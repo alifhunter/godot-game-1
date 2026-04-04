@@ -1,0 +1,35 @@
+[gd_scene format=3]
+
+[node name="DeskPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(320, 0)
+
+[node name="DeskMargin" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="DeskVBox" type="VBoxContainer" parent="DeskMargin"]
+theme_override_constants/separation = 10
+
+[node name="DeskTitle" type="Label" parent="DeskMargin/DeskVBox"]
+visible = false
+text = "TRADING DESK"
+
+[node name="DayLabel" type="Label" parent="DeskMargin/DeskVBox"]
+text = "Day 0"
+
+[node name="CashLabel" type="Label" parent="DeskMargin/DeskVBox"]
+text = "Cash: Rp 0.00"
+
+[node name="EquityLabel" type="Label" parent="DeskMargin/DeskVBox"]
+text = "Equity: Rp 0.00"
+
+[node name="StatusLabel" type="Label" parent="DeskMargin/DeskVBox"]
+visible = false
+autowrap_mode = 3
+text = ""
+
+[node name="GuideLabel" type="Label" parent="DeskMargin/DeskVBox"]
+autowrap_mode = 3
+text = ""

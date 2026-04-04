@@ -1,0 +1,32 @@
+[gd_scene format=3]
+
+[node name="SummaryPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(360, 0)
+
+[node name="SummaryMargin" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="SummaryVBox" type="VBoxContainer" parent="SummaryMargin"]
+theme_override_constants/separation = 10
+
+[node name="SummaryTitle" type="Label" parent="SummaryMargin/SummaryVBox"]
+text = "END-OF-DAY REVIEW"
+
+[node name="ReviewHeadlineLabel" type="Label" parent="SummaryMargin/SummaryVBox"]
+autowrap_mode = 3
+text = "Review headline:"
+
+[node name="SummaryLabel" type="Label" parent="SummaryMargin/SummaryVBox"]
+autowrap_mode = 3
+text = "Advance the first day to produce a summary."
+
+[node name="MoversLabel" type="Label" parent="SummaryMargin/SummaryVBox"]
+autowrap_mode = 3
+text = "Top movers will appear here after the close."
+
+[node name="ReflectionLabel" type="Label" parent="SummaryMargin/SummaryVBox"]
+autowrap_mode = 3
+text = "Tomorrow's prompt will appear here after the first close."

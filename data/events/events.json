@@ -1,0 +1,44 @@
+[
+  {
+	"id": "sector_tailwind",
+	"scope": "sector",
+	"sentiment_shift": 0.012,
+	"broker_bias": "foreign",
+	"description": "A supportive sector theme keeps institutional attention engaged."
+  },
+  {
+	"id": "sector_headwind",
+	"scope": "sector",
+	"sentiment_shift": -0.024,
+	"broker_bias": "retail",
+	"description": "Sector weakness creates hesitation and reactive selling."
+  },
+  {
+	"id": "favorable_coverage",
+	"scope": "company",
+	"sentiment_shift": 0.015,
+	"broker_bias": "institution",
+	"description": "A constructive company update improves conviction."
+  },
+  {
+	"id": "risk_off_headline",
+	"scope": "market",
+	"sentiment_shift": -0.03,
+	"broker_bias": "foreign",
+	"description": "A macro scare nudges risk appetite lower for the day."
+  },
+  {
+	"id": "rumor_wave_positive",
+	"scope": "company",
+	"sentiment_shift": 0.014,
+	"broker_bias": "retail",
+	"description": "A hot rumor wave encourages fast money to chase."
+  },
+  {
+	"id": "rumor_wave_negative",
+	"scope": "company",
+	"sentiment_shift": -0.022,
+	"broker_bias": "retail",
+	"description": "A shaky rumor wave triggers defensive selling."
+  }
+]

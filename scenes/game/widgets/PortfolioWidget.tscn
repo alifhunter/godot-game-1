@@ -1,0 +1,65 @@
+[gd_scene format=3]
+
+[node name="PortfolioPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(780, 0)
+
+[node name="PortfolioMargin" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="PortfolioVBox" type="VBoxContainer" parent="PortfolioMargin"]
+theme_override_constants/separation = 12
+
+[node name="PortfolioTitle" type="Label" parent="PortfolioMargin/PortfolioVBox"]
+text = "Portfolio"
+
+[node name="HoldingsScroll" type="ScrollContainer" parent="PortfolioMargin/PortfolioVBox"]
+custom_minimum_size = Vector2(0, 420)
+size_flags_vertical = 3
+horizontal_scroll_mode = 1
+
+[node name="HoldingsTableVBox" type="VBoxContainer" parent="PortfolioMargin/PortfolioVBox/HoldingsScroll"]
+custom_minimum_size = Vector2(790, 0)
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="HoldingsHeaderRow" type="HBoxContainer" parent="PortfolioMargin/PortfolioVBox/HoldingsScroll/HoldingsTableVBox"]
+theme_override_constants/separation = 10
+
+[node name="TickerHeaderLabel" type="Label" parent="PortfolioMargin/PortfolioVBox/HoldingsScroll/HoldingsTableVBox/HoldingsHeaderRow"]
+custom_minimum_size = Vector2(90, 0)
+text = "Ticker"
+
+[node name="CurrentPriceHeaderLabel" type="Label" parent="PortfolioMargin/PortfolioVBox/HoldingsScroll/HoldingsTableVBox/HoldingsHeaderRow"]
+custom_minimum_size = Vector2(120, 0)
+text = "Current Price"
+
+[node name="AveragePriceHeaderLabel" type="Label" parent="PortfolioMargin/PortfolioVBox/HoldingsScroll/HoldingsTableVBox/HoldingsHeaderRow"]
+custom_minimum_size = Vector2(110, 0)
+text = "Average Price"
+
+[node name="BalanceLotHeaderLabel" type="Label" parent="PortfolioMargin/PortfolioVBox/HoldingsScroll/HoldingsTableVBox/HoldingsHeaderRow"]
+custom_minimum_size = Vector2(80, 0)
+text = "Bal Lot"
+
+[node name="InvestedHeaderLabel" type="Label" parent="PortfolioMargin/PortfolioVBox/HoldingsScroll/HoldingsTableVBox/HoldingsHeaderRow"]
+custom_minimum_size = Vector2(120, 0)
+text = "Invested"
+
+[node name="PnLHeaderLabel" type="Label" parent="PortfolioMargin/PortfolioVBox/HoldingsScroll/HoldingsTableVBox/HoldingsHeaderRow"]
+custom_minimum_size = Vector2(120, 0)
+text = "P&L"
+
+[node name="PnLPercentHeaderLabel" type="Label" parent="PortfolioMargin/PortfolioVBox/HoldingsScroll/HoldingsTableVBox/HoldingsHeaderRow"]
+custom_minimum_size = Vector2(80, 0)
+text = "%"
+
+[node name="HoldingsRowsVBox" type="VBoxContainer" parent="PortfolioMargin/PortfolioVBox/HoldingsScroll/HoldingsTableVBox"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="HoldingsEmptyLabel" type="Label" parent="PortfolioMargin/PortfolioVBox/HoldingsScroll/HoldingsTableVBox/HoldingsRowsVBox"]
+autowrap_mode = 3
+text = "No open positions yet."

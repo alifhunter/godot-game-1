@@ -1,0 +1,89 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/game/widgets/PortfolioWidget.tscn" id="1_portfolio"]
+[ext_resource type="PackedScene" path="res://scenes/game/widgets/TradeHistoryWidget.tscn" id="2_history"]
+
+[node name="PortfolioView" type="MarginContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 2
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 2
+theme_override_constants/margin_bottom = 2
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_scroll_mode = 0
+
+[node name="ContentVBox" type="VBoxContainer" parent="Scroll"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="SummaryPanel" type="PanelContainer" parent="Scroll/ContentVBox"]
+
+[node name="SummaryMargin" type="MarginContainer" parent="Scroll/ContentVBox/SummaryPanel"]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="SummaryGrid" type="GridContainer" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin"]
+size_flags_horizontal = 3
+columns = 4
+theme_override_constants/h_separation = 18
+theme_override_constants/v_separation = 12
+
+[node name="BalanceCard" type="VBoxContainer" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid"]
+theme_override_constants/separation = 6
+
+[node name="BalanceTitleLabel" type="Label" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid/BalanceCard"]
+text = "Trading Balance"
+
+[node name="BalanceValueLabel" type="Label" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid/BalanceCard"]
+text = "Rp 0.00"
+
+[node name="InvestedCard" type="VBoxContainer" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid"]
+theme_override_constants/separation = 6
+
+[node name="InvestedTitleLabel" type="Label" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid/InvestedCard"]
+text = "Invested"
+
+[node name="InvestedValueLabel" type="Label" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid/InvestedCard"]
+text = "Rp 0.00"
+
+[node name="PnLCard" type="VBoxContainer" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid"]
+theme_override_constants/separation = 6
+
+[node name="PnLTitleLabel" type="Label" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid/PnLCard"]
+text = "P&L"
+
+[node name="PnLValueLabel" type="Label" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid/PnLCard"]
+text = "Rp 0.00 (0.0%)"
+
+[node name="EquityCard" type="VBoxContainer" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid"]
+theme_override_constants/separation = 6
+
+[node name="EquityTitleLabel" type="Label" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid/EquityCard"]
+text = "Total Equity"
+
+[node name="EquityValueLabel" type="Label" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid/EquityCard"]
+text = "Rp 0.00"
+
+[node name="ContentGrid" type="GridContainer" parent="Scroll/ContentVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+columns = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 12
+
+[node name="PortfolioPanel" parent="Scroll/ContentVBox/ContentGrid" instance=ExtResource("1_portfolio")]
+
+[node name="TradeHistoryPanel" parent="Scroll/ContentVBox/ContentGrid" instance=ExtResource("2_history")]

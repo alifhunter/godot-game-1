@@ -1,0 +1,68 @@
+[
+  {
+	"id": "consumer",
+	"name": "Consumer",
+	"trend_bias": 0.001,
+	"volatility_bias": 0.004
+  },
+  {
+	"id": "industrial",
+	"name": "Industrial",
+	"trend_bias": -0.001,
+	"volatility_bias": 0.006
+  },
+  {
+	"id": "energy",
+	"name": "Energy",
+	"trend_bias": 0.0,
+	"volatility_bias": 0.01
+  },
+  {
+	"id": "tech",
+	"name": "Technology",
+	"trend_bias": 0.0,
+	"volatility_bias": 0.01
+  },
+  {
+	"id": "infra",
+	"name": "Infrastructure",
+	"trend_bias": 0.0,
+	"volatility_bias": 0.01
+  },
+  {
+	"id": "transport",
+	"name": "Transport",
+	"trend_bias": 0.0,
+	"volatility_bias": 0.01
+  },
+  {
+	"id": "health",
+	"name": "Health",
+	"trend_bias": 0.0,
+	"volatility_bias": 0.01
+  },
+  {
+	"id": "finance",
+	"name": "Finance",
+	"trend_bias": 0.0,
+	"volatility_bias": 0.01
+  },
+  {
+	"id": "basicindustry",
+	"name": "Basic-Industry",
+	"trend_bias": 0.0,
+	"volatility_bias": 0.01
+  },
+  {
+	"id": "property",
+	"name": "Property",
+	"trend_bias": 0.0,
+	"volatility_bias": 0.01
+  },
+  {
+	"id": "noncyclical",
+	"name": "Non-Cyclical",
+	"trend_bias": 0.0,
+	"volatility_bias": 0.01
+  }
+]

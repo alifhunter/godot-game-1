@@ -1,0 +1,11 @@
+# Godot 4 generated cache
+.godot/
+
+# Export/build folders
+/android/
+/build/
+/exports/
+
+# Editor cruft
+.DS_Store
+Thumbs.db

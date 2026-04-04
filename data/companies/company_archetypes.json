@@ -1,0 +1,92 @@
+[
+  {
+	"id": "arta",
+	"ticker": "ARTA",
+	"name": "Arta Tekstil Nusantara",
+	"sector_id": "consumer",
+	"narrative_tags": ["domestic_demand", "quiet_execution", "stealth_interest"],
+	"anchors": {
+	  "base_price": 124.0,
+	  "quality": 68,
+	  "growth": 64,
+	  "risk": 34,
+	  "market_cap": 1850000000000,
+	  "free_float_pct": 27.5,
+	  "avg_daily_value": 6400000000,
+	  "net_profit_margin": 8.9,
+	  "debt_to_equity": 0.42
+	}
+  },
+  {
+	"id": "baja",
+	"ticker": "BAJA",
+	"name": "Baja Infrastruktur Tbk",
+	"sector_id": "industrial",
+	"narrative_tags": ["capex_cycle", "policy_beta"],
+	"anchors": {
+	  "base_price": 196.0,
+	  "quality": 61,
+	  "growth": 55,
+	  "risk": 47,
+	  "market_cap": 2650000000000,
+	  "free_float_pct": 36.0,
+	  "avg_daily_value": 9800000000,
+	  "net_profit_margin": 6.1,
+	  "debt_to_equity": 0.88
+	}
+  },
+  {
+	"id": "sena",
+	"ticker": "SENA",
+	"name": "Sena Energi Logistik",
+	"sector_id": "energy",
+	"narrative_tags": ["commodity_beta", "foreign_watchlist"],
+	"anchors": {
+	  "base_price": 158.0,
+	  "quality": 58,
+	  "growth": 70,
+	  "risk": 52,
+	  "market_cap": 3220000000000,
+	  "free_float_pct": 41.5,
+	  "avg_daily_value": 14200000000,
+	  "net_profit_margin": 7.4,
+	  "debt_to_equity": 1.12
+	}
+  },
+  {
+	"id": "lang",
+	"ticker": "LANG",
+	"name": "Langit Ritel Digital",
+	"sector_id": "consumer",
+	"narrative_tags": ["narrative_hot", "retail_favorite"],
+	"anchors": {
+	  "base_price": 88.0,
+	  "quality": 52,
+	  "growth": 72,
+	  "risk": 61,
+	  "market_cap": 1240000000000,
+	  "free_float_pct": 18.2,
+	  "avg_daily_value": 17600000000,
+	  "net_profit_margin": 1.9,
+	  "debt_to_equity": 1.36
+	}
+  },
+  {
+	"id": "mira",
+	"ticker": "MIRA",
+	"name": "Mira Mesin Presisi",
+	"sector_id": "industrial",
+	"narrative_tags": ["institution_quality", "supportive_balance_sheet"],
+	"anchors": {
+	  "base_price": 142.0,
+	  "quality": 74,
+	  "growth": 59,
+	  "risk": 29,
+	  "market_cap": 2890000000000,
+	  "free_float_pct": 32.8,
+	  "avg_daily_value": 7300000000,
+	  "net_profit_margin": 11.4,
+	  "debt_to_equity": 0.24
+	}
+  }
+]

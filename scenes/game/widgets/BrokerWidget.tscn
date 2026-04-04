@@ -1,0 +1,28 @@
+[gd_scene format=3]
+
+[node name="BrokerPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(420, 0)
+
+[node name="BrokerMargin" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="BrokerVBox" type="VBoxContainer" parent="BrokerMargin"]
+theme_override_constants/separation = 10
+
+[node name="BrokerTitle" type="Label" parent="BrokerMargin/BrokerVBox"]
+text = "BROKER FLOW READ"
+
+[node name="BrokerPressureLabel" type="Label" parent="BrokerMargin/BrokerVBox"]
+autowrap_mode = 3
+text = "Pressure read:"
+
+[node name="BrokerLabel" type="Label" parent="BrokerMargin/BrokerVBox"]
+autowrap_mode = 3
+text = "Broker summary will populate after the first day closes."
+
+[node name="BrokerHintLabel" type="Label" parent="BrokerMargin/BrokerVBox"]
+autowrap_mode = 3
+text = "Ask: who is leaning on the tape, and is that flow supportive or suspicious?"

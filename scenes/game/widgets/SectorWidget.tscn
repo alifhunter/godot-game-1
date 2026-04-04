@@ -1,0 +1,28 @@
+[gd_scene format=3]
+
+[node name="SectorPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(360, 0)
+
+[node name="SectorMargin" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="SectorVBox" type="VBoxContainer" parent="SectorMargin"]
+theme_override_constants/separation = 10
+
+[node name="SectorTitle" type="Label" parent="SectorMargin/SectorVBox"]
+text = "SECTOR TAPE"
+
+[node name="MarketHintLabel" type="Label" parent="SectorMargin/SectorVBox"]
+autowrap_mode = 3
+text = ""
+
+[node name="SectorSummaryLabel" type="Label" parent="SectorMargin/SectorVBox"]
+autowrap_mode = 3
+text = "Sector summary will appear here."
+
+[node name="SectorListLabel" type="Label" parent="SectorMargin/SectorVBox"]
+autowrap_mode = 3
+text = "Sector details will appear here."

@@ -1,0 +1,32 @@
+[gd_scene format=3]
+
+[node name="WatchlistPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(420, 0)
+
+[node name="WatchlistMargin" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="WatchlistVBox" type="VBoxContainer" parent="WatchlistMargin"]
+theme_override_constants/separation = 10
+
+[node name="WatchlistTitle" type="Label" parent="WatchlistMargin/WatchlistVBox"]
+text = "MARKETS"
+
+[node name="WatchlistHintLabel" type="Label" parent="WatchlistMargin/WatchlistVBox"]
+autowrap_mode = 3
+text = ""
+
+[node name="SelectedMarketLabel" type="Label" parent="WatchlistMargin/WatchlistVBox"]
+autowrap_mode = 3
+text = "Current focus: -"
+
+[node name="WatchlistSummaryLabel" type="Label" parent="WatchlistMargin/WatchlistVBox"]
+autowrap_mode = 3
+text = "Watchlist summary will appear here."
+
+[node name="CompanyList" type="ItemList" parent="WatchlistMargin/WatchlistVBox"]
+custom_minimum_size = Vector2(0, 360)
+size_flags_vertical = 3

@@ -1,0 +1,243 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/MainMenu.gd" id="1_menu"]
+
+[node name="MainMenu" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 12
+script = ExtResource("1_menu")
+
+[node name="Background" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.054902, 0.0784314, 0.0980392, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 40
+
+[node name="ScreenRoot" type="Control" parent="Margin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="HomeScreen" type="Control" parent="Margin/ScreenRoot"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CenterContent" type="CenterContainer" parent="Margin/ScreenRoot/HomeScreen"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MainRow" type="HBoxContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent"]
+theme_override_constants/separation = 20
+
+[node name="IntroCard" type="PanelContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow"]
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(640, 0)
+
+[node name="IntroMargin" type="MarginContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard"]
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="IntroVBox" type="VBoxContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin"]
+theme_override_constants/separation = 16
+
+[node name="EyebrowLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin/IntroVBox"]
+text = "WIREFRAME BUILD"
+
+[node name="TitleLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin/IntroVBox"]
+text = "The Daytrader Game"
+
+[node name="BodyLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin/IntroVBox"]
+autowrap_mode = 3
+text = "Goal: make one readable market desk where the player can scan a watchlist, place a trade, and understand why the tape changed."
+
+[node name="LoopTitle" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin/IntroVBox"]
+text = "CORE LOOP"
+
+[node name="LoopLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin/IntroVBox"]
+text = "1. Scan the watchlist\n2. Read the selected company\n3. Buy, sell, or hold\n4. Advance one day\n5. Review why the market changed"
+
+[node name="FocusTitle" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin/IntroVBox"]
+text = "NEW GAME FLOW"
+
+[node name="FocusLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin/IntroVBox"]
+autowrap_mode = 3
+text = "New Game now opens a dedicated difficulty selector, then a short setup screen while the market roster and company financials are generated."
+
+[node name="ActionCard" type="PanelContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow"]
+custom_minimum_size = Vector2(380, 0)
+
+[node name="ActionMargin" type="MarginContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard"]
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="ActionVBox" type="VBoxContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin"]
+theme_override_constants/separation = 16
+
+[node name="StartTitle" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox"]
+text = "START HERE"
+
+[node name="StatusLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox"]
+autowrap_mode = 3
+text = "No saved run yet. Start a new game to choose a market difficulty and build the first watchlist."
+
+[node name="FlowTitle" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox"]
+text = "WHAT HAPPENS NEXT"
+
+[node name="FlowLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox"]
+autowrap_mode = 3
+text = "New Game -> pick a difficulty card -> press Continue -> wait through setup -> enter the market"
+
+[node name="ButtonColumn" type="VBoxContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox"]
+theme_override_constants/separation = 10
+
+[node name="NewGameButton" type="Button" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/ButtonColumn"]
+custom_minimum_size = Vector2(0, 54)
+text = "New Game"
+
+[node name="LoadButton" type="Button" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/ButtonColumn"]
+custom_minimum_size = Vector2(0, 54)
+text = "Load Run"
+
+[node name="QuitButton" type="Button" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/ButtonColumn"]
+custom_minimum_size = Vector2(0, 54)
+text = "Quit"
+
+[node name="DifficultyScreen" type="Control" parent="Margin/ScreenRoot"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CenterContent" type="CenterContainer" parent="Margin/ScreenRoot/DifficultyScreen"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="SelectorCard" type="PanelContainer" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent"]
+custom_minimum_size = Vector2(980, 0)
+
+[node name="SelectorMargin" type="MarginContainer" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard"]
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="SelectorVBox" type="VBoxContainer" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin"]
+theme_override_constants/separation = 18
+
+[node name="EyebrowLabel" type="Label" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
+text = "NEW GAME"
+
+[node name="TitleLabel" type="Label" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
+text = "Choose Difficulty"
+
+[node name="BodyLabel" type="Label" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
+autowrap_mode = 3
+text = "Pick one market profile. Each difficulty changes starting cash, roster size, volatility, and how often events hit the tape."
+
+[node name="DifficultyCardGrid" type="GridContainer" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
+columns = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 16
+
+[node name="SelectionDetailLabel" type="Label" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
+autowrap_mode = 3
+text = "Pick one difficulty card to preview bankroll size, company count, and market intensity before you continue."
+
+[node name="TutorialCheckBox" type="CheckBox" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
+text = "Show Quick Tutorial Popup"
+
+[node name="FooterRow" type="HBoxContainer" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
+alignment = 2
+theme_override_constants/separation = 12
+
+[node name="BackButton" type="Button" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox/FooterRow"]
+custom_minimum_size = Vector2(140, 52)
+text = "Back"
+
+[node name="ContinueButton" type="Button" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox/FooterRow"]
+custom_minimum_size = Vector2(180, 52)
+disabled = true
+text = "Continue"
+
+[node name="LoadingScreen" type="Control" parent="Margin/ScreenRoot"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CenterContent" type="CenterContainer" parent="Margin/ScreenRoot/LoadingScreen"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="LoadingCard" type="PanelContainer" parent="Margin/ScreenRoot/LoadingScreen/CenterContent"]
+custom_minimum_size = Vector2(640, 0)
+
+[node name="LoadingMargin" type="MarginContainer" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard"]
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="LoadingVBox" type="VBoxContainer" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin"]
+theme_override_constants/separation = 16
+
+[node name="EyebrowLabel" type="Label" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox"]
+text = "SETTING UP MARKET"
+
+[node name="LoadingTitleLabel" type="Label" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox"]
+text = "Starting run"
+
+[node name="LoadingStageLabel" type="Label" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox"]
+text = "Preparing market seed"
+
+[node name="LoadingBodyLabel" type="Label" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox"]
+autowrap_mode = 3
+text = "Building procedural companies, financials, and the opening market state."
+
+[node name="LoadingProgressBar" type="ProgressBar" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox"]
+custom_minimum_size = Vector2(0, 28)
+max_value = 100.0
+show_percentage = false
+
+[node name="LoadingStepLabel" type="Label" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox"]
+text = "Step 1/5"
+
+[node name="LoadingNoteLabel" type="Label" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox"]
+autowrap_mode = 3
+text = "Large rosters can take a moment, especially on Hardcore where 200 companies are generated."

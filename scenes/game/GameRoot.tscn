@@ -1,0 +1,226 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/GameRoot.gd" id="1_game"]
+[ext_resource type="PackedScene" path="res://scenes/game/views/DashboardView.tscn" id="2_dashboard"]
+[ext_resource type="PackedScene" path="res://scenes/game/views/MarketsView.tscn" id="3_markets"]
+[ext_resource type="PackedScene" path="res://scenes/game/views/PortfolioView.tscn" id="4_portfolio"]
+[ext_resource type="PackedScene" path="res://scenes/game/views/HelpView.tscn" id="5_help"]
+
+[node name="GameRoot" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 12
+script = ExtResource("1_game")
+
+[node name="Background" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0470588, 0.0666667, 0.0862745, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="RootVBox" type="VBoxContainer" parent="Margin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="TopBarPanel" type="PanelContainer" parent="Margin/RootVBox"]
+
+[node name="TopBarMargin" type="MarginContainer" parent="Margin/RootVBox/TopBarPanel"]
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="TopBarVBox" type="VBoxContainer" parent="Margin/RootVBox/TopBarPanel/TopBarMargin"]
+theme_override_constants/separation = 10
+
+[node name="TitleRow" type="HBoxContainer" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox"]
+theme_override_constants/separation = 10
+
+[node name="TitleWrap" type="VBoxContainer" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
+visible = false
+size_flags_horizontal = 3
+
+[node name="EyebrowLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TitleWrap"]
+text = "MARKET DESK"
+
+[node name="TitleLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TitleWrap"]
+text = "Modular Play Space"
+
+[node name="SubtitleLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TitleWrap"]
+text = ""
+
+[node name="TopSectionLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
+size_flags_horizontal = 3
+text = "Dashboard"
+
+[node name="AdvanceDayButton" type="Button" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
+custom_minimum_size = Vector2(160, 42)
+text = "Advance Day"
+
+[node name="StatsFlow" type="HFlowContainer" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox"]
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+
+[node name="TopDayLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow"]
+text = "THU, 02 JAN 2020"
+
+[node name="TopMarketLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow"]
+text = "MARKET +0.00%"
+
+[node name="TopEquityLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow"]
+text = "EQUITY Rp 0.00"
+
+[node name="TopFocusLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow"]
+text = "FOCUS -"
+
+[node name="ObjectiveLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox"]
+autowrap_mode = 3
+text = ""
+
+[node name="ShellHBox" type="HBoxContainer" parent="Margin/RootVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="SidebarPanel" type="PanelContainer" parent="Margin/RootVBox/ShellHBox"]
+custom_minimum_size = Vector2(260, 0)
+
+[node name="SidebarMargin" type="MarginContainer" parent="Margin/RootVBox/ShellHBox/SidebarPanel"]
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="SidebarVBox" type="VBoxContainer" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="SidebarEyebrowLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
+visible = false
+text = "WORKSPACE"
+
+[node name="SidebarTitleLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
+visible = false
+text = "Market Sections"
+
+[node name="SidebarIntroLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
+autowrap_mode = 3
+text = ""
+
+[node name="NavigationButtons" type="VBoxContainer" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
+theme_override_constants/separation = 8
+
+[node name="DashboardButton" type="Button" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons"]
+custom_minimum_size = Vector2(0, 44)
+toggle_mode = true
+text = "Dashboard"
+
+[node name="MarketsButton" type="Button" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons"]
+custom_minimum_size = Vector2(0, 44)
+toggle_mode = true
+text = "Markets"
+
+[node name="PortfolioButton" type="Button" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons"]
+custom_minimum_size = Vector2(0, 44)
+toggle_mode = true
+text = "Portfolio"
+
+[node name="HelpButton" type="Button" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons"]
+custom_minimum_size = Vector2(0, 44)
+toggle_mode = true
+text = "Help"
+
+[node name="SidebarFocusLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
+visible = false
+autowrap_mode = 3
+text = "Current focus: none selected yet."
+
+[node name="SidebarHintLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
+autowrap_mode = 3
+text = ""
+
+[node name="SidebarSpacer" type="Control" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
+size_flags_vertical = 3
+
+[node name="BackToMenuButton" type="Button" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
+custom_minimum_size = Vector2(0, 44)
+text = "Back to Menu"
+
+[node name="MainVBox" type="VBoxContainer" parent="Margin/RootVBox/ShellHBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="ContentTabs" type="TabContainer" parent="Margin/RootVBox/ShellHBox/MainVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+tabs_visible = false
+
+[node name="DashboardView" parent="Margin/RootVBox/ShellHBox/MainVBox/ContentTabs" instance=ExtResource("2_dashboard")]
+unique_name_in_owner = true
+
+[node name="MarketsView" parent="Margin/RootVBox/ShellHBox/MainVBox/ContentTabs" instance=ExtResource("3_markets")]
+unique_name_in_owner = true
+
+[node name="PortfolioView" parent="Margin/RootVBox/ShellHBox/MainVBox/ContentTabs" instance=ExtResource("4_portfolio")]
+unique_name_in_owner = true
+
+[node name="HelpView" parent="Margin/RootVBox/ShellHBox/MainVBox/ContentTabs" instance=ExtResource("5_help")]
+unique_name_in_owner = true
+
+[node name="ToastOverlay" type="MarginContainer" parent="."]
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -430.0
+offset_top = -108.0
+offset_right = -14.0
+offset_bottom = -14.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="ToastPanel" type="PanelContainer" parent="ToastOverlay"]
+visible = false
+custom_minimum_size = Vector2(0, 64)
+
+[node name="ToastMargin" type="MarginContainer" parent="ToastOverlay/ToastPanel"]
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="ToastHBox" type="HBoxContainer" parent="ToastOverlay/ToastPanel/ToastMargin"]
+theme_override_constants/separation = 10
+
+[node name="ToastMessageLabel" type="Label" parent="ToastOverlay/ToastPanel/ToastMargin/ToastHBox"]
+size_flags_horizontal = 3
+autowrap_mode = 3
+text = ""
+
+[node name="ToastCloseButton" type="Button" parent="ToastOverlay/ToastPanel/ToastMargin/ToastHBox"]
+custom_minimum_size = Vector2(36, 36)
+text = "X"
+
+[node name="ToastTimer" type="Timer" parent="."]
+one_shot = true

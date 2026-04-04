@@ -1,0 +1,64 @@
+[gd_scene format=3]
+
+[node name="DetailPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(420, 0)
+
+[node name="DetailMargin" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="DetailVBox" type="VBoxContainer" parent="DetailMargin"]
+theme_override_constants/separation = 10
+
+[node name="DetailTitle" type="Label" parent="DetailMargin/DetailVBox"]
+text = "SELECTED COMPANY READ"
+
+[node name="CompanyNameLabel" type="Label" parent="DetailMargin/DetailVBox"]
+autowrap_mode = 3
+text = "No selection"
+
+[node name="SectorLabel" type="Label" parent="DetailMargin/DetailVBox"]
+autowrap_mode = 3
+text = "Sector:"
+
+[node name="PriceLabel" type="Label" parent="DetailMargin/DetailVBox"]
+autowrap_mode = 3
+text = "Price:"
+
+[node name="FactorLabel" type="Label" parent="DetailMargin/DetailVBox"]
+autowrap_mode = 3
+text = "Quality | Growth | Risk"
+
+[node name="FinancialLabel" type="Label" parent="DetailMargin/DetailVBox"]
+autowrap_mode = 3
+text = "Financials:"
+
+[node name="SetupLabel" type="Label" parent="DetailMargin/DetailVBox"]
+autowrap_mode = 3
+text = "Setup read:"
+
+[node name="SupportLabel" type="Label" parent="DetailMargin/DetailVBox"]
+autowrap_mode = 3
+text = "Supportive signals:"
+
+[node name="RiskLabel" type="Label" parent="DetailMargin/DetailVBox"]
+autowrap_mode = 3
+text = "Risk signals:"
+
+[node name="EventLabel" type="Label" parent="DetailMargin/DetailVBox"]
+autowrap_mode = 3
+text = "Signals:"
+
+[node name="HistoryLabel" type="Label" parent="DetailMargin/DetailVBox"]
+autowrap_mode = 3
+text = "Recent closes:"
+
+[node name="FinancialHistoryLabel" type="RichTextLabel" parent="DetailMargin/DetailVBox"]
+custom_minimum_size = Vector2(0, 260)
+size_flags_vertical = 3
+fit_content = false
+scroll_active = true
+selection_enabled = true
+text = "Generated history appears here."

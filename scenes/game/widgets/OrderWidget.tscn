@@ -1,0 +1,57 @@
+[gd_scene format=3]
+
+[node name="ActionPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(320, 0)
+
+[node name="ActionMargin" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="ActionVBox" type="VBoxContainer" parent="ActionMargin"]
+theme_override_constants/separation = 10
+
+[node name="SelectionLabel" type="Label" parent="ActionMargin/ActionVBox"]
+autowrap_mode = 3
+text = "Selected: -"
+
+[node name="ActionHintLabel" type="Label" parent="ActionMargin/ActionVBox"]
+autowrap_mode = 3
+text = "Use lot-sized orders so position sizing and fees matter."
+
+[node name="TradeRuleLabel" type="Label" parent="ActionMargin/ActionVBox"]
+autowrap_mode = 3
+text = "1 lot = 100 shares | Buy fee 0.15% | Sell fee 0.25%"
+
+[node name="SizingRow" type="HBoxContainer" parent="ActionMargin/ActionVBox"]
+theme_override_constants/separation = 10
+
+[node name="LotsTitleLabel" type="Label" parent="ActionMargin/ActionVBox/SizingRow"]
+text = "Order Size"
+
+[node name="LotSpinBox" type="SpinBox" parent="ActionMargin/ActionVBox/SizingRow"]
+custom_minimum_size = Vector2(140, 0)
+size_flags_horizontal = 3
+min_value = 1.0
+max_value = 9999.0
+step = 1.0
+rounded = true
+value = 1.0
+
+[node name="OrderPreviewLabel" type="Label" parent="ActionMargin/ActionVBox"]
+autowrap_mode = 3
+text = "Order preview will appear here."
+
+[node name="TradeButtonRow" type="HBoxContainer" parent="ActionMargin/ActionVBox"]
+theme_override_constants/separation = 10
+
+[node name="BuyButton" type="Button" parent="ActionMargin/ActionVBox/TradeButtonRow"]
+custom_minimum_size = Vector2(0, 46)
+size_flags_horizontal = 3
+text = "Buy 1 Lot"
+
+[node name="SellButton" type="Button" parent="ActionMargin/ActionVBox/TradeButtonRow"]
+custom_minimum_size = Vector2(0, 46)
+size_flags_horizontal = 3
+text = "Sell 1 Lot"

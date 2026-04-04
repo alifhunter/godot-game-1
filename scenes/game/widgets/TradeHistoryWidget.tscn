@@ -1,0 +1,57 @@
+[gd_scene format=3]
+
+[node name="TradeHistoryPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(540, 0)
+
+[node name="TradeHistoryMargin" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="TradeHistoryVBox" type="VBoxContainer" parent="TradeHistoryMargin"]
+theme_override_constants/separation = 12
+
+[node name="TradeHistoryTitle" type="Label" parent="TradeHistoryMargin/TradeHistoryVBox"]
+text = "History"
+
+[node name="TradeHistoryScroll" type="ScrollContainer" parent="TradeHistoryMargin/TradeHistoryVBox"]
+custom_minimum_size = Vector2(0, 420)
+size_flags_vertical = 3
+horizontal_scroll_mode = 1
+
+[node name="TradeHistoryTableVBox" type="VBoxContainer" parent="TradeHistoryMargin/TradeHistoryVBox/TradeHistoryScroll"]
+custom_minimum_size = Vector2(590, 0)
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="TradeHistoryHeaderRow" type="HBoxContainer" parent="TradeHistoryMargin/TradeHistoryVBox/TradeHistoryScroll/TradeHistoryTableVBox"]
+theme_override_constants/separation = 10
+
+[node name="ActionHeaderLabel" type="Label" parent="TradeHistoryMargin/TradeHistoryVBox/TradeHistoryScroll/TradeHistoryTableVBox/TradeHistoryHeaderRow"]
+custom_minimum_size = Vector2(150, 0)
+text = "Action"
+
+[node name="AmountHeaderLabel" type="Label" parent="TradeHistoryMargin/TradeHistoryVBox/TradeHistoryScroll/TradeHistoryTableVBox/TradeHistoryHeaderRow"]
+custom_minimum_size = Vector2(120, 0)
+text = "Net Amount"
+
+[node name="QuantityHeaderLabel" type="Label" parent="TradeHistoryMargin/TradeHistoryVBox/TradeHistoryScroll/TradeHistoryTableVBox/TradeHistoryHeaderRow"]
+custom_minimum_size = Vector2(70, 0)
+text = "Qty"
+
+[node name="PriceHeaderLabel" type="Label" parent="TradeHistoryMargin/TradeHistoryVBox/TradeHistoryScroll/TradeHistoryTableVBox/TradeHistoryHeaderRow"]
+custom_minimum_size = Vector2(90, 0)
+text = "Price"
+
+[node name="DateHeaderLabel" type="Label" parent="TradeHistoryMargin/TradeHistoryVBox/TradeHistoryScroll/TradeHistoryTableVBox/TradeHistoryHeaderRow"]
+custom_minimum_size = Vector2(110, 0)
+text = "Date"
+
+[node name="TradeHistoryRowsVBox" type="VBoxContainer" parent="TradeHistoryMargin/TradeHistoryVBox/TradeHistoryScroll/TradeHistoryTableVBox"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="TradeHistoryEmptyLabel" type="Label" parent="TradeHistoryMargin/TradeHistoryVBox/TradeHistoryScroll/TradeHistoryTableVBox/TradeHistoryRowsVBox"]
+autowrap_mode = 3
+text = "No trades yet."
