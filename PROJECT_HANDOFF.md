@@ -6,42 +6,346 @@ Read this file first in the next session.
 - Engine: Godot `4.6.1`
 - Project path: `c:\Users\Alif\Documents\godot game 1\new-game-project`
 - Current milestone: `first playable prototype`
-- Start date in-game: `Thursday, 2 January 2020`
-- Current structure: top navbar + body-row sidebar app shell with modular views and widget scenes
+- Seed date in-game: `Thursday, 2 January 2020`
+- First player-visible session on a fresh run: `Friday, 3 January 2020`
+- Fresh runs simulate the first trading session immediately before handing control to the player, so the market already has a previous close, current price move, and chart-ready early history
+- Current shell is now `desktop-first`, not the old direct dashboard flow
+- Version control:
+  - local Git repo initialized on branch `main`
+  - GitHub remote configured as `origin`
+  - remote URL: `https://github.com/alifhunter/godot-game-1.git`
 
 ## Current Playable State
-- Main menu supports `New Run`, `Load Run`, `Quit`
-- `New Game` now opens a dedicated difficulty selector screen with four difficulty cards and a separate `Continue` step
-- After the player confirms difficulty, a simple loading screen shows staged setup progress:
+- Main menu supports `New Game`, `Load Run`, `Quit`
+- `New Game` opens a dedicated difficulty selector with four difficulty cards and a separate `Continue` step
+- After difficulty is confirmed, a simple loading screen shows staged setup progress:
   - `Preparing market seed`
   - `Creating companies`
   - `Creating financials`
+  - `Simulating opening session`
   - `Saving run`
   - `Opening trading desk`
-- New Run supports difficulty presets:
+- `Load Run` now also uses the loading screen instead of jumping straight into the game scene
+- Current load-run loading stages are:
+  - `Reading save file`
+  - `Restoring run state`
+  - `Opening trading desk`
+- Difficulty presets:
   - `Newbie`
   - `Normal`
   - `Hard`
   - `Hardcore`
-- Difficulty now also controls generated roster size:
-  - `Newbie`: `20` companies
+- Difficulty also controls generated roster size:
+  - `Newbie`: `25` companies
   - `Normal`: `50` companies
-  - `Hard`: `100` companies
-  - `Hardcore`: `200` companies
-- Tutorial checkbox exists and currently shows a simple one-time popup
-- Player loop is:
-  - choose stock
-  - read setup
-  - inspect the generated `2010-2019` company history
-  - trade in lots
-  - advance day
-  - review result
-- Buy/sell feedback now appears as a bottom-right toast with manual close + `5s` auto-hide
-- Portfolio screen now reads more like a broker app layout:
+  - `Hard`: `75` companies
+  - `Hardcore`: `100` companies
+- The old larger top-end roster sizes were intentionally reduced; current prototype cap is now `100` companies on `Hardcore`
+- Generated opening prices use a wider ladder:
+  - smaller and mid-cap names can still open cheap
+  - larger, higher-free-float, stronger-financial names can open above `Rp 1,000`
+  - premium names can land in `Rp 5,000+`, `Rp 10,000+`, and `Rp 20,000+` tiers
+- Backend event layers already exist:
+  - yearly `macro` world-state generation
+  - structured `company` catalyst generation
+  - short-horizon `person-of-interest` sentiment generation
+  - multi-day `special` market-regime arcs
+- A first-pass event-reading UX now exists in `News`
+- A first-pass smaller mobile-style social-feed UX now also exists in `Twooter`
+
+## Current Player Flow
+- Current fresh-run flow is:
+  - `Main Menu`
+  - `Difficulty`
+  - `Loading`
+  - `Desktop`
+- Current load-run flow is:
+  - `Main Menu`
+  - `Loading`
+  - `Desktop`
+- Desktop icons currently are:
+  - `STOCKBOT`
+  - `News`
+  - `Twooter`
+  - `Exit`
+- Desktop behavior:
+  - desktop background is plain beige
+  - decorative accent/glow nodes still exist in the scene, but are currently hidden
+  - desktop header/subtitle/hint labels still exist in the scene, but are currently hidden
+  - taskbar nodes and logic still exist, but `TaskbarLayer` is currently hidden by default
+- App behavior:
+  - `STOCKBOT` opens the trading platform inside a faux app window
+  - the faux app window has a top title bar with `minimize` and `close`
+  - both window controls return the player to the desktop for now
+  - `News` opens a beige event-driven intel/news desk
+  - `Twooter` opens a smaller beige mobile-style social-feed window
+  - `Exit` returns to the main menu
+- Stock app identity:
+  - desktop label: `STOCKBOT`
+  - app-window title: `STOCKBOT`
+  - the old in-terminal `Back to Menu` button has been removed
+- Social app identity:
+  - desktop label: `Twooter`
+  - app-window title: `Twooter`
+
+## Stock Terminal Layout
+- `STOCKBOT` still contains the existing trading shell:
+  - `Dashboard`
+  - `Trade`
+  - `Portfolio`
+  - `Help`
+- Top stock-terminal navbar currently surfaces:
+  - `Market`
+  - `Equity`
+  - `Cash Available`
+  - `Day / Date`
+  - `Advance Day`
+- The old top `Focus` read in the navbar has been removed and replaced by `Cash Available`
+- The stock app window intentionally uses a dark theme, while the desktop, `News`, and `Twooter` windows use beige/light themes
+- The stock app is now contained inside a dedicated window container so the trading shell cannot spill outside the faux browser window bounds
+- Current app-window content insets are effectively:
+  - left/right: `20`
+  - top: `64`
+  - bottom: `20`
+- The stock shell itself was tightened in several passes:
+  - internal container padding was removed
+  - gaps between navbar and sidebar were removed
+  - Trade columns are clipped to their container
+  - Portfolio sections were tightened to sit flush
+  - internal stock-app border radii were stripped out for a squarer terminal look
+
+## Trade View
+- Trade view now uses:
+  - left `watchlist / all stock / portfolio` panel
+  - center work area with `Chart`, `Key Stats`, `Financials`, `Analyzer`, and `Profile` tabs
+  - right order ticket
+- Current center-tab responsibilities are:
+  - `Chart`: price chart plus range switching
+    - the old subheader line under the ticker has been intentionally hidden
+    - chart UI now includes:
+      - range buttons: `1D`, `1W`, `1M`, `1Y`, `5Y`, `YTD`
+      - display-mode buttons: `Line`, `Candle`
+      - simplified zoom buttons: `-`, `+`
+    - chart canvas now draws:
+      - right-side price labels / Y axis
+      - bottom date labels / X axis
+      - crosshair lines plus hover price / date badges
+      - a compact hover OHLC / volume readout
+    - `5Y` can now show a derived pre-2020 history instead of only post-start runtime bars
+    - the pre-2020 layer is generated lazily per company from the existing annual + quarterly financial data
+    - the historical path was revised away from the first overly smooth always-upward interpolation so it can now show sideways years, pullbacks, and down years while still resolving to the correct `Q4 2019` / opening anchor
+    - current X-axis label behavior is range-specific:
+      - `5Y`: year labels only
+      - `1Y`: month labels only
+      - `1M`: first trading day of each week as day-of-month labels like `06`, `13`, `20`
+    - long-range display is now resampled for readability:
+      - `1Y` renders from weekly aggregated display bars
+      - `5Y` renders from monthly aggregated display bars
+      - raw runtime daily bars are still preserved underneath; this resampling is display-only
+    - chart display modes currently behave like:
+      - `Line`: default everywhere
+      - `Candle`: available on `1W`, `1M`, `1Y`, `5Y`, and `YTD`
+      - `1D` intentionally forces `Line` mode because the current sim only generates one daily OHLC bar per trade day and there is no intraday tape yet
+  - `Key Stats`: top-level financial summary plus generated `2010-2019` history table
+    - current history table is shown descending, so `2019` is first and `2010` is last
+  - `Financials`: derived simplified `Income Statement`, `Balance Sheet`, and `Cash Flow`
+    - this is intentionally a learning-oriented abstraction, not a full accounting engine
+    - current data covers `40` derived quarters from `Q1 2010` through `Q4 2019`
+    - current default landing period is the latest available quarter, `Q4 2019`
+    - the tab now has `Older / Newer` period navigation inside the panel
+    - quarterly statement lines are derived from generated annual history + hidden traits and are meant to be internally coherent, not GAAP-accurate
+  - `Analyzer`: setup read, supportive signals, risk signals, visible inputs, and recent closes
+  - `Profile`: company identity, sector, archetype, size, board, live price snapshot, generated company profile scores, founded year, age, employee count, profile revenue, profile tags, and generated narrative description
+- The old left-panel helper copy was removed:
+  - no advancers / decliners / flat / strongest-tape helper
+  - no selected-stock helper label
+- The old `TRADE LIST` title was replaced with tabs:
+  - `Watchlist`
+  - `All Stock`
+  - `Portfolio`
+- Current default tab is `Watchlist`
+- Current right-side order ticket is now a simplified execution card:
+  - darker stock-terminal styling again instead of the earlier bright prototype card
+  - top `Buy / Sell` side selectors
+  - quantity input
+  - current-price field
+  - estimated total
+  - one submit button
+  - no order-type row yet
+  - no bid / ask display for now because there is no separate quote / order-book layer yet
+- Trade panel spacing was tightened:
+  - `MarketsView.tscn` split separations are now `0`
+  - the three trade sections are intended to sit flush with no gap
+- Stock-switch performance was also optimized:
+  - selecting a stock no longer runs a full `_refresh_all()` path
+  - list views now use lighter company snapshots instead of copying full financial history + quarter history for every row
+  - the active trade snapshot is cached in `GameRoot.gd` so quarter navigation does not re-fetch the company
+  - `TradeWorkspaceWidget.gd` no longer deep-copies the selected stock snapshot before rebuilding the chart
+- Chart system status:
+  - chart range switcher supports `1D`, `1W`, `1M`, `1Y`, `5Y`, `YTD`
+  - chart display-mode switcher supports `Line` and `Candle`
+  - chart backend already prepares layered plot snapshots and indicator-ready data
+  - `GameManager.get_company_chart_snapshot()` now feeds the chart from combined bars, not only raw runtime `price_bars`
+  - pre-2020 `5Y` history is currently chart-only; it is not used by market simulation logic, analyzer recent closes, or the saved runtime `price_history`
+  - `PriceChartCanvas.gd` is now responsible for:
+    - axes and tick labels
+    - zoomed visible-window slicing
+    - line rendering
+    - candle rendering
+  - indicator catalog exists in backend but still has no player-facing toggle UI
+
+## Watchlist System
+- A real persistent watchlist system now exists
+- Save/runtime model:
+  - `RunState` now stores `watchlist_company_ids`
+  - `RunState.reset()` clears it
+  - `RunState.load_from_dict()` loads it
+  - `RunState.to_save_dict()` persists it
+  - `GameManager` exposes:
+    - `get_watchlist_company_ids()`
+    - `add_company_to_watchlist(company_id)`
+  - `GameManager` emits `watchlist_changed` after a successful add and save
+- Watchlist UX:
+  - `Watchlist` tab can start empty
+  - `Add Watchlist` button opens a popup list of all stocks
+  - player selects one stock and confirms to save it into the watchlist
+  - `All Stock` tab renders dynamic per-stock rows
+  - each `All Stock` row has:
+    - a select button
+    - an `Add` button
+  - pressing `Add` immediately saves that company into the watchlist
+  - already-added names become `Added` and the button is disabled
+  - `Portfolio` tab now also exists beside `Watchlist` and `All Stock`
+  - `Portfolio` tab shows stocks the player currently holds so they can be reselected quickly from the trade sidebar
+- Important limitation:
+  - there is no remove-from-watchlist flow yet
+  - there is still no search / sort / filter for either list
+
+## Portfolio / Dashboard / Help
+- `Dashboard`, `Portfolio`, and `Help` still exist inside `STOCKBOT`
+- Their right-side outer margins were tightened so they sit more flush inside the stock window
+- Portfolio layout still reads like a broker app:
   - top summary strip
-  - left holdings table
-  - right history table
-  - both lower tables now scroll horizontally on tighter widths so columns stay reachable
+  - holdings table
+  - history table
+- Portfolio section spacing was reduced so the blocks sit flush against each other
+
+## News Desk
+- `News` is no longer a blank placeholder
+- It currently lives inside the existing faux app window in `GameRoot.tscn`; there is still no separate scene for it
+- Current news model is:
+  - the real event systems remain the source of truth
+  - the news layer renders those events into readable articles
+  - the news layer does not create its own separate market-moving reality
+- Current prototype intel/outlet mapping is:
+  - `Intel 1`: `Gorengan Daily`
+  - `Intel 2`: `Waduh Finance`
+  - `Intel 3`: `Harian Investor`
+  - `Intel 4`: `Ordal News`
+- Important design note:
+  - these are currently presented as outlet names in the News window
+  - conceptually they map to future `Intel 1-4` perks rather than independent truth sources
+  - higher intel means earlier visibility into the same underlying event
+- Current prototype behavior uses a temporary hardcoded unlocked intel level of `4`
+  - this means all four outlet buttons are currently visible and usable until the perk system exists
+- Current news feed sources are:
+  - active hidden `company_arc` phases for the highest intel tier
+  - active `special` events still playing out
+  - recent `event_history` entries already recorded into `RunState`
+  - a market-wrap fallback built from saved `market_history`
+- Current generated article fields include:
+  - `headline`
+  - `deck`
+  - `body`
+  - `progress_label`
+  - `category`
+  - `tone`
+  - target company / ticker / sector / person metadata when available
+- Current rendering behavior:
+  - left side shows outlet buttons plus an article list
+  - right side shows article detail
+  - article timing/availability depends on event progress and outlet intel level
+  - market-wrap style articles provide fallback content so the feed is not empty on quieter sessions
+- Current content source is editable:
+  - `data/news/news_feed_data.json`
+  - this stores outlet labels, summary/tagline copy, progress labels, headline prefixes, sentence pools, and hidden-phase templates
+- Current generator implementation:
+  - `systems/NewsFeedSystem.gd`
+  - wired through `GameManager.get_news_snapshot()`
+  - loaded through `DataRepository.gd`
+
+## Twooter Feed
+- `Twooter` is no longer a blank placeholder
+- It currently lives inside the existing faux app window in `GameRoot.tscn`; there is still no separate scene for it
+- Current social model is:
+  - the same underlying event systems still remain the source of truth
+  - the social layer renders those events into short posts, reactions, and account chatter
+  - unlike `News`, progression here is account-access based rather than outlet-based
+- Current prototype behavior uses a temporary hardcoded unlocked access tier of `4`
+  - this means all currently defined accounts are visible and usable until the perk system exists
+- Current account tiers are:
+  - Tier `1`: `Gorengan Hunter`, `Rumor Lokal`
+  - Tier `2`: `Flow Warung`, `Waduh Macro`
+  - Tier `3`: `Investor Kantor`, `Funda Thread`
+  - Tier `4`: `Tonald Drump`, `Melon Tusk`
+- Current feed sources are:
+  - active hidden `company_arc` phases for earlier chatter
+  - active `special` events still playing out
+  - recent `event_history` entries already recorded into `RunState`
+  - a market-wrap fallback built from saved `market_history`
+- Current generated post fields include:
+  - `account display name`
+  - `handle`
+  - `tier`
+  - `verified`
+  - `post_text`
+  - `visibility_label`
+  - `category`
+  - `tone`
+  - target company / ticker / sector / person metadata when available
+  - deterministic `likes`, `replies`, and `retwoots`
+- Current rendering behavior:
+  - the window is now intentionally smaller and centered so it reads more like a phone/social app than a desktop dashboard
+  - top row shows the current prototype access-tier status
+  - the body is now a single scrollable feed
+  - each post renders as a simple stacked card with account, handle, post text, compact meta/context, and reactions
+  - there are no per-account filter tabs/buttons in the current UI
+  - there is no separate selected-post detail pane in the current UI
+- Current content source is editable:
+  - `data/social/twooter_feed_data.json`
+  - this stores tier labels, account definitions, handles, verification flags, and post/template pools
+- Current generator implementation:
+  - `systems/TwooterFeedSystem.gd`
+  - wired through `GameManager.get_twooter_snapshot()`
+  - loaded through `DataRepository.gd`
+
+## Event Systems
+- Macro state generation:
+  - `systems/MacroStateSystem.gd`
+  - deterministic yearly macro outlooks from the run seed
+  - derives central-bank `cut / hold / hike`
+  - maps macro conditions into market bias, volatility multiplier, and sector biases
+- Company event generation:
+  - `systems/CompanyEventSystem.gd`
+  - deterministic daily company catalyst sampling
+  - supports persistent multi-day company arcs
+- Person-of-interest event generation:
+  - `systems/PersonEventSystem.gd`
+  - currently supports:
+    - `trump_tariff_barrage`
+    - `trump_deal_optimism`
+    - `musk_ai_hype`
+    - `musk_meme_pump`
+    - `musk_controversy_spiral`
+  - displayed parody names now use:
+    - `Tonald Drump`
+    - `Melon Tusk`
+  - note: event ids still use `trump_*` / `musk_*`; only displayed copy and person metadata were renamed
+- Special event generation:
+  - `systems/SpecialEventSystem.gd`
+  - deterministic multi-day market arcs
+  - persists active arcs into `RunState.active_special_events`
+  - supports scripted shock phases like consecutive ARB sessions and capped ARA-style bursts on affected sectors
 
 ## Implemented Systems
 - Core autoloads:
@@ -49,6 +353,14 @@ Read this file first in the next session.
   - `autoloads/RunState.gd`
   - `autoloads/DataRepository.gd`
   - `autoloads/SaveManager.gd`
+- Data repository content loading now includes:
+  - `data/companies/company_archetypes.json`
+  - `data/companies/company_words.json`
+  - `data/companies/company_profile_data.json`
+  - `data/sectors/sectors.json`
+  - `data/events/events.json`
+  - `data/news/news_feed_data.json`
+  - `data/social/twooter_feed_data.json`
 - Market simulation:
   - `systems/MarketSimulator.gd`
   - daily price change uses market sentiment, sector sentiment, events, broker flow, mean reversion, and noise
@@ -57,23 +369,142 @@ Read this file first in the next session.
   - broker archetypes: retail, foreign, institution, zombie
 - Summary system:
   - `systems/SummaryInsightSystem.gd`
+- Chart system:
+  - `systems/ChartSystem.gd`
+  - chart snapshot building now also supports `build_chart_snapshot_from_bars()` so callers can render from combined historical + runtime bars
+  - current backend indicator catalog already includes:
+    - `SMA 20`
+    - `EMA 20`
+    - `SMA 50`
+    - `RSI 14`
 - IDX price rules:
   - `systems/IDXPriceRules.gd`
   - tick size ladder implemented
-  - ARA/ARB implemented
+  - ARA / ARB implemented
 - Trading calendar:
   - `systems/TradingCalendar.gd`
-  - skips weekends and 2020 IDX holiday list from `data/calendar/idx_holidays.json`
+  - skips weekends and IDX holiday dates from `data/calendar/idx_holidays.json`
+  - holiday coverage extends from `2020` through `2030`
+  - `2027-2030` uses projected holiday dates for long-run simulation
 - Procedural company generation:
   - `systems/CompanyGenerator.gd`
   - generates hidden traits
   - generates annual financial history from `2010` to `2019`
   - derives 2020 opening fundamentals
   - derives `quality_score`, `growth_score`, `risk_score`, `base_volatility`, and `base_price`
+  - now also derives a quarterly `financial_statement_snapshot` with:
+    - a latest-period top-level snapshot used by the UI
+    - `40` quarterly periods from `Q1 2010` through `Q4 2019`
+    - simplified income statement lines
+    - simplified balance sheet lines
+    - simplified cash flow lines
+  - current statement layer is formula-derived from generated history, current financials, and hidden traits
+  - quarter seasonality currently uses sector-weighted quarter profiles plus seeded noise, then normalizes back into coherent yearly totals
+  - now also exposes a chart-only historical price builder for pre-2020 `5Y` views
+    - derives older bars from annual history, quarterly statements, implied share-price anchors, and seeded valuation/regime noise
+    - currently targets believable long-run shape rather than exact financial-to-price realism
+- Procedural narrative company profile generation:
+  - `systems/CompanyNarrativeGenerator.gd`
+  - deterministic narrative layer built on top of the existing roster + financial generators
+  - uses a mulberry32 RNG stream seeded from `run_seed` + `company_id`
+  - editable content source is `data/companies/company_profile_data.json`
+  - currently generates:
+    - `archetype_id` / `archetype_label`
+    - `company_size_id` / `company_size_label`
+    - `company_age`
+    - `founded_year`
+    - `employee_count`
+    - `profile_revenue`
+    - `profile_revenue_value`
+    - `profile_revenue_unit`
+    - `profile_description`
+    - `profile_tags`
+  - profile revenue currently derives from the already-generated financials so the narrative layer stays aligned with the sim's actual company numbers
 - Procedural roster generation:
   - `systems/CompanyRosterGenerator.gd`
-  - builds a fresh company list each run from archetype anchors + word-bank names
+  - builds a fresh company list each run from archetype anchors plus procedural naming banks
   - generates `2-3` word company names, unique `4-letter` tickers, sector assignment, and listing board
+  - still owns company identity generation:
+    - name
+    - ticker
+    - sector assignment
+    - listing board
+    - narrative tags
+
+## UI / Scene Map
+- Main menu flow:
+  - `scenes/main_menu/MainMenu.tscn`
+  - `scripts/ui/MainMenu.gd`
+- Game shell:
+  - `scenes/game/GameRoot.tscn`
+  - `scripts/ui/GameRoot.gd`
+- Main game view scenes:
+  - `scenes/game/views/DashboardView.tscn`
+  - `scenes/game/views/MarketsView.tscn`
+  - `scenes/game/views/PortfolioView.tscn`
+  - `scenes/game/views/HelpView.tscn`
+- Main trade/widget scenes:
+  - `scenes/game/widgets/WatchlistWidget.tscn`
+  - `scenes/game/widgets/TradeWorkspaceWidget.tscn`
+  - `scenes/game/widgets/OrderWidget.tscn`
+  - `scenes/game/widgets/PortfolioWidget.tscn`
+  - `scenes/game/widgets/TradeHistoryWidget.tscn`
+  - `scenes/game/widgets/SummaryWidget.tscn`
+  - `scenes/game/widgets/SectorWidget.tscn`
+- Chart widget scripts:
+  - `scripts/ui/widgets/TradeWorkspaceWidget.gd`
+  - `scripts/ui/widgets/PriceChartCanvas.gd`
+- News desk backend / content:
+  - `systems/NewsFeedSystem.gd`
+  - `data/news/news_feed_data.json`
+- Twooter backend / content:
+  - `systems/TwooterFeedSystem.gd`
+  - `data/social/twooter_feed_data.json`
+
+## Important Runtime / Save Decisions
+- Runtime company stats are generated per run and saved in `RunState`
+- Runtime company definitions are also saved in `RunState`, so generated names / tickers / sectors survive save / load
+- Runtime `company_profile` now persists:
+  - financial/runtime profile fields
+  - narrative profile fields
+  - the derived `financial_statement_snapshot`
+- `RunState.COMPANY_PROFILE_KEYS` now includes:
+  - financial/runtime values like `base_price`, scores, `financials`, `financial_history`, `financial_statement_snapshot`, and `generation_traits`
+  - narrative values like `archetype_label`, `company_size_label`, `founded_year`, `employee_count`, `profile_revenue`, `profile_description`, and `profile_tags`
+- Older saves are backfilled through `RunState._ensure_company_profiles()` and normalized through `RunState._normalize_company_profile()`
+- Older saves now also backfill missing quarterly statement history by rebuilding `financial_statement_snapshot` from the saved annual financial history + traits
+- Snapshot access is now intentionally split by weight:
+  - lightweight list/overview callers can ask for company snapshots without full `financial_history` or `quarterly_statements`
+  - the Trade workspace still requests the full stock snapshot because it needs chart history, annual history, and quarter navigation
+- Trade chart history is now also split by source:
+  - runtime `price_history` / `price_bars` still start in `2020`
+  - `RunState.get_company_chart_bars(company_id)` lazily prepends derived pre-2020 bars for chart rendering when needed
+  - the lazy historical chart cache currently lives only in memory and is rebuilt after load; it is not persisted into the save file
+- Runtime companies persist:
+  - `starting_price`
+  - `ytd_open_price`
+  - `ytd_reference_year`
+  - longer-running `price_history`
+  - daily `price_bars`
+- Yearly macro states are saved in `RunState`
+- Daily generated events are saved in `RunState.event_history`
+- Daily market-performance snapshots are saved in `RunState.market_history`
+- Ongoing company-event arcs are saved in `RunState.active_company_arcs`
+- Ongoing special-event arcs are saved in `RunState.active_special_events`
+- Watchlist membership is now also saved in `RunState.watchlist_company_ids`
+- News articles are currently not persisted as separate save data:
+  - the feed is re-rendered from saved event / market state on demand
+  - this keeps the article layer deterministic and lightweight
+- Twooter posts are also not persisted as separate save data:
+  - the feed is re-rendered from saved event / market state on demand
+  - this keeps the social layer deterministic and lightweight
+- Gameplay code should prefer runtime company access through:
+  - `RunState.get_effective_company_definition(company_id)`
+  - `RunState.get_effective_company_definitions()`
+- Trade chart consumers can use:
+  - `GameManager.get_company_chart_snapshot(company_id, range_id, enabled_indicator_ids := [])`
+  - `GameManager.get_chart_range_label(range_id)`
+  - `GameManager.get_chart_indicator_catalog()`
 
 ## Trading Rules
 - Lot size: `1 lot = 100 shares`
@@ -91,141 +522,140 @@ Read this file first in the next session.
   - cash impact
   - realized P/L on sells
 
-## UI Layout
-- Main menu flow:
-  - `scenes/main_menu/MainMenu.tscn`
-  - `scripts/ui/MainMenu.gd`
-  - screens now switch between `Home`, `Difficulty selector`, and `Loading`
-- Root shell:
-  - `scenes/game/GameRoot.tscn`
-  - `scripts/ui/GameRoot.gd`
-- Navbar now sits at the top of the screen, with the sidebar below it in the main body row
-- Sidebar sections:
-  - `Dashboard`
-  - `Markets`
-  - `Portfolio`
-  - `Help`
-- View scenes:
-  - `scenes/game/views/DashboardView.tscn`
-  - `scenes/game/views/MarketsView.tscn`
-  - `scenes/game/views/PortfolioView.tscn`
-  - `scenes/game/views/HelpView.tscn`
-- Widget scenes:
-  - `scenes/game/widgets/DeskWidget.tscn`
-  - `scenes/game/widgets/OrderWidget.tscn`
-  - `scenes/game/widgets/CompanyDetailWidget.tscn`
-  - `scenes/game/widgets/BrokerWidget.tscn`
-  - `scenes/game/widgets/SummaryWidget.tscn`
-  - `scenes/game/widgets/WatchlistWidget.tscn`
-  - `scenes/game/widgets/SectorWidget.tscn`
-  - `scenes/game/widgets/PortfolioWidget.tscn`
-  - `scenes/game/widgets/TradeHistoryWidget.tscn`
-- Portfolio view now uses:
-  - a full-width top summary strip for `Trading Balance`, `Invested`, `P&L`, and `Total Equity`
-  - a left holdings table with ticker, current price, average price, lot balance, invested cost, P&L, and `%`
-  - a right history table with action, net amount, qty, price, and date
-  - both lower tables keep their headers and rows inside horizontally scrollable containers
-
-## Important Design Decisions
-- `company_archetypes.json` is now the static archetype seed file, not the live runtime roster
-- `company_archetypes.json` stores cleaner templates with runtime-generation anchors grouped under `anchors`
-- `company_words.json` now holds the procedural naming bank used to randomize company names each run
-- Runtime company stats are generated per run and saved in `RunState`
-- Runtime company definitions are also saved in `RunState`, so generated names/tickers/sectors survive save/load cleanly
-- The rest of the game should use:
-  - `RunState.get_effective_company_definition(company_id)`
-  - `RunState.get_effective_company_definitions()`
-  instead of reading only static `DataRepository` company definitions for gameplay logic
-- UI dates should use `GameManager.format_trade_date(...)` and `RunState` calendar state, not local date math
-- Layout is modular enough for future widget rearranging, but drag/drop user customization is not implemented yet
-- The selected-company dashboard panel now includes an in-panel generated history view fed from runtime `financial_history`
-- Most static explanatory copy has been removed from the live game layout and moved into the in-game `Help` section for a cleaner shell
-- Sidebar chrome is now stripped down:
-  - no `WORKSPACE`
-  - no `Market Sections`
-  - no sidebar `Current focus`
-- Navbar branding copy is now stripped down:
-  - no `MARKET DESK`
-  - no `Modular Play Space`
-- The old dashboard `TRADING DESK` label/status area has been removed in favor of a bottom-right order toast with a close button and `5s` auto-hide
-
-## Company Data Model
-- Static template still lives in:
-  - `data/companies/company_archetypes.json`
-- Procedural naming bank lives in:
-  - `data/companies/company_words.json`
-- Static company templates now mainly carry:
-  - seed identity fields like `id`, `ticker`, `name`, `sector_id`
-  - `narrative_tags`
-  - compact generator inputs under `anchors`
-- A real run no longer uses the five static companies directly:
-  - `GameManager.build_company_roster(...)` generates the live roster for the selected difficulty
-  - each generated company gets its own `id`, `ticker`, `name`, `sector_id`, `listing_board`, `narrative_tags`, and mutated `anchors`
-- Runtime generated profile is stored in each company runtime as `company_profile`
-- Generated profile currently includes:
-  - `base_price`
-  - `quality_score`
-  - `growth_score`
-  - `risk_score`
-  - `base_volatility`
-  - `financials`
-  - `financial_history`
-  - `generation_traits`
-  - `shares_outstanding`
-- `financial_history` currently contains annual rows for `2010-2019`
-- `GameManager.get_portfolio_snapshot()` now also exposes:
-  - `invested_cost`
-  - `unrealized_pnl`
-  - `unrealized_pnl_pct`
-  - per-holding `invested_cost` and `unrealized_pnl_pct`
-
 ## Testing
 - Smoke scene:
   - `scenes/tests/SmokeTest.tscn`
-  - script: `scripts/tests/SmokeTest.gd`
-- Smoke test currently verifies:
-  - main menu `New Game` opens the dedicated difficulty selector
-  - selector renders four difficulty cards
-  - `Continue` stays disabled until a difficulty card is chosen
-  - loading screen exposes a progress bar node
-  - difficulty-based company counts load (`50` on Normal, `200` on Hardcore)
-  - generated company names are `2-3` words
-  - generated tickers are unique `4-letter` codes
-  - dashboard buy flow shows the new order toast
-  - opening trade date is `2020-01-02`
-  - trade history is created
-  - prices stay on IDX ticks
-  - prices stay inside ARA/ARB
-  - financial snapshot exists
-  - financial history has 10 rows
-  - financial history spans `2010-2019`
-  - dashboard company history panel is populated from generated runtime history
-  - Hardcore path has at least one down day
-- Last known passing smoke output:
-  - `SMOKE_OK normal_equity=99999985.15 hardcore_equity=965847.0 hardcore_down_days=7 summary=Zombie distribution hit MECH hardest and kept the day defensive.`
+  - `scripts/tests/SmokeTest.gd`
+- Smoke coverage now includes:
+  - main menu `New Game` -> difficulty selector flow
+  - loading screen progress existence
+  - macro state generation and persistence
+  - structured company event generation
+  - person-of-interest event generation
+  - special event arc generation
+  - difficulty-based company counts
+  - generated company naming / ticker constraints
+  - premium opening-price tiers
+  - opening trade date is `2020-01-03`
+  - trading calendar reaches `2030`
+  - order toast appears after buy flow
+  - trade history creation
+  - IDX tick / ARA / ARB enforcement
+  - generated financial snapshot and `2010-2019` annual history
+  - generated derived financial statements in the company snapshot
+  - derived quarterly statement count is `40`
+  - latest derived statement period resolves to `Q4 2019`
+  - generated narrative company profile description
+  - generated narrative company profile tags
+  - chart snapshot / range-switcher wiring
+  - chart zoom controls exist and behave on `5Y`
+  - chart display-mode controls switch between `Line` and `Candle`
+  - `1D` keeps candle mode disabled and falls back to line mode
+  - lazy `5Y` chart history reaching back before `2020`
+  - lazy `5Y` chart history rebuilding after save / load
+  - desktop shell appears first
+  - `News` opens the event-driven desk with outlet buttons and populated stories
+  - `Twooter` opens the simplified mobile-style social feed with populated post cards
+  - `STOCKBOT` opens the trading shell inside the faux app window
+  - watchlist popup add flow works
+  - `All Stock` add button immediately saves into watchlist
+  - `Portfolio` tab appears in the trade sidebar and lists held stocks when present
+- Important recent verification note:
+  - `SmokeTest.gd` has now been updated to assert that generated company snapshots include a non-empty derived financial-statement block, `40` quarters of statement history, and a latest period of `Q4 2019`
+  - `SmokeTest.gd` was also updated for the reduced difficulty company counts of `25 / 50 / 75 / 100`
+  - `SmokeTest.gd` was later extended again to expect a pre-2020 `5Y` chart path and successful lazy `5Y` rebuild after save/load
+  - `SmokeTest.gd` was later extended again to expect chart zoom buttons plus `Line / Candle` display-mode controls, including the `1D` candle lockout behavior
+  - `SmokeTest.gd` was later extended again so `Twooter` is expected to open as a populated simplified feed with stacked post cards instead of a blank prototype window
+  - the last confirmed full end-to-end smoke rerun still remains the earlier successful run on `2026-04-05 18:45` local time
+  - that confirmed `SMOKE_OK` output predates the most recent difficulty-count reduction, so there is not yet a fresh end-to-end smoke artifact for the lower company-count presets
+  - during the later lazy-historical-chart and chart-shape-adjustment passes, Godot launch/runtime sanity checks also passed with no debug errors after fixing a temporary `CompanyGenerator.gd` parser issue
+  - attempted direct smoke reruns during those later chart passes still did not rewrite `user://smoke_test_result.txt`, so there is still not yet a newly confirmed post-quarterly-financials / post-lazy-chart `SMOKE_OK` file
+- Last known fully passing smoke output is now:
+  - `SMOKE_OK normal_equity=99998359.35 hardcore_equity=923611.5 hardcore_down_days=18 summary=Institution-led accumulation gave IDSY the cleanest tape today.`
 
 ## Known Limitations
-- Trading calendar currently has 2020 holidays only
-- No quarterly financial simulation yet
-- No price chart widget yet
-- No onboarding beyond a simple tutorial popup
+- Quarterly financials now exist, but they are still a derived educational layer:
+  - not a full accounting engine
+  - not based on real filing logic like depreciation schedules, working-capital ledgers, minority-interest ownership trees, or tax assets/liabilities
+  - designed to be coherent and learnable rather than standards-accurate
+- The `Financials` tab currently shows one quarter at a time:
+  - there is no dense multi-quarter grid/table yet
+  - there is no annual/quarter toggle yet
+  - there is no export / comparison UI yet
+- No deeper onboarding beyond the current tutorial popup
 - No player-custom widget layout yet
-- Company generator still uses the compact `anchors` values in `company_archetypes.json` as runtime generation inputs
-- `200`-name Hardcore rosters are playable, but the Markets screen still has no search/sort/filter tools yet
-- Portfolio holdings/history tables are display-focused right now:
+- `2027-2030` holiday rows are projected simulation data and may differ from future official IDX calendars
+- `News` is now a first-pass deterministic desk, but still limited:
+  - current prototype hardcodes unlocked intel to `4`
+  - there is no real perk / upgrade system driving outlet access yet
+  - there is no search / archive / pagination / bookmarking yet
+  - current article text is template-driven and intentionally editable, but still early-pass content
+  - no richer article-specific imagery / attachments / linked company cards yet
+- `Twooter` is now a first-pass deterministic feed, but still limited:
+  - current prototype hardcodes unlocked access tier to `4`
+  - there is no real perk / upgrade system driving account access yet
+  - there is no search / archive / pagination / bookmarking yet
+  - current post text is template-driven and intentionally editable, but still early-pass content
+  - the simplified mobile feed intentionally drops per-account filters for now
+  - no richer account pages / follow system / custom finfluencer authoring UI yet
+- Taskbar scaffold exists, but is currently hidden
+- No draggable / resizable window manager yet
+- There is now a dedicated `News` UI, but there is still no separate long-form history browser beyond the current article list/detail feed
+- Person-event ids still use `trump_*` / `musk_*` internally even though displayed names are now `Tonald Drump` / `Melon Tusk`
+- Watchlist has no remove flow yet
+- Trade list still has no search / sort / filter tools
+- `Load Run` now uses a loading screen, but the smoke flow still does not explicitly click through the saved-run path
+- Portfolio tables are still display-focused:
   - no sorting
   - no filtering
   - no row actions yet
-  - horizontal scrolling solves clipping, but the tables still need a stronger responsive/mobile treatment later
+- Trade view still needs deeper polish later:
+  - there is still no intraday tape or intraday execution layer
+  - candle mode is currently display-only and uses daily / weekly / monthly OHLC bars depending on range
+  - `1D` intentionally does not allow candles because the sim only resolves one OHLC bar per day
+  - no indicator toggle UI / unlock flow yet
+  - no lower indicator panes yet
+  - crosshair / hover readout now exist, but there is still no draggable chart interaction yet
+  - the current pre-2020 `5Y` history is intentionally derived and chart-only:
+    - not a fully simulated day-by-day market tape
+    - not yet surfaced as a dense historical table anywhere else in the UI
+    - should be treated as believable long-run context, not canonical event-by-event history
+- Company generation is still intentionally split across layers rather than one single end-to-end pipeline:
+  - `CompanyRosterGenerator.gd` still owns identity generation
+  - `CompanyGenerator.gd` still owns financial/runtime stat generation
+  - `CompanyNarrativeGenerator.gd` now adds deterministic archetype/size/description flavor on top
+- `company_profile_data.json` is now the editable narrative content source, but it is tailored to the repo's existing sector ids rather than the broader external reference schema
 
 ## Recommended Next Steps (Confirm user first)
-- Add price chart + recent company timeline
-- Extend trading calendar beyond 2020
+- Deepen the real `News` content now that the first event-driven desk exists:
+  - replace the temporary prototype intel `4` unlock with real perk-driven `Intel 1-4`
+  - keep the same outlet names:
+    - `Gorengan Daily`
+    - `Waduh Finance`
+    - `Harian Investor`
+    - `Ordal News`
+  - expand/edit outlet voice, headline prefixes, and sentence pools in `data/news/news_feed_data.json`
+  - decide whether more event families need dedicated templates beyond the current first-pass pools
+- Deepen the real `Twooter` content now that the first simplified social feed exists:
+  - replace the temporary prototype access tier `4` unlock with real perk-driven account access
+  - keep `Tonald Drump` / `Melon Tusk` as the current highest-tier accounts
+  - expand/edit account voice and template pools in `data/social/twooter_feed_data.json`
+  - add more user-authored finfluencer accounts later
+- Add watchlist management polish:
+  - remove from watchlist
+  - search / sort / filter
+  - maybe multi-list support later
+- Deepen the chart:
+  - indicator unlock flow tied to learning / perks
+  - overlay toggles
+  - lower indicator panes
+  - event markers / timeline
+  - hover pinning / richer hover cards
+  - drag / pan interaction
+  - if desired later, a true intraday layer built on top of the current daily sim rather than replacing it
+- Extend trading calendar beyond `2030`
 - Consider quarterly report events driven by generated fundamentals
-- Add score-explanation UI:
-  - why quality is high/low
-  - why growth is high/low
-  - why risk is high/low
+- Add score-explanation UI for quality / growth / risk
 
 ## Good Re-entry Prompt
 Use something like:

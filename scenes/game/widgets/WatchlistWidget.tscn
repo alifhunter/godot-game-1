@@ -1,32 +1,74 @@
 [gd_scene format=3]
 
 [node name="WatchlistPanel" type="PanelContainer"]
+clip_contents = true
 custom_minimum_size = Vector2(420, 0)
+size_flags_vertical = 3
 
 [node name="WatchlistMargin" type="MarginContainer" parent="."]
+size_flags_horizontal = 3
+size_flags_vertical = 3
 theme_override_constants/margin_left = 16
 theme_override_constants/margin_top = 16
 theme_override_constants/margin_right = 16
 theme_override_constants/margin_bottom = 16
 
 [node name="WatchlistVBox" type="VBoxContainer" parent="WatchlistMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 0
+
+[node name="StockListTabs" type="TabContainer" parent="WatchlistMargin/WatchlistVBox"]
+clip_contents = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="WatchlistTab" type="VBoxContainer" parent="WatchlistMargin/WatchlistVBox/StockListTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
 theme_override_constants/separation = 10
 
-[node name="WatchlistTitle" type="Label" parent="WatchlistMargin/WatchlistVBox"]
-text = "MARKETS"
+[node name="AddWatchlistButton" type="Button" parent="WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab"]
+custom_minimum_size = Vector2(0, 40)
+text = "Add Watchlist"
 
-[node name="WatchlistHintLabel" type="Label" parent="WatchlistMargin/WatchlistVBox"]
+[node name="WatchlistEmptyLabel" type="Label" parent="WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab"]
 autowrap_mode = 3
-text = ""
+text = "No stocks in your watchlist yet."
 
-[node name="SelectedMarketLabel" type="Label" parent="WatchlistMargin/WatchlistVBox"]
-autowrap_mode = 3
-text = "Current focus: -"
-
-[node name="WatchlistSummaryLabel" type="Label" parent="WatchlistMargin/WatchlistVBox"]
-autowrap_mode = 3
-text = "Watchlist summary will appear here."
-
-[node name="CompanyList" type="ItemList" parent="WatchlistMargin/WatchlistVBox"]
+[node name="CompanyList" type="ItemList" parent="WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab"]
 custom_minimum_size = Vector2(0, 360)
+size_flags_horizontal = 3
 size_flags_vertical = 3
+
+[node name="AllStocksTab" type="VBoxContainer" parent="WatchlistMargin/WatchlistVBox/StockListTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 0
+
+[node name="AllStocksScroll" type="ScrollContainer" parent="WatchlistMargin/WatchlistVBox/StockListTabs/AllStocksTab"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="AllStocksRows" type="VBoxContainer" parent="WatchlistMargin/WatchlistVBox/StockListTabs/AllStocksTab/AllStocksScroll"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 0
+
+[node name="PortfolioTab" type="VBoxContainer" parent="WatchlistMargin/WatchlistVBox/StockListTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 0
+
+[node name="PortfolioScroll" type="ScrollContainer" parent="WatchlistMargin/WatchlistVBox/StockListTabs/PortfolioTab"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="PortfolioRows" type="VBoxContainer" parent="WatchlistMargin/WatchlistVBox/StockListTabs/PortfolioTab/PortfolioScroll"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 0
+
+[node name="PortfolioEmptyLabel" type="Label" parent="WatchlistMargin/WatchlistVBox/StockListTabs/PortfolioTab/PortfolioScroll/PortfolioRows"]
+autowrap_mode = 3
+text = "No owned stocks yet."

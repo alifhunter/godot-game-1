@@ -2,6 +2,8 @@
 
 [node name="DetailPanel" type="PanelContainer"]
 custom_minimum_size = Vector2(420, 0)
+size_flags_horizontal = 3
+size_flags_vertical = 3
 
 [node name="DetailMargin" type="MarginContainer" parent="."]
 theme_override_constants/margin_left = 18
@@ -13,7 +15,7 @@ theme_override_constants/margin_bottom = 18
 theme_override_constants/separation = 10
 
 [node name="DetailTitle" type="Label" parent="DetailMargin/DetailVBox"]
-text = "SELECTED COMPANY READ"
+text = "KEY STATS"
 
 [node name="CompanyNameLabel" type="Label" parent="DetailMargin/DetailVBox"]
 autowrap_mode = 3

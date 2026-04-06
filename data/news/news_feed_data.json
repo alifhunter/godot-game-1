@@ -1,0 +1,132 @@
+{
+  "prototype_default_intel_level": 4,
+  "article_limit": 14,
+  "outlets": [
+    {
+      "id": "gorengan_daily",
+      "label": "Gorengan Daily",
+      "intel_level": 1,
+      "tagline": "Public recap and after-the-move chatter.",
+      "summary": "Late, loud, and mostly reactive."
+    },
+    {
+      "id": "waduh_finance",
+      "label": "Waduh Finance",
+      "intel_level": 2,
+      "tagline": "Confirmation arrives once the tape is already moving.",
+      "summary": "Developing coverage once the move gets obvious."
+    },
+    {
+      "id": "harian_investor",
+      "label": "Harian Investor",
+      "intel_level": 3,
+      "tagline": "Cleaner reads while the story is still forming.",
+      "summary": "Earlier context with a more analytical tone."
+    },
+    {
+      "id": "ordal_news",
+      "label": "Ordal News",
+      "intel_level": 4,
+      "tagline": "The earliest desk notes before the move turns crowded.",
+      "summary": "Highest intel tier with the earliest available read."
+    }
+  ],
+  "progress_labels": {
+    "early": "Early read",
+    "developing": "Developing",
+    "follow_through": "Follow-through",
+    "recap": "Public recap"
+  },
+  "headline_prefixes": {
+    "gorengan_daily": ["Sudah rame", "Penutupan panas", "Setelah gerak"],
+    "waduh_finance": ["Waduh update", "Pantau tape", "Konfirmasi"],
+    "harian_investor": ["Investor note", "Developing", "Desk view"],
+    "ordal_news": ["My boss told me", "I heard from a friend", "Info A1"]
+  },
+  "intel_lines": {
+    "1": [
+      "By the time this reaches the wider crowd, most desks are reacting rather than initiating."
+    ],
+    "2": [
+      "Confirmation is now clear enough that the story is spreading beyond the first responders."
+    ],
+    "3": [
+      "The setup is still developing, and positioning looks uneven across the board."
+    ],
+    "4": [
+      "This is still early enough that the wider market has not fully repositioned yet."
+    ]
+  },
+  "family_lines": {
+    "market": [
+      "Sector money is rotating fast enough to matter for the session."
+    ],
+    "company": [
+      "This is a single-name story where traders are re-pricing the setup around one company."
+    ],
+    "company_arc": [
+      "Positioning has been building across multiple sessions before the obvious move reaches everyone."
+    ],
+    "person": [
+      "A personality-driven post is shaping crowd attention and fast-money behavior."
+    ],
+    "special": [
+      "This is broad enough to alter how traders frame the whole tape, not just one ticker."
+    ]
+  },
+  "scope_lines": {
+    "market": [
+      "The effect is broad enough to touch multiple sectors at once."
+    ],
+    "sector": [
+      "The pressure is clustering around {sector_name}, where leadership is changing fast."
+    ],
+    "company": [
+      "The cleanest read still sits in {target_company_name} ({target_ticker})."
+    ]
+  },
+  "tone_lines": {
+    "positive": [
+      "If the flow keeps holding up, buyers can still frame this as constructive rather than exhausted."
+    ],
+    "negative": [
+      "Unless the tape stabilizes quickly, traders are likely to keep treating this as risk to be reduced."
+    ],
+    "mixed": [
+      "The read is not one-way yet, so traders still need to separate conviction from noise."
+    ]
+  },
+  "hidden_phase_templates": {
+    "smart_money_accumulation": {
+      "headline": [
+        "Quiet accumulation builds in {target_ticker}",
+        "{target_ticker} keeps attracting discreet accumulation"
+      ],
+      "deck": [
+        "Positioning is building in {target_company_name} before the broader tape fully reacts."
+      ]
+    },
+    "smart_money_distribution": {
+      "headline": [
+        "Quiet distribution starts leaking through {target_ticker}",
+        "{target_ticker} shows early signs of discreet distribution"
+      ],
+      "deck": [
+        "Supply looks heavier in {target_company_name} before the wider crowd fully notices the shift."
+      ]
+    }
+  },
+  "market_wrap_headlines": [
+    "Market wrap: {market_change} into the close",
+    "Closing bell: market settles at {market_change}",
+    "Session wrap: tape closes {market_change}"
+  ],
+  "market_wrap_decks": [
+    "Breadth closed with {advancers} advancers versus {decliners} decliners as traders reset for the next session.",
+    "The board ended with {advancers} advancers and {decliners} decliners while leadership kept rotating."
+  ],
+  "market_wrap_lines": [
+    "The strongest print came from {biggest_winner}, while {biggest_loser} was the clearest weak spot on the board.",
+    "Leadership stayed fluid, with {biggest_winner} leading the upside and {biggest_loser} trailing the tape."
+  ]
+}

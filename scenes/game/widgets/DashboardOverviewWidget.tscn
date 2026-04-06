@@ -1,0 +1,41 @@
+[gd_scene format=3]
+
+[node name="OverviewPanel" type="PanelContainer"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="OverviewMargin" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="OverviewVBox" type="VBoxContainer" parent="OverviewMargin"]
+theme_override_constants/separation = 12
+
+[node name="OverviewTitle" type="Label" parent="OverviewMargin/OverviewVBox"]
+text = "MARKET OVERVIEW"
+
+[node name="OverviewHeadlineLabel" type="Label" parent="OverviewMargin/OverviewVBox"]
+autowrap_mode = 3
+text = "Waiting for an active run."
+
+[node name="MarketOverviewLabel" type="Label" parent="OverviewMargin/OverviewVBox"]
+autowrap_mode = 3
+text = "Market and macro overview will appear here."
+
+[node name="PortfolioOverviewLabel" type="Label" parent="OverviewMargin/OverviewVBox"]
+autowrap_mode = 3
+text = "Portfolio overview will appear here."
+
+[node name="FocusOverviewLabel" type="Label" parent="OverviewMargin/OverviewVBox"]
+autowrap_mode = 3
+text = "Current focus overview will appear here."
+
+[node name="SpecialOverviewLabel" type="Label" parent="OverviewMargin/OverviewVBox"]
+autowrap_mode = 3
+text = "Event overview will appear here."
+
+[node name="NextStepLabel" type="Label" parent="OverviewMargin/OverviewVBox"]
+autowrap_mode = 3
+text = "Open Trade to inspect a chart, review key stats, and place orders."

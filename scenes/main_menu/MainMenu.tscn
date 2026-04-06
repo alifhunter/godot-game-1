@@ -240,4 +240,4 @@ text = "Step 1/5"
 
 [node name="LoadingNoteLabel" type="Label" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox"]
 autowrap_mode = 3
-text = "Large rosters can take a moment, especially on Hardcore where 200 companies are generated."
+text = "Large rosters can take a moment, especially on Hardcore where 100 companies are generated."

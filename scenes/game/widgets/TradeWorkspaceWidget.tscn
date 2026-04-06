@@ -1,0 +1,319 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/widgets/TradeWorkspaceWidget.gd" id="2_widget"]
+[ext_resource type="Script" path="res://scripts/ui/widgets/PriceChartCanvas.gd" id="3_chart"]
+
+[node name="WorkAreaPanel" type="PanelContainer"]
+clip_contents = true
+custom_minimum_size = Vector2(540, 0)
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("2_widget")
+
+[node name="WorkAreaMargin" type="MarginContainer" parent="."]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="WorkAreaVBox" type="VBoxContainer" parent="WorkAreaMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="WorkTabs" type="TabContainer" parent="WorkAreaMargin/WorkAreaVBox"]
+clip_contents = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Chart" type="VBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="ChartHeaderLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart"]
+autowrap_mode = 3
+text = "No selection"
+
+[node name="ChartSubheaderLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart"]
+autowrap_mode = 3
+text = "Chart context will appear here."
+
+[node name="ChartRangeRow" type="HBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="Range1DButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow"]
+size_flags_horizontal = 3
+toggle_mode = true
+text = "1D"
+
+[node name="Range1WButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow"]
+size_flags_horizontal = 3
+toggle_mode = true
+text = "1W"
+
+[node name="Range1MButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow"]
+size_flags_horizontal = 3
+button_pressed = true
+toggle_mode = true
+text = "1M"
+
+[node name="Range1YButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow"]
+size_flags_horizontal = 3
+toggle_mode = true
+text = "1Y"
+
+[node name="Range5YButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow"]
+size_flags_horizontal = 3
+toggle_mode = true
+text = "5Y"
+
+[node name="RangeYTDButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow"]
+size_flags_horizontal = 3
+toggle_mode = true
+text = "YTD"
+
+[node name="DisplayLineButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow"]
+custom_minimum_size = Vector2(64, 0)
+button_pressed = true
+toggle_mode = true
+text = "Line"
+
+[node name="DisplayCandleButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow"]
+custom_minimum_size = Vector2(74, 0)
+toggle_mode = true
+text = "Candle"
+
+[node name="ChartZoomSpacer" type="Control" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow"]
+size_flags_horizontal = 3
+
+[node name="ZoomOutButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow"]
+custom_minimum_size = Vector2(42, 0)
+text = "-"
+
+[node name="ZoomInButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow"]
+custom_minimum_size = Vector2(42, 0)
+text = "+"
+
+[node name="ChartCanvas" type="Control" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart"]
+custom_minimum_size = Vector2(0, 360)
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("3_chart")
+
+[node name="ChartMetaLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart"]
+visible = false
+autowrap_mode = 3
+text = "Chart range details will appear here."
+
+[node name="KeyStats" type="ScrollContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="KeyStatsPanel" type="PanelContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="KeyStatsMargin" type="MarginContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel"]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="KeyStatsVBox" type="VBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel/KeyStatsMargin"]
+theme_override_constants/separation = 10
+
+[node name="KeyStatsTitle" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel/KeyStatsMargin/KeyStatsVBox"]
+text = "KEY STATS"
+
+[node name="KeyStatsFinancialLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel/KeyStatsMargin/KeyStatsVBox"]
+autowrap_mode = 3
+text = "Financials:"
+
+[node name="FinancialHistorySummaryLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel/KeyStatsMargin/KeyStatsVBox"]
+autowrap_mode = 3
+text = "Generated history summary appears here."
+
+[node name="FinancialHistoryTable" type="VBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel/KeyStatsMargin/KeyStatsVBox"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="FinancialHistoryHeaderRow" type="HBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel/KeyStatsMargin/KeyStatsVBox/FinancialHistoryTable"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="FinancialHistorySeparator" type="HSeparator" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel/KeyStatsMargin/KeyStatsVBox/FinancialHistoryTable"]
+
+[node name="FinancialHistoryRows" type="VBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel/KeyStatsMargin/KeyStatsVBox/FinancialHistoryTable"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="FinancialHistoryEmptyLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel/KeyStatsMargin/KeyStatsVBox/FinancialHistoryTable/FinancialHistoryRows"]
+autowrap_mode = 3
+text = "Generated history unavailable."
+
+[node name="Financials" type="ScrollContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="FinancialsPanel" type="PanelContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="FinancialsMargin" type="MarginContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel"]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="FinancialsVBox" type="VBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin"]
+theme_override_constants/separation = 10
+
+[node name="FinancialsTitle" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox"]
+text = "FINANCIALS"
+
+[node name="FinancialsYearLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox"]
+autowrap_mode = 3
+text = "Derived financial statements appear here."
+
+[node name="FinancialsPeriodRow" type="HBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox"]
+theme_override_constants/separation = 8
+
+[node name="FinancialsPreviousButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/FinancialsPeriodRow"]
+text = "< Older"
+
+[node name="FinancialsPeriodLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/FinancialsPeriodRow"]
+size_flags_horizontal = 3
+horizontal_alignment = 1
+text = "Viewing latest available period."
+
+[node name="FinancialsNextButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/FinancialsPeriodRow"]
+text = "Newer >"
+
+[node name="IncomeStatementTitle" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox"]
+text = "INCOME STATEMENT"
+
+[node name="IncomeStatementRows" type="VBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="IncomeStatementEmptyLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/IncomeStatementRows"]
+autowrap_mode = 3
+text = "No income statement data."
+
+[node name="IncomeStatementSeparator" type="HSeparator" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox"]
+
+[node name="BalanceSheetTitle" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox"]
+text = "BALANCE SHEET"
+
+[node name="BalanceSheetRows" type="VBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="BalanceSheetEmptyLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/BalanceSheetRows"]
+autowrap_mode = 3
+text = "No balance sheet data."
+
+[node name="BalanceSheetSeparator" type="HSeparator" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox"]
+
+[node name="CashFlowTitle" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox"]
+text = "CASH FLOW"
+
+[node name="CashFlowRows" type="VBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="CashFlowEmptyLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/CashFlowRows"]
+autowrap_mode = 3
+text = "No cash flow data."
+
+[node name="Analyzer" type="ScrollContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="AnalyzerPanel" type="PanelContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="AnalyzerMargin" type="MarginContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel"]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="AnalyzerVBox" type="VBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel/AnalyzerMargin"]
+theme_override_constants/separation = 10
+
+[node name="AnalyzerTitle" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel/AnalyzerMargin/AnalyzerVBox"]
+text = "ANALYZER"
+
+[node name="AnalyzerSetupLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel/AnalyzerMargin/AnalyzerVBox"]
+autowrap_mode = 3
+text = "Setup read:"
+
+[node name="AnalyzerSupportLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel/AnalyzerMargin/AnalyzerVBox"]
+autowrap_mode = 3
+text = "Supportive signals:"
+
+[node name="AnalyzerRiskLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel/AnalyzerMargin/AnalyzerVBox"]
+autowrap_mode = 3
+text = "Risk signals:"
+
+[node name="AnalyzerEventLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel/AnalyzerMargin/AnalyzerVBox"]
+autowrap_mode = 3
+text = "Visible inputs:"
+
+[node name="AnalyzerHistoryLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel/AnalyzerMargin/AnalyzerVBox"]
+autowrap_mode = 3
+text = "Recent closes:"
+
+[node name="Profile" type="ScrollContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="ProfilePanel" type="PanelContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="ProfileMargin" type="MarginContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel"]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="ProfileVBox" type="VBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin"]
+theme_override_constants/separation = 10
+
+[node name="ProfileTitle" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox"]
+text = "PROFILE"
+
+[node name="ProfileCompanyNameLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox"]
+autowrap_mode = 3
+text = "No selection"
+
+[node name="ProfileSectorLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox"]
+autowrap_mode = 3
+text = "Sector:"
+
+[node name="ProfilePriceLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox"]
+autowrap_mode = 3
+text = "Price:"
+
+[node name="ProfileFactorLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox"]
+autowrap_mode = 3
+text = "Company profile:"
+
+[node name="ProfileTagsLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox"]
+autowrap_mode = 3
+text = "Tags:"
+
+[node name="ProfileDescriptionLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox"]
+autowrap_mode = 3
+text = "Description:"

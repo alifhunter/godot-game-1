@@ -54,9 +54,18 @@ func _on_new_game_pressed() -> void:
 
 
 func _on_load_pressed() -> void:
-	if GameManager.load_run_from_save():
-		status_label.text = "Reloading saved run..."
-	else:
+	if not SaveManager.has_save():
+		status_label.text = "No save file was found, so a fresh run is safer."
+		_refresh_load_state()
+		return
+
+	_prepare_load_screen()
+	_set_screen(SCREEN_LOADING)
+	var load_succeeded: bool = await GameManager.load_run_from_save_with_loading()
+	if not is_inside_tree():
+		return
+	if not load_succeeded:
+		_set_screen(SCREEN_HOME)
 		status_label.text = "No save file was found, so a fresh run is safer."
 		_refresh_load_state()
 
@@ -151,6 +160,14 @@ func _prepare_loading_screen(difficulty_id: String) -> void:
 	loading_progress_bar.value = 0.0
 
 
+func _prepare_load_screen() -> void:
+	loading_title_label.text = "Loading saved run"
+	loading_stage_label.text = "Reading save file"
+	loading_body_label.text = "Restoring the saved market state, portfolio, watchlist, and current trading day."
+	loading_step_label.text = "Step 1/%d" % max(GameManager.LOAD_RUN_LOADING_STEPS.size(), 1)
+	loading_progress_bar.value = 0.0
+
+
 func _on_run_loading_started(difficulty_id: String) -> void:
 	if not is_inside_tree():
 		return
@@ -178,12 +195,20 @@ func _loading_body_for_stage(stage_id: String) -> String:
 	var difficulty_config: Dictionary = GameManager.get_difficulty_config(selected_difficulty_id)
 	var company_count: int = int(difficulty_config.get("company_count", 0))
 	match stage_id:
+		"load_save":
+			return "Reading the saved market state from disk so the roster, prices, and event history can be restored."
+		"restore_state":
+			return "Restoring the portfolio, watchlist, calendar day, and generated company data from the save file."
+		"load_launch":
+			return "Opening the trading desk and handing control back to the saved run."
 		"seed":
 			return "Locking the run seed, trade calendar, and bankroll rules before generation starts."
 		"companies":
 			return "Creating %d company identities with randomized names, tickers, sectors, and exchange boards." % company_count
 		"financials":
 			return "Creating company financials, ten-year histories, quality scores, and opening prices for the new roster."
+		"opening_day":
+			return "Simulating the first trading session so the market opens with live price changes instead of flat starting quotes."
 		"save":
 			return "Saving the freshly generated run so the roster survives reloads."
 		"launch":

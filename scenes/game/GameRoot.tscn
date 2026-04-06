@@ -23,92 +23,287 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.0470588, 0.0666667, 0.0862745, 1)
 
-[node name="Margin" type="MarginContainer" parent="."]
+[node name="DesktopLayer" type="Control" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 14
-theme_override_constants/margin_top = 14
-theme_override_constants/margin_right = 14
-theme_override_constants/margin_bottom = 14
 
-[node name="RootVBox" type="VBoxContainer" parent="Margin"]
+[node name="DesktopShade" type="ColorRect" parent="DesktopLayer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.909804, 0.909804, 0.803922, 1)
+
+[node name="DesktopAccentBand" type="ColorRect" parent="DesktopLayer"]
+visible = false
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 180.0
+grow_horizontal = 2
+color = Color(0.721569, 0.690196, 0.560784, 0.22)
+
+[node name="DesktopGlowLeft" type="ColorRect" parent="DesktopLayer"]
+visible = false
+offset_left = -120.0
+offset_top = 120.0
+offset_right = 320.0
+offset_bottom = 620.0
+color = Color(0.980392, 0.960784, 0.847059, 0.28)
+
+[node name="DesktopGlowRight" type="ColorRect" parent="DesktopLayer"]
+visible = false
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -460.0
+offset_top = 40.0
+offset_right = -40.0
+offset_bottom = 420.0
+grow_horizontal = 0
+color = Color(0.862745, 0.835294, 0.694118, 0.2)
+
+[node name="DesktopMargin" type="MarginContainer" parent="DesktopLayer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 28
+
+[node name="DesktopVBox" type="VBoxContainer" parent="DesktopLayer/DesktopMargin"]
 size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 12
 
-[node name="TopBarPanel" type="PanelContainer" parent="Margin/RootVBox"]
+[node name="DesktopHeaderRow" type="HBoxContainer" parent="DesktopLayer/DesktopMargin/DesktopVBox"]
+visible = false
+theme_override_constants/separation = 12
 
-[node name="TopBarMargin" type="MarginContainer" parent="Margin/RootVBox/TopBarPanel"]
+[node name="DesktopTitleLabel" type="Label" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopHeaderRow"]
+size_flags_horizontal = 3
+text = "Trading Desktop"
+
+[node name="DesktopDateLabel" type="Label" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopHeaderRow"]
+text = "FRI, 03 JAN 2020"
+
+[node name="DesktopSubtitleLabel" type="Label" parent="DesktopLayer/DesktopMargin/DesktopVBox"]
+visible = false
+text = "Open an app to continue."
+
+[node name="DesktopSpacer" type="Control" parent="DesktopLayer/DesktopMargin/DesktopVBox"]
+visible = false
+custom_minimum_size = Vector2(0, 16)
+
+[node name="DesktopIconsRow" type="HBoxContainer" parent="DesktopLayer/DesktopMargin/DesktopVBox"]
+theme_override_constants/separation = 28
+
+[node name="StockAppTile" type="VBoxContainer" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow"]
+theme_override_constants/separation = 10
+
+[node name="StockAppButton" type="Button" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/StockAppTile"]
+custom_minimum_size = Vector2(92, 92)
+toggle_mode = true
+text = ""
+
+[node name="StockAppLabel" type="Label" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/StockAppTile"]
+horizontal_alignment = 1
+text = "STOCKBOT"
+
+[node name="NewsAppTile" type="VBoxContainer" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow"]
+theme_override_constants/separation = 10
+
+[node name="NewsAppButton" type="Button" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/NewsAppTile"]
+custom_minimum_size = Vector2(92, 92)
+toggle_mode = true
+text = ""
+
+[node name="NewsAppLabel" type="Label" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/NewsAppTile"]
+horizontal_alignment = 1
+text = "News"
+
+[node name="SocialAppTile" type="VBoxContainer" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow"]
+theme_override_constants/separation = 10
+
+[node name="SocialAppButton" type="Button" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/SocialAppTile"]
+custom_minimum_size = Vector2(92, 92)
+toggle_mode = true
+text = ""
+
+[node name="SocialAppLabel" type="Label" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/SocialAppTile"]
+horizontal_alignment = 1
+text = "Twooter"
+
+[node name="ExitAppTile" type="VBoxContainer" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow"]
+theme_override_constants/separation = 10
+
+[node name="ExitAppButton" type="Button" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/ExitAppTile"]
+custom_minimum_size = Vector2(92, 92)
+text = ""
+
+[node name="ExitAppLabel" type="Label" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/ExitAppTile"]
+horizontal_alignment = 1
+text = "Exit"
+
+[node name="DesktopFooterSpacer" type="Control" parent="DesktopLayer/DesktopMargin/DesktopVBox"]
+size_flags_vertical = 3
+
+[node name="DesktopHintLabel" type="Label" parent="DesktopLayer/DesktopMargin/DesktopVBox"]
+visible = false
+autowrap_mode = 3
+text = "Prototype desktop: STOCKBOT opens the trading platform, News opens the intel desk, Twooter opens the social feed, and Exit returns to the main menu."
+
+[node name="AppWindowBackdrop" type="Control" parent="."]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="AppWindowMargin" type="MarginContainer" parent="AppWindowBackdrop"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="AppWindowPanel" type="PanelContainer" parent="AppWindowBackdrop/AppWindowMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="AppWindowFiller" type="Control" parent="AppWindowBackdrop/AppWindowMargin/AppWindowPanel"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="StockWindowContainer" type="PanelContainer" parent="."]
+visible = false
+mouse_filter = 2
+clip_contents = true
+theme_override_font_sizes/font_size = 11
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+offset_left = 20.0
+offset_top = 64.0
+offset_right = -20.0
+offset_bottom = -20.0
+
+[node name="Margin" type="MarginContainer" parent="."]
+visible = false
+clip_contents = true
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 11
+theme_override_constants/margin_left = 0
+theme_override_constants/margin_top = 0
+theme_override_constants/margin_right = 0
+theme_override_constants/margin_bottom = 0
+
+[node name="RootVBox" type="VBoxContainer" parent="Margin"]
+clip_contents = true
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 0
+
+[node name="TopBarOuterMargin" type="MarginContainer" parent="Margin/RootVBox"]
+theme_override_constants/margin_left = 0
+theme_override_constants/margin_top = 0
+theme_override_constants/margin_right = 0
+
+[node name="TopBarPanel" type="PanelContainer" parent="Margin/RootVBox/TopBarOuterMargin"]
+
+[node name="TopBarMargin" type="MarginContainer" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel"]
 theme_override_constants/margin_left = 16
 theme_override_constants/margin_top = 16
 theme_override_constants/margin_right = 16
 theme_override_constants/margin_bottom = 16
 
-[node name="TopBarVBox" type="VBoxContainer" parent="Margin/RootVBox/TopBarPanel/TopBarMargin"]
+[node name="TopBarVBox" type="VBoxContainer" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin"]
 theme_override_constants/separation = 10
 
-[node name="TitleRow" type="HBoxContainer" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox"]
+[node name="TitleRow" type="HBoxContainer" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox"]
 theme_override_constants/separation = 10
 
-[node name="TitleWrap" type="VBoxContainer" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
+[node name="TitleWrap" type="VBoxContainer" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
 visible = false
 size_flags_horizontal = 3
 
-[node name="EyebrowLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TitleWrap"]
+[node name="EyebrowLabel" type="Label" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TitleWrap"]
 text = "MARKET DESK"
 
-[node name="TitleLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TitleWrap"]
+[node name="TitleLabel" type="Label" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TitleWrap"]
 text = "Modular Play Space"
 
-[node name="SubtitleLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TitleWrap"]
+[node name="SubtitleLabel" type="Label" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TitleWrap"]
 text = ""
 
-[node name="TopSectionLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
-size_flags_horizontal = 3
-text = "Dashboard"
+[node name="TopMarketLabel" type="Label" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
+text = "MARKET +0.00%"
 
-[node name="AdvanceDayButton" type="Button" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
+[node name="TopEquityLabel" type="Label" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
+text = "EQUITY Rp 0.00"
+
+[node name="TopCashLabel" type="Label" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
+text = "CASH AVAILABLE Rp 0.00"
+
+[node name="TopBarSpacer" type="Control" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
+size_flags_horizontal = 3
+
+[node name="TopSectionLabel" type="Label" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
+text = ""
+
+[node name="AdvanceDayButton" type="Button" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
 custom_minimum_size = Vector2(160, 42)
 text = "Advance Day"
 
-[node name="StatsFlow" type="HFlowContainer" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox"]
+[node name="StatsFlow" type="HBoxContainer" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox"]
+visible = false
 theme_override_constants/h_separation = 8
-theme_override_constants/v_separation = 8
 
-[node name="TopDayLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow"]
+[node name="TopDayLabel" type="Label" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow"]
+visible = false
 text = "THU, 02 JAN 2020"
 
-[node name="TopMarketLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow"]
-text = "MARKET +0.00%"
-
-[node name="TopEquityLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow"]
-text = "EQUITY Rp 0.00"
-
-[node name="TopFocusLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow"]
-text = "FOCUS -"
-
-[node name="ObjectiveLabel" type="Label" parent="Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox"]
+[node name="ObjectiveLabel" type="Label" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox"]
 autowrap_mode = 3
 text = ""
 
 [node name="ShellHBox" type="HBoxContainer" parent="Margin/RootVBox"]
+clip_contents = true
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/separation = 12
+theme_override_constants/separation = 0
 
-[node name="SidebarPanel" type="PanelContainer" parent="Margin/RootVBox/ShellHBox"]
-custom_minimum_size = Vector2(260, 0)
+[node name="SidebarOuterMargin" type="MarginContainer" parent="Margin/RootVBox/ShellHBox"]
+theme_override_constants/margin_left = 0
+theme_override_constants/margin_top = 0
+theme_override_constants/margin_bottom = 0
 
-[node name="SidebarMargin" type="MarginContainer" parent="Margin/RootVBox/ShellHBox/SidebarPanel"]
-theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 16
-theme_override_constants/margin_bottom = 16
+[node name="SidebarPanel" type="PanelContainer" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin"]
+custom_minimum_size = Vector2(220, 0)
 
-[node name="SidebarVBox" type="VBoxContainer" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin"]
+[node name="SidebarMargin" type="MarginContainer" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel"]
+theme_override_constants/margin_left = 0
+theme_override_constants/margin_top = 0
+theme_override_constants/margin_right = 0
+theme_override_constants/margin_bottom = 0
+
+[node name="SidebarVBox" type="VBoxContainer" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -116,62 +311,60 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 10
 
-[node name="SidebarEyebrowLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
+[node name="SidebarEyebrowLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox"]
 visible = false
 text = "WORKSPACE"
 
-[node name="SidebarTitleLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
+[node name="SidebarTitleLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox"]
 visible = false
 text = "Market Sections"
 
-[node name="SidebarIntroLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
+[node name="SidebarIntroLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox"]
 autowrap_mode = 3
 text = ""
 
-[node name="NavigationButtons" type="VBoxContainer" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
-theme_override_constants/separation = 8
+[node name="NavigationButtons" type="VBoxContainer" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox"]
+theme_override_constants/separation = 0
 
-[node name="DashboardButton" type="Button" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons"]
+[node name="DashboardButton" type="Button" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons"]
 custom_minimum_size = Vector2(0, 44)
 toggle_mode = true
 text = "Dashboard"
 
-[node name="MarketsButton" type="Button" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons"]
+[node name="MarketsButton" type="Button" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons"]
 custom_minimum_size = Vector2(0, 44)
 toggle_mode = true
-text = "Markets"
+text = "Trade"
 
-[node name="PortfolioButton" type="Button" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons"]
+[node name="PortfolioButton" type="Button" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons"]
 custom_minimum_size = Vector2(0, 44)
 toggle_mode = true
 text = "Portfolio"
 
-[node name="HelpButton" type="Button" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons"]
+[node name="HelpButton" type="Button" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons"]
 custom_minimum_size = Vector2(0, 44)
 toggle_mode = true
 text = "Help"
 
-[node name="SidebarFocusLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
+[node name="SidebarFocusLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox"]
 visible = false
 autowrap_mode = 3
 text = "Current focus: none selected yet."
 
-[node name="SidebarHintLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
+[node name="SidebarHintLabel" type="Label" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox"]
 autowrap_mode = 3
 text = ""
 
-[node name="SidebarSpacer" type="Control" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
+[node name="SidebarSpacer" type="Control" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox"]
 size_flags_vertical = 3
 
-[node name="BackToMenuButton" type="Button" parent="Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox"]
-custom_minimum_size = Vector2(0, 44)
-text = "Back to Menu"
-
 [node name="MainVBox" type="VBoxContainer" parent="Margin/RootVBox/ShellHBox"]
+clip_contents = true
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
 [node name="ContentTabs" type="TabContainer" parent="Margin/RootVBox/ShellHBox/MainVBox"]
+clip_contents = true
 size_flags_horizontal = 3
 size_flags_vertical = 3
 tabs_visible = false
@@ -188,7 +381,444 @@ unique_name_in_owner = true
 [node name="HelpView" parent="Margin/RootVBox/ShellHBox/MainVBox/ContentTabs" instance=ExtResource("5_help")]
 unique_name_in_owner = true
 
+[node name="NewsWindow" type="MarginContainer" parent="."]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 64
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="NewsWindowBody" type="PanelContainer" parent="NewsWindow"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="NewsWindowMargin" type="MarginContainer" parent="NewsWindow/NewsWindowBody"]
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="NewsWindowVBox" type="VBoxContainer" parent="NewsWindow/NewsWindowBody/NewsWindowMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="NewsHeaderRow" type="HBoxContainer" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox"]
+theme_override_constants/separation = 8
+
+[node name="NewsTitleLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsHeaderRow"]
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "News Desk"
+
+[node name="NewsIntelStatusLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsHeaderRow"]
+horizontal_alignment = 2
+text = "Intel 4 active"
+
+[node name="NewsOutletButtons" type="HBoxContainer" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="NewsContentSplit" type="HSplitContainer" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+split_offset = 360
+
+[node name="NewsFeedPanel" type="PanelContainer" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit"]
+custom_minimum_size = Vector2(320, 0)
+size_flags_vertical = 3
+
+[node name="NewsFeedMargin" type="MarginContainer" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="NewsFeedVBox" type="VBoxContainer" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="NewsFeedSummaryLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox"]
+autowrap_mode = 3
+text = "Choose an outlet to browse the feed."
+
+[node name="NewsArticleList" type="ItemList" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox"]
+custom_minimum_size = Vector2(0, 420)
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="NewsDetailPanel" type="PanelContainer" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="NewsDetailMargin" type="MarginContainer" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel"]
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="NewsDetailVBox" type="VBoxContainer" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="NewsDetailOutletLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox"]
+text = "Select an article"
+
+[node name="NewsDetailHeadlineLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox"]
+theme_override_font_sizes/font_size = 20
+autowrap_mode = 3
+text = "No article selected."
+
+[node name="NewsDetailDeckLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox"]
+autowrap_mode = 3
+text = "Open an outlet on the left to read the latest event-driven stories."
+
+[node name="NewsDetailMetaLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox"]
+autowrap_mode = 3
+text = ""
+
+[node name="NewsDetailBody" type="RichTextLabel" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = false
+scroll_active = true
+fit_content = false
+text = ""
+
+[node name="NewsDetailHintLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox"]
+autowrap_mode = 3
+text = "Intel outlets unlock earlier coverage tiers once the perk system is wired in."
+
+[node name="SocialWindow" type="MarginContainer" parent="."]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 64
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="SocialWindowBody" type="PanelContainer" parent="SocialWindow"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="SocialWindowMargin" type="MarginContainer" parent="SocialWindow/SocialWindowBody"]
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="SocialWindowVBox" type="VBoxContainer" parent="SocialWindow/SocialWindowBody/SocialWindowMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="SocialHeaderRow" type="HBoxContainer" parent="SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox"]
+theme_override_constants/separation = 8
+
+[node name="SocialTitleLabel" type="Label" parent="SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialHeaderRow"]
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "Twooter"
+
+[node name="SocialAccessStatusLabel" type="Label" parent="SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialHeaderRow"]
+horizontal_alignment = 2
+text = "Tier 4 access active"
+
+[node name="SocialFeedSummaryLabel" type="Label" parent="SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox"]
+autowrap_mode = 3
+text = "Latest chatter from unlocked accounts."
+
+[node name="SocialFeedScroll" type="ScrollContainer" parent="SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="SocialFeedCards" type="VBoxContainer" parent="SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialFeedScroll"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="AppWindowTitleBar" type="PanelContainer" parent="."]
+visible = false
+anchor_right = 1.0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 64.0
+grow_horizontal = 2
+
+[node name="AppWindowTitleMargin" type="MarginContainer" parent="AppWindowTitleBar"]
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="AppWindowTitleRow" type="HBoxContainer" parent="AppWindowTitleBar/AppWindowTitleMargin"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="AppWindowTitleLabel" type="Label" parent="AppWindowTitleBar/AppWindowTitleMargin/AppWindowTitleRow"]
+size_flags_horizontal = 3
+text = "STOCKBOT"
+
+[node name="AppWindowMinimizeButton" type="Button" parent="AppWindowTitleBar/AppWindowTitleMargin/AppWindowTitleRow"]
+custom_minimum_size = Vector2(36, 24)
+text = "_"
+
+[node name="AppWindowCloseButton" type="Button" parent="AppWindowTitleBar/AppWindowTitleMargin/AppWindowTitleRow"]
+custom_minimum_size = Vector2(36, 24)
+text = "X"
+
+[node name="TaskbarLayer" type="MarginContainer" parent="."]
+visible = false
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 18.0
+offset_top = -70.0
+offset_right = -18.0
+offset_bottom = -18.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="TaskbarPanel" type="PanelContainer" parent="TaskbarLayer"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="TaskbarMargin" type="MarginContainer" parent="TaskbarLayer/TaskbarPanel"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="TaskbarRow" type="HBoxContainer" parent="TaskbarLayer/TaskbarPanel/TaskbarMargin"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="TaskbarHomeButton" type="Button" parent="TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow"]
+custom_minimum_size = Vector2(94, 34)
+text = "Desktop"
+
+[node name="TaskbarStockButton" type="Button" parent="TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow"]
+custom_minimum_size = Vector2(88, 34)
+toggle_mode = true
+text = "STOCKBOT"
+
+[node name="TaskbarNewsButton" type="Button" parent="TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow"]
+custom_minimum_size = Vector2(88, 34)
+toggle_mode = true
+text = "News"
+
+[node name="TaskbarSpacer" type="Control" parent="TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow"]
+size_flags_horizontal = 3
+
+[node name="TaskbarStatusLabel" type="Label" parent="TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow"]
+size_flags_horizontal = 3
+text = "Desktop ready."
+
+[node name="TaskbarClockLabel" type="Label" parent="TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow"]
+horizontal_alignment = 2
+text = "DAY 1"
+
+[node name="DebugOverlay" type="Control" parent="."]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="DebugScrim" type="ColorRect" parent="DebugOverlay"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.027451, 0.0392157, 0.0588235, 0.84)
+
+[node name="DebugCenter" type="CenterContainer" parent="DebugOverlay"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="DebugPanel" type="PanelContainer" parent="DebugOverlay/DebugCenter"]
+custom_minimum_size = Vector2(1080, 680)
+
+[node name="DebugMargin" type="MarginContainer" parent="DebugOverlay/DebugCenter/DebugPanel"]
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="DebugVBox" type="VBoxContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="DebugHeaderRow" type="HBoxContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox"]
+theme_override_constants/separation = 10
+
+[node name="DebugTitleLabel" type="Label" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugHeaderRow"]
+size_flags_horizontal = 3
+text = "Debug Tools"
+
+[node name="DebugCloseButton" type="Button" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugHeaderRow"]
+custom_minimum_size = Vector2(40, 40)
+text = "X"
+
+[node name="DebugHintLabel" type="Label" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox"]
+text = "Ctrl+L toggles this popup."
+
+[node name="DebugTabs" type="TabContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Upcoming" type="PanelContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs"]
+size_flags_vertical = 3
+
+[node name="UpcomingMargin" type="MarginContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Upcoming"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="UpcomingVBox" type="VBoxContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Upcoming/UpcomingMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="UpcomingEventsLabel" type="RichTextLabel" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Upcoming/UpcomingMargin/UpcomingVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = false
+scroll_active = true
+fit_content = false
+text = ""
+
+[node name="Current" type="PanelContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs"]
+size_flags_vertical = 3
+
+[node name="CurrentMargin" type="MarginContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Current"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="CurrentVBox" type="VBoxContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Current/CurrentMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="CurrentEventsLabel" type="RichTextLabel" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Current/CurrentMargin/CurrentVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = false
+scroll_active = true
+fit_content = false
+text = ""
+
+[node name="Special" type="PanelContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs"]
+size_flags_vertical = 3
+
+[node name="SpecialMargin" type="MarginContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Special"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="SpecialVBox" type="VBoxContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Special/SpecialMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="SpecialEventsLabel" type="RichTextLabel" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Special/SpecialMargin/SpecialVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = false
+scroll_active = true
+fit_content = false
+text = ""
+
+[node name="Person" type="PanelContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs"]
+size_flags_vertical = 3
+
+[node name="PeopleMargin" type="MarginContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Person"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="PeopleVBox" type="VBoxContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Person/PeopleMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="PersonEventsLabel" type="RichTextLabel" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Person/PeopleMargin/PeopleVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = false
+scroll_active = true
+fit_content = false
+text = ""
+
+[node name="Stocks" type="PanelContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs"]
+size_flags_vertical = 3
+
+[node name="StocksMargin" type="MarginContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Stocks"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="StocksVBox" type="VBoxContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Stocks/StocksMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="StockPerformanceLabel" type="RichTextLabel" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Stocks/StocksMargin/StocksVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = false
+scroll_active = true
+fit_content = false
+text = ""
+
+[node name="Market" type="PanelContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs"]
+size_flags_vertical = 3
+
+[node name="MarketHistoryMargin" type="MarginContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Market"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="MarketHistoryVBox" type="VBoxContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Market/MarketHistoryMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="MarketHistoryLabel" type="RichTextLabel" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Market/MarketHistoryMargin/MarketHistoryVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = false
+scroll_active = true
+fit_content = false
+text = ""
+
 [node name="ToastOverlay" type="MarginContainer" parent="."]
+visible = false
 anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0

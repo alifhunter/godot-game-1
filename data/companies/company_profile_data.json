@@ -1,0 +1,533 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "description": "Narrative company profile data for deterministic client-side generation."
+  },
+  "reference_year": 2020,
+  "sentence_settings": {
+    "optional_third_sentence_probability": 0.58
+  },
+  "sentence_templates": {
+    "primary_pool": [
+      "{COMPANY} is a {ARCHETYPE_DESCRIPTOR} company focused on {SECTOR_BUSINESS}",
+      "{COMPANY} {ARCHETYPE_VERB} {SECTOR_BUSINESS}",
+      "{COMPANY} operates as a {SIZE_DESCRIPTOR} player in {SECTOR_BUSINESS}",
+      "{COMPANY} has built its business around {SECTOR_BUSINESS}"
+    ]
+  },
+  "archetype_weights_by_sector": {
+    "consumer": {
+      "startup": 1.0,
+      "challenger": 3.0,
+      "blue_chip": 3.0,
+      "conglomerate": 1.8,
+      "soe": 0.8,
+      "specialist": 1.6,
+      "turnaround": 1.3
+    },
+    "industrial": {
+      "startup": 0.8,
+      "challenger": 2.4,
+      "blue_chip": 2.2,
+      "conglomerate": 1.9,
+      "soe": 1.2,
+      "specialist": 2.3,
+      "turnaround": 1.9
+    },
+    "energy": {
+      "startup": 0.7,
+      "challenger": 2.2,
+      "blue_chip": 2.0,
+      "conglomerate": 1.7,
+      "soe": 2.2,
+      "specialist": 1.5,
+      "turnaround": 1.7
+    },
+    "tech": {
+      "startup": 3.5,
+      "challenger": 2.4,
+      "blue_chip": 1.3,
+      "conglomerate": 1.2,
+      "soe": 0.8,
+      "specialist": 1.9,
+      "turnaround": 1.0
+    },
+    "infra": {
+      "startup": 0.8,
+      "challenger": 2.0,
+      "blue_chip": 2.6,
+      "conglomerate": 2.1,
+      "soe": 2.3,
+      "specialist": 1.7,
+      "turnaround": 1.3
+    },
+    "transport": {
+      "startup": 0.6,
+      "challenger": 2.0,
+      "blue_chip": 1.6,
+      "conglomerate": 1.6,
+      "soe": 1.1,
+      "specialist": 1.8,
+      "turnaround": 2.4
+    },
+    "health": {
+      "startup": 1.4,
+      "challenger": 2.0,
+      "blue_chip": 2.0,
+      "conglomerate": 1.5,
+      "soe": 1.5,
+      "specialist": 2.8,
+      "turnaround": 1.0
+    },
+    "finance": {
+      "startup": 0.8,
+      "challenger": 2.2,
+      "blue_chip": 2.8,
+      "conglomerate": 1.9,
+      "soe": 2.1,
+      "specialist": 1.8,
+      "turnaround": 1.4
+    },
+    "basicindustry": {
+      "startup": 0.7,
+      "challenger": 2.2,
+      "blue_chip": 1.8,
+      "conglomerate": 1.8,
+      "soe": 1.1,
+      "specialist": 2.2,
+      "turnaround": 2.0
+    },
+    "property": {
+      "startup": 0.8,
+      "challenger": 2.2,
+      "blue_chip": 1.9,
+      "conglomerate": 2.0,
+      "soe": 1.1,
+      "specialist": 1.6,
+      "turnaround": 2.1
+    },
+    "noncyclical": {
+      "startup": 0.8,
+      "challenger": 2.0,
+      "blue_chip": 2.9,
+      "conglomerate": 1.5,
+      "soe": 1.1,
+      "specialist": 2.0,
+      "turnaround": 1.0
+    }
+  },
+  "archetypes": {
+    "startup": {
+      "label": "Startup",
+      "tone": "aggressive",
+      "age_range": [1, 8],
+      "allowed_sizes": [0, 1, 2],
+      "size_weights": {
+        "0": 6.0,
+        "1": 4.0,
+        "2": 1.6
+      },
+      "descriptor_pool": ["innovative", "fast-growing", "venture-backed", "tech-driven", "next-generation"],
+      "verb_pool": ["is building", "is scaling", "is developing", "is rethinking", "is expanding in"],
+      "differentiator_pool": [
+        "Management is still prioritizing product rollout, user growth, and market capture over near-term efficiency",
+        "Its story is driven by execution speed, product-market fit, and the ability to convert early demand into durable scale",
+        "The company is still proving out its operating model, which keeps both upside and execution risk elevated"
+      ],
+      "tag_pool": ["startup", "high-growth", "early-stage", "venture-backed", "speculative"]
+    },
+    "challenger": {
+      "label": "Challenger",
+      "tone": "confident",
+      "age_range": [5, 20],
+      "allowed_sizes": [1, 2, 3],
+      "size_weights": {
+        "1": 3.0,
+        "2": 4.0,
+        "3": 2.0
+      },
+      "descriptor_pool": ["ambitious", "expanding", "disciplined", "competitive", "differentiated"],
+      "verb_pool": ["is taking share in", "continues to expand in", "is competing in", "is scaling across", "is growing through"],
+      "differentiator_pool": [
+        "Its investment case is built around share gains, operating leverage, and a clearer path to scale than most smaller peers",
+        "Management has been pushing harder into adjacent markets while trying to protect margins and capital discipline",
+        "The company sits in the middle ground between early-stage upside and established-market credibility"
+      ],
+      "tag_pool": ["challenger", "growth", "expanding", "mid-cap", "competitive"]
+    },
+    "blue_chip": {
+      "label": "Blue Chip",
+      "tone": "conservative",
+      "age_range": [20, 100],
+      "allowed_sizes": [2, 3, 4],
+      "size_weights": {
+        "2": 1.8,
+        "3": 4.0,
+        "4": 3.2
+      },
+      "descriptor_pool": ["established", "market-leading", "trusted", "well-capitalized", "resilient"],
+      "verb_pool": ["remains a leading provider of", "continues to anchor", "has operated across", "has built scale in", "has maintained leadership in"],
+      "differentiator_pool": [
+        "Its scale, balance sheet depth, and long operating record give it unusual resilience during weaker market phases",
+        "The company is widely followed for its stability, execution consistency, and ability to absorb cyclical pressure better than most peers",
+        "Institutional ownership and long-running operating discipline remain central to how the market prices the name"
+      ],
+      "tag_pool": ["blue-chip", "market-leader", "defensive", "institutional-grade", "large-cap"]
+    },
+    "conglomerate": {
+      "label": "Conglomerate",
+      "tone": "neutral",
+      "age_range": [15, 120],
+      "allowed_sizes": [2, 3, 4],
+      "size_weights": {
+        "2": 1.5,
+        "3": 3.0,
+        "4": 3.4
+      },
+      "descriptor_pool": ["diversified", "integrated", "portfolio-driven", "multi-segment", "cross-sector"],
+      "verb_pool": ["operates across", "has built scale in", "maintains a portfolio across", "combines", "spans"],
+      "differentiator_pool": [
+        "Its portfolio structure gives management multiple capital allocation levers, even if that breadth can make the story harder to read quickly",
+        "The market usually values the company on the quality of capital deployment and the balance between stable cash generators and higher-growth units",
+        "Its breadth across business lines softens single-segment shocks but can dilute how clearly each underlying engine is understood"
+      ],
+      "tag_pool": ["conglomerate", "diversified", "holding-company", "multi-sector", "complex"]
+    },
+    "soe": {
+      "label": "SOE",
+      "tone": "institutional",
+      "age_range": [10, 150],
+      "allowed_sizes": [2, 3, 4],
+      "size_weights": {
+        "2": 1.4,
+        "3": 3.0,
+        "4": 3.6
+      },
+      "descriptor_pool": ["state-linked", "strategic", "government-backed", "national", "mission-driven"],
+      "verb_pool": ["supports", "underpins", "operates across", "maintains assets in", "serves national demand through"],
+      "differentiator_pool": [
+        "Its valuation is often shaped as much by policy relevance and mandate quality as by near-term earnings momentum",
+        "Government relationships can support scale and strategic access, but they can also slow purely commercial decision-making",
+        "The name tends to trade around shifts in policy direction, capital spending priorities, and expectations for public-sector support"
+      ],
+      "tag_pool": ["soe", "government-linked", "strategic", "regulated", "national-champion"]
+    },
+    "specialist": {
+      "label": "Specialist",
+      "tone": "precise",
+      "age_range": [5, 60],
+      "allowed_sizes": [0, 1, 2, 3],
+      "size_weights": {
+        "0": 2.2,
+        "1": 3.0,
+        "2": 3.0,
+        "3": 1.4
+      },
+      "descriptor_pool": ["focused", "technical", "niche", "specialized", "expert-led"],
+      "verb_pool": ["specializes in", "focuses on", "has built expertise in", "concentrates on", "has developed capabilities in"],
+      "differentiator_pool": [
+        "Depth of expertise matters more to the story than broad market share, which can make the name look obscure until demand tightens around its niche",
+        "Its operating results are usually tied to execution quality in a narrow lane rather than broad macro participation",
+        "The company tends to be judged on precision, reputation, and repeat demand within a tightly defined customer set"
+      ],
+      "tag_pool": ["specialist", "niche", "technical", "focused", "b2b"]
+    },
+    "turnaround": {
+      "label": "Turnaround",
+      "tone": "cautious",
+      "age_range": [10, 80],
+      "allowed_sizes": [1, 2, 3],
+      "size_weights": {
+        "1": 2.4,
+        "2": 3.4,
+        "3": 2.0
+      },
+      "descriptor_pool": ["restructured", "refocused", "recovering", "repositioned", "rebuilding"],
+      "verb_pool": ["is rebuilding in", "is stabilizing around", "has refocused on", "is recovering through", "is repositioning around"],
+      "differentiator_pool": [
+        "The story depends on whether operational fixes, asset sales, and tighter capital discipline translate into durable recovery",
+        "Investors tend to focus on balance sheet repair, cleaner execution, and evidence that the worst of the legacy overhang is fading",
+        "It can rerate quickly if recovery milestones hold, but confidence usually remains fragile until performance is proven over several periods"
+      ],
+      "tag_pool": ["turnaround", "recovery", "restructuring", "speculative", "repositioning"]
+    }
+  },
+  "sizes": {
+    "0": {
+      "label": "Micro",
+      "employee_range": [25, 180],
+      "revenue_hint_range": [0, 150000000000],
+      "descriptor_pool": ["small", "emerging", "boutique", "nascent", "lean"],
+      "tag_pool": ["micro-cap", "illiquid", "early-stage"]
+    },
+    "1": {
+      "label": "Small",
+      "employee_range": [180, 1200],
+      "revenue_hint_range": [150000000000, 750000000000],
+      "descriptor_pool": ["growing", "regional", "independent", "focused", "lean"],
+      "tag_pool": ["small-cap", "growing", "independent"]
+    },
+    "2": {
+      "label": "Mid",
+      "employee_range": [1200, 8000],
+      "revenue_hint_range": [750000000000, 4000000000000],
+      "descriptor_pool": ["scaled", "established", "multi-regional", "mid-sized", "maturing"],
+      "tag_pool": ["mid-cap", "established", "profitable"]
+    },
+    "3": {
+      "label": "Large",
+      "employee_range": [8000, 40000],
+      "revenue_hint_range": [4000000000000, 20000000000000],
+      "descriptor_pool": ["large", "national", "major", "leading", "dominant"],
+      "tag_pool": ["large-cap", "institutional-grade", "market-followed"]
+    },
+    "4": {
+      "label": "Mega",
+      "employee_range": [40000, 250000],
+      "revenue_hint_range": [20000000000000, 250000000000000],
+      "descriptor_pool": ["massive", "national-scale", "industry-defining", "systemically important", "dominant"],
+      "tag_pool": ["mega-cap", "blue-chip", "systemic"]
+    }
+  },
+  "sectors": {
+    "consumer": {
+      "business_pool": [
+        "consumer brands, packaged goods, and retail distribution for domestic households",
+        "food, beverage, household, and personal care products sold through mass-market channels",
+        "branded staples and discretionary products supplied to retail, wholesale, and distribution partners"
+      ],
+      "scope_pool": [
+        "Its products reach customers through supermarkets, wholesalers, traditional trade, and modern retail partners",
+        "The company balances domestic brand building with regional distribution and selective export channels",
+        "Its route-to-market combines in-house sales execution, distributor networks, and recurring shelf-space agreements"
+      ],
+      "differentiator_pool": [
+        "Brand recognition, distribution reach, and repeat purchase behavior remain central to its competitive position",
+        "Its ability to defend shelf space and maintain pricing discipline is a major part of how the market reads the story"
+      ],
+      "tag_pool": ["consumer", "branded", "domestic-demand", "retail", "defensive", "distribution"]
+    },
+    "industrial": {
+      "business_pool": [
+        "industrial machinery, engineered components, and project-based services for commercial customers",
+        "equipment, materials handling systems, and industrial services for construction, mining, and manufacturing clients",
+        "precision parts, workshop output, and field support for heavy industry and infrastructure customers"
+      ],
+      "scope_pool": [
+        "Its operations are supported by workshops, fabrication capacity, field technicians, and long-running customer relationships",
+        "The company serves contractors, manufacturers, and asset owners through direct sales, tenders, and recurring service work",
+        "Its mix of equipment sales and aftermarket support gives the business exposure to both project cycles and maintenance demand"
+      ],
+      "differentiator_pool": [
+        "Execution quality, project backlog visibility, and utilization rates usually drive conviction in the name",
+        "The market pays close attention to margins on new work and whether the company can turn order momentum into cleaner cash flow"
+      ],
+      "tag_pool": ["industrial", "manufacturing", "capex-cycle", "b2b", "projects", "machinery"]
+    },
+    "energy": {
+      "business_pool": [
+        "energy production, resource development, and supporting logistics across upstream and downstream assets",
+        "oil, gas, coal, and adjacent energy services tied to production, transport, and processing activity",
+        "resource extraction, power-linked operations, and field services exposed to commodity demand"
+      ],
+      "scope_pool": [
+        "Its asset base spans production fields, transport infrastructure, service contracts, and long-running customer offtake relationships",
+        "The company sells into domestic demand while remaining exposed to global pricing and export-linked volume shifts",
+        "Its economics are shaped by reserve quality, field execution, hauling or shipping access, and the wider commodity cycle"
+      ],
+      "differentiator_pool": [
+        "Reserve life, realized pricing, and the ability to hold costs in volatile tape conditions remain major parts of the story",
+        "The market usually reads the name through commodity sensitivity, production reliability, and capital allocation discipline"
+      ],
+      "tag_pool": ["energy", "commodity-driven", "upstream", "downstream", "export-heavy", "capital-intensive"]
+    },
+    "tech": {
+      "business_pool": [
+        "software, digital platforms, and technology-enabled services for consumer and enterprise users",
+        "cloud tools, data products, and workflow software built for modern businesses and online ecosystems",
+        "digital marketplaces, transaction infrastructure, and product-led technology services"
+      ],
+      "scope_pool": [
+        "Its platform model emphasizes user growth, product iteration, and higher engagement across multiple digital touchpoints",
+        "The company scales through software deployment, recurring usage, and adjacent monetization opportunities inside its ecosystem",
+        "Its operating model depends on engineering output, distribution efficiency, and the ability to retain users at attractive unit economics"
+      ],
+      "differentiator_pool": [
+        "The story tends to hinge on product velocity, adoption depth, and whether growth can translate into stronger monetization over time",
+        "Investors usually focus on user retention, operating leverage, and how defensible the company's digital moat really is"
+      ],
+      "tag_pool": ["tech", "digital", "software", "platform", "high-growth", "network-effects"]
+    },
+    "infra": {
+      "business_pool": [
+        "infrastructure assets, regulated networks, and concession-backed services tied to national connectivity and logistics",
+        "telecom towers, broadband assets, transport links, and long-cycle infrastructure services",
+        "critical physical and digital infrastructure used by consumers, enterprises, and public institutions"
+      ],
+      "scope_pool": [
+        "Its revenue base is supported by long-term contracts, regulated frameworks, and assets that are difficult to replicate quickly",
+        "The business relies on high asset uptime, disciplined maintenance, and steady capital deployment into network expansion",
+        "Its operating footprint spans multiple regions and customer types, with cash flow shaped by utilization and contract quality"
+      ],
+      "differentiator_pool": [
+        "The market tends to reward the name when utilization, contract tenor, and return on new capex stay aligned",
+        "Investors usually focus on concession durability, tenant quality, and whether growth is arriving without excessive balance-sheet strain"
+      ],
+      "tag_pool": ["infrastructure", "regulated", "recurring-revenue", "telecom", "long-cycle", "capital-intensive"]
+    },
+    "transport": {
+      "business_pool": [
+        "transport capacity, logistics services, and asset-heavy operations that move goods and people across key routes",
+        "shipping, haulage, fleet management, and related logistics services linked to industrial and consumer demand",
+        "transport networks, cargo handling, and route-based services for commercial counterparties and trade corridors"
+      ],
+      "scope_pool": [
+        "Its performance depends on load factors, route economics, asset utilization, and the health of linked end markets",
+        "The company operates through a mix of owned assets, contract routes, and recurring customer relationships across regional corridors",
+        "Its revenue base is shaped by freight volumes, service reliability, and the ability to manage fuel and maintenance costs"
+      ],
+      "differentiator_pool": [
+        "The tape often reacts to utilization trends, contract renewals, and whether cost discipline is keeping pace with operational complexity",
+        "Investors usually watch fuel sensitivity, fleet productivity, and signs that route economics are improving or deteriorating"
+      ],
+      "tag_pool": ["transport", "logistics", "asset-heavy", "cyclical", "routes", "fleet"]
+    },
+    "health": {
+      "business_pool": [
+        "healthcare products, medical services, and regulated treatment or diagnostic solutions",
+        "pharmaceutical, clinical, hospital, and diagnostic offerings for patients, providers, and healthcare institutions",
+        "medicines, devices, and healthcare services supported by regulatory oversight and specialist know-how"
+      ],
+      "scope_pool": [
+        "Its business blends product quality, compliance, and trusted delivery across institutional, clinical, and retail channels",
+        "The company operates in a regulated environment where execution, product mix, and service standards all matter to market confidence",
+        "Its revenue base is supported by recurring care demand, licensed distribution, and the ability to manage quality at scale"
+      ],
+      "differentiator_pool": [
+        "The market often rewards the name for consistency, product defensiveness, and the visibility that comes from regulated demand",
+        "Investors usually focus on compliance strength, treatment mix, and whether the company can compound growth without sacrificing quality"
+      ],
+      "tag_pool": ["healthcare", "regulated", "defensive", "pharma", "medical", "diagnostics"]
+    },
+    "finance": {
+      "business_pool": [
+        "banking, lending, payments, and capital services for retail, commercial, and institutional customers",
+        "financial intermediation, credit deployment, and fee-based services across consumer and business segments",
+        "deposit, financing, insurance, and market-linked services exposed to credit quality and funding conditions"
+      ],
+      "scope_pool": [
+        "Its performance is shaped by balance-sheet quality, funding mix, and the spread between growth ambitions and risk control",
+        "The company serves multiple customer cohorts through branches, distribution partners, and increasingly digital service channels",
+        "Its revenue engine combines net interest income, fee generation, and portfolio quality across different lending and service lines"
+      ],
+      "differentiator_pool": [
+        "Capital strength, asset quality, and deposit resilience usually sit at the center of the investment debate",
+        "The market tends to focus on loan growth quality, margin durability, and whether the company is taking risk deliberately or chasing volume"
+      ],
+      "tag_pool": ["finance", "banking", "regulated", "interest-rate-sensitive", "capital", "systemic"]
+    },
+    "basicindustry": {
+      "business_pool": [
+        "materials processing, chemical output, and industrial inputs sold into construction and manufacturing chains",
+        "base materials, industrial compounds, and processing output tied to heavy industry and downstream fabrication",
+        "raw and semi-finished materials used by manufacturing, infrastructure, and export-linked customers"
+      ],
+      "scope_pool": [
+        "Its economics depend on plant utilization, input cost control, and demand from downstream industrial customers",
+        "The company sits near the base of multiple supply chains, which makes pricing power and cycle timing especially important",
+        "Its operations are shaped by processing efficiency, working capital discipline, and the health of linked industrial end markets"
+      ],
+      "differentiator_pool": [
+        "The market usually watches spread dynamics, utilization, and whether fixed-cost absorption is improving enough to lift returns",
+        "Investors tend to focus on cycle timing, export exposure, and how well the company can manage through uneven demand phases"
+      ],
+      "tag_pool": ["basic-materials", "chemicals", "industrial-inputs", "cyclical", "processing", "export"]
+    },
+    "property": {
+      "business_pool": [
+        "property development, recurring rental assets, and land-bank driven real estate operations",
+        "residential, commercial, and mixed-use property projects supported by leasing and development income",
+        "township, building, and real estate asset development tied to urban demand and capital access"
+      ],
+      "scope_pool": [
+        "Its results are shaped by launch timing, occupancy, project execution, and the balance between development sales and recurring income",
+        "The company manages a mix of land inventory, active projects, and completed assets that together determine cash flow quality",
+        "Its operating cadence depends on selling momentum, construction progress, and the ability to recycle capital across projects"
+      ],
+      "differentiator_pool": [
+        "The market usually focuses on land-bank quality, presales momentum, and whether leverage is being used with discipline",
+        "Investors tend to watch recurring income mix, project delivery, and how exposed the company is to softer property demand"
+      ],
+      "tag_pool": ["property", "real-estate", "land-bank", "development", "leasing", "interest-rate-sensitive"]
+    },
+    "noncyclical": {
+      "business_pool": [
+        "everyday staples, essential goods, and defensive demand categories used across household and business consumption",
+        "food, agricultural, and recurring-use products that tend to hold demand more steadily across market cycles",
+        "non-cyclical goods and supply chains linked to basic consumption, distribution, and recurring reorder behavior"
+      ],
+      "scope_pool": [
+        "Its end markets are usually steadier than most sectors, which shifts investor focus toward execution consistency and distribution depth",
+        "The company benefits from recurring demand patterns, but margins still depend on procurement discipline and channel strength",
+        "Its operating model is built around dependable volume, efficient supply chains, and pricing discipline across staple categories"
+      ],
+      "differentiator_pool": [
+        "The market often treats the name as a steadier compounder when execution and balance-sheet discipline remain intact",
+        "Investors usually focus on defensiveness, distribution reach, and whether margin stability is holding through input-cost swings"
+      ],
+      "tag_pool": ["non-cyclical", "defensive", "staples", "domestic-demand", "distribution", "cash-flow"]
+    }
+  },
+  "narrative_tag_sentences": {
+    "domestic_demand": [
+      "Its story is closely tied to domestic demand conditions and the health of local purchasing power",
+      "The name usually benefits when internal consumption stays resilient relative to the broader tape"
+    ],
+    "quiet_execution": [
+      "The company is better known for steady execution than for promotional headlines or aggressive storytelling",
+      "It rarely needs loud headlines to stay relevant, because the market tends to notice consistent delivery over time"
+    ],
+    "stealth_interest": [
+      "The name often attracts attention quietly, with interest building before the broader market narrative fully catches up",
+      "It can move from overlooked to closely watched quickly once operating momentum becomes harder to ignore"
+    ],
+    "retail_favorite": [
+      "Retail attention tends to arrive quickly when the story starts to feel simple, liquid, and easy to circulate",
+      "The name often trades with a stronger retail narrative component than its underlying size alone would suggest"
+    ],
+    "narrative_hot": [
+      "The company can become highly narrative-driven when sentiment swings in favor of its segment or thematic setup",
+      "When the story is working, valuation can move faster than the underlying operating base"
+    ],
+    "commodity_beta": [
+      "Its earnings profile remains sensitive to commodity moves, which can amplify both upside and drawdown phases",
+      "The name usually trades as a higher-beta expression of the wider commodity cycle"
+    ],
+    "policy_beta": [
+      "Policy signals and regulatory direction can materially shift how the market values the company from one phase to the next",
+      "Expectations around permits, tariffs, incentives, and state priorities remain important to the story"
+    ],
+    "foreign_watchlist": [
+      "It tends to stay on foreign watchlists when liquidity, sector positioning, and macro access line up constructively",
+      "Cross-border fund interest matters because ownership changes can quickly reshape the tape in either direction"
+    ],
+    "institution_quality": [
+      "Institutional buyers usually focus on the name when governance, execution, and balance-sheet signals remain supportive",
+      "Its operating profile fits the type of quality screen that longer-horizon funds often prefer"
+    ],
+    "supportive_balance_sheet": [
+      "A cleaner balance sheet gives the company more room to compound without relying on constant refinancing pressure",
+      "Balance-sheet support is one of the cleaner reasons the name can hold up better than weaker peers in the same group"
+    ],
+    "capex_cycle": [
+      "The story is closely tied to capex timing, which means contract visibility and project conversion matter more than headline optimism",
+      "Its next leg usually depends on whether capital spending actually moves from planning into funded execution"
+    ]
+  },
+  "global_differentiator_pool": [
+    "Management has been allocating capital more selectively, which has made execution quality a bigger part of the story than raw growth alone",
+    "The company tends to rerate when investors gain confidence that operating momentum is durable rather than merely cyclical",
+    "Its valuation often reflects a balance between visible operating strengths and the market's willingness to underwrite the next growth phase",
+    "The name usually gets rewarded when management can turn a simple story into cleaner cash generation instead of just louder guidance"
+  ]
+}

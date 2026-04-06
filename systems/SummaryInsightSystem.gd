@@ -41,6 +41,9 @@ func build_daily_summary(run_state, _data_repository) -> Dictionary:
 	var current_equity: float = run_state.get_total_equity()
 	var starting_equity: float = float(run_state.last_day_results.get("starting_equity", run_state.last_equity_value))
 	var portfolio_delta: float = current_equity - starting_equity
+	var macro_state: Dictionary = run_state.get_current_macro_state()
+	var active_company_arcs: Array = run_state.get_active_company_arcs()
+	var active_special_events: Array = run_state.get_active_special_events()
 
 	return {
 		"day_index": run_state.day_index,
@@ -52,6 +55,9 @@ func build_daily_summary(run_state, _data_repository) -> Dictionary:
 		"top_movers": movers,
 		"best_accumulation": most_accumulated,
 		"heaviest_distribution": most_distributed,
+		"macro_state": macro_state,
+		"active_company_arcs": active_company_arcs,
+		"active_special_events": active_special_events,
 		"explanation": _build_explanation(biggest_winner, biggest_loser, most_accumulated, most_distributed, portfolio_delta)
 	}
 

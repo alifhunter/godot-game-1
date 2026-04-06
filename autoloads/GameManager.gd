@@ -3,6 +3,7 @@ extends Node
 signal day_started(day_index)
 signal price_formed(day_index)
 signal portfolio_changed
+signal watchlist_changed
 signal summary_ready(summary)
 signal broker_flow_generated(day_index)
 signal run_started
@@ -21,15 +22,21 @@ const NEW_RUN_LOADING_STEPS := [
 	{"id": "seed", "label": "Preparing market seed"},
 	{"id": "companies", "label": "Creating companies"},
 	{"id": "financials", "label": "Creating financials"},
+	{"id": "opening_day", "label": "Simulating opening session"},
 	{"id": "save", "label": "Saving run"},
 	{"id": "launch", "label": "Opening trading desk"}
+]
+const LOAD_RUN_LOADING_STEPS := [
+	{"id": "load_save", "label": "Reading save file"},
+	{"id": "restore_state", "label": "Restoring run state"},
+	{"id": "load_launch", "label": "Opening trading desk"}
 ]
 const DIFFICULTY_PRESETS := {
 	"newbie": {
 		"id": "newbie",
 		"label": "Newbie",
 		"starting_cash": 1000000000.0,
-		"company_count": 20,
+		"company_count": 25,
 		"market_swing_range": 0.012,
 		"volatility_multiplier": 0.55,
 		"event_interval_days": 60.0,
@@ -57,7 +64,7 @@ const DIFFICULTY_PRESETS := {
 		"id": "hard",
 		"label": "Hard",
 		"starting_cash": 10000000.0,
-		"company_count": 100,
+		"company_count": 75,
 		"market_swing_range": 0.035,
 		"volatility_multiplier": 1.0,
 		"event_interval_days": 14.0,
@@ -71,7 +78,7 @@ const DIFFICULTY_PRESETS := {
 		"id": "hardcore",
 		"label": "Hardcore",
 		"starting_cash": 1000000.0,
-		"company_count": 200,
+		"company_count": 100,
 		"market_swing_range": 0.055,
 		"volatility_multiplier": 1.35,
 		"event_interval_days": 7.0,
@@ -88,6 +95,9 @@ var summary_system = preload("res://systems/SummaryInsightSystem.gd").new()
 var broker_flow_system = preload("res://systems/BrokerFlowSystem.gd").new()
 var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 var company_roster_generator = preload("res://systems/CompanyRosterGenerator.gd").new()
+var chart_system = preload("res://systems/ChartSystem.gd").new()
+var news_feed_system = preload("res://systems/NewsFeedSystem.gd").new()
+var twooter_feed_system = preload("res://systems/TwooterFeedSystem.gd").new()
 
 
 func _ready() -> void:
@@ -101,6 +111,7 @@ func start_new_run(run_seed: int = 0, difficulty_id: String = DEFAULT_DIFFICULTY
 	var difficulty_config: Dictionary = get_difficulty_config(difficulty_id)
 	var company_definitions: Array = build_company_roster(run_seed, difficulty_config)
 	RunState.setup_new_run(run_seed, company_definitions, difficulty_config, tutorial_enabled)
+	simulate_opening_session(false)
 	SaveManager.save_run(RunState.to_save_dict())
 	run_started.emit()
 	_enter_game_scene()
@@ -128,11 +139,15 @@ func start_new_run_with_loading(
 	await get_tree().process_frame
 
 	_emit_run_loading_step(3)
+	simulate_opening_session(false)
+	await get_tree().process_frame
+
+	_emit_run_loading_step(4)
 	SaveManager.save_run(RunState.to_save_dict())
 	run_started.emit()
 	await get_tree().process_frame
 
-	_emit_run_loading_step(4)
+	_emit_run_loading_step(5)
 	await get_tree().process_frame
 	run_loading_finished.emit()
 	_enter_game_scene()
@@ -149,6 +164,27 @@ func load_run_from_save() -> bool:
 	return true
 
 
+func load_run_from_save_with_loading() -> bool:
+	_emit_load_run_loading_step(0)
+	await get_tree().process_frame
+
+	var saved_run: Dictionary = SaveManager.load_run()
+	if saved_run.is_empty():
+		run_loading_finished.emit()
+		return false
+
+	_emit_load_run_loading_step(1)
+	RunState.load_from_dict(saved_run)
+	run_loaded.emit()
+	await get_tree().process_frame
+
+	_emit_load_run_loading_step(2)
+	await get_tree().process_frame
+	run_loading_finished.emit()
+	_enter_game_scene()
+	return true
+
+
 func return_to_menu() -> void:
 	get_tree().change_scene_to_file(MAIN_MENU_SCENE)
 
@@ -158,20 +194,36 @@ func quit_game() -> void:
 
 
 func advance_day() -> void:
-	if not RunState.has_active_run():
-		return
+	_advance_day_internal(true, true)
 
-	day_started.emit(RunState.day_index + 1)
+
+func simulate_opening_session(save_after: bool = false) -> Dictionary:
+	return _advance_day_internal(save_after, false)
+
+
+func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool = true) -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+
+	if emit_runtime_signals:
+		day_started.emit(RunState.day_index + 1)
 	var day_result: Dictionary = market_simulator.simulate_day(RunState, DataRepository, broker_flow_system)
 	RunState.apply_day_result(day_result)
-	broker_flow_generated.emit(RunState.day_index)
-	price_formed.emit(RunState.day_index)
+	if emit_runtime_signals:
+		broker_flow_generated.emit(RunState.day_index)
+		price_formed.emit(RunState.day_index)
 
 	var summary: Dictionary = summary_system.build_daily_summary(RunState, DataRepository)
 	RunState.set_daily_summary(summary)
-	SaveManager.save_run(RunState.to_save_dict())
-	summary_ready.emit(summary)
-	portfolio_changed.emit()
+	if save_after:
+		SaveManager.save_run(RunState.to_save_dict())
+	if emit_runtime_signals:
+		summary_ready.emit(summary)
+		portfolio_changed.emit()
+	return {
+		"day_result": day_result,
+		"summary": summary
+	}
 
 
 func buy_company(company_id: String, shares: int = 1) -> Dictionary:
@@ -206,15 +258,36 @@ func estimate_sell_lots(company_id: String, lots: int = 1) -> Dictionary:
 	return RunState.estimate_sell_order(company_id, lots_to_shares(lots))
 
 
+func add_company_to_watchlist(company_id: String) -> Dictionary:
+	var result: Dictionary = RunState.add_to_watchlist(company_id)
+	if result.get("success", false):
+		SaveManager.save_run(RunState.to_save_dict())
+		watchlist_changed.emit()
+	return result
+
+
+func get_watchlist_company_ids() -> Array:
+	return RunState.get_watchlist_company_ids()
+
+
 func get_company_rows() -> Array:
 	var rows: Array = []
 	for company_id in RunState.company_order:
-		rows.append(get_company_snapshot(str(company_id)))
+		rows.append(get_company_snapshot(str(company_id), false, false, false))
 	return rows
 
 
-func get_company_snapshot(company_id: String) -> Dictionary:
-	var definition: Dictionary = RunState.get_effective_company_definition(company_id)
+func get_company_snapshot(
+	company_id: String,
+	include_price_history: bool = false,
+	include_financial_history: bool = false,
+	include_statement_history: bool = false
+) -> Dictionary:
+	var definition: Dictionary = RunState.get_effective_company_definition(
+		company_id,
+		include_financial_history,
+		include_statement_history
+	)
 	var runtime: Dictionary = RunState.get_company(company_id)
 	if definition.is_empty() or runtime.is_empty():
 		return {}
@@ -233,13 +306,35 @@ func get_company_snapshot(company_id: String) -> Dictionary:
 	var lot_size: int = get_lot_size()
 	var average_price: float = float(holding.get("average_price", 0.0))
 	var financials: Dictionary = definition.get("financials", {}).duplicate(true)
-	var financial_history: Array = definition.get("financial_history", []).duplicate(true)
-	return {
+	var financial_history: Array = []
+	if include_financial_history:
+		financial_history = definition.get("financial_history", []).duplicate(true)
+	var starting_price: float = float(runtime.get("starting_price", current_price))
+	var ytd_open_price: float = float(runtime.get("ytd_open_price", starting_price))
+	var since_start_pct: float = 0.0
+	var ytd_change_pct: float = 0.0
+	if not is_zero_approx(starting_price):
+		since_start_pct = (current_price - starting_price) / starting_price
+	if not is_zero_approx(ytd_open_price):
+		ytd_change_pct = (current_price - ytd_open_price) / ytd_open_price
+	var snapshot: Dictionary = {
 		"id": company_id,
 		"ticker": definition.get("ticker", company_id.to_upper()),
 		"name": definition.get("name", ""),
 		"sector_id": str(definition.get("sector_id", "")),
 		"sector_name": sector_definition.get("name", "Unknown"),
+		"archetype_id": str(definition.get("archetype_id", "")),
+		"archetype_label": str(definition.get("archetype_label", "")),
+		"company_size_id": int(definition.get("company_size_id", 0)),
+		"company_size_label": str(definition.get("company_size_label", "")),
+		"company_age": int(definition.get("company_age", 0)),
+		"founded_year": int(definition.get("founded_year", 0)),
+		"employee_count": int(definition.get("employee_count", 0)),
+		"profile_revenue": float(definition.get("profile_revenue", 0.0)),
+		"profile_revenue_value": float(definition.get("profile_revenue_value", 0.0)),
+		"profile_revenue_unit": str(definition.get("profile_revenue_unit", "")),
+		"profile_description": str(definition.get("profile_description", "")),
+		"profile_tags": definition.get("profile_tags", []).duplicate(),
 		"current_price": current_price,
 		"previous_close": previous_close,
 		"daily_change_pct": daily_change_pct,
@@ -248,10 +343,16 @@ func get_company_snapshot(company_id: String) -> Dictionary:
 		"risk_score": int(definition.get("risk_score", 0)),
 		"financials": financials,
 		"financial_history": financial_history,
+		"financial_statement_snapshot": definition.get("financial_statement_snapshot", {}).duplicate(true),
 		"narrative_tags": definition.get("narrative_tags", []).duplicate(),
-		"price_history": runtime.get("price_history", []).duplicate(),
 		"sentiment": float(runtime.get("sentiment", 0.0)),
 		"event_tags": runtime.get("active_event_tags", []).duplicate(),
+		"active_events": runtime.get("active_events", []).duplicate(true),
+		"starting_price": starting_price,
+		"ytd_open_price": ytd_open_price,
+		"ytd_reference_year": int(runtime.get("ytd_reference_year", int(RunState.get_current_trade_date().get("year", 2020)))),
+		"since_start_pct": since_start_pct,
+		"ytd_change_pct": ytd_change_pct,
 		"broker_flow": runtime.get("broker_flow", {}).duplicate(true),
 		"hidden_story_flags": runtime.get("hidden_story_flags", []).duplicate(),
 		"listing_board": listing_board,
@@ -268,13 +369,26 @@ func get_company_snapshot(company_id: String) -> Dictionary:
 		"unrealized_pnl": (current_price - average_price) * shares_owned
 	}
 
+	if include_price_history:
+		snapshot["price_history"] = runtime.get("price_history", []).duplicate()
+		snapshot["price_bars"] = runtime.get("price_bars", []).duplicate(true)
+
+	return snapshot
+
+
+func get_company_chart_snapshot(company_id: String, range_id: String = "1m", enabled_indicator_ids: Array = []) -> Dictionary:
+	var chart_bars: Array = RunState.get_company_chart_bars(company_id)
+	if chart_bars.is_empty():
+		return {}
+	return chart_system.build_chart_snapshot_from_bars(chart_bars, range_id, enabled_indicator_ids)
+
 
 func get_portfolio_snapshot() -> Dictionary:
 	var holdings_rows: Array = []
 	var invested_cost_total: float = 0.0
 	var unrealized_pnl_total: float = 0.0
 	for company_id in RunState.player_portfolio.get("holdings", {}).keys():
-		var snapshot: Dictionary = get_company_snapshot(str(company_id))
+		var snapshot: Dictionary = get_company_snapshot(str(company_id), false)
 		var holding: Dictionary = RunState.get_holding(str(company_id))
 		var shares: int = int(holding.get("shares", 0))
 		var invested_cost: float = float(holding.get("average_price", 0.0)) * float(shares)
@@ -323,7 +437,7 @@ func get_sector_rows() -> Array:
 	var ordered_rows: Array = []
 
 	for company_id in RunState.company_order:
-		var snapshot: Dictionary = get_company_snapshot(str(company_id))
+		var snapshot: Dictionary = get_company_snapshot(str(company_id), false)
 		var sector_id: String = str(snapshot.get("sector_id", ""))
 		if sector_id.is_empty():
 			continue
@@ -414,6 +528,71 @@ func get_trade_history() -> Array:
 	return rows
 
 
+func get_event_history() -> Array:
+	return RunState.get_event_history()
+
+
+func get_market_history() -> Array:
+	return RunState.get_market_history()
+
+
+func get_active_company_arcs() -> Array:
+	return RunState.get_active_company_arcs()
+
+
+func get_active_special_events() -> Array:
+	return RunState.get_active_special_events()
+
+
+func get_news_snapshot(unlocked_intel_level: int = -1) -> Dictionary:
+	if not RunState.has_active_run():
+		return {
+			"intel_level": max(unlocked_intel_level, 1),
+			"outlets": [],
+			"feeds": {}
+		}
+
+	var news_trade_date: Dictionary = get_current_trade_date()
+	news_trade_date["day_index"] = RunState.day_index
+
+	return news_feed_system.build_news_snapshot(
+		RunState,
+		DataRepository.get_news_feed_data(),
+		get_company_rows(),
+		get_market_history(),
+		get_event_history(),
+		get_active_special_events(),
+		get_active_company_arcs(),
+		news_trade_date,
+		unlocked_intel_level
+	)
+
+
+func get_twooter_snapshot(unlocked_access_tier: int = -1) -> Dictionary:
+	if not RunState.has_active_run():
+		return {
+			"access_tier": max(unlocked_access_tier, 1),
+			"tier_label": "Tier 1",
+			"accounts": [],
+			"posts": []
+		}
+
+	var social_trade_date: Dictionary = get_current_trade_date()
+	social_trade_date["day_index"] = RunState.day_index
+
+	return twooter_feed_system.build_social_snapshot(
+		RunState,
+		DataRepository.get_twooter_feed_data(),
+		get_company_rows(),
+		get_market_history(),
+		get_event_history(),
+		get_active_special_events(),
+		get_active_company_arcs(),
+		social_trade_date,
+		unlocked_access_tier
+	)
+
+
 func get_difficulty_options() -> Array:
 	var options: Array = []
 
@@ -462,6 +641,14 @@ func get_current_trade_date() -> Dictionary:
 	return RunState.get_current_trade_date()
 
 
+func get_current_macro_state() -> Dictionary:
+	return RunState.get_current_macro_state()
+
+
+func get_macro_state_history() -> Array:
+	return RunState.get_macro_state_history()
+
+
 func get_next_trade_date() -> Dictionary:
 	return RunState.get_next_trade_date()
 
@@ -499,20 +686,36 @@ func get_tick_size_for_price(price: float) -> float:
 	return IDX_PRICE_RULES.tick_size_for_reference_price(price)
 
 
+func get_chart_range_label(range_id: String) -> String:
+	return chart_system.get_range_label(range_id)
+
+
+func get_chart_indicator_catalog() -> Array:
+	return chart_system.get_indicator_catalog()
+
+
 func _emit_run_loading_step(step_index: int) -> void:
-	if NEW_RUN_LOADING_STEPS.is_empty():
+	_emit_loading_step_from_list(NEW_RUN_LOADING_STEPS, step_index)
+
+
+func _emit_load_run_loading_step(step_index: int) -> void:
+	_emit_loading_step_from_list(LOAD_RUN_LOADING_STEPS, step_index)
+
+
+func _emit_loading_step_from_list(steps: Array, step_index: int) -> void:
+	if steps.is_empty():
 		run_loading_progress.emit("", "", 0, 0, 1.0)
 		return
 
-	var clamped_index: int = clamp(step_index, 0, NEW_RUN_LOADING_STEPS.size() - 1)
-	var step: Dictionary = NEW_RUN_LOADING_STEPS[clamped_index]
-	var denominator: float = max(float(NEW_RUN_LOADING_STEPS.size() - 1), 1.0)
+	var clamped_index: int = clamp(step_index, 0, steps.size() - 1)
+	var step: Dictionary = steps[clamped_index]
+	var denominator: float = max(float(steps.size() - 1), 1.0)
 	var progress_ratio: float = float(clamped_index) / denominator
 	run_loading_progress.emit(
 		str(step.get("id", "")),
 		str(step.get("label", "")),
 		clamped_index + 1,
-		NEW_RUN_LOADING_STEPS.size(),
+		steps.size(),
 		progress_ratio
 	)
 

@@ -1,47 +1,54 @@
 [gd_scene format=3]
 
 [node name="ActionPanel" type="PanelContainer"]
+clip_contents = true
 custom_minimum_size = Vector2(320, 0)
+size_flags_vertical = 3
 
 [node name="ActionMargin" type="MarginContainer" parent="."]
-theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 16
-theme_override_constants/margin_bottom = 16
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
 
 [node name="ActionVBox" type="VBoxContainer" parent="ActionMargin"]
-theme_override_constants/separation = 10
-
-[node name="SelectionLabel" type="Label" parent="ActionMargin/ActionVBox"]
-autowrap_mode = 3
-text = "Selected: -"
-
-[node name="ActionHintLabel" type="Label" parent="ActionMargin/ActionVBox"]
-autowrap_mode = 3
-text = "Use lot-sized orders so position sizing and fees matter."
-
-[node name="TradeRuleLabel" type="Label" parent="ActionMargin/ActionVBox"]
-autowrap_mode = 3
-text = "1 lot = 100 shares | Buy fee 0.15% | Sell fee 0.25%"
-
-[node name="SizingRow" type="HBoxContainer" parent="ActionMargin/ActionVBox"]
-theme_override_constants/separation = 10
-
-[node name="LotsTitleLabel" type="Label" parent="ActionMargin/ActionVBox/SizingRow"]
-text = "Order Size"
-
-[node name="LotSpinBox" type="SpinBox" parent="ActionMargin/ActionVBox/SizingRow"]
-custom_minimum_size = Vector2(140, 0)
 size_flags_horizontal = 3
-min_value = 1.0
-max_value = 9999.0
-step = 1.0
-rounded = true
-value = 1.0
+size_flags_vertical = 3
+theme_override_constants/separation = 14
 
-[node name="OrderPreviewLabel" type="Label" parent="ActionMargin/ActionVBox"]
+[node name="HeaderVBox" type="VBoxContainer" parent="ActionMargin/ActionVBox"]
+theme_override_constants/separation = 4
+
+[node name="CompanyNameLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox"]
+theme_override_font_sizes/font_size = 10
 autowrap_mode = 3
-text = "Order preview will appear here."
+text = "NO SELECTION"
+
+[node name="SelectionLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox"]
+theme_override_font_sizes/font_size = 20
+text = "-"
+
+[node name="QuoteRow" type="HBoxContainer" parent="ActionMargin/ActionVBox/HeaderVBox"]
+theme_override_constants/separation = 0
+
+[node name="PriceBlock" type="VBoxContainer" parent="ActionMargin/ActionVBox/HeaderVBox/QuoteRow"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="CurrentPriceLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/QuoteRow/PriceBlock"]
+theme_override_font_sizes/font_size = 26
+text = "Rp 0.00"
+
+[node name="PriceChangeLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/QuoteRow/PriceBlock"]
+theme_override_font_sizes/font_size = 12
+text = "+Rp 0.00  |  +0.00%"
+
+[node name="PositionLabel" type="Label" parent="ActionMargin/ActionVBox"]
+theme_override_font_sizes/font_size = 11
+autowrap_mode = 3
+text = "Held 0 lot(s) / 0 share(s)"
 
 [node name="TradeButtonRow" type="HBoxContainer" parent="ActionMargin/ActionVBox"]
 theme_override_constants/separation = 10
@@ -49,9 +56,74 @@ theme_override_constants/separation = 10
 [node name="BuyButton" type="Button" parent="ActionMargin/ActionVBox/TradeButtonRow"]
 custom_minimum_size = Vector2(0, 46)
 size_flags_horizontal = 3
-text = "Buy 1 Lot"
+button_pressed = true
+toggle_mode = true
+text = "Buy"
 
 [node name="SellButton" type="Button" parent="ActionMargin/ActionVBox/TradeButtonRow"]
 custom_minimum_size = Vector2(0, 46)
 size_flags_horizontal = 3
-text = "Sell 1 Lot"
+toggle_mode = true
+text = "Sell"
+
+[node name="OrderCard" type="PanelContainer" parent="ActionMargin/ActionVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="OrderCardMargin" type="MarginContainer" parent="ActionMargin/ActionVBox/OrderCard"]
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="OrderCardVBox" type="VBoxContainer" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="OrderTitleRow" type="HBoxContainer" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
+theme_override_constants/separation = 8
+
+[node name="OrderTitleLabel" type="Label" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox/OrderTitleRow"]
+theme_override_font_sizes/font_size = 15
+text = "Buy Order"
+
+[node name="OrderTitleSpacer" type="Control" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox/OrderTitleRow"]
+size_flags_horizontal = 3
+
+[node name="QuantityTitleLabel" type="Label" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
+theme_override_font_sizes/font_size = 11
+text = "QUANTITY"
+
+[node name="LotSpinBox" type="SpinBox" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
+custom_minimum_size = Vector2(0, 42)
+size_flags_horizontal = 3
+min_value = 1.0
+max_value = 9999.0
+step = 1.0
+rounded = true
+value = 1.0
+
+[node name="PriceTitleLabel" type="Label" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
+theme_override_font_sizes/font_size = 11
+text = "PRICE"
+
+[node name="PriceLineEdit" type="LineEdit" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
+custom_minimum_size = Vector2(0, 42)
+size_flags_horizontal = 3
+editable = false
+placeholder_text = "Price"
+
+[node name="EstimatedTotalLabel" type="Label" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
+theme_override_font_sizes/font_size = 11
+text = "ESTIMATED TOTAL"
+
+[node name="EstimatedTotalValueLabel" type="Label" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
+theme_override_font_sizes/font_size = 22
+horizontal_alignment = 2
+text = "Rp 0.00"
+
+[node name="SubmitOrderButton" type="Button" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
+custom_minimum_size = Vector2(0, 48)
+size_flags_horizontal = 3
+text = "Submit Buy Order"

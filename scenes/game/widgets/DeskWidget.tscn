@@ -20,9 +20,11 @@ text = "TRADING DESK"
 text = "Day 0"
 
 [node name="CashLabel" type="Label" parent="DeskMargin/DeskVBox"]
+visible = false
 text = "Cash: Rp 0.00"
 
 [node name="EquityLabel" type="Label" parent="DeskMargin/DeskVBox"]
+visible = false
 text = "Equity: Rp 0.00"
 
 [node name="StatusLabel" type="Label" parent="DeskMargin/DeskVBox"]

@@ -2,13 +2,19 @@ extends Node
 
 const COMPANY_ARCHETYPES_PATH := "res://data/companies/company_archetypes.json"
 const COMPANY_WORDS_PATH := "res://data/companies/company_words.json"
+const COMPANY_PROFILE_DATA_PATH := "res://data/companies/company_profile_data.json"
 const SECTORS_PATH := "res://data/sectors/sectors.json"
 const EVENTS_PATH := "res://data/events/events.json"
+const NEWS_FEED_DATA_PATH := "res://data/news/news_feed_data.json"
+const TWOOTER_FEED_DATA_PATH := "res://data/social/twooter_feed_data.json"
 
 var company_archetypes = []
 var company_words = {}
+var company_profile_data = {}
 var sectors = []
 var event_definitions = []
+var news_feed_data = {}
+var twooter_feed_data = {}
 var company_archetype_by_id = {}
 var sector_by_id = {}
 var event_by_id = {}
@@ -21,8 +27,11 @@ func _ready() -> void:
 func reload_all() -> void:
 	company_archetypes = _load_array_json(COMPANY_ARCHETYPES_PATH)
 	company_words = _load_dictionary_json(COMPANY_WORDS_PATH)
+	company_profile_data = _load_dictionary_json(COMPANY_PROFILE_DATA_PATH)
 	sectors = _load_array_json(SECTORS_PATH)
 	event_definitions = _load_array_json(EVENTS_PATH)
+	news_feed_data = _load_dictionary_json(NEWS_FEED_DATA_PATH)
+	twooter_feed_data = _load_dictionary_json(TWOOTER_FEED_DATA_PATH)
 
 	company_archetype_by_id.clear()
 	for company_archetype in company_archetypes:
@@ -53,12 +62,24 @@ func get_company_word_data() -> Dictionary:
 	return company_words.duplicate(true)
 
 
+func get_company_profile_data() -> Dictionary:
+	return company_profile_data.duplicate(true)
+
+
 func get_company_name_words() -> Array:
 	return company_words.get("unique_words", []).duplicate(true)
 
 
 func get_event_definitions() -> Array:
 	return event_definitions.duplicate(true)
+
+
+func get_news_feed_data() -> Dictionary:
+	return news_feed_data.duplicate(true)
+
+
+func get_twooter_feed_data() -> Dictionary:
+	return twooter_feed_data.duplicate(true)
 
 
 func get_company_archetype(company_id: String) -> Dictionary:

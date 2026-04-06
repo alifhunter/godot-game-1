@@ -3,6 +3,7 @@ extends RefCounted
 const HISTORY_START_YEAR := 2010
 const HISTORY_END_YEAR := 2019
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
+const COMPANY_NARRATIVE_GENERATOR = preload("res://systems/CompanyNarrativeGenerator.gd")
 const DEFAULT_SECTOR_PROFILE := {
 	"scale": 0.50,
 	"growth": 0.50,
@@ -12,6 +13,8 @@ const DEFAULT_SECTOR_PROFILE := {
 	"liquidity": 0.45,
 	"growth_drift": 0.005
 }
+
+var company_narrative_generator = COMPANY_NARRATIVE_GENERATOR.new()
 const SECTOR_ALIASES := {
 	"industry": "industrial"
 }
@@ -116,6 +119,20 @@ const SECTOR_PROFILES := {
 		"growth_drift": 0.008
 	}
 }
+const DEFAULT_QUARTER_WEIGHTS := [0.23, 0.24, 0.25, 0.28]
+const QUARTER_WEIGHT_PROFILES := {
+	"consumer": [0.21, 0.24, 0.25, 0.30],
+	"industrial": [0.23, 0.25, 0.26, 0.26],
+	"energy": [0.24, 0.25, 0.26, 0.25],
+	"tech": [0.21, 0.24, 0.25, 0.30],
+	"infra": [0.24, 0.24, 0.25, 0.27],
+	"transport": [0.22, 0.25, 0.27, 0.26],
+	"health": [0.24, 0.25, 0.25, 0.26],
+	"finance": [0.24, 0.25, 0.25, 0.26],
+	"basicindustry": [0.24, 0.25, 0.26, 0.25],
+	"property": [0.20, 0.22, 0.26, 0.32],
+	"noncyclical": [0.24, 0.25, 0.25, 0.26]
+}
 
 
 func generate_company_profile(template: Dictionary, sector_definition: Dictionary, run_seed: int) -> Dictionary:
@@ -132,7 +149,7 @@ func generate_company_profile(template: Dictionary, sector_definition: Dictionar
 	)
 	var latest_year: Dictionary = financial_history[financial_history.size() - 1].duplicate(true)
 	var target_price: float = _derive_target_price(template, traits, run_seed, company_id)
-	var shares_outstanding: float = _derive_shares_outstanding(float(latest_year.get("market_cap", 0.0)), target_price)
+	var shares_outstanding: float = _derive_shares_outstanding(float(latest_year.get("market_cap", 0.0)), target_price, template)
 	financial_history = _apply_share_price_history(financial_history, shares_outstanding)
 	latest_year = financial_history[financial_history.size() - 1].duplicate(true)
 
@@ -142,8 +159,7 @@ func generate_company_profile(template: Dictionary, sector_definition: Dictionar
 	var risk_score: int = _derive_risk_score(traits, financials)
 	var base_volatility: float = _derive_base_volatility(traits, risk_score)
 	var generated_base_price: float = IDX_PRICE_RULES.normalize_last_price(float(latest_year.get("implied_share_price", target_price)))
-
-	return {
+	var generated_profile: Dictionary = {
 		"base_price": generated_base_price,
 		"quality_score": quality_score,
 		"growth_score": growth_score,
@@ -154,6 +170,134 @@ func generate_company_profile(template: Dictionary, sector_definition: Dictionar
 		"generation_traits": traits,
 		"shares_outstanding": shares_outstanding
 	}
+	generated_profile["financial_statement_snapshot"] = build_financial_statement_snapshot_from_profile(
+		generated_profile,
+		sector_id,
+		run_seed,
+		company_id
+	)
+	var narrative_profile: Dictionary = company_narrative_generator.build_profile(
+		template,
+		sector_definition,
+		financials,
+		run_seed,
+		company_id
+	)
+	for narrative_key_value in narrative_profile.keys():
+		generated_profile[str(narrative_key_value)] = narrative_profile[narrative_key_value]
+	return generated_profile
+
+
+func build_financial_statement_snapshot_from_profile(
+	company_profile: Dictionary,
+	sector_id: String,
+	run_seed: int,
+	company_id: String
+) -> Dictionary:
+	var financial_history: Array = company_profile.get("financial_history", []).duplicate(true)
+	var financials: Dictionary = company_profile.get("financials", {}).duplicate(true)
+	var traits: Dictionary = company_profile.get("generation_traits", {}).duplicate(true)
+	return _build_financial_statement_snapshot(
+		financial_history,
+		financials,
+		traits,
+		run_seed,
+		company_id,
+		sector_id
+	)
+
+
+func build_historical_chart_bars(
+	company_profile: Dictionary,
+	trade_dates: Array,
+	end_price: float,
+	run_seed: int,
+	company_id: String
+) -> Array:
+	if trade_dates.is_empty():
+		return []
+
+	var financial_history: Array = company_profile.get("financial_history", []).duplicate(true)
+	var statement_snapshot: Dictionary = company_profile.get("financial_statement_snapshot", {}).duplicate(true)
+	var traits: Dictionary = company_profile.get("generation_traits", {}).duplicate(true)
+	if financial_history.is_empty() or statement_snapshot.is_empty():
+		return []
+
+	var annual_by_year: Dictionary = {}
+	for annual_entry_value in financial_history:
+		var annual_entry: Dictionary = annual_entry_value.duplicate(true)
+		annual_by_year[int(annual_entry.get("year", 0))] = annual_entry
+
+	var quarterly_by_key: Dictionary = {}
+	for statement_value in statement_snapshot.get("quarterly_statements", []):
+		var statement: Dictionary = statement_value.duplicate(true)
+		quarterly_by_key[_quarter_key(
+			int(statement.get("statement_year", 0)),
+			int(statement.get("statement_quarter", 0))
+		)] = statement
+
+	var quarter_trade_dates: Dictionary = _group_trade_dates_by_quarter(trade_dates)
+	if quarter_trade_dates.is_empty():
+		return []
+
+	var processed_years: Array = []
+	for trade_date_value in trade_dates:
+		var trade_date: Dictionary = trade_date_value
+		var trade_year: int = int(trade_date.get("year", HISTORY_END_YEAR))
+		if processed_years.has(trade_year):
+			continue
+		processed_years.append(trade_year)
+
+	var year_end_price_map: Dictionary = _build_historical_year_end_price_map(
+		processed_years,
+		annual_by_year,
+		traits,
+		run_seed,
+		company_id,
+		end_price
+	)
+	var previous_year_end_price: float = _historical_year_start_price(
+		int(processed_years[0]),
+		annual_by_year,
+		float(year_end_price_map.get(int(processed_years[0]), end_price))
+	)
+	var previous_quarter_end_price: float = previous_year_end_price
+	var bars: Array = []
+
+	for year_value in processed_years:
+		var year: int = int(year_value)
+		var annual_entry: Dictionary = annual_by_year.get(year, annual_by_year.get(year - 1, {})).duplicate(true)
+		var year_end_price: float = max(float(year_end_price_map.get(year, previous_year_end_price)), 1.0)
+
+		var quarter_end_prices: Array = _build_historical_year_quarter_end_prices(
+			year,
+			previous_year_end_price,
+			year_end_price,
+			quarterly_by_key,
+			traits,
+			run_seed,
+			company_id
+		)
+		for quarter in range(1, 5):
+			var quarter_key: String = _quarter_key(year, quarter)
+			if quarter_trade_dates.has(quarter_key):
+				var quarter_bars: Array = _build_historical_quarter_bars(
+					quarter_trade_dates[quarter_key],
+					previous_quarter_end_price,
+					float(quarter_end_prices[quarter - 1]),
+					annual_entry,
+					quarterly_by_key.get(quarter_key, {}).duplicate(true),
+					traits,
+					run_seed,
+					company_id,
+					year,
+					quarter
+				)
+				bars.append_array(quarter_bars)
+			previous_quarter_end_price = float(quarter_end_prices[quarter - 1])
+		previous_year_end_price = year_end_price
+
+	return bars
 
 
 func _build_traits(
@@ -168,6 +312,11 @@ func _build_traits(
 	var growth_anchor: float = _anchor_ratio(template, "growth", "growth_score", 58.0)
 	var risk_anchor: float = _anchor_ratio(template, "risk", "risk_score", 42.0)
 	var free_float_anchor: float = clamp(_anchor_value(template, "free_float_pct", 28.0) / 100.0, 0.07, 0.60)
+	var owner_concentration_anchor: float = clamp(
+		_anchor_value(template, "owner_concentration_pct", 100.0 - _anchor_value(template, "free_float_pct", 28.0)) / 100.0,
+		0.25,
+		0.95
+	)
 	var debt_anchor: float = clamp(_anchor_value(template, "debt_to_equity", 0.75) / 1.8, 0.0, 1.0)
 	var margin_anchor: float = clamp(_anchor_value(template, "net_profit_margin", 7.5) / 20.0, 0.0, 1.0)
 	var liquidity_anchor: float = clamp(
@@ -230,12 +379,14 @@ func _build_traits(
 		(liquidity_anchor * 0.42) +
 		(free_float_anchor * 0.24) +
 		(float(sector_profile.get("liquidity", 0.45)) * 0.20) +
+		((1.0 - owner_concentration_anchor) * 0.08) +
 		rng.randf_range(-0.08, 0.08),
 		0.08,
 		0.95
 	)
 	var float_tightness: float = clamp(
-		((1.0 - free_float_anchor) * 0.70) +
+		((1.0 - free_float_anchor) * 0.54) +
+		(owner_concentration_anchor * 0.18) +
 		rng.randf_range(-0.07, 0.07),
 		0.05,
 		0.95
@@ -554,6 +705,743 @@ func _build_current_financials(financial_history: Array, latest_year: Dictionary
 	}
 
 
+func _build_financial_statement_snapshot(
+	financial_history: Array,
+	financials: Dictionary,
+	traits: Dictionary,
+	run_seed: int,
+	company_id: String,
+	sector_id: String
+) -> Dictionary:
+	if financial_history.is_empty():
+		return {}
+
+	var quarterly_statements: Array = _build_quarterly_statement_history(
+		financial_history,
+		traits,
+		run_seed,
+		company_id,
+		sector_id,
+		float(financials.get("shares_outstanding", 0.0))
+	)
+	if quarterly_statements.is_empty():
+		return {}
+
+	var latest_statement: Dictionary = quarterly_statements[quarterly_statements.size() - 1].duplicate(true)
+	var first_statement: Dictionary = quarterly_statements[0]
+	return {
+		"statement_year": int(latest_statement.get("statement_year", HISTORY_END_YEAR)),
+		"statement_quarter": int(latest_statement.get("statement_quarter", 4)),
+		"statement_period_label": str(latest_statement.get("statement_period_label", "Q4 %d" % HISTORY_END_YEAR)),
+		"statement_scope": "quarterly",
+		"quarterly_statement_count": quarterly_statements.size(),
+		"history_start_period_label": str(first_statement.get("statement_period_label", "Q1 %d" % HISTORY_START_YEAR)),
+		"history_end_period_label": str(latest_statement.get("statement_period_label", "Q4 %d" % HISTORY_END_YEAR)),
+		"income_statement": latest_statement.get("income_statement", []).duplicate(true),
+		"balance_sheet": latest_statement.get("balance_sheet", []).duplicate(true),
+		"cash_flow": latest_statement.get("cash_flow", []).duplicate(true),
+		"quarterly_statements": quarterly_statements
+	}
+
+
+func _build_quarterly_statement_history(
+	financial_history: Array,
+	traits: Dictionary,
+	run_seed: int,
+	company_id: String,
+	sector_id: String,
+	default_shares_outstanding: float
+) -> Array:
+	var normalized_sector_id: String = str(SECTOR_ALIASES.get(sector_id, sector_id))
+	var statements: Array = []
+	var previous_year_end_equity: float = 0.0
+	var previous_year_end_debt: float = 0.0
+	var previous_quarter_revenue: float = 0.0
+
+	for history_index in range(financial_history.size()):
+		var annual_entry: Dictionary = financial_history[history_index]
+		var year: int = int(annual_entry.get("year", HISTORY_START_YEAR + history_index))
+		var annual_revenue: float = max(float(annual_entry.get("revenue", 0.0)), 1.0)
+		var annual_net_income: float = float(annual_entry.get("net_income", 0.0))
+		var year_end_equity: float = max(float(annual_entry.get("equity", 0.0)), annual_revenue * 0.04)
+		var year_end_debt: float = max(float(annual_entry.get("debt", 0.0)), 0.0)
+		var shares_outstanding: float = max(
+			float(annual_entry.get("shares_outstanding", default_shares_outstanding)),
+			0.0
+		)
+		var previous_annual_revenue: float = annual_revenue
+		if history_index > 0:
+			previous_annual_revenue = float(financial_history[history_index - 1].get("revenue", annual_revenue))
+		else:
+			var initial_growth_ratio: float = max(
+				1.0 + (float(annual_entry.get("revenue_growth_yoy", 0.0)) / 100.0),
+				0.70
+			)
+			previous_annual_revenue = annual_revenue / initial_growth_ratio
+
+		var year_start_equity: float = previous_year_end_equity
+		if history_index == 0:
+			year_start_equity = _estimate_start_of_history_equity(annual_revenue, annual_net_income, year_end_equity)
+
+		var year_start_debt: float = previous_year_end_debt
+		if history_index == 0:
+			year_start_debt = _estimate_start_of_history_debt(annual_revenue, year_end_debt, traits)
+
+		var revenue_weights: Array = _build_quarter_weight_profile(
+			normalized_sector_id,
+			run_seed,
+			company_id,
+			"quarter_revenue",
+			year
+		)
+		var earnings_seed_weights: Array = []
+		var debt_seed_weights: Array = []
+		var equity_seed_weights: Array = []
+		for quarter_index in range(4):
+			var margin_jitter: float = _sample_noise(
+				run_seed,
+				company_id,
+				"quarter_margin",
+				-0.06,
+				0.06,
+				(year * 10) + quarter_index + 1
+			)
+			var earnings_bias: float = 1.0
+			if quarter_index == 3:
+				earnings_bias += 0.04 + (float(traits.get("story_heat", 0.5)) * 0.03)
+			if quarter_index == 0:
+				earnings_bias -= float(traits.get("cyclicality", 0.5)) * 0.03
+			earnings_bias += (float(traits.get("execution_consistency", 0.5)) - 0.5) * 0.08
+			earnings_bias += margin_jitter
+			earnings_seed_weights.append(max(float(revenue_weights[quarter_index]) * earnings_bias, 0.05))
+
+			var debt_bias: float = float(revenue_weights[quarter_index]) * (
+				1.0 +
+				(float(traits.get("capital_intensity", 0.5)) * 0.28) +
+				(0.05 if quarter_index in [1, 2] else 0.0) +
+				_sample_noise(
+					run_seed,
+					company_id,
+					"quarter_debt_bias",
+					-0.04,
+					0.04,
+					(year * 10) + quarter_index + 1
+				)
+			)
+			debt_seed_weights.append(max(debt_bias, 0.05))
+
+			var equity_bias: float = float(revenue_weights[quarter_index]) * (
+				1.0 +
+				(float(traits.get("balance_sheet_strength", 0.5)) - 0.5) * 0.10 +
+				_sample_noise(
+					run_seed,
+					company_id,
+					"quarter_equity_bias",
+					-0.03,
+					0.03,
+					(year * 10) + quarter_index + 1
+				)
+			)
+			equity_seed_weights.append(max(equity_bias, 0.05))
+
+		var earnings_weights: Array = _normalize_quarter_weights(earnings_seed_weights)
+		var debt_progress_weights: Array = _normalize_quarter_weights(debt_seed_weights)
+		var equity_progress_weights: Array = _normalize_quarter_weights(equity_seed_weights)
+		var cumulative_equity_progress: float = 0.0
+		var cumulative_debt_progress: float = 0.0
+		var quarter_start_debt: float = year_start_debt
+		var previous_revenue_reference: float = previous_quarter_revenue
+		if history_index == 0 and is_zero_approx(previous_revenue_reference):
+			previous_revenue_reference = previous_annual_revenue * float(revenue_weights[3])
+
+		for quarter_index in range(4):
+			var quarter_revenue: float = annual_revenue * float(revenue_weights[quarter_index])
+			var quarter_net_income: float = annual_net_income * float(earnings_weights[quarter_index])
+			cumulative_equity_progress += float(equity_progress_weights[quarter_index])
+			cumulative_debt_progress += float(debt_progress_weights[quarter_index])
+
+			var quarter_end_equity: float = year_start_equity + (
+				(year_end_equity - year_start_equity) * cumulative_equity_progress
+			)
+			var quarter_end_debt: float = year_start_debt + (
+				(year_end_debt - year_start_debt) * cumulative_debt_progress
+			)
+			if quarter_index == 3:
+				quarter_end_equity = year_end_equity
+				quarter_end_debt = year_end_debt
+
+			var statement_rng: RandomNumberGenerator = _rng_for(
+				run_seed,
+				company_id,
+				"statement_%d_q%d" % [year, quarter_index + 1]
+			)
+			statements.append(_build_statement_period(
+				year,
+				quarter_index + 1,
+				quarter_revenue,
+				quarter_net_income,
+				quarter_end_equity,
+				quarter_end_debt,
+				shares_outstanding,
+				previous_revenue_reference,
+				quarter_start_debt,
+				traits,
+				statement_rng
+			))
+
+			previous_revenue_reference = quarter_revenue
+			previous_quarter_revenue = quarter_revenue
+			quarter_start_debt = quarter_end_debt
+		previous_year_end_equity = year_end_equity
+		previous_year_end_debt = year_end_debt
+
+	return statements
+
+
+func _build_statement_period(
+	statement_year: int,
+	statement_quarter: int,
+	revenue: float,
+	net_income: float,
+	equity: float,
+	debt: float,
+	shares_outstanding: float,
+	previous_revenue: float,
+	previous_debt: float,
+	traits: Dictionary,
+	rng: RandomNumberGenerator
+) -> Dictionary:
+	var safe_revenue: float = max(revenue, 1.0)
+	var safe_equity: float = max(equity, safe_revenue * 0.04)
+	var safe_debt: float = max(debt, 0.0)
+	var net_margin_ratio: float = clamp(net_income / safe_revenue, -0.30, 0.35)
+	var margin_strength: float = float(traits.get("margin_strength", 0.5))
+	var capital_intensity: float = float(traits.get("capital_intensity", 0.5))
+	var balance_sheet_strength: float = float(traits.get("balance_sheet_strength", 0.5))
+	var liquidity_profile: float = float(traits.get("liquidity_profile", 0.5))
+	var growth_engine: float = float(traits.get("growth_engine", 0.5))
+	var scale: float = float(traits.get("scale", 0.5))
+	var cyclicality: float = float(traits.get("cyclicality", 0.5))
+	var story_heat: float = float(traits.get("story_heat", 0.5))
+
+	var tax_rate: float = clamp(
+		0.19 +
+		(capital_intensity * 0.03) +
+		(cyclicality * 0.015) -
+		(balance_sheet_strength * 0.02) +
+		rng.randf_range(-0.012, 0.012),
+		0.15,
+		0.30
+	)
+	var income_before_tax: float = net_income / max(1.0 - tax_rate, 0.60)
+	var average_debt: float = max((safe_debt + max(previous_debt, 0.0)) * 0.5, 0.0)
+	var interest_rate: float = clamp(
+		0.032 +
+		(cyclicality * 0.028) +
+		((1.0 - balance_sheet_strength) * 0.025) +
+		rng.randf_range(-0.004, 0.004),
+		0.025,
+		0.10
+	)
+	var finance_cost: float = max(average_debt * interest_rate * 0.25, 0.0)
+	var income_from_operations: float = income_before_tax + finance_cost
+	var gross_margin_ratio: float = clamp(
+		max(income_from_operations / safe_revenue, net_margin_ratio + 0.02) +
+		0.09 +
+		(margin_strength * 0.12) -
+		(capital_intensity * 0.04) +
+		rng.randf_range(-0.018, 0.018),
+		0.10,
+		0.78
+	)
+	var gross_profit: float = safe_revenue * gross_margin_ratio
+	if gross_profit < income_from_operations:
+		gross_profit = income_from_operations * 1.08
+
+	var oci_amount: float = net_income * (rng.randf_range(-0.025, 0.025) * lerp(0.35, 1.0, cyclicality))
+	var total_comprehensive_income: float = net_income + oci_amount
+	var others_ratio: float = clamp(
+		0.02 +
+		(scale * 0.07) +
+		(capital_intensity * 0.03) +
+		rng.randf_range(-0.012, 0.018),
+		0.0,
+		0.18
+	)
+	var owners_income: float = net_income * (1.0 - others_ratio)
+	var others_income: float = net_income - owners_income
+
+	var other_liabilities: float = max(
+		safe_revenue * (0.012 + (capital_intensity * 0.02) + ((1.0 - liquidity_profile) * 0.01)),
+		safe_equity * (0.08 + (capital_intensity * 0.16) + (cyclicality * 0.04) - (balance_sheet_strength * 0.05))
+	)
+	var total_liabilities: float = max(safe_debt + other_liabilities, safe_debt)
+	var total_assets: float = max(total_liabilities + safe_equity, safe_revenue * 0.20)
+	var current_asset_ratio: float = clamp(
+		0.32 +
+		(liquidity_profile * 0.18) +
+		(balance_sheet_strength * 0.06) -
+		(capital_intensity * 0.10) +
+		rng.randf_range(-0.025, 0.025),
+		0.18,
+		0.72
+	)
+	var current_assets: float = total_assets * current_asset_ratio
+	var non_current_assets: float = total_assets - current_assets
+	var current_liability_ratio: float = clamp(
+		0.40 +
+		(capital_intensity * 0.12) -
+		(balance_sheet_strength * 0.07) +
+		rng.randf_range(-0.025, 0.025),
+		0.24,
+		0.74
+	)
+	var current_liabilities: float = total_liabilities * current_liability_ratio
+	var non_current_liabilities: float = total_liabilities - current_liabilities
+
+	var depreciation: float = safe_revenue * clamp(0.02 + (capital_intensity * 0.07), 0.02, 0.09)
+	var working_capital_outflow: float = (safe_revenue - previous_revenue) * clamp(
+		0.03 + (capital_intensity * 0.04) + ((1.0 - liquidity_profile) * 0.03),
+		0.02,
+		0.10
+	)
+	var cash_from_operating: float = net_income + depreciation - working_capital_outflow
+	var capex: float = safe_revenue * clamp(
+		0.04 + (capital_intensity * 0.14) + (growth_engine * 0.03) + (scale * 0.02),
+		0.03,
+		0.22
+	)
+	var asset_sales: float = 0.0
+	if net_income < 0.0 or balance_sheet_strength < 0.35:
+		asset_sales = capex * 0.12 * rng.randf_range(0.0, 1.0)
+	var cash_from_investing: float = -capex + asset_sales
+	var dividend_payout_ratio: float = 0.0
+	if net_income > 0.0:
+		dividend_payout_ratio = clamp(
+			0.05 +
+			(balance_sheet_strength * 0.14) +
+			(scale * 0.08) -
+			(growth_engine * 0.14),
+			0.0,
+			0.30
+		)
+	var dividends: float = max(net_income, 0.0) * dividend_payout_ratio
+	var debt_change: float = safe_debt - max(previous_debt, 0.0)
+	var equity_raise: float = 0.0
+	if cash_from_operating + cash_from_investing < 0.0 and story_heat > 0.55:
+		equity_raise = safe_revenue * (0.008 + (story_heat * 0.016)) * clamp(
+			0.72 - balance_sheet_strength,
+			0.0,
+			1.0
+		)
+	var cash_from_financing: float = debt_change + equity_raise - dividends
+
+	return {
+		"statement_year": statement_year,
+		"statement_quarter": statement_quarter,
+		"statement_period_label": "Q%d %d" % [statement_quarter, statement_year],
+		"income_statement": [
+			_statement_line("revenue", "Total revenue", safe_revenue),
+			_statement_line("gross_profit", "Gross profit", gross_profit),
+			_statement_line("operating_income", "Income from operations", income_from_operations),
+			_statement_line("income_before_tax", "Income before tax", income_before_tax),
+			_statement_line("net_income", "Net income for the period", net_income),
+			_statement_line("comprehensive_income", "Total comprehensive income", total_comprehensive_income),
+			_statement_line("owners_income", "Net income attributable to owners", owners_income),
+			_statement_line("others_income", "Net income attributable to others", others_income)
+		],
+		"balance_sheet": [
+			_statement_line("current_assets", "Current assets", current_assets),
+			_statement_line("non_current_assets", "Non-current assets", non_current_assets),
+			_statement_line("total_assets", "Total assets", total_assets),
+			_statement_line("current_liabilities", "Current liabilities", current_liabilities),
+			_statement_line("non_current_liabilities", "Non-current liabilities", non_current_liabilities),
+			_statement_line("total_liabilities", "Total liabilities", total_liabilities),
+			_statement_line("equity", "Equity", safe_equity),
+			_statement_line("shares_outstanding", "Shares outstanding", max(shares_outstanding, 0.0), "shares")
+		],
+		"cash_flow": [
+			_statement_line("cash_from_operating", "Cash from operating", cash_from_operating),
+			_statement_line("cash_from_investing", "Cash from investing", cash_from_investing),
+			_statement_line("cash_from_financing", "Cash from financing", cash_from_financing)
+		]
+	}
+
+
+func _build_quarter_weight_profile(
+	sector_id: String,
+	run_seed: int,
+	company_id: String,
+	salt: String,
+	year: int
+) -> Array:
+	var base_weights: Array = DEFAULT_QUARTER_WEIGHTS
+	if QUARTER_WEIGHT_PROFILES.has(sector_id):
+		base_weights = QUARTER_WEIGHT_PROFILES[sector_id]
+
+	var seeded_weights: Array = []
+	for quarter_index in range(4):
+		var jitter: float = _sample_noise(
+			run_seed,
+			company_id,
+			salt,
+			-0.018,
+			0.018,
+			(year * 10) + quarter_index + 1
+		)
+		seeded_weights.append(max(float(base_weights[quarter_index]) + jitter, 0.12))
+	return _normalize_quarter_weights(seeded_weights)
+
+
+func _normalize_quarter_weights(weights: Array) -> Array:
+	var normalized_weights: Array = []
+	var total_weight: float = 0.0
+	for weight_value in weights:
+		var safe_weight: float = max(float(weight_value), 0.001)
+		normalized_weights.append(safe_weight)
+		total_weight += safe_weight
+
+	if total_weight <= 0.0:
+		return DEFAULT_QUARTER_WEIGHTS.duplicate()
+
+	for weight_index in range(normalized_weights.size()):
+		normalized_weights[weight_index] = float(normalized_weights[weight_index]) / total_weight
+	return normalized_weights
+
+
+func _estimate_start_of_history_equity(annual_revenue: float, annual_net_income: float, year_end_equity: float) -> float:
+	var implied_start_equity: float = year_end_equity - (annual_net_income * 0.72)
+	return max(implied_start_equity, annual_revenue * 0.10)
+
+
+func _estimate_start_of_history_debt(
+	annual_revenue: float,
+	year_end_debt: float,
+	traits: Dictionary
+) -> float:
+	if year_end_debt <= 0.0:
+		return 0.0
+
+	var starting_debt_multiplier: float = clamp(
+		0.90 + (float(traits.get("capital_intensity", 0.5)) * 0.08),
+		0.82,
+		1.04
+	)
+	return max(year_end_debt * starting_debt_multiplier, annual_revenue * 0.015)
+
+
+func _statement_line(id: String, label: String, value: float, value_format: String = "currency") -> Dictionary:
+	return {
+		"id": id,
+		"label": label,
+		"value": value,
+		"format": value_format
+	}
+
+
+func _quarter_key(year: int, quarter: int) -> String:
+	return "%d_q%d" % [year, quarter]
+
+
+func _group_trade_dates_by_quarter(trade_dates: Array) -> Dictionary:
+	var grouped_dates: Dictionary = {}
+	for trade_date_value in trade_dates:
+		if typeof(trade_date_value) != TYPE_DICTIONARY:
+			continue
+		var trade_date: Dictionary = trade_date_value
+		var year: int = int(trade_date.get("year", HISTORY_END_YEAR))
+		var month: int = int(trade_date.get("month", 1))
+		var quarter: int = int(clamp(ceili(float(month) / 3.0), 1, 4))
+		var quarter_key: String = _quarter_key(year, quarter)
+		if not grouped_dates.has(quarter_key):
+			grouped_dates[quarter_key] = []
+		grouped_dates[quarter_key].append(trade_date.duplicate(true))
+	return grouped_dates
+
+
+func _historical_year_start_price(start_year: int, annual_by_year: Dictionary, fallback_price: float) -> float:
+	if annual_by_year.has(start_year - 1):
+		return IDX_PRICE_RULES.normalize_last_price(max(
+			float(annual_by_year[start_year - 1].get("implied_share_price", fallback_price)),
+			1.0
+		))
+	if annual_by_year.has(start_year):
+		return IDX_PRICE_RULES.normalize_last_price(max(
+			float(annual_by_year[start_year].get("implied_share_price", fallback_price)),
+			1.0
+		))
+	return IDX_PRICE_RULES.normalize_last_price(max(fallback_price, 1.0))
+
+
+func _build_historical_year_end_price_map(
+	processed_years: Array,
+	annual_by_year: Dictionary,
+	traits: Dictionary,
+	run_seed: int,
+	company_id: String,
+	end_price: float
+) -> Dictionary:
+	var price_map: Dictionary = {}
+	if processed_years.is_empty():
+		return price_map
+
+	var first_year: int = int(processed_years[0])
+	var current_price: float = _historical_year_start_price(first_year, annual_by_year, end_price)
+	var balance_sheet_strength: float = float(traits.get("balance_sheet_strength", 0.5))
+	var cyclicality: float = float(traits.get("cyclicality", 0.5))
+	var story_heat: float = float(traits.get("story_heat", 0.5))
+	var execution_consistency: float = float(traits.get("execution_consistency", 0.5))
+	var valuation_state: float = _sample_noise(
+		run_seed,
+		company_id,
+		"historical_valuation_state",
+		-0.18,
+		0.18,
+		first_year
+	)
+	var previous_year_return: float = 0.0
+
+	for year_value in processed_years:
+		var year: int = int(year_value)
+		var annual_entry: Dictionary = annual_by_year.get(year, {})
+		if annual_entry.is_empty():
+			annual_entry = annual_by_year.get(year - 1, {}).duplicate(true)
+		var previous_annual_entry: Dictionary = annual_by_year.get(year - 1, annual_entry).duplicate(true)
+		var current_anchor: float = max(
+			float(annual_entry.get("implied_share_price", current_price)),
+			1.0
+		)
+		var previous_anchor: float = max(
+			float(previous_annual_entry.get("implied_share_price", current_price)),
+			1.0
+		)
+		var anchor_return: float = clamp((current_anchor / previous_anchor) - 1.0, -0.28, 0.36)
+		var revenue_growth: float = clamp(float(annual_entry.get("revenue_growth_yoy", 0.0)) / 100.0, -0.24, 0.30)
+		var earnings_growth: float = clamp(float(annual_entry.get("earnings_growth_yoy", 0.0)) / 100.0, -0.36, 0.42)
+		var roe_signal: float = clamp((float(annual_entry.get("roe", 0.0)) - 12.0) / 100.0, -0.18, 0.18)
+		var leverage_drag: float = max(float(annual_entry.get("debt_to_equity", 0.0)) - 0.75, 0.0)
+		var regime_noise: float = _sample_noise(
+			run_seed,
+			company_id,
+			"historical_year_regime",
+			-0.22,
+			0.22,
+			year
+		)
+		valuation_state = clamp(
+			(valuation_state * 0.44) +
+			(regime_noise * (0.78 + (cyclicality * 0.36) + (story_heat * 0.22))) +
+			(revenue_growth * 0.08) +
+			(earnings_growth * 0.12) -
+			(previous_year_return * 0.16),
+			-0.38,
+			0.38
+		)
+		var yearly_return: float = clamp(
+			(anchor_return * 0.24) +
+			(revenue_growth * 0.16) +
+			(earnings_growth * 0.24) +
+			(roe_signal * 0.34) +
+			(valuation_state * 0.54) -
+			(leverage_drag * 0.09) +
+			((balance_sheet_strength - 0.5) * 0.05) -
+			((cyclicality - 0.5) * 0.02),
+			-0.48,
+			0.58
+		)
+		current_price = max(current_price * (1.0 + yearly_return), 1.0)
+		var anchor_pull: float = 0.14 + (execution_consistency * 0.08) + (balance_sheet_strength * 0.04)
+		current_price = lerp(current_price, current_anchor, clamp(anchor_pull, 0.12, 0.26))
+		price_map[year] = IDX_PRICE_RULES.normalize_last_price(max(current_price, 1.0))
+		previous_year_return = yearly_return
+
+	var last_year: int = int(processed_years[processed_years.size() - 1])
+	var last_generated_price: float = max(float(price_map.get(last_year, end_price)), 1.0)
+	var scale_factor: float = max(end_price, 1.0) / last_generated_price
+	for year_value in processed_years:
+		var year: int = int(year_value)
+		price_map[year] = IDX_PRICE_RULES.normalize_last_price(max(float(price_map.get(year, 1.0)) * scale_factor, 1.0))
+	price_map[last_year] = IDX_PRICE_RULES.normalize_last_price(max(end_price, 1.0))
+	return price_map
+
+
+func _build_historical_year_quarter_end_prices(
+	year: int,
+	year_start_price: float,
+	year_end_price: float,
+	quarterly_by_key: Dictionary,
+	traits: Dictionary,
+	run_seed: int,
+	company_id: String
+) -> Array:
+	var quarter_end_prices: Array = []
+	var current_price: float = max(year_start_price, 1.0)
+	var balance_sheet_strength: float = float(traits.get("balance_sheet_strength", 0.5))
+	var cyclicality: float = float(traits.get("cyclicality", 0.5))
+	var story_heat: float = float(traits.get("story_heat", 0.5))
+	var execution_consistency: float = float(traits.get("execution_consistency", 0.5))
+	var corridor_floor: float = max(min(year_start_price, year_end_price) * max(0.58 - (cyclicality * 0.10), 0.38), 1.0)
+	var corridor_ceiling: float = max(year_start_price, year_end_price) * (1.28 + (cyclicality * 0.18) + (story_heat * 0.08))
+	for quarter in range(1, 5):
+		if quarter == 4:
+			quarter_end_prices.append(IDX_PRICE_RULES.normalize_last_price(max(year_end_price, 1.0)))
+			break
+
+		var remaining_steps: float = float(5 - quarter)
+		var baseline_target: float = lerp(current_price, year_end_price, 1.0 / remaining_steps)
+		var statement: Dictionary = quarterly_by_key.get(_quarter_key(year, quarter), {})
+		var revenue: float = max(_statement_value(statement.get("income_statement", []), "revenue"), 1.0)
+		var net_income: float = _statement_value(statement.get("income_statement", []), "net_income")
+		var operating_cash: float = _statement_value(statement.get("cash_flow", []), "cash_from_operating")
+		var quarter_signal: float = clamp(
+			((net_income / revenue) * 0.75) +
+			((operating_cash / revenue) * 0.35),
+			-0.18,
+			0.22
+		)
+		var regime_noise: float = _sample_noise(
+			run_seed,
+			company_id,
+			"historical_quarter_regime_%d" % year,
+			-0.22,
+			0.22,
+			quarter
+		)
+		var quarter_target: float = baseline_target * (
+			1.0 +
+			(quarter_signal * 0.22) +
+			(regime_noise * (0.20 + (cyclicality * 0.12) + (story_heat * 0.08))) +
+			((0.5 - execution_consistency) * 0.03) -
+			((balance_sheet_strength - 0.5) * 0.02)
+		)
+		quarter_target = clamp(quarter_target, corridor_floor, corridor_ceiling)
+		current_price = IDX_PRICE_RULES.normalize_last_price(max(quarter_target, 1.0))
+		quarter_end_prices.append(current_price)
+	return quarter_end_prices
+
+
+func _build_historical_quarter_bars(
+	trade_dates: Array,
+	quarter_start_price: float,
+	quarter_end_price: float,
+	annual_entry: Dictionary,
+	quarter_statement: Dictionary,
+	traits: Dictionary,
+	run_seed: int,
+	company_id: String,
+	year: int,
+	quarter: int
+) -> Array:
+	if trade_dates.is_empty():
+		return []
+
+	var safe_start_price: float = IDX_PRICE_RULES.normalize_last_price(max(quarter_start_price, 1.0))
+	var safe_end_price: float = IDX_PRICE_RULES.normalize_last_price(max(quarter_end_price, 1.0))
+	var annual_revenue: float = max(float(annual_entry.get("revenue", 0.0)), 1.0)
+	var quarter_revenue: float = max(_statement_value(quarter_statement.get("income_statement", []), "revenue"), annual_revenue / 4.0)
+	var quarter_operating_cash: float = _statement_value(quarter_statement.get("cash_flow", []), "cash_from_operating")
+	var quarter_value_bias: float = clamp((quarter_revenue / annual_revenue) * 4.0, 0.70, 1.35)
+	var base_daily_value: float = max(
+		float(annual_entry.get("avg_daily_value", 0.0)) * quarter_value_bias,
+		safe_end_price * 5000.0
+	)
+	var noise_scale: float = clamp(
+		0.0045 +
+		(float(traits.get("cyclicality", 0.5)) * 0.0050) +
+		(float(traits.get("story_heat", 0.5)) * 0.0035) +
+		((1.0 - float(traits.get("liquidity_profile", 0.5))) * 0.0030),
+		0.0040,
+		0.0150
+	)
+
+	var bars: Array = []
+	var previous_close: float = safe_start_price
+	for trade_date_index in range(trade_dates.size()):
+		var trade_date: Dictionary = trade_dates[trade_date_index]
+		var progress: float = float(trade_date_index + 1) / float(trade_dates.size())
+		var noise_envelope: float = sin(progress * PI)
+		var deterministic_close: float = lerp(safe_start_price, safe_end_price, progress)
+		var close_noise: float = _sample_noise(
+			run_seed,
+			company_id,
+			"historical_close_%d_q%d" % [year, quarter],
+			-1.0,
+			1.0,
+			trade_date_index + 1
+		)
+		var close_price: float = deterministic_close + (
+			deterministic_close * noise_scale * noise_envelope * close_noise
+		)
+		close_price += (deterministic_close - previous_close) * 0.22
+		if trade_date_index == trade_dates.size() - 1:
+			close_price = safe_end_price
+		close_price = IDX_PRICE_RULES.normalize_last_price(max(close_price, 1.0))
+
+		var intraday_multiplier: float = _sample_noise(
+			run_seed,
+			company_id,
+			"historical_intraday_%d_q%d" % [year, quarter],
+			0.45,
+			1.20,
+			trade_date_index + 1
+		)
+		var day_move_ratio: float = absf(close_price - previous_close) / max(previous_close, 1.0)
+		var intraday_range_ratio: float = max(day_move_ratio * 0.70, noise_scale * intraday_multiplier)
+		var high_price: float = IDX_PRICE_RULES.normalize_last_price(max(
+			max(previous_close, close_price) * (1.0 + intraday_range_ratio),
+			max(previous_close, close_price)
+		))
+		var low_floor: float = max(
+			min(previous_close, close_price) * max(1.0 - intraday_range_ratio, 0.55),
+			1.0
+		)
+		var low_price: float = IDX_PRICE_RULES.normalize_last_price(min(
+			min(previous_close, close_price),
+			low_floor
+		))
+		high_price = max(high_price, previous_close, close_price)
+		low_price = min(low_price, previous_close, close_price)
+
+		var value_multiplier: float = _sample_noise(
+			run_seed,
+			company_id,
+			"historical_value_%d_q%d" % [year, quarter],
+			0.82,
+			1.18,
+			trade_date_index + 1
+		)
+		var operating_cash_multiplier: float = 1.0
+		if quarter_revenue > 0.0:
+			operating_cash_multiplier += clamp(quarter_operating_cash / quarter_revenue, -0.15, 0.25)
+		var traded_value: float = max(
+			base_daily_value * value_multiplier * (1.0 + (day_move_ratio * 7.0)) * operating_cash_multiplier,
+			close_price * 1000.0
+		)
+		var volume_shares: int = int(max(round(traded_value / max(close_price, 1.0) / 100.0), 1.0) * 100.0)
+		var bar_value: float = close_price * float(volume_shares)
+		bars.append({
+			"trade_date": trade_date.duplicate(true),
+			"open": previous_close,
+			"high": high_price,
+			"low": low_price,
+			"close": close_price,
+			"volume_shares": volume_shares,
+			"value": bar_value
+		})
+		previous_close = close_price
+	return bars
+
+
+func _statement_value(statement_lines: Array, line_id: String) -> float:
+	for line_value in statement_lines:
+		if typeof(line_value) != TYPE_DICTIONARY:
+			continue
+		var line: Dictionary = line_value
+		if str(line.get("id", "")) == line_id:
+			return float(line.get("value", 0.0))
+	return 0.0
+
+
 func _derive_quality_score(traits: Dictionary, financials: Dictionary) -> int:
 	var quality_raw: float = (
 		25.0 +
@@ -604,7 +1492,21 @@ func _derive_base_volatility(traits: Dictionary, risk_score: int) -> float:
 
 
 func _derive_target_price(template: Dictionary, traits: Dictionary, run_seed: int, company_id: String) -> float:
+	var anchors: Dictionary = template.get("anchors", {})
+	var capital_structure_style: String = str(anchors.get("capital_structure_style", "balanced"))
+	var target_price_floor: float = float(anchors.get("target_price_floor", 0.0))
+	var target_price_ceiling: float = float(anchors.get("target_price_ceiling", 0.0))
 	var anchor_price: float = max(_anchor_value(template, "base_price", 100.0, "base_price"), 50.0)
+	var market_cap_trillions: float = max(_anchor_value(template, "market_cap", 1000000000000.0), 100000000000.0) / 1000000000000.0
+	var free_float_ratio: float = clamp(_anchor_value(template, "free_float_pct", 28.0) / 100.0, 0.07, 0.60)
+	var margin_ratio: float = clamp(_anchor_value(template, "net_profit_margin", 7.5) / 18.0, 0.0, 1.0)
+	var debt_ratio: float = clamp(_anchor_value(template, "debt_to_equity", 0.75) / 1.8, 0.0, 1.0)
+	var quality_ratio: float = clamp(_anchor_ratio(template, "quality", "quality_score", 58.0), 0.25, 0.95)
+	var owner_concentration_ratio: float = clamp(
+		float(anchors.get("owner_concentration_pct", 100.0 - (_anchor_value(template, "free_float_pct", 28.0)))) / 100.0,
+		0.25,
+		0.95
+	)
 	var price_multiplier: float = _sample_noise(run_seed, company_id, "price_anchor", 0.92, 1.08, HISTORY_END_YEAR)
 	var target_price: float = anchor_price * price_multiplier
 	var fundamental_multiplier: float = (
@@ -614,12 +1516,85 @@ func _derive_target_price(template: Dictionary, traits: Dictionary, run_seed: in
 		((float(traits.get("cyclicality", 0.5)) - 0.5) * 0.03)
 	)
 	target_price *= fundamental_multiplier
-	return IDX_PRICE_RULES.normalize_last_price(clamp(target_price, 50.0, 500.0))
+	var size_score: float = clamp((market_cap_trillions - 1.6) / 4.4, 0.0, 1.0)
+	var institutional_score: float = clamp(
+		(size_score * 0.34) +
+		(float(traits.get("balance_sheet_strength", 0.5)) * 0.20) +
+		(float(traits.get("margin_strength", 0.5)) * 0.16) +
+		(float(traits.get("liquidity_profile", 0.5)) * 0.10) +
+		(free_float_ratio * 0.10) +
+		(quality_ratio * 0.10),
+		0.0,
+		1.0
+	)
+	var scarcity_score: float = clamp(
+		(size_score * 0.50) +
+		(clamp((0.20 - free_float_ratio) / 0.13, 0.0, 1.0) * 0.18) +
+		(clamp((margin_ratio - 0.42) / 0.58, 0.0, 1.0) * 0.10) +
+		(clamp(1.0 - debt_ratio, 0.0, 1.0) * 0.06) +
+		(clamp((quality_ratio - 0.52) / 0.43, 0.0, 1.0) * 0.06) +
+		(owner_concentration_ratio * 0.10),
+		0.0,
+		1.0
+	)
+	match capital_structure_style:
+		"wide_float":
+			target_price *= lerp(0.82, 1.18, clamp((size_score * 0.58) + (free_float_ratio * 0.42), 0.0, 1.0))
+		"institutional_premium":
+			target_price *= lerp(1.8, 8.4, institutional_score)
+		"owner_controlled":
+			target_price *= lerp(2.2, 11.5, scarcity_score)
+		_:
+			target_price *= lerp(0.96, 1.72, clamp((size_score * 0.36) + (quality_ratio * 0.24) + (free_float_ratio * 0.10), 0.0, 1.0))
+
+	if target_price_floor > 0.0:
+		target_price = max(target_price, target_price_floor * _sample_noise(run_seed, company_id, "price_floor", 0.97, 1.05, HISTORY_END_YEAR))
+	if target_price_ceiling > 0.0:
+		var safe_ceiling: float = max(target_price_ceiling, target_price_floor if target_price_floor > 0.0 else target_price_ceiling)
+		target_price = min(target_price, safe_ceiling * _sample_noise(run_seed, company_id, "price_ceiling", 0.97, 1.05, HISTORY_END_YEAR))
+	if target_price_floor > 0.0 and target_price_ceiling > target_price_floor:
+		target_price = clamp(target_price, target_price_floor * 0.97, target_price_ceiling * 1.05)
+
+	var fundamental_price_floor: float = 60.0
+	match capital_structure_style:
+		"wide_float":
+			fundamental_price_floor = lerp(50.0, 720.0, pow(institutional_score, 1.45))
+		"institutional_premium":
+			fundamental_price_floor = lerp(220.0, 2200.0, pow(institutional_score, 1.15))
+		"owner_controlled":
+			fundamental_price_floor = lerp(160.0, 2600.0, pow(scarcity_score, 1.05))
+		_:
+			fundamental_price_floor = lerp(60.0, 1400.0, pow(institutional_score, 1.35))
+	target_price = max(target_price, fundamental_price_floor)
+	return IDX_PRICE_RULES.normalize_last_price(clamp(target_price, 50.0, 45000.0))
 
 
-func _derive_shares_outstanding(market_cap: float, target_price: float) -> float:
+func _derive_shares_outstanding(market_cap: float, target_price: float, template: Dictionary) -> float:
 	var safe_price: float = max(target_price, 1.0)
-	return max(round(market_cap / safe_price), 100000000.0)
+	var capital_structure_style: String = str(template.get("anchors", {}).get("capital_structure_style", "balanced"))
+	var raw_shares_outstanding: float = max(market_cap / safe_price, 1000000.0)
+	var minimum_shares_outstanding: float = 40000000.0
+	match capital_structure_style:
+		"wide_float":
+			minimum_shares_outstanding = 120000000.0
+		"institutional_premium":
+			minimum_shares_outstanding = 12000000.0
+		"owner_controlled":
+			minimum_shares_outstanding = 4000000.0
+		_:
+			minimum_shares_outstanding = 40000000.0
+
+	return max(_round_shares_outstanding(raw_shares_outstanding), minimum_shares_outstanding)
+
+
+func _round_shares_outstanding(raw_shares_outstanding: float) -> float:
+	if raw_shares_outstanding >= 1000000000.0:
+		return round(raw_shares_outstanding / 10000000.0) * 10000000.0
+	if raw_shares_outstanding >= 100000000.0:
+		return round(raw_shares_outstanding / 5000000.0) * 5000000.0
+	if raw_shares_outstanding >= 20000000.0:
+		return round(raw_shares_outstanding / 1000000.0) * 1000000.0
+	return round(raw_shares_outstanding / 250000.0) * 250000.0
 
 
 func _sector_profile(sector_id: String) -> Dictionary:

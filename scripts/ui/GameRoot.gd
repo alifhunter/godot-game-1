@@ -1,6 +1,12 @@
 extends Control
 
 const SECTION_ORDER := ["dashboard", "markets", "portfolio", "help"]
+const APP_ID_DESKTOP := "desktop"
+const APP_ID_STOCK := "stock"
+const APP_ID_NEWS := "news"
+const APP_ID_SOCIAL := "social"
+const STOCK_APP_FONT_SIZE := 11
+const DEFAULT_APP_FONT_SIZE := 12
 const COLOR_PANEL_BLUE := Color(0.109804, 0.14902, 0.184314, 0.94)
 const COLOR_PANEL_BLUE_ALT := Color(0.0901961, 0.129412, 0.164706, 0.96)
 const COLOR_PANEL_GREEN := Color(0.0862745, 0.152941, 0.133333, 0.95)
@@ -12,7 +18,29 @@ const COLOR_POSITIVE := Color(0.513726, 0.886275, 0.662745, 1)
 const COLOR_NEGATIVE := Color(0.968627, 0.513726, 0.513726, 1)
 const COLOR_WARNING := Color(0.980392, 0.792157, 0.392157, 1)
 const COLOR_ACCENT := Color(0.560784, 0.772549, 1, 1)
+const COLOR_DESKTOP_BG := Color(0.909804, 0.909804, 0.803922, 1)
+const COLOR_DESKTOP_TEXT := Color(0.184314, 0.172549, 0.109804, 1)
+const COLOR_STOCK_WINDOW_BG := Color(0.0901961, 0.129412, 0.164706, 0.98)
+const COLOR_ORDER_PANEL_BG := Color(0.0901961, 0.129412, 0.164706, 0.98)
+const COLOR_ORDER_CARD_BG := Color(0.109804, 0.14902, 0.184314, 0.98)
+const COLOR_ORDER_INPUT_BG := Color(0.0901961, 0.129412, 0.164706, 0.98)
+const COLOR_ORDER_BUY := Color(0.117647, 0.32549, 0.239216, 1)
+const COLOR_ORDER_BUY_BORDER := Color(0.309804, 0.631373, 0.486275, 1)
+const COLOR_ORDER_SELL := Color(0.27451, 0.164706, 0.180392, 1)
+const COLOR_ORDER_SELL_BORDER := Color(0.690196, 0.34902, 0.372549, 1)
+const COLOR_WINDOW_BG := Color(0.909804, 0.909804, 0.803922, 1)
+const COLOR_WINDOW_TEXT := Color(0.184314, 0.172549, 0.109804, 1)
+const COLOR_NAV_FILL := Color(0.126, 0.188, 0.251, 1)
+const COLOR_NAV_ACTIVE_FILL := Color(0.219608, 0.439216, 0.65098, 1)
+const COLOR_NAV_ACTIVE_BORDER := Color(0.690196, 0.87451, 1, 1)
 const TOAST_DURATION_SECONDS := 5.0
+const SHOW_DASHBOARD_DESK_PANEL := false
+const SHOW_DASHBOARD_BALANCE_BLOCK := false
+const SHOW_DASHBOARD_BROKER_READ := false
+const SHOW_DASHBOARD_REVIEW := false
+const STOCK_LIST_TAB_WATCHLIST := 0
+const STOCK_LIST_TAB_ALL_STOCKS := 1
+const STOCK_LIST_TAB_PORTFOLIO := 2
 const HOLDINGS_TICKER_WIDTH := 90.0
 const HOLDINGS_PRICE_WIDTH := 120.0
 const HOLDINGS_AVERAGE_WIDTH := 110.0
@@ -25,82 +53,185 @@ const HISTORY_AMOUNT_WIDTH := 120.0
 const HISTORY_QTY_WIDTH := 70.0
 const HISTORY_PRICE_WIDTH := 90.0
 const HISTORY_DATE_WIDTH := 110.0
+const FINANCIAL_HISTORY_YEAR_WIDTH := 48.0
+const FINANCIAL_HISTORY_REVENUE_WIDTH := 84.0
+const FINANCIAL_HISTORY_NET_INCOME_WIDTH := 84.0
+const FINANCIAL_HISTORY_MARGIN_WIDTH := 62.0
+const FINANCIAL_HISTORY_ROE_WIDTH := 52.0
+const FINANCIAL_HISTORY_DEBT_WIDTH := 50.0
+const FINANCIAL_HISTORY_PRICE_WIDTH := 72.0
+const STATEMENT_LABEL_WIDTH := 286.0
+const STATEMENT_VALUE_WIDTH := 148.0
+const APP_WINDOW_INSET := 20
+const APP_WINDOW_CONTENT_MARGIN := 20
+const APP_WINDOW_CONTENT_TOP_MARGIN := 64
+const APP_WINDOW_CONTENT_BOTTOM_MARGIN := 20
+const APP_WINDOW_FRAME_BOTTOM_MARGIN := 20
+const APP_WINDOW_INNER_PADDING := 0
+const SOCIAL_WINDOW_MAX_WIDTH := 460.0
+const SOCIAL_WINDOW_MAX_HEIGHT := 780.0
+const SOCIAL_WINDOW_MIN_HEIGHT := 520.0
+const PROTOTYPE_NEWS_INTEL_LEVEL := 4
+const PROTOTYPE_TWOOTER_ACCESS_TIER := 4
 
 var selected_company_id: String = ""
 var displayed_company_ids: Array = []
+var watchlist_picker_company_ids: Array = []
 var tutorial_dialog: AcceptDialog = null
+var watchlist_picker_dialog: ConfirmationDialog = null
+var watchlist_picker_list: ItemList = null
 var selected_lots: int = 1
 var active_section_id: String = "dashboard"
+var active_app_id: String = APP_ID_DESKTOP
 var status_message: String = "Ready."
+var selected_financial_statement_index: int = -1
+var selected_financial_statement_company_id: String = ""
+var current_trade_snapshot: Dictionary = {}
+var current_news_snapshot: Dictionary = {}
+var current_social_snapshot: Dictionary = {}
+var active_order_side: String = "buy"
+var selected_news_outlet_id: String = ""
+var selected_news_article_id: String = ""
 var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 
-@onready var sidebar_panel: PanelContainer = $Margin/RootVBox/ShellHBox/SidebarPanel
-@onready var top_bar_panel: PanelContainer = $Margin/RootVBox/TopBarPanel
-@onready var dashboard_button: Button = $Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons/DashboardButton
-@onready var markets_button: Button = $Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons/MarketsButton
-@onready var portfolio_button: Button = $Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons/PortfolioButton
-@onready var help_button: Button = $Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons/HelpButton
-@onready var back_to_menu_button: Button = $Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/BackToMenuButton
-@onready var sidebar_intro_label: Label = $Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/SidebarIntroLabel
-@onready var sidebar_focus_label: Label = $Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/SidebarFocusLabel
-@onready var sidebar_hint_label: Label = $Margin/RootVBox/ShellHBox/SidebarPanel/SidebarMargin/SidebarVBox/SidebarHintLabel
+@onready var desktop_layer: Control = $DesktopLayer
+@onready var desktop_title_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopHeaderRow/DesktopTitleLabel
+@onready var desktop_date_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopHeaderRow/DesktopDateLabel
+@onready var desktop_subtitle_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopSubtitleLabel
+@onready var desktop_hint_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopHintLabel
+@onready var stock_app_button: Button = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/StockAppTile/StockAppButton
+@onready var stock_app_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/StockAppTile/StockAppLabel
+@onready var news_app_button: Button = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/NewsAppTile/NewsAppButton
+@onready var news_app_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/NewsAppTile/NewsAppLabel
+@onready var social_app_button: Button = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/SocialAppTile/SocialAppButton
+@onready var social_app_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/SocialAppTile/SocialAppLabel
+@onready var exit_app_button: Button = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/ExitAppTile/ExitAppButton
+@onready var exit_app_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/ExitAppTile/ExitAppLabel
+@onready var app_window_backdrop: Control = $AppWindowBackdrop
+@onready var app_window_margin: MarginContainer = $AppWindowBackdrop/AppWindowMargin
+@onready var app_window_panel: PanelContainer = $AppWindowBackdrop/AppWindowMargin/AppWindowPanel
+@onready var stock_window_container: PanelContainer = $StockWindowContainer
+@onready var app_content_margin: MarginContainer = $Margin
+@onready var news_window: MarginContainer = $NewsWindow
+@onready var news_window_body: PanelContainer = $NewsWindow/NewsWindowBody
+@onready var news_title_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsHeaderRow/NewsTitleLabel
+@onready var news_intel_status_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsHeaderRow/NewsIntelStatusLabel
+@onready var news_outlet_buttons: HBoxContainer = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsOutletButtons
+@onready var news_feed_panel: PanelContainer = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel
+@onready var news_feed_summary_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsFeedSummaryLabel
+@onready var news_article_list: ItemList = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsArticleList
+@onready var news_detail_panel: PanelContainer = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel
+@onready var news_detail_outlet_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailOutletLabel
+@onready var news_detail_headline_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailHeadlineLabel
+@onready var news_detail_deck_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailDeckLabel
+@onready var news_detail_meta_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailMetaLabel
+@onready var news_detail_body: RichTextLabel = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailBody
+@onready var news_detail_hint_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailHintLabel
+@onready var social_window: MarginContainer = $SocialWindow
+@onready var social_window_body: PanelContainer = $SocialWindow/SocialWindowBody
+@onready var social_title_label: Label = $SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialHeaderRow/SocialTitleLabel
+@onready var social_access_status_label: Label = $SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialHeaderRow/SocialAccessStatusLabel
+@onready var social_feed_summary_label: Label = $SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialFeedSummaryLabel
+@onready var social_feed_scroll: ScrollContainer = $SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialFeedScroll
+@onready var social_feed_cards: VBoxContainer = $SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialFeedScroll/SocialFeedCards
+@onready var app_window_title_bar: PanelContainer = $AppWindowTitleBar
+@onready var app_window_title_label: Label = $AppWindowTitleBar/AppWindowTitleMargin/AppWindowTitleRow/AppWindowTitleLabel
+@onready var app_window_minimize_button: Button = $AppWindowTitleBar/AppWindowTitleMargin/AppWindowTitleRow/AppWindowMinimizeButton
+@onready var app_window_close_button: Button = $AppWindowTitleBar/AppWindowTitleMargin/AppWindowTitleRow/AppWindowCloseButton
+@onready var taskbar_panel: PanelContainer = $TaskbarLayer/TaskbarPanel
+@onready var taskbar_home_button: Button = $TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow/TaskbarHomeButton
+@onready var taskbar_stock_button: Button = $TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow/TaskbarStockButton
+@onready var taskbar_news_button: Button = $TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow/TaskbarNewsButton
+@onready var taskbar_status_label: Label = $TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow/TaskbarStatusLabel
+@onready var taskbar_clock_label: Label = $TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow/TaskbarClockLabel
+@onready var top_bar_outer_margin: MarginContainer = $Margin/RootVBox/TopBarOuterMargin
+@onready var sidebar_panel: PanelContainer = $Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel
+@onready var sidebar_outer_margin: MarginContainer = $Margin/RootVBox/ShellHBox/SidebarOuterMargin
+@onready var top_bar_panel: PanelContainer = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel
+@onready var dashboard_button: Button = $Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons/DashboardButton
+@onready var markets_button: Button = $Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons/MarketsButton
+@onready var portfolio_button: Button = $Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons/PortfolioButton
+@onready var help_button: Button = $Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox/NavigationButtons/HelpButton
+@onready var sidebar_intro_label: Label = $Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox/SidebarIntroLabel
+@onready var sidebar_focus_label: Label = $Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox/SidebarFocusLabel
+@onready var sidebar_hint_label: Label = $Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox/SidebarHintLabel
 @onready var content_tabs: TabContainer = $Margin/RootVBox/ShellHBox/MainVBox/ContentTabs
-@onready var top_section_label: Label = $Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TopSectionLabel
-@onready var advance_day_button: Button = $Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/AdvanceDayButton
-@onready var top_day_label: Label = $Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow/TopDayLabel
-@onready var top_market_label: Label = $Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow/TopMarketLabel
-@onready var top_equity_label: Label = $Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow/TopEquityLabel
-@onready var top_focus_label: Label = $Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow/TopFocusLabel
-@onready var objective_label: Label = $Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/ObjectiveLabel
-@onready var subtitle_label: Label = $Margin/RootVBox/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TitleWrap/SubtitleLabel
+@onready var top_section_label: Label = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TopSectionLabel
+@onready var advance_day_button: Button = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/AdvanceDayButton
+@onready var top_day_label: Label = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow/TopDayLabel
+@onready var top_market_label: Label = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TopMarketLabel
+@onready var top_equity_label: Label = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TopEquityLabel
+@onready var top_cash_label: Label = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TopCashLabel
+@onready var objective_label: Label = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/ObjectiveLabel
+@onready var subtitle_label: Label = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TitleWrap/SubtitleLabel
 
-@onready var dashboard_grid: GridContainer = %DashboardView/Scroll/ContentGrid
-@onready var desk_panel: PanelContainer = %DashboardView/Scroll/ContentGrid/DeskPanel
-@onready var action_panel: PanelContainer = %DashboardView/Scroll/ContentGrid/ActionPanel
-@onready var detail_panel: PanelContainer = %DashboardView/Scroll/ContentGrid/DetailPanel
-@onready var broker_panel: PanelContainer = %DashboardView/Scroll/ContentGrid/BrokerPanel
-@onready var summary_panel: PanelContainer = %DashboardView/Scroll/ContentGrid/SummaryPanel
-@onready var day_label: Label = %DashboardView/Scroll/ContentGrid/DeskPanel/DeskMargin/DeskVBox/DayLabel
-@onready var cash_label: Label = %DashboardView/Scroll/ContentGrid/DeskPanel/DeskMargin/DeskVBox/CashLabel
-@onready var equity_label: Label = %DashboardView/Scroll/ContentGrid/DeskPanel/DeskMargin/DeskVBox/EquityLabel
-@onready var status_label: Label = %DashboardView/Scroll/ContentGrid/DeskPanel/DeskMargin/DeskVBox/StatusLabel
-@onready var guide_label: Label = %DashboardView/Scroll/ContentGrid/DeskPanel/DeskMargin/DeskVBox/GuideLabel
-@onready var selection_label: Label = %DashboardView/Scroll/ContentGrid/ActionPanel/ActionMargin/ActionVBox/SelectionLabel
-@onready var action_hint_label: Label = %DashboardView/Scroll/ContentGrid/ActionPanel/ActionMargin/ActionVBox/ActionHintLabel
-@onready var trade_rule_label: Label = %DashboardView/Scroll/ContentGrid/ActionPanel/ActionMargin/ActionVBox/TradeRuleLabel
-@onready var lot_spin_box: SpinBox = %DashboardView/Scroll/ContentGrid/ActionPanel/ActionMargin/ActionVBox/SizingRow/LotSpinBox
-@onready var order_preview_label: Label = %DashboardView/Scroll/ContentGrid/ActionPanel/ActionMargin/ActionVBox/OrderPreviewLabel
-@onready var buy_button: Button = %DashboardView/Scroll/ContentGrid/ActionPanel/ActionMargin/ActionVBox/TradeButtonRow/BuyButton
-@onready var sell_button: Button = %DashboardView/Scroll/ContentGrid/ActionPanel/ActionMargin/ActionVBox/TradeButtonRow/SellButton
-@onready var company_name_label: Label = %DashboardView/Scroll/ContentGrid/DetailPanel/DetailMargin/DetailVBox/CompanyNameLabel
-@onready var sector_label: Label = %DashboardView/Scroll/ContentGrid/DetailPanel/DetailMargin/DetailVBox/SectorLabel
-@onready var price_label: Label = %DashboardView/Scroll/ContentGrid/DetailPanel/DetailMargin/DetailVBox/PriceLabel
-@onready var factor_label: Label = %DashboardView/Scroll/ContentGrid/DetailPanel/DetailMargin/DetailVBox/FactorLabel
-@onready var financial_label: Label = %DashboardView/Scroll/ContentGrid/DetailPanel/DetailMargin/DetailVBox/FinancialLabel
-@onready var setup_label: Label = %DashboardView/Scroll/ContentGrid/DetailPanel/DetailMargin/DetailVBox/SetupLabel
-@onready var support_label: Label = %DashboardView/Scroll/ContentGrid/DetailPanel/DetailMargin/DetailVBox/SupportLabel
-@onready var risk_label: Label = %DashboardView/Scroll/ContentGrid/DetailPanel/DetailMargin/DetailVBox/RiskLabel
-@onready var event_label: Label = %DashboardView/Scroll/ContentGrid/DetailPanel/DetailMargin/DetailVBox/EventLabel
-@onready var history_label: Label = %DashboardView/Scroll/ContentGrid/DetailPanel/DetailMargin/DetailVBox/HistoryLabel
-@onready var financial_history_label: RichTextLabel = %DashboardView/Scroll/ContentGrid/DetailPanel/DetailMargin/DetailVBox/FinancialHistoryLabel
-@onready var broker_pressure_label: Label = %DashboardView/Scroll/ContentGrid/BrokerPanel/BrokerMargin/BrokerVBox/BrokerPressureLabel
-@onready var broker_label: Label = %DashboardView/Scroll/ContentGrid/BrokerPanel/BrokerMargin/BrokerVBox/BrokerLabel
-@onready var broker_hint_label: Label = %DashboardView/Scroll/ContentGrid/BrokerPanel/BrokerMargin/BrokerVBox/BrokerHintLabel
-@onready var review_headline_label: Label = %DashboardView/Scroll/ContentGrid/SummaryPanel/SummaryMargin/SummaryVBox/ReviewHeadlineLabel
-@onready var summary_label: Label = %DashboardView/Scroll/ContentGrid/SummaryPanel/SummaryMargin/SummaryVBox/SummaryLabel
-@onready var movers_label: Label = %DashboardView/Scroll/ContentGrid/SummaryPanel/SummaryMargin/SummaryVBox/MoversLabel
-@onready var reflection_label: Label = %DashboardView/Scroll/ContentGrid/SummaryPanel/SummaryMargin/SummaryVBox/ReflectionLabel
+@onready var overview_panel: PanelContainer = %DashboardView/ContentVBox/OverviewPanel
+@onready var overview_headline_label: Label = %DashboardView/ContentVBox/OverviewPanel/OverviewMargin/OverviewVBox/OverviewHeadlineLabel
+@onready var market_overview_label: Label = %DashboardView/ContentVBox/OverviewPanel/OverviewMargin/OverviewVBox/MarketOverviewLabel
+@onready var portfolio_overview_label: Label = %DashboardView/ContentVBox/OverviewPanel/OverviewMargin/OverviewVBox/PortfolioOverviewLabel
+@onready var focus_overview_label: Label = %DashboardView/ContentVBox/OverviewPanel/OverviewMargin/OverviewVBox/FocusOverviewLabel
+@onready var special_overview_label: Label = %DashboardView/ContentVBox/OverviewPanel/OverviewMargin/OverviewVBox/SpecialOverviewLabel
+@onready var next_step_label: Label = %DashboardView/ContentVBox/OverviewPanel/OverviewMargin/OverviewVBox/NextStepLabel
 
-@onready var markets_grid: GridContainer = %MarketsView/Scroll/ContentGrid
-@onready var watchlist_panel: PanelContainer = %MarketsView/Scroll/ContentGrid/WatchlistPanel
-@onready var sector_panel: PanelContainer = %MarketsView/Scroll/ContentGrid/SectorPanel
-@onready var watchlist_hint_label: Label = %MarketsView/Scroll/ContentGrid/WatchlistPanel/WatchlistMargin/WatchlistVBox/WatchlistHintLabel
-@onready var selected_market_label: Label = %MarketsView/Scroll/ContentGrid/WatchlistPanel/WatchlistMargin/WatchlistVBox/SelectedMarketLabel
-@onready var watchlist_summary_label: Label = %MarketsView/Scroll/ContentGrid/WatchlistPanel/WatchlistMargin/WatchlistVBox/WatchlistSummaryLabel
-@onready var company_list: ItemList = %MarketsView/Scroll/ContentGrid/WatchlistPanel/WatchlistMargin/WatchlistVBox/CompanyList
-@onready var market_hint_label: Label = %MarketsView/Scroll/ContentGrid/SectorPanel/SectorMargin/SectorVBox/MarketHintLabel
-@onready var sector_summary_label: Label = %MarketsView/Scroll/ContentGrid/SectorPanel/SectorMargin/SectorVBox/SectorSummaryLabel
-@onready var sector_list_label: Label = %MarketsView/Scroll/ContentGrid/SectorPanel/SectorMargin/SectorVBox/SectorListLabel
+@onready var trade_split: HSplitContainer = %MarketsView/TradeSplit
+@onready var main_trade_split: HSplitContainer = %MarketsView/TradeSplit/MainSplit
+@onready var watchlist_panel: PanelContainer = %MarketsView/TradeSplit/WatchlistPanel
+@onready var work_area_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel
+@onready var action_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/ActionPanel
+@onready var stock_list_tabs: TabContainer = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs
+@onready var add_watchlist_button: Button = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab/AddWatchlistButton
+@onready var watchlist_empty_label: Label = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab/WatchlistEmptyLabel
+@onready var company_list: ItemList = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab/CompanyList
+@onready var all_stocks_scroll: ScrollContainer = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/AllStocksTab/AllStocksScroll
+@onready var all_stocks_rows: VBoxContainer = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/AllStocksTab/AllStocksScroll/AllStocksRows
+@onready var portfolio_stocks_scroll: ScrollContainer = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/PortfolioTab/PortfolioScroll
+@onready var portfolio_stocks_rows: VBoxContainer = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/PortfolioTab/PortfolioScroll/PortfolioRows
+@onready var portfolio_stocks_empty_label: Label = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/PortfolioTab/PortfolioScroll/PortfolioRows/PortfolioEmptyLabel
+@onready var trade_workspace_widget = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel
+@onready var work_tabs: TabContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs
+@onready var key_stats_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel
+@onready var key_stats_financial_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel/KeyStatsMargin/KeyStatsVBox/KeyStatsFinancialLabel
+@onready var financial_history_summary_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel/KeyStatsMargin/KeyStatsVBox/FinancialHistorySummaryLabel
+@onready var financial_history_header_row: HBoxContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel/KeyStatsMargin/KeyStatsVBox/FinancialHistoryTable/FinancialHistoryHeaderRow
+@onready var financial_history_rows_vbox: VBoxContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel/KeyStatsMargin/KeyStatsVBox/FinancialHistoryTable/FinancialHistoryRows
+@onready var financial_history_empty_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/KeyStats/KeyStatsPanel/KeyStatsMargin/KeyStatsVBox/FinancialHistoryTable/FinancialHistoryRows/FinancialHistoryEmptyLabel
+@onready var financials_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel
+@onready var financials_year_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/FinancialsYearLabel
+@onready var financials_previous_button: Button = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/FinancialsPeriodRow/FinancialsPreviousButton
+@onready var financials_period_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/FinancialsPeriodRow/FinancialsPeriodLabel
+@onready var financials_next_button: Button = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/FinancialsPeriodRow/FinancialsNextButton
+@onready var income_statement_rows_vbox: VBoxContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/IncomeStatementRows
+@onready var income_statement_empty_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/IncomeStatementRows/IncomeStatementEmptyLabel
+@onready var balance_sheet_rows_vbox: VBoxContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/BalanceSheetRows
+@onready var balance_sheet_empty_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/BalanceSheetRows/BalanceSheetEmptyLabel
+@onready var cash_flow_rows_vbox: VBoxContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/CashFlowRows
+@onready var cash_flow_empty_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/CashFlowRows/CashFlowEmptyLabel
+@onready var analyzer_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel
+@onready var analyzer_setup_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel/AnalyzerMargin/AnalyzerVBox/AnalyzerSetupLabel
+@onready var analyzer_support_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel/AnalyzerMargin/AnalyzerVBox/AnalyzerSupportLabel
+@onready var analyzer_risk_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel/AnalyzerMargin/AnalyzerVBox/AnalyzerRiskLabel
+@onready var analyzer_event_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel/AnalyzerMargin/AnalyzerVBox/AnalyzerEventLabel
+@onready var analyzer_history_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel/AnalyzerMargin/AnalyzerVBox/AnalyzerHistoryLabel
+@onready var profile_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel
+@onready var profile_company_name_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfileCompanyNameLabel
+@onready var profile_sector_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfileSectorLabel
+@onready var profile_price_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfilePriceLabel
+@onready var profile_factor_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfileFactorLabel
+@onready var profile_tags_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfileTagsLabel
+@onready var profile_description_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfileDescriptionLabel
+@onready var order_company_name_label: Label = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/HeaderVBox/CompanyNameLabel
+@onready var selection_label: Label = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/HeaderVBox/SelectionLabel
+@onready var order_price_value_label: Label = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/HeaderVBox/QuoteRow/PriceBlock/CurrentPriceLabel
+@onready var order_price_change_label: Label = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/HeaderVBox/QuoteRow/PriceBlock/PriceChangeLabel
+@onready var order_position_label: Label = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/PositionLabel
+@onready var order_card_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/OrderCard
+@onready var order_title_label: Label = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox/OrderTitleRow/OrderTitleLabel
+@onready var lot_spin_box: SpinBox = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox/LotSpinBox
+@onready var order_price_line_edit: LineEdit = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox/PriceLineEdit
+@onready var estimated_total_value_label: Label = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox/EstimatedTotalValueLabel
+@onready var buy_button: Button = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/TradeButtonRow/BuyButton
+@onready var sell_button: Button = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/TradeButtonRow/SellButton
+@onready var submit_order_button: Button = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox/SubmitOrderButton
 
 @onready var portfolio_grid: GridContainer = %PortfolioView/Scroll/ContentVBox/ContentGrid
 @onready var portfolio_summary_panel: PanelContainer = %PortfolioView/Scroll/ContentVBox/SummaryPanel
@@ -118,6 +249,24 @@ var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new
 
 @onready var help_panel: PanelContainer = %HelpView/HelpPanel
 @onready var help_text_label: RichTextLabel = %HelpView/HelpPanel/HelpMargin/HelpVBox/HelpTextLabel
+@onready var debug_overlay: Control = $DebugOverlay
+@onready var debug_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel
+@onready var debug_close_button: Button = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugHeaderRow/DebugCloseButton
+@onready var debug_hint_label: Label = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugHintLabel
+@onready var debug_tabs: TabContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs
+@onready var upcoming_events_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Upcoming
+@onready var current_events_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Current
+@onready var special_events_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Special
+@onready var person_events_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Person
+@onready var stock_performance_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Stocks
+@onready var market_history_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Market
+@onready var upcoming_events_label: RichTextLabel = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Upcoming/UpcomingMargin/UpcomingVBox/UpcomingEventsLabel
+@onready var current_events_label: RichTextLabel = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Current/CurrentMargin/CurrentVBox/CurrentEventsLabel
+@onready var special_events_label: RichTextLabel = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Special/SpecialMargin/SpecialVBox/SpecialEventsLabel
+@onready var person_events_label: RichTextLabel = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Person/PeopleMargin/PeopleVBox/PersonEventsLabel
+@onready var stock_performance_label: RichTextLabel = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Stocks/StocksMargin/StocksVBox/StockPerformanceLabel
+@onready var market_history_label: RichTextLabel = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Market/MarketHistoryMargin/MarketHistoryVBox/MarketHistoryLabel
+@onready var toast_overlay: MarginContainer = $ToastOverlay
 @onready var toast_panel: PanelContainer = $ToastOverlay/ToastPanel
 @onready var toast_message_label: Label = $ToastOverlay/ToastPanel/ToastMargin/ToastHBox/ToastMessageLabel
 @onready var toast_close_button: Button = $ToastOverlay/ToastPanel/ToastMargin/ToastHBox/ToastCloseButton
@@ -126,29 +275,74 @@ var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new
 
 func _ready() -> void:
 	_ensure_tutorial_dialog()
+	_ensure_watchlist_picker_dialog()
 	_apply_visual_theme()
 	_apply_compact_layout()
+	_hide_toast()
+	stock_list_tabs.set_tab_title(STOCK_LIST_TAB_WATCHLIST, "Watchlist")
+	stock_list_tabs.set_tab_title(STOCK_LIST_TAB_ALL_STOCKS, "All Stock")
+	stock_list_tabs.set_tab_title(STOCK_LIST_TAB_PORTFOLIO, "Portfolio")
+	stock_app_button.pressed.connect(_on_stock_app_pressed)
+	news_app_button.pressed.connect(_on_news_app_pressed)
+	social_app_button.pressed.connect(_on_social_app_pressed)
+	exit_app_button.pressed.connect(_on_exit_app_pressed)
+	taskbar_home_button.pressed.connect(_on_taskbar_home_pressed)
+	taskbar_stock_button.pressed.connect(_on_taskbar_stock_pressed)
+	taskbar_news_button.pressed.connect(_on_taskbar_news_pressed)
+	app_window_minimize_button.pressed.connect(_on_app_window_minimize_pressed)
+	app_window_close_button.pressed.connect(_on_app_window_close_pressed)
 	dashboard_button.pressed.connect(_on_dashboard_pressed)
 	markets_button.pressed.connect(_on_markets_pressed)
 	portfolio_button.pressed.connect(_on_portfolio_pressed)
 	help_button.pressed.connect(_on_help_pressed)
-	back_to_menu_button.pressed.connect(_on_menu_pressed)
+	debug_close_button.pressed.connect(_hide_debug_overlay)
 	toast_close_button.pressed.connect(_on_toast_close_pressed)
 	toast_timer.timeout.connect(_hide_toast)
+	stock_list_tabs.tab_changed.connect(_on_stock_list_tab_changed)
+	add_watchlist_button.pressed.connect(_on_add_watchlist_pressed)
+	financials_previous_button.pressed.connect(_on_financials_previous_pressed)
+	financials_next_button.pressed.connect(_on_financials_next_pressed)
 	company_list.item_selected.connect(_on_company_selected)
+	news_article_list.item_selected.connect(_on_news_article_selected)
 	lot_spin_box.value_changed.connect(_on_lot_size_changed)
-	buy_button.pressed.connect(_on_buy_pressed)
-	sell_button.pressed.connect(_on_sell_pressed)
+	buy_button.pressed.connect(_on_buy_side_pressed)
+	sell_button.pressed.connect(_on_sell_side_pressed)
+	submit_order_button.pressed.connect(_on_submit_order_pressed)
 	advance_day_button.pressed.connect(_on_next_day_pressed)
 	get_viewport().size_changed.connect(_update_responsive_layout)
 	GameManager.portfolio_changed.connect(_refresh_all)
+	GameManager.watchlist_changed.connect(_refresh_all)
 	GameManager.price_formed.connect(_on_day_progressed)
 	GameManager.summary_ready.connect(_on_summary_ready)
+	stock_app_button.tooltip_text = "Open STOCKBOT."
+	news_app_button.tooltip_text = "Open the event-driven news desk."
+	social_app_button.tooltip_text = "Open the mobile-style social feed."
+	exit_app_button.tooltip_text = "Return to the main menu."
+	taskbar_home_button.tooltip_text = "Return to the desktop."
+	taskbar_stock_button.tooltip_text = "Open STOCKBOT."
+	taskbar_news_button.tooltip_text = "Open the event-driven news desk."
+	financials_previous_button.tooltip_text = "View the previous quarter."
+	financials_next_button.tooltip_text = "View the next quarter."
+	buy_button.tooltip_text = "Switch the ticket to buy mode."
+	sell_button.tooltip_text = "Switch the ticket to sell mode."
+	submit_order_button.tooltip_text = "Submit the active order."
 	call_deferred("_update_responsive_layout")
-	day_label.visible = false
 	_set_active_section(active_section_id)
+	_set_active_app(APP_ID_DESKTOP)
 	_refresh_all()
 	call_deferred("_show_tutorial_if_needed")
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		var key_event: InputEventKey = event
+		if key_event.ctrl_pressed and key_event.keycode == KEY_L and active_app_id == APP_ID_STOCK:
+			_toggle_debug_overlay()
+			get_viewport().set_input_as_handled()
+			return
+		if debug_overlay.visible and key_event.keycode == KEY_ESCAPE:
+			_hide_debug_overlay()
+			get_viewport().set_input_as_handled()
 
 
 func _apply_compact_layout() -> void:
@@ -156,65 +350,445 @@ func _apply_compact_layout() -> void:
 	sidebar_focus_label.visible = false
 	sidebar_hint_label.visible = false
 	subtitle_label.visible = false
+	top_day_label.visible = false
 	objective_label.visible = false
-	status_label.visible = false
-	guide_label.visible = false
-	watchlist_hint_label.visible = false
-	market_hint_label.visible = false
+
+
+func _apply_dashboard_perk_visibility() -> void:
+	pass
 
 
 func _update_responsive_layout() -> void:
 	var content_width: float = content_tabs.get_rect().size.x
 	if content_width <= 0.0:
 		content_width = get_viewport_rect().size.x - 320.0
+	var viewport_size: Vector2 = get_viewport_rect().size
 
-	dashboard_grid.columns = 2 if content_width >= 1280.0 else 1
-	markets_grid.columns = 2 if content_width >= 1100.0 else 1
 	portfolio_grid.columns = 2 if content_width >= 1100.0 else 1
 	portfolio_summary_grid.columns = 4 if content_width >= 1200.0 else 2
-	company_list.custom_minimum_size = Vector2(0, 260 if markets_grid.columns == 1 else 360)
+	watchlist_panel.custom_minimum_size = Vector2(300 if content_width < 1420.0 else 360, 0)
+	action_panel.custom_minimum_size = Vector2(280 if content_width < 1420.0 else 320, 0)
+	company_list.custom_minimum_size = Vector2(0, 300 if content_width < 1320.0 else 420)
+	all_stocks_scroll.custom_minimum_size = Vector2(0, 300 if content_width < 1320.0 else 420)
+	portfolio_stocks_scroll.custom_minimum_size = Vector2(0, 300 if content_width < 1320.0 else 420)
+	trade_workspace_widget.set_chart_minimum_height(300 if content_width < 1320.0 else 380)
+	social_feed_cards.custom_minimum_size = Vector2(max(min(get_viewport_rect().size.x - 120.0, SOCIAL_WINDOW_MAX_WIDTH - 24.0), 280.0), 0)
+	debug_panel.custom_minimum_size = Vector2(
+		max(min(viewport_size.x - 48.0, 1080.0), 560.0),
+		max(min(viewport_size.y - 48.0, 680.0), 460.0)
+	)
+	_apply_window_layout()
 
 
 func _refresh_all() -> void:
+	_refresh_desktop()
 	if not RunState.has_active_run():
 		status_message = "No active run. Return to menu to begin."
+		selected_company_id = ""
 		_refresh_header()
 		_refresh_sidebar()
+		_refresh_news()
+		_refresh_social()
+		_refresh_markets()
+		_refresh_debug_overlay()
 		return
 
-	if selected_company_id.is_empty() or RunState.get_company(selected_company_id).is_empty():
-		selected_company_id = str(RunState.company_order[0])
+	_sync_selected_company_with_active_stock_list()
 
 	_refresh_header()
 	_refresh_sidebar()
+	_refresh_news()
+	_refresh_social()
 	_refresh_dashboard()
 	_refresh_markets()
 	_refresh_portfolio()
 	_refresh_help()
+	_refresh_debug_overlay()
 
 
 func _refresh_header() -> void:
-	var focus_snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id)
+	var portfolio: Dictionary = GameManager.get_portfolio_snapshot()
 	var trading_day_number: int = max(RunState.day_index + 1, 1)
 	var current_trade_date: Dictionary = GameManager.get_current_trade_date()
-	top_section_label.text = _section_label(active_section_id)
+	top_section_label.text = "DAY %d  |  %s" % [trading_day_number, GameManager.format_trade_date(current_trade_date)]
 	top_day_label.text = "DAY %d  |  %s" % [trading_day_number, GameManager.format_trade_date(current_trade_date)]
 	top_market_label.text = "MARKET %s" % _format_change(RunState.market_sentiment)
 	top_equity_label.text = "EQUITY %s" % _format_currency(RunState.get_total_equity())
-	if focus_snapshot.is_empty():
-		top_focus_label.text = "FOCUS -"
-	else:
-		top_focus_label.text = "FOCUS %s @ %s" % [
-			str(focus_snapshot.get("ticker", "")),
-			_format_currency(float(focus_snapshot.get("current_price", 0.0)))
-		]
+	top_cash_label.text = "CASH AVAILABLE %s" % _format_currency(float(portfolio.get("cash", 0.0)))
 	objective_label.text = ""
 	advance_day_button.disabled = not RunState.has_active_run()
 	advance_day_button.text = "Advance Day"
 	_set_label_tone(top_market_label, _color_for_change(RunState.market_sentiment))
-	_set_label_tone(top_focus_label, COLOR_ACCENT)
+	_set_label_tone(top_cash_label, COLOR_ACCENT)
 	_set_label_tone(top_section_label, COLOR_WARNING)
 	_set_label_tone(top_day_label, COLOR_WARNING)
+
+
+func _refresh_desktop() -> void:
+	_sync_desktop_app_state()
+	if not RunState.has_active_run():
+		desktop_title_label.text = "Daytrader OS"
+		desktop_date_label.text = "No active run"
+		desktop_subtitle_label.text = "Boot a run from the main menu to bring the terminal online."
+		desktop_hint_label.text = "Desktop icons launch apps. STOCKBOT trades, News reads the event tape, and Twooter surfaces tiered account chatter."
+		taskbar_status_label.text = "No active run loaded."
+		taskbar_clock_label.text = "MENU"
+		return
+
+	var current_trade_date: Dictionary = GameManager.get_current_trade_date()
+	var focus_snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id)
+	desktop_title_label.text = "Daytrader OS"
+	desktop_date_label.text = "DAY %d  |  %s" % [
+		max(RunState.day_index + 1, 1),
+		GameManager.format_trade_date(current_trade_date)
+	]
+	desktop_subtitle_label.text = "%s session online  |  Equity %s" % [
+		GameManager.get_current_difficulty_label(),
+		_format_currency(RunState.get_total_equity())
+	]
+	desktop_hint_label.text = "STOCKBOT is live. News renders event-driven intel feeds, and Twooter now shows tiered social chatter from unlocked accounts."
+	taskbar_status_label.text = _build_taskbar_status_text(focus_snapshot)
+	taskbar_clock_label.text = "DAY %d  |  %s" % [
+		max(RunState.day_index + 1, 1),
+		GameManager.format_trade_date(current_trade_date)
+	]
+
+
+func _refresh_news() -> void:
+	current_news_snapshot = {}
+	news_title_label.text = "News Desk"
+	if not RunState.has_active_run():
+		selected_news_outlet_id = ""
+		selected_news_article_id = ""
+		_rebuild_news_outlet_buttons([])
+		news_intel_status_label.text = "No run loaded"
+		news_feed_summary_label.text = "Start a run to populate the event-driven news desk."
+		news_article_list.clear()
+		_show_news_article({})
+		return
+
+	current_news_snapshot = GameManager.get_news_snapshot(PROTOTYPE_NEWS_INTEL_LEVEL)
+	var outlets: Array = current_news_snapshot.get("outlets", [])
+	if selected_news_outlet_id.is_empty() or not _news_outlet_exists(outlets, selected_news_outlet_id):
+		selected_news_outlet_id = _default_news_outlet_id(outlets)
+		selected_news_article_id = ""
+
+	news_intel_status_label.text = "Prototype Intel %d active" % int(current_news_snapshot.get("intel_level", PROTOTYPE_NEWS_INTEL_LEVEL))
+	_rebuild_news_outlet_buttons(outlets)
+	_refresh_news_article_list()
+
+
+func _rebuild_news_outlet_buttons(outlets: Array) -> void:
+	for child in news_outlet_buttons.get_children():
+		news_outlet_buttons.remove_child(child)
+		child.queue_free()
+
+	for outlet_value in outlets:
+		var outlet: Dictionary = outlet_value
+		var outlet_id: String = str(outlet.get("id", ""))
+		var button: Button = Button.new()
+		var unlocked: bool = bool(outlet.get("unlocked", true))
+		button.name = "NewsOutletButton_%s" % outlet_id
+		button.text = str(outlet.get("label", outlet_id))
+		button.toggle_mode = true
+		button.disabled = not unlocked
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.custom_minimum_size = Vector2(0, 36)
+		button.tooltip_text = "Intel %d  |  %s" % [
+			int(outlet.get("intel_level", 1)),
+			str(outlet.get("tagline", ""))
+		]
+		_style_news_outlet_button(button, outlet_id == selected_news_outlet_id, unlocked)
+		button.pressed.connect(_on_news_outlet_pressed.bind(outlet_id))
+		news_outlet_buttons.add_child(button)
+
+
+func _refresh_news_article_list() -> void:
+	news_article_list.clear()
+	var feed: Dictionary = _current_news_feed()
+	var articles: Array = feed.get("articles", [])
+	var outlet_label: String = str(feed.get("outlet_label", "News"))
+	var summary: String = str(feed.get("summary", ""))
+	var tagline: String = str(feed.get("tagline", ""))
+	news_feed_summary_label.text = "%s  |  %s\n%s" % [
+		outlet_label,
+		tagline,
+		summary
+	]
+
+	for article_value in articles:
+		var article: Dictionary = article_value
+		var line: String = _build_news_article_list_line(article)
+		news_article_list.add_item(line)
+		var item_index: int = news_article_list.item_count - 1
+		news_article_list.set_item_tooltip(item_index, str(article.get("deck", "")))
+		news_article_list.set_item_custom_fg_color(item_index, _news_color_for_tone(str(article.get("tone", "mixed"))))
+
+	var selected_index: int = -1
+	for article_index in range(articles.size()):
+		if str(articles[article_index].get("id", "")) == selected_news_article_id:
+			selected_index = article_index
+			break
+
+	if selected_index == -1 and not articles.is_empty():
+		selected_index = 0
+		selected_news_article_id = str(articles[0].get("id", ""))
+
+	if selected_index >= 0:
+		news_article_list.select(selected_index)
+		_show_news_article(articles[selected_index])
+	else:
+		selected_news_article_id = ""
+		_show_news_article({})
+
+
+func _refresh_social() -> void:
+	current_social_snapshot = {}
+	social_title_label.text = "Twooter"
+	if not RunState.has_active_run():
+		social_access_status_label.text = "No run loaded"
+		social_feed_summary_label.text = "Start a run to populate the mobile-style social feed."
+		_rebuild_social_feed_cards([])
+		return
+
+	current_social_snapshot = GameManager.get_twooter_snapshot(PROTOTYPE_TWOOTER_ACCESS_TIER)
+	var posts: Array = current_social_snapshot.get("posts", [])
+	social_access_status_label.text = "Prototype %s access active" % str(current_social_snapshot.get("tier_label", "Tier 4"))
+	social_feed_summary_label.text = "%d post(s)  |  Mobile feed view\nHigher access tiers unlock more credible or more market-moving accounts." % posts.size()
+	_rebuild_social_feed_cards(posts)
+
+
+func _rebuild_social_feed_cards(posts: Array) -> void:
+	for child in social_feed_cards.get_children():
+		social_feed_cards.remove_child(child)
+		child.queue_free()
+
+	if posts.is_empty():
+		social_feed_cards.add_child(_build_social_empty_card())
+		return
+
+	for post_value in posts:
+		var post: Dictionary = post_value
+		social_feed_cards.add_child(_build_social_post_card(post))
+
+	if social_feed_scroll.get_v_scroll_bar() != null:
+		social_feed_scroll.get_v_scroll_bar().value = 0.0
+
+
+func _build_social_empty_card() -> PanelContainer:
+	var card: PanelContainer = PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_social_post_card(card, "mixed")
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	card.add_child(margin)
+
+	var body: Label = Label.new()
+	body.text = "No posts yet.\nAdvance the day to generate fresh chatter."
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_theme_font_size_override("font_size", 13)
+	body.add_theme_color_override("font_color", Color(0.25098, 0.309804, 0.388235, 1))
+	margin.add_child(body)
+	return card
+
+
+func _build_social_post_card(post: Dictionary) -> PanelContainer:
+	var card: PanelContainer = PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.custom_minimum_size = Vector2(0, 128)
+	_style_social_post_card(card, str(post.get("tone", "mixed")))
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	card.add_child(margin)
+
+	var content: VBoxContainer = VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 6)
+	margin.add_child(content)
+
+	var header_row: HBoxContainer = HBoxContainer.new()
+	header_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_row.add_theme_constant_override("separation", 8)
+	content.add_child(header_row)
+
+	var account_label: Label = Label.new()
+	account_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	account_label.text = "%s%s" % [
+		str(post.get("account_name", "")),
+		" [verified]" if bool(post.get("account_verified", false)) else ""
+	]
+	account_label.add_theme_font_size_override("font_size", 13)
+	account_label.add_theme_color_override("font_color", Color(0.0862745, 0.129412, 0.196078, 1))
+	header_row.add_child(account_label)
+
+	var meta_badge_label: Label = Label.new()
+	meta_badge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	meta_badge_label.text = "Tier %d" % int(post.get("account_tier", 1))
+	meta_badge_label.add_theme_font_size_override("font_size", 11)
+	meta_badge_label.add_theme_color_override("font_color", Color(0.254902, 0.4, 0.639216, 1))
+	header_row.add_child(meta_badge_label)
+
+	var handle_label: Label = Label.new()
+	handle_label.text = str(post.get("account_handle", ""))
+	handle_label.add_theme_font_size_override("font_size", 11)
+	handle_label.add_theme_color_override("font_color", Color(0.360784, 0.454902, 0.603922, 1))
+	content.add_child(handle_label)
+
+	var body_label: Label = Label.new()
+	body_label.text = str(post.get("post_text", ""))
+	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body_label.add_theme_font_size_override("font_size", 15)
+	body_label.add_theme_color_override("font_color", Color(0.0627451, 0.0862745, 0.117647, 1))
+	content.add_child(body_label)
+
+	var meta_line: String = _build_social_card_meta_line(post)
+	if not meta_line.is_empty():
+		var meta_label: Label = Label.new()
+		meta_label.text = meta_line
+		meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		meta_label.add_theme_font_size_override("font_size", 11)
+		meta_label.add_theme_color_override("font_color", Color(0.254902, 0.34902, 0.454902, 1))
+		content.add_child(meta_label)
+
+	var context_hint: String = str(post.get("context_hint", ""))
+	if not context_hint.is_empty():
+		var context_label: Label = Label.new()
+		context_label.text = context_hint
+		context_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		context_label.add_theme_font_size_override("font_size", 11)
+		context_label.add_theme_color_override("font_color", Color(0.345098, 0.384314, 0.458824, 1))
+		content.add_child(context_label)
+
+	var reactions_label: Label = Label.new()
+	reactions_label.text = "%d likes  |  %d replies  |  %d retwoots" % [
+		int(post.get("likes", 0)),
+		int(post.get("replies", 0)),
+		int(post.get("retwoots", 0))
+	]
+	reactions_label.add_theme_font_size_override("font_size", 11)
+	reactions_label.add_theme_color_override("font_color", Color(0.317647, 0.403922, 0.537255, 1))
+	content.add_child(reactions_label)
+
+	return card
+
+
+func _build_social_card_meta_line(post: Dictionary) -> String:
+	var meta_parts: Array = []
+	var trade_date: Dictionary = post.get("trade_date", {})
+	if not trade_date.is_empty():
+		meta_parts.append(GameManager.format_trade_date(trade_date))
+	if not str(post.get("visibility_label", "")).is_empty():
+		meta_parts.append(str(post.get("visibility_label", "")))
+	if not str(post.get("target_ticker", "")).is_empty():
+		meta_parts.append(str(post.get("target_ticker", "")))
+	elif not str(post.get("person_name", "")).is_empty():
+		meta_parts.append(str(post.get("person_name", "")))
+	elif not str(post.get("sector_name", "")).is_empty():
+		meta_parts.append(str(post.get("sector_name", "")))
+	if not str(post.get("category", "")).is_empty():
+		meta_parts.append(_titleize_snake_case(str(post.get("category", ""))))
+	return "  |  ".join(meta_parts)
+
+
+func _style_social_post_card(panel: PanelContainer, tone: String) -> void:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.964706, 0.972549, 0.992157, 1)
+	style.border_color = _social_card_border_color(tone)
+	style.set_border_width_all(1)
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 0
+	style.corner_radius_bottom_right = 0
+	style.corner_radius_bottom_left = 0
+	panel.add_theme_stylebox_override("panel", style)
+
+
+func _social_card_border_color(tone: String) -> Color:
+	if tone == "positive":
+		return Color(0.333333, 0.607843, 0.470588, 1)
+	if tone == "negative":
+		return Color(0.709804, 0.403922, 0.423529, 1)
+	return Color(0.556863, 0.647059, 0.776471, 1)
+
+
+func _show_news_article(article: Dictionary) -> void:
+	if article.is_empty():
+		news_detail_outlet_label.text = "Select an article"
+		news_detail_headline_label.text = "No article selected."
+		news_detail_deck_label.text = "Pick an outlet and story from the left feed."
+		news_detail_meta_label.text = ""
+		news_detail_body.text = ""
+		news_detail_hint_label.text = "Intel outlets unlock earlier timing tiers once perks are wired in."
+		return
+
+	var feed: Dictionary = _current_news_feed()
+	var meta_parts: Array = []
+	var trade_date: Dictionary = article.get("trade_date", {})
+	if not trade_date.is_empty():
+		meta_parts.append(GameManager.format_trade_date(trade_date))
+	if not str(article.get("progress_label", "")).is_empty():
+		meta_parts.append(str(article.get("progress_label", "")))
+	if not str(article.get("person_name", "")).is_empty():
+		meta_parts.append(str(article.get("person_name", "")))
+	elif not str(article.get("target_ticker", "")).is_empty():
+		meta_parts.append(str(article.get("target_ticker", "")))
+	elif not str(article.get("sector_name", "")).is_empty():
+		meta_parts.append(str(article.get("sector_name", "")))
+	if not str(article.get("category", "")).is_empty():
+		meta_parts.append(_titleize_snake_case(str(article.get("category", ""))))
+
+	news_detail_outlet_label.text = "%s  |  Intel %d" % [
+		str(feed.get("outlet_label", "News")),
+		int(feed.get("intel_level", 1))
+	]
+	news_detail_headline_label.text = str(article.get("headline", ""))
+	news_detail_deck_label.text = str(article.get("deck", ""))
+	news_detail_meta_label.text = "  |  ".join(meta_parts)
+	news_detail_body.text = str(article.get("body", ""))
+	news_detail_hint_label.text = str(feed.get("tagline", ""))
+
+
+func _current_news_feed() -> Dictionary:
+	var feeds: Dictionary = current_news_snapshot.get("feeds", {})
+	if feeds.has(selected_news_outlet_id):
+		return feeds[selected_news_outlet_id]
+	return {}
+
+
+func _build_news_article_list_line(article: Dictionary) -> String:
+	var progress_label: String = str(article.get("progress_label", "News"))
+	return "[%s] %s" % [progress_label, str(article.get("headline", ""))]
+
+
+func _news_color_for_tone(tone: String) -> Color:
+	if tone == "positive":
+		return Color(0.156863, 0.364706, 0.247059, 1)
+	if tone == "negative":
+		return Color(0.494118, 0.184314, 0.184314, 1)
+	return Color(0.301961, 0.247059, 0.121569, 1)
+
+
+func _default_news_outlet_id(outlets: Array) -> String:
+	for outlet_value in outlets:
+		var outlet: Dictionary = outlet_value
+		if bool(outlet.get("unlocked", true)):
+			return str(outlet.get("id", ""))
+	return ""
+
+
+func _news_outlet_exists(outlets: Array, outlet_id: String) -> bool:
+	for outlet_value in outlets:
+		var outlet: Dictionary = outlet_value
+		if str(outlet.get("id", "")) == outlet_id:
+			return true
+	return false
 
 
 func _refresh_sidebar() -> void:
@@ -226,72 +800,47 @@ func _refresh_sidebar() -> void:
 
 
 func _refresh_dashboard() -> void:
-	var snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id)
-	if snapshot.is_empty():
-		status_label.text = "No stock selected."
-		financial_history_label.text = "Generated history unavailable."
+	if not RunState.has_active_run():
+		overview_headline_label.text = "No active run."
+		market_overview_label.text = "Start a run to see the market overview."
+		portfolio_overview_label.text = "Portfolio overview unavailable."
+		focus_overview_label.text = "No focus stock selected."
+		special_overview_label.text = "No active events."
+		next_step_label.text = "Use New Game or Load Run to begin."
 		return
 
-	lot_spin_box.set_value_no_signal(float(_selected_lots()))
-	cash_label.text = "Available cash: %s" % _format_currency(float(RunState.player_portfolio.get("cash", 0.0)))
-	equity_label.text = "Total equity: %s" % _format_currency(RunState.get_total_equity())
-	status_label.text = status_message
-	guide_label.text = ""
-	action_hint_label.text = _build_action_hint(snapshot)
-	company_name_label.text = "%s  |  %s" % [snapshot.get("ticker", ""), snapshot.get("name", "")]
-	sector_label.text = "Sector: %s" % snapshot.get("sector_name", "Unknown")
-	price_label.text = "Price now: %s  |  Daily move: %s" % [
-		_format_currency(float(snapshot.get("current_price", 0.0))),
-		_format_change(float(snapshot.get("daily_change_pct", 0.0)))
-	]
-	factor_label.text = "Company profile: quality %d  |  growth %d  |  risk %d  |  board %s  |  tick Rp %.0f  |  held %d lot(s) / %d share(s)" % [
-		int(snapshot.get("quality_score", 0)),
-		int(snapshot.get("growth_score", 0)),
-		int(snapshot.get("risk_score", 0)),
-		str(snapshot.get("listing_board", "main")).capitalize(),
-		float(snapshot.get("tick_size", 1.0)),
-		int(snapshot.get("lots_owned", 0)),
-		int(snapshot.get("shares_owned", 0))
-	]
-	financial_label.text = "Financials:\n%s" % _format_financial_block(snapshot.get("financials", {}))
-	setup_label.text = "Setup read:\n%s" % _build_setup_read(snapshot)
-	support_label.text = "Supportive signals:\n%s" % _build_support_signals(snapshot)
-	risk_label.text = "Risk signals:\n%s" % _build_risk_signals(snapshot)
-	event_label.text = "Visible inputs:\nEvent tags: %s\nNarratives: %s" % [
-		_join_or_default(snapshot.get("event_tags", []), "none today"),
-		_join_or_default(snapshot.get("narrative_tags", []), "none")
-	]
-	history_label.text = "Recent closes:\n%s" % _format_history(snapshot.get("price_history", []))
-	financial_history_label.text = _format_financial_history_block(
-		snapshot.get("financial_history", []),
-		snapshot.get("financials", {})
-	)
+	var snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id)
+	var portfolio: Dictionary = GameManager.get_portfolio_snapshot()
+	var macro_state: Dictionary = GameManager.get_current_macro_state()
+	var sector_rows: Array = GameManager.get_sector_rows()
+	var active_special_events: Array = GameManager.get_active_special_events()
+	var trading_day_number: int = max(RunState.day_index + 1, 1)
 
-	var broker_flow: Dictionary = snapshot.get("broker_flow", {})
-	broker_pressure_label.text = "Pressure read: %s  |  Buyer: %s  |  Seller: %s" % [
-		str(broker_flow.get("flow_tag", "neutral")).capitalize(),
-		str(broker_flow.get("dominant_buyer", "balanced")).capitalize(),
-		str(broker_flow.get("dominant_seller", "balanced")).capitalize()
+	overview_headline_label.text = "Day %d overview | Market %s | Equity %s" % [
+		trading_day_number,
+		_format_change(RunState.market_sentiment),
+		_format_currency(float(portfolio.get("equity", 0.0)))
 	]
-	broker_label.text = "Net reads:\nRetail %+.0f  |  Foreign %+.0f\nInstitution %+.0f  |  Zombie %+.0f\n\nDominant buyer: %s\nDominant seller: %s\nTape label: %s" % [
-		float(broker_flow.get("retail_net", 0.0)),
-		float(broker_flow.get("foreign_net", 0.0)),
-		float(broker_flow.get("institution_net", 0.0)),
-		float(broker_flow.get("zombie_net", 0.0)),
-		str(broker_flow.get("dominant_buyer", "balanced")).capitalize(),
-		str(broker_flow.get("dominant_seller", "balanced")).capitalize(),
-		str(broker_flow.get("flow_tag", "neutral")).capitalize()
-	]
-	broker_hint_label.text = _build_broker_hint(snapshot)
-	_refresh_order_controls(snapshot)
-	_refresh_summary()
-	_set_label_tone(price_label, _color_for_change(float(snapshot.get("daily_change_pct", 0.0))))
-	_set_label_tone(broker_pressure_label, _color_for_flow(str(broker_flow.get("flow_tag", "neutral"))))
+	market_overview_label.text = _build_market_overview_text(macro_state, sector_rows)
+	portfolio_overview_label.text = _build_dashboard_portfolio_text(portfolio)
+	focus_overview_label.text = _build_dashboard_focus_text(snapshot)
+	special_overview_label.text = _build_special_overview_text(active_special_events)
+	next_step_label.text = "Next step:\nOpen Trade to scan the stock list, inspect the Chart, Key Stats, Financials, Analyzer, or Profile tabs, then place orders from the right-side ticket."
+	_set_label_tone(overview_headline_label, _color_for_change(RunState.market_sentiment))
 
 
 func _refresh_markets() -> void:
 	_refresh_company_list()
-	_refresh_sector_list()
+	_refresh_trade_workspace()
+
+
+func _refresh_after_company_selection() -> void:
+	_refresh_company_selection_state()
+	_refresh_trade_workspace()
+	_refresh_dashboard()
+	_refresh_desktop()
+	if debug_overlay.visible:
+		_refresh_debug_overlay()
 
 
 func _refresh_portfolio() -> void:
@@ -319,107 +868,322 @@ func _refresh_help() -> void:
 	help_text_label.text = _build_help_text()
 
 
+func _refresh_debug_overlay() -> void:
+	if not RunState.has_active_run():
+		upcoming_events_label.text = "No active run."
+		current_events_label.text = "No active run."
+		special_events_label.text = "No active run."
+		person_events_label.text = "No active run."
+		stock_performance_label.text = "No active run."
+		market_history_label.text = "No active run."
+		return
+
+	upcoming_events_label.text = _build_debug_upcoming_events_text()
+	current_events_label.text = _build_debug_current_events_text()
+	special_events_label.text = _build_debug_special_events_text()
+	person_events_label.text = _build_debug_person_events_text()
+	stock_performance_label.text = _build_debug_stock_performance_text()
+	market_history_label.text = _build_debug_market_history_text()
+
+
+func _toggle_debug_overlay() -> void:
+	if debug_overlay.visible:
+		_hide_debug_overlay()
+		return
+	_show_debug_overlay()
+
+
+func _show_debug_overlay() -> void:
+	_refresh_debug_overlay()
+	debug_overlay.visible = true
+
+
+func _hide_debug_overlay() -> void:
+	debug_overlay.visible = false
+
+
+func _sync_selected_company_with_active_stock_list() -> void:
+	var watchlist_ids: Array = GameManager.get_watchlist_company_ids()
+	var holdings_ids: Array = _get_portfolio_company_ids()
+	if selected_company_id.is_empty():
+		if stock_list_tabs.current_tab == STOCK_LIST_TAB_WATCHLIST:
+			selected_company_id = str(watchlist_ids[0]) if not watchlist_ids.is_empty() else ""
+		elif stock_list_tabs.current_tab == STOCK_LIST_TAB_PORTFOLIO:
+			selected_company_id = str(holdings_ids[0]) if not holdings_ids.is_empty() else ""
+		elif not RunState.company_order.is_empty():
+			selected_company_id = str(RunState.company_order[0])
+		return
+
+	if RunState.get_company(selected_company_id).is_empty():
+		selected_company_id = ""
+		_sync_selected_company_with_active_stock_list()
+		return
+
+	if stock_list_tabs.current_tab == STOCK_LIST_TAB_WATCHLIST and not watchlist_ids.has(selected_company_id):
+		selected_company_id = str(watchlist_ids[0]) if not watchlist_ids.is_empty() else ""
+	elif stock_list_tabs.current_tab == STOCK_LIST_TAB_PORTFOLIO and not holdings_ids.has(selected_company_id):
+		selected_company_id = str(holdings_ids[0]) if not holdings_ids.is_empty() else ""
+
+
 func _refresh_company_list() -> void:
 	displayed_company_ids.clear()
 	company_list.clear()
-	var advancers: int = 0
-	var decliners: int = 0
-	var strongest_flow_ticker: String = ""
-	var strongest_flow_value: float = -INF
+	var company_rows: Array = GameManager.get_company_rows()
+	var company_row_lookup: Dictionary = {}
+	for row_value in company_rows:
+		var company_row: Dictionary = row_value
+		company_row_lookup[str(company_row.get("id", ""))] = company_row
+	var watchlist_company_ids: Array = GameManager.get_watchlist_company_ids()
+	var watchlist_lookup: Dictionary = {}
+	for company_id_value in watchlist_company_ids:
+		watchlist_lookup[str(company_id_value)] = true
 
-	for row_value in GameManager.get_company_rows():
+	for row_value in company_rows:
 		var row: Dictionary = row_value
-		displayed_company_ids.append(str(row.get("id", "")))
+		var company_id: String = str(row.get("id", ""))
+		if not watchlist_lookup.has(company_id):
+			continue
+		displayed_company_ids.append(company_id)
 		var change_pct: float = float(row.get("daily_change_pct", 0.0))
 		var broker_flow: Dictionary = row.get("broker_flow", {})
 		var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
-		var flow_badge: String = _flow_badge(flow_tag)
-		var line: String = "%s  %s  %s  %s" % [
-			row.get("ticker", ""),
-			_format_currency(float(row.get("current_price", 0.0))),
-			_format_change(change_pct),
-			flow_badge
-		]
+		var line: String = _build_stock_list_line(row)
 		company_list.add_item(line)
 		var item_index: int = company_list.item_count - 1
 		company_list.set_item_tooltip(item_index, _watchlist_tooltip(row))
 		company_list.set_item_custom_fg_color(item_index, _color_for_change(change_pct))
 		company_list.set_item_custom_bg_color(item_index, _color_for_flow_bg(flow_tag))
 
-		if change_pct > 0.0:
-			advancers += 1
-		elif change_pct < 0.0:
-			decliners += 1
-
-		var net_pressure: float = abs(float(broker_flow.get("net_pressure", 0.0)))
-		if net_pressure > strongest_flow_value:
-			strongest_flow_value = net_pressure
-			strongest_flow_ticker = str(row.get("ticker", ""))
-
 	var selected_index: int = displayed_company_ids.find(selected_company_id)
-	if selected_index == -1 and not displayed_company_ids.is_empty():
+	if stock_list_tabs.current_tab == STOCK_LIST_TAB_WATCHLIST and selected_index == -1 and not displayed_company_ids.is_empty():
 		selected_company_id = str(displayed_company_ids[0])
 		selected_index = 0
 
 	if selected_index >= 0:
 		company_list.select(selected_index)
+	watchlist_empty_label.visible = displayed_company_ids.is_empty()
+	_refresh_all_stock_rows(company_rows, watchlist_lookup)
+	_refresh_portfolio_stock_rows(GameManager.get_portfolio_snapshot().get("holdings", []), company_row_lookup)
 
-	var flat_count: int = max(displayed_company_ids.size() - advancers - decliners, 0)
-	watchlist_summary_label.text = "Advancers: %d  |  Decliners: %d  |  Flat: %d  |  Strongest tape: %s" % [
-		advancers,
-		decliners,
-		flat_count,
-		strongest_flow_ticker if not strongest_flow_ticker.is_empty() else "n/a"
+
+func _refresh_all_stock_rows(company_rows: Array, watchlist_lookup: Dictionary) -> void:
+	for child in all_stocks_rows.get_children():
+		all_stocks_rows.remove_child(child)
+		child.queue_free()
+
+	for row_value in company_rows:
+		var row: Dictionary = row_value
+		var company_id: String = str(row.get("id", ""))
+		var line: String = _build_stock_list_line(row)
+		var is_selected: bool = company_id == selected_company_id
+		var is_in_watchlist: bool = watchlist_lookup.has(company_id)
+
+		var row_box: HBoxContainer = HBoxContainer.new()
+		row_box.add_theme_constant_override("separation", 0)
+		row_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row_box.name = "AllStockRow_%s" % company_id
+
+		var select_button: Button = Button.new()
+		select_button.name = "AllStockSelectButton_%s" % company_id
+		select_button.text = line
+		select_button.tooltip_text = _watchlist_tooltip(row)
+		select_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		select_button.custom_minimum_size = Vector2(0, 40)
+		_style_stock_list_row_button(select_button, is_selected)
+		select_button.pressed.connect(_on_all_stock_selected.bind(company_id))
+		row_box.add_child(select_button)
+
+		var add_button: Button = Button.new()
+		add_button.name = "AllStockAddButton_%s" % company_id
+		add_button.custom_minimum_size = Vector2(118, 40)
+		add_button.text = "Added" if is_in_watchlist else "Add"
+		add_button.disabled = is_in_watchlist
+		_style_button(
+			add_button,
+			Color(0.164706, 0.215686, 0.278431, 1) if is_in_watchlist else Color(0.117647, 0.32549, 0.239216, 1),
+			COLOR_BORDER,
+			COLOR_TEXT,
+			0
+		)
+		if not is_in_watchlist:
+			add_button.pressed.connect(_on_add_to_watchlist_pressed.bind(company_id))
+		row_box.add_child(add_button)
+
+		all_stocks_rows.add_child(row_box)
+
+
+func _refresh_portfolio_stock_rows(holdings: Array, company_row_lookup: Dictionary) -> void:
+	for child in portfolio_stocks_rows.get_children():
+		if child == portfolio_stocks_empty_label:
+			continue
+		portfolio_stocks_rows.remove_child(child)
+		child.queue_free()
+
+	var has_holdings: bool = false
+	for holding_value in holdings:
+		var holding: Dictionary = holding_value
+		var company_id: String = str(holding.get("company_id", ""))
+		if company_id.is_empty():
+			continue
+		var row: Dictionary = company_row_lookup.get(company_id, {})
+		if row.is_empty():
+			continue
+
+		has_holdings = true
+		var lots_owned: int = int(holding.get("lots", 0))
+		var line: String = "%s  |  %d lot(s)" % [_build_stock_list_line(row), lots_owned]
+		var select_button: Button = Button.new()
+		select_button.name = "PortfolioSelectButton_%s" % company_id
+		select_button.text = line
+		select_button.tooltip_text = _watchlist_tooltip(row)
+		select_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		select_button.custom_minimum_size = Vector2(0, 40)
+		_style_stock_list_row_button(select_button, company_id == selected_company_id)
+		select_button.pressed.connect(_on_portfolio_stock_selected.bind(company_id))
+		portfolio_stocks_rows.add_child(select_button)
+
+	portfolio_stocks_empty_label.visible = not has_holdings
+
+
+func _refresh_company_selection_state() -> void:
+	var selected_index: int = displayed_company_ids.find(selected_company_id)
+	if selected_index >= 0:
+		company_list.select(selected_index)
+	else:
+		company_list.deselect_all()
+
+	for row_box_value in all_stocks_rows.get_children():
+		if row_box_value is not HBoxContainer:
+			continue
+		var row_box: HBoxContainer = row_box_value
+		var company_id: String = str(row_box.name).trim_prefix("AllStockRow_")
+		var select_button: Button = row_box.get_node_or_null("AllStockSelectButton_%s" % company_id) as Button
+		if select_button == null:
+			continue
+		_style_stock_list_row_button(select_button, company_id == selected_company_id)
+
+	for child in portfolio_stocks_rows.get_children():
+		if child == portfolio_stocks_empty_label or child is not Button:
+			continue
+		var portfolio_button: Button = child
+		var company_id: String = str(portfolio_button.name).trim_prefix("PortfolioSelectButton_")
+		_style_stock_list_row_button(portfolio_button, company_id == selected_company_id)
+
+
+func _build_stock_list_line(row: Dictionary) -> String:
+	return "%s  %s  %s" % [
+		row.get("ticker", ""),
+		_format_currency(float(row.get("current_price", 0.0))),
+		_format_change(float(row.get("daily_change_pct", 0.0)))
 	]
 
-	var focus_snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id)
-	if focus_snapshot.is_empty():
-		selected_market_label.text = "Current focus: none selected."
-	else:
-		selected_market_label.text = "Current focus: %s | %s | %s" % [
-			str(focus_snapshot.get("ticker", "")),
-			_format_currency(float(focus_snapshot.get("current_price", 0.0))),
-			_format_change(float(focus_snapshot.get("daily_change_pct", 0.0)))
-		]
-		_set_label_tone(selected_market_label, _color_for_change(float(focus_snapshot.get("daily_change_pct", 0.0))))
+
+func _get_portfolio_company_ids() -> Array:
+	var company_ids: Array = []
+	var holdings: Array = GameManager.get_portfolio_snapshot().get("holdings", [])
+	for holding_value in holdings:
+		var holding: Dictionary = holding_value
+		var company_id: String = str(holding.get("company_id", ""))
+		if company_id.is_empty():
+			continue
+		company_ids.append(company_id)
+	return company_ids
 
 
-func _refresh_sector_list() -> void:
-	var sector_rows: Array = GameManager.get_sector_rows()
-	if sector_rows.is_empty():
-		sector_summary_label.text = "Sector summary unavailable."
-		sector_list_label.text = "No sector data available."
+func _refresh_trade_workspace() -> void:
+	var snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id, true, true, true)
+	current_trade_snapshot = snapshot
+	trade_workspace_widget.set_company_snapshot(snapshot)
+	if snapshot.is_empty():
+		current_trade_snapshot = {}
+		selected_financial_statement_company_id = ""
+		selected_financial_statement_index = -1
+		active_order_side = "buy"
+		order_company_name_label.text = "NO SELECTION"
+		selection_label.text = "-"
+		order_price_value_label.text = "Rp 0.00"
+		order_price_change_label.text = "+Rp 0.00  |  +0.00%"
+		order_position_label.text = "Pick a stock first so the order ticket can price the trade."
+		order_title_label.text = "Buy Order"
+		order_price_line_edit.text = ""
+		estimated_total_value_label.text = "Rp 0.00"
+		buy_button.disabled = true
+		sell_button.disabled = true
+		submit_order_button.disabled = true
+		submit_order_button.text = "Submit Buy Order"
+		_set_label_tone(order_price_change_label, COLOR_MUTED)
+		_set_label_tone(estimated_total_value_label, COLOR_MUTED)
+		_update_order_side_buttons()
+		profile_company_name_label.text = "No selection"
+		profile_sector_label.text = "Sector:"
+		profile_price_label.text = "Price:"
+		profile_factor_label.text = "Company profile:"
+		profile_tags_label.text = "Tags:"
+		profile_description_label.text = "Description:"
+		key_stats_financial_label.text = "Financials:"
+		financials_year_label.text = "Derived financial statements unavailable."
+		financials_period_label.text = "Viewing latest available period."
+		analyzer_setup_label.text = "Setup read:"
+		analyzer_support_label.text = "Supportive signals:"
+		analyzer_risk_label.text = "Risk signals:"
+		analyzer_event_label.text = "Visible inputs:"
+		analyzer_history_label.text = "Recent closes:"
+		financial_history_summary_label.text = "Generated history unavailable."
+		_refresh_financial_history_table([], {})
+		_refresh_statement_sections({})
+		_set_label_tone(profile_price_label, COLOR_TEXT)
 		return
 
-	var positive_sectors: int = 0
-	var negative_sectors: int = 0
-	var strongest_sector_name: String = ""
-	var strongest_sector_value: float = -INF
-	var blocks: Array = []
-
-	for row_value in sector_rows:
-		var row: Dictionary = row_value
-		var average_change_pct: float = float(row.get("average_change_pct", 0.0))
-		if average_change_pct > 0.0:
-			positive_sectors += 1
-		elif average_change_pct < 0.0:
-			negative_sectors += 1
-
-		var magnitude: float = abs(average_change_pct)
-		if magnitude > strongest_sector_value:
-			strongest_sector_value = magnitude
-			strongest_sector_name = str(row.get("name", ""))
-
-		blocks.append(_format_sector_block(row))
-
-	var flat_sectors: int = max(sector_rows.size() - positive_sectors - negative_sectors, 0)
-	sector_summary_label.text = "Green sectors: %d  |  Red sectors: %d  |  Flat sectors: %d  |  Loudest tape: %s" % [
-		positive_sectors,
-		negative_sectors,
-		flat_sectors,
-		strongest_sector_name if not strongest_sector_name.is_empty() else "n/a"
+	var financial_statement_snapshot: Dictionary = snapshot.get("financial_statement_snapshot", {})
+	_sync_financial_statement_selection(str(snapshot.get("id", "")), financial_statement_snapshot)
+	lot_spin_box.set_value_no_signal(float(_selected_lots()))
+	profile_company_name_label.text = "%s  |  %s" % [snapshot.get("ticker", ""), snapshot.get("name", "")]
+	profile_sector_label.text = "Sector: %s  |  Archetype: %s  |  Size: %s  |  Board: %s" % [
+		snapshot.get("sector_name", "Unknown"),
+		str(snapshot.get("archetype_label", "Unclassified")),
+		str(snapshot.get("company_size_label", "Unknown")),
+		str(snapshot.get("listing_board", "main")).capitalize()
 	]
-	sector_list_label.text = "\n\n".join(blocks)
+	profile_price_label.text = "Price now: %s  |  Previous close: %s  |  Daily move: %s" % [
+		_format_currency(float(snapshot.get("current_price", 0.0))),
+		_format_currency(float(snapshot.get("previous_close", 0.0))),
+		_format_change(float(snapshot.get("daily_change_pct", 0.0)))
+	]
+	profile_factor_label.text = "Company profile: quality %d  |  growth %d  |  risk %d  |  founded %d  |  age %dy  |  employees %s  |  revenue %s" % [
+		int(snapshot.get("quality_score", 0)),
+		int(snapshot.get("growth_score", 0)),
+		int(snapshot.get("risk_score", 0)),
+		int(snapshot.get("founded_year", 0)),
+		int(snapshot.get("company_age", 0)),
+		_format_grouped_integer(int(snapshot.get("employee_count", 0))),
+		_format_compact_currency(float(snapshot.get("profile_revenue", 0.0)))
+	]
+	profile_tags_label.text = "Tags: %s" % _join_or_default(snapshot.get("profile_tags", []), "none")
+	profile_description_label.text = "Description: %s" % str(snapshot.get(
+		"profile_description",
+		"No generated profile description for this company."
+	))
+	key_stats_financial_label.text = "Financials:\n%s" % _format_financial_block(snapshot.get("financials", {}))
+	financials_year_label.text = _format_statement_year_label(financial_statement_snapshot)
+	analyzer_setup_label.text = "Setup read:\n%s" % _build_setup_read(snapshot)
+	analyzer_support_label.text = "Supportive signals:\n%s" % _build_support_signals(snapshot)
+	analyzer_risk_label.text = "Risk signals:\n%s" % _build_risk_signals(snapshot)
+	analyzer_event_label.text = "Visible inputs:\nEvent tags: %s\nNarratives: %s" % [
+		_join_or_default(snapshot.get("event_tags", []), "none today"),
+		_join_or_default(snapshot.get("narrative_tags", []), "none")
+	]
+	analyzer_history_label.text = "Recent closes:\n%s" % _format_history(snapshot.get("price_history", []))
+	financial_history_summary_label.text = _format_financial_history_summary(
+		snapshot.get("financial_history", []),
+		snapshot.get("financials", {})
+	)
+	_refresh_financial_history_table(
+		snapshot.get("financial_history", []),
+		snapshot.get("financials", {})
+	)
+	_refresh_statement_sections(financial_statement_snapshot)
+	_refresh_order_controls(snapshot)
+	_set_label_tone(profile_price_label, _color_for_change(float(snapshot.get("daily_change_pct", 0.0))))
 
 
 func _refresh_trade_history() -> void:
@@ -597,52 +1361,131 @@ func _format_trade_date_short(day_index: int) -> String:
 
 
 func _refresh_summary() -> void:
-	var summary: Dictionary = GameManager.get_latest_summary()
-	if summary.is_empty():
-		review_headline_label.text = "Review headline: Waiting for the first close."
-		summary_label.text = "No closing summary yet.\nAdvance the first day to see the market review."
-		movers_label.text = "Top movers, best accumulation, and heaviest distribution will appear after the close."
-		reflection_label.text = "Tomorrow's prompt: pick one stock you want to understand better before risking more capital."
-		return
-
-	var headline: String = _build_review_headline(summary)
-	review_headline_label.text = "Review headline: %s" % headline
-	summary_label.text = "Day %d close:\nPortfolio move: %s\n\n%s" % [
-		int(summary.get("day_index", 0)),
-		_format_signed_currency(float(summary.get("portfolio_delta", 0.0))),
-		str(summary.get("explanation", ""))
-	]
-
-	var mover_lines: Array = []
-	var winner: Dictionary = summary.get("biggest_winner", {})
-	var loser: Dictionary = summary.get("biggest_loser", {})
-	if not winner.is_empty():
-		mover_lines.append("Best gainer: %s %s" % [winner.get("ticker", ""), _format_change(float(winner.get("change_pct", 0.0)))])
-	if not loser.is_empty():
-		mover_lines.append("Weakest name: %s %s" % [loser.get("ticker", ""), _format_change(float(loser.get("change_pct", 0.0)))])
-
-	for row_value in summary.get("top_movers", []):
-		var row: Dictionary = row_value
-		mover_lines.append("Mover: %s %s" % [row.get("ticker", ""), _format_change(float(row.get("change_pct", 0.0)))])
-
-	var best_accumulation: Dictionary = summary.get("best_accumulation", {})
-	if not best_accumulation.is_empty():
-		mover_lines.append("Cleanest accumulation: %s" % best_accumulation.get("ticker", ""))
-
-	var heaviest_distribution: Dictionary = summary.get("heaviest_distribution", {})
-	if not heaviest_distribution.is_empty():
-		mover_lines.append("Heaviest distribution: %s" % heaviest_distribution.get("ticker", ""))
-
-	movers_label.text = "\n".join(mover_lines)
-	reflection_label.text = _build_reflection_prompt(summary)
-	_set_label_tone(
-		review_headline_label,
-		_color_for_change(float(summary.get("portfolio_delta", 0.0)) / max(float(summary.get("portfolio_value", 1.0)), 1.0))
-	)
+	_refresh_dashboard()
 
 
 func _on_dashboard_pressed() -> void:
 	_set_active_section("dashboard")
+
+
+func _on_stock_app_pressed() -> void:
+	_set_active_app(APP_ID_STOCK)
+
+
+func _on_news_app_pressed() -> void:
+	_set_active_app(APP_ID_NEWS)
+
+
+func _on_social_app_pressed() -> void:
+	_set_active_app(APP_ID_SOCIAL)
+
+
+func _on_news_outlet_pressed(outlet_id: String) -> void:
+	selected_news_outlet_id = outlet_id
+	selected_news_article_id = ""
+	_rebuild_news_outlet_buttons(current_news_snapshot.get("outlets", []))
+	_refresh_news_article_list()
+
+
+func _on_news_article_selected(index: int) -> void:
+	var articles: Array = _current_news_feed().get("articles", [])
+	if index < 0 or index >= articles.size():
+		return
+	selected_news_article_id = str(articles[index].get("id", ""))
+	_show_news_article(articles[index])
+
+
+func _on_stock_list_tab_changed(_tab_index: int) -> void:
+	_sync_selected_company_with_active_stock_list()
+	_refresh_markets()
+	_refresh_dashboard()
+	_refresh_desktop()
+	if debug_overlay.visible:
+		_refresh_debug_overlay()
+
+
+func _on_add_watchlist_pressed() -> void:
+	if not RunState.has_active_run():
+		return
+
+	_populate_watchlist_picker()
+	watchlist_picker_dialog.popup_centered(Vector2i(720, 520))
+
+
+func _on_watchlist_picker_confirmed() -> void:
+	if watchlist_picker_list == null:
+		return
+
+	var selected_items: PackedInt32Array = watchlist_picker_list.get_selected_items()
+	if selected_items.is_empty():
+		_show_toast("Pick a stock first.", false)
+		return
+
+	var selected_index: int = int(selected_items[0])
+	if selected_index < 0 or selected_index >= watchlist_picker_company_ids.size():
+		_show_toast("Pick a valid stock first.", false)
+		return
+
+	var company_id: String = str(watchlist_picker_company_ids[selected_index])
+	var result: Dictionary = GameManager.add_company_to_watchlist(company_id)
+	_show_toast(str(result.get("message", "Watchlist updated.")), bool(result.get("success", false)))
+	if bool(result.get("success", false)):
+		if watchlist_picker_dialog != null:
+			watchlist_picker_dialog.hide()
+		selected_company_id = company_id
+		stock_list_tabs.current_tab = STOCK_LIST_TAB_WATCHLIST
+		_refresh_all()
+
+
+func _on_watchlist_picker_item_activated(index: int) -> void:
+	if watchlist_picker_list == null:
+		return
+	watchlist_picker_list.select(index)
+	_on_watchlist_picker_confirmed()
+	if watchlist_picker_dialog != null:
+		watchlist_picker_dialog.hide()
+
+
+func _on_all_stock_selected(company_id: String) -> void:
+	selected_company_id = company_id
+	_refresh_after_company_selection()
+
+
+func _on_portfolio_stock_selected(company_id: String) -> void:
+	selected_company_id = company_id
+	_refresh_after_company_selection()
+
+
+func _on_add_to_watchlist_pressed(company_id: String) -> void:
+	var result: Dictionary = GameManager.add_company_to_watchlist(company_id)
+	_show_toast(str(result.get("message", "Watchlist updated.")), bool(result.get("success", false)))
+	if bool(result.get("success", false)):
+		selected_company_id = company_id
+		_refresh_all()
+
+
+func _on_taskbar_home_pressed() -> void:
+	_set_active_app(APP_ID_DESKTOP)
+
+
+func _on_taskbar_stock_pressed() -> void:
+	_set_active_app(APP_ID_STOCK)
+
+
+func _on_taskbar_news_pressed() -> void:
+	_set_active_app(APP_ID_NEWS)
+
+
+func _on_exit_app_pressed() -> void:
+	GameManager.return_to_menu()
+
+
+func _on_app_window_minimize_pressed() -> void:
+	_set_active_app(APP_ID_DESKTOP)
+
+
+func _on_app_window_close_pressed() -> void:
+	_set_active_app(APP_ID_DESKTOP)
 
 
 func _on_markets_pressed() -> void:
@@ -657,23 +1500,42 @@ func _on_help_pressed() -> void:
 	_set_active_section("help")
 
 
+func _on_financials_previous_pressed() -> void:
+	_shift_financial_statement_selection(-1)
+
+
+func _on_financials_next_pressed() -> void:
+	_shift_financial_statement_selection(1)
+
+
 func _on_company_selected(index: int) -> void:
 	if index < 0 or index >= displayed_company_ids.size():
 		return
 
 	selected_company_id = str(displayed_company_ids[index])
-	_refresh_all()
+	_refresh_after_company_selection()
 
 
-func _on_buy_pressed() -> void:
-	var result: Dictionary = GameManager.buy_lots(selected_company_id, _selected_lots())
-	status_message = str(result.get("message", "Order finished."))
-	_show_toast(status_message, bool(result.get("success", false)))
-	_refresh_all()
+func _on_buy_side_pressed() -> void:
+	active_order_side = "buy"
+	_update_order_side_buttons()
+	if not current_trade_snapshot.is_empty():
+		_refresh_order_controls(current_trade_snapshot)
 
 
-func _on_sell_pressed() -> void:
-	var result: Dictionary = GameManager.sell_lots(selected_company_id, _selected_lots())
+func _on_sell_side_pressed() -> void:
+	active_order_side = "sell"
+	_update_order_side_buttons()
+	if not current_trade_snapshot.is_empty():
+		_refresh_order_controls(current_trade_snapshot)
+
+
+func _on_submit_order_pressed() -> void:
+	var result: Dictionary = {}
+	if active_order_side == "sell":
+		result = GameManager.sell_lots(selected_company_id, _selected_lots())
+	else:
+		result = GameManager.buy_lots(selected_company_id, _selected_lots())
 	status_message = str(result.get("message", "Order finished."))
 	_show_toast(status_message, bool(result.get("success", false)))
 	_refresh_all()
@@ -685,6 +1547,7 @@ func _show_toast(message: String, is_success: bool) -> void:
 
 	toast_message_label.text = message
 	_apply_toast_theme(is_success)
+	toast_overlay.visible = true
 	toast_panel.visible = true
 	toast_timer.stop()
 	toast_timer.start(TOAST_DURATION_SECONDS)
@@ -693,6 +1556,7 @@ func _show_toast(message: String, is_success: bool) -> void:
 func _hide_toast() -> void:
 	toast_timer.stop()
 	toast_panel.visible = false
+	toast_overlay.visible = false
 
 
 func _on_toast_close_pressed() -> void:
@@ -705,23 +1569,19 @@ func _on_next_day_pressed() -> void:
 	GameManager.advance_day()
 
 
-func _on_menu_pressed() -> void:
-	GameManager.return_to_menu()
-
-
 func _on_day_progressed(_day_index: int) -> void:
 	status_message = "Market closed."
 	_refresh_all()
 
 
 func _on_summary_ready(_summary: Dictionary) -> void:
-	_refresh_summary()
+	_refresh_dashboard()
 
 
 func _on_lot_size_changed(value: float) -> void:
 	selected_lots = max(int(round(value)), 1)
 	_refresh_sidebar()
-	_refresh_dashboard()
+	_refresh_markets()
 
 
 func _show_tutorial_if_needed() -> void:
@@ -746,17 +1606,349 @@ func _ensure_tutorial_dialog() -> void:
 	add_child(tutorial_dialog)
 
 
+func _ensure_watchlist_picker_dialog() -> void:
+	if watchlist_picker_dialog != null:
+		return
+
+	watchlist_picker_dialog = ConfirmationDialog.new()
+	watchlist_picker_dialog.name = "WatchlistPickerDialog"
+	watchlist_picker_dialog.title = "Add to Watchlist"
+	add_child(watchlist_picker_dialog)
+	watchlist_picker_dialog.confirmed.connect(_on_watchlist_picker_confirmed)
+	watchlist_picker_dialog.get_ok_button().text = "Add"
+
+	var picker_margin: MarginContainer = MarginContainer.new()
+	picker_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	picker_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	picker_margin.add_theme_constant_override("margin_left", 16)
+	picker_margin.add_theme_constant_override("margin_top", 16)
+	picker_margin.add_theme_constant_override("margin_right", 16)
+	picker_margin.add_theme_constant_override("margin_bottom", 16)
+	watchlist_picker_dialog.add_child(picker_margin)
+
+	watchlist_picker_list = ItemList.new()
+	watchlist_picker_list.name = "WatchlistPickerList"
+	watchlist_picker_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	watchlist_picker_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	watchlist_picker_list.custom_minimum_size = Vector2(640, 360)
+	watchlist_picker_list.item_activated.connect(_on_watchlist_picker_item_activated)
+	picker_margin.add_child(watchlist_picker_list)
+
+
+func _populate_watchlist_picker() -> void:
+	if watchlist_picker_list == null:
+		return
+
+	watchlist_picker_company_ids.clear()
+	watchlist_picker_list.clear()
+	var watchlist_lookup: Dictionary = {}
+	for company_id_value in GameManager.get_watchlist_company_ids():
+		watchlist_lookup[str(company_id_value)] = true
+
+	for row_value in GameManager.get_company_rows():
+		var row: Dictionary = row_value
+		var company_id: String = str(row.get("id", ""))
+		var item_text: String = _build_stock_list_line(row)
+		watchlist_picker_company_ids.append(company_id)
+		watchlist_picker_list.add_item(item_text)
+		var item_index: int = watchlist_picker_list.item_count - 1
+		watchlist_picker_list.set_item_tooltip(item_index, _watchlist_tooltip(row))
+		if watchlist_lookup.has(company_id):
+			watchlist_picker_list.set_item_disabled(item_index, true)
+
+	if watchlist_picker_list.item_count > 0:
+		for item_index in range(watchlist_picker_list.item_count):
+			if watchlist_picker_list.is_item_disabled(item_index):
+				continue
+			watchlist_picker_list.select(item_index)
+			break
+
+
 func _build_tutorial_text() -> String:
-	return "Open Markets and pick one stock first.\n\nThen return to Dashboard to read the setup, check the broker flow, size the order in lots, and use the navbar to advance the day.\n\nPortfolio keeps your holdings and trade history together.\n\nDifficulty: %s." % GameManager.get_current_difficulty_label()
+	return "Open the STOCKBOT app from the desktop, then pick one stock first.\n\nUse the Chart, Key Stats, Financials, Analyzer, or Profile tabs to inspect the setup, size the order from the right-side ticket, then use the navbar to advance the day.\n\nDashboard is now overview-only, while Portfolio keeps your holdings and trade history together.\n\nDifficulty: %s." % GameManager.get_current_difficulty_label()
 
 
 func _build_help_text() -> String:
-	return "OVERVIEW\nThe game screen is split into modular views so you can move sections around more easily later.\nSidebar sections now swap self-contained views instead of one giant screen.\n\nOBJECTIVE\nFind the clearest setup, size lightly, then learn from the close.\n\nSECTIONS\n%s\n\n%s\n\n%s\n\nWORKFLOW\n1. Open Markets and choose a stock.\n2. Return to Dashboard to read the setup.\n3. Size the order in lots.\n4. Advance the day.\n5. Review the close.\n\nNOTES\nUse sector context to decide whether a stock is moving with its group or fighting it.\nNewest fills appear first in Trade History so you can audit lots, fees, cash impact, and realized P/L.\n\nCURRENT DIFFICULTY\n%s" % [
+	return "OVERVIEW\nThe game screen is split into modular views so you can move sections around more easily later.\nSidebar sections now swap self-contained views instead of one giant screen.\n\nOBJECTIVE\nFind the clearest setup, size lightly, then learn from the close.\n\nSECTIONS\n%s\n\n%s\n\n%s\n\nWORKFLOW\n1. Start on Dashboard for the market overview.\n2. Open Trade and choose a stock.\n3. Use Chart, Key Stats, Financials, Analyzer, or Profile to inspect it.\n4. Size the order from the right-side ticket.\n5. Advance the day.\n\nNOTES\nUse sector context to decide whether a stock is moving with its group or fighting it.\nNewest fills appear first in Trade History so you can audit lots, fees, cash impact, and realized P/L.\n\nCURRENT DIFFICULTY\n%s" % [
 		_sidebar_hint_for_section("dashboard"),
 		_sidebar_hint_for_section("markets"),
 		_sidebar_hint_for_section("portfolio"),
 		GameManager.get_current_difficulty_label()
 	]
+
+
+func _build_debug_upcoming_events_text() -> String:
+	var lines: Array = []
+	for arc_value in GameManager.get_active_company_arcs():
+		var arc: Dictionary = arc_value
+		if str(arc.get("phase_visibility", "visible")) != "hidden":
+			continue
+
+		var next_phase: Dictionary = _next_visible_arc_phase(arc)
+		var next_phase_label: String = str(next_phase.get("label", "Visible move"))
+		var next_phase_day: int = int(next_phase.get("start_run_day", int(arc.get("phase_end_offset", 1)) + int(arc.get("start_day_index", 1))))
+		var next_phase_date: Dictionary = portfolio_trading_calendar.trade_date_for_index(max(next_phase_day, 1))
+		lines.append("%s | %s\nHidden phase: %s (%d/%d)\nNext visible: %s around %s\nTone: %s | Arc ends around %s" % [
+			str(arc.get("target_ticker", "")),
+			_format_debug_event_title(str(arc.get("event_id", ""))),
+			str(arc.get("current_phase_label", "Accumulation")),
+			int(arc.get("phase_day_index", 1)),
+			int(arc.get("phase_duration_days", 1)),
+			next_phase_label,
+			GameManager.format_trade_date(next_phase_date),
+			str(arc.get("tone", "mixed")).capitalize(),
+			GameManager.format_trade_date(portfolio_trading_calendar.trade_date_for_index(max(int(arc.get("end_day_index", 1)), 1)))
+		])
+
+	if lines.is_empty():
+		return "No hidden buildup or rumor arcs right now."
+
+	return "\n\n".join(lines)
+
+
+func _build_debug_current_events_text() -> String:
+	var lines: Array = []
+	for arc_value in GameManager.get_active_company_arcs():
+		var arc: Dictionary = arc_value
+		if str(arc.get("phase_visibility", "visible")) == "hidden":
+			continue
+
+		lines.append("%s | %s\nCurrent phase: %s (%d/%d)\nStarted: %s | Ends around %s\nTone: %s | Bias: %s" % [
+			str(arc.get("target_ticker", "")),
+			_format_debug_event_title(str(arc.get("event_id", ""))),
+			str(arc.get("current_phase_label", "Live")),
+			int(arc.get("phase_day_index", 1)),
+			int(arc.get("phase_duration_days", 1)),
+			GameManager.format_trade_date(portfolio_trading_calendar.trade_date_for_index(max(int(arc.get("start_day_index", 1)), 1))),
+			GameManager.format_trade_date(portfolio_trading_calendar.trade_date_for_index(max(int(arc.get("end_day_index", 1)), 1))),
+			str(arc.get("tone", "mixed")).capitalize(),
+			_format_change(float(arc.get("phase_sentiment_shift", 0.0)))
+		])
+
+	if lines.is_empty():
+		return "No visible company arcs are active right now."
+
+	return "\n\n".join(lines)
+
+
+func _build_debug_special_events_text() -> String:
+	var sections: Array = []
+	var active_special_events: Array = GameManager.get_active_special_events()
+	if not active_special_events.is_empty():
+		var active_lines: Array = []
+		for event_value in active_special_events:
+			var event_data: Dictionary = event_value
+			var start_date: Dictionary = event_data.get("trade_date", {}).duplicate(true)
+			var end_date: Dictionary = portfolio_trading_calendar.trade_date_for_index(max(int(event_data.get("end_day_index", 1)), 1))
+			active_lines.append("%s\nWindow: %s to %s | %d day(s) left\nSectors: %s\nBias: %s | Vol x%s\n%s" % [
+				str(event_data.get("headline", _format_debug_event_title(str(event_data.get("event_id", ""))))),
+				GameManager.format_trade_date(start_date),
+				GameManager.format_trade_date(end_date),
+				max(int(event_data.get("end_day_index", 0)) - RunState.day_index, 0),
+				_format_debug_sector_targets(
+					event_data.get("affected_sector_ids", []).duplicate(),
+					event_data.get("sector_biases", {}).duplicate(true)
+				),
+				_format_change(float(event_data.get("market_bias_shift", 0.0))),
+				String.num(float(event_data.get("volatility_multiplier", 1.0)), 2),
+				_debug_event_detail_text(event_data)
+			])
+		sections.append("ACTIVE SPECIAL ARCS\n%s" % "\n\n".join(active_lines))
+
+	var recent_lines: Array = []
+	for event_value in _recent_event_history_by_family("special", 8):
+		var event_data: Dictionary = event_value
+		recent_lines.append("Day %d | %s\nHeadline: %s\nDate: %s | Tone: %s" % [
+			int(event_data.get("day_index", 0)),
+			_format_debug_event_title(str(event_data.get("event_id", ""))),
+			str(event_data.get("headline", event_data.get("description", ""))),
+			GameManager.format_trade_date(event_data.get("trade_date", {})),
+			str(event_data.get("tone", "mixed")).capitalize()
+		])
+	if not recent_lines.is_empty():
+		sections.append("RECENT SPECIAL LOG\n%s" % "\n\n".join(recent_lines))
+
+	if sections.is_empty():
+		return "No special-event arcs are active or logged yet."
+
+	return "\n\n".join(sections)
+
+
+func _build_debug_person_events_text() -> String:
+	var recent_person_events: Array = _recent_event_history_by_family("person", 12)
+	if recent_person_events.is_empty():
+		return "No person-of-interest events have hit the tape yet."
+
+	var lines: Array = []
+	for event_value in recent_person_events:
+		var event_data: Dictionary = event_value
+		lines.append("Day %d | %s\n%s\nTarget: %s | Date: %s | Tone: %s" % [
+			int(event_data.get("day_index", 0)),
+			str(event_data.get("person_name", "Person of Interest")),
+			str(event_data.get("headline", _format_debug_event_title(str(event_data.get("event_id", ""))))),
+			_format_debug_scope_target(event_data),
+			GameManager.format_trade_date(event_data.get("trade_date", {})),
+			str(event_data.get("tone", "mixed")).capitalize()
+		])
+
+	return "\n\n".join(lines)
+
+
+func _build_debug_stock_performance_text() -> String:
+	var stock_rows: Array = GameManager.get_company_rows()
+	if stock_rows.is_empty():
+		return "No stock universe is loaded yet."
+
+	stock_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return str(a.get("ticker", "")) < str(b.get("ticker", ""))
+	)
+
+	var current_year: int = int(GameManager.get_current_trade_date().get("year", 2020))
+	var lines: Array = []
+	for row_value in stock_rows:
+		var row: Dictionary = row_value
+		lines.append("%s | Start %s | %d YTD Open %s | Current %s | Since start %s | YTD %s" % [
+			str(row.get("ticker", "")),
+			_format_currency(float(row.get("starting_price", 0.0))),
+			int(row.get("ytd_reference_year", current_year)),
+			_format_currency(float(row.get("ytd_open_price", 0.0))),
+			_format_currency(float(row.get("current_price", 0.0))),
+			_format_change(float(row.get("since_start_pct", 0.0))),
+			_format_change(float(row.get("ytd_change_pct", 0.0)))
+		])
+
+	return "\n".join(lines)
+
+
+func _build_debug_market_history_text() -> String:
+	var history: Array = GameManager.get_market_history()
+	if history.is_empty():
+		return "No market closes recorded yet. Advance the first day to build history."
+
+	var lines: Array = []
+	for history_value in history:
+		var entry: Dictionary = history_value
+		var winner: Dictionary = entry.get("biggest_winner", {})
+		var loser: Dictionary = entry.get("biggest_loser", {})
+		var trade_date: Dictionary = entry.get("trade_date", {})
+		lines.append("Day %d | %s | Market %s | Avg %s | A/D/F %d/%d/%d | Best %s %s | Worst %s %s" % [
+			int(entry.get("day_index", 0)),
+			GameManager.format_trade_date(trade_date),
+			_format_change(float(entry.get("market_sentiment", 0.0))),
+			_format_change(float(entry.get("average_change_pct", 0.0))),
+			int(entry.get("advancers", 0)),
+			int(entry.get("decliners", 0)),
+			int(entry.get("flat_count", 0)),
+			str(winner.get("ticker", "n/a")),
+			_format_change(float(winner.get("change_pct", 0.0))),
+			str(loser.get("ticker", "n/a")),
+			_format_change(float(loser.get("change_pct", 0.0)))
+		])
+
+	return "\n".join(lines)
+
+
+func _recent_event_history_by_family(event_family: String, limit: int = 10) -> Array:
+	var matches: Array = []
+	var history: Array = GameManager.get_event_history()
+	for index in range(history.size() - 1, -1, -1):
+		var entry: Dictionary = history[index]
+		if str(entry.get("event_family", "")) != event_family:
+			continue
+		matches.append(entry)
+		if matches.size() >= limit:
+			break
+	return matches
+
+
+func _format_debug_scope_target(event_data: Dictionary) -> String:
+	var scope: String = str(event_data.get("scope", "market"))
+	if scope == "company":
+		var ticker: String = str(event_data.get("target_ticker", event_data.get("target_company_id", "")))
+		var company_name: String = str(event_data.get("target_company_name", ""))
+		if company_name.is_empty():
+			return ticker
+		return "%s (%s)" % [ticker, company_name]
+	if scope == "sector":
+		return _format_debug_sector_targets([str(event_data.get("target_sector_id", ""))], {})
+	return "Market-wide"
+
+
+func _format_debug_sector_targets(affected_sector_ids: Array, sector_biases: Dictionary = {}) -> String:
+	var sector_ids: Array = []
+	for sector_id_value in affected_sector_ids:
+		var sector_id: String = str(sector_id_value)
+		if sector_id.is_empty() or sector_ids.has(sector_id):
+			continue
+		sector_ids.append(sector_id)
+	if sector_ids.is_empty():
+		for sector_id_value in sector_biases.keys():
+			var sector_id: String = str(sector_id_value)
+			if sector_id.is_empty() or sector_ids.has(sector_id):
+				continue
+			sector_ids.append(sector_id)
+	if sector_ids.is_empty():
+		return "Market-wide"
+
+	var sector_names: Array = []
+	for sector_id_value in sector_ids:
+		var sector_id: String = str(sector_id_value)
+		var sector_definition: Dictionary = DataRepository.get_sector_definition(sector_id)
+		sector_names.append(str(sector_definition.get("name", sector_id.capitalize())))
+	return ", ".join(sector_names)
+
+
+func _debug_event_detail_text(event_data: Dictionary) -> String:
+	var detail_text: String = str(event_data.get("headline_detail", ""))
+	if detail_text.is_empty():
+		detail_text = str(event_data.get("description", ""))
+	return detail_text
+
+
+func _next_visible_arc_phase(arc: Dictionary) -> Dictionary:
+	var phase_schedule: Array = arc.get("phase_schedule", []).duplicate(true)
+	var current_phase_id: String = str(arc.get("current_phase_id", ""))
+	var running_total: int = 0
+	var current_phase_index: int = -1
+
+	for phase_index in range(phase_schedule.size()):
+		var phase: Dictionary = phase_schedule[phase_index]
+		if str(phase.get("id", "")) == current_phase_id:
+			current_phase_index = phase_index
+			break
+
+	if current_phase_index == -1:
+		return {}
+
+	running_total = 0
+	for phase_index in range(phase_schedule.size()):
+		var phase: Dictionary = phase_schedule[phase_index]
+		var duration_days: int = max(int(phase.get("duration_days", 1)), 1)
+		var phase_start_offset: int = running_total + 1
+		var phase_end_offset: int = running_total + duration_days
+		if phase_index > current_phase_index and str(phase.get("visibility", "visible")) != "hidden":
+			var next_phase: Dictionary = phase.duplicate(true)
+			next_phase["start_offset"] = phase_start_offset
+			next_phase["end_offset"] = phase_end_offset
+			next_phase["start_run_day"] = int(arc.get("start_day_index", 1)) + phase_start_offset - 1
+			return next_phase
+		running_total = phase_end_offset
+
+	return {}
+
+
+func _format_debug_event_title(event_id: String) -> String:
+	if event_id.is_empty():
+		return "Unknown Event"
+
+	var words: PackedStringArray = event_id.split("_", false)
+	var parts: Array = []
+	for word_value in words:
+		var word: String = str(word_value)
+		if word.is_empty():
+			continue
+		parts.append(word.capitalize())
+	return " ".join(parts)
 
 
 func _refresh_order_controls(snapshot: Dictionary) -> void:
@@ -774,52 +1966,51 @@ func _refresh_order_controls(snapshot: Dictionary) -> void:
 	var buy_total_cost: float = float(buy_estimate.get("total_cost", 0.0))
 	var can_buy: bool = bool(buy_estimate.get("success", false)) and buy_total_cost <= available_cash + 0.0001
 	var can_sell: bool = bool(sell_estimate.get("success", false)) and max_sellable_lots >= current_lots
+	var current_price: float = float(snapshot.get("current_price", 0.0))
+	var previous_close: float = float(snapshot.get("previous_close", current_price))
+	var price_change_value: float = current_price - previous_close
+	var active_estimate: Dictionary = sell_estimate if active_order_side == "sell" else buy_estimate
+	var estimated_total: float = float(active_estimate.get("net_proceeds", 0.0)) if active_order_side == "sell" else float(active_estimate.get("total_cost", 0.0))
+	var can_submit: bool = can_sell if active_order_side == "sell" else can_buy
 
-	trade_rule_label.text = "1 lot = %d shares | Tick Rp %.0f | ARA %s (%s) | ARB %s (%s) | Buy fee %s | Sell fee %s" % [
-		lot_size,
-		float(snapshot.get("tick_size", 1.0)),
-		_format_currency(float(snapshot.get("ara_price", 0.0))),
-		str(snapshot.get("ara_label", "")),
-		_format_currency(float(snapshot.get("arb_price", 0.0))),
-		str(snapshot.get("arb_label", "")),
-		_format_rate(GameManager.get_buy_fee_rate()),
-		_format_rate(GameManager.get_sell_fee_rate())
+	order_company_name_label.text = str(snapshot.get("name", "No selection")).to_upper()
+	selection_label.text = str(snapshot.get("ticker", "-"))
+	order_price_value_label.text = _format_currency(current_price)
+	order_price_change_label.text = "%s  |  %s" % [
+		_format_signed_currency(price_change_value),
+		_format_change(float(snapshot.get("daily_change_pct", 0.0)))
 	]
-	buy_button.text = "Buy %d Lot%s" % [current_lots, "" if current_lots == 1 else "s"]
-	sell_button.text = "Sell %d Lot%s" % [current_lots, "" if current_lots == 1 else "s"]
-	buy_button.disabled = not can_buy
-	sell_button.disabled = not can_sell
-	selection_label.text = "Selected: %s at %s | Held: %d lot(s) / %d share(s)" % [
-		snapshot.get("ticker", ""),
-		_format_currency(float(snapshot.get("current_price", 0.0))),
+	order_position_label.text = "Held %d lot(s) / %d share(s)  |  Cash %s  |  %d lot(s) = %d share(s)" % [
 		lots_owned,
-		shares_owned
-	]
-
-	var preview_lines: Array = [
-		"Order preview:",
-		"%d lot(s) = %d share(s)" % [current_lots, requested_shares],
-		"Buy total: %s (gross %s + fee %s)" % [
-			_format_currency(float(buy_estimate.get("total_cost", 0.0))),
-			_format_currency(float(buy_estimate.get("gross_value", 0.0))),
-			_format_currency(float(buy_estimate.get("fee", 0.0)))
-		],
-		"Sell net: %s (gross %s - fee %s)" % [
-			_format_currency(float(sell_estimate.get("net_proceeds", 0.0))),
-			_format_currency(float(sell_estimate.get("gross_value", 0.0))),
-			_format_currency(float(sell_estimate.get("fee", 0.0)))
-		],
-		"Cash after buy: %s" % _format_currency(available_cash - buy_total_cost),
-		"Sellable lots right now: %d" % max_sellable_lots
+		shares_owned,
+		_format_currency(available_cash),
+		current_lots,
+		requested_shares
 	]
 	if odd_lot_remainder > 0:
-		preview_lines.append("Legacy odd-lot remainder: %d share(s)." % odd_lot_remainder)
+		order_position_label.text += "  |  Odd lot %d share(s)" % odd_lot_remainder
 
-	order_preview_label.text = "\n".join(preview_lines)
+	order_title_label.text = "Sell Order" if active_order_side == "sell" else "Buy Order"
+	order_price_line_edit.text = _format_currency(current_price)
+	estimated_total_value_label.text = _format_currency(estimated_total)
+	submit_order_button.text = "Submit Sell Order" if active_order_side == "sell" else "Submit Buy Order"
+	submit_order_button.disabled = not can_submit
+	buy_button.disabled = false
+	sell_button.disabled = false
+	_refresh_submit_order_button_style()
+	_update_order_side_buttons()
+	_set_label_tone(order_price_change_label, _color_for_change(float(snapshot.get("daily_change_pct", 0.0))))
+	_set_label_tone(estimated_total_value_label, COLOR_TEXT if can_submit else COLOR_MUTED)
 
 
 func _selected_lots() -> int:
 	return max(selected_lots, 1)
+
+
+func _update_order_side_buttons() -> void:
+	buy_button.set_pressed_no_signal(active_order_side == "buy")
+	sell_button.set_pressed_no_signal(active_order_side == "sell")
+	_refresh_submit_order_button_style()
 
 
 func _set_active_section(section_id: String) -> void:
@@ -836,9 +2027,146 @@ func _set_active_section(section_id: String) -> void:
 	_refresh_header()
 
 
+func _set_active_app(app_id: String) -> void:
+	var normalized_app_id: String = app_id.to_lower()
+	if normalized_app_id != APP_ID_STOCK and normalized_app_id != APP_ID_NEWS and normalized_app_id != APP_ID_SOCIAL:
+		normalized_app_id = APP_ID_DESKTOP
+
+	active_app_id = normalized_app_id
+	desktop_layer.visible = true
+	app_window_backdrop.visible = active_app_id != APP_ID_DESKTOP
+	app_window_title_bar.visible = active_app_id != APP_ID_DESKTOP
+	stock_window_container.visible = active_app_id == APP_ID_STOCK
+	app_content_margin.visible = active_app_id == APP_ID_STOCK
+	news_window.visible = active_app_id == APP_ID_NEWS
+	social_window.visible = active_app_id == APP_ID_SOCIAL
+
+	if active_app_id == APP_ID_STOCK:
+		app_window_title_label.text = "STOCKBOT"
+		call_deferred("_update_responsive_layout")
+	elif active_app_id == APP_ID_NEWS:
+		app_window_title_label.text = "News Browser"
+		_refresh_news()
+		_hide_debug_overlay()
+		_hide_toast()
+	elif active_app_id == APP_ID_SOCIAL:
+		app_window_title_label.text = "Twooter"
+		_refresh_social()
+		_hide_debug_overlay()
+		_hide_toast()
+	else:
+		app_window_title_label.text = ""
+		_hide_debug_overlay()
+		_hide_toast()
+
+	_apply_window_layout()
+	_apply_active_window_theme()
+	_refresh_desktop()
+
+
+func _apply_window_layout() -> void:
+	var window_margin_left: float = APP_WINDOW_INSET
+	var window_margin_top: float = APP_WINDOW_INSET
+	var window_margin_right: float = APP_WINDOW_INSET
+	var window_margin_bottom: float = APP_WINDOW_FRAME_BOTTOM_MARGIN
+	var social_margin_left: float = APP_WINDOW_CONTENT_MARGIN
+	var social_margin_top: float = APP_WINDOW_CONTENT_TOP_MARGIN
+	var social_margin_right: float = APP_WINDOW_CONTENT_MARGIN
+	var social_margin_bottom: float = APP_WINDOW_CONTENT_BOTTOM_MARGIN
+
+	if active_app_id == APP_ID_SOCIAL:
+		var viewport_size: Vector2 = get_viewport_rect().size
+		var social_width: float = clamp(viewport_size.x - 72.0, 340.0, SOCIAL_WINDOW_MAX_WIDTH)
+		var social_height: float = clamp(viewport_size.y - 96.0, SOCIAL_WINDOW_MIN_HEIGHT, SOCIAL_WINDOW_MAX_HEIGHT)
+		window_margin_left = max(floor((viewport_size.x - social_width) * 0.5), 16.0)
+		window_margin_right = max(viewport_size.x - window_margin_left - social_width, 16.0)
+		window_margin_top = max(floor((viewport_size.y - social_height) * 0.5), 16.0)
+		window_margin_bottom = max(viewport_size.y - window_margin_top - social_height, 16.0)
+		social_margin_left = window_margin_left + 8.0
+		social_margin_top = window_margin_top + 48.0
+		social_margin_right = window_margin_right + 8.0
+		social_margin_bottom = window_margin_bottom + 8.0
+
+	app_window_margin.add_theme_constant_override("margin_left", int(window_margin_left))
+	app_window_margin.add_theme_constant_override("margin_top", int(window_margin_top))
+	app_window_margin.add_theme_constant_override("margin_right", int(window_margin_right))
+	app_window_margin.add_theme_constant_override("margin_bottom", int(window_margin_bottom))
+	app_content_margin.offset_left = APP_WINDOW_CONTENT_MARGIN
+	app_content_margin.offset_top = APP_WINDOW_CONTENT_TOP_MARGIN
+	app_content_margin.offset_right = -APP_WINDOW_CONTENT_MARGIN
+	app_content_margin.offset_bottom = -APP_WINDOW_CONTENT_BOTTOM_MARGIN
+	app_content_margin.add_theme_constant_override("margin_left", APP_WINDOW_INNER_PADDING)
+	app_content_margin.add_theme_constant_override("margin_top", APP_WINDOW_INNER_PADDING)
+	app_content_margin.add_theme_constant_override("margin_right", APP_WINDOW_INNER_PADDING)
+	app_content_margin.add_theme_constant_override("margin_bottom", APP_WINDOW_INNER_PADDING)
+	top_bar_outer_margin.add_theme_constant_override("margin_left", 0)
+	top_bar_outer_margin.add_theme_constant_override("margin_top", 0)
+	top_bar_outer_margin.add_theme_constant_override("margin_right", 0)
+	sidebar_outer_margin.add_theme_constant_override("margin_left", 0)
+	sidebar_outer_margin.add_theme_constant_override("margin_top", 0)
+	sidebar_outer_margin.add_theme_constant_override("margin_bottom", 0)
+	news_window.add_theme_constant_override("margin_left", APP_WINDOW_CONTENT_MARGIN)
+	news_window.add_theme_constant_override("margin_top", APP_WINDOW_CONTENT_TOP_MARGIN)
+	news_window.add_theme_constant_override("margin_right", APP_WINDOW_CONTENT_MARGIN)
+	news_window.add_theme_constant_override("margin_bottom", APP_WINDOW_CONTENT_BOTTOM_MARGIN)
+	social_window.add_theme_constant_override("margin_left", int(social_margin_left))
+	social_window.add_theme_constant_override("margin_top", int(social_margin_top))
+	social_window.add_theme_constant_override("margin_right", int(social_margin_right))
+	social_window.add_theme_constant_override("margin_bottom", int(social_margin_bottom))
+	app_window_title_bar.offset_left = window_margin_left
+	app_window_title_bar.offset_top = window_margin_top
+	app_window_title_bar.offset_right = -window_margin_right
+	app_window_title_bar.offset_bottom = window_margin_top + 44.0
+	stock_window_container.offset_left = APP_WINDOW_CONTENT_MARGIN
+	stock_window_container.offset_top = APP_WINDOW_CONTENT_TOP_MARGIN
+	stock_window_container.offset_right = -APP_WINDOW_CONTENT_MARGIN
+	stock_window_container.offset_bottom = -APP_WINDOW_CONTENT_BOTTOM_MARGIN
+
+
+func _apply_active_window_theme() -> void:
+	var is_light_window: bool = active_app_id == APP_ID_NEWS or active_app_id == APP_ID_SOCIAL
+	var window_fill: Color = COLOR_WINDOW_BG if is_light_window else COLOR_STOCK_WINDOW_BG
+	var window_text: Color = COLOR_WINDOW_TEXT if is_light_window else COLOR_TEXT
+	var app_font_size: int = STOCK_APP_FONT_SIZE if active_app_id == APP_ID_STOCK else DEFAULT_APP_FONT_SIZE
+	_style_panel(app_window_panel, window_fill, 8)
+	_style_window_title_bar(app_window_title_bar, window_fill)
+	_style_panel(stock_window_container, COLOR_STOCK_WINDOW_BG, 0)
+	app_window_title_bar.add_theme_font_size_override("font_size", app_font_size)
+	_set_label_tone(app_window_title_label, window_text)
+	app_window_title_label.add_theme_color_override("font_color", window_text)
+
+
+func _sync_desktop_app_state() -> void:
+	var stock_active: bool = active_app_id == APP_ID_STOCK
+	var news_active: bool = active_app_id == APP_ID_NEWS
+	var social_active: bool = active_app_id == APP_ID_SOCIAL
+	stock_app_button.set_pressed_no_signal(stock_active)
+	news_app_button.set_pressed_no_signal(news_active)
+	social_app_button.set_pressed_no_signal(social_active)
+	taskbar_stock_button.set_pressed_no_signal(stock_active)
+	taskbar_news_button.set_pressed_no_signal(news_active)
+	taskbar_home_button.disabled = active_app_id == APP_ID_DESKTOP
+
+
+func _build_taskbar_status_text(focus_snapshot: Dictionary) -> String:
+	if active_app_id == APP_ID_STOCK:
+		if focus_snapshot.is_empty():
+			return "STOCKBOT running."
+		return "STOCKBOT live  |  Focus %s @ %s  |  Market %s" % [
+			str(focus_snapshot.get("ticker", "")),
+			_format_currency(float(focus_snapshot.get("current_price", 0.0))),
+			_format_change(RunState.market_sentiment)
+		]
+	if active_app_id == APP_ID_NEWS:
+		return "News browser open  |  Event-driven intel feed online."
+	if active_app_id == APP_ID_SOCIAL:
+		return "Twooter open  |  Tiered social feed online."
+	return "Desktop ready  |  Open STOCKBOT to trade, News to browse intel, or Twooter to scan social chatter."
+
+
 func _section_label(section_id: String) -> String:
 	if section_id == "markets":
-		return "Markets"
+		return "Trade"
 	if section_id == "portfolio":
 		return "Portfolio"
 	if section_id == "help":
@@ -848,10 +2176,10 @@ func _section_label(section_id: String) -> String:
 
 func _sidebar_hint_for_section(section_id: String) -> String:
 	if section_id == "markets":
-		return "Markets keeps the stock list and sector tape together so you can scan, compare, and pick the next focus name."
+		return "Trade keeps the stock list, chart workspace, and order ticket together so you can inspect and execute without bouncing between sections."
 	if section_id == "portfolio":
 		return "Portfolio keeps positions and trade history in one place so you can review exposure, fees, and realized P/L."
-	return "Dashboard keeps the active read together: selected company, broker flow, order sizing, and end-of-day review."
+	return "Dashboard is now overview-only, giving you the tape, macro, portfolio, and event context before you drill into Trade."
 
 
 func _format_sector_block(row: Dictionary) -> String:
@@ -866,6 +2194,88 @@ func _format_sector_block(row: Dictionary) -> String:
 		_format_change(float(row.get("strongest_change_pct", 0.0))),
 		_flow_badge(str(row.get("strongest_flow_tag", "neutral")))
 	]
+
+
+func _build_market_overview_text(macro_state: Dictionary, sector_rows: Array) -> String:
+	var positive_sectors: int = 0
+	var negative_sectors: int = 0
+	var strongest_sector_name: String = "n/a"
+	var strongest_sector_move: float = 0.0
+	var strongest_sector_found: bool = false
+
+	for row_value in sector_rows:
+		var row: Dictionary = row_value
+		var average_change_pct: float = float(row.get("average_change_pct", 0.0))
+		if average_change_pct > 0.0:
+			positive_sectors += 1
+		elif average_change_pct < 0.0:
+			negative_sectors += 1
+
+		if not strongest_sector_found or abs(average_change_pct) > abs(strongest_sector_move):
+			strongest_sector_found = true
+			strongest_sector_name = str(row.get("name", "Unknown"))
+			strongest_sector_move = average_change_pct
+
+	var flat_sectors: int = max(sector_rows.size() - positive_sectors - negative_sectors, 0)
+	return "Market tone: %s\nMacro: %s\nInflation %.1f%% | GDP %.1f%% | Employment %.1f%% | Policy %.2f%% (%+d bps)\nSector breadth: %d green | %d red | %d flat | Loudest sector %s %s" % [
+		_format_change(RunState.market_sentiment),
+		str(macro_state.get("central_bank_stance", "hold")).capitalize(),
+		float(macro_state.get("inflation_rate", 0.0)),
+		float(macro_state.get("gdp_growth", 0.0)),
+		float(macro_state.get("employment_rate", 0.0)),
+		float(macro_state.get("policy_rate", 0.0)),
+		int(macro_state.get("policy_action_bps", 0)),
+		positive_sectors,
+		negative_sectors,
+		flat_sectors,
+		strongest_sector_name,
+		_format_change(strongest_sector_move)
+	]
+
+
+func _build_dashboard_portfolio_text(portfolio: Dictionary) -> String:
+	var unrealized_pnl_pct: float = float(portfolio.get("unrealized_pnl_pct", 0.0))
+	return "Portfolio: Equity %s | Cash %s | Invested %s\nOpen P&L %s (%s)\n%s" % [
+		_format_currency(float(portfolio.get("equity", 0.0))),
+		_format_currency(float(portfolio.get("cash", 0.0))),
+		_format_currency(float(portfolio.get("invested_cost", 0.0))),
+		_format_signed_currency(float(portfolio.get("unrealized_pnl", 0.0))),
+		_format_change(unrealized_pnl_pct),
+		_build_portfolio_prompt(portfolio)
+	]
+
+
+func _build_dashboard_focus_text(snapshot: Dictionary) -> String:
+	if snapshot.is_empty():
+		return "Focus: none selected.\nOpen Trade and choose a stock from the list."
+
+	var summary: Dictionary = GameManager.get_latest_summary()
+	var summary_line: String = "No close summary yet."
+	if not summary.is_empty():
+		summary_line = str(summary.get("explanation", "No close summary yet."))
+
+	return "Focus: %s | %s | %s\n%s\nLatest close read: %s" % [
+		str(snapshot.get("ticker", "")),
+		_format_currency(float(snapshot.get("current_price", 0.0))),
+		_format_change(float(snapshot.get("daily_change_pct", 0.0))),
+		_build_setup_read(snapshot),
+		summary_line
+	]
+
+
+func _build_special_overview_text(active_special_events: Array) -> String:
+	if active_special_events.is_empty():
+		return "Live events: no active special regime.\nPerson and company arcs may still be influencing individual names behind the scenes."
+
+	var lines: Array = ["Live events:"]
+	for event_value in active_special_events:
+		var event_data: Dictionary = event_value
+		lines.append("- %s | phase %s | impact %s" % [
+			_format_debug_event_title(str(event_data.get("event_id", ""))),
+			str(event_data.get("current_phase_id", "live")).replace("_", " "),
+			_format_change(float(event_data.get("market_bias_shift", 0.0)))
+		])
+	return "\n".join(lines)
 
 
 func _format_trade_entry(trade: Dictionary) -> String:
@@ -1108,6 +2518,17 @@ func _build_review_headline(summary: Dictionary) -> String:
 	return "Flat close. The next edge comes from reading signal quality, not just activity."
 
 
+func _titleize_snake_case(value: String) -> String:
+	var words: PackedStringArray = value.split("_", false)
+	var parts: Array = []
+	for word_value in words:
+		var word: String = str(word_value)
+		if word.is_empty():
+			continue
+		parts.append(word.capitalize())
+	return " ".join(parts)
+
+
 func _watchlist_tooltip(row: Dictionary) -> String:
 	var broker_flow: Dictionary = row.get("broker_flow", {})
 	return "%s\nSector: %s\nHeld: %d lot(s) / %d share(s)\nBuyer: %s\nSeller: %s\nTape: %s" % [
@@ -1158,66 +2579,238 @@ func _set_label_tone(label: Label, color: Color) -> void:
 
 
 func _apply_visual_theme() -> void:
-	_style_panel(sidebar_panel, COLOR_PANEL_BLUE_ALT)
-	_style_panel(top_bar_panel, COLOR_PANEL_BLUE_ALT)
-	_style_panel(desk_panel, COLOR_PANEL_BLUE_ALT)
-	_style_panel(action_panel, COLOR_PANEL_GREEN)
-	_style_panel(detail_panel, COLOR_PANEL_BLUE)
-	_style_panel(broker_panel, COLOR_PANEL_BLUE_ALT)
-	_style_panel(summary_panel, COLOR_PANEL_GOLD)
-	_style_panel(watchlist_panel, COLOR_PANEL_BLUE)
-	_style_panel(sector_panel, COLOR_PANEL_BLUE_ALT)
-	_style_panel(portfolio_summary_panel, COLOR_PANEL_BLUE_ALT)
-	_style_panel(portfolio_panel, COLOR_PANEL_BLUE_ALT)
-	_style_panel(trade_history_panel, COLOR_PANEL_BLUE_ALT)
-	_style_panel(help_panel, COLOR_PANEL_BLUE_ALT)
+	_style_panel(app_window_panel, COLOR_STOCK_WINDOW_BG, 8)
+	_style_window_title_bar(app_window_title_bar, COLOR_STOCK_WINDOW_BG)
+	_style_panel(stock_window_container, COLOR_STOCK_WINDOW_BG, 0)
+	_style_panel(taskbar_panel, Color(0.0588235, 0.0823529, 0.109804, 0.96), 14)
+	_style_panel(sidebar_panel, COLOR_PANEL_BLUE_ALT, 0, 0, 1, 1, 1)
+	_style_panel(top_bar_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(overview_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(news_window_body, COLOR_WINDOW_BG, 0)
+	_style_panel(news_feed_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
+	_style_panel(news_detail_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
+	_style_panel(social_window_body, Color(0.94902, 0.956863, 0.976471, 1), 0)
+	_style_panel(action_panel, COLOR_ORDER_PANEL_BG, 0)
+	_style_panel(order_card_panel, COLOR_ORDER_CARD_BG, 0)
+	_style_panel(key_stats_panel, COLOR_PANEL_BLUE, 0)
+	_style_panel(financials_panel, COLOR_PANEL_BLUE, 0)
+	_style_panel(analyzer_panel, COLOR_PANEL_BLUE, 0)
+	_style_panel(profile_panel, COLOR_PANEL_BLUE, 0)
+	_style_panel(watchlist_panel, COLOR_PANEL_BLUE, 0)
+	_style_panel(work_area_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(portfolio_summary_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(portfolio_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(trade_history_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(help_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(debug_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(upcoming_events_panel, COLOR_PANEL_BLUE, 0)
+	_style_panel(current_events_panel, COLOR_PANEL_BLUE, 0)
+	_style_panel(special_events_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(person_events_panel, COLOR_PANEL_BLUE, 0)
+	_style_panel(stock_performance_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(market_history_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_apply_toast_theme(true)
-	_style_button(dashboard_button, Color(0.126, 0.188, 0.251, 1), COLOR_BORDER, COLOR_TEXT)
-	_style_button(markets_button, Color(0.126, 0.188, 0.251, 1), COLOR_BORDER, COLOR_TEXT)
-	_style_button(portfolio_button, Color(0.126, 0.188, 0.251, 1), COLOR_BORDER, COLOR_TEXT)
-	_style_button(help_button, Color(0.126, 0.188, 0.251, 1), COLOR_BORDER, COLOR_TEXT)
-	_style_button(back_to_menu_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT)
-	_style_button(advance_day_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT)
-	_style_button(buy_button, Color(0.117647, 0.32549, 0.239216, 1), Color(0.321569, 0.588235, 0.470588, 1), COLOR_TEXT)
-	_style_button(sell_button, Color(0.368627, 0.160784, 0.176471, 1), Color(0.709804, 0.34902, 0.372549, 1), COLOR_TEXT)
-	_style_item_list()
+	_style_desktop_icon_button(stock_app_button)
+	_style_desktop_icon_button(news_app_button)
+	_style_desktop_icon_button(social_app_button)
+	_style_desktop_icon_button(exit_app_button)
+	_style_button(taskbar_home_button, Color(0.117647, 0.168627, 0.223529, 1), COLOR_BORDER, COLOR_TEXT)
+	_style_taskbar_launch_button(taskbar_stock_button)
+	_style_taskbar_launch_button(taskbar_news_button)
+	_style_navigation_button(dashboard_button)
+	_style_navigation_button(markets_button)
+	_style_navigation_button(portfolio_button)
+	_style_navigation_button(help_button)
+	_style_tab_container(stock_list_tabs, 0)
+	_style_tab_container(work_tabs, 0)
+	_style_tab_container(debug_tabs, 0)
+	_style_button(add_watchlist_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	_style_button(advance_day_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
+	_style_button(buy_button, COLOR_ORDER_BUY, COLOR_ORDER_BUY_BORDER, COLOR_TEXT, 0)
+	_style_button(sell_button, COLOR_ORDER_SELL, COLOR_ORDER_SELL_BORDER, COLOR_TEXT, 0)
+	_style_button(submit_order_button, COLOR_ORDER_BUY, COLOR_ORDER_BUY_BORDER, COLOR_TEXT, 0)
+	_style_button(app_window_minimize_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	_style_button(app_window_close_button, Color(0.368627, 0.160784, 0.176471, 1), Color(0.709804, 0.34902, 0.372549, 1), COLOR_TEXT, 0)
+	_style_button(financials_previous_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	_style_button(financials_next_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	_style_button(debug_close_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	_style_item_list(company_list, 0, 0)
+	_style_light_item_list(news_article_list)
+	if watchlist_picker_list != null:
+		_style_item_list(watchlist_picker_list, 0, 0)
+	_style_line_input(order_price_line_edit)
+	_style_spin_input(lot_spin_box)
 	_set_label_tone(objective_label, COLOR_MUTED)
+	_set_label_tone(desktop_title_label, COLOR_DESKTOP_TEXT)
+	_set_label_tone(desktop_date_label, COLOR_DESKTOP_TEXT)
+	_set_label_tone(desktop_subtitle_label, COLOR_DESKTOP_TEXT)
+	_set_label_tone(desktop_hint_label, COLOR_DESKTOP_TEXT)
+	_set_label_tone(stock_app_label, COLOR_DESKTOP_TEXT)
+	_set_label_tone(news_app_label, COLOR_DESKTOP_TEXT)
+	_set_label_tone(social_app_label, COLOR_DESKTOP_TEXT)
+	_set_label_tone(exit_app_label, COLOR_DESKTOP_TEXT)
+	_set_label_tone(app_window_title_label, COLOR_TEXT)
+	_set_label_tone(news_title_label, COLOR_WINDOW_TEXT)
+	_set_label_tone(news_intel_status_label, Color(0.454902, 0.337255, 0.141176, 1))
+	_set_label_tone(news_feed_summary_label, COLOR_WINDOW_TEXT)
+	_set_label_tone(news_detail_outlet_label, Color(0.454902, 0.337255, 0.141176, 1))
+	_set_label_tone(news_detail_headline_label, COLOR_WINDOW_TEXT)
+	_set_label_tone(news_detail_deck_label, COLOR_WINDOW_TEXT)
+	_set_label_tone(news_detail_meta_label, Color(0.352941, 0.309804, 0.203922, 1))
+	_set_label_tone(news_detail_hint_label, Color(0.352941, 0.309804, 0.203922, 1))
+	news_detail_body.add_theme_color_override("default_color", COLOR_WINDOW_TEXT)
+	news_detail_body.add_theme_color_override("font_selected_color", COLOR_WINDOW_TEXT)
+	_set_label_tone(social_title_label, Color(0.121569, 0.160784, 0.258824, 1))
+	_set_label_tone(social_access_status_label, Color(0.196078, 0.301961, 0.486275, 1))
+	_set_label_tone(social_feed_summary_label, Color(0.121569, 0.160784, 0.258824, 1))
+	_set_label_tone(taskbar_status_label, COLOR_MUTED)
+	_set_label_tone(taskbar_clock_label, COLOR_WARNING)
 	_set_label_tone(sidebar_intro_label, COLOR_MUTED)
 	_set_label_tone(sidebar_focus_label, COLOR_ACCENT)
 	_set_label_tone(sidebar_hint_label, COLOR_MUTED)
-	_set_label_tone(status_label, COLOR_ACCENT)
-	_set_label_tone(action_hint_label, COLOR_MUTED)
-	_set_label_tone(trade_rule_label, COLOR_WARNING)
-	_set_label_tone(order_preview_label, COLOR_TEXT)
-	_set_label_tone(watchlist_summary_label, COLOR_MUTED)
-	_set_label_tone(market_hint_label, COLOR_MUTED)
-	_set_label_tone(sector_summary_label, COLOR_MUTED)
-	_set_label_tone(broker_hint_label, COLOR_MUTED)
+	_set_label_tone(overview_headline_label, COLOR_ACCENT)
+	_set_label_tone(market_overview_label, COLOR_MUTED)
+	_set_label_tone(portfolio_overview_label, COLOR_TEXT)
+	_set_label_tone(focus_overview_label, COLOR_TEXT)
+	_set_label_tone(special_overview_label, COLOR_MUTED)
+	_set_label_tone(next_step_label, COLOR_WARNING)
+	_set_label_tone(order_company_name_label, COLOR_MUTED)
+	_set_label_tone(selection_label, COLOR_TEXT)
+	_set_label_tone(order_price_value_label, COLOR_TEXT)
+	_set_label_tone(order_price_change_label, COLOR_TEXT)
+	_set_label_tone(order_position_label, COLOR_MUTED)
+	_set_label_tone(order_title_label, COLOR_TEXT)
+	_set_label_tone(estimated_total_value_label, COLOR_TEXT)
+	_set_label_tone(watchlist_empty_label, COLOR_MUTED)
+	_set_label_tone(portfolio_stocks_empty_label, COLOR_MUTED)
+	_set_label_tone(profile_tags_label, COLOR_MUTED)
+	_set_label_tone(profile_description_label, COLOR_TEXT)
 	_set_label_tone(balance_value_label, COLOR_TEXT)
 	_set_label_tone(invested_value_label, COLOR_TEXT)
 	_set_label_tone(equity_value_label, COLOR_TEXT)
 	_set_label_tone(holdings_empty_label, COLOR_MUTED)
 	_set_label_tone(trade_history_empty_label, COLOR_MUTED)
-	_set_label_tone(reflection_label, COLOR_MUTED)
-	_set_label_tone(financial_label, COLOR_MUTED)
-	_set_label_tone(support_label, COLOR_POSITIVE)
-	_set_label_tone(risk_label, COLOR_NEGATIVE)
+	_set_label_tone(debug_hint_label, COLOR_MUTED)
+	_set_label_tone(key_stats_financial_label, COLOR_MUTED)
+	_set_label_tone(financial_history_summary_label, COLOR_MUTED)
+	_set_label_tone(financial_history_empty_label, COLOR_MUTED)
+	_set_label_tone(financials_year_label, COLOR_MUTED)
+	_set_label_tone(financials_period_label, COLOR_WARNING)
+	_set_label_tone(income_statement_empty_label, COLOR_MUTED)
+	_set_label_tone(balance_sheet_empty_label, COLOR_MUTED)
+	_set_label_tone(cash_flow_empty_label, COLOR_MUTED)
+	_set_label_tone(analyzer_support_label, COLOR_POSITIVE)
+	_set_label_tone(analyzer_risk_label, COLOR_NEGATIVE)
 	help_text_label.add_theme_color_override("default_color", COLOR_TEXT)
 	help_text_label.add_theme_color_override("font_selected_color", COLOR_TEXT)
-	financial_history_label.add_theme_color_override("default_color", COLOR_TEXT)
-	financial_history_label.add_theme_color_override("font_selected_color", COLOR_TEXT)
+	upcoming_events_label.add_theme_color_override("default_color", COLOR_TEXT)
+	upcoming_events_label.add_theme_color_override("font_selected_color", COLOR_TEXT)
+	current_events_label.add_theme_color_override("default_color", COLOR_TEXT)
+	current_events_label.add_theme_color_override("font_selected_color", COLOR_TEXT)
+	special_events_label.add_theme_color_override("default_color", COLOR_TEXT)
+	special_events_label.add_theme_color_override("font_selected_color", COLOR_TEXT)
+	person_events_label.add_theme_color_override("default_color", COLOR_TEXT)
+	person_events_label.add_theme_color_override("font_selected_color", COLOR_TEXT)
+	stock_performance_label.add_theme_color_override("default_color", COLOR_TEXT)
+	stock_performance_label.add_theme_color_override("font_selected_color", COLOR_TEXT)
+	market_history_label.add_theme_color_override("default_color", COLOR_TEXT)
+	market_history_label.add_theme_color_override("font_selected_color", COLOR_TEXT)
 	toast_message_label.add_theme_color_override("font_color", COLOR_TEXT)
+	_apply_active_window_theme()
+	_refresh_financial_history_header()
 
 
-func _style_panel(panel: PanelContainer, fill_color: Color) -> void:
+func _style_desktop_icon_button(button: Button) -> void:
+	var normal: StyleBoxFlat = StyleBoxFlat.new()
+	normal.bg_color = Color(0.0156863, 0.0156863, 0.0196078, 1)
+	normal.border_color = COLOR_BORDER
+	normal.set_border_width_all(1)
+	normal.corner_radius_top_left = 0
+	normal.corner_radius_top_right = 0
+	normal.corner_radius_bottom_right = 0
+	normal.corner_radius_bottom_left = 0
+
+	var hover: StyleBoxFlat = normal.duplicate()
+	hover.bg_color = Color(0.0784314, 0.0941176, 0.117647, 1)
+
+	var pressed: StyleBoxFlat = normal.duplicate()
+	pressed.bg_color = Color(0.164706, 0.215686, 0.278431, 1)
+	pressed.border_color = COLOR_ACCENT
+	pressed.set_border_width_all(2)
+
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("focus", pressed)
+	button.add_theme_color_override("font_color", Color(0, 0, 0, 0))
+	button.add_theme_color_override("font_hover_color", Color(0, 0, 0, 0))
+	button.add_theme_color_override("font_pressed_color", Color(0, 0, 0, 0))
+
+
+func _style_taskbar_launch_button(button: Button) -> void:
+	var normal: StyleBoxFlat = StyleBoxFlat.new()
+	normal.bg_color = Color(0.101961, 0.141176, 0.180392, 1)
+	normal.border_color = COLOR_BORDER
+	normal.set_border_width_all(1)
+	normal.corner_radius_top_left = 6
+	normal.corner_radius_top_right = 6
+	normal.corner_radius_bottom_right = 6
+	normal.corner_radius_bottom_left = 6
+
+	var hover: StyleBoxFlat = normal.duplicate()
+	hover.bg_color = Color(0.14902, 0.211765, 0.27451, 1)
+
+	var pressed: StyleBoxFlat = normal.duplicate()
+	pressed.bg_color = COLOR_NAV_ACTIVE_FILL
+	pressed.border_color = COLOR_NAV_ACTIVE_BORDER
+	pressed.set_border_width_all(2)
+
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("focus", pressed)
+	button.add_theme_color_override("font_color", COLOR_TEXT)
+	button.add_theme_color_override("font_hover_color", COLOR_TEXT)
+	button.add_theme_color_override("font_pressed_color", COLOR_TEXT)
+	button.add_theme_color_override("font_focus_color", COLOR_TEXT)
+
+
+func _style_window_title_bar(panel: PanelContainer, fill_color: Color) -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = fill_color
 	style.border_color = COLOR_BORDER
 	style.set_border_width_all(1)
-	style.corner_radius_top_left = 10
-	style.corner_radius_top_right = 10
-	style.corner_radius_bottom_right = 10
-	style.corner_radius_bottom_left = 10
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_right = 0
+	style.corner_radius_bottom_left = 0
+	style.content_margin_left = 0
+	style.content_margin_top = 0
+	style.content_margin_right = 0
+	style.content_margin_bottom = 0
+	panel.add_theme_stylebox_override("panel", style)
+
+
+func _style_panel(
+	panel: PanelContainer,
+	fill_color: Color,
+	corner_radius: int = 10,
+	border_top: int = 1,
+	border_right: int = 1,
+	border_bottom: int = 1,
+	border_left: int = 1
+) -> void:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = COLOR_BORDER
+	style.border_width_top = border_top
+	style.border_width_right = border_right
+	style.border_width_bottom = border_bottom
+	style.border_width_left = border_left
+	style.corner_radius_top_left = corner_radius
+	style.corner_radius_top_right = corner_radius
+	style.corner_radius_bottom_right = corner_radius
+	style.corner_radius_bottom_left = corner_radius
 	style.content_margin_left = 0
 	style.content_margin_top = 0
 	style.content_margin_right = 0
@@ -1228,19 +2821,88 @@ func _style_panel(panel: PanelContainer, fill_color: Color) -> void:
 func _apply_toast_theme(is_success: bool) -> void:
 	var panel_color: Color = COLOR_PANEL_GREEN if is_success else Color(0.243137, 0.133333, 0.141176, 0.96)
 	var button_color: Color = panel_color.darkened(0.08)
-	_style_panel(toast_panel, panel_color)
-	_style_button(toast_close_button, button_color, COLOR_BORDER, COLOR_TEXT)
+	_style_panel(toast_panel, panel_color, 0)
+	_style_button(toast_close_button, button_color, COLOR_BORDER, COLOR_TEXT, 0)
 
 
-func _style_button(button: Button, fill_color: Color, border_color: Color, font_color: Color) -> void:
+func _style_navigation_button(button: Button) -> void:
+	var normal: StyleBoxFlat = StyleBoxFlat.new()
+	normal.bg_color = COLOR_NAV_FILL
+	normal.border_color = COLOR_BORDER
+	normal.set_border_width_all(1)
+	normal.corner_radius_top_left = 0
+	normal.corner_radius_top_right = 0
+	normal.corner_radius_bottom_right = 0
+	normal.corner_radius_bottom_left = 0
+
+	var hover: StyleBoxFlat = normal.duplicate()
+	hover.bg_color = COLOR_NAV_FILL.lightened(0.08)
+
+	var pressed: StyleBoxFlat = normal.duplicate()
+	pressed.bg_color = COLOR_NAV_ACTIVE_FILL
+	pressed.border_color = COLOR_NAV_ACTIVE_BORDER
+	pressed.set_border_width_all(2)
+
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("focus", pressed)
+	button.add_theme_color_override("font_color", COLOR_TEXT)
+	button.add_theme_color_override("font_hover_color", COLOR_TEXT)
+	button.add_theme_color_override("font_pressed_color", Color(0.972549, 0.988235, 1, 1))
+	button.add_theme_color_override("font_focus_color", Color(0.972549, 0.988235, 1, 1))
+
+
+func _style_tab_container(tab_container: TabContainer, corner_radius: int = 6) -> void:
+	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.0588235, 0.0823529, 0.109804, 0.35)
+	panel_style.set_border_width_all(0)
+
+	var tab_normal: StyleBoxFlat = StyleBoxFlat.new()
+	tab_normal.bg_color = Color(0.0823529, 0.117647, 0.156863, 0.9)
+	tab_normal.border_color = COLOR_BORDER
+	tab_normal.set_border_width_all(1)
+	tab_normal.corner_radius_top_left = corner_radius
+	tab_normal.corner_radius_top_right = corner_radius
+	tab_normal.corner_radius_bottom_left = corner_radius
+	tab_normal.corner_radius_bottom_right = corner_radius
+	tab_normal.content_margin_left = 12
+	tab_normal.content_margin_right = 12
+	tab_normal.content_margin_top = 6
+	tab_normal.content_margin_bottom = 6
+
+	var tab_selected: StyleBoxFlat = tab_normal.duplicate()
+	tab_selected.bg_color = Color(0.184314, 0.247059, 0.309804, 0.98)
+	tab_selected.border_color = COLOR_ACCENT
+	tab_selected.set_border_width_all(2)
+
+	var tab_hover: StyleBoxFlat = tab_normal.duplicate()
+	tab_hover.bg_color = Color(0.117647, 0.168627, 0.223529, 1)
+
+	tab_container.add_theme_stylebox_override("panel", panel_style)
+	tab_container.add_theme_stylebox_override("tab_unselected", tab_normal)
+	tab_container.add_theme_stylebox_override("tab_selected", tab_selected)
+	tab_container.add_theme_stylebox_override("tab_hovered", tab_hover)
+	tab_container.add_theme_color_override("font_selected_color", COLOR_TEXT)
+	tab_container.add_theme_color_override("font_unselected_color", COLOR_MUTED)
+	tab_container.add_theme_color_override("font_hovered_color", COLOR_TEXT)
+
+
+func _style_button(
+	button: Button,
+	fill_color: Color,
+	border_color: Color,
+	font_color: Color,
+	corner_radius: int = 8
+) -> void:
 	var normal: StyleBoxFlat = StyleBoxFlat.new()
 	normal.bg_color = fill_color
 	normal.border_color = border_color
 	normal.set_border_width_all(1)
-	normal.corner_radius_top_left = 8
-	normal.corner_radius_top_right = 8
-	normal.corner_radius_bottom_right = 8
-	normal.corner_radius_bottom_left = 8
+	normal.corner_radius_top_left = corner_radius
+	normal.corner_radius_top_right = corner_radius
+	normal.corner_radius_bottom_right = corner_radius
+	normal.corner_radius_bottom_left = corner_radius
 
 	var hover: StyleBoxFlat = normal.duplicate()
 	hover.bg_color = fill_color.lightened(0.1)
@@ -1257,34 +2919,130 @@ func _style_button(button: Button, fill_color: Color, border_color: Color, font_
 	button.add_theme_color_override("font_pressed_color", font_color)
 
 
-func _style_item_list() -> void:
+func _style_news_outlet_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
+	var fill_color: Color = Color(0.87451, 0.843137, 0.705882, 1) if is_unlocked else Color(0.85098, 0.835294, 0.772549, 1)
+	var border_color: Color = Color(0.47451, 0.384314, 0.227451, 1)
+	var font_color: Color = COLOR_WINDOW_TEXT if is_unlocked else Color(0.541176, 0.494118, 0.396078, 1)
+	if is_selected:
+		fill_color = Color(0.772549, 0.694118, 0.447059, 1)
+		border_color = Color(0.52549, 0.396078, 0.160784, 1)
+		font_color = Color(0.184314, 0.14902, 0.0705882, 1)
+	_style_button(button, fill_color, border_color, font_color, 0)
+
+
+func _style_social_filter_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
+	var fill_color: Color = Color(0.85098, 0.890196, 0.964706, 1) if is_unlocked else Color(0.85098, 0.866667, 0.901961, 1)
+	var border_color: Color = Color(0.337255, 0.443137, 0.647059, 1)
+	var font_color: Color = Color(0.0941176, 0.113725, 0.160784, 1) if is_unlocked else Color(0.423529, 0.470588, 0.560784, 1)
+	if is_selected:
+		fill_color = Color(0.572549, 0.713726, 0.929412, 1)
+		border_color = Color(0.254902, 0.4, 0.639216, 1)
+		font_color = Color(0.0470588, 0.0745098, 0.117647, 1)
+	_style_button(button, fill_color, border_color, font_color, 0)
+
+
+func _style_line_input(line_edit: LineEdit) -> void:
+	var normal: StyleBoxFlat = StyleBoxFlat.new()
+	normal.bg_color = COLOR_ORDER_INPUT_BG
+	normal.border_color = COLOR_BORDER
+	normal.set_border_width_all(1)
+	normal.corner_radius_top_left = 0
+	normal.corner_radius_top_right = 0
+	normal.corner_radius_bottom_right = 0
+	normal.corner_radius_bottom_left = 0
+	normal.content_margin_left = 10
+	normal.content_margin_right = 10
+	normal.content_margin_top = 8
+	normal.content_margin_bottom = 8
+
+	var focus: StyleBoxFlat = normal.duplicate()
+	focus.border_color = COLOR_ORDER_BUY_BORDER
+	focus.set_border_width_all(2)
+
+	line_edit.add_theme_stylebox_override("normal", normal)
+	line_edit.add_theme_stylebox_override("focus", focus)
+	line_edit.add_theme_stylebox_override("read_only", normal)
+	line_edit.add_theme_color_override("font_color", COLOR_TEXT)
+	line_edit.add_theme_color_override("font_placeholder_color", COLOR_MUTED)
+	line_edit.add_theme_color_override("font_uneditable_color", COLOR_TEXT)
+	line_edit.alignment = HORIZONTAL_ALIGNMENT_LEFT
+
+
+func _style_spin_input(spin_box: SpinBox) -> void:
+	var line_edit: LineEdit = spin_box.get_line_edit()
+	if line_edit != null:
+		_style_line_input(line_edit)
+		line_edit.placeholder_text = "Quantity"
+
+
+func _refresh_submit_order_button_style() -> void:
+	if active_order_side == "sell":
+		_style_button(submit_order_button, COLOR_ORDER_SELL, COLOR_ORDER_SELL_BORDER, COLOR_TEXT, 0)
+	else:
+		_style_button(submit_order_button, COLOR_ORDER_BUY, COLOR_ORDER_BUY_BORDER, COLOR_TEXT, 0)
+
+
+func _style_stock_list_row_button(button: Button, is_selected: bool) -> void:
+	var fill_color: Color = COLOR_NAV_ACTIVE_FILL if is_selected else Color(0.0823529, 0.117647, 0.156863, 0.98)
+	var border_color: Color = COLOR_NAV_ACTIVE_BORDER if is_selected else COLOR_BORDER
+	_style_button(button, fill_color, border_color, COLOR_TEXT, 0)
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+
+
+func _style_light_item_list(item_list: ItemList) -> void:
+	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.980392, 0.976471, 0.921569, 1)
+	panel_style.border_color = Color(0.572549, 0.482353, 0.309804, 0.8)
+	panel_style.set_border_width_all(1)
+	panel_style.corner_radius_top_left = 0
+	panel_style.corner_radius_top_right = 0
+	panel_style.corner_radius_bottom_right = 0
+	panel_style.corner_radius_bottom_left = 0
+
+	var cursor_style: StyleBoxFlat = StyleBoxFlat.new()
+	cursor_style.bg_color = Color(0.835294, 0.764706, 0.529412, 0.52)
+	cursor_style.border_color = Color(0.52549, 0.396078, 0.160784, 1)
+	cursor_style.set_border_width_all(1)
+	cursor_style.corner_radius_top_left = 0
+	cursor_style.corner_radius_top_right = 0
+	cursor_style.corner_radius_bottom_right = 0
+	cursor_style.corner_radius_bottom_left = 0
+
+	item_list.add_theme_stylebox_override("panel", panel_style)
+	item_list.add_theme_stylebox_override("panel_focus", panel_style)
+	item_list.add_theme_stylebox_override("cursor", cursor_style)
+	item_list.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	item_list.add_theme_color_override("font_selected_color", COLOR_WINDOW_TEXT)
+
+
+func _style_item_list(item_list: ItemList, panel_radius: int = 8, cursor_radius: int = 6) -> void:
 	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.0588235, 0.0823529, 0.109804, 0.98)
 	panel_style.border_color = COLOR_BORDER
 	panel_style.set_border_width_all(1)
-	panel_style.corner_radius_top_left = 8
-	panel_style.corner_radius_top_right = 8
-	panel_style.corner_radius_bottom_right = 8
-	panel_style.corner_radius_bottom_left = 8
+	panel_style.corner_radius_top_left = panel_radius
+	panel_style.corner_radius_top_right = panel_radius
+	panel_style.corner_radius_bottom_right = panel_radius
+	panel_style.corner_radius_bottom_left = panel_radius
 
 	var cursor_style: StyleBoxFlat = StyleBoxFlat.new()
 	cursor_style.bg_color = Color(0.239216, 0.407843, 0.572549, 0.7)
 	cursor_style.border_color = COLOR_ACCENT
 	cursor_style.set_border_width_all(1)
-	cursor_style.corner_radius_top_left = 6
-	cursor_style.corner_radius_top_right = 6
-	cursor_style.corner_radius_bottom_right = 6
-	cursor_style.corner_radius_bottom_left = 6
+	cursor_style.corner_radius_top_left = cursor_radius
+	cursor_style.corner_radius_top_right = cursor_radius
+	cursor_style.corner_radius_bottom_right = cursor_radius
+	cursor_style.corner_radius_bottom_left = cursor_radius
 
-	company_list.add_theme_stylebox_override("panel", panel_style)
-	company_list.add_theme_stylebox_override("panel_focus", panel_style)
-	company_list.add_theme_stylebox_override("cursor", cursor_style)
-	company_list.add_theme_stylebox_override("cursor_unfocused", cursor_style)
-	company_list.add_theme_color_override("font_color", COLOR_TEXT)
-	company_list.add_theme_color_override("font_selected_color", COLOR_TEXT)
-	company_list.add_theme_color_override("guide_color", Color(0, 0, 0, 0))
-	company_list.add_theme_constant_override("h_separation", 6)
-	company_list.add_theme_constant_override("v_separation", 6)
+	item_list.add_theme_stylebox_override("panel", panel_style)
+	item_list.add_theme_stylebox_override("panel_focus", panel_style)
+	item_list.add_theme_stylebox_override("cursor", cursor_style)
+	item_list.add_theme_stylebox_override("cursor_unfocused", cursor_style)
+	item_list.add_theme_color_override("font_color", COLOR_TEXT)
+	item_list.add_theme_color_override("font_selected_color", COLOR_TEXT)
+	item_list.add_theme_color_override("guide_color", Color(0, 0, 0, 0))
+	item_list.add_theme_constant_override("h_separation", 6)
+	item_list.add_theme_constant_override("v_separation", 6)
 
 
 func _format_currency(value: float) -> String:
@@ -1344,7 +3102,7 @@ func _format_financial_block(financials: Dictionary) -> String:
 	]
 
 
-func _format_financial_history_block(financial_history: Array, financials: Dictionary) -> String:
+func _format_financial_history_summary(financial_history: Array, financials: Dictionary) -> String:
 	if financial_history.is_empty():
 		return "Generated history unavailable for this run."
 
@@ -1352,33 +3110,306 @@ func _format_financial_history_block(financial_history: Array, financials: Dicti
 	var last_year: Dictionary = financial_history[financial_history.size() - 1]
 	var start_year: int = int(first_year.get("year", financials.get("history_start_year", 0)))
 	var end_year: int = int(last_year.get("year", financials.get("history_end_year", start_year)))
-	var lines: Array = [
-		"GENERATED %d-%d HISTORY" % [start_year, end_year],
-		"Rev CAGR %s  |  Earn CAGR %s  |  Implied price %s -> %s" % [
-			_format_signed_percent_value(float(financials.get("revenue_cagr_10y", 0.0))),
-			_format_signed_percent_value(float(financials.get("earnings_cagr_10y", 0.0))),
-			_format_last_price(float(first_year.get("implied_share_price", 0.0))),
-			_format_last_price(float(last_year.get("implied_share_price", 0.0)))
-		]
+	return "Generated %d-%d history  |  Rev CAGR %s  |  Earn CAGR %s  |  Implied price %s -> %s" % [
+		start_year,
+		end_year,
+		_format_signed_percent_value(float(financials.get("revenue_cagr_10y", 0.0))),
+		_format_signed_percent_value(float(financials.get("earnings_cagr_10y", 0.0))),
+		_format_last_price(float(first_year.get("implied_share_price", 0.0))),
+		_format_last_price(float(last_year.get("implied_share_price", 0.0)))
 	]
 
-	for history_entry_value in financial_history:
-		var history_entry: Dictionary = history_entry_value
-		lines.append("")
-		lines.append("%d | Rev %s | NI %s | Px %s" % [
-			int(history_entry.get("year", 0)),
-			_format_compact_currency(float(history_entry.get("revenue", 0.0))),
-			_format_compact_currency(float(history_entry.get("net_income", 0.0))),
-			_format_last_price(float(history_entry.get("implied_share_price", 0.0)))
-		])
-		lines.append("Margin %s | ROE %s | D/E %s | Earn YoY %s" % [
-			_format_percent_value(float(history_entry.get("net_profit_margin", 0.0))),
-			_format_percent_value(float(history_entry.get("roe", 0.0))),
-			_format_multiple(float(history_entry.get("debt_to_equity", 0.0))),
-			_format_signed_percent_value(float(history_entry.get("earnings_growth_yoy", 0.0)))
-		])
 
-	return "\n".join(lines)
+func _refresh_financial_history_header() -> void:
+	if financial_history_header_row == null:
+		return
+	if financial_history_header_row.get_child_count() > 0:
+		return
+
+	financial_history_header_row.add_child(_build_table_cell(
+		"Year",
+		FINANCIAL_HISTORY_YEAR_WIDTH,
+		COLOR_WARNING
+	))
+	financial_history_header_row.add_child(_build_table_cell(
+		"Revenue",
+		FINANCIAL_HISTORY_REVENUE_WIDTH,
+		COLOR_WARNING,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	financial_history_header_row.add_child(_build_table_cell(
+		"NI",
+		FINANCIAL_HISTORY_NET_INCOME_WIDTH,
+		COLOR_WARNING,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	financial_history_header_row.add_child(_build_table_cell(
+		"Margin",
+		FINANCIAL_HISTORY_MARGIN_WIDTH,
+		COLOR_WARNING,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	financial_history_header_row.add_child(_build_table_cell(
+		"ROE",
+		FINANCIAL_HISTORY_ROE_WIDTH,
+		COLOR_WARNING,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	financial_history_header_row.add_child(_build_table_cell(
+		"D/E",
+		FINANCIAL_HISTORY_DEBT_WIDTH,
+		COLOR_WARNING,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	financial_history_header_row.add_child(_build_table_cell(
+		"Price",
+		FINANCIAL_HISTORY_PRICE_WIDTH,
+		COLOR_WARNING,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+
+
+func _refresh_financial_history_table(financial_history: Array, _financials: Dictionary) -> void:
+	if financial_history_rows_vbox == null or financial_history_empty_label == null:
+		return
+
+	_clear_dynamic_rows(financial_history_rows_vbox, financial_history_empty_label)
+	financial_history_empty_label.visible = financial_history.is_empty()
+	if financial_history.is_empty():
+		financial_history_empty_label.text = "Generated history unavailable."
+		return
+
+	for history_index in range(financial_history.size() - 1, -1, -1):
+		var history_entry: Dictionary = financial_history[history_index]
+		financial_history_rows_vbox.add_child(_build_financial_history_row(history_entry))
+
+
+func _build_financial_history_row(history_entry: Dictionary) -> Control:
+	var row_wrap: VBoxContainer = VBoxContainer.new()
+	row_wrap.add_theme_constant_override("separation", 4)
+
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row_wrap.add_child(row)
+
+	row.add_child(_build_table_cell(
+		str(int(history_entry.get("year", 0))),
+		FINANCIAL_HISTORY_YEAR_WIDTH,
+		COLOR_TEXT
+	))
+	row.add_child(_build_table_cell(
+		_format_compact_currency(float(history_entry.get("revenue", 0.0))),
+		FINANCIAL_HISTORY_REVENUE_WIDTH,
+		COLOR_TEXT,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	row.add_child(_build_table_cell(
+		_format_compact_currency(float(history_entry.get("net_income", 0.0))),
+		FINANCIAL_HISTORY_NET_INCOME_WIDTH,
+		COLOR_TEXT,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	row.add_child(_build_table_cell(
+		_format_percent_value(float(history_entry.get("net_profit_margin", 0.0))),
+		FINANCIAL_HISTORY_MARGIN_WIDTH,
+		COLOR_TEXT,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	row.add_child(_build_table_cell(
+		_format_percent_value(float(history_entry.get("roe", 0.0))),
+		FINANCIAL_HISTORY_ROE_WIDTH,
+		COLOR_TEXT,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	row.add_child(_build_table_cell(
+		_format_multiple(float(history_entry.get("debt_to_equity", 0.0))),
+		FINANCIAL_HISTORY_DEBT_WIDTH,
+		COLOR_TEXT,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	row.add_child(_build_table_cell(
+		_format_last_price(float(history_entry.get("implied_share_price", 0.0))),
+		FINANCIAL_HISTORY_PRICE_WIDTH,
+		COLOR_TEXT,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+
+	var separator: HSeparator = HSeparator.new()
+	row_wrap.add_child(separator)
+	return row_wrap
+
+
+func _format_statement_year_label(financial_statement_snapshot: Dictionary) -> String:
+	if financial_statement_snapshot.is_empty():
+		return "Derived financial statements unavailable."
+
+	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
+	if quarterly_statements.is_empty():
+		return "Derived %s statements  |  simplified learning model built from the generated company history." % str(
+			financial_statement_snapshot.get("statement_period_label", "latest")
+		)
+
+	return "%d derived quarters  |  %s -> %s  |  simplified learning model built from generated company history." % [
+		quarterly_statements.size(),
+		str(financial_statement_snapshot.get("history_start_period_label", "Q1 2010")),
+		str(financial_statement_snapshot.get("history_end_period_label", "Q4 2019"))
+	]
+
+
+func _sync_financial_statement_selection(company_id: String, financial_statement_snapshot: Dictionary) -> void:
+	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
+	if company_id != selected_financial_statement_company_id:
+		selected_financial_statement_company_id = company_id
+		selected_financial_statement_index = quarterly_statements.size() - 1
+
+	if quarterly_statements.is_empty():
+		selected_financial_statement_index = -1
+		return
+
+	selected_financial_statement_index = clampi(
+		selected_financial_statement_index,
+		0,
+		quarterly_statements.size() - 1
+	)
+
+
+func _shift_financial_statement_selection(offset: int) -> void:
+	if selected_company_id.is_empty():
+		return
+
+	var financial_statement_snapshot: Dictionary = current_trade_snapshot.get("financial_statement_snapshot", {})
+	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
+	if quarterly_statements.is_empty():
+		return
+
+	_sync_financial_statement_selection(selected_company_id, financial_statement_snapshot)
+	selected_financial_statement_index = clampi(
+		selected_financial_statement_index + offset,
+		0,
+		quarterly_statements.size() - 1
+	)
+	financials_year_label.text = _format_statement_year_label(financial_statement_snapshot)
+	_refresh_statement_sections(financial_statement_snapshot)
+
+
+func _selected_statement_period(financial_statement_snapshot: Dictionary) -> Dictionary:
+	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
+	if quarterly_statements.is_empty():
+		return financial_statement_snapshot
+
+	var safe_index: int = quarterly_statements.size() - 1
+	if selected_financial_statement_index >= 0:
+		safe_index = clampi(selected_financial_statement_index, 0, quarterly_statements.size() - 1)
+	return quarterly_statements[safe_index]
+
+
+func _refresh_statement_navigation(financial_statement_snapshot: Dictionary) -> void:
+	if financials_period_label == null or financials_previous_button == null or financials_next_button == null:
+		return
+
+	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
+	if quarterly_statements.is_empty():
+		financials_period_label.text = "Viewing latest available period."
+		financials_previous_button.disabled = true
+		financials_next_button.disabled = true
+		return
+
+	var selected_period: Dictionary = _selected_statement_period(financial_statement_snapshot)
+	var selected_position: int = clampi(selected_financial_statement_index, 0, quarterly_statements.size() - 1)
+	financials_period_label.text = "Viewing %s  |  %d / %d" % [
+		str(selected_period.get("statement_period_label", "latest")),
+		selected_position + 1,
+		quarterly_statements.size()
+	]
+	financials_previous_button.disabled = selected_position <= 0
+	financials_next_button.disabled = selected_position >= quarterly_statements.size() - 1
+
+
+func _refresh_statement_sections(financial_statement_snapshot: Dictionary) -> void:
+	_refresh_statement_navigation(financial_statement_snapshot)
+	if financial_statement_snapshot.is_empty():
+		_refresh_statement_section(income_statement_rows_vbox, income_statement_empty_label, [])
+		_refresh_statement_section(balance_sheet_rows_vbox, balance_sheet_empty_label, [])
+		_refresh_statement_section(cash_flow_rows_vbox, cash_flow_empty_label, [])
+		return
+
+	var selected_period: Dictionary = _selected_statement_period(financial_statement_snapshot)
+	_refresh_statement_section(
+		income_statement_rows_vbox,
+		income_statement_empty_label,
+		selected_period.get("income_statement", [])
+	)
+	_refresh_statement_section(
+		balance_sheet_rows_vbox,
+		balance_sheet_empty_label,
+		selected_period.get("balance_sheet", [])
+	)
+	_refresh_statement_section(
+		cash_flow_rows_vbox,
+		cash_flow_empty_label,
+		selected_period.get("cash_flow", [])
+	)
+
+
+func _refresh_statement_section(rows_vbox: VBoxContainer, empty_label: Label, lines: Array) -> void:
+	if rows_vbox == null or empty_label == null:
+		return
+
+	_clear_dynamic_rows(rows_vbox, empty_label)
+	empty_label.visible = lines.is_empty()
+	if lines.is_empty():
+		return
+
+	for line_value in lines:
+		var line_item: Dictionary = line_value
+		rows_vbox.add_child(_build_statement_row(line_item))
+
+
+func _build_statement_row(line_item: Dictionary) -> Control:
+	var row_wrap: VBoxContainer = VBoxContainer.new()
+	row_wrap.add_theme_constant_override("separation", 4)
+
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row_wrap.add_child(row)
+
+	row.add_child(_build_table_cell(
+		str(line_item.get("label", "")),
+		STATEMENT_LABEL_WIDTH,
+		COLOR_TEXT,
+		true
+	))
+	row.add_child(_build_table_cell(
+		_format_statement_value(line_item),
+		STATEMENT_VALUE_WIDTH,
+		COLOR_TEXT,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+
+	var separator: HSeparator = HSeparator.new()
+	row_wrap.add_child(separator)
+	return row_wrap
+
+
+func _format_statement_value(line_item: Dictionary) -> String:
+	var line_format: String = str(line_item.get("format", "currency"))
+	var value: float = float(line_item.get("value", 0.0))
+	if line_format == "shares":
+		return _format_grouped_integer(int(round(value)))
+	return _format_compact_currency(value)
 
 
 func _format_compact_currency(value: float) -> String:
@@ -1390,6 +3421,21 @@ func _format_compact_currency(value: float) -> String:
 	if absolute_value >= 1000000.0:
 		return "Rp %sM" % String.num(value / 1000000.0, 2)
 	return _format_currency(value)
+
+
+func _format_grouped_integer(value: int) -> String:
+	var negative: bool = value < 0
+	var digits: String = str(abs(value))
+	var groups: Array = []
+	while digits.length() > 3:
+		groups.push_front(digits.substr(digits.length() - 3, 3))
+		digits = digits.substr(0, digits.length() - 3)
+	if not digits.is_empty():
+		groups.push_front(digits)
+	var grouped_value: String = ",".join(groups)
+	if grouped_value.is_empty():
+		grouped_value = "0"
+	return "-%s" % grouped_value if negative else grouped_value
 
 
 func _format_percent_value(value: float) -> String:

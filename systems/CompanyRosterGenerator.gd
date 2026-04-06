@@ -351,6 +351,7 @@ func generate_roster(
 			"anchors": _build_anchors(template, sector_id, run_seed, company_index)
 		})
 
+	_apply_nominal_price_profiles(generated_definitions, run_seed)
 	return generated_definitions
 
 
@@ -629,13 +630,31 @@ func _build_anchors(template: Dictionary, sector_id: String, run_seed: int, comp
 		0.05,
 		1.70
 	)
-	var base_price: float = clamp(
-		float(template_anchors.get("base_price", 120.0)) *
-		(1.0 + float(sector_bias.get("price", 0.0))) *
-		rng.randf_range(0.78, 1.28),
-		50.0,
-		500.0
+	var market_cap_trillions: float = market_cap / 1000000000000.0
+	var size_score: float = clamp((market_cap_trillions - 1.4) / 4.4, 0.0, 1.0)
+	var float_score: float = clamp((free_float_pct - 24.0) / 26.0, 0.0, 1.0)
+	var financial_score: float = clamp(
+		(((quality - 50.0) / 38.0) * 0.40) +
+		(((net_profit_margin - 5.0) / 10.0) * 0.34) +
+		((1.0 - (debt_to_equity / 1.70)) * 0.26),
+		0.0,
+		1.0
 	)
+	var premium_score: float = clamp(
+		(size_score * 0.46) +
+		(financial_score * 0.34) +
+		(float_score * 0.20),
+		0.0,
+		1.0
+	)
+	var base_price: float = float(template_anchors.get("base_price", 120.0))
+	base_price *= (1.0 + float(sector_bias.get("price", 0.0))) * rng.randf_range(0.80, 1.26)
+	base_price *= lerp(1.0, 6.6, premium_score)
+	base_price = max(
+		base_price,
+		lerp(70.0, 1400.0, premium_score * clamp((financial_score + float_score) * 0.55, 0.18, 1.0))
+	)
+	base_price = clamp(base_price, 50.0, 2400.0)
 	var turnover_ratio: float = clamp(
 		0.0010 +
 		((growth / 100.0) * 0.0008) +
@@ -659,6 +678,297 @@ func _build_anchors(template: Dictionary, sector_id: String, run_seed: int, comp
 		"net_profit_margin": _round_to_step(net_profit_margin, 0.1),
 		"debt_to_equity": _round_to_step(debt_to_equity, 0.01)
 	}
+
+
+func _apply_nominal_price_profiles(generated_definitions: Array, run_seed: int) -> void:
+	if generated_definitions.is_empty():
+		return
+
+	var band_targets: Dictionary = _nominal_price_band_targets(generated_definitions.size())
+	var ranked_indices: Array = _rank_definition_indices_for_nominal_price(generated_definitions)
+	var assigned_indices := {}
+	var profile_slot: int = 0
+
+	for band_name_value in ["flagship", "elite", "premium"]:
+		var band_name: String = str(band_name_value)
+		var band_count: int = int(band_targets.get(band_name, 0))
+		if band_count <= 0:
+			continue
+
+		var assigned_band_count: int = 0
+		for ranked_index_value in ranked_indices:
+			var ranked_index: int = int(ranked_index_value)
+			if assigned_indices.has(ranked_index):
+				continue
+
+			_apply_high_price_profile(generated_definitions[ranked_index], band_name, run_seed, profile_slot)
+			assigned_indices[ranked_index] = true
+			assigned_band_count += 1
+			profile_slot += 1
+			if assigned_band_count >= band_count:
+				break
+
+	for definition_index in range(generated_definitions.size()):
+		if assigned_indices.has(definition_index):
+			continue
+		_apply_default_capital_structure(generated_definitions[definition_index], run_seed, definition_index)
+
+
+func _nominal_price_band_targets(company_count: int) -> Dictionary:
+	if company_count >= 200:
+		return {
+			"premium": 18,
+			"elite": 7,
+			"flagship": 4
+		}
+	if company_count >= 100:
+		return {
+			"premium": 10,
+			"elite": 4,
+			"flagship": 2
+		}
+	if company_count >= 50:
+		return {
+			"premium": 5,
+			"elite": 2,
+			"flagship": 1
+		}
+	if company_count >= 20:
+		return {
+			"premium": 2,
+			"elite": 1,
+			"flagship": 0
+		}
+	return {
+		"premium": 1,
+		"elite": 0,
+		"flagship": 0
+	}
+
+
+func _rank_definition_indices_for_nominal_price(generated_definitions: Array) -> Array:
+	var scored_indices: Array = []
+	for definition_index in range(generated_definitions.size()):
+		scored_indices.append({
+			"index": definition_index,
+			"score": _nominal_price_score(generated_definitions[definition_index])
+		})
+
+	scored_indices.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return float(left.get("score", 0.0)) > float(right.get("score", 0.0))
+	)
+
+	var ranked_indices: Array = []
+	for scored_entry_value in scored_indices:
+		ranked_indices.append(int(scored_entry_value.get("index", 0)))
+	return ranked_indices
+
+
+func _nominal_price_score(definition: Dictionary) -> float:
+	var anchors: Dictionary = definition.get("anchors", {})
+	var narrative_tags: Array = definition.get("narrative_tags", []).duplicate()
+	var market_cap: float = float(anchors.get("market_cap", 1000000000000.0))
+	var quality: float = float(anchors.get("quality", 58.0))
+	var margin: float = float(anchors.get("net_profit_margin", 7.5))
+	var debt_to_equity: float = float(anchors.get("debt_to_equity", 0.75))
+	var free_float_pct: float = float(anchors.get("free_float_pct", 28.0))
+	var score: float = (
+		log(max(market_cap, 1000000000.0)) * 13.0 +
+		quality * 0.95 +
+		margin * 4.4 +
+		free_float_pct * 0.32 -
+		debt_to_equity * 18.0
+	)
+	if "institution_quality" in narrative_tags:
+		score += 14.0
+	if "supportive_balance_sheet" in narrative_tags:
+		score += 8.0
+	if "foreign_watchlist" in narrative_tags:
+		score += 6.0
+	if "quiet_execution" in narrative_tags:
+		score += 4.0
+	if "stealth_interest" in narrative_tags:
+		score += max(18.0 - free_float_pct, 0.0) * 0.80
+	if "retail_favorite" in narrative_tags or "narrative_hot" in narrative_tags:
+		score += max(22.0 - free_float_pct, 0.0) * 0.44
+	return score
+
+
+func _apply_high_price_profile(definition: Dictionary, band_name: String, run_seed: int, profile_slot: int) -> void:
+	var anchors: Dictionary = definition.get("anchors", {}).duplicate(true)
+	var rng: RandomNumberGenerator = _rng_for(run_seed, "nominal_profile_%s_%d" % [band_name, profile_slot])
+	var style: String = _preferred_high_price_style(definition, band_name)
+	var band_range: Dictionary = _band_range_for_style(band_name, style)
+	var floor_value: float = rng.randf_range(
+		float(band_range.get("floor_min", 5000.0)),
+		float(band_range.get("floor_max", 7000.0))
+	)
+	var ceiling_value: float = rng.randf_range(
+		max(float(band_range.get("ceiling_min", floor_value * 1.25)), floor_value * 1.15),
+		max(float(band_range.get("ceiling_max", floor_value * 1.45)), floor_value * 1.25)
+	)
+	var target_anchor_price: float = rng.randf_range(floor_value * 0.94, ceiling_value * 0.88)
+	var market_cap: float = float(anchors.get("market_cap", 1000000000000.0))
+	var current_avg_daily_value: float = float(anchors.get("avg_daily_value", 1000000000.0))
+
+	anchors["capital_structure_style"] = style
+	anchors["target_price_floor"] = _round_to_step(floor_value, 5.0)
+	anchors["target_price_ceiling"] = _round_to_step(ceiling_value, 5.0)
+	anchors["base_price"] = round(clamp(target_anchor_price, 50.0, 45000.0))
+
+	match style:
+		"institutional_premium":
+			anchors["free_float_pct"] = _round_to_step(
+				clamp(max(float(anchors.get("free_float_pct", 28.0)), rng.randf_range(24.0, 46.0)), 22.0, 55.0),
+				0.1
+			)
+			anchors["owner_concentration_pct"] = _round_to_step(rng.randf_range(38.0, 60.0), 0.1)
+			anchors["avg_daily_value"] = _round_to_step(
+				max(current_avg_daily_value, market_cap * rng.randf_range(0.0023, 0.0068)),
+				10000000.0
+			)
+		"owner_controlled":
+			anchors["free_float_pct"] = _round_to_step(
+				clamp(min(float(anchors.get("free_float_pct", 18.0)), rng.randf_range(7.0, 16.0)), 7.0, 18.0),
+				0.1
+			)
+			anchors["owner_concentration_pct"] = _round_to_step(rng.randf_range(72.0, 90.0), 0.1)
+			anchors["avg_daily_value"] = _round_to_step(
+				max(current_avg_daily_value, market_cap * rng.randf_range(0.0010, 0.0038)),
+				10000000.0
+			)
+		_:
+			anchors["owner_concentration_pct"] = _round_to_step(
+				clamp(100.0 - float(anchors.get("free_float_pct", 28.0)) + rng.randf_range(-6.0, 6.0), 35.0, 78.0),
+				0.1
+			)
+
+	definition["anchors"] = anchors
+
+
+func _preferred_high_price_style(definition: Dictionary, band_name: String) -> String:
+	var anchors: Dictionary = definition.get("anchors", {})
+	var narrative_tags: Array = definition.get("narrative_tags", []).duplicate()
+	var market_cap: float = float(anchors.get("market_cap", 1000000000000.0))
+	var free_float_pct: float = float(anchors.get("free_float_pct", 28.0))
+	var quality: float = float(anchors.get("quality", 58.0))
+	var margin: float = float(anchors.get("net_profit_margin", 7.5))
+	var institutional_score: float = (
+		clamp((market_cap - 1800000000000.0) / 4200000000000.0, 0.0, 1.0) * 0.42 +
+		clamp((free_float_pct - 24.0) / 22.0, 0.0, 1.0) * 0.24 +
+		clamp((quality - 58.0) / 24.0, 0.0, 1.0) * 0.20 +
+		clamp((margin - 7.0) / 7.0, 0.0, 1.0) * 0.14
+	)
+	var scarcity_score: float = (
+		clamp((market_cap - 1100000000000.0) / 3200000000000.0, 0.0, 1.0) * 0.30 +
+		clamp((18.0 - free_float_pct) / 12.0, 0.0, 1.0) * 0.30 +
+		clamp((quality - 54.0) / 28.0, 0.0, 1.0) * 0.14 +
+		(0.26 if (
+			"stealth_interest" in narrative_tags or
+			"retail_favorite" in narrative_tags or
+			"narrative_hot" in narrative_tags
+		) else 0.0)
+	)
+
+	if band_name == "flagship" and scarcity_score > institutional_score + 0.08:
+		return "owner_controlled"
+	if free_float_pct <= 16.0 and scarcity_score >= 0.48:
+		return "owner_controlled"
+	if quality >= 64.0 and market_cap >= 2200000000000.0:
+		return "institutional_premium"
+	return "institutional_premium" if institutional_score >= scarcity_score else "owner_controlled"
+
+
+func _band_range_for_style(band_name: String, style: String) -> Dictionary:
+	if band_name == "flagship":
+		if style == "owner_controlled":
+			return {
+				"floor_min": 21000.0,
+				"floor_max": 26000.0,
+				"ceiling_min": 28000.0,
+				"ceiling_max": 42000.0
+			}
+		return {
+			"floor_min": 18000.0,
+			"floor_max": 24000.0,
+			"ceiling_min": 24000.0,
+			"ceiling_max": 34000.0
+		}
+	if band_name == "elite":
+		if style == "owner_controlled":
+			return {
+				"floor_min": 11000.0,
+				"floor_max": 15000.0,
+				"ceiling_min": 15000.0,
+				"ceiling_max": 23000.0
+			}
+		return {
+			"floor_min": 10000.0,
+			"floor_max": 13500.0,
+			"ceiling_min": 13500.0,
+			"ceiling_max": 19000.0
+		}
+	if style == "owner_controlled":
+		return {
+			"floor_min": 5500.0,
+			"floor_max": 8000.0,
+			"ceiling_min": 8000.0,
+			"ceiling_max": 12500.0
+		}
+	return {
+		"floor_min": 5000.0,
+		"floor_max": 7200.0,
+		"ceiling_min": 7200.0,
+		"ceiling_max": 10500.0
+	}
+
+
+func _apply_default_capital_structure(definition: Dictionary, run_seed: int, definition_index: int) -> void:
+	var anchors: Dictionary = definition.get("anchors", {}).duplicate(true)
+	var rng: RandomNumberGenerator = _rng_for(run_seed, "capital_structure_%d" % definition_index)
+	var free_float_pct: float = float(anchors.get("free_float_pct", 28.0))
+	var market_cap: float = float(anchors.get("market_cap", 1000000000000.0))
+	var quality: float = float(anchors.get("quality", 58.0))
+	var margin: float = float(anchors.get("net_profit_margin", 7.5))
+	var narrative_tags: Array = definition.get("narrative_tags", []).duplicate()
+	var style: String = "balanced"
+
+	if market_cap >= 3500000000000.0 and free_float_pct >= 28.0 and quality >= 66.0 and margin >= 7.0:
+		style = "institutional_premium"
+	elif free_float_pct <= 15.0 and market_cap >= 900000000000.0 and (
+		"stealth_interest" in narrative_tags or
+		"retail_favorite" in narrative_tags or
+		"narrative_hot" in narrative_tags
+	):
+		style = "owner_controlled"
+	elif free_float_pct >= 38.0:
+		style = "wide_float"
+
+	anchors["capital_structure_style"] = style
+	if not anchors.has("owner_concentration_pct"):
+		match style:
+			"wide_float":
+				anchors["owner_concentration_pct"] = _round_to_step(
+					clamp(100.0 - free_float_pct + rng.randf_range(-10.0, 4.0), 25.0, 60.0),
+					0.1
+				)
+			"institutional_premium":
+				anchors["owner_concentration_pct"] = _round_to_step(
+					clamp(100.0 - free_float_pct + rng.randf_range(-6.0, 6.0), 34.0, 68.0),
+					0.1
+				)
+			"owner_controlled":
+				anchors["owner_concentration_pct"] = _round_to_step(
+					clamp(rng.randf_range(70.0, 88.0), 68.0, 90.0),
+					0.1
+				)
+			_:
+				anchors["owner_concentration_pct"] = _round_to_step(
+					clamp(100.0 - free_float_pct + rng.randf_range(-4.0, 8.0), 38.0, 78.0),
+					0.1
+				)
+
+	definition["anchors"] = anchors
 
 
 func _derive_listing_board(template: Dictionary, sector_id: String, run_seed: int, company_index: int) -> String:

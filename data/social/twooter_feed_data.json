@@ -1,0 +1,194 @@
+{
+  "prototype_default_access_tier": 4,
+  "post_limit": 18,
+  "tier_labels": {
+    "1": "Tier 1",
+    "2": "Tier 2",
+    "3": "Tier 3",
+    "4": "Tier 4"
+  },
+  "accounts": [
+    {
+      "id": "gorengan_hunter",
+      "display_name": "Gorengan Hunter",
+      "handle": "@gorenganhunter",
+      "tier": 1,
+      "verified": false,
+      "voice": "retail_hype"
+    },
+    {
+      "id": "rumor_lokal",
+      "display_name": "Rumor Lokal",
+      "handle": "@rumorlokal",
+      "tier": 1,
+      "verified": false,
+      "voice": "rumor_feed"
+    },
+    {
+      "id": "flow_warung",
+      "display_name": "Flow Warung",
+      "handle": "@flowwarung",
+      "tier": 2,
+      "verified": false,
+      "voice": "flow_watch"
+    },
+    {
+      "id": "waduh_macro",
+      "display_name": "Waduh Macro",
+      "handle": "@waduhmacro",
+      "tier": 2,
+      "verified": true,
+      "voice": "macro_watch"
+    },
+    {
+      "id": "investor_kantor",
+      "display_name": "Investor Kantor",
+      "handle": "@investorkantor",
+      "tier": 3,
+      "verified": true,
+      "voice": "desk_analyst"
+    },
+    {
+      "id": "funda_thread",
+      "display_name": "Funda Thread",
+      "handle": "@fundathread",
+      "tier": 3,
+      "verified": true,
+      "voice": "funda_thread"
+    },
+    {
+      "id": "tonald_drump",
+      "display_name": "Tonald Drump",
+      "handle": "@realtonalddrump",
+      "tier": 4,
+      "verified": true,
+      "voice": "tonald_drump",
+      "person_id": "donald_trump"
+    },
+    {
+      "id": "melon_tusk",
+      "display_name": "Melon Tusk",
+      "handle": "@melontusk",
+      "tier": 4,
+      "verified": true,
+      "voice": "melon_tusk",
+      "person_id": "elon_musk"
+    }
+  ],
+  "voice_templates": {
+    "retail_hype": {
+      "company_positive": [
+        "{target_ticker} masih panas. Kalau crowd lihat ini lagi, kejaran bisa lanjut."
+      ],
+      "company_negative": [
+        "{target_ticker} mulai ga enak. Yang telat masuk biasanya yang paling panik."
+      ],
+      "sector_positive": [
+        "{sector_name} lagi rame. Watchlist retail bakal penuh kalau begini terus."
+      ],
+      "sector_negative": [
+        "{sector_name} keliatan ga sehat. Crowd biasanya telat sadar kalau supply sudah numpuk."
+      ],
+      "market_wrap": [
+        "Tape hari ini {market_change}. {biggest_winner} paling disorot, {biggest_loser} paling bikin nyesek."
+      ]
+    },
+    "rumor_feed": {
+      "company_positive": [
+        "Ada yang lagi bisik-bisik soal {target_ticker}. Belum jelas, tapi flow-nya keburu berubah."
+      ],
+      "company_negative": [
+        "Rumor di {target_ticker} makin jelek. Belum ada kejelasan, tapi orang sudah keburu buang barang."
+      ],
+      "sector_positive": [
+        "Katanya ada cerita baru di {sector_name}. Belum rapi, tapi meja spekulan mulai ngumpul."
+      ],
+      "sector_negative": [
+        "Obrolan soal {sector_name} makin seret. Biasanya crowd baru sadar setelah candle-nya jelek."
+      ]
+    },
+    "flow_watch": {
+      "company_positive": [
+        "Flow di {target_ticker} mulai rapi. Belum tentu selesai, tapi buyer sudah keliatan lebih disiplin."
+      ],
+      "company_negative": [
+        "Supply di {target_ticker} mulai konsisten. Kalau ini lanjut, bid tipis bisa cepat jebol."
+      ],
+      "sector_positive": [
+        "Rotasi ke {sector_name} makin kebaca. Bukan cuma satu ticker yang ditarik."
+      ],
+      "sector_negative": [
+        "{sector_name} lagi dibuang bertahap. Belum chaos, tapi distribusinya kebaca."
+      ],
+      "market_wrap": [
+        "Breadth hari ini {advancers} lawan {decliners}. Tape masih pilih-pilih, bukan broad risk-on."
+      ]
+    },
+    "macro_watch": {
+      "sector_positive": [
+        "{sector_name} kebagian angin sekarang. Macro-nya cukup mendukung buat trader tetap stay with the move."
+      ],
+      "sector_negative": [
+        "{sector_name} lagi kena tekanan dari framing macro. Susah dipaksa lawan arus kalau konteksnya belum berubah."
+      ],
+      "market_positive": [
+        "Risk appetite membaik. Selama breadth tetap sehat, trader masih punya alasan buat stay constructive."
+      ],
+      "market_negative": [
+        "Risk appetite retak. Selama itu belum pulih, rally kecil gampang berubah jadi exit liquidity."
+      ]
+    },
+    "desk_analyst": {
+      "company_positive": [
+        "{target_ticker} masih constructive. Yang menarik bukan cuma candle, tapi cara flow menyerap supply."
+      ],
+      "company_negative": [
+        "{target_ticker} kehilangan bentuk. Kalau pembeli tidak cepat kembali, struktur ini rawan lanjut melemah."
+      ],
+      "sector_positive": [
+        "{sector_name} sedang memimpin. Selama leadership bertahan, sektor ini masih layak diprioritaskan."
+      ],
+      "sector_negative": [
+        "{sector_name} sedang kehilangan leadership. Untuk sekarang, lebih aman menunggu konfirmasi baru."
+      ],
+      "hidden_company": [
+        "Ada positioning yang belum ramai dibicarakan di {target_ticker}. Belum obvious, tapi cukup untuk masuk radar lebih awal."
+      ]
+    },
+    "funda_thread": {
+      "company_positive": [
+        "Kalau mau lihat {target_ticker}, baca juga ceritanya di balik angka. Ini bukan cuma squeeze satu hari."
+      ],
+      "company_negative": [
+        "Masalah {target_ticker} bukan sekadar candle merah. Narasi fundanya lagi kehilangan dukungan."
+      ],
+      "sector_positive": [
+        "Kekuatan {sector_name} tidak kelihatan acak. Ada alasan kenapa modal mau stay lebih lama di sini."
+      ],
+      "sector_negative": [
+        "{sector_name} lagi susah jual cerita. Kalau narasinya ga kuat, pantulan biasanya pendek."
+      ]
+    },
+    "tonald_drump": {
+      "person_positive": [
+        "{sector_name} is looking very strong. Great things coming. Everybody knows it."
+      ],
+      "person_negative": [
+        "{sector_name} has been treated very unfairly. Big changes coming, believe me."
+      ]
+    },
+    "melon_tusk": {
+      "person_positive": [
+        "{target_ticker} + future tech + vibes. Interesting."
+      ],
+      "person_negative": [
+        "Market overreacting again. Still weird though."
+      ]
+    }
+  },
+  "fallback_posts": {
+    "all": [
+      "Tape still setting up. Watching where leadership forms next."
+    ]
+  }
+}
