@@ -43,6 +43,58 @@ func build_company_arc_candidates(run_state, trade_date: Dictionary, day_number:
 	return _build_ranked_company_candidates(run_state, trade_date, day_number, macro_state, true)
 
 
+func build_debug_company_event(
+	run_state,
+	trade_date: Dictionary,
+	_day_number: int,
+	macro_state: Dictionary,
+	event_id: String
+) -> Dictionary:
+	var picked_candidate: Dictionary = _pick_debug_company_candidate(
+		run_state,
+		trade_date,
+		macro_state,
+		event_id,
+		false
+	)
+	if picked_candidate.is_empty():
+		return {}
+
+	var debug_event: Dictionary = picked_candidate.duplicate(true)
+	debug_event.erase("weight")
+	return debug_event
+
+
+func build_debug_company_arc(
+	run_state,
+	trade_date: Dictionary,
+	day_number: int,
+	macro_state: Dictionary,
+	event_id: String
+) -> Dictionary:
+	var picked_candidate: Dictionary = _pick_debug_company_candidate(
+		run_state,
+		trade_date,
+		macro_state,
+		event_id,
+		true
+	)
+	if picked_candidate.is_empty():
+		return {}
+
+	return _build_company_arc_from_candidate(
+		run_state,
+		trade_date,
+		day_number,
+		macro_state,
+		picked_candidate
+	)
+
+
+func build_arc_start_event(arc: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
+	return _build_arc_start_event(arc, trade_date, day_number)
+
+
 func resolve_day(run_state, trade_date: Dictionary, day_number: int, macro_state: Dictionary) -> Dictionary:
 	var active_arcs: Array = _active_arcs_for_day(run_state.get_active_company_arcs(), day_number)
 	var started_events: Array = []
@@ -376,6 +428,22 @@ func _build_company_arc(
 	if picked_candidate.is_empty():
 		return {}
 
+	return _build_company_arc_from_candidate(
+		run_state,
+		trade_date,
+		day_number,
+		macro_state,
+		picked_candidate
+	)
+
+
+func _build_company_arc_from_candidate(
+	run_state,
+	trade_date: Dictionary,
+	day_number: int,
+	macro_state: Dictionary,
+	picked_candidate: Dictionary
+) -> Dictionary:
 	var company_id: String = str(picked_candidate.get("target_company_id", ""))
 	var definition: Dictionary = run_state.get_effective_company_definition(company_id)
 	var runtime: Dictionary = run_state.get_company(company_id)
@@ -451,6 +519,42 @@ func _build_company_arc(
 		"hidden_story_flag": "smart_money_accumulation" if tone != "negative" else "smart_money_distribution"
 	}
 	return _decorate_arc_for_day(arc, day_number)
+
+
+func _pick_debug_company_candidate(
+	run_state,
+	trade_date: Dictionary,
+	macro_state: Dictionary,
+	event_id: String,
+	arc_backed_only: bool
+) -> Dictionary:
+	var picked_candidate: Dictionary = {}
+	var picked_weight: float = -INF
+
+	for company_id_value in run_state.company_order:
+		var company_id: String = str(company_id_value)
+		var definition: Dictionary = run_state.get_effective_company_definition(company_id)
+		var runtime: Dictionary = run_state.get_company(company_id)
+		if definition.is_empty() or runtime.is_empty():
+			continue
+
+		for candidate_value in _build_company_candidates(
+			definition,
+			runtime,
+			trade_date,
+			macro_state,
+			arc_backed_only
+		):
+			var candidate: Dictionary = candidate_value
+			if str(candidate.get("event_id", "")) != event_id:
+				continue
+
+			var candidate_weight: float = float(candidate.get("weight", 0.0))
+			if candidate_weight > picked_weight:
+				picked_weight = candidate_weight
+				picked_candidate = candidate.duplicate(true)
+
+	return picked_candidate
 
 
 func _candidate_is_available(candidate: Dictionary, history: Array, active_arcs: Array, day_number: int) -> bool:

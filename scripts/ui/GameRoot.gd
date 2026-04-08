@@ -6,7 +6,7 @@ const APP_ID_STOCK := "stock"
 const APP_ID_NEWS := "news"
 const APP_ID_SOCIAL := "social"
 const STOCK_APP_FONT_SIZE := 11
-const DEFAULT_APP_FONT_SIZE := 12
+const DEFAULT_APP_FONT_SIZE := 11
 const COLOR_PANEL_BLUE := Color(0.109804, 0.14902, 0.184314, 0.94)
 const COLOR_PANEL_BLUE_ALT := Color(0.0901961, 0.129412, 0.164706, 0.96)
 const COLOR_PANEL_GREEN := Color(0.0862745, 0.152941, 0.133333, 0.95)
@@ -89,6 +89,7 @@ var selected_financial_statement_company_id: String = ""
 var current_trade_snapshot: Dictionary = {}
 var current_news_snapshot: Dictionary = {}
 var current_social_snapshot: Dictionary = {}
+var debug_generator_buttons: Dictionary = {}
 var active_order_side: String = "buy"
 var selected_news_outlet_id: String = ""
 var selected_news_article_id: String = ""
@@ -258,12 +259,17 @@ var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new
 @onready var current_events_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Current
 @onready var special_events_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Special
 @onready var person_events_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Person
+@onready var generic_events_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generic
+@onready var debug_generators_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generators
 @onready var stock_performance_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Stocks
 @onready var market_history_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Market
 @onready var upcoming_events_label: RichTextLabel = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Upcoming/UpcomingMargin/UpcomingVBox/UpcomingEventsLabel
 @onready var current_events_label: RichTextLabel = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Current/CurrentMargin/CurrentVBox/CurrentEventsLabel
 @onready var special_events_label: RichTextLabel = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Special/SpecialMargin/SpecialVBox/SpecialEventsLabel
 @onready var person_events_label: RichTextLabel = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Person/PeopleMargin/PeopleVBox/PersonEventsLabel
+@onready var generic_events_label: RichTextLabel = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generic/GenericMargin/GenericVBox/GenericEventsLabel
+@onready var debug_generators_hint_label: Label = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generators/GeneratorsMargin/GeneratorsVBox/GeneratorsHintLabel
+@onready var debug_generator_groups: VBoxContainer = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generators/GeneratorsMargin/GeneratorsVBox/GeneratorsScroll/GeneratorGroupsVBox
 @onready var stock_performance_label: RichTextLabel = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Stocks/StocksMargin/StocksVBox/StockPerformanceLabel
 @onready var market_history_label: RichTextLabel = $DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Market/MarketHistoryMargin/MarketHistoryVBox/MarketHistoryLabel
 @onready var toast_overlay: MarginContainer = $ToastOverlay
@@ -326,6 +332,7 @@ func _ready() -> void:
 	buy_button.tooltip_text = "Switch the ticket to buy mode."
 	sell_button.tooltip_text = "Switch the ticket to sell mode."
 	submit_order_button.tooltip_text = "Submit the active order."
+	_build_debug_generator_controls()
 	call_deferred("_update_responsive_layout")
 	_set_active_section(active_section_id)
 	_set_active_app(APP_ID_DESKTOP)
@@ -336,7 +343,7 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var key_event: InputEventKey = event
-		if key_event.ctrl_pressed and key_event.keycode == KEY_L and active_app_id == APP_ID_STOCK:
+		if key_event.ctrl_pressed and key_event.keycode == KEY_L:
 			_toggle_debug_overlay()
 			get_viewport().set_input_as_handled()
 			return
@@ -391,6 +398,7 @@ func _refresh_all() -> void:
 		_refresh_social()
 		_refresh_markets()
 		_refresh_debug_overlay()
+		_apply_global_font_size_overrides()
 		return
 
 	_sync_selected_company_with_active_stock_list()
@@ -404,6 +412,26 @@ func _refresh_all() -> void:
 	_refresh_portfolio()
 	_refresh_help()
 	_refresh_debug_overlay()
+	_apply_global_font_size_overrides()
+
+
+func _apply_global_font_size_overrides() -> void:
+	_apply_font_size_override_to_tree(self, DEFAULT_APP_FONT_SIZE)
+
+
+func _apply_font_size_override_to_tree(node: Node, font_size: int) -> void:
+	if node is Control:
+		var control: Control = node
+		control.add_theme_font_size_override("font_size", font_size)
+		if control is RichTextLabel:
+			var rich_text: RichTextLabel = control
+			rich_text.add_theme_font_size_override("normal_font_size", font_size)
+			rich_text.add_theme_font_size_override("bold_font_size", font_size)
+			rich_text.add_theme_font_size_override("italics_font_size", font_size)
+			rich_text.add_theme_font_size_override("mono_font_size", font_size)
+
+	for child: Node in node.get_children():
+		_apply_font_size_override_to_tree(child, font_size)
 
 
 func _refresh_header() -> void:
@@ -590,7 +618,7 @@ func _build_social_empty_card() -> PanelContainer:
 	var body: Label = Label.new()
 	body.text = "No posts yet.\nAdvance the day to generate fresh chatter."
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_theme_font_size_override("font_size", 13)
+	body.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 	body.add_theme_color_override("font_color", Color(0.25098, 0.309804, 0.388235, 1))
 	margin.add_child(body)
 	return card
@@ -625,27 +653,27 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 		str(post.get("account_name", "")),
 		" [verified]" if bool(post.get("account_verified", false)) else ""
 	]
-	account_label.add_theme_font_size_override("font_size", 13)
+	account_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 	account_label.add_theme_color_override("font_color", Color(0.0862745, 0.129412, 0.196078, 1))
 	header_row.add_child(account_label)
 
 	var meta_badge_label: Label = Label.new()
 	meta_badge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	meta_badge_label.text = "Tier %d" % int(post.get("account_tier", 1))
-	meta_badge_label.add_theme_font_size_override("font_size", 11)
+	meta_badge_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 	meta_badge_label.add_theme_color_override("font_color", Color(0.254902, 0.4, 0.639216, 1))
 	header_row.add_child(meta_badge_label)
 
 	var handle_label: Label = Label.new()
 	handle_label.text = str(post.get("account_handle", ""))
-	handle_label.add_theme_font_size_override("font_size", 11)
+	handle_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 	handle_label.add_theme_color_override("font_color", Color(0.360784, 0.454902, 0.603922, 1))
 	content.add_child(handle_label)
 
 	var body_label: Label = Label.new()
 	body_label.text = str(post.get("post_text", ""))
 	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body_label.add_theme_font_size_override("font_size", 15)
+	body_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 	body_label.add_theme_color_override("font_color", Color(0.0627451, 0.0862745, 0.117647, 1))
 	content.add_child(body_label)
 
@@ -654,7 +682,7 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 		var meta_label: Label = Label.new()
 		meta_label.text = meta_line
 		meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		meta_label.add_theme_font_size_override("font_size", 11)
+		meta_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 		meta_label.add_theme_color_override("font_color", Color(0.254902, 0.34902, 0.454902, 1))
 		content.add_child(meta_label)
 
@@ -663,7 +691,7 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 		var context_label: Label = Label.new()
 		context_label.text = context_hint
 		context_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		context_label.add_theme_font_size_override("font_size", 11)
+		context_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 		context_label.add_theme_color_override("font_color", Color(0.345098, 0.384314, 0.458824, 1))
 		content.add_child(context_label)
 
@@ -673,7 +701,7 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 		int(post.get("replies", 0)),
 		int(post.get("retwoots", 0))
 	]
-	reactions_label.add_theme_font_size_override("font_size", 11)
+	reactions_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 	reactions_label.add_theme_color_override("font_color", Color(0.317647, 0.403922, 0.537255, 1))
 	content.add_child(reactions_label)
 
@@ -869,11 +897,13 @@ func _refresh_help() -> void:
 
 
 func _refresh_debug_overlay() -> void:
+	_update_debug_generator_buttons_enabled(RunState.has_active_run())
 	if not RunState.has_active_run():
 		upcoming_events_label.text = "No active run."
 		current_events_label.text = "No active run."
 		special_events_label.text = "No active run."
 		person_events_label.text = "No active run."
+		generic_events_label.text = "No active run."
 		stock_performance_label.text = "No active run."
 		market_history_label.text = "No active run."
 		return
@@ -882,6 +912,7 @@ func _refresh_debug_overlay() -> void:
 	current_events_label.text = _build_debug_current_events_text()
 	special_events_label.text = _build_debug_special_events_text()
 	person_events_label.text = _build_debug_person_events_text()
+	generic_events_label.text = _build_debug_generic_events_text()
 	stock_performance_label.text = _build_debug_stock_performance_text()
 	market_history_label.text = _build_debug_market_history_text()
 
@@ -900,6 +931,66 @@ func _show_debug_overlay() -> void:
 
 func _hide_debug_overlay() -> void:
 	debug_overlay.visible = false
+
+
+func _build_debug_generator_controls() -> void:
+	debug_generator_buttons.clear()
+	for child in debug_generator_groups.get_children():
+		child.queue_free()
+
+	for group_value in GameManager.get_debug_event_generator_catalog():
+		var group: Dictionary = group_value
+		var event_entries: Array = group.get("events", [])
+		if event_entries.is_empty():
+			continue
+
+		var group_label: Label = Label.new()
+		group_label.text = str(group.get("label", ""))
+		group_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		group_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+		_set_label_tone(group_label, COLOR_TEXT)
+		debug_generator_groups.add_child(group_label)
+
+		var flow: HFlowContainer = HFlowContainer.new()
+		flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		flow.add_theme_constant_override("h_separation", 8)
+		flow.add_theme_constant_override("v_separation", 8)
+		debug_generator_groups.add_child(flow)
+
+		for event_entry_value in event_entries:
+			var event_entry: Dictionary = event_entry_value
+			var event_id: String = str(event_entry.get("event_id", ""))
+			if event_id.is_empty():
+				continue
+
+			var generator_button: Button = Button.new()
+			generator_button.custom_minimum_size = Vector2(170, 34)
+			generator_button.text = _format_debug_event_title(event_id)
+			generator_button.tooltip_text = str(event_entry.get("description", ""))
+			generator_button.pressed.connect(_on_debug_generate_event_pressed.bind(event_id))
+			_style_button(generator_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+			flow.add_child(generator_button)
+			debug_generator_buttons[event_id] = generator_button
+
+	_update_debug_generator_buttons_enabled(RunState.has_active_run())
+
+
+func _update_debug_generator_buttons_enabled(is_enabled: bool) -> void:
+	for button_value in debug_generator_buttons.values():
+		var generator_button: Button = button_value as Button
+		if generator_button == null:
+			continue
+		generator_button.disabled = not is_enabled
+
+
+func _on_debug_generate_event_pressed(event_id: String) -> void:
+	var result: Dictionary = GameManager.debug_generate_event(event_id)
+	_show_toast(
+		str(result.get("message", "Debug event updated.")),
+		bool(result.get("success", false))
+	)
+	if bool(result.get("success", false)):
+		_refresh_all()
 
 
 func _sync_selected_company_with_active_stock_list() -> void:
@@ -1794,6 +1885,45 @@ func _build_debug_person_events_text() -> String:
 	return "\n\n".join(lines)
 
 
+func _build_debug_generic_events_text() -> String:
+	var sections: Array = []
+
+	var recent_market_events: Array = _recent_event_history_by_family("market", 12)
+	if not recent_market_events.is_empty():
+		var market_lines: Array = []
+		for event_value in recent_market_events:
+			var event_data: Dictionary = event_value
+			market_lines.append("Day %d | %s\nHeadline: %s\nTarget: %s | Date: %s | Tone: %s" % [
+				int(event_data.get("day_index", 0)),
+				_format_debug_event_title(str(event_data.get("event_id", ""))),
+				str(event_data.get("headline", event_data.get("description", ""))),
+				_format_debug_scope_target(event_data),
+				GameManager.format_trade_date(event_data.get("trade_date", {})),
+				str(event_data.get("tone", "mixed")).capitalize()
+			])
+		sections.append("MARKET EVENTS\n%s" % "\n\n".join(market_lines))
+
+	var recent_company_events: Array = _recent_event_history_by_family("company", 12)
+	if not recent_company_events.is_empty():
+		var company_lines: Array = []
+		for event_value in recent_company_events:
+			var event_data: Dictionary = event_value
+			company_lines.append("Day %d | %s\nHeadline: %s\nTarget: %s | Date: %s | Tone: %s" % [
+				int(event_data.get("day_index", 0)),
+				_format_debug_event_title(str(event_data.get("event_id", ""))),
+				str(event_data.get("headline", event_data.get("description", ""))),
+				_format_debug_scope_target(event_data),
+				GameManager.format_trade_date(event_data.get("trade_date", {})),
+				str(event_data.get("tone", "mixed")).capitalize()
+			])
+		sections.append("COMPANY EVENTS\n%s" % "\n\n".join(company_lines))
+
+	if sections.is_empty():
+		return "No generic market or one-day company events are logged yet."
+
+	return "\n\n".join(sections)
+
+
 func _build_debug_stock_performance_text() -> String:
 	var stock_rows: Array = GameManager.get_company_rows()
 	if stock_rows.is_empty():
@@ -2607,6 +2737,8 @@ func _apply_visual_theme() -> void:
 	_style_panel(current_events_panel, COLOR_PANEL_BLUE, 0)
 	_style_panel(special_events_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_style_panel(person_events_panel, COLOR_PANEL_BLUE, 0)
+	_style_panel(generic_events_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(debug_generators_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_style_panel(stock_performance_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_style_panel(market_history_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_apply_toast_theme(true)
@@ -2662,6 +2794,7 @@ func _apply_visual_theme() -> void:
 	news_detail_body.add_theme_color_override("font_selected_color", COLOR_WINDOW_TEXT)
 	_set_label_tone(social_title_label, Color(0.121569, 0.160784, 0.258824, 1))
 	_set_label_tone(social_access_status_label, Color(0.196078, 0.301961, 0.486275, 1))
+	_set_label_tone(debug_generators_hint_label, COLOR_MUTED)
 	_set_label_tone(social_feed_summary_label, Color(0.121569, 0.160784, 0.258824, 1))
 	_set_label_tone(taskbar_status_label, COLOR_MUTED)
 	_set_label_tone(taskbar_clock_label, COLOR_WARNING)

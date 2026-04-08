@@ -149,6 +149,143 @@ func build_person_event_candidates(
 	return candidates
 
 
+func build_debug_person_event(
+	run_state,
+	trade_date: Dictionary,
+	day_number: int,
+	macro_state: Dictionary,
+	sector_sentiments: Dictionary,
+	market_sentiment: float,
+	event_id: String
+) -> Dictionary:
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = int(hash("%s|debug_person_event|%s|%s" % [run_state.run_seed, day_number, event_id]))
+	var sampled_company_ids: Array = _sample_company_ids(run_state.company_order, rng)
+	var risk_appetite: float = float(macro_state.get("risk_appetite", 0.5))
+	var inflation_yoy: float = float(macro_state.get("inflation_yoy", 3.0))
+	var gdp_growth: float = float(macro_state.get("gdp_growth", 4.8))
+
+	match event_id:
+		"trump_tariff_barrage":
+			var tariff_sector_id: String = _pick_sector_by_sentiment(sector_sentiments, TRUMP_TARIFF_SECTORS, true)
+			if tariff_sector_id.is_empty():
+				tariff_sector_id = _first_sector_from_pool(TRUMP_TARIFF_SECTORS)
+			if tariff_sector_id.is_empty():
+				return {}
+			var tariff_sentiment: float = float(sector_sentiments.get(tariff_sector_id, 0.0))
+			var tariff_sector_name: String = _sector_name(tariff_sector_id)
+			var tariff_weight: float = (
+				0.22 +
+				max(0.56 - risk_appetite, 0.0) * 0.72 +
+				max(inflation_yoy - 3.8, 0.0) * 0.05 +
+				max(-tariff_sentiment, 0.0) * 4.4
+			)
+			var tariff_candidate: Dictionary = _build_sector_candidate(
+				event_id,
+				tariff_weight,
+				tariff_sector_id,
+				trade_date,
+				"Tonald Drump tariff post hits %s" % tariff_sector_name,
+				"Tonald Drump fires off a tariff-heavy post that puts %s on the defensive." % tariff_sector_name
+			)
+			tariff_candidate.erase("weight")
+			return tariff_candidate
+		"trump_deal_optimism":
+			var deal_sector_id: String = _pick_sector_by_sentiment(sector_sentiments, TRUMP_DEAL_SECTORS, false)
+			if deal_sector_id.is_empty():
+				deal_sector_id = _first_sector_from_pool(TRUMP_DEAL_SECTORS)
+			if deal_sector_id.is_empty():
+				return {}
+			var deal_sentiment: float = float(sector_sentiments.get(deal_sector_id, 0.0))
+			var deal_sector_name: String = _sector_name(deal_sector_id)
+			var deal_weight: float = (
+				0.18 +
+				max(gdp_growth - 4.7, 0.0) * 0.05 +
+				max(risk_appetite - 0.48, 0.0) * 0.54 +
+				max(deal_sentiment, 0.0) * 3.4
+			)
+			var deal_candidate: Dictionary = _build_sector_candidate(
+				event_id,
+				deal_weight,
+				deal_sector_id,
+				trade_date,
+				"Tonald Drump deal optimism lifts %s" % deal_sector_name,
+				"Tonald Drump posts upbeat deal commentary that sharpens interest in %s." % deal_sector_name
+			)
+			deal_candidate.erase("weight")
+			return deal_candidate
+		"musk_ai_hype":
+			var ai_sector_id: String = _pick_sector_by_sentiment(sector_sentiments, MUSK_AI_SECTORS, false)
+			if ai_sector_id.is_empty():
+				ai_sector_id = _first_sector_from_pool(MUSK_AI_SECTORS)
+			if ai_sector_id.is_empty():
+				return {}
+			var ai_sentiment: float = float(sector_sentiments.get(ai_sector_id, 0.0))
+			var ai_sector_name: String = _sector_name(ai_sector_id)
+			var ai_weight: float = (
+				0.24 +
+				max(risk_appetite - 0.47, 0.0) * 0.64 +
+				max(ai_sentiment, 0.0) * 4.0 +
+				max(market_sentiment, 0.0) * 2.2
+			)
+			var ai_candidate: Dictionary = _build_sector_candidate(
+				event_id,
+				ai_weight,
+				ai_sector_id,
+				trade_date,
+				"Melon Tusk AI post ignites %s" % ai_sector_name,
+				"A Melon Tusk post around AI and future tech sends %s into the spotlight." % ai_sector_name
+			)
+			ai_candidate.erase("weight")
+			return ai_candidate
+		"musk_meme_pump":
+			var meme_company: Dictionary = _pick_company_story_target(run_state, sampled_company_ids, true)
+			if meme_company.is_empty():
+				return {}
+			var meme_definition: Dictionary = meme_company.get("definition", {})
+			var meme_runtime: Dictionary = meme_company.get("runtime", {})
+			var meme_weight: float = (
+				0.24 +
+				float(meme_company.get("score", 0.0)) * 0.82 +
+				max(risk_appetite - 0.46, 0.0) * 0.28 +
+				max(-float(meme_runtime.get("daily_change_pct", meme_runtime.get("sentiment", 0.0))), 0.0) * 0.75
+			)
+			var meme_candidate: Dictionary = _build_company_candidate(
+				event_id,
+				meme_weight,
+				meme_definition,
+				trade_date,
+				"Melon Tusk post spotlights %s" % str(meme_definition.get("ticker", "")),
+				"A Melon Tusk-style hype post puts %s right back on the fast-money radar." % str(meme_definition.get("name", ""))
+			)
+			meme_candidate.erase("weight")
+			return meme_candidate
+		"musk_controversy_spiral":
+			var controversy_company: Dictionary = _pick_company_story_target(run_state, sampled_company_ids, false)
+			if controversy_company.is_empty():
+				return {}
+			var controversy_definition: Dictionary = controversy_company.get("definition", {})
+			var controversy_runtime: Dictionary = controversy_company.get("runtime", {})
+			var controversy_weight: float = (
+				0.22 +
+				float(controversy_company.get("score", 0.0)) * 0.78 +
+				max(0.54 - risk_appetite, 0.0) * 0.26 +
+				max(float(controversy_runtime.get("daily_change_pct", controversy_runtime.get("sentiment", 0.0))), 0.0) * 0.95
+			)
+			var controversy_candidate: Dictionary = _build_company_candidate(
+				event_id,
+				controversy_weight,
+				controversy_definition,
+				trade_date,
+				"Melon Tusk controversy drags on %s" % str(controversy_definition.get("ticker", "")),
+				"A fresh Melon Tusk controversy post knocks confidence in %s and cools the chase." % str(controversy_definition.get("name", ""))
+			)
+			controversy_candidate.erase("weight")
+			return controversy_candidate
+
+	return {}
+
+
 func _sample_company_ids(company_order: Array, rng: RandomNumberGenerator) -> Array:
 	var sampled_ids: Array = []
 	var remaining_ids: Array = company_order.duplicate()
@@ -303,3 +440,9 @@ func _build_company_candidate(
 func _sector_name(sector_id: String) -> String:
 	var sector_definition: Dictionary = DataRepository.get_sector_definition(sector_id)
 	return str(sector_definition.get("name", sector_id.capitalize()))
+
+
+func _first_sector_from_pool(sector_pool: Dictionary) -> String:
+	for sector_id_value in sector_pool.keys():
+		return str(sector_id_value)
+	return ""

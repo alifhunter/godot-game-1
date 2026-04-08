@@ -17,6 +17,12 @@ const GAME_SCENE := "res://scenes/game/GameRoot.tscn"
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
 const DEFAULT_DIFFICULTY_ID := "normal"
 const STARTING_CASH := 100000000.0
+const DEBUG_COMPANY_ARC_EVENT_IDS := {
+	"earnings_beat": true,
+	"earnings_miss": true,
+	"strategic_acquisition": true,
+	"integration_overhang": true
+}
 const DIFFICULTY_ORDER := ["newbie", "normal", "hard", "hardcore"]
 const NEW_RUN_LOADING_STEPS := [
 	{"id": "seed", "label": "Preparing market seed"},
@@ -98,6 +104,9 @@ var company_roster_generator = preload("res://systems/CompanyRosterGenerator.gd"
 var chart_system = preload("res://systems/ChartSystem.gd").new()
 var news_feed_system = preload("res://systems/NewsFeedSystem.gd").new()
 var twooter_feed_system = preload("res://systems/TwooterFeedSystem.gd").new()
+var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
+var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
+var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
 
 
 func _ready() -> void:
@@ -544,6 +553,133 @@ func get_active_special_events() -> Array:
 	return RunState.get_active_special_events()
 
 
+func get_debug_event_generator_catalog() -> Array:
+	var group_labels: Dictionary = {
+		"market": "Market Events",
+		"company": "Company Events",
+		"company_arc": "Company Arcs",
+		"person": "Person Events",
+		"special": "Special Events"
+	}
+	var group_order: Array = ["market", "company", "company_arc", "person", "special"]
+	var grouped_events: Dictionary = {}
+	for group_id_value in group_order:
+		grouped_events[str(group_id_value)] = []
+
+	for event_definition_value in DataRepository.get_event_definitions():
+		var event_definition: Dictionary = event_definition_value
+		var event_id: String = str(event_definition.get("id", ""))
+		if event_id.is_empty():
+			continue
+
+		var group_id: String = "company_arc" if DEBUG_COMPANY_ARC_EVENT_IDS.has(event_id) else str(event_definition.get("event_family", ""))
+		if not grouped_events.has(group_id):
+			continue
+
+		grouped_events[group_id].append({
+			"event_id": event_id,
+			"description": str(event_definition.get("description", ""))
+		})
+
+	var catalog: Array = []
+	for group_id_value in group_order:
+		var group_id: String = str(group_id_value)
+		var events: Array = grouped_events.get(group_id, [])
+		events.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return str(a.get("event_id", "")) < str(b.get("event_id", ""))
+		)
+		catalog.append({
+			"id": group_id,
+			"label": str(group_labels.get(group_id, group_id.capitalize())),
+			"events": events
+		})
+
+	return catalog
+
+
+func debug_generate_event(event_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run to modify."}
+
+	var event_definition: Dictionary = DataRepository.get_event_definition(event_id)
+	if event_definition.is_empty():
+		return {"success": false, "message": "Unknown debug event id."}
+
+	var trade_date: Dictionary = get_current_trade_date()
+	var day_number: int = max(int(RunState.day_index), 1)
+	var macro_state: Dictionary = get_current_macro_state()
+	var generated_event: Dictionary = {}
+	var event_family: String = str(event_definition.get("event_family", ""))
+
+	if DEBUG_COMPANY_ARC_EVENT_IDS.has(event_id):
+		var generated_arc: Dictionary = company_event_system.build_debug_company_arc(
+			RunState,
+			trade_date,
+			day_number,
+			macro_state,
+			event_id
+		)
+		if generated_arc.is_empty():
+			return {"success": false, "message": "Could not build that company arc right now."}
+
+		var arc_start_event: Dictionary = company_event_system.build_arc_start_event(
+			generated_arc,
+			trade_date,
+			day_number
+		)
+		RunState.debug_add_company_arc(generated_arc, arc_start_event)
+		generated_event = arc_start_event
+	elif event_family == "company":
+		generated_event = company_event_system.build_debug_company_event(
+			RunState,
+			trade_date,
+			day_number,
+			macro_state,
+			event_id
+		)
+		if generated_event.is_empty():
+			return {"success": false, "message": "Could not find a company match for that event."}
+		RunState.debug_add_recorded_event(generated_event)
+	elif event_family == "person":
+		generated_event = person_event_system.build_debug_person_event(
+			RunState,
+			trade_date,
+			day_number,
+			macro_state,
+			_build_debug_sector_sentiments(),
+			float(RunState.market_sentiment),
+			event_id
+		)
+		if generated_event.is_empty():
+			return {"success": false, "message": "Could not find a person-event target right now."}
+		RunState.debug_add_recorded_event(generated_event)
+	elif event_family == "special":
+		generated_event = special_event_system.build_debug_special_event(
+			RunState,
+			trade_date,
+			day_number,
+			macro_state,
+			event_id
+		)
+		if generated_event.is_empty():
+			return {"success": false, "message": "Could not build that special event right now."}
+		RunState.debug_add_special_event(generated_event)
+	elif event_family == "market":
+		generated_event = _build_debug_market_event(event_definition, trade_date)
+		if generated_event.is_empty():
+			return {"success": false, "message": "Could not build that market event right now."}
+		RunState.debug_add_recorded_event(generated_event)
+	else:
+		return {"success": false, "message": "No debug generator is defined for that event family."}
+
+	SaveManager.save_run(RunState.to_save_dict())
+	return {
+		"success": true,
+		"message": _build_debug_generated_message(generated_event, event_definition),
+		"event": generated_event
+	}
+
+
 func get_news_snapshot(unlocked_intel_level: int = -1) -> Dictionary:
 	if not RunState.has_active_run():
 		return {
@@ -692,6 +828,109 @@ func get_chart_range_label(range_id: String) -> String:
 
 func get_chart_indicator_catalog() -> Array:
 	return chart_system.get_indicator_catalog()
+
+
+func _build_debug_sector_sentiments() -> Dictionary:
+	var sector_sentiments: Dictionary = {}
+	for sector_row_value in get_sector_rows():
+		var sector_row: Dictionary = sector_row_value
+		sector_sentiments[str(sector_row.get("id", ""))] = float(sector_row.get("average_change_pct", 0.0))
+
+	if sector_sentiments.is_empty():
+		for sector_definition_value in DataRepository.get_sector_definitions():
+			var sector_definition: Dictionary = sector_definition_value
+			sector_sentiments[str(sector_definition.get("id", ""))] = float(sector_definition.get("trend_bias", 0.0))
+
+	return sector_sentiments
+
+
+func _build_debug_market_event(event_definition: Dictionary, trade_date: Dictionary) -> Dictionary:
+	var event_id: String = str(event_definition.get("id", ""))
+	if event_id.is_empty():
+		return {}
+
+	var event_data: Dictionary = {
+		"event_id": event_id,
+		"scope": str(event_definition.get("scope", "market")),
+		"event_family": str(event_definition.get("event_family", "market")),
+		"category": str(event_definition.get("category", "market")),
+		"tone": str(event_definition.get("tone", "mixed")),
+		"duration_days": int(event_definition.get("duration_days", 1)),
+		"trade_date": trade_date.duplicate(true),
+		"sentiment_shift": float(event_definition.get("sentiment_shift", 0.0)),
+		"description": str(event_definition.get("description", "")),
+		"broker_bias": str(event_definition.get("broker_bias", "balanced"))
+	}
+
+	if str(event_definition.get("scope", "market")) == "market":
+		event_data["headline"] = "Risk-off pressure hits the tape"
+		event_data["headline_detail"] = "A manually injected market headline pushes traders into defense mode."
+		return event_data
+
+	var sector_sentiments: Dictionary = _build_debug_sector_sentiments()
+	var target_sector_id: String = _pick_debug_market_sector(event_id, sector_sentiments)
+	if target_sector_id.is_empty():
+		return {}
+
+	var sector_definition: Dictionary = DataRepository.get_sector_definition(target_sector_id)
+	var sector_name: String = str(sector_definition.get("name", target_sector_id.capitalize()))
+	event_data["target_sector_id"] = target_sector_id
+	if event_id == "sector_tailwind":
+		event_data["headline"] = "%s catches a sector tailwind" % sector_name
+		event_data["headline_detail"] = "A fresh wave of buyers rotates into %s and keeps the tape constructive." % sector_name
+	else:
+		event_data["headline"] = "%s runs into a sector headwind" % sector_name
+		event_data["headline_detail"] = "Sellers lean on %s as the sector tone rolls over." % sector_name
+
+	return event_data
+
+
+func _pick_debug_market_sector(event_id: String, sector_sentiments: Dictionary) -> String:
+	var selected_sector_id: String = ""
+	var selected_value: float = -INF if event_id == "sector_tailwind" else INF
+
+	for sector_id_value in sector_sentiments.keys():
+		var sector_id: String = str(sector_id_value)
+		var sentiment_value: float = float(sector_sentiments.get(sector_id, 0.0))
+		if event_id == "sector_tailwind":
+			if sentiment_value > selected_value:
+				selected_value = sentiment_value
+				selected_sector_id = sector_id
+		elif sentiment_value < selected_value:
+			selected_value = sentiment_value
+			selected_sector_id = sector_id
+
+	if not selected_sector_id.is_empty():
+		return selected_sector_id
+
+	for sector_definition_value in DataRepository.get_sector_definitions():
+		return str(sector_definition_value.get("id", ""))
+	return ""
+
+
+func _build_debug_generated_message(event_data: Dictionary, event_definition: Dictionary) -> String:
+	var event_label: String = _format_debug_event_label(str(event_definition.get("id", "")))
+	var target_ticker: String = str(event_data.get("target_ticker", ""))
+	if not target_ticker.is_empty():
+		return "%s generated for %s." % [event_label, target_ticker]
+
+	var person_name: String = str(event_data.get("person_name", ""))
+	if not person_name.is_empty():
+		return "%s generated from %s." % [event_label, person_name]
+
+	var target_sector_id: String = str(event_data.get("target_sector_id", ""))
+	if not target_sector_id.is_empty():
+		var sector_definition: Dictionary = DataRepository.get_sector_definition(target_sector_id)
+		return "%s generated for %s." % [event_label, str(sector_definition.get("name", target_sector_id.capitalize()))]
+
+	return "%s generated." % event_label
+
+
+func _format_debug_event_label(event_id: String) -> String:
+	var words: Array = event_id.split("_", false)
+	for index in range(words.size()):
+		words[index] = str(words[index]).capitalize()
+	return " ".join(words)
 
 
 func _emit_run_loading_step(step_index: int) -> void:

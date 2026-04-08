@@ -579,6 +579,39 @@ func get_active_special_events() -> Array:
 	return active_special_events.duplicate(true)
 
 
+func debug_add_recorded_event(event_data: Dictionary) -> void:
+	if event_data.is_empty():
+		return
+
+	var resolved_trade_date: Dictionary = current_trade_date.duplicate(true)
+	var resolved_day_index: int = max(day_index, 1)
+	_record_event(event_data, resolved_trade_date, resolved_day_index)
+	_append_event_to_companies(event_data)
+
+
+func debug_add_special_event(event_data: Dictionary) -> void:
+	if event_data.is_empty():
+		return
+
+	active_special_events.append(event_data.duplicate(true))
+	var resolved_trade_date: Dictionary = current_trade_date.duplicate(true)
+	var resolved_day_index: int = max(day_index, 1)
+	_record_event(event_data, resolved_trade_date, resolved_day_index)
+	_append_event_to_companies(event_data)
+
+
+func debug_add_company_arc(arc_data: Dictionary, start_event: Dictionary) -> void:
+	if arc_data.is_empty():
+		return
+
+	active_company_arcs.append(arc_data.duplicate(true))
+	if not start_event.is_empty():
+		var resolved_trade_date: Dictionary = current_trade_date.duplicate(true)
+		var resolved_day_index: int = max(day_index, 1)
+		_record_event(start_event, resolved_trade_date, resolved_day_index)
+	_append_company_arc_to_companies(arc_data)
+
+
 func estimate_buy_order(company_id: String, shares: int) -> Dictionary:
 	return _estimate_order(company_id, shares, true)
 
@@ -706,6 +739,97 @@ func _record_market_history(summary: Dictionary) -> void:
 
 	if market_history.size() > MAX_MARKET_HISTORY:
 		market_history = market_history.slice(market_history.size() - MAX_MARKET_HISTORY, market_history.size())
+
+
+func _append_event_to_companies(event_data: Dictionary) -> void:
+	var event_id: String = str(event_data.get("event_id", ""))
+	if event_id.is_empty():
+		return
+
+	for company_id_value in company_order:
+		var company_id: String = str(company_id_value)
+		if not companies.has(company_id):
+			continue
+
+		var definition: Dictionary = get_effective_company_definition(company_id, false, false)
+		if definition.is_empty():
+			continue
+
+		if not _event_applies_to_company(event_data, company_id, str(definition.get("sector_id", ""))):
+			continue
+
+		var runtime: Dictionary = companies[company_id].duplicate(true)
+		var active_events: Array = runtime.get("active_events", []).duplicate(true)
+		if not _active_event_exists(active_events, event_data):
+			active_events.append(event_data.duplicate(true))
+		runtime["active_events"] = active_events
+
+		var active_event_tags: Array = runtime.get("active_event_tags", []).duplicate()
+		if not active_event_tags.has(event_id):
+			active_event_tags.append(event_id)
+		runtime["active_event_tags"] = active_event_tags
+		companies[company_id] = runtime
+
+
+func _append_company_arc_to_companies(arc_data: Dictionary) -> void:
+	var company_id: String = str(arc_data.get("target_company_id", ""))
+	if company_id.is_empty() or not companies.has(company_id):
+		return
+
+	var runtime: Dictionary = companies[company_id].duplicate(true)
+	var hidden_story_flags: Array = runtime.get("hidden_story_flags", []).duplicate()
+	var phase_visibility: String = str(arc_data.get("phase_visibility", "hidden"))
+	if phase_visibility == "hidden":
+		var hidden_flag: String = str(arc_data.get("phase_hidden_flag", arc_data.get("hidden_story_flag", "")))
+		if not hidden_flag.is_empty() and not hidden_story_flags.has(hidden_flag):
+			hidden_story_flags.append(hidden_flag)
+		runtime["hidden_story_flags"] = hidden_story_flags
+		companies[company_id] = runtime
+		return
+
+	runtime["hidden_story_flags"] = hidden_story_flags
+	companies[company_id] = runtime
+	var visible_arc: Dictionary = arc_data.duplicate(true)
+	visible_arc["sentiment_shift"] = float(arc_data.get("phase_sentiment_shift", 0.0))
+	_append_event_to_companies(visible_arc)
+
+
+func _event_applies_to_company(event_data: Dictionary, company_id: String, sector_id: String) -> bool:
+	if event_data.is_empty():
+		return false
+
+	var scope: String = str(event_data.get("scope", "company"))
+	if scope == "market":
+		return true
+	if scope == "sector":
+		var target_sector_id: String = str(event_data.get("target_sector_id", ""))
+		if not target_sector_id.is_empty():
+			return target_sector_id == sector_id
+		return sector_id in event_data.get("affected_sector_ids", [])
+	return str(event_data.get("target_company_id", "")) == company_id
+
+
+func _active_event_exists(active_events: Array, event_data: Dictionary) -> bool:
+	var event_id: String = str(event_data.get("event_id", ""))
+	var target_company_id: String = str(event_data.get("target_company_id", ""))
+	var target_sector_id: String = str(event_data.get("target_sector_id", ""))
+	var headline: String = str(event_data.get("headline", ""))
+	var arc_id: String = str(event_data.get("arc_id", ""))
+
+	for active_event_value in active_events:
+		var active_event: Dictionary = active_event_value
+		if str(active_event.get("event_id", "")) != event_id:
+			continue
+		if str(active_event.get("arc_id", "")) == arc_id and not arc_id.is_empty():
+			return true
+		if str(active_event.get("target_company_id", "")) != target_company_id:
+			continue
+		if str(active_event.get("target_sector_id", "")) != target_sector_id:
+			continue
+		if str(active_event.get("headline", "")) == headline:
+			return true
+
+	return false
 
 
 func _normalize_company_runtime(runtime: Dictionary) -> Dictionary:

@@ -12,7 +12,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 11
 script = ExtResource("1_game")
 
 [node name="Background" type="ColorRect" parent="."]
@@ -413,7 +413,7 @@ theme_override_constants/separation = 8
 
 [node name="NewsTitleLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsHeaderRow"]
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 11
 text = "News Desk"
 
 [node name="NewsIntelStatusLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsHeaderRow"]
@@ -472,7 +472,7 @@ theme_override_constants/separation = 10
 text = "Select an article"
 
 [node name="NewsDetailHeadlineLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox"]
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 11
 autowrap_mode = 3
 text = "No article selected."
 
@@ -528,7 +528,7 @@ theme_override_constants/separation = 8
 
 [node name="SocialTitleLabel" type="Label" parent="SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialHeaderRow"]
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 11
 text = "Twooter"
 
 [node name="SocialAccessStatusLabel" type="Label" parent="SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialHeaderRow"]
@@ -672,14 +672,14 @@ theme_override_constants/separation = 10
 
 [node name="DebugTitleLabel" type="Label" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugHeaderRow"]
 size_flags_horizontal = 3
-text = "Debug Tools"
+text = "Events Debug Mode"
 
 [node name="DebugCloseButton" type="Button" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugHeaderRow"]
 custom_minimum_size = Vector2(40, 40)
 text = "X"
 
 [node name="DebugHintLabel" type="Label" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox"]
-text = "Ctrl+L toggles this popup."
+text = "Ctrl+L toggles this popup from anywhere in the game."
 
 [node name="DebugTabs" type="TabContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox"]
 size_flags_horizontal = 3
@@ -772,6 +772,56 @@ bbcode_enabled = false
 scroll_active = true
 fit_content = false
 text = ""
+
+[node name="Generic" type="PanelContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs"]
+size_flags_vertical = 3
+
+[node name="GenericMargin" type="MarginContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generic"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="GenericVBox" type="VBoxContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generic/GenericMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="GenericEventsLabel" type="RichTextLabel" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generic/GenericMargin/GenericVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = false
+scroll_active = true
+fit_content = false
+text = ""
+
+[node name="Generators" type="PanelContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs"]
+size_flags_vertical = 3
+
+[node name="GeneratorsMargin" type="MarginContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generators"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="GeneratorsVBox" type="VBoxContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generators/GeneratorsMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="GeneratorsHintLabel" type="Label" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generators/GeneratorsMargin/GeneratorsVBox"]
+autowrap_mode = 3
+text = "Use these buttons to inject event definitions directly into the current run for debugging."
+
+[node name="GeneratorsScroll" type="ScrollContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generators/GeneratorsMargin/GeneratorsVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="GeneratorGroupsVBox" type="VBoxContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generators/GeneratorsMargin/GeneratorsVBox/GeneratorsScroll"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
 
 [node name="Stocks" type="PanelContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs"]
 size_flags_vertical = 3

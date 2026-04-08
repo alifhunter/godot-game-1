@@ -24,6 +24,20 @@ func resolve_day(run_state, trade_date: Dictionary, day_number: int, macro_state
 	}
 
 
+func build_debug_special_event(
+	run_state,
+	trade_date: Dictionary,
+	day_number: int,
+	_macro_state: Dictionary,
+	event_id: String
+) -> Dictionary:
+	var event_definition: Dictionary = DataRepository.get_event_definition(event_id)
+	if event_definition.is_empty() or str(event_definition.get("event_family", "")) != "special":
+		return {}
+
+	return _build_special_event_from_definition(run_state, trade_date, day_number, event_definition)
+
+
 func _active_events_for_day(stored_events: Array, day_number: int) -> Array:
 	var active_events: Array = []
 	for event_value in stored_events:
@@ -72,9 +86,24 @@ func _build_special_event(
 		return {}
 
 	var event_definition: Dictionary = DataRepository.get_event_definition(str(picked_candidate.get("event_id", "")))
+	return _build_special_event_from_definition(run_state, trade_date, day_number, event_definition)
+
+
+func _build_special_event_from_definition(
+	run_state,
+	trade_date: Dictionary,
+	day_number: int,
+	event_definition: Dictionary
+) -> Dictionary:
 	var duration_days: int = int(event_definition.get("duration_days", 8))
 	var minimum_duration: int = int(event_definition.get("duration_days_min", duration_days))
 	var maximum_duration: int = int(event_definition.get("duration_days_max", duration_days))
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = int(hash("%s|special_manual|%s|%s" % [
+		run_state.run_seed,
+		day_number,
+		str(event_definition.get("id", ""))
+	]))
 	duration_days = rng.randi_range(minimum_duration, max(minimum_duration, maximum_duration))
 
 	return {

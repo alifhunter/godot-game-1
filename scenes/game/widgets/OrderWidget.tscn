@@ -22,12 +22,12 @@ theme_override_constants/separation = 14
 theme_override_constants/separation = 4
 
 [node name="CompanyNameLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox"]
-theme_override_font_sizes/font_size = 10
+theme_override_font_sizes/font_size = 11
 autowrap_mode = 3
 text = "NO SELECTION"
 
 [node name="SelectionLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox"]
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 11
 text = "-"
 
 [node name="QuoteRow" type="HBoxContainer" parent="ActionMargin/ActionVBox/HeaderVBox"]
@@ -38,11 +38,11 @@ size_flags_horizontal = 3
 theme_override_constants/separation = 2
 
 [node name="CurrentPriceLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/QuoteRow/PriceBlock"]
-theme_override_font_sizes/font_size = 26
+theme_override_font_sizes/font_size = 11
 text = "Rp 0.00"
 
 [node name="PriceChangeLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/QuoteRow/PriceBlock"]
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 11
 text = "+Rp 0.00  |  +0.00%"
 
 [node name="PositionLabel" type="Label" parent="ActionMargin/ActionVBox"]
@@ -85,7 +85,7 @@ theme_override_constants/separation = 10
 theme_override_constants/separation = 8
 
 [node name="OrderTitleLabel" type="Label" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox/OrderTitleRow"]
-theme_override_font_sizes/font_size = 15
+theme_override_font_sizes/font_size = 11
 text = "Buy Order"
 
 [node name="OrderTitleSpacer" type="Control" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox/OrderTitleRow"]
@@ -119,7 +119,7 @@ theme_override_font_sizes/font_size = 11
 text = "ESTIMATED TOTAL"
 
 [node name="EstimatedTotalValueLabel" type="Label" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 11
 horizontal_alignment = 2
 text = "Rp 0.00"
 

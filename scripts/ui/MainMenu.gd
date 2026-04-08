@@ -3,6 +3,7 @@ extends Control
 const SCREEN_HOME := "home"
 const SCREEN_DIFFICULTY := "difficulty"
 const SCREEN_LOADING := "loading"
+const UI_FONT_SIZE := 11
 
 @onready var home_screen: Control = $Margin/ScreenRoot/HomeScreen
 @onready var difficulty_screen: Control = $Margin/ScreenRoot/DifficultyScreen
@@ -38,6 +39,7 @@ func _ready() -> void:
 	_refresh_load_state()
 	_set_screen(SCREEN_HOME)
 	_clear_selected_difficulty()
+	_apply_global_font_size_overrides()
 
 
 func _refresh_load_state() -> void:
@@ -228,6 +230,25 @@ func _set_screen(screen_id: String) -> void:
 	home_screen.visible = screen_id == SCREEN_HOME
 	difficulty_screen.visible = screen_id == SCREEN_DIFFICULTY
 	loading_screen.visible = screen_id == SCREEN_LOADING
+
+
+func _apply_global_font_size_overrides() -> void:
+	_apply_font_size_override_to_tree(self, UI_FONT_SIZE)
+
+
+func _apply_font_size_override_to_tree(node: Node, font_size: int) -> void:
+	if node is Control:
+		var control: Control = node
+		control.add_theme_font_size_override("font_size", font_size)
+		if control is RichTextLabel:
+			var rich_text: RichTextLabel = control
+			rich_text.add_theme_font_size_override("normal_font_size", font_size)
+			rich_text.add_theme_font_size_override("bold_font_size", font_size)
+			rich_text.add_theme_font_size_override("italics_font_size", font_size)
+			rich_text.add_theme_font_size_override("mono_font_size", font_size)
+
+	for child: Node in node.get_children():
+		_apply_font_size_override_to_tree(child, font_size)
 
 
 func _format_currency(value: float) -> String:
