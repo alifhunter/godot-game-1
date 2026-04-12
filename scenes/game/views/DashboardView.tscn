@@ -1,6 +1,4 @@
-[gd_scene load_steps=2 format=3]
-
-[ext_resource type="PackedScene" path="res://scenes/game/widgets/DashboardOverviewWidget.tscn" id="1_overview"]
+[gd_scene format=3]
 
 [node name="DashboardView" type="MarginContainer"]
 anchors_preset = 15
@@ -13,7 +11,7 @@ theme_override_constants/margin_top = 0
 theme_override_constants/margin_right = 0
 theme_override_constants/margin_bottom = 0
 
-[node name="ContentVBox" type="VBoxContainer" parent="."]
+[node name="DashboardGrid" type="GridContainer" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -21,6 +19,159 @@ grow_horizontal = 2
 grow_vertical = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/separation = 12
+columns = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 12
 
-[node name="OverviewPanel" parent="ContentVBox" instance=ExtResource("1_overview")]
+[node name="IndexPanel" type="PanelContainer" parent="DashboardGrid"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="IndexMargin" type="MarginContainer" parent="DashboardGrid/IndexPanel"]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="IndexVBox" type="VBoxContainer" parent="DashboardGrid/IndexPanel/IndexMargin"]
+theme_override_constants/separation = 10
+
+[node name="IndexTitleLabel" type="Label" parent="DashboardGrid/IndexPanel/IndexMargin/IndexVBox"]
+text = "Index Gorengan"
+
+[node name="IndexDateLabel" type="Label" parent="DashboardGrid/IndexPanel/IndexMargin/IndexVBox"]
+text = "Date unavailable."
+
+[node name="IndexStatsGrid" type="GridContainer" parent="DashboardGrid/IndexPanel/IndexMargin/IndexVBox"]
+columns = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 8
+
+[node name="IndexPointsCaptionLabel" type="Label" parent="DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid"]
+text = "Points"
+
+[node name="IndexPointsValueLabel" type="Label" parent="DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid"]
+horizontal_alignment = 2
+text = "-"
+
+[node name="IndexLotsCaptionLabel" type="Label" parent="DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid"]
+text = "Traded Lot"
+
+[node name="IndexLotsValueLabel" type="Label" parent="DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid"]
+horizontal_alignment = 2
+text = "-"
+
+[node name="IndexValueCaptionLabel" type="Label" parent="DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid"]
+text = "Traded Value"
+
+[node name="IndexValueValueLabel" type="Label" parent="DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid"]
+horizontal_alignment = 2
+text = "-"
+
+[node name="IndexHintLabel" type="Label" parent="DashboardGrid/IndexPanel/IndexMargin/IndexVBox"]
+autowrap_mode = 3
+text = "Synthetic index built from the live roster and latest market session."
+
+[node name="PlaceholderTopPanel" type="PanelContainer" parent="DashboardGrid"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="PlaceholderTopMargin" type="MarginContainer" parent="DashboardGrid/PlaceholderTopPanel"]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="PlaceholderTopVBox" type="VBoxContainer" parent="DashboardGrid/PlaceholderTopPanel/PlaceholderTopMargin"]
+theme_override_constants/separation = 10
+
+[node name="PlaceholderTopTitleLabel" type="Label" parent="DashboardGrid/PlaceholderTopPanel/PlaceholderTopMargin/PlaceholderTopVBox"]
+text = "Reserved"
+
+[node name="PlaceholderTopBodyLabel" type="Label" parent="DashboardGrid/PlaceholderTopPanel/PlaceholderTopMargin/PlaceholderTopVBox"]
+size_flags_vertical = 3
+vertical_alignment = 1
+horizontal_alignment = 1
+autowrap_mode = 3
+text = "Empty for now."
+
+[node name="CalendarPanel" type="PanelContainer" parent="DashboardGrid"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="CalendarMargin" type="MarginContainer" parent="DashboardGrid/CalendarPanel"]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="CalendarVBox" type="VBoxContainer" parent="DashboardGrid/CalendarPanel/CalendarMargin"]
+theme_override_constants/separation = 10
+
+[node name="CalendarTitleLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox"]
+text = "Calendar"
+
+[node name="CalendarMonthLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox"]
+text = "-"
+
+[node name="CalendarWeekHeader" type="GridContainer" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox"]
+columns = 7
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 4
+
+[node name="WeekMonLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader"]
+horizontal_alignment = 1
+text = "Mon"
+
+[node name="WeekTueLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader"]
+horizontal_alignment = 1
+text = "Tue"
+
+[node name="WeekWedLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader"]
+horizontal_alignment = 1
+text = "Wed"
+
+[node name="WeekThuLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader"]
+horizontal_alignment = 1
+text = "Thu"
+
+[node name="WeekFriLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader"]
+horizontal_alignment = 1
+text = "Fri"
+
+[node name="WeekSatLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader"]
+horizontal_alignment = 1
+text = "Sat"
+
+[node name="WeekSunLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader"]
+horizontal_alignment = 1
+text = "Sun"
+
+[node name="CalendarDaysGrid" type="GridContainer" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox"]
+size_flags_vertical = 3
+columns = 7
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
+
+[node name="PlaceholderBottomPanel" type="PanelContainer" parent="DashboardGrid"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="PlaceholderBottomMargin" type="MarginContainer" parent="DashboardGrid/PlaceholderBottomPanel"]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="PlaceholderBottomVBox" type="VBoxContainer" parent="DashboardGrid/PlaceholderBottomPanel/PlaceholderBottomMargin"]
+theme_override_constants/separation = 10
+
+[node name="PlaceholderBottomTitleLabel" type="Label" parent="DashboardGrid/PlaceholderBottomPanel/PlaceholderBottomMargin/PlaceholderBottomVBox"]
+text = "Reserved"
+
+[node name="PlaceholderBottomBodyLabel" type="Label" parent="DashboardGrid/PlaceholderBottomPanel/PlaceholderBottomMargin/PlaceholderBottomVBox"]
+size_flags_vertical = 3
+vertical_alignment = 1
+horizontal_alignment = 1
+autowrap_mode = 3
+text = "Empty for now."

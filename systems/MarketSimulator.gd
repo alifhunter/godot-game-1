@@ -92,8 +92,25 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 			"recent_momentum": recent_momentum,
 			"event_bias": float(event_context.get("event_bias", 0.0))
 		}
-		var broker_flow: Dictionary = broker_flow_system.generate_day_flow(definition, runtime, broker_context)
+		var broker_flow: Dictionary = broker_flow_system.generate_day_flow(
+			definition,
+			runtime,
+			broker_context,
+			data_repository
+		)
 		var previous_close: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("current_price", definition.get("base_price", 0.0))))
+		var volume_context: Dictionary = _build_volume_activity_context(
+			definition,
+			runtime,
+			recent_momentum,
+			market_sentiment,
+			sector_sentiment,
+			event_context,
+			broker_flow,
+			run_state.run_seed,
+			day_number,
+			company_id
+		)
 		var daily_change_pct: float = _calculate_daily_change(
 			definition,
 			sector_definition,
@@ -102,6 +119,7 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 			sector_sentiment,
 			float(event_context.get("event_bias", 0.0)),
 			float(broker_flow.get("net_pressure", 0.0)),
+			volume_context,
 			run_state.run_seed,
 			day_number,
 			company_id,
@@ -126,7 +144,7 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 		var price_history: Array = runtime.get("price_history", []).duplicate()
 		price_history.append(current_price)
 		var price_bars: Array = runtime.get("price_bars", []).duplicate(true)
-		price_bars.append(_build_daily_price_bar(
+		var daily_price_bar: Dictionary = _build_daily_price_bar(
 			definition,
 			previous_close,
 			current_price,
@@ -135,12 +153,23 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 			sector_sentiment,
 			float(event_context.get("event_bias", 0.0)),
 			broker_flow,
+			volume_context,
 			run_state.run_seed,
 			day_number,
 			company_id,
 			ar_limits,
 			trade_date
-		))
+		)
+		price_bars.append(daily_price_bar)
+		broker_flow = broker_flow_system.finalize_day_flow(
+			definition,
+			runtime,
+			broker_context,
+			broker_flow,
+			daily_price_bar,
+			current_price,
+			data_repository
+		)
 
 		runtime["previous_close"] = previous_close
 		runtime["current_price"] = current_price
@@ -153,6 +182,7 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 		runtime["broker_flow"] = broker_flow
 		runtime["daily_change_pct"] = daily_change_pct
 		runtime["ar_limits"] = ar_limits.duplicate(true)
+		runtime["volume_context"] = volume_context.duplicate(true)
 
 		companies_result[company_id] = runtime
 
@@ -534,6 +564,7 @@ func _calculate_daily_change(
 	sector_sentiment: float,
 	event_bias: float,
 	broker_pressure: float,
+	volume_context: Dictionary,
 	run_seed: int,
 	day_number: int,
 	company_id: String,
@@ -564,6 +595,9 @@ func _calculate_daily_change(
 	daily_change += sector_sentiment * 0.55
 	daily_change += event_bias * 0.8
 	daily_change += broker_pressure * 0.03 * broker_impact_multiplier
+	daily_change += float(volume_context.get("lead_price_bias", 0.0)) * broker_impact_multiplier
+	daily_change += float(volume_context.get("buying_exhaustion_drag", 0.0))
+	daily_change += float(volume_context.get("distribution_drag", 0.0))
 	daily_change += momentum_component
 	daily_change += noise_component
 
@@ -582,6 +616,266 @@ func _recent_momentum(price_history: Array) -> float:
 	return (last_close - previous_close) / previous_close
 
 
+func _build_volume_activity_context(
+	definition: Dictionary,
+	runtime: Dictionary,
+	recent_momentum: float,
+	market_sentiment: float,
+	sector_sentiment: float,
+	event_context: Dictionary,
+	broker_flow: Dictionary,
+	run_seed: int,
+	day_number: int,
+	company_id: String
+) -> Dictionary:
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = int(hash("%s|volume_activity|%s|%s" % [run_seed, day_number, company_id]))
+
+	var financials: Dictionary = definition.get("financials", {})
+	var traits: Dictionary = definition.get("generation_traits", {})
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var market_cap: float = max(float(financials.get("market_cap", current_price * 1000000000.0)), current_price * 1000000.0)
+	var free_float_ratio: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, 0.07, 0.85)
+	var avg_daily_value: float = max(float(financials.get("avg_daily_value", current_price * 250000.0)), current_price * 1000.0)
+	var liquidity_profile: float = clamp(float(traits.get("liquidity_profile", 0.5)), 0.0, 1.0)
+	var story_heat: float = clamp(float(traits.get("story_heat", 0.5)), 0.0, 1.0)
+	var narrative_tags: Array = definition.get("narrative_tags", [])
+	var hidden_flags: Array = event_context.get("hidden_story_flags", runtime.get("hidden_story_flags", [])).duplicate()
+	var price_bars: Array = runtime.get("price_bars", [])
+	var event_bias: float = float(event_context.get("event_bias", 0.0))
+	var event_volatility_multiplier: float = clamp(float(event_context.get("event_volatility_multiplier", 1.0)), 0.55, 2.1)
+	var net_pressure: float = clamp(float(broker_flow.get("net_pressure", 0.0)), -1.0, 1.0)
+	var smart_money_pressure: float = clamp(float(broker_flow.get("smart_money_pressure", 0.0)), -1.0, 1.0)
+	var retail_pressure: float = clamp(float(broker_flow.get("retail_net", 0.0)) / 100.0, -1.0, 1.0)
+	var float_tightness: float = clamp((0.48 - free_float_ratio) / 0.40, 0.0, 1.0)
+
+	var free_float_value: float = market_cap * free_float_ratio
+	var turnover_rate: float = clamp(
+		0.00045 +
+		(liquidity_profile * 0.0028) +
+		(story_heat * 0.0013) +
+		(free_float_ratio * 0.0012),
+		0.00035,
+		0.0085
+	)
+	if "retail_favorite" in narrative_tags:
+		turnover_rate += 0.00035
+	if "narrative_hot" in narrative_tags:
+		turnover_rate += 0.00045
+	if "institution_quality" in narrative_tags:
+		turnover_rate += 0.00020
+	turnover_rate = clamp(turnover_rate, 0.00035, 0.0095)
+
+	var free_float_daily_value: float = max(free_float_value * turnover_rate, current_price * 1000.0)
+	var quiet_float_drag: float = lerp(1.0, 0.78, float_tightness * (1.0 - liquidity_profile))
+	var base_daily_value: float = max(lerp(avg_daily_value, free_float_daily_value, 0.48) * quiet_float_drag, current_price * 1000.0)
+
+	var recent_value_average: float = _average_recent_bar_value(price_bars, 20, base_daily_value)
+	var recent_short_value_average: float = _average_recent_bar_value(price_bars, 3, recent_value_average)
+	var previous_value: float = _latest_bar_value(price_bars, recent_value_average)
+	var previous_activity_ratio: float = previous_value / max(recent_value_average, 1.0)
+	var short_activity_ratio: float = recent_short_value_average / max(recent_value_average, 1.0)
+	var high_activity_streak: int = _recent_high_activity_streak(price_bars, recent_value_average, 5, 1.85)
+	var recent_runup: float = max(_recent_price_change_from_bars(price_bars, 8), 0.0)
+	var recent_drawdown: float = max(-_recent_price_change_from_bars(price_bars, 8), 0.0)
+	var prior_activity_pressure: float = clamp(((previous_activity_ratio + short_activity_ratio) * 0.5 - 1.10) / 2.40, 0.0, 1.0)
+
+	var has_hidden_accumulation: bool = "smart_money_accumulation" in hidden_flags
+	var has_stealth_interest: bool = "stealth_interest" in hidden_flags
+	var hidden_distribution: bool = "smart_money_distribution" in hidden_flags
+	var retail_chase: float = clamp(
+		max(retail_pressure, 0.0) * 0.42 +
+		max(recent_momentum, 0.0) * 5.0 +
+		story_heat * 0.22 +
+		(0.16 if "retail_favorite" in narrative_tags else 0.0) +
+		(0.12 if "narrative_hot" in narrative_tags else 0.0),
+		0.0,
+		1.0
+	)
+	var accumulation_signal: float = clamp(
+		max(net_pressure, 0.0) * 0.25 +
+		max(smart_money_pressure, 0.0) * 0.38 +
+		max(event_bias, 0.0) * 5.0 +
+		max(sector_sentiment, 0.0) * 1.6 +
+		max(market_sentiment, 0.0) * 0.9 +
+		float_tightness * 0.14 +
+		(0.34 if has_hidden_accumulation else 0.0) +
+		(0.16 if has_stealth_interest else 0.0) +
+		max(-recent_momentum, 0.0) * 1.4,
+		0.0,
+		1.0
+	)
+	var distribution_signal: float = clamp(
+		max(-smart_money_pressure, 0.0) * 0.36 +
+		max(-net_pressure, 0.0) * 0.18 +
+		max(-event_bias, 0.0) * 5.0 +
+		max(-sector_sentiment, 0.0) * 1.6 +
+		max(-market_sentiment, 0.0) * 0.9 +
+		float_tightness * 0.12 +
+		(0.38 if hidden_distribution else 0.0) +
+		retail_chase * 0.18 +
+		max(recent_momentum, 0.0) * 1.2,
+		0.0,
+		1.0
+	)
+
+	var lead_direction: float = 0.0
+	if accumulation_signal > distribution_signal:
+		lead_direction = accumulation_signal
+	elif distribution_signal > accumulation_signal:
+		lead_direction = -distribution_signal
+	var lead_price_bias: float = clamp(prior_activity_pressure * lead_direction * 0.011, -0.012, 0.012)
+
+	var exhaustion_score: float = clamp(
+		recent_runup * 4.8 +
+		max(previous_activity_ratio - 1.55, 0.0) * 0.18 +
+		float(high_activity_streak) * 0.12 +
+		retail_chase * 0.24 +
+		float_tightness * 0.12 +
+		story_heat * 0.08 +
+		max(-smart_money_pressure, 0.0) * 0.22 -
+		max(smart_money_pressure, 0.0) * 0.18,
+		0.0,
+		1.0
+	)
+	var exhaustion_drag: float = -exhaustion_score * lerp(0.0025, 0.0160, clamp(recent_runup * 8.0, 0.0, 1.0))
+	var distribution_drag: float = -distribution_signal * prior_activity_pressure * lerp(0.0015, 0.0075, clamp(recent_runup * 7.0, 0.0, 1.0))
+	if recent_drawdown > 0.06 and distribution_signal < 0.35:
+		distribution_drag *= 0.45
+
+	var event_multiplier: float = 1.0 + min(absf(event_bias) * 6.0, 1.55) + max(event_volatility_multiplier - 1.0, 0.0) * 0.70
+	var broker_multiplier: float = 1.0 + absf(net_pressure) * 0.50 + absf(smart_money_pressure) * 0.35
+	var hidden_multiplier: float = 1.0 + (0.34 if has_hidden_accumulation else 0.0) + (0.14 if has_stealth_interest else 0.0) + (0.36 if hidden_distribution else 0.0)
+	var story_multiplier: float = 1.0 + story_heat * 0.16 + float_tightness * 0.14
+	var memory_multiplier: float = clamp(lerp(0.88, 1.42, clamp((short_activity_ratio - 0.65) / 2.60, 0.0, 1.0)), 0.82, 1.48)
+	var exhaustion_multiplier: float = 1.0 + exhaustion_score * 0.80
+	var lumpy_noise: float = _sample_lumpy_volume_noise(
+		rng,
+		story_heat,
+		float_tightness,
+		absf(event_bias),
+		max(accumulation_signal, distribution_signal)
+	)
+	var volume_multiplier: float = clamp(
+		event_multiplier *
+		broker_multiplier *
+		hidden_multiplier *
+		story_multiplier *
+		memory_multiplier *
+		exhaustion_multiplier *
+		lumpy_noise,
+		0.30,
+		8.00
+	)
+	var expected_activity_ratio: float = (base_daily_value * volume_multiplier) / max(recent_value_average, 1.0)
+
+	return {
+		"base_daily_value": base_daily_value,
+		"volume_multiplier": volume_multiplier,
+		"expected_activity_ratio": expected_activity_ratio,
+		"previous_activity_ratio": previous_activity_ratio,
+		"short_activity_ratio": short_activity_ratio,
+		"high_activity_streak": high_activity_streak,
+		"accumulation_signal": accumulation_signal,
+		"distribution_signal": distribution_signal,
+		"lead_price_bias": lead_price_bias,
+		"buying_exhaustion_score": exhaustion_score,
+		"buying_exhaustion_drag": exhaustion_drag,
+		"distribution_drag": distribution_drag
+	}
+
+
+func _average_recent_bar_value(price_bars: Array, lookback: int, fallback_value: float) -> float:
+	if price_bars.is_empty():
+		return max(fallback_value, 1.0)
+
+	var start_index: int = max(price_bars.size() - max(lookback, 1), 0)
+	var total_value: float = 0.0
+	var count: int = 0
+	for bar_index in range(start_index, price_bars.size()):
+		var bar: Dictionary = price_bars[bar_index]
+		var bar_value: float = float(bar.get("value", 0.0))
+		if bar_value <= 0.0:
+			bar_value = float(bar.get("close", 0.0)) * float(bar.get("volume_shares", 0))
+		if bar_value <= 0.0:
+			continue
+		total_value += bar_value
+		count += 1
+	if count <= 0:
+		return max(fallback_value, 1.0)
+	return max(total_value / float(count), 1.0)
+
+
+func _latest_bar_value(price_bars: Array, fallback_value: float) -> float:
+	if price_bars.is_empty():
+		return max(fallback_value, 1.0)
+	var latest_bar: Dictionary = price_bars[price_bars.size() - 1]
+	var bar_value: float = float(latest_bar.get("value", 0.0))
+	if bar_value <= 0.0:
+		bar_value = float(latest_bar.get("close", 0.0)) * float(latest_bar.get("volume_shares", 0))
+	if bar_value <= 0.0:
+		return max(fallback_value, 1.0)
+	return max(bar_value, 1.0)
+
+
+func _recent_high_activity_streak(price_bars: Array, baseline_value: float, lookback: int, threshold_ratio: float) -> int:
+	if price_bars.is_empty():
+		return 0
+
+	var safe_baseline: float = max(baseline_value, 1.0)
+	var max_lookback: int = min(max(lookback, 1), price_bars.size())
+	var streak: int = 0
+	for offset in range(max_lookback):
+		var bar_index: int = price_bars.size() - 1 - offset
+		var bar: Dictionary = price_bars[bar_index]
+		var bar_value: float = float(bar.get("value", 0.0))
+		if bar_value <= 0.0:
+			bar_value = float(bar.get("close", 0.0)) * float(bar.get("volume_shares", 0))
+		if (bar_value / safe_baseline) < threshold_ratio:
+			break
+		streak += 1
+	return streak
+
+
+func _recent_price_change_from_bars(price_bars: Array, lookback: int) -> float:
+	if price_bars.size() < 2:
+		return 0.0
+
+	var end_bar: Dictionary = price_bars[price_bars.size() - 1]
+	var start_index: int = max(price_bars.size() - max(lookback, 1), 0)
+	var start_bar: Dictionary = price_bars[start_index]
+	var start_price: float = float(start_bar.get("open", start_bar.get("close", 0.0)))
+	var end_price: float = float(end_bar.get("close", start_price))
+	if is_zero_approx(start_price):
+		return 0.0
+	return (end_price - start_price) / start_price
+
+
+func _sample_lumpy_volume_noise(
+	rng: RandomNumberGenerator,
+	story_heat: float,
+	float_tightness: float,
+	event_intensity: float,
+	signal_intensity: float
+) -> float:
+	var base_noise: float = rng.randf_range(0.76, 1.18)
+	var spike_chance: float = clamp(
+		0.025 +
+		story_heat * 0.060 +
+		float_tightness * 0.045 +
+		event_intensity * 0.240 +
+		signal_intensity * 0.075,
+		0.025,
+		0.380
+	)
+	if rng.randf() < spike_chance:
+		base_noise *= rng.randf_range(
+			1.16,
+			2.05 + story_heat * 0.45 + float_tightness * 0.35 + event_intensity * 1.20
+		)
+	return clamp(base_noise, 0.45, 4.80)
+
+
 func _build_daily_price_bar(
 	definition: Dictionary,
 	previous_close: float,
@@ -590,7 +884,8 @@ func _build_daily_price_bar(
 	market_sentiment: float,
 	sector_sentiment: float,
 	event_bias: float,
-	broker_flow: Dictionary,
+	_broker_flow: Dictionary,
+	volume_context: Dictionary,
 	run_seed: int,
 	day_number: int,
 	company_id: String,
@@ -634,12 +929,12 @@ func _build_daily_price_bar(
 		float(ar_limits.get("upper_price", current_price))
 	)
 
-	var financials: Dictionary = definition.get("financials", {})
-	var avg_daily_value: float = max(float(financials.get("avg_daily_value", current_price * 250000.0)), current_price * 1000.0)
-	var flow_intensity: float = absf(float(broker_flow.get("net_pressure", 0.0)))
-	var volume_multiplier: float = 1.0 + (flow_intensity * 0.75) + min(absf(event_bias) * 3.0, 1.5) + min(absf(daily_change_pct) * 8.0, 1.2)
-	var traded_value: float = avg_daily_value * volume_multiplier * rng.randf_range(0.82, 1.24)
-	var volume_shares: int = max(int(round(traded_value / max(current_price, 1.0))), 100)
+	var base_daily_value: float = max(float(volume_context.get("base_daily_value", current_price * 250000.0)), current_price * 1000.0)
+	var volume_multiplier: float = max(float(volume_context.get("volume_multiplier", 1.0)), 0.10)
+	var day_move_confirmation: float = 1.0 + min(absf(daily_change_pct) * 4.5, 0.75)
+	var traded_value: float = max(base_daily_value * volume_multiplier * day_move_confirmation, current_price * 1000.0)
+	var volume_shares: int = int(max(round(traded_value / max(current_price, 1.0) / 100.0), 1.0) * 100.0)
+	var bar_value: float = current_price * float(volume_shares)
 
 	return {
 		"trade_date": trade_date.duplicate(true),
@@ -648,7 +943,7 @@ func _build_daily_price_bar(
 		"low": low_price,
 		"close": current_price,
 		"volume_shares": volume_shares,
-		"value": traded_value
+		"value": bar_value
 	}
 
 

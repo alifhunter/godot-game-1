@@ -24,6 +24,7 @@ const DEBUG_COMPANY_ARC_EVENT_IDS := {
 	"integration_overhang": true
 }
 const DIFFICULTY_ORDER := ["newbie", "normal", "hard", "hardcore"]
+const NEW_RUN_FINAL_STEP_HOLD_SECONDS := 0.28
 const NEW_RUN_LOADING_STEPS := [
 	{"id": "seed", "label": "Preparing market seed"},
 	{"id": "companies", "label": "Creating companies"},
@@ -154,10 +155,10 @@ func start_new_run_with_loading(
 	_emit_run_loading_step(4)
 	SaveManager.save_run(RunState.to_save_dict())
 	run_started.emit()
-	await get_tree().process_frame
+	await _hold_loading_stage(NEW_RUN_FINAL_STEP_HOLD_SECONDS)
 
 	_emit_run_loading_step(5)
-	await get_tree().process_frame
+	await _hold_loading_stage(NEW_RUN_FINAL_STEP_HOLD_SECONDS)
 	run_loading_finished.emit()
 	_enter_game_scene()
 
@@ -224,6 +225,7 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 
 	var summary: Dictionary = summary_system.build_daily_summary(RunState, DataRepository)
 	RunState.set_daily_summary(summary)
+	RunState.record_news_snapshot(_build_news_snapshot())
 	if save_after:
 		SaveManager.save_run(RunState.to_save_dict())
 	if emit_runtime_signals:
@@ -326,6 +328,10 @@ func get_company_snapshot(
 		since_start_pct = (current_price - starting_price) / starting_price
 	if not is_zero_approx(ytd_open_price):
 		ytd_change_pct = (current_price - ytd_open_price) / ytd_open_price
+	var broker_flow_view: Dictionary = _build_broker_flow_view(
+		runtime.get("broker_flow", {}),
+		include_price_history or include_financial_history or include_statement_history
+	)
 	var snapshot: Dictionary = {
 		"id": company_id,
 		"ticker": definition.get("ticker", company_id.to_upper()),
@@ -362,7 +368,7 @@ func get_company_snapshot(
 		"ytd_reference_year": int(runtime.get("ytd_reference_year", int(RunState.get_current_trade_date().get("year", 2020)))),
 		"since_start_pct": since_start_pct,
 		"ytd_change_pct": ytd_change_pct,
-		"broker_flow": runtime.get("broker_flow", {}).duplicate(true),
+		"broker_flow": broker_flow_view,
 		"hidden_story_flags": runtime.get("hidden_story_flags", []).duplicate(),
 		"listing_board": listing_board,
 		"shares_owned": shares_owned,
@@ -383,6 +389,19 @@ func get_company_snapshot(
 		snapshot["price_bars"] = runtime.get("price_bars", []).duplicate(true)
 
 	return snapshot
+
+
+func _build_broker_flow_view(broker_flow: Dictionary, include_rows: bool) -> Dictionary:
+	if broker_flow.is_empty():
+		return {}
+
+	var broker_flow_view: Dictionary = broker_flow.duplicate(true)
+	if not include_rows:
+		broker_flow_view.erase("buy_brokers")
+		broker_flow_view.erase("sell_brokers")
+		broker_flow_view.erase("net_buy_brokers")
+		broker_flow_view.erase("net_sell_brokers")
+	return broker_flow_view
 
 
 func get_company_chart_snapshot(company_id: String, range_id: String = "1m", enabled_indicator_ids: Array = []) -> Dictionary:
@@ -680,7 +699,7 @@ func debug_generate_event(event_id: String) -> Dictionary:
 	}
 
 
-func get_news_snapshot(unlocked_intel_level: int = -1) -> Dictionary:
+func _build_news_snapshot(unlocked_intel_level: int = -1) -> Dictionary:
 	if not RunState.has_active_run():
 		return {
 			"intel_level": max(unlocked_intel_level, 1),
@@ -702,6 +721,28 @@ func get_news_snapshot(unlocked_intel_level: int = -1) -> Dictionary:
 		news_trade_date,
 		unlocked_intel_level
 	)
+
+
+func get_news_snapshot(unlocked_intel_level: int = -1) -> Dictionary:
+	var snapshot: Dictionary = _build_news_snapshot(unlocked_intel_level)
+	RunState.record_news_snapshot(snapshot)
+	return snapshot
+
+
+func get_news_archive_years(outlet_id: String) -> Array:
+	return RunState.get_news_archive_years(outlet_id)
+
+
+func get_news_archive_months(outlet_id: String, year: int) -> Array:
+	return RunState.get_news_archive_months(outlet_id, year)
+
+
+func get_news_archive_article_summaries(outlet_id: String, year: int, month: int) -> Array:
+	return RunState.get_news_archive_article_summaries(outlet_id, year, month)
+
+
+func get_news_archive_article(article_id: String) -> Dictionary:
+	return RunState.get_news_archive_article(article_id)
 
 
 func get_twooter_snapshot(unlocked_access_tier: int = -1) -> Dictionary:
@@ -935,6 +976,14 @@ func _format_debug_event_label(event_id: String) -> String:
 
 func _emit_run_loading_step(step_index: int) -> void:
 	_emit_loading_step_from_list(NEW_RUN_LOADING_STEPS, step_index)
+
+
+func _hold_loading_stage(duration_seconds: float) -> void:
+	if duration_seconds <= 0.0:
+		await get_tree().process_frame
+		return
+
+	await get_tree().create_timer(duration_seconds).timeout
 
 
 func _emit_load_run_loading_step(step_index: int) -> void:

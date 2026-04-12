@@ -3,6 +3,7 @@ extends Node
 const COMPANY_ARCHETYPES_PATH := "res://data/companies/company_archetypes.json"
 const COMPANY_WORDS_PATH := "res://data/companies/company_words.json"
 const COMPANY_PROFILE_DATA_PATH := "res://data/companies/company_profile_data.json"
+const BROKER_ROSTER_PATH := "res://data/brokers/broker_roster.json"
 const SECTORS_PATH := "res://data/sectors/sectors.json"
 const EVENTS_PATH := "res://data/events/events.json"
 const NEWS_FEED_DATA_PATH := "res://data/news/news_feed_data.json"
@@ -11,11 +12,13 @@ const TWOOTER_FEED_DATA_PATH := "res://data/social/twooter_feed_data.json"
 var company_archetypes = []
 var company_words = {}
 var company_profile_data = {}
+var broker_roster = []
 var sectors = []
 var event_definitions = []
 var news_feed_data = {}
 var twooter_feed_data = {}
 var company_archetype_by_id = {}
+var broker_by_code = {}
 var sector_by_id = {}
 var event_by_id = {}
 
@@ -28,6 +31,7 @@ func reload_all() -> void:
 	company_archetypes = _load_array_json(COMPANY_ARCHETYPES_PATH)
 	company_words = _load_dictionary_json(COMPANY_WORDS_PATH)
 	company_profile_data = _load_dictionary_json(COMPANY_PROFILE_DATA_PATH)
+	broker_roster = _load_array_json(BROKER_ROSTER_PATH)
 	sectors = _load_array_json(SECTORS_PATH)
 	event_definitions = _load_array_json(EVENTS_PATH)
 	news_feed_data = _load_dictionary_json(NEWS_FEED_DATA_PATH)
@@ -40,6 +44,11 @@ func reload_all() -> void:
 	sector_by_id.clear()
 	for sector in sectors:
 		sector_by_id[str(sector.get("id", ""))] = sector
+
+	broker_by_code.clear()
+	for broker_value in broker_roster:
+		var broker: Dictionary = broker_value
+		broker_by_code[str(broker.get("code", ""))] = broker
 
 	event_by_id.clear()
 	for event_definition in event_definitions:
@@ -64,6 +73,10 @@ func get_company_word_data() -> Dictionary:
 
 func get_company_profile_data() -> Dictionary:
 	return company_profile_data.duplicate(true)
+
+
+func get_broker_roster() -> Array:
+	return broker_roster.duplicate(true)
 
 
 func get_company_name_words() -> Array:
@@ -96,6 +109,12 @@ func get_sector_definition(sector_id: String) -> Dictionary:
 	if not sector_by_id.has(sector_id):
 		return {}
 	return sector_by_id[sector_id].duplicate(true)
+
+
+func get_broker_definition(broker_code: String) -> Dictionary:
+	if not broker_by_code.has(broker_code):
+		return {}
+	return broker_by_code[broker_code].duplicate(true)
 
 
 func get_event_definition(event_id: String) -> Dictionary:

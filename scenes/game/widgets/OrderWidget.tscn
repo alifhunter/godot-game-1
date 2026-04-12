@@ -2,7 +2,6 @@
 
 [node name="ActionPanel" type="PanelContainer"]
 clip_contents = true
-custom_minimum_size = Vector2(320, 0)
 size_flags_vertical = 3
 
 [node name="ActionMargin" type="MarginContainer" parent="."]
@@ -22,12 +21,12 @@ theme_override_constants/separation = 14
 theme_override_constants/separation = 4
 
 [node name="CompanyNameLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox"]
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 autowrap_mode = 3
 text = "NO SELECTION"
 
 [node name="SelectionLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox"]
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 text = "-"
 
 [node name="QuoteRow" type="HBoxContainer" parent="ActionMargin/ActionVBox/HeaderVBox"]
@@ -38,15 +37,15 @@ size_flags_horizontal = 3
 theme_override_constants/separation = 2
 
 [node name="CurrentPriceLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/QuoteRow/PriceBlock"]
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 text = "Rp 0.00"
 
 [node name="PriceChangeLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/QuoteRow/PriceBlock"]
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 text = "+Rp 0.00  |  +0.00%"
 
 [node name="PositionLabel" type="Label" parent="ActionMargin/ActionVBox"]
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 autowrap_mode = 3
 text = "Held 0 lot(s) / 0 share(s)"
 
@@ -85,14 +84,14 @@ theme_override_constants/separation = 10
 theme_override_constants/separation = 8
 
 [node name="OrderTitleLabel" type="Label" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox/OrderTitleRow"]
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 text = "Buy Order"
 
 [node name="OrderTitleSpacer" type="Control" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox/OrderTitleRow"]
 size_flags_horizontal = 3
 
 [node name="QuantityTitleLabel" type="Label" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 text = "QUANTITY"
 
 [node name="LotSpinBox" type="SpinBox" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
@@ -105,7 +104,7 @@ rounded = true
 value = 1.0
 
 [node name="PriceTitleLabel" type="Label" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 text = "PRICE"
 
 [node name="PriceLineEdit" type="LineEdit" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
@@ -115,11 +114,11 @@ editable = false
 placeholder_text = "Price"
 
 [node name="EstimatedTotalLabel" type="Label" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 text = "ESTIMATED TOTAL"
 
 [node name="EstimatedTotalValueLabel" type="Label" parent="ActionMargin/ActionVBox/OrderCard/OrderCardMargin/OrderCardVBox"]
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 horizontal_alignment = 2
 text = "Rp 0.00"
 

@@ -117,7 +117,7 @@ Read this file first in the next session.
 ## Trade View
 - Trade view now uses:
   - left `watchlist / all stock / portfolio` panel
-  - center work area with `Chart`, `Key Stats`, `Financials`, `Analyzer`, and `Profile` tabs
+  - center work area with `Chart`, `Key Stats`, `Financials`, `Broker`, `Analyzer`, and `Profile` tabs
   - right order ticket
 - Current center-tab responsibilities are:
   - `Chart`: price chart plus range switching
@@ -131,6 +131,7 @@ Read this file first in the next session.
       - bottom date labels / X axis
       - crosshair lines plus hover price / date badges
       - a compact hover OHLC / volume readout
+    - there is still no dedicated visual volume-bar panel on the chart; the latest volume work is backend-only for now
     - `5Y` can now show a derived pre-2020 history instead of only post-start runtime bars
     - the pre-2020 layer is generated lazily per company from the existing annual + quarterly financial data
     - the historical path was revised away from the first overly smooth always-upward interpolation so it can now show sideways years, pullbacks, and down years while still resolving to the correct `Q4 2019` / opening anchor
@@ -154,6 +155,11 @@ Read this file first in the next session.
     - current default landing period is the latest available quarter, `Q4 2019`
     - the tab now has `Older / Newer` period navigation inside the panel
     - quarterly statement lines are derived from generated annual history + hidden traits and are meant to be internally coherent, not GAAP-accurate
+  - `Broker`: derived broker tape plus action meter
+    - split view shows ranked `buy` and `sell` broker tables side by side
+    - `Net` toggle now also exists, so each broker appears only on one side based on net value for the session
+    - current rows show code, traded value, lots, and average price
+    - current `Broker Action` meter is derived from aggregate group flow plus the broker table composition
   - `Analyzer`: setup read, supportive signals, risk signals, visible inputs, and recent closes
   - `Profile`: company identity, sector, archetype, size, board, live price snapshot, generated company profile scores, founded year, age, employee count, profile revenue, profile tags, and generated narrative description
 - The old left-panel helper copy was removed:
@@ -187,6 +193,7 @@ Read this file first in the next session.
   - chart backend already prepares layered plot snapshots and indicator-ready data
   - `GameManager.get_company_chart_snapshot()` now feeds the chart from combined bars, not only raw runtime `price_bars`
   - pre-2020 `5Y` history is currently chart-only; it is not used by market simulation logic, analyzer recent closes, or the saved runtime `price_history`
+  - daily runtime bars now carry more meaningful backend volume because `MarketSimulator.gd` builds a pre-price volume/activity context before resolving the day
   - `PriceChartCanvas.gd` is now responsible for:
     - axes and tick labels
     - zoomed visible-window slicing
@@ -224,6 +231,23 @@ Read this file first in the next session.
 ## Portfolio / Dashboard / Help
 - `Dashboard`, `Portfolio`, and `Help` still exist inside `STOCKBOT`
 - Their right-side outer margins were tightened so they sit more flush inside the stock window
+- `Dashboard` no longer uses the old long text overview card
+- Dashboard is now a `2x2` grid:
+  - top-left: `Index Gorengan` card with derived market points, traded lot, and traded value
+  - bottom-left: live month calendar with the current in-game day highlighted
+  - top-right: reserved empty placeholder box
+  - bottom-right: reserved empty placeholder box
+- Dashboard market card is currently built from:
+  - live company prices vs starting prices for synthetic index points
+  - latest daily `volume_lots`
+  - latest daily traded `value`
+  - daily breadth counts (`green / red / flat`)
+- The `volume_lots` / traded `value` feeding charts and the dashboard are synthetic but now less purely reactive:
+  - `MarketSimulator.gd` derives a pre-price `volume_context` from free float, liquidity profile, story heat, hidden accumulation/distribution flags, broker pressure, recent volume memory, and recent price run-up
+  - prior high activity can now act as a leading signal before price fully resolves
+  - buying exhaustion can add downside drag after repeated high-volume run-up behavior
+  - high-volume red sessions are possible through distribution pressure, negative broker flow, weak event/sector/market context, and exhaustion
+  - there are intentionally no player-facing activity labels like `normal activity` or `busy day`; players are expected to learn interpretation later through the future academy feature
 - Portfolio layout still reads like a broker app:
   - top summary strip
   - holdings table
@@ -263,7 +287,9 @@ Read this file first in the next session.
   - target company / ticker / sector / person metadata when available
 - Current rendering behavior:
   - left side shows outlet buttons plus an article list
+  - the article list can browse archived articles by outlet, year, and month
   - right side shows article detail
+  - full article bodies are loaded when an archived article is selected, rather than dumping all history into the list at once
   - article timing/availability depends on event progress and outlet intel level
   - market-wrap style articles provide fallback content so the feed is not empty on quieter sessions
 - Current content source is editable:
@@ -357,6 +383,7 @@ Read this file first in the next session.
   - `data/companies/company_archetypes.json`
   - `data/companies/company_words.json`
   - `data/companies/company_profile_data.json`
+  - `data/brokers/broker_roster.json`
   - `data/sectors/sectors.json`
   - `data/events/events.json`
   - `data/news/news_feed_data.json`
@@ -364,9 +391,28 @@ Read this file first in the next session.
 - Market simulation:
   - `systems/MarketSimulator.gd`
   - daily price change uses market sentiment, sector sentiment, events, broker flow, mean reversion, and noise
+  - daily price change now also receives a backend `volume_context` before the close is resolved
+  - backend volume now uses a free-float-aware base value, recent volume memory, lumpy spike noise, event/broker pressure, and hidden accumulation/distribution signals
+  - prior high activity can create a small leading price bias, while repeated high-volume run-ups can create buying-exhaustion drag
+  - daily OHLCV bars still remain daily bars only; there is no intraday order-book/tape simulation yet
 - Broker flow:
   - `systems/BrokerFlowSystem.gd`
-  - broker archetypes: retail, foreign, institution, zombie
+  - aggregate broker groups now include:
+    - `retail`
+    - `foreign`
+    - `institution`
+    - `bandar`
+    - `zombie`
+  - current broker tape is roster-backed rather than purely generic
+  - current roster is loaded from `data/brokers/broker_roster.json`
+  - current displayed rows derive:
+    - dominant broker codes/names/types
+    - split `buy_brokers` / `sell_brokers`
+    - net-ranked `net_buy_brokers` / `net_sell_brokers`
+    - `action_meter_score` / `action_meter_label`
+  - current balancing now uses hidden broker-stock affinity:
+    - broad brokers can appear across many names
+    - selective `bandar` / `smart-money` brokers only dominate a smaller subset of stocks where their hidden affinity and conviction are high
 - Summary system:
   - `systems/SummaryInsightSystem.gd`
 - Chart system:
@@ -460,6 +506,8 @@ Read this file first in the next session.
 - Twooter backend / content:
   - `systems/TwooterFeedSystem.gd`
   - `data/social/twooter_feed_data.json`
+- Broker roster data:
+  - `data/brokers/broker_roster.json`
 
 ## Important Runtime / Save Decisions
 - Runtime company stats are generated per run and saved in `RunState`
@@ -492,9 +540,13 @@ Read this file first in the next session.
 - Ongoing company-event arcs are saved in `RunState.active_company_arcs`
 - Ongoing special-event arcs are saved in `RunState.active_special_events`
 - Watchlist membership is now also saved in `RunState.watchlist_company_ids`
-- News articles are currently not persisted as separate save data:
-  - the feed is re-rendered from saved event / market state on demand
-  - this keeps the article layer deterministic and lightweight
+- News articles now have a lightweight persistent archive:
+  - `RunState.news_archive_index`
+  - `RunState.news_archive_articles`
+  - `RunState.record_news_snapshot(snapshot)` captures rendered article records
+  - `GameManager` exposes year/month/article accessors for lazy archive browsing
+  - the archive stores final article-facing fields rather than all template/helper context
+  - older saves cannot reconstruct already-lost historical rendered article text; the archive begins preserving from current state forward
 - Twooter posts are also not persisted as separate save data:
   - the feed is re-rendered from saved event / market state on demand
   - this keeps the social layer deterministic and lightweight
@@ -560,6 +612,7 @@ Read this file first in the next session.
   - watchlist popup add flow works
   - `All Stock` add button immediately saves into watchlist
   - `Portfolio` tab appears in the trade sidebar and lists held stocks when present
+  - note: smoke coverage has not yet been updated to assert the new backend volume-context behavior directly
 - Important recent verification note:
   - `SmokeTest.gd` has now been updated to assert that generated company snapshots include a non-empty derived financial-statement block, `40` quarters of statement history, and a latest period of `Q4 2019`
   - `SmokeTest.gd` was also updated for the reduced difficulty company counts of `25 / 50 / 75 / 100`
@@ -569,6 +622,8 @@ Read this file first in the next session.
   - the last confirmed full end-to-end smoke rerun still remains the earlier successful run on `2026-04-05 18:45` local time
   - that confirmed `SMOKE_OK` output predates the most recent difficulty-count reduction, so there is not yet a fresh end-to-end smoke artifact for the lower company-count presets
   - during the later lazy-historical-chart and chart-shape-adjustment passes, Godot launch/runtime sanity checks also passed with no debug errors after fixing a temporary `CompanyGenerator.gd` parser issue
+  - the newer broker-roster, broker-net-toggle, and dashboard `2x2` passes have only been sanity-checked with Godot launches so far; they do not yet have a fresh confirmed end-to-end smoke artifact
+  - the backend-only volume-context pass was sanity-launched in Godot `4.6.1`; `GameRoot.tscn` loaded cleanly with only the existing `GameRoot.gd` warnings, and a smoke attempt reached the opening-session simulator path before failing later on the older dashboard history-panel expectation
   - attempted direct smoke reruns during those later chart passes still did not rewrite `user://smoke_test_result.txt`, so there is still not yet a newly confirmed post-quarterly-financials / post-lazy-chart `SMOKE_OK` file
 - Last known fully passing smoke output is now:
   - `SMOKE_OK normal_equity=99998359.35 hardcore_equity=923611.5 hardcore_down_days=18 summary=Institution-led accumulation gave IDSY the cleanest tape today.`
@@ -588,7 +643,7 @@ Read this file first in the next session.
 - `News` is now a first-pass deterministic desk, but still limited:
   - current prototype hardcodes unlocked intel to `4`
   - there is no real perk / upgrade system driving outlet access yet
-  - there is no search / archive / pagination / bookmarking yet
+  - there is now a lightweight outlet/year/month article archive, but no search / pagination / bookmarking yet
   - current article text is template-driven and intentionally editable, but still early-pass content
   - no richer article-specific imagery / attachments / linked company cards yet
 - `Twooter` is now a first-pass deterministic feed, but still limited:
@@ -600,7 +655,7 @@ Read this file first in the next session.
   - no richer account pages / follow system / custom finfluencer authoring UI yet
 - Taskbar scaffold exists, but is currently hidden
 - No draggable / resizable window manager yet
-- There is now a dedicated `News` UI, but there is still no separate long-form history browser beyond the current article list/detail feed
+- There is now a dedicated `News` UI with archive browsing, but the archive still reuses the current article list/detail layout rather than a separate long-form history browser
 - Person-event ids still use `trump_*` / `musk_*` internally even though displayed names are now `Tonald Drump` / `Melon Tusk`
 - Watchlist has no remove flow yet
 - Trade list still has no search / sort / filter tools
@@ -609,13 +664,22 @@ Read this file first in the next session.
   - no sorting
   - no filtering
   - no row actions yet
+- Dashboard is now more terminal-like, but still early-pass:
+  - the two right-side boxes are intentionally empty placeholders
+  - there is no deeper click-through from the index card or calendar yet
+  - there is no market frequency metric on the card yet
 - Trade view still needs deeper polish later:
   - there is still no intraday tape or intraday execution layer
   - candle mode is currently display-only and uses daily / weekly / monthly OHLC bars depending on range
   - `1D` intentionally does not allow candles because the sim only resolves one OHLC bar per day
+  - backend volume is now more meaningful, but there is still no dedicated visual volume-bar indicator on the chart
   - no indicator toggle UI / unlock flow yet
   - no lower indicator panes yet
   - crosshair / hover readout now exist, but there is still no draggable chart interaction yet
+  - broker tape is now much richer, but still a derived display layer:
+    - it is not a true per-broker execution engine
+    - broker rows are generated deterministically from aggregate flow + broker roster + company fit
+    - some balancing may still need tuning after more playtesting, especially for selective operator brokers
   - the current pre-2020 `5Y` history is intentionally derived and chart-only:
     - not a fully simulated day-by-day market tape
     - not yet surfaced as a dense historical table anywhere else in the UI
@@ -649,6 +713,7 @@ Read this file first in the next session.
   - indicator unlock flow tied to learning / perks
   - overlay toggles
   - lower indicator panes
+  - optional future volume-bar panel once the academy/tutorial layer is ready to teach volume interpretation
   - event markers / timeline
   - hover pinning / richer hover cards
   - drag / pan interaction

@@ -8,7 +8,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 script = ExtResource("1_menu")
 
 [node name="Background" type="ColorRect" parent="."]
@@ -50,42 +50,6 @@ grow_vertical = 2
 
 [node name="MainRow" type="HBoxContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent"]
 theme_override_constants/separation = 20
-
-[node name="IntroCard" type="PanelContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow"]
-size_flags_horizontal = 3
-custom_minimum_size = Vector2(640, 0)
-
-[node name="IntroMargin" type="MarginContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard"]
-theme_override_constants/margin_left = 24
-theme_override_constants/margin_top = 24
-theme_override_constants/margin_right = 24
-theme_override_constants/margin_bottom = 24
-
-[node name="IntroVBox" type="VBoxContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin"]
-theme_override_constants/separation = 16
-
-[node name="EyebrowLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin/IntroVBox"]
-text = "WIREFRAME BUILD"
-
-[node name="TitleLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin/IntroVBox"]
-text = "The Daytrader Game"
-
-[node name="BodyLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin/IntroVBox"]
-autowrap_mode = 3
-text = "Goal: make one readable market desk where the player can scan a watchlist, place a trade, and understand why the tape changed."
-
-[node name="LoopTitle" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin/IntroVBox"]
-text = "CORE LOOP"
-
-[node name="LoopLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin/IntroVBox"]
-text = "1. Scan the watchlist\n2. Read the selected company\n3. Buy, sell, or hold\n4. Advance one day\n5. Review why the market changed"
-
-[node name="FocusTitle" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin/IntroVBox"]
-text = "NEW GAME FLOW"
-
-[node name="FocusLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/IntroCard/IntroMargin/IntroVBox"]
-autowrap_mode = 3
-text = "New Game now opens a dedicated difficulty selector, then a short setup screen while the market roster and company financials are generated."
 
 [node name="ActionCard" type="PanelContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow"]
 custom_minimum_size = Vector2(380, 0)

@@ -12,7 +12,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 script = ExtResource("1_game")
 
 [node name="Background" type="ColorRect" parent="."]
@@ -189,7 +189,7 @@ size_flags_vertical = 3
 visible = false
 mouse_filter = 2
 clip_contents = true
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -208,7 +208,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 theme_override_constants/margin_left = 0
 theme_override_constants/margin_top = 0
 theme_override_constants/margin_right = 0
@@ -413,7 +413,7 @@ theme_override_constants/separation = 8
 
 [node name="NewsTitleLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsHeaderRow"]
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 text = "News Desk"
 
 [node name="NewsIntelStatusLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsHeaderRow"]
@@ -448,6 +448,22 @@ theme_override_constants/separation = 8
 autowrap_mode = 3
 text = "Choose an outlet to browse the feed."
 
+[node name="NewsArchiveFiltersRow" type="HBoxContainer" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="NewsArchiveYearLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsArchiveFiltersRow"]
+text = "Year"
+
+[node name="NewsArchiveYearOption" type="OptionButton" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsArchiveFiltersRow"]
+custom_minimum_size = Vector2(92, 30)
+
+[node name="NewsArchiveMonthLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsArchiveFiltersRow"]
+text = "Month"
+
+[node name="NewsArchiveMonthOption" type="OptionButton" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsArchiveFiltersRow"]
+custom_minimum_size = Vector2(104, 30)
+
 [node name="NewsArticleList" type="ItemList" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox"]
 custom_minimum_size = Vector2(0, 420)
 size_flags_horizontal = 3
@@ -472,7 +488,7 @@ theme_override_constants/separation = 10
 text = "Select an article"
 
 [node name="NewsDetailHeadlineLabel" type="Label" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox"]
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 autowrap_mode = 3
 text = "No article selected."
 
@@ -528,7 +544,7 @@ theme_override_constants/separation = 8
 
 [node name="SocialTitleLabel" type="Label" parent="SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialHeaderRow"]
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 12
 text = "Twooter"
 
 [node name="SocialAccessStatusLabel" type="Label" parent="SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialHeaderRow"]

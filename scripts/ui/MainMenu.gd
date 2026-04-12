@@ -3,7 +3,7 @@ extends Control
 const SCREEN_HOME := "home"
 const SCREEN_DIFFICULTY := "difficulty"
 const SCREEN_LOADING := "loading"
-const UI_FONT_SIZE := 11
+const UI_FONT_SIZE := 12
 
 @onready var home_screen: Control = $Margin/ScreenRoot/HomeScreen
 @onready var difficulty_screen: Control = $Margin/ScreenRoot/DifficultyScreen

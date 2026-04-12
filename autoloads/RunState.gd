@@ -64,6 +64,8 @@ var event_history = []
 var market_history = []
 var active_company_arcs = []
 var active_special_events = []
+var news_archive_index = {}
+var news_archive_articles = {}
 var yearly_macro_states = {}
 var historical_chart_bar_cache = {}
 var difficulty_id = "normal"
@@ -101,6 +103,8 @@ func reset() -> void:
 	market_history = []
 	active_company_arcs = []
 	active_special_events = []
+	news_archive_index = {}
+	news_archive_articles = {}
 	yearly_macro_states = {}
 	historical_chart_bar_cache = {}
 	difficulty_id = str(DEFAULT_DIFFICULTY_CONFIG.get("id", "normal"))
@@ -179,6 +183,8 @@ func load_from_dict(data: Dictionary) -> void:
 	market_history = data.get("market_history", []).duplicate(true)
 	active_company_arcs = data.get("active_company_arcs", []).duplicate(true)
 	active_special_events = data.get("active_special_events", []).duplicate(true)
+	news_archive_index = data.get("news_archive_index", {}).duplicate(true)
+	news_archive_articles = data.get("news_archive_articles", {}).duplicate(true)
 	yearly_macro_states = data.get("yearly_macro_states", {}).duplicate(true)
 	difficulty_id = str(data.get("difficulty_id", "normal"))
 	difficulty_config = data.get("difficulty_config", {}).duplicate(true)
@@ -236,6 +242,8 @@ func to_save_dict() -> Dictionary:
 		"market_history": market_history.duplicate(true),
 		"active_company_arcs": active_company_arcs.duplicate(true),
 		"active_special_events": active_special_events.duplicate(true),
+		"news_archive_index": news_archive_index.duplicate(true),
+		"news_archive_articles": news_archive_articles.duplicate(true),
 		"yearly_macro_states": yearly_macro_states.duplicate(true),
 		"difficulty_id": difficulty_id,
 		"difficulty_config": difficulty_config.duplicate(true),
@@ -579,6 +587,59 @@ func get_active_special_events() -> Array:
 	return active_special_events.duplicate(true)
 
 
+func record_news_snapshot(snapshot: Dictionary) -> void:
+	if snapshot.is_empty():
+		return
+
+	var outlet_label_lookup: Dictionary = {}
+	for outlet_value in snapshot.get("outlets", []):
+		var outlet: Dictionary = outlet_value
+		outlet_label_lookup[str(outlet.get("id", ""))] = str(outlet.get("label", "News"))
+
+	var feeds: Dictionary = snapshot.get("feeds", {})
+	for outlet_id_value in feeds.keys():
+		var outlet_id: String = str(outlet_id_value)
+		var feed: Dictionary = feeds.get(outlet_id, {})
+		var outlet_label: String = str(feed.get("outlet_label", outlet_label_lookup.get(outlet_id, "News")))
+		for article_value in feed.get("articles", []):
+			var article: Dictionary = article_value
+			_upsert_news_archive_article(outlet_id, outlet_label, article)
+
+
+func get_news_archive_years(outlet_id: String) -> Array:
+	var outlet_bucket: Dictionary = news_archive_index.get(outlet_id, {})
+	var years_bucket: Dictionary = outlet_bucket.get("years", {})
+	var years: Array = []
+	for year_key_value in years_bucket.keys():
+		years.append(int(year_key_value))
+	years.sort()
+	years.reverse()
+	return years
+
+
+func get_news_archive_months(outlet_id: String, year: int) -> Array:
+	var outlet_bucket: Dictionary = news_archive_index.get(outlet_id, {})
+	var year_bucket: Dictionary = outlet_bucket.get("years", {}).get(str(year), {})
+	var months_bucket: Dictionary = year_bucket.get("months", {})
+	var months: Array = []
+	for month_key_value in months_bucket.keys():
+		months.append(int(month_key_value))
+	months.sort()
+	months.reverse()
+	return months
+
+
+func get_news_archive_article_summaries(outlet_id: String, year: int, month: int) -> Array:
+	var outlet_bucket: Dictionary = news_archive_index.get(outlet_id, {})
+	var year_bucket: Dictionary = outlet_bucket.get("years", {}).get(str(year), {})
+	var month_bucket: Dictionary = year_bucket.get("months", {}).get(str(month), {})
+	return month_bucket.get("articles", []).duplicate(true)
+
+
+func get_news_archive_article(article_id: String) -> Dictionary:
+	return news_archive_articles.get(article_id, {}).duplicate(true)
+
+
 func debug_add_recorded_event(event_data: Dictionary) -> void:
 	if event_data.is_empty():
 		return
@@ -641,11 +702,25 @@ func _empty_broker_flow() -> Dictionary:
 		"retail_net": 0.0,
 		"foreign_net": 0.0,
 		"institution_net": 0.0,
+		"bandar_net": 0.0,
 		"zombie_net": 0.0,
 		"net_pressure": 0.0,
+		"smart_money_pressure": 0.0,
 		"dominant_buyer": "balanced",
 		"dominant_seller": "balanced",
-		"flow_tag": "neutral"
+		"dominant_buy_broker_code": "",
+		"dominant_buy_broker_name": "",
+		"dominant_buy_broker_type": "",
+		"dominant_sell_broker_code": "",
+		"dominant_sell_broker_name": "",
+		"dominant_sell_broker_type": "",
+		"flow_tag": "neutral",
+		"action_meter_score": 0.0,
+		"action_meter_label": "Neutral",
+		"buy_brokers": [],
+		"sell_brokers": [],
+		"net_buy_brokers": [],
+		"net_sell_brokers": []
 	}
 
 
@@ -739,6 +814,86 @@ func _record_market_history(summary: Dictionary) -> void:
 
 	if market_history.size() > MAX_MARKET_HISTORY:
 		market_history = market_history.slice(market_history.size() - MAX_MARKET_HISTORY, market_history.size())
+
+
+func _upsert_news_archive_article(outlet_id: String, outlet_label: String, article: Dictionary) -> void:
+	if article.is_empty():
+		return
+
+	var trade_date: Dictionary = article.get("trade_date", {}).duplicate(true)
+	var year_number: int = int(trade_date.get("year", 0))
+	var month_number: int = int(trade_date.get("month", 0))
+	if year_number <= 0 or month_number <= 0:
+		return
+
+	var source_article_id: String = str(article.get("id", ""))
+	var archive_article_id: String = "%s|%d|%s" % [
+		outlet_id,
+		int(article.get("day_index", -1)),
+		source_article_id
+	]
+	var article_record: Dictionary = {
+		"id": archive_article_id,
+		"source_article_id": source_article_id,
+		"outlet_id": outlet_id,
+		"outlet_label": outlet_label,
+		"headline": str(article.get("headline", "")),
+		"body": str(article.get("body", "")),
+		"trade_date": trade_date,
+		"day_index": int(article.get("day_index", -1))
+	}
+	news_archive_articles[archive_article_id] = article_record
+
+	var summary_entry: Dictionary = {
+		"id": archive_article_id,
+		"headline": str(article_record.get("headline", "")),
+		"trade_date": trade_date.duplicate(true),
+		"day_index": int(article_record.get("day_index", -1))
+	}
+
+	var outlet_bucket: Dictionary = news_archive_index.get(outlet_id, {
+		"outlet_label": outlet_label,
+		"years": {}
+	}).duplicate(true)
+	outlet_bucket["outlet_label"] = outlet_label
+
+	var years_bucket: Dictionary = outlet_bucket.get("years", {}).duplicate(true)
+	var year_key: String = str(year_number)
+	var year_bucket: Dictionary = years_bucket.get(year_key, {
+		"year": year_number,
+		"months": {}
+	}).duplicate(true)
+
+	var months_bucket: Dictionary = year_bucket.get("months", {}).duplicate(true)
+	var month_key: String = str(month_number)
+	var month_bucket: Dictionary = months_bucket.get(month_key, {
+		"month": month_number,
+		"articles": []
+	}).duplicate(true)
+
+	var article_summaries: Array = month_bucket.get("articles", []).duplicate(true)
+	var replaced: bool = false
+	for article_index in range(article_summaries.size()):
+		var existing_summary: Dictionary = article_summaries[article_index]
+		if str(existing_summary.get("id", "")) == archive_article_id:
+			article_summaries[article_index] = summary_entry
+			replaced = true
+			break
+	if not replaced:
+		article_summaries.append(summary_entry)
+
+	article_summaries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a.get("day_index", -1)) == int(b.get("day_index", -1)):
+			return str(a.get("headline", "")) < str(b.get("headline", ""))
+		return int(a.get("day_index", -1)) > int(b.get("day_index", -1))
+	)
+
+	month_bucket["articles"] = article_summaries
+	months_bucket[month_key] = month_bucket
+	year_bucket["months"] = months_bucket
+	years_bucket[year_key] = year_bucket
+	outlet_bucket["years"] = years_bucket
+	news_archive_index[outlet_id] = outlet_bucket
 
 
 func _append_event_to_companies(event_data: Dictionary) -> void:

@@ -11,9 +11,9 @@ config_version=5
 [application]
 
 config/name="The Daytrader Game"
+run/main_scene="res://scenes/main_menu/MainMenu.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
-run/main_scene="res://scenes/main_menu/MainMenu.tscn"
 
 [autoload]
 
@@ -26,7 +26,6 @@ SaveManager="*res://autoloads/SaveManager.gd"
 
 window/size/viewport_width=1440
 window/size/viewport_height=810
-window/size/resizable=true
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 

@@ -16,7 +16,7 @@ theme_override_constants/margin_top = 0
 theme_override_constants/margin_right = 0
 theme_override_constants/margin_bottom = 0
 
-[node name="TradeSplit" type="HSplitContainer" parent="."]
+[node name="TradeSplit" type="HBoxContainer" parent="."]
 clip_contents = true
 anchors_preset = 15
 anchor_right = 1.0
@@ -24,24 +24,28 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 0
-split_offset = 320
 
 [node name="WatchlistPanel" parent="TradeSplit" instance=ExtResource("1_watchlist")]
 clip_contents = true
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.0
 size_flags_vertical = 3
 
-[node name="MainSplit" type="HSplitContainer" parent="TradeSplit"]
+[node name="MainSplit" type="HBoxContainer" parent="TradeSplit"]
 clip_contents = true
 size_flags_horizontal = 3
+size_flags_stretch_ratio = 3.0
 size_flags_vertical = 3
 theme_override_constants/separation = 0
-split_offset = 860
 
 [node name="WorkAreaPanel" parent="TradeSplit/MainSplit" instance=ExtResource("2_workspace")]
 clip_contents = true
 size_flags_horizontal = 3
+size_flags_stretch_ratio = 2.0
 size_flags_vertical = 3
 
 [node name="ActionPanel" parent="TradeSplit/MainSplit" instance=ExtResource("3_order")]
 clip_contents = true
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.0
 size_flags_vertical = 3

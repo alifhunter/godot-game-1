@@ -5,8 +5,11 @@ const APP_ID_DESKTOP := "desktop"
 const APP_ID_STOCK := "stock"
 const APP_ID_NEWS := "news"
 const APP_ID_SOCIAL := "social"
-const STOCK_APP_FONT_SIZE := 11
-const DEFAULT_APP_FONT_SIZE := 11
+const STOCK_APP_FONT_SIZE := 12
+const DEFAULT_APP_FONT_SIZE := 12
+const TRADE_LEFT_SECTION_RATIO := 1.0
+const TRADE_CENTER_SECTION_RATIO := 2.0
+const TRADE_RIGHT_SECTION_RATIO := 1.0
 const COLOR_PANEL_BLUE := Color(0.109804, 0.14902, 0.184314, 0.94)
 const COLOR_PANEL_BLUE_ALT := Color(0.0901961, 0.129412, 0.164706, 0.96)
 const COLOR_PANEL_GREEN := Color(0.0862745, 0.152941, 0.133333, 0.95)
@@ -60,6 +63,10 @@ const FINANCIAL_HISTORY_MARGIN_WIDTH := 62.0
 const FINANCIAL_HISTORY_ROE_WIDTH := 52.0
 const FINANCIAL_HISTORY_DEBT_WIDTH := 50.0
 const FINANCIAL_HISTORY_PRICE_WIDTH := 72.0
+const BROKER_CODE_WIDTH := 42.0
+const BROKER_VALUE_WIDTH := 76.0
+const BROKER_LOT_WIDTH := 62.0
+const BROKER_AVERAGE_WIDTH := 70.0
 const STATEMENT_LABEL_WIDTH := 286.0
 const STATEMENT_VALUE_WIDTH := 148.0
 const APP_WINDOW_INSET := 20
@@ -73,6 +80,8 @@ const SOCIAL_WINDOW_MAX_HEIGHT := 780.0
 const SOCIAL_WINDOW_MIN_HEIGHT := 520.0
 const PROTOTYPE_NEWS_INTEL_LEVEL := 4
 const PROTOTYPE_TWOOTER_ACCESS_TIER := 4
+const DASHBOARD_WEEKDAY_NAMES := ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+const DASHBOARD_MONTH_NAMES := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 var selected_company_id: String = ""
 var displayed_company_ids: Array = []
@@ -91,7 +100,10 @@ var current_news_snapshot: Dictionary = {}
 var current_social_snapshot: Dictionary = {}
 var debug_generator_buttons: Dictionary = {}
 var active_order_side: String = "buy"
+var broker_net_mode: bool = false
 var selected_news_outlet_id: String = ""
+var selected_news_archive_year: int = 0
+var selected_news_archive_month: int = 0
 var selected_news_article_id: String = ""
 var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 
@@ -120,6 +132,10 @@ var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new
 @onready var news_outlet_buttons: HBoxContainer = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsOutletButtons
 @onready var news_feed_panel: PanelContainer = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel
 @onready var news_feed_summary_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsFeedSummaryLabel
+@onready var news_archive_year_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsArchiveFiltersRow/NewsArchiveYearLabel
+@onready var news_archive_year_option: OptionButton = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsArchiveFiltersRow/NewsArchiveYearOption
+@onready var news_archive_month_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsArchiveFiltersRow/NewsArchiveMonthLabel
+@onready var news_archive_month_option: OptionButton = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsArchiveFiltersRow/NewsArchiveMonthOption
 @onready var news_article_list: ItemList = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsArticleList
 @onready var news_detail_panel: PanelContainer = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel
 @onready var news_detail_outlet_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailOutletLabel
@@ -166,16 +182,24 @@ var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new
 @onready var objective_label: Label = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/ObjectiveLabel
 @onready var subtitle_label: Label = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TitleWrap/SubtitleLabel
 
-@onready var overview_panel: PanelContainer = %DashboardView/ContentVBox/OverviewPanel
-@onready var overview_headline_label: Label = %DashboardView/ContentVBox/OverviewPanel/OverviewMargin/OverviewVBox/OverviewHeadlineLabel
-@onready var market_overview_label: Label = %DashboardView/ContentVBox/OverviewPanel/OverviewMargin/OverviewVBox/MarketOverviewLabel
-@onready var portfolio_overview_label: Label = %DashboardView/ContentVBox/OverviewPanel/OverviewMargin/OverviewVBox/PortfolioOverviewLabel
-@onready var focus_overview_label: Label = %DashboardView/ContentVBox/OverviewPanel/OverviewMargin/OverviewVBox/FocusOverviewLabel
-@onready var special_overview_label: Label = %DashboardView/ContentVBox/OverviewPanel/OverviewMargin/OverviewVBox/SpecialOverviewLabel
-@onready var next_step_label: Label = %DashboardView/ContentVBox/OverviewPanel/OverviewMargin/OverviewVBox/NextStepLabel
+@onready var dashboard_grid: GridContainer = %DashboardView/DashboardGrid
+@onready var dashboard_index_panel: PanelContainer = %DashboardView/DashboardGrid/IndexPanel
+@onready var dashboard_index_title_label: Label = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexTitleLabel
+@onready var dashboard_index_date_label: Label = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexDateLabel
+@onready var dashboard_index_points_value_label: Label = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid/IndexPointsValueLabel
+@onready var dashboard_index_lots_value_label: Label = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid/IndexLotsValueLabel
+@onready var dashboard_index_value_value_label: Label = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid/IndexValueValueLabel
+@onready var dashboard_index_hint_label: Label = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexHintLabel
+@onready var dashboard_placeholder_top_panel: PanelContainer = %DashboardView/DashboardGrid/PlaceholderTopPanel
+@onready var dashboard_placeholder_top_body_label: Label = %DashboardView/DashboardGrid/PlaceholderTopPanel/PlaceholderTopMargin/PlaceholderTopVBox/PlaceholderTopBodyLabel
+@onready var dashboard_calendar_panel: PanelContainer = %DashboardView/DashboardGrid/CalendarPanel
+@onready var dashboard_calendar_month_label: Label = %DashboardView/DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarMonthLabel
+@onready var dashboard_calendar_days_grid: GridContainer = %DashboardView/DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarDaysGrid
+@onready var dashboard_placeholder_bottom_panel: PanelContainer = %DashboardView/DashboardGrid/PlaceholderBottomPanel
+@onready var dashboard_placeholder_bottom_body_label: Label = %DashboardView/DashboardGrid/PlaceholderBottomPanel/PlaceholderBottomMargin/PlaceholderBottomVBox/PlaceholderBottomBodyLabel
 
-@onready var trade_split: HSplitContainer = %MarketsView/TradeSplit
-@onready var main_trade_split: HSplitContainer = %MarketsView/TradeSplit/MainSplit
+@onready var trade_split: HBoxContainer = %MarketsView/TradeSplit
+@onready var main_trade_split: HBoxContainer = %MarketsView/TradeSplit/MainSplit
 @onready var watchlist_panel: PanelContainer = %MarketsView/TradeSplit/WatchlistPanel
 @onready var work_area_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel
 @onready var action_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/ActionPanel
@@ -207,6 +231,17 @@ var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new
 @onready var balance_sheet_empty_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/BalanceSheetRows/BalanceSheetEmptyLabel
 @onready var cash_flow_rows_vbox: VBoxContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/CashFlowRows
 @onready var cash_flow_empty_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox/CashFlowRows/CashFlowEmptyLabel
+@onready var broker_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Broker/BrokerPanel
+@onready var broker_summary_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Broker/BrokerPanel/BrokerMargin/BrokerVBox/BrokerSummaryLabel
+@onready var broker_meter_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Broker/BrokerPanel/BrokerMargin/BrokerVBox/BrokerMeterLabel
+@onready var broker_meter_bar: ProgressBar = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Broker/BrokerPanel/BrokerMargin/BrokerVBox/BrokerMeterBar
+@onready var broker_scale_left_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Broker/BrokerPanel/BrokerMargin/BrokerVBox/BrokerScaleRow/BrokerScaleLeftLabel
+@onready var broker_scale_mid_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Broker/BrokerPanel/BrokerMargin/BrokerVBox/BrokerScaleRow/BrokerScaleMidLabel
+@onready var broker_scale_right_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Broker/BrokerPanel/BrokerMargin/BrokerVBox/BrokerScaleRow/BrokerScaleRightLabel
+@onready var broker_net_toggle: CheckButton = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Broker/BrokerPanel/BrokerMargin/BrokerVBox/BrokerControlsRow/BrokerNetToggle
+@onready var broker_header_row: HBoxContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Broker/BrokerPanel/BrokerMargin/BrokerVBox/BrokerHeaderRow
+@onready var broker_rows_vbox: VBoxContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Broker/BrokerPanel/BrokerMargin/BrokerVBox/BrokerRows
+@onready var broker_empty_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Broker/BrokerPanel/BrokerMargin/BrokerVBox/BrokerRows/BrokerEmptyLabel
 @onready var analyzer_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel
 @onready var analyzer_setup_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel/AnalyzerMargin/AnalyzerVBox/AnalyzerSetupLabel
 @onready var analyzer_support_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Analyzer/AnalyzerPanel/AnalyzerMargin/AnalyzerVBox/AnalyzerSupportLabel
@@ -284,6 +319,7 @@ func _ready() -> void:
 	_ensure_watchlist_picker_dialog()
 	_apply_visual_theme()
 	_apply_compact_layout()
+	_apply_trade_layout_ratios()
 	_hide_toast()
 	stock_list_tabs.set_tab_title(STOCK_LIST_TAB_WATCHLIST, "Watchlist")
 	stock_list_tabs.set_tab_title(STOCK_LIST_TAB_ALL_STOCKS, "All Stock")
@@ -308,8 +344,11 @@ func _ready() -> void:
 	add_watchlist_button.pressed.connect(_on_add_watchlist_pressed)
 	financials_previous_button.pressed.connect(_on_financials_previous_pressed)
 	financials_next_button.pressed.connect(_on_financials_next_pressed)
+	broker_net_toggle.toggled.connect(_on_broker_net_toggled)
 	company_list.item_selected.connect(_on_company_selected)
 	news_article_list.item_selected.connect(_on_news_article_selected)
+	news_archive_year_option.item_selected.connect(_on_news_archive_year_selected)
+	news_archive_month_option.item_selected.connect(_on_news_archive_month_selected)
 	lot_spin_box.value_changed.connect(_on_lot_size_changed)
 	buy_button.pressed.connect(_on_buy_side_pressed)
 	sell_button.pressed.connect(_on_sell_side_pressed)
@@ -329,6 +368,7 @@ func _ready() -> void:
 	taskbar_news_button.tooltip_text = "Open the event-driven news desk."
 	financials_previous_button.tooltip_text = "View the previous quarter."
 	financials_next_button.tooltip_text = "View the next quarter."
+	broker_net_toggle.tooltip_text = "Toggle net broker flow so each broker appears on only one side."
 	buy_button.tooltip_text = "Switch the ticket to buy mode."
 	sell_button.tooltip_text = "Switch the ticket to sell mode."
 	submit_order_button.tooltip_text = "Submit the active order."
@@ -357,8 +397,25 @@ func _apply_compact_layout() -> void:
 	sidebar_focus_label.visible = false
 	sidebar_hint_label.visible = false
 	subtitle_label.visible = false
+	news_intel_status_label.visible = false
+	news_feed_summary_label.visible = false
+	news_detail_deck_label.visible = false
+	news_detail_hint_label.visible = false
 	top_day_label.visible = false
 	objective_label.visible = false
+
+
+func _apply_trade_layout_ratios() -> void:
+	trade_split.add_theme_constant_override("separation", 0)
+	main_trade_split.add_theme_constant_override("separation", 0)
+	watchlist_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	watchlist_panel.size_flags_stretch_ratio = TRADE_LEFT_SECTION_RATIO
+	main_trade_split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main_trade_split.size_flags_stretch_ratio = TRADE_CENTER_SECTION_RATIO + TRADE_RIGHT_SECTION_RATIO
+	work_area_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	work_area_panel.size_flags_stretch_ratio = TRADE_CENTER_SECTION_RATIO
+	action_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	action_panel.size_flags_stretch_ratio = TRADE_RIGHT_SECTION_RATIO
 
 
 func _apply_dashboard_perk_visibility() -> void:
@@ -373,8 +430,10 @@ func _update_responsive_layout() -> void:
 
 	portfolio_grid.columns = 2 if content_width >= 1100.0 else 1
 	portfolio_summary_grid.columns = 4 if content_width >= 1200.0 else 2
-	watchlist_panel.custom_minimum_size = Vector2(300 if content_width < 1420.0 else 360, 0)
-	action_panel.custom_minimum_size = Vector2(280 if content_width < 1420.0 else 320, 0)
+	_apply_trade_layout_ratios()
+	watchlist_panel.custom_minimum_size = Vector2.ZERO
+	work_area_panel.custom_minimum_size = Vector2.ZERO
+	action_panel.custom_minimum_size = Vector2.ZERO
 	company_list.custom_minimum_size = Vector2(0, 300 if content_width < 1320.0 else 420)
 	all_stocks_scroll.custom_minimum_size = Vector2(0, 300 if content_width < 1320.0 else 420)
 	portfolio_stocks_scroll.custom_minimum_size = Vector2(0, 300 if content_width < 1320.0 else 420)
@@ -484,13 +543,16 @@ func _refresh_desktop() -> void:
 
 func _refresh_news() -> void:
 	current_news_snapshot = {}
-	news_title_label.text = "News Desk"
+	news_title_label.text = "News"
 	if not RunState.has_active_run():
 		selected_news_outlet_id = ""
+		selected_news_archive_year = 0
+		selected_news_archive_month = 0
 		selected_news_article_id = ""
 		_rebuild_news_outlet_buttons([])
-		news_intel_status_label.text = "No run loaded"
-		news_feed_summary_label.text = "Start a run to populate the event-driven news desk."
+		_refresh_news_archive_filters()
+		news_intel_status_label.text = ""
+		news_feed_summary_label.text = ""
 		news_article_list.clear()
 		_show_news_article({})
 		return
@@ -499,10 +561,13 @@ func _refresh_news() -> void:
 	var outlets: Array = current_news_snapshot.get("outlets", [])
 	if selected_news_outlet_id.is_empty() or not _news_outlet_exists(outlets, selected_news_outlet_id):
 		selected_news_outlet_id = _default_news_outlet_id(outlets)
+		selected_news_archive_year = 0
+		selected_news_archive_month = 0
 		selected_news_article_id = ""
 
-	news_intel_status_label.text = "Prototype Intel %d active" % int(current_news_snapshot.get("intel_level", PROTOTYPE_NEWS_INTEL_LEVEL))
+	news_intel_status_label.text = ""
 	_rebuild_news_outlet_buttons(outlets)
+	_refresh_news_archive_filters()
 	_refresh_news_article_list()
 
 
@@ -522,35 +587,77 @@ func _rebuild_news_outlet_buttons(outlets: Array) -> void:
 		button.disabled = not unlocked
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.custom_minimum_size = Vector2(0, 36)
-		button.tooltip_text = "Intel %d  |  %s" % [
-			int(outlet.get("intel_level", 1)),
-			str(outlet.get("tagline", ""))
-		]
+		button.tooltip_text = ""
 		_style_news_outlet_button(button, outlet_id == selected_news_outlet_id, unlocked)
 		button.pressed.connect(_on_news_outlet_pressed.bind(outlet_id))
 		news_outlet_buttons.add_child(button)
 
 
+func _refresh_news_archive_filters() -> void:
+	news_archive_year_option.clear()
+	news_archive_month_option.clear()
+
+	var years: Array = []
+	if not selected_news_outlet_id.is_empty():
+		years = GameManager.get_news_archive_years(selected_news_outlet_id)
+
+	if years.is_empty():
+		selected_news_archive_year = 0
+		selected_news_archive_month = 0
+		news_archive_year_option.disabled = true
+		news_archive_month_option.disabled = true
+		return
+
+	news_archive_year_option.disabled = false
+	if not years.has(selected_news_archive_year):
+		selected_news_archive_year = int(years[0])
+
+	var selected_year_index: int = 0
+	for year_index in range(years.size()):
+		var year_number: int = int(years[year_index])
+		news_archive_year_option.add_item(str(year_number))
+		if year_number == selected_news_archive_year:
+			selected_year_index = year_index
+	news_archive_year_option.select(selected_year_index)
+	_refresh_news_archive_month_options()
+
+
+func _refresh_news_archive_month_options() -> void:
+	news_archive_month_option.clear()
+
+	var months: Array = []
+	if not selected_news_outlet_id.is_empty() and selected_news_archive_year > 0:
+		months = GameManager.get_news_archive_months(selected_news_outlet_id, selected_news_archive_year)
+
+	if months.is_empty():
+		selected_news_archive_month = 0
+		news_archive_month_option.disabled = true
+		return
+
+	news_archive_month_option.disabled = false
+	if not months.has(selected_news_archive_month):
+		selected_news_archive_month = int(months[0])
+
+	var selected_month_index: int = 0
+	for month_index in range(months.size()):
+		var month_number: int = int(months[month_index])
+		news_archive_month_option.add_item(_news_archive_month_label(month_number))
+		if month_number == selected_news_archive_month:
+			selected_month_index = month_index
+	news_archive_month_option.select(selected_month_index)
+
+
 func _refresh_news_article_list() -> void:
 	news_article_list.clear()
-	var feed: Dictionary = _current_news_feed()
-	var articles: Array = feed.get("articles", [])
-	var outlet_label: String = str(feed.get("outlet_label", "News"))
-	var summary: String = str(feed.get("summary", ""))
-	var tagline: String = str(feed.get("tagline", ""))
-	news_feed_summary_label.text = "%s  |  %s\n%s" % [
-		outlet_label,
-		tagline,
-		summary
-	]
+	var articles: Array = _current_news_archive_article_summaries()
+	news_feed_summary_label.text = ""
 
 	for article_value in articles:
 		var article: Dictionary = article_value
 		var line: String = _build_news_article_list_line(article)
 		news_article_list.add_item(line)
 		var item_index: int = news_article_list.item_count - 1
-		news_article_list.set_item_tooltip(item_index, str(article.get("deck", "")))
-		news_article_list.set_item_custom_fg_color(item_index, _news_color_for_tone(str(article.get("tone", "mixed"))))
+		news_article_list.set_item_tooltip(item_index, "")
 
 	var selected_index: int = -1
 	for article_index in range(articles.size()):
@@ -564,7 +671,7 @@ func _refresh_news_article_list() -> void:
 
 	if selected_index >= 0:
 		news_article_list.select(selected_index)
-		_show_news_article(articles[selected_index])
+		_show_news_article(GameManager.get_news_archive_article(selected_news_article_id))
 	else:
 		selected_news_article_id = ""
 		_show_news_article({})
@@ -748,51 +855,43 @@ func _social_card_border_color(tone: String) -> Color:
 
 func _show_news_article(article: Dictionary) -> void:
 	if article.is_empty():
-		news_detail_outlet_label.text = "Select an article"
+		news_detail_outlet_label.text = ""
 		news_detail_headline_label.text = "No article selected."
-		news_detail_deck_label.text = "Pick an outlet and story from the left feed."
+		news_detail_deck_label.text = ""
 		news_detail_meta_label.text = ""
-		news_detail_body.text = ""
-		news_detail_hint_label.text = "Intel outlets unlock earlier timing tiers once perks are wired in."
+		news_detail_body.text = "Choose a story from the list."
+		news_detail_hint_label.text = ""
 		return
 
-	var feed: Dictionary = _current_news_feed()
-	var meta_parts: Array = []
 	var trade_date: Dictionary = article.get("trade_date", {})
+	var trade_date_text: String = ""
 	if not trade_date.is_empty():
-		meta_parts.append(GameManager.format_trade_date(trade_date))
-	if not str(article.get("progress_label", "")).is_empty():
-		meta_parts.append(str(article.get("progress_label", "")))
-	if not str(article.get("person_name", "")).is_empty():
-		meta_parts.append(str(article.get("person_name", "")))
-	elif not str(article.get("target_ticker", "")).is_empty():
-		meta_parts.append(str(article.get("target_ticker", "")))
-	elif not str(article.get("sector_name", "")).is_empty():
-		meta_parts.append(str(article.get("sector_name", "")))
-	if not str(article.get("category", "")).is_empty():
-		meta_parts.append(_titleize_snake_case(str(article.get("category", ""))))
+		trade_date_text = GameManager.format_trade_date(trade_date)
 
-	news_detail_outlet_label.text = "%s  |  Intel %d" % [
-		str(feed.get("outlet_label", "News")),
-		int(feed.get("intel_level", 1))
-	]
+	news_detail_outlet_label.text = str(article.get("outlet_label", "News"))
 	news_detail_headline_label.text = str(article.get("headline", ""))
-	news_detail_deck_label.text = str(article.get("deck", ""))
-	news_detail_meta_label.text = "  |  ".join(meta_parts)
+	news_detail_deck_label.text = ""
+	news_detail_meta_label.text = trade_date_text
 	news_detail_body.text = str(article.get("body", ""))
-	news_detail_hint_label.text = str(feed.get("tagline", ""))
+	news_detail_hint_label.text = ""
 
 
-func _current_news_feed() -> Dictionary:
-	var feeds: Dictionary = current_news_snapshot.get("feeds", {})
-	if feeds.has(selected_news_outlet_id):
-		return feeds[selected_news_outlet_id]
-	return {}
+func _current_news_archive_article_summaries() -> Array:
+	if selected_news_outlet_id.is_empty() or selected_news_archive_year <= 0 or selected_news_archive_month <= 0:
+		return []
+	return GameManager.get_news_archive_article_summaries(
+		selected_news_outlet_id,
+		selected_news_archive_year,
+		selected_news_archive_month
+	)
 
 
 func _build_news_article_list_line(article: Dictionary) -> String:
-	var progress_label: String = str(article.get("progress_label", "News"))
-	return "[%s] %s" % [progress_label, str(article.get("headline", ""))]
+	return str(article.get("headline", ""))
+
+
+func _news_archive_month_label(month_number: int) -> String:
+	return DASHBOARD_MONTH_NAMES[clamp(month_number - 1, 0, DASHBOARD_MONTH_NAMES.size() - 1)]
 
 
 func _news_color_for_tone(tone: String) -> Color:
@@ -829,32 +928,215 @@ func _refresh_sidebar() -> void:
 
 func _refresh_dashboard() -> void:
 	if not RunState.has_active_run():
-		overview_headline_label.text = "No active run."
-		market_overview_label.text = "Start a run to see the market overview."
-		portfolio_overview_label.text = "Portfolio overview unavailable."
-		focus_overview_label.text = "No focus stock selected."
-		special_overview_label.text = "No active events."
-		next_step_label.text = "Use New Game or Load Run to begin."
+		dashboard_index_date_label.text = "No active run."
+		dashboard_index_points_value_label.text = "-"
+		dashboard_index_lots_value_label.text = "-"
+		dashboard_index_value_value_label.text = "-"
+		dashboard_index_hint_label.text = "Use New Game or Load Run to begin."
+		dashboard_calendar_month_label.text = "-"
+		_refresh_dashboard_calendar({})
+		dashboard_placeholder_top_body_label.text = "Empty for now."
+		dashboard_placeholder_bottom_body_label.text = "Empty for now."
 		return
 
-	var snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id)
-	var portfolio: Dictionary = GameManager.get_portfolio_snapshot()
-	var macro_state: Dictionary = GameManager.get_current_macro_state()
-	var sector_rows: Array = GameManager.get_sector_rows()
-	var active_special_events: Array = GameManager.get_active_special_events()
+	var index_snapshot: Dictionary = _build_dashboard_index_snapshot()
+	var trade_date: Dictionary = GameManager.get_current_trade_date()
 	var trading_day_number: int = max(RunState.day_index + 1, 1)
-
-	overview_headline_label.text = "Day %d overview | Market %s | Equity %s" % [
+	dashboard_index_date_label.text = "Day %d  |  %s" % [
 		trading_day_number,
-		_format_change(RunState.market_sentiment),
-		_format_currency(float(portfolio.get("equity", 0.0)))
+		GameManager.format_trade_date(trade_date)
 	]
-	market_overview_label.text = _build_market_overview_text(macro_state, sector_rows)
-	portfolio_overview_label.text = _build_dashboard_portfolio_text(portfolio)
-	focus_overview_label.text = _build_dashboard_focus_text(snapshot)
-	special_overview_label.text = _build_special_overview_text(active_special_events)
-	next_step_label.text = "Next step:\nOpen Trade to scan the stock list, inspect the Chart, Key Stats, Financials, Analyzer, or Profile tabs, then place orders from the right-side ticket."
-	_set_label_tone(overview_headline_label, _color_for_change(RunState.market_sentiment))
+	dashboard_index_points_value_label.text = _format_grouped_integer(int(round(float(index_snapshot.get("points", 0.0)))))
+	dashboard_index_lots_value_label.text = _format_compact_lots(float(index_snapshot.get("traded_lots", 0.0)))
+	dashboard_index_value_value_label.text = _format_compact_currency(float(index_snapshot.get("traded_value", 0.0)))
+	dashboard_index_hint_label.text = "Breadth %d green | %d red | %d flat | Market tone %s" % [
+		int(index_snapshot.get("advancers", 0)),
+		int(index_snapshot.get("decliners", 0)),
+		int(index_snapshot.get("flat_count", 0)),
+		_format_change(RunState.market_sentiment)
+	]
+	dashboard_calendar_month_label.text = "%s %d" % [
+		DASHBOARD_MONTH_NAMES[clamp(int(trade_date.get("month", 1)) - 1, 0, DASHBOARD_MONTH_NAMES.size() - 1)],
+		int(trade_date.get("year", 2020))
+	]
+	_refresh_dashboard_calendar(trade_date)
+	dashboard_placeholder_top_body_label.text = "Empty for now."
+	dashboard_placeholder_bottom_body_label.text = "Empty for now."
+	_set_label_tone(dashboard_index_points_value_label, _color_for_change(float(index_snapshot.get("day_change_pct", 0.0))))
+
+
+func _build_dashboard_index_snapshot() -> Dictionary:
+	var weighted_ratio_sum: float = 0.0
+	var weight_total: float = 0.0
+	var traded_lots: float = 0.0
+	var traded_value: float = 0.0
+	var advancers: int = 0
+	var decliners: int = 0
+	var flat_count: int = 0
+	var weighted_day_change_sum: float = 0.0
+
+	for company_id_value in RunState.company_order:
+		var company_id: String = str(company_id_value)
+		var runtime: Dictionary = RunState.get_company(company_id)
+		if runtime.is_empty():
+			continue
+
+		var current_price: float = float(runtime.get("current_price", 0.0))
+		var starting_price: float = max(float(runtime.get("starting_price", current_price)), 1.0)
+		var company_profile: Dictionary = runtime.get("company_profile", {})
+		var financials: Dictionary = company_profile.get("financials", {})
+		var weight: float = max(float(financials.get("market_cap", current_price * 1000000000.0)), current_price * 1000000.0)
+		weighted_ratio_sum += (current_price / starting_price) * weight
+		weight_total += weight
+
+		var daily_change_pct: float = float(runtime.get("daily_change_pct", 0.0))
+		weighted_day_change_sum += daily_change_pct * weight
+		if daily_change_pct > 0.0:
+			advancers += 1
+		elif daily_change_pct < 0.0:
+			decliners += 1
+		else:
+			flat_count += 1
+
+		var price_bars: Array = runtime.get("price_bars", [])
+		if not price_bars.is_empty():
+			var latest_bar: Dictionary = price_bars[price_bars.size() - 1]
+			traded_lots += float(latest_bar.get("volume_lots", 0.0))
+			traded_value += float(latest_bar.get("value", 0.0))
+
+	var points: float = 1000.0
+	var day_change_pct: float = 0.0
+	if weight_total > 0.0:
+		points = 1000.0 * (weighted_ratio_sum / weight_total)
+		day_change_pct = weighted_day_change_sum / weight_total
+
+	return {
+		"points": points,
+		"traded_lots": traded_lots,
+		"traded_value": traded_value,
+		"advancers": advancers,
+		"decliners": decliners,
+		"flat_count": flat_count,
+		"day_change_pct": day_change_pct
+	}
+
+
+func _refresh_dashboard_calendar(current_date: Dictionary) -> void:
+	if dashboard_calendar_days_grid == null:
+		return
+
+	_clear_container_children(dashboard_calendar_days_grid)
+	if current_date.is_empty():
+		return
+
+	var year_value: int = int(current_date.get("year", 2020))
+	var month_value: int = int(current_date.get("month", 1))
+	var current_day: int = int(current_date.get("day", 1))
+	var first_weekday: int = _weekday_for_date(year_value, month_value, 1)
+	var days_in_month: int = _days_in_month(year_value, month_value)
+
+	for _index in range(first_weekday):
+		dashboard_calendar_days_grid.add_child(_build_dashboard_calendar_spacer())
+
+	for day_value in range(1, days_in_month + 1):
+		var weekday_value: int = _weekday_for_date(year_value, month_value, day_value)
+		var day_info: Dictionary = {
+			"year": year_value,
+			"month": month_value,
+			"day": day_value,
+			"weekday": weekday_value
+		}
+		var is_current_day: bool = day_value == current_day
+		var is_trade_day: bool = weekday_value < 5 and not portfolio_trading_calendar.is_holiday(day_info)
+		dashboard_calendar_days_grid.add_child(_build_dashboard_calendar_day_cell(day_value, is_current_day, is_trade_day))
+
+	while dashboard_calendar_days_grid.get_child_count() % 7 != 0:
+		dashboard_calendar_days_grid.add_child(_build_dashboard_calendar_spacer())
+
+
+func _build_dashboard_calendar_spacer() -> Control:
+	var spacer: Control = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 28)
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return spacer
+
+
+func _build_dashboard_calendar_day_cell(day_value: int, is_current_day: bool, is_trade_day: bool) -> Control:
+	var panel: PanelContainer = PanelContainer.new()
+	panel.custom_minimum_size = Vector2(0, 28)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var label: Label = Label.new()
+	label.text = str(day_value)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	panel.add_child(label)
+
+	var fill_color: Color = Color(0.0784314, 0.109804, 0.141176, 0.85)
+	var border_color: Color = Color(0.211765, 0.270588, 0.329412, 0.7)
+	var text_color: Color = COLOR_TEXT
+	if not is_trade_day:
+		fill_color = Color(0.054902, 0.0705882, 0.0901961, 0.72)
+		border_color = Color(0.141176, 0.176471, 0.215686, 0.6)
+		text_color = COLOR_MUTED
+	if is_current_day:
+		fill_color = Color(0.219608, 0.439216, 0.65098, 0.92)
+		border_color = COLOR_NAV_ACTIVE_BORDER
+		text_color = Color(1, 1, 1, 1)
+
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = border_color
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_width_left = 1
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 0
+	style.corner_radius_bottom_right = 0
+	style.corner_radius_bottom_left = 0
+	panel.add_theme_stylebox_override("panel", style)
+	_set_label_tone(label, text_color)
+	return panel
+
+
+func _clear_container_children(container: Node) -> void:
+	for child in container.get_children():
+		container.remove_child(child)
+		child.queue_free()
+
+
+func _weekday_for_date(year_value: int, month_value: int, day_value: int) -> int:
+	var month_offsets: Array = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4]
+	var adjusted_year: int = year_value
+	if month_value < 3:
+		adjusted_year -= 1
+	var sunday_based: int = int(posmod(
+		adjusted_year +
+		int(adjusted_year / 4) -
+		int(adjusted_year / 100) +
+		int(adjusted_year / 400) +
+		int(month_offsets[month_value - 1]) +
+		day_value,
+		7
+	))
+	return int(posmod(sunday_based + 6, 7))
+
+
+func _days_in_month(year_value: int, month_value: int) -> int:
+	if month_value in [1, 3, 5, 7, 8, 10, 12]:
+		return 31
+	if month_value == 2:
+		return 29 if _is_leap_year(year_value) else 28
+	return 30
+
+
+func _is_leap_year(year_value: int) -> bool:
+	if year_value % 400 == 0:
+		return true
+	if year_value % 100 == 0:
+		return false
+	return year_value % 4 == 0
 
 
 func _refresh_markets() -> void:
@@ -1086,7 +1368,7 @@ func _refresh_all_stock_rows(company_rows: Array, watchlist_lookup: Dictionary) 
 
 		var add_button: Button = Button.new()
 		add_button.name = "AllStockAddButton_%s" % company_id
-		add_button.custom_minimum_size = Vector2(118, 40)
+		add_button.custom_minimum_size = Vector2(84, 36)
 		add_button.text = "Added" if is_in_watchlist else "Add"
 		add_button.disabled = is_in_watchlist
 		_style_button(
@@ -1214,6 +1496,9 @@ func _refresh_trade_workspace() -> void:
 		key_stats_financial_label.text = "Financials:"
 		financials_year_label.text = "Derived financial statements unavailable."
 		financials_period_label.text = "Viewing latest available period."
+		broker_summary_label.text = "Broker tape unavailable."
+		broker_meter_label.text = "Broker Action: Neutral"
+		broker_meter_bar.value = 50.0
 		analyzer_setup_label.text = "Setup read:"
 		analyzer_support_label.text = "Supportive signals:"
 		analyzer_risk_label.text = "Risk signals:"
@@ -1221,6 +1506,7 @@ func _refresh_trade_workspace() -> void:
 		analyzer_history_label.text = "Recent closes:"
 		financial_history_summary_label.text = "Generated history unavailable."
 		_refresh_financial_history_table([], {})
+		_refresh_broker_table({})
 		_refresh_statement_sections({})
 		_set_label_tone(profile_price_label, COLOR_TEXT)
 		return
@@ -1272,6 +1558,7 @@ func _refresh_trade_workspace() -> void:
 		snapshot.get("financial_history", []),
 		snapshot.get("financials", {})
 	)
+	_refresh_broker_table(snapshot.get("broker_flow", {}))
 	_refresh_statement_sections(financial_statement_snapshot)
 	_refresh_order_controls(snapshot)
 	_set_label_tone(profile_price_label, _color_for_change(float(snapshot.get("daily_change_pct", 0.0))))
@@ -1473,17 +1760,41 @@ func _on_social_app_pressed() -> void:
 
 func _on_news_outlet_pressed(outlet_id: String) -> void:
 	selected_news_outlet_id = outlet_id
+	selected_news_archive_year = 0
+	selected_news_archive_month = 0
 	selected_news_article_id = ""
 	_rebuild_news_outlet_buttons(current_news_snapshot.get("outlets", []))
+	_refresh_news_archive_filters()
 	_refresh_news_article_list()
 
 
 func _on_news_article_selected(index: int) -> void:
-	var articles: Array = _current_news_feed().get("articles", [])
+	var articles: Array = _current_news_archive_article_summaries()
 	if index < 0 or index >= articles.size():
 		return
 	selected_news_article_id = str(articles[index].get("id", ""))
-	_show_news_article(articles[index])
+	_show_news_article(GameManager.get_news_archive_article(selected_news_article_id))
+
+
+func _on_news_archive_year_selected(index: int) -> void:
+	if index < 0 or index >= news_archive_year_option.item_count:
+		return
+	selected_news_archive_year = int(news_archive_year_option.get_item_text(index))
+	selected_news_archive_month = 0
+	selected_news_article_id = ""
+	_refresh_news_archive_month_options()
+	_refresh_news_article_list()
+
+
+func _on_news_archive_month_selected(index: int) -> void:
+	if index < 0 or index >= news_archive_month_option.item_count:
+		return
+	selected_news_archive_month = clamp(index + 1, 1, 12)
+	var months: Array = GameManager.get_news_archive_months(selected_news_outlet_id, selected_news_archive_year)
+	if index < months.size():
+		selected_news_archive_month = int(months[index])
+	selected_news_article_id = ""
+	_refresh_news_article_list()
 
 
 func _on_stock_list_tab_changed(_tab_index: int) -> void:
@@ -1756,11 +2067,11 @@ func _populate_watchlist_picker() -> void:
 
 
 func _build_tutorial_text() -> String:
-	return "Open the STOCKBOT app from the desktop, then pick one stock first.\n\nUse the Chart, Key Stats, Financials, Analyzer, or Profile tabs to inspect the setup, size the order from the right-side ticket, then use the navbar to advance the day.\n\nDashboard is now overview-only, while Portfolio keeps your holdings and trade history together.\n\nDifficulty: %s." % GameManager.get_current_difficulty_label()
+	return "Open the STOCKBOT app from the desktop, then pick one stock first.\n\nUse the Chart, Key Stats, Financials, Broker, Analyzer, or Profile tabs to inspect the setup, size the order from the right-side ticket, then use the navbar to advance the day.\n\nDashboard is now overview-only, while Portfolio keeps your holdings and trade history together.\n\nDifficulty: %s." % GameManager.get_current_difficulty_label()
 
 
 func _build_help_text() -> String:
-	return "OVERVIEW\nThe game screen is split into modular views so you can move sections around more easily later.\nSidebar sections now swap self-contained views instead of one giant screen.\n\nOBJECTIVE\nFind the clearest setup, size lightly, then learn from the close.\n\nSECTIONS\n%s\n\n%s\n\n%s\n\nWORKFLOW\n1. Start on Dashboard for the market overview.\n2. Open Trade and choose a stock.\n3. Use Chart, Key Stats, Financials, Analyzer, or Profile to inspect it.\n4. Size the order from the right-side ticket.\n5. Advance the day.\n\nNOTES\nUse sector context to decide whether a stock is moving with its group or fighting it.\nNewest fills appear first in Trade History so you can audit lots, fees, cash impact, and realized P/L.\n\nCURRENT DIFFICULTY\n%s" % [
+	return "OVERVIEW\nThe game screen is split into modular views so you can move sections around more easily later.\nSidebar sections now swap self-contained views instead of one giant screen.\n\nOBJECTIVE\nFind the clearest setup, size lightly, then learn from the close.\n\nSECTIONS\n%s\n\n%s\n\n%s\n\nWORKFLOW\n1. Start on Dashboard for the market overview.\n2. Open Trade and choose a stock.\n3. Use Chart, Key Stats, Financials, Broker, Analyzer, or Profile to inspect it.\n4. Size the order from the right-side ticket.\n5. Advance the day.\n\nNOTES\nUse sector context to decide whether a stock is moving with its group or fighting it.\nNewest fills appear first in Trade History so you can audit lots, fees, cash impact, and realized P/L.\n\nCURRENT DIFFICULTY\n%s" % [
 		_sidebar_hint_for_section("dashboard"),
 		_sidebar_hint_for_section("markets"),
 		_sidebar_hint_for_section("portfolio"),
@@ -2493,6 +2804,7 @@ func _build_support_signals(snapshot: Dictionary) -> String:
 	var financials: Dictionary = snapshot.get("financials", {})
 	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
 	var dominant_buyer: String = str(broker_flow.get("dominant_buyer", "balanced"))
+	var dominant_buy_actor: String = _broker_actor_label(broker_flow, "buy")
 	var revenue_growth_yoy: float = float(financials.get("revenue_growth_yoy", 0.0))
 	var earnings_growth_yoy: float = float(financials.get("earnings_growth_yoy", 0.0))
 	var net_profit_margin: float = float(financials.get("net_profit_margin", 0.0))
@@ -2509,8 +2821,8 @@ func _build_support_signals(snapshot: Dictionary) -> String:
 		signals.append("- price already confirms strength")
 	if flow_tag == "accumulation":
 		signals.append("- broker flow leans supportive")
-	if dominant_buyer in ["foreign", "institution", "zombie"]:
-		signals.append("- cleaner buyer profile: %s" % dominant_buyer)
+	if dominant_buyer in ["foreign", "institution", "bandar", "zombie"]:
+		signals.append("- cleaner buyer profile: %s" % dominant_buy_actor)
 	if revenue_growth_yoy >= 12.0:
 		signals.append("- revenue is still growing at a healthy clip")
 	if earnings_growth_yoy >= 10.0:
@@ -2538,6 +2850,7 @@ func _build_risk_signals(snapshot: Dictionary) -> String:
 	var financials: Dictionary = snapshot.get("financials", {})
 	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
 	var dominant_seller: String = str(broker_flow.get("dominant_seller", "balanced"))
+	var dominant_sell_actor: String = _broker_actor_label(broker_flow, "sell")
 	var earnings_growth_yoy: float = float(financials.get("earnings_growth_yoy", 0.0))
 	var net_profit_margin: float = float(financials.get("net_profit_margin", 0.0))
 	var roe: float = float(financials.get("roe", 0.0))
@@ -2553,8 +2866,8 @@ func _build_risk_signals(snapshot: Dictionary) -> String:
 		risks.append("- price is already under pressure")
 	if flow_tag == "distribution":
 		risks.append("- broker flow leans defensive")
-	if dominant_seller in ["retail", "foreign", "institution", "zombie"] and dominant_seller != "balanced":
-		risks.append("- active selling from %s" % dominant_seller)
+	if dominant_seller in ["retail", "foreign", "institution", "bandar", "zombie"] and dominant_seller != "balanced":
+		risks.append("- active selling from %s" % dominant_sell_actor)
 	if earnings_growth_yoy < 0.0:
 		risks.append("- earnings are shrinking despite the story")
 	if net_profit_margin < 3.0:
@@ -2577,28 +2890,30 @@ func _build_action_hint(snapshot: Dictionary) -> String:
 	var dominant_buyer: String = str(broker_flow.get("dominant_buyer", "balanced"))
 	var dominant_seller: String = str(broker_flow.get("dominant_seller", "balanced"))
 	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
+	var dominant_buy_actor: String = _broker_actor_label(broker_flow, "buy")
+	var dominant_sell_actor: String = _broker_actor_label(broker_flow, "sell")
 
 	if shares_owned > 0 and flow_tag == "distribution":
 		return "You already hold %d lot(s). Decide whether today's selling pressure weakens your original thesis." % lots_owned
 	if shares_owned > 0:
 		return "You already have exposure. Use the lot selector to scale deliberately, not just because price moved."
 	if flow_tag == "accumulation" and dominant_buyer != "balanced":
-		return "%s is currently the strongest buyer. Start small and let the fee-aware preview define your first lot." % dominant_buyer.capitalize()
+		return "%s is currently the strongest buyer. Start small and let the fee-aware preview define your first lot." % dominant_buy_actor
 	if dominant_seller != "balanced":
-		return "%s is leaning on this tape. Waiting is a valid decision." % dominant_seller.capitalize()
+		return "%s is leaning on this tape. Waiting is a valid decision." % dominant_sell_actor
 	return "No position yet. Use this panel to size a deliberate first lot."
 
 
 func _build_broker_hint(snapshot: Dictionary) -> String:
 	var broker_flow: Dictionary = snapshot.get("broker_flow", {})
-	var dominant_buyer: String = str(broker_flow.get("dominant_buyer", "balanced"))
-	var dominant_seller: String = str(broker_flow.get("dominant_seller", "balanced"))
 	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
+	var dominant_buy_actor: String = _broker_actor_label(broker_flow, "buy")
+	var dominant_sell_actor: String = _broker_actor_label(broker_flow, "sell")
 
 	if flow_tag == "accumulation":
-		return "Read: %s is supporting the tape, so ask whether price action agrees or is still lagging." % dominant_buyer.capitalize()
+		return "Read: %s is supporting the tape, so ask whether price action agrees or is still lagging." % dominant_buy_actor
 	if flow_tag == "distribution":
-		return "Read: %s is the main seller, so ask whether weakness is temporary or the thesis is breaking." % dominant_seller.capitalize()
+		return "Read: %s is the main seller, so ask whether weakness is temporary or the thesis is breaking." % dominant_sell_actor
 	return "Read: mixed broker behavior. Treat this as a lower-conviction setup unless the company story is especially strong."
 
 
@@ -2659,6 +2974,20 @@ func _titleize_snake_case(value: String) -> String:
 	return " ".join(parts)
 
 
+func _broker_actor_label(broker_flow: Dictionary, side: String) -> String:
+	var normalized_side: String = side.to_lower()
+	var broker_code_key: String = "dominant_buy_broker_code" if normalized_side == "buy" else "dominant_sell_broker_code"
+	var broker_type_key: String = "dominant_buy_broker_type" if normalized_side == "buy" else "dominant_sell_broker_type"
+	var fallback_key: String = "dominant_buyer" if normalized_side == "buy" else "dominant_seller"
+	var broker_code: String = str(broker_flow.get(broker_code_key, ""))
+	if not broker_code.is_empty():
+		return broker_code
+	var fallback_value: String = str(broker_flow.get(broker_type_key, broker_flow.get(fallback_key, "balanced")))
+	if fallback_value.is_empty() or fallback_value == "balanced":
+		return "Balanced"
+	return fallback_value.capitalize()
+
+
 func _watchlist_tooltip(row: Dictionary) -> String:
 	var broker_flow: Dictionary = row.get("broker_flow", {})
 	return "%s\nSector: %s\nHeld: %d lot(s) / %d share(s)\nBuyer: %s\nSeller: %s\nTape: %s" % [
@@ -2666,8 +2995,8 @@ func _watchlist_tooltip(row: Dictionary) -> String:
 		row.get("sector_name", "Unknown"),
 		int(row.get("lots_owned", 0)),
 		int(row.get("shares_owned", 0)),
-		str(broker_flow.get("dominant_buyer", "balanced")).capitalize(),
-		str(broker_flow.get("dominant_seller", "balanced")).capitalize(),
+		_broker_actor_label(broker_flow, "buy"),
+		_broker_actor_label(broker_flow, "sell"),
 		str(broker_flow.get("flow_tag", "neutral")).capitalize()
 	]
 
@@ -2715,7 +3044,10 @@ func _apply_visual_theme() -> void:
 	_style_panel(taskbar_panel, Color(0.0588235, 0.0823529, 0.109804, 0.96), 14)
 	_style_panel(sidebar_panel, COLOR_PANEL_BLUE_ALT, 0, 0, 1, 1, 1)
 	_style_panel(top_bar_panel, COLOR_PANEL_BLUE_ALT, 0)
-	_style_panel(overview_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(dashboard_index_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(dashboard_calendar_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(dashboard_placeholder_top_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(dashboard_placeholder_bottom_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_style_panel(news_window_body, COLOR_WINDOW_BG, 0)
 	_style_panel(news_feed_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
 	_style_panel(news_detail_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
@@ -2724,6 +3056,7 @@ func _apply_visual_theme() -> void:
 	_style_panel(order_card_panel, COLOR_ORDER_CARD_BG, 0)
 	_style_panel(key_stats_panel, COLOR_PANEL_BLUE, 0)
 	_style_panel(financials_panel, COLOR_PANEL_BLUE, 0)
+	_style_panel(broker_panel, COLOR_PANEL_BLUE, 0)
 	_style_panel(analyzer_panel, COLOR_PANEL_BLUE, 0)
 	_style_panel(profile_panel, COLOR_PANEL_BLUE, 0)
 	_style_panel(watchlist_panel, COLOR_PANEL_BLUE, 0)
@@ -2766,6 +3099,8 @@ func _apply_visual_theme() -> void:
 	_style_button(financials_previous_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(financials_next_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(debug_close_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	_style_light_option_button(news_archive_year_option)
+	_style_light_option_button(news_archive_month_option)
 	_style_item_list(company_list, 0, 0)
 	_style_light_item_list(news_article_list)
 	if watchlist_picker_list != null:
@@ -2785,6 +3120,8 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(news_title_label, COLOR_WINDOW_TEXT)
 	_set_label_tone(news_intel_status_label, Color(0.454902, 0.337255, 0.141176, 1))
 	_set_label_tone(news_feed_summary_label, COLOR_WINDOW_TEXT)
+	_set_label_tone(news_archive_year_label, COLOR_WINDOW_TEXT)
+	_set_label_tone(news_archive_month_label, COLOR_WINDOW_TEXT)
 	_set_label_tone(news_detail_outlet_label, Color(0.454902, 0.337255, 0.141176, 1))
 	_set_label_tone(news_detail_headline_label, COLOR_WINDOW_TEXT)
 	_set_label_tone(news_detail_deck_label, COLOR_WINDOW_TEXT)
@@ -2801,12 +3138,12 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(sidebar_intro_label, COLOR_MUTED)
 	_set_label_tone(sidebar_focus_label, COLOR_ACCENT)
 	_set_label_tone(sidebar_hint_label, COLOR_MUTED)
-	_set_label_tone(overview_headline_label, COLOR_ACCENT)
-	_set_label_tone(market_overview_label, COLOR_MUTED)
-	_set_label_tone(portfolio_overview_label, COLOR_TEXT)
-	_set_label_tone(focus_overview_label, COLOR_TEXT)
-	_set_label_tone(special_overview_label, COLOR_MUTED)
-	_set_label_tone(next_step_label, COLOR_WARNING)
+	_set_label_tone(dashboard_index_title_label, COLOR_ACCENT)
+	_set_label_tone(dashboard_index_date_label, COLOR_MUTED)
+	_set_label_tone(dashboard_index_hint_label, COLOR_WARNING)
+	_set_label_tone(dashboard_calendar_month_label, COLOR_ACCENT)
+	_set_label_tone(dashboard_placeholder_top_body_label, COLOR_MUTED)
+	_set_label_tone(dashboard_placeholder_bottom_body_label, COLOR_MUTED)
 	_set_label_tone(order_company_name_label, COLOR_MUTED)
 	_set_label_tone(selection_label, COLOR_TEXT)
 	_set_label_tone(order_price_value_label, COLOR_TEXT)
@@ -2832,6 +3169,12 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(income_statement_empty_label, COLOR_MUTED)
 	_set_label_tone(balance_sheet_empty_label, COLOR_MUTED)
 	_set_label_tone(cash_flow_empty_label, COLOR_MUTED)
+	_set_label_tone(broker_summary_label, COLOR_MUTED)
+	_set_label_tone(broker_meter_label, COLOR_WARNING)
+	_set_label_tone(broker_empty_label, COLOR_MUTED)
+	_set_label_tone(broker_scale_left_label, COLOR_NEGATIVE)
+	_set_label_tone(broker_scale_mid_label, COLOR_MUTED)
+	_set_label_tone(broker_scale_right_label, COLOR_POSITIVE)
 	_set_label_tone(analyzer_support_label, COLOR_POSITIVE)
 	_set_label_tone(analyzer_risk_label, COLOR_NEGATIVE)
 	help_text_label.add_theme_color_override("default_color", COLOR_TEXT)
@@ -2851,6 +3194,7 @@ func _apply_visual_theme() -> void:
 	toast_message_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_apply_active_window_theme()
 	_refresh_financial_history_header()
+	_refresh_broker_header()
 
 
 func _style_desktop_icon_button(button: Button) -> void:
@@ -2949,6 +3293,30 @@ func _style_panel(
 	style.content_margin_right = 0
 	style.content_margin_bottom = 0
 	panel.add_theme_stylebox_override("panel", style)
+
+
+func _style_broker_meter(fill_color: Color) -> void:
+	if broker_meter_bar == null:
+		return
+
+	var background: StyleBoxFlat = StyleBoxFlat.new()
+	background.bg_color = Color(0.0823529, 0.117647, 0.156863, 0.92)
+	background.border_color = COLOR_BORDER
+	background.set_border_width_all(1)
+	background.corner_radius_top_left = 0
+	background.corner_radius_top_right = 0
+	background.corner_radius_bottom_right = 0
+	background.corner_radius_bottom_left = 0
+
+	var fill: StyleBoxFlat = StyleBoxFlat.new()
+	fill.bg_color = fill_color
+	fill.corner_radius_top_left = 0
+	fill.corner_radius_top_right = 0
+	fill.corner_radius_bottom_right = 0
+	fill.corner_radius_bottom_left = 0
+
+	broker_meter_bar.add_theme_stylebox_override("background", background)
+	broker_meter_bar.add_theme_stylebox_override("fill", fill)
 
 
 func _apply_toast_theme(is_success: bool) -> void:
@@ -3050,6 +3418,28 @@ func _style_button(
 	button.add_theme_color_override("font_color", font_color)
 	button.add_theme_color_override("font_hover_color", font_color)
 	button.add_theme_color_override("font_pressed_color", font_color)
+
+
+func _style_light_option_button(option_button: OptionButton) -> void:
+	_style_button(
+		option_button,
+		Color(0.909804, 0.87451, 0.737255, 1),
+		Color(0.52549, 0.396078, 0.160784, 1),
+		COLOR_WINDOW_TEXT,
+		0
+	)
+	var popup: PopupMenu = option_button.get_popup()
+	if popup == null:
+		return
+
+	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.980392, 0.976471, 0.921569, 1)
+	panel_style.border_color = Color(0.572549, 0.482353, 0.309804, 0.9)
+	panel_style.set_border_width_all(1)
+	popup.add_theme_stylebox_override("panel", panel_style)
+	popup.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	popup.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
+	popup.add_theme_color_override("font_disabled_color", Color(0.541176, 0.494118, 0.396078, 1))
 
 
 func _style_news_outlet_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
@@ -3384,6 +3774,168 @@ func _build_financial_history_row(history_entry: Dictionary) -> Control:
 	return row_wrap
 
 
+func _refresh_broker_header() -> void:
+	if broker_header_row == null:
+		return
+
+	for child in broker_header_row.get_children():
+		broker_header_row.remove_child(child)
+		child.queue_free()
+
+	if broker_net_mode:
+		broker_header_row.add_child(_build_table_cell("Net Buy", BROKER_CODE_WIDTH, COLOR_POSITIVE))
+		broker_header_row.add_child(_build_table_cell("N.Val", BROKER_VALUE_WIDTH, COLOR_POSITIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
+		broker_header_row.add_child(_build_table_cell("N.Lot", BROKER_LOT_WIDTH, COLOR_POSITIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
+		broker_header_row.add_child(_build_table_cell("N.Avg", BROKER_AVERAGE_WIDTH, COLOR_POSITIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
+		broker_header_row.add_child(_build_table_cell("Net Sell", BROKER_CODE_WIDTH, COLOR_NEGATIVE))
+		broker_header_row.add_child(_build_table_cell("N.Val", BROKER_VALUE_WIDTH, COLOR_NEGATIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
+		broker_header_row.add_child(_build_table_cell("N.Lot", BROKER_LOT_WIDTH, COLOR_NEGATIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
+		broker_header_row.add_child(_build_table_cell("N.Avg", BROKER_AVERAGE_WIDTH, COLOR_NEGATIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
+	else:
+		broker_header_row.add_child(_build_table_cell("Buy", BROKER_CODE_WIDTH, COLOR_POSITIVE))
+		broker_header_row.add_child(_build_table_cell("B.Val", BROKER_VALUE_WIDTH, COLOR_POSITIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
+		broker_header_row.add_child(_build_table_cell("B.Lot", BROKER_LOT_WIDTH, COLOR_POSITIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
+		broker_header_row.add_child(_build_table_cell("B.Avg", BROKER_AVERAGE_WIDTH, COLOR_POSITIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
+		broker_header_row.add_child(_build_table_cell("Sell", BROKER_CODE_WIDTH, COLOR_NEGATIVE))
+		broker_header_row.add_child(_build_table_cell("S.Val", BROKER_VALUE_WIDTH, COLOR_NEGATIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
+		broker_header_row.add_child(_build_table_cell("S.Lot", BROKER_LOT_WIDTH, COLOR_NEGATIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
+		broker_header_row.add_child(_build_table_cell("S.Avg", BROKER_AVERAGE_WIDTH, COLOR_NEGATIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
+
+
+func _refresh_broker_table(broker_flow: Dictionary) -> void:
+	if broker_rows_vbox == null or broker_empty_label == null:
+		return
+
+	_clear_dynamic_rows(broker_rows_vbox, broker_empty_label)
+	var buy_brokers: Array = broker_flow.get("net_buy_brokers", []) if broker_net_mode else broker_flow.get("buy_brokers", [])
+	var sell_brokers: Array = broker_flow.get("net_sell_brokers", []) if broker_net_mode else broker_flow.get("sell_brokers", [])
+	var row_count: int = max(buy_brokers.size(), sell_brokers.size())
+	broker_empty_label.visible = row_count == 0
+	if row_count == 0:
+		broker_summary_label.text = "Broker tape unavailable."
+		broker_meter_label.text = "Broker Action: Neutral"
+		broker_meter_bar.value = 50.0
+		_style_broker_meter(Color(0.603922, 0.623529, 0.662745, 0.92))
+		return
+
+	var dominant_buy_text: String = _broker_side_display_label(
+		str(broker_flow.get("dominant_buy_broker_code", "")),
+		str(broker_flow.get("dominant_buy_broker_name", "")),
+		str(broker_flow.get("dominant_buy_broker_type", ""))
+	)
+	var dominant_sell_text: String = _broker_side_display_label(
+		str(broker_flow.get("dominant_sell_broker_code", "")),
+		str(broker_flow.get("dominant_sell_broker_name", "")),
+		str(broker_flow.get("dominant_sell_broker_type", ""))
+	)
+	var action_meter_score: float = float(broker_flow.get("action_meter_score", 0.0))
+	var action_meter_label: String = str(broker_flow.get("action_meter_label", "Neutral"))
+	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
+	var view_label: String = "Net" if broker_net_mode else "Split"
+	broker_summary_label.text = "Lead buyer: %s  |  Lead seller: %s  |  Tape: %s  |  View: %s" % [
+		dominant_buy_text,
+		dominant_sell_text,
+		_flow_badge(flow_tag),
+		view_label
+	]
+	broker_meter_label.text = "Broker Action: %s  |  Aggregate flow %s  |  Smart money %s" % [
+		action_meter_label,
+		_format_change(float(broker_flow.get("net_pressure", 0.0))),
+		_format_change(float(broker_flow.get("smart_money_pressure", 0.0)))
+	]
+	broker_meter_bar.value = clamp((action_meter_score + 1.0) * 50.0, 0.0, 100.0)
+	_style_broker_meter(_color_for_flow(flow_tag))
+
+	for row_index in range(row_count):
+		var buy_row: Dictionary = buy_brokers[row_index] if row_index < buy_brokers.size() else {}
+		var sell_row: Dictionary = sell_brokers[row_index] if row_index < sell_brokers.size() else {}
+		broker_rows_vbox.add_child(_build_broker_table_row(buy_row, sell_row))
+
+
+func _on_broker_net_toggled(toggled_on: bool) -> void:
+	broker_net_mode = toggled_on
+	_refresh_broker_header()
+	if current_trade_snapshot.is_empty():
+		_refresh_broker_table({})
+	else:
+		_refresh_broker_table(current_trade_snapshot.get("broker_flow", {}))
+
+
+func _build_broker_table_row(buy_row: Dictionary, sell_row: Dictionary) -> Control:
+	var row_wrap: VBoxContainer = VBoxContainer.new()
+	row_wrap.add_theme_constant_override("separation", 4)
+
+	var row: HBoxContainer = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row_wrap.add_child(row)
+
+	row.add_child(_build_table_cell(
+		str(buy_row.get("code", "-")),
+		BROKER_CODE_WIDTH,
+		COLOR_POSITIVE if not buy_row.is_empty() else COLOR_MUTED
+	))
+	row.add_child(_build_table_cell(
+		_format_compact_currency(float(buy_row.get("value", 0.0))) if not buy_row.is_empty() else "-",
+		BROKER_VALUE_WIDTH,
+		COLOR_POSITIVE if not buy_row.is_empty() else COLOR_MUTED,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	row.add_child(_build_table_cell(
+		_format_compact_lots(float(buy_row.get("lots", 0.0))) if not buy_row.is_empty() else "-",
+		BROKER_LOT_WIDTH,
+		COLOR_POSITIVE if not buy_row.is_empty() else COLOR_MUTED,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	row.add_child(_build_table_cell(
+		_format_last_price(float(buy_row.get("avg_price", 0.0))) if not buy_row.is_empty() else "-",
+		BROKER_AVERAGE_WIDTH,
+		COLOR_POSITIVE if not buy_row.is_empty() else COLOR_MUTED,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	row.add_child(_build_table_cell(
+		str(sell_row.get("code", "-")),
+		BROKER_CODE_WIDTH,
+		COLOR_NEGATIVE if not sell_row.is_empty() else COLOR_MUTED
+	))
+	row.add_child(_build_table_cell(
+		_format_compact_currency(float(sell_row.get("value", 0.0))) if not sell_row.is_empty() else "-",
+		BROKER_VALUE_WIDTH,
+		COLOR_NEGATIVE if not sell_row.is_empty() else COLOR_MUTED,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	row.add_child(_build_table_cell(
+		_format_compact_lots(float(sell_row.get("lots", 0.0))) if not sell_row.is_empty() else "-",
+		BROKER_LOT_WIDTH,
+		COLOR_NEGATIVE if not sell_row.is_empty() else COLOR_MUTED,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	row.add_child(_build_table_cell(
+		_format_last_price(float(sell_row.get("avg_price", 0.0))) if not sell_row.is_empty() else "-",
+		BROKER_AVERAGE_WIDTH,
+		COLOR_NEGATIVE if not sell_row.is_empty() else COLOR_MUTED,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+
+	var separator: HSeparator = HSeparator.new()
+	row_wrap.add_child(separator)
+	return row_wrap
+
+
+func _broker_side_display_label(broker_code: String, broker_name: String, broker_type: String) -> String:
+	if broker_code.is_empty():
+		return str(broker_type).capitalize() if not broker_type.is_empty() else "Balanced"
+	var short_name: String = broker_name
+	if short_name.begins_with("PT. "):
+		short_name = short_name.trim_prefix("PT. ")
+	return "%s (%s)" % [broker_code, short_name if not short_name.is_empty() else broker_type.capitalize()]
+
+
 func _format_statement_year_label(financial_statement_snapshot: Dictionary) -> String:
 	if financial_statement_snapshot.is_empty():
 		return "Derived financial statements unavailable."
@@ -3554,6 +4106,15 @@ func _format_compact_currency(value: float) -> String:
 	if absolute_value >= 1000000.0:
 		return "Rp %sM" % String.num(value / 1000000.0, 2)
 	return _format_currency(value)
+
+
+func _format_compact_lots(value: float) -> String:
+	var absolute_value: float = absf(value)
+	if absolute_value >= 1000000.0:
+		return "%sM" % String.num(value / 1000000.0, 1)
+	if absolute_value >= 1000.0:
+		return "%sK" % String.num(value / 1000.0, 1)
+	return String.num(value, 1)
 
 
 func _format_grouped_integer(value: int) -> String:

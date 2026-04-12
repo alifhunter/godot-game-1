@@ -1,0 +1,128 @@
+[
+  {
+    "code": "AK",
+    "company_name": "PT. ABS Sekuritas",
+    "broker_type": "foreign",
+    "personality_tags": ["robotic", "trading", "quality_buyer"]
+  },
+  {
+    "code": "BK",
+    "company_name": "PT. JP Morten",
+    "broker_type": "foreign",
+    "personality_tags": ["robotic", "trading", "quality_buyer"]
+  },
+  {
+    "code": "ZP",
+    "company_name": "PT. Nobank Indo",
+    "broker_type": "foreign",
+    "personality_tags": ["trading", "retail_facing", "dumb_money"]
+  },
+  {
+    "code": "YP",
+    "company_name": "PT. Murah Asset",
+    "broker_type": "foreign",
+    "personality_tags": ["trading", "retail_facing", "dumb_money"]
+  },
+  {
+    "code": "YU",
+    "company_name": "PT. CGIL Sekuritas",
+    "broker_type": "foreign",
+    "personality_tags": ["market_maker", "smart_money", "quiet_accumulator"]
+  },
+  {
+    "code": "XL",
+    "company_name": "PT. Sobat Loser",
+    "broker_type": "retail",
+    "personality_tags": ["dumb_money", "follow_the_wave"]
+  },
+  {
+    "code": "XC",
+    "company_name": "PT. Sobat Cutloss",
+    "broker_type": "retail",
+    "personality_tags": ["dumb_money", "follow_the_wave"]
+  },
+  {
+    "code": "PD",
+    "company_name": "PT. Indo Premium",
+    "broker_type": "retail",
+    "personality_tags": ["dumb_money", "follow_the_wave"]
+  },
+  {
+    "code": "HP",
+    "company_name": "PT. Happy Papi",
+    "broker_type": "bandar",
+    "personality_tags": ["smart_money", "quality_buyer", "quiet_accumulator", "market_maker"]
+  },
+  {
+    "code": "MG",
+    "company_name": "PT. Mamang Goreng",
+    "broker_type": "bandar",
+    "personality_tags": ["smart_money", "speculative", "distributor", "market_maker"]
+  },
+  {
+    "code": "LG",
+    "company_name": "PT. Duo Sempit Sekuritas",
+    "broker_type": "bandar",
+    "personality_tags": ["speculative", "market_maker"]
+  },
+  {
+    "code": "AZ",
+    "company_name": "PT. Anak Anzing",
+    "broker_type": "bandar",
+    "personality_tags": ["speculative", "evil_to_retail", "distributor", "market_maker"]
+  },
+  {
+    "code": "CP",
+    "company_name": "PT. Cuan Pening",
+    "broker_type": "foreign",
+    "personality_tags": ["dumb_money", "follow_the_wave", "retail_facing"]
+  },
+  {
+    "code": "SS",
+    "company_name": "PT. Samson",
+    "broker_type": "zombie",
+    "personality_tags": ["smart_money", "quiet_accumulator"]
+  },
+  {
+    "code": "CC",
+    "company_name": "PT. Sendiri Sekuritas",
+    "broker_type": "institution",
+    "personality_tags": ["defensive", "retail", "dumb_money"]
+  },
+  {
+    "code": "NI",
+    "company_name": "PT. Bank NI",
+    "broker_type": "institution",
+    "personality_tags": ["defensive", "government"]
+  },
+  {
+    "code": "SQ",
+    "company_name": "PT. BACA Sekuritas",
+    "broker_type": "institution",
+    "personality_tags": ["defensive", "retail"]
+  },
+  {
+    "code": "RX",
+    "company_name": "PT. Rex Indo",
+    "broker_type": "foreign",
+    "personality_tags": ["smart_money", "quiet_accumulator", "market_maker"]
+  },
+  {
+    "code": "BB",
+    "company_name": "PT. Berat Badan",
+    "broker_type": "zombie",
+    "personality_tags": ["quiet_accumulator"]
+  },
+  {
+    "code": "DH",
+    "company_name": "PT. Light Gold",
+    "broker_type": "bandar",
+    "personality_tags": ["smart_money", "evil_to_retail"]
+  },
+  {
+    "code": "YB",
+    "company_name": "PT. Yakin Bisa",
+    "broker_type": "retail",
+    "personality_tags": ["dumb_money"]
+  }
+]

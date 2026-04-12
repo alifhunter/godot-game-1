@@ -2,7 +2,6 @@
 
 [node name="WatchlistPanel" type="PanelContainer"]
 clip_contents = true
-custom_minimum_size = Vector2(420, 0)
 size_flags_vertical = 3
 
 [node name="WatchlistMargin" type="MarginContainer" parent="."]

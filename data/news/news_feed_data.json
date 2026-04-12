@@ -5,128 +5,544 @@
     {
       "id": "gorengan_daily",
       "label": "Gorengan Daily",
+      "voice": "gorengan_daily",
       "intel_level": 1,
-      "tagline": "Public recap and after-the-move chatter.",
-      "summary": "Late, loud, and mostly reactive."
+      "tagline": "Loud, simple, and focused on what people are talking about.",
+      "summary": "The most dramatic outlet, but still easy to read."
     },
     {
       "id": "waduh_finance",
       "label": "Waduh Finance",
+      "voice": "waduh_finance",
       "intel_level": 2,
-      "tagline": "Confirmation arrives once the tape is already moving.",
-      "summary": "Developing coverage once the move gets obvious."
+      "tagline": "Fast updates once a story starts to look real.",
+      "summary": "Quick and clear coverage with less noise."
     },
     {
       "id": "harian_investor",
       "label": "Harian Investor",
+      "voice": "harian_investor",
       "intel_level": 3,
-      "tagline": "Cleaner reads while the story is still forming.",
-      "summary": "Earlier context with a more analytical tone."
+      "tagline": "Calmer coverage with a little more context.",
+      "summary": "The most balanced and straightforward outlet."
     },
     {
       "id": "ordal_news",
       "label": "Ordal News",
+      "voice": "ordal_news",
       "intel_level": 4,
-      "tagline": "The earliest desk notes before the move turns crowded.",
-      "summary": "Highest intel tier with the earliest available read."
+      "tagline": "Early stories, careful wording, and a lot of 'maybe.'",
+      "summary": "The earliest outlet, but still written in plain language."
     }
   ],
   "progress_labels": {
-    "early": "Early read",
+    "early": "Desk note",
     "developing": "Developing",
     "follow_through": "Follow-through",
     "recap": "Public recap"
   },
-  "headline_prefixes": {
-    "gorengan_daily": ["Sudah rame", "Penutupan panas", "Setelah gerak"],
-    "waduh_finance": ["Waduh update", "Pantau tape", "Konfirmasi"],
-    "harian_investor": ["Investor note", "Developing", "Desk view"],
-    "ordal_news": ["My boss told me", "I heard from a friend", "Info A1"]
-  },
-  "intel_lines": {
-    "1": [
-      "By the time this reaches the wider crowd, most desks are reacting rather than initiating."
+  "reference_signals": {
+    "whisper_hedges": [
+      "There are early signs that",
+      "People close to the story say",
+      "Talk in the market suggests",
+      "It is not official yet, but",
+      "A few people are starting to say"
     ],
-    "2": [
-      "Confirmation is now clear enough that the story is spreading beyond the first responders."
+    "desk_watch": [
+      "people are starting to talk about it",
+      "only a small group is paying attention so far",
+      "the wider market has not fully noticed yet",
+      "interest is still limited for now",
+      "this is only starting to get noticed"
     ],
-    "3": [
-      "The setup is still developing, and positioning looks uneven across the board."
+    "formal_markers": [
+      "in the company's statement",
+      "in the latest market disclosure",
+      "management said",
+      "the company added",
+      "regulators said"
     ],
-    "4": [
-      "This is still early enough that the wider market has not fully repositioned yet."
+    "analysis_markers": [
+      "Looking at the market",
+      "From a wider view",
+      "In simple terms",
+      "After the first reaction",
+      "So far"
+    ],
+    "reaction_markers": [
+      "buying the stronger names",
+      "selling weaker positions",
+      "waiting before making bigger bets",
+      "cutting risk",
+      "moving toward safer names"
+    ],
+    "market_jargon": [
+      "the move is still limited to a few stocks",
+      "selling is spread across the market",
+      "buying is not broad yet",
+      "most of the action is still in only a few names",
+      "the market is still trying to decide what really matters"
     ]
   },
-  "family_lines": {
-    "market": [
-      "Sector money is rotating fast enough to matter for the session."
+  "driver_phrases": {
+    "company_arc_positive": [
+      "buyers still think there may be more good news ahead"
     ],
-    "company": [
-      "This is a single-name story where traders are re-pricing the setup around one company."
+    "company_arc_negative": [
+      "the market is getting more nervous about what comes next"
     ],
-    "company_arc": [
-      "Positioning has been building across multiple sessions before the obvious move reaches everyone."
+    "company_positive": [
+      "the story still sounds strong enough to keep attention"
     ],
-    "person": [
-      "A personality-driven post is shaping crowd attention and fast-money behavior."
+    "company_negative": [
+      "the story is losing some of its shine"
     ],
-    "special": [
-      "This is broad enough to alter how traders frame the whole tape, not just one ticker."
+    "coverage_positive": [
+      "recent headlines have helped the mood around the name"
+    ],
+    "rumor_positive": [
+      "early talk is making traders more interested"
+    ],
+    "rumor_negative": [
+      "early talk is making traders more careful"
+    ],
+    "earnings_positive": [
+      "good numbers are helping the company look stronger"
+    ],
+    "earnings_negative": [
+      "the numbers are raising more questions than confidence"
+    ],
+    "mna_positive": [
+      "the deal story is centered on growth and a more stable business"
+    ],
+    "mna_negative": [
+      "the deal story is raising worries about price and execution"
+    ],
+    "management_positive": [
+      "leadership changes are being read as a chance to improve execution"
+    ],
+    "management_negative": [
+      "leadership changes are raising worries about direction"
+    ],
+    "sector_rotation_positive": [
+      "money is moving into the stronger names in the sector"
+    ],
+    "sector_rotation_negative": [
+      "money is leaving the weaker names in the sector"
+    ],
+    "macro_shock_negative": [
+      "the wider market mood is turning cautious"
+    ],
+    "commodity_mixed": [
+      "the main story is still the commodity price and who feels it first"
+    ],
+    "commodity_negative": [
+      "the drop in the main commodity price is hurting confidence"
+    ],
+    "geopolitics_negative": [
+      "global events are pushing the market into a more defensive mood"
+    ],
+    "pandemic_negative": [
+      "the market is worrying again about disruption and weaker demand"
+    ],
+    "policy_post_negative": [
+      "policy headlines are making the market more careful"
+    ],
+    "deal_post_positive": [
+      "policy optimism is lifting interest in the more aggressive names"
+    ],
+    "social_post_positive": [
+      "online attention is bringing fresh interest"
+    ],
+    "social_post_negative": [
+      "online attention is turning against the story"
+    ],
+    "controversy_negative": [
+      "bad headlines are making people step back"
+    ],
+    "person_positive": [
+      "a well-known name is drawing attention quickly"
+    ],
+    "person_negative": [
+      "a well-known name is shifting attention toward risk"
+    ],
+    "special_mixed": [
+      "the market is still sorting out who benefits and who gets hurt"
+    ],
+    "special_negative": [
+      "the wider story is making traders think about safety first"
+    ],
+    "market_wrap": [
+      "by the close, the main question is whether today's move was broad or only carried by a few names"
+    ],
+    "fallback": [
+      "the market is still deciding how much this story matters"
     ]
   },
-  "scope_lines": {
-    "market": [
-      "The effect is broad enough to touch multiple sectors at once."
+  "watch_phrases": {
+    "whisper": [
+      "The next clue is whether more people start paying attention.",
+      "What matters next is whether this stays small or becomes a bigger story.",
+      "If this is real, the market should react more clearly soon."
     ],
-    "sector": [
-      "The pressure is clustering around {sector_name}, where leadership is changing fast."
+    "confirmation": [
+      "The next question is whether buyers stay interested after the headline.",
+      "Now the market needs to decide whether this news still matters tomorrow.",
+      "The next session should show whether this story has real strength."
     ],
-    "company": [
-      "The cleanest read still sits in {target_company_name} ({target_ticker})."
+    "analysis": [
+      "The next few sessions should show whether this move has real strength.",
+      "If interest fades too quickly, the story may not have much life left.",
+      "This is the point where a real move keeps going and a weak one starts to fade."
+    ],
+    "recap": [
+      "The story may be older now, but the after-effects can still matter.",
+      "This is no longer fresh news, but it can still shape how people trade.",
+      "The headline has aged, but the market may still be reacting to it."
+    ],
+    "market_wrap": [
+      "Tomorrow will show whether the move spreads or fades.",
+      "The next session should make it clearer whether buyers are really coming back.",
+      "The close gives a hint, but tomorrow will say more."
     ]
   },
-  "tone_lines": {
-    "positive": [
-      "If the flow keeps holding up, buyers can still frame this as constructive rather than exhausted."
-    ],
-    "negative": [
-      "Unless the tape stabilizes quickly, traders are likely to keep treating this as risk to be reduced."
-    ],
-    "mixed": [
-      "The read is not one-way yet, so traders still need to separate conviction from noise."
-    ]
-  },
-  "hidden_phase_templates": {
-    "smart_money_accumulation": {
-      "headline": [
-        "Quiet accumulation builds in {target_ticker}",
-        "{target_ticker} keeps attracting discreet accumulation"
+  "voice_profiles": {
+    "gorengan_daily": {
+      "headline_prefixes": [
+        "People are talking",
+        "Getting noisy",
+        "Starting to move",
+        "Buzz building"
       ],
-      "deck": [
-        "Positioning is building in {target_company_name} before the broader tape fully reacts."
+      "headline_templates": {
+        "whisper": [
+          "{focus_label} is starting to get attention before the crowd fully notices",
+          "Early talk around {focus_label} is getting louder"
+        ],
+        "confirmation": [
+          "{focus_label} now has the headline people were waiting for",
+          "{focus_label} jumps back into focus after fresh confirmation"
+        ],
+        "analysis": [
+          "{focus_label} has moved and now the market wants more proof",
+          "{focus_label} is no longer just a story and now has to hold up"
+        ],
+        "recap": [
+          "{focus_label} is still being talked about after the earlier move",
+          "The {focus_label} story is not over just yet"
+        ],
+        "market_wrap": [
+          "By the close, the market ends {market_change}",
+          "The market closes {market_change} and the mood still looks shaky"
+        ]
+      },
+      "deck_templates": {
+        "whisper": [
+          "{whisper_phrase} {subject_reference} is getting early attention while the wider market is still quiet.",
+          "{desk_watch}. {subject_reference} is starting to stand out before the story becomes widely known."
+        ],
+        "confirmation": [
+          "{detail_blend}. That gave the market a clearer reason to react.",
+          "{formal_phrase}, {detail_blend}. After that, interest in {focus_label} quickly picked up."
+        ],
+        "analysis": [
+          "{analysis_phrase}, {subject_reference} is now {price_action_label} while people ask whether the move can keep going.",
+          "{detail_blend}. After the first jump, attention shifts to whether the story still feels strong."
+        ],
+        "recap": [
+          "{subject_reference} is still being watched because the earlier news has not fully faded away.",
+          "{detail_blend}. Even after the first reaction, people are still deciding what it means."
+        ],
+        "market_wrap": [
+          "Most of the market moved in the same direction, and only a small number of names stayed strong.",
+          "The market finished {market_change}, and the move still looked uneven by the close."
+        ]
+      },
+      "lead_templates": {
+        "whisper": [
+          "{whisper_phrase} {focus_label} is starting to show up early, even if only a few people are talking about it.",
+          "Not everyone sees it yet, but {focus_label} is starting to feel like a bigger story."
+        ],
+        "confirmation": [
+          "Once the headline hit, {focus_label} quickly moved from rumor to something people could act on.",
+          "Fresh confirmation made {focus_label} much easier for the market to react to."
+        ],
+        "analysis": [
+          "After the first move, the market starts asking whether the story is actually strong enough to last.",
+          "{focus_label} has already pulled attention. The next test is whether it can keep that attention."
+        ],
+        "recap": [
+          "An older {focus_label} story can still matter when people have not fully moved on.",
+          "The headline may be older, but {focus_label} is still feeling the after-effect."
+        ],
+        "market_wrap": [
+          "The market ended the day with a {market_state_label} tone, but the move still looked uneven.",
+          "By the close, the market looked {market_state_label}, and only a few areas held up well."
+        ]
+      },
+      "context_templates": [
+        "{analysis_phrase}, {driver_phrase}. Right now {focus_label} is {price_action_label}, and {flow_label}.",
+        "{driver_phrase}. Across the market, {breadth_summary}, which suggests that {market_jargon}.",
+        "{formal_phrase}, {detail_blend}. That is why people are {reaction_phrase}."
+      ],
+      "impact_templates": [
+        "For regular players, the key question is simple: does {focus_label} stay strong after the first burst of attention? {watch_phrase}",
+        "The real test is whether people stay interested in {focus_label} once the headline is no longer brand new. {watch_phrase}",
+        "If interest fades too fast, this can quickly turn into just another short-lived story. {watch_phrase}"
       ]
     },
-    "smart_money_distribution": {
-      "headline": [
-        "Quiet distribution starts leaking through {target_ticker}",
-        "{target_ticker} shows early signs of discreet distribution"
+    "waduh_finance": {
+      "headline_prefixes": [
+        "Quick update",
+        "Now clearer",
+        "Worth watching",
+        "Fresh move"
       ],
-      "deck": [
-        "Supply looks heavier in {target_company_name} before the wider crowd fully notices the shift."
+      "headline_templates": {
+        "whisper": [
+          "{focus_label} is starting to show early signs of attention",
+          "People are beginning to watch {focus_label} more closely"
+        ],
+        "confirmation": [
+          "{focus_label} gets fresh confirmation and the market reacts",
+          "{focus_label} moves from early talk to clearer news"
+        ],
+        "analysis": [
+          "{focus_label} enters the stage where the story must hold up",
+          "The market is now testing whether {focus_label} can keep its strength"
+        ],
+        "recap": [
+          "{focus_label} remains on watch after the first reaction",
+          "The earlier {focus_label} story is still shaping market attention"
+        ],
+        "market_wrap": [
+          "The market ends {market_change} as the day winds down",
+          "By the close, the market finishes {market_change} with confidence still uneven"
+        ]
+      },
+      "deck_templates": {
+        "whisper": [
+          "{desk_watch}. {subject_reference} is getting attention before the wider public fully catches on.",
+          "{whisper_phrase} there is early interest in {subject_reference}, but the signal is still limited."
+        ],
+        "confirmation": [
+          "{detail_blend}. That was enough to shift attention from rumor to real reaction.",
+          "{formal_phrase}, {detail_blend}. The market now has a clearer reason to care."
+        ],
+        "analysis": [
+          "{detail_blend}. The focus now is whether the first move in {focus_label} can hold.",
+          "{analysis_phrase}, the {focus_label} story is moving into the stage where people want proof, not just headlines."
+        ],
+        "recap": [
+          "{subject_reference} remains worth watching because the earlier headline still matters.",
+          "{detail_blend}. The market is now treating this as an ongoing story rather than a fresh surprise."
+        ],
+        "market_wrap": [
+          "The market finished {market_change}, and only part of the board looked strong by the close.",
+          "Most of the market moved together, but the strongest names still stood apart from the rest."
+        ]
+      },
+      "lead_templates": {
+        "whisper": [
+          "For now, the {focus_label} story is still early and not yet fully proven.",
+          "There is an early sign in {focus_label}, but the whole market has not reacted yet."
+        ],
+        "confirmation": [
+          "Fresh confirmation gave the market a more direct reason to respond to {focus_label}.",
+          "{focus_label} is no longer just a maybe story; it now has a clearer trigger."
+        ],
+        "analysis": [
+          "The next stage for {focus_label} is about whether the move can stay alive after the first reaction.",
+          "The market now cares less about noise and more about whether the story still feels solid."
+        ],
+        "recap": [
+          "The first burst around {focus_label} may have cooled, but the story has not fully disappeared.",
+          "Even older news can keep shaping how people look at {focus_label}."
+        ],
+        "market_wrap": [
+          "Today's close suggests the market is still not fully confident.",
+          "The session ended with a {market_state_label} mood, and tomorrow still looks important."
+        ]
+      },
+      "context_templates": [
+        "{analysis_phrase}, {driver_phrase}. Right now {focus_label} is {price_action_label}, and {flow_label}.",
+        "{driver_phrase}. Across the market, {breadth_summary}, which helps explain why the mood still feels uneven.",
+        "{formal_phrase}, {detail_blend}. Because of that, people are {reaction_phrase}."
+      ],
+      "impact_templates": [
+        "What matters next is whether the story can stay alive without another fresh headline. {watch_phrase}",
+        "Stories like this last only if people keep believing in them after the first reaction. {watch_phrase}",
+        "The market will now judge whether this move still deserves attention tomorrow. {watch_phrase}"
+      ]
+    },
+    "harian_investor": {
+      "headline_prefixes": [
+        "Investor note",
+        "Market note",
+        "What changed",
+        "Latest view"
+      ],
+      "headline_templates": {
+        "whisper": [
+          "{focus_label} is showing early signs of becoming a bigger story",
+          "Early attention is building around {focus_label}"
+        ],
+        "confirmation": [
+          "{focus_label} gets confirmation and draws a clearer market response",
+          "New confirmation puts {focus_label} back into focus"
+        ],
+        "analysis": [
+          "{focus_label} moves into the stage where the market looks for staying power",
+          "The market is checking whether the {focus_label} story can last"
+        ],
+        "recap": [
+          "{focus_label} is still relevant after the first move",
+          "The {focus_label} story remains important even after the headline cools"
+        ],
+        "market_wrap": [
+          "By the close, the market shows a {market_state_label} mood",
+          "The market finishes {market_change} with the overall picture still mixed"
+        ]
+      },
+      "deck_templates": {
+        "whisper": [
+          "{whisper_phrase} there is early interest in {subject_reference}, though the signs are still limited.",
+          "{subject_reference} is beginning to attract attention, even if the case is not fully clear yet."
+        ],
+        "confirmation": [
+          "{detail_blend}. With that, the market has a firmer reason to react.",
+          "{formal_phrase}, {detail_blend}. Attention now shifts from the headline to what happens next."
+        ],
+        "analysis": [
+          "{detail_blend}. At this point, the market cares more about whether the story lasts than about how loud it sounds.",
+          "{analysis_phrase}, {subject_reference} is now being judged on whether the first move can hold up."
+        ],
+        "recap": [
+          "{subject_reference} remains worth following because the earlier news still affects market thinking.",
+          "{detail_blend}. This is no longer brand new, but it still helps explain current behavior."
+        ],
+        "market_wrap": [
+          "The market closed {market_change}, and the move was not strong everywhere.",
+          "By the close, the market still looked uneven, with weakness or strength not spreading fully across the board."
+        ]
+      },
+      "lead_templates": {
+        "whisper": [
+          "At this stage, early information is best treated as a sign to watch, not a final answer.",
+          "The first clues around {focus_label} are worth noting, but the case is still incomplete."
+        ],
+        "confirmation": [
+          "Official confirmation reduces uncertainty, but it does not guarantee the story will stay strong.",
+          "Once a headline becomes official, the market usually starts testing whether it still matters."
+        ],
+        "analysis": [
+          "After the first move, the market becomes more focused on whether the story can hold its strength.",
+          "At this stage, the headline matters less than the way the market keeps responding to it."
+        ],
+        "recap": [
+          "When a story reaches recap stage, it matters more as background than as a fresh trigger.",
+          "Older stories can still matter when the market has not fully moved on."
+        ],
+        "market_wrap": [
+          "Overall, the close suggests the market is still trying to find its balance.",
+          "The session ended without a clear all-clear signal, even if a few stories still stood out."
+        ]
+      },
+      "context_templates": [
+        "{analysis_phrase}, {driver_phrase}. At the same time, {focus_label} is {price_action_label}, and {flow_label}.",
+        "{driver_phrase}. Across the market, {breadth_summary}, which helps show how wide the move really was.",
+        "{formal_phrase}, {detail_blend}. In response, people are {reaction_phrase}."
+      ],
+      "impact_templates": [
+        "For more patient players, the main question is whether this story lasts for several sessions or fades quickly. {watch_phrase}",
+        "What happens next depends on whether the market still cares once attention moves elsewhere. {watch_phrase}",
+        "If the next few sessions do not support the story, the early excitement may fade fast. {watch_phrase}"
+      ]
+    },
+    "ordal_news": {
+      "headline_prefixes": [
+        "Early note",
+        "Not official yet",
+        "Quiet warning",
+        "First signs"
+      ],
+      "headline_templates": {
+        "whisper": [
+          "{focus_label} is starting to draw quiet early attention",
+          "There are early signs that {focus_label} may become a bigger story"
+        ],
+        "confirmation": [
+          "{focus_label} now has official support for what some people already suspected",
+          "Fresh confirmation reaches {focus_label} after early hints"
+        ],
+        "analysis": [
+          "{focus_label} now has to prove the early read was right",
+          "The early {focus_label} story is moving into its real test"
+        ],
+        "recap": [
+          "{focus_label} still carries an after-effect from earlier news",
+          "The earlier {focus_label} story still has some life left"
+        ],
+        "market_wrap": [
+          "The market closes {market_change}, but the picture still feels unfinished",
+          "By the close, the market ends {market_change} and tomorrow still matters a lot"
+        ]
+      },
+      "deck_templates": {
+        "whisper": [
+          "{whisper_phrase} {subject_reference} is being noticed earlier than usual, even if only by a few people.",
+          "{desk_watch}. {subject_reference} is still not a big public story, but it is no longer being ignored."
+        ],
+        "confirmation": [
+          "{formal_phrase}, {detail_blend}. For those already watching, this feels more like a check mark than a surprise.",
+          "{detail_blend}. The official version has arrived after earlier hints were already circulating."
+        ],
+        "analysis": [
+          "{analysis_phrase}, {subject_reference} is now in the harder stage: the story is known, but it still has to prove itself.",
+          "{detail_blend}. This is where the earlier read either starts to look smart or starts to fade."
+        ],
+        "recap": [
+          "{subject_reference} still matters, but the early advantage in knowing about it is clearly shrinking.",
+          "{detail_blend}. At this point, the story matters more for timing than surprise."
+        ],
+        "market_wrap": [
+          "The market closed {market_change}, and the overall move still looked uneven.",
+          "By the close, it was clear that not every part of the market moved the same way."
+        ]
+      },
+      "lead_templates": {
+        "whisper": [
+          "Stories like this rarely begin with certainty. They begin with small signs that get harder to ignore.",
+          "There is still no reason to sound too sure, but the first hints around {focus_label} are there."
+        ],
+        "confirmation": [
+          "The official headline matters, but in some cases it only confirms what early watchers already suspected.",
+          "For people paying attention early, this confirmation feels more like support than a shock."
+        ],
+        "analysis": [
+          "Now comes the honest part: whether the early read can hold up in the open.",
+          "Once the surprise is gone, the story has to stand on its own."
+        ],
+        "recap": [
+          "In recap stage, the story is less about surprise and more about what people still do with it.",
+          "Older stories only stay interesting if the market has not fully adjusted."
+        ],
+        "market_wrap": [
+          "Today's close does not settle everything, but it does make the market mood a little clearer.",
+          "The session ended with a {market_state_label} feel, and that still leaves room for tomorrow to change the picture."
+        ]
+      },
+      "context_templates": [
+        "{analysis_phrase}, {driver_phrase}. For now {focus_label} is {price_action_label}, and {flow_label}.",
+        "{driver_phrase}. Across the market, {breadth_summary}, which suggests that {market_jargon}.",
+        "{formal_phrase}, {detail_blend}. For now, people are mostly {reaction_phrase}."
+      ],
+      "impact_templates": [
+        "The next thing to watch is whether people stay interested once the story is no longer new. {watch_phrase}",
+        "If the story is real, the next proof should be easier to see soon. {watch_phrase}",
+        "If momentum disappears too quickly, the early read may only have worked for a short window. {watch_phrase}"
       ]
     }
-  },
-  "market_wrap_headlines": [
-    "Market wrap: {market_change} into the close",
-    "Closing bell: market settles at {market_change}",
-    "Session wrap: tape closes {market_change}"
-  ],
-  "market_wrap_decks": [
-    "Breadth closed with {advancers} advancers versus {decliners} decliners as traders reset for the next session.",
-    "The board ended with {advancers} advancers and {decliners} decliners while leadership kept rotating."
-  ],
-  "market_wrap_lines": [
-    "The strongest print came from {biggest_winner}, while {biggest_loser} was the clearest weak spot on the board.",
-    "Leadership stayed fluid, with {biggest_winner} leading the upside and {biggest_loser} trailing the tape."
-  ]
+  }
 }
