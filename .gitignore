@@ -9,3 +9,6 @@
 # Editor cruft
 .DS_Store
 Thumbs.db
+
+# Accidental local Windows PowerShell cache
+/Microsoft/
