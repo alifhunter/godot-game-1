@@ -232,7 +232,7 @@
 	"min_month": 2,
 	"sentiment_shift": -0.012,
 	"market_bias_shift": -0.016,
-	"volatility_multiplier": 1.45,
+	"volatility_multiplier": 1.95,
 	"broker_bias": "foreign",
 	"shock_profile": {
 	  "apply_bias_sign": "negative",
@@ -243,16 +243,16 @@
 	  "sideways_band_ratio": 0.08
 	},
 	"sector_biases": {
-	  "transport": -0.02,
-	  "property": -0.018,
-	  "consumer": -0.012,
-	  "industrial": -0.008,
+	  "transport": -0.032,
+	  "property": -0.028,
+	  "consumer": -0.022,
+	  "industrial": -0.028,
 	  "health": 0.014,
 	  "tech": 0.008,
 	  "noncyclical": 0.01
 	},
 	"headline_template": "COVID wave hits risk appetite",
-	"headline_detail_template": "COVID worries disrupt mobility and force traders to rethink the whole tape.",
+	"headline_detail_template": "COVID worries disrupt mobility and force traders to rethink their strategy.",
 	"description": "A pandemic shock reshapes mobility, risk appetite, and sector leadership."
   },
   {

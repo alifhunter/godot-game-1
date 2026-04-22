@@ -15,12 +15,25 @@ const SPECIAL_EVENT_IDS := {
 	"geopolitical_turmoil": true,
 	"commodity_price_shock": true
 }
+const SMOKE_MODE_FULL := "full"
+const SMOKE_MODE_QUICK := "quick"
+const NORMAL_FULL_DAYS := 10
+const NORMAL_QUICK_DAYS := 3
+const GRIND_FULL_DAYS := 30
+const QUICK_SMOKE_FLAG_PATH := "user://quick_smoke.flag"
 
 var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 
 
 func _ready() -> void:
+	var smoke_mode: String = _get_smoke_mode()
 	DataRepository.reload_all()
+	var network_data_validation: String = _validate_contact_network_data()
+	if not network_data_validation.is_empty():
+		push_error(network_data_validation)
+		get_tree().quit(1)
+		return
+
 	var calendar_validation: String = _validate_trading_calendar_extension()
 	if not calendar_validation.is_empty():
 		push_error(calendar_validation)
@@ -33,30 +46,56 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 
-	var normal_result: Dictionary = await _run_scenario(424242, GameManager.DEFAULT_DIFFICULTY_ID, 10, 1, false)
+	var normal_days: int = NORMAL_QUICK_DAYS if smoke_mode == SMOKE_MODE_QUICK else NORMAL_FULL_DAYS
+	var normal_result: Dictionary = await _run_scenario(424242, GameManager.DEFAULT_DIFFICULTY_ID, normal_days, 1, false)
 	if not bool(normal_result.get("success", false)):
 		push_error(str(normal_result.get("message", "Smoke test failed.")))
 		get_tree().quit(1)
 		return
 
-	var hardcore_result: Dictionary = await _run_scenario(987654, "hardcore", 30, 10, true)
-	if not bool(hardcore_result.get("success", false)):
-		push_error(str(hardcore_result.get("message", "Hardcore smoke test failed.")))
+	if smoke_mode == SMOKE_MODE_QUICK:
+		var quick_line: String = "SMOKE_QUICK_OK normal_equity=%s days=%d summary=%s" % [
+			String.num(float(normal_result.get("equity", 0.0)), 2),
+			normal_days,
+			str(normal_result.get("summary", ""))
+		]
+		print(quick_line)
+		_write_smoke_result(quick_line)
+		await get_tree().create_timer(1.0).timeout
+		get_tree().quit()
+		return
+
+	var grind_result: Dictionary = await _run_scenario(987654, "grind", GRIND_FULL_DAYS, 10, true)
+	if not bool(grind_result.get("success", false)):
+		push_error(str(grind_result.get("message", "Grind smoke test failed.")))
 		get_tree().quit(1)
 		return
 
-	var smoke_line: String = "SMOKE_OK normal_equity=%s hardcore_equity=%s hardcore_down_days=%d summary=%s" % [
+	var smoke_line: String = "SMOKE_OK normal_equity=%s grind_equity=%s grind_down_days=%d summary=%s" % [
 		String.num(float(normal_result.get("equity", 0.0)), 2),
-		String.num(float(hardcore_result.get("equity", 0.0)), 2),
-		int(hardcore_result.get("down_days", 0)),
+		String.num(float(grind_result.get("equity", 0.0)), 2),
+		int(grind_result.get("down_days", 0)),
 		str(normal_result.get("summary", ""))
 	]
 	print(smoke_line)
+	_write_smoke_result(smoke_line)
+	await get_tree().create_timer(1.0).timeout
+	get_tree().quit()
+
+
+func _get_smoke_mode() -> String:
+	if FileAccess.file_exists(QUICK_SMOKE_FLAG_PATH):
+		var user_dir := DirAccess.open("user://")
+		if user_dir != null:
+			user_dir.remove("quick_smoke.flag")
+		return SMOKE_MODE_QUICK
+	return SMOKE_MODE_FULL
+
+
+func _write_smoke_result(smoke_line: String) -> void:
 	var result_file = FileAccess.open("user://smoke_test_result.txt", FileAccess.WRITE)
 	if result_file != null:
 		result_file.store_string(smoke_line)
-	await get_tree().create_timer(1.0).timeout
-	get_tree().quit()
 
 
 func _validate_main_menu_flow() -> Dictionary:
@@ -83,15 +122,59 @@ func _validate_main_menu_flow() -> Dictionary:
 		return {
 			"success": false,
 			"message": "Smoke test expected New Game to open the dedicated difficulty selector screen."
-		}
+	}
 
 	var difficulty_card_grid: GridContainer = main_menu.find_child("DifficultyCardGrid", true, false) as GridContainer
-	if difficulty_card_grid == null or difficulty_card_grid.get_child_count() != 4:
+	if difficulty_card_grid == null or difficulty_card_grid.get_child_count() != 3:
 		main_menu.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the difficulty selector to render four difficulty cards."
+			"message": "Smoke test expected the difficulty selector to render three difficulty cards."
+		}
+
+	var expected_difficulty_configs := {
+		"chill": {"company_count": 20, "event_interval_days": 14, "volatility_label": "Low"},
+		"normal": {"company_count": 30, "event_interval_days": 10, "volatility_label": "Normal"},
+		"grind": {"company_count": 50, "event_interval_days": 7, "volatility_label": "High"}
+	}
+	for difficulty_id in expected_difficulty_configs.keys():
+		var expected_config: Dictionary = expected_difficulty_configs[difficulty_id]
+		var actual_config: Dictionary = GameManager.get_difficulty_config(str(difficulty_id))
+		if (
+			int(actual_config.get("company_count", 0)) != int(expected_config.get("company_count", 0)) or
+			int(actual_config.get("event_interval_days", 0)) != int(expected_config.get("event_interval_days", 0)) or
+			str(actual_config.get("volatility_label", "")) != str(expected_config.get("volatility_label", ""))
+		):
+			main_menu.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected %s difficulty to use %d companies, %d-day events, and %s volatility." % [
+					str(difficulty_id).capitalize(),
+					int(expected_config.get("company_count", 0)),
+					int(expected_config.get("event_interval_days", 0)),
+					str(expected_config.get("volatility_label", ""))
+				]
+			}
+
+	for expected_button_name in ["ChillCardButton", "NormalCardButton", "GrindCardButton"]:
+		if main_menu.find_child(expected_button_name, true, false) == null:
+			main_menu.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test could not find expected difficulty card %s." % expected_button_name
+			}
+
+	var selector_card: PanelContainer = main_menu.find_child("SelectorCard", true, false) as PanelContainer
+	var maximum_selector_width: float = get_viewport().get_visible_rect().size.x * 0.9 + 1.0
+	if selector_card == null or selector_card.custom_minimum_size.x > maximum_selector_width or selector_card.get_global_rect().size.x > maximum_selector_width:
+		main_menu.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the difficulty selector card to fit within 90 percent of the screen width."
 		}
 
 	var continue_button: Button = main_menu.find_child("ContinueButton", true, false) as Button
@@ -160,6 +243,9 @@ func _run_scenario(
 	var stock_app_button: Button = game_root.find_child("StockAppButton", true, false) as Button
 	var news_app_button: Button = game_root.find_child("NewsAppButton", true, false) as Button
 	var social_app_button: Button = game_root.find_child("SocialAppButton", true, false) as Button
+	var network_app_button: Button = game_root.find_child("NetworkAppButton", true, false) as Button
+	var academy_app_button: Button = game_root.find_child("AcademyAppButton", true, false) as Button
+	var upgrades_app_button: Button = game_root.find_child("UpgradesAppButton", true, false) as Button
 	var taskbar_stock_button: Button = game_root.find_child("TaskbarStockButton", true, false) as Button
 	var taskbar_news_button: Button = game_root.find_child("TaskbarNewsButton", true, false) as Button
 	var app_window_title_label: Label = game_root.find_child("AppWindowTitleLabel", true, false) as Label
@@ -169,6 +255,13 @@ func _run_scenario(
 	var news_outlet_buttons: HBoxContainer = game_root.find_child("NewsOutletButtons", true, false) as HBoxContainer
 	var social_window: Control = game_root.find_child("SocialWindow", true, false) as Control
 	var social_feed_cards: VBoxContainer = game_root.find_child("SocialFeedCards", true, false) as VBoxContainer
+	var network_window: Control = game_root.find_child("NetworkWindow", true, false) as Control
+	var network_contacts_list: ItemList = game_root.find_child("NetworkContactsList", true, false) as ItemList
+	var academy_window: Control = game_root.find_child("AcademyWindow", true, false) as Control
+	var academy_category_tabs: HBoxContainer = game_root.find_child("AcademyCategoryTabs", true, false) as HBoxContainer
+	var academy_section_list: ItemList = game_root.find_child("AcademySectionList", true, false) as ItemList
+	var upgrade_window: Control = game_root.find_child("UpgradeWindow", true, false) as Control
+	var upgrade_cards_vbox: VBoxContainer = game_root.find_child("UpgradeCardsVBox", true, false) as VBoxContainer
 	if desktop_layer == null or not desktop_layer.visible:
 		game_root.queue_free()
 		await get_tree().process_frame
@@ -177,12 +270,12 @@ func _run_scenario(
 			"message": "Smoke test expected GameRoot to open on the new desktop layer before the trading app is launched."
 		}
 
-	if stock_app_button == null or news_app_button == null or social_app_button == null or taskbar_stock_button == null or taskbar_news_button == null:
+	if stock_app_button == null or news_app_button == null or social_app_button == null or network_app_button == null or academy_app_button == null or upgrades_app_button == null or taskbar_stock_button == null or taskbar_news_button == null:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test could not find the prototype desktop icons and taskbar launch buttons."
+			"message": "Smoke test could not find the prototype desktop icons, Academy icon, Upgrades icon, and taskbar launch buttons."
 		}
 
 	if app_window_title_label == null or app_window_close_button == null:
@@ -191,6 +284,396 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected the faux app window to expose a title bar and close button."
+		}
+
+	var upgrade_defaults: Dictionary = RunState.get_upgrade_tiers()
+	for track_id in RunState.UPGRADE_TRACK_IDS:
+		if int(upgrade_defaults.get(str(track_id), 0)) != 4:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected upgrade track %s to start at tier 4." % str(track_id)
+			}
+	if int(GameManager.get_daily_action_snapshot().get("limit", 0)) != 10:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Daily Action Points to start at 10."
+		}
+
+	var opening_report_month: Dictionary = GameManager.get_report_calendar_snapshot(2020, 1)
+	var opening_report_rows: Array = opening_report_month.get("reports", [])
+	var opening_report_days: Dictionary = opening_report_month.get("reports_by_day", {})
+	if opening_report_rows.size() != RunState.company_order.size() or opening_report_days.keys().size() <= 1:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected every generated company to receive a Q1 report date spread across January."
+		}
+
+	var initial_news_snapshot: Dictionary = GameManager.get_news_snapshot()
+	if _count_unlocked_rows(initial_news_snapshot.get("outlets", [])) != 1:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected News to start with only intel level 1 unlocked."
+		}
+	var initial_social_snapshot: Dictionary = GameManager.get_twooter_snapshot()
+	if int(initial_social_snapshot.get("access_tier", 0)) != 1:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Twooter to start at access tier 1."
+		}
+
+	var initial_academy_snapshot: Dictionary = GameManager.get_academy_snapshot("technical", "quiz")
+	if not bool(initial_academy_snapshot.get("quiz", {}).get("locked", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Technical Academy quiz to start locked."
+		}
+
+	academy_app_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if (
+		academy_window == null or
+		not academy_window.visible or
+		app_window_title_label.text != "Academy" or
+		academy_category_tabs == null or
+		academy_category_tabs.get_child_count() != 4 or
+		academy_section_list == null or
+		academy_section_list.item_count != 8
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Academy icon to open a lesson window with four categories and eight Technical sections."
+		}
+
+	var coming_soon_snapshot: Dictionary = GameManager.get_academy_snapshot("mindset", "")
+	if not bool(coming_soon_snapshot.get("coming_soon", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected non-Technical Academy categories to show coming-soon states."
+		}
+
+	var locked_quiz_result: Dictionary = GameManager.submit_academy_quiz("technical", {})
+	if bool(locked_quiz_result.get("success", false)) or not bool(locked_quiz_result.get("locked", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Technical quiz API to reject attempts before required reading is complete."
+		}
+
+	var inline_result: Dictionary = GameManager.submit_academy_inline_check("technical", "intro", "intro_data", "price_volume")
+	if not bool(inline_result.get("success", false)) or not bool(inline_result.get("correct", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Academy inline checks to accept and store correct answers."
+		}
+
+	for required_section_id in ["intro", "market_structure", "candlesticks", "patterns"]:
+		var read_result: Dictionary = GameManager.mark_academy_section_read("technical", str(required_section_id))
+		if not bool(read_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected Academy section %s to be markable as read." % str(required_section_id)
+			}
+
+	var unlocked_academy_snapshot: Dictionary = GameManager.get_academy_snapshot("technical", "quiz")
+	if bool(unlocked_academy_snapshot.get("quiz", {}).get("locked", true)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected reading Intro, Market Structure, Candlesticks, and Patterns to unlock the Technical quiz."
+		}
+
+	var saved_academy_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(saved_academy_state)
+	if bool(GameManager.get_academy_snapshot("technical", "quiz").get("quiz", {}).get("locked", true)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Academy read progress to persist through save/load."
+		}
+
+	var failing_answers: Dictionary = _build_academy_answers(false)
+	var failing_quiz_result: Dictionary = GameManager.submit_academy_quiz("technical", failing_answers)
+	if not bool(failing_quiz_result.get("success", false)) or bool(failing_quiz_result.get("passed", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Technical quiz to fail below 80 percent."
+		}
+
+	var passing_answers: Dictionary = _build_academy_answers(true)
+	var passing_quiz_result: Dictionary = GameManager.submit_academy_quiz("technical", passing_answers)
+	if (
+		not bool(passing_quiz_result.get("success", false)) or
+		not bool(passing_quiz_result.get("passed", false)) or
+		not RunState.get_academy_progress().get("badges", []).has("technical_basics")
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected passing the Technical quiz to grant the Technical Basics badge."
+		}
+
+	if GameManager.search_academy_glossary("support").is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Academy glossary search to return seeded technical terms."
+		}
+
+	app_window_close_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if not desktop_layer.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected closing the Academy window to return the player to the desktop."
+		}
+
+	upgrades_app_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if (
+		upgrade_window == null or
+		not upgrade_window.visible or
+		app_window_title_label.text != "Upgrades" or
+		upgrade_cards_vbox == null or
+		upgrade_cards_vbox.get_child_count() < RunState.UPGRADE_TRACK_IDS.size()
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Upgrades icon to open a populated shop window."
+	}
+
+	var console_saved_state: Dictionary = RunState.to_save_dict()
+	var console_toggle_event: InputEventKey = InputEventKey.new()
+	console_toggle_event.pressed = true
+	console_toggle_event.keycode = 96
+	game_root._input(console_toggle_event)
+	await get_tree().process_frame
+	var console_overlay: Control = game_root.find_child("ConsoleCommandOverlay", true, false) as Control
+	var console_input: LineEdit = game_root.find_child("ConsoleCommandInput", true, false) as LineEdit
+	if console_overlay == null or console_input == null or not console_overlay.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the backtick key to open the console command overlay."
+		}
+
+	var cash_before_console_command: float = float(RunState.player_portfolio.get("cash", 0.0))
+	console_input.emit_signal("text_submitted", "cuankus")
+	await get_tree().process_frame
+	var expected_console_cash: float = cash_before_console_command + GameManager.CONSOLE_CASH_GRANT_AMOUNT
+	if not is_equal_approx(float(RunState.player_portfolio.get("cash", 0.0)), expected_console_cash):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected console command cuankus to add Rp999.999.999.999 cash."
+		}
+
+	game_root._input(console_toggle_event)
+	await get_tree().process_frame
+	if console_overlay.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the backtick key to close the console command overlay."
+		}
+
+	game_root._input(console_toggle_event)
+	await get_tree().process_frame
+	console_input.emit_signal("text_submitted", "ordalbos")
+	await get_tree().process_frame
+	for upgraded_track_id in RunState.UPGRADE_TRACK_IDS:
+		if RunState.get_upgrade_tier(str(upgraded_track_id)) != 1:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected console command ordalbos to max every upgrade track."
+			}
+	game_root._input(console_toggle_event)
+	await get_tree().process_frame
+	RunState.load_from_dict(console_saved_state)
+	SaveManager.save_run(RunState.to_save_dict())
+	game_root._refresh_all()
+	await get_tree().process_frame
+
+	SaveManager.flush_pending_save()
+	var cash_before_upgrade: float = float(RunState.player_portfolio.get("cash", 0.0))
+	var news_upgrade_button: Button = game_root.find_child("UpgradeBuyButton_news_content", true, false) as Button
+	var upgrade_purchase_dialog: ConfirmationDialog = game_root.find_child("UpgradePurchaseDialog", true, false) as ConfirmationDialog
+	if news_upgrade_button == null or upgrade_purchase_dialog == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Upgrades shop to expose a News Content buy button and confirmation dialog."
+		}
+
+	news_upgrade_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if not upgrade_purchase_dialog.visible or RunState.get_upgrade_tier("news_content") != 4 or not is_equal_approx(float(RunState.player_portfolio.get("cash", 0.0)), cash_before_upgrade):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected pressing an upgrade button to ask for confirmation before spending cash."
+		}
+
+	upgrade_purchase_dialog.emit_signal("confirmed")
+	await get_tree().process_frame
+	if RunState.get_upgrade_tier("news_content") != 3:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected confirming News Content once to improve it to tier 3."
+		}
+	if float(RunState.player_portfolio.get("cash", 0.0)) >= cash_before_upgrade:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected buying an upgrade to spend cash."
+		}
+	if _count_unlocked_rows(GameManager.get_news_snapshot().get("outlets", [])) != 2:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected News Content tier 3 to unlock intel level 2."
+		}
+	if not SaveManager.has_pending_save():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected buying an upgrade to queue a pending autosave."
+		}
+	if not SaveManager.flush_pending_save() or SaveManager.has_pending_save():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the pending autosave flush to complete immediately."
+		}
+	var flushed_upgrade_save: Dictionary = SaveManager.load_run()
+	if int(flushed_upgrade_save.get("upgrade_tiers", {}).get("news_content", 0)) != 3:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected flush_pending_save to persist the upgraded News Content tier."
+		}
+	var saved_upgrade_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(saved_upgrade_state)
+	if RunState.get_upgrade_tier("news_content") != 3:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected upgrade tiers to persist through save/load."
+		}
+	if difficulty_id != GameManager.DEFAULT_DIFFICULTY_ID:
+		RunState.player_portfolio["cash"] = cash_before_upgrade
+		RunState.set_upgrade_tier("news_content", 4)
+
+	if difficulty_id == GameManager.DEFAULT_DIFFICULTY_ID:
+		var trading_fee_result: Dictionary = GameManager.purchase_upgrade("trading_fee")
+		if not bool(trading_fee_result.get("success", false)) or GameManager.get_buy_fee_rate() >= RunState.BUY_FEE_RATE or GameManager.get_sell_fee_rate() >= RunState.SELL_FEE_RATE:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected Trading Fee tier 3 to lower both buy and sell fee rates."
+			}
+		var fee_estimate: Dictionary = GameManager.estimate_buy_lots(str(RunState.company_order[0]), 1)
+		if not is_equal_approx(float(fee_estimate.get("fee_rate", 0.0)), GameManager.get_buy_fee_rate()):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected buy estimates to use the upgraded trading fee rate."
+			}
+
+		var chart_upgrade_result: Dictionary = GameManager.purchase_upgrade("chart_indicators")
+		if not bool(chart_upgrade_result.get("success", false)) or not GameManager.get_unlocked_chart_indicator_ids().has("sma_20"):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected Chart Indicators tier 3 to unlock SMA 20."
+			}
+
+		var daily_action_result: Dictionary = GameManager.purchase_upgrade("daily_action_points")
+		if not bool(daily_action_result.get("success", false)) or int(GameManager.get_daily_action_snapshot().get("limit", 0)) != 15:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected Daily Action Points tier 3 to raise the daily limit to 15."
+			}
+
+		var twooter_result: Dictionary = GameManager.purchase_upgrade("twooter_content")
+		if not bool(twooter_result.get("success", false)) or int(GameManager.get_twooter_snapshot().get("access_tier", 0)) != 2:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected Twooter Content tier 3 to unlock access tier 2."
+			}
+
+		var cash_before_failed_upgrade: float = float(RunState.player_portfolio.get("cash", 0.0))
+		RunState.player_portfolio["cash"] = 0.0
+		var failed_upgrade_result: Dictionary = GameManager.purchase_upgrade("chart_indicators")
+		RunState.player_portfolio["cash"] = cash_before_failed_upgrade
+		if bool(failed_upgrade_result.get("success", false)) or RunState.get_upgrade_tier("chart_indicators") != 3:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected unaffordable upgrades to fail without improving the tier."
+			}
+
+	app_window_close_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if not desktop_layer.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected closing the Upgrades window to return the player to the desktop."
 		}
 
 	news_app_button.emit_signal("pressed")
@@ -247,6 +730,34 @@ func _run_scenario(
 			"message": "Smoke test expected closing the Twooter window to return the player to the desktop."
 		}
 
+	network_app_button.emit_signal("pressed")
+	await get_tree().process_frame
+	var network_snapshot: Dictionary = GameManager.get_network_snapshot()
+	if (
+		network_window == null or
+		not network_window.visible or
+		app_window_title_label.text != "Network" or
+		network_contacts_list == null or
+		str(network_snapshot.get("recognition", {}).get("label", "")).is_empty() or
+		int(network_snapshot.get("contact_cap", 0)) <= 0
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Network icon to open a contact window with recognition data."
+		}
+
+	app_window_close_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if not desktop_layer.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected closing the Network window to return the player to the desktop."
+		}
+
 	stock_app_button.emit_signal("pressed")
 	await get_tree().process_frame
 	if app_window_title_label.text != "STOCKBOT":
@@ -256,9 +767,19 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected the STOCKBOT icon to open the trading platform inside the faux app window."
 		}
+	if difficulty_id == GameManager.DEFAULT_DIFFICULTY_ID:
+		var sma_toggle: CheckButton = game_root.find_child("IndicatorToggle_sma_20", true, false) as CheckButton
+		if sma_toggle == null or sma_toggle.disabled:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected unlocked chart indicators to expose enabled chart toggles."
+			}
 
 	var tracked_company_id: String = str(RunState.company_order[0]) if not RunState.company_order.is_empty() else ""
 	var secondary_company_id: String = str(RunState.company_order[1]) if RunState.company_order.size() > 1 else tracked_company_id
+	var request_fail_company_id: String = str(RunState.company_order[2]) if RunState.company_order.size() > 2 else secondary_company_id
 	var stock_list_tabs: TabContainer = game_root.find_child("StockListTabs", true, false) as TabContainer
 	var add_watchlist_button: Button = game_root.find_child("AddWatchlistButton", true, false) as Button
 	var company_list: ItemList = game_root.find_child("CompanyList", true, false) as ItemList
@@ -278,6 +799,28 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected Watchlist to be the default active trade-list tab."
+		}
+
+	var dashboard_grid: GridContainer = game_root.find_child("DashboardGrid", true, false) as GridContainer
+	var movers_tabs: TabContainer = game_root.find_child("MoversTabs", true, false) as TabContainer
+	var work_tabs: TabContainer = game_root.find_child("WorkTabs", true, false) as TabContainer
+	var upcoming_reports_label: Label = game_root.find_child("PlaceholderBottomBodyLabel", true, false) as Label
+	if (
+		dashboard_grid == null or
+		int(dashboard_grid.get_theme_constant("h_separation")) != 0 or
+		int(dashboard_grid.get_theme_constant("v_separation")) != 0 or
+		movers_tabs == null or
+		movers_tabs.get_tab_count() < 2 or
+		work_tabs == null or
+		not work_tabs.is_tab_hidden(4) or
+		upcoming_reports_label == null or
+		not upcoming_reports_label.text.contains("Q1 2020")
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Dashboard movers, report calendar text, zero dashboard separation, and hidden Analyzer tab."
 		}
 
 	add_watchlist_button.emit_signal("pressed")
@@ -335,6 +878,169 @@ func _run_scenario(
 	all_stock_select_button.emit_signal("pressed")
 	await get_tree().process_frame
 
+	GameManager.discover_network_contacts_for_company(tracked_company_id)
+	network_snapshot = GameManager.get_network_snapshot()
+	var discovered_contacts: Array = network_snapshot.get("discoveries", [])
+	if discovered_contacts.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected company Profile discovery to expose at least one Network contact."
+		}
+	var tracked_sector_id: String = str(GameManager.get_company_snapshot(tracked_company_id).get("sector_id", ""))
+	var tracked_profile_leads: int = 0
+	for discovered_value in discovered_contacts:
+		var discovered_contact: Dictionary = discovered_value
+		if str(discovered_contact.get("source_type", "")) != "profile":
+			continue
+		if str(discovered_contact.get("target_company_id", "")) != tracked_company_id:
+			continue
+		tracked_profile_leads += 1
+		if not (tracked_sector_id in discovered_contact.get("sector_ids", [])):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected company Profile Network leads to match the company's sector."
+			}
+	if tracked_profile_leads <= 0:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected company Profile Network discovery to produce at least one matching lead."
+		}
+
+	for company_index in range(min(RunState.company_order.size(), 8)):
+		GameManager.discover_network_contacts_for_company(str(RunState.company_order[company_index]))
+	var lead_limit_validation: String = _validate_floater_company_lead_limit()
+	if not lead_limit_validation.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": lead_limit_validation
+		}
+
+	var profile_management_label: Label = game_root.find_child("ProfileManagementLabel", true, false) as Label
+	if profile_management_label == null or not profile_management_label.text.contains("CEO") or not profile_management_label.text.contains("CFO") or not profile_management_label.text.contains("Commissioner"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected company Profile to display public management names and roles."
+		}
+
+	var referral_setup: Dictionary = _first_referral_setup(tracked_company_id)
+	if referral_setup.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected generated insiders to have at least one connected floater referral path."
+		}
+
+	var contact_id: String = str(referral_setup.get("floater_id", ""))
+	_ensure_test_contact_discovery(contact_id, tracked_company_id, "referral")
+	var meet_result: Dictionary = GameManager.meet_contact(contact_id, {"source_type": "profile", "source_id": tracked_company_id})
+	if not bool(meet_result.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected meeting a discovered Network contact to succeed."
+		}
+	if int(GameManager.get_daily_action_snapshot().get("used", 0)) <= 0:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected successful Network actions to spend daily action points."
+		}
+
+	var saved_network_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(saved_network_state)
+	network_snapshot = GameManager.get_network_snapshot()
+	var contact_persisted: bool = false
+	for contact_value in network_snapshot.get("contacts", []):
+		var contact: Dictionary = contact_value
+		if str(contact.get("id", "")) == contact_id and bool(contact.get("met", false)):
+			contact_persisted = true
+			break
+	if not contact_persisted:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected met Network contacts to persist through save/load."
+		}
+
+	var early_referral_result: Dictionary = GameManager.request_contact_referral(contact_id, tracked_company_id)
+	if bool(early_referral_result.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network referral to require enough relationship before succeeding."
+		}
+
+	_set_test_contact_relationship(contact_id, 45)
+	var referral_result: Dictionary = GameManager.request_contact_referral(contact_id, tracked_company_id)
+	var referred_contact_id: String = str(referral_result.get("contact_id", ""))
+	if not bool(referral_result.get("success", false)) or referred_contact_id.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected a connected floater to refer a company insider once relationship is high enough."
+		}
+	var post_referral_contacts: Dictionary = RunState.get_network_contacts()
+	if int(post_referral_contacts.get(contact_id, {}).get("relationship", 0)) != 35:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected successful Network referral to spend 10 relationship points."
+		}
+
+	var meet_referred_result: Dictionary = GameManager.meet_contact(referred_contact_id, {"source_type": "referral", "source_id": contact_id})
+	if not bool(meet_referred_result.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected a referred company insider to be meetable."
+		}
+	var referred_save_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(referred_save_state)
+	network_snapshot = GameManager.get_network_snapshot()
+	if not _has_met_network_contact(network_snapshot, referred_contact_id):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected referred company insiders to persist through save/load after meeting."
+		}
+
+	var insider_tip_result: Dictionary = GameManager.request_contact_tip(referred_contact_id)
+	if not bool(insider_tip_result.get("success", false)) or not _has_contact_arc(referred_contact_id, tracked_company_id, "tip"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected company insider tips to default to the insider's affiliated company."
+		}
+
+	var tip_result: Dictionary = GameManager.request_contact_tip(contact_id, secondary_company_id)
+	if not bool(tip_result.get("success", false)) or not _has_contact_arc(contact_id, secondary_company_id, "tip"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected asking a Network contact for a tip to create a contact company arc."
+		}
+
 	var help_button: Button = game_root.find_child("HelpButton", true, false) as Button
 	if help_button == null:
 		game_root.queue_free()
@@ -391,6 +1097,92 @@ func _run_scenario(
 	var opening_financial_history: Array = opening_snapshot.get("financial_history", [])
 	var opening_statement_snapshot: Dictionary = opening_snapshot.get("financial_statement_snapshot", {})
 	var opening_macro_state: Dictionary = GameManager.get_current_macro_state()
+	var ownership_test_state: Dictionary = RunState.to_save_dict()
+	var shares_outstanding: float = float(opening_snapshot.get("shares_outstanding", 0.0))
+	var ownership_test_shares: int = int(ceil(shares_outstanding * 0.051 / float(RunState.LOT_SIZE))) * RunState.LOT_SIZE
+	if shares_outstanding <= 0.0 or ownership_test_shares <= 0:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected company snapshots to expose shares outstanding for ownership calculations."
+		}
+	RunState.player_portfolio["cash"] = float(opening_snapshot.get("current_price", 1.0)) * float(ownership_test_shares) * 2.0
+	var ownership_buy_result: Dictionary = RunState.buy_company(tracked_company_id, ownership_test_shares)
+	var ownership_snapshot: Dictionary = GameManager.get_company_ownership_snapshot(tracked_company_id)
+	var player_flow_context: Dictionary = RunState.get_player_market_flow_context(tracked_company_id, RunState.day_index + 1)
+	var player_is_listed: bool = false
+	for shareholder_value in ownership_snapshot.get("shareholder_rows", []):
+		var shareholder: Dictionary = shareholder_value
+		if str(shareholder.get("name", "")) == "Player":
+			player_is_listed = true
+	if (
+		not bool(ownership_buy_result.get("success", false)) or
+		not bool(ownership_snapshot.get("is_major_shareholder", false)) or
+		not player_is_listed or
+		str(player_flow_context.get("broker_code", "")) != RunState.PLAYER_BROKER_CODE or
+		float(player_flow_context.get("net_value", 0.0)) <= 0.0
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected buying more than 5 percent ownership to list Player as a major shareholder and record XL buy pressure."
+		}
+	GameManager.simulate_opening_session(false)
+	var impact_snapshot: Dictionary = GameManager.get_company_snapshot(tracked_company_id, true)
+	var impact_broker_flow: Dictionary = impact_snapshot.get("broker_flow", {})
+	var impact_volume_context: Dictionary = RunState.get_company(tracked_company_id).get("volume_context", {})
+	var impact_market_depth: Dictionary = GameManager.get_company_market_depth_snapshot(tracked_company_id)
+	var impact_player_snapshot: Dictionary = GameManager.get_player_market_impact_snapshot(tracked_company_id)
+	var impact_price_bars: Array = impact_snapshot.get("price_bars", [])
+	var impact_latest_bar: Dictionary = impact_price_bars[impact_price_bars.size() - 1] if not impact_price_bars.is_empty() else {}
+	if (
+		float(impact_volume_context.get("player_impact_ratio", 0.0)) <= 0.0 or
+		not _broker_rows_contain_code(impact_broker_flow.get("buy_brokers", []), RunState.PLAYER_BROKER_CODE) or
+		impact_market_depth.is_empty() or
+		float(impact_market_depth.get("ask_depth_value", 0.0)) <= 0.0 or
+		float(impact_player_snapshot.get("depth_impact_ratio", 0.0)) <= 0.0 or
+		str(impact_latest_bar.get("limit_lock", "")) != "ara" or
+		not is_equal_approx(float(impact_latest_bar.get("close", 0.0)), float(impact_snapshot.get("ara_price", 0.0))) or
+		not bool(impact_latest_bar.get("locked_through_day", false))
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected a large XL buy to affect market depth, lock ARA, and appear in the broker tape."
+		}
+	var impact_sell_result: Dictionary = RunState.sell_company(tracked_company_id, ownership_test_shares)
+	if not bool(impact_sell_result.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the large impact position to be sellable for the ARB pressure check."
+		}
+	GameManager.simulate_opening_session(false)
+	var sell_impact_snapshot: Dictionary = GameManager.get_company_snapshot(tracked_company_id, true)
+	var sell_impact_broker_flow: Dictionary = sell_impact_snapshot.get("broker_flow", {})
+	var sell_impact_player_snapshot: Dictionary = GameManager.get_player_market_impact_snapshot(tracked_company_id)
+	var sell_impact_price_bars: Array = sell_impact_snapshot.get("price_bars", [])
+	var sell_impact_latest_bar: Dictionary = sell_impact_price_bars[sell_impact_price_bars.size() - 1] if not sell_impact_price_bars.is_empty() else {}
+	if (
+		float(sell_impact_player_snapshot.get("depth_impact_ratio", 0.0)) >= 0.0 or
+		not _broker_rows_contain_code(sell_impact_broker_flow.get("sell_brokers", []), RunState.PLAYER_BROKER_CODE) or
+		str(sell_impact_latest_bar.get("limit_lock", "")) != "arb" or
+		not is_equal_approx(float(sell_impact_latest_bar.get("close", 0.0)), float(sell_impact_snapshot.get("arb_price", 0.0))) or
+		not bool(sell_impact_latest_bar.get("locked_through_day", false))
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected a large XL sell to affect market depth, lock ARB, and appear in the broker tape."
+		}
+	RunState.load_from_dict(ownership_test_state)
+	game_root._refresh_all()
+	await get_tree().process_frame
 	var opening_trade_date_key: String = trading_calendar.to_key(RunState.get_current_trade_date())
 	if opening_trade_date_key != "2020-01-03":
 		game_root.queue_free()
@@ -482,6 +1274,24 @@ func _run_scenario(
 			"message": "Smoke test expected %s to expose at least two generated profile tags." % tracked_company_id.to_upper()
 		}
 
+	var opening_management_roster: Array = opening_snapshot.get("management_roster", [])
+	if opening_management_roster.size() != 3 or not _has_management_roles(opening_management_roster):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected %s to generate CEO, CFO, and Commissioner management insiders." % tracked_company_id.to_upper()
+		}
+	for company_id_value in RunState.company_order:
+		var roster_snapshot: Dictionary = GameManager.get_company_snapshot(str(company_id_value), false, false, false)
+		if roster_snapshot.get("management_roster", []).size() != 3:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected every generated company to have exactly three management insiders."
+			}
+
 	if opening_macro_state.is_empty():
 		game_root.queue_free()
 		await get_tree().process_frame
@@ -559,22 +1369,23 @@ func _run_scenario(
 			]
 		}
 
-	var financial_history_label: RichTextLabel = game_root.find_child("FinancialHistoryLabel", true, false) as RichTextLabel
-	if financial_history_label == null:
+	var financial_history_summary_label: Label = game_root.find_child("FinancialHistorySummaryLabel", true, false) as Label
+	var financial_history_rows: VBoxContainer = game_root.find_child("FinancialHistoryRows", true, false) as VBoxContainer
+	if financial_history_summary_label == null or financial_history_rows == null:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test could not find the generated company history panel in the dashboard UI."
+			"message": "Smoke test could not find the generated company history table in the Trade UI."
 		}
 
-	var financial_history_text: String = financial_history_label.text
-	if not financial_history_text.contains("GENERATED 2010-2019 HISTORY") or not financial_history_text.contains("2019 |"):
+	var rendered_history_rows: int = financial_history_rows.get_child_count() - 1
+	if not financial_history_summary_label.text.contains("Generated 2010-2019 history") or rendered_history_rows != 10:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the generated company history panel to show the 2010-2019 history for %s." % tracked_company_id.to_upper()
+			"message": "Smoke test expected the generated company history table to show the 2010-2019 history for %s." % tracked_company_id.to_upper()
 		}
 
 	var range_1d_button: Button = game_root.find_child("Range1DButton", true, false) as Button
@@ -763,6 +1574,29 @@ func _run_scenario(
 			"message": "Smoke test buy failed on %s because the dashboard buy button did not produce a trade entry." % difficulty_id
 		}
 
+	var broker_summary_label: Label = game_root.find_child("BrokerSummaryLabel", true, false) as Label
+	var broker_rows_vbox: VBoxContainer = game_root.find_child("BrokerRows", true, false) as VBoxContainer
+	if financial_history_summary_label == null or broker_summary_label == null or broker_rows_vbox == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test could not find the Key Stats or Broker widgets needed for the post-buy detail regression check."
+		}
+
+	var rendered_broker_rows_after_buy: int = broker_rows_vbox.get_child_count() - 1
+	if (
+		not financial_history_summary_label.text.contains("Generated 2010-2019 history") or
+		not broker_summary_label.text.contains("Lead buyer:") or
+		rendered_broker_rows_after_buy <= 0
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Key Stats history and Broker rows to stay populated after the opening buy refresh."
+		}
+
 	var toast_panel: PanelContainer = game_root.find_child("ToastPanel", true, false) as PanelContainer
 	var toast_message_label: Label = game_root.find_child("ToastMessageLabel", true, false) as Label
 	if toast_panel == null or not toast_panel.visible:
@@ -788,7 +1622,60 @@ func _run_scenario(
 			"message": "Smoke test expected at least one trade history entry after the opening buy."
 		}
 
-	for _day in range(days_to_advance):
+	var request_success_result: Dictionary = GameManager.accept_contact_request(contact_id, tracked_company_id)
+	var daily_actions_before_duplicate_request: int = int(GameManager.get_daily_action_snapshot().get("used", 0))
+	var duplicate_request_result: Dictionary = GameManager.accept_contact_request(contact_id, tracked_company_id)
+	var request_failure_result: Dictionary = GameManager.accept_contact_request(contact_id, request_fail_company_id)
+	if not bool(request_success_result.get("success", false)) or not bool(request_failure_result.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network contact requests to be accepted for success and failure paths."
+		}
+	if bool(duplicate_request_result.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected duplicate Network position requests on the same contact and stock to be rejected."
+		}
+	if int(GameManager.get_daily_action_snapshot().get("used", 0)) != daily_actions_before_duplicate_request + 1:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected duplicate Network request rejection to avoid spending extra daily action points."
+		}
+
+	for _request_day in range(3):
+		GameManager.advance_day()
+
+	if int(GameManager.get_daily_action_snapshot().get("used", 0)) != 0:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected daily action points to reset after advancing days."
+		}
+
+	var request_snapshot: Dictionary = GameManager.get_network_snapshot()
+	if not _has_network_request_status(request_snapshot, tracked_company_id, "completed") or not _has_network_request_status(request_snapshot, request_fail_company_id, "missed"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network requests to complete when holding 1 lot and miss when not holding the target."
+		}
+	if not _has_contact_arc(contact_id, tracked_company_id, "request"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected a completed Network request to create a contact company arc."
+		}
+
+	for _day in range(max(days_to_advance - 3, 0)):
 		GameManager.advance_day()
 
 	var event_history: Array = GameManager.get_event_history()
@@ -941,12 +1828,17 @@ func _run_scenario(
 			]
 		}
 
-	if difficulty_id == GameManager.DEFAULT_DIFFICULTY_ID and current_trade_date_key != "2020-01-17":
+	var expected_trade_date_key: String = trading_calendar.to_key(trading_calendar.trade_date_for_index(days_to_advance + 2))
+	if difficulty_id == GameManager.DEFAULT_DIFFICULTY_ID and current_trade_date_key != expected_trade_date_key:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the next trade date after the preloaded opening session plus 10 more days to be 2020-01-17, found %s." % current_trade_date_key
+			"message": "Smoke test expected the next trade date after the preloaded opening session plus %d more days to be %s, found %s." % [
+				days_to_advance,
+				expected_trade_date_key,
+				current_trade_date_key
+			]
 		}
 
 	var result: Dictionary = {
@@ -973,6 +1865,36 @@ func _count_down_days(price_history: Array) -> int:
 		if float(price_history[index]) < float(price_history[index - 1]):
 			down_days += 1
 	return down_days
+
+
+func _validate_contact_network_data() -> String:
+	var network_data: Dictionary = DataRepository.get_contact_network_data()
+	var seen_ids := {}
+	var insider_template_roles := {}
+	for contact_value in network_data.get("contacts", []):
+		var contact: Dictionary = contact_value
+		var contact_id: String = str(contact.get("id", "")).strip_edges()
+		if contact_id.is_empty():
+			return "Smoke test expected every Network contact to have an id."
+		if seen_ids.has(contact_id):
+			return "Smoke test expected Network contact ids to be unique, but found duplicate %s." % contact_id
+		seen_ids[contact_id] = true
+		var affiliation_type: String = str(contact.get("affiliation_type", "")).strip_edges()
+		if affiliation_type.is_empty():
+			return "Smoke test expected %s to define affiliation_type." % contact_id
+		if not (affiliation_type in ["floater", "insider_template"]):
+			return "Smoke test found unsupported affiliation_type %s on %s." % [affiliation_type, contact_id]
+		if affiliation_type == "insider_template":
+			var affiliation_role: String = str(contact.get("affiliation_role", "")).strip_edges()
+			if not (affiliation_role in ["ceo", "cfo", "commissioner"]):
+				return "Smoke test expected insider template %s to use ceo/cfo/commissioner affiliation_role." % contact_id
+			insider_template_roles[affiliation_role] = true
+		elif contact.has("affiliation_role"):
+			return "Smoke test expected floater %s not to define affiliation_role." % contact_id
+	for required_role in ["ceo", "cfo", "commissioner"]:
+		if not insider_template_roles.has(required_role):
+			return "Smoke test expected at least one %s insider template." % required_role
+	return ""
 
 
 func _validate_trading_calendar_extension() -> String:
@@ -1037,6 +1959,150 @@ func _count_person_events(event_history: Array) -> int:
 	return match_count
 
 
+func _has_contact_arc(contact_id: String, company_id: String, source_action: String) -> bool:
+	for arc_value in GameManager.get_active_company_arcs():
+		var arc: Dictionary = arc_value
+		if (
+			str(arc.get("event_family", "")) == "contact" and
+			str(arc.get("source_contact_id", "")) == contact_id and
+			str(arc.get("target_company_id", "")) == company_id and
+			str(arc.get("source_action", "")) == source_action
+		):
+			return true
+	return false
+
+
+func _has_network_request_status(network_snapshot: Dictionary, company_id: String, status: String) -> bool:
+	for request_value in network_snapshot.get("requests", []):
+		var request: Dictionary = request_value
+		if str(request.get("target_company_id", "")) == company_id and str(request.get("status", "")) == status:
+			return true
+	return false
+
+
+func _broker_rows_contain_code(rows: Array, broker_code: String) -> bool:
+	for row_value in rows:
+		var row: Dictionary = row_value
+		if str(row.get("code", "")) == broker_code:
+			return true
+	return false
+
+
+func _has_met_network_contact(network_snapshot: Dictionary, contact_id: String) -> bool:
+	for contact_value in network_snapshot.get("contacts", []):
+		var contact: Dictionary = contact_value
+		if str(contact.get("id", "")) == contact_id and bool(contact.get("met", false)):
+			return true
+	return false
+
+
+func _first_referral_setup(company_id: String) -> Dictionary:
+	var snapshot: Dictionary = GameManager.get_company_snapshot(company_id, false, false, false)
+	for management_value in snapshot.get("management_roster", []):
+		var management: Dictionary = management_value
+		for bridge_value in management.get("connected_floaters", []):
+			var bridge: Dictionary = bridge_value
+			var floater_id: String = str(bridge.get("contact_id", ""))
+			if int(bridge.get("score", 0)) >= 50:
+				return {
+					"insider_id": str(management.get("id", management.get("contact_id", ""))),
+					"floater_id": floater_id,
+					"score": int(bridge.get("score", 0))
+				}
+	return {}
+
+
+func _ensure_test_contact_discovery(contact_id: String, company_id: String, source_type: String) -> void:
+	var discoveries: Dictionary = RunState.get_network_discoveries()
+	discoveries[contact_id] = {
+		"contact_id": contact_id,
+		"discovered": true,
+		"source_type": source_type,
+		"source_id": company_id,
+		"target_company_id": company_id,
+		"target_company_ids": [company_id],
+		"target_sector_id": str(GameManager.get_company_snapshot(company_id, false, false, false).get("sector_id", "")),
+		"day_index": RunState.day_index
+	}
+	RunState.set_network_discoveries(discoveries)
+
+
+func _count_unlocked_rows(rows: Array) -> int:
+	var count: int = 0
+	for row_value in rows:
+		var row: Dictionary = row_value
+		if bool(row.get("unlocked", false)):
+			count += 1
+	return count
+
+
+func _build_academy_answers(use_correct_answers: bool) -> Dictionary:
+	var answers: Dictionary = {}
+	var catalog: Dictionary = DataRepository.get_academy_catalog()
+	for category_value in catalog.get("categories", []):
+		var category: Dictionary = category_value
+		if str(category.get("id", "")) != "technical":
+			continue
+		for question_value in category.get("quiz_questions", []):
+			var question: Dictionary = question_value
+			var question_id: String = str(question.get("id", ""))
+			var correct_answer_id: String = str(question.get("correct_answer_id", ""))
+			if use_correct_answers:
+				answers[question_id] = correct_answer_id
+				continue
+			for option_value in question.get("options", []):
+				var option: Dictionary = option_value
+				var option_id: String = str(option.get("id", ""))
+				if option_id != correct_answer_id:
+					answers[question_id] = option_id
+					break
+	return answers
+
+
+func _validate_floater_company_lead_limit() -> String:
+	var network_data: Dictionary = DataRepository.get_contact_network_data()
+	var floater_ids := {}
+	for contact_value in network_data.get("contacts", []):
+		var contact: Dictionary = contact_value
+		if str(contact.get("affiliation_type", "floater")) == "floater":
+			floater_ids[str(contact.get("id", ""))] = true
+	var discoveries: Dictionary = RunState.get_network_discoveries()
+	for contact_id_value in discoveries.keys():
+		var contact_id: String = str(contact_id_value)
+		if not floater_ids.has(contact_id):
+			continue
+		var discovery: Dictionary = discoveries.get(contact_id, {})
+		var targets: Array = []
+		for company_id_value in discovery.get("target_company_ids", []):
+			var company_id: String = str(company_id_value)
+			if not company_id.is_empty() and not targets.has(company_id):
+				targets.append(company_id)
+		var primary_company_id: String = str(discovery.get("target_company_id", ""))
+		if not primary_company_id.is_empty() and not targets.has(primary_company_id):
+			targets.append(primary_company_id)
+		if targets.size() > 2:
+			return "Smoke test expected floater %s to be an initial lead for at most 2 companies, found %d." % [contact_id, targets.size()]
+	return ""
+
+
+func _set_test_contact_relationship(contact_id: String, relationship: int) -> void:
+	var contacts: Dictionary = RunState.get_network_contacts()
+	var runtime: Dictionary = contacts.get(contact_id, {})
+	runtime["contact_id"] = contact_id
+	runtime["met"] = true
+	runtime["relationship"] = relationship
+	contacts[contact_id] = runtime
+	RunState.set_network_contacts(contacts)
+
+
+func _has_management_roles(management_roster: Array) -> bool:
+	var roles := {}
+	for management_value in management_roster:
+		var management: Dictionary = management_value
+		roles[str(management.get("affiliation_role", ""))] = true
+	return roles.has("ceo") and roles.has("cfo") and roles.has("commissioner")
+
+
 func _validate_generated_roster() -> String:
 	var seen_tickers := {}
 	for company_id_value in RunState.company_order:
@@ -1082,11 +2148,7 @@ func _validate_starting_price_diversity(expected_company_count: int) -> String:
 			above_20000_count += 1
 
 	if expected_company_count >= 50 and above_5000_count <= 0:
-		return "Smoke test expected larger generated rosters to include at least one opening price above Rp 5,000, but the max price was %s." % String.num(max_price, 0)
-	if expected_company_count >= 100 and above_10000_count <= 0:
-		return "Smoke test expected Hardcore-sized rosters to include at least one opening price above Rp 10,000, but only found %d." % above_10000_count
-	if expected_company_count >= 100 and above_20000_count <= 0:
-		return "Smoke test expected Hardcore-sized rosters to include at least one opening price above Rp 20,000, but the max price was %s." % String.num(max_price, 0)
+		return "Smoke test expected larger generated rosters to include at least one opening price above Rp5.000, but the max price was %s." % String.num(max_price, 0)
 	if expected_company_count >= 50 and min_price >= 300.0:
 		return "Smoke test expected larger generated rosters to still include cheaper names, but the minimum opening price was %s." % String.num(min_price, 0)
 
@@ -1119,6 +2181,12 @@ func _validate_save_round_trip(
 		]
 	if reloaded_snapshot.get("price_bars", []).is_empty():
 		return "Smoke test expected %s OHLCV bars to survive a save/load round trip." % tracked_company_id.to_upper()
+	var opening_management_roster: Array = opening_snapshot.get("management_roster", [])
+	var reloaded_management_roster: Array = reloaded_snapshot.get("management_roster", [])
+	if reloaded_management_roster.size() != 3 or opening_management_roster.is_empty():
+		return "Smoke test expected %s management roster to survive a save/load round trip." % tracked_company_id.to_upper()
+	if str(reloaded_management_roster[0].get("contact_id", "")) != str(opening_management_roster[0].get("contact_id", "")):
+		return "Smoke test expected %s management insider ids to stay stable after save/load." % tracked_company_id.to_upper()
 	if reloaded_chart_5y.is_empty() or int(reloaded_chart_5y.get("start_date", {}).get("year", 2020)) >= 2020:
 		return "Smoke test expected %s to rebuild its lazy historical 5Y chart after save/load." % tracked_company_id.to_upper()
 	var reloaded_macro_state: Dictionary = GameManager.get_current_macro_state()

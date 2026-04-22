@@ -48,7 +48,7 @@ theme_override_constants/separation = 6
 text = "Trading Balance"
 
 [node name="BalanceValueLabel" type="Label" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid/BalanceCard"]
-text = "Rp 0.00"
+text = "Rp0,00"
 
 [node name="InvestedCard" type="VBoxContainer" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid"]
 theme_override_constants/separation = 6
@@ -57,7 +57,7 @@ theme_override_constants/separation = 6
 text = "Invested"
 
 [node name="InvestedValueLabel" type="Label" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid/InvestedCard"]
-text = "Rp 0.00"
+text = "Rp0,00"
 
 [node name="PnLCard" type="VBoxContainer" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid"]
 theme_override_constants/separation = 6
@@ -66,7 +66,7 @@ theme_override_constants/separation = 6
 text = "P&L"
 
 [node name="PnLValueLabel" type="Label" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid/PnLCard"]
-text = "Rp 0.00 (0.0%)"
+text = "Rp0,00 (0.0%)"
 
 [node name="EquityCard" type="VBoxContainer" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid"]
 theme_override_constants/separation = 6
@@ -75,7 +75,7 @@ theme_override_constants/separation = 6
 text = "Total Equity"
 
 [node name="EquityValueLabel" type="Label" parent="Scroll/ContentVBox/SummaryPanel/SummaryMargin/SummaryGrid/EquityCard"]
-text = "Rp 0.00"
+text = "Rp0,00"
 
 [node name="ContentGrid" type="GridContainer" parent="Scroll/ContentVBox"]
 size_flags_horizontal = 3

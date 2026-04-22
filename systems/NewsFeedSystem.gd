@@ -740,7 +740,42 @@ func _format_percent(value: float) -> String:
 func _format_price(value: float) -> String:
 	if is_zero_approx(value):
 		return ""
-	return "Rp %s" % String.num(value, 0)
+	return "%sRp%s" % [
+		"-" if value < 0.0 else "",
+		_format_decimal(absf(value), 2, true)
+	]
+
+
+func _format_decimal(value: float, decimal_places: int = 2, use_grouping: bool = true) -> String:
+	var safe_places: int = max(decimal_places, 0)
+	var decimal_scale: int = 1
+	for _index in range(safe_places):
+		decimal_scale *= 10
+	var scaled_value: int = int(round(absf(value) * float(decimal_scale)))
+	var whole_value: int = int(floor(float(scaled_value) / float(decimal_scale)))
+	var decimal_value: int = scaled_value % decimal_scale
+	var whole_text: String = _format_grouped_integer(whole_value) if use_grouping else str(whole_value)
+	if safe_places <= 0:
+		return whole_text
+	var decimal_text: String = str(decimal_value)
+	while decimal_text.length() < safe_places:
+		decimal_text = "0" + decimal_text
+	return "%s,%s" % [whole_text, decimal_text]
+
+
+func _format_grouped_integer(value: int) -> String:
+	var negative: bool = value < 0
+	var digits: String = str(abs(value))
+	var groups: Array = []
+	while digits.length() > 3:
+		groups.push_front(digits.substr(digits.length() - 3, 3))
+		digits = digits.substr(0, digits.length() - 3)
+	if not digits.is_empty():
+		groups.push_front(digits)
+	var grouped_value: String = ".".join(groups)
+	if grouped_value.is_empty():
+		grouped_value = "0"
+	return "-%s" % grouped_value if negative else grouped_value
 
 
 func _format_abs_percent(value: float) -> String:

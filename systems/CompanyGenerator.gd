@@ -120,6 +120,11 @@ const SECTOR_PROFILES := {
 	}
 }
 const DEFAULT_QUARTER_WEIGHTS := [0.23, 0.24, 0.25, 0.28]
+const MANAGEMENT_ROLES := [
+	{"id": "ceo", "label": "CEO"},
+	{"id": "cfo", "label": "CFO"},
+	{"id": "commissioner", "label": "Commissioner"}
+]
 const QUARTER_WEIGHT_PROFILES := {
 	"consumer": [0.21, 0.24, 0.25, 0.30],
 	"industrial": [0.23, 0.25, 0.26, 0.26],
@@ -185,7 +190,34 @@ func generate_company_profile(template: Dictionary, sector_definition: Dictionar
 	)
 	for narrative_key_value in narrative_profile.keys():
 		generated_profile[str(narrative_key_value)] = narrative_profile[narrative_key_value]
+	generated_profile["management_roster"] = build_management_roster(
+		template,
+		sector_definition,
+		run_seed
+	)
 	return generated_profile
+
+
+func build_management_roster(template: Dictionary, sector_definition: Dictionary, run_seed: int) -> Array:
+	var network_data: Dictionary = DataRepository.get_contact_network_data()
+	var company_id: String = str(template.get("id", "company"))
+	var company_name: String = str(template.get("name", company_id.to_upper()))
+	var sector_id: String = str(sector_definition.get("id", template.get("sector_id", "")))
+	var roster: Array = []
+	for role_value in MANAGEMENT_ROLES:
+		var role: Dictionary = role_value
+		var role_id: String = str(role.get("id", ""))
+		var template_contact: Dictionary = _pick_management_template(network_data, role_id, sector_id, run_seed, company_id)
+		roster.append(_build_management_contact(
+			template_contact,
+			network_data,
+			company_id,
+			company_name,
+			sector_id,
+			role,
+			run_seed
+		))
+	return roster
 
 
 func build_financial_statement_snapshot_from_profile(
@@ -1595,6 +1627,200 @@ func _round_shares_outstanding(raw_shares_outstanding: float) -> float:
 	if raw_shares_outstanding >= 20000000.0:
 		return round(raw_shares_outstanding / 1000000.0) * 1000000.0
 	return round(raw_shares_outstanding / 250000.0) * 250000.0
+
+
+func _pick_management_template(network_data: Dictionary, role_id: String, sector_id: String, run_seed: int, company_id: String) -> Dictionary:
+	var candidates: Array = []
+	for contact_value in network_data.get("contacts", []):
+		var contact: Dictionary = contact_value
+		if str(contact.get("affiliation_type", "floater")) != "insider_template":
+			continue
+		if str(contact.get("affiliation_role", "")) != role_id:
+			continue
+		var score: float = 1.0
+		if sector_id in contact.get("sector_ids", []):
+			score += 3.0
+		score += float(contact.get("reliability", 0.5))
+		score += _sample_noise(run_seed, company_id, "management_template_%s_%s" % [role_id, str(contact.get("id", ""))], 0.0, 1.0, 0)
+		candidates.append({"contact": contact, "score": score})
+
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("score", 0.0)) > float(b.get("score", 0.0))
+	)
+	if not candidates.is_empty():
+		return candidates[0].get("contact", {}).duplicate(true)
+	return _fallback_management_template(role_id)
+
+
+func _fallback_management_template(role_id: String) -> Dictionary:
+	var role_label: String = _management_role_label(role_id)
+	return {
+		"id": "fallback_%s_template" % role_id,
+		"display_name": role_label,
+		"role": "Listed Company %s" % role_label,
+		"sector_ids": [],
+		"categories": _management_categories(role_id),
+		"recognition_required": 50,
+		"base_relationship": 18,
+		"reliability": 0.68,
+		"tone": "mixed",
+		"intro": "A senior company insider with direct visibility over the issuer.",
+		"affiliation_type": "insider_template",
+		"affiliation_role": role_id
+	}
+
+
+func _build_management_contact(
+	template_contact: Dictionary,
+	network_data: Dictionary,
+	company_id: String,
+	company_name: String,
+	sector_id: String,
+	role: Dictionary,
+	run_seed: int
+) -> Dictionary:
+	var role_id: String = str(role.get("id", ""))
+	var role_label: String = str(role.get("label", _management_role_label(role_id)))
+	var display_name: String = _generated_management_name(network_data, run_seed, company_id, role_id)
+	var categories: Array = []
+	for category_value in template_contact.get("categories", _management_categories(role_id)):
+		var category: String = str(category_value)
+		if not category.is_empty() and not categories.has(category):
+			categories.append(category)
+	for category_value in _management_categories(role_id):
+		var fallback_category: String = str(category_value)
+		if not categories.has(fallback_category):
+			categories.append(fallback_category)
+
+	return {
+		"contact_id": "insider_%s_%s" % [company_id, role_id],
+		"id": "insider_%s_%s" % [company_id, role_id],
+		"display_name": display_name,
+		"affiliation_type": "insider",
+		"affiliation_role": role_id,
+		"company_id": company_id,
+		"affiliated_company_id": company_id,
+		"sector_id": sector_id,
+		"sector_ids": [sector_id],
+		"template_contact_id": str(template_contact.get("id", "")),
+		"role": role_label,
+		"role_label": role_label,
+		"categories": categories,
+		"recognition_required": int(template_contact.get("recognition_required", 50)),
+		"base_relationship": int(template_contact.get("base_relationship", 18)),
+		"reliability": float(template_contact.get("reliability", 0.68)),
+		"tone": str(template_contact.get("tone", "mixed")),
+		"intro": "%s serves as %s at %s. %s" % [
+			display_name,
+			role_label,
+			company_name,
+			str(template_contact.get("intro", "They have direct visibility over the issuer."))
+		],
+		"connected_floaters": _connected_floaters_for_insider(
+			network_data,
+			sector_id,
+			categories,
+			role_id,
+			run_seed,
+			company_id
+		)
+	}
+
+
+func _generated_management_name(network_data: Dictionary, run_seed: int, company_id: String, role_id: String) -> String:
+	var name_pools: Dictionary = network_data.get("person_name_pools", {})
+	var first_names: Array = name_pools.get("first_names", ["Aditya", "Dewi", "Prasetyo", "Rani"])
+	var family_names: Array = name_pools.get("family_names", ["Santoso", "Wijaya", "Kusuma", "Hidayat"])
+	if first_names.is_empty():
+		first_names = ["Aditya"]
+	if family_names.is_empty():
+		family_names = ["Santoso"]
+	var rng: RandomNumberGenerator = _rng_for(run_seed, company_id, "management_name_%s" % role_id)
+	var first_name: String = str(first_names[int(rng.randi_range(0, first_names.size() - 1))])
+	var family_name: String = str(family_names[int(rng.randi_range(0, family_names.size() - 1))])
+	return "%s %s" % [first_name, family_name]
+
+
+func _connected_floaters_for_insider(
+	network_data: Dictionary,
+	sector_id: String,
+	insider_categories: Array,
+	role_id: String,
+	run_seed: int,
+	company_id: String
+) -> Array:
+	var rows: Array = []
+	for contact_value in network_data.get("contacts", []):
+		var contact: Dictionary = contact_value
+		if str(contact.get("affiliation_type", "floater")) != "floater":
+			continue
+		var contact_id: String = str(contact.get("id", ""))
+		if contact_id.is_empty():
+			continue
+		var sector_score: float = 24.0 if sector_id in contact.get("sector_ids", []) else 0.0
+		var category_score: float = 0.0
+		for category_value in contact.get("categories", []):
+			if str(category_value) in insider_categories:
+				category_score += 12.0
+		var role_score: float = _floater_role_affinity(contact, role_id)
+		var reliability_score: float = clamp(float(contact.get("reliability", 0.5)), 0.0, 1.0) * 18.0
+		var recognition_bonus: float = max(0.0, 70.0 - float(contact.get("recognition_required", 0))) * 0.45
+		var noise: float = _sample_noise(run_seed, company_id, "floater_bridge_%s_%s" % [role_id, contact_id], 0.0, 18.0, 0)
+		var score: int = int(round(clamp(sector_score + category_score + role_score + reliability_score + recognition_bonus + noise, 0.0, 100.0)))
+		if score < 35:
+			continue
+		rows.append({"contact_id": contact_id, "score": score})
+
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("score", 0)) > int(b.get("score", 0))
+	)
+	if rows.size() > 6:
+		rows = rows.slice(0, 6)
+	return rows
+
+
+func _floater_role_affinity(contact: Dictionary, role_id: String) -> float:
+	var role_text: String = str(contact.get("role", "")).to_lower()
+	var categories: Array = contact.get("categories", [])
+	match role_id:
+		"ceo":
+			if "management" in categories or "mna" in categories:
+				return 16.0
+			if role_text.contains("strategy") or role_text.contains("director"):
+				return 12.0
+		"cfo":
+			if "earnings" in categories or "mna" in categories:
+				return 16.0
+			if role_text.contains("account") or role_text.contains("broker") or role_text.contains("finance"):
+				return 12.0
+		"commissioner":
+			if "management" in categories or "policy_post" in categories:
+				return 16.0
+			if role_text.contains("law") or role_text.contains("regulator") or role_text.contains("commissioner"):
+				return 12.0
+	return 4.0
+
+
+func _management_categories(role_id: String) -> Array:
+	match role_id:
+		"ceo":
+			return ["management", "mna", "company"]
+		"cfo":
+			return ["earnings", "management", "mna"]
+		"commissioner":
+			return ["management", "policy_post", "mna"]
+	return ["management", "company"]
+
+
+func _management_role_label(role_id: String) -> String:
+	match role_id:
+		"ceo":
+			return "CEO"
+		"cfo":
+			return "CFO"
+		"commissioner":
+			return "Commissioner"
+	return role_id.capitalize()
 
 
 func _sector_profile(sector_id: String) -> Dictionary:

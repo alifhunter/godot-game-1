@@ -7,6 +7,8 @@ The project is currently in a `first playable prototype` state. A new run lands 
 - `STOCKBOT` for trading and research
 - `News` for event-driven intel articles
 - `Twooter` for faster social chatter and personality-driven signal
+- `Network` for contact leads, tips, requests, and referrals
+- `Upgrades` for cash-bought progression perks
 
 Everything is local, deterministic, and data-driven. Companies, financial history, event flows, news copy, and social posts are generated from seeded systems and editable JSON content pools.
 
@@ -15,11 +17,10 @@ Everything is local, deterministic, and data-driven. Companies, financial histor
 - Desktop-first game flow:
   - `Main Menu -> Difficulty -> Loading -> Desktop`
   - `Load Run -> Loading -> Desktop`
-- Four difficulty presets with different roster sizes:
-  - `Newbie`: `25` companies
-  - `Normal`: `50` companies
-  - `Hard`: `75` companies
-  - `Hardcore`: `100` companies
+- Three difficulty presets with different roster sizes, event pace, and volatility:
+  - `Chill`: `20` companies, events every `14` days, `Low` volatility
+  - `Normal`: `30` companies, events every `10` days, `Normal` volatility
+  - `Grind`: `50` companies, events every `7` days, `High` volatility
 - Procedural company generation:
   - unique names and tickers
   - sector assignment and board assignment
@@ -45,10 +46,14 @@ Everything is local, deterministic, and data-driven. Companies, financial histor
 - Research layer:
   - `News` renders event-driven articles from current market/event state
   - `Twooter` renders a smaller mobile-style feed of short posts from tiered accounts
+- Progression layer:
+  - `Upgrades` spends portfolio cash on lower trading fees, richer News and Twooter access, chart indicators, and daily Network action points
+  - `Network` spends daily action points on meeting contacts, asking for tips, accepting requests, and seeking referrals
 - Save/load support:
   - runtime-generated companies persist across saves
   - watchlist persists
   - event and market history persist
+  - upgrade tiers and Network state persist
 
 ## Design Direction
 
@@ -114,17 +119,14 @@ scripts/     UI scripts and smoke-test logic
 
 - No intraday simulation yet
 - Financial statements are simplified and educational, not filing-accurate
-- `News` and `Twooter` still use prototype access levels instead of a real perk system
 - `Twooter` currently favors a simple mobile-feed presentation over richer account pages or filtering
-- Chart indicators exist in backend, but player-facing indicator controls are still limited
+- Chart indicators are a first pass and still need deeper presentation polish
 
 ## Next Directions
 
 Likely next steps include:
 
-- deeper perk-driven intel access
 - richer `News` and `Twooter` content pools
 - more chart polish and indicator UX
 - more educational overlays around fundamentals and market behavior
 - more content around event interpretation and player progression
-

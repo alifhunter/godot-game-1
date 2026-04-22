@@ -108,7 +108,7 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="SelectorCard" type="PanelContainer" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent"]
-custom_minimum_size = Vector2(980, 0)
+custom_minimum_size = Vector2(0, 0)
 
 [node name="SelectorMargin" type="MarginContainer" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard"]
 theme_override_constants/margin_left = 24
@@ -130,7 +130,7 @@ autowrap_mode = 3
 text = "Pick one market profile. Each difficulty changes starting cash, roster size, volatility, and how often events hit the tape."
 
 [node name="DifficultyCardGrid" type="GridContainer" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
-columns = 2
+columns = 3
 theme_override_constants/h_separation = 16
 theme_override_constants/v_separation = 16
 
@@ -204,4 +204,4 @@ text = "Step 1/5"
 
 [node name="LoadingNoteLabel" type="Label" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox"]
 autowrap_mode = 3
-text = "Large rosters can take a moment, especially on Hardcore where 100 companies are generated."
+text = "Larger rosters can take a moment, especially on Grind where 50 companies are generated."

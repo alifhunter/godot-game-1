@@ -17,7 +17,8 @@ Read this file first in the next session.
 
 ## Current Playable State
 - Main menu supports `New Game`, `Load Run`, `Quit`
-- `New Game` opens a dedicated difficulty selector with four difficulty cards and a separate `Continue` step
+- `New Game` opens a dedicated difficulty selector with three difficulty cards and a separate `Continue` step
+  - the selector card is constrained to `90%` of the viewport width and collapses cards into one column on narrower windows
 - After difficulty is confirmed, a simple loading screen shows staged setup progress:
   - `Preparing market seed`
   - `Creating companies`
@@ -31,20 +32,18 @@ Read this file first in the next session.
   - `Restoring run state`
   - `Opening trading desk`
 - Difficulty presets:
-  - `Newbie`
+  - `Chill`
   - `Normal`
-  - `Hard`
-  - `Hardcore`
-- Difficulty also controls generated roster size:
-  - `Newbie`: `25` companies
-  - `Normal`: `50` companies
-  - `Hard`: `75` companies
-  - `Hardcore`: `100` companies
-- The old larger top-end roster sizes were intentionally reduced; current prototype cap is now `100` companies on `Hardcore`
+  - `Grind`
+- Difficulty also controls generated roster size, event frequency, and volatility:
+  - `Chill`: `20` companies, events every `14` days, `Low` volatility
+  - `Normal`: `30` companies, events every `10` days, `Normal` volatility
+  - `Grind`: `50` companies, events every `7` days, `High` volatility
+- The old four-option ladder was intentionally reduced for balance; current prototype cap is now `50` companies on `Grind`
 - Generated opening prices use a wider ladder:
   - smaller and mid-cap names can still open cheap
-  - larger, higher-free-float, stronger-financial names can open above `Rp 1,000`
-  - premium names can land in `Rp 5,000+`, `Rp 10,000+`, and `Rp 20,000+` tiers
+  - larger, higher-free-float, stronger-financial names can open above `Rp1.000`
+  - premium names can land in `Rp5.000+`, `Rp10.000+`, and `Rp20.000+` tiers
 - Backend event layers already exist:
   - yearly `macro` world-state generation
   - structured `company` catalyst generation
@@ -52,6 +51,16 @@ Read this file first in the next session.
   - multi-day `special` market-regime arcs
 - A first-pass event-reading UX now exists in `News`
 - A first-pass smaller mobile-style social-feed UX now also exists in `Twooter`
+- A first playable `Academy` desktop app now exists
+- A first playable contact/recognition UX now exists in `Network`
+- A first playable `Upgrades` shop app now exists on the desktop
+- Upgrade tiers are bought with player cash and now drive trading fees, News access, Twooter access, chart indicators, and daily Network action points
+- A backtick console-command overlay now exists for cheat/testing commands
+- Every generated company now has a persistent public management roster with generated `CEO`, `CFO`, and `Commissioner` insiders
+- Network leads were tightened after playtesting:
+  - company/Profile leads are scored by context and must match the selected company's sector, so generic `company` tags no longer allow sector-irrelevant contacts to appear
+  - Profile/News discovery is no longer hard-capped at `4` leads
+  - the same floater can be an initial company lead for no more than `2` distinct companies
 
 ## Current Player Flow
 - Current fresh-run flow is:
@@ -67,19 +76,36 @@ Read this file first in the next session.
   - `STOCKBOT`
   - `News`
   - `Twooter`
+  - `Academy`
+  - `Network`
+  - `Shop`
   - `Exit`
 - Desktop behavior:
-  - desktop background is plain beige
+  - desktop now uses a Figma-inspired shell rather than the older plain beige launcher
+  - top bar shows current trade date on the left, current cash centered, and a gold `Advance Day` action on the right
+  - the main desktop area is a cream framed canvas with large launcher tiles
+  - the first-pass bottom launcher bar was removed after iteration; the desktop is currently top bar + framed canvas only
+  - desktop launcher/status icons now load from local SVG assets in `assets/ui/desktop/`
   - decorative accent/glow nodes still exist in the scene, but are currently hidden
-  - desktop header/subtitle/hint labels still exist in the scene, but are currently hidden
-  - taskbar nodes and logic still exist, but `TaskbarLayer` is currently hidden by default
+  - legacy desktop header/subtitle/hint/icons/taskbar nodes still exist in the scene/script, but are hidden and moved out of the active desktop layout
 - App behavior:
   - `STOCKBOT` opens the trading platform inside a faux app window
   - the faux app window has a top title bar with `minimize` and `close`
   - both window controls return the player to the desktop for now
   - `News` opens a beige event-driven intel/news desk
   - `Twooter` opens a smaller beige mobile-style social-feed window
+  - `Academy` opens a beige/light learning app
+  - `Network` opens a beige contact/recognition window for discovered market contacts
+  - `Shop` opens the existing beige `Upgrades` cash shop for desk upgrades
   - `Exit` returns to the main menu
+- Console command overlay:
+  - press `` ` `` to open it
+  - press `` ` `` again to close it
+  - type a command and press `Enter` to execute
+  - `cuankus` gives the player `Rp999.999.999.999`
+  - `ordalbos` sets every upgrade track to tier `1`
+  - commands now queue the same debounced autosave path used by other small state changes and refresh the game UI through the usual manager signals/handlers
+  - implementation lives in `GameManager.execute_console_command()` plus dynamic overlay nodes in `scripts/ui/GameRoot.gd`
 - Stock app identity:
   - desktop label: `STOCKBOT`
   - app-window title: `STOCKBOT`
@@ -87,6 +113,15 @@ Read this file first in the next session.
 - Social app identity:
   - desktop label: `Twooter`
   - app-window title: `Twooter`
+- Network app identity:
+  - desktop label: `Network`
+  - app-window title: `Network`
+- Academy app identity:
+  - desktop label: `Academy`
+  - app-window title: `Academy`
+- Upgrades app identity:
+  - desktop label: `Shop`
+  - app-window title: `Upgrades`
 
 ## Stock Terminal Layout
 - `STOCKBOT` still contains the existing trading shell:
@@ -101,7 +136,9 @@ Read this file first in the next session.
   - `Day / Date`
   - `Advance Day`
 - The old top `Focus` read in the navbar has been removed and replaced by `Cash Available`
-- The stock app window intentionally uses a dark theme, while the desktop, `News`, and `Twooter` windows use beige/light themes
+- The stock app window intentionally uses a dark theme, while the desktop, `News`, `Twooter`, `Academy`, `Network`, and `Upgrades` windows use beige/light themes
+- Optional UI font files now live in `assets/fonts/`; the UI auto-loads `app_font.ttf`, `app_font.otf`, then `OpenSans-Regular.ttf` for the main menu + game UI font style
+- Money formatting now uses Indonesian Rupiah style like `Rp1.000.000,00`; compact money uses comma decimals, e.g. `Rp1,25B`
 - The stock app is now contained inside a dedicated window container so the trading shell cannot spill outside the faux browser window bounds
 - Current app-window content insets are effectively:
   - left/right: `20`
@@ -117,8 +154,9 @@ Read this file first in the next session.
 ## Trade View
 - Trade view now uses:
   - left `watchlist / all stock / portfolio` panel
-  - center work area with `Chart`, `Key Stats`, `Financials`, `Broker`, `Analyzer`, and `Profile` tabs
+  - center work area with visible `Chart`, `Key Stats`, `Financials`, `Broker`, and `Profile` tabs
   - right order ticket
+- The old `Analyzer` tab is currently hidden with `TabContainer.set_tab_hidden(4, true)`, but the Analyzer node/backend stays in place so existing `GameRoot.gd` references still resolve
 - Current center-tab responsibilities are:
   - `Chart`: price chart plus range switching
     - the old subheader line under the ticker has been intentionally hidden
@@ -131,7 +169,8 @@ Read this file first in the next session.
       - bottom date labels / X axis
       - crosshair lines plus hover price / date badges
       - a compact hover OHLC / volume readout
-    - there is still no dedicated visual volume-bar panel on the chart; the latest volume work is backend-only for now
+      - a dedicated lower volume-bar panel synced to the same visible bars / zoom window
+    - the volume panel is intentionally visual-only for now: no helper labels like `normal activity` or `busy day`
     - `5Y` can now show a derived pre-2020 history instead of only post-start runtime bars
     - the pre-2020 layer is generated lazily per company from the existing annual + quarterly financial data
     - the historical path was revised away from the first overly smooth always-upward interpolation so it can now show sideways years, pullbacks, and down years while still resolving to the correct `Q4 2019` / opening anchor
@@ -160,8 +199,9 @@ Read this file first in the next session.
     - `Net` toggle now also exists, so each broker appears only on one side based on net value for the session
     - current rows show code, traded value, lots, and average price
     - current `Broker Action` meter is derived from aggregate group flow plus the broker table composition
-  - `Analyzer`: setup read, supportive signals, risk signals, visible inputs, and recent closes
+  - hidden `Analyzer`: setup read, supportive signals, risk signals, visible inputs, and recent closes; kept as backend/scene scaffold only for now
   - `Profile`: company identity, sector, archetype, size, board, live price snapshot, generated company profile scores, founded year, age, employee count, profile revenue, profile tags, and generated narrative description
+    - company Profile can now surface a contextual `Meet` button when a discoverable Network contact matches the selected company and the player meets recognition requirements
 - The old left-panel helper copy was removed:
   - no advancers / decliners / flat / strongest-tape helper
   - no selected-stock helper label
@@ -174,11 +214,12 @@ Read this file first in the next session.
   - darker stock-terminal styling again instead of the earlier bright prototype card
   - top `Buy / Sell` side selectors
   - quantity input
+  - max quantity is now `99.999.999` lots for late-game / cheat-assisted market-impact testing
   - current-price field
   - estimated total
   - one submit button
   - no order-type row yet
-  - no bid / ask display for now because there is no separate quote / order-book layer yet
+  - no bid / ask display for now; the new depth model is backend-only and not a visible order-book UI
 - Trade panel spacing was tightened:
   - `MarketsView.tscn` split separations are now `0`
   - the three trade sections are intended to sit flush with no gap
@@ -187,6 +228,24 @@ Read this file first in the next session.
   - list views now use lighter company snapshots instead of copying full financial history + quarter history for every row
   - the active trade snapshot is cached in `GameRoot.gd` so quarter navigation does not re-fetch the company
   - `TradeWorkspaceWidget.gd` no longer deep-copies the selected stock snapshot before rebuilding the chart
+- Broader interaction performance was also optimized on `2026-04-22`:
+  - `SaveManager.gd` now acts as a save coordinator with `request_save()`, `flush_pending_save()`, and `has_pending_save()`
+  - small state changes now queue a debounced autosave instead of forcing a full synchronous disk write on every click
+  - critical boundaries still flush immediately:
+    - new run creation
+    - `Advance Day`
+    - return to menu
+    - quit / window close
+  - `portfolio_changed`, `watchlist_changed`, and `network_changed` no longer always route into `_refresh_all()`
+  - the old global font-size walk is no longer re-applied across the entire UI tree on every refresh
+  - buy/watchlist/upgrade/network handlers now rely more on targeted signal refreshes instead of duplicate manual full refreshes
+  - `TradeWorkspaceWidget.gd` now caches chart snapshots by company/range/indicator/day key so holdings or upgrade refreshes do not always rebuild the same chart data
+  - a follow-up latency pass on the same date added a per-refresh `GameRoot.gd` cache for company rows / row lookup so Dashboard, Trade, watchlist picker, and debug stock-performance reads can reuse the same row data inside one UI pass
+  - `portfolio_changed` now uses a narrower refresh path instead of always rebuilding the full stock app; header/sidebar/portfolio/desktop still update, while the selected stock can reuse a lighter holdings-state refresh
+  - the trade workspace now has a lighter holdings-state refresh path that merges a shallow company snapshot into the cached selected snapshot instead of always re-fetching full chart / annual / quarterly data
+  - a post-buy regression from that lighter holdings refresh was fixed the same day: Key Stats history, quarterly statement data, and Broker rows are now preserved after `portfolio_changed` updates instead of being overwritten by the stripped snapshot used for holdings-only updates
+  - lot-size changes now only recalculate order controls instead of re-running the whole markets refresh
+  - current main remaining hotspot is now the watchlist / company-list rebuild path: watchlist add-remove and some stock-list-tab flows still rebuild the left stock pane together, so they are noticeably slower than buy, upgrade, or Network actions
 - Chart system status:
   - chart range switcher supports `1D`, `1W`, `1M`, `1Y`, `5Y`, `YTD`
   - chart display-mode switcher supports `Line` and `Candle`
@@ -199,7 +258,12 @@ Read this file first in the next session.
     - zoomed visible-window slicing
     - line rendering
     - candle rendering
-  - indicator catalog exists in backend but still has no player-facing toggle UI
+    - lower volume-bar rendering
+    - a minimal lower RSI indicator panel when `RSI 14` is unlocked and toggled
+  - indicator catalog now has player-facing toggles in the Chart tab:
+    - locked indicators show as disabled toggles
+    - unlocked indicators can be toggled per session
+    - tier-driven unlock order is `SMA 20`, then `EMA 20` + `SMA 50`, then `RSI 14`
 
 ## Watchlist System
 - A real persistent watchlist system now exists
@@ -211,32 +275,54 @@ Read this file first in the next session.
   - `GameManager` exposes:
     - `get_watchlist_company_ids()`
     - `add_company_to_watchlist(company_id)`
-  - `GameManager` emits `watchlist_changed` after a successful add and save
+    - `remove_company_from_watchlist(company_id)`
+  - `GameManager` emits `watchlist_changed` after a successful add/remove; persistence now goes through the debounced autosave path
 - Watchlist UX:
   - `Watchlist` tab can start empty
   - `Add Watchlist` button opens a popup list of all stocks
-  - player selects one stock and confirms to save it into the watchlist
+  - `Remove` button removes the currently selected watchlist stock
+  - player selects one stock and confirms to add it into the watchlist
+  - `All Stock` tab has a search input that filters by ticker, company name, or sector
   - `All Stock` tab renders dynamic per-stock rows
   - each `All Stock` row has:
     - a select button
     - an `Add` button
-  - pressing `Add` immediately saves that company into the watchlist
+  - pressing `Add` immediately updates the in-memory watchlist and queues autosave persistence
   - already-added names become `Added` and the button is disabled
   - `Portfolio` tab now also exists beside `Watchlist` and `All Stock`
   - `Portfolio` tab shows stocks the player currently holds so they can be reselected quickly from the trade sidebar
 - Important limitation:
-  - there is no remove-from-watchlist flow yet
-  - there is still no search / sort / filter for either list
+  - there is still no sort / multi-list management for either list
 
 ## Portfolio / Dashboard / Help
 - `Dashboard`, `Portfolio`, and `Help` still exist inside `STOCKBOT`
 - Their right-side outer margins were tightened so they sit more flush inside the stock window
 - `Dashboard` no longer uses the old long text overview card
+- `DashboardGrid` now has `h_separation = 0` and `v_separation = 0`, so the four dashboard sections sit flush
 - Dashboard is now a `2x2` grid:
   - top-left: `Index Gorengan` card with derived market points, traded lot, and traded value
-  - bottom-left: live month calendar with the current in-game day highlighted
-  - top-right: reserved empty placeholder box
-  - bottom-right: reserved empty placeholder box
+  - bottom-left: live month calendar with the current in-game day highlighted and quarterly report filing days marked as `R`
+  - top-right: `Movers` card with a `Top 15 Gainer` tab and a `Top 15 Loser` tab
+  - bottom-right: `Upcoming Reports` list showing the next scheduled company filings
+- Quarterly report calendar:
+  - stored in `RunState.quarterly_report_calendar` and saved/loaded with the run
+  - old saves backfill a deterministic report calendar from the saved roster
+  - every generated company receives one filing date per quarter through `2030`
+  - report months currently follow the prototype earnings season convention:
+    - Q1 filings are spread across January trading days
+    - Q2 filings are spread across April trading days
+    - Q3 filings are spread across July trading days
+    - Q4 filings are spread across October trading days
+  - companies are shuffled deterministically per quarter so filings are distributed across the month, while still allowing multiple companies on the same day
+  - public API:
+    - `GameManager.get_report_calendar_snapshot(year, month)`
+    - `GameManager.get_upcoming_report_rows(limit)`
+- Dashboard movers are built from `GameManager.get_company_rows()`:
+  - gainers sort by `daily_change_pct` descending and filter `> 0`
+  - losers sort by `daily_change_pct` ascending and filter `< 0`
+  - each side renders no more than `15` rows
+  - rows show rank, ticker, company name, current price, and daily-change percent
+  - empty states read `No gainers this session.` / `No losers this session.`
 - Dashboard market card is currently built from:
   - live company prices vs starting prices for synthetic index points
   - latest daily `volume_lots`
@@ -253,6 +339,31 @@ Read this file first in the next session.
   - holdings table
   - history table
 - Portfolio section spacing was reduced so the blocks sit flush against each other
+- Player ownership:
+  - current ownership is derived from `player shares / shares_outstanding`
+  - the displayed label is simply `% ownership`
+  - when the player reaches at least `5%` ownership, `Player` appears in the selected company's `Major Shareholders` list in the Profile tab
+  - shareholder rows are built by `GameManager.get_company_ownership_snapshot(company_id)` and included in `GameManager.get_company_snapshot()`
+  - the ownership breakdown now subtracts player stake from public float first and then from the controlling block if needed, so visible shareholder totals stay coherent even when the player accumulates beyond free float
+  - this is still not a voting/control simulation, but large player trades now feed the market-impact layer through order size, free-float pressure, and synthetic liquidity
+- Player market-impact / synthetic depth layer:
+  - all player trades are associated with broker code `XL`
+  - `RunState.player_market_flows` stores recent player buy/sell pressure per company from order value, shares, ownership percentage, free-float percentage, market-cap percentage, and impact intent
+  - player pressure decays across the next `3` simulated trading sessions
+  - `MarketSimulator.gd` now builds a compact per-company `market_depth_context` from market cap, free float, average daily value, liquidity profile, story heat, volatility, event pressure, and difficulty
+  - the depth model tracks estimated bid-side depth, ask-side depth, liquidity consumed, free-float pressure, resistance, and whether the player overwhelmed available liquidity
+  - large `XL` buys can create pump pressure and, when strong enough, force an `ARA` limit lock
+  - large `XL` sells can create dump/distribution pressure and, when strong enough, force an `ARB` limit lock
+  - ARA locks create full green daily candles with high/close at the upper auto-rejection price
+  - ARB locks create full red daily candles with low/close at the lower auto-rejection price
+  - scripted special-event limit moves still take precedence over player-generated limit locks
+  - repeated oversized pumping feeds the existing exhaustion/aftermath drag so this should not become a clean free-money button
+  - `BrokerFlowSystem.gd` injects player pressure into the visible `XL` broker row and can label extreme sessions as `XL ARA Lock` / `XL ARB Lock`
+  - chart bars preserve `limit_lock`, `limit_source`, `impact_side`, and player liquidity metadata; chart hover now calls out ARA/ARB lock days
+  - public impact APIs:
+    - `GameManager.get_company_market_depth_snapshot(company_id)`
+    - `GameManager.get_player_market_impact_snapshot(company_id)`
+  - this is still a daily synthetic depth foundation, not a full matching engine: no visible bid/ask queue, no partial fills, and no tick-by-tick intraday tape yet
 
 ## News Desk
 - `News` is no longer a blank placeholder
@@ -270,8 +381,10 @@ Read this file first in the next session.
   - these are currently presented as outlet names in the News window
   - conceptually they map to future `Intel 1-4` perks rather than independent truth sources
   - higher intel means earlier visibility into the same underlying event
-- Current prototype behavior uses a temporary hardcoded unlocked intel level of `4`
-  - this means all four outlet buttons are currently visible and usable until the perk system exists
+- Current access behavior is upgrade-driven:
+  - fresh runs start at News Content tier `4`, which unlocks Intel level `1`
+  - buying News Content upgrades unlocks Intel levels `2`, `3`, and `4`
+  - the old temporary hardcoded unlocked intel level of `4` has been removed
 - Current news feed sources are:
   - active hidden `company_arc` phases for the highest intel tier
   - active `special` events still playing out
@@ -292,6 +405,7 @@ Read this file first in the next session.
   - full article bodies are loaded when an archived article is selected, rather than dumping all history into the list at once
   - article timing/availability depends on event progress and outlet intel level
   - market-wrap style articles provide fallback content so the feed is not empty on quieter sessions
+  - article details can now surface a contextual Network `Meet` button when the article metadata points at a discoverable contact and the player meets recognition requirements
 - Current content source is editable:
   - `data/news/news_feed_data.json`
   - this stores outlet labels, summary/tagline copy, progress labels, headline prefixes, sentence pools, and hidden-phase templates
@@ -307,8 +421,10 @@ Read this file first in the next session.
   - the same underlying event systems still remain the source of truth
   - the social layer renders those events into short posts, reactions, and account chatter
   - unlike `News`, progression here is account-access based rather than outlet-based
-- Current prototype behavior uses a temporary hardcoded unlocked access tier of `4`
-  - this means all currently defined accounts are visible and usable until the perk system exists
+- Current access behavior is upgrade-driven:
+  - fresh runs start at Twooter Content tier `4`, which unlocks account tier `1`
+  - buying Twooter Content upgrades unlocks account tiers `2`, `3`, and `4`
+  - the old temporary hardcoded unlocked access tier of `4` has been removed
 - Current account tiers are:
   - Tier `1`: `Gorengan Hunter`, `Rumor Lokal`
   - Tier `2`: `Flow Warung`, `Waduh Macro`
@@ -345,6 +461,211 @@ Read this file first in the next session.
   - wired through `GameManager.get_twooter_snapshot()`
   - loaded through `DataRepository.gd`
 
+## Academy App
+- `Academy` is now a first playable desktop learning app
+- It currently lives inside the existing faux app window in `GameRoot.tscn`; there is still no separate scene for it
+- Current category tabs are:
+  - `Mindset`
+  - `Fundamental`
+  - `Technical`
+  - `Transactional`
+- Current module status:
+  - `Technical` is the only fully playable module
+  - the other three categories are visible but still `Coming soon`
+- Technical module currently includes:
+  - `01 Intro`
+  - `02 Market Structure`
+  - `03 Candlesticks`
+  - `04 Patterns`
+  - `05 Moving Average`
+  - `06 Thinking Framework`
+  - `07 Quiz`
+  - `08 Glossary`
+- Current Technical behavior:
+  - sections `01-06` and `08 Glossary` are open-access
+  - `07 Quiz` stays locked until `01 Intro`, `02 Market Structure`, `03 Candlesticks`, and `04 Patterns` are marked read
+  - section progress persists in save data through `RunState.academy_progress`
+  - glossary search is implemented
+  - quiz passing score is `80%`
+  - passing grants a non-gameplay `Technical Basics` badge
+- Current implementation:
+  - content data: `data/academy/academy_catalog.json`
+  - system/backend: `systems/AcademySystem.gd`
+  - state/API: `RunState.gd`, `GameManager.gd`, `DataRepository.gd`
+  - UI: `scenes/game/GameRoot.tscn`, `scripts/ui/GameRoot.gd`
+
+## Upgrades Shop
+- `Upgrades` is now a first playable desktop shop app
+- It currently lives inside the existing faux app window in `GameRoot.tscn`; there is still no separate scene for it
+- Upgrades are purchased with available portfolio cash
+- Every upgrade track starts at tier `4`, where `4` is the lowest tier and `1` is the highest tier
+- Buying an upgrade improves exactly one tier at a time:
+  - tier `4` -> tier `3`
+  - tier `3` -> tier `2`
+  - tier `2` -> tier `1`
+- Failed purchases do not change cash or tier
+- Successful purchases now queue the debounced autosave path and refresh the relevant portfolio/shop UI through targeted handlers
+- Purchase buttons now open a confirmation dialog before spending cash:
+  - the dialog shows track name, current tier/effect, next tier/effect, cost, and cash after purchase
+  - cash and tier do not change until the player confirms
+- Current upgrade tracks and effects:
+  - `Trading Fee`
+    - tier `4`: buy `0.15%`, sell `0.25%`
+    - tier `3`: buy `0.13%`, sell `0.22%`, cost `Rp2.000.000`
+    - tier `2`: buy `0.11%`, sell `0.19%`, cost `Rp7.500.000`
+    - tier `1`: buy `0.09%`, sell `0.16%`, cost `Rp20.000.000`
+  - `News Content`
+    - tier `4`: Intel level `1`
+    - tier `3`: Intel level `2`, cost `Rp750.000`
+    - tier `2`: Intel level `3`, cost `Rp2.500.000`
+    - tier `1`: Intel level `4`, cost `Rp7.500.000`
+  - `Twooter Content`
+    - tier `4`: Access tier `1`
+    - tier `3`: Access tier `2`, cost `Rp750.000`
+    - tier `2`: Access tier `3`, cost `Rp2.500.000`
+    - tier `1`: Access tier `4`, cost `Rp7.500.000`
+  - `Chart Indicators`
+    - tier `4`: no indicators
+    - tier `3`: `SMA 20`, cost `Rp1.000.000`
+    - tier `2`: `SMA 20`, `EMA 20`, `SMA 50`, cost `Rp3.000.000`
+    - tier `1`: `SMA 20`, `EMA 20`, `SMA 50`, `RSI 14`, cost `Rp9.000.000`
+  - `Daily Action Points`
+    - tier `4`: `10` AP/day
+    - tier `3`: `15` AP/day, cost `Rp1.500.000`
+    - tier `2`: `20` AP/day, cost `Rp5.000.000`
+    - tier `1`: `25` AP/day, cost `Rp15.000.000`
+- Current shop UI shows:
+  - current cash
+  - current daily Network AP remaining/limit
+  - one card per upgrade track
+  - current tier/effect
+  - next tier price/effect
+  - disabled max-tier and unaffordable purchase buttons
+  - a `Buy Upgrade` confirmation step for affordable purchases
+- Current implementation:
+  - upgrade catalog data: `data/upgrades/upgrade_catalog.json`
+  - state/API: `RunState.gd`, `GameManager.gd`, `DataRepository.gd`
+  - shop UI: `scenes/game/GameRoot.tscn`, `scripts/ui/GameRoot.gd`
+
+## Network App / Contact System
+- `Network` is now a first playable contact-management app
+- It currently lives inside the existing faux app window in `GameRoot.tscn`; there is still no separate scene for it
+- Contacts are not purchased from an upgrade shop:
+  - contacts are discovered through `News` articles, company `Profile` pages, and floater referrals
+  - discovered contacts are still unmet until the player presses `Meet`
+  - recognition requirements gate whether a contact can be discovered/met, except warm referral leads can be met after referral discovery
+- Current Network window shows:
+  - recognition tier and numeric recognition score
+  - contact cap
+  - met contact count
+  - discovered-but-unmet contacts
+  - floater vs company-insider state in the contact list/detail
+  - referred leads
+  - pending/completed/missed requests
+  - current daily Network AP remaining/limit
+  - selected-contact detail
+  - action buttons for `Meet`, `Tip`, `Request`, and `Referral`
+  - when no contacts/leads are available, the list shows `No leads yet. Explore the world more.` instead of dumping all floaters
+- Recognition formula currently scores `0-100` from:
+  - equity progress worth up to `40`, based on current equity vs difficulty starting cash and capped when equity reaches `2x` starting cash
+  - holdings / invested exposure worth up to `30`, split between number of companies held at `1+` lot and invested market value as a share of equity
+  - met contact count worth up to `30`, capped at `8` met contacts
+- Current recognition tiers and contact caps are:
+  - `Unknown`: score `<20`, cap `2`
+  - `Retail Regular`: score `<40`, cap `3`
+  - `Known Trader`: score `<65`, cap `5`
+  - `Connected Player`: score `<85`, cap `8`
+  - `Market Name`: score `>=85`, cap `12`
+- Current Network interactions:
+  - `Meet` spends `1` daily AP on success, unlocks a discovered contact, and starts relationship at the data-defined base relationship, defaulting to `25`
+  - `Tip` spends `1` daily AP on success, creates a saved company arc with `event_family = "contact"` and phases `hidden_whisper -> visible_reaction -> digestion`, then burns `2` relationship points
+  - `Request` spends `1` daily AP on success and creates a pending task to hold at least `1` lot of the target company by `current_day + 3`
+  - repeat accepts for the same contact-target pair while a request is already pending now fail safely and do not spend extra AP
+  - a successful request creates a contact company arc and adds `8` relationship points
+  - when a due request resolves, it only marks `completed` if the promised follow-up arc is successfully created; otherwise it stays pending
+  - a missed request marks the request missed and subtracts `6` relationship points
+  - `Referral` spends `1` daily AP on success and lets a met floater introduce a connected company insider when relationship and connection requirements are met
+  - insider `Tip` / `Request` actions default to the insider's affiliated company
+  - revisiting the same company/profile context no longer re-discovers the same floater-company lead repeatedly, so Trade/Profile refreshes only queue discovery autosave work when a genuinely new lead is found
+- Daily Network AP behavior:
+  - fresh runs start with `10` AP/day through Daily Action Points tier `4`
+  - AP resets when the trade day advances
+  - failed Network actions do not spend AP
+  - reading News, scanning Twooter, opening Profile, trading, buying upgrades, and advancing the day do not spend AP
+- Current referral rules:
+  - only met `floater` contacts can refer
+  - relationship must be `>=45`
+  - generated connection score to the target insider must be `>=50`
+  - successful referral costs `10` relationship points
+  - successful referral creates a `network_discoveries` entry with `source_type = "referral"` and `referred_by_contact_id`
+  - referred insiders can be met even if recognition would otherwise be below the insider's normal requirement
+- Current guardrail:
+  - one active `tip` or `request` arc per contact-target pair at a time
+- Current lead/discovery behavior:
+  - company/Profile discovery currently surfaces scored floater leads only; public management names are shown separately and are not auto-discovered from simply opening Profile
+  - company/Profile floater leads must match the selected company's sector
+  - broad tags such as `company` add only a small score bonus and no longer override sector mismatch
+  - Profile discovery no longer has the old hard cap of `4` leads per context
+  - News/article discovery can surface both matching floaters and target-company insiders when article metadata contains a target company
+  - News/article discovery no longer has the old hard cap of `4` leads per context
+  - floater discovery stores `target_company_ids`
+  - a floater is skipped as a new initial lead once they are already tied to `2` distinct companies
+- Current prototype simplification:
+  - contact interactions consume daily AP but do not consume a separate event slot yet
+  - contact effects do not directly change current prices; they enter the existing active company-arc pipeline so MarketSimulator, News, and Twooter can read them like other company arcs
+- Current content source is editable:
+  - `data/network/contact_network_data.json`
+  - contacts are fictional/data-authored Indonesian market roles and names, not real people
+  - authored contacts use `affiliation_type = "floater"` or `affiliation_type = "insider_template"`
+  - insider templates use `affiliation_role` values of `ceo`, `cfo`, or `commissioner`
+  - generated company insiders are created from insider templates at run generation and are not fixed global executives
+  - current data validation summary from the latest implementation pass:
+    - total authored contacts: `233`
+    - duplicate ids: `0`
+    - floaters: `221`
+    - insider templates: `12`
+- Current implementation:
+  - `systems/ContactNetworkSystem.gd`
+  - wired through `GameManager.get_network_snapshot()`
+  - loaded through `DataRepository.gd`
+  - persisted through `RunState.network_contacts`, `RunState.network_discoveries`, and `RunState.network_requests`
+
+## Company Management / Insider Generation
+- Every generated company now persists a compact public `management_roster`
+- The roster contains exactly three generated people:
+  - `CEO`
+  - `CFO`
+  - `Commissioner`
+- Generated insider ids are stable and unique per company/role:
+  - `insider_<company_id>_<role>`
+- Each generated management person stores:
+  - `contact_id`
+  - `display_name`
+  - `affiliation_type = "insider"`
+  - `affiliation_role`
+  - `company_id`
+  - `sector_id`
+  - `template_contact_id`
+  - `role_label`
+  - `recognition_required`
+  - `reliability`
+  - `tone`
+  - `intro`
+  - `connected_floaters`
+- Company Profile now shows public management names immediately, even before Network discovery
+- Profile rows expose each manager's Network state as:
+  - `public`
+  - `discovered`
+  - `met`
+- `connected_floaters` stores only the top matching floater bridges for each insider, not a full relationship graph
+- The connection score is deterministic from:
+  - sector/category overlap
+  - role affinity
+  - floater reliability
+  - recognition accessibility
+  - seeded noise
+- Older saves are backfilled with missing management rosters through `RunState._ensure_company_profiles()`
+
 ## Event Systems
 - Macro state generation:
   - `systems/MacroStateSystem.gd`
@@ -355,6 +676,11 @@ Read this file first in the next session.
   - `systems/CompanyEventSystem.gd`
   - deterministic daily company catalyst sampling
   - supports persistent multi-day company arcs
+- Quarterly report events:
+  - report dates are generated by `RunState._build_quarterly_report_calendar()`
+  - on the scheduled trading day, `MarketSimulator.gd` asks `RunState.get_quarterly_report_events_for_day_number()`
+  - report filings currently resolve into `earnings_beat` or `earnings_miss` events based on a deterministic surprise score from quality, growth, risk, recent sentiment, and seeded noise
+  - report events are company-scoped, affect that company's daily event bias, and are recorded into `event_history`
 - Person-of-interest event generation:
   - `systems/PersonEventSystem.gd`
   - currently supports:
@@ -388,6 +714,8 @@ Read this file first in the next session.
   - `data/events/events.json`
   - `data/news/news_feed_data.json`
   - `data/social/twooter_feed_data.json`
+  - `data/academy/academy_catalog.json`
+  - `data/network/contact_network_data.json`
 - Market simulation:
   - `systems/MarketSimulator.gd`
   - daily price change uses market sentiment, sector sentiment, events, broker flow, mean reversion, and noise
@@ -423,6 +751,19 @@ Read this file first in the next session.
     - `EMA 20`
     - `SMA 50`
     - `RSI 14`
+- Contact network:
+  - `systems/ContactNetworkSystem.gd`
+  - builds recognition snapshot, contact cap, discoveries, met contacts, and request state
+  - resolves both authored floaters and generated company insiders as contact definitions
+  - discovers contacts from News article metadata and company Profile sector/company context
+  - uses scored sector-relevant Profile leads rather than first-match rows
+  - supports referrals from met floaters to generated company insiders
+  - creates contact-sourced company arcs through the existing `RunState.active_company_arcs` pipeline
+  - processes due requests during day advancement
+- Academy:
+  - `systems/AcademySystem.gd`
+  - builds category/section snapshots from catalog data plus saved progress
+  - resolves read state, quiz lock state, quiz scoring, glossary results, and earned badge state
 - IDX price rules:
   - `systems/IDXPriceRules.gd`
   - tick size ladder implemented
@@ -435,6 +776,7 @@ Read this file first in the next session.
 - Procedural company generation:
   - `systems/CompanyGenerator.gd`
   - generates hidden traits
+  - generates a persistent `management_roster` with CEO/CFO/Commissioner insiders for every company
   - generates annual financial history from `2010` to `2019`
   - derives 2020 opening fundamentals
   - derives `quality_score`, `growth_score`, `risk_score`, `base_volatility`, and `base_price`
@@ -500,12 +842,22 @@ Read this file first in the next session.
 - Chart widget scripts:
   - `scripts/ui/widgets/TradeWorkspaceWidget.gd`
   - `scripts/ui/widgets/PriceChartCanvas.gd`
+- UI asset folders:
+  - `assets/fonts/README.md`
+  - `assets/ui/desktop/`
 - News desk backend / content:
   - `systems/NewsFeedSystem.gd`
   - `data/news/news_feed_data.json`
 - Twooter backend / content:
   - `systems/TwooterFeedSystem.gd`
   - `data/social/twooter_feed_data.json`
+- Network backend / content:
+  - `systems/ContactNetworkSystem.gd`
+  - `data/network/contact_network_data.json`
+- Upgrades backend / content:
+  - `data/upgrades/upgrade_catalog.json`
+  - `autoloads/GameManager.gd`
+  - `autoloads/RunState.gd`
 - Broker roster data:
   - `data/brokers/broker_roster.json`
 
@@ -519,8 +871,10 @@ Read this file first in the next session.
 - `RunState.COMPANY_PROFILE_KEYS` now includes:
   - financial/runtime values like `base_price`, scores, `financials`, `financial_history`, `financial_statement_snapshot`, and `generation_traits`
   - narrative values like `archetype_label`, `company_size_label`, `founded_year`, `employee_count`, `profile_revenue`, `profile_description`, and `profile_tags`
+  - company management value `management_roster`
 - Older saves are backfilled through `RunState._ensure_company_profiles()` and normalized through `RunState._normalize_company_profile()`
 - Older saves now also backfill missing quarterly statement history by rebuilding `financial_statement_snapshot` from the saved annual financial history + traits
+- Older saves now also backfill missing/invalid management rosters by rebuilding the three generated management insiders from saved company profile context
 - Snapshot access is now intentionally split by weight:
   - lightweight list/overview callers can ask for company snapshots without full `financial_history` or `quarterly_statements`
   - the Trade workspace still requests the full stock snapshot because it needs chart history, annual history, and quarter navigation
@@ -534,11 +888,26 @@ Read this file first in the next session.
   - `ytd_reference_year`
   - longer-running `price_history`
   - daily `price_bars`
+  - latest `market_depth_context`
+  - latest `player_market_impact`
 - Yearly macro states are saved in `RunState`
 - Daily generated events are saved in `RunState.event_history`
 - Daily market-performance snapshots are saved in `RunState.market_history`
 - Ongoing company-event arcs are saved in `RunState.active_company_arcs`
 - Ongoing special-event arcs are saved in `RunState.active_special_events`
+- Network runtime state is saved in:
+  - `RunState.network_contacts`
+  - `RunState.network_discoveries`
+  - `RunState.network_requests`
+- Contact tips and completed contact requests create entries in `RunState.active_company_arcs` using `event_family = "contact"`
+- Upgrade runtime state is saved in:
+  - `RunState.upgrade_tiers`
+  - `RunState.daily_action_day_index`
+  - `RunState.daily_actions_used`
+- Older saves backfill missing upgrade state to tier `4` for every track and reset daily AP safely for the current day
+- Academy runtime state is saved in:
+  - `RunState.academy_progress`
+  - older saves backfill missing academy progress safely
 - Watchlist membership is now also saved in `RunState.watchlist_company_ids`
 - News articles now have a lightweight persistent archive:
   - `RunState.news_archive_index`
@@ -557,11 +926,35 @@ Read this file first in the next session.
   - `GameManager.get_company_chart_snapshot(company_id, range_id, enabled_indicator_ids := [])`
   - `GameManager.get_chart_range_label(range_id)`
   - `GameManager.get_chart_indicator_catalog()`
+- Market-impact consumers can use:
+  - `GameManager.get_company_market_depth_snapshot(company_id)`
+  - `GameManager.get_player_market_impact_snapshot(company_id)`
+- Network consumers can use:
+  - `GameManager.get_network_snapshot()`
+  - `GameManager.discover_network_contacts_from_article(article)`
+  - `GameManager.discover_network_contacts_for_company(company_id)`
+  - `GameManager.meet_contact(contact_id, source_context := {})`
+  - `GameManager.request_contact_tip(contact_id, company_id := "")`
+  - `GameManager.accept_contact_request(contact_id, company_id := "")`
+  - `GameManager.request_contact_referral(contact_id, company_id := "", affiliation_role := "")`
+- Upgrade consumers can use:
+  - `GameManager.get_upgrade_shop_snapshot()`
+  - `GameManager.purchase_upgrade(track_id)`
+  - `GameManager.get_unlocked_news_intel_level()`
+  - `GameManager.get_unlocked_twooter_access_tier()`
+  - `GameManager.get_unlocked_chart_indicator_ids()`
+  - `GameManager.get_daily_action_snapshot()`
+  - `GameManager.try_spend_daily_action(action_id, metadata := {})`
+- Console command consumers can use:
+  - `GameManager.execute_console_command(command_text)`
+  - currently recognized commands are `cuankus` and `ordalbos`
 
 ## Trading Rules
 - Lot size: `1 lot = 100 shares`
-- Buy fee: `0.15%`
-- Sell fee: `0.25%`
+- Order ticket max buy/sell quantity is currently `99.999.999` lots
+- Base buy fee: `0.15%`
+- Base sell fee: `0.25%`
+- Effective buy/sell fees are now upgrade-driven by the `Trading Fee` track
 - Trade history panel records:
   - day
   - ticker
@@ -578,8 +971,26 @@ Read this file first in the next session.
 - Smoke scene:
   - `scenes/tests/SmokeTest.tscn`
   - `scripts/tests/SmokeTest.gd`
+- Full smoke command remains:
+  - `& "C:\Users\Alif\Desktop\Godot_v4.6.1-stable_win64_console.exe" --headless --path . --scene res://scenes/tests/SmokeTest.tscn`
+- Quick smoke mode now exists for faster iteration:
+  - create `user://quick_smoke.flag` before running the same smoke scene
+  - in Windows terms, the flag path is `C:\Users\Alif\AppData\Roaming\Godot\app_userdata\The Daytrader Game\quick_smoke.flag`
+  - the test deletes the flag as soon as it starts, so quick mode is one-shot
+  - quick mode runs menu flow plus a shorter Normal scenario and skips the long Grind/event-arc regression pass
+  - recent quick smoke runtimes have been roughly `47-134s`, compared with roughly `9-10 minutes` for the current full smoke
+- Handy quick smoke PowerShell:
+  - `$userDir = Join-Path $env:APPDATA 'Godot\app_userdata\The Daytrader Game'`
+  - `New-Item -ItemType Directory -Force -Path $userDir | Out-Null`
+  - `New-Item -ItemType File -Force -Path (Join-Path $userDir 'quick_smoke.flag') | Out-Null`
+  - `& "C:\Users\Alif\Desktop\Godot_v4.6.1-stable_win64_console.exe" --headless --path . --scene res://scenes/tests/SmokeTest.tscn`
+- Debug performance instrumentation now exists in debug/headless runs:
+  - `[perf][save]` logs autosave requests, debounced saves, flushes, and raw disk-write duration
+  - `[perf][ui]` logs `_refresh_all()`, `_refresh_markets()`, `_refresh_network()`, `_refresh_upgrades()`, and key buy/watchlist/upgrade/network handlers
 - Smoke coverage now includes:
   - main menu `New Game` -> difficulty selector flow
+  - difficulty selector card stays within `90%` of the viewport width
+  - difficulty presets use the current company counts, event frequency, and volatility labels
   - loading screen progress existence
   - macro state generation and persistence
   - structured company event generation
@@ -592,6 +1003,7 @@ Read this file first in the next session.
   - trading calendar reaches `2030`
   - order toast appears after buy flow
   - trade history creation
+  - opening buy refresh keeps Key Stats annual history and Broker rows populated
   - IDX tick / ARA / ARB enforcement
   - generated financial snapshot and `2010-2019` annual history
   - generated derived financial statements in the company snapshot
@@ -608,25 +1020,103 @@ Read this file first in the next session.
   - desktop shell appears first
   - `News` opens the event-driven desk with outlet buttons and populated stories
   - `Twooter` opens the simplified mobile-style social feed with populated post cards
+  - `Academy` desktop icon opens the Academy window
+  - Academy shows four category tabs and the Technical module section list
+  - Academy quiz starts locked and unlocks after the required reading sections are marked read
+  - `Network` desktop icon opens the Network window
+  - `Upgrades` desktop icon opens a populated shop window
   - `STOCKBOT` opens the trading shell inside the faux app window
+  - Dashboard grid separation is `0`
+  - Dashboard `Movers` tabs exist
+  - Dashboard movers render no more than `15` rows per side
+  - quarterly report calendar gives every generated company a January Q1 filing date spread across multiple days
+  - Dashboard shows upcoming Q1 report filings
+  - buying at least `5%` ownership lists `Player` as a major shareholder
+  - large player buys record short-lived `XL` pressure, affect market depth on the next simulated day, can lock ARA, and appear in the broker buy tape
+  - large player sells record short-lived `XL` pressure, affect market depth on the next simulated day, can lock ARB, and appear in the broker sell tape
+  - the Trade `Analyzer` tab is hidden
+  - backtick opens/closes the console command overlay
+  - `cuankus` console command adds `Rp999.999.999.999` cash
+  - `ordalbos` console command maxes every upgrade track
+  - Network recognition snapshot returns a tier label and contact cap
+  - upgrade tracks start at tier `4`
+  - pressing an upgrade purchase button opens confirmation before spending cash or changing tier
+  - buying an affordable upgrade spends cash, improves one tier, and persists through save/load
+  - buying an upgrade queues a pending autosave, `flush_pending_save()` clears it, and the flushed save persists the upgraded tier
+  - unaffordable upgrades fail without changing tier
+  - Trading Fee upgrades lower buy/sell estimate fee rates
+  - News Content upgrades unlock higher intel outlets
+  - Twooter Content upgrades unlock higher account tiers
+  - Chart Indicators upgrades unlock indicator toggles
+  - Daily Action Points upgrades increase AP limit
+  - successful Network actions spend daily AP
+  - daily AP resets after advancing days
+  - network data loads with unique ids and every authored contact defines `affiliation_type`
+  - generated insider templates use valid `ceo` / `cfo` / `commissioner` roles
+  - fresh runs create exactly three management insiders for every generated company
+  - management rosters persist through save/load
+  - company Profile displays public CEO/CFO/Commissioner names
+  - company Profile Network leads match the selected company's sector
+  - no floater becomes an initial lead for more than `2` distinct companies
+  - meeting a company Profile-discovered contact persists through save/load
+  - requesting a contact tip creates an active contact company arc
+  - accepted Network requests complete when the player owns at least `1` lot by the due day
+  - accepted Network requests miss when the player does not own the requested target by the due day
+  - connected-floater referral requires relationship, spends `10` relationship on success, creates a referred insider lead, and the referred insider can be met/persisted
+  - insider tips default to the insider's affiliated company
   - watchlist popup add flow works
-  - `All Stock` add button immediately saves into watchlist
+  - `All Stock` add button immediately adds into the watchlist and persists through the autosave path
   - `Portfolio` tab appears in the trade sidebar and lists held stocks when present
-  - note: smoke coverage has not yet been updated to assert the new backend volume-context behavior directly
-- Important recent verification note:
-  - `SmokeTest.gd` has now been updated to assert that generated company snapshots include a non-empty derived financial-statement block, `40` quarters of statement history, and a latest period of `Q4 2019`
-  - `SmokeTest.gd` was also updated for the reduced difficulty company counts of `25 / 50 / 75 / 100`
-  - `SmokeTest.gd` was later extended again to expect a pre-2020 `5Y` chart path and successful lazy `5Y` rebuild after save/load
-  - `SmokeTest.gd` was later extended again to expect chart zoom buttons plus `Line / Candle` display-mode controls, including the `1D` candle lockout behavior
-  - `SmokeTest.gd` was later extended again so `Twooter` is expected to open as a populated simplified feed with stacked post cards instead of a blank prototype window
-  - the last confirmed full end-to-end smoke rerun still remains the earlier successful run on `2026-04-05 18:45` local time
-  - that confirmed `SMOKE_OK` output predates the most recent difficulty-count reduction, so there is not yet a fresh end-to-end smoke artifact for the lower company-count presets
-  - during the later lazy-historical-chart and chart-shape-adjustment passes, Godot launch/runtime sanity checks also passed with no debug errors after fixing a temporary `CompanyGenerator.gd` parser issue
-  - the newer broker-roster, broker-net-toggle, and dashboard `2x2` passes have only been sanity-checked with Godot launches so far; they do not yet have a fresh confirmed end-to-end smoke artifact
-  - the backend-only volume-context pass was sanity-launched in Godot `4.6.1`; `GameRoot.tscn` loaded cleanly with only the existing `GameRoot.gd` warnings, and a smoke attempt reached the opening-session simulator path before failing later on the older dashboard history-panel expectation
-  - attempted direct smoke reruns during those later chart passes still did not rewrite `user://smoke_test_result.txt`, so there is still not yet a newly confirmed post-quarterly-financials / post-lazy-chart `SMOKE_OK` file
-- Last known fully passing smoke output is now:
-  - `SMOKE_OK normal_equity=99998359.35 hardcore_equity=923611.5 hardcore_down_days=18 summary=Institution-led accumulation gave IDSY the cleanest tape today.`
+  - note: newest UI polish is not directly asserted yet:
+    - Figma-inspired desktop top bar / framed canvas shell
+    - desktop launcher icon sizing / spacing / alignment polish
+    - watchlist remove button
+    - `All Stock` search input
+    - visual chart volume panel
+    - Indonesian Rupiah formatter
+    - optional UI font loader
+- Current verification status:
+  - `git diff --check` passed after the debounced-save / targeted-refresh plus company-row-cache latency passes and post-buy detail regression fix on `2026-04-22`
+  - Godot project-load check passed after the post-buy detail regression fix on `2026-04-22`
+  - quick Godot headless smoke passed after the post-buy detail regression fix on `2026-04-22`
+  - recent quick-smoke debug timings after the latest latency pass are still variable in headless runs, but current rough ranges are:
+    - upgrade purchase confirm: about `21-35ms`
+    - Network actions: about `10-35ms`
+    - buy submit: about `150-300ms`
+    - watchlist add: about `420-480ms`
+  - `git diff --check -- PROJECT_HANDOFF.md` passed after the handoff refresh for the desktop-shell / Academy state on `2026-04-22`
+  - recent desktop-shell iteration used quick `git diff --check` plus Godot project-load `--quit` checks instead of full smoke because smoke remains slow and can hang during UI-only polish passes
+  - `git diff --check -- scenes/game/widgets/OrderWidget.tscn` passed after raising the order ticket lot cap to `99.999.999` on `2026-04-19`
+  - `git diff --check` passed after the synthetic depth / ARA-ARB player market-impact foundation on `2026-04-19`
+  - Godot project-load check passed after the synthetic depth / ARA-ARB player market-impact foundation on `2026-04-19`
+  - full Godot headless smoke was attempted after the synthetic depth / ARA-ARB player market-impact foundation, but timed out twice; quick smoke passed and leftover timed-out Godot processes were stopped
+  - `git diff --check -- autoloads/RunState.gd systems/MarketSimulator.gd systems/BrokerFlowSystem.gd scripts/tests/SmokeTest.gd PROJECT_HANDOFF.md` passed after the player `XL` market-impact update on `2026-04-19`
+  - quick Godot headless smoke passed after the player `XL` market-impact update on `2026-04-19`
+  - `git diff --check -- autoloads/RunState.gd systems/MarketSimulator.gd autoloads/GameManager.gd scripts/ui/GameRoot.gd scenes/game/widgets/TradeWorkspaceWidget.tscn scripts/tests/SmokeTest.gd PROJECT_HANDOFF.md` passed after the quarterly report calendar and ownership update on `2026-04-19`
+  - quick Godot headless smoke passed after the quarterly report calendar and ownership update on `2026-04-19`
+  - `git diff --check -- autoloads/GameManager.gd autoloads/RunState.gd scenes/main_menu/MainMenu.tscn scripts/ui/MainMenu.gd scripts/tests/SmokeTest.gd PROJECT_HANDOFF.md README.md` passed after the difficulty selector sizing, event-frequency, and volatility update on `2026-04-19`
+  - quick Godot headless smoke passed after the difficulty selector sizing, event-frequency, and volatility update on `2026-04-19`
+  - `git diff --check -- autoloads/GameManager.gd autoloads/RunState.gd scenes/main_menu/MainMenu.tscn scripts/tests/SmokeTest.gd PROJECT_HANDOFF.md README.md` passed after the Chill/Normal/Grind rebalance on `2026-04-19`
+  - quick Godot headless smoke passed after the Chill/Normal/Grind rebalance on `2026-04-19`
+  - `git diff --check -- autoloads/GameManager.gd scripts/ui/GameRoot.gd scripts/tests/SmokeTest.gd` passed after adding console commands on `2026-04-19`
+  - quick Godot headless smoke passed after adding console commands on `2026-04-19`
+  - `git diff --check -- scripts/ui/GameRoot.gd scripts/tests/SmokeTest.gd` passed after adding upgrade purchase confirmation on `2026-04-16`
+  - full Godot headless smoke passed after adding upgrade purchase confirmation on `2026-04-16`
+  - `git diff --check -- scripts/tests/SmokeTest.gd` passed after adding quick smoke mode on `2026-04-16`
+  - quick Godot headless smoke passed after adding quick smoke mode on `2026-04-16`
+  - `git diff --check` passed after the Upgrades Shop + Network discovery update on `2026-04-16`
+  - Godot headless smoke scene passed after the Upgrades Shop + Network discovery update on `2026-04-16`
+  - the smoke run took a long time but completed successfully
+  - the old spawned smoke-test Godot processes from an earlier timeout were stopped manually; the user's older editor process was left running
+  - previous `git diff --check` also passed after the Company Management + Network World Model and Network lead-scoring edits
+  - contact-network data validation passed during the implementation pass:
+    - total authored contacts: `233`
+    - duplicate ids: `0`
+    - floaters: `221`
+    - insider templates: `12`
+- Last known smoke output from `user://smoke_test_result.txt`:
+  - quick: `SMOKE_QUICK_OK normal_equity=94001565.29 days=3 summary=Zombie-led accumulation gave KUST the cleanest tape today.`
+  - full before the difficulty rebalance: `SMOKE_OK normal_equity=93997964.77 hardcore_equity=934611.5 hardcore_down_days=15 summary=Institution-led accumulation gave IDSY the cleanest tape today.`
 
 ## Known Limitations
 - Quarterly financials now exist, but they are still a derived educational layer:
@@ -641,40 +1131,60 @@ Read this file first in the next session.
 - No player-custom widget layout yet
 - `2027-2030` holiday rows are projected simulation data and may differ from future official IDX calendars
 - `News` is now a first-pass deterministic desk, but still limited:
-  - current prototype hardcodes unlocked intel to `4`
-  - there is no real perk / upgrade system driving outlet access yet
+  - outlet access is now upgrade-driven by `News Content`, but the article text/content depth is still first-pass
   - there is now a lightweight outlet/year/month article archive, but no search / pagination / bookmarking yet
   - current article text is template-driven and intentionally editable, but still early-pass content
   - no richer article-specific imagery / attachments / linked company cards yet
 - `Twooter` is now a first-pass deterministic feed, but still limited:
-  - current prototype hardcodes unlocked access tier to `4`
-  - there is no real perk / upgrade system driving account access yet
+  - account access is now upgrade-driven by `Twooter Content`, but feed depth is still first-pass
   - there is no search / archive / pagination / bookmarking yet
   - current post text is template-driven and intentionally editable, but still early-pass content
   - the simplified mobile feed intentionally drops per-account filters for now
   - no richer account pages / follow system / custom finfluencer authoring UI yet
+- `Network` is now a first playable contact system, but still limited:
+  - discovery currently only comes from News, company Profile context, and floater referrals
+  - there is no AGM / earnings call / IPO roadshow / RUPS / RUPSLB attendance UI yet
+  - favor cooldowns are not implemented yet
+  - follow-up / report-back actions are not implemented yet
+  - ignore decay is only represented through request failure for now
+  - cross-reference / conflicting-tip reliability checks are not implemented yet
+  - contact interactions now consume daily AP, but there is no richer daily-action journal or non-Network action economy yet
+  - no perk-driven extra contact slots, cooldown reductions, or sector starting-relationship modifiers yet beyond the current Daily Action Points upgrade track
+  - Profile currently shows public management names, but simply opening Profile does not privately discover those insiders
+  - there is no full relationship graph UI; `connected_floaters` is currently stored only as deterministic top bridges per generated insider
+- `Upgrades` is first playable, but still limited:
+  - no refund/respec flow
+  - no unlock animation or purchase history
+  - no difficulty-specific price scaling
+  - only Network actions currently use Daily Action Points
 - Taskbar scaffold exists, but is currently hidden
 - No draggable / resizable window manager yet
 - There is now a dedicated `News` UI with archive browsing, but the archive still reuses the current article list/detail layout rather than a separate long-form history browser
 - Person-event ids still use `trump_*` / `musk_*` internally even though displayed names are now `Tonald Drump` / `Melon Tusk`
-- Watchlist has no remove flow yet
-- Trade list still has no search / sort / filter tools
+- Watchlist now has add/remove flows, but no multi-list management yet
+- Trade list now has basic All Stock search, but no sort tools yet
 - `Load Run` now uses a loading screen, but the smoke flow still does not explicitly click through the saved-run path
 - Portfolio tables are still display-focused:
   - no sorting
   - no filtering
   - no row actions yet
 - Dashboard is now more terminal-like, but still early-pass:
-  - the two right-side boxes are intentionally empty placeholders
+  - top-right now contains `Movers`
+  - the bottom-right box is intentionally still an empty placeholder
   - there is no deeper click-through from the index card or calendar yet
   - there is no market frequency metric on the card yet
 - Trade view still needs deeper polish later:
   - there is still no intraday tape or intraday execution layer
   - candle mode is currently display-only and uses daily / weekly / monthly OHLC bars depending on range
   - `1D` intentionally does not allow candles because the sim only resolves one OHLC bar per day
-  - backend volume is now more meaningful, but there is still no dedicated visual volume-bar indicator on the chart
-  - no indicator toggle UI / unlock flow yet
-  - no lower indicator panes yet
+  - the player market-impact layer now has synthetic daily bid/ask depth, but there is still no visible order-book queue, partial-fill execution, or intraday lock/tape visualization
+  - click latency is improved again after the company-row-cache / narrower trade-refresh pass, but `Trade` is still heavier than ideal:
+    - watchlist add/remove and some stock-list-tab flows still rebuild the left stock pane together
+    - `_refresh_markets()` is still used on some flows and still couples company-list refresh with trade-workspace refresh
+    - critical flush points like `Advance Day`, return-to-menu, quit, and close still serialize the full JSON save synchronously
+  - volume bars are now shown under the chart, but there is still no player-facing volume lesson / academy integration yet
+  - indicator toggles and unlocks now exist, but indicator UX is still basic
+  - only a minimal RSI lower panel exists; there are no richer optional indicator panes yet
   - crosshair / hover readout now exist, but there is still no draggable chart interaction yet
   - broker tape is now much richer, but still a derived display layer:
     - it is not a true per-broker execution engine
@@ -691,8 +1201,14 @@ Read this file first in the next session.
 - `company_profile_data.json` is now the editable narrative content source, but it is tailored to the repo's existing sector ids rather than the broader external reference schema
 
 ## Recommended Next Steps (Confirm user first)
+- Finish the next performance pass if click latency still feels rough after more playtesting:
+  - focus specifically on watchlist / company-list diffing now, because that is the main remaining click hotspot after the latest latency pass
+  - stop rebuilding the watchlist list, all-stock rows, and portfolio sidebar together for every single watchlist mutation
+  - decouple watchlist add/remove refresh from trade-workspace refresh when the selected stock does not actually change
+  - keep using the new `[perf][ui]` / `[perf][save]` debug logs while tuning
+  - if latency feels acceptable after this pass, resume the planned content push with `News` first
 - Deepen the real `News` content now that the first event-driven desk exists:
-  - replace the temporary prototype intel `4` unlock with real perk-driven `Intel 1-4`
+  - tune the new `News Content` upgrade pacing if playtesting says access opens too slowly/quickly
   - keep the same outlet names:
     - `Gorengan Daily`
     - `Waduh Finance`
@@ -701,25 +1217,44 @@ Read this file first in the next session.
   - expand/edit outlet voice, headline prefixes, and sentence pools in `data/news/news_feed_data.json`
   - decide whether more event families need dedicated templates beyond the current first-pass pools
 - Deepen the real `Twooter` content now that the first simplified social feed exists:
-  - replace the temporary prototype access tier `4` unlock with real perk-driven account access
+  - tune the new `Twooter Content` upgrade pacing if playtesting says access opens too slowly/quickly
   - keep `Tonald Drump` / `Melon Tusk` as the current highest-tier accounts
   - expand/edit account voice and template pools in `data/social/twooter_feed_data.json`
   - add more user-authored finfluencer accounts later
+- Deepen the Upgrades system:
+  - tune or polish the new purchase confirmation copy if playtesting says the modal is too wordy/slow
+  - tune fixed upgrade costs after playtesting Chill/Normal/Grind cash pressure
+  - consider upgrade descriptions/tooltips that teach why each tier matters
+  - decide whether Daily Action Points should eventually cover non-Network world interactions
 - Add watchlist management polish:
-  - remove from watchlist
-  - search / sort / filter
+  - sort / filter presets
   - maybe multi-list support later
+- Deepen the Network/contact system:
+  - add in-world discovery through AGM, earnings call, IPO roadshow, RUPS, and RUPSLB attendance
+  - add event-slot or daily-action costs for meeting contacts if/when the broader time system exists
+  - deepen referrals beyond the current no-cooldown floater-to-insider prototype
+  - add favor cooldowns and tune relationship burn for on-demand tips
+  - add follow-up/report-back after acting on tips
+  - add ignore/ghosting decay beyond the current missed-request relationship penalty
+  - add cross-reference so two contacts can give conflicting tips and produce a reliability read
+  - add perk hooks such as extra contact slots, reduced contact cooldown, and sector-specific starting relationship
+  - add richer contact detail pages and a clearer request journal
+  - add a clearer UI for public management vs discovered/meet-ready insider leads
+  - tune relationship gains/losses and contact arc market impact after playtesting
 - Deepen the chart:
-  - indicator unlock flow tied to learning / perks
-  - overlay toggles
-  - lower indicator panes
-  - optional future volume-bar panel once the academy/tutorial layer is ready to teach volume interpretation
+  - deepen the current indicator unlock/toggle UX
+  - add richer lower indicator panes beyond the minimal RSI panel
+  - academy/tutorial lesson for volume interpretation
   - event markers / timeline
   - hover pinning / richer hover cards
   - drag / pan interaction
   - if desired later, a true intraday layer built on top of the current daily sim rather than replacing it
+- Deepen the market-impact layer after playtesting:
+  - tune synthetic depth thresholds for ARA/ARB locks across Chill/Normal/Grind
+  - add player-facing pre-trade impact warnings for very large orders
+  - consider a lightweight intraday tape view for limit-lock days before attempting a full matching engine
 - Extend trading calendar beyond `2030`
-- Consider quarterly report events driven by generated fundamentals
+- Deepen quarterly reports so filed reports can update post-2020 financial statements, not just trigger earnings events
 - Add score-explanation UI for quality / growth / risk
 
 ## Good Re-entry Prompt

@@ -5,8 +5,16 @@ const APP_ID_DESKTOP := "desktop"
 const APP_ID_STOCK := "stock"
 const APP_ID_NEWS := "news"
 const APP_ID_SOCIAL := "social"
+const APP_ID_NETWORK := "network"
+const APP_ID_ACADEMY := "academy"
+const APP_ID_UPGRADES := "upgrades"
 const STOCK_APP_FONT_SIZE := 12
 const DEFAULT_APP_FONT_SIZE := 12
+const APP_FONT_CANDIDATE_PATHS := [
+	"res://assets/fonts/app_font.ttf",
+	"res://assets/fonts/app_font.otf",
+	"res://assets/fonts/OpenSans-Regular.ttf"
+]
 const TRADE_LEFT_SECTION_RATIO := 1.0
 const TRADE_CENTER_SECTION_RATIO := 2.0
 const TRADE_RIGHT_SECTION_RATIO := 1.0
@@ -23,6 +31,44 @@ const COLOR_WARNING := Color(0.980392, 0.792157, 0.392157, 1)
 const COLOR_ACCENT := Color(0.560784, 0.772549, 1, 1)
 const COLOR_DESKTOP_BG := Color(0.909804, 0.909804, 0.803922, 1)
 const COLOR_DESKTOP_TEXT := Color(0.184314, 0.172549, 0.109804, 1)
+const COLOR_DESKTOP_CREAM := Color(1.0, 0.976471, 0.929412, 1)
+const COLOR_DESKTOP_PANEL := Color(0.945098, 0.909804, 0.803922, 1)
+const COLOR_DESKTOP_BROWN := Color(0.509804, 0.231373, 0.0941176, 1)
+const COLOR_DESKTOP_OLIVE := Color(0.247059, 0.278431, 0.117647, 1)
+const COLOR_DESKTOP_GOLD := Color(0.972549, 0.713726, 0.0627451, 1)
+const DESKTOP_ICON_PATHS := {
+	"stock": {
+		"shortcut": "res://assets/ui/desktop/stockbot_shortcut.svg",
+		"nav": "res://assets/ui/desktop/stockbot_nav.svg"
+	},
+	"news": {
+		"shortcut": "res://assets/ui/desktop/news_shortcut.svg",
+		"nav": "res://assets/ui/desktop/news_nav.svg"
+	},
+	"social": {
+		"shortcut": "res://assets/ui/desktop/twooter_shortcut.svg",
+		"nav": "res://assets/ui/desktop/twooter_nav.svg"
+	},
+	"academy": {
+		"shortcut": "res://assets/ui/desktop/academy_shortcut.svg",
+		"nav": "res://assets/ui/desktop/academy_nav.svg"
+	},
+	"network": {
+		"shortcut": "res://assets/ui/desktop/network_shortcut.svg",
+		"nav": "res://assets/ui/desktop/network_nav.svg"
+	},
+	"upgrades": {
+		"shortcut": "res://assets/ui/desktop/shop_shortcut.svg",
+		"nav": "res://assets/ui/desktop/shop_nav.svg"
+	},
+	"exit": {
+		"shortcut": "res://assets/ui/desktop/exit_shortcut.svg",
+		"nav": "res://assets/ui/desktop/exit_nav.svg"
+	},
+	"date": "res://assets/ui/desktop/date_icon.svg",
+	"cash": "res://assets/ui/desktop/cash_icon.svg",
+	"advance": "res://assets/ui/desktop/advance_icon.svg"
+}
 const COLOR_STOCK_WINDOW_BG := Color(0.0901961, 0.129412, 0.164706, 0.98)
 const COLOR_ORDER_PANEL_BG := Color(0.0901961, 0.129412, 0.164706, 0.98)
 const COLOR_ORDER_CARD_BG := Color(0.109804, 0.14902, 0.184314, 0.98)
@@ -78,10 +124,11 @@ const APP_WINDOW_INNER_PADDING := 0
 const SOCIAL_WINDOW_MAX_WIDTH := 460.0
 const SOCIAL_WINDOW_MAX_HEIGHT := 780.0
 const SOCIAL_WINDOW_MIN_HEIGHT := 520.0
-const PROTOTYPE_NEWS_INTEL_LEVEL := 4
-const PROTOTYPE_TWOOTER_ACCESS_TIER := 4
+const DASHBOARD_MOVER_LIMIT := 15
 const DASHBOARD_WEEKDAY_NAMES := ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 const DASHBOARD_MONTH_NAMES := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+const CONSOLE_TOGGLE_KEY_CODE := 96
+const PERF_LOG_PREFIX := "[perf][ui]"
 
 var selected_company_id: String = ""
 var displayed_company_ids: Array = []
@@ -89,6 +136,15 @@ var watchlist_picker_company_ids: Array = []
 var tutorial_dialog: AcceptDialog = null
 var watchlist_picker_dialog: ConfirmationDialog = null
 var watchlist_picker_list: ItemList = null
+var upgrade_purchase_dialog: ConfirmationDialog = null
+var upgrade_purchase_body_label: Label = null
+var pending_upgrade_track_id: String = ""
+var console_overlay: Control = null
+var console_panel: PanelContainer = null
+var console_title_label: Label = null
+var console_hint_label: Label = null
+var console_input: LineEdit = null
+var console_status_label: Label = null
 var selected_lots: int = 1
 var active_section_id: String = "dashboard"
 var active_app_id: String = APP_ID_DESKTOP
@@ -96,15 +152,29 @@ var status_message: String = "Ready."
 var selected_financial_statement_index: int = -1
 var selected_financial_statement_company_id: String = ""
 var current_trade_snapshot: Dictionary = {}
+var cached_company_rows: Array = []
+var cached_company_row_lookup: Dictionary = {}
+var has_cached_company_rows: bool = false
 var current_news_snapshot: Dictionary = {}
 var current_social_snapshot: Dictionary = {}
+var current_network_snapshot: Dictionary = {}
+var current_academy_snapshot: Dictionary = {}
 var debug_generator_buttons: Dictionary = {}
+var cached_app_font: Font = null
+var has_checked_app_font: bool = false
+var suppress_next_portfolio_refresh: bool = false
+var pending_watchlist_selected_company_id: String = ""
+var pending_watchlist_target_tab: int = -1
 var active_order_side: String = "buy"
 var broker_net_mode: bool = false
 var selected_news_outlet_id: String = ""
 var selected_news_archive_year: int = 0
 var selected_news_archive_month: int = 0
 var selected_news_article_id: String = ""
+var selected_network_contact_id: String = ""
+var selected_academy_category_id: String = "technical"
+var selected_academy_section_id: String = "intro"
+var academy_quiz_option_buttons: Dictionary = {}
 var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 
 @onready var desktop_layer: Control = $DesktopLayer
@@ -118,8 +188,22 @@ var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new
 @onready var news_app_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/NewsAppTile/NewsAppLabel
 @onready var social_app_button: Button = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/SocialAppTile/SocialAppButton
 @onready var social_app_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/SocialAppTile/SocialAppLabel
+@onready var network_app_button: Button = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/NetworkAppTile/NetworkAppButton
+@onready var network_app_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/NetworkAppTile/NetworkAppLabel
+var academy_app_button: Button = null
+var academy_app_label: Label = null
+@onready var upgrades_app_button: Button = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/UpgradesAppTile/UpgradesAppButton
+@onready var upgrades_app_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/UpgradesAppTile/UpgradesAppLabel
 @onready var exit_app_button: Button = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/ExitAppTile/ExitAppButton
 @onready var exit_app_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/ExitAppTile/ExitAppLabel
+var desktop_figma_top_bar: PanelContainer = null
+var desktop_figma_date_label: Label = null
+var desktop_figma_cash_label: Label = null
+var desktop_advance_day_button: Button = null
+var desktop_figma_canvas_panel: PanelContainer = null
+var desktop_shortcut_grid: GridContainer = null
+var desktop_bottom_nav_bar: PanelContainer = null
+var desktop_bottom_nav_buttons: Dictionary = {}
 @onready var app_window_backdrop: Control = $AppWindowBackdrop
 @onready var app_window_margin: MarginContainer = $AppWindowBackdrop/AppWindowMargin
 @onready var app_window_panel: PanelContainer = $AppWindowBackdrop/AppWindowMargin/AppWindowPanel
@@ -144,6 +228,7 @@ var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new
 @onready var news_detail_meta_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailMetaLabel
 @onready var news_detail_body: RichTextLabel = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailBody
 @onready var news_detail_hint_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailHintLabel
+@onready var news_meet_contact_button: Button = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsMeetContactButton
 @onready var social_window: MarginContainer = $SocialWindow
 @onready var social_window_body: PanelContainer = $SocialWindow/SocialWindowBody
 @onready var social_title_label: Label = $SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialHeaderRow/SocialTitleLabel
@@ -151,6 +236,45 @@ var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new
 @onready var social_feed_summary_label: Label = $SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialFeedSummaryLabel
 @onready var social_feed_scroll: ScrollContainer = $SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialFeedScroll
 @onready var social_feed_cards: VBoxContainer = $SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialFeedScroll/SocialFeedCards
+@onready var network_window: MarginContainer = $NetworkWindow
+@onready var network_window_body: PanelContainer = $NetworkWindow/NetworkWindowBody
+@onready var network_title_label: Label = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkHeaderRow/NetworkTitleLabel
+@onready var network_recognition_label: Label = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkHeaderRow/NetworkRecognitionLabel
+@onready var network_summary_label: Label = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkSummaryLabel
+@onready var network_list_panel: PanelContainer = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel
+@onready var network_detail_panel: PanelContainer = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel
+@onready var network_contacts_list: ItemList = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel/NetworkListMargin/NetworkListVBox/NetworkContactsList
+@onready var network_requests_list: ItemList = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel/NetworkListMargin/NetworkListVBox/NetworkRequestsList
+@onready var network_contact_name_label: Label = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkContactNameLabel
+@onready var network_contact_meta_label: Label = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkContactMetaLabel
+@onready var network_contact_body_label: Label = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkContactBodyLabel
+@onready var network_meet_button: Button = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkActionRow/NetworkMeetButton
+@onready var network_tip_button: Button = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkActionRow/NetworkTipButton
+@onready var network_request_button: Button = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkActionRow/NetworkRequestButton
+@onready var network_referral_button: Button = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkActionRow/NetworkReferralButton
+var academy_window: MarginContainer = null
+var academy_window_body: PanelContainer = null
+var academy_title_label: Label = null
+var academy_progress_label: Label = null
+var academy_category_tabs: HBoxContainer = null
+var academy_section_tabs: GridContainer = null
+var academy_summary_label: Label = null
+var academy_section_list: ItemList = null
+var academy_lesson_title_label: Label = null
+var academy_lesson_meta_label: Label = null
+var academy_lesson_content_vbox: VBoxContainer = null
+var academy_mark_read_button: Button = null
+var academy_next_button: Button = null
+var academy_side_title_label: Label = null
+var academy_side_body_label: Label = null
+var academy_glossary_search_input: LineEdit = null
+var academy_glossary_list: ItemList = null
+@onready var upgrade_window: MarginContainer = $UpgradeWindow
+@onready var upgrade_window_body: PanelContainer = $UpgradeWindow/UpgradeWindowBody
+@onready var upgrade_title_label: Label = $UpgradeWindow/UpgradeWindowBody/UpgradeWindowMargin/UpgradeWindowVBox/UpgradeHeaderRow/UpgradeTitleLabel
+@onready var upgrade_cash_label: Label = $UpgradeWindow/UpgradeWindowBody/UpgradeWindowMargin/UpgradeWindowVBox/UpgradeHeaderRow/UpgradeCashLabel
+@onready var upgrade_summary_label: Label = $UpgradeWindow/UpgradeWindowBody/UpgradeWindowMargin/UpgradeWindowVBox/UpgradeSummaryLabel
+@onready var upgrade_cards_vbox: VBoxContainer = $UpgradeWindow/UpgradeWindowBody/UpgradeWindowMargin/UpgradeWindowVBox/UpgradeScroll/UpgradeCardsVBox
 @onready var app_window_title_bar: PanelContainer = $AppWindowTitleBar
 @onready var app_window_title_label: Label = $AppWindowTitleBar/AppWindowTitleMargin/AppWindowTitleRow/AppWindowTitleLabel
 @onready var app_window_minimize_button: Button = $AppWindowTitleBar/AppWindowTitleMargin/AppWindowTitleRow/AppWindowMinimizeButton
@@ -190,12 +314,18 @@ var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new
 @onready var dashboard_index_lots_value_label: Label = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid/IndexLotsValueLabel
 @onready var dashboard_index_value_value_label: Label = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid/IndexValueValueLabel
 @onready var dashboard_index_hint_label: Label = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexHintLabel
-@onready var dashboard_placeholder_top_panel: PanelContainer = %DashboardView/DashboardGrid/PlaceholderTopPanel
-@onready var dashboard_placeholder_top_body_label: Label = %DashboardView/DashboardGrid/PlaceholderTopPanel/PlaceholderTopMargin/PlaceholderTopVBox/PlaceholderTopBodyLabel
+@onready var dashboard_movers_panel: PanelContainer = %DashboardView/DashboardGrid/MoversPanel
+@onready var dashboard_movers_title_label: Label = %DashboardView/DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTitleLabel
+@onready var dashboard_movers_tabs: TabContainer = %DashboardView/DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs
+@onready var dashboard_top_gainers_rows: VBoxContainer = %DashboardView/DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs/TopGainers/TopGainersRows
+@onready var dashboard_top_gainers_empty_label: Label = %DashboardView/DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs/TopGainers/TopGainersRows/TopGainersEmptyLabel
+@onready var dashboard_top_losers_rows: VBoxContainer = %DashboardView/DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs/TopLosers/TopLosersRows
+@onready var dashboard_top_losers_empty_label: Label = %DashboardView/DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs/TopLosers/TopLosersRows/TopLosersEmptyLabel
 @onready var dashboard_calendar_panel: PanelContainer = %DashboardView/DashboardGrid/CalendarPanel
 @onready var dashboard_calendar_month_label: Label = %DashboardView/DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarMonthLabel
 @onready var dashboard_calendar_days_grid: GridContainer = %DashboardView/DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarDaysGrid
 @onready var dashboard_placeholder_bottom_panel: PanelContainer = %DashboardView/DashboardGrid/PlaceholderBottomPanel
+@onready var dashboard_placeholder_bottom_title_label: Label = %DashboardView/DashboardGrid/PlaceholderBottomPanel/PlaceholderBottomMargin/PlaceholderBottomVBox/PlaceholderBottomTitleLabel
 @onready var dashboard_placeholder_bottom_body_label: Label = %DashboardView/DashboardGrid/PlaceholderBottomPanel/PlaceholderBottomMargin/PlaceholderBottomVBox/PlaceholderBottomBodyLabel
 
 @onready var trade_split: HBoxContainer = %MarketsView/TradeSplit
@@ -204,9 +334,11 @@ var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new
 @onready var work_area_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel
 @onready var action_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/ActionPanel
 @onready var stock_list_tabs: TabContainer = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs
-@onready var add_watchlist_button: Button = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab/AddWatchlistButton
+@onready var add_watchlist_button: Button = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab/WatchlistActionRow/AddWatchlistButton
+@onready var remove_watchlist_button: Button = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab/WatchlistActionRow/RemoveWatchlistButton
 @onready var watchlist_empty_label: Label = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab/WatchlistEmptyLabel
 @onready var company_list: ItemList = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab/CompanyList
+@onready var all_stocks_search_input: LineEdit = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/AllStocksTab/AllStocksSearchInput
 @onready var all_stocks_scroll: ScrollContainer = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/AllStocksTab/AllStocksScroll
 @onready var all_stocks_rows: VBoxContainer = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/AllStocksTab/AllStocksScroll/AllStocksRows
 @onready var portfolio_stocks_scroll: ScrollContainer = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/PortfolioTab/PortfolioScroll
@@ -253,8 +385,12 @@ var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new
 @onready var profile_sector_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfileSectorLabel
 @onready var profile_price_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfilePriceLabel
 @onready var profile_factor_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfileFactorLabel
+@onready var profile_management_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfileManagementLabel
+@onready var profile_shareholders_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfileShareholdersLabel
 @onready var profile_tags_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfileTagsLabel
 @onready var profile_description_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfileDescriptionLabel
+@onready var profile_network_hint_label: Label = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfileNetworkHintLabel
+@onready var profile_meet_contact_button: Button = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel/WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox/ProfileMeetContactButton
 @onready var order_company_name_label: Label = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/HeaderVBox/CompanyNameLabel
 @onready var selection_label: Label = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/HeaderVBox/SelectionLabel
 @onready var order_price_value_label: Label = %MarketsView/TradeSplit/MainSplit/ActionPanel/ActionMargin/ActionVBox/HeaderVBox/QuoteRow/PriceBlock/CurrentPriceLabel
@@ -317,6 +453,10 @@ var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new
 func _ready() -> void:
 	_ensure_tutorial_dialog()
 	_ensure_watchlist_picker_dialog()
+	_ensure_upgrade_purchase_dialog()
+	_ensure_console_overlay()
+	_ensure_academy_ui()
+	_ensure_figma_desktop_ui()
 	_apply_visual_theme()
 	_apply_compact_layout()
 	_apply_trade_layout_ratios()
@@ -327,6 +467,10 @@ func _ready() -> void:
 	stock_app_button.pressed.connect(_on_stock_app_pressed)
 	news_app_button.pressed.connect(_on_news_app_pressed)
 	social_app_button.pressed.connect(_on_social_app_pressed)
+	network_app_button.pressed.connect(_on_network_app_pressed)
+	if academy_app_button != null:
+		academy_app_button.pressed.connect(_on_academy_app_pressed)
+	upgrades_app_button.pressed.connect(_on_upgrades_app_pressed)
 	exit_app_button.pressed.connect(_on_exit_app_pressed)
 	taskbar_home_button.pressed.connect(_on_taskbar_home_pressed)
 	taskbar_stock_button.pressed.connect(_on_taskbar_stock_pressed)
@@ -342,26 +486,51 @@ func _ready() -> void:
 	toast_timer.timeout.connect(_hide_toast)
 	stock_list_tabs.tab_changed.connect(_on_stock_list_tab_changed)
 	add_watchlist_button.pressed.connect(_on_add_watchlist_pressed)
+	remove_watchlist_button.pressed.connect(_on_remove_watchlist_pressed)
+	all_stocks_search_input.text_changed.connect(_on_all_stock_search_text_changed)
 	financials_previous_button.pressed.connect(_on_financials_previous_pressed)
 	financials_next_button.pressed.connect(_on_financials_next_pressed)
 	broker_net_toggle.toggled.connect(_on_broker_net_toggled)
 	company_list.item_selected.connect(_on_company_selected)
 	news_article_list.item_selected.connect(_on_news_article_selected)
+	news_meet_contact_button.pressed.connect(_on_news_meet_contact_pressed)
 	news_archive_year_option.item_selected.connect(_on_news_archive_year_selected)
 	news_archive_month_option.item_selected.connect(_on_news_archive_month_selected)
+	network_contacts_list.item_selected.connect(_on_network_contact_selected)
+	if academy_section_list != null:
+		academy_section_list.item_selected.connect(_on_academy_section_selected)
+	if academy_mark_read_button != null:
+		academy_mark_read_button.pressed.connect(_on_academy_mark_read_pressed)
+	if academy_next_button != null:
+		academy_next_button.pressed.connect(_on_academy_next_pressed)
+	if academy_glossary_search_input != null:
+		academy_glossary_search_input.text_changed.connect(_on_academy_glossary_search_changed)
+	network_meet_button.pressed.connect(_on_network_meet_pressed)
+	network_tip_button.pressed.connect(_on_network_tip_pressed)
+	network_request_button.pressed.connect(_on_network_request_pressed)
+	network_referral_button.pressed.connect(_on_network_referral_pressed)
+	profile_meet_contact_button.pressed.connect(_on_profile_meet_contact_pressed)
 	lot_spin_box.value_changed.connect(_on_lot_size_changed)
 	buy_button.pressed.connect(_on_buy_side_pressed)
 	sell_button.pressed.connect(_on_sell_side_pressed)
 	submit_order_button.pressed.connect(_on_submit_order_pressed)
 	advance_day_button.pressed.connect(_on_next_day_pressed)
 	get_viewport().size_changed.connect(_update_responsive_layout)
-	GameManager.portfolio_changed.connect(_refresh_all)
-	GameManager.watchlist_changed.connect(_refresh_all)
+	GameManager.portfolio_changed.connect(_on_portfolio_changed)
+	GameManager.watchlist_changed.connect(_on_watchlist_changed)
+	GameManager.network_changed.connect(_on_network_changed)
+	GameManager.upgrades_changed.connect(_on_upgrades_changed)
+	GameManager.daily_actions_changed.connect(_refresh_daily_action_displays)
+	GameManager.academy_changed.connect(_refresh_academy)
 	GameManager.price_formed.connect(_on_day_progressed)
 	GameManager.summary_ready.connect(_on_summary_ready)
 	stock_app_button.tooltip_text = "Open STOCKBOT."
 	news_app_button.tooltip_text = "Open the event-driven news desk."
 	social_app_button.tooltip_text = "Open the mobile-style social feed."
+	network_app_button.tooltip_text = "Open the relationship network."
+	if academy_app_button != null:
+		academy_app_button.tooltip_text = "Open Academy lessons."
+	upgrades_app_button.tooltip_text = "Open the upgrades shop."
 	exit_app_button.tooltip_text = "Return to the main menu."
 	taskbar_home_button.tooltip_text = "Return to the desktop."
 	taskbar_stock_button.tooltip_text = "Open STOCKBOT."
@@ -372,12 +541,27 @@ func _ready() -> void:
 	buy_button.tooltip_text = "Switch the ticket to buy mode."
 	sell_button.tooltip_text = "Switch the ticket to sell mode."
 	submit_order_button.tooltip_text = "Submit the active order."
+	news_meet_contact_button.tooltip_text = "Meet the contact connected to this story."
+	profile_meet_contact_button.tooltip_text = "Meet a contact connected to this company."
+	network_meet_button.tooltip_text = "Meet the selected discovered contact."
+	network_tip_button.tooltip_text = "Ask the selected contact for a market read."
+	network_request_button.tooltip_text = "Accept a position request from the selected contact."
+	network_referral_button.tooltip_text = "Ask a trusted floater to introduce a company insider."
 	_build_debug_generator_controls()
 	call_deferred("_update_responsive_layout")
 	_set_active_section(active_section_id)
 	_set_active_app(APP_ID_DESKTOP)
 	_refresh_all()
+	_apply_global_font_size_overrides()
 	call_deferred("_show_tutorial_if_needed")
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		var key_event: InputEventKey = event
+		if _is_console_toggle_key(key_event):
+			_toggle_console_overlay()
+			get_viewport().set_input_as_handled()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -385,6 +569,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		var key_event: InputEventKey = event
 		if key_event.ctrl_pressed and key_event.keycode == KEY_L:
 			_toggle_debug_overlay()
+			get_viewport().set_input_as_handled()
+			return
+		if console_overlay != null and console_overlay.visible and key_event.keycode == KEY_ESCAPE:
+			_hide_console_overlay()
 			get_viewport().set_input_as_handled()
 			return
 		if debug_overlay.visible and key_event.keycode == KEY_ESCAPE:
@@ -443,10 +631,13 @@ func _update_responsive_layout() -> void:
 		max(min(viewport_size.x - 48.0, 1080.0), 560.0),
 		max(min(viewport_size.y - 48.0, 680.0), 460.0)
 	)
+	_update_desktop_figma_layout()
 	_apply_window_layout()
 
 
 func _refresh_all() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	_invalidate_company_rows_cache()
 	_refresh_desktop()
 	if not RunState.has_active_run():
 		status_message = "No active run. Return to menu to begin."
@@ -455,9 +646,12 @@ func _refresh_all() -> void:
 		_refresh_sidebar()
 		_refresh_news()
 		_refresh_social()
+		_refresh_network()
+		_refresh_academy()
+		_refresh_upgrades()
 		_refresh_markets()
 		_refresh_debug_overlay()
-		_apply_global_font_size_overrides()
+		_log_perf_elapsed("_refresh_all", started_at_usec)
 		return
 
 	_sync_selected_company_with_active_stock_list()
@@ -466,31 +660,166 @@ func _refresh_all() -> void:
 	_refresh_sidebar()
 	_refresh_news()
 	_refresh_social()
+	_refresh_network()
+	_refresh_academy()
+	_refresh_upgrades()
 	_refresh_dashboard()
 	_refresh_markets()
 	_refresh_portfolio()
 	_refresh_help()
 	_refresh_debug_overlay()
-	_apply_global_font_size_overrides()
+	_log_perf_elapsed("_refresh_all", started_at_usec)
+
+
+func _on_portfolio_changed() -> void:
+	if suppress_next_portfolio_refresh:
+		suppress_next_portfolio_refresh = false
+		return
+	var started_at_usec: int = Time.get_ticks_usec()
+	_invalidate_company_rows_cache()
+	_sync_selected_company_with_active_stock_list()
+	_refresh_header()
+	_refresh_sidebar()
+	_refresh_company_list([], {}, false, true)
+	_refresh_trade_workspace_holdings_state()
+	_refresh_portfolio()
+	_refresh_desktop()
+	if active_section_id == "dashboard":
+		_refresh_dashboard()
+	if debug_overlay.visible:
+		_refresh_debug_overlay()
+	_log_perf_elapsed("_on_portfolio_changed", started_at_usec)
+
+
+func _on_watchlist_changed() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	_invalidate_company_rows_cache()
+	var target_company_id: String = pending_watchlist_selected_company_id
+	var target_tab: int = pending_watchlist_target_tab
+	var should_change_tab: bool = target_tab >= 0 and target_tab != stock_list_tabs.current_tab
+	if not target_company_id.is_empty():
+		selected_company_id = target_company_id
+	_clear_watchlist_refresh_override()
+	if should_change_tab:
+		stock_list_tabs.current_tab = target_tab
+		return
+	_sync_selected_company_with_active_stock_list()
+	_refresh_markets()
+	if active_section_id == "dashboard":
+		_refresh_dashboard()
+	_refresh_desktop()
+	if active_app_id == APP_ID_NETWORK:
+		_refresh_network()
+	_log_perf_elapsed("_on_watchlist_changed", started_at_usec)
+
+
+func _on_network_changed() -> void:
+	_refresh_network()
 
 
 func _apply_global_font_size_overrides() -> void:
-	_apply_font_size_override_to_tree(self, DEFAULT_APP_FONT_SIZE)
+	_apply_font_size_override_to_tree(self, DEFAULT_APP_FONT_SIZE, _get_app_font())
+	_style_figma_desktop_ui()
 
 
-func _apply_font_size_override_to_tree(node: Node, font_size: int) -> void:
+func _apply_font_overrides_to_subtree(node: Node) -> void:
+	if node == null:
+		return
+	_apply_font_size_override_to_tree(node, DEFAULT_APP_FONT_SIZE, _get_app_font())
+
+
+func _queue_watchlist_refresh_override(company_id: String = "", target_tab: int = -1) -> void:
+	pending_watchlist_selected_company_id = company_id
+	pending_watchlist_target_tab = target_tab
+
+
+func _clear_watchlist_refresh_override() -> void:
+	pending_watchlist_selected_company_id = ""
+	pending_watchlist_target_tab = -1
+
+
+func _invalidate_company_rows_cache() -> void:
+	cached_company_rows = []
+	cached_company_row_lookup = {}
+	has_cached_company_rows = false
+
+
+func _get_company_rows_cached() -> Array:
+	if not has_cached_company_rows:
+		cached_company_rows = GameManager.get_company_rows()
+		cached_company_row_lookup = _build_company_row_lookup(cached_company_rows)
+		has_cached_company_rows = true
+	return cached_company_rows
+
+
+func _get_company_row_lookup_cached() -> Dictionary:
+	_get_company_rows_cached()
+	return cached_company_row_lookup
+
+
+func _build_company_row_lookup(company_rows: Array) -> Dictionary:
+	var company_row_lookup: Dictionary = {}
+	for row_value in company_rows:
+		var company_row: Dictionary = row_value
+		company_row_lookup[str(company_row.get("id", ""))] = company_row
+	return company_row_lookup
+
+
+func _suppress_next_portfolio_refresh() -> void:
+	suppress_next_portfolio_refresh = true
+	call_deferred("_clear_suppressed_portfolio_refresh")
+
+
+func _clear_suppressed_portfolio_refresh() -> void:
+	suppress_next_portfolio_refresh = false
+
+
+func _log_perf_elapsed(label: String, started_at_usec: int) -> void:
+	if not OS.is_debug_build():
+		return
+	var elapsed_ms: float = float(Time.get_ticks_usec() - started_at_usec) / 1000.0
+	print("%s %s %.2fms" % [PERF_LOG_PREFIX, label, elapsed_ms])
+
+
+func _apply_font_size_override_to_tree(node: Node, font_size: int, app_font: Font = null) -> void:
 	if node is Control:
-		var control: Control = node
-		control.add_theme_font_size_override("font_size", font_size)
-		if control is RichTextLabel:
-			var rich_text: RichTextLabel = control
-			rich_text.add_theme_font_size_override("normal_font_size", font_size)
-			rich_text.add_theme_font_size_override("bold_font_size", font_size)
-			rich_text.add_theme_font_size_override("italics_font_size", font_size)
-			rich_text.add_theme_font_size_override("mono_font_size", font_size)
+		_apply_font_override_to_control(node as Control, font_size, app_font)
 
 	for child: Node in node.get_children():
-		_apply_font_size_override_to_tree(child, font_size)
+		_apply_font_size_override_to_tree(child, font_size, app_font)
+
+
+func _apply_font_override_to_control(control: Control, font_size: int, app_font: Font = null) -> void:
+	control.add_theme_font_size_override("font_size", font_size)
+	if app_font != null:
+		control.add_theme_font_override("font", app_font)
+	if control is RichTextLabel:
+		var rich_text: RichTextLabel = control
+		rich_text.add_theme_font_size_override("normal_font_size", font_size)
+		rich_text.add_theme_font_size_override("bold_font_size", font_size)
+		rich_text.add_theme_font_size_override("italics_font_size", font_size)
+		rich_text.add_theme_font_size_override("mono_font_size", font_size)
+		if app_font != null:
+			rich_text.add_theme_font_override("normal_font", app_font)
+			rich_text.add_theme_font_override("bold_font", app_font)
+			rich_text.add_theme_font_override("italics_font", app_font)
+			rich_text.add_theme_font_override("mono_font", app_font)
+
+
+func _get_app_font() -> Font:
+	if has_checked_app_font:
+		return cached_app_font
+
+	has_checked_app_font = true
+	for font_path_value in APP_FONT_CANDIDATE_PATHS:
+		var font_path: String = str(font_path_value)
+		if not ResourceLoader.exists(font_path):
+			continue
+		var font_resource := load(font_path)
+		if font_resource is Font:
+			cached_app_font = font_resource
+			return cached_app_font
+	return null
 
 
 func _refresh_header() -> void:
@@ -517,9 +846,10 @@ func _refresh_desktop() -> void:
 		desktop_title_label.text = "Daytrader OS"
 		desktop_date_label.text = "No active run"
 		desktop_subtitle_label.text = "Boot a run from the main menu to bring the terminal online."
-		desktop_hint_label.text = "Desktop icons launch apps. STOCKBOT trades, News reads the event tape, and Twooter surfaces tiered account chatter."
+		desktop_hint_label.text = "Desktop icons launch apps. STOCKBOT trades, News reads the event tape, Twooter surfaces chatter, Network manages contacts, Academy teaches chart reading, and Upgrades improves the desk."
 		taskbar_status_label.text = "No active run loaded."
 		taskbar_clock_label.text = "MENU"
+		_refresh_figma_desktop_status()
 		return
 
 	var current_trade_date: Dictionary = GameManager.get_current_trade_date()
@@ -533,12 +863,13 @@ func _refresh_desktop() -> void:
 		GameManager.get_current_difficulty_label(),
 		_format_currency(RunState.get_total_equity())
 	]
-	desktop_hint_label.text = "STOCKBOT is live. News renders event-driven intel feeds, and Twooter now shows tiered social chatter from unlocked accounts."
+	desktop_hint_label.text = "STOCKBOT is live. News renders event-driven intel feeds, Twooter shows tiered social chatter, Network tracks contacts, Academy teaches technical routines, and Upgrades spends cash on desk improvements."
 	taskbar_status_label.text = _build_taskbar_status_text(focus_snapshot)
 	taskbar_clock_label.text = "DAY %d  |  %s" % [
 		max(RunState.day_index + 1, 1),
 		GameManager.format_trade_date(current_trade_date)
 	]
+	_refresh_figma_desktop_status()
 
 
 func _refresh_news() -> void:
@@ -555,9 +886,10 @@ func _refresh_news() -> void:
 		news_feed_summary_label.text = ""
 		news_article_list.clear()
 		_show_news_article({})
+		_apply_font_overrides_to_subtree(news_outlet_buttons)
 		return
 
-	current_news_snapshot = GameManager.get_news_snapshot(PROTOTYPE_NEWS_INTEL_LEVEL)
+	current_news_snapshot = GameManager.get_news_snapshot()
 	var outlets: Array = current_news_snapshot.get("outlets", [])
 	if selected_news_outlet_id.is_empty() or not _news_outlet_exists(outlets, selected_news_outlet_id):
 		selected_news_outlet_id = _default_news_outlet_id(outlets)
@@ -565,10 +897,11 @@ func _refresh_news() -> void:
 		selected_news_archive_month = 0
 		selected_news_article_id = ""
 
-	news_intel_status_label.text = ""
+	news_intel_status_label.text = "Intel %d active" % int(current_news_snapshot.get("intel_level", 1))
 	_rebuild_news_outlet_buttons(outlets)
 	_refresh_news_archive_filters()
 	_refresh_news_article_list()
+	_apply_font_overrides_to_subtree(news_outlet_buttons)
 
 
 func _rebuild_news_outlet_buttons(outlets: Array) -> void:
@@ -684,13 +1017,1549 @@ func _refresh_social() -> void:
 		social_access_status_label.text = "No run loaded"
 		social_feed_summary_label.text = "Start a run to populate the mobile-style social feed."
 		_rebuild_social_feed_cards([])
+		_apply_font_overrides_to_subtree(social_feed_cards)
 		return
 
-	current_social_snapshot = GameManager.get_twooter_snapshot(PROTOTYPE_TWOOTER_ACCESS_TIER)
+	current_social_snapshot = GameManager.get_twooter_snapshot()
 	var posts: Array = current_social_snapshot.get("posts", [])
-	social_access_status_label.text = "Prototype %s access active" % str(current_social_snapshot.get("tier_label", "Tier 4"))
+	social_access_status_label.text = "%s access active" % str(current_social_snapshot.get("tier_label", "Tier 1"))
 	social_feed_summary_label.text = "%d post(s)  |  Mobile feed view\nHigher access tiers unlock more credible or more market-moving accounts." % posts.size()
 	_rebuild_social_feed_cards(posts)
+	_apply_font_overrides_to_subtree(social_feed_cards)
+
+
+func _refresh_network() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	current_network_snapshot = {}
+	network_title_label.text = "Network"
+	if not RunState.has_active_run():
+		selected_network_contact_id = ""
+		network_recognition_label.text = "Recognition: Unknown"
+		network_summary_label.text = "Start a run to meet market contacts."
+		network_contacts_list.clear()
+		network_requests_list.clear()
+		_show_network_contact({})
+		_log_perf_elapsed("_refresh_network", started_at_usec)
+		return
+
+	current_network_snapshot = GameManager.get_network_snapshot()
+	var recognition: Dictionary = current_network_snapshot.get("recognition", {})
+	network_recognition_label.text = "Recognition: %s (%d)" % [
+		str(recognition.get("label", "Unknown")),
+		int(round(float(recognition.get("score", 0.0))))
+	]
+	var action_snapshot: Dictionary = GameManager.get_daily_action_snapshot()
+	network_summary_label.text = "%d / %d contacts met  |  AP %d/%d  |  Contacts are discovered through News and company Profile pages." % [
+		int(current_network_snapshot.get("met_count", 0)),
+		int(current_network_snapshot.get("contact_cap", 2)),
+		int(action_snapshot.get("remaining", 0)),
+		int(action_snapshot.get("limit", 10))
+	]
+	_rebuild_network_contact_list()
+	_rebuild_network_request_list()
+	_log_perf_elapsed("_refresh_network", started_at_usec)
+
+
+func _refresh_daily_action_displays() -> void:
+	if active_app_id == APP_ID_NETWORK:
+		_refresh_network()
+	if active_app_id == APP_ID_ACADEMY:
+		_refresh_academy()
+	if active_app_id == APP_ID_UPGRADES:
+		_refresh_upgrades()
+
+
+func _ensure_figma_desktop_ui() -> void:
+	if desktop_figma_top_bar != null:
+		return
+
+	var desktop_shade: ColorRect = $DesktopLayer/DesktopShade
+	desktop_shade.color = COLOR_DESKTOP_CREAM
+
+	var desktop_margin: MarginContainer = $DesktopLayer/DesktopMargin
+	desktop_margin.add_theme_constant_override("margin_left", 0)
+	desktop_margin.add_theme_constant_override("margin_top", 0)
+	desktop_margin.add_theme_constant_override("margin_right", 0)
+	desktop_margin.add_theme_constant_override("margin_bottom", 0)
+
+	var desktop_vbox: VBoxContainer = $DesktopLayer/DesktopMargin/DesktopVBox
+	desktop_vbox.add_theme_constant_override("separation", 0)
+	desktop_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	desktop_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+	var header_row: Control = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopHeaderRow
+	var old_icons_row: HBoxContainer = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow
+	var desktop_footer_spacer: Control = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopFooterSpacer
+	var desktop_spacer: Node = get_node_or_null("DesktopLayer/DesktopMargin/DesktopVBox/DesktopSpacer")
+	var legacy_hidden_host: Control = desktop_layer.get_node_or_null("DesktopLegacyHidden") as Control
+	if legacy_hidden_host == null:
+		legacy_hidden_host = Control.new()
+		legacy_hidden_host.name = "DesktopLegacyHidden"
+		legacy_hidden_host.visible = false
+		legacy_hidden_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		legacy_hidden_host.set_anchors_preset(Control.PRESET_FULL_RECT)
+		desktop_layer.add_child(legacy_hidden_host)
+	var legacy_nodes: Array[Node] = [
+		header_row,
+		desktop_subtitle_label,
+		desktop_hint_label,
+		old_icons_row,
+		desktop_footer_spacer,
+		desktop_spacer
+	]
+	for legacy_node in legacy_nodes:
+		if legacy_node == null:
+			continue
+		if legacy_node.get_parent() != legacy_hidden_host:
+			var legacy_parent: Node = legacy_node.get_parent()
+			if legacy_parent != null:
+				legacy_parent.remove_child(legacy_node)
+			legacy_hidden_host.add_child(legacy_node)
+		if legacy_node is Control:
+			var legacy_control: Control = legacy_node as Control
+			legacy_control.custom_minimum_size = Vector2.ZERO
+			legacy_control.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+			legacy_control.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		if legacy_node is CanvasItem:
+			(legacy_node as CanvasItem).visible = false
+
+	desktop_figma_top_bar = PanelContainer.new()
+	desktop_figma_top_bar.name = "DesktopFigmaTopBar"
+	desktop_figma_top_bar.custom_minimum_size = Vector2(0, 80)
+	desktop_figma_top_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	desktop_vbox.add_child(desktop_figma_top_bar)
+	desktop_vbox.move_child(desktop_figma_top_bar, 0)
+
+	var top_margin := MarginContainer.new()
+	top_margin.name = "DesktopFigmaTopMargin"
+	top_margin.add_theme_constant_override("margin_left", 24)
+	top_margin.add_theme_constant_override("margin_top", 14)
+	top_margin.add_theme_constant_override("margin_right", 24)
+	top_margin.add_theme_constant_override("margin_bottom", 14)
+	desktop_figma_top_bar.add_child(top_margin)
+
+	var top_row := HBoxContainer.new()
+	top_row.name = "DesktopFigmaTopRow"
+	top_row.add_theme_constant_override("separation", 24)
+	top_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_margin.add_child(top_row)
+
+	var date_row := HBoxContainer.new()
+	date_row.name = "DesktopFigmaDateRow"
+	date_row.add_theme_constant_override("separation", 10)
+	date_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	date_row.custom_minimum_size = Vector2(260, 0)
+	top_row.add_child(date_row)
+	date_row.add_child(_make_desktop_icon_rect(str(DESKTOP_ICON_PATHS.get("date", "")), Vector2(24, 24)))
+
+	desktop_figma_date_label = Label.new()
+	desktop_figma_date_label.name = "DesktopFigmaDateLabel"
+	desktop_figma_date_label.text = "NO RUN"
+	desktop_figma_date_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	desktop_figma_date_label.add_theme_font_size_override("font_size", 20)
+	desktop_figma_date_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	date_row.add_child(desktop_figma_date_label)
+
+	var cash_spacer_left := Control.new()
+	cash_spacer_left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_row.add_child(cash_spacer_left)
+
+	var cash_panel := PanelContainer.new()
+	cash_panel.name = "DesktopFigmaCashPanel"
+	cash_panel.custom_minimum_size = Vector2(300, 48)
+	top_row.add_child(cash_panel)
+	_style_panel(cash_panel, COLOR_DESKTOP_PANEL, 8)
+	var cash_margin := MarginContainer.new()
+	cash_margin.name = "DesktopFigmaCashMargin"
+	cash_margin.add_theme_constant_override("margin_left", 16)
+	cash_margin.add_theme_constant_override("margin_top", 6)
+	cash_margin.add_theme_constant_override("margin_right", 16)
+	cash_margin.add_theme_constant_override("margin_bottom", 6)
+	cash_panel.add_child(cash_margin)
+	var cash_row := HBoxContainer.new()
+	cash_row.name = "DesktopFigmaCashRow"
+	cash_row.add_theme_constant_override("separation", 10)
+	cash_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	cash_margin.add_child(cash_row)
+	cash_row.add_child(_make_desktop_icon_rect(str(DESKTOP_ICON_PATHS.get("cash", "")), Vector2(24, 24)))
+
+	desktop_figma_cash_label = Label.new()
+	desktop_figma_cash_label.name = "DesktopFigmaCashLabel"
+	desktop_figma_cash_label.text = "RP 0"
+	desktop_figma_cash_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	desktop_figma_cash_label.add_theme_font_size_override("font_size", 20)
+	desktop_figma_cash_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	cash_row.add_child(desktop_figma_cash_label)
+
+	var cash_spacer_right := Control.new()
+	cash_spacer_right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_row.add_child(cash_spacer_right)
+
+	desktop_advance_day_button = Button.new()
+	desktop_advance_day_button.name = "DesktopAdvanceDayButton"
+	desktop_advance_day_button.text = "ADVANCE DAY"
+	desktop_advance_day_button.custom_minimum_size = Vector2(232, 50)
+	desktop_advance_day_button.icon = _desktop_texture(str(DESKTOP_ICON_PATHS.get("advance", "")))
+	desktop_advance_day_button.expand_icon = false
+	desktop_advance_day_button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	desktop_advance_day_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desktop_advance_day_button.add_theme_constant_override("icon_max_width", 24)
+	desktop_advance_day_button.add_theme_constant_override("h_separation", 8)
+	desktop_advance_day_button.tooltip_text = "Advance to the next trading day."
+	desktop_advance_day_button.pressed.connect(_on_next_day_pressed)
+	top_row.add_child(desktop_advance_day_button)
+
+	desktop_figma_canvas_panel = PanelContainer.new()
+	desktop_figma_canvas_panel.name = "DesktopFigmaCanvasPanel"
+	desktop_figma_canvas_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	desktop_figma_canvas_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	desktop_figma_canvas_panel.custom_minimum_size = Vector2(0, 0)
+	desktop_vbox.add_child(desktop_figma_canvas_panel)
+	desktop_vbox.move_child(desktop_figma_canvas_panel, 1)
+
+	var canvas_margin := MarginContainer.new()
+	canvas_margin.name = "DesktopFigmaCanvasMargin"
+	canvas_margin.add_theme_constant_override("margin_left", 40)
+	canvas_margin.add_theme_constant_override("margin_top", 40)
+	canvas_margin.add_theme_constant_override("margin_right", 40)
+	canvas_margin.add_theme_constant_override("margin_bottom", 40)
+	canvas_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	canvas_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	desktop_figma_canvas_panel.add_child(canvas_margin)
+
+	var grid_center := CenterContainer.new()
+	grid_center.name = "DesktopFigmaShortcutCenter"
+	grid_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid_center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	canvas_margin.add_child(grid_center)
+
+	desktop_shortcut_grid = GridContainer.new()
+	desktop_shortcut_grid.name = "DesktopFigmaShortcutGrid"
+	desktop_shortcut_grid.columns = 7
+	desktop_shortcut_grid.add_theme_constant_override("h_separation", 40)
+	desktop_shortcut_grid.add_theme_constant_override("v_separation", 36)
+	grid_center.add_child(desktop_shortcut_grid)
+
+	_reparent_desktop_shortcuts_to_figma_grid()
+
+	_style_figma_desktop_ui()
+	_update_desktop_figma_layout()
+
+
+func _reparent_desktop_shortcuts_to_figma_grid() -> void:
+	if desktop_shortcut_grid == null:
+		return
+	var shortcuts := [
+		{
+			"app_id": APP_ID_STOCK,
+			"button": stock_app_button,
+			"label": stock_app_label,
+			"text": "STOCKBOT"
+		},
+		{
+			"app_id": APP_ID_NEWS,
+			"button": news_app_button,
+			"label": news_app_label,
+			"text": "NEWS"
+		},
+		{
+			"app_id": APP_ID_SOCIAL,
+			"button": social_app_button,
+			"label": social_app_label,
+			"text": "TWOOTER"
+		},
+		{
+			"app_id": APP_ID_ACADEMY,
+			"button": academy_app_button,
+			"label": academy_app_label,
+			"text": "ACADEMY"
+		},
+		{
+			"app_id": APP_ID_NETWORK,
+			"button": network_app_button,
+			"label": network_app_label,
+			"text": "NETWORK"
+		},
+		{
+			"app_id": APP_ID_UPGRADES,
+			"button": upgrades_app_button,
+			"label": upgrades_app_label,
+			"text": "SHOP"
+		},
+		{
+			"app_id": "exit",
+			"button": exit_app_button,
+			"label": exit_app_label,
+			"text": "EXIT"
+		}
+	]
+
+	for shortcut_value in shortcuts:
+		var shortcut: Dictionary = shortcut_value
+		var button: Button = shortcut.get("button", null)
+		var label: Label = shortcut.get("label", null)
+		if button == null or label == null:
+			continue
+		var tile: Control = button.get_parent() as Control
+		if tile == null:
+			continue
+		var old_parent := tile.get_parent()
+		if old_parent != desktop_shortcut_grid:
+			if old_parent != null:
+				old_parent.remove_child(tile)
+			desktop_shortcut_grid.add_child(tile)
+		tile.visible = true
+		_configure_desktop_shortcut_tile(tile, button, label, str(shortcut.get("app_id", "")), str(shortcut.get("text", "")))
+
+
+func _configure_desktop_shortcut_tile(tile: Control, button: Button, label: Label, app_id: String, display_text: String) -> void:
+	tile.custom_minimum_size = Vector2(144, 178)
+	tile.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	tile.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	if tile is VBoxContainer:
+		var tile_box: VBoxContainer = tile
+		tile_box.alignment = BoxContainer.ALIGNMENT_CENTER
+		tile_box.add_theme_constant_override("separation", 12)
+
+	button.text = ""
+	button.custom_minimum_size = Vector2(128, 128)
+	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	button.expand_icon = false
+	button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	button.icon = _desktop_texture(_get_desktop_icon_path(app_id, "shortcut"))
+	button.add_theme_constant_override("icon_max_width", 44)
+	_style_desktop_shortcut_button(button)
+	_ensure_desktop_shortcut_corner_marker(button)
+
+	label.text = display_text
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.custom_minimum_size = Vector2(128, 28)
+	label.add_theme_font_size_override("font_size", 15)
+	label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	_style_desktop_label_plaque(label)
+
+
+func _ensure_desktop_shortcut_corner_marker(button: Button) -> void:
+	if button.get_node_or_null("DesktopShortcutCornerMarker") != null:
+		return
+	var marker := ColorRect.new()
+	marker.name = "DesktopShortcutCornerMarker"
+	marker.color = COLOR_DESKTOP_BROWN
+	marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	marker.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	marker.offset_left = -18
+	marker.offset_top = 0
+	marker.offset_right = -2
+	marker.offset_bottom = 16
+	button.add_child(marker)
+
+
+func _add_desktop_bottom_nav_button(parent: HBoxContainer, app_id: String, label_text: String, callback: Callable) -> void:
+	var nav_button := Button.new()
+	nav_button.name = "DesktopBottomNav%sButton" % label_text.capitalize().replace(" ", "")
+	nav_button.text = label_text
+	nav_button.icon = _desktop_texture(_get_desktop_icon_path(app_id, "nav"))
+	nav_button.expand_icon = false
+	nav_button.toggle_mode = app_id != "exit"
+	nav_button.custom_minimum_size = Vector2(132, 48)
+	nav_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nav_button.tooltip_text = "Open %s." % label_text.capitalize()
+	nav_button.pressed.connect(callback)
+	parent.add_child(nav_button)
+	desktop_bottom_nav_buttons[app_id] = nav_button
+	_style_desktop_bottom_nav_button(nav_button, false)
+
+
+func _get_desktop_icon_path(app_id: String, kind: String) -> String:
+	if not DESKTOP_ICON_PATHS.has(app_id):
+		return ""
+	var entry = DESKTOP_ICON_PATHS.get(app_id)
+	if entry is Dictionary:
+		return str(entry.get(kind, ""))
+	return ""
+
+
+func _desktop_texture(path: String) -> Texture2D:
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return null
+	var resource := load(path)
+	if resource is Texture2D:
+		return resource
+	return null
+
+
+func _make_desktop_icon_rect(path: String, minimum_size: Vector2) -> TextureRect:
+	var icon := TextureRect.new()
+	icon.name = "DesktopIcon"
+	icon.texture = _desktop_texture(path)
+	icon.custom_minimum_size = minimum_size
+	icon.size = minimum_size
+	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon.expand_mode = TextureRect.EXPAND_KEEP_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	return icon
+
+
+func _update_desktop_figma_layout() -> void:
+	if desktop_shortcut_grid == null:
+		return
+	var viewport_width: float = get_viewport_rect().size.x
+	if viewport_width >= 1280.0:
+		desktop_shortcut_grid.columns = 7
+	elif viewport_width >= 960.0:
+		desktop_shortcut_grid.columns = 4
+	elif viewport_width >= 680.0:
+		desktop_shortcut_grid.columns = 3
+	else:
+		desktop_shortcut_grid.columns = 2
+
+	var canvas_margin: MarginContainer = get_node_or_null("DesktopLayer/DesktopMargin/DesktopVBox/DesktopFigmaCanvasPanel/DesktopFigmaCanvasMargin") as MarginContainer
+	if canvas_margin != null:
+		var side_margin: int = 40 if viewport_width >= 920.0 else 18
+		canvas_margin.add_theme_constant_override("margin_left", side_margin)
+		canvas_margin.add_theme_constant_override("margin_right", side_margin)
+		canvas_margin.add_theme_constant_override("margin_top", 32 if viewport_width >= 920.0 else 18)
+		canvas_margin.add_theme_constant_override("margin_bottom", 0)
+
+
+func _refresh_figma_desktop_status() -> void:
+	if desktop_figma_date_label == null or desktop_figma_cash_label == null:
+		return
+	if not RunState.has_active_run():
+		desktop_figma_date_label.text = "NO RUN"
+		desktop_figma_cash_label.text = "RP 0"
+		if desktop_advance_day_button != null:
+			desktop_advance_day_button.disabled = true
+		return
+	var current_trade_date: Dictionary = GameManager.get_current_trade_date()
+	var portfolio: Dictionary = GameManager.get_portfolio_snapshot()
+	desktop_figma_date_label.text = _format_desktop_figma_date(current_trade_date).to_upper()
+	desktop_figma_cash_label.text = _format_desktop_figma_cash(float(portfolio.get("cash", 0.0)))
+	if desktop_advance_day_button != null:
+		desktop_advance_day_button.disabled = false
+
+
+func _format_desktop_figma_date(date_info: Dictionary) -> String:
+	var month_index: int = int(date_info.get("month", 1)) - 1
+	var month_name: String = "Jan"
+	if month_index >= 0 and month_index < DASHBOARD_MONTH_NAMES.size():
+		month_name = str(DASHBOARD_MONTH_NAMES[month_index])
+	return "%s %d, %d" % [
+		month_name,
+		int(date_info.get("day", 1)),
+		int(date_info.get("year", 2020))
+	]
+
+
+func _format_desktop_figma_cash(value: float) -> String:
+	var formatted := _format_currency(value).replace("Rp", "")
+	return "RP %s" % formatted
+
+
+func _style_figma_desktop_ui() -> void:
+	if desktop_figma_top_bar != null:
+		_style_panel(desktop_figma_top_bar, COLOR_DESKTOP_CREAM, 0)
+	if desktop_figma_date_label != null:
+		desktop_figma_date_label.add_theme_font_size_override("font_size", 20)
+		desktop_figma_date_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	if desktop_figma_cash_label != null:
+		desktop_figma_cash_label.add_theme_font_size_override("font_size", 20)
+		desktop_figma_cash_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	if desktop_figma_canvas_panel != null:
+		var canvas_style := StyleBoxFlat.new()
+		canvas_style.bg_color = COLOR_DESKTOP_CREAM
+		canvas_style.border_color = Color(COLOR_DESKTOP_OLIVE.r, COLOR_DESKTOP_OLIVE.g, COLOR_DESKTOP_OLIVE.b, 0.38)
+		canvas_style.set_border_width_all(8)
+		canvas_style.set_corner_radius_all(0)
+		canvas_style.shadow_color = Color(0.22, 0.22, 0.12, 0.12)
+		canvas_style.shadow_size = 8
+		canvas_style.shadow_offset = Vector2(0, -4)
+		desktop_figma_canvas_panel.add_theme_stylebox_override("panel", canvas_style)
+	if desktop_bottom_nav_bar != null:
+		_style_panel(desktop_bottom_nav_bar, COLOR_DESKTOP_PANEL, 0)
+	if desktop_advance_day_button != null:
+		_style_desktop_advance_button(desktop_advance_day_button)
+	_style_desktop_shortcut_button(stock_app_button)
+	_style_desktop_shortcut_button(news_app_button)
+	_style_desktop_shortcut_button(social_app_button)
+	if academy_app_button != null:
+		_style_desktop_shortcut_button(academy_app_button)
+	_style_desktop_shortcut_button(network_app_button)
+	_style_desktop_shortcut_button(upgrades_app_button)
+	_style_desktop_shortcut_button(exit_app_button)
+	_style_desktop_label_plaque(stock_app_label)
+	_style_desktop_label_plaque(news_app_label)
+	_style_desktop_label_plaque(social_app_label)
+	if academy_app_label != null:
+		_style_desktop_label_plaque(academy_app_label)
+	_style_desktop_label_plaque(network_app_label)
+	_style_desktop_label_plaque(upgrades_app_label)
+	_style_desktop_label_plaque(exit_app_label)
+	for app_id in desktop_bottom_nav_buttons.keys():
+		var button: Button = desktop_bottom_nav_buttons[app_id]
+		_style_desktop_bottom_nav_button(button, str(app_id) == active_app_id)
+
+
+func _style_desktop_shortcut_button(button: Button) -> void:
+	if button == null:
+		return
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = COLOR_DESKTOP_PANEL
+	normal.border_color = COLOR_DESKTOP_BROWN
+	normal.set_border_width_all(4)
+	normal.set_corner_radius_all(0)
+	normal.shadow_color = Color(0.22, 0.20, 0.12, 0.20)
+	normal.shadow_size = 0
+	normal.shadow_offset = Vector2(4, 4)
+	button.add_theme_stylebox_override("normal", normal)
+	var hover := normal.duplicate()
+	hover.bg_color = Color(0.992157, 0.941176, 0.760784, 1)
+	button.add_theme_stylebox_override("hover", hover)
+	var pressed := normal.duplicate()
+	pressed.bg_color = Color(0.882353, 0.831373, 0.65098, 1)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("focus", pressed)
+	button.add_theme_color_override("icon_normal_color", COLOR_DESKTOP_BROWN)
+	button.add_theme_color_override("icon_hover_color", COLOR_DESKTOP_BROWN)
+	button.add_theme_color_override("icon_pressed_color", COLOR_DESKTOP_BROWN)
+
+
+func _style_desktop_label_plaque(label: Label) -> void:
+	if label == null:
+		return
+	var plaque := StyleBoxFlat.new()
+	plaque.bg_color = COLOR_DESKTOP_PANEL
+	plaque.border_color = Color(COLOR_DESKTOP_BROWN.r, COLOR_DESKTOP_BROWN.g, COLOR_DESKTOP_BROWN.b, 0.45)
+	plaque.set_border_width_all(2)
+	plaque.set_corner_radius_all(0)
+	label.add_theme_stylebox_override("normal", plaque)
+	label.add_theme_font_size_override("font_size", 15)
+	label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+
+
+func _style_desktop_advance_button(button: Button) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = COLOR_DESKTOP_GOLD
+	normal.border_color = COLOR_DESKTOP_BROWN
+	normal.set_border_width_all(3)
+	normal.set_corner_radius_all(6)
+	normal.content_margin_left = 16
+	normal.content_margin_right = 14
+	normal.content_margin_top = 8
+	normal.content_margin_bottom = 8
+	button.add_theme_stylebox_override("normal", normal)
+	var hover := normal.duplicate()
+	hover.bg_color = Color(1.0, 0.792157, 0.168627, 1)
+	button.add_theme_stylebox_override("hover", hover)
+	var pressed := normal.duplicate()
+	pressed.bg_color = Color(0.862745, 0.580392, 0.0392157, 1)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	button.add_theme_color_override("font_hover_color", COLOR_DESKTOP_BROWN)
+	button.add_theme_color_override("font_pressed_color", COLOR_DESKTOP_BROWN)
+	button.add_theme_font_size_override("font_size", 18)
+
+
+func _style_desktop_bottom_nav_button(button: Button, active: bool) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.984314, 0.94902, 0.835294, 1) if active else COLOR_DESKTOP_PANEL
+	normal.border_color = COLOR_DESKTOP_BROWN if active else Color(COLOR_DESKTOP_BROWN.r, COLOR_DESKTOP_BROWN.g, COLOR_DESKTOP_BROWN.b, 0.28)
+	normal.set_border_width_all(2)
+	normal.set_corner_radius_all(6)
+	button.add_theme_stylebox_override("normal", normal)
+	var hover := normal.duplicate()
+	hover.bg_color = Color(0.992157, 0.941176, 0.760784, 1)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", hover)
+	button.add_theme_stylebox_override("focus", hover)
+	button.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	button.add_theme_color_override("font_hover_color", COLOR_DESKTOP_BROWN)
+	button.add_theme_color_override("font_pressed_color", COLOR_DESKTOP_BROWN)
+	button.add_theme_color_override("icon_normal_color", COLOR_DESKTOP_BROWN)
+	button.add_theme_color_override("icon_hover_color", COLOR_DESKTOP_BROWN)
+	button.add_theme_color_override("icon_pressed_color", COLOR_DESKTOP_BROWN)
+	button.add_theme_font_size_override("font_size", 12)
+
+
+func _ensure_academy_ui() -> void:
+	if academy_window != null:
+		return
+
+	var desktop_icons_row: HBoxContainer = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow
+	var academy_tile := VBoxContainer.new()
+	academy_tile.name = "AcademyAppTile"
+	academy_tile.add_theme_constant_override("separation", 10)
+	desktop_icons_row.add_child(academy_tile)
+	var upgrades_tile: Node = desktop_icons_row.get_node_or_null("UpgradesAppTile")
+	if upgrades_tile != null:
+		desktop_icons_row.move_child(academy_tile, upgrades_tile.get_index())
+
+	academy_app_button = Button.new()
+	academy_app_button.name = "AcademyAppButton"
+	academy_app_button.custom_minimum_size = Vector2(92, 92)
+	academy_app_button.toggle_mode = true
+	academy_tile.add_child(academy_app_button)
+
+	academy_app_label = Label.new()
+	academy_app_label.name = "AcademyAppLabel"
+	academy_app_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	academy_app_label.text = "Academy"
+	academy_app_label.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
+	academy_tile.add_child(academy_app_label)
+
+	academy_window = MarginContainer.new()
+	academy_window.name = "AcademyWindow"
+	academy_window.visible = false
+	academy_window.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(academy_window)
+	var upgrade_window_node: Node = get_node_or_null("UpgradeWindow")
+	if upgrade_window_node != null:
+		move_child(academy_window, upgrade_window_node.get_index())
+
+	academy_window_body = PanelContainer.new()
+	academy_window_body.name = "AcademyWindowBody"
+	academy_window_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	academy_window_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	academy_window.add_child(academy_window_body)
+
+	var academy_margin := MarginContainer.new()
+	academy_margin.name = "AcademyWindowMargin"
+	academy_margin.add_theme_constant_override("margin_left", 16)
+	academy_margin.add_theme_constant_override("margin_top", 16)
+	academy_margin.add_theme_constant_override("margin_right", 16)
+	academy_margin.add_theme_constant_override("margin_bottom", 16)
+	academy_window_body.add_child(academy_margin)
+
+	var academy_vbox := VBoxContainer.new()
+	academy_vbox.name = "AcademyWindowVBox"
+	academy_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	academy_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	academy_vbox.add_theme_constant_override("separation", 10)
+	academy_margin.add_child(academy_vbox)
+
+	var header_row := HBoxContainer.new()
+	header_row.name = "AcademyHeaderRow"
+	header_row.visible = false
+	header_row.add_theme_constant_override("separation", 12)
+	academy_vbox.add_child(header_row)
+
+	academy_title_label = Label.new()
+	academy_title_label.name = "AcademyTitleLabel"
+	academy_title_label.text = "Academy"
+	academy_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_row.add_child(academy_title_label)
+
+	academy_progress_label = Label.new()
+	academy_progress_label.name = "AcademyProgressLabel"
+	academy_progress_label.text = ""
+	header_row.add_child(academy_progress_label)
+
+	academy_category_tabs = HBoxContainer.new()
+	academy_category_tabs.name = "AcademyCategoryTabs"
+	academy_category_tabs.add_theme_constant_override("separation", 8)
+	academy_vbox.add_child(academy_category_tabs)
+
+	academy_section_tabs = GridContainer.new()
+	academy_section_tabs.name = "AcademySectionTabs"
+	academy_section_tabs.columns = 4
+	academy_section_tabs.add_theme_constant_override("h_separation", 8)
+	academy_section_tabs.add_theme_constant_override("v_separation", 8)
+	academy_vbox.add_child(academy_section_tabs)
+
+	academy_summary_label = Label.new()
+	academy_summary_label.name = "AcademySummaryLabel"
+	academy_summary_label.visible = false
+	academy_summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	academy_vbox.add_child(academy_summary_label)
+
+	var content_split := HSplitContainer.new()
+	content_split.name = "AcademyContentSplit"
+	content_split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content_split.split_offset = 230
+	academy_vbox.add_child(content_split)
+
+	var list_panel := PanelContainer.new()
+	list_panel.name = "AcademySectionListPanel"
+	list_panel.visible = false
+	list_panel.custom_minimum_size = Vector2(220, 0)
+	content_split.add_child(list_panel)
+	_style_panel(list_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
+	var list_margin := MarginContainer.new()
+	list_margin.add_theme_constant_override("margin_left", 10)
+	list_margin.add_theme_constant_override("margin_top", 10)
+	list_margin.add_theme_constant_override("margin_right", 10)
+	list_margin.add_theme_constant_override("margin_bottom", 10)
+	list_panel.add_child(list_margin)
+	var list_vbox := VBoxContainer.new()
+	list_vbox.add_theme_constant_override("separation", 8)
+	list_margin.add_child(list_vbox)
+	var list_title := Label.new()
+	list_title.text = "Sections"
+	list_vbox.add_child(list_title)
+	academy_section_list = ItemList.new()
+	academy_section_list.name = "AcademySectionList"
+	academy_section_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list_vbox.add_child(academy_section_list)
+
+	var lesson_panel := PanelContainer.new()
+	lesson_panel.name = "AcademyLessonPanel"
+	lesson_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lesson_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content_split.add_child(lesson_panel)
+	_style_panel(lesson_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
+	var lesson_margin := MarginContainer.new()
+	lesson_margin.add_theme_constant_override("margin_left", 14)
+	lesson_margin.add_theme_constant_override("margin_top", 12)
+	lesson_margin.add_theme_constant_override("margin_right", 14)
+	lesson_margin.add_theme_constant_override("margin_bottom", 12)
+	lesson_panel.add_child(lesson_margin)
+	var lesson_vbox := VBoxContainer.new()
+	lesson_vbox.add_theme_constant_override("separation", 8)
+	lesson_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lesson_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lesson_margin.add_child(lesson_vbox)
+	academy_lesson_title_label = Label.new()
+	academy_lesson_title_label.name = "AcademyLessonTitleLabel"
+	academy_lesson_title_label.visible = false
+	lesson_vbox.add_child(academy_lesson_title_label)
+	academy_lesson_meta_label = Label.new()
+	academy_lesson_meta_label.name = "AcademyLessonMetaLabel"
+	academy_lesson_meta_label.visible = false
+	academy_lesson_meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lesson_vbox.add_child(academy_lesson_meta_label)
+	var lesson_scroll := ScrollContainer.new()
+	lesson_scroll.name = "AcademyLessonScroll"
+	lesson_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lesson_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lesson_vbox.add_child(lesson_scroll)
+	academy_lesson_content_vbox = VBoxContainer.new()
+	academy_lesson_content_vbox.name = "AcademyLessonContentVBox"
+	academy_lesson_content_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	academy_lesson_content_vbox.add_theme_constant_override("separation", 10)
+	lesson_scroll.add_child(academy_lesson_content_vbox)
+	var action_row := HBoxContainer.new()
+	action_row.name = "AcademyActionRow"
+	action_row.add_theme_constant_override("separation", 8)
+	lesson_vbox.add_child(action_row)
+	academy_mark_read_button = Button.new()
+	academy_mark_read_button.name = "AcademyMarkReadButton"
+	academy_mark_read_button.text = "Mark Read"
+	action_row.add_child(academy_mark_read_button)
+	academy_next_button = Button.new()
+	academy_next_button.name = "AcademyNextButton"
+	academy_next_button.text = "Next Section"
+	action_row.add_child(academy_next_button)
+
+	var side_panel := PanelContainer.new()
+	side_panel.name = "AcademySidePanel"
+	side_panel.visible = false
+	side_panel.custom_minimum_size = Vector2(260, 0)
+	content_split.add_child(side_panel)
+	_style_panel(side_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
+	var side_margin := MarginContainer.new()
+	side_margin.add_theme_constant_override("margin_left", 10)
+	side_margin.add_theme_constant_override("margin_top", 10)
+	side_margin.add_theme_constant_override("margin_right", 10)
+	side_margin.add_theme_constant_override("margin_bottom", 10)
+	side_panel.add_child(side_margin)
+	var side_vbox := VBoxContainer.new()
+	side_vbox.add_theme_constant_override("separation", 8)
+	side_margin.add_child(side_vbox)
+	academy_side_title_label = Label.new()
+	academy_side_title_label.name = "AcademySideTitleLabel"
+	side_vbox.add_child(academy_side_title_label)
+	academy_side_body_label = Label.new()
+	academy_side_body_label.name = "AcademySideBodyLabel"
+	academy_side_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	side_vbox.add_child(academy_side_body_label)
+	academy_glossary_search_input = LineEdit.new()
+	academy_glossary_search_input.name = "AcademyGlossarySearchInput"
+	academy_glossary_search_input.placeholder_text = "Search glossary"
+	side_vbox.add_child(academy_glossary_search_input)
+	academy_glossary_list = ItemList.new()
+	academy_glossary_list.name = "AcademyGlossaryList"
+	academy_glossary_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	side_vbox.add_child(academy_glossary_list)
+	_apply_academy_text_theme()
+	_style_button(academy_mark_read_button, Color(0.968627, 0.964706, 0.898039, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_WINDOW_TEXT, 0)
+	_style_button(academy_next_button, Color(0.968627, 0.964706, 0.898039, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_WINDOW_TEXT, 0)
+	_apply_academy_button_padding(academy_mark_read_button)
+	_apply_academy_button_padding(academy_next_button)
+
+
+func _refresh_academy() -> void:
+	if academy_window == null:
+		return
+	current_academy_snapshot = {}
+	academy_title_label.text = "Academy"
+	if not RunState.has_active_run():
+		academy_progress_label.text = "No run loaded"
+		academy_summary_label.text = "Start a run to open Academy lessons."
+		academy_section_list.clear()
+		_clear_container_children(academy_category_tabs)
+		_clear_container_children(academy_section_tabs)
+		_clear_container_children(academy_lesson_content_vbox)
+		academy_lesson_title_label.text = "No lesson"
+		academy_lesson_meta_label.text = ""
+		academy_mark_read_button.disabled = true
+		academy_next_button.disabled = true
+		_apply_font_overrides_to_subtree(academy_window)
+		return
+
+	current_academy_snapshot = GameManager.get_academy_snapshot(selected_academy_category_id, selected_academy_section_id)
+	selected_academy_category_id = str(current_academy_snapshot.get("category_id", selected_academy_category_id))
+	selected_academy_section_id = str(current_academy_snapshot.get("selected_section_id", selected_academy_section_id))
+	academy_title_label.text = ""
+	_rebuild_academy_category_tabs()
+	_rebuild_academy_section_list()
+	_rebuild_academy_section_tabs()
+	_refresh_academy_content()
+	_apply_academy_text_theme()
+	_apply_font_overrides_to_subtree(academy_window)
+
+
+func _apply_academy_text_theme() -> void:
+	if academy_window == null:
+		return
+	_apply_academy_text_theme_to_node(academy_window)
+
+
+func _apply_academy_text_theme_to_node(node: Node) -> void:
+	if node is Label:
+		var label: Label = node
+		label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	elif node is RichTextLabel:
+		var rich_text: RichTextLabel = node
+		rich_text.add_theme_color_override("default_color", COLOR_WINDOW_TEXT)
+	elif node is ItemList:
+		var item_list: ItemList = node
+		item_list.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+		item_list.add_theme_color_override("font_hovered_color", COLOR_WINDOW_TEXT)
+		item_list.add_theme_color_override("font_selected_color", COLOR_WINDOW_TEXT)
+	elif node is LineEdit:
+		var line_edit: LineEdit = node
+		line_edit.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+		line_edit.add_theme_color_override("font_placeholder_color", Color(0.352941, 0.309804, 0.203922, 0.78))
+	elif node is OptionButton:
+		var option_button: OptionButton = node
+		option_button.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+		option_button.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
+		option_button.add_theme_color_override("font_pressed_color", COLOR_WINDOW_TEXT)
+	elif node is Button:
+		var button: Button = node
+		button.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+		button.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
+		button.add_theme_color_override("font_pressed_color", COLOR_WINDOW_TEXT)
+		button.add_theme_color_override("font_disabled_color", Color(0.352941, 0.309804, 0.203922, 0.62))
+
+	for child in node.get_children():
+		_apply_academy_text_theme_to_node(child)
+
+
+func _rebuild_academy_category_tabs() -> void:
+	_clear_container_children(academy_category_tabs)
+	for category_value in current_academy_snapshot.get("categories", []):
+		var category: Dictionary = category_value
+		var button := Button.new()
+		var category_id: String = str(category.get("id", ""))
+		button.name = "AcademyCategoryButton_%s" % category_id
+		button.text = str(category.get("label", category_id.capitalize()))
+		button.toggle_mode = true
+		button.set_pressed_no_signal(category_id == selected_academy_category_id)
+		button.pressed.connect(_on_academy_category_pressed.bind(category_id))
+		academy_category_tabs.add_child(button)
+		_style_academy_category_tab(button, category_id == selected_academy_category_id)
+
+
+func _style_academy_category_tab(button: Button, selected: bool) -> void:
+	var fill: Color = Color(0.968627, 0.964706, 0.898039, 1)
+	var border: Color = Color(0.454902, 0.337255, 0.141176, 0.45)
+	if selected:
+		fill = Color(0.909804, 0.909804, 0.803922, 1)
+		border = Color(0.819608, 0.631373, 0.254902, 1)
+	var normal: StyleBoxFlat = StyleBoxFlat.new()
+	normal.bg_color = fill
+	normal.border_color = border
+	normal.set_border_width_all(1 if not selected else 2)
+	normal.corner_radius_top_left = 8
+	normal.corner_radius_top_right = 8
+	normal.corner_radius_bottom_left = 8
+	normal.corner_radius_bottom_right = 8
+	normal.content_margin_left = 24
+	normal.content_margin_right = 24
+	normal.content_margin_top = 24
+	normal.content_margin_bottom = 24
+	var hover: StyleBoxFlat = normal.duplicate()
+	hover.bg_color = fill.lightened(0.05)
+	var pressed: StyleBoxFlat = normal.duplicate()
+	pressed.bg_color = fill.darkened(0.04)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("focus", pressed)
+	button.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	button.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
+	button.add_theme_color_override("font_pressed_color", COLOR_WINDOW_TEXT)
+
+
+func _apply_academy_button_padding(button: Button, padding: int = 24) -> void:
+	for style_name in ["normal", "hover", "pressed", "focus", "disabled"]:
+		var current_style: StyleBox = button.get_theme_stylebox(style_name)
+		if current_style == null or current_style is not StyleBoxFlat:
+			continue
+		var flat_style: StyleBoxFlat = current_style.duplicate()
+		flat_style.content_margin_left = padding
+		flat_style.content_margin_right = padding
+		flat_style.content_margin_top = padding
+		flat_style.content_margin_bottom = padding
+		button.add_theme_stylebox_override(style_name, flat_style)
+
+
+func _rebuild_academy_section_list() -> void:
+	academy_section_list.clear()
+	var sections: Array = current_academy_snapshot.get("sections", [])
+	for index in range(sections.size()):
+		var section: Dictionary = sections[index]
+		var label: String = str(section.get("label", "Section"))
+		if bool(section.get("locked", false)):
+			label = "%s (Locked)" % label
+		elif bool(section.get("read", false)):
+			label = "%s (Read)" % label
+		academy_section_list.add_item(label)
+		academy_section_list.set_item_metadata(index, section.duplicate(true))
+		academy_section_list.set_item_disabled(index, bool(section.get("locked", false)))
+		if str(section.get("id", "")) == selected_academy_section_id:
+			academy_section_list.select(index)
+
+
+func _rebuild_academy_section_tabs() -> void:
+	_clear_container_children(academy_section_tabs)
+	var sections: Array = current_academy_snapshot.get("sections", [])
+	for section_value in sections:
+		var section: Dictionary = section_value
+		var section_id: String = str(section.get("id", ""))
+		var selected: bool = section_id == selected_academy_section_id
+		var button := Button.new()
+		button.name = "AcademySectionTab_%s" % section_id
+		button.custom_minimum_size = Vector2(220, 56)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.toggle_mode = true
+		button.text = _academy_section_tab_label(section, selected)
+		button.disabled = bool(section.get("locked", false))
+		button.set_pressed_no_signal(selected)
+		button.pressed.connect(_on_academy_section_tab_pressed.bind(section_id))
+		academy_section_tabs.add_child(button)
+		_style_academy_section_tab(button, selected, bool(section.get("locked", false)))
+
+
+func _academy_section_tab_label(section: Dictionary, selected: bool = false) -> String:
+	var label: String = str(section.get("label", "Section"))
+	var title: String = str(section.get("title", ""))
+	var order: int = int(section.get("order", 0))
+	var prefix: String = "%02d / 08 " % order if selected and order > 0 else ""
+	if label.begins_with("01"):
+		return "%s01 Getting to Know TA" % prefix
+	if label.begins_with("02"):
+		return "%s02 Market Structure" % prefix
+	if label.begins_with("03"):
+		return "%s03 Candlesticks" % prefix
+	if label.begins_with("04"):
+		return "%s04 Patterns" % prefix
+	if label.begins_with("05"):
+		return "%s05 Moving Average" % prefix
+	if label.begins_with("06"):
+		return "%s06 Framework" % prefix
+	if label.begins_with("07"):
+		return "%s07 Quiz" % prefix if not bool(section.get("locked", false)) else "%s07 Quiz locked" % prefix
+	if label.begins_with("08"):
+		return "%s08 Glossary" % prefix
+	return "%s%s" % [prefix, title if not title.is_empty() else label]
+
+
+func _style_academy_section_tab(button: Button, selected: bool, locked: bool) -> void:
+	var fill: Color = Color(0.968627, 0.964706, 0.898039, 1)
+	var border: Color = COLOR_BORDER
+	if selected:
+		fill = Color(0.811765, 0.858824, 0.65098, 1)
+		border = Color(0.117647, 0.32549, 0.239216, 1)
+	elif locked:
+		fill = Color(0.909804, 0.909804, 0.803922, 0.55)
+		border = Color(0.454902, 0.337255, 0.141176, 0.5)
+	var normal: StyleBoxFlat = StyleBoxFlat.new()
+	normal.bg_color = fill
+	normal.border_color = border
+	normal.set_border_width_all(1 if not selected else 2)
+	normal.corner_radius_top_left = 8
+	normal.corner_radius_top_right = 8
+	normal.corner_radius_bottom_left = 8
+	normal.corner_radius_bottom_right = 8
+	normal.content_margin_left = 24
+	normal.content_margin_right = 24
+	normal.content_margin_top = 24
+	normal.content_margin_bottom = 24
+	var hover: StyleBoxFlat = normal.duplicate()
+	hover.bg_color = fill.lightened(0.06)
+	var pressed: StyleBoxFlat = normal.duplicate()
+	pressed.bg_color = fill.darkened(0.04)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("focus", pressed)
+	button.add_theme_stylebox_override("disabled", normal)
+	button.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	button.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
+	button.add_theme_color_override("font_pressed_color", COLOR_WINDOW_TEXT)
+	button.add_theme_color_override("font_disabled_color", Color(0.352941, 0.309804, 0.203922, 0.62))
+
+
+func _refresh_academy_content() -> void:
+	var progress: Dictionary = current_academy_snapshot.get("progress", {})
+	var quiz: Dictionary = current_academy_snapshot.get("quiz", {})
+	academy_progress_label.text = "%d/%d sections read  |  Quiz %s  |  Best %d%%" % [
+		int(progress.get("read_count", 0)),
+		int(progress.get("readable_count", 0)),
+		"passed" if bool(quiz.get("passed", false)) else ("locked" if bool(quiz.get("locked", true)) else "open"),
+		int(quiz.get("best_score_percent", 0))
+	]
+	_clear_container_children(academy_lesson_content_vbox)
+	academy_quiz_option_buttons.clear()
+
+	if bool(current_academy_snapshot.get("coming_soon", false)):
+		academy_summary_label.text = str(current_academy_snapshot.get("category_label", "Academy")).to_upper()
+		academy_lesson_title_label.text = str(current_academy_snapshot.get("category_label", "Academy"))
+		academy_lesson_meta_label.text = str(current_academy_snapshot.get("coming_soon_copy", "Coming soon."))
+		academy_mark_read_button.visible = false
+		academy_next_button.visible = false
+		_refresh_academy_side_panel()
+		return
+
+	var section: Dictionary = current_academy_snapshot.get("selected_section", {})
+	if section.is_empty():
+		academy_summary_label.text = ""
+		academy_lesson_title_label.text = "Choose a section"
+		academy_lesson_meta_label.text = ""
+		academy_mark_read_button.visible = false
+		academy_next_button.visible = false
+		_refresh_academy_side_panel()
+		return
+
+	var kind: String = str(section.get("kind", "lesson"))
+	academy_summary_label.text = str(section.get("label", "")).to_upper()
+	academy_lesson_title_label.text = str(section.get("title", section.get("label", "Lesson")))
+	academy_lesson_meta_label.text = ""
+	if kind == "quiz":
+		_build_academy_quiz(section)
+	elif kind == "glossary":
+		_build_academy_glossary_section()
+	else:
+		_build_academy_lesson(section)
+
+	academy_mark_read_button.visible = kind == "lesson"
+	academy_mark_read_button.disabled = bool(section.get("read", false))
+	academy_mark_read_button.text = "Completed" if bool(section.get("read", false)) else "Complete Section"
+	academy_next_button.visible = true
+	academy_next_button.disabled = _next_academy_section_id().is_empty()
+	_refresh_academy_side_panel()
+
+
+func _build_academy_lesson(section: Dictionary) -> void:
+	var paragraphs: Array = []
+	for page_value in section.get("pages", []):
+		var page: Dictionary = page_value
+		var body: String = str(page.get("body", "")).strip_edges()
+		if not body.is_empty():
+			paragraphs.append(body)
+	if not paragraphs.is_empty():
+		academy_lesson_content_vbox.add_child(_build_academy_text_block(
+			_academy_lesson_card_title(section),
+			"\n\n".join(paragraphs)
+		))
+		if str(section.get("id", "")) == "intro":
+			academy_lesson_content_vbox.add_child(_build_academy_principles_row())
+
+	for example_value in section.get("examples", []):
+		var example: Dictionary = example_value
+		academy_lesson_content_vbox.add_child(_build_academy_example_block(str(example.get("title", "Chart cue")), str(example.get("type", ""))))
+
+	for card_value in section.get("pattern_cards", []):
+		var card: Dictionary = card_value
+		academy_lesson_content_vbox.add_child(_build_academy_text_block(str(card.get("label", "Pattern")), str(card.get("cue", ""))))
+
+	var stored_checks: Dictionary = RunState.get_academy_progress().get("inline_checks", {}).get(selected_academy_category_id, {}).get(str(section.get("id", "")), {})
+	for check_value in section.get("checks", []):
+		var check: Dictionary = check_value
+		academy_lesson_content_vbox.add_child(_build_academy_check_block(str(section.get("id", "")), check, stored_checks.get(str(check.get("id", "")), {})))
+
+
+func _academy_lesson_card_title(section: Dictionary) -> String:
+	var section_id: String = str(section.get("id", ""))
+	if section_id == "intro":
+		return "What is technical analysis?"
+	if section_id == "market_structure":
+		return "Read the market shape first"
+	if section_id == "candlesticks":
+		return "Read the fight inside each candle"
+	if section_id == "patterns":
+		return "Patterns need context"
+	if section_id == "moving_average":
+		return "Moving averages confirm, not command"
+	if section_id == "thinking_framework":
+		return "A repeatable routine beats guessing"
+	return str(section.get("title", "Lesson"))
+
+
+func _build_academy_principles_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "AcademyPrinciplesRow"
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 12)
+	var principles: Array = [
+		{
+			"title": "Markets discount everything",
+			"body": "All known information is already reflected in price."
+		},
+		{
+			"title": "Price moves in trends",
+			"body": "Trends persist until a reversal signal appears."
+		},
+		{
+			"title": "History repeats",
+			"body": "Market psychology is consistent; patterns recur."
+		}
+	]
+	for principle_value in principles:
+		var principle: Dictionary = principle_value
+		row.add_child(_build_academy_principle_card(
+			str(principle.get("title", "")),
+			str(principle.get("body", ""))
+		))
+	return row
+
+
+func _build_academy_principle_card(title: String, body: String) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_panel(panel, Color(0.952941, 0.94902, 0.87451, 1), 8, 1, 1, 1, 1)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	panel.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(vbox)
+	var title_label := Label.new()
+	title_label.text = title
+	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	vbox.add_child(title_label)
+	var body_label := Label.new()
+	body_label.text = body
+	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body_label.add_theme_color_override("font_color", Color(0.352941, 0.309804, 0.203922, 1))
+	vbox.add_child(body_label)
+	return panel
+
+
+func _build_academy_quiz(_section: Dictionary) -> void:
+	var quiz: Dictionary = current_academy_snapshot.get("quiz", {})
+	if bool(quiz.get("locked", true)):
+		var unread_labels: Array = []
+		for unread_value in quiz.get("unread_required_sections", []):
+			var unread: Dictionary = unread_value
+			unread_labels.append(str(unread.get("label", "")))
+		academy_lesson_content_vbox.add_child(_build_academy_text_block("Locked", "Read these sections first: %s." % ", ".join(unread_labels)))
+		return
+
+	academy_lesson_content_vbox.add_child(_build_academy_text_block("Quiz", "Score 80 percent or better to earn Technical Basics. Wrong answers give feedback after submission."))
+	var catalog: Dictionary = DataRepository.get_academy_catalog()
+	var technical_category: Dictionary = {}
+	for category_value in catalog.get("categories", []):
+		var category: Dictionary = category_value
+		if str(category.get("id", "")) == selected_academy_category_id:
+			technical_category = category
+			break
+	for question_value in technical_category.get("quiz_questions", []):
+		var question: Dictionary = question_value
+		var block := VBoxContainer.new()
+		block.add_theme_constant_override("separation", 6)
+		var prompt := Label.new()
+		prompt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		prompt.text = "%s: %s" % [str(question.get("category", "Question")), str(question.get("prompt", ""))]
+		prompt.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+		block.add_child(prompt)
+		var option_button := OptionButton.new()
+		option_button.name = "AcademyQuizOption_%s" % str(question.get("id", ""))
+		for option_value in question.get("options", []):
+			var option: Dictionary = option_value
+			option_button.add_item(str(option.get("label", "")))
+			option_button.set_item_metadata(option_button.get_item_count() - 1, str(option.get("id", "")))
+		academy_quiz_option_buttons[str(question.get("id", ""))] = option_button
+		block.add_child(option_button)
+		academy_lesson_content_vbox.add_child(block)
+
+	var submit_button := Button.new()
+	submit_button.name = "AcademyQuizSubmitButton"
+	submit_button.text = "Submit Quiz"
+	submit_button.pressed.connect(_on_academy_quiz_submit_pressed)
+	academy_lesson_content_vbox.add_child(submit_button)
+	_style_button(submit_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
+	_apply_academy_button_padding(submit_button)
+
+
+func _build_academy_glossary_section() -> void:
+	academy_lesson_content_vbox.add_child(_build_academy_text_block("Searchable Glossary", "Search any technical term from this academy track."))
+	var search_input := LineEdit.new()
+	search_input.name = "AcademyGlossaryInlineSearchInput"
+	search_input.placeholder_text = "Search glossary"
+	search_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	academy_lesson_content_vbox.add_child(search_input)
+	var glossary_list := ItemList.new()
+	glossary_list.name = "AcademyGlossaryInlineList"
+	glossary_list.custom_minimum_size = Vector2(0, 260)
+	glossary_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	academy_lesson_content_vbox.add_child(glossary_list)
+	_populate_academy_glossary_list(glossary_list, "")
+	search_input.text_changed.connect(func(new_text: String) -> void:
+		_populate_academy_glossary_list(glossary_list, new_text)
+	)
+	_style_light_item_list(glossary_list)
+	_style_line_input(search_input)
+
+
+func _build_academy_text_block(title: String, body: String) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_panel(panel, Color(0.968627, 0.964706, 0.898039, 1), 8, 1, 1, 1, 1)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 20)
+	margin.add_theme_constant_override("margin_top", 18)
+	margin.add_theme_constant_override("margin_right", 20)
+	margin.add_theme_constant_override("margin_bottom", 18)
+	panel.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	margin.add_child(vbox)
+	var title_label := Label.new()
+	title_label.text = title
+	title_label.add_theme_font_size_override("font_size", 16)
+	title_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	vbox.add_child(title_label)
+	var body_label := Label.new()
+	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body_label.text = body
+	body_label.add_theme_font_size_override("font_size", 14)
+	body_label.add_theme_color_override("font_color", Color(0.352941, 0.309804, 0.203922, 1))
+	vbox.add_child(body_label)
+	return panel
+
+
+func _build_academy_example_block(title: String, example_type: String) -> PanelContainer:
+	var body: String = "Practice: %s. Run the same read on live stock charts after you finish the lesson." % example_type.replace("_", " ")
+	return _build_academy_text_block(title, body)
+
+
+func _build_academy_check_block(section_id: String, check: Dictionary, stored_result: Dictionary) -> PanelContainer:
+	var panel := _build_academy_text_block("Quick Check", str(check.get("question", "")))
+	var vbox: VBoxContainer = panel.get_child(0).get_child(0) as VBoxContainer
+	var options_row := HBoxContainer.new()
+	options_row.add_theme_constant_override("separation", 6)
+	vbox.add_child(options_row)
+	for option_value in check.get("options", []):
+		var option: Dictionary = option_value
+		var button := Button.new()
+		button.text = str(option.get("label", "Answer"))
+		button.pressed.connect(_on_academy_inline_check_pressed.bind(section_id, str(check.get("id", "")), str(option.get("id", ""))))
+		options_row.add_child(button)
+		_style_button(button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
+		_apply_academy_button_padding(button)
+	if not stored_result.is_empty():
+		var result_label := Label.new()
+		result_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		result_label.text = "Saved answer: %s. %s" % [
+			"Correct" if bool(stored_result.get("correct", false)) else "Not yet",
+			str(stored_result.get("feedback", ""))
+		]
+		result_label.add_theme_color_override("font_color", COLOR_POSITIVE if bool(stored_result.get("correct", false)) else COLOR_NEGATIVE)
+		vbox.add_child(result_label)
+	return panel
+
+
+func _refresh_academy_side_panel() -> void:
+	var quiz: Dictionary = current_academy_snapshot.get("quiz", {})
+	var badge: Dictionary = current_academy_snapshot.get("badge", {})
+	academy_side_title_label.text = "Progress"
+	var status_lines: Array = [
+		"Quiz: %s" % ("passed" if bool(quiz.get("passed", false)) else ("locked" if bool(quiz.get("locked", true)) else "open")),
+		"Attempts: %d" % int(quiz.get("attempts", 0)),
+		"Best score: %d%%" % int(quiz.get("best_score_percent", 0))
+	]
+	if bool(current_academy_snapshot.get("progress", {}).get("badge_earned", false)):
+		status_lines.append("Badge earned: %s" % str(badge.get("label", "Technical Basics")))
+	academy_side_body_label.text = "\n".join(status_lines)
+	academy_glossary_search_input.visible = selected_academy_category_id == "technical"
+	academy_glossary_list.visible = selected_academy_category_id == "technical"
+	_refresh_academy_glossary_results()
+
+
+func _refresh_academy_glossary_results() -> void:
+	if academy_glossary_list == null:
+		return
+	var query: String = academy_glossary_search_input.text if academy_glossary_search_input != null else ""
+	_populate_academy_glossary_list(academy_glossary_list, query)
+
+
+func _populate_academy_glossary_list(target_list: ItemList, query: String) -> void:
+	target_list.clear()
+	var rows: Array = GameManager.search_academy_glossary(query)
+	if rows.is_empty():
+		target_list.add_item("No matching terms.")
+		target_list.set_item_disabled(0, true)
+		return
+	for index in range(rows.size()):
+		var row: Dictionary = rows[index]
+		target_list.add_item("%s - %s" % [str(row.get("term", "")), str(row.get("definition", ""))])
+		target_list.set_item_metadata(index, row)
+
+
+func _next_academy_section_id() -> String:
+	var sections: Array = current_academy_snapshot.get("sections", [])
+	for index in range(sections.size()):
+		var section: Dictionary = sections[index]
+		if str(section.get("id", "")) != selected_academy_section_id:
+			continue
+		for next_index in range(index + 1, sections.size()):
+			var next_section: Dictionary = sections[next_index]
+			if not bool(next_section.get("locked", false)):
+				return str(next_section.get("id", ""))
+	return ""
+
+
+func _refresh_upgrades() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	if upgrade_cards_vbox == null:
+		return
+	for child in upgrade_cards_vbox.get_children():
+		upgrade_cards_vbox.remove_child(child)
+		child.queue_free()
+
+	upgrade_title_label.text = "Upgrades"
+	if not RunState.has_active_run():
+		upgrade_cash_label.text = "No run loaded"
+		upgrade_summary_label.text = "Start a run to buy upgrades."
+		_apply_font_overrides_to_subtree(upgrade_window)
+		_log_perf_elapsed("_refresh_upgrades", started_at_usec)
+		return
+
+	var snapshot: Dictionary = GameManager.get_upgrade_shop_snapshot()
+	var action_snapshot: Dictionary = snapshot.get("daily_action", {})
+	upgrade_cash_label.text = "Cash %s" % _format_currency(float(snapshot.get("cash", 0.0)))
+	upgrade_summary_label.text = "Network AP %d/%d today. Upgrades are paid from available cash." % [
+		int(action_snapshot.get("remaining", 0)),
+		int(action_snapshot.get("limit", 10))
+	]
+
+	for track_value in snapshot.get("tracks", []):
+		var track: Dictionary = track_value
+		upgrade_cards_vbox.add_child(_build_upgrade_card(track))
+	_apply_font_overrides_to_subtree(upgrade_cards_vbox)
+	_log_perf_elapsed("_refresh_upgrades", started_at_usec)
+
+
+func _build_upgrade_card(track: Dictionary) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.name = "UpgradeCard_%s" % str(track.get("id", ""))
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_panel(panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	panel.add_child(margin)
+
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 12)
+	margin.add_child(row)
+
+	var copy := VBoxContainer.new()
+	copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	copy.add_theme_constant_override("separation", 4)
+	row.add_child(copy)
+
+	var title := Label.new()
+	title.text = "%s  |  Tier %d" % [str(track.get("label", "Upgrade")), int(track.get("tier", 4))]
+	title.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	copy.add_child(title)
+
+	var body := Label.new()
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.text = "%s\nCurrent: %s" % [
+		str(track.get("description", "")),
+		str(track.get("effect_label", ""))
+	]
+	body.add_theme_color_override("font_color", Color(0.352941, 0.309804, 0.203922, 1))
+	copy.add_child(body)
+
+	var purchase_button := Button.new()
+	purchase_button.name = "UpgradeBuyButton_%s" % str(track.get("id", ""))
+	purchase_button.custom_minimum_size = Vector2(190, 44)
+	if bool(track.get("maxed", false)):
+		purchase_button.text = "Max Tier"
+		purchase_button.disabled = true
+	else:
+		purchase_button.text = "Buy Tier %d\n%s" % [
+			int(track.get("next_tier", 0)),
+			_format_currency(float(track.get("next_cost", 0.0)))
+		]
+		purchase_button.disabled = not bool(track.get("can_purchase", false))
+		purchase_button.tooltip_text = "Next: %s" % str(track.get("next_effect_label", ""))
+		purchase_button.pressed.connect(_on_upgrade_purchase_pressed.bind(str(track.get("id", ""))))
+	row.add_child(purchase_button)
+	_style_button(purchase_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
+	return panel
+
+
+func _upgrade_track_from_snapshot(snapshot: Dictionary, track_id: String) -> Dictionary:
+	for track_value in snapshot.get("tracks", []):
+		var track: Dictionary = track_value
+		if str(track.get("id", "")) == track_id:
+			return track
+	return {}
+
+
+func _rebuild_network_contact_list() -> void:
+	network_contacts_list.clear()
+	var rows: Array = []
+	rows.append_array(current_network_snapshot.get("contacts", []))
+	rows.append_array(current_network_snapshot.get("discoveries", []))
+	if rows.is_empty():
+		selected_network_contact_id = ""
+		network_contacts_list.add_item("No leads yet. Explore the world more.")
+		network_contacts_list.set_item_disabled(0, true)
+		_show_network_contact({})
+		return
+
+	var selected_index: int = -1
+	for row_index in range(rows.size()):
+		var row: Dictionary = rows[row_index]
+		var affiliation_label: String = "Insider" if str(row.get("affiliation_type", "floater")) == "insider" else "Floater"
+		var prefix: String = "Met %s" % affiliation_label if bool(row.get("met", false)) else "Lead %s" % affiliation_label
+		if str(row.get("source_type", "")) == "referral" and not bool(row.get("met", false)):
+			prefix = "Referred Insider"
+		network_contacts_list.add_item("%s  |  %s - %s" % [
+			prefix,
+			str(row.get("display_name", "")),
+			str(row.get("role", ""))
+		])
+		var item_index: int = network_contacts_list.item_count - 1
+		network_contacts_list.set_item_metadata(item_index, row.duplicate(true))
+		if str(row.get("id", "")) == selected_network_contact_id:
+			selected_index = item_index
+
+	if selected_index == -1:
+		selected_index = 0
+		selected_network_contact_id = str(rows[0].get("id", ""))
+	network_contacts_list.select(selected_index)
+	_show_network_contact(rows[selected_index])
+
+
+func _rebuild_network_request_list() -> void:
+	network_requests_list.clear()
+	var requests: Array = current_network_snapshot.get("requests", [])
+	for request_value in requests:
+		var request: Dictionary = request_value
+		network_requests_list.add_item("%s  |  %s  |  due day %d" % [
+			str(request.get("status", "pending")).capitalize(),
+			_ticker_for_company(str(request.get("target_company_id", ""))),
+			int(request.get("due_day_index", 0))
+		])
+	if requests.is_empty():
+		network_requests_list.add_item("No active requests.")
+
+
+func _show_network_contact(contact: Dictionary) -> void:
+	if contact.is_empty():
+		network_contact_name_label.text = "No leads yet."
+		network_contact_meta_label.text = ""
+		network_contact_body_label.text = "Explore the world more. Read News, open company Profile pages, and follow referrals to discover people before they appear here."
+		network_meet_button.disabled = true
+		network_tip_button.disabled = true
+		network_request_button.disabled = true
+		network_referral_button.disabled = true
+		return
+
+	var is_met: bool = bool(contact.get("met", false))
+	var affiliation_type: String = str(contact.get("affiliation_type", "floater"))
+	network_contact_name_label.text = "%s  |  %s" % [
+		str(contact.get("display_name", "")),
+		str(contact.get("role", ""))
+	]
+	var affiliation_label: String = "Floater"
+	var affiliated_company_id: String = str(contact.get("affiliated_company_id", contact.get("company_id", "")))
+	if affiliation_type == "insider":
+		affiliation_label = "Insider at %s" % _ticker_for_company(affiliated_company_id)
+	elif str(contact.get("source_type", "")) == "referral":
+		affiliation_label = "Referred lead"
+	network_contact_meta_label.text = "%s  |  Relationship %d  |  Required recognition %d  |  Source %s" % [
+		affiliation_label,
+		int(contact.get("relationship", 0)),
+		int(contact.get("recognition_required", 0)),
+		str(contact.get("source_type", "network"))
+	]
+	network_contact_body_label.text = str(contact.get("intro", ""))
+	var has_action_points: bool = int(GameManager.get_daily_action_snapshot().get("remaining", 0)) > 0
+	var referral_company_id: String = selected_company_id
+	if referral_company_id.is_empty():
+		referral_company_id = _network_contact_target_company(contact)
+	network_meet_button.disabled = is_met or not bool(contact.get("can_meet", false))
+	network_tip_button.disabled = not is_met or not has_action_points
+	network_request_button.disabled = not is_met or not has_action_points
+	network_referral_button.disabled = not (is_met and affiliation_type == "floater" and not referral_company_id.is_empty() and has_action_points)
+	if not has_action_points and not is_met:
+		network_meet_button.disabled = true
+
+
+func _current_network_contact() -> Dictionary:
+	if network_contacts_list.item_count <= 0:
+		return {}
+	var selected_items: PackedInt32Array = network_contacts_list.get_selected_items()
+	if selected_items.is_empty():
+		return {}
+	var item_index: int = selected_items[0]
+	var metadata: Variant = network_contacts_list.get_item_metadata(item_index)
+	if typeof(metadata) == TYPE_DICTIONARY:
+		var row: Dictionary = metadata
+		return row
+	return {}
+
+
+func _contact_for_context(source_type: String, source_id: String, company_id: String) -> Dictionary:
+	current_network_snapshot = GameManager.get_network_snapshot()
+	var rows: Array = []
+	rows.append_array(current_network_snapshot.get("discoveries", []))
+	rows.append_array(current_network_snapshot.get("contacts", []))
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("lead_score", 0)) > int(b.get("lead_score", 0))
+	)
+	for row_value in rows:
+		var row: Dictionary = row_value
+		if bool(row.get("met", false)):
+			continue
+		if not source_id.is_empty() and str(row.get("source_id", "")) == source_id and str(row.get("source_type", "")) == source_type:
+			return row
+		if not company_id.is_empty() and str(row.get("target_company_id", "")) == company_id:
+			return row
+		if not company_id.is_empty() and company_id in row.get("target_company_ids", []):
+			return row
+	return {}
 
 
 func _rebuild_social_feed_cards(posts: Array) -> void:
@@ -861,6 +2730,9 @@ func _show_news_article(article: Dictionary) -> void:
 		news_detail_meta_label.text = ""
 		news_detail_body.text = "Choose a story from the list."
 		news_detail_hint_label.text = ""
+		news_meet_contact_button.visible = false
+		news_meet_contact_button.disabled = true
+		news_meet_contact_button.set_meta("contact_id", "")
 		return
 
 	var trade_date: Dictionary = article.get("trade_date", {})
@@ -873,7 +2745,19 @@ func _show_news_article(article: Dictionary) -> void:
 	news_detail_deck_label.text = ""
 	news_detail_meta_label.text = trade_date_text
 	news_detail_body.text = str(article.get("body", ""))
-	news_detail_hint_label.text = ""
+	GameManager.discover_network_contacts_from_article(article)
+	var contact: Dictionary = _contact_for_context("news", str(article.get("id", "")), str(article.get("target_company_id", "")))
+	news_meet_contact_button.visible = not contact.is_empty()
+	news_meet_contact_button.disabled = contact.is_empty() or not bool(contact.get("can_meet", false))
+	news_meet_contact_button.text = "Meet %s" % str(contact.get("display_name", "Contact")) if not contact.is_empty() else "Meet Contact"
+	news_meet_contact_button.set_meta("contact_id", str(contact.get("id", "")))
+	if not contact.is_empty():
+		news_detail_hint_label.text = "Network lead: %s, %s." % [
+			str(contact.get("display_name", "")),
+			str(contact.get("role", ""))
+		]
+	else:
+		news_detail_hint_label.text = ""
 
 
 func _current_news_archive_article_summaries() -> Array:
@@ -888,6 +2772,13 @@ func _current_news_archive_article_summaries() -> Array:
 
 func _build_news_article_list_line(article: Dictionary) -> String:
 	return str(article.get("headline", ""))
+
+
+func _ticker_for_company(company_id: String) -> String:
+	if company_id.is_empty():
+		return "-"
+	var snapshot: Dictionary = GameManager.get_company_snapshot(company_id)
+	return str(snapshot.get("ticker", company_id.to_upper()))
 
 
 func _news_archive_month_label(month_number: int) -> String:
@@ -935,11 +2826,13 @@ func _refresh_dashboard() -> void:
 		dashboard_index_hint_label.text = "Use New Game or Load Run to begin."
 		dashboard_calendar_month_label.text = "-"
 		_refresh_dashboard_calendar({})
-		dashboard_placeholder_top_body_label.text = "Empty for now."
-		dashboard_placeholder_bottom_body_label.text = "Empty for now."
+		_refresh_dashboard_movers([])
+		dashboard_placeholder_bottom_title_label.text = "Upcoming Reports"
+		dashboard_placeholder_bottom_body_label.text = "No active report calendar."
 		return
 
 	var index_snapshot: Dictionary = _build_dashboard_index_snapshot()
+	var company_rows: Array = _get_company_rows_cached()
 	var trade_date: Dictionary = GameManager.get_current_trade_date()
 	var trading_day_number: int = max(RunState.day_index + 1, 1)
 	dashboard_index_date_label.text = "Day %d  |  %s" % [
@@ -960,8 +2853,9 @@ func _refresh_dashboard() -> void:
 		int(trade_date.get("year", 2020))
 	]
 	_refresh_dashboard_calendar(trade_date)
-	dashboard_placeholder_top_body_label.text = "Empty for now."
-	dashboard_placeholder_bottom_body_label.text = "Empty for now."
+	_refresh_dashboard_movers(company_rows)
+	dashboard_placeholder_bottom_title_label.text = "Upcoming Reports"
+	dashboard_placeholder_bottom_body_label.text = _format_upcoming_report_rows(GameManager.get_upcoming_report_rows(8))
 	_set_label_tone(dashboard_index_points_value_label, _color_for_change(float(index_snapshot.get("day_change_pct", 0.0))))
 
 
@@ -1021,6 +2915,78 @@ func _build_dashboard_index_snapshot() -> Dictionary:
 	}
 
 
+func _refresh_dashboard_movers(company_rows: Array) -> void:
+	if dashboard_movers_tabs == null:
+		return
+	dashboard_movers_tabs.set_tab_title(0, "Top 15 Gainer")
+	dashboard_movers_tabs.set_tab_title(1, "Top 15 Loser")
+	_refresh_dashboard_mover_side(company_rows, true)
+	_refresh_dashboard_mover_side(company_rows, false)
+
+
+func _refresh_dashboard_mover_side(company_rows: Array, wants_gainers: bool) -> void:
+	var rows_container: VBoxContainer = dashboard_top_gainers_rows if wants_gainers else dashboard_top_losers_rows
+	var empty_label: Label = dashboard_top_gainers_empty_label if wants_gainers else dashboard_top_losers_empty_label
+	if rows_container == null or empty_label == null:
+		return
+
+	_clear_dynamic_rows(rows_container, empty_label)
+	var movers: Array = []
+	for row_value in company_rows:
+		var company_row: Dictionary = row_value
+		var change_pct: float = float(company_row.get("daily_change_pct", 0.0))
+		if wants_gainers and change_pct <= 0.0:
+			continue
+		if not wants_gainers and change_pct >= 0.0:
+			continue
+		movers.append(company_row)
+
+	movers.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_change: float = float(a.get("daily_change_pct", 0.0))
+		var b_change: float = float(b.get("daily_change_pct", 0.0))
+		return a_change > b_change if wants_gainers else a_change < b_change
+	)
+	if movers.size() > DASHBOARD_MOVER_LIMIT:
+		movers = movers.slice(0, DASHBOARD_MOVER_LIMIT)
+
+	empty_label.visible = movers.is_empty()
+	empty_label.text = "No gainers this session." if wants_gainers else "No losers this session."
+	for mover_index in range(movers.size()):
+		rows_container.add_child(_build_dashboard_mover_row(movers[mover_index], mover_index + 1))
+
+
+func _build_dashboard_mover_row(company_row: Dictionary, rank_number: int) -> Control:
+	var row_wrap: VBoxContainer = VBoxContainer.new()
+	row_wrap.add_theme_constant_override("separation", 4)
+	var row: HBoxContainer = HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 8)
+	row_wrap.add_child(row)
+
+	row.add_child(_build_table_cell("%02d" % rank_number, 30.0, COLOR_MUTED))
+	row.add_child(_build_table_cell(str(company_row.get("ticker", "")), 56.0, COLOR_TEXT))
+	var name_label: Label = _build_table_cell(str(company_row.get("name", "")), 0.0, COLOR_TEXT, true)
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(name_label)
+	row.add_child(_build_table_cell(
+		_format_last_price(float(company_row.get("current_price", 0.0))),
+		78.0,
+		COLOR_TEXT,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	row.add_child(_build_table_cell(
+		_format_change(float(company_row.get("daily_change_pct", 0.0))),
+		64.0,
+		_color_for_change(float(company_row.get("daily_change_pct", 0.0))),
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	var separator: HSeparator = HSeparator.new()
+	row_wrap.add_child(separator)
+	return row_wrap
+
+
 func _refresh_dashboard_calendar(current_date: Dictionary) -> void:
 	if dashboard_calendar_days_grid == null:
 		return
@@ -1032,6 +2998,8 @@ func _refresh_dashboard_calendar(current_date: Dictionary) -> void:
 	var year_value: int = int(current_date.get("year", 2020))
 	var month_value: int = int(current_date.get("month", 1))
 	var current_day: int = int(current_date.get("day", 1))
+	var report_snapshot: Dictionary = GameManager.get_report_calendar_snapshot(year_value, month_value)
+	var reports_by_day: Dictionary = report_snapshot.get("reports_by_day", {})
 	var first_weekday: int = _weekday_for_date(year_value, month_value, 1)
 	var days_in_month: int = _days_in_month(year_value, month_value)
 
@@ -1048,7 +3016,8 @@ func _refresh_dashboard_calendar(current_date: Dictionary) -> void:
 		}
 		var is_current_day: bool = day_value == current_day
 		var is_trade_day: bool = weekday_value < 5 and not portfolio_trading_calendar.is_holiday(day_info)
-		dashboard_calendar_days_grid.add_child(_build_dashboard_calendar_day_cell(day_value, is_current_day, is_trade_day))
+		var day_reports: Array = reports_by_day.get(str(day_value), [])
+		dashboard_calendar_days_grid.add_child(_build_dashboard_calendar_day_cell(day_value, is_current_day, is_trade_day, day_reports))
 
 	while dashboard_calendar_days_grid.get_child_count() % 7 != 0:
 		dashboard_calendar_days_grid.add_child(_build_dashboard_calendar_spacer())
@@ -1056,18 +3025,62 @@ func _refresh_dashboard_calendar(current_date: Dictionary) -> void:
 
 func _build_dashboard_calendar_spacer() -> Control:
 	var spacer: Control = Control.new()
-	spacer.custom_minimum_size = Vector2(0, 28)
+	spacer.custom_minimum_size = Vector2(0, 34)
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return spacer
 
 
-func _build_dashboard_calendar_day_cell(day_value: int, is_current_day: bool, is_trade_day: bool) -> Control:
+func _format_report_tooltip(reports: Array) -> String:
+	if reports.is_empty():
+		return ""
+	var tickers: Array = []
+	for report_value in reports:
+		var report: Dictionary = report_value
+		tickers.append("%s %s" % [str(report.get("ticker", "")), str(report.get("period_label", ""))])
+	return "Reports: %s" % ", ".join(tickers)
+
+
+func _format_upcoming_report_rows(reports: Array) -> String:
+	if reports.is_empty():
+		return "No upcoming filings on the report calendar."
+	var lines: Array = []
+	var grouped_by_date: Dictionary = {}
+	for report_value in reports:
+		var report: Dictionary = report_value
+		var date_key: String = str(report.get("date_key", ""))
+		if not grouped_by_date.has(date_key):
+			var report_date: Dictionary = report.get("report_date", {})
+			grouped_by_date[date_key] = {
+				"date": report_date.duplicate(true),
+				"items": []
+			}
+		grouped_by_date[date_key]["items"].append("%s %s" % [
+			str(report.get("ticker", "")),
+			str(report.get("period_label", ""))
+		])
+	var date_keys: Array = grouped_by_date.keys()
+	date_keys.sort()
+	for date_key_value in date_keys:
+		var date_key: String = str(date_key_value)
+		var group: Dictionary = grouped_by_date[date_key]
+		var date_info: Dictionary = group.get("date", {})
+		lines.append("%s: %s" % [
+			GameManager.format_trade_date(date_info),
+			", ".join(group.get("items", []))
+		])
+	return "\n".join(lines)
+
+
+func _build_dashboard_calendar_day_cell(day_value: int, is_current_day: bool, is_trade_day: bool, reports: Array = []) -> Control:
 	var panel: PanelContainer = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(0, 28)
+	panel.custom_minimum_size = Vector2(0, 34)
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.tooltip_text = _format_report_tooltip(reports)
 
 	var label: Label = Label.new()
 	label.text = str(day_value)
+	if not reports.is_empty():
+		label.text = "%d\n%dR" % [day_value, reports.size()]
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	panel.add_child(label)
@@ -1079,6 +3092,10 @@ func _build_dashboard_calendar_day_cell(day_value: int, is_current_day: bool, is
 		fill_color = Color(0.054902, 0.0705882, 0.0901961, 0.72)
 		border_color = Color(0.141176, 0.176471, 0.215686, 0.6)
 		text_color = COLOR_MUTED
+	if not reports.is_empty():
+		fill_color = Color(0.192157, 0.152941, 0.0823529, 0.96)
+		border_color = COLOR_WARNING
+		text_color = Color(1, 0.941176, 0.760784, 1)
 	if is_current_day:
 		fill_color = Color(0.219608, 0.439216, 0.65098, 0.92)
 		border_color = COLOR_NAV_ACTIVE_BORDER
@@ -1113,9 +3130,9 @@ func _weekday_for_date(year_value: int, month_value: int, day_value: int) -> int
 		adjusted_year -= 1
 	var sunday_based: int = int(posmod(
 		adjusted_year +
-		int(adjusted_year / 4) -
-		int(adjusted_year / 100) +
-		int(adjusted_year / 400) +
+		floori(float(adjusted_year) / 4.0) -
+		floori(float(adjusted_year) / 100.0) +
+		floori(float(adjusted_year) / 400.0) +
 		int(month_offsets[month_value - 1]) +
 		day_value,
 		7
@@ -1140,8 +3157,12 @@ func _is_leap_year(year_value: int) -> bool:
 
 
 func _refresh_markets() -> void:
-	_refresh_company_list()
+	var started_at_usec: int = Time.get_ticks_usec()
+	var company_rows: Array = _get_company_rows_cached()
+	var company_row_lookup: Dictionary = _get_company_row_lookup_cached()
+	_refresh_company_list(company_rows, company_row_lookup)
 	_refresh_trade_workspace()
+	_log_perf_elapsed("_refresh_markets", started_at_usec)
 
 
 func _refresh_after_company_selection() -> void:
@@ -1213,6 +3234,59 @@ func _show_debug_overlay() -> void:
 
 func _hide_debug_overlay() -> void:
 	debug_overlay.visible = false
+
+
+func _is_console_toggle_key(key_event: InputEventKey) -> bool:
+	if key_event.ctrl_pressed or key_event.alt_pressed or key_event.meta_pressed:
+		return false
+	return (
+		int(key_event.keycode) == CONSOLE_TOGGLE_KEY_CODE or
+		int(key_event.physical_keycode) == CONSOLE_TOGGLE_KEY_CODE or
+		int(key_event.unicode) == CONSOLE_TOGGLE_KEY_CODE
+	)
+
+
+func _toggle_console_overlay() -> void:
+	if console_overlay != null and console_overlay.visible:
+		_hide_console_overlay()
+		return
+	_show_console_overlay()
+
+
+func _show_console_overlay() -> void:
+	_ensure_console_overlay()
+	if console_overlay == null:
+		return
+	console_overlay.visible = true
+	if console_input != null:
+		console_input.clear()
+		console_input.grab_focus()
+	if console_status_label != null:
+		console_status_label.text = "Type a command, then press Enter."
+
+
+func _hide_console_overlay() -> void:
+	if console_input != null:
+		console_input.release_focus()
+	if console_overlay != null:
+		console_overlay.visible = false
+
+
+func _on_console_command_submitted(command_text: String) -> void:
+	var trimmed_command: String = command_text.strip_edges()
+	if trimmed_command.is_empty():
+		if console_status_label != null:
+			console_status_label.text = "No command entered."
+		return
+
+	var result: Dictionary = GameManager.execute_console_command(trimmed_command)
+	var message: String = str(result.get("message", "Command processed."))
+	if console_status_label != null:
+		console_status_label.text = message
+	if console_input != null:
+		console_input.clear()
+		console_input.grab_focus()
+	_show_toast(message, bool(result.get("success", false)))
 
 
 func _build_debug_generator_controls() -> void:
@@ -1298,14 +3372,18 @@ func _sync_selected_company_with_active_stock_list() -> void:
 		selected_company_id = str(holdings_ids[0]) if not holdings_ids.is_empty() else ""
 
 
-func _refresh_company_list() -> void:
+func _refresh_company_list(
+	company_rows: Array = [],
+	company_row_lookup: Dictionary = {},
+	refresh_all_stock_rows: bool = true,
+	refresh_portfolio_sidebar: bool = true
+) -> void:
 	displayed_company_ids.clear()
 	company_list.clear()
-	var company_rows: Array = GameManager.get_company_rows()
-	var company_row_lookup: Dictionary = {}
-	for row_value in company_rows:
-		var company_row: Dictionary = row_value
-		company_row_lookup[str(company_row.get("id", ""))] = company_row
+	if company_rows.is_empty() and RunState.has_active_run():
+		company_rows = _get_company_rows_cached()
+	if company_row_lookup.is_empty() and not company_rows.is_empty():
+		company_row_lookup = _build_company_row_lookup(company_rows)
 	var watchlist_company_ids: Array = GameManager.get_watchlist_company_ids()
 	var watchlist_lookup: Dictionary = {}
 	for company_id_value in watchlist_company_ids:
@@ -1335,8 +3413,11 @@ func _refresh_company_list() -> void:
 	if selected_index >= 0:
 		company_list.select(selected_index)
 	watchlist_empty_label.visible = displayed_company_ids.is_empty()
-	_refresh_all_stock_rows(company_rows, watchlist_lookup)
-	_refresh_portfolio_stock_rows(GameManager.get_portfolio_snapshot().get("holdings", []), company_row_lookup)
+	_refresh_watchlist_action_state(watchlist_lookup)
+	if refresh_all_stock_rows:
+		_refresh_all_stock_rows(company_rows, watchlist_lookup)
+	if refresh_portfolio_sidebar:
+		_refresh_portfolio_stock_rows(GameManager.get_portfolio_snapshot().get("holdings", []), company_row_lookup)
 
 
 func _refresh_all_stock_rows(company_rows: Array, watchlist_lookup: Dictionary) -> void:
@@ -1344,8 +3425,16 @@ func _refresh_all_stock_rows(company_rows: Array, watchlist_lookup: Dictionary) 
 		all_stocks_rows.remove_child(child)
 		child.queue_free()
 
+	var search_query: String = ""
+	if all_stocks_search_input != null:
+		search_query = all_stocks_search_input.text.strip_edges().to_lower()
+	var has_visible_rows: bool = false
 	for row_value in company_rows:
 		var row: Dictionary = row_value
+		if not _matches_all_stock_search(row, search_query):
+			continue
+
+		has_visible_rows = true
 		var company_id: String = str(row.get("id", ""))
 		var line: String = _build_stock_list_line(row)
 		var is_selected: bool = company_id == selected_company_id
@@ -1384,6 +3473,28 @@ func _refresh_all_stock_rows(company_rows: Array, watchlist_lookup: Dictionary) 
 
 		all_stocks_rows.add_child(row_box)
 
+	if not has_visible_rows and not search_query.is_empty():
+		var empty_label: Label = Label.new()
+		empty_label.name = "AllStocksSearchEmptyLabel"
+		empty_label.text = "No stocks match \"%s\"." % all_stocks_search_input.text.strip_edges()
+		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		empty_label.add_theme_color_override("font_color", COLOR_MUTED)
+		_apply_font_override_to_control(empty_label, DEFAULT_APP_FONT_SIZE, _get_app_font())
+		all_stocks_rows.add_child(empty_label)
+	_apply_font_overrides_to_subtree(all_stocks_rows)
+
+
+func _matches_all_stock_search(row: Dictionary, search_query: String) -> bool:
+	if search_query.is_empty():
+		return true
+
+	var searchable_text: String = "%s %s %s" % [
+		str(row.get("ticker", "")),
+		str(row.get("name", "")),
+		str(row.get("sector_name", ""))
+	]
+	return searchable_text.to_lower().find(search_query) != -1
+
 
 func _refresh_portfolio_stock_rows(holdings: Array, company_row_lookup: Dictionary) -> void:
 	for child in portfolio_stocks_rows.get_children():
@@ -1416,6 +3527,7 @@ func _refresh_portfolio_stock_rows(holdings: Array, company_row_lookup: Dictiona
 		portfolio_stocks_rows.add_child(select_button)
 
 	portfolio_stocks_empty_label.visible = not has_holdings
+	_apply_font_overrides_to_subtree(portfolio_stocks_rows)
 
 
 func _refresh_company_selection_state() -> void:
@@ -1424,6 +3536,7 @@ func _refresh_company_selection_state() -> void:
 		company_list.select(selected_index)
 	else:
 		company_list.deselect_all()
+	_refresh_watchlist_action_state()
 
 	for row_box_value in all_stocks_rows.get_children():
 		if row_box_value is not HBoxContainer:
@@ -1438,9 +3551,18 @@ func _refresh_company_selection_state() -> void:
 	for child in portfolio_stocks_rows.get_children():
 		if child == portfolio_stocks_empty_label or child is not Button:
 			continue
-		var portfolio_button: Button = child
-		var company_id: String = str(portfolio_button.name).trim_prefix("PortfolioSelectButton_")
-		_style_stock_list_row_button(portfolio_button, company_id == selected_company_id)
+		var portfolio_row_button: Button = child
+		var company_id: String = str(portfolio_row_button.name).trim_prefix("PortfolioSelectButton_")
+		_style_stock_list_row_button(portfolio_row_button, company_id == selected_company_id)
+
+
+func _refresh_watchlist_action_state(watchlist_lookup: Dictionary = {}) -> void:
+	if remove_watchlist_button == null:
+		return
+	if watchlist_lookup.is_empty():
+		for company_id_value in GameManager.get_watchlist_company_ids():
+			watchlist_lookup[str(company_id_value)] = true
+	remove_watchlist_button.disabled = selected_company_id.is_empty() or not watchlist_lookup.has(selected_company_id)
 
 
 func _build_stock_list_line(row: Dictionary) -> String:
@@ -1465,6 +3587,39 @@ func _get_portfolio_company_ids() -> Array:
 
 func _refresh_trade_workspace() -> void:
 	var snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id, true, true, true)
+	_apply_trade_workspace_snapshot(snapshot)
+
+
+func _refresh_trade_workspace_holdings_state() -> void:
+	if selected_company_id.is_empty():
+		_apply_trade_workspace_snapshot({})
+		return
+	if current_trade_snapshot.is_empty() or str(current_trade_snapshot.get("id", "")) != selected_company_id:
+		_refresh_trade_workspace()
+		return
+
+	var holdings_snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id, false, false, false)
+	if holdings_snapshot.is_empty():
+		_refresh_trade_workspace()
+		return
+	if (
+		current_trade_snapshot.get("financial_history", []).is_empty() or
+		current_trade_snapshot.get("financial_statement_snapshot", {}).get("quarterly_statements", []).is_empty() or
+		not _broker_flow_has_rows(current_trade_snapshot.get("broker_flow", {}))
+	):
+		_refresh_trade_workspace()
+		return
+
+	var merged_snapshot: Dictionary = current_trade_snapshot.duplicate()
+	for key_value in holdings_snapshot.keys():
+		var key: String = str(key_value)
+		if key == "financial_history" or key == "financial_statement_snapshot" or key == "broker_flow":
+			continue
+		merged_snapshot[key] = holdings_snapshot[key]
+	_apply_trade_workspace_snapshot(merged_snapshot)
+
+
+func _apply_trade_workspace_snapshot(snapshot: Dictionary) -> void:
 	current_trade_snapshot = snapshot
 	trade_workspace_widget.set_company_snapshot(snapshot)
 	if snapshot.is_empty():
@@ -1474,12 +3629,12 @@ func _refresh_trade_workspace() -> void:
 		active_order_side = "buy"
 		order_company_name_label.text = "NO SELECTION"
 		selection_label.text = "-"
-		order_price_value_label.text = "Rp 0.00"
-		order_price_change_label.text = "+Rp 0.00  |  +0.00%"
+		order_price_value_label.text = _format_currency(0.0)
+		order_price_change_label.text = "%s  |  +0.00%%" % _format_signed_currency(0.0)
 		order_position_label.text = "Pick a stock first so the order ticket can price the trade."
 		order_title_label.text = "Buy Order"
 		order_price_line_edit.text = ""
-		estimated_total_value_label.text = "Rp 0.00"
+		estimated_total_value_label.text = _format_currency(0.0)
 		buy_button.disabled = true
 		sell_button.disabled = true
 		submit_order_button.disabled = true
@@ -1491,8 +3646,14 @@ func _refresh_trade_workspace() -> void:
 		profile_sector_label.text = "Sector:"
 		profile_price_label.text = "Price:"
 		profile_factor_label.text = "Company profile:"
+		profile_management_label.text = "Management:"
+		profile_shareholders_label.text = "Major Shareholders:"
 		profile_tags_label.text = "Tags:"
 		profile_description_label.text = "Description:"
+		profile_network_hint_label.text = ""
+		profile_meet_contact_button.visible = false
+		profile_meet_contact_button.disabled = true
+		profile_meet_contact_button.set_meta("contact_id", "")
 		key_stats_financial_label.text = "Financials:"
 		financials_year_label.text = "Derived financial statements unavailable."
 		financials_period_label.text = "Viewing latest available period."
@@ -1536,10 +3697,13 @@ func _refresh_trade_workspace() -> void:
 		_format_compact_currency(float(snapshot.get("profile_revenue", 0.0)))
 	]
 	profile_tags_label.text = "Tags: %s" % _join_or_default(snapshot.get("profile_tags", []), "none")
+	profile_management_label.text = _format_profile_management(snapshot)
+	profile_shareholders_label.text = _format_profile_shareholders(snapshot)
 	profile_description_label.text = "Description: %s" % str(snapshot.get(
 		"profile_description",
 		"No generated profile description for this company."
 	))
+	_refresh_profile_network_contact(str(snapshot.get("id", "")))
 	key_stats_financial_label.text = "Financials:\n%s" % _format_financial_block(snapshot.get("financials", {}))
 	financials_year_label.text = _format_statement_year_label(financial_statement_snapshot)
 	analyzer_setup_label.text = "Setup read:\n%s" % _build_setup_read(snapshot)
@@ -1562,6 +3726,85 @@ func _refresh_trade_workspace() -> void:
 	_refresh_statement_sections(financial_statement_snapshot)
 	_refresh_order_controls(snapshot)
 	_set_label_tone(profile_price_label, _color_for_change(float(snapshot.get("daily_change_pct", 0.0))))
+
+
+func _refresh_profile_network_contact(company_id: String) -> void:
+	if company_id.is_empty():
+		profile_network_hint_label.text = ""
+		profile_meet_contact_button.visible = false
+		profile_meet_contact_button.disabled = true
+		profile_meet_contact_button.set_meta("contact_id", "")
+		return
+
+	GameManager.discover_network_contacts_for_company(company_id)
+	var contact: Dictionary = _contact_for_context("profile", company_id, company_id)
+	profile_meet_contact_button.visible = not contact.is_empty()
+	profile_meet_contact_button.disabled = contact.is_empty() or not bool(contact.get("can_meet", false))
+	profile_meet_contact_button.text = "Meet %s" % str(contact.get("display_name", "Contact")) if not contact.is_empty() else "Meet Contact"
+	profile_meet_contact_button.set_meta("contact_id", str(contact.get("id", "")))
+	if contact.is_empty():
+		profile_network_hint_label.text = "Network: no contact lead from this profile yet."
+	else:
+		profile_network_hint_label.text = "Network lead: %s, %s." % [
+			str(contact.get("display_name", "")),
+			str(contact.get("role", ""))
+		]
+
+
+func _format_profile_management(snapshot: Dictionary) -> String:
+	var roster: Array = snapshot.get("management_roster", [])
+	if roster.is_empty():
+		return "Management: not generated for this company yet."
+	var network_snapshot: Dictionary = GameManager.get_network_snapshot()
+	var lines: Array = ["Management:"]
+	for management_value in roster:
+		if typeof(management_value) != TYPE_DICTIONARY:
+			continue
+		var management: Dictionary = management_value
+		var contact_id: String = str(management.get("id", management.get("contact_id", "")))
+		lines.append("%s: %s (%s)" % [
+			str(management.get("role_label", management.get("role", "Management"))),
+			str(management.get("display_name", "")),
+			_network_state_for_contact(network_snapshot, contact_id)
+		])
+	return "\n".join(lines)
+
+
+func _format_profile_shareholders(snapshot: Dictionary) -> String:
+	var rows: Array = snapshot.get("shareholder_rows", [])
+	var player_ownership_pct: float = float(snapshot.get("ownership_pct", 0.0))
+	var lines: Array = ["Major Shareholders:"]
+	for row_value in rows:
+		var row: Dictionary = row_value
+		lines.append("%s: %s ownership (%s)" % [
+			str(row.get("name", "")),
+			_format_percent_value(float(row.get("ownership_pct", 0.0)) * 100.0),
+			str(row.get("role", "holder"))
+		])
+	if player_ownership_pct > 0.0 and not bool(snapshot.get("is_major_shareholder", false)):
+		lines.append("Player: %s ownership" % _format_percent_value(player_ownership_pct * 100.0))
+	return "\n".join(lines)
+
+
+func _broker_flow_has_rows(broker_flow: Dictionary) -> bool:
+	return (
+		not broker_flow.get("buy_brokers", []).is_empty() or
+		not broker_flow.get("sell_brokers", []).is_empty() or
+		not broker_flow.get("net_buy_brokers", []).is_empty() or
+		not broker_flow.get("net_sell_brokers", []).is_empty()
+	)
+
+
+func _network_state_for_contact(network_snapshot: Dictionary, contact_id: String) -> String:
+	for contact_value in network_snapshot.get("contacts", []):
+		var contact: Dictionary = contact_value
+		if str(contact.get("id", "")) == contact_id and bool(contact.get("met", false)):
+			return "met"
+	for discovery_value in network_snapshot.get("discoveries", []):
+		var discovery: Dictionary = discovery_value
+		if str(discovery.get("id", "")) == contact_id:
+			return "discovered"
+	return "public"
 
 
 func _refresh_trade_history() -> void:
@@ -1729,6 +3972,7 @@ func _build_table_cell(
 	label.clip_text = true
 	label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	label.add_theme_color_override("font_color", font_color)
+	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE, _get_app_font())
 	return label
 
 
@@ -1758,6 +4002,177 @@ func _on_social_app_pressed() -> void:
 	_set_active_app(APP_ID_SOCIAL)
 
 
+func _on_network_app_pressed() -> void:
+	_set_active_app(APP_ID_NETWORK)
+
+
+func _on_academy_app_pressed() -> void:
+	_set_active_app(APP_ID_ACADEMY)
+
+
+func _on_upgrades_app_pressed() -> void:
+	_set_active_app(APP_ID_UPGRADES)
+
+
+func _on_upgrades_changed() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	_suppress_next_portfolio_refresh()
+	trade_workspace_widget.refresh_indicator_catalog()
+	_refresh_header()
+	_refresh_sidebar()
+	_refresh_trade_workspace_holdings_state()
+	_refresh_portfolio()
+	_refresh_desktop()
+	if active_app_id == APP_ID_NEWS:
+		_refresh_news()
+	elif active_app_id == APP_ID_SOCIAL:
+		_refresh_social()
+	elif active_app_id == APP_ID_NETWORK:
+		_refresh_network()
+	elif active_app_id == APP_ID_UPGRADES:
+		_refresh_upgrades()
+	if debug_overlay.visible:
+		_refresh_debug_overlay()
+	_log_perf_elapsed("_on_upgrades_changed", started_at_usec)
+
+
+func _on_academy_category_pressed(category_id: String) -> void:
+	selected_academy_category_id = category_id
+	selected_academy_section_id = ""
+	_refresh_academy()
+
+
+func _on_academy_section_selected(index: int) -> void:
+	var metadata: Variant = academy_section_list.get_item_metadata(index)
+	if typeof(metadata) != TYPE_DICTIONARY:
+		return
+	var section: Dictionary = metadata
+	if bool(section.get("locked", false)):
+		return
+	selected_academy_section_id = str(section.get("id", ""))
+	_refresh_academy()
+
+
+func _on_academy_section_tab_pressed(section_id: String) -> void:
+	if section_id.is_empty():
+		return
+	selected_academy_section_id = section_id
+	_refresh_academy()
+
+
+func _on_academy_mark_read_pressed() -> void:
+	var result: Dictionary = GameManager.mark_academy_section_read(selected_academy_category_id, selected_academy_section_id)
+	_show_toast(str(result.get("message", "Academy updated.")), bool(result.get("success", false)))
+	_refresh_academy()
+
+
+func _on_academy_next_pressed() -> void:
+	var next_section_id: String = _next_academy_section_id()
+	if next_section_id.is_empty():
+		return
+	selected_academy_section_id = next_section_id
+	_refresh_academy()
+
+
+func _on_academy_inline_check_pressed(section_id: String, check_id: String, answer_id: String) -> void:
+	var result: Dictionary = GameManager.submit_academy_inline_check(selected_academy_category_id, section_id, check_id, answer_id)
+	_show_toast(str(result.get("feedback", result.get("message", "Answer saved."))), bool(result.get("correct", false)))
+	_refresh_academy()
+
+
+func _on_academy_quiz_submit_pressed() -> void:
+	var answers: Dictionary = {}
+	for question_id_value in academy_quiz_option_buttons.keys():
+		var question_id: String = str(question_id_value)
+		var option_button: OptionButton = academy_quiz_option_buttons[question_id]
+		if option_button.selected >= 0:
+			answers[question_id] = str(option_button.get_item_metadata(option_button.selected))
+	var result: Dictionary = GameManager.submit_academy_quiz(selected_academy_category_id, answers)
+	if not bool(result.get("success", false)):
+		_show_toast(str(result.get("message", "Quiz could not be submitted.")), false)
+		_refresh_academy()
+		return
+	var message: String = "Quiz score %d%%. %s" % [
+		int(result.get("score_percent", 0)),
+		"Technical Basics earned." if bool(result.get("passed", false)) else "Review and try again."
+	]
+	_show_toast(message, bool(result.get("passed", false)))
+	_refresh_academy()
+	_show_academy_quiz_feedback(result.get("feedback", []), bool(result.get("passed", false)), int(result.get("score_percent", 0)))
+
+
+func _show_academy_quiz_feedback(feedback_rows: Array, passed: bool, score_percent: int) -> void:
+	_clear_container_children(academy_lesson_content_vbox)
+	academy_lesson_content_vbox.add_child(_build_academy_text_block(
+		"Quiz Result",
+		"Score: %d%%. %s" % [score_percent, "Passed. Technical Basics is now earned." if passed else "Not yet. Review the feedback and retry."]
+	))
+	for feedback_value in feedback_rows:
+		var feedback: Dictionary = feedback_value
+		academy_lesson_content_vbox.add_child(_build_academy_text_block(
+			"%s - %s" % [str(feedback.get("prompt", "Question")), "Correct" if bool(feedback.get("correct", false)) else "Review"],
+			str(feedback.get("feedback", ""))
+		))
+
+
+func _on_academy_glossary_search_changed(_new_text: String) -> void:
+	_refresh_academy_glossary_results()
+
+
+func _on_upgrade_purchase_pressed(track_id: String) -> void:
+	_ensure_upgrade_purchase_dialog()
+	var snapshot: Dictionary = GameManager.get_upgrade_shop_snapshot()
+	var track: Dictionary = _upgrade_track_from_snapshot(snapshot, track_id)
+	if track.is_empty():
+		_show_toast("Upgrade track not found.", false)
+		_refresh_upgrades()
+		return
+	if bool(track.get("maxed", false)):
+		_show_toast("%s is already tier 1." % str(track.get("label", "Upgrade")), false)
+		_refresh_upgrades()
+		return
+	if not bool(track.get("can_purchase", false)):
+		_show_toast(
+			"Need %s for %s." % [
+				_format_currency(float(track.get("next_cost", 0.0))),
+				str(track.get("label", "this upgrade"))
+			],
+			false
+		)
+		_refresh_upgrades()
+		return
+
+	pending_upgrade_track_id = track_id
+	var cost: float = float(track.get("next_cost", 0.0))
+	var cash: float = float(snapshot.get("cash", 0.0))
+	upgrade_purchase_body_label.text = "Buy %s Tier %d?\n\nCurrent: Tier %d - %s\nNext: Tier %d - %s\nCost: %s\nCash after purchase: %s" % [
+		str(track.get("label", "Upgrade")),
+		int(track.get("next_tier", 0)),
+		int(track.get("tier", 4)),
+		str(track.get("effect_label", "")),
+		int(track.get("next_tier", 0)),
+		str(track.get("next_effect_label", "")),
+		_format_currency(cost),
+		_format_currency(cash - cost)
+	]
+	upgrade_purchase_dialog.popup_centered(Vector2i(560, 260))
+
+
+func _on_upgrade_purchase_confirmed() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	if pending_upgrade_track_id.is_empty():
+		_show_toast("No upgrade selected.", false)
+		return
+
+	var track_id: String = pending_upgrade_track_id
+	pending_upgrade_track_id = ""
+	var result: Dictionary = GameManager.purchase_upgrade(track_id)
+	if upgrade_purchase_dialog != null:
+		upgrade_purchase_dialog.hide()
+	_show_toast(str(result.get("message", "Upgrade updated.")), bool(result.get("success", false)))
+	_log_perf_elapsed("_on_upgrade_purchase_confirmed", started_at_usec)
+
+
 func _on_news_outlet_pressed(outlet_id: String) -> void:
 	selected_news_outlet_id = outlet_id
 	selected_news_archive_year = 0
@@ -1774,6 +4189,79 @@ func _on_news_article_selected(index: int) -> void:
 		return
 	selected_news_article_id = str(articles[index].get("id", ""))
 	_show_news_article(GameManager.get_news_archive_article(selected_news_article_id))
+
+
+func _on_news_meet_contact_pressed() -> void:
+	var contact_id: String = str(news_meet_contact_button.get_meta("contact_id", ""))
+	_meet_contact_from_context(contact_id, {"source_type": "news", "source_id": selected_news_article_id})
+
+
+func _on_profile_meet_contact_pressed() -> void:
+	var contact_id: String = str(profile_meet_contact_button.get_meta("contact_id", ""))
+	_meet_contact_from_context(contact_id, {"source_type": "profile", "source_id": selected_company_id})
+
+
+func _on_network_contact_selected(index: int) -> void:
+	var metadata: Variant = network_contacts_list.get_item_metadata(index)
+	if typeof(metadata) != TYPE_DICTIONARY:
+		return
+	var contact: Dictionary = metadata
+	selected_network_contact_id = str(contact.get("id", ""))
+	_show_network_contact(contact)
+
+
+func _on_network_meet_pressed() -> void:
+	var contact: Dictionary = _current_network_contact()
+	_meet_contact_from_context(str(contact.get("id", "")), {"source_type": "network"})
+
+
+func _on_network_tip_pressed() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	var contact: Dictionary = _current_network_contact()
+	var company_id: String = _network_contact_target_company(contact)
+	var result: Dictionary = GameManager.request_contact_tip(str(contact.get("id", "")), company_id)
+	_show_toast(str(result.get("message", "Network tip updated.")), bool(result.get("success", false)))
+	_log_perf_elapsed("_on_network_tip_pressed", started_at_usec)
+
+
+func _on_network_request_pressed() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	var contact: Dictionary = _current_network_contact()
+	var company_id: String = _network_contact_target_company(contact)
+	var result: Dictionary = GameManager.accept_contact_request(str(contact.get("id", "")), company_id)
+	_show_toast(str(result.get("message", "Network request updated.")), bool(result.get("success", false)))
+	_log_perf_elapsed("_on_network_request_pressed", started_at_usec)
+
+
+func _on_network_referral_pressed() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	var contact: Dictionary = _current_network_contact()
+	var company_id: String = selected_company_id
+	if company_id.is_empty():
+		company_id = _network_contact_target_company(contact)
+	var result: Dictionary = GameManager.request_contact_referral(str(contact.get("id", "")), company_id)
+	_show_toast(str(result.get("message", "Network referral updated.")), bool(result.get("success", false)))
+	_log_perf_elapsed("_on_network_referral_pressed", started_at_usec)
+
+
+func _meet_contact_from_context(contact_id: String, source_context: Dictionary) -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	if contact_id.is_empty():
+		_show_toast("No contact lead is available here.", false)
+		return
+	var result: Dictionary = GameManager.meet_contact(contact_id, source_context)
+	_show_toast(str(result.get("message", "Network updated.")), bool(result.get("success", false)))
+	_log_perf_elapsed("_meet_contact_from_context", started_at_usec)
+
+
+func _network_contact_target_company(contact: Dictionary) -> String:
+	var target_company_id: String = str(contact.get("target_company_id", ""))
+	if not target_company_id.is_empty():
+		return target_company_id
+	var affiliated_company_id: String = str(contact.get("affiliated_company_id", contact.get("company_id", "")))
+	if not affiliated_company_id.is_empty():
+		return affiliated_company_id
+	return selected_company_id
 
 
 func _on_news_archive_year_selected(index: int) -> void:
@@ -1814,7 +4302,20 @@ func _on_add_watchlist_pressed() -> void:
 	watchlist_picker_dialog.popup_centered(Vector2i(720, 520))
 
 
+func _on_remove_watchlist_pressed() -> void:
+	if selected_company_id.is_empty():
+		_show_toast("Pick a watchlist stock first.", false)
+		return
+
+	var removed_company_id: String = selected_company_id
+	var result: Dictionary = GameManager.remove_company_from_watchlist(removed_company_id)
+	_show_toast(str(result.get("message", "Watchlist updated.")), bool(result.get("success", false)))
+	if not bool(result.get("success", false)):
+		return
+
+
 func _on_watchlist_picker_confirmed() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
 	if watchlist_picker_list == null:
 		return
 
@@ -1829,14 +4330,15 @@ func _on_watchlist_picker_confirmed() -> void:
 		return
 
 	var company_id: String = str(watchlist_picker_company_ids[selected_index])
+	_queue_watchlist_refresh_override(company_id, STOCK_LIST_TAB_WATCHLIST)
 	var result: Dictionary = GameManager.add_company_to_watchlist(company_id)
+	if not bool(result.get("success", false)):
+		_clear_watchlist_refresh_override()
 	_show_toast(str(result.get("message", "Watchlist updated.")), bool(result.get("success", false)))
 	if bool(result.get("success", false)):
 		if watchlist_picker_dialog != null:
 			watchlist_picker_dialog.hide()
-		selected_company_id = company_id
-		stock_list_tabs.current_tab = STOCK_LIST_TAB_WATCHLIST
-		_refresh_all()
+	_log_perf_elapsed("_on_watchlist_picker_confirmed", started_at_usec)
 
 
 func _on_watchlist_picker_item_activated(index: int) -> void:
@@ -1859,11 +4361,17 @@ func _on_portfolio_stock_selected(company_id: String) -> void:
 
 
 func _on_add_to_watchlist_pressed(company_id: String) -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	_queue_watchlist_refresh_override(company_id)
 	var result: Dictionary = GameManager.add_company_to_watchlist(company_id)
+	if not bool(result.get("success", false)):
+		_clear_watchlist_refresh_override()
 	_show_toast(str(result.get("message", "Watchlist updated.")), bool(result.get("success", false)))
-	if bool(result.get("success", false)):
-		selected_company_id = company_id
-		_refresh_all()
+	_log_perf_elapsed("_on_add_to_watchlist_pressed", started_at_usec)
+
+
+func _on_all_stock_search_text_changed(_new_text: String) -> void:
+	_refresh_company_list(_get_company_rows_cached(), _get_company_row_lookup_cached(), true, false)
 
 
 func _on_taskbar_home_pressed() -> void:
@@ -1933,6 +4441,7 @@ func _on_sell_side_pressed() -> void:
 
 
 func _on_submit_order_pressed() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
 	var result: Dictionary = {}
 	if active_order_side == "sell":
 		result = GameManager.sell_lots(selected_company_id, _selected_lots())
@@ -1940,7 +4449,7 @@ func _on_submit_order_pressed() -> void:
 		result = GameManager.buy_lots(selected_company_id, _selected_lots())
 	status_message = str(result.get("message", "Order finished."))
 	_show_toast(status_message, bool(result.get("success", false)))
-	_refresh_all()
+	_log_perf_elapsed("_on_submit_order_pressed", started_at_usec)
 
 
 func _show_toast(message: String, is_success: bool) -> void:
@@ -1973,6 +4482,7 @@ func _on_next_day_pressed() -> void:
 
 func _on_day_progressed(_day_index: int) -> void:
 	status_message = "Market closed."
+	_suppress_next_portfolio_refresh()
 	_refresh_all()
 
 
@@ -1983,7 +4493,8 @@ func _on_summary_ready(_summary: Dictionary) -> void:
 func _on_lot_size_changed(value: float) -> void:
 	selected_lots = max(int(round(value)), 1)
 	_refresh_sidebar()
-	_refresh_markets()
+	if not current_trade_snapshot.is_empty():
+		_refresh_order_controls(current_trade_snapshot)
 
 
 func _show_tutorial_if_needed() -> void:
@@ -2037,6 +4548,113 @@ func _ensure_watchlist_picker_dialog() -> void:
 	picker_margin.add_child(watchlist_picker_list)
 
 
+func _ensure_upgrade_purchase_dialog() -> void:
+	if upgrade_purchase_dialog != null:
+		return
+
+	upgrade_purchase_dialog = ConfirmationDialog.new()
+	upgrade_purchase_dialog.name = "UpgradePurchaseDialog"
+	upgrade_purchase_dialog.title = "Confirm Upgrade"
+	add_child(upgrade_purchase_dialog)
+	upgrade_purchase_dialog.confirmed.connect(_on_upgrade_purchase_confirmed)
+	upgrade_purchase_dialog.get_ok_button().text = "Buy Upgrade"
+	upgrade_purchase_dialog.get_cancel_button().text = "Cancel"
+
+	var dialog_margin: MarginContainer = MarginContainer.new()
+	dialog_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dialog_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dialog_margin.add_theme_constant_override("margin_left", 18)
+	dialog_margin.add_theme_constant_override("margin_top", 18)
+	dialog_margin.add_theme_constant_override("margin_right", 18)
+	dialog_margin.add_theme_constant_override("margin_bottom", 18)
+	upgrade_purchase_dialog.add_child(dialog_margin)
+
+	upgrade_purchase_body_label = Label.new()
+	upgrade_purchase_body_label.name = "UpgradePurchaseBodyLabel"
+	upgrade_purchase_body_label.custom_minimum_size = Vector2(500, 150)
+	upgrade_purchase_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	upgrade_purchase_body_label.text = ""
+	upgrade_purchase_body_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	dialog_margin.add_child(upgrade_purchase_body_label)
+
+
+func _ensure_console_overlay() -> void:
+	if console_overlay != null:
+		return
+
+	console_overlay = Control.new()
+	console_overlay.name = "ConsoleCommandOverlay"
+	console_overlay.visible = false
+	console_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	console_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(console_overlay)
+	console_overlay.move_to_front()
+
+	var scrim := ColorRect.new()
+	scrim.name = "ConsoleCommandScrim"
+	scrim.color = Color(0, 0, 0, 0.42)
+	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	console_overlay.add_child(scrim)
+
+	var console_margin := MarginContainer.new()
+	console_margin.name = "ConsoleCommandMargin"
+	console_margin.anchor_left = 0.0
+	console_margin.anchor_top = 0.0
+	console_margin.anchor_right = 1.0
+	console_margin.anchor_bottom = 0.0
+	console_margin.offset_left = 24.0
+	console_margin.offset_top = 24.0
+	console_margin.offset_right = -24.0
+	console_margin.offset_bottom = 186.0
+	console_overlay.add_child(console_margin)
+
+	console_panel = PanelContainer.new()
+	console_panel.name = "ConsoleCommandPanel"
+	console_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	console_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	console_margin.add_child(console_panel)
+
+	var panel_margin := MarginContainer.new()
+	panel_margin.name = "ConsoleCommandPanelMargin"
+	panel_margin.add_theme_constant_override("margin_left", 16)
+	panel_margin.add_theme_constant_override("margin_top", 12)
+	panel_margin.add_theme_constant_override("margin_right", 16)
+	panel_margin.add_theme_constant_override("margin_bottom", 12)
+	console_panel.add_child(panel_margin)
+
+	var console_vbox := VBoxContainer.new()
+	console_vbox.name = "ConsoleCommandVBox"
+	console_vbox.add_theme_constant_override("separation", 8)
+	console_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel_margin.add_child(console_vbox)
+
+	console_title_label = Label.new()
+	console_title_label.name = "ConsoleCommandTitleLabel"
+	console_title_label.text = "Console Command"
+	console_vbox.add_child(console_title_label)
+
+	console_hint_label = Label.new()
+	console_hint_label.name = "ConsoleCommandHintLabel"
+	console_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	console_hint_label.text = "` toggles console. Enter runs command. Commands: cuankus, ordalbos."
+	console_vbox.add_child(console_hint_label)
+
+	console_input = LineEdit.new()
+	console_input.name = "ConsoleCommandInput"
+	console_input.placeholder_text = "Type command"
+	console_input.clear_button_enabled = true
+	console_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	console_input.text_submitted.connect(_on_console_command_submitted)
+	console_vbox.add_child(console_input)
+
+	console_status_label = Label.new()
+	console_status_label.name = "ConsoleCommandStatusLabel"
+	console_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	console_status_label.text = "Type a command, then press Enter."
+	console_vbox.add_child(console_status_label)
+
+
 func _populate_watchlist_picker() -> void:
 	if watchlist_picker_list == null:
 		return
@@ -2047,7 +4665,7 @@ func _populate_watchlist_picker() -> void:
 	for company_id_value in GameManager.get_watchlist_company_ids():
 		watchlist_lookup[str(company_id_value)] = true
 
-	for row_value in GameManager.get_company_rows():
+	for row_value in _get_company_rows_cached():
 		var row: Dictionary = row_value
 		var company_id: String = str(row.get("id", ""))
 		var item_text: String = _build_stock_list_line(row)
@@ -2067,11 +4685,11 @@ func _populate_watchlist_picker() -> void:
 
 
 func _build_tutorial_text() -> String:
-	return "Open the STOCKBOT app from the desktop, then pick one stock first.\n\nUse the Chart, Key Stats, Financials, Broker, Analyzer, or Profile tabs to inspect the setup, size the order from the right-side ticket, then use the navbar to advance the day.\n\nDashboard is now overview-only, while Portfolio keeps your holdings and trade history together.\n\nDifficulty: %s." % GameManager.get_current_difficulty_label()
+	return "Open the STOCKBOT app from the desktop, then pick one stock first.\n\nUse the Chart, Key Stats, Financials, Broker, or Profile tabs to inspect the setup, size the order from the right-side ticket, then use the navbar to advance the day.\n\nDashboard is now overview-only, while Portfolio keeps your holdings and trade history together.\n\nDifficulty: %s." % GameManager.get_current_difficulty_label()
 
 
 func _build_help_text() -> String:
-	return "OVERVIEW\nThe game screen is split into modular views so you can move sections around more easily later.\nSidebar sections now swap self-contained views instead of one giant screen.\n\nOBJECTIVE\nFind the clearest setup, size lightly, then learn from the close.\n\nSECTIONS\n%s\n\n%s\n\n%s\n\nWORKFLOW\n1. Start on Dashboard for the market overview.\n2. Open Trade and choose a stock.\n3. Use Chart, Key Stats, Financials, Broker, Analyzer, or Profile to inspect it.\n4. Size the order from the right-side ticket.\n5. Advance the day.\n\nNOTES\nUse sector context to decide whether a stock is moving with its group or fighting it.\nNewest fills appear first in Trade History so you can audit lots, fees, cash impact, and realized P/L.\n\nCURRENT DIFFICULTY\n%s" % [
+	return "OVERVIEW\nThe game screen is split into modular views so you can move sections around more easily later.\nSidebar sections now swap self-contained views instead of one giant screen.\n\nOBJECTIVE\nFind the clearest setup, size lightly, then learn from the close.\n\nSECTIONS\n%s\n\n%s\n\n%s\n\nWORKFLOW\n1. Start on Dashboard for the market overview.\n2. Open Trade and choose a stock.\n3. Use Chart, Key Stats, Financials, Broker, or Profile to inspect it.\n4. Size the order from the right-side ticket.\n5. Advance the day.\n\nNOTES\nUse sector context to decide whether a stock is moving with its group or fighting it.\nNewest fills appear first in Trade History so you can audit lots, fees, cash impact, and realized P/L.\n\nCURRENT DIFFICULTY\n%s" % [
 		_sidebar_hint_for_section("dashboard"),
 		_sidebar_hint_for_section("markets"),
 		_sidebar_hint_for_section("portfolio"),
@@ -2236,7 +4854,7 @@ func _build_debug_generic_events_text() -> String:
 
 
 func _build_debug_stock_performance_text() -> String:
-	var stock_rows: Array = GameManager.get_company_rows()
+	var stock_rows: Array = _get_company_rows_cached().duplicate()
 	if stock_rows.is_empty():
 		return "No stock universe is loaded yet."
 
@@ -2470,7 +5088,14 @@ func _set_active_section(section_id: String) -> void:
 
 func _set_active_app(app_id: String) -> void:
 	var normalized_app_id: String = app_id.to_lower()
-	if normalized_app_id != APP_ID_STOCK and normalized_app_id != APP_ID_NEWS and normalized_app_id != APP_ID_SOCIAL:
+	if (
+		normalized_app_id != APP_ID_STOCK and
+		normalized_app_id != APP_ID_NEWS and
+		normalized_app_id != APP_ID_SOCIAL and
+		normalized_app_id != APP_ID_NETWORK and
+		normalized_app_id != APP_ID_ACADEMY and
+		normalized_app_id != APP_ID_UPGRADES
+	):
 		normalized_app_id = APP_ID_DESKTOP
 
 	active_app_id = normalized_app_id
@@ -2481,6 +5106,10 @@ func _set_active_app(app_id: String) -> void:
 	app_content_margin.visible = active_app_id == APP_ID_STOCK
 	news_window.visible = active_app_id == APP_ID_NEWS
 	social_window.visible = active_app_id == APP_ID_SOCIAL
+	network_window.visible = active_app_id == APP_ID_NETWORK
+	if academy_window != null:
+		academy_window.visible = active_app_id == APP_ID_ACADEMY
+	upgrade_window.visible = active_app_id == APP_ID_UPGRADES
 
 	if active_app_id == APP_ID_STOCK:
 		app_window_title_label.text = "STOCKBOT"
@@ -2493,6 +5122,21 @@ func _set_active_app(app_id: String) -> void:
 	elif active_app_id == APP_ID_SOCIAL:
 		app_window_title_label.text = "Twooter"
 		_refresh_social()
+		_hide_debug_overlay()
+		_hide_toast()
+	elif active_app_id == APP_ID_NETWORK:
+		app_window_title_label.text = "Network"
+		_refresh_network()
+		_hide_debug_overlay()
+		_hide_toast()
+	elif active_app_id == APP_ID_ACADEMY:
+		app_window_title_label.text = "Academy"
+		_refresh_academy()
+		_hide_debug_overlay()
+		_hide_toast()
+	elif active_app_id == APP_ID_UPGRADES:
+		app_window_title_label.text = "Upgrades"
+		_refresh_upgrades()
 		_hide_debug_overlay()
 		_hide_toast()
 	else:
@@ -2550,6 +5194,19 @@ func _apply_window_layout() -> void:
 	news_window.add_theme_constant_override("margin_top", APP_WINDOW_CONTENT_TOP_MARGIN)
 	news_window.add_theme_constant_override("margin_right", APP_WINDOW_CONTENT_MARGIN)
 	news_window.add_theme_constant_override("margin_bottom", APP_WINDOW_CONTENT_BOTTOM_MARGIN)
+	network_window.add_theme_constant_override("margin_left", APP_WINDOW_CONTENT_MARGIN)
+	network_window.add_theme_constant_override("margin_top", APP_WINDOW_CONTENT_TOP_MARGIN)
+	network_window.add_theme_constant_override("margin_right", APP_WINDOW_CONTENT_MARGIN)
+	network_window.add_theme_constant_override("margin_bottom", APP_WINDOW_CONTENT_BOTTOM_MARGIN)
+	if academy_window != null:
+		academy_window.add_theme_constant_override("margin_left", APP_WINDOW_CONTENT_MARGIN)
+		academy_window.add_theme_constant_override("margin_top", APP_WINDOW_CONTENT_TOP_MARGIN)
+		academy_window.add_theme_constant_override("margin_right", APP_WINDOW_CONTENT_MARGIN)
+		academy_window.add_theme_constant_override("margin_bottom", APP_WINDOW_CONTENT_BOTTOM_MARGIN)
+	upgrade_window.add_theme_constant_override("margin_left", APP_WINDOW_CONTENT_MARGIN)
+	upgrade_window.add_theme_constant_override("margin_top", APP_WINDOW_CONTENT_TOP_MARGIN)
+	upgrade_window.add_theme_constant_override("margin_right", APP_WINDOW_CONTENT_MARGIN)
+	upgrade_window.add_theme_constant_override("margin_bottom", APP_WINDOW_CONTENT_BOTTOM_MARGIN)
 	social_window.add_theme_constant_override("margin_left", int(social_margin_left))
 	social_window.add_theme_constant_override("margin_top", int(social_margin_top))
 	social_window.add_theme_constant_override("margin_right", int(social_margin_right))
@@ -2565,7 +5222,7 @@ func _apply_window_layout() -> void:
 
 
 func _apply_active_window_theme() -> void:
-	var is_light_window: bool = active_app_id == APP_ID_NEWS or active_app_id == APP_ID_SOCIAL
+	var is_light_window: bool = active_app_id == APP_ID_NEWS or active_app_id == APP_ID_SOCIAL or active_app_id == APP_ID_NETWORK or active_app_id == APP_ID_ACADEMY or active_app_id == APP_ID_UPGRADES
 	var window_fill: Color = COLOR_WINDOW_BG if is_light_window else COLOR_STOCK_WINDOW_BG
 	var window_text: Color = COLOR_WINDOW_TEXT if is_light_window else COLOR_TEXT
 	var app_font_size: int = STOCK_APP_FONT_SIZE if active_app_id == APP_ID_STOCK else DEFAULT_APP_FONT_SIZE
@@ -2581,12 +5238,25 @@ func _sync_desktop_app_state() -> void:
 	var stock_active: bool = active_app_id == APP_ID_STOCK
 	var news_active: bool = active_app_id == APP_ID_NEWS
 	var social_active: bool = active_app_id == APP_ID_SOCIAL
+	var network_active: bool = active_app_id == APP_ID_NETWORK
+	var academy_active: bool = active_app_id == APP_ID_ACADEMY
+	var upgrades_active: bool = active_app_id == APP_ID_UPGRADES
 	stock_app_button.set_pressed_no_signal(stock_active)
 	news_app_button.set_pressed_no_signal(news_active)
 	social_app_button.set_pressed_no_signal(social_active)
+	network_app_button.set_pressed_no_signal(network_active)
+	if academy_app_button != null:
+		academy_app_button.set_pressed_no_signal(academy_active)
+	upgrades_app_button.set_pressed_no_signal(upgrades_active)
 	taskbar_stock_button.set_pressed_no_signal(stock_active)
 	taskbar_news_button.set_pressed_no_signal(news_active)
 	taskbar_home_button.disabled = active_app_id == APP_ID_DESKTOP
+	for app_id in desktop_bottom_nav_buttons.keys():
+		var nav_button: Button = desktop_bottom_nav_buttons[app_id]
+		var is_active: bool = str(app_id) == active_app_id
+		if nav_button.toggle_mode:
+			nav_button.set_pressed_no_signal(is_active)
+		_style_desktop_bottom_nav_button(nav_button, is_active)
 
 
 func _build_taskbar_status_text(focus_snapshot: Dictionary) -> String:
@@ -2602,7 +5272,13 @@ func _build_taskbar_status_text(focus_snapshot: Dictionary) -> String:
 		return "News browser open  |  Event-driven intel feed online."
 	if active_app_id == APP_ID_SOCIAL:
 		return "Twooter open  |  Tiered social feed online."
-	return "Desktop ready  |  Open STOCKBOT to trade, News to browse intel, or Twooter to scan social chatter."
+	if active_app_id == APP_ID_NETWORK:
+		return "Network open  |  Contacts, recognition, and requests online."
+	if active_app_id == APP_ID_ACADEMY:
+		return "Academy open  |  Technical chart-reading lessons online."
+	if active_app_id == APP_ID_UPGRADES:
+		return "Upgrades open  |  Spend cash to improve your desk."
+	return "Desktop ready  |  Open STOCKBOT, News, Twooter, Network, Academy, or Upgrades."
 
 
 func _section_label(section_id: String) -> String:
@@ -3046,12 +5722,21 @@ func _apply_visual_theme() -> void:
 	_style_panel(top_bar_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_style_panel(dashboard_index_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_style_panel(dashboard_calendar_panel, COLOR_PANEL_BLUE_ALT, 0)
-	_style_panel(dashboard_placeholder_top_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_panel(dashboard_movers_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_style_panel(dashboard_placeholder_bottom_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_style_panel(news_window_body, COLOR_WINDOW_BG, 0)
 	_style_panel(news_feed_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
 	_style_panel(news_detail_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
 	_style_panel(social_window_body, Color(0.94902, 0.956863, 0.976471, 1), 0)
+	_style_panel(network_window_body, COLOR_WINDOW_BG, 0)
+	_style_panel(network_list_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
+	_style_panel(network_detail_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
+	if academy_window_body != null:
+		_style_panel(academy_window_body, COLOR_WINDOW_BG, 0)
+		_apply_academy_text_theme()
+	_style_panel(upgrade_window_body, COLOR_WINDOW_BG, 0)
+	if console_panel != null:
+		_style_panel(console_panel, Color(0.0588235, 0.0823529, 0.109804, 0.98), 0)
 	_style_panel(action_panel, COLOR_ORDER_PANEL_BG, 0)
 	_style_panel(order_card_panel, COLOR_ORDER_CARD_BG, 0)
 	_style_panel(key_stats_panel, COLOR_PANEL_BLUE, 0)
@@ -3078,6 +5763,10 @@ func _apply_visual_theme() -> void:
 	_style_desktop_icon_button(stock_app_button)
 	_style_desktop_icon_button(news_app_button)
 	_style_desktop_icon_button(social_app_button)
+	_style_desktop_icon_button(network_app_button)
+	if academy_app_button != null:
+		_style_desktop_icon_button(academy_app_button)
+	_style_desktop_icon_button(upgrades_app_button)
 	_style_desktop_icon_button(exit_app_button)
 	_style_button(taskbar_home_button, Color(0.117647, 0.168627, 0.223529, 1), COLOR_BORDER, COLOR_TEXT)
 	_style_taskbar_launch_button(taskbar_stock_button)
@@ -3088,8 +5777,10 @@ func _apply_visual_theme() -> void:
 	_style_navigation_button(help_button)
 	_style_tab_container(stock_list_tabs, 0)
 	_style_tab_container(work_tabs, 0)
+	_style_tab_container(dashboard_movers_tabs, 0)
 	_style_tab_container(debug_tabs, 0)
 	_style_button(add_watchlist_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	_style_button(remove_watchlist_button, Color(0.27451, 0.164706, 0.180392, 1), Color(0.690196, 0.34902, 0.372549, 1), COLOR_TEXT, 0)
 	_style_button(advance_day_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
 	_style_button(buy_button, COLOR_ORDER_BUY, COLOR_ORDER_BUY_BORDER, COLOR_TEXT, 0)
 	_style_button(sell_button, COLOR_ORDER_SELL, COLOR_ORDER_SELL_BORDER, COLOR_TEXT, 0)
@@ -3099,12 +5790,23 @@ func _apply_visual_theme() -> void:
 	_style_button(financials_previous_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(financials_next_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(debug_close_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	_style_button(news_meet_contact_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
+	_style_button(profile_meet_contact_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
+	_style_button(network_meet_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
+	_style_button(network_tip_button, Color(0.117647, 0.32549, 0.239216, 1), COLOR_ORDER_BUY_BORDER, COLOR_TEXT, 0)
+	_style_button(network_request_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	_style_button(network_referral_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
 	_style_light_option_button(news_archive_year_option)
 	_style_light_option_button(news_archive_month_option)
 	_style_item_list(company_list, 0, 0)
 	_style_light_item_list(news_article_list)
+	_style_light_item_list(network_contacts_list)
+	_style_light_item_list(network_requests_list)
 	if watchlist_picker_list != null:
 		_style_item_list(watchlist_picker_list, 0, 0)
+	if console_input != null:
+		_style_line_input(console_input)
+	_style_line_input(all_stocks_search_input)
 	_style_line_input(order_price_line_edit)
 	_style_spin_input(lot_spin_box)
 	_set_label_tone(objective_label, COLOR_MUTED)
@@ -3115,6 +5817,10 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(stock_app_label, COLOR_DESKTOP_TEXT)
 	_set_label_tone(news_app_label, COLOR_DESKTOP_TEXT)
 	_set_label_tone(social_app_label, COLOR_DESKTOP_TEXT)
+	_set_label_tone(network_app_label, COLOR_DESKTOP_TEXT)
+	if academy_app_label != null:
+		_set_label_tone(academy_app_label, COLOR_DESKTOP_TEXT)
+	_set_label_tone(upgrades_app_label, COLOR_DESKTOP_TEXT)
 	_set_label_tone(exit_app_label, COLOR_DESKTOP_TEXT)
 	_set_label_tone(app_window_title_label, COLOR_TEXT)
 	_set_label_tone(news_title_label, COLOR_WINDOW_TEXT)
@@ -3133,6 +5839,23 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(social_access_status_label, Color(0.196078, 0.301961, 0.486275, 1))
 	_set_label_tone(debug_generators_hint_label, COLOR_MUTED)
 	_set_label_tone(social_feed_summary_label, Color(0.121569, 0.160784, 0.258824, 1))
+	_set_label_tone(network_title_label, COLOR_WINDOW_TEXT)
+	_set_label_tone(network_recognition_label, Color(0.454902, 0.337255, 0.141176, 1))
+	_set_label_tone(network_summary_label, COLOR_WINDOW_TEXT)
+	_set_label_tone(network_contact_name_label, COLOR_WINDOW_TEXT)
+	_set_label_tone(network_contact_meta_label, Color(0.352941, 0.309804, 0.203922, 1))
+	_set_label_tone(network_contact_body_label, COLOR_WINDOW_TEXT)
+	_set_label_tone(upgrade_title_label, COLOR_WINDOW_TEXT)
+	_set_label_tone(upgrade_cash_label, Color(0.454902, 0.337255, 0.141176, 1))
+	_set_label_tone(upgrade_summary_label, COLOR_WINDOW_TEXT)
+	if upgrade_purchase_body_label != null:
+		_set_label_tone(upgrade_purchase_body_label, COLOR_WINDOW_TEXT)
+	if console_title_label != null:
+		_set_label_tone(console_title_label, COLOR_TEXT)
+	if console_hint_label != null:
+		_set_label_tone(console_hint_label, COLOR_MUTED)
+	if console_status_label != null:
+		_set_label_tone(console_status_label, COLOR_WARNING)
 	_set_label_tone(taskbar_status_label, COLOR_MUTED)
 	_set_label_tone(taskbar_clock_label, COLOR_WARNING)
 	_set_label_tone(sidebar_intro_label, COLOR_MUTED)
@@ -3142,7 +5865,9 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(dashboard_index_date_label, COLOR_MUTED)
 	_set_label_tone(dashboard_index_hint_label, COLOR_WARNING)
 	_set_label_tone(dashboard_calendar_month_label, COLOR_ACCENT)
-	_set_label_tone(dashboard_placeholder_top_body_label, COLOR_MUTED)
+	_set_label_tone(dashboard_movers_title_label, COLOR_ACCENT)
+	_set_label_tone(dashboard_top_gainers_empty_label, COLOR_MUTED)
+	_set_label_tone(dashboard_top_losers_empty_label, COLOR_MUTED)
 	_set_label_tone(dashboard_placeholder_bottom_body_label, COLOR_MUTED)
 	_set_label_tone(order_company_name_label, COLOR_MUTED)
 	_set_label_tone(selection_label, COLOR_TEXT)
@@ -3154,7 +5879,9 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(watchlist_empty_label, COLOR_MUTED)
 	_set_label_tone(portfolio_stocks_empty_label, COLOR_MUTED)
 	_set_label_tone(profile_tags_label, COLOR_MUTED)
+	_set_label_tone(profile_management_label, COLOR_WARNING)
 	_set_label_tone(profile_description_label, COLOR_TEXT)
+	_set_label_tone(profile_network_hint_label, COLOR_WARNING)
 	_set_label_tone(balance_value_label, COLOR_TEXT)
 	_set_label_tone(invested_value_label, COLOR_TEXT)
 	_set_label_tone(equity_value_label, COLOR_TEXT)
@@ -3192,6 +5919,7 @@ func _apply_visual_theme() -> void:
 	market_history_label.add_theme_color_override("default_color", COLOR_TEXT)
 	market_history_label.add_theme_color_override("font_selected_color", COLOR_TEXT)
 	toast_message_label.add_theme_color_override("font_color", COLOR_TEXT)
+	_style_figma_desktop_ui()
 	_apply_active_window_theme()
 	_refresh_financial_history_header()
 	_refresh_broker_header()
@@ -3418,6 +6146,7 @@ func _style_button(
 	button.add_theme_color_override("font_color", font_color)
 	button.add_theme_color_override("font_hover_color", font_color)
 	button.add_theme_color_override("font_pressed_color", font_color)
+	_apply_font_override_to_control(button, DEFAULT_APP_FONT_SIZE, _get_app_font())
 
 
 func _style_light_option_button(option_button: OptionButton) -> void:
@@ -3569,13 +6298,16 @@ func _style_item_list(item_list: ItemList, panel_radius: int = 8, cursor_radius:
 
 
 func _format_currency(value: float) -> String:
-	return "Rp %s" % String.num(value, 2)
+	return "%sRp%s" % [
+		"-" if value < 0.0 else "",
+		_format_decimal(absf(value), 2, true)
+	]
 
 
 func _format_signed_currency(value: float) -> String:
-	return "%sRp %s" % [
+	return "%sRp%s" % [
 		"+" if value >= 0.0 else "-",
-		String.num(absf(value), 2)
+		_format_decimal(absf(value), 2, true)
 	]
 
 
@@ -4100,11 +6832,20 @@ func _format_statement_value(line_item: Dictionary) -> String:
 func _format_compact_currency(value: float) -> String:
 	var absolute_value: float = absf(value)
 	if absolute_value >= 1000000000000.0:
-		return "Rp %sT" % String.num(value / 1000000000000.0, 2)
+		return "%sRp%sT" % [
+			"-" if value < 0.0 else "",
+			_format_decimal(absf(value) / 1000000000000.0, 2, false)
+		]
 	if absolute_value >= 1000000000.0:
-		return "Rp %sB" % String.num(value / 1000000000.0, 2)
+		return "%sRp%sB" % [
+			"-" if value < 0.0 else "",
+			_format_decimal(absf(value) / 1000000000.0, 2, false)
+		]
 	if absolute_value >= 1000000.0:
-		return "Rp %sM" % String.num(value / 1000000.0, 2)
+		return "%sRp%sM" % [
+			"-" if value < 0.0 else "",
+			_format_decimal(absf(value) / 1000000.0, 2, false)
+		]
 	return _format_currency(value)
 
 
@@ -4126,7 +6867,7 @@ func _format_grouped_integer(value: int) -> String:
 		digits = digits.substr(0, digits.length() - 3)
 	if not digits.is_empty():
 		groups.push_front(digits)
-	var grouped_value: String = ",".join(groups)
+	var grouped_value: String = ".".join(groups)
 	if grouped_value.is_empty():
 		grouped_value = "0"
 	return "-%s" % grouped_value if negative else grouped_value
@@ -4145,7 +6886,27 @@ func _format_multiple(value: float) -> String:
 
 
 func _format_last_price(value: float) -> String:
-	return "Rp %s" % String.num(value, 0)
+	return "%sRp%s" % [
+		"-" if value < 0.0 else "",
+		_format_decimal(absf(value), 0, true)
+	]
+
+
+func _format_decimal(value: float, decimal_places: int = 2, use_grouping: bool = true) -> String:
+	var safe_places: int = max(decimal_places, 0)
+	var decimal_scale: int = 1
+	for _index in range(safe_places):
+		decimal_scale *= 10
+	var scaled_value: int = int(round(absf(value) * float(decimal_scale)))
+	var whole_value: int = int(floor(float(scaled_value) / float(decimal_scale)))
+	var decimal_value: int = scaled_value % decimal_scale
+	var whole_text: String = _format_grouped_integer(whole_value) if use_grouping else str(whole_value)
+	if safe_places <= 0:
+		return whole_text
+	var decimal_text: String = str(decimal_value)
+	while decimal_text.length() < safe_places:
+		decimal_text = "0" + decimal_text
+	return "%s,%s" % [whole_text, decimal_text]
 
 
 func _join_or_default(values: Array, default_text: String) -> String:

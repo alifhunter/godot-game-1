@@ -4,6 +4,10 @@ signal day_started(day_index)
 signal price_formed(day_index)
 signal portfolio_changed
 signal watchlist_changed
+signal network_changed
+signal upgrades_changed
+signal daily_actions_changed
+signal academy_changed
 signal summary_ready(summary)
 signal broker_flow_generated(day_index)
 signal run_started
@@ -17,13 +21,15 @@ const GAME_SCENE := "res://scenes/game/GameRoot.tscn"
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
 const DEFAULT_DIFFICULTY_ID := "normal"
 const STARTING_CASH := 100000000.0
+const CONSOLE_CASH_GRANT_AMOUNT := 999999999999.0
+const PLAYER_MAJOR_SHAREHOLDER_THRESHOLD := 0.05
 const DEBUG_COMPANY_ARC_EVENT_IDS := {
 	"earnings_beat": true,
 	"earnings_miss": true,
 	"strategic_acquisition": true,
 	"integration_overhang": true
 }
-const DIFFICULTY_ORDER := ["newbie", "normal", "hard", "hardcore"]
+const DIFFICULTY_ORDER := ["chill", "normal", "grind"]
 const NEW_RUN_FINAL_STEP_HOLD_SECONDS := 0.28
 const NEW_RUN_LOADING_STEPS := [
 	{"id": "seed", "label": "Preparing market seed"},
@@ -39,61 +45,47 @@ const LOAD_RUN_LOADING_STEPS := [
 	{"id": "load_launch", "label": "Opening trading desk"}
 ]
 const DIFFICULTY_PRESETS := {
-	"newbie": {
-		"id": "newbie",
-		"label": "Newbie",
+	"chill": {
+		"id": "chill",
+		"label": "Chill",
 		"starting_cash": 1000000000.0,
-		"company_count": 25,
-		"market_swing_range": 0.012,
-		"volatility_multiplier": 0.55,
-		"event_interval_days": 60.0,
-		"broker_impact_multiplier": 0.65,
-		"daily_move_cap": 0.06,
-		"volatility_label": "Very Low",
-		"event_label": "Very Low",
-		"description": "A forgiving tape with gentle moves, rare news shocks, and plenty of cash to experiment."
+		"company_count": 20,
+		"market_swing_range": 0.02,
+		"volatility_multiplier": 0.75,
+		"event_interval_days": 14.0,
+		"broker_impact_multiplier": 0.85,
+		"daily_move_cap": 0.08,
+		"volatility_label": "Low",
+		"event_label": "Every 14 Days",
+		"description": "A forgiving tape with calmer moves, slower event cadence, and plenty of cash to experiment."
 	},
 	"normal": {
 		"id": "normal",
 		"label": "Normal",
 		"starting_cash": 100000000.0,
-		"company_count": 50,
-		"market_swing_range": 0.02,
-		"volatility_multiplier": 0.75,
-		"event_interval_days": 30.0,
-		"broker_impact_multiplier": 0.85,
-		"daily_move_cap": 0.08,
-		"volatility_label": "Low",
-		"event_label": "Low",
-		"description": "A calmer starter mode where market context matters, but the tape stays readable."
-	},
-	"hard": {
-		"id": "hard",
-		"label": "Hard",
-		"starting_cash": 10000000.0,
-		"company_count": 75,
+		"company_count": 30,
 		"market_swing_range": 0.035,
 		"volatility_multiplier": 1.0,
-		"event_interval_days": 14.0,
+		"event_interval_days": 10.0,
 		"broker_impact_multiplier": 1.0,
 		"daily_move_cap": 0.12,
 		"volatility_label": "Normal",
-		"event_label": "Normal",
-		"description": "The baseline prototype experience with sharper moves, tighter bankroll pressure, and regular news catalysts."
+		"event_label": "Every 10 Days",
+		"description": "The balanced prototype experience with readable tape, meaningful bankroll pressure, and a tighter market roster."
 	},
-	"hardcore": {
-		"id": "hardcore",
-		"label": "Hardcore",
-		"starting_cash": 1000000.0,
-		"company_count": 100,
+	"grind": {
+		"id": "grind",
+		"label": "Grind",
+		"starting_cash": 10000000.0,
+		"company_count": 50,
 		"market_swing_range": 0.055,
 		"volatility_multiplier": 1.35,
 		"event_interval_days": 7.0,
 		"broker_impact_multiplier": 1.2,
 		"daily_move_cap": 0.18,
 		"volatility_label": "High",
-		"event_label": "High",
-		"description": "Fast, noisy, and hostile. Expect crypto-style swings, frequent headlines, and less room for mistakes."
+		"event_label": "Every 7 Days",
+		"description": "A leaner hard mode with sharper moves, tighter bankroll pressure, and regular news catalysts."
 	}
 }
 
@@ -105,13 +97,37 @@ var company_roster_generator = preload("res://systems/CompanyRosterGenerator.gd"
 var chart_system = preload("res://systems/ChartSystem.gd").new()
 var news_feed_system = preload("res://systems/NewsFeedSystem.gd").new()
 var twooter_feed_system = preload("res://systems/TwooterFeedSystem.gd").new()
+var contact_network_system = preload("res://systems/ContactNetworkSystem.gd").new()
 var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
 var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
 var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
+var academy_system = preload("res://systems/AcademySystem.gd").new()
 
 
 func _ready() -> void:
 	DataRepository.reload_all()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_flush_pending_save_if_needed()
+
+
+func _request_autosave(reason: String) -> void:
+	SaveManager.request_save(reason)
+
+
+func _save_active_run_now(reason: String) -> bool:
+	if not RunState.has_active_run():
+		return false
+	SaveManager.request_save(reason, 0.0)
+	return SaveManager.flush_pending_save()
+
+
+func _flush_pending_save_if_needed() -> bool:
+	if not SaveManager.has_pending_save():
+		return true
+	return SaveManager.flush_pending_save()
 
 
 func start_new_run(run_seed: int = 0, difficulty_id: String = DEFAULT_DIFFICULTY_ID, tutorial_enabled: bool = false) -> void:
@@ -122,7 +138,7 @@ func start_new_run(run_seed: int = 0, difficulty_id: String = DEFAULT_DIFFICULTY
 	var company_definitions: Array = build_company_roster(run_seed, difficulty_config)
 	RunState.setup_new_run(run_seed, company_definitions, difficulty_config, tutorial_enabled)
 	simulate_opening_session(false)
-	SaveManager.save_run(RunState.to_save_dict())
+	_save_active_run_now("start_new_run")
 	run_started.emit()
 	_enter_game_scene()
 
@@ -153,7 +169,7 @@ func start_new_run_with_loading(
 	await get_tree().process_frame
 
 	_emit_run_loading_step(4)
-	SaveManager.save_run(RunState.to_save_dict())
+	_save_active_run_now("start_new_run_with_loading")
 	run_started.emit()
 	await _hold_loading_stage(NEW_RUN_FINAL_STEP_HOLD_SECONDS)
 
@@ -196,10 +212,12 @@ func load_run_from_save_with_loading() -> bool:
 
 
 func return_to_menu() -> void:
+	_flush_pending_save_if_needed()
 	get_tree().change_scene_to_file(MAIN_MENU_SCENE)
 
 
 func quit_game() -> void:
+	_flush_pending_save_if_needed()
 	get_tree().quit()
 
 
@@ -219,15 +237,19 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 		day_started.emit(RunState.day_index + 1)
 	var day_result: Dictionary = market_simulator.simulate_day(RunState, DataRepository, broker_flow_system)
 	RunState.apply_day_result(day_result)
+	var network_results: Array = contact_network_system.process_due_requests(RunState, DataRepository)
+	if not network_results.is_empty() and emit_runtime_signals:
+		network_changed.emit()
 	if emit_runtime_signals:
 		broker_flow_generated.emit(RunState.day_index)
 		price_formed.emit(RunState.day_index)
+		daily_actions_changed.emit()
 
 	var summary: Dictionary = summary_system.build_daily_summary(RunState, DataRepository)
 	RunState.set_daily_summary(summary)
 	RunState.record_news_snapshot(_build_news_snapshot())
 	if save_after:
-		SaveManager.save_run(RunState.to_save_dict())
+		_save_active_run_now("advance_day")
 	if emit_runtime_signals:
 		summary_ready.emit(summary)
 		portfolio_changed.emit()
@@ -240,7 +262,7 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 func buy_company(company_id: String, shares: int = 1) -> Dictionary:
 	var result: Dictionary = RunState.buy_company(company_id, shares)
 	if result.get("success", false):
-		SaveManager.save_run(RunState.to_save_dict())
+		_request_autosave("buy_company")
 		portfolio_changed.emit()
 	return result
 
@@ -248,7 +270,7 @@ func buy_company(company_id: String, shares: int = 1) -> Dictionary:
 func sell_company(company_id: String, shares: int = 1) -> Dictionary:
 	var result: Dictionary = RunState.sell_company(company_id, shares)
 	if result.get("success", false):
-		SaveManager.save_run(RunState.to_save_dict())
+		_request_autosave("sell_company")
 		portfolio_changed.emit()
 	return result
 
@@ -272,9 +294,241 @@ func estimate_sell_lots(company_id: String, lots: int = 1) -> Dictionary:
 func add_company_to_watchlist(company_id: String) -> Dictionary:
 	var result: Dictionary = RunState.add_to_watchlist(company_id)
 	if result.get("success", false):
-		SaveManager.save_run(RunState.to_save_dict())
+		_request_autosave("watchlist_add")
 		watchlist_changed.emit()
 	return result
+
+
+func remove_company_from_watchlist(company_id: String) -> Dictionary:
+	var result: Dictionary = RunState.remove_from_watchlist(company_id)
+	if result.get("success", false):
+		_request_autosave("watchlist_remove")
+		watchlist_changed.emit()
+	return result
+
+
+func get_upgrade_shop_snapshot() -> Dictionary:
+	var cash_available: float = float(RunState.player_portfolio.get("cash", 0.0))
+	var tracks: Array = []
+	for track_value in DataRepository.get_upgrade_catalog().get("tracks", []):
+		if typeof(track_value) != TYPE_DICTIONARY:
+			continue
+		var track: Dictionary = track_value
+		var track_id: String = str(track.get("id", ""))
+		if track_id.is_empty():
+			continue
+		var current_tier: int = RunState.get_upgrade_tier(track_id)
+		var current_data: Dictionary = _upgrade_tier_data(track, current_tier)
+		var next_tier: int = current_tier - 1
+		var next_data: Dictionary = _upgrade_tier_data(track, next_tier)
+		var next_cost: float = float(next_data.get("cost", 0.0)) if next_tier >= 1 else 0.0
+		tracks.append({
+			"id": track_id,
+			"label": str(track.get("label", track_id.capitalize())),
+			"description": str(track.get("description", "")),
+			"tier": current_tier,
+			"effect_label": str(current_data.get("effect_label", "Tier %d" % current_tier)),
+			"next_tier": next_tier if next_tier >= 1 else 0,
+			"next_effect_label": str(next_data.get("effect_label", "")),
+			"next_cost": next_cost,
+			"maxed": current_tier <= 1,
+			"affordable": cash_available + 0.0001 >= next_cost and next_cost > 0.0,
+			"can_purchase": current_tier > 1 and cash_available + 0.0001 >= next_cost and next_cost > 0.0
+		})
+
+	return {
+		"cash": cash_available,
+		"tracks": tracks,
+		"daily_action": RunState.get_daily_action_snapshot()
+	}
+
+
+func purchase_upgrade(track_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+
+	var track: Dictionary = _upgrade_track(track_id)
+	if track.is_empty():
+		return {"success": false, "message": "Unknown upgrade."}
+
+	var normalized_track_id: String = str(track.get("id", track_id))
+	var current_tier: int = RunState.get_upgrade_tier(normalized_track_id)
+	if current_tier <= 1:
+		return {"success": false, "message": "%s is already maxed." % str(track.get("label", "Upgrade"))}
+
+	var next_tier: int = current_tier - 1
+	var next_data: Dictionary = _upgrade_tier_data(track, next_tier)
+	var cost: float = float(next_data.get("cost", 0.0))
+	if cost <= 0.0:
+		return {"success": false, "message": "That upgrade tier has no price."}
+
+	var cash_available: float = float(RunState.player_portfolio.get("cash", 0.0))
+	if cost > cash_available + 0.0001:
+		return {"success": false, "message": "Not enough cash for that upgrade."}
+
+	RunState.player_portfolio["cash"] = cash_available - cost
+	RunState.set_upgrade_tier(normalized_track_id, next_tier)
+	_request_autosave("purchase_upgrade")
+	upgrades_changed.emit()
+	portfolio_changed.emit()
+	if normalized_track_id == "daily_action_points":
+		daily_actions_changed.emit()
+	return {
+		"success": true,
+		"message": "%s upgraded to tier %d." % [str(track.get("label", "Upgrade")), next_tier],
+		"track_id": normalized_track_id,
+		"tier": next_tier,
+		"cash": float(RunState.player_portfolio.get("cash", 0.0))
+	}
+
+
+func execute_console_command(command_text: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+
+	var normalized_command: String = command_text.strip_edges().to_lower()
+	match normalized_command:
+		"cuankus":
+			var cash_before: float = float(RunState.player_portfolio.get("cash", 0.0))
+			RunState.player_portfolio["cash"] = cash_before + CONSOLE_CASH_GRANT_AMOUNT
+			_request_autosave("console_cuankus")
+			portfolio_changed.emit()
+			return {
+				"success": true,
+				"message": "Cuankus! Cash added: Rp999.999.999.999.",
+				"command": normalized_command,
+				"cash": float(RunState.player_portfolio.get("cash", 0.0))
+			}
+		"ordalbos":
+			for track_id in RunState.UPGRADE_TRACK_IDS:
+				RunState.set_upgrade_tier(str(track_id), 1)
+			_request_autosave("console_ordalbos")
+			upgrades_changed.emit()
+			daily_actions_changed.emit()
+			return {
+				"success": true,
+				"message": "Ordal bos unlocked every upgrade.",
+				"command": normalized_command,
+				"upgrade_tiers": RunState.get_upgrade_tiers()
+			}
+
+	return {
+		"success": false,
+		"message": "Unknown command: %s" % command_text.strip_edges(),
+		"command": normalized_command
+	}
+
+
+func get_unlocked_news_intel_level() -> int:
+	return _content_level_for_upgrade("news_content")
+
+
+func get_unlocked_twooter_access_tier() -> int:
+	return _content_level_for_upgrade("twooter_content")
+
+
+func get_unlocked_chart_indicator_ids() -> Array:
+	var track: Dictionary = _upgrade_track("chart_indicators")
+	var tier_data: Dictionary = _upgrade_tier_data(track, RunState.get_upgrade_tier("chart_indicators"))
+	return tier_data.get("indicator_ids", []).duplicate()
+
+
+func get_daily_action_snapshot() -> Dictionary:
+	return RunState.get_daily_action_snapshot()
+
+
+func try_spend_daily_action(action_id: String, metadata: Dictionary = {}) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if not RunState.can_spend_daily_action(1):
+		return {
+			"success": false,
+			"message": "No daily action points left.",
+			"action_id": action_id,
+			"metadata": metadata.duplicate(true),
+			"snapshot": RunState.get_daily_action_snapshot()
+		}
+	var result: Dictionary = RunState.spend_daily_action(1)
+	if bool(result.get("success", false)):
+		_request_autosave("spend_daily_action")
+		daily_actions_changed.emit()
+	result["action_id"] = action_id
+	result["metadata"] = metadata.duplicate(true)
+	return result
+
+
+func get_academy_snapshot(category_id: String = "technical", section_id: String = "") -> Dictionary:
+	var requested_category_id: String = category_id
+	if requested_category_id.is_empty():
+		requested_category_id = str(RunState.get_academy_progress().get("last_category_id", "technical"))
+	var requested_section_id: String = section_id
+	if requested_section_id.is_empty():
+		requested_section_id = str(RunState.get_academy_progress().get("last_section_id", "intro"))
+	return academy_system.build_snapshot(
+		DataRepository.get_academy_catalog(),
+		RunState.get_academy_progress(),
+		requested_category_id,
+		requested_section_id
+	)
+
+
+func mark_academy_section_read(category_id: String, section_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var result: Dictionary = academy_system.mark_section_read(
+		DataRepository.get_academy_catalog(),
+		RunState.get_academy_progress(),
+		category_id,
+		section_id
+	)
+	if bool(result.get("success", false)):
+		RunState.set_academy_progress(result.get("progress", {}))
+		_request_autosave("academy_mark_read")
+		academy_changed.emit()
+	return result
+
+
+func submit_academy_inline_check(
+	category_id: String,
+	section_id: String,
+	check_id: String,
+	answer_id: String
+) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var result: Dictionary = academy_system.submit_inline_check(
+		DataRepository.get_academy_catalog(),
+		RunState.get_academy_progress(),
+		category_id,
+		section_id,
+		check_id,
+		answer_id
+	)
+	if bool(result.get("success", false)):
+		RunState.set_academy_progress(result.get("progress", {}))
+		_request_autosave("academy_inline_check")
+		academy_changed.emit()
+	return result
+
+
+func submit_academy_quiz(category_id: String, answers: Dictionary) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var result: Dictionary = academy_system.submit_quiz(
+		DataRepository.get_academy_catalog(),
+		RunState.get_academy_progress(),
+		category_id,
+		answers
+	)
+	if bool(result.get("success", false)):
+		RunState.set_academy_progress(result.get("progress", {}))
+		_request_autosave("academy_quiz")
+		academy_changed.emit()
+	return result
+
+
+func search_academy_glossary(query: String) -> Array:
+	return academy_system.search_glossary(DataRepository.get_academy_catalog(), query)
 
 
 func get_watchlist_company_ids() -> Array:
@@ -286,6 +540,72 @@ func get_company_rows() -> Array:
 	for company_id in RunState.company_order:
 		rows.append(get_company_snapshot(str(company_id), false, false, false))
 	return rows
+
+
+func get_report_calendar_snapshot(year_value: int = 0, month_value: int = 0) -> Dictionary:
+	var trade_date: Dictionary = RunState.get_current_trade_date()
+	var resolved_year: int = int(trade_date.get("year", 2020)) if year_value <= 0 else year_value
+	var resolved_month: int = int(trade_date.get("month", 1)) if month_value <= 0 else month_value
+	return RunState.get_report_calendar_month(resolved_year, resolved_month)
+
+
+func get_upcoming_report_rows(limit: int = 8) -> Array:
+	return RunState.get_upcoming_quarterly_reports(limit)
+
+
+func get_company_ownership_snapshot(company_id: String) -> Dictionary:
+	var definition: Dictionary = RunState.get_effective_company_definition(company_id, false, false)
+	var holding: Dictionary = RunState.get_holding(company_id)
+	if definition.is_empty():
+		return {}
+
+	var financials: Dictionary = definition.get("financials", {})
+	var shares_outstanding: float = max(
+		float(definition.get("shares_outstanding", financials.get("shares_outstanding", 0.0))),
+		0.0
+	)
+	var shares_owned: int = int(holding.get("shares", 0))
+	var ownership_pct: float = 0.0
+	if shares_outstanding > 0.0:
+		ownership_pct = clamp(float(shares_owned) / shares_outstanding, 0.0, 1.0)
+
+	var free_float_pct: float = clamp(float(financials.get("free_float_pct", 0.0)) / 100.0, 0.0, 1.0)
+	var owner_concentration_pct: float = clamp(1.0 - free_float_pct, 0.0, 1.0)
+	var player_public_float_pct: float = min(ownership_pct, free_float_pct)
+	var player_control_block_pct: float = max(ownership_pct - player_public_float_pct, 0.0)
+	var public_float_pct: float = max(free_float_pct - player_public_float_pct, 0.0)
+	var remaining_control_pct: float = max(owner_concentration_pct - player_control_block_pct, 0.0)
+	var shareholder_rows: Array = []
+	if remaining_control_pct > 0.0:
+		shareholder_rows.append({
+			"name": "Controlling Group",
+			"ownership_pct": remaining_control_pct,
+			"role": "Founder / strategic holder"
+		})
+	if ownership_pct >= PLAYER_MAJOR_SHAREHOLDER_THRESHOLD:
+		shareholder_rows.append({
+			"name": "Player",
+			"ownership_pct": ownership_pct,
+			"role": "Major shareholder"
+		})
+	if public_float_pct > 0.0:
+		shareholder_rows.append({
+			"name": "Public Float",
+			"ownership_pct": public_float_pct,
+			"role": "Market holders"
+		})
+	shareholder_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("ownership_pct", 0.0)) > float(b.get("ownership_pct", 0.0))
+	)
+	return {
+		"company_id": company_id,
+		"shares_owned": shares_owned,
+		"shares_outstanding": shares_outstanding,
+		"ownership_pct": ownership_pct,
+		"is_major_shareholder": ownership_pct >= PLAYER_MAJOR_SHAREHOLDER_THRESHOLD,
+		"major_shareholder_threshold": PLAYER_MAJOR_SHAREHOLDER_THRESHOLD,
+		"shareholder_rows": shareholder_rows
+	}
 
 
 func get_company_snapshot(
@@ -317,6 +637,7 @@ func get_company_snapshot(
 	var lot_size: int = get_lot_size()
 	var average_price: float = float(holding.get("average_price", 0.0))
 	var financials: Dictionary = definition.get("financials", {}).duplicate(true)
+	var ownership_snapshot: Dictionary = get_company_ownership_snapshot(company_id)
 	var financial_history: Array = []
 	if include_financial_history:
 		financial_history = definition.get("financial_history", []).duplicate(true)
@@ -332,6 +653,9 @@ func get_company_snapshot(
 		runtime.get("broker_flow", {}),
 		include_price_history or include_financial_history or include_statement_history
 	)
+	var market_depth_context: Dictionary = runtime.get("market_depth_context", {}).duplicate(true)
+	var player_market_impact: Dictionary = runtime.get("player_market_impact", {}).duplicate(true)
+	var shareholder_rows: Array = ownership_snapshot.get("shareholder_rows", [])
 	var snapshot: Dictionary = {
 		"id": company_id,
 		"ticker": definition.get("ticker", company_id.to_upper()),
@@ -350,6 +674,7 @@ func get_company_snapshot(
 		"profile_revenue_unit": str(definition.get("profile_revenue_unit", "")),
 		"profile_description": str(definition.get("profile_description", "")),
 		"profile_tags": definition.get("profile_tags", []).duplicate(),
+		"management_roster": definition.get("management_roster", []).duplicate(true),
 		"current_price": current_price,
 		"previous_close": previous_close,
 		"daily_change_pct": daily_change_pct,
@@ -369,6 +694,9 @@ func get_company_snapshot(
 		"since_start_pct": since_start_pct,
 		"ytd_change_pct": ytd_change_pct,
 		"broker_flow": broker_flow_view,
+		"market_depth_context": market_depth_context,
+		"player_market_impact": player_market_impact,
+		"player_market_impact_summary": str(player_market_impact.get("impact_summary", "")),
 		"hidden_story_flags": runtime.get("hidden_story_flags", []).duplicate(),
 		"listing_board": listing_board,
 		"shares_owned": shares_owned,
@@ -381,7 +709,11 @@ func get_company_snapshot(
 		"arb_label": str(ar_limits.get("lower_label", "")),
 		"average_price": average_price,
 		"market_value": shares_owned * current_price,
-		"unrealized_pnl": (current_price - average_price) * shares_owned
+		"unrealized_pnl": (current_price - average_price) * shares_owned,
+		"ownership_pct": float(ownership_snapshot.get("ownership_pct", 0.0)),
+		"is_major_shareholder": bool(ownership_snapshot.get("is_major_shareholder", false)),
+		"shareholder_rows": shareholder_rows.duplicate(true),
+		"shares_outstanding": float(ownership_snapshot.get("shares_outstanding", 0.0))
 	}
 
 	if include_price_history:
@@ -389,6 +721,46 @@ func get_company_snapshot(
 		snapshot["price_bars"] = runtime.get("price_bars", []).duplicate(true)
 
 	return snapshot
+
+
+func get_company_market_depth_snapshot(company_id: String) -> Dictionary:
+	var runtime: Dictionary = RunState.get_company(company_id)
+	if runtime.is_empty():
+		return {}
+
+	var definition: Dictionary = RunState.get_effective_company_definition(company_id, false, false)
+	var depth_context: Dictionary = runtime.get("market_depth_context", {}).duplicate(true)
+	if depth_context.is_empty():
+		var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+		var financials: Dictionary = definition.get("financials", {})
+		var market_cap: float = max(float(financials.get("market_cap", current_price * 1000000000.0)), current_price * 1000000.0)
+		var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", market_cap / current_price))), 1.0)
+		var free_float_ratio: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, 0.07, 0.85)
+		depth_context = {
+			"current_price": current_price,
+			"market_cap": market_cap,
+			"shares_outstanding": shares_outstanding,
+			"free_float_ratio": free_float_ratio,
+			"free_float_shares": shares_outstanding * free_float_ratio,
+			"avg_daily_value": max(float(financials.get("avg_daily_value", current_price * 250000.0)), current_price * 1000.0),
+			"ask_depth_value": 0.0,
+			"bid_depth_value": 0.0,
+			"synthetic_daily_value": 0.0
+		}
+	return depth_context
+
+
+func get_player_market_impact_snapshot(company_id: String) -> Dictionary:
+	var runtime: Dictionary = RunState.get_company(company_id)
+	if runtime.is_empty():
+		return {}
+	var impact: Dictionary = runtime.get("player_market_impact", {}).duplicate(true)
+	if impact.is_empty():
+		impact = RunState.get_player_market_flow_context(company_id, RunState.day_index + 1)
+		impact["impact_summary"] = ""
+		impact["limit_lock"] = ""
+		impact["limit_source"] = ""
+	return impact
 
 
 func _build_broker_flow_view(broker_flow: Dictionary, include_rows: bool) -> Dictionary:
@@ -572,6 +944,93 @@ func get_active_special_events() -> Array:
 	return RunState.get_active_special_events()
 
 
+func get_network_snapshot() -> Dictionary:
+	if not RunState.has_active_run():
+		return {
+			"recognition": {"score": 0.0, "label": "Unknown", "contact_cap": 2},
+			"contacts": [],
+			"discoveries": [],
+			"requests": [],
+			"met_count": 0,
+			"contact_cap": 2
+		}
+	return contact_network_system.build_snapshot(RunState, DataRepository)
+
+
+func discover_network_contacts_from_article(article: Dictionary) -> Array:
+	if not RunState.has_active_run() or article.is_empty():
+		return []
+	var discovered: Array = contact_network_system.discover_from_article(RunState, DataRepository, article)
+	if not discovered.is_empty():
+		_request_autosave("discover_network_from_article")
+	return discovered
+
+
+func discover_network_contacts_for_company(company_id: String) -> Array:
+	if not RunState.has_active_run() or company_id.is_empty():
+		return []
+	var discovered: Array = contact_network_system.discover_for_company(RunState, DataRepository, company_id)
+	if not discovered.is_empty():
+		_request_autosave("discover_network_for_company")
+	return discovered
+
+
+func meet_contact(contact_id: String, source_context: Dictionary = {}) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if not RunState.can_spend_daily_action(1):
+		return {"success": false, "message": "No daily action points left."}
+	var result: Dictionary = contact_network_system.meet_contact(RunState, DataRepository, contact_id, source_context)
+	if bool(result.get("success", false)):
+		RunState.spend_daily_action(1)
+		_request_autosave("network_meet")
+		daily_actions_changed.emit()
+		network_changed.emit()
+	return result
+
+
+func request_contact_tip(contact_id: String, company_id: String = "") -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if not RunState.can_spend_daily_action(1):
+		return {"success": false, "message": "No daily action points left."}
+	var result: Dictionary = contact_network_system.request_tip(RunState, DataRepository, contact_id, company_id)
+	if bool(result.get("success", false)):
+		RunState.spend_daily_action(1)
+		_request_autosave("network_tip")
+		daily_actions_changed.emit()
+		network_changed.emit()
+	return result
+
+
+func accept_contact_request(contact_id: String, company_id: String = "") -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if not RunState.can_spend_daily_action(1):
+		return {"success": false, "message": "No daily action points left."}
+	var result: Dictionary = contact_network_system.accept_request(RunState, DataRepository, contact_id, company_id)
+	if bool(result.get("success", false)):
+		RunState.spend_daily_action(1)
+		_request_autosave("network_request")
+		daily_actions_changed.emit()
+		network_changed.emit()
+	return result
+
+
+func request_contact_referral(contact_id: String, company_id: String = "", affiliation_role: String = "") -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if not RunState.can_spend_daily_action(1):
+		return {"success": false, "message": "No daily action points left."}
+	var result: Dictionary = contact_network_system.request_referral(RunState, DataRepository, contact_id, company_id, affiliation_role)
+	if bool(result.get("success", false)):
+		RunState.spend_daily_action(1)
+		_request_autosave("network_referral")
+		daily_actions_changed.emit()
+		network_changed.emit()
+	return result
+
+
 func get_debug_event_generator_catalog() -> Array:
 	var group_labels: Dictionary = {
 		"market": "Market Events",
@@ -691,7 +1150,7 @@ func debug_generate_event(event_id: String) -> Dictionary:
 	else:
 		return {"success": false, "message": "No debug generator is defined for that event family."}
 
-	SaveManager.save_run(RunState.to_save_dict())
+	_request_autosave("debug_generate_event")
 	return {
 		"success": true,
 		"message": _build_debug_generated_message(generated_event, event_definition),
@@ -700,6 +1159,8 @@ func debug_generate_event(event_id: String) -> Dictionary:
 
 
 func _build_news_snapshot(unlocked_intel_level: int = -1) -> Dictionary:
+	if unlocked_intel_level < 1:
+		unlocked_intel_level = get_unlocked_news_intel_level()
 	if not RunState.has_active_run():
 		return {
 			"intel_level": max(unlocked_intel_level, 1),
@@ -724,6 +1185,8 @@ func _build_news_snapshot(unlocked_intel_level: int = -1) -> Dictionary:
 
 
 func get_news_snapshot(unlocked_intel_level: int = -1) -> Dictionary:
+	if unlocked_intel_level < 1:
+		unlocked_intel_level = get_unlocked_news_intel_level()
 	var snapshot: Dictionary = _build_news_snapshot(unlocked_intel_level)
 	RunState.record_news_snapshot(snapshot)
 	return snapshot
@@ -746,6 +1209,8 @@ func get_news_archive_article(article_id: String) -> Dictionary:
 
 
 func get_twooter_snapshot(unlocked_access_tier: int = -1) -> Dictionary:
+	if unlocked_access_tier < 1:
+		unlocked_access_tier = get_unlocked_twooter_access_tier()
 	if not RunState.has_active_run():
 		return {
 			"access_tier": max(unlocked_access_tier, 1),
@@ -840,7 +1305,7 @@ func should_show_tutorial() -> bool:
 
 func mark_tutorial_shown() -> void:
 	RunState.mark_tutorial_shown()
-	SaveManager.save_run(RunState.to_save_dict())
+	_request_autosave("tutorial_shown")
 
 
 func get_lot_size() -> int:
@@ -848,11 +1313,11 @@ func get_lot_size() -> int:
 
 
 func get_buy_fee_rate() -> float:
-	return float(RunState.BUY_FEE_RATE)
+	return RunState.get_effective_buy_fee_rate()
 
 
 func get_sell_fee_rate() -> float:
-	return float(RunState.SELL_FEE_RATE)
+	return RunState.get_effective_sell_fee_rate()
 
 
 func lots_to_shares(lots: int) -> int:
@@ -868,7 +1333,41 @@ func get_chart_range_label(range_id: String) -> String:
 
 
 func get_chart_indicator_catalog() -> Array:
-	return chart_system.get_indicator_catalog()
+	var unlocked_lookup: Dictionary = {}
+	for indicator_id_value in get_unlocked_chart_indicator_ids():
+		unlocked_lookup[str(indicator_id_value)] = true
+	var catalog: Array = []
+	for indicator_value in chart_system.get_indicator_catalog():
+		var indicator: Dictionary = indicator_value
+		var indicator_id: String = str(indicator.get("id", ""))
+		indicator["unlocked"] = unlocked_lookup.has(indicator_id)
+		catalog.append(indicator)
+	return catalog
+
+
+func _upgrade_track(track_id: String) -> Dictionary:
+	for track_value in DataRepository.get_upgrade_catalog().get("tracks", []):
+		if typeof(track_value) != TYPE_DICTIONARY:
+			continue
+		var track: Dictionary = track_value
+		if str(track.get("id", "")) == track_id:
+			return track.duplicate(true)
+	return {}
+
+
+func _upgrade_tier_data(track: Dictionary, tier: int) -> Dictionary:
+	if track.is_empty() or tier < 1:
+		return {}
+	var tiers: Dictionary = track.get("tiers", {})
+	return tiers.get(str(tier), {}).duplicate(true)
+
+
+func _content_level_for_upgrade(track_id: String) -> int:
+	var track: Dictionary = _upgrade_track(track_id)
+	var tier_data: Dictionary = _upgrade_tier_data(track, RunState.get_upgrade_tier(track_id))
+	if tier_data.has("content_level"):
+		return int(tier_data.get("content_level", 1))
+	return clamp(5 - RunState.get_upgrade_tier(track_id), 1, 4)
 
 
 func _build_debug_sector_sentiments() -> Dictionary:

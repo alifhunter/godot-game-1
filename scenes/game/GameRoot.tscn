@@ -139,6 +139,30 @@ text = ""
 horizontal_alignment = 1
 text = "Twooter"
 
+[node name="NetworkAppTile" type="VBoxContainer" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow"]
+theme_override_constants/separation = 10
+
+[node name="NetworkAppButton" type="Button" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/NetworkAppTile"]
+custom_minimum_size = Vector2(92, 92)
+toggle_mode = true
+text = ""
+
+[node name="NetworkAppLabel" type="Label" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/NetworkAppTile"]
+horizontal_alignment = 1
+text = "Network"
+
+[node name="UpgradesAppTile" type="VBoxContainer" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow"]
+theme_override_constants/separation = 10
+
+[node name="UpgradesAppButton" type="Button" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/UpgradesAppTile"]
+custom_minimum_size = Vector2(92, 92)
+toggle_mode = true
+text = ""
+
+[node name="UpgradesAppLabel" type="Label" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/UpgradesAppTile"]
+horizontal_alignment = 1
+text = "Upgrades"
+
 [node name="ExitAppTile" type="VBoxContainer" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow"]
 theme_override_constants/separation = 10
 
@@ -156,7 +180,7 @@ size_flags_vertical = 3
 [node name="DesktopHintLabel" type="Label" parent="DesktopLayer/DesktopMargin/DesktopVBox"]
 visible = false
 autowrap_mode = 3
-text = "Prototype desktop: STOCKBOT opens the trading platform, News opens the intel desk, Twooter opens the social feed, and Exit returns to the main menu."
+text = "Prototype desktop: STOCKBOT opens the trading platform, News opens the intel desk, Twooter opens the social feed, Network opens contacts, and Exit returns to the main menu."
 
 [node name="AppWindowBackdrop" type="Control" parent="."]
 visible = false
@@ -256,10 +280,10 @@ text = ""
 text = "MARKET +0.00%"
 
 [node name="TopEquityLabel" type="Label" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
-text = "EQUITY Rp 0.00"
+text = "EQUITY Rp0,00"
 
 [node name="TopCashLabel" type="Label" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
-text = "CASH AVAILABLE Rp 0.00"
+text = "CASH AVAILABLE Rp0,00"
 
 [node name="TopBarSpacer" type="Control" parent="Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow"]
 size_flags_horizontal = 3
@@ -512,6 +536,10 @@ text = ""
 autowrap_mode = 3
 text = "Intel outlets unlock earlier coverage tiers once the perk system is wired in."
 
+[node name="NewsMeetContactButton" type="Button" parent="NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox"]
+custom_minimum_size = Vector2(0, 34)
+text = "Meet Contact"
+
 [node name="SocialWindow" type="MarginContainer" parent="."]
 visible = false
 anchors_preset = 15
@@ -560,6 +588,183 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 
 [node name="SocialFeedCards" type="VBoxContainer" parent="SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialFeedScroll"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="NetworkWindow" type="MarginContainer" parent="."]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 64
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="NetworkWindowBody" type="PanelContainer" parent="NetworkWindow"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="NetworkWindowMargin" type="MarginContainer" parent="NetworkWindow/NetworkWindowBody"]
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="NetworkWindowVBox" type="VBoxContainer" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="NetworkHeaderRow" type="HBoxContainer" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox"]
+theme_override_constants/separation = 8
+
+[node name="NetworkTitleLabel" type="Label" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkHeaderRow"]
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 12
+text = "Network"
+
+[node name="NetworkRecognitionLabel" type="Label" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkHeaderRow"]
+horizontal_alignment = 2
+text = "Recognition: Unknown"
+
+[node name="NetworkSummaryLabel" type="Label" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox"]
+autowrap_mode = 3
+text = "Meet contacts through News and Profile pages."
+
+[node name="NetworkContentSplit" type="HSplitContainer" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+split_offset = 380
+
+[node name="NetworkListPanel" type="PanelContainer" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit"]
+custom_minimum_size = Vector2(340, 0)
+size_flags_vertical = 3
+
+[node name="NetworkListMargin" type="MarginContainer" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="NetworkListVBox" type="VBoxContainer" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel/NetworkListMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="NetworkContactsLabel" type="Label" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel/NetworkListMargin/NetworkListVBox"]
+text = "Contacts"
+
+[node name="NetworkContactsList" type="ItemList" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel/NetworkListMargin/NetworkListVBox"]
+custom_minimum_size = Vector2(0, 220)
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="NetworkRequestsLabel" type="Label" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel/NetworkListMargin/NetworkListVBox"]
+text = "Requests"
+
+[node name="NetworkRequestsList" type="ItemList" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel/NetworkListMargin/NetworkListVBox"]
+custom_minimum_size = Vector2(0, 150)
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="NetworkDetailPanel" type="PanelContainer" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="NetworkDetailMargin" type="MarginContainer" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel"]
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="NetworkDetailVBox" type="VBoxContainer" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="NetworkContactNameLabel" type="Label" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox"]
+autowrap_mode = 3
+text = "No leads yet."
+
+[node name="NetworkContactMetaLabel" type="Label" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox"]
+autowrap_mode = 3
+text = ""
+
+[node name="NetworkContactBodyLabel" type="Label" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox"]
+size_flags_vertical = 3
+autowrap_mode = 3
+text = "Explore the world more. Read News, open company Profile pages, and follow referrals to discover people before they appear here."
+
+[node name="NetworkActionRow" type="HBoxContainer" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox"]
+theme_override_constants/separation = 8
+
+[node name="NetworkMeetButton" type="Button" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkActionRow"]
+custom_minimum_size = Vector2(120, 34)
+text = "Meet"
+
+[node name="NetworkTipButton" type="Button" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkActionRow"]
+custom_minimum_size = Vector2(120, 34)
+text = "Ask Tip"
+
+[node name="NetworkRequestButton" type="Button" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkActionRow"]
+custom_minimum_size = Vector2(140, 34)
+text = "Accept Request"
+
+[node name="NetworkReferralButton" type="Button" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkActionRow"]
+custom_minimum_size = Vector2(120, 34)
+text = "Ask Referral"
+
+[node name="UpgradeWindow" type="MarginContainer" parent="."]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 64
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="UpgradeWindowBody" type="PanelContainer" parent="UpgradeWindow"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="UpgradeWindowMargin" type="MarginContainer" parent="UpgradeWindow/UpgradeWindowBody"]
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="UpgradeWindowVBox" type="VBoxContainer" parent="UpgradeWindow/UpgradeWindowBody/UpgradeWindowMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="UpgradeHeaderRow" type="HBoxContainer" parent="UpgradeWindow/UpgradeWindowBody/UpgradeWindowMargin/UpgradeWindowVBox"]
+theme_override_constants/separation = 8
+
+[node name="UpgradeTitleLabel" type="Label" parent="UpgradeWindow/UpgradeWindowBody/UpgradeWindowMargin/UpgradeWindowVBox/UpgradeHeaderRow"]
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 12
+text = "Upgrades"
+
+[node name="UpgradeCashLabel" type="Label" parent="UpgradeWindow/UpgradeWindowBody/UpgradeWindowMargin/UpgradeWindowVBox/UpgradeHeaderRow"]
+horizontal_alignment = 2
+text = "Cash Rp0,00"
+
+[node name="UpgradeSummaryLabel" type="Label" parent="UpgradeWindow/UpgradeWindowBody/UpgradeWindowMargin/UpgradeWindowVBox"]
+autowrap_mode = 3
+text = "Buy desk upgrades with available cash."
+
+[node name="UpgradeScroll" type="ScrollContainer" parent="UpgradeWindow/UpgradeWindowBody/UpgradeWindowMargin/UpgradeWindowVBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="UpgradeCardsVBox" type="VBoxContainer" parent="UpgradeWindow/UpgradeWindowBody/UpgradeWindowMargin/UpgradeWindowVBox/UpgradeScroll"]
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
 

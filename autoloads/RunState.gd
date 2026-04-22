@@ -1,13 +1,44 @@
 extends Node
 
 const LOT_SIZE := 100
+const PLAYER_BROKER_CODE := "XL"
+const PLAYER_BROKER_NAME := "PT. Sobat Loser"
+const PLAYER_MARKET_FLOW_DECAY_DAYS := 3
+const MAX_PLAYER_MARKET_FLOW_ENTRIES := 96
 const BUY_FEE_RATE := 0.0015
 const SELL_FEE_RATE := 0.0025
+const DEFAULT_UPGRADE_TIER := 4
+const UPGRADE_TRACK_IDS := [
+	"trading_fee",
+	"news_content",
+	"twooter_content",
+	"chart_indicators",
+	"daily_action_points"
+]
+const TRADING_FEE_BY_TIER := {
+	4: {"buy_fee_rate": 0.0015, "sell_fee_rate": 0.0025},
+	3: {"buy_fee_rate": 0.0013, "sell_fee_rate": 0.0022},
+	2: {"buy_fee_rate": 0.0011, "sell_fee_rate": 0.0019},
+	1: {"buy_fee_rate": 0.0009, "sell_fee_rate": 0.0016}
+}
+const DAILY_ACTION_LIMIT_BY_TIER := {
+	4: 10,
+	3: 15,
+	2: 20,
+	1: 25
+}
 const MAX_TRADE_HISTORY := 64
 const MAX_EVENT_HISTORY := 160
 const MAX_MARKET_HISTORY := 512
 const MAX_PRICE_BARS_HISTORY := 1600
 const CHART_HISTORY_VISIBLE_BARS := 1260
+const REPORT_CALENDAR_END_YEAR := 2030
+const REPORT_MONTH_BY_QUARTER := {
+	1: 1,
+	2: 4,
+	3: 7,
+	4: 10
+}
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
 const COMPANY_PROFILE_KEYS := [
 	"base_price",
@@ -32,20 +63,21 @@ const COMPANY_PROFILE_KEYS := [
 	"profile_revenue_value",
 	"profile_revenue_unit",
 	"profile_description",
-	"profile_tags"
+	"profile_tags",
+	"management_roster"
 ]
 const DEFAULT_DIFFICULTY_CONFIG := {
 	"id": "normal",
 	"label": "Normal",
 	"starting_cash": 100000000.0,
-	"company_count": 50,
-	"market_swing_range": 0.02,
-	"volatility_multiplier": 0.75,
-	"event_interval_days": 30.0,
-	"broker_impact_multiplier": 0.85,
-	"daily_move_cap": 0.08,
-	"volatility_label": "Low",
-	"event_label": "Low"
+	"company_count": 30,
+	"market_swing_range": 0.035,
+	"volatility_multiplier": 1.0,
+	"event_interval_days": 10.0,
+	"broker_impact_multiplier": 1.0,
+	"daily_move_cap": 0.12,
+	"volatility_label": "Normal",
+	"event_label": "Every 10 Days"
 }
 
 var run_seed = 0
@@ -60,12 +92,21 @@ var daily_summary = {}
 var last_day_results = {}
 var last_equity_value = 0.0
 var trade_history = []
+var player_market_flows = {}
 var event_history = []
 var market_history = []
 var active_company_arcs = []
 var active_special_events = []
 var news_archive_index = {}
 var news_archive_articles = {}
+var network_contacts = {}
+var network_discoveries = {}
+var network_requests = {}
+var upgrade_tiers = {}
+var daily_action_day_index = 0
+var daily_actions_used = 0
+var academy_progress = {}
+var quarterly_report_calendar = {}
 var yearly_macro_states = {}
 var historical_chart_bar_cache = {}
 var difficulty_id = "normal"
@@ -99,12 +140,21 @@ func reset() -> void:
 	last_day_results = {}
 	last_equity_value = 0.0
 	trade_history = []
+	player_market_flows = {}
 	event_history = []
 	market_history = []
 	active_company_arcs = []
 	active_special_events = []
 	news_archive_index = {}
 	news_archive_articles = {}
+	network_contacts = {}
+	network_discoveries = {}
+	network_requests = {}
+	upgrade_tiers = _default_upgrade_tiers()
+	daily_action_day_index = 0
+	daily_actions_used = 0
+	academy_progress = _default_academy_progress()
+	quarterly_report_calendar = {}
 	yearly_macro_states = {}
 	historical_chart_bar_cache = {}
 	difficulty_id = str(DEFAULT_DIFFICULTY_CONFIG.get("id", "normal"))
@@ -164,10 +214,13 @@ func setup_new_run(
 			"hidden_story_flags": _seed_hidden_story_flags(base_definition),
 			"broker_flow": _empty_broker_flow(),
 			"daily_change_pct": 0.0,
+			"market_depth_context": {},
+			"player_market_impact": {},
 			"company_profile": company_profile
 		}
 
 	last_equity_value = get_total_equity()
+	quarterly_report_calendar = _build_quarterly_report_calendar()
 
 
 func load_from_dict(data: Dictionary) -> void:
@@ -179,12 +232,22 @@ func load_from_dict(data: Dictionary) -> void:
 	daily_summary = data.get("daily_summary", {}).duplicate(true)
 	last_day_results = data.get("last_day_results", {}).duplicate(true)
 	trade_history = data.get("trade_history", []).duplicate(true)
+	player_market_flows = data.get("player_market_flows", {}).duplicate(true)
 	event_history = data.get("event_history", []).duplicate(true)
 	market_history = data.get("market_history", []).duplicate(true)
 	active_company_arcs = data.get("active_company_arcs", []).duplicate(true)
 	active_special_events = data.get("active_special_events", []).duplicate(true)
 	news_archive_index = data.get("news_archive_index", {}).duplicate(true)
 	news_archive_articles = data.get("news_archive_articles", {}).duplicate(true)
+	network_contacts = data.get("network_contacts", {}).duplicate(true)
+	network_discoveries = data.get("network_discoveries", {}).duplicate(true)
+	network_requests = data.get("network_requests", {}).duplicate(true)
+	upgrade_tiers = _normalize_upgrade_tiers(data.get("upgrade_tiers", {}))
+	daily_action_day_index = int(data.get("daily_action_day_index", day_index))
+	daily_actions_used = max(int(data.get("daily_actions_used", 0)), 0)
+	_sync_daily_action_day()
+	academy_progress = _normalize_academy_progress(data.get("academy_progress", {}))
+	quarterly_report_calendar = data.get("quarterly_report_calendar", {}).duplicate(true)
 	yearly_macro_states = data.get("yearly_macro_states", {}).duplicate(true)
 	difficulty_id = str(data.get("difficulty_id", "normal"))
 	difficulty_config = data.get("difficulty_config", {}).duplicate(true)
@@ -222,6 +285,8 @@ func load_from_dict(data: Dictionary) -> void:
 		"holdings": {},
 		"realized_pnl": 0.0
 	}).duplicate(true)
+	if quarterly_report_calendar.is_empty() and not company_order.is_empty():
+		quarterly_report_calendar = _build_quarterly_report_calendar()
 
 
 func to_save_dict() -> Dictionary:
@@ -238,12 +303,21 @@ func to_save_dict() -> Dictionary:
 		"last_day_results": last_day_results.duplicate(true),
 		"last_equity_value": last_equity_value,
 		"trade_history": trade_history.duplicate(true),
+		"player_market_flows": player_market_flows.duplicate(true),
 		"event_history": event_history.duplicate(true),
 		"market_history": market_history.duplicate(true),
 		"active_company_arcs": active_company_arcs.duplicate(true),
 		"active_special_events": active_special_events.duplicate(true),
 		"news_archive_index": news_archive_index.duplicate(true),
 		"news_archive_articles": news_archive_articles.duplicate(true),
+		"network_contacts": network_contacts.duplicate(true),
+		"network_discoveries": network_discoveries.duplicate(true),
+		"network_requests": network_requests.duplicate(true),
+		"upgrade_tiers": get_upgrade_tiers(),
+		"daily_action_day_index": daily_action_day_index,
+		"daily_actions_used": daily_actions_used,
+		"academy_progress": get_academy_progress(),
+		"quarterly_report_calendar": quarterly_report_calendar.duplicate(true),
 		"yearly_macro_states": yearly_macro_states.duplicate(true),
 		"difficulty_id": difficulty_id,
 		"difficulty_config": difficulty_config.duplicate(true),
@@ -370,6 +444,20 @@ func add_to_watchlist(company_id: String) -> Dictionary:
 	}
 
 
+func remove_from_watchlist(company_id: String) -> Dictionary:
+	if not companies.has(company_id):
+		return {"success": false, "message": "Unknown company selection."}
+	if not is_in_watchlist(company_id):
+		return {"success": false, "message": "%s is not in the watchlist." % str(get_effective_company_definition(company_id).get("ticker", company_id.to_upper()))}
+
+	watchlist_company_ids.erase(company_id)
+	var ticker: String = str(get_effective_company_definition(company_id).get("ticker", company_id.to_upper()))
+	return {
+		"success": true,
+		"message": "%s removed from the watchlist." % ticker
+	}
+
+
 func buy_company(company_id: String, shares: int) -> Dictionary:
 	if not companies.has(company_id):
 		return {"success": false, "message": "Unknown company selection."}
@@ -414,6 +502,7 @@ func buy_company(company_id: String, shares: int) -> Dictionary:
 		-total_cost,
 		float(player_portfolio.get("cash", 0.0))
 	)
+	_record_player_market_flow(company_id, "buy", estimate)
 
 	return {
 		"success": true,
@@ -469,6 +558,7 @@ func sell_company(company_id: String, shares: int) -> Dictionary:
 		net_proceeds,
 		float(player_portfolio.get("cash", 0.0))
 	)
+	_record_player_market_flow(company_id, "sell", estimate)
 
 	return {
 		"success": true,
@@ -504,10 +594,14 @@ func get_total_equity() -> float:
 
 func apply_day_result(day_result: Dictionary) -> void:
 	day_index += 1
+	daily_action_day_index = day_index
+	daily_actions_used = 0
 	market_sentiment = float(day_result.get("market_sentiment", market_sentiment))
 	last_day_results = day_result.duplicate(true)
 	var previous_trade_date: Dictionary = current_trade_date.duplicate(true)
 	_record_event(day_result.get("scheduled_event", {}), day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
+	for report_event_value in day_result.get("report_events", []):
+		_record_event(report_event_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	for company_arc_value in day_result.get("started_company_arcs", []):
 		_record_event(company_arc_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	for company_arc_phase_value in day_result.get("company_arc_phase_events", []):
@@ -526,6 +620,7 @@ func apply_day_result(day_result: Dictionary) -> void:
 	if current_year != previous_year:
 		_reset_ytd_open_prices_for_year(current_year)
 	_ensure_macro_state_for_year(current_year)
+	_prune_player_market_flows(day_index)
 
 
 func set_daily_summary(summary: Dictionary) -> void:
@@ -567,8 +662,139 @@ func get_next_trade_date() -> Dictionary:
 	return trading_calendar.next_trade_date(current_trade_date)
 
 
+func get_quarterly_report_calendar() -> Dictionary:
+	if quarterly_report_calendar.is_empty() and not company_order.is_empty():
+		quarterly_report_calendar = _build_quarterly_report_calendar()
+	return quarterly_report_calendar.duplicate(true)
+
+
+func get_quarterly_reports_for_date(date_info: Dictionary) -> Array:
+	var date_key: String = trading_calendar.to_key(date_info)
+	return _reports_for_date_key(date_key)
+
+
+func get_quarterly_report_events_for_day_number(trading_day_number: int, trade_date: Dictionary) -> Array:
+	var reports: Array = get_quarterly_reports_for_date(trade_date)
+	var events: Array = []
+	for report_value in reports:
+		var report: Dictionary = report_value
+		events.append(_build_quarterly_report_event(report, trading_day_number, trade_date))
+	return events
+
+
+func get_report_calendar_month(year_value: int, month_value: int) -> Dictionary:
+	var reports_by_day: Dictionary = {}
+	var reports: Array = []
+	for date_key_value in get_quarterly_report_calendar().keys():
+		var date_key: String = str(date_key_value)
+		var date_info: Dictionary = _date_from_key(date_key)
+		if int(date_info.get("year", 0)) != year_value or int(date_info.get("month", 0)) != month_value:
+			continue
+		var day_value: int = int(date_info.get("day", 0))
+		var day_key: String = str(day_value)
+		if not reports_by_day.has(day_key):
+			reports_by_day[day_key] = []
+		for report_value in _reports_for_date_key(date_key):
+			var report: Dictionary = report_value
+			reports_by_day[day_key].append(report.duplicate(true))
+			reports.append(report.duplicate(true))
+	reports.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a.get("trading_day_number", 0)) == int(b.get("trading_day_number", 0)):
+			return str(a.get("ticker", "")) < str(b.get("ticker", ""))
+		return int(a.get("trading_day_number", 0)) < int(b.get("trading_day_number", 0))
+	)
+	return {
+		"year": year_value,
+		"month": month_value,
+		"reports_by_day": reports_by_day,
+		"reports": reports
+	}
+
+
+func get_upcoming_quarterly_reports(limit: int = 8) -> Array:
+	var reports: Array = []
+	var current_key: String = trading_calendar.to_key(current_trade_date)
+	for date_key_value in get_quarterly_report_calendar().keys():
+		var date_key: String = str(date_key_value)
+		if date_key < current_key:
+			continue
+		for report_value in _reports_for_date_key(date_key):
+			var report: Dictionary = report_value
+			reports.append(report.duplicate(true))
+	reports.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a.get("trading_day_number", 0)) == int(b.get("trading_day_number", 0)):
+			return str(a.get("ticker", "")) < str(b.get("ticker", ""))
+		return int(a.get("trading_day_number", 0)) < int(b.get("trading_day_number", 0))
+	)
+	if limit > 0 and reports.size() > limit:
+		reports = reports.slice(0, limit)
+	return reports
+
+
 func get_trade_history() -> Array:
 	return trade_history.duplicate(true)
+
+
+func get_player_market_flow_context(company_id: String, target_day_index: int) -> Dictionary:
+	_prune_player_market_flows(target_day_index)
+	var flow_entries: Array = player_market_flows.get(company_id, [])
+	var buy_value: float = 0.0
+	var sell_value: float = 0.0
+	var buy_shares: float = 0.0
+	var sell_shares: float = 0.0
+	var buy_free_float_pct: float = 0.0
+	var sell_free_float_pct: float = 0.0
+	var buy_ownership_pct: float = 0.0
+	var sell_ownership_pct: float = 0.0
+	var max_single_trade_free_float_pct: float = 0.0
+	var max_single_trade_ownership_pct: float = 0.0
+	var active_entries: int = 0
+	for flow_value in flow_entries:
+		var flow: Dictionary = flow_value
+		var source_day_index: int = int(flow.get("day_index", day_index))
+		var age: int = target_day_index - source_day_index
+		if age <= 0 or age > PLAYER_MARKET_FLOW_DECAY_DAYS:
+			continue
+		var weight: float = _player_flow_decay_weight(age)
+		var side: String = str(flow.get("side", ""))
+		var gross_value: float = float(flow.get("gross_value", 0.0)) * weight
+		var shares: float = float(flow.get("shares", 0.0)) * weight
+		var weighted_free_float_pct: float = float(flow.get("trade_free_float_pct", 0.0)) * weight
+		var weighted_ownership_pct: float = float(flow.get("trade_ownership_pct", 0.0)) * weight
+		if side == "buy":
+			buy_value += gross_value
+			buy_shares += shares
+			buy_free_float_pct += weighted_free_float_pct
+			buy_ownership_pct += weighted_ownership_pct
+		elif side == "sell":
+			sell_value += gross_value
+			sell_shares += shares
+			sell_free_float_pct += weighted_free_float_pct
+			sell_ownership_pct += weighted_ownership_pct
+		max_single_trade_free_float_pct = max(max_single_trade_free_float_pct, float(flow.get("trade_free_float_pct", 0.0)) * weight)
+		max_single_trade_ownership_pct = max(max_single_trade_ownership_pct, float(flow.get("trade_ownership_pct", 0.0)) * weight)
+		active_entries += 1
+	return {
+		"broker_code": PLAYER_BROKER_CODE,
+		"broker_name": PLAYER_BROKER_NAME,
+		"buy_value": buy_value,
+		"sell_value": sell_value,
+		"net_value": buy_value - sell_value,
+		"buy_shares": buy_shares,
+		"sell_shares": sell_shares,
+		"net_shares": buy_shares - sell_shares,
+		"buy_free_float_pct": buy_free_float_pct,
+		"sell_free_float_pct": sell_free_float_pct,
+		"net_free_float_pct": buy_free_float_pct - sell_free_float_pct,
+		"gross_free_float_pct": buy_free_float_pct + sell_free_float_pct,
+		"buy_ownership_pct": buy_ownership_pct,
+		"sell_ownership_pct": sell_ownership_pct,
+		"net_ownership_pct": buy_ownership_pct - sell_ownership_pct,
+		"max_single_trade_free_float_pct": max_single_trade_free_float_pct,
+		"max_single_trade_ownership_pct": max_single_trade_ownership_pct,
+		"active_entries": active_entries,
+		"decay_days": PLAYER_MARKET_FLOW_DECAY_DAYS
+	}
 
 
 func get_event_history() -> Array:
@@ -585,6 +811,112 @@ func get_active_company_arcs() -> Array:
 
 func get_active_special_events() -> Array:
 	return active_special_events.duplicate(true)
+
+
+func get_network_contacts() -> Dictionary:
+	return network_contacts.duplicate(true)
+
+
+func set_network_contacts(next_contacts: Dictionary) -> void:
+	network_contacts = next_contacts.duplicate(true)
+
+
+func get_network_discoveries() -> Dictionary:
+	return network_discoveries.duplicate(true)
+
+
+func set_network_discoveries(next_discoveries: Dictionary) -> void:
+	network_discoveries = next_discoveries.duplicate(true)
+
+
+func get_network_requests() -> Dictionary:
+	return network_requests.duplicate(true)
+
+
+func set_network_requests(next_requests: Dictionary) -> void:
+	network_requests = next_requests.duplicate(true)
+
+
+func get_academy_progress() -> Dictionary:
+	academy_progress = _normalize_academy_progress(academy_progress)
+	return academy_progress.duplicate(true)
+
+
+func set_academy_progress(next_progress: Dictionary) -> void:
+	academy_progress = _normalize_academy_progress(next_progress)
+
+
+func get_upgrade_tiers() -> Dictionary:
+	upgrade_tiers = _normalize_upgrade_tiers(upgrade_tiers)
+	return upgrade_tiers.duplicate(true)
+
+
+func get_upgrade_tier(track_id: String) -> int:
+	upgrade_tiers = _normalize_upgrade_tiers(upgrade_tiers)
+	return int(upgrade_tiers.get(track_id, DEFAULT_UPGRADE_TIER))
+
+
+func set_upgrade_tier(track_id: String, tier: int) -> void:
+	if not (track_id in UPGRADE_TRACK_IDS):
+		return
+	upgrade_tiers[track_id] = clamp(tier, 1, DEFAULT_UPGRADE_TIER)
+
+
+func get_effective_buy_fee_rate() -> float:
+	var tier: int = get_upgrade_tier("trading_fee")
+	return float(TRADING_FEE_BY_TIER.get(tier, TRADING_FEE_BY_TIER[DEFAULT_UPGRADE_TIER]).get("buy_fee_rate", BUY_FEE_RATE))
+
+
+func get_effective_sell_fee_rate() -> float:
+	var tier: int = get_upgrade_tier("trading_fee")
+	return float(TRADING_FEE_BY_TIER.get(tier, TRADING_FEE_BY_TIER[DEFAULT_UPGRADE_TIER]).get("sell_fee_rate", SELL_FEE_RATE))
+
+
+func get_daily_action_limit() -> int:
+	var tier: int = get_upgrade_tier("daily_action_points")
+	return int(DAILY_ACTION_LIMIT_BY_TIER.get(tier, DAILY_ACTION_LIMIT_BY_TIER[DEFAULT_UPGRADE_TIER]))
+
+
+func get_daily_action_snapshot() -> Dictionary:
+	_sync_daily_action_day()
+	var limit: int = get_daily_action_limit()
+	return {
+		"day_index": daily_action_day_index,
+		"used": daily_actions_used,
+		"limit": limit,
+		"remaining": max(limit - daily_actions_used, 0),
+		"tier": get_upgrade_tier("daily_action_points")
+	}
+
+
+func can_spend_daily_action(cost: int = 1) -> bool:
+	var snapshot: Dictionary = get_daily_action_snapshot()
+	return int(snapshot.get("remaining", 0)) >= max(cost, 0)
+
+
+func spend_daily_action(cost: int = 1) -> Dictionary:
+	_sync_daily_action_day()
+	var resolved_cost: int = max(cost, 0)
+	var limit: int = get_daily_action_limit()
+	if daily_actions_used + resolved_cost > limit:
+		return {
+			"success": false,
+			"message": "No daily action points left.",
+			"snapshot": get_daily_action_snapshot()
+		}
+	daily_actions_used += resolved_cost
+	return {
+		"success": true,
+		"message": "Daily action spent.",
+		"snapshot": get_daily_action_snapshot()
+	}
+
+
+func add_network_company_arc(arc_data: Dictionary) -> void:
+	if arc_data.is_empty():
+		return
+	active_company_arcs.append(arc_data.duplicate(true))
+	_append_company_arc_to_companies(arc_data)
 
 
 func record_news_snapshot(snapshot: Dictionary) -> void:
@@ -697,6 +1029,82 @@ func _seed_hidden_story_flags(definition: Dictionary) -> Array:
 	return hidden_flags
 
 
+func _default_upgrade_tiers() -> Dictionary:
+	var defaults: Dictionary = {}
+	for track_id_value in UPGRADE_TRACK_IDS:
+		defaults[str(track_id_value)] = DEFAULT_UPGRADE_TIER
+	return defaults
+
+
+func _normalize_upgrade_tiers(source_tiers: Dictionary) -> Dictionary:
+	var normalized: Dictionary = _default_upgrade_tiers()
+	for track_id_value in UPGRADE_TRACK_IDS:
+		var track_id: String = str(track_id_value)
+		normalized[track_id] = clamp(int(source_tiers.get(track_id, DEFAULT_UPGRADE_TIER)), 1, DEFAULT_UPGRADE_TIER)
+	return normalized
+
+
+func _default_academy_progress() -> Dictionary:
+	return {
+		"read_sections": {},
+		"inline_checks": {},
+		"quiz_attempts": {},
+		"quiz_best_score": {},
+		"quiz_passed": {},
+		"badges": [],
+		"completed_modules": [],
+		"last_category_id": "technical",
+		"last_section_id": "intro"
+	}
+
+
+func _normalize_academy_progress(source_progress: Variant) -> Dictionary:
+	var normalized: Dictionary = _default_academy_progress()
+	if typeof(source_progress) != TYPE_DICTIONARY:
+		return normalized
+
+	var source: Dictionary = source_progress
+	var read_sections: Variant = source.get("read_sections", {})
+	if typeof(read_sections) == TYPE_DICTIONARY:
+		normalized["read_sections"] = read_sections.duplicate(true)
+	var inline_checks: Variant = source.get("inline_checks", {})
+	if typeof(inline_checks) == TYPE_DICTIONARY:
+		normalized["inline_checks"] = inline_checks.duplicate(true)
+	var quiz_attempts: Variant = source.get("quiz_attempts", {})
+	if typeof(quiz_attempts) == TYPE_DICTIONARY:
+		normalized["quiz_attempts"] = quiz_attempts.duplicate(true)
+	var quiz_best_score: Variant = source.get("quiz_best_score", {})
+	if typeof(quiz_best_score) == TYPE_DICTIONARY:
+		normalized["quiz_best_score"] = quiz_best_score.duplicate(true)
+	var quiz_passed: Variant = source.get("quiz_passed", {})
+	if typeof(quiz_passed) == TYPE_DICTIONARY:
+		normalized["quiz_passed"] = quiz_passed.duplicate(true)
+	normalized["badges"] = _normalize_unique_string_array(source.get("badges", []))
+	normalized["completed_modules"] = _normalize_unique_string_array(source.get("completed_modules", []))
+	normalized["last_category_id"] = str(source.get("last_category_id", "technical"))
+	normalized["last_section_id"] = str(source.get("last_section_id", "intro"))
+	return normalized
+
+
+func _normalize_unique_string_array(source_values: Variant) -> Array:
+	var normalized: Array = []
+	if typeof(source_values) != TYPE_ARRAY:
+		return normalized
+	for value in source_values:
+		var normalized_value: String = str(value)
+		if normalized_value.is_empty() or normalized.has(normalized_value):
+			continue
+		normalized.append(normalized_value)
+	return normalized
+
+
+func _sync_daily_action_day() -> void:
+	if daily_action_day_index == day_index:
+		return
+	daily_action_day_index = day_index
+	daily_actions_used = 0
+
+
 func _empty_broker_flow() -> Dictionary:
 	return {
 		"retail_net": 0.0,
@@ -738,6 +1146,8 @@ func _record_trade(
 		"side": side,
 		"lots": int(estimate.get("lots", 0)),
 		"shares": int(estimate.get("shares", 0)),
+		"broker_code": PLAYER_BROKER_CODE,
+		"broker_name": PLAYER_BROKER_NAME,
 		"price_per_share": float(estimate.get("price_per_share", 0.0)),
 		"gross_value": float(estimate.get("gross_value", 0.0)),
 		"fee_rate": float(estimate.get("fee_rate", 0.0)),
@@ -750,6 +1160,239 @@ func _record_trade(
 	trade_history.append(entry)
 	if trade_history.size() > MAX_TRADE_HISTORY:
 		trade_history = trade_history.slice(trade_history.size() - MAX_TRADE_HISTORY, trade_history.size())
+
+
+func _record_player_market_flow(company_id: String, side: String, estimate: Dictionary) -> void:
+	if company_id.is_empty():
+		return
+	var definition: Dictionary = get_effective_company_definition(company_id, false, false)
+	var runtime: Dictionary = get_company(company_id)
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", estimate.get("price_per_share", 1.0)))), 1.0)
+	var financials: Dictionary = definition.get("financials", {})
+	var market_cap: float = max(float(financials.get("market_cap", current_price * 1000000000.0)), current_price * 1000000.0)
+	var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", market_cap / current_price))), 1.0)
+	var free_float_ratio: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, 0.07, 0.85)
+	var free_float_shares: float = max(shares_outstanding * free_float_ratio, 1.0)
+	var trade_shares: float = max(float(estimate.get("shares", 0)), 0.0)
+	var gross_value: float = float(estimate.get("gross_value", 0.0))
+	var holdings: Dictionary = player_portfolio.get("holdings", {})
+	var holding: Dictionary = holdings.get(company_id, {})
+	var player_shares_after: float = float(holding.get("shares", 0))
+	var flow_entries: Array = player_market_flows.get(company_id, [])
+	flow_entries.append({
+		"day_index": day_index,
+		"trade_date": current_trade_date.duplicate(true),
+		"company_id": company_id,
+		"side": side,
+		"broker_code": PLAYER_BROKER_CODE,
+		"broker_name": PLAYER_BROKER_NAME,
+		"shares": int(estimate.get("shares", 0)),
+		"lots": int(estimate.get("lots", 0)),
+		"price_per_share": float(estimate.get("price_per_share", 0.0)),
+		"gross_value": gross_value,
+		"market_cap": market_cap,
+		"shares_outstanding": shares_outstanding,
+		"free_float_ratio": free_float_ratio,
+		"free_float_shares": free_float_shares,
+		"trade_ownership_pct": trade_shares / shares_outstanding,
+		"trade_free_float_pct": trade_shares / free_float_shares,
+		"trade_market_cap_pct": gross_value / max(market_cap, 1.0),
+		"player_ownership_pct_after": player_shares_after / shares_outstanding,
+		"player_free_float_pct_after": player_shares_after / free_float_shares,
+		"impact_intent": "accumulate" if side == "buy" else "distribute"
+	})
+	if flow_entries.size() > MAX_PLAYER_MARKET_FLOW_ENTRIES:
+		flow_entries = flow_entries.slice(flow_entries.size() - MAX_PLAYER_MARKET_FLOW_ENTRIES, flow_entries.size())
+	player_market_flows[company_id] = flow_entries
+	_prune_player_market_flows(day_index)
+
+
+func _prune_player_market_flows(reference_day_index: int) -> void:
+	var company_ids: Array = player_market_flows.keys()
+	for company_id_value in company_ids:
+		var company_id: String = str(company_id_value)
+		var kept_entries: Array = []
+		for flow_value in player_market_flows.get(company_id, []):
+			var flow: Dictionary = flow_value
+			var age: int = reference_day_index - int(flow.get("day_index", reference_day_index))
+			if age <= PLAYER_MARKET_FLOW_DECAY_DAYS:
+				kept_entries.append(flow.duplicate(true))
+		if kept_entries.is_empty():
+			player_market_flows.erase(company_id)
+		else:
+			player_market_flows[company_id] = kept_entries
+
+
+func _player_flow_decay_weight(age: int) -> float:
+	match age:
+		1:
+			return 1.0
+		2:
+			return 0.55
+		3:
+			return 0.25
+	return 0.0
+
+
+func _build_quarterly_report_calendar() -> Dictionary:
+	var calendar: Dictionary = {}
+	if company_order.is_empty():
+		return calendar
+
+	var trade_days_by_month: Dictionary = _build_report_trade_days_by_month(REPORT_CALENDAR_END_YEAR)
+	for year_value in range(int(trading_calendar.start_date().get("year", 2020)), REPORT_CALENDAR_END_YEAR + 1):
+		for quarter_value in REPORT_MONTH_BY_QUARTER.keys():
+			var report_month: int = int(REPORT_MONTH_BY_QUARTER[quarter_value])
+			var month_key: String = _report_month_key(year_value, report_month)
+			var trade_days: Array = trade_days_by_month.get(month_key, [])
+			if trade_days.is_empty():
+				continue
+			var ordered_company_ids: Array = _company_ids_for_report_quarter(year_value, int(quarter_value))
+			var company_count: int = max(ordered_company_ids.size(), 1)
+			for company_index in range(ordered_company_ids.size()):
+				var company_id: String = str(ordered_company_ids[company_index])
+				var day_slot: int = int(floor((float(company_index) + 0.5) * float(trade_days.size()) / float(company_count)))
+				day_slot = clamp(day_slot, 0, trade_days.size() - 1)
+				var day_info: Dictionary = trade_days[day_slot]
+				var date_key: String = str(day_info.get("date_key", ""))
+				if date_key.is_empty():
+					continue
+				if not calendar.has(date_key):
+					calendar[date_key] = []
+				calendar[date_key].append(_build_quarterly_report_record(
+					company_id,
+					year_value,
+					int(quarter_value),
+					day_info
+				))
+
+	for date_key_value in calendar.keys():
+		var date_key: String = str(date_key_value)
+		var reports: Array = calendar.get(date_key, [])
+		reports.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return str(a.get("ticker", "")) < str(b.get("ticker", ""))
+		)
+		calendar[date_key] = reports
+	return calendar
+
+
+func _build_report_trade_days_by_month(end_year: int) -> Dictionary:
+	var grouped_days: Dictionary = {}
+	var trade_date: Dictionary = trading_calendar.start_date()
+	var trading_day_number: int = 1
+	while int(trade_date.get("year", 2020)) <= end_year:
+		var year_value: int = int(trade_date.get("year", 2020))
+		var month_value: int = int(trade_date.get("month", 1))
+		if REPORT_MONTH_BY_QUARTER.values().has(month_value) and trading_day_number >= 2:
+			var month_key: String = _report_month_key(year_value, month_value)
+			if not grouped_days.has(month_key):
+				grouped_days[month_key] = []
+			grouped_days[month_key].append({
+				"date": trade_date.duplicate(true),
+				"date_key": trading_calendar.to_key(trade_date),
+				"trading_day_number": trading_day_number
+			})
+		trade_date = trading_calendar.next_trade_date(trade_date)
+		trading_day_number += 1
+	return grouped_days
+
+
+func _company_ids_for_report_quarter(year_value: int, quarter_value: int) -> Array:
+	var ordered_ids: Array = company_order.duplicate()
+	ordered_ids.sort_custom(func(a, b) -> bool:
+		return int(hash("%s|report_order|%s|%s|%s" % [run_seed, year_value, quarter_value, str(a)])) < int(hash("%s|report_order|%s|%s|%s" % [run_seed, year_value, quarter_value, str(b)]))
+	)
+	return ordered_ids
+
+
+func _build_quarterly_report_record(company_id: String, year_value: int, quarter_value: int, day_info: Dictionary) -> Dictionary:
+	var definition: Dictionary = get_effective_company_definition(company_id, false, false)
+	var report_date: Dictionary = day_info.get("date", {}).duplicate(true)
+	return {
+		"id": "%s_q%d_%d" % [company_id, quarter_value, year_value],
+		"company_id": company_id,
+		"ticker": str(definition.get("ticker", company_id.to_upper())),
+		"company_name": str(definition.get("name", company_id.to_upper())),
+		"year": year_value,
+		"quarter": quarter_value,
+		"period_label": "Q%d %d" % [quarter_value, year_value],
+		"report_date": report_date,
+		"date_key": str(day_info.get("date_key", "")),
+		"trading_day_number": int(day_info.get("trading_day_number", 0))
+	}
+
+
+func _build_quarterly_report_event(report: Dictionary, trading_day_number: int, trade_date: Dictionary) -> Dictionary:
+	var company_id: String = str(report.get("company_id", ""))
+	var definition: Dictionary = get_effective_company_definition(company_id, false, false)
+	var runtime: Dictionary = get_company(company_id)
+	if definition.is_empty() or runtime.is_empty():
+		return {}
+
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = int(hash("%s|report_event|%s|%s" % [run_seed, company_id, str(report.get("id", ""))]))
+	var quality: float = float(definition.get("quality_score", 50.0))
+	var growth: float = float(definition.get("growth_score", 50.0))
+	var risk: float = float(definition.get("risk_score", 50.0))
+	var recent_sentiment: float = float(runtime.get("daily_change_pct", runtime.get("sentiment", 0.0)))
+	var surprise_score: float = (
+		(quality - 50.0) * 0.55 +
+		(growth - 50.0) * 0.35 -
+		(risk - 50.0) * 0.42 -
+		recent_sentiment * 180.0 +
+		rng.randf_range(-18.0, 18.0)
+	)
+	var event_id: String = "earnings_beat" if surprise_score >= 0.0 else "earnings_miss"
+	var event_definition: Dictionary = DataRepository.get_event_definition(event_id)
+	var ticker: String = str(definition.get("ticker", company_id.to_upper()))
+	var company_name: String = str(definition.get("name", ticker))
+	var period_label: String = str(report.get("period_label", "Q%d %d" % [
+		int(report.get("quarter", 1)),
+		int(report.get("year", int(trade_date.get("year", 2020))))
+	]))
+	var tone: String = str(event_definition.get("tone", "positive" if event_id == "earnings_beat" else "negative"))
+	return {
+		"event_id": event_id,
+		"scope": "company",
+		"event_family": "company",
+		"category": "earnings",
+		"tone": tone,
+		"target_company_id": company_id,
+		"target_ticker": ticker,
+		"target_name": company_name,
+		"headline": "%s files %s %s" % [ticker, period_label, "above expectations" if event_id == "earnings_beat" else "below expectations"],
+		"summary": "%s files its %s report %s expectations." % [company_name, period_label, "above" if event_id == "earnings_beat" else "below"],
+		"description": str(event_definition.get("description", "")),
+		"sentiment_shift": float(event_definition.get("sentiment_shift", 0.0)),
+		"broker_bias": str(event_definition.get("broker_bias", "")),
+		"quarterly_report": true,
+		"report_id": str(report.get("id", "")),
+		"report_period_label": period_label,
+		"report_date": trade_date.duplicate(true),
+		"day_index": trading_day_number
+	}
+
+
+func _reports_for_date_key(date_key: String) -> Array:
+	if quarterly_report_calendar.is_empty() and not company_order.is_empty():
+		quarterly_report_calendar = _build_quarterly_report_calendar()
+	var reports: Array = quarterly_report_calendar.get(date_key, [])
+	return reports.duplicate(true)
+
+
+func _report_month_key(year_value: int, month_value: int) -> String:
+	return "%04d-%02d" % [year_value, month_value]
+
+
+func _date_from_key(date_key: String) -> Dictionary:
+	var parts: PackedStringArray = date_key.split("-")
+	if parts.size() < 3:
+		return {}
+	return {
+		"year": int(parts[0]),
+		"month": int(parts[1]),
+		"day": int(parts[2])
+	}
 
 
 func _record_event(event_data: Dictionary, trade_date: Dictionary, resolved_day_index: int) -> void:
@@ -1003,6 +1646,8 @@ func _normalize_company_runtime(runtime: Dictionary) -> Dictionary:
 		normalized_runtime["price_history"] = _rebuild_price_history_from_bars(normalized_runtime["price_bars"])
 	normalized_runtime["company_profile"] = _normalize_company_profile(normalized_runtime.get("company_profile", {}))
 	normalized_runtime["active_events"] = normalized_runtime.get("active_events", []).duplicate(true)
+	normalized_runtime["market_depth_context"] = normalized_runtime.get("market_depth_context", {}).duplicate(true)
+	normalized_runtime["player_market_impact"] = normalized_runtime.get("player_market_impact", {}).duplicate(true)
 	return normalized_runtime
 
 
@@ -1056,6 +1701,26 @@ func _normalize_price_bar(bar: Dictionary) -> Dictionary:
 	normalized_bar["volume_lots"] = int(floor(float(normalized_bar.get("volume_shares", 0)) / float(LOT_SIZE)))
 	if is_zero_approx(float(normalized_bar.get("value", 0.0))):
 		normalized_bar["value"] = float(normalized_bar.get("close", 0.0)) * float(normalized_bar.get("volume_shares", 0))
+	for optional_key in [
+		"limit_lock",
+		"limit_source",
+		"impact_side",
+		"player_broker_code"
+	]:
+		if bar.has(optional_key):
+			normalized_bar[optional_key] = str(bar.get(optional_key, ""))
+	for optional_bool_key in ["locked_through_day"]:
+		if bar.has(optional_bool_key):
+			normalized_bar[optional_bool_key] = bool(bar.get(optional_bool_key, false))
+	for optional_float_key in [
+		"player_impact_ratio",
+		"player_liquidity_consumed",
+		"player_free_float_pct",
+		"ask_depth_value",
+		"bid_depth_value"
+	]:
+		if bar.has(optional_float_key):
+			normalized_bar[optional_float_key] = float(bar.get(optional_float_key, 0.0))
 	return normalized_bar
 
 
@@ -1117,6 +1782,29 @@ func _normalize_company_profile(company_profile: Dictionary) -> Dictionary:
 			continue
 		profile_tags.append(tag)
 	normalized_profile["profile_tags"] = profile_tags
+	var management_roster: Array = []
+	for management_value in normalized_profile.get("management_roster", []):
+		if typeof(management_value) != TYPE_DICTIONARY:
+			continue
+		var management_contact: Dictionary = management_value.duplicate(true)
+		management_contact["contact_id"] = str(management_contact.get("contact_id", management_contact.get("id", "")))
+		management_contact["id"] = str(management_contact.get("id", management_contact.get("contact_id", "")))
+		management_contact["display_name"] = str(management_contact.get("display_name", ""))
+		management_contact["affiliation_type"] = str(management_contact.get("affiliation_type", "insider"))
+		management_contact["affiliation_role"] = str(management_contact.get("affiliation_role", ""))
+		management_contact["company_id"] = str(management_contact.get("company_id", ""))
+		management_contact["affiliated_company_id"] = str(management_contact.get("affiliated_company_id", management_contact.get("company_id", "")))
+		management_contact["sector_id"] = str(management_contact.get("sector_id", ""))
+		management_contact["template_contact_id"] = str(management_contact.get("template_contact_id", ""))
+		management_contact["role"] = str(management_contact.get("role", management_contact.get("role_label", "")))
+		management_contact["role_label"] = str(management_contact.get("role_label", management_contact.get("role", "")))
+		management_contact["recognition_required"] = int(management_contact.get("recognition_required", 50))
+		management_contact["base_relationship"] = int(management_contact.get("base_relationship", 18))
+		management_contact["reliability"] = float(management_contact.get("reliability", 0.68))
+		management_contact["tone"] = str(management_contact.get("tone", "mixed"))
+		management_contact["intro"] = str(management_contact.get("intro", ""))
+		management_roster.append(management_contact)
+	normalized_profile["management_roster"] = management_roster
 	var financial_history: Array = []
 	for history_entry_value in normalized_profile.get("financial_history", []):
 		var history_entry: Dictionary = history_entry_value.duplicate(true)
@@ -1316,6 +2004,20 @@ func _ensure_company_profiles() -> void:
 				runtime["company_profile"] = company_profile
 				companies[company_id] = runtime
 
+		if company_profile.get("management_roster", []).size() != 3:
+			var management_template: Dictionary = _get_base_company_definition(company_id)
+			if management_template.is_empty():
+				continue
+
+			var management_sector_definition: Dictionary = DataRepository.get_sector_definition(str(management_template.get("sector_id", "")))
+			company_profile["management_roster"] = company_generator.build_management_roster(
+				management_template,
+				management_sector_definition,
+				run_seed
+			)
+			runtime["company_profile"] = company_profile
+			companies[company_id] = runtime
+
 
 func _get_base_company_definition(company_id: String) -> Dictionary:
 	if company_definitions.has(company_id):
@@ -1340,7 +2042,7 @@ func _estimate_order(company_id: String, shares: int, is_buy: bool) -> Dictionar
 
 	var current_price = float(companies[company_id].get("current_price", 0.0))
 	var gross_value: float = current_price * shares
-	var fee_rate: float = BUY_FEE_RATE if is_buy else SELL_FEE_RATE
+	var fee_rate: float = get_effective_buy_fee_rate() if is_buy else get_effective_sell_fee_rate()
 	var fee: float = gross_value * fee_rate
 	var lots: int = int(round(float(shares) / float(LOT_SIZE)))
 	var result: Dictionary = {
@@ -1362,4 +2064,39 @@ func _estimate_order(company_id: String, shares: int, is_buy: bool) -> Dictionar
 
 
 func _format_currency(value: float) -> String:
-	return "Rp %s" % String.num(value, 2)
+	return "%sRp%s" % [
+		"-" if value < 0.0 else "",
+		_format_decimal(absf(value), 2, true)
+	]
+
+
+func _format_decimal(value: float, decimal_places: int = 2, use_grouping: bool = true) -> String:
+	var safe_places: int = max(decimal_places, 0)
+	var decimal_scale: int = 1
+	for _index in range(safe_places):
+		decimal_scale *= 10
+	var scaled_value: int = int(round(absf(value) * float(decimal_scale)))
+	var whole_value: int = int(floor(float(scaled_value) / float(decimal_scale)))
+	var decimal_value: int = scaled_value % decimal_scale
+	var whole_text: String = _format_grouped_integer(whole_value) if use_grouping else str(whole_value)
+	if safe_places <= 0:
+		return whole_text
+	var decimal_text: String = str(decimal_value)
+	while decimal_text.length() < safe_places:
+		decimal_text = "0" + decimal_text
+	return "%s,%s" % [whole_text, decimal_text]
+
+
+func _format_grouped_integer(value: int) -> String:
+	var negative: bool = value < 0
+	var digits: String = str(abs(value))
+	var groups: Array = []
+	while digits.length() > 3:
+		groups.push_front(digits.substr(digits.length() - 3, 3))
+		digits = digits.substr(0, digits.length() - 3)
+	if not digits.is_empty():
+		groups.push_front(digits)
+	var grouped_value: String = ".".join(groups)
+	if grouped_value.is_empty():
+		grouped_value = "0"
+	return "-%s" % grouped_value if negative else grouped_value

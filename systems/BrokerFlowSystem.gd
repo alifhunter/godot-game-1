@@ -137,6 +137,15 @@ func generate_day_flow(definition: Dictionary, runtime: Dictionary, context: Dic
 		"bandar_net": round(bandar_score * 100.0),
 		"zombie_net": round(zombie_score * 100.0)
 	}
+	var player_flow: Dictionary = context.get("player_flow", {})
+	var player_impact_ratio: float = clamp(float(player_flow.get("impact_ratio", 0.0)), -1.0, 1.0)
+	var player_depth_impact_ratio: float = clamp(float(player_flow.get("depth_impact_ratio", 0.0)), -1.0, 1.0)
+	if not is_zero_approx(player_impact_ratio):
+		raw_scores["retail_net"] = clamp(float(raw_scores.get("retail_net", 0.0)) + player_impact_ratio * 42.0, -100.0, 100.0)
+		raw_scores["bandar_net"] = clamp(float(raw_scores.get("bandar_net", 0.0)) + player_impact_ratio * 16.0, -100.0, 100.0)
+	if not is_zero_approx(player_depth_impact_ratio):
+		raw_scores["retail_net"] = clamp(float(raw_scores.get("retail_net", 0.0)) + player_depth_impact_ratio * 26.0, -100.0, 100.0)
+		raw_scores["bandar_net"] = clamp(float(raw_scores.get("bandar_net", 0.0)) + player_depth_impact_ratio * 10.0, -100.0, 100.0)
 	var net_pressure: float = 0.0
 	for key in BROKER_KEYS:
 		net_pressure += float(raw_scores.get(key, 0.0))
@@ -152,6 +161,18 @@ func generate_day_flow(definition: Dictionary, runtime: Dictionary, context: Dic
 		-1.0,
 		1.0
 	)
+	var flow_tag: String = _flow_tag(net_pressure)
+	var action_meter_score: float = clamp(net_pressure, -1.0, 1.0)
+	var action_meter_label: String = _meter_label_for_score(net_pressure)
+	var player_limit_lock: String = str(player_flow.get("limit_lock", ""))
+	if player_limit_lock == "ara":
+		flow_tag = "accumulation"
+		action_meter_score = max(action_meter_score, 0.92)
+		action_meter_label = "XL ARA Lock"
+	elif player_limit_lock == "arb":
+		flow_tag = "distribution"
+		action_meter_score = min(action_meter_score, -0.92)
+		action_meter_label = "XL ARB Lock"
 
 	return {
 		"retail_net": raw_scores["retail_net"],
@@ -169,9 +190,13 @@ func generate_day_flow(definition: Dictionary, runtime: Dictionary, context: Dic
 		"dominant_sell_broker_code": "",
 		"dominant_sell_broker_name": "",
 		"dominant_sell_broker_type": "",
-		"flow_tag": _flow_tag(net_pressure),
-		"action_meter_score": clamp(net_pressure, -1.0, 1.0),
-		"action_meter_label": _meter_label_for_score(net_pressure),
+		"flow_tag": flow_tag,
+		"action_meter_score": action_meter_score,
+		"action_meter_label": action_meter_label,
+		"player_flow": player_flow.duplicate(true),
+		"player_impact_summary": str(player_flow.get("impact_summary", "")),
+		"limit_lock": player_limit_lock,
+		"limit_source": str(player_flow.get("limit_source", "")),
 		"buy_brokers": [],
 		"sell_brokers": [],
 		"net_buy_brokers": [],
@@ -304,6 +329,8 @@ func _build_broker_tape(
 		row["buy_shares"] = max((buy_value / max(buy_avg_price, 1.0)), 0.0)
 		row["sell_shares"] = max((sell_value / max(sell_avg_price, 1.0)), 0.0)
 
+	_inject_player_flow_into_broker_rows(broker_rows, context.get("player_flow", {}), current_price)
+
 	var buy_ranked: Array = broker_rows.duplicate(true)
 	var sell_ranked: Array = broker_rows.duplicate(true)
 	buy_ranked.sort_custom(_sort_broker_buy_rows)
@@ -338,6 +365,14 @@ func _build_broker_tape(
 	var dominant_buy: Dictionary = top_buy_brokers[0] if not top_buy_brokers.is_empty() else {}
 	var dominant_sell: Dictionary = top_sell_brokers[0] if not top_sell_brokers.is_empty() else {}
 	var action_meter_score: float = _derive_action_meter_score(broker_flow, broker_rows, trade_value)
+	var action_meter_label: String = _meter_label_for_score(action_meter_score)
+	var limit_lock: String = str(broker_flow.get("limit_lock", ""))
+	if limit_lock == "ara":
+		action_meter_score = max(action_meter_score, 0.92)
+		action_meter_label = "XL ARA Lock"
+	elif limit_lock == "arb":
+		action_meter_score = min(action_meter_score, -0.92)
+		action_meter_label = "XL ARB Lock"
 
 	return {
 		"buy_brokers": top_buy_brokers,
@@ -351,10 +386,65 @@ func _build_broker_tape(
 		"dominant_sell_broker_name": str(dominant_sell.get("company_name", "")),
 		"dominant_sell_broker_type": str(dominant_sell.get("broker_type", "")),
 		"action_meter_score": action_meter_score,
-		"action_meter_label": _meter_label_for_score(action_meter_score),
+		"action_meter_label": action_meter_label,
 		"net_buy_brokers": top_net_buy_brokers,
 		"net_sell_brokers": top_net_sell_brokers
 	}
+
+
+func _inject_player_flow_into_broker_rows(broker_rows: Array, player_flow: Dictionary, current_price: float) -> void:
+	var broker_code: String = str(player_flow.get("broker_code", ""))
+	if broker_code.is_empty():
+		return
+
+	var player_buy_value: float = max(float(player_flow.get("buy_value", 0.0)), 0.0)
+	var player_sell_value: float = max(float(player_flow.get("sell_value", 0.0)), 0.0)
+	if player_buy_value <= 0.0 and player_sell_value <= 0.0:
+		return
+
+	var target_row: Dictionary = {}
+	for broker_row_value in broker_rows:
+		var broker_row: Dictionary = broker_row_value
+		if str(broker_row.get("code", "")) == broker_code:
+			target_row = broker_row
+			break
+	if target_row.is_empty():
+		target_row = {
+			"code": broker_code,
+			"company_name": str(player_flow.get("broker_name", "Player Broker")),
+			"broker_type": "retail",
+			"personality_tags": ["player", "retail_facing"],
+			"buy_weight": 0.0,
+			"sell_weight": 0.0,
+			"activity_score": 0.0,
+			"buy_value": 0.0,
+			"sell_value": 0.0,
+			"buy_shares": 0.0,
+			"sell_shares": 0.0,
+			"buy_avg_price": current_price,
+			"sell_avg_price": current_price,
+			"buy_lots": 0.0,
+			"sell_lots": 0.0
+		}
+		broker_rows.append(target_row)
+
+	if player_buy_value > 0.0:
+		var previous_buy_value: float = float(target_row.get("buy_value", 0.0))
+		var previous_buy_avg: float = float(target_row.get("buy_avg_price", current_price))
+		var next_buy_value: float = previous_buy_value + player_buy_value
+		target_row["buy_avg_price"] = ((previous_buy_avg * previous_buy_value) + (current_price * player_buy_value)) / max(next_buy_value, 1.0)
+		target_row["buy_value"] = next_buy_value
+		target_row["buy_shares"] = float(target_row.get("buy_shares", 0.0)) + max(float(player_flow.get("buy_shares", 0.0)), player_buy_value / max(current_price, 1.0))
+		target_row["buy_lots"] = float(target_row.get("buy_shares", 0.0)) / 100.0
+	if player_sell_value > 0.0:
+		var previous_sell_value: float = float(target_row.get("sell_value", 0.0))
+		var previous_sell_avg: float = float(target_row.get("sell_avg_price", current_price))
+		var next_sell_value: float = previous_sell_value + player_sell_value
+		target_row["sell_avg_price"] = ((previous_sell_avg * previous_sell_value) + (current_price * player_sell_value)) / max(next_sell_value, 1.0)
+		target_row["sell_value"] = next_sell_value
+		target_row["sell_shares"] = float(target_row.get("sell_shares", 0.0)) + max(float(player_flow.get("sell_shares", 0.0)), player_sell_value / max(current_price, 1.0))
+		target_row["sell_lots"] = float(target_row.get("sell_shares", 0.0)) / 100.0
+	target_row["player_flow"] = true
 
 
 func _derive_broker_side_weights(

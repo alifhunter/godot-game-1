@@ -121,6 +121,7 @@ func build_chart_snapshot_from_bars(
 		change_pct = (end_price - start_price) / start_price
 
 	var indicator_snapshots: Array = _build_indicator_snapshots(display_bars, enabled_indicator_ids, primary_values.size())
+	var latest_bar: Dictionary = display_bars[display_bars.size() - 1]
 	var plots: Array = [{
 		"id": "close",
 		"label": "Close",
@@ -132,12 +133,13 @@ func build_chart_snapshot_from_bars(
 	}]
 	for indicator_value in indicator_snapshots:
 		var indicator_snapshot: Dictionary = indicator_value
-		if str(indicator_snapshot.get("plot_kind", "")) != "overlay":
+		var plot_kind: String = str(indicator_snapshot.get("plot_kind", "overlay"))
+		if plot_kind != "overlay" and plot_kind != "panel":
 			continue
 		plots.append({
 			"id": str(indicator_snapshot.get("id", "")),
 			"label": str(indicator_snapshot.get("label", "")),
-			"plot_kind": "overlay",
+			"plot_kind": plot_kind,
 			"style": "line",
 			"fill": false,
 			"values": indicator_snapshot.get("values", []).duplicate(),
@@ -163,7 +165,11 @@ func build_chart_snapshot_from_bars(
 		"visible_point_count": primary_values.size(),
 		"full_bar_count": full_bars.size(),
 		"start_date": visible_bars[0].get("trade_date", {}).duplicate(true),
-		"end_date": visible_bars[visible_bars.size() - 1].get("trade_date", {}).duplicate(true)
+		"end_date": visible_bars[visible_bars.size() - 1].get("trade_date", {}).duplicate(true),
+		"latest_limit_lock": str(latest_bar.get("limit_lock", "")),
+		"latest_limit_source": str(latest_bar.get("limit_source", "")),
+		"latest_player_impact_ratio": float(latest_bar.get("player_impact_ratio", 0.0)),
+		"latest_player_liquidity_consumed": float(latest_bar.get("player_liquidity_consumed", 0.0))
 	}
 
 
@@ -279,14 +285,27 @@ func _aggregate_bar_group(bar_group: Array) -> Dictionary:
 	)
 	var total_volume_shares: int = 0
 	var total_value: float = 0.0
+	var latest_limit_lock: String = ""
+	var latest_limit_source: String = ""
+	var latest_impact_side: String = ""
+	var max_player_impact_ratio: float = 0.0
+	var max_player_liquidity_consumed: float = 0.0
 	for bar_value in bar_group:
 		var bar: Dictionary = bar_value
 		high_price = max(high_price, float(bar.get("high", close_price)))
 		low_price = min(low_price, float(bar.get("low", close_price)))
 		total_volume_shares += int(bar.get("volume_shares", 0))
 		total_value += float(bar.get("value", float(bar.get("close", 0.0)) * float(bar.get("volume_shares", 0))))
+		if not str(bar.get("limit_lock", "")).is_empty():
+			latest_limit_lock = str(bar.get("limit_lock", ""))
+			latest_limit_source = str(bar.get("limit_source", ""))
+			latest_impact_side = str(bar.get("impact_side", ""))
+		var player_impact_ratio: float = float(bar.get("player_impact_ratio", 0.0))
+		if absf(player_impact_ratio) > absf(max_player_impact_ratio):
+			max_player_impact_ratio = player_impact_ratio
+		max_player_liquidity_consumed = max(max_player_liquidity_consumed, float(bar.get("player_liquidity_consumed", 0.0)))
 
-	return {
+	var aggregated_bar: Dictionary = {
 		"trade_date": last_bar.get("trade_date", {}).duplicate(true),
 		"open": open_price,
 		"high": high_price,
@@ -296,6 +315,15 @@ func _aggregate_bar_group(bar_group: Array) -> Dictionary:
 		"volume_lots": int(floor(float(total_volume_shares) / 100.0)),
 		"value": total_value
 	}
+	if not latest_limit_lock.is_empty():
+		aggregated_bar["limit_lock"] = latest_limit_lock
+		aggregated_bar["limit_source"] = latest_limit_source
+		aggregated_bar["impact_side"] = latest_impact_side
+		aggregated_bar["locked_through_day"] = true
+	if not is_zero_approx(max_player_impact_ratio):
+		aggregated_bar["player_impact_ratio"] = max_player_impact_ratio
+		aggregated_bar["player_liquidity_consumed"] = max_player_liquidity_consumed
+	return aggregated_bar
 
 
 func _build_primary_values(visible_bars: Array) -> Array:

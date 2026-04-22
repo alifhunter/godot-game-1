@@ -4,12 +4,23 @@ const SCREEN_HOME := "home"
 const SCREEN_DIFFICULTY := "difficulty"
 const SCREEN_LOADING := "loading"
 const UI_FONT_SIZE := 12
+const DIFFICULTY_SELECTOR_WIDTH_RATIO := 0.9
+const DIFFICULTY_SELECTOR_COMPACT_WIDTH := 720.0
+const APP_FONT_CANDIDATE_PATHS := [
+	"res://assets/fonts/app_font.ttf",
+	"res://assets/fonts/app_font.otf",
+	"res://assets/fonts/OpenSans-Regular.ttf"
+]
+
+var cached_app_font: Font = null
+var has_checked_app_font: bool = false
 
 @onready var home_screen: Control = $Margin/ScreenRoot/HomeScreen
 @onready var difficulty_screen: Control = $Margin/ScreenRoot/DifficultyScreen
 @onready var loading_screen: Control = $Margin/ScreenRoot/LoadingScreen
 @onready var status_label: Label = $Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/StatusLabel
 @onready var load_button: Button = $Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/ButtonColumn/LoadButton
+@onready var difficulty_selector_card: PanelContainer = $Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard
 @onready var difficulty_card_grid: GridContainer = $Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox/DifficultyCardGrid
 @onready var selection_detail_label: Label = $Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox/SelectionDetailLabel
 @onready var tutorial_checkbox: CheckBox = $Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox/TutorialCheckBox
@@ -34,12 +45,14 @@ func _ready() -> void:
 	GameManager.run_loading_started.connect(_on_run_loading_started)
 	GameManager.run_loading_progress.connect(_on_run_loading_progress)
 	GameManager.run_loading_finished.connect(_on_run_loading_finished)
+	get_viewport().size_changed.connect(_update_difficulty_selector_size)
 	_populate_difficulty_cards()
 	tutorial_checkbox.button_pressed = true
 	_refresh_load_state()
 	_set_screen(SCREEN_HOME)
 	_clear_selected_difficulty()
 	_apply_global_font_size_overrides()
+	_update_difficulty_selector_size()
 
 
 func _refresh_load_state() -> void:
@@ -106,16 +119,28 @@ func _populate_difficulty_cards() -> void:
 		card_button.toggle_mode = true
 		card_button.button_group = difficulty_button_group
 		card_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		card_button.clip_text = true
 		card_button.text = _build_difficulty_card_text(difficulty_config)
 		card_button.pressed.connect(_on_difficulty_card_pressed.bind(difficulty_id))
 		difficulty_card_grid.add_child(card_button)
 		difficulty_card_buttons[difficulty_id] = card_button
 
 
+func _update_difficulty_selector_size() -> void:
+	if difficulty_selector_card == null:
+		return
+	var viewport_width: float = get_viewport_rect().size.x
+	var available_width: float = difficulty_screen.size.x if difficulty_screen != null and difficulty_screen.size.x > 0.0 else viewport_width
+	var target_width: float = floor(min(viewport_width * DIFFICULTY_SELECTOR_WIDTH_RATIO, available_width))
+	difficulty_selector_card.custom_minimum_size.x = target_width
+	difficulty_selector_card.size.x = target_width
+	if difficulty_card_grid != null:
+		difficulty_card_grid.columns = 1 if target_width < DIFFICULTY_SELECTOR_COMPACT_WIDTH else 3
+
+
 func _build_difficulty_card_text(difficulty_config: Dictionary) -> String:
-	return "%s\n%s\n\nCash: %s\nCompanies: %d\nVolatility: %s\nEvents: every %d day(s)" % [
+	return "%s\n\nCash: %s\nCompanies: %d\nVolatility: %s\nEvents: every %d day(s)" % [
 		str(difficulty_config.get("label", "Normal")),
-		str(difficulty_config.get("description", "")),
 		_format_currency(float(difficulty_config.get("starting_cash", 0.0))),
 		int(difficulty_config.get("company_count", 0)),
 		str(difficulty_config.get("volatility_label", "Normal")),
@@ -233,23 +258,84 @@ func _set_screen(screen_id: String) -> void:
 
 
 func _apply_global_font_size_overrides() -> void:
-	_apply_font_size_override_to_tree(self, UI_FONT_SIZE)
+	_apply_font_size_override_to_tree(self, UI_FONT_SIZE, _get_app_font())
 
 
-func _apply_font_size_override_to_tree(node: Node, font_size: int) -> void:
+func _apply_font_size_override_to_tree(node: Node, font_size: int, app_font: Font = null) -> void:
 	if node is Control:
-		var control: Control = node
-		control.add_theme_font_size_override("font_size", font_size)
-		if control is RichTextLabel:
-			var rich_text: RichTextLabel = control
-			rich_text.add_theme_font_size_override("normal_font_size", font_size)
-			rich_text.add_theme_font_size_override("bold_font_size", font_size)
-			rich_text.add_theme_font_size_override("italics_font_size", font_size)
-			rich_text.add_theme_font_size_override("mono_font_size", font_size)
+		_apply_font_override_to_control(node as Control, font_size, app_font)
 
 	for child: Node in node.get_children():
-		_apply_font_size_override_to_tree(child, font_size)
+		_apply_font_size_override_to_tree(child, font_size, app_font)
+
+
+func _apply_font_override_to_control(control: Control, font_size: int, app_font: Font = null) -> void:
+	control.add_theme_font_size_override("font_size", font_size)
+	if app_font != null:
+		control.add_theme_font_override("font", app_font)
+	if control is RichTextLabel:
+		var rich_text: RichTextLabel = control
+		rich_text.add_theme_font_size_override("normal_font_size", font_size)
+		rich_text.add_theme_font_size_override("bold_font_size", font_size)
+		rich_text.add_theme_font_size_override("italics_font_size", font_size)
+		rich_text.add_theme_font_size_override("mono_font_size", font_size)
+		if app_font != null:
+			rich_text.add_theme_font_override("normal_font", app_font)
+			rich_text.add_theme_font_override("bold_font", app_font)
+			rich_text.add_theme_font_override("italics_font", app_font)
+			rich_text.add_theme_font_override("mono_font", app_font)
+
+
+func _get_app_font() -> Font:
+	if has_checked_app_font:
+		return cached_app_font
+
+	has_checked_app_font = true
+	for font_path_value in APP_FONT_CANDIDATE_PATHS:
+		var font_path: String = str(font_path_value)
+		if not ResourceLoader.exists(font_path):
+			continue
+		var font_resource := load(font_path)
+		if font_resource is Font:
+			cached_app_font = font_resource
+			return cached_app_font
+	return null
 
 
 func _format_currency(value: float) -> String:
-	return "Rp %s" % String.num(value, 0)
+	return "%sRp%s" % [
+		"-" if value < 0.0 else "",
+		_format_decimal(absf(value), 2, true)
+	]
+
+
+func _format_decimal(value: float, decimal_places: int = 2, use_grouping: bool = true) -> String:
+	var safe_places: int = max(decimal_places, 0)
+	var decimal_scale: int = 1
+	for _index in range(safe_places):
+		decimal_scale *= 10
+	var scaled_value: int = int(round(absf(value) * float(decimal_scale)))
+	var whole_value: int = int(floor(float(scaled_value) / float(decimal_scale)))
+	var decimal_value: int = scaled_value % decimal_scale
+	var whole_text: String = _format_grouped_integer(whole_value) if use_grouping else str(whole_value)
+	if safe_places <= 0:
+		return whole_text
+	var decimal_text: String = str(decimal_value)
+	while decimal_text.length() < safe_places:
+		decimal_text = "0" + decimal_text
+	return "%s,%s" % [whole_text, decimal_text]
+
+
+func _format_grouped_integer(value: int) -> String:
+	var negative: bool = value < 0
+	var digits: String = str(abs(value))
+	var groups: Array = []
+	while digits.length() > 3:
+		groups.push_front(digits.substr(digits.length() - 3, 3))
+		digits = digits.substr(0, digits.length() - 3)
+	if not digits.is_empty():
+		groups.push_front(digits)
+	var grouped_value: String = ".".join(groups)
+	if grouped_value.is_empty():
+		grouped_value = "0"
+	return "-%s" % grouped_value if negative else grouped_value

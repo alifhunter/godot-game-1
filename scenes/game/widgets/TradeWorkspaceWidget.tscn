@@ -382,6 +382,14 @@ text = "Price:"
 autowrap_mode = 3
 text = "Company profile:"
 
+[node name="ProfileManagementLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox"]
+autowrap_mode = 3
+text = "Management:"
+
+[node name="ProfileShareholdersLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox"]
+autowrap_mode = 3
+text = "Major Shareholders:"
+
 [node name="ProfileTagsLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox"]
 autowrap_mode = 3
 text = "Tags:"
@@ -389,3 +397,11 @@ text = "Tags:"
 [node name="ProfileDescriptionLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox"]
 autowrap_mode = 3
 text = "Description:"
+
+[node name="ProfileNetworkHintLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox"]
+autowrap_mode = 3
+text = ""
+
+[node name="ProfileMeetContactButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Profile/ProfilePanel/ProfileMargin/ProfileVBox"]
+custom_minimum_size = Vector2(0, 34)
+text = "Meet Contact"

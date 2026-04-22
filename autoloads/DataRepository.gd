@@ -8,6 +8,9 @@ const SECTORS_PATH := "res://data/sectors/sectors.json"
 const EVENTS_PATH := "res://data/events/events.json"
 const NEWS_FEED_DATA_PATH := "res://data/news/news_feed_data.json"
 const TWOOTER_FEED_DATA_PATH := "res://data/social/twooter_feed_data.json"
+const CONTACT_NETWORK_DATA_PATH := "res://data/network/contact_network_data.json"
+const UPGRADE_CATALOG_PATH := "res://data/upgrades/upgrade_catalog.json"
+const ACADEMY_CATALOG_PATH := "res://data/academy/academy_catalog.json"
 
 var company_archetypes = []
 var company_words = {}
@@ -17,6 +20,9 @@ var sectors = []
 var event_definitions = []
 var news_feed_data = {}
 var twooter_feed_data = {}
+var contact_network_data = {}
+var upgrade_catalog = {}
+var academy_catalog = {}
 var company_archetype_by_id = {}
 var broker_by_code = {}
 var sector_by_id = {}
@@ -36,6 +42,9 @@ func reload_all() -> void:
 	event_definitions = _load_array_json(EVENTS_PATH)
 	news_feed_data = _load_dictionary_json(NEWS_FEED_DATA_PATH)
 	twooter_feed_data = _load_dictionary_json(TWOOTER_FEED_DATA_PATH)
+	contact_network_data = _load_dictionary_json(CONTACT_NETWORK_DATA_PATH)
+	upgrade_catalog = _load_dictionary_json(UPGRADE_CATALOG_PATH)
+	academy_catalog = _load_dictionary_json(ACADEMY_CATALOG_PATH)
 
 	company_archetype_by_id.clear()
 	for company_archetype in company_archetypes:
@@ -93,6 +102,18 @@ func get_news_feed_data() -> Dictionary:
 
 func get_twooter_feed_data() -> Dictionary:
 	return twooter_feed_data.duplicate(true)
+
+
+func get_contact_network_data() -> Dictionary:
+	return contact_network_data.duplicate(true)
+
+
+func get_upgrade_catalog() -> Dictionary:
+	return upgrade_catalog.duplicate(true)
+
+
+func get_academy_catalog() -> Dictionary:
+	return academy_catalog.duplicate(true)
 
 
 func get_company_archetype(company_id: String) -> Dictionary:

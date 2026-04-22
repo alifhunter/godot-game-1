@@ -27,9 +27,19 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 10
 
-[node name="AddWatchlistButton" type="Button" parent="WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab"]
+[node name="WatchlistActionRow" type="HBoxContainer" parent="WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="AddWatchlistButton" type="Button" parent="WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab/WatchlistActionRow"]
 custom_minimum_size = Vector2(0, 40)
+size_flags_horizontal = 3
 text = "Add Watchlist"
+
+[node name="RemoveWatchlistButton" type="Button" parent="WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab/WatchlistActionRow"]
+custom_minimum_size = Vector2(0, 40)
+size_flags_horizontal = 3
+text = "Remove"
 
 [node name="WatchlistEmptyLabel" type="Label" parent="WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab"]
 autowrap_mode = 3
@@ -43,7 +53,13 @@ size_flags_vertical = 3
 [node name="AllStocksTab" type="VBoxContainer" parent="WatchlistMargin/WatchlistVBox/StockListTabs"]
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/separation = 0
+theme_override_constants/separation = 8
+
+[node name="AllStocksSearchInput" type="LineEdit" parent="WatchlistMargin/WatchlistVBox/StockListTabs/AllStocksTab"]
+custom_minimum_size = Vector2(0, 36)
+size_flags_horizontal = 3
+placeholder_text = "Search ticker or company"
+clear_button_enabled = true
 
 [node name="AllStocksScroll" type="ScrollContainer" parent="WatchlistMargin/WatchlistVBox/StockListTabs/AllStocksTab"]
 size_flags_horizontal = 3

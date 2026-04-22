@@ -20,6 +20,13 @@ const PLOT_MARGIN_BOTTOM := 34.0
 const AXIS_FONT_SIZE := 11
 const Y_TICK_COUNT := 5
 const X_TICK_COUNT := 6
+const VOLUME_PANEL_RATIO := 0.22
+const VOLUME_PANEL_MIN_HEIGHT := 52.0
+const VOLUME_PANEL_MAX_HEIGHT := 88.0
+const VOLUME_PANEL_GAP := 12.0
+const VOLUME_BAR_ALPHA := 0.62
+const INDICATOR_PANEL_HEIGHT := 64.0
+const INDICATOR_PANEL_GAP := 10.0
 const ZOOM_FRACTIONS := [1.0, 0.75, 0.5, 0.33, 0.2, 0.125]
 const MONTH_NAMES := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -109,12 +116,27 @@ func _draw() -> void:
 	var visible_plots: Array = visible_context.get("plots", [])
 	if visible_plots.is_empty():
 		return
+	var price_plots: Array = _plots_for_kind(visible_plots, false)
+	var panel_plots: Array = _plots_for_kind(visible_plots, true)
+	if price_plots.is_empty():
+		return
 
-	var bounds: Dictionary = _resolve_plot_bounds(visible_plots, visible_bars)
+	var bounds: Dictionary = _resolve_plot_bounds(price_plots, visible_bars)
 	if bool(bounds.get("empty", true)):
 		return
 	var min_value: float = float(bounds.get("min", 0.0))
 	var max_value: float = float(bounds.get("max", 0.0))
+	var layout: Dictionary = _build_chart_layout(plot_rect, visible_bars, not panel_plots.is_empty())
+	var price_rect: Rect2 = layout.get("price_rect", plot_rect)
+	var indicator_rect: Rect2 = layout.get("indicator_rect", Rect2())
+	var volume_rect: Rect2 = layout.get("volume_rect", Rect2())
+	var x_axis_rect: Rect2 = volume_rect if volume_rect.size.y > 0.0 else price_rect
+	if x_axis_rect == price_rect and indicator_rect.size.y > 0.0:
+		x_axis_rect = indicator_rect
+	var grid_rect := Rect2(
+		price_rect.position,
+		Vector2(price_rect.size.x, max(x_axis_rect.end.y - price_rect.position.y, price_rect.size.y))
+	)
 
 	if is_equal_approx(min_value, max_value):
 		var single_value_padding: float = max(abs(min_value) * 0.05, 1.0)
@@ -125,29 +147,33 @@ func _draw() -> void:
 		min_value -= padding
 		max_value += padding
 
-	_draw_y_axis(plot_rect, min_value, max_value)
-	_draw_x_axis(plot_rect, visible_bars)
+	_draw_y_axis(price_rect, min_value, max_value)
+	_draw_x_axis(x_axis_rect, visible_bars, grid_rect)
+	if volume_rect.size.y > 0.0:
+		_draw_volume_bars(visible_bars, volume_rect)
+	if indicator_rect.size.y > 0.0:
+		_draw_indicator_panel(panel_plots, indicator_rect)
 
 	if not is_zero_approx(_baseline_value):
-		var baseline_y: float = _value_to_plot_y(_baseline_value, min_value, max_value, plot_rect)
+		var baseline_y: float = _value_to_plot_y(_baseline_value, min_value, max_value, price_rect)
 		draw_line(
-			Vector2(plot_rect.position.x, baseline_y),
-			Vector2(plot_rect.end.x, baseline_y),
+			Vector2(price_rect.position.x, baseline_y),
+			Vector2(price_rect.end.x, baseline_y),
 			BASELINE_COLOR,
 			1.0
 		)
 
 	if _display_mode == "candle":
-		_draw_candlesticks(visible_bars, plot_rect, min_value, max_value)
+		_draw_candlesticks(visible_bars, price_rect, min_value, max_value)
 
-	for plot_index in range(visible_plots.size()):
-		var plot: Dictionary = visible_plots[plot_index]
+	for plot_index in range(price_plots.size()):
+		var plot: Dictionary = price_plots[plot_index]
 		var plot_id: String = str(plot.get("id", ""))
 		if _display_mode == "candle" and plot_id == "close":
 			continue
-		_draw_plot(plot, plot_rect, min_value, max_value, _display_mode != "candle" and plot_id == "close")
+		_draw_plot(plot, price_rect, min_value, max_value, _display_mode != "candle" and plot_id == "close")
 
-	_draw_hover_overlay(plot_rect, visible_bars, min_value, max_value)
+	_draw_hover_overlay(price_rect, visible_bars, min_value, max_value, grid_rect, x_axis_rect)
 
 
 func _value_to_plot_y(value: float, min_value: float, max_value: float, plot_rect: Rect2) -> float:
@@ -201,6 +227,62 @@ func _resolve_plot_bounds(plots: Array, bars: Array) -> Dictionary:
 	}
 
 
+func _build_chart_layout(plot_rect: Rect2, visible_bars: Array, has_indicator_panel: bool = false) -> Dictionary:
+	var price_rect: Rect2 = plot_rect
+	var indicator_rect := Rect2()
+	var volume_rect := Rect2()
+	var used_bottom_height: float = 0.0
+	var bottom_cursor: float = plot_rect.end.y
+
+	if _has_visible_volume(visible_bars):
+		var volume_height: float = clamp(
+			plot_rect.size.y * VOLUME_PANEL_RATIO,
+			VOLUME_PANEL_MIN_HEIGHT,
+			VOLUME_PANEL_MAX_HEIGHT
+		)
+		volume_rect = Rect2(
+			Vector2(plot_rect.position.x, bottom_cursor - volume_height),
+			Vector2(plot_rect.size.x, volume_height)
+		)
+		bottom_cursor = volume_rect.position.y - VOLUME_PANEL_GAP
+		used_bottom_height += volume_height + VOLUME_PANEL_GAP
+
+	if has_indicator_panel:
+		var panel_height: float = min(INDICATOR_PANEL_HEIGHT, max(plot_rect.size.y - used_bottom_height - 100.0, 0.0))
+		if panel_height >= 40.0:
+			indicator_rect = Rect2(
+				Vector2(plot_rect.position.x, bottom_cursor - panel_height),
+				Vector2(plot_rect.size.x, panel_height)
+			)
+			bottom_cursor = indicator_rect.position.y - INDICATOR_PANEL_GAP
+			used_bottom_height += panel_height + INDICATOR_PANEL_GAP
+
+	var price_height: float = bottom_cursor - plot_rect.position.y
+	if price_height < 90.0:
+		return {
+			"price_rect": price_rect,
+			"indicator_rect": Rect2(),
+			"volume_rect": volume_rect
+		}
+
+	price_rect = Rect2(plot_rect.position, Vector2(plot_rect.size.x, price_height))
+	return {
+		"price_rect": price_rect,
+		"indicator_rect": indicator_rect,
+		"volume_rect": volume_rect
+	}
+
+
+func _has_visible_volume(visible_bars: Array) -> bool:
+	for bar_value in visible_bars:
+		if typeof(bar_value) != TYPE_DICTIONARY:
+			continue
+		var bar: Dictionary = bar_value
+		if int(bar.get("volume_shares", 0)) > 0:
+			return true
+	return false
+
+
 func _draw_candlesticks(visible_bars: Array, plot_rect: Rect2, min_value: float, max_value: float) -> void:
 	if visible_bars.is_empty():
 		return
@@ -238,8 +320,84 @@ func _draw_candlesticks(visible_bars: Array, plot_rect: Rect2, min_value: float,
 		draw_rect(body_rect, candle_color.darkened(0.18), false, 1.0)
 
 
-func _draw_hover_overlay(plot_rect: Rect2, visible_bars: Array, min_value: float, max_value: float) -> void:
-	var hover_state: Dictionary = _build_hover_state(plot_rect, visible_bars, min_value, max_value)
+func _draw_volume_bars(visible_bars: Array, volume_rect: Rect2) -> void:
+	if visible_bars.is_empty() or volume_rect.size.y <= 0.0:
+		return
+
+	var max_volume: int = 0
+	for bar_value in visible_bars:
+		if typeof(bar_value) != TYPE_DICTIONARY:
+			continue
+		var bar: Dictionary = bar_value
+		max_volume = max(max_volume, int(bar.get("volume_shares", 0)))
+	if max_volume <= 0:
+		return
+
+	draw_line(
+		Vector2(volume_rect.position.x, volume_rect.position.y),
+		Vector2(volume_rect.end.x, volume_rect.position.y),
+		AXIS_LINE_COLOR,
+		1.0
+	)
+	draw_line(
+		Vector2(volume_rect.position.x, volume_rect.position.y + volume_rect.size.y * 0.5),
+		Vector2(volume_rect.end.x, volume_rect.position.y + volume_rect.size.y * 0.5),
+		Color(GRID_COLOR.r, GRID_COLOR.g, GRID_COLOR.b, 0.34),
+		1.0
+	)
+
+	var bar_count: int = visible_bars.size()
+	var slot_width: float = volume_rect.size.x / float(max(bar_count, 1))
+	var bar_width: float = clamp(slot_width * 0.62, 1.0, 16.0)
+	var drawable_height: float = max(volume_rect.size.y - 4.0, 1.0)
+	for bar_index in range(bar_count):
+		var bar: Dictionary = visible_bars[bar_index]
+		var volume_shares: int = int(bar.get("volume_shares", 0))
+		if volume_shares <= 0:
+			continue
+
+		var open_price: float = float(bar.get("open", bar.get("close", 0.0)))
+		var close_price: float = float(bar.get("close", open_price))
+		var base_color: Color = CANDLE_UP_COLOR if close_price >= open_price else CANDLE_DOWN_COLOR
+		var volume_color := Color(base_color.r, base_color.g, base_color.b, VOLUME_BAR_ALPHA)
+		var volume_ratio: float = clamp(float(volume_shares) / float(max_volume), 0.0, 1.0)
+		var bar_height: float = max(volume_ratio * drawable_height, 1.0)
+		var center_x: float = volume_rect.position.x + (slot_width * (float(bar_index) + 0.5))
+		var bar_rect := Rect2(
+			Vector2(center_x - (bar_width * 0.5), volume_rect.end.y - bar_height),
+			Vector2(bar_width, bar_height)
+		)
+		draw_rect(bar_rect, volume_color, true)
+
+
+func _draw_indicator_panel(panel_plots: Array, panel_rect: Rect2) -> void:
+	if panel_plots.is_empty() or panel_rect.size.y <= 0.0:
+		return
+
+	draw_rect(panel_rect, Color(CHART_BACKGROUND.r, CHART_BACKGROUND.g, CHART_BACKGROUND.b, 0.55), true)
+	draw_line(panel_rect.position, Vector2(panel_rect.end.x, panel_rect.position.y), AXIS_LINE_COLOR, 1.0)
+	for guide_value in [30.0, 50.0, 70.0]:
+		var guide_y: float = _value_to_plot_y(guide_value, 0.0, 100.0, panel_rect)
+		draw_line(
+			Vector2(panel_rect.position.x, guide_y),
+			Vector2(panel_rect.end.x, guide_y),
+			Color(GRID_COLOR.r, GRID_COLOR.g, GRID_COLOR.b, 0.42),
+			1.0
+		)
+	for plot_value in panel_plots:
+		var plot: Dictionary = plot_value
+		_draw_plot(plot, panel_rect, 0.0, 100.0, false)
+
+
+func _draw_hover_overlay(
+	plot_rect: Rect2,
+	visible_bars: Array,
+	min_value: float,
+	max_value: float,
+	interaction_rect: Rect2,
+	date_axis_rect: Rect2
+) -> void:
+	var hover_state: Dictionary = _build_hover_state(interaction_rect, plot_rect, visible_bars, min_value, max_value)
 	if hover_state.is_empty():
 		return
 
@@ -249,15 +407,16 @@ func _draw_hover_overlay(plot_rect: Rect2, visible_bars: Array, min_value: float
 
 	var crosshair_x: float = float(hover_state.get("x", plot_rect.position.x))
 	var crosshair_y: float = float(hover_state.get("y", plot_rect.position.y))
+	if bool(hover_state.get("pointer_in_price", true)):
+		draw_line(
+			Vector2(plot_rect.position.x, crosshair_y),
+			Vector2(plot_rect.end.x, crosshair_y),
+			CROSSHAIR_COLOR,
+			1.0
+		)
 	draw_line(
-		Vector2(plot_rect.position.x, crosshair_y),
-		Vector2(plot_rect.end.x, crosshair_y),
-		CROSSHAIR_COLOR,
-		1.0
-	)
-	draw_line(
-		Vector2(crosshair_x, plot_rect.position.y),
-		Vector2(crosshair_x, plot_rect.end.y),
+		Vector2(crosshair_x, interaction_rect.position.y),
+		Vector2(crosshair_x, interaction_rect.end.y),
 		CROSSHAIR_COLOR,
 		1.0
 	)
@@ -268,8 +427,9 @@ func _draw_hover_overlay(plot_rect: Rect2, visible_bars: Array, min_value: float
 	var candle_color: Color = CANDLE_UP_COLOR if close_price >= float(hovered_bar.get("open", close_price)) else CANDLE_DOWN_COLOR
 	draw_circle(Vector2(crosshair_x, close_y), 3.5, candle_color)
 
-	_draw_hover_price_label(font, hover_state, plot_rect)
-	_draw_hover_date_label(font, hover_state, plot_rect)
+	if bool(hover_state.get("pointer_in_price", true)):
+		_draw_hover_price_label(font, hover_state, plot_rect)
+	_draw_hover_date_label(font, hover_state, date_axis_rect)
 	_draw_hover_info_panel(font, hover_state, plot_rect)
 
 
@@ -314,26 +474,43 @@ func _build_plot_segments(values: Array, plot_rect: Rect2, min_value: float, max
 	return segments
 
 
-func _build_hover_state(plot_rect: Rect2, visible_bars: Array, min_value: float, max_value: float) -> Dictionary:
-	if not _hover_active or visible_bars.is_empty() or not plot_rect.has_point(_hover_position):
+func _plots_for_kind(plots: Array, wants_panel: bool) -> Array:
+	var filtered: Array = []
+	for plot_value in plots:
+		var plot: Dictionary = plot_value
+		var is_panel: bool = str(plot.get("plot_kind", "")) == "panel"
+		if is_panel == wants_panel:
+			filtered.append(plot)
+	return filtered
+
+
+func _build_hover_state(
+	interaction_rect: Rect2,
+	price_rect: Rect2,
+	visible_bars: Array,
+	min_value: float,
+	max_value: float
+) -> Dictionary:
+	if not _hover_active or visible_bars.is_empty() or not interaction_rect.has_point(_hover_position):
 		return {}
 
 	var bar_count: int = visible_bars.size()
-	var slot_width: float = plot_rect.size.x / float(max(bar_count, 1))
+	var slot_width: float = interaction_rect.size.x / float(max(bar_count, 1))
 	if slot_width <= 0.0:
 		return {}
 
-	var relative_x: float = clamp(_hover_position.x - plot_rect.position.x, 0.0, max(plot_rect.size.x - 0.001, 0.0))
+	var relative_x: float = clamp(_hover_position.x - interaction_rect.position.x, 0.0, max(interaction_rect.size.x - 0.001, 0.0))
 	var bar_index: int = clamp(int(floor(relative_x / slot_width)), 0, bar_count - 1)
-	var crosshair_x: float = plot_rect.position.x + (slot_width * (float(bar_index) + 0.5))
-	var crosshair_y: float = clamp(_hover_position.y, plot_rect.position.y, plot_rect.end.y)
+	var crosshair_x: float = interaction_rect.position.x + (slot_width * (float(bar_index) + 0.5))
+	var crosshair_y: float = clamp(_hover_position.y, price_rect.position.y, price_rect.end.y)
 	var hovered_bar: Dictionary = visible_bars[bar_index]
 	return {
 		"index": bar_index,
 		"bar": hovered_bar,
 		"x": crosshair_x,
 		"y": crosshair_y,
-		"hover_price": _plot_y_to_value(crosshair_y, min_value, max_value, plot_rect)
+		"pointer_in_price": price_rect.has_point(_hover_position),
+		"hover_price": _plot_y_to_value(crosshair_y, min_value, max_value, price_rect)
 	}
 
 
@@ -393,9 +570,10 @@ func _draw_hover_info_panel(font: Font, hover_state: Dictionary, plot_rect: Rect
 	var low_price: float = float(hovered_bar.get("low", open_price))
 	var close_price: float = float(hovered_bar.get("close", open_price))
 	var volume_text: String = _format_volume(int(hovered_bar.get("volume_shares", 0)))
+	var limit_lock: String = str(hovered_bar.get("limit_lock", "")).to_upper()
 	var info_rect := Rect2(
 		plot_rect.position + Vector2(10, 10),
-		Vector2(min(plot_rect.size.x - 20.0, 260.0), 40)
+		Vector2(min(plot_rect.size.x - 20.0, 278.0), 56.0 if not limit_lock.is_empty() else 40.0)
 	)
 	draw_rect(info_rect, HOVER_PANEL_FILL, true)
 	draw_rect(info_rect, HOVER_PANEL_BORDER, false, 1.0)
@@ -434,6 +612,21 @@ func _draw_hover_info_panel(font: Font, hover_state: Dictionary, plot_rect: Rect
 		AXIS_FONT_SIZE,
 		change_color
 	)
+	if not limit_lock.is_empty():
+		var source_text: String = str(hovered_bar.get("limit_source", "")).replace("_", " ").capitalize()
+		var line_three: String = "%s lock%s" % [
+			limit_lock,
+			"  " + source_text if not source_text.is_empty() else ""
+		]
+		draw_string(
+			font,
+			info_rect.position + Vector2(8, 43),
+			line_three,
+			HORIZONTAL_ALIGNMENT_LEFT,
+			info_rect.size.x - 16,
+			AXIS_FONT_SIZE,
+			HOVER_PANEL_TEXT
+		)
 
 
 func zoom_in() -> void:
@@ -548,7 +741,7 @@ func _draw_y_axis(plot_rect: Rect2, min_value: float, max_value: float) -> void:
 		)
 
 
-func _draw_x_axis(plot_rect: Rect2, visible_bars: Array) -> void:
+func _draw_x_axis(plot_rect: Rect2, visible_bars: Array, grid_rect: Rect2) -> void:
 	var font: Font = _get_chart_font()
 	if font == null or visible_bars.is_empty():
 		return
@@ -567,8 +760,8 @@ func _draw_x_axis(plot_rect: Rect2, visible_bars: Array) -> void:
 		var bar_midpoint_ratio: float = (float(bar_index) + 0.5) / float(max(visible_bars.size(), 1))
 		var x_position: float = plot_rect.position.x + (plot_rect.size.x * bar_midpoint_ratio)
 		draw_line(
-			Vector2(x_position, plot_rect.position.y),
-			Vector2(x_position, plot_rect.end.y),
+			Vector2(x_position, grid_rect.position.y),
+			Vector2(x_position, grid_rect.end.y),
 			GRID_COLOR,
 			1.0
 		)
@@ -698,7 +891,7 @@ func _format_axis_price(value: float) -> String:
 		groups.insert(0, digits.substr(digits.length() - 3, 3))
 		digits = digits.substr(0, digits.length() - 3)
 	groups.insert(0, digits)
-	return sign_prefix + ",".join(groups)
+	return sign_prefix + ".".join(groups)
 
 
 func _format_axis_date(trade_date: Dictionary) -> String:

@@ -1,0 +1,78 @@
+{
+  "tracks": [
+    {
+      "id": "trading_fee",
+      "label": "Trading Fee",
+      "description": "Lower buy and sell fees for every order.",
+      "tiers": {
+        "4": {
+          "effect_label": "Buy 0.15% / Sell 0.25%",
+          "buy_fee_rate": 0.0015,
+          "sell_fee_rate": 0.0025
+        },
+        "3": {
+          "cost": 2000000,
+          "effect_label": "Buy 0.13% / Sell 0.22%",
+          "buy_fee_rate": 0.0013,
+          "sell_fee_rate": 0.0022
+        },
+        "2": {
+          "cost": 7500000,
+          "effect_label": "Buy 0.11% / Sell 0.19%",
+          "buy_fee_rate": 0.0011,
+          "sell_fee_rate": 0.0019
+        },
+        "1": {
+          "cost": 20000000,
+          "effect_label": "Buy 0.09% / Sell 0.16%",
+          "buy_fee_rate": 0.0009,
+          "sell_fee_rate": 0.0016
+        }
+      }
+    },
+    {
+      "id": "news_content",
+      "label": "News Content",
+      "description": "Unlock higher-intel outlets in News.",
+      "tiers": {
+        "4": {"effect_label": "Intel level 1", "content_level": 1},
+        "3": {"cost": 750000, "effect_label": "Intel level 2", "content_level": 2},
+        "2": {"cost": 2500000, "effect_label": "Intel level 3", "content_level": 3},
+        "1": {"cost": 7500000, "effect_label": "Intel level 4", "content_level": 4}
+      }
+    },
+    {
+      "id": "twooter_content",
+      "label": "Twooter Content",
+      "description": "Unlock higher-tier market chatter accounts.",
+      "tiers": {
+        "4": {"effect_label": "Access level 1", "content_level": 1},
+        "3": {"cost": 750000, "effect_label": "Access level 2", "content_level": 2},
+        "2": {"cost": 2500000, "effect_label": "Access level 3", "content_level": 3},
+        "1": {"cost": 7500000, "effect_label": "Access level 4", "content_level": 4}
+      }
+    },
+    {
+      "id": "chart_indicators",
+      "label": "Chart Indicators",
+      "description": "Unlock technical overlays and momentum reads.",
+      "tiers": {
+        "4": {"effect_label": "No indicators", "indicator_ids": []},
+        "3": {"cost": 1000000, "effect_label": "SMA 20", "indicator_ids": ["sma_20"]},
+        "2": {"cost": 3000000, "effect_label": "SMA 20, EMA 20, SMA 50", "indicator_ids": ["sma_20", "ema_20", "sma_50"]},
+        "1": {"cost": 9000000, "effect_label": "SMA 20, EMA 20, SMA 50, RSI 14", "indicator_ids": ["sma_20", "ema_20", "sma_50", "rsi_14"]}
+      }
+    },
+    {
+      "id": "daily_action_points",
+      "label": "Daily Action Points",
+      "description": "Increase how many Network actions you can take each trading day.",
+      "tiers": {
+        "4": {"effect_label": "10 AP per day", "daily_action_limit": 10},
+        "3": {"cost": 1500000, "effect_label": "15 AP per day", "daily_action_limit": 15},
+        "2": {"cost": 5000000, "effect_label": "20 AP per day", "daily_action_limit": 20},
+        "1": {"cost": 15000000, "effect_label": "25 AP per day", "daily_action_limit": 25}
+      }
+    }
+  ]
+}

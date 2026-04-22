@@ -20,8 +20,8 @@ grow_vertical = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 columns = 2
-theme_override_constants/h_separation = 12
-theme_override_constants/v_separation = 12
+theme_override_constants/h_separation = 0
+theme_override_constants/v_separation = 0
 
 [node name="IndexPanel" type="PanelContainer" parent="DashboardGrid"]
 size_flags_horizontal = 3
@@ -72,28 +72,57 @@ text = "-"
 autowrap_mode = 3
 text = "Synthetic index built from the live roster and latest market session."
 
-[node name="PlaceholderTopPanel" type="PanelContainer" parent="DashboardGrid"]
+[node name="MoversPanel" type="PanelContainer" parent="DashboardGrid"]
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="PlaceholderTopMargin" type="MarginContainer" parent="DashboardGrid/PlaceholderTopPanel"]
+[node name="MoversMargin" type="MarginContainer" parent="DashboardGrid/MoversPanel"]
 theme_override_constants/margin_left = 18
 theme_override_constants/margin_top = 18
 theme_override_constants/margin_right = 18
 theme_override_constants/margin_bottom = 18
 
-[node name="PlaceholderTopVBox" type="VBoxContainer" parent="DashboardGrid/PlaceholderTopPanel/PlaceholderTopMargin"]
+[node name="MoversVBox" type="VBoxContainer" parent="DashboardGrid/MoversPanel/MoversMargin"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
 theme_override_constants/separation = 10
 
-[node name="PlaceholderTopTitleLabel" type="Label" parent="DashboardGrid/PlaceholderTopPanel/PlaceholderTopMargin/PlaceholderTopVBox"]
-text = "Reserved"
+[node name="MoversTitleLabel" type="Label" parent="DashboardGrid/MoversPanel/MoversMargin/MoversVBox"]
+text = "Movers"
 
-[node name="PlaceholderTopBodyLabel" type="Label" parent="DashboardGrid/PlaceholderTopPanel/PlaceholderTopMargin/PlaceholderTopVBox"]
+[node name="MoversTabs" type="TabContainer" parent="DashboardGrid/MoversPanel/MoversMargin/MoversVBox"]
+size_flags_horizontal = 3
 size_flags_vertical = 3
+
+[node name="TopGainers" type="ScrollContainer" parent="DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="TopGainersRows" type="VBoxContainer" parent="DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs/TopGainers"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+
+[node name="TopGainersEmptyLabel" type="Label" parent="DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs/TopGainers/TopGainersRows"]
 vertical_alignment = 1
 horizontal_alignment = 1
 autowrap_mode = 3
-text = "Empty for now."
+text = "No gainers this session."
+
+[node name="TopLosers" type="ScrollContainer" parent="DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="TopLosersRows" type="VBoxContainer" parent="DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs/TopLosers"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+
+[node name="TopLosersEmptyLabel" type="Label" parent="DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs/TopLosers/TopLosersRows"]
+vertical_alignment = 1
+horizontal_alignment = 1
+autowrap_mode = 3
+text = "No losers this session."
 
 [node name="CalendarPanel" type="PanelContainer" parent="DashboardGrid"]
 size_flags_horizontal = 3

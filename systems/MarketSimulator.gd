@@ -62,6 +62,7 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 		difficulty_config,
 		macro_state
 	)
+	var report_events: Array = run_state.get_quarterly_report_events_for_day_number(day_number, trade_date)
 	var companies_result: Dictionary = {}
 
 	for company_id_value in run_state.company_order:
@@ -74,13 +75,39 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 		var listing_board: String = str(definition.get("listing_board", "main"))
 		var recent_momentum: float = _recent_momentum(runtime.get("price_history", []))
 		var sector_sentiment: float = float(sector_sentiments.get(str(sector_definition.get("id", "")), 0.0))
+		var previous_close: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("current_price", definition.get("base_price", 0.0))))
+		var ar_limits: Dictionary = IDX_PRICE_RULES.auto_rejection_limits(previous_close, listing_board)
+		var player_flow_context: Dictionary = _build_player_flow_impact_context(
+			definition,
+			runtime,
+			run_state.get_player_market_flow_context(company_id, day_number)
+		)
 		var event_context: Dictionary = _resolve_event_context(
 			definition,
 			runtime,
 			sector_definition,
 			scheduled_event,
+			report_events,
 			active_special_events,
 			active_company_arcs
+		)
+		var market_depth_context: Dictionary = _build_market_depth_context(
+			definition,
+			runtime,
+			recent_momentum,
+			market_sentiment,
+			sector_sentiment,
+			event_context,
+			difficulty_config,
+			run_state.run_seed,
+			day_number,
+			company_id
+		)
+		player_flow_context = _resolve_player_market_impact_context(
+			player_flow_context,
+			market_depth_context,
+			previous_close,
+			ar_limits
 		)
 
 		var broker_context: Dictionary = {
@@ -90,7 +117,8 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 			"market_sentiment": market_sentiment,
 			"sector_sentiment": sector_sentiment,
 			"recent_momentum": recent_momentum,
-			"event_bias": float(event_context.get("event_bias", 0.0))
+			"event_bias": float(event_context.get("event_bias", 0.0)),
+			"player_flow": player_flow_context.duplicate(true)
 		}
 		var broker_flow: Dictionary = broker_flow_system.generate_day_flow(
 			definition,
@@ -98,7 +126,6 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 			broker_context,
 			data_repository
 		)
-		var previous_close: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("current_price", definition.get("base_price", 0.0))))
 		var volume_context: Dictionary = _build_volume_activity_context(
 			definition,
 			runtime,
@@ -127,8 +154,7 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 			float(event_context.get("event_volatility_multiplier", 1.0))
 		)
 		var raw_price: float = previous_close * (1.0 + daily_change_pct)
-		var ar_limits: Dictionary = IDX_PRICE_RULES.auto_rejection_limits(previous_close, listing_board)
-		var current_price: float = _resolve_day_close_price(
+		var close_context: Dictionary = _resolve_day_close_context(
 			raw_price,
 			previous_close,
 			ar_limits,
@@ -136,11 +162,18 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 			active_special_events,
 			day_number,
 			run_state.run_seed,
-			company_id
+			company_id,
+			player_flow_context
 		)
+		var current_price: float = float(close_context.get("close_price", previous_close))
 		daily_change_pct = 0.0
 		if not is_zero_approx(previous_close):
 			daily_change_pct = (current_price - previous_close) / previous_close
+		volume_context["market_depth_context"] = market_depth_context.duplicate(true)
+		volume_context["limit_lock"] = str(close_context.get("limit_lock", ""))
+		volume_context["limit_source"] = str(close_context.get("limit_source", ""))
+		volume_context["impact_side"] = str(player_flow_context.get("impact_side", "neutral"))
+		volume_context["player_depth_impact_ratio"] = float(player_flow_context.get("depth_impact_ratio", 0.0))
 		var price_history: Array = runtime.get("price_history", []).duplicate()
 		price_history.append(current_price)
 		var price_bars: Array = runtime.get("price_bars", []).duplicate(true)
@@ -158,7 +191,10 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 			day_number,
 			company_id,
 			ar_limits,
-			trade_date
+			trade_date,
+			close_context,
+			player_flow_context,
+			market_depth_context
 		)
 		price_bars.append(daily_price_bar)
 		broker_flow = broker_flow_system.finalize_day_flow(
@@ -183,6 +219,8 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 		runtime["daily_change_pct"] = daily_change_pct
 		runtime["ar_limits"] = ar_limits.duplicate(true)
 		runtime["volume_context"] = volume_context.duplicate(true)
+		runtime["market_depth_context"] = market_depth_context.duplicate(true)
+		runtime["player_market_impact"] = _build_player_market_impact_snapshot(player_flow_context, close_context)
 
 		companies_result[company_id] = runtime
 
@@ -192,6 +230,7 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 		"companies": companies_result,
 		"starting_equity": run_state.get_total_equity(),
 		"scheduled_event": scheduled_event.duplicate(true),
+		"report_events": report_events.duplicate(true),
 		"started_company_arcs": company_arc_resolution.get("started_events", []).duplicate(true),
 		"company_arc_phase_events": company_arc_resolution.get("phase_events", []).duplicate(true),
 		"active_company_arcs": active_company_arcs,
@@ -230,6 +269,76 @@ func _resolve_day_close_price(
 		float(ar_limits.get("lower_price", 1.0)),
 		float(ar_limits.get("upper_price", current_price))
 	)
+
+
+func _resolve_day_close_context(
+	raw_price: float,
+	previous_close: float,
+	ar_limits: Dictionary,
+	sector_id: String,
+	active_special_events: Array,
+	day_number: int,
+	run_seed: int,
+	company_id: String,
+	player_flow_context: Dictionary
+) -> Dictionary:
+	var scripted_price: float = _resolve_special_price_override(
+		previous_close,
+		ar_limits,
+		sector_id,
+		active_special_events,
+		day_number,
+		run_seed,
+		company_id
+	)
+	if scripted_price > 0.0:
+		var scripted_lock: String = _limit_lock_for_price(scripted_price, ar_limits)
+		return {
+			"close_price": scripted_price,
+			"limit_lock": scripted_lock,
+			"limit_source": "scripted_event" if not scripted_lock.is_empty() else "",
+			"scripted_override": true
+		}
+
+	var player_limit_lock: String = str(player_flow_context.get("limit_lock", ""))
+	if player_limit_lock == "ara":
+		return {
+			"close_price": float(ar_limits.get("upper_price", previous_close)),
+			"limit_lock": "ara",
+			"limit_source": "player_market_impact",
+			"scripted_override": false
+		}
+	if player_limit_lock == "arb":
+		return {
+			"close_price": float(ar_limits.get("lower_price", previous_close)),
+			"limit_lock": "arb",
+			"limit_source": "player_market_impact",
+			"scripted_override": false
+		}
+
+	var adjusted_raw_price: float = raw_price * (1.0 + float(player_flow_context.get("depth_price_bias", 0.0)))
+	var current_price: float = IDX_PRICE_RULES.snap_price_for_day(adjusted_raw_price, previous_close)
+	current_price = clamp(
+		current_price,
+		float(ar_limits.get("lower_price", 1.0)),
+		float(ar_limits.get("upper_price", current_price))
+	)
+	return {
+		"close_price": current_price,
+		"limit_lock": _limit_lock_for_price(current_price, ar_limits),
+		"limit_source": "",
+		"scripted_override": false
+	}
+
+
+func _limit_lock_for_price(price: float, ar_limits: Dictionary) -> String:
+	var upper_price: float = float(ar_limits.get("upper_price", price))
+	var lower_price: float = float(ar_limits.get("lower_price", price))
+	if price >= upper_price - 0.0001:
+		return "ara"
+	if price <= lower_price + 0.0001:
+		return "arb"
+	return ""
 
 
 func _resolve_special_price_override(
@@ -457,6 +566,7 @@ func _resolve_event_context(
 	runtime: Dictionary,
 	sector_definition: Dictionary,
 	scheduled_event: Dictionary,
+	report_events: Array = [],
 	active_special_events: Array = [],
 	active_company_arcs: Array = []
 ) -> Dictionary:
@@ -476,6 +586,16 @@ func _resolve_event_context(
 		active_events,
 		event_bias
 	)
+	for report_event_value in report_events:
+		var report_event: Dictionary = report_event_value
+		event_bias = _append_event_if_applicable(
+			report_event,
+			company_id,
+			sector_id,
+			event_tags,
+			active_events,
+			event_bias
+		)
 	for special_event_value in active_special_events:
 		event_bias = _append_event_if_applicable(
 			special_event_value,
@@ -554,6 +674,243 @@ func _event_applies_to_company(scheduled_event: Dictionary, company_id: String, 
 			return target_sector_id == sector_id
 		return sector_id in scheduled_event.get("affected_sector_ids", [])
 	return str(scheduled_event.get("target_company_id", "")) == company_id
+
+
+func _build_player_flow_impact_context(definition: Dictionary, runtime: Dictionary, player_flow: Dictionary) -> Dictionary:
+	var enriched_flow: Dictionary = player_flow.duplicate(true)
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var financials: Dictionary = definition.get("financials", {})
+	var market_cap: float = max(float(financials.get("market_cap", current_price * 1000000000.0)), current_price * 1000000.0)
+	var free_float_ratio: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, 0.07, 0.85)
+	var avg_daily_value: float = max(float(financials.get("avg_daily_value", current_price * 250000.0)), current_price * 1000.0)
+	var estimated_float_value: float = max(market_cap * free_float_ratio * 0.0022, current_price * 1000.0)
+	var impact_baseline_value: float = max(lerp(avg_daily_value, estimated_float_value, 0.42), current_price * 1000.0)
+	var net_value: float = float(enriched_flow.get("net_value", 0.0))
+	var gross_value: float = max(absf(float(enriched_flow.get("buy_value", 0.0))) + absf(float(enriched_flow.get("sell_value", 0.0))), absf(net_value))
+	enriched_flow["impact_baseline_value"] = impact_baseline_value
+	enriched_flow["impact_ratio"] = clamp(net_value / impact_baseline_value, -3.0, 3.0)
+	enriched_flow["gross_impact_ratio"] = clamp(gross_value / impact_baseline_value, 0.0, 6.0)
+	return enriched_flow
+
+
+func _build_market_depth_context(
+	definition: Dictionary,
+	runtime: Dictionary,
+	recent_momentum: float,
+	market_sentiment: float,
+	sector_sentiment: float,
+	event_context: Dictionary,
+	difficulty_config: Dictionary,
+	run_seed: int,
+	day_number: int,
+	company_id: String
+) -> Dictionary:
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = int(hash("%s|depth|%s|%s" % [run_seed, day_number, company_id]))
+
+	var financials: Dictionary = definition.get("financials", {})
+	var traits: Dictionary = definition.get("generation_traits", {})
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var market_cap: float = max(float(financials.get("market_cap", current_price * 1000000000.0)), current_price * 1000000.0)
+	var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", market_cap / current_price))), 1.0)
+	var free_float_ratio: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, 0.07, 0.85)
+	var free_float_shares: float = max(shares_outstanding * free_float_ratio, 1.0)
+	var free_float_value: float = max(free_float_shares * current_price, current_price * 1000.0)
+	var avg_daily_value: float = max(float(financials.get("avg_daily_value", current_price * 250000.0)), current_price * 1000.0)
+	var liquidity_profile: float = clamp(float(traits.get("liquidity_profile", 0.5)), 0.0, 1.0)
+	var story_heat: float = clamp(float(traits.get("story_heat", 0.5)), 0.0, 1.0)
+	var base_volatility: float = max(float(definition.get("base_volatility", 0.025)), 0.004)
+	var event_intensity: float = min(absf(float(event_context.get("event_bias", 0.0))) * 7.0, 1.35)
+	var volatility_multiplier: float = clamp(float(difficulty_config.get("volatility_multiplier", 1.0)), 0.55, 1.85)
+	var float_tightness: float = clamp((0.48 - free_float_ratio) / 0.40, 0.0, 1.0)
+	var sentiment_bias: float = clamp(
+		market_sentiment * 2.2 +
+		sector_sentiment * 2.4 +
+		recent_momentum * 4.0 +
+		float(event_context.get("event_bias", 0.0)) * 5.0,
+		-1.0,
+		1.0
+	)
+
+	var turnover_rate: float = clamp(
+		0.00042 +
+		(liquidity_profile * 0.0036) +
+		(story_heat * 0.0015) +
+		(free_float_ratio * 0.0010) +
+		(base_volatility * 0.018),
+		0.00035,
+		0.0105
+	)
+	var synthetic_daily_value: float = max(
+		lerp(avg_daily_value, free_float_value * turnover_rate, 0.54),
+		current_price * 1000.0
+	)
+	synthetic_daily_value *= clamp(
+		(1.0 + story_heat * 0.22 + event_intensity * 0.62) *
+		volatility_multiplier *
+		rng.randf_range(0.86, 1.18),
+		0.55,
+		2.85
+	)
+
+	var depth_quality: float = lerp(0.72, 1.72, liquidity_profile) * lerp(0.78, 1.18, free_float_ratio)
+	var ask_sentiment_modifier: float = clamp(1.0 - max(sentiment_bias, 0.0) * 0.28 + max(-sentiment_bias, 0.0) * 0.16, 0.62, 1.35)
+	var bid_sentiment_modifier: float = clamp(1.0 + max(sentiment_bias, 0.0) * 0.16 - max(-sentiment_bias, 0.0) * 0.30, 0.62, 1.35)
+	var ask_depth_value: float = max(synthetic_daily_value * depth_quality * ask_sentiment_modifier, current_price * 1000.0)
+	var bid_depth_value: float = max(synthetic_daily_value * depth_quality * bid_sentiment_modifier, current_price * 1000.0)
+	var lock_depth_multiplier: float = lerp(2.6, 6.8, liquidity_profile) * lerp(0.78, 1.28, free_float_ratio)
+	var free_float_lock_threshold: float = clamp(lerp(0.045, 0.145, liquidity_profile) + free_float_ratio * 0.04, 0.045, 0.18)
+
+	return {
+		"current_price": current_price,
+		"market_cap": market_cap,
+		"shares_outstanding": shares_outstanding,
+		"free_float_ratio": free_float_ratio,
+		"free_float_shares": free_float_shares,
+		"free_float_value": free_float_value,
+		"avg_daily_value": avg_daily_value,
+		"synthetic_daily_value": synthetic_daily_value,
+		"ask_depth_value": ask_depth_value,
+		"bid_depth_value": bid_depth_value,
+		"ask_depth_shares": ask_depth_value / current_price,
+		"bid_depth_shares": bid_depth_value / current_price,
+		"ask_resistance": clamp(ask_depth_value / max(synthetic_daily_value, 1.0), 0.0, 12.0),
+		"bid_resistance": clamp(bid_depth_value / max(synthetic_daily_value, 1.0), 0.0, 12.0),
+		"lock_depth_multiplier": lock_depth_multiplier,
+		"free_float_lock_threshold": free_float_lock_threshold,
+		"liquidity_profile": liquidity_profile,
+		"story_heat": story_heat,
+		"float_tightness": float_tightness,
+		"sentiment_bias": sentiment_bias,
+		"event_intensity": event_intensity
+	}
+
+
+func _resolve_player_market_impact_context(
+	player_flow: Dictionary,
+	market_depth_context: Dictionary,
+	previous_close: float,
+	ar_limits: Dictionary
+) -> Dictionary:
+	var resolved_flow: Dictionary = player_flow.duplicate(true)
+	var buy_value: float = max(float(resolved_flow.get("buy_value", 0.0)), 0.0)
+	var sell_value: float = max(float(resolved_flow.get("sell_value", 0.0)), 0.0)
+	var buy_shares: float = max(float(resolved_flow.get("buy_shares", 0.0)), 0.0)
+	var sell_shares: float = max(float(resolved_flow.get("sell_shares", 0.0)), 0.0)
+	var net_value: float = buy_value - sell_value
+	var gross_value: float = buy_value + sell_value
+	var ask_depth_value: float = max(float(market_depth_context.get("ask_depth_value", 1.0)), 1.0)
+	var bid_depth_value: float = max(float(market_depth_context.get("bid_depth_value", 1.0)), 1.0)
+	var free_float_shares: float = max(float(market_depth_context.get("free_float_shares", 1.0)), 1.0)
+	var free_float_value: float = max(float(market_depth_context.get("free_float_value", 1.0)), 1.0)
+	var buy_liquidity_consumed: float = buy_value / ask_depth_value
+	var sell_liquidity_consumed: float = sell_value / bid_depth_value
+	var buy_free_float_pct: float = buy_shares / free_float_shares
+	var sell_free_float_pct: float = sell_shares / free_float_shares
+	var gross_free_float_pct: float = (buy_shares + sell_shares) / free_float_shares
+	var net_free_float_pct: float = (buy_shares - sell_shares) / free_float_shares
+	var lock_depth_multiplier: float = max(float(market_depth_context.get("lock_depth_multiplier", 4.0)), 0.5)
+	var free_float_lock_threshold: float = max(float(market_depth_context.get("free_float_lock_threshold", 0.08)), 0.01)
+
+	var limit_lock: String = ""
+	var impact_side: String = "neutral"
+	var side_depth_ratio: float = 0.0
+	var side_free_float_pct: float = 0.0
+	if net_value > 0.0:
+		impact_side = "buy"
+		side_depth_ratio = buy_liquidity_consumed
+		side_free_float_pct = buy_free_float_pct
+		if buy_liquidity_consumed >= lock_depth_multiplier or buy_free_float_pct >= free_float_lock_threshold:
+			limit_lock = "ara"
+	elif net_value < 0.0:
+		impact_side = "sell"
+		side_depth_ratio = sell_liquidity_consumed
+		side_free_float_pct = sell_free_float_pct
+		if sell_liquidity_consumed >= lock_depth_multiplier or sell_free_float_pct >= free_float_lock_threshold:
+			limit_lock = "arb"
+
+	var signed_depth_ratio: float = clamp(net_value / (ask_depth_value if net_value >= 0.0 else bid_depth_value), -8.0, 8.0)
+	var signed_float_pressure: float = clamp(net_free_float_pct / max(free_float_lock_threshold, 0.01), -5.0, 5.0)
+	var depth_price_bias: float = clamp(
+		(signed_depth_ratio * lerp(0.004, 0.020, float(market_depth_context.get("float_tightness", 0.0)))) +
+		(signed_float_pressure * 0.010),
+		-0.16,
+		0.16
+	)
+	if limit_lock == "ara":
+		depth_price_bias = max(depth_price_bias, 0.12)
+	elif limit_lock == "arb":
+		depth_price_bias = min(depth_price_bias, -0.12)
+
+	resolved_flow["market_depth_context"] = market_depth_context.duplicate(true)
+	resolved_flow["buy_liquidity_consumed"] = buy_liquidity_consumed
+	resolved_flow["sell_liquidity_consumed"] = sell_liquidity_consumed
+	resolved_flow["gross_liquidity_consumed"] = gross_value / max((ask_depth_value + bid_depth_value) * 0.5, 1.0)
+	resolved_flow["buy_free_float_pct"] = buy_free_float_pct
+	resolved_flow["sell_free_float_pct"] = sell_free_float_pct
+	resolved_flow["gross_free_float_pct"] = gross_free_float_pct
+	resolved_flow["net_free_float_pct"] = net_free_float_pct
+	resolved_flow["free_float_value_pct"] = gross_value / free_float_value
+	resolved_flow["impact_side"] = impact_side
+	resolved_flow["side_depth_ratio"] = side_depth_ratio
+	resolved_flow["side_free_float_pct"] = side_free_float_pct
+	resolved_flow["depth_impact_ratio"] = signed_depth_ratio
+	resolved_flow["depth_price_bias"] = depth_price_bias
+	resolved_flow["limit_lock"] = limit_lock
+	resolved_flow["limit_source"] = "player_market_impact" if not limit_lock.is_empty() else ""
+	resolved_flow["overwhelmed_liquidity"] = not limit_lock.is_empty() or absf(signed_depth_ratio) >= 1.0
+	resolved_flow["limit_price"] = _player_limit_price(limit_lock, previous_close, ar_limits)
+	resolved_flow["impact_summary"] = _build_player_impact_summary(resolved_flow)
+	return resolved_flow
+
+
+func _player_limit_price(limit_lock: String, previous_close: float, ar_limits: Dictionary) -> float:
+	if limit_lock == "ara":
+		return float(ar_limits.get("upper_price", previous_close))
+	if limit_lock == "arb":
+		return float(ar_limits.get("lower_price", previous_close))
+	return 0.0
+
+
+func _build_player_impact_summary(player_flow: Dictionary) -> String:
+	var limit_lock: String = str(player_flow.get("limit_lock", ""))
+	if limit_lock == "ara":
+		return "XL buy pressure overwhelmed ask depth and locked the stock at ARA."
+	if limit_lock == "arb":
+		return "XL sell pressure overwhelmed bid depth and locked the stock at ARB."
+	var side: String = str(player_flow.get("impact_side", "neutral"))
+	if side == "buy" and float(player_flow.get("side_depth_ratio", 0.0)) >= 1.0:
+		return "XL buy pressure consumed more than one day of visible ask depth."
+	if side == "sell" and float(player_flow.get("side_depth_ratio", 0.0)) >= 1.0:
+		return "XL sell pressure consumed more than one day of visible bid depth."
+	if side == "buy" and float(player_flow.get("buy_value", 0.0)) > 0.0:
+		return "XL buy pressure is visible but still within normal market depth."
+	if side == "sell" and float(player_flow.get("sell_value", 0.0)) > 0.0:
+		return "XL sell pressure is visible but still within normal market depth."
+	return ""
+
+
+func _build_player_market_impact_snapshot(player_flow_context: Dictionary, close_context: Dictionary) -> Dictionary:
+	return {
+		"broker_code": str(player_flow_context.get("broker_code", "")),
+		"broker_name": str(player_flow_context.get("broker_name", "")),
+		"impact_side": str(player_flow_context.get("impact_side", "neutral")),
+		"buy_value": float(player_flow_context.get("buy_value", 0.0)),
+		"sell_value": float(player_flow_context.get("sell_value", 0.0)),
+		"net_value": float(player_flow_context.get("net_value", 0.0)),
+		"depth_impact_ratio": float(player_flow_context.get("depth_impact_ratio", 0.0)),
+		"buy_liquidity_consumed": float(player_flow_context.get("buy_liquidity_consumed", 0.0)),
+		"sell_liquidity_consumed": float(player_flow_context.get("sell_liquidity_consumed", 0.0)),
+		"buy_free_float_pct": float(player_flow_context.get("buy_free_float_pct", 0.0)),
+		"sell_free_float_pct": float(player_flow_context.get("sell_free_float_pct", 0.0)),
+		"net_free_float_pct": float(player_flow_context.get("net_free_float_pct", 0.0)),
+		"overwhelmed_liquidity": bool(player_flow_context.get("overwhelmed_liquidity", false)),
+		"limit_lock": str(close_context.get("limit_lock", player_flow_context.get("limit_lock", ""))),
+		"limit_source": str(close_context.get("limit_source", player_flow_context.get("limit_source", ""))),
+		"limit_price": float(player_flow_context.get("limit_price", 0.0)),
+		"impact_summary": str(player_flow_context.get("impact_summary", "")),
+		"scripted_override": bool(close_context.get("scripted_override", false))
+	}
 
 
 func _calculate_daily_change(
@@ -669,6 +1026,19 @@ func _build_volume_activity_context(
 	var free_float_daily_value: float = max(free_float_value * turnover_rate, current_price * 1000.0)
 	var quiet_float_drag: float = lerp(1.0, 0.78, float_tightness * (1.0 - liquidity_profile))
 	var base_daily_value: float = max(lerp(avg_daily_value, free_float_daily_value, 0.48) * quiet_float_drag, current_price * 1000.0)
+	var player_flow: Dictionary = broker_flow.get("player_flow", {})
+	var player_net_value: float = float(player_flow.get("net_value", 0.0))
+	var player_abs_value: float = max(absf(float(player_flow.get("buy_value", 0.0))) + absf(float(player_flow.get("sell_value", 0.0))), absf(player_net_value))
+	var player_abs_ratio: float = clamp(player_abs_value / max(base_daily_value, 1.0), 0.0, 6.0)
+	var player_impact_ratio: float = clamp(player_net_value / max(base_daily_value, 1.0), -3.0, 3.0)
+	var depth_price_bias: float = float(player_flow.get("depth_price_bias", 0.0))
+	var player_price_bias: float = clamp(
+		(player_impact_ratio * lerp(0.006, 0.024, float_tightness)) + depth_price_bias,
+		-0.110,
+		0.110
+	)
+	var player_volume_multiplier: float = 1.0 + clamp(player_abs_ratio * 0.55, 0.0, 2.8)
+	player_volume_multiplier += clamp(float(player_flow.get("gross_liquidity_consumed", 0.0)) * 0.18, 0.0, 2.2)
 
 	var recent_value_average: float = _average_recent_bar_value(price_bars, 20, base_daily_value)
 	var recent_short_value_average: float = _average_recent_bar_value(price_bars, 3, recent_value_average)
@@ -725,12 +1095,14 @@ func _build_volume_activity_context(
 	elif distribution_signal > accumulation_signal:
 		lead_direction = -distribution_signal
 	var lead_price_bias: float = clamp(prior_activity_pressure * lead_direction * 0.011, -0.012, 0.012)
+	lead_price_bias = clamp(lead_price_bias + player_price_bias, -0.060, 0.060)
 
 	var exhaustion_score: float = clamp(
 		recent_runup * 4.8 +
 		max(previous_activity_ratio - 1.55, 0.0) * 0.18 +
 		float(high_activity_streak) * 0.12 +
 		retail_chase * 0.24 +
+		max(player_impact_ratio, 0.0) * 0.10 +
 		float_tightness * 0.12 +
 		story_heat * 0.08 +
 		max(-smart_money_pressure, 0.0) * 0.22 -
@@ -740,6 +1112,7 @@ func _build_volume_activity_context(
 	)
 	var exhaustion_drag: float = -exhaustion_score * lerp(0.0025, 0.0160, clamp(recent_runup * 8.0, 0.0, 1.0))
 	var distribution_drag: float = -distribution_signal * prior_activity_pressure * lerp(0.0015, 0.0075, clamp(recent_runup * 7.0, 0.0, 1.0))
+	distribution_drag += clamp(min(player_impact_ratio, 0.0) * lerp(0.004, 0.018, float_tightness), -0.045, 0.0)
 	if recent_drawdown > 0.06 and distribution_signal < 0.35:
 		distribution_drag *= 0.45
 
@@ -763,6 +1136,7 @@ func _build_volume_activity_context(
 		story_multiplier *
 		memory_multiplier *
 		exhaustion_multiplier *
+		player_volume_multiplier *
 		lumpy_noise,
 		0.30,
 		8.00
@@ -781,7 +1155,15 @@ func _build_volume_activity_context(
 		"lead_price_bias": lead_price_bias,
 		"buying_exhaustion_score": exhaustion_score,
 		"buying_exhaustion_drag": exhaustion_drag,
-		"distribution_drag": distribution_drag
+		"distribution_drag": distribution_drag,
+		"player_impact_ratio": player_impact_ratio,
+		"player_abs_ratio": player_abs_ratio,
+		"player_price_bias": player_price_bias,
+		"player_depth_price_bias": depth_price_bias,
+		"player_depth_impact_ratio": float(player_flow.get("depth_impact_ratio", 0.0)),
+		"player_buy_liquidity_consumed": float(player_flow.get("buy_liquidity_consumed", 0.0)),
+		"player_sell_liquidity_consumed": float(player_flow.get("sell_liquidity_consumed", 0.0)),
+		"player_gross_free_float_pct": float(player_flow.get("gross_free_float_pct", 0.0))
 	}
 
 
@@ -890,11 +1272,16 @@ func _build_daily_price_bar(
 	day_number: int,
 	company_id: String,
 	ar_limits: Dictionary,
-	trade_date: Dictionary
+	trade_date: Dictionary,
+	close_context: Dictionary = {},
+	player_flow_context: Dictionary = {},
+	market_depth_context: Dictionary = {}
 ) -> Dictionary:
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 	rng.seed = int(hash("%s|bar|%s|%s" % [run_seed, day_number, company_id]))
 
+	var limit_lock: String = str(close_context.get("limit_lock", ""))
+	var limit_source: String = str(close_context.get("limit_source", ""))
 	var gap_bias: float = clamp(
 		(daily_change_pct * 0.32) +
 		(event_bias * 0.18) +
@@ -928,15 +1315,27 @@ func _build_daily_price_bar(
 		float(ar_limits.get("lower_price", 1.0)),
 		float(ar_limits.get("upper_price", current_price))
 	)
+	if limit_lock == "ara":
+		open_price = previous_close
+		low_price = min(previous_close, current_price)
+		high_price = float(ar_limits.get("upper_price", current_price))
+		current_price = high_price
+	elif limit_lock == "arb":
+		open_price = previous_close
+		high_price = max(previous_close, current_price)
+		low_price = float(ar_limits.get("lower_price", current_price))
+		current_price = low_price
 
 	var base_daily_value: float = max(float(volume_context.get("base_daily_value", current_price * 250000.0)), current_price * 1000.0)
 	var volume_multiplier: float = max(float(volume_context.get("volume_multiplier", 1.0)), 0.10)
 	var day_move_confirmation: float = 1.0 + min(absf(daily_change_pct) * 4.5, 0.75)
+	if not limit_lock.is_empty():
+		day_move_confirmation += 0.65 + min(absf(float(player_flow_context.get("depth_impact_ratio", 0.0))) * 0.12, 0.95)
 	var traded_value: float = max(base_daily_value * volume_multiplier * day_move_confirmation, current_price * 1000.0)
 	var volume_shares: int = int(max(round(traded_value / max(current_price, 1.0) / 100.0), 1.0) * 100.0)
 	var bar_value: float = current_price * float(volume_shares)
 
-	return {
+	var bar: Dictionary = {
 		"trade_date": trade_date.duplicate(true),
 		"open": open_price,
 		"high": high_price,
@@ -945,6 +1344,20 @@ func _build_daily_price_bar(
 		"volume_shares": volume_shares,
 		"value": bar_value
 	}
+	if not limit_lock.is_empty():
+		bar["limit_lock"] = limit_lock
+		bar["limit_source"] = limit_source
+		bar["locked_through_day"] = true
+		bar["impact_side"] = "buy" if limit_lock == "ara" else "sell"
+	if float(player_flow_context.get("buy_value", 0.0)) > 0.0 or float(player_flow_context.get("sell_value", 0.0)) > 0.0:
+		bar["player_impact_ratio"] = float(player_flow_context.get("depth_impact_ratio", 0.0))
+		bar["player_liquidity_consumed"] = float(player_flow_context.get("side_depth_ratio", 0.0))
+		bar["player_free_float_pct"] = float(player_flow_context.get("side_free_float_pct", 0.0))
+		bar["player_broker_code"] = str(player_flow_context.get("broker_code", ""))
+	if not market_depth_context.is_empty():
+		bar["ask_depth_value"] = float(market_depth_context.get("ask_depth_value", 0.0))
+		bar["bid_depth_value"] = float(market_depth_context.get("bid_depth_value", 0.0))
+	return bar
 
 
 func _pick_weighted_candidate(rng: RandomNumberGenerator, candidates: Array) -> Dictionary:
