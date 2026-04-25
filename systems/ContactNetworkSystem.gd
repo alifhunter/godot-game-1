@@ -5,6 +5,8 @@ const REFERRAL_RELATIONSHIP_THRESHOLD := 45
 const REFERRAL_RELATIONSHIP_COST := 10
 const REFERRAL_CONNECTION_THRESHOLD := 50
 const MAX_COMPANY_LEADS_PER_FLOATER := 2
+const TIP_MEMORY_RESOLVE_DAYS := 3
+const MAX_TIP_MEMORY_ROWS := 96
 
 
 func build_snapshot(run_state, data_repository) -> Dictionary:
@@ -12,6 +14,9 @@ func build_snapshot(run_state, data_repository) -> Dictionary:
 	var discoveries: Dictionary = run_state.get_network_discoveries()
 	var requests: Dictionary = run_state.get_network_requests()
 	var recognition: Dictionary = build_recognition_snapshot(run_state)
+	var last_tip_notes: Dictionary = _last_tip_notes_by_contact(run_state)
+	var tip_histories: Dictionary = _tip_histories_by_contact(run_state)
+	var cross_checks: Dictionary = _cross_contact_reads_by_contact(run_state)
 	var contact_rows: Array = []
 	var discovered_rows: Array = []
 
@@ -25,6 +30,9 @@ func build_snapshot(run_state, data_repository) -> Dictionary:
 		var runtime: Dictionary = contacts.get(contact_id, {})
 		var discovery: Dictionary = discoveries.get(contact_id, {})
 		var row: Dictionary = _contact_row(contact, runtime, discovery, recognition)
+		_apply_last_tip_note(row, last_tip_notes)
+		_apply_tip_history(row, tip_histories)
+		_apply_cross_contact_read(row, cross_checks)
 		if bool(runtime.get("met", false)):
 			contact_rows.append(row)
 		elif bool(discovery.get("discovered", false)):
@@ -47,6 +55,9 @@ func build_snapshot(run_state, data_repository) -> Dictionary:
 		var runtime: Dictionary = contacts.get(generated_contact_id, {})
 		var discovery: Dictionary = discoveries.get(generated_contact_id, {})
 		var row: Dictionary = _contact_row(generated_contact, runtime, discovery, recognition)
+		_apply_last_tip_note(row, last_tip_notes)
+		_apply_tip_history(row, tip_histories)
+		_apply_cross_contact_read(row, cross_checks)
 		if bool(runtime.get("met", false)):
 			contact_rows.append(row)
 		elif bool(discovery.get("discovered", false)):
@@ -198,14 +209,24 @@ func request_tip(run_state, data_repository, corporate_action_system, contact_id
 	)
 	if bool(intel_result.get("success", false)):
 		_adjust_relationship(run_state, contact_id, -2)
-		intel_result["contact_id"] = contact_id
-		intel_result["target_company_id"] = resolved_company_id
-		return intel_result
+		var decorated_intel_result: Dictionary = _decorate_tip_result(
+			run_state,
+			data_repository,
+			contact,
+			resolved_company_id,
+			intel_result
+		)
+		decorated_intel_result["contact_id"] = contact_id
+		decorated_intel_result["target_company_id"] = resolved_company_id
+		_record_tip_memory(run_state, contact, resolved_company_id, decorated_intel_result)
+		return decorated_intel_result
 	var build_result: Dictionary = _build_and_store_contact_arc(run_state, data_repository, contact_id, resolved_company_id, "tip")
 	if not bool(build_result.get("success", false)):
 		return build_result
 	_adjust_relationship(run_state, contact_id, -2)
-	return build_result
+	var decorated_build_result: Dictionary = _decorate_contact_arc_tip_result(run_state, data_repository, contact, resolved_company_id, build_result)
+	_record_tip_memory(run_state, contact, resolved_company_id, decorated_build_result)
+	return decorated_build_result
 
 
 func accept_request(run_state, data_repository, contact_id: String, company_id: String = "") -> Dictionary:
@@ -284,6 +305,40 @@ func request_referral(run_state, data_repository, contact_id: String, company_id
 	}
 
 
+func follow_up_tip(run_state, data_repository, contact_id: String, followup_id: String) -> Dictionary:
+	var contact: Dictionary = _contact_definition(run_state, data_repository, contact_id)
+	if contact.is_empty():
+		return {"success": false, "message": "Unknown contact."}
+	if not _is_met(run_state, contact_id):
+		return {"success": false, "message": "Meet this contact first."}
+	var tip: Dictionary = _latest_followup_tip_for_contact(run_state, contact_id)
+	if tip.is_empty():
+		return {"success": false, "message": "No resolved tip needs a follow-up right now."}
+	var followup_result: Dictionary = _build_tip_followup_result(contact, tip, followup_id)
+	if not bool(followup_result.get("success", false)):
+		return followup_result
+	var journal: Dictionary = run_state.get_network_tip_journal()
+	var tip_id: String = str(tip.get("id", ""))
+	tip["followup_id"] = followup_id
+	tip["followup_label"] = str(followup_result.get("followup_label", "Follow-up"))
+	tip["followup_note"] = str(followup_result.get("followup_note", ""))
+	tip["followup_day_index"] = run_state.day_index
+	tip["followup_relationship_delta"] = int(followup_result.get("relationship_delta", 0))
+	journal[tip_id] = tip
+	run_state.set_network_tip_journal(journal)
+	var relationship_delta: int = int(followup_result.get("relationship_delta", 0))
+	if relationship_delta != 0:
+		_adjust_relationship(run_state, contact_id, relationship_delta)
+	_store_contact_tip_followup(run_state, tip)
+	return {
+		"success": true,
+		"message": str(followup_result.get("message", "Follow-up recorded.")),
+		"tip_id": tip_id,
+		"followup_id": followup_id,
+		"relationship_delta": relationship_delta
+	}
+
+
 func process_due_requests(run_state, data_repository) -> Array:
 	var requests: Dictionary = run_state.get_network_requests()
 	var results: Array = []
@@ -316,6 +371,41 @@ func process_due_requests(run_state, data_repository) -> Array:
 			results.append({"success": false, "message": "Network request missed.", "request_id": request_id})
 		requests[request_id] = request
 	run_state.set_network_requests(requests)
+	return results
+
+
+func process_due_tip_memories(run_state, data_repository) -> Array:
+	var results: Array = []
+	var journal: Dictionary = run_state.get_network_tip_journal()
+	var changed: bool = false
+	for tip_id_value in journal.keys():
+		var tip_id: String = str(tip_id_value)
+		var tip: Dictionary = journal.get(tip_id, {})
+		if str(tip.get("status", "pending")) != "pending":
+			continue
+		if int(tip.get("resolve_day_index", 0)) > run_state.day_index:
+			continue
+		var outcome: Dictionary = _resolve_tip_memory(run_state, data_repository, tip)
+		tip["status"] = str(outcome.get("status", "resolved"))
+		tip["outcome_label"] = str(outcome.get("outcome_label", "Still pending"))
+		tip["outcome_note"] = str(outcome.get("outcome_note", "The read is still unresolved."))
+		tip["player_action_label"] = str(outcome.get("player_action_label", "No action"))
+		tip["player_action_note"] = str(outcome.get("player_action_note", ""))
+		tip["player_action_alignment"] = str(outcome.get("player_action_alignment", "neutral"))
+		tip["player_net_shares"] = int(outcome.get("player_net_shares", 0))
+		tip["relationship_delta"] = int(outcome.get("relationship_delta", 0))
+		tip["resolved_day_index"] = run_state.day_index
+		tip["resolved_price"] = float(outcome.get("resolved_price", 0.0))
+		tip["resolved_change_pct"] = float(outcome.get("change_pct", 0.0))
+		journal[tip_id] = tip
+		changed = true
+		results.append(tip.duplicate(true))
+		var relationship_delta: int = int(outcome.get("relationship_delta", 0))
+		if relationship_delta != 0:
+			_adjust_relationship(run_state, str(tip.get("contact_id", "")), relationship_delta)
+		_store_contact_tip_note(run_state, tip)
+	if changed:
+		run_state.set_network_tip_journal(_pruned_tip_journal(journal))
 	return results
 
 
@@ -543,6 +633,924 @@ func _build_and_store_contact_arc(run_state, data_repository, contact_id: String
 	return {"success": true, "message": "%s created a %s arc on %s." % [str(contact.get("display_name", "Contact")), action, target_ticker], "arc": arc}
 
 
+func _decorate_tip_result(run_state, data_repository, contact: Dictionary, company_id: String, tip_result: Dictionary) -> Dictionary:
+	var result: Dictionary = tip_result.duplicate(true)
+	var chain: Dictionary = _active_corporate_chain_for_company(run_state, company_id)
+	var truth_read: Dictionary = _build_public_tip_read(
+		run_state,
+		data_repository,
+		contact,
+		company_id,
+		chain,
+		str(tip_result.get("intel_quality", "weak"))
+	)
+	var contact_name: String = str(contact.get("display_name", "Contact"))
+	result["public_truth_label"] = str(truth_read.get("truth_label", "Network Read"))
+	result["public_tip_read"] = str(truth_read.get("tip_read", ""))
+	result["public_confidence_label"] = str(truth_read.get("confidence_label", "Soft read"))
+	result["tip_source_role"] = str(truth_read.get("source_role", "market contact"))
+	result["intel_summary"] = "%s | %s" % [
+		str(truth_read.get("truth_label", "Network Read")),
+		str(truth_read.get("confidence_label", "Soft read"))
+	]
+	result["message"] = "%s | %s: %s" % [
+		str(truth_read.get("truth_label", "Network Read")),
+		contact_name,
+		str(truth_read.get("tip_read", ""))
+	]
+	return result
+
+
+func _decorate_contact_arc_tip_result(run_state, data_repository, contact: Dictionary, company_id: String, tip_result: Dictionary) -> Dictionary:
+	var result: Dictionary = tip_result.duplicate(true)
+	var truth_read: Dictionary = _build_public_tip_read(
+		run_state,
+		data_repository,
+		contact,
+		company_id,
+		{},
+		"weak"
+	)
+	var contact_name: String = str(contact.get("display_name", "Contact"))
+	result["public_truth_label"] = str(truth_read.get("truth_label", "Network Read"))
+	result["public_tip_read"] = str(truth_read.get("tip_read", ""))
+	result["public_confidence_label"] = str(truth_read.get("confidence_label", "Soft read"))
+	result["tip_source_role"] = str(truth_read.get("source_role", "market contact"))
+	result["message"] = "%s | %s: %s" % [
+		str(truth_read.get("truth_label", "Network Read")),
+		contact_name,
+		str(truth_read.get("tip_read", ""))
+	]
+	return result
+
+
+func _record_tip_memory(run_state, contact: Dictionary, company_id: String, tip_result: Dictionary) -> void:
+	var contact_id: String = str(contact.get("id", contact.get("contact_id", "")))
+	if contact_id.is_empty() or company_id.is_empty():
+		return
+	var company: Dictionary = run_state.get_company(company_id)
+	var baseline_price: float = float(company.get("current_price", 0.0))
+	if baseline_price <= 0.0:
+		return
+	var holding: Dictionary = run_state.get_holding(company_id)
+	var tip_id: String = "tip_%s_%s_%d_%d" % [
+		contact_id,
+		company_id,
+		run_state.day_index,
+		run_state.get_network_tip_journal().size()
+	]
+	var journal: Dictionary = run_state.get_network_tip_journal()
+	journal[tip_id] = {
+		"id": tip_id,
+		"contact_id": contact_id,
+		"contact_name": str(contact.get("display_name", "Contact")),
+		"target_company_id": company_id,
+		"target_ticker": _company_ticker(run_state, company_id),
+		"created_day_index": run_state.day_index,
+		"resolve_day_index": run_state.day_index + TIP_MEMORY_RESOLVE_DAYS,
+		"baseline_price": baseline_price,
+		"baseline_shares": int(holding.get("shares", 0)),
+		"chain_id": str(tip_result.get("chain_id", "")),
+		"truth_label": str(tip_result.get("public_truth_label", "Network Read")),
+		"confidence_label": str(tip_result.get("public_confidence_label", "Soft read")),
+		"source_role": str(tip_result.get("tip_source_role", "market contact")),
+		"tip_read": str(tip_result.get("public_tip_read", "")),
+		"status": "pending"
+	}
+	run_state.set_network_tip_journal(_pruned_tip_journal(journal))
+
+
+func _resolve_tip_memory(run_state, _data_repository, tip: Dictionary) -> Dictionary:
+	var company_id: String = str(tip.get("target_company_id", ""))
+	var company: Dictionary = run_state.get_company(company_id)
+	var current_price: float = float(company.get("current_price", tip.get("baseline_price", 0.0)))
+	var baseline_price: float = max(float(tip.get("baseline_price", current_price)), 1.0)
+	var change_pct: float = (current_price - baseline_price) / baseline_price
+	var truth_label: String = str(tip.get("truth_label", "Network Read"))
+	var chain: Dictionary = _chain_by_id(run_state, str(tip.get("chain_id", "")))
+	var outcome_state: String = str(chain.get("outcome_state", ""))
+	var timeline_state: String = str(chain.get("current_timeline_state", ""))
+	var status: String = "resolved"
+	var outcome_label: String = "Still pending"
+	var relationship_delta: int = 0
+	if _tip_label_is_cautionary(truth_label):
+		if change_pct <= -0.015 or outcome_state == "cancelled" or timeline_state == "cancelled":
+			outcome_label = "Useful warning"
+			relationship_delta = 3
+		elif change_pct >= 0.025 or outcome_state == "approved":
+			outcome_label = "Missed badly"
+			relationship_delta = -3
+		elif absf(change_pct) <= 0.012:
+			outcome_label = "Still pending"
+			status = "unresolved"
+		else:
+			outcome_label = "Too early"
+	elif truth_label == "Real But Delayed":
+		if timeline_state == "delayed":
+			outcome_label = "Useful timing read"
+			relationship_delta = 2
+		elif change_pct >= 0.025 or outcome_state == "approved":
+			outcome_label = "Early, not wrong"
+			relationship_delta = 1
+		elif change_pct <= -0.025 or outcome_state == "cancelled":
+			outcome_label = "Missed badly"
+			relationship_delta = -3
+		else:
+			outcome_label = "Still pending"
+			status = "unresolved"
+	else:
+		if change_pct >= 0.018 or outcome_state == "approved" or timeline_state in ["approved", "executing", "completed"]:
+			outcome_label = "Useful read"
+			relationship_delta = 3
+		elif change_pct <= -0.025 or outcome_state == "cancelled" or timeline_state == "cancelled":
+			outcome_label = "Missed badly"
+			relationship_delta = -3
+		elif absf(change_pct) <= 0.012:
+			outcome_label = "Still pending"
+			status = "unresolved"
+		else:
+			outcome_label = "Too early"
+	var ticker: String = str(tip.get("target_ticker", company_id.to_upper()))
+	var player_action: Dictionary = _player_action_for_tip(run_state, tip)
+	var player_read: Dictionary = _player_tip_action_read(tip, outcome_label, player_action)
+	relationship_delta += int(player_read.get("relationship_delta", 0))
+	var outcome_note: String = _tip_outcome_note(outcome_label, ticker, change_pct)
+	var player_note: String = str(player_read.get("note", ""))
+	if not player_note.is_empty():
+		outcome_note += " " + player_note
+	return {
+		"status": status,
+		"outcome_label": outcome_label,
+		"outcome_note": outcome_note,
+		"player_action_label": str(player_read.get("label", "No action")),
+		"player_action_note": player_note,
+		"player_action_alignment": str(player_read.get("alignment", "neutral")),
+		"player_net_shares": int(player_action.get("net_shares", 0)),
+		"relationship_delta": relationship_delta,
+		"resolved_price": current_price,
+		"change_pct": change_pct
+	}
+
+
+func _player_action_for_tip(run_state, tip: Dictionary) -> Dictionary:
+	var company_id: String = str(tip.get("target_company_id", ""))
+	var created_day_index: int = int(tip.get("created_day_index", 0))
+	var resolve_day_index: int = int(tip.get("resolve_day_index", run_state.day_index))
+	var buy_shares: int = 0
+	var sell_shares: int = 0
+	for trade_value in run_state.get_trade_history():
+		if typeof(trade_value) != TYPE_DICTIONARY:
+			continue
+		var trade: Dictionary = trade_value
+		if str(trade.get("company_id", "")) != company_id:
+			continue
+		var trade_day_index: int = int(trade.get("day_index", 0))
+		if trade_day_index < created_day_index or trade_day_index > resolve_day_index:
+			continue
+		var shares: int = int(trade.get("shares", 0))
+		if str(trade.get("side", "")) == "buy":
+			buy_shares += shares
+		elif str(trade.get("side", "")) == "sell":
+			sell_shares += shares
+	var baseline_shares: int = int(tip.get("baseline_shares", 0))
+	var ending_shares: int = int(run_state.get_holding(company_id).get("shares", 0))
+	var net_shares: int = buy_shares - sell_shares
+	var action_label: String = "Ignored"
+	if buy_shares > sell_shares:
+		action_label = "Bought after tip"
+	elif sell_shares > buy_shares:
+		action_label = "Sold after tip"
+	elif buy_shares > 0 and sell_shares > 0:
+		action_label = "Round-tripped"
+	elif baseline_shares > 0 and ending_shares > 0:
+		action_label = "Held through read"
+	return {
+		"label": action_label,
+		"buy_shares": buy_shares,
+		"sell_shares": sell_shares,
+		"net_shares": net_shares,
+		"baseline_shares": baseline_shares,
+		"ending_shares": ending_shares
+	}
+
+
+func _player_tip_action_read(tip: Dictionary, outcome_label: String, player_action: Dictionary) -> Dictionary:
+	var truth_label: String = str(tip.get("truth_label", "Network Read"))
+	var ticker: String = str(tip.get("target_ticker", str(tip.get("target_company_id", "")).to_upper()))
+	var action_label: String = str(player_action.get("label", "Ignored"))
+	var net_shares: int = int(player_action.get("net_shares", 0))
+	var baseline_shares: int = int(player_action.get("baseline_shares", 0))
+	var ending_shares: int = int(player_action.get("ending_shares", 0))
+	var read_was_good: bool = outcome_label in ["Useful read", "Useful warning", "Useful timing read", "Early, not wrong"]
+	var read_was_bad: bool = outcome_label == "Missed badly"
+	var cautionary: bool = _tip_label_is_cautionary(truth_label)
+	var label: String = action_label
+	var note: String = ""
+	var alignment: String = "neutral"
+	var relationship_delta: int = 0
+	if cautionary:
+		if net_shares < 0:
+			label = "Acted on warning"
+			alignment = "followed"
+			note = "You reduced exposure after the warning."
+		elif net_shares > 0:
+			label = "Chased against warning"
+			alignment = "against"
+			note = "You bought anyway, so the contact's warning became a test of discipline."
+		elif baseline_shares <= 0 and ending_shares <= 0:
+			label = "Avoided warning"
+			alignment = "followed"
+			note = "You stayed out after the warning."
+		elif baseline_shares > 0 and ending_shares > 0:
+			label = "Held despite warning"
+			alignment = "against"
+			note = "You kept holding despite the caution."
+	else:
+		if net_shares > 0:
+			label = "Followed read"
+			alignment = "followed"
+			note = "You followed the read with a buy."
+		elif baseline_shares > 0 and ending_shares > 0:
+			label = "Held through read"
+			alignment = "followed"
+			note = "You were already positioned and held through the read."
+		elif net_shares < 0:
+			label = "Sold against read"
+			alignment = "against"
+			note = "You sold against the contact's read."
+		else:
+			label = "Ignored read"
+			alignment = "ignored"
+			note = "You did not act on this read."
+	if read_was_good and alignment == "followed":
+		relationship_delta = 1
+		note += " That follow-through gives the relationship a small boost."
+	elif read_was_bad and alignment == "followed":
+		relationship_delta = -1
+		note += " The read aged poorly, and following it costs a little trust."
+	elif read_was_bad and alignment in ["ignored", "against"]:
+		note += " That restraint helped you dodge a bad read."
+	elif read_was_good and alignment == "ignored":
+		note += " The contact was useful, but you left it on the table."
+	if ticker.is_empty():
+		ticker = "the stock"
+	return {
+		"label": label,
+		"note": note,
+		"alignment": alignment,
+		"relationship_delta": relationship_delta
+	}
+
+
+func _tip_label_is_cautionary(truth_label: String) -> bool:
+	return truth_label in ["Distribution Risk", "Retail Trap", "Dead Story", "Pressure Read"]
+
+
+func _tip_outcome_note(outcome_label: String, ticker: String, change_pct: float) -> String:
+	var pct_text: String = String.num(change_pct * 100.0, 1) + "%"
+	match outcome_label:
+		"Useful read":
+			return "Last read: useful. %s moved %s after the tip." % [ticker, pct_text]
+		"Useful warning":
+			return "Last read: useful warning. %s cooled %s after the tip." % [ticker, pct_text]
+		"Useful timing read":
+			return "Last read: useful timing read. The story did slow down."
+		"Early, not wrong":
+			return "Last read: early, not wrong. %s kept moving, just faster than expected." % ticker
+		"Too early":
+			return "Last read: too early. %s moved %s, but the signal stayed mixed." % [ticker, pct_text]
+		"Missed badly":
+			return "Last read: missed badly. %s moved against the read by %s." % [ticker, pct_text]
+		_:
+			return "Last read: still pending. %s has not confirmed or rejected the setup yet." % ticker
+
+
+func _store_contact_tip_note(run_state, tip: Dictionary) -> void:
+	var contact_id: String = str(tip.get("contact_id", ""))
+	if contact_id.is_empty():
+		return
+	var contacts: Dictionary = run_state.get_network_contacts()
+	var runtime: Dictionary = contacts.get(contact_id, {})
+	runtime["last_tip_id"] = str(tip.get("id", ""))
+	runtime["last_tip_status"] = str(tip.get("status", ""))
+	runtime["last_tip_label"] = str(tip.get("outcome_label", "Still pending"))
+	runtime["last_tip_note"] = str(tip.get("outcome_note", ""))
+	runtime["last_tip_player_action_label"] = str(tip.get("player_action_label", ""))
+	runtime["last_tip_player_action_alignment"] = str(tip.get("player_action_alignment", ""))
+	runtime["last_tip_day_index"] = int(tip.get("resolved_day_index", run_state.day_index))
+	contacts[contact_id] = runtime
+	run_state.set_network_contacts(contacts)
+
+
+func _store_contact_tip_followup(run_state, tip: Dictionary) -> void:
+	var contact_id: String = str(tip.get("contact_id", ""))
+	if contact_id.is_empty():
+		return
+	var contacts: Dictionary = run_state.get_network_contacts()
+	var runtime: Dictionary = contacts.get(contact_id, {})
+	runtime["last_tip_followup_id"] = str(tip.get("followup_id", ""))
+	runtime["last_tip_followup_label"] = str(tip.get("followup_label", ""))
+	runtime["last_tip_followup_note"] = str(tip.get("followup_note", ""))
+	runtime["last_tip_followup_day_index"] = int(tip.get("followup_day_index", run_state.day_index))
+	contacts[contact_id] = runtime
+	run_state.set_network_contacts(contacts)
+
+
+func _last_tip_notes_by_contact(run_state) -> Dictionary:
+	var notes: Dictionary = {}
+	for tip_value in run_state.get_network_tip_journal().values():
+		var tip: Dictionary = tip_value
+		var contact_id: String = str(tip.get("contact_id", ""))
+		if contact_id.is_empty():
+			continue
+		if str(tip.get("status", "pending")) == "pending":
+			continue
+		var existing: Dictionary = notes.get(contact_id, {})
+		if existing.is_empty() or int(tip.get("resolved_day_index", 0)) >= int(existing.get("resolved_day_index", 0)):
+			notes[contact_id] = tip.duplicate(true)
+	return notes
+
+
+func _apply_last_tip_note(row: Dictionary, last_tip_notes: Dictionary) -> void:
+	var contact_id: String = str(row.get("id", ""))
+	if contact_id.is_empty():
+		return
+	var note: Dictionary = last_tip_notes.get(contact_id, {})
+	if note.is_empty():
+		return
+	row["last_tip_status"] = str(note.get("status", ""))
+	row["last_tip_label"] = str(note.get("outcome_label", ""))
+	row["last_tip_note"] = str(note.get("outcome_note", ""))
+	row["last_tip_player_action_label"] = str(note.get("player_action_label", ""))
+	row["last_tip_player_action_alignment"] = str(note.get("player_action_alignment", ""))
+	row["last_tip_day_index"] = int(note.get("resolved_day_index", 0))
+	row["last_tip_followup_id"] = str(note.get("followup_id", ""))
+	row["last_tip_followup_label"] = str(note.get("followup_label", ""))
+	row["last_tip_followup_note"] = str(note.get("followup_note", ""))
+	row["can_follow_up_tip"] = str(note.get("followup_id", "")).is_empty()
+	row["tip_followup_options"] = _tip_followup_options(note)
+
+
+func _tip_histories_by_contact(run_state) -> Dictionary:
+	var grouped: Dictionary = {}
+	for tip_value in run_state.get_network_tip_journal().values():
+		if typeof(tip_value) != TYPE_DICTIONARY:
+			continue
+		var tip: Dictionary = tip_value
+		var contact_id: String = str(tip.get("contact_id", ""))
+		if contact_id.is_empty():
+			continue
+		if str(tip.get("status", "pending")) == "pending":
+			continue
+		var rows: Array = grouped.get(contact_id, [])
+		rows.append(_tip_history_row(tip))
+		grouped[contact_id] = rows
+	var histories: Dictionary = {}
+	for contact_id_value in grouped.keys():
+		var contact_id: String = str(contact_id_value)
+		var rows: Array = grouped.get(contact_id, [])
+		rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return int(a.get("resolved_day_index", 0)) > int(b.get("resolved_day_index", 0))
+		)
+		histories[contact_id] = _tip_history_summary(rows)
+	return histories
+
+
+func _tip_history_row(tip: Dictionary) -> Dictionary:
+	return {
+		"id": str(tip.get("id", "")),
+		"target_company_id": str(tip.get("target_company_id", "")),
+		"target_ticker": str(tip.get("target_ticker", "")),
+		"truth_label": str(tip.get("truth_label", "")),
+		"outcome_label": str(tip.get("outcome_label", "")),
+		"player_action_label": str(tip.get("player_action_label", "")),
+		"followup_label": str(tip.get("followup_label", "")),
+		"resolved_day_index": int(tip.get("resolved_day_index", 0)),
+		"change_pct": float(tip.get("resolved_change_pct", 0.0))
+	}
+
+
+func _tip_history_summary(rows: Array) -> Dictionary:
+	var useful_count: int = 0
+	var missed_count: int = 0
+	var neutral_count: int = 0
+	var scored_count: int = 0
+	var score_total: float = 0.0
+	for row_value in rows:
+		var row: Dictionary = row_value
+		var outcome_label: String = str(row.get("outcome_label", ""))
+		if outcome_label in ["Useful read", "Useful warning", "Useful timing read", "Early, not wrong"]:
+			useful_count += 1
+			scored_count += 1
+			score_total += 1.0
+		elif outcome_label == "Missed badly":
+			missed_count += 1
+			scored_count += 1
+			score_total -= 1.0
+		else:
+			neutral_count += 1
+	var reliability_score: float = 50.0
+	if scored_count > 0:
+		reliability_score = clamp(50.0 + (score_total / float(scored_count)) * 35.0, 0.0, 100.0)
+	var reliability_label: String = _tip_reliability_label(rows.size(), useful_count, missed_count, reliability_score)
+	var visible_rows: Array = rows
+	if visible_rows.size() > 4:
+		visible_rows = visible_rows.slice(0, 4)
+	return {
+		"rows": visible_rows.duplicate(true),
+		"resolved_count": rows.size(),
+		"useful_count": useful_count,
+		"missed_count": missed_count,
+		"neutral_count": neutral_count,
+		"reliability_score": reliability_score,
+		"reliability_label": reliability_label
+	}
+
+
+func _tip_reliability_label(resolved_count: int, useful_count: int, missed_count: int, reliability_score: float) -> String:
+	if resolved_count <= 0:
+		return "No track record yet"
+	if resolved_count == 1:
+		if useful_count > 0:
+			return "One useful read"
+		if missed_count > 0:
+			return "One bad read"
+		return "One unresolved read"
+	if reliability_score >= 72.0:
+		return "Reliable lately"
+	if reliability_score <= 38.0:
+		return "Cold lately"
+	return "Mixed record"
+
+
+func _apply_tip_history(row: Dictionary, tip_histories: Dictionary) -> void:
+	var contact_id: String = str(row.get("id", ""))
+	var history: Dictionary = tip_histories.get(contact_id, {})
+	if history.is_empty():
+		row["tip_history"] = []
+		row["tip_reliability_label"] = "No track record yet"
+		row["tip_reliability_score"] = 50.0
+		row["tip_resolved_count"] = 0
+		row["tip_useful_count"] = 0
+		row["tip_missed_count"] = 0
+		return
+	row["tip_history"] = history.get("rows", []).duplicate(true)
+	row["tip_reliability_label"] = str(history.get("reliability_label", "No track record yet"))
+	row["tip_reliability_score"] = float(history.get("reliability_score", 50.0))
+	row["tip_resolved_count"] = int(history.get("resolved_count", 0))
+	row["tip_useful_count"] = int(history.get("useful_count", 0))
+	row["tip_missed_count"] = int(history.get("missed_count", 0))
+
+
+func _cross_contact_reads_by_contact(run_state) -> Dictionary:
+	var recent_rows: Array = []
+	var min_day_index: int = run_state.day_index - 8
+	for tip_value in run_state.get_network_tip_journal().values():
+		if typeof(tip_value) != TYPE_DICTIONARY:
+			continue
+		var tip: Dictionary = tip_value
+		var contact_id: String = str(tip.get("contact_id", ""))
+		var company_id: String = str(tip.get("target_company_id", ""))
+		if contact_id.is_empty() or company_id.is_empty():
+			continue
+		if int(tip.get("created_day_index", 0)) < min_day_index:
+			continue
+		recent_rows.append(_cross_contact_read_row(tip))
+	var result: Dictionary = {}
+	for row_value in recent_rows:
+		var row: Dictionary = row_value
+		var contact_id: String = str(row.get("contact_id", ""))
+		var peers: Array = []
+		for peer_value in recent_rows:
+			var peer: Dictionary = peer_value
+			if str(peer.get("contact_id", "")) == contact_id:
+				continue
+			if str(peer.get("target_company_id", "")) != str(row.get("target_company_id", "")):
+				continue
+			peers.append(peer)
+		if peers.is_empty():
+			continue
+		var summary: Dictionary = _cross_contact_summary(row, peers)
+		var existing: Dictionary = result.get(contact_id, {})
+		if existing.is_empty() or int(row.get("created_day_index", 0)) > int(existing.get("created_day_index", 0)):
+			result[contact_id] = summary
+	return result
+
+
+func _cross_contact_read_row(tip: Dictionary) -> Dictionary:
+	var truth_label: String = str(tip.get("truth_label", "Network Read"))
+	return {
+		"contact_id": str(tip.get("contact_id", "")),
+		"contact_name": str(tip.get("contact_name", "Contact")),
+		"target_company_id": str(tip.get("target_company_id", "")),
+		"target_ticker": str(tip.get("target_ticker", "")),
+		"truth_label": truth_label,
+		"confidence_label": str(tip.get("confidence_label", "")),
+		"source_role": str(tip.get("source_role", "")),
+		"status": str(tip.get("status", "pending")),
+		"created_day_index": int(tip.get("created_day_index", 0)),
+		"stance": _truth_stance(truth_label)
+	}
+
+
+func _cross_contact_summary(current: Dictionary, peers: Array) -> Dictionary:
+	var conflict_rows: Array = []
+	var agreement_rows: Array = []
+	var mixed_rows: Array = []
+	var current_stance: String = str(current.get("stance", "uncertain"))
+	for peer_value in peers:
+		var peer: Dictionary = peer_value
+		var peer_stance: String = str(peer.get("stance", "uncertain"))
+		if _truth_stances_conflict(current_stance, peer_stance):
+			conflict_rows.append(peer)
+		elif current_stance == peer_stance:
+			agreement_rows.append(peer)
+		else:
+			mixed_rows.append(peer)
+	var label: String = "Mixed sources"
+	var note: String = "Other sources are reading the same name differently."
+	var rows: Array = mixed_rows
+	if not conflict_rows.is_empty():
+		label = "Conflicting sources"
+		var first_conflict: Dictionary = conflict_rows[0]
+		note = "%s has a different read on %s: %s versus %s." % [
+			str(first_conflict.get("contact_name", "Another contact")),
+			str(current.get("target_ticker", "")),
+			str(first_conflict.get("truth_label", "a different read")),
+			str(current.get("truth_label", "this read"))
+		]
+		rows = conflict_rows
+	elif not agreement_rows.is_empty():
+		label = "Source agreement"
+		var first_agreement: Dictionary = agreement_rows[0]
+		note = "%s is broadly aligned on %s." % [
+			str(first_agreement.get("contact_name", "Another contact")),
+			str(current.get("target_ticker", "this name"))
+		]
+		rows = agreement_rows
+	if rows.size() > 3:
+		rows = rows.slice(0, 3)
+	return {
+		"label": label,
+		"note": note,
+		"target_ticker": str(current.get("target_ticker", "")),
+		"current_truth_label": str(current.get("truth_label", "")),
+		"current_stance": current_stance,
+		"rows": rows.duplicate(true),
+		"created_day_index": int(current.get("created_day_index", 0))
+	}
+
+
+func _truth_stance(truth_label: String) -> String:
+	if _tip_label_is_cautionary(truth_label):
+		return "caution"
+	match truth_label:
+		"Accumulation", "Filing-Backed", "Execution Watch", "Network Read":
+			return "constructive"
+		"Real But Delayed", "Room Risk", "Early Read":
+			return "timing_risk"
+		_:
+			return "uncertain"
+
+
+func _truth_stances_conflict(a: String, b: String) -> bool:
+	return (a == "constructive" and b == "caution") or (a == "caution" and b == "constructive")
+
+
+func _apply_cross_contact_read(row: Dictionary, cross_checks: Dictionary) -> void:
+	var contact_id: String = str(row.get("id", ""))
+	var cross_check: Dictionary = cross_checks.get(contact_id, {})
+	if cross_check.is_empty():
+		row["cross_contact_label"] = ""
+		row["cross_contact_note"] = ""
+		row["cross_contact_rows"] = []
+		return
+	row["cross_contact_label"] = str(cross_check.get("label", "Mixed sources"))
+	row["cross_contact_note"] = str(cross_check.get("note", ""))
+	row["cross_contact_rows"] = cross_check.get("rows", []).duplicate(true)
+
+
+func _pruned_tip_journal(journal: Dictionary) -> Dictionary:
+	var rows: Array = []
+	for tip_value in journal.values():
+		if typeof(tip_value) != TYPE_DICTIONARY:
+			continue
+		rows.append(tip_value)
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("created_day_index", 0)) > int(b.get("created_day_index", 0))
+	)
+	var pruned: Dictionary = {}
+	for index in range(min(rows.size(), MAX_TIP_MEMORY_ROWS)):
+		var tip: Dictionary = rows[index]
+		pruned[str(tip.get("id", "tip_%d" % index))] = tip.duplicate(true)
+	return pruned
+
+
+func _latest_followup_tip_for_contact(run_state, contact_id: String) -> Dictionary:
+	var candidates: Array = []
+	for tip_value in run_state.get_network_tip_journal().values():
+		if typeof(tip_value) != TYPE_DICTIONARY:
+			continue
+		var tip: Dictionary = tip_value
+		if str(tip.get("contact_id", "")) != contact_id:
+			continue
+		if str(tip.get("status", "pending")) == "pending":
+			continue
+		if not str(tip.get("followup_id", "")).is_empty():
+			continue
+		candidates.append(tip.duplicate(true))
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("resolved_day_index", 0)) > int(b.get("resolved_day_index", 0))
+	)
+	if candidates.is_empty():
+		return {}
+	return candidates[0]
+
+
+func _tip_followup_options(tip: Dictionary) -> Array:
+	if not str(tip.get("followup_id", "")).is_empty():
+		return []
+	return [
+		{"id": "thank", "label": "Thank"},
+		{"id": "ask_why", "label": "Ask Why"},
+		{"id": "challenge", "label": "Challenge"}
+	]
+
+
+func _build_tip_followup_result(contact: Dictionary, tip: Dictionary, followup_id: String) -> Dictionary:
+	var contact_name: String = str(contact.get("display_name", "Contact"))
+	var outcome_label: String = str(tip.get("outcome_label", "Still pending"))
+	var player_action_label: String = str(tip.get("player_action_label", "No action"))
+	var player_alignment: String = str(tip.get("player_action_alignment", "neutral"))
+	var truth_label: String = str(tip.get("truth_label", "Network Read"))
+	var read_was_good: bool = outcome_label in ["Useful read", "Useful warning", "Useful timing read", "Early, not wrong"]
+	var read_was_bad: bool = outcome_label == "Missed badly"
+	var reliability: float = clamp(float(contact.get("reliability", 0.6)), 0.0, 1.0)
+	var relationship_delta: int = 0
+	var label: String = ""
+	var note: String = ""
+	match followup_id:
+		"thank":
+			label = "Thanked"
+			if read_was_good and player_alignment == "followed":
+				relationship_delta = 2
+				note = "%s appreciates that you acted with discipline after the read." % contact_name
+			elif read_was_good:
+				relationship_delta = 1
+				note = "%s accepts the thanks, but points out that the market only pays when you act." % contact_name
+			elif read_was_bad:
+				note = "%s accepts the note, but admits the read did not age cleanly." % contact_name
+			else:
+				relationship_delta = 1
+				note = "%s logs it as unfinished business and keeps the line warm." % contact_name
+		"ask_why":
+			label = "Asked Why"
+			note = _tip_followup_explanation(contact_name, truth_label, outcome_label, player_action_label)
+			if read_was_good:
+				relationship_delta = 1
+		"challenge":
+			label = "Challenged"
+			if read_was_bad:
+				if reliability >= 0.65:
+					relationship_delta = 1
+					note = "%s respects the pushback and walks through what broke in the read." % contact_name
+				else:
+					relationship_delta = -1
+					note = "%s gets defensive, which tells you something about the quality of the source." % contact_name
+			elif read_was_good:
+				relationship_delta = -1
+				note = "%s thinks the tape already answered the question and does not love being second-guessed." % contact_name
+			else:
+				note = "%s agrees the setup is still not clean enough to call." % contact_name
+		_:
+			return {"success": false, "message": "Unknown follow-up option."}
+	return {
+		"success": true,
+		"followup_label": label,
+		"followup_note": note,
+		"relationship_delta": relationship_delta,
+		"message": "%s: %s" % [label, note]
+	}
+
+
+func _tip_followup_explanation(contact_name: String, truth_label: String, outcome_label: String, player_action_label: String) -> String:
+	match truth_label:
+		"Accumulation":
+			return "%s says the read came from absorption and follow-through, not the headline itself. Your action: %s. Outcome: %s." % [contact_name, player_action_label, outcome_label]
+		"Room Risk":
+			return "%s says the meeting room mattered more than the first tape reaction. Your action: %s. Outcome: %s." % [contact_name, player_action_label, outcome_label]
+		"Real But Delayed":
+			return "%s says the story was real, but the calendar moved under it. Your action: %s. Outcome: %s." % [contact_name, player_action_label, outcome_label]
+		"Retail Trap", "Distribution Risk", "Dead Story", "Pressure Read":
+			return "%s says the warning was about crowding and weak follow-through. Your action: %s. Outcome: %s." % [contact_name, player_action_label, outcome_label]
+		_:
+			return "%s says the read was only a lead until tape, filings, or another source confirmed it. Your action: %s. Outcome: %s." % [contact_name, player_action_label, outcome_label]
+
+
+func _chain_by_id(run_state, chain_id: String) -> Dictionary:
+	if chain_id.is_empty():
+		return {}
+	return run_state.get_active_corporate_action_chains().get(chain_id, {}).duplicate(true)
+
+
+func _build_public_tip_read(
+	run_state,
+	_data_repository,
+	contact: Dictionary,
+	company_id: String,
+	chain: Dictionary,
+	intel_quality: String
+) -> Dictionary:
+	var ticker: String = _company_ticker(run_state, company_id)
+	var family_label: String = _public_family_label(str(chain.get("family", "")))
+	if family_label.is_empty():
+		family_label = "story"
+	var truth_label: String = _public_truth_label(contact, chain, intel_quality)
+	var confidence_label: String = _public_confidence_label(contact, intel_quality)
+	var source_role: String = _contact_tip_voice(contact)
+	var read: String = _public_tip_opening(truth_label, ticker, family_label)
+	var color: String = _public_tip_source_color(contact, source_role, ticker)
+	if not color.is_empty():
+		read += " " + color
+	var watch_note: String = _public_tip_watch_note(truth_label, chain)
+	if not watch_note.is_empty():
+		read += " " + watch_note
+	return {
+		"truth_label": truth_label,
+		"confidence_label": confidence_label,
+		"source_role": source_role,
+		"tip_read": read.strip_edges()
+	}
+
+
+func _public_tip_opening(truth_label: String, ticker: String, family_label: String) -> String:
+	match truth_label:
+		"Real But Delayed":
+			return "%s still looks live, but the timing is no longer clean." % ticker
+		"Room Risk":
+			return "%s has a real %s path, but the room can still reset the trade." % [ticker, family_label]
+		"Filing-Backed":
+			return "%s has moved past loose rumor; the paper trail is now doing the work." % ticker
+		"Accumulation":
+			return "%s looks like a quiet accumulation story before the wider market fully agrees." % ticker
+		"Distribution Risk":
+			return "%s is getting crowded, and stronger hands may be selling into attention." % ticker
+		"Retail Trap":
+			return "%s has the shape of a crowded ritel chase rather than a clean confirmation." % ticker
+		"Execution Watch":
+			return "%s cleared the noisy part; now the question is whether execution keeps pace." % ticker
+		"Dead Story":
+			return "%s looks mostly spent for now; do not treat the old headline as fresh fuel." % ticker
+		_:
+			return "%s has a live read, but it is still early enough to demand confirmation." % ticker
+
+
+func _public_tip_source_color(contact: Dictionary, source_role: String, ticker: String) -> String:
+	var reliability: float = clamp(float(contact.get("reliability", 0.6)), 0.0, 1.0)
+	match source_role:
+		"flow desk":
+			return "The tape matters more than the headline here: watch whether bandar flow keeps absorbing ritel supply."
+		"corporate desk":
+			return "The useful signal is paperwork, agenda language, and whether a formal notice appears on schedule."
+		"company room":
+			return "The room sounds engaged, but support still has to survive the meeting and the next disclosure."
+		"source book":
+			return "Sources are willing to talk, although the public story is still catching up."
+		"research desk":
+			return "The thesis only gets cleaner if price action follows fundamentals instead of chat-room heat."
+		_:
+			if reliability >= 0.74:
+				return "This is not a public confirmation, but the contact has been useful enough to keep it on the watchlist."
+			return "Treat it as a lead, not a signal by itself."
+
+
+func _public_tip_watch_note(truth_label: String, chain: Dictionary) -> String:
+	match truth_label:
+		"Real But Delayed":
+			return "Wait for a fresh date, renewed accumulation, or a clearer boardroom cue."
+		"Room Risk":
+			return "Meeting notices, attendance, and vote wording matter more than intraday noise."
+		"Filing-Backed":
+			return "The next useful clue is whether the market buys the filing after the first reaction."
+		"Accumulation":
+			return "If volume rises without the story getting too loud, the read improves."
+		"Distribution Risk", "Retail Trap":
+			return "Be careful if volume expands while the bid keeps slipping."
+		"Execution Watch":
+			return "Follow-through now matters more than another headline."
+		"Dead Story":
+			return "Only a new notice or hard reversal would make it worth reopening."
+		_:
+			if not str(chain.get("active_meeting_id", "")).is_empty():
+				return "The calendar is the cleanest thing to track next."
+			return "Confirmation should come from tape, filings, or a cleaner second source."
+
+
+func _public_truth_label(contact: Dictionary, chain: Dictionary, intel_quality: String) -> String:
+	if chain.is_empty():
+		if str(contact.get("tone", "mixed")) == "negative":
+			return "Pressure Read"
+		return "Network Read"
+	var stage: String = str(chain.get("stage", ""))
+	var timeline_state: String = str(chain.get("current_timeline_state", ""))
+	var outcome_state: String = str(chain.get("outcome_state", ""))
+	var smart_money_phase: String = str(chain.get("smart_money_phase", ""))
+	var public_heat: float = float(chain.get("public_heat", 0.0))
+	var retail_positioning: float = float(chain.get("retail_positioning", 0.0))
+	var source_role: String = _contact_tip_voice(contact)
+	if outcome_state == "cancelled" or timeline_state == "cancelled":
+		return "Dead Story"
+	if stage == "execution" or outcome_state == "approved":
+		return "Execution Watch"
+	if timeline_state == "delayed" or intel_quality == "very_strong":
+		return "Real But Delayed"
+	if source_role == "flow desk" and public_heat >= 0.45 and retail_positioning >= 0.24:
+		return "Retail Trap"
+	if stage == "meeting_or_call" or not str(chain.get("active_meeting_id", "")).is_empty():
+		return "Room Risk"
+	if smart_money_phase in ["distributing", "trapping"]:
+		return "Retail Trap" if public_heat >= 0.58 or retail_positioning >= 0.36 else "Distribution Risk"
+	if stage == "formal_agenda_or_filing":
+		return "Filing-Backed"
+	if smart_money_phase in ["accumulating", "re_accumulating"] and stage in ["hidden_positioning", "unusual_activity", "rumor_leak"]:
+		return "Accumulation"
+	if public_heat >= 0.64 and retail_positioning >= 0.34:
+		return "Retail Trap"
+	return "Early Read"
+
+
+func _public_confidence_label(contact: Dictionary, intel_quality: String) -> String:
+	var reliability: float = clamp(float(contact.get("reliability", 0.6)), 0.0, 1.0)
+	match intel_quality:
+		"very_strong":
+			return "High conviction"
+		"strong":
+			return "Grounded read" if reliability >= 0.64 else "Useful but partial"
+		"medium":
+			return "Early but credible"
+		_:
+			return "Soft read"
+
+
+func _contact_tip_voice(contact: Dictionary) -> String:
+	var haystack: String = "%s %s %s" % [
+		str(contact.get("role", "")),
+		str(contact.get("affiliation_role", "")),
+		str(contact.get("intro", ""))
+	]
+	for category_value in contact.get("categories", []):
+		haystack += " " + str(category_value)
+	haystack = haystack.to_lower()
+	if str(contact.get("affiliation_type", "floater")) == "insider":
+		return "company room"
+	if haystack.find("journal") >= 0 or haystack.find("media") >= 0 or haystack.find("news") >= 0:
+		return "source book"
+	if haystack.find("broker") >= 0 or haystack.find("flow") >= 0 or haystack.find("dealer") >= 0 or haystack.find("trader") >= 0:
+		return "flow desk"
+	if haystack.find("legal") >= 0 or haystack.find("law") >= 0 or haystack.find("corporate") >= 0 or haystack.find("disclosure") >= 0 or haystack.find("ojk") >= 0:
+		return "corporate desk"
+	if haystack.find("analyst") >= 0 or haystack.find("research") >= 0 or haystack.find("fund") >= 0 or haystack.find("investor") >= 0:
+		return "research desk"
+	return "market contact"
+
+
+func _active_corporate_chain_for_company(run_state, company_id: String) -> Dictionary:
+	var rows: Array = []
+	for chain_value in run_state.get_active_corporate_action_chains().values():
+		var chain: Dictionary = chain_value
+		if str(chain.get("company_id", "")) == company_id and str(chain.get("status", "active")) != "completed":
+			rows.append(chain.duplicate(true))
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("started_day_index", 0)) > int(b.get("started_day_index", 0))
+	)
+	if rows.is_empty():
+		return {}
+	return rows[0]
+
+
+func _company_ticker(run_state, company_id: String) -> String:
+	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+	return str(definition.get("ticker", company_id.to_upper()))
+
+
+func _public_family_label(family_id: String) -> String:
+	match family_id:
+		"rights_issue":
+			return "rights issue"
+		"stock_split":
+			return "stock split"
+		"stock_buyback":
+			return "buyback"
+		"merger_acquisition":
+			return "deal"
+		"ceo_change":
+			return "leadership change"
+		"dividend_special":
+			return "special dividend"
+		_:
+			return family_id.replace("_", " ")
+
+
 func _all_contact_definitions(run_state, data_repository) -> Array:
 	var definitions: Array = []
 	for contact_value in data_repository.get_contact_network_data().get("contacts", []):
@@ -655,7 +1663,27 @@ func _contact_row(contact: Dictionary, runtime: Dictionary, discovery: Dictionar
 		"target_sector_id": str(discovery.get("target_sector_id", contact.get("sector_id", ""))),
 		"sector_ids": contact.get("sector_ids", []).duplicate(true),
 		"categories": contact.get("categories", []).duplicate(true),
-		"lead_score": int(discovery.get("lead_score", 0))
+		"lead_score": int(discovery.get("lead_score", 0)),
+		"last_tip_status": str(runtime.get("last_tip_status", "")),
+		"last_tip_label": str(runtime.get("last_tip_label", "")),
+		"last_tip_note": str(runtime.get("last_tip_note", "")),
+		"last_tip_player_action_label": str(runtime.get("last_tip_player_action_label", "")),
+		"last_tip_player_action_alignment": str(runtime.get("last_tip_player_action_alignment", "")),
+		"last_tip_day_index": int(runtime.get("last_tip_day_index", 0)),
+		"last_tip_followup_id": str(runtime.get("last_tip_followup_id", "")),
+		"last_tip_followup_label": str(runtime.get("last_tip_followup_label", "")),
+		"last_tip_followup_note": str(runtime.get("last_tip_followup_note", "")),
+		"can_follow_up_tip": false,
+		"tip_followup_options": [],
+		"tip_history": [],
+		"tip_reliability_label": "No track record yet",
+		"tip_reliability_score": 50.0,
+		"tip_resolved_count": 0,
+		"tip_useful_count": 0,
+		"tip_missed_count": 0,
+		"cross_contact_label": "",
+		"cross_contact_note": "",
+		"cross_contact_rows": []
 	}
 
 

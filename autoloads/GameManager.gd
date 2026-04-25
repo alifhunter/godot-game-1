@@ -272,7 +272,8 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	var day_result: Dictionary = market_simulator.simulate_day(RunState, DataRepository, broker_flow_system, corporate_action_system)
 	RunState.apply_day_result(day_result)
 	var network_results: Array = contact_network_system.process_due_requests(RunState, DataRepository)
-	if not network_results.is_empty() and emit_runtime_signals:
+	var network_tip_results: Array = contact_network_system.process_due_tip_memories(RunState, DataRepository)
+	if (not network_results.is_empty() or not network_tip_results.is_empty()) and emit_runtime_signals:
 		network_changed.emit()
 	if emit_runtime_signals:
 		broker_flow_generated.emit(RunState.day_index)
@@ -1197,6 +1198,20 @@ func request_contact_referral(contact_id: String, company_id: String = "", affil
 	if bool(result.get("success", false)):
 		RunState.spend_daily_action(1)
 		_request_autosave("network_referral")
+		daily_actions_changed.emit()
+		network_changed.emit()
+	return result
+
+
+func follow_up_contact_tip(contact_id: String, followup_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if not RunState.can_spend_daily_action(1):
+		return {"success": false, "message": "No daily action points left."}
+	var result: Dictionary = contact_network_system.follow_up_tip(RunState, DataRepository, contact_id, followup_id)
+	if bool(result.get("success", false)):
+		RunState.spend_daily_action(1)
+		_request_autosave("network_tip_followup")
 		daily_actions_changed.emit()
 		network_changed.emit()
 	return result

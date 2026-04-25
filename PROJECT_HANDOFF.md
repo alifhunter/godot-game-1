@@ -14,6 +14,15 @@ Read this file first in the next session.
   - local Git repo initialized on branch `main`
   - GitHub remote configured as `origin`
   - remote URL: `https://github.com/alifhunter/godot-game-1.git`
+  - latest Network tip-memory / follow-up / read-history / cross-check changes are currently uncommitted unless committed after this handoff
+  - uncommitted Network pass files are expected to include:
+    - `autoloads/GameManager.gd`
+    - `autoloads/RunState.gd`
+    - `systems/ContactNetworkSystem.gd`
+    - `systems/CorporateActionSystem.gd`
+    - `scripts/ui/GameRoot.gd`
+    - `scripts/tests/SmokeTest.gd`
+    - `PROJECT_HANDOFF.md`
 
 ## Current Playable State
 - Main menu supports `New Game`, `Load Run`, `Quit`
@@ -647,7 +656,14 @@ Read this file first in the next session.
   - current daily Network AP remaining/limit
   - selected-contact detail
   - linked corporate-action summary / intel summary when the selected contact and target company map to a live chain
-  - action buttons for `Meet`, `Tip`, `Request`, and `Referral`
+  - latest resolved tip note, when a selected met contact has resolved tip history
+  - compact `Read History` panel when the selected contact has resolved tips
+    - shows recent target ticker, read outcome, player action, and follow-up result
+    - includes a simple derived reliability label such as `One useful read`, `Reliable lately`, `Mixed record`, or `Cold lately`
+  - compact `Source Cross-Check` panel when another recent contact has read the same target
+    - labels the comparison as `Source agreement`, `Mixed sources`, or `Conflicting sources`
+    - this panel is derived from recent tip journal rows and is not separately saved
+  - action buttons for `Meet`, `Tip`, `Request`, `Referral`, and contextual `Follow Up`
   - a contextual `Open Meeting` button when the selected contact is linked to an upcoming corporate venue
     - `rights_issue` `rupslb` links now open the fullscreen staged meeting overlay
     - other linked meeting types still open the simpler shared meeting modal
@@ -664,7 +680,22 @@ Read this file first in the next session.
   - `Market Name`: score `>=85`, cap `12`
 - Current Network interactions:
   - `Meet` spends `1` daily AP on success, unlocks a discovered contact, and starts relationship at the data-defined base relationship, defaulting to `25`
-  - `Tip` spends `1` daily AP on success, first tries to reveal corporate-action intel for a relevant live chain, and otherwise falls back to creating the older saved contact company arc with `event_family = "contact"` and phases `hidden_whisper -> visible_reaction -> digestion`; either success path burns `2` relationship points
+  - `Tip` spends `1` daily AP on success, first tries to reveal corporate-action intel for a relevant live chain, and otherwise falls back to creating the older saved contact company arc with `event_family = "contact"` and phases `hidden_whisper -> visible_reaction -> digestion`; either success path burns `2` relationship points immediately
+    - tip results now return player-facing `public_truth_label`, `public_confidence_label`, `public_tip_read`, and `tip_source_role`
+    - player-visible tip copy now uses natural reads such as `Accumulation`, `Room Risk`, `Real But Delayed`, `Retail Trap`, `Execution Watch`, and `Network Read` instead of raw chain/stage ids
+    - contact voice colors the read: flow desks talk tape/ritel/bandar, corporate/legal contacts talk paperwork and notices, insiders talk the room/meeting support, journalists talk source books, and research contacts talk thesis quality
+    - successful tips are persisted in `RunState.network_tip_journal`
+    - each tip journal row stores contact id/name, target company/ticker, created day, due day, baseline price, baseline shares, optional chain id, public truth/confidence/source role, and rendered read text
+    - due tips resolve after `3` simulated days, during day advance after market simulation has applied the fresh price/chain state
+    - resolved tip outcome labels currently include `Useful read`, `Useful warning`, `Useful timing read`, `Early, not wrong`, `Too early`, `Missed badly`, and `Still pending`
+    - player behavior is classified from trades/holdings between tip creation and resolution as followed, held, ignored, avoided, sold against, acted on warning, or chased against warning
+    - resolved tips apply small relationship adjustments: useful reads recover relationship, missed reads hurt it, and mixed/early reads stay mostly neutral
+    - player follow-through can add a small relationship boost when a good read was followed, while following a bad read costs a little extra trust
+  - `Follow Up` spends `1` daily AP on success and appears after the selected contact has one resolved tip memory without a follow-up
+    - current follow-up choices are `Thank`, `Ask Why`, and `Challenge`
+    - each resolved tip can only be followed up once
+    - follow-up outcomes are stored back into `network_tip_journal` as `followup_id`, `followup_label`, `followup_note`, `followup_day_index`, and `followup_relationship_delta`
+    - follow-up result text is also mirrored into the selected contact's runtime latest-tip fields for display
   - `Request` spends `1` daily AP on success and creates a pending task to hold at least `1` lot of the target company by `current_day + 3`
   - repeat accepts for the same contact-target pair while a request is already pending now fail safely and do not spend extra AP
   - a successful request creates a contact company arc and adds `8` relationship points
@@ -699,7 +730,14 @@ Read this file first in the next session.
 - Current prototype simplification:
   - contact interactions consume daily AP but do not consume a separate event slot yet
   - non-corporate contact effects do not directly change current prices; they enter the existing active company-arc pipeline so MarketSimulator, News, and Twooter can read them like other company arcs
-  - corporate-action contact intel updates saved truth buckets and venue links, but does not yet create a separate multi-contact contradiction/reliability UI
+  - corporate-action contact intel updates saved truth buckets and venue links; a first-pass cross-contact source check exists, but there is still no full relationship graph or dedicated contradiction investigation UI
+  - tip memory is intentionally light: it scores outcome from price/chain state plus player trade/holding behavior after a few days, but it is still not a full portfolio-attribution system
+  - `Read History` and `Source Cross-Check` panels are derived from `network_tip_journal` at snapshot-build time, not separately persisted UI state
+  - cross-contact checks currently compare recent reads on the same target from the last `8` run days and group them by broad stance:
+    - constructive: e.g. `Accumulation`, `Filing-Backed`, `Execution Watch`, `Network Read`
+    - caution: e.g. `Retail Trap`, `Distribution Risk`, `Dead Story`, `Pressure Read`
+    - timing risk: e.g. `Real But Delayed`, `Room Risk`, `Early Read`
+  - only constructive-vs-caution is considered a direct conflict in the current pass; other combinations show as agreement or mixed sources
 - Current content source is editable:
   - `data/network/contact_network_data.json`
   - contacts are fictional/data-authored Indonesian market roles and names, not real people
@@ -716,7 +754,17 @@ Read this file first in the next session.
   - wired through `GameManager.get_network_snapshot()`
   - loaded through `DataRepository.gd`
   - consulted alongside `systems/CorporateActionSystem.gd` for chain-linked tips
-  - persisted through `RunState.network_contacts`, `RunState.network_discoveries`, and `RunState.network_requests`
+  - day-advance resolution is called from `GameManager._advance_day_internal()`
+  - persisted through:
+    - `RunState.network_contacts`
+    - `RunState.network_discoveries`
+    - `RunState.network_requests`
+    - `RunState.network_tip_journal`
+  - derived at snapshot-build time:
+    - latest tip note fields on contact rows
+    - `tip_history`
+    - `tip_reliability_label` / `tip_reliability_score`
+    - cross-contact source checks
 
 ## Company Management / Insider Generation
 - Every generated company now persists a compact public `management_roster`
@@ -905,6 +953,8 @@ Read this file first in the next session.
   - `ContactNetworkSystem.request_tip()` is now two-path:
     - if there is relevant live chain access, the contact reveals chain-linked intel into `RunState.corporate_action_intel`
     - otherwise it falls back to the older contact company-arc flow
+    - both paths now decorate the return payload with public truth/confidence/read fields and a natural toast message
+    - both paths now create a pending tip-memory row that stores the contact, target, baseline price, baseline shares, public read, confidence, and due day
   - current intel buckets store discovered facts rather than full chain copies, including best-known:
     - `truth_level`
     - `current_timeline_state`
@@ -913,7 +963,12 @@ Read this file first in the next session.
     - discovered fields / sources / confidence
   - floaters are better for early rumor / positioning context
   - insiders are better for management stance, agenda details, and timing/approval reads
+  - the selected-contact intel summary now translates raw state/management values into labels like `Timing slipped`, `Company denying it`, or `Execution underway`
   - attending a linked meeting reveals a stronger intel slice for that chain
+  - day advance now resolves due tip memories after market simulation, checks player trades/holdings around the read, and surfaces the latest resolved note in the Network contact list/detail
+  - follow-up interactions branch on the resolved tip outcome and player action classification, then write `followup_id`, `followup_label`, `followup_note`, and relationship delta into the tip journal
+  - contact rows now derive recent read-history summaries from `network_tip_journal`, including target ticker, outcome, player action, follow-up label, and a simple reliability label such as `Reliable lately`, `Mixed record`, or `Cold lately`
+  - contact rows now also derive recent cross-contact source checks from `network_tip_journal`, surfacing `Source agreement`, `Mixed sources`, or `Conflicting sources` when other contacts recently read the same target differently
 - Current player-facing UI/entry points:
   - `Dashboard` bottom-right area now shows `Upcoming Meetings / Reports`
   - a short meeting-button strip on the dashboard can open up to `4` upcoming meetings
@@ -1393,6 +1448,10 @@ Read this file first in the next session.
   - no floater becomes an initial lead for more than `2` distinct companies
   - meeting a company Profile-discovered contact persists through save/load
   - requesting a contact tip either reveals linked corporate-action intel or creates an active contact company arc, depending on whether the target has a live chain
+  - Network tip payloads expose natural public truth/confidence/read fields and avoid raw system labels in visible copy
+  - Network tip-memory journal rows persist through save/load, resolve after several days, classify player action, and surface player-aware last-read notes on contacts
+  - Network contact snapshots expose compact read-history rows plus `tip_reliability_label` / `tip_reliability_score`, and the Network detail renders those rows in a small `Read History` panel
+  - Network contact snapshots expose cross-contact read disagreement data, and the Network detail renders it in a small `Source Cross-Check` panel
   - accepted Network requests complete when the player owns at least `1` lot by the due day
   - accepted Network requests miss when the player does not own the requested target by the due day
   - connected-floater referral requires relationship, spends `10` relationship on success, creates a referred insider lead, and the referred insider can be met/persisted
@@ -1423,6 +1482,13 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - handoff-only precision update: `git diff --check` passed on `2026-04-25`; no Godot rerun was needed because only `PROJECT_HANDOFF.md` changed in that update
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the Network cross-contact contradiction update on `2026-04-25`
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the Network contact read-history panel update on `2026-04-25`
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the Network tip follow-up interactions update on `2026-04-25`
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the player-aware Network tip-memory update on `2026-04-25`
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the Network tip-memory update on `2026-04-25`
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the Network truth-depth tip update on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the Twooter content enrichment / expandable threads pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the News content enrichment / continuity pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the News card readability / open-window day reload fix on `2026-04-25`
@@ -1484,10 +1550,10 @@ Read this file first in the next session.
   - the smoke run took a long time but completed successfully
   - the old spawned smoke-test Godot processes from an earlier timeout were stopped manually; the user's older editor process was left running
   - previous `git diff --check` also passed after the Company Management + Network World Model and Network lead-scoring edits
-  - contact-network data validation passed during the implementation pass:
-    - total authored contacts: `233`
+  - latest contact-network data validation passed during the implementation pass:
+    - total authored contacts: `237`
     - duplicate ids: `0`
-    - floaters: `221`
+    - floaters: `225`
     - insider templates: `12`
 - Last known smoke output from `user://smoke_test_result.txt`:
   - quick: `SMOKE_QUICK_OK normal_equity=94001565.29 days=3 summary=Retail-led accumulation gave WAME the cleanest tape today.`
@@ -1505,25 +1571,25 @@ Read this file first in the next session.
 - No deeper onboarding beyond the current tutorial popup
 - No player-custom widget layout yet
 - `2027-2030` holiday rows are projected simulation data and may differ from future official IDX calendars
-- `News` is now a first-pass deterministic desk, but still limited:
-  - outlet access is now upgrade-driven by `News Content`, but the article text/content depth is still first-pass
+- `News` is now a deterministic newspaper desk with enriched article bodies, but still limited:
+  - outlet access is now upgrade-driven by `News Content`, and article bodies now render as fuller 5-6 paragraph stories
   - there is now a lightweight outlet/year/month article archive, but no search / pagination / bookmarking yet
-  - current article text is template-driven and intentionally editable, but still early-pass content
+  - current article text is still template-driven and intentionally editable; future work should tune/add prose pools rather than rebuild the UI
   - no richer article-specific imagery / attachments / linked company cards yet
-- `Twooter` is now a first-pass deterministic feed, but still limited:
-  - account access is now upgrade-driven by `Twooter Content`, but feed depth is still first-pass
+- `Twooter` is now a deterministic social feed with enriched fictional account voices and expandable threads, but still limited:
+  - account access is now upgrade-driven by `Twooter Content`, and thread-capable accounts can render numbered expandable thread lines
   - there is no search / archive / pagination / bookmarking yet
-  - current post text is template-driven and intentionally editable, but still early-pass content
+  - current post/thread text is still template-driven and intentionally editable; future work should tune account voice and coverage before adding relationship mechanics
   - the simplified mobile feed intentionally drops per-account filters for now
   - no richer account pages / follow system / custom finfluencer authoring UI yet
 - `Network` is now a first playable contact system, but still limited:
   - discovery currently only comes from News, company Profile context, and floater referrals
-  - there is now a shared meeting modal for simple venues, an interactive fullscreen `rights_issue` `RUPSLB` overlay, and chain-linked intel, but there is still no dedicated venue desktop app or richer contradiction/reliability presentation layer
-  - contacts can now reveal first-pass chain truth such as family, stance, timeline state, and next expected step, but there is still no richer contradiction / cross-contact reliability UI
+  - there is now a shared meeting modal for simple venues, an interactive fullscreen `rights_issue` `RUPSLB` overlay, and chain-linked intel, but there is still no dedicated venue desktop app
+  - contacts can now reveal first-pass chain truth such as family, stance, timeline state, and next expected step, with compact per-contact read-history and source cross-check panels
   - favor cooldowns are not implemented yet
-  - follow-up / report-back actions are not implemented yet
+  - follow-up actions exist for resolved tips, but there is no broader report-back system for other favors or requests yet
   - ignore decay is only represented through request failure for now
-  - cross-reference / conflicting-tip reliability checks are not implemented yet
+  - cross-reference / conflicting-tip reliability checks are first-pass only: they show agreement/conflict, but do not yet trigger dedicated contact dialogue or investigative actions
   - contact interactions now consume daily AP, but there is no richer daily-action journal or non-Network action economy yet
   - no perk-driven extra contact slots, cooldown reductions, or sector starting-relationship modifiers yet beyond the current Daily Action Points upgrade track
   - Profile currently shows public management names, but simply opening Profile does not privately discover those insiders
@@ -1642,7 +1708,10 @@ Read this file first in the next session.
   - deepen the implemented shared corporate-action chain system rather than bolting on isolated meeting UIs
   - keep `earnings_call`, `annual_rups`, and `rupslb` as formal venues reading/writing the same underlying chain object
   - deepen how `News`, `Twooter`, `Network`, and market reaction consume the same chain state so rumor, denial, delay, shakeout, approval, and execution feel more connected and dramatic
-  - let floaters and insiders leak more differentiated layers of truth, especially timing changes such as `real but delayed`, `renegotiated`, or `smart money is distributing before rerunning`
+  - next Network pass could make cross-contact conflict actionable:
+    - let the player ask one contact about another contact's conflicting read
+    - branch the answer based on source role and recent reliability
+    - optionally make this a relationship-sensitive action instead of automatic free context
   - add event-slot or daily-action costs for venue attendance / meeting contacts if/when the broader time system exists
   - next corporate-action feature step is to expand the new interactive `rupslb` flow beyond `rights_issue`:
     - add more agenda families
@@ -1655,9 +1724,9 @@ Read this file first in the next session.
   - save `backdoor_listing` for a later special pass as the most composite/high-volatility Indonesia-specific chain
   - deepen referrals beyond the current no-cooldown floater-to-insider prototype
   - add favor cooldowns and tune relationship burn for on-demand tips
-  - add follow-up/report-back after acting on tips
+  - broaden report-back beyond the current resolved-tip `Follow Up` button so requests, referrals, and meeting favors can also produce relationship/story consequences
   - add ignore/ghosting decay beyond the current missed-request relationship penalty
-  - add cross-reference so two contacts can give conflicting tips and produce a reliability read
+  - deepen the implemented cross-contact read system from passive `Source Cross-Check` labels into playable investigation/dialogue choices
   - add perk hooks such as extra contact slots, reduced contact cooldown, and sector-specific starting relationship
   - add richer contact detail pages and a clearer request journal
   - add a clearer UI for public management vs discovered/meet-ready insider leads

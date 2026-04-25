@@ -109,6 +109,7 @@ var news_archive_articles = {}
 var network_contacts = {}
 var network_discoveries = {}
 var network_requests = {}
+var network_tip_journal = {}
 var upgrade_tiers = {}
 var daily_action_day_index = 0
 var daily_actions_used = 0
@@ -164,6 +165,7 @@ func reset() -> void:
 	network_contacts = {}
 	network_discoveries = {}
 	network_requests = {}
+	network_tip_journal = {}
 	upgrade_tiers = _default_upgrade_tiers()
 	daily_action_day_index = 0
 	daily_actions_used = 0
@@ -351,6 +353,7 @@ func load_from_dict(data: Dictionary) -> void:
 	network_contacts = data.get("network_contacts", {}).duplicate(true)
 	network_discoveries = data.get("network_discoveries", {}).duplicate(true)
 	network_requests = data.get("network_requests", {}).duplicate(true)
+	network_tip_journal = data.get("network_tip_journal", {}).duplicate(true)
 	upgrade_tiers = _normalize_upgrade_tiers(data.get("upgrade_tiers", {}))
 	daily_action_day_index = int(data.get("daily_action_day_index", day_index))
 	daily_actions_used = max(int(data.get("daily_actions_used", 0)), 0)
@@ -425,6 +428,7 @@ func to_save_dict() -> Dictionary:
 		"network_contacts": network_contacts.duplicate(true),
 		"network_discoveries": network_discoveries.duplicate(true),
 		"network_requests": network_requests.duplicate(true),
+		"network_tip_journal": network_tip_journal.duplicate(true),
 		"upgrade_tiers": get_upgrade_tiers(),
 		"daily_action_day_index": daily_action_day_index,
 		"daily_actions_used": daily_actions_used,
@@ -1109,6 +1113,14 @@ func get_network_requests() -> Dictionary:
 
 func set_network_requests(next_requests: Dictionary) -> void:
 	network_requests = next_requests.duplicate(true)
+
+
+func get_network_tip_journal() -> Dictionary:
+	return network_tip_journal.duplicate(true)
+
+
+func set_network_tip_journal(next_tip_journal: Dictionary) -> void:
+	network_tip_journal = next_tip_journal.duplicate(true)
 
 
 func get_academy_progress() -> Dictionary:

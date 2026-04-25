@@ -8,6 +8,11 @@ const APP_ID_SOCIAL := "social"
 const APP_ID_NETWORK := "network"
 const APP_ID_ACADEMY := "academy"
 const APP_ID_UPGRADES := "upgrades"
+const NETWORK_FOLLOWUP_ACTIONS := {
+	0: "thank",
+	1: "ask_why",
+	2: "challenge"
+}
 const STOCK_APP_FONT_SIZE := 12
 const DEFAULT_APP_FONT_SIZE := 12
 const APP_FONT_CANDIDATE_PATHS := [
@@ -284,6 +289,9 @@ var news_open_meeting_button: Button = null
 @onready var network_referral_button: Button = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkActionRow/NetworkReferralButton
 var network_corporate_action_label: Label = null
 var network_open_meeting_button: Button = null
+var network_followup_button: MenuButton = null
+var network_tip_history_label: Label = null
+var network_crosscheck_label: Label = null
 var academy_window: MarginContainer = null
 var academy_window_body: PanelContainer = null
 var academy_title_label: Label = null
@@ -3224,10 +3232,14 @@ func _rebuild_network_contact_list() -> void:
 		var prefix: String = "Met %s" % affiliation_label if bool(row.get("met", false)) else "Lead %s" % affiliation_label
 		if str(row.get("source_type", "")) == "referral" and not bool(row.get("met", false)):
 			prefix = "Referred Insider"
+		var display_role: String = str(row.get("role", ""))
+		var last_tip_label: String = str(row.get("last_tip_label", ""))
+		if not last_tip_label.is_empty():
+			display_role += " | %s" % last_tip_label
 		network_contacts_list.add_item("%s  |  %s - %s" % [
 			prefix,
 			str(row.get("display_name", "")),
-			str(row.get("role", ""))
+			display_role
 		])
 		var item_index: int = network_contacts_list.item_count - 1
 		network_contacts_list.set_item_metadata(item_index, row.duplicate(true))
@@ -3267,6 +3279,15 @@ func _show_network_contact(contact: Dictionary) -> void:
 			network_open_meeting_button.visible = false
 			network_open_meeting_button.disabled = true
 			network_open_meeting_button.set_meta("meeting_id", "")
+		if network_followup_button != null:
+			network_followup_button.visible = false
+			network_followup_button.disabled = true
+		if network_tip_history_label != null:
+			network_tip_history_label.visible = false
+			network_tip_history_label.text = ""
+		if network_crosscheck_label != null:
+			network_crosscheck_label.visible = false
+			network_crosscheck_label.text = ""
 		network_meet_button.disabled = true
 		network_tip_button.disabled = true
 		network_request_button.disabled = true
@@ -3291,7 +3312,16 @@ func _show_network_contact(contact: Dictionary) -> void:
 		int(contact.get("recognition_required", 0)),
 		str(contact.get("source_type", "network"))
 	]
-	network_contact_body_label.text = str(contact.get("intro", ""))
+	var contact_body_text: String = str(contact.get("intro", ""))
+	var last_tip_note: String = str(contact.get("last_tip_note", ""))
+	if not last_tip_note.is_empty():
+		contact_body_text += "\n\n%s" % last_tip_note
+	var followup_note: String = str(contact.get("last_tip_followup_note", ""))
+	if not followup_note.is_empty():
+		contact_body_text += "\n%s" % followup_note
+	network_contact_body_label.text = contact_body_text
+	_update_network_tip_history_panel(contact)
+	_update_network_crosscheck_panel(contact)
 	var has_action_points: bool = int(GameManager.get_daily_action_snapshot().get("remaining", 0)) > 0
 	var referral_company_id: String = selected_company_id
 	if referral_company_id.is_empty():
@@ -3300,6 +3330,7 @@ func _show_network_contact(contact: Dictionary) -> void:
 	network_tip_button.disabled = not is_met or not has_action_points
 	network_request_button.disabled = not is_met or not has_action_points
 	network_referral_button.disabled = not (is_met and affiliation_type == "floater" and not referral_company_id.is_empty() and has_action_points)
+	_update_network_followup_button(contact, is_met, has_action_points)
 	if not has_action_points and not is_met:
 		network_meet_button.disabled = true
 	var company_snapshot: Dictionary = GameManager.get_company_corporate_action_snapshot(_network_contact_target_company(contact))
@@ -3338,6 +3369,105 @@ func _current_network_contact() -> Dictionary:
 		var row: Dictionary = metadata
 		return row
 	return {}
+
+
+func _update_network_followup_button(contact: Dictionary, is_met: bool, has_action_points: bool) -> void:
+	if network_followup_button == null:
+		return
+	var options: Array = contact.get("tip_followup_options", [])
+	var can_follow_up: bool = is_met and bool(contact.get("can_follow_up_tip", false)) and not options.is_empty()
+	network_followup_button.visible = can_follow_up
+	network_followup_button.disabled = not can_follow_up or not has_action_points
+	var popup: PopupMenu = network_followup_button.get_popup()
+	popup.clear()
+	for option_value in options:
+		if typeof(option_value) != TYPE_DICTIONARY:
+			continue
+		var option: Dictionary = option_value
+		var followup_id: String = str(option.get("id", ""))
+		var menu_id: int = _network_followup_menu_id(followup_id)
+		if menu_id < 0:
+			continue
+		popup.add_item(str(option.get("label", followup_id.capitalize())), menu_id)
+	network_followup_button.tooltip_text = "Follow up on the selected contact's latest resolved read."
+
+
+func _network_followup_menu_id(followup_id: String) -> int:
+	for menu_id_value in NETWORK_FOLLOWUP_ACTIONS.keys():
+		var menu_id: int = int(menu_id_value)
+		if str(NETWORK_FOLLOWUP_ACTIONS.get(menu_id, "")) == followup_id:
+			return menu_id
+	return -1
+
+
+func _update_network_tip_history_panel(contact: Dictionary) -> void:
+	if network_tip_history_label == null:
+		return
+	var history_text: String = _network_tip_history_text(contact)
+	network_tip_history_label.text = history_text
+	network_tip_history_label.visible = not history_text.is_empty()
+
+
+func _network_tip_history_text(contact: Dictionary) -> String:
+	var rows: Array = contact.get("tip_history", [])
+	if rows.is_empty():
+		return ""
+	var useful_count: int = int(contact.get("tip_useful_count", 0))
+	var resolved_count: int = int(contact.get("tip_resolved_count", rows.size()))
+	var missed_count: int = int(contact.get("tip_missed_count", 0))
+	var header: String = "Read History | %s | %d/%d useful" % [
+		str(contact.get("tip_reliability_label", "Mixed record")),
+		useful_count,
+		resolved_count
+	]
+	if missed_count > 0:
+		header += " | %d missed" % missed_count
+	var lines: Array = [header]
+	for row_value in rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var line: String = "- %s: %s" % [
+			str(row.get("target_ticker", "")),
+			str(row.get("outcome_label", "Read"))
+		]
+		var player_action: String = str(row.get("player_action_label", ""))
+		if not player_action.is_empty():
+			line += " | %s" % player_action
+		var followup_label: String = str(row.get("followup_label", ""))
+		if not followup_label.is_empty():
+			line += " | %s" % followup_label
+		lines.append(line)
+	return "\n".join(lines)
+
+
+func _update_network_crosscheck_panel(contact: Dictionary) -> void:
+	if network_crosscheck_label == null:
+		return
+	var crosscheck_text: String = _network_crosscheck_text(contact)
+	network_crosscheck_label.text = crosscheck_text
+	network_crosscheck_label.visible = not crosscheck_text.is_empty()
+
+
+func _network_crosscheck_text(contact: Dictionary) -> String:
+	var label: String = str(contact.get("cross_contact_label", ""))
+	var note: String = str(contact.get("cross_contact_note", ""))
+	if label.is_empty() or note.is_empty():
+		return ""
+	var lines: Array = ["Source Cross-Check | %s" % label, note]
+	for row_value in contact.get("cross_contact_rows", []):
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var line: String = "- %s: %s" % [
+			str(row.get("contact_name", "Another contact")),
+			str(row.get("truth_label", "different read"))
+		]
+		var confidence_label: String = str(row.get("confidence_label", ""))
+		if not confidence_label.is_empty():
+			line += " | %s" % confidence_label
+		lines.append(line)
+	return "\n".join(lines)
 
 
 func _contact_for_context(source_type: String, source_id: String, company_id: String) -> Dictionary:
@@ -5524,6 +5654,17 @@ func _on_network_referral_pressed() -> void:
 	_log_perf_elapsed("_on_network_referral_pressed", started_at_usec)
 
 
+func _on_network_followup_selected(menu_id: int) -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	var followup_id: String = str(NETWORK_FOLLOWUP_ACTIONS.get(menu_id, ""))
+	if followup_id.is_empty():
+		return
+	var contact: Dictionary = _current_network_contact()
+	var result: Dictionary = GameManager.follow_up_contact_tip(str(contact.get("id", "")), followup_id)
+	_show_toast(str(result.get("message", "Network follow-up updated.")), bool(result.get("success", false)))
+	_log_perf_elapsed("_on_network_followup_selected", started_at_usec)
+
+
 func _on_network_open_meeting_pressed() -> void:
 	if network_open_meeting_button == null:
 		return
@@ -6133,6 +6274,26 @@ func _ensure_corporate_action_ui() -> void:
 		network_detail_vbox.add_child(network_corporate_action_label)
 		network_detail_vbox.move_child(network_corporate_action_label, network_detail_vbox.get_children().find(action_row))
 
+	if network_tip_history_label == null:
+		network_tip_history_label = Label.new()
+		network_tip_history_label.name = "NetworkTipHistoryLabel"
+		network_tip_history_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		network_tip_history_label.visible = false
+		var network_detail_vbox: VBoxContainer = network_contact_body_label.get_parent()
+		var action_row: HBoxContainer = network_meet_button.get_parent()
+		network_detail_vbox.add_child(network_tip_history_label)
+		network_detail_vbox.move_child(network_tip_history_label, network_detail_vbox.get_children().find(action_row))
+
+	if network_crosscheck_label == null:
+		network_crosscheck_label = Label.new()
+		network_crosscheck_label.name = "NetworkCrosscheckLabel"
+		network_crosscheck_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		network_crosscheck_label.visible = false
+		var network_detail_vbox: VBoxContainer = network_contact_body_label.get_parent()
+		var action_row: HBoxContainer = network_meet_button.get_parent()
+		network_detail_vbox.add_child(network_crosscheck_label)
+		network_detail_vbox.move_child(network_crosscheck_label, network_detail_vbox.get_children().find(action_row))
+
 	if network_open_meeting_button == null:
 		network_open_meeting_button = Button.new()
 		network_open_meeting_button.name = "NetworkOpenMeetingButton"
@@ -6145,6 +6306,17 @@ func _ensure_corporate_action_ui() -> void:
 		var action_row: HBoxContainer = network_meet_button.get_parent()
 		network_detail_vbox.add_child(network_open_meeting_button)
 		network_detail_vbox.move_child(network_open_meeting_button, network_detail_vbox.get_children().find(action_row))
+
+	if network_followup_button == null:
+		network_followup_button = MenuButton.new()
+		network_followup_button.name = "NetworkFollowupButton"
+		network_followup_button.text = "Follow Up"
+		network_followup_button.visible = false
+		network_followup_button.disabled = true
+		network_followup_button.tooltip_text = "Follow up on the latest resolved contact read."
+		network_followup_button.get_popup().id_pressed.connect(_on_network_followup_selected)
+		var network_action_row: HBoxContainer = network_meet_button.get_parent()
+		network_action_row.add_child(network_followup_button)
 
 	if rupslb_meeting_overlay == null:
 		rupslb_meeting_overlay = RUPSLB_MEETING_OVERLAY_SCRIPT.new()
@@ -7449,6 +7621,8 @@ func _apply_visual_theme() -> void:
 	_style_button(network_tip_button, Color(0.117647, 0.32549, 0.239216, 1), COLOR_ORDER_BUY_BORDER, COLOR_TEXT, 0)
 	_style_button(network_request_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(network_referral_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
+	if network_followup_button != null:
+		_style_button(network_followup_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	if network_open_meeting_button != null:
 		_style_button(network_open_meeting_button, Color(0.866667, 0.807843, 0.635294, 1), Color(0.709804, 0.607843, 0.345098, 1), COLOR_WINDOW_TEXT, 0)
 	if corporate_meeting_panel != null:
@@ -7527,6 +7701,10 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(network_contact_body_label, COLOR_WINDOW_TEXT)
 	if network_corporate_action_label != null:
 		_set_label_tone(network_corporate_action_label, Color(0.352941, 0.309804, 0.203922, 1))
+	if network_tip_history_label != null:
+		_set_label_tone(network_tip_history_label, Color(0.352941, 0.309804, 0.203922, 1))
+	if network_crosscheck_label != null:
+		_set_label_tone(network_crosscheck_label, Color(0.454902, 0.337255, 0.141176, 1))
 	_set_label_tone(upgrade_title_label, COLOR_WINDOW_TEXT)
 	_set_label_tone(upgrade_cash_label, Color(0.454902, 0.337255, 0.141176, 1))
 	_set_label_tone(upgrade_summary_label, COLOR_WINDOW_TEXT)

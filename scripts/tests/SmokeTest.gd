@@ -2122,6 +2122,14 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected company insider tips to default to the insider's affiliated company."
 		}
+	var insider_tip_public_error: String = _validate_network_tip_public_payload(insider_tip_result, "company insider tip")
+	if not insider_tip_public_error.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": insider_tip_public_error
+		}
 
 	var tip_result: Dictionary = GameManager.request_contact_tip(contact_id, secondary_company_id)
 	if not bool(tip_result.get("success", false)) or not _has_contact_arc(contact_id, secondary_company_id, "tip"):
@@ -2130,6 +2138,30 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected asking a Network contact for a tip to create a contact company arc."
+		}
+	var floater_tip_public_error: String = _validate_network_tip_public_payload(tip_result, "floater tip")
+	if not floater_tip_public_error.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": floater_tip_public_error
+		}
+	if not _tip_journal_has_pending_public_memory():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected successful Network tips to create pending public tip-memory journal rows."
+		}
+	var tip_memory_save_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(tip_memory_save_state)
+	if not _tip_journal_has_pending_public_memory():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network tip-memory journal rows to survive save/load."
 		}
 
 	var help_button: Button = game_root.find_child("HelpButton", true, false) as Button
@@ -2766,6 +2798,107 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected a completed Network request to create a contact company arc."
 		}
+	if not _tip_journal_has_resolved_memory():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected pending Network tip memories to resolve after several days."
+		}
+	if not _tip_journal_has_player_aware_memory():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected resolved Network tip memories to classify player action after the read."
+		}
+	if not _network_snapshot_has_last_tip_note(request_snapshot):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected resolved Network tip memories to surface as contact last-read notes."
+		}
+	var followup_contact_id: String = _first_followup_ready_contact_id()
+	if followup_contact_id.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected at least one resolved Network tip to be ready for follow-up."
+		}
+	var daily_actions_before_followup: int = int(GameManager.get_daily_action_snapshot().get("used", 0))
+	var followup_result: Dictionary = GameManager.follow_up_contact_tip(followup_contact_id, "thank")
+	if not bool(followup_result.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected a resolved Network tip follow-up to succeed."
+		}
+	if int(GameManager.get_daily_action_snapshot().get("used", 0)) != daily_actions_before_followup + 1:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network tip follow-up to spend one daily action point."
+		}
+	if not _tip_journal_has_followup_memory():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network tip follow-up results to be stored in the tip journal."
+		}
+	var duplicate_followup_result: Dictionary = GameManager.follow_up_contact_tip(followup_contact_id, "thank")
+	if bool(duplicate_followup_result.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected a resolved Network tip to allow only one follow-up."
+		}
+	var followup_save_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(followup_save_state)
+	if not _tip_journal_has_followup_memory() or not _network_snapshot_has_followup_note(GameManager.get_network_snapshot()):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network tip follow-up results to persist and surface on contacts."
+		}
+	if not _network_snapshot_has_tip_history_data(GameManager.get_network_snapshot()):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network contacts to expose compact tip history and reliability data."
+		}
+	var tip_history_label: Label = game_root.find_child("NetworkTipHistoryLabel", true, false) as Label
+	if tip_history_label == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network UI to create the compact read-history label."
+		}
+	_inject_network_crosscheck_fixture(contact_id, referred_contact_id, tracked_company_id)
+	var crosscheck_snapshot: Dictionary = GameManager.get_network_snapshot()
+	if not _network_snapshot_has_crosscheck_data(crosscheck_snapshot):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network contacts to expose cross-contact read disagreement data."
+		}
+	var crosscheck_label: Label = game_root.find_child("NetworkCrosscheckLabel", true, false) as Label
+	if crosscheck_label == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network UI to create the source cross-check label."
+		}
 
 	for _day in range(max(days_to_advance - 3, 0)):
 		GameManager.advance_day()
@@ -3085,6 +3218,208 @@ func _has_met_network_contact(network_snapshot: Dictionary, contact_id: String) 
 		var contact: Dictionary = contact_value
 		if str(contact.get("id", "")) == contact_id and bool(contact.get("met", false)):
 			return true
+	return false
+
+
+func _validate_network_tip_public_payload(tip_result: Dictionary, context_label: String) -> String:
+	if str(tip_result.get("public_truth_label", "")).strip_edges().is_empty():
+		return "Smoke test expected %s to expose a public truth label." % context_label
+	if str(tip_result.get("public_confidence_label", "")).strip_edges().is_empty():
+		return "Smoke test expected %s to expose a public confidence label." % context_label
+	if str(tip_result.get("public_tip_read", "")).strip_edges().is_empty():
+		return "Smoke test expected %s to expose a natural public tip read." % context_label
+	var visible_text: String = "%s %s %s %s %s" % [
+		str(tip_result.get("message", "")),
+		str(tip_result.get("intel_summary", "")),
+		str(tip_result.get("public_truth_label", "")),
+		str(tip_result.get("public_confidence_label", "")),
+		str(tip_result.get("public_tip_read", ""))
+	]
+	visible_text = visible_text.to_lower()
+	var forbidden_terms: Array = [
+		"source_chain_id",
+		"chain_family",
+		"meeting_id",
+		"venue_type",
+		"current_timeline_state",
+		"management stance",
+		"hidden_positioning",
+		"formal_agenda_or_filing",
+		"meeting_or_call",
+		"created a tip arc",
+		"created a tip"
+	]
+	for forbidden_term_value in forbidden_terms:
+		var forbidden_term: String = str(forbidden_term_value)
+		if visible_text.find(forbidden_term) != -1:
+			return "Smoke test expected %s to avoid raw Network/system wording like %s." % [context_label, forbidden_term]
+	return ""
+
+
+func _tip_journal_has_pending_public_memory() -> bool:
+	for tip_value in RunState.get_network_tip_journal().values():
+		var tip: Dictionary = tip_value
+		if (
+			str(tip.get("status", "")) == "pending" and
+			not str(tip.get("truth_label", "")).is_empty() and
+			not str(tip.get("confidence_label", "")).is_empty() and
+			not str(tip.get("tip_read", "")).is_empty() and
+			int(tip.get("resolve_day_index", 0)) > int(tip.get("created_day_index", 0))
+		):
+			return true
+	return false
+
+
+func _tip_journal_has_resolved_memory() -> bool:
+	for tip_value in RunState.get_network_tip_journal().values():
+		var tip: Dictionary = tip_value
+		if (
+			str(tip.get("status", "")) != "pending" and
+			not str(tip.get("outcome_label", "")).is_empty() and
+			not str(tip.get("outcome_note", "")).is_empty() and
+			int(tip.get("resolved_day_index", 0)) >= int(tip.get("resolve_day_index", 0))
+		):
+			return true
+	return false
+
+
+func _tip_journal_has_player_aware_memory() -> bool:
+	for tip_value in RunState.get_network_tip_journal().values():
+		var tip: Dictionary = tip_value
+		if (
+			str(tip.get("status", "")) != "pending" and
+			not str(tip.get("player_action_label", "")).is_empty() and
+			not str(tip.get("player_action_note", "")).is_empty() and
+			not str(tip.get("player_action_alignment", "")).is_empty() and
+			str(tip.get("outcome_note", "")).find("You ") != -1
+		):
+			return true
+	return false
+
+
+func _first_followup_ready_contact_id() -> String:
+	var rows: Array = []
+	for tip_value in RunState.get_network_tip_journal().values():
+		if typeof(tip_value) != TYPE_DICTIONARY:
+			continue
+		var tip: Dictionary = tip_value
+		if str(tip.get("status", "")) == "pending":
+			continue
+		if not str(tip.get("followup_id", "")).is_empty():
+			continue
+		if str(tip.get("contact_id", "")).is_empty():
+			continue
+		rows.append(tip)
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("resolved_day_index", 0)) > int(b.get("resolved_day_index", 0))
+	)
+	if rows.is_empty():
+		return ""
+	return str(rows[0].get("contact_id", ""))
+
+
+func _tip_journal_has_followup_memory() -> bool:
+	for tip_value in RunState.get_network_tip_journal().values():
+		var tip: Dictionary = tip_value
+		if (
+			not str(tip.get("followup_id", "")).is_empty() and
+			not str(tip.get("followup_label", "")).is_empty() and
+			not str(tip.get("followup_note", "")).is_empty() and
+			int(tip.get("followup_day_index", 0)) >= int(tip.get("resolved_day_index", 0))
+		):
+			return true
+	return false
+
+
+func _network_snapshot_has_last_tip_note(network_snapshot: Dictionary) -> bool:
+	for contact_value in network_snapshot.get("contacts", []):
+		var contact: Dictionary = contact_value
+		if not str(contact.get("last_tip_note", "")).is_empty() and not str(contact.get("last_tip_player_action_label", "")).is_empty():
+			return true
+	return false
+
+
+func _network_snapshot_has_followup_note(network_snapshot: Dictionary) -> bool:
+	for contact_value in network_snapshot.get("contacts", []):
+		var contact: Dictionary = contact_value
+		if (
+			not str(contact.get("last_tip_followup_id", "")).is_empty() and
+			not str(contact.get("last_tip_followup_note", "")).is_empty() and
+			not bool(contact.get("can_follow_up_tip", true))
+		):
+			return true
+	return false
+
+
+func _network_snapshot_has_tip_history_data(network_snapshot: Dictionary) -> bool:
+	for contact_value in network_snapshot.get("contacts", []):
+		var contact: Dictionary = contact_value
+		var history: Array = contact.get("tip_history", [])
+		if (
+			not history.is_empty() and
+			not str(contact.get("tip_reliability_label", "")).is_empty() and
+			float(contact.get("tip_reliability_score", -1.0)) >= 0.0 and
+			int(contact.get("tip_resolved_count", 0)) >= history.size()
+		):
+			var first_row: Dictionary = history[0]
+			if not str(first_row.get("target_ticker", "")).is_empty() and not str(first_row.get("outcome_label", "")).is_empty():
+				return true
+	return false
+
+
+func _inject_network_crosscheck_fixture(contact_id: String, other_contact_id: String, company_id: String) -> void:
+	var ticker: String = str(GameManager.get_company_snapshot(company_id, false, false, false).get("ticker", company_id.to_upper()))
+	var journal: Dictionary = RunState.get_network_tip_journal()
+	var base_day: int = RunState.day_index
+	journal["smoke_crosscheck_positive"] = {
+		"id": "smoke_crosscheck_positive",
+		"contact_id": contact_id,
+		"contact_name": "Smoke Contact A",
+		"target_company_id": company_id,
+		"target_ticker": ticker,
+		"created_day_index": base_day,
+		"resolve_day_index": base_day + 3,
+		"baseline_price": 1000.0,
+		"baseline_shares": 0,
+		"chain_id": "smoke_crosscheck_chain",
+		"truth_label": "Accumulation",
+		"confidence_label": "Early but credible",
+		"source_role": "research desk",
+		"tip_read": "Smoke fixture constructive read.",
+		"status": "pending"
+	}
+	journal["smoke_crosscheck_warning"] = {
+		"id": "smoke_crosscheck_warning",
+		"contact_id": other_contact_id,
+		"contact_name": "Smoke Contact B",
+		"target_company_id": company_id,
+		"target_ticker": ticker,
+		"created_day_index": base_day,
+		"resolve_day_index": base_day + 3,
+		"baseline_price": 1000.0,
+		"baseline_shares": 0,
+		"chain_id": "smoke_crosscheck_chain",
+		"truth_label": "Retail Trap",
+		"confidence_label": "Grounded read",
+		"source_role": "flow desk",
+		"tip_read": "Smoke fixture cautionary read.",
+		"status": "pending"
+	}
+	RunState.set_network_tip_journal(journal)
+
+
+func _network_snapshot_has_crosscheck_data(network_snapshot: Dictionary) -> bool:
+	for contact_value in network_snapshot.get("contacts", []):
+		var contact: Dictionary = contact_value
+		var rows: Array = contact.get("cross_contact_rows", [])
+		if (
+			str(contact.get("cross_contact_label", "")) == "Conflicting sources" and
+			not str(contact.get("cross_contact_note", "")).is_empty() and
+			not rows.is_empty()
+		):
+			var first_row: Dictionary = rows[0]
+			if not str(first_row.get("truth_label", "")).is_empty() and not str(first_row.get("contact_name", "")).is_empty():
+				return true
 	return false
 
 

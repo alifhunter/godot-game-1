@@ -1822,14 +1822,50 @@ func _intel_summary(intel_bucket: Dictionary) -> String:
 		pieces.append(_family_label(family))
 	var timeline_state: String = str(intel_bucket.get("best_known_current_timeline_state", intel_bucket.get("current_timeline_state", "")))
 	if not timeline_state.is_empty():
-		pieces.append("state: %s" % timeline_state.replace("_", " "))
+		pieces.append(_timeline_state_label(timeline_state))
 	var stance: String = str(intel_bucket.get("best_known_management_stance", intel_bucket.get("management_stance", "")))
 	if not stance.is_empty():
-		pieces.append("management: %s" % stance)
+		pieces.append(_management_stance_label(stance))
 	var next_step: String = str(intel_bucket.get("best_known_next_expected_step", intel_bucket.get("next_expected_step", "")))
 	if not next_step.is_empty():
 		pieces.append(next_step)
 	return " | ".join(pieces)
+
+
+func _timeline_state_label(timeline_state: String) -> String:
+	match timeline_state:
+		"forming":
+			return "Still forming"
+		"active":
+			return "Active"
+		"delayed":
+			return "Timing slipped"
+		"approved":
+			return "Approved"
+		"executing":
+			return "Execution underway"
+		"completed":
+			return "Completed"
+		"cancelled":
+			return "Cancelled"
+		_:
+			return timeline_state.replace("_", " ").capitalize()
+
+
+func _management_stance_label(stance: String) -> String:
+	match stance:
+		"silent":
+			return "Company quiet"
+		"deny":
+			return "Company denying it"
+		"clarify":
+			return "Company clarifying"
+		"confirm":
+			return "Company confirming"
+		"evasive":
+			return "Company evasive"
+		_:
+			return stance.replace("_", " ").capitalize()
 
 
 func _meeting_is_player_visible(meeting: Dictionary) -> bool:
