@@ -175,6 +175,7 @@ var has_checked_app_font: bool = false
 var suppress_next_portfolio_refresh: bool = false
 var pending_watchlist_selected_company_id: String = ""
 var pending_watchlist_target_tab: int = -1
+var suppress_stock_list_tab_refresh: bool = false
 var active_order_side: String = "buy"
 var order_ticket_collapsed: bool = false
 var broker_net_mode: bool = false
@@ -778,7 +779,7 @@ func _on_portfolio_changed() -> void:
 
 func _on_watchlist_changed() -> void:
 	var started_at_usec: int = Time.get_ticks_usec()
-	_invalidate_company_rows_cache()
+	var previous_selected_company_id: String = selected_company_id
 	var target_company_id: String = pending_watchlist_selected_company_id
 	var target_tab: int = pending_watchlist_target_tab
 	var should_change_tab: bool = target_tab >= 0 and target_tab != stock_list_tabs.current_tab
@@ -786,15 +787,21 @@ func _on_watchlist_changed() -> void:
 		selected_company_id = target_company_id
 	_clear_watchlist_refresh_override()
 	if should_change_tab:
+		suppress_stock_list_tab_refresh = true
 		stock_list_tabs.current_tab = target_tab
-		return
 	_sync_selected_company_with_active_stock_list()
-	_refresh_markets()
-	if active_section_id == "dashboard":
-		_refresh_dashboard()
-	_refresh_desktop()
-	if _is_desktop_app_window_open(APP_ID_NETWORK):
-		_refresh_network()
+	var company_rows: Array = _get_company_rows_cached()
+	var watchlist_lookup: Dictionary = _build_watchlist_lookup()
+	_refresh_watchlist_rows(company_rows, watchlist_lookup)
+	_refresh_all_stock_watchlist_button_states(watchlist_lookup)
+	_refresh_company_selection_state()
+	if selected_company_id != previous_selected_company_id:
+		_refresh_trade_workspace()
+		if active_section_id == "dashboard":
+			_refresh_dashboard()
+		_refresh_desktop()
+		if debug_overlay.visible:
+			_refresh_debug_overlay()
 	_start_background_company_detail_hydration()
 	_log_perf_elapsed("_on_watchlist_changed", started_at_usec)
 
@@ -4312,23 +4319,36 @@ func _sync_selected_company_with_active_stock_list() -> void:
 		selected_company_id = str(holdings_ids[0]) if not holdings_ids.is_empty() else ""
 
 
+func _build_watchlist_lookup(watchlist_company_ids: Array = []) -> Dictionary:
+	if watchlist_company_ids.is_empty():
+		watchlist_company_ids = GameManager.get_watchlist_company_ids()
+	var watchlist_lookup: Dictionary = {}
+	for company_id_value in watchlist_company_ids:
+		watchlist_lookup[str(company_id_value)] = true
+	return watchlist_lookup
+
+
 func _refresh_company_list(
 	company_rows: Array = [],
 	company_row_lookup: Dictionary = {},
 	refresh_all_stock_rows: bool = true,
 	refresh_portfolio_sidebar: bool = true
 ) -> void:
-	displayed_company_ids.clear()
-	company_list.clear()
 	if company_rows.is_empty() and RunState.has_active_run():
 		company_rows = _get_company_rows_cached()
 	if company_row_lookup.is_empty() and not company_rows.is_empty():
 		company_row_lookup = _build_company_row_lookup(company_rows)
-	var watchlist_company_ids: Array = GameManager.get_watchlist_company_ids()
-	var watchlist_lookup: Dictionary = {}
-	for company_id_value in watchlist_company_ids:
-		watchlist_lookup[str(company_id_value)] = true
+	var watchlist_lookup: Dictionary = _build_watchlist_lookup()
+	_refresh_watchlist_rows(company_rows, watchlist_lookup)
+	if refresh_all_stock_rows:
+		_refresh_all_stock_rows(company_rows, watchlist_lookup)
+	if refresh_portfolio_sidebar:
+		_refresh_portfolio_stock_rows(GameManager.get_portfolio_snapshot().get("holdings", []), company_row_lookup)
 
+
+func _refresh_watchlist_rows(company_rows: Array, watchlist_lookup: Dictionary) -> void:
+	displayed_company_ids.clear()
+	company_list.clear()
 	for row_value in company_rows:
 		var row: Dictionary = row_value
 		var company_id: String = str(row.get("id", ""))
@@ -4354,10 +4374,30 @@ func _refresh_company_list(
 		company_list.select(selected_index)
 	watchlist_empty_label.visible = displayed_company_ids.is_empty()
 	_refresh_watchlist_action_state(watchlist_lookup)
-	if refresh_all_stock_rows:
-		_refresh_all_stock_rows(company_rows, watchlist_lookup)
-	if refresh_portfolio_sidebar:
-		_refresh_portfolio_stock_rows(GameManager.get_portfolio_snapshot().get("holdings", []), company_row_lookup)
+
+
+func _refresh_all_stock_watchlist_button_states(watchlist_lookup: Dictionary) -> void:
+	for row_box_value in all_stocks_rows.get_children():
+		if row_box_value is not HBoxContainer:
+			continue
+		var row_box: HBoxContainer = row_box_value
+		var company_id: String = str(row_box.name).trim_prefix("AllStockRow_")
+		var add_button: Button = row_box.get_node_or_null("AllStockAddButton_%s" % company_id) as Button
+		if add_button == null:
+			continue
+		var is_in_watchlist: bool = watchlist_lookup.has(company_id)
+		add_button.text = "Added" if is_in_watchlist else "Add"
+		add_button.disabled = is_in_watchlist
+		_style_button(
+			add_button,
+			Color(0.164706, 0.215686, 0.278431, 1) if is_in_watchlist else Color(0.117647, 0.32549, 0.239216, 1),
+			COLOR_BORDER,
+			COLOR_TEXT,
+			0
+		)
+		var add_callable: Callable = Callable(self, "_on_add_to_watchlist_pressed").bind(company_id)
+		if not is_in_watchlist and not add_button.pressed.is_connected(add_callable):
+			add_button.pressed.connect(add_callable)
 
 
 func _refresh_all_stock_rows(company_rows: Array, watchlist_lookup: Dictionary) -> void:
@@ -5436,6 +5476,9 @@ func _on_news_archive_month_selected(index: int) -> void:
 
 
 func _on_stock_list_tab_changed(_tab_index: int) -> void:
+	if suppress_stock_list_tab_refresh:
+		suppress_stock_list_tab_refresh = false
+		return
 	_sync_selected_company_with_active_stock_list()
 	_refresh_markets()
 	_refresh_dashboard()
@@ -5512,10 +5555,7 @@ func _on_portfolio_stock_selected(company_id: String) -> void:
 
 func _on_add_to_watchlist_pressed(company_id: String) -> void:
 	var started_at_usec: int = Time.get_ticks_usec()
-	_queue_watchlist_refresh_override(company_id)
 	var result: Dictionary = GameManager.add_company_to_watchlist(company_id)
-	if not bool(result.get("success", false)):
-		_clear_watchlist_refresh_override()
 	_show_toast(str(result.get("message", "Watchlist updated.")), bool(result.get("success", false)))
 	_log_perf_elapsed("_on_add_to_watchlist_pressed", started_at_usec)
 

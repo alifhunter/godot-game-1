@@ -277,7 +277,10 @@ Read this file first in the next session.
   - the trade workspace now has a lighter holdings-state refresh path that merges a shallow company snapshot into the cached selected snapshot instead of always re-fetching full chart / annual / quarterly data
   - a post-buy regression from that lighter holdings refresh was fixed the same day: Key Stats history, quarterly statement data, and Broker rows are now preserved after `portfolio_changed` updates instead of being overwritten by the stripped snapshot used for holdings-only updates
   - lot-size changes now only recalculate order controls instead of re-running the whole markets refresh
-  - current main remaining hotspot is now the watchlist / company-list rebuild path: watchlist add-remove and some stock-list-tab flows still rebuild the left stock pane together, so they are noticeably slower than buy, upgrade, or Network actions
+  - the previous watchlist / company-list rebuild hotspot has had a focused first pass:
+    - `watchlist_changed` now updates the Watchlist `ItemList` and visible All Stock add buttons directly instead of calling the full `_refresh_markets()` path
+    - All Stock `Add` now behaves as an in-place membership action instead of selecting the added stock and forcing a full Trade workspace refresh
+    - recent smoke timings put picker adds around `57-72ms` and All Stock adds around `35-56ms`
 - Chart system status:
   - chart range switcher supports `1D`, `1W`, `1M`, `1Y`, `5Y`, `YTD`
   - chart display-mode switcher supports `Line` and `Candle`
@@ -325,7 +328,7 @@ Read this file first in the next session.
   - each `All Stock` row has:
     - a select button
     - an `Add` button
-  - pressing `Add` immediately updates the in-memory watchlist and queues autosave persistence
+  - pressing `Add` immediately updates the in-memory watchlist and queues autosave persistence without changing the selected stock
   - already-added names become `Added` and the button is disabled
   - `Portfolio` tab now also exists beside `Watchlist` and `All Stock`
   - `Portfolio` tab shows stocks the player currently holds so they can be reselected quickly from the trade sidebar
@@ -1391,6 +1394,7 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - `git diff --check`, Godot project-load check, and full Godot headless smoke passed after the watchlist/company-list latency pass on `2026-04-25`
   - `git diff --check` passed during the stabilization checkpoint on `2026-04-25`
   - Godot project-load check passed during the same stabilization checkpoint on `2026-04-25`
   - quick and full Godot headless smoke both passed during the same stabilization checkpoint on `2026-04-25`
@@ -1418,7 +1422,8 @@ Read this file first in the next session.
     - upgrade purchase confirm: about `21-35ms`
     - Network actions: about `10-35ms`
     - buy submit: about `150-300ms`
-    - watchlist add: about `420-480ms`
+    - watchlist picker add: about `57-72ms`
+    - All Stock add: about `35-56ms`
   - `git diff --check -- PROJECT_HANDOFF.md` passed after the handoff refresh for the desktop-shell / Academy state on `2026-04-22`
   - recent desktop-shell / desktop-window-manager iteration used quick `git diff --check` plus Godot project-load `--quit` checks instead of full smoke because smoke remains slow and can hang during UI-only polish passes
   - `git diff --check -- scenes/game/widgets/OrderWidget.tscn` passed after raising the order ticket lot cap to `99.999.999` on `2026-04-19`
@@ -1534,9 +1539,8 @@ Read this file first in the next session.
   - candle mode is currently display-only and uses daily / weekly / monthly OHLC bars depending on range
   - `1D` intentionally does not allow candles because the sim only resolves one OHLC bar per day
   - the player market-impact layer now has synthetic daily bid/ask depth, but there is still no visible order-book queue, partial-fill execution, or intraday lock/tape visualization
-  - click latency is improved again after the company-row-cache / narrower trade-refresh pass, but `Trade` is still heavier than ideal:
-    - watchlist add/remove and some stock-list-tab flows still rebuild the left stock pane together
-    - `_refresh_markets()` is still used on some flows and still couples company-list refresh with trade-workspace refresh
+  - click latency is improved again after the company-row-cache / narrower trade-refresh and watchlist/company-list passes, but `Trade` is still heavier than ideal:
+    - some stock-list-tab flows still use `_refresh_markets()` and still couple company-list refresh with trade-workspace refresh
     - critical flush points like `Advance Day`, return-to-menu, quit, and close still serialize the full JSON save synchronously
   - volume bars are now shown under the chart, but there is still no player-facing volume lesson / academy integration yet
   - indicator toggles and unlocks now exist, but indicator UX is still basic
@@ -1571,10 +1575,9 @@ Read this file first in the next session.
   - reduce how much fully hydrated company detail is serialized into the save payload
   - or defer/trim save flushes triggered after background hydration batches
   - keep using the new `[perf][startup]`, `[perf][ui]`, and `[perf][save]` logs to compare before/after
-- Finish the next performance pass if click latency still feels rough after more playtesting:
-  - focus specifically on watchlist / company-list diffing now, because that is the main remaining click hotspot after the latest latency pass
-  - stop rebuilding the watchlist list, all-stock rows, and portfolio sidebar together for every single watchlist mutation
-  - decouple watchlist add/remove refresh from trade-workspace refresh when the selected stock does not actually change
+- If click latency still feels rough after more playtesting, continue with stock-list tab switching and broader `_refresh_markets()` coupling:
+  - avoid refreshing the Trade workspace when tab changes do not change the selected stock
+  - consider diffing visible All Stock rows when search/filter state is unchanged
   - keep using the new `[perf][ui]` / `[perf][save]` debug logs while tuning
   - if latency feels acceptable after this pass, resume the planned content push with `News` first
 - Deepen the real `News` content now that the first event-driven desk exists:
