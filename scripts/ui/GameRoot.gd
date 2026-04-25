@@ -292,6 +292,7 @@ var network_open_meeting_button: Button = null
 var network_followup_button: MenuButton = null
 var network_tip_history_label: Label = null
 var network_crosscheck_label: Label = null
+var network_source_check_button: Button = null
 var academy_window: MarginContainer = null
 var academy_window_body: PanelContainer = null
 var academy_title_label: Label = null
@@ -3282,6 +3283,9 @@ func _show_network_contact(contact: Dictionary) -> void:
 		if network_followup_button != null:
 			network_followup_button.visible = false
 			network_followup_button.disabled = true
+		if network_source_check_button != null:
+			network_source_check_button.visible = false
+			network_source_check_button.disabled = true
 		if network_tip_history_label != null:
 			network_tip_history_label.visible = false
 			network_tip_history_label.text = ""
@@ -3331,6 +3335,7 @@ func _show_network_contact(contact: Dictionary) -> void:
 	network_request_button.disabled = not is_met or not has_action_points
 	network_referral_button.disabled = not (is_met and affiliation_type == "floater" and not referral_company_id.is_empty() and has_action_points)
 	_update_network_followup_button(contact, is_met, has_action_points)
+	_update_network_source_check_button(contact, is_met, has_action_points)
 	if not has_action_points and not is_met:
 		network_meet_button.disabled = true
 	var company_snapshot: Dictionary = GameManager.get_company_corporate_action_snapshot(_network_contact_target_company(contact))
@@ -3390,6 +3395,16 @@ func _update_network_followup_button(contact: Dictionary, is_met: bool, has_acti
 			continue
 		popup.add_item(str(option.get("label", followup_id.capitalize())), menu_id)
 	network_followup_button.tooltip_text = "Follow up on the selected contact's latest resolved read."
+
+
+func _update_network_source_check_button(contact: Dictionary, is_met: bool, has_action_points: bool) -> void:
+	if network_source_check_button == null:
+		return
+	var can_ask: bool = is_met and bool(contact.get("can_ask_source_check", false))
+	network_source_check_button.visible = can_ask
+	network_source_check_button.disabled = not can_ask or not has_action_points
+	network_source_check_button.text = "Ask About Conflict"
+	network_source_check_button.tooltip_text = "Spend 1 action point to ask this contact why another source disagrees."
 
 
 func _network_followup_menu_id(followup_id: String) -> int:
@@ -3467,6 +3482,9 @@ func _network_crosscheck_text(contact: Dictionary) -> String:
 		if not confidence_label.is_empty():
 			line += " | %s" % confidence_label
 		lines.append(line)
+	var source_check_note: String = str(contact.get("source_check_note", ""))
+	if not source_check_note.is_empty():
+		lines.append("Asked: %s" % source_check_note)
 	return "\n".join(lines)
 
 
@@ -5665,6 +5683,14 @@ func _on_network_followup_selected(menu_id: int) -> void:
 	_log_perf_elapsed("_on_network_followup_selected", started_at_usec)
 
 
+func _on_network_source_check_pressed() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	var contact: Dictionary = _current_network_contact()
+	var result: Dictionary = GameManager.ask_contact_source_check(str(contact.get("id", "")))
+	_show_toast(str(result.get("message", "Source check updated.")), bool(result.get("success", false)))
+	_log_perf_elapsed("_on_network_source_check_pressed", started_at_usec)
+
+
 func _on_network_open_meeting_pressed() -> void:
 	if network_open_meeting_button == null:
 		return
@@ -6317,6 +6343,17 @@ func _ensure_corporate_action_ui() -> void:
 		network_followup_button.get_popup().id_pressed.connect(_on_network_followup_selected)
 		var network_action_row: HBoxContainer = network_meet_button.get_parent()
 		network_action_row.add_child(network_followup_button)
+
+	if network_source_check_button == null:
+		network_source_check_button = Button.new()
+		network_source_check_button.name = "NetworkSourceCheckButton"
+		network_source_check_button.text = "Ask About Conflict"
+		network_source_check_button.visible = false
+		network_source_check_button.disabled = true
+		network_source_check_button.tooltip_text = "Ask this contact why another source disagrees."
+		network_source_check_button.pressed.connect(_on_network_source_check_pressed)
+		var network_action_row: HBoxContainer = network_meet_button.get_parent()
+		network_action_row.add_child(network_source_check_button)
 
 	if rupslb_meeting_overlay == null:
 		rupslb_meeting_overlay = RUPSLB_MEETING_OVERLAY_SCRIPT.new()
@@ -7623,6 +7660,8 @@ func _apply_visual_theme() -> void:
 	_style_button(network_referral_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
 	if network_followup_button != null:
 		_style_button(network_followup_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	if network_source_check_button != null:
+		_style_button(network_source_check_button, Color(0.192157, 0.152941, 0.0823529, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
 	if network_open_meeting_button != null:
 		_style_button(network_open_meeting_button, Color(0.866667, 0.807843, 0.635294, 1), Color(0.709804, 0.607843, 0.345098, 1), COLOR_WINDOW_TEXT, 0)
 	if corporate_meeting_panel != null:

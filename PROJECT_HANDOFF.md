@@ -14,12 +14,11 @@ Read this file first in the next session.
   - local Git repo initialized on branch `main`
   - GitHub remote configured as `origin`
   - remote URL: `https://github.com/alifhunter/godot-game-1.git`
-  - latest Network tip-memory / follow-up / read-history / cross-check changes are currently uncommitted unless committed after this handoff
-  - uncommitted Network pass files are expected to include:
+  - committed checkpoint: `615a415 Add Network tip memory and source checks`
+  - latest actionable Source Cross-Check changes are currently uncommitted unless committed after this handoff
+  - uncommitted actionable Source Cross-Check files are expected to include:
     - `autoloads/GameManager.gd`
-    - `autoloads/RunState.gd`
     - `systems/ContactNetworkSystem.gd`
-    - `systems/CorporateActionSystem.gd`
     - `scripts/ui/GameRoot.gd`
     - `scripts/tests/SmokeTest.gd`
     - `PROJECT_HANDOFF.md`
@@ -663,7 +662,8 @@ Read this file first in the next session.
   - compact `Source Cross-Check` panel when another recent contact has read the same target
     - labels the comparison as `Source agreement`, `Mixed sources`, or `Conflicting sources`
     - this panel is derived from recent tip journal rows and is not separately saved
-  - action buttons for `Meet`, `Tip`, `Request`, `Referral`, and contextual `Follow Up`
+    - direct conflicts can now expose an `Ask About Conflict` action that spends `1` AP, asks the selected contact to explain the disagreement, and records the answer on the related tip journal row
+  - action buttons for `Meet`, `Tip`, `Request`, `Referral`, contextual `Follow Up`, and contextual `Ask About Conflict`
   - a contextual `Open Meeting` button when the selected contact is linked to an upcoming corporate venue
     - `rights_issue` `rupslb` links now open the fullscreen staged meeting overlay
     - other linked meeting types still open the simpler shared meeting modal
@@ -696,6 +696,10 @@ Read this file first in the next session.
     - each resolved tip can only be followed up once
     - follow-up outcomes are stored back into `network_tip_journal` as `followup_id`, `followup_label`, `followup_note`, `followup_day_index`, and `followup_relationship_delta`
     - follow-up result text is also mirrored into the selected contact's runtime latest-tip fields for display
+  - `Ask About Conflict` spends `1` daily AP on success and appears when the selected contact has a direct constructive-vs-caution cross-contact conflict that has not already been asked about
+    - the answer branches on relationship, contact reliability, source role, selected contact stance, and the opposing source's read
+    - source-check answers are stored back into `network_tip_journal` as `source_check_label`, `source_check_note`, `source_check_day_index`, `source_check_relationship_delta`, `source_check_peer_contact_id`, and `source_check_peer_contact_name`
+    - each source conflict can only be asked once; the stored answer then appears under the `Source Cross-Check` panel
   - `Request` spends `1` daily AP on success and creates a pending task to hold at least `1` lot of the target company by `current_day + 3`
   - repeat accepts for the same contact-target pair while a request is already pending now fail safely and do not spend extra AP
   - a successful request creates a contact company arc and adds `8` relationship points
@@ -730,14 +734,14 @@ Read this file first in the next session.
 - Current prototype simplification:
   - contact interactions consume daily AP but do not consume a separate event slot yet
   - non-corporate contact effects do not directly change current prices; they enter the existing active company-arc pipeline so MarketSimulator, News, and Twooter can read them like other company arcs
-  - corporate-action contact intel updates saved truth buckets and venue links; a first-pass cross-contact source check exists, but there is still no full relationship graph or dedicated contradiction investigation UI
+  - corporate-action contact intel updates saved truth buckets and venue links; a first-pass actionable cross-contact source check exists, but there is still no full relationship graph or multi-step contradiction investigation UI
   - tip memory is intentionally light: it scores outcome from price/chain state plus player trade/holding behavior after a few days, but it is still not a full portfolio-attribution system
   - `Read History` and `Source Cross-Check` panels are derived from `network_tip_journal` at snapshot-build time, not separately persisted UI state
   - cross-contact checks currently compare recent reads on the same target from the last `8` run days and group them by broad stance:
     - constructive: e.g. `Accumulation`, `Filing-Backed`, `Execution Watch`, `Network Read`
     - caution: e.g. `Retail Trap`, `Distribution Risk`, `Dead Story`, `Pressure Read`
     - timing risk: e.g. `Real But Delayed`, `Room Risk`, `Early Read`
-  - only constructive-vs-caution is considered a direct conflict in the current pass; other combinations show as agreement or mixed sources
+  - only constructive-vs-caution is considered a direct actionable conflict in the current pass; other combinations show as agreement or mixed sources without an ask action
 - Current content source is editable:
   - `data/network/contact_network_data.json`
   - contacts are fictional/data-authored Indonesian market roles and names, not real people
@@ -764,7 +768,7 @@ Read this file first in the next session.
     - latest tip note fields on contact rows
     - `tip_history`
     - `tip_reliability_label` / `tip_reliability_score`
-    - cross-contact source checks
+    - cross-contact source checks and whether a direct conflict can still be asked about
 
 ## Company Management / Insider Generation
 - Every generated company now persists a compact public `management_roster`
@@ -1482,6 +1486,7 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the actionable Network Source Cross-Check update on `2026-04-25`
   - handoff-only precision update: `git diff --check` passed on `2026-04-25`; no Godot rerun was needed because only `PROJECT_HANDOFF.md` changed in that update
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the Network cross-contact contradiction update on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the Network contact read-history panel update on `2026-04-25`
@@ -1585,11 +1590,11 @@ Read this file first in the next session.
 - `Network` is now a first playable contact system, but still limited:
   - discovery currently only comes from News, company Profile context, and floater referrals
   - there is now a shared meeting modal for simple venues, an interactive fullscreen `rights_issue` `RUPSLB` overlay, and chain-linked intel, but there is still no dedicated venue desktop app
-  - contacts can now reveal first-pass chain truth such as family, stance, timeline state, and next expected step, with compact per-contact read-history and source cross-check panels
+  - contacts can now reveal first-pass chain truth such as family, stance, timeline state, and next expected step, with compact per-contact read-history and actionable source cross-check panels
   - favor cooldowns are not implemented yet
   - follow-up actions exist for resolved tips, but there is no broader report-back system for other favors or requests yet
   - ignore decay is only represented through request failure for now
-  - cross-reference / conflicting-tip reliability checks are first-pass only: they show agreement/conflict, but do not yet trigger dedicated contact dialogue or investigative actions
+  - cross-reference / conflicting-tip reliability checks are first-pass only: direct conflicts can be asked about once, but there is no multi-step source interview, clue journal, or contact-vs-contact dialogue yet
   - contact interactions now consume daily AP, but there is no richer daily-action journal or non-Network action economy yet
   - no perk-driven extra contact slots, cooldown reductions, or sector starting-relationship modifiers yet beyond the current Daily Action Points upgrade track
   - Profile currently shows public management names, but simply opening Profile does not privately discover those insiders
@@ -1708,10 +1713,10 @@ Read this file first in the next session.
   - deepen the implemented shared corporate-action chain system rather than bolting on isolated meeting UIs
   - keep `earnings_call`, `annual_rups`, and `rupslb` as formal venues reading/writing the same underlying chain object
   - deepen how `News`, `Twooter`, `Network`, and market reaction consume the same chain state so rumor, denial, delay, shakeout, approval, and execution feel more connected and dramatic
-  - next Network pass could make cross-contact conflict actionable:
-    - let the player ask one contact about another contact's conflicting read
-    - branch the answer based on source role and recent reliability
-    - optionally make this a relationship-sensitive action instead of automatic free context
+  - deepen the new actionable cross-contact conflict pass:
+    - add multiple ask styles such as `Ask for evidence`, `Push back`, and `Compare source`
+    - let the answer create a clue / task / contact referral instead of only a stored note
+    - add a clearer conflict-history journal so repeated names and sources become readable over time
   - add event-slot or daily-action costs for venue attendance / meeting contacts if/when the broader time system exists
   - next corporate-action feature step is to expand the new interactive `rupslb` flow beyond `rights_issue`:
     - add more agenda families
@@ -1726,7 +1731,7 @@ Read this file first in the next session.
   - add favor cooldowns and tune relationship burn for on-demand tips
   - broaden report-back beyond the current resolved-tip `Follow Up` button so requests, referrals, and meeting favors can also produce relationship/story consequences
   - add ignore/ghosting decay beyond the current missed-request relationship penalty
-  - deepen the implemented cross-contact read system from passive `Source Cross-Check` labels into playable investigation/dialogue choices
+  - deepen the implemented cross-contact read system from one-shot `Ask About Conflict` into richer investigation/dialogue choices
   - add perk hooks such as extra contact slots, reduced contact cooldown, and sector-specific starting relationship
   - add richer contact detail pages and a clearer request journal
   - add a clearer UI for public management vs discovered/meet-ready insider leads

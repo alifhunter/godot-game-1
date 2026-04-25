@@ -339,6 +339,47 @@ func follow_up_tip(run_state, data_repository, contact_id: String, followup_id: 
 	}
 
 
+func ask_source_check(run_state, data_repository, contact_id: String) -> Dictionary:
+	var contact: Dictionary = _contact_definition(run_state, data_repository, contact_id)
+	if contact.is_empty():
+		return {"success": false, "message": "Unknown contact."}
+	if not _is_met(run_state, contact_id):
+		return {"success": false, "message": "Meet this contact first."}
+	var source_checks: Dictionary = _cross_contact_reads_by_contact(run_state)
+	var source_check: Dictionary = source_checks.get(contact_id, {})
+	if source_check.is_empty():
+		return {"success": false, "message": "No source cross-check is active for this contact."}
+	if str(source_check.get("label", "")) != "Conflicting sources":
+		return {"success": false, "message": "The current source check is not a direct conflict."}
+	if not bool(source_check.get("can_ask_source_check", false)):
+		return {"success": false, "message": "You already asked about this source conflict."}
+	var tip_id: String = str(source_check.get("current_tip_id", ""))
+	if tip_id.is_empty():
+		return {"success": false, "message": "This source conflict is missing its read record."}
+	var journal: Dictionary = run_state.get_network_tip_journal()
+	var tip: Dictionary = journal.get(tip_id, {})
+	if tip.is_empty():
+		return {"success": false, "message": "This source conflict is no longer available."}
+	var response: Dictionary = _build_source_check_response(contact, run_state, source_check)
+	tip["source_check_label"] = str(response.get("label", "Asked about conflict"))
+	tip["source_check_note"] = str(response.get("note", ""))
+	tip["source_check_day_index"] = run_state.day_index
+	tip["source_check_relationship_delta"] = int(response.get("relationship_delta", 0))
+	tip["source_check_peer_contact_id"] = str(response.get("peer_contact_id", ""))
+	tip["source_check_peer_contact_name"] = str(response.get("peer_contact_name", ""))
+	journal[tip_id] = tip
+	run_state.set_network_tip_journal(journal)
+	var relationship_delta: int = int(response.get("relationship_delta", 0))
+	if relationship_delta != 0:
+		_adjust_relationship(run_state, contact_id, relationship_delta)
+	return {
+		"success": true,
+		"message": str(response.get("message", "Source check recorded.")),
+		"tip_id": tip_id,
+		"relationship_delta": relationship_delta
+	}
+
+
 func process_due_requests(run_state, data_repository) -> Array:
 	var requests: Dictionary = run_state.get_network_requests()
 	var results: Array = []
@@ -1140,6 +1181,7 @@ func _cross_contact_reads_by_contact(run_state) -> Dictionary:
 func _cross_contact_read_row(tip: Dictionary) -> Dictionary:
 	var truth_label: String = str(tip.get("truth_label", "Network Read"))
 	return {
+		"tip_id": str(tip.get("id", "")),
 		"contact_id": str(tip.get("contact_id", "")),
 		"contact_name": str(tip.get("contact_name", "Contact")),
 		"target_company_id": str(tip.get("target_company_id", "")),
@@ -1147,6 +1189,9 @@ func _cross_contact_read_row(tip: Dictionary) -> Dictionary:
 		"truth_label": truth_label,
 		"confidence_label": str(tip.get("confidence_label", "")),
 		"source_role": str(tip.get("source_role", "")),
+		"source_check_label": str(tip.get("source_check_label", "")),
+		"source_check_note": str(tip.get("source_check_note", "")),
+		"source_check_day_index": int(tip.get("source_check_day_index", 0)),
 		"status": str(tip.get("status", "pending")),
 		"created_day_index": int(tip.get("created_day_index", 0)),
 		"stance": _truth_stance(truth_label)
@@ -1190,14 +1235,23 @@ func _cross_contact_summary(current: Dictionary, peers: Array) -> Dictionary:
 		rows = agreement_rows
 	if rows.size() > 3:
 		rows = rows.slice(0, 3)
+	var source_check_note: String = str(current.get("source_check_note", ""))
+	var can_ask_source_check: bool = label == "Conflicting sources" and source_check_note.is_empty()
 	return {
 		"label": label,
 		"note": note,
 		"target_ticker": str(current.get("target_ticker", "")),
+		"current_tip_id": str(current.get("tip_id", "")),
 		"current_truth_label": str(current.get("truth_label", "")),
+		"current_confidence_label": str(current.get("confidence_label", "")),
+		"current_source_role": str(current.get("source_role", "")),
 		"current_stance": current_stance,
 		"rows": rows.duplicate(true),
-		"created_day_index": int(current.get("created_day_index", 0))
+		"created_day_index": int(current.get("created_day_index", 0)),
+		"can_ask_source_check": can_ask_source_check,
+		"source_check_label": str(current.get("source_check_label", "")),
+		"source_check_note": source_check_note,
+		"source_check_day_index": int(current.get("source_check_day_index", 0))
 	}
 
 
@@ -1224,10 +1278,18 @@ func _apply_cross_contact_read(row: Dictionary, cross_checks: Dictionary) -> voi
 		row["cross_contact_label"] = ""
 		row["cross_contact_note"] = ""
 		row["cross_contact_rows"] = []
+		row["can_ask_source_check"] = false
+		row["source_check_label"] = ""
+		row["source_check_note"] = ""
+		row["source_check_day_index"] = 0
 		return
 	row["cross_contact_label"] = str(cross_check.get("label", "Mixed sources"))
 	row["cross_contact_note"] = str(cross_check.get("note", ""))
 	row["cross_contact_rows"] = cross_check.get("rows", []).duplicate(true)
+	row["can_ask_source_check"] = bool(cross_check.get("can_ask_source_check", false))
+	row["source_check_label"] = str(cross_check.get("source_check_label", ""))
+	row["source_check_note"] = str(cross_check.get("source_check_note", ""))
+	row["source_check_day_index"] = int(cross_check.get("source_check_day_index", 0))
 
 
 func _pruned_tip_journal(journal: Dictionary) -> Dictionary:
@@ -1331,6 +1393,84 @@ func _build_tip_followup_result(contact: Dictionary, tip: Dictionary, followup_i
 		"relationship_delta": relationship_delta,
 		"message": "%s: %s" % [label, note]
 	}
+
+
+func _build_source_check_response(contact: Dictionary, run_state, source_check: Dictionary) -> Dictionary:
+	var rows: Array = source_check.get("rows", [])
+	var peer: Dictionary = {}
+	if not rows.is_empty() and typeof(rows[0]) == TYPE_DICTIONARY:
+		peer = rows[0]
+	var contact_id: String = str(contact.get("id", ""))
+	var contact_name: String = str(contact.get("display_name", "Contact"))
+	var ticker: String = str(source_check.get("target_ticker", "this name"))
+	var current_truth: String = str(source_check.get("current_truth_label", "this read"))
+	var peer_truth: String = str(peer.get("truth_label", "the other read"))
+	var current_stance: String = str(source_check.get("current_stance", "uncertain"))
+	var relationship: int = int(run_state.get_network_contacts().get(contact_id, {}).get("relationship", contact.get("base_relationship", 25)))
+	var reliability: float = clamp(float(contact.get("reliability", 0.6)), 0.0, 1.0)
+	var evidence_phrase: String = _source_check_evidence_phrase(contact, str(source_check.get("current_source_role", "")))
+	var relationship_delta: int = 0
+	var note: String = ""
+	if relationship < 25:
+		relationship_delta = -1
+		note = "%s gives a guarded answer on %s: the conflict is real, but they will not open the whole book yet. Their read still leans on %s." % [
+			contact_name,
+			ticker,
+			evidence_phrase
+		]
+	elif reliability >= 0.72:
+		relationship_delta = 1
+		if current_stance == "constructive":
+			note = "%s says the warning from %s is worth respecting, but their constructive read still has better backing from %s. Treat size and timing carefully." % [
+				contact_name,
+				str(peer.get("contact_name", "the other source")),
+				evidence_phrase
+			]
+		else:
+			note = "%s says the bullish read from %s may be early or crowded; their warning is based on %s. Wait for cleaner confirmation before chasing." % [
+				contact_name,
+				str(peer.get("contact_name", "the other source")),
+				evidence_phrase
+			]
+	else:
+		if current_stance == "constructive":
+			note = "%s admits %s is not clean: %s conflicts with %s, so the idea needs confirmation before it deserves full trust." % [
+				contact_name,
+				ticker,
+				current_truth,
+				peer_truth
+			]
+		else:
+			note = "%s keeps the caution flag on %s, but admits the opposite read means the setup is not dead. The next tape or filing should decide it." % [
+				contact_name,
+				ticker
+			]
+	return {
+		"label": "Asked about conflict",
+		"note": note,
+		"relationship_delta": relationship_delta,
+		"peer_contact_id": str(peer.get("contact_id", "")),
+		"peer_contact_name": str(peer.get("contact_name", "")),
+		"message": "Source check: %s" % note
+	}
+
+
+func _source_check_evidence_phrase(contact: Dictionary, source_role: String) -> String:
+	var categories_text: String = " ".join(contact.get("categories", [])).to_lower()
+	var role_text: String = ("%s %s %s" % [
+		source_role,
+		str(contact.get("role", "")),
+		categories_text
+	]).to_lower()
+	if role_text.find("flow") >= 0 or role_text.find("desk") >= 0 or role_text.find("broker") >= 0 or role_text.find("bandar") >= 0:
+		return "tape behavior, ritel pressure, and who keeps taking the offer"
+	if role_text.find("legal") >= 0 or role_text.find("corporate") >= 0 or role_text.find("insider") >= 0 or role_text.find("commissioner") >= 0:
+		return "paperwork timing and what the room is willing to sign"
+	if role_text.find("journal") >= 0 or role_text.find("source") >= 0 or role_text.find("news") >= 0:
+		return "how many independent source lines are telling the same story"
+	if role_text.find("research") >= 0 or role_text.find("analyst") >= 0 or role_text.find("fundamental") >= 0:
+		return "filing quality, valuation room, and whether the thesis still holds"
+	return "the parts of the story they can personally verify"
 
 
 func _tip_followup_explanation(contact_name: String, truth_label: String, outcome_label: String, player_action_label: String) -> String:
@@ -1683,7 +1823,11 @@ func _contact_row(contact: Dictionary, runtime: Dictionary, discovery: Dictionar
 		"tip_missed_count": 0,
 		"cross_contact_label": "",
 		"cross_contact_note": "",
-		"cross_contact_rows": []
+		"cross_contact_rows": [],
+		"can_ask_source_check": false,
+		"source_check_label": "",
+		"source_check_note": "",
+		"source_check_day_index": 0
 	}
 
 

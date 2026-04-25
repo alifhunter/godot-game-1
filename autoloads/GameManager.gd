@@ -1217,6 +1217,20 @@ func follow_up_contact_tip(contact_id: String, followup_id: String) -> Dictionar
 	return result
 
 
+func ask_contact_source_check(contact_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if not RunState.can_spend_daily_action(1):
+		return {"success": false, "message": "No daily action points left."}
+	var result: Dictionary = contact_network_system.ask_source_check(RunState, DataRepository, contact_id)
+	if bool(result.get("success", false)):
+		RunState.spend_daily_action(1)
+		_request_autosave("network_source_check")
+		daily_actions_changed.emit()
+		network_changed.emit()
+	return result
+
+
 func get_debug_event_generator_catalog() -> Array:
 	var group_labels: Dictionary = {
 		"market": "Market Events",

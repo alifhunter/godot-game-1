@@ -2899,6 +2899,45 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected Network UI to create the source cross-check label."
 		}
+	var source_check_button: Button = game_root.find_child("NetworkSourceCheckButton", true, false) as Button
+	if source_check_button == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network UI to create the actionable source-check button."
+		}
+	var daily_actions_before_source_check: int = int(GameManager.get_daily_action_snapshot().get("used", 0))
+	var source_check_result: Dictionary = GameManager.ask_contact_source_check(contact_id)
+	if not bool(source_check_result.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected asking about a conflicting source read to succeed."
+		}
+	if int(GameManager.get_daily_action_snapshot().get("used", 0)) != daily_actions_before_source_check + 1:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected asking about a source conflict to spend one daily action point."
+		}
+	if not _tip_journal_has_source_check_memory() or not _network_snapshot_has_source_check_answer(GameManager.get_network_snapshot()):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected source-check answers to persist in the tip journal and surface on contacts."
+		}
+	var duplicate_source_check_result: Dictionary = GameManager.ask_contact_source_check(contact_id)
+	if bool(duplicate_source_check_result.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected a source conflict to allow only one ask."
+		}
 
 	for _day in range(max(days_to_advance - 3, 0)):
 		GameManager.advance_day()
@@ -3415,11 +3454,34 @@ func _network_snapshot_has_crosscheck_data(network_snapshot: Dictionary) -> bool
 		if (
 			str(contact.get("cross_contact_label", "")) == "Conflicting sources" and
 			not str(contact.get("cross_contact_note", "")).is_empty() and
-			not rows.is_empty()
+			not rows.is_empty() and
+			bool(contact.get("can_ask_source_check", false))
 		):
 			var first_row: Dictionary = rows[0]
 			if not str(first_row.get("truth_label", "")).is_empty() and not str(first_row.get("contact_name", "")).is_empty():
 				return true
+	return false
+
+
+func _tip_journal_has_source_check_memory() -> bool:
+	for tip_value in RunState.get_network_tip_journal().values():
+		if typeof(tip_value) != TYPE_DICTIONARY:
+			continue
+		var tip: Dictionary = tip_value
+		if not str(tip.get("source_check_note", "")).is_empty() and int(tip.get("source_check_day_index", 0)) == RunState.day_index:
+			return true
+	return false
+
+
+func _network_snapshot_has_source_check_answer(network_snapshot: Dictionary) -> bool:
+	for contact_value in network_snapshot.get("contacts", []):
+		var contact: Dictionary = contact_value
+		if (
+			str(contact.get("cross_contact_label", "")) == "Conflicting sources" and
+			not str(contact.get("source_check_note", "")).is_empty() and
+			not bool(contact.get("can_ask_source_check", true))
+		):
+			return true
 	return false
 
 
