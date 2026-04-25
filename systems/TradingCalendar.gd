@@ -44,6 +44,30 @@ func trade_date_for_index(trading_day_number: int) -> Dictionary:
 	return date_info
 
 
+func trade_index_for_date(date_info: Dictionary) -> int:
+	var target: Dictionary = _sanitize_date(date_info)
+	var target_key: String = to_key(target)
+	var current: Dictionary = start_date()
+	var current_index: int = 1
+	while to_key(current) != target_key:
+		if _compare_dates(current, target) > 0:
+			return -1
+		current = next_trade_date(current)
+		current_index += 1
+		if current_index > 5000:
+			return -1
+	return current_index
+
+
+func advance_trade_days(date_info: Dictionary, offset_days: int) -> Dictionary:
+	var current: Dictionary = _sanitize_date(date_info)
+	var remaining: int = max(offset_days, 0)
+	while remaining > 0:
+		current = next_trade_date(current)
+		remaining -= 1
+	return current
+
+
 func is_trade_day(date_info: Dictionary) -> bool:
 	var sanitized_date: Dictionary = _sanitize_date(date_info)
 	var weekday_value: int = int(sanitized_date.get("weekday", 0))
@@ -170,3 +194,19 @@ func _is_leap_year(year_value: int) -> bool:
 	if year_value % 100 == 0:
 		return false
 	return year_value % 4 == 0
+
+
+func _compare_dates(a: Dictionary, b: Dictionary) -> int:
+	var year_a: int = int(a.get("year", START_DATE["year"]))
+	var year_b: int = int(b.get("year", START_DATE["year"]))
+	if year_a != year_b:
+		return -1 if year_a < year_b else 1
+	var month_a: int = int(a.get("month", START_DATE["month"]))
+	var month_b: int = int(b.get("month", START_DATE["month"]))
+	if month_a != month_b:
+		return -1 if month_a < month_b else 1
+	var day_a: int = int(a.get("day", START_DATE["day"]))
+	var day_b: int = int(b.get("day", START_DATE["day"]))
+	if day_a != day_b:
+		return -1 if day_a < day_b else 1
+	return 0

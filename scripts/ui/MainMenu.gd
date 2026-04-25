@@ -30,6 +30,8 @@ var has_checked_app_font: bool = false
 @onready var loading_body_label: Label = $Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox/LoadingBodyLabel
 @onready var loading_progress_bar: ProgressBar = $Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox/LoadingProgressBar
 @onready var loading_step_label: Label = $Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox/LoadingStepLabel
+@onready var loading_subprogress_label: Label = $Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox/LoadingSubprogressLabel
+@onready var loading_note_label: Label = $Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox/LoadingNoteLabel
 
 var difficulty_button_group := ButtonGroup.new()
 var difficulty_card_buttons: Dictionary = {}
@@ -44,6 +46,7 @@ func _ready() -> void:
 	continue_button.pressed.connect(_on_continue_pressed)
 	GameManager.run_loading_started.connect(_on_run_loading_started)
 	GameManager.run_loading_progress.connect(_on_run_loading_progress)
+	GameManager.run_loading_detail_updated.connect(_on_run_loading_detail_updated)
 	GameManager.run_loading_finished.connect(_on_run_loading_finished)
 	get_viewport().size_changed.connect(_update_difficulty_selector_size)
 	_populate_difficulty_cards()
@@ -182,9 +185,11 @@ func _prepare_loading_screen(difficulty_id: String) -> void:
 	var difficulty_config: Dictionary = GameManager.get_difficulty_config(difficulty_id)
 	loading_title_label.text = "Starting %s run" % str(difficulty_config.get("label", "Normal"))
 	loading_stage_label.text = "Preparing market seed"
-	loading_body_label.text = "Building %d procedural companies, their financial profiles, and the opening market state." % int(difficulty_config.get("company_count", 0))
+	loading_body_label.text = "Building %d procedural companies, their core market data, and the opening market state." % int(difficulty_config.get("company_count", 0))
 	loading_step_label.text = "Step 1/%d" % max(GameManager.NEW_RUN_LOADING_STEPS.size(), 1)
 	loading_progress_bar.value = 0.0
+	loading_subprogress_label.text = ""
+	loading_note_label.text = "Desktop entry comes first. Full company detail can finish in the background after the market opens."
 
 
 func _prepare_load_screen() -> void:
@@ -193,6 +198,8 @@ func _prepare_load_screen() -> void:
 	loading_body_label.text = "Restoring the saved market state, portfolio, watchlist, and current trading day."
 	loading_step_label.text = "Step 1/%d" % max(GameManager.LOAD_RUN_LOADING_STEPS.size(), 1)
 	loading_progress_bar.value = 0.0
+	loading_subprogress_label.text = ""
+	loading_note_label.text = "Loading the saved market state and reopening the trading desk."
 
 
 func _on_run_loading_started(difficulty_id: String) -> void:
@@ -216,6 +223,27 @@ func _on_run_loading_progress(
 	loading_step_label.text = "Step %d/%d" % [stage_index, max(stage_count, 1)]
 	loading_progress_bar.value = clamp(progress_ratio, 0.0, 1.0) * 100.0
 	loading_body_label.text = _loading_body_for_stage(stage_id)
+	if stage_id == "financials":
+		loading_note_label.text = _loading_note_for_stage(stage_id)
+	elif stage_id != "financials":
+		loading_subprogress_label.text = ""
+		loading_note_label.text = _loading_note_for_stage(stage_id)
+
+
+func _on_run_loading_detail_updated(subprogress_text: String, log_lines: Array) -> void:
+	if not is_inside_tree():
+		return
+
+	loading_subprogress_label.text = subprogress_text
+	var normalized_lines: Array = []
+	for line_value in log_lines:
+		var line: String = str(line_value).strip_edges()
+		if line.is_empty():
+			continue
+		normalized_lines.append(line)
+	if subprogress_text.is_empty() and normalized_lines.is_empty():
+		return
+	loading_note_label.text = "\n".join(normalized_lines) if not normalized_lines.is_empty() else _loading_note_for_stage("financials")
 
 
 func _loading_body_for_stage(stage_id: String) -> String:
@@ -231,9 +259,9 @@ func _loading_body_for_stage(stage_id: String) -> String:
 		"seed":
 			return "Locking the run seed, trade calendar, and bankroll rules before generation starts."
 		"companies":
-			return "Creating %d company identities with randomized names, tickers, sectors, and exchange boards." % company_count
+			return "Creating %d company identities, tickers, sector assignments, and listing boards for the new roster." % company_count
 		"financials":
-			return "Creating company financials, ten-year histories, quality scores, and opening prices for the new roster."
+			return "Creating market-ready fundamentals, scores, traits, and opening prices for the new roster. Full company detail can finish after the desktop opens."
 		"opening_day":
 			return "Simulating the first trading session so the market opens with live price changes instead of flat starting quotes."
 		"save":
@@ -242,6 +270,18 @@ func _loading_body_for_stage(stage_id: String) -> String:
 			return "Opening the market desk and handing control to the player."
 		_:
 			return "Preparing the next market screen."
+
+
+func _loading_note_for_stage(stage_id: String) -> String:
+	match stage_id:
+		"financials":
+			return "Preparing core market data first so the desktop can open sooner."
+		"save":
+			return "Writing the new run to disk before control returns to the desktop."
+		"launch", "load_launch":
+			return "Handing control to the trading desk."
+		_:
+			return "Larger rosters can take a moment, especially on Grind where 50 companies are generated."
 
 
 func _on_run_loading_finished() -> void:

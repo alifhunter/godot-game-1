@@ -13,6 +13,10 @@ const CROSSHAIR_COLOR := Color(0.819608, 0.890196, 0.984314, 0.45)
 const HOVER_PANEL_FILL := Color(0.0705882, 0.105882, 0.145098, 0.94)
 const HOVER_PANEL_BORDER := Color(0.333333, 0.462745, 0.580392, 0.92)
 const HOVER_PANEL_TEXT := Color(0.956863, 0.976471, 1, 1)
+const DRAWING_LINE_COLOR := Color(0.980392, 0.792157, 0.392157, 0.92)
+const DRAWING_SELECTED_COLOR := Color(0.690196, 0.87451, 1, 1)
+const DRAWING_PREVIEW_COLOR := Color(0.980392, 0.792157, 0.392157, 0.55)
+const DRAWING_HIT_DISTANCE := 8.0
 const PLOT_MARGIN_LEFT := 16.0
 const PLOT_MARGIN_TOP := 14.0
 const PLOT_MARGIN_RIGHT := 76.0
@@ -38,11 +42,17 @@ var _display_mode: String = "line"
 var _zoom_level_index: int = 0
 var _hover_active: bool = false
 var _hover_position: Vector2 = Vector2.ZERO
+var _active_company_id: String = ""
+var _drawing_tool: String = "select"
+var _drawings_by_company: Dictionary = {}
+var _selected_drawing_id: String = ""
+var _pending_trend_anchor: Dictionary = {}
+var _next_drawing_id: int = 1
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	mouse_default_cursor_shape = Control.CURSOR_CROSS
+	mouse_default_cursor_shape = Control.CURSOR_ARROW if _drawing_tool == "select" else Control.CURSOR_CROSS
 	mouse_exited.connect(_clear_hover_state)
 
 
@@ -52,9 +62,26 @@ func _gui_input(event: InputEvent) -> void:
 		_hover_position = (event as InputEventMouseMotion).position
 		queue_redraw()
 	elif event is InputEventMouseButton:
+		var mouse_button: InputEventMouseButton = event as InputEventMouseButton
 		_hover_active = true
-		_hover_position = (event as InputEventMouseButton).position
+		_hover_position = mouse_button.position
+		if mouse_button.pressed and mouse_button.button_index == MOUSE_BUTTON_RIGHT:
+			if _cancel_pending_drawing():
+				get_viewport().set_input_as_handled()
+				return
+		if mouse_button.pressed and mouse_button.button_index == MOUSE_BUTTON_LEFT:
+			if _handle_drawing_click(mouse_button.position):
+				get_viewport().set_input_as_handled()
+				return
 		queue_redraw()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var key_event: InputEventKey = event
+		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_ESCAPE:
+			if _cancel_pending_drawing():
+				get_viewport().set_input_as_handled()
 
 
 func set_chart_series(series: Array, baseline_value: float, line_color: Color) -> void:
@@ -93,6 +120,54 @@ func clear_chart() -> void:
 	_display_mode = "line"
 	_zoom_level_index = 0
 	_clear_hover_state()
+	queue_redraw()
+
+
+func set_active_company_id(company_id: String) -> void:
+	var normalized_company_id: String = str(company_id)
+	if normalized_company_id == _active_company_id:
+		return
+	_active_company_id = normalized_company_id
+	_selected_drawing_id = ""
+	_pending_trend_anchor.clear()
+	queue_redraw()
+
+
+func set_drawing_tool(tool_id: String) -> void:
+	var normalized_tool: String = str(tool_id).to_lower()
+	if not ["select", "horizontal", "trend"].has(normalized_tool):
+		normalized_tool = "select"
+	if normalized_tool != "trend":
+		_pending_trend_anchor.clear()
+	_drawing_tool = normalized_tool
+	mouse_default_cursor_shape = Control.CURSOR_ARROW if _drawing_tool == "select" else Control.CURSOR_CROSS
+	queue_redraw()
+
+
+func get_drawing_tool() -> String:
+	return _drawing_tool
+
+
+func delete_selected_drawing() -> void:
+	if _selected_drawing_id.is_empty() or _active_company_id.is_empty():
+		return
+	var drawings: Array = _drawings_for_active_company()
+	for drawing_index in range(drawings.size() - 1, -1, -1):
+		var drawing: Dictionary = drawings[drawing_index]
+		if str(drawing.get("id", "")) == _selected_drawing_id:
+			drawings.remove_at(drawing_index)
+			break
+	_drawings_by_company[_active_company_id] = drawings
+	_selected_drawing_id = ""
+	queue_redraw()
+
+
+func clear_drawings_for_active_company() -> void:
+	if _active_company_id.is_empty():
+		return
+	_drawings_by_company[_active_company_id] = []
+	_selected_drawing_id = ""
+	_pending_trend_anchor.clear()
 	queue_redraw()
 
 
@@ -173,6 +248,7 @@ func _draw() -> void:
 			continue
 		_draw_plot(plot, price_rect, min_value, max_value, _display_mode != "candle" and plot_id == "close")
 
+	_draw_chart_drawings(price_rect, visible_bars, min_value, max_value)
 	_draw_hover_overlay(price_rect, visible_bars, min_value, max_value, grid_rect, x_axis_rect)
 
 
@@ -627,6 +703,271 @@ func _draw_hover_info_panel(font: Font, hover_state: Dictionary, plot_rect: Rect
 			AXIS_FONT_SIZE,
 			HOVER_PANEL_TEXT
 		)
+
+
+func _drawings_for_active_company() -> Array:
+	if _active_company_id.is_empty():
+		return []
+	if not _drawings_by_company.has(_active_company_id):
+		_drawings_by_company[_active_company_id] = []
+	return _drawings_by_company[_active_company_id]
+
+
+func _build_drawing_context() -> Dictionary:
+	var plot_rect := Rect2(
+		Vector2(PLOT_MARGIN_LEFT, PLOT_MARGIN_TOP),
+		size - Vector2(PLOT_MARGIN_LEFT + PLOT_MARGIN_RIGHT, PLOT_MARGIN_TOP + PLOT_MARGIN_BOTTOM)
+	)
+	if plot_rect.size.x <= 0.0 or plot_rect.size.y <= 0.0 or _plots.is_empty():
+		return {}
+
+	var visible_context: Dictionary = _build_visible_context()
+	var visible_bars: Array = visible_context.get("bars", [])
+	var visible_plots: Array = visible_context.get("plots", [])
+	if visible_bars.is_empty() or visible_plots.is_empty():
+		return {}
+	var price_plots: Array = _plots_for_kind(visible_plots, false)
+	var panel_plots: Array = _plots_for_kind(visible_plots, true)
+	if price_plots.is_empty():
+		return {}
+
+	var bounds: Dictionary = _resolve_plot_bounds(price_plots, visible_bars)
+	if bool(bounds.get("empty", true)):
+		return {}
+	var min_value: float = float(bounds.get("min", 0.0))
+	var max_value: float = float(bounds.get("max", 0.0))
+	var layout: Dictionary = _build_chart_layout(plot_rect, visible_bars, not panel_plots.is_empty())
+	var price_rect: Rect2 = layout.get("price_rect", plot_rect)
+	if is_equal_approx(min_value, max_value):
+		var single_value_padding: float = max(abs(min_value) * 0.05, 1.0)
+		min_value -= single_value_padding
+		max_value += single_value_padding
+	else:
+		var padding: float = (max_value - min_value) * 0.12
+		min_value -= padding
+		max_value += padding
+	return {
+		"visible_bars": visible_bars,
+		"price_rect": price_rect,
+		"min_value": min_value,
+		"max_value": max_value
+	}
+
+
+func _handle_drawing_click(mouse_position: Vector2) -> bool:
+	if _active_company_id.is_empty():
+		return false
+	var context: Dictionary = _build_drawing_context()
+	if context.is_empty():
+		return false
+	var price_rect: Rect2 = context.get("price_rect", Rect2())
+	var visible_bars: Array = context.get("visible_bars", [])
+	if not price_rect.has_point(mouse_position):
+		return false
+
+	var min_value: float = float(context.get("min_value", 0.0))
+	var max_value: float = float(context.get("max_value", 0.0))
+	if _drawing_tool == "horizontal":
+		var drawing_id: String = _new_drawing_id()
+		var drawings: Array = _drawings_for_active_company()
+		drawings.append({
+			"id": drawing_id,
+			"type": "horizontal",
+			"price": _plot_y_to_value(mouse_position.y, min_value, max_value, price_rect)
+		})
+		_drawings_by_company[_active_company_id] = drawings
+		_selected_drawing_id = drawing_id
+		queue_redraw()
+		return true
+	if _drawing_tool == "trend":
+		var anchor: Dictionary = _anchor_from_position(mouse_position, visible_bars, price_rect, min_value, max_value)
+		if anchor.is_empty():
+			return false
+		if _pending_trend_anchor.is_empty():
+			_pending_trend_anchor = anchor
+		else:
+			var drawing_id: String = _new_drawing_id()
+			var drawings: Array = _drawings_for_active_company()
+			drawings.append({
+				"id": drawing_id,
+				"type": "trend",
+				"start": _pending_trend_anchor.duplicate(true),
+				"end": anchor
+			})
+			_drawings_by_company[_active_company_id] = drawings
+			_selected_drawing_id = drawing_id
+			_pending_trend_anchor.clear()
+		queue_redraw()
+		return true
+
+	_selected_drawing_id = _find_drawing_at_position(mouse_position, visible_bars, price_rect, min_value, max_value)
+	queue_redraw()
+	return true
+
+
+func _cancel_pending_drawing() -> bool:
+	if _pending_trend_anchor.is_empty():
+		return false
+	_pending_trend_anchor.clear()
+	queue_redraw()
+	return true
+
+
+func _new_drawing_id() -> String:
+	var drawing_id: String = "%s_chart_drawing_%d" % [_active_company_id, _next_drawing_id]
+	_next_drawing_id += 1
+	return drawing_id
+
+
+func _anchor_from_position(
+	mouse_position: Vector2,
+	visible_bars: Array,
+	price_rect: Rect2,
+	min_value: float,
+	max_value: float
+) -> Dictionary:
+	if visible_bars.is_empty():
+		return {}
+	var bar_index: int = _bar_index_for_x(mouse_position.x, visible_bars, price_rect)
+	var bar: Dictionary = visible_bars[bar_index]
+	return {
+		"bar_key": _bar_key_from_bar(bar, bar_index),
+		"date_serial": _date_serial_from_trade_date(bar.get("trade_date", {})),
+		"price": _plot_y_to_value(mouse_position.y, min_value, max_value, price_rect)
+	}
+
+
+func _bar_index_for_x(x_position: float, visible_bars: Array, price_rect: Rect2) -> int:
+	var slot_width: float = price_rect.size.x / float(max(visible_bars.size(), 1))
+	if slot_width <= 0.0:
+		return 0
+	var relative_x: float = clamp(x_position - price_rect.position.x, 0.0, max(price_rect.size.x - 0.001, 0.0))
+	return clamp(int(floor(relative_x / slot_width)), 0, visible_bars.size() - 1)
+
+
+func _bar_key_from_bar(bar: Dictionary, fallback_index: int = 0) -> String:
+	var trade_date: Dictionary = bar.get("trade_date", {})
+	if not trade_date.is_empty():
+		return "%04d-%02d-%02d" % [
+			int(trade_date.get("year", 0)),
+			int(trade_date.get("month", 0)),
+			int(trade_date.get("day", 0))
+		]
+	return "index:%d" % fallback_index
+
+
+func _date_serial_from_trade_date(trade_date: Dictionary) -> int:
+	if trade_date.is_empty():
+		return 0
+	return int(trade_date.get("year", 0)) * 10000 + int(trade_date.get("month", 0)) * 100 + int(trade_date.get("day", 0))
+
+
+func _screen_position_for_anchor(
+	anchor: Dictionary,
+	visible_bars: Array,
+	price_rect: Rect2,
+	min_value: float,
+	max_value: float
+) -> Vector2:
+	var x_position: float = _x_for_anchor(anchor, visible_bars, price_rect)
+	var y_position: float = _value_to_plot_y(float(anchor.get("price", 0.0)), min_value, max_value, price_rect)
+	return Vector2(x_position, y_position)
+
+
+func _x_for_anchor(anchor: Dictionary, visible_bars: Array, price_rect: Rect2) -> float:
+	if visible_bars.is_empty():
+		return price_rect.position.x
+	var target_key: String = str(anchor.get("bar_key", ""))
+	for bar_index in range(visible_bars.size()):
+		var bar: Dictionary = visible_bars[bar_index]
+		if _bar_key_from_bar(bar, bar_index) == target_key:
+			return _bar_center_x(bar_index, visible_bars.size(), price_rect)
+
+	var target_serial: int = int(anchor.get("date_serial", 0))
+	if target_serial <= 0:
+		return _bar_center_x(0, visible_bars.size(), price_rect)
+	var best_index: int = 0
+	var best_distance: int = 2147483647
+	for bar_index in range(visible_bars.size()):
+		var bar: Dictionary = visible_bars[bar_index]
+		var serial_value: int = _date_serial_from_trade_date(bar.get("trade_date", {}))
+		if serial_value <= 0:
+			continue
+		var distance: int = absi(serial_value - target_serial)
+		if distance < best_distance:
+			best_distance = distance
+			best_index = bar_index
+	return _bar_center_x(best_index, visible_bars.size(), price_rect)
+
+
+func _bar_center_x(bar_index: int, bar_count: int, price_rect: Rect2) -> float:
+	var slot_width: float = price_rect.size.x / float(max(bar_count, 1))
+	return price_rect.position.x + (slot_width * (float(bar_index) + 0.5))
+
+
+func _draw_chart_drawings(price_rect: Rect2, visible_bars: Array, min_value: float, max_value: float) -> void:
+	if _active_company_id.is_empty():
+		return
+	var drawings: Array = _drawings_for_active_company()
+	for drawing_value in drawings:
+		var drawing: Dictionary = drawing_value
+		var drawing_id: String = str(drawing.get("id", ""))
+		var is_selected: bool = drawing_id == _selected_drawing_id
+		var line_color: Color = DRAWING_SELECTED_COLOR if is_selected else DRAWING_LINE_COLOR
+		var line_width: float = 2.4 if is_selected else 1.8
+		var drawing_type: String = str(drawing.get("type", ""))
+		if drawing_type == "horizontal":
+			var y_position: float = _value_to_plot_y(float(drawing.get("price", 0.0)), min_value, max_value, price_rect)
+			draw_line(Vector2(price_rect.position.x, y_position), Vector2(price_rect.end.x, y_position), line_color, line_width)
+		elif drawing_type == "trend":
+			var start_position: Vector2 = _screen_position_for_anchor(drawing.get("start", {}), visible_bars, price_rect, min_value, max_value)
+			var end_position: Vector2 = _screen_position_for_anchor(drawing.get("end", {}), visible_bars, price_rect, min_value, max_value)
+			draw_line(start_position, end_position, line_color, line_width)
+			if is_selected:
+				draw_circle(start_position, 4.0, line_color)
+				draw_circle(end_position, 4.0, line_color)
+	_draw_pending_trend_preview(price_rect, visible_bars, min_value, max_value)
+
+
+func _draw_pending_trend_preview(price_rect: Rect2, visible_bars: Array, min_value: float, max_value: float) -> void:
+	if _pending_trend_anchor.is_empty() or not _hover_active or not price_rect.has_point(_hover_position):
+		return
+	var start_position: Vector2 = _screen_position_for_anchor(_pending_trend_anchor, visible_bars, price_rect, min_value, max_value)
+	draw_line(start_position, _hover_position, DRAWING_PREVIEW_COLOR, 1.4)
+	draw_circle(start_position, 3.5, DRAWING_PREVIEW_COLOR)
+
+
+func _find_drawing_at_position(
+	mouse_position: Vector2,
+	visible_bars: Array,
+	price_rect: Rect2,
+	min_value: float,
+	max_value: float
+) -> String:
+	var drawings: Array = _drawings_for_active_company()
+	for drawing_index in range(drawings.size() - 1, -1, -1):
+		var drawing: Dictionary = drawings[drawing_index]
+		var drawing_type: String = str(drawing.get("type", ""))
+		if drawing_type == "horizontal":
+			var y_position: float = _value_to_plot_y(float(drawing.get("price", 0.0)), min_value, max_value, price_rect)
+			if absf(mouse_position.y - y_position) <= DRAWING_HIT_DISTANCE:
+				return str(drawing.get("id", ""))
+		elif drawing_type == "trend":
+			var start_position: Vector2 = _screen_position_for_anchor(drawing.get("start", {}), visible_bars, price_rect, min_value, max_value)
+			var end_position: Vector2 = _screen_position_for_anchor(drawing.get("end", {}), visible_bars, price_rect, min_value, max_value)
+			if _distance_to_segment(mouse_position, start_position, end_position) <= DRAWING_HIT_DISTANCE:
+				return str(drawing.get("id", ""))
+	return ""
+
+
+func _distance_to_segment(point: Vector2, segment_start: Vector2, segment_end: Vector2) -> float:
+	var segment_delta: Vector2 = segment_end - segment_start
+	var length_squared: float = segment_delta.length_squared()
+	if length_squared <= 0.001:
+		return point.distance_to(segment_start)
+	var t: float = clamp((point - segment_start).dot(segment_delta) / length_squared, 0.0, 1.0)
+	var closest_point: Vector2 = segment_start + (segment_delta * t)
+	return point.distance_to(closest_point)
 
 
 func zoom_in() -> void:

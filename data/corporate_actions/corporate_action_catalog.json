@@ -1,0 +1,310 @@
+{
+  "review_interval_days": 5,
+  "annual_rups": {
+    "start_year": 2020,
+    "end_year": 2030,
+    "start_month": 3,
+    "end_month": 6
+  },
+  "meeting_defaults": {
+    "earnings_call": {
+      "delay_min_days": 0,
+      "delay_max_days": 1
+    },
+    "rupslb": {
+      "delay_min_days": 4,
+      "delay_max_days": 9
+    },
+    "annual_rups": {
+      "fallback_delay_min_days": 8,
+      "fallback_delay_max_days": 16
+    }
+  },
+  "stage_order": [
+    "hidden_positioning",
+    "unusual_activity",
+    "rumor_leak",
+    "public_speculation",
+    "management_response",
+    "formal_agenda_or_filing",
+    "meeting_or_call",
+    "resolution",
+    "execution",
+    "aftermath"
+  ],
+  "stage_templates": {
+    "hidden_positioning": {
+      "label": "Hidden positioning",
+      "visibility": "hidden",
+      "tone": "positive",
+      "category": "corporate_action_rumor",
+      "article_stage": "whisper",
+      "progress_key": "early",
+      "sentiment_shift": 0.08,
+      "volatility_multiplier": 1.03
+    },
+    "unusual_activity": {
+      "label": "Unusual activity",
+      "visibility": "hidden",
+      "tone": "positive",
+      "category": "corporate_action_rumor",
+      "article_stage": "whisper",
+      "progress_key": "early",
+      "sentiment_shift": 0.12,
+      "volatility_multiplier": 1.05
+    },
+    "rumor_leak": {
+      "label": "Rumor leak",
+      "visibility": "visible",
+      "tone": "positive",
+      "category": "corporate_action_rumor",
+      "article_stage": "whisper",
+      "progress_key": "developing",
+      "sentiment_shift": 0.16,
+      "volatility_multiplier": 1.08
+    },
+    "public_speculation": {
+      "label": "Public speculation",
+      "visibility": "visible",
+      "tone": "positive",
+      "category": "corporate_action_speculation",
+      "article_stage": "analysis",
+      "progress_key": "developing",
+      "sentiment_shift": 0.22,
+      "volatility_multiplier": 1.12
+    },
+    "management_response": {
+      "label": "Management response",
+      "visibility": "visible",
+      "tone": "mixed",
+      "category": "corporate_action_clarification",
+      "article_stage": "analysis",
+      "progress_key": "follow_through",
+      "sentiment_shift": 0.06,
+      "volatility_multiplier": 1.07
+    },
+    "formal_agenda_or_filing": {
+      "label": "Formal agenda / filing",
+      "visibility": "visible",
+      "tone": "positive",
+      "category": "corporate_action_filing",
+      "article_stage": "confirmation",
+      "progress_key": "follow_through",
+      "sentiment_shift": 0.28,
+      "volatility_multiplier": 1.16
+    },
+    "meeting_or_call": {
+      "label": "Meeting / call",
+      "visibility": "visible",
+      "tone": "mixed",
+      "category": "corporate_meeting",
+      "article_stage": "confirmation",
+      "progress_key": "follow_through",
+      "sentiment_shift": 0.1,
+      "volatility_multiplier": 1.08
+    },
+    "resolution": {
+      "label": "Resolution",
+      "visibility": "visible",
+      "tone": "positive",
+      "category": "corporate_action_resolution",
+      "article_stage": "confirmation",
+      "progress_key": "follow_through",
+      "sentiment_shift": 0.2,
+      "volatility_multiplier": 1.12
+    },
+    "execution": {
+      "label": "Execution",
+      "visibility": "visible",
+      "tone": "positive",
+      "category": "corporate_action_execution",
+      "article_stage": "confirmation",
+      "progress_key": "follow_through",
+      "sentiment_shift": 0.18,
+      "volatility_multiplier": 1.1
+    },
+    "aftermath": {
+      "label": "Aftermath",
+      "visibility": "visible",
+      "tone": "mixed",
+      "category": "corporate_action_aftermath",
+      "article_stage": "recap",
+      "progress_key": "recap",
+      "sentiment_shift": -0.05,
+      "volatility_multiplier": 1.0
+    }
+  },
+  "families": [
+    {
+      "id": "rights_issue",
+      "enabled": true,
+      "label": "Rights Issue",
+      "default_venue_type": "rupslb",
+      "mutually_exclusive_families": [
+        "rights_issue",
+        "private_placement",
+        "stock_buyback"
+      ],
+      "supports_delay": true,
+      "prefers_denial_response": true,
+      "story_bias": 0.95,
+      "agendas": [
+        {
+          "id": "rights_issue_approval",
+          "label": "Approve rights issue",
+          "description": "Shareholders review a proposed rights issue structure and the funding rationale."
+        }
+      ],
+      "meeting_presentation": {
+        "stage_labels": {
+          "arrival": "Arrival",
+          "seating": "Seating",
+          "host_intro": "Host Intro",
+          "agenda_reveal": "Agenda",
+          "vote": "Vote",
+          "result": "Result Board"
+        },
+        "host_intro_lines": [
+          "The chair opens the extraordinary meeting and frames the rights issue as a funding decision for the company’s next phase.",
+          "Management steps to the podium and argues that the rights issue is meant to stabilize the balance sheet and extend operational runway."
+        ],
+        "observer_copy": "You can watch the room, but only shareholders with a live position on the meeting day can cast a weighted vote.",
+        "vote_prompt": "The host now asks shareholders to vote on the proposed rights issue agenda.",
+        "approved_result_copy": "The room approves the rights issue proposal. The market will only digest that outcome on the next simulation day.",
+        "rejected_result_copy": "The room rejects the rights issue proposal. The market will only digest that outcome on the next simulation day."
+      }
+    },
+    {
+      "id": "stock_buyback",
+      "enabled": true,
+      "label": "Stock Buyback",
+      "default_venue_type": "annual_rups",
+      "mutually_exclusive_families": [
+        "rights_issue",
+        "private_placement",
+        "stock_buyback"
+      ],
+      "supports_delay": false,
+      "prefers_denial_response": false,
+      "story_bias": 0.78,
+      "agendas": [
+        {
+          "id": "stock_buyback_authorization",
+          "label": "Approve buyback authorization",
+          "description": "Shareholders review a proposed buyback mandate and confidence-support rationale."
+        }
+      ]
+    },
+    {
+      "id": "stock_split",
+      "enabled": true,
+      "label": "Stock Split",
+      "default_venue_type": "annual_rups",
+      "mutually_exclusive_families": [],
+      "supports_delay": false,
+      "prefers_denial_response": false,
+      "story_bias": 0.68,
+      "agendas": [
+        {
+          "id": "stock_split_approval",
+          "label": "Approve stock split",
+          "description": "Shareholders review a proposed stock split intended to widen accessibility and liquidity."
+        }
+      ]
+    },
+    {
+      "id": "ceo_change",
+      "enabled": true,
+      "label": "CEO Change",
+      "default_venue_type": "annual_rups",
+      "mutually_exclusive_families": [],
+      "supports_delay": false,
+      "prefers_denial_response": false,
+      "story_bias": 0.44,
+      "agendas": [
+        {
+          "id": "board_ceo_change",
+          "label": "Approve CEO / board changes",
+          "description": "Shareholders review proposed leadership changes and the stated turnaround rationale."
+        }
+      ]
+    },
+    {
+      "id": "private_placement",
+      "enabled": false,
+      "label": "Private Placement",
+      "default_venue_type": "rupslb",
+      "mutually_exclusive_families": [
+        "rights_issue",
+        "private_placement",
+        "stock_buyback"
+      ],
+      "supports_delay": true,
+      "prefers_denial_response": true,
+      "story_bias": 0.82,
+      "agendas": [
+        {
+          "id": "private_placement_approval",
+          "label": "Approve private placement",
+          "description": "Shareholders review a targeted placement structure and proposed strategic investor entry."
+        }
+      ]
+    },
+    {
+      "id": "restructuring",
+      "enabled": false,
+      "label": "Restructuring",
+      "default_venue_type": "rupslb",
+      "mutually_exclusive_families": [],
+      "supports_delay": true,
+      "prefers_denial_response": true,
+      "story_bias": 0.52,
+      "agendas": [
+        {
+          "id": "restructuring_approval",
+          "label": "Approve restructuring plan",
+          "description": "Shareholders review a restructuring package, asset actions, and leadership commitments."
+        }
+      ]
+    },
+    {
+      "id": "strategic_merger_acquisition",
+      "enabled": false,
+      "label": "Strategic Merger / Acquisition",
+      "default_venue_type": "rupslb",
+      "mutually_exclusive_families": [],
+      "supports_delay": true,
+      "prefers_denial_response": true,
+      "story_bias": 1.0,
+      "agendas": [
+        {
+          "id": "strategic_mna_approval",
+          "label": "Approve strategic M&A",
+          "description": "Shareholders review a strategic merger or acquisition proposal and the expected business fit."
+        }
+      ]
+    },
+    {
+      "id": "backdoor_listing",
+      "enabled": false,
+      "label": "Backdoor Listing",
+      "default_venue_type": "rupslb",
+      "mutually_exclusive_families": [],
+      "supports_delay": true,
+      "prefers_denial_response": true,
+      "story_bias": 1.25,
+      "agendas": [
+        {
+          "id": "change_of_control",
+          "label": "Approve change of control",
+          "description": "Shareholders review a control change and proposed strategic redirection."
+        },
+        {
+          "id": "asset_injection",
+          "label": "Approve asset injection",
+          "description": "Shareholders review a proposed asset injection and new business-line transformation."
+        }
+      ]
+    }
+  ]
+}

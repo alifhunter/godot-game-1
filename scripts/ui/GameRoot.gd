@@ -18,6 +18,7 @@ const APP_FONT_CANDIDATE_PATHS := [
 const TRADE_LEFT_SECTION_RATIO := 1.0
 const TRADE_CENTER_SECTION_RATIO := 2.0
 const TRADE_RIGHT_SECTION_RATIO := 1.0
+const ORDER_TICKET_TOGGLE_WIDTH := 28.0
 const COLOR_PANEL_BLUE := Color(0.109804, 0.14902, 0.184314, 0.94)
 const COLOR_PANEL_BLUE_ALT := Color(0.0901961, 0.129412, 0.164706, 0.96)
 const COLOR_PANEL_GREEN := Color(0.0862745, 0.152941, 0.133333, 0.95)
@@ -36,6 +37,8 @@ const COLOR_DESKTOP_PANEL := Color(0.945098, 0.909804, 0.803922, 1)
 const COLOR_DESKTOP_BROWN := Color(0.509804, 0.231373, 0.0941176, 1)
 const COLOR_DESKTOP_OLIVE := Color(0.247059, 0.278431, 0.117647, 1)
 const COLOR_DESKTOP_GOLD := Color(0.972549, 0.713726, 0.0627451, 1)
+const COLOR_DESKTOP_FRAME := Color(0.729412, 0.694118, 0.603922, 1)
+const DESKTOP_REFERENCE_VIEWPORT := Vector2(1920.0, 1080.0)
 const DESKTOP_ICON_PATHS := {
 	"stock": {
 		"shortcut": "res://assets/ui/desktop/stockbot_shortcut.svg",
@@ -121,6 +124,9 @@ const APP_WINDOW_CONTENT_TOP_MARGIN := 64
 const APP_WINDOW_CONTENT_BOTTOM_MARGIN := 20
 const APP_WINDOW_FRAME_BOTTOM_MARGIN := 20
 const APP_WINDOW_INNER_PADDING := 0
+const DESKTOP_WINDOW_TITLE_BAR_HEIGHT := 40.0
+const DESKTOP_WINDOW_MIN_WIDTH := 360.0
+const DESKTOP_WINDOW_MIN_HEIGHT := 260.0
 const SOCIAL_WINDOW_MAX_WIDTH := 460.0
 const SOCIAL_WINDOW_MAX_HEIGHT := 780.0
 const SOCIAL_WINDOW_MIN_HEIGHT := 520.0
@@ -129,6 +135,7 @@ const DASHBOARD_WEEKDAY_NAMES := ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun
 const DASHBOARD_MONTH_NAMES := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 const CONSOLE_TOGGLE_KEY_CODE := 96
 const PERF_LOG_PREFIX := "[perf][ui]"
+const RUPSLB_MEETING_OVERLAY_SCRIPT = preload("res://scripts/ui/widgets/RupslbMeetingOverlay.gd")
 
 var selected_company_id: String = ""
 var displayed_company_ids: Array = []
@@ -159,13 +166,17 @@ var current_news_snapshot: Dictionary = {}
 var current_social_snapshot: Dictionary = {}
 var current_network_snapshot: Dictionary = {}
 var current_academy_snapshot: Dictionary = {}
+var current_corporate_meeting_id: String = ""
 var debug_generator_buttons: Dictionary = {}
+var debug_start_rupslb_button: Button = null
+var debug_start_rupslb_status_label: Label = null
 var cached_app_font: Font = null
 var has_checked_app_font: bool = false
 var suppress_next_portfolio_refresh: bool = false
 var pending_watchlist_selected_company_id: String = ""
 var pending_watchlist_target_tab: int = -1
 var active_order_side: String = "buy"
+var order_ticket_collapsed: bool = false
 var broker_net_mode: bool = false
 var selected_news_outlet_id: String = ""
 var selected_news_archive_year: int = 0
@@ -197,13 +208,21 @@ var academy_app_label: Label = null
 @onready var exit_app_button: Button = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/ExitAppTile/ExitAppButton
 @onready var exit_app_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/ExitAppTile/ExitAppLabel
 var desktop_figma_top_bar: PanelContainer = null
+var desktop_figma_top_margin: MarginContainer = null
 var desktop_figma_date_label: Label = null
+var desktop_figma_cash_panel: PanelContainer = null
 var desktop_figma_cash_label: Label = null
 var desktop_advance_day_button: Button = null
 var desktop_figma_canvas_panel: PanelContainer = null
+var desktop_figma_canvas_margin: MarginContainer = null
+var desktop_figma_canvas_content_margin: MarginContainer = null
 var desktop_shortcut_grid: GridContainer = null
 var desktop_bottom_nav_bar: PanelContainer = null
 var desktop_bottom_nav_buttons: Dictionary = {}
+var desktop_window_layer: Control = null
+var desktop_app_windows: Dictionary = {}
+var desktop_dragging_app_id: String = ""
+var desktop_drag_offset: Vector2 = Vector2.ZERO
 @onready var app_window_backdrop: Control = $AppWindowBackdrop
 @onready var app_window_margin: MarginContainer = $AppWindowBackdrop/AppWindowMargin
 @onready var app_window_panel: PanelContainer = $AppWindowBackdrop/AppWindowMargin/AppWindowPanel
@@ -229,6 +248,7 @@ var desktop_bottom_nav_buttons: Dictionary = {}
 @onready var news_detail_body: RichTextLabel = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailBody
 @onready var news_detail_hint_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailHintLabel
 @onready var news_meet_contact_button: Button = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsMeetContactButton
+var news_open_meeting_button: Button = null
 @onready var social_window: MarginContainer = $SocialWindow
 @onready var social_window_body: PanelContainer = $SocialWindow/SocialWindowBody
 @onready var social_title_label: Label = $SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialHeaderRow/SocialTitleLabel
@@ -252,6 +272,8 @@ var desktop_bottom_nav_buttons: Dictionary = {}
 @onready var network_tip_button: Button = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkActionRow/NetworkTipButton
 @onready var network_request_button: Button = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkActionRow/NetworkRequestButton
 @onready var network_referral_button: Button = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkActionRow/NetworkReferralButton
+var network_corporate_action_label: Label = null
+var network_open_meeting_button: Button = null
 var academy_window: MarginContainer = null
 var academy_window_body: PanelContainer = null
 var academy_title_label: Label = null
@@ -298,7 +320,6 @@ var academy_glossary_list: ItemList = null
 @onready var sidebar_hint_label: Label = $Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel/SidebarMargin/SidebarVBox/SidebarHintLabel
 @onready var content_tabs: TabContainer = $Margin/RootVBox/ShellHBox/MainVBox/ContentTabs
 @onready var top_section_label: Label = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TopSectionLabel
-@onready var advance_day_button: Button = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/AdvanceDayButton
 @onready var top_day_label: Label = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/StatsFlow/TopDayLabel
 @onready var top_market_label: Label = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TopMarketLabel
 @onready var top_equity_label: Label = $Margin/RootVBox/TopBarOuterMargin/TopBarPanel/TopBarMargin/TopBarVBox/TitleRow/TopEquityLabel
@@ -332,6 +353,7 @@ var academy_glossary_list: ItemList = null
 @onready var main_trade_split: HBoxContainer = %MarketsView/TradeSplit/MainSplit
 @onready var watchlist_panel: PanelContainer = %MarketsView/TradeSplit/WatchlistPanel
 @onready var work_area_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/WorkAreaPanel
+@onready var order_ticket_toggle_button: Button = %MarketsView/TradeSplit/MainSplit/OrderTicketToggleButton
 @onready var action_panel: PanelContainer = %MarketsView/TradeSplit/MainSplit/ActionPanel
 @onready var stock_list_tabs: TabContainer = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs
 @onready var add_watchlist_button: Button = %MarketsView/TradeSplit/WatchlistPanel/WatchlistMargin/WatchlistVBox/StockListTabs/WatchlistTab/WatchlistActionRow/AddWatchlistButton
@@ -448,6 +470,18 @@ var academy_glossary_list: ItemList = null
 @onready var toast_message_label: Label = $ToastOverlay/ToastPanel/ToastMargin/ToastHBox/ToastMessageLabel
 @onready var toast_close_button: Button = $ToastOverlay/ToastPanel/ToastMargin/ToastHBox/ToastCloseButton
 @onready var toast_timer: Timer = $ToastTimer
+var dashboard_meeting_buttons: VBoxContainer = null
+var corporate_meeting_overlay: Control = null
+var corporate_meeting_panel: PanelContainer = null
+var corporate_meeting_title_label: Label = null
+var corporate_meeting_meta_label: Label = null
+var corporate_meeting_summary_label: Label = null
+var corporate_meeting_agenda_label: Label = null
+var corporate_meeting_intel_label: Label = null
+var corporate_meeting_attendance_label: Label = null
+var corporate_meeting_attend_button: Button = null
+var corporate_meeting_close_button: Button = null
+var rupslb_meeting_overlay: Control = null
 
 
 func _ready() -> void:
@@ -456,7 +490,10 @@ func _ready() -> void:
 	_ensure_upgrade_purchase_dialog()
 	_ensure_console_overlay()
 	_ensure_academy_ui()
+	_ensure_corporate_action_ui()
 	_ensure_figma_desktop_ui()
+	_ensure_desktop_window_layer()
+	_initialize_desktop_app_windows()
 	_apply_visual_theme()
 	_apply_compact_layout()
 	_apply_trade_layout_ratios()
@@ -511,10 +548,10 @@ func _ready() -> void:
 	network_referral_button.pressed.connect(_on_network_referral_pressed)
 	profile_meet_contact_button.pressed.connect(_on_profile_meet_contact_pressed)
 	lot_spin_box.value_changed.connect(_on_lot_size_changed)
+	order_ticket_toggle_button.pressed.connect(_on_order_ticket_toggle_pressed)
 	buy_button.pressed.connect(_on_buy_side_pressed)
 	sell_button.pressed.connect(_on_sell_side_pressed)
 	submit_order_button.pressed.connect(_on_submit_order_pressed)
-	advance_day_button.pressed.connect(_on_next_day_pressed)
 	get_viewport().size_changed.connect(_update_responsive_layout)
 	GameManager.portfolio_changed.connect(_on_portfolio_changed)
 	GameManager.watchlist_changed.connect(_on_watchlist_changed)
@@ -524,6 +561,7 @@ func _ready() -> void:
 	GameManager.academy_changed.connect(_refresh_academy)
 	GameManager.price_formed.connect(_on_day_progressed)
 	GameManager.summary_ready.connect(_on_summary_ready)
+	GameManager.company_detail_ready.connect(_on_company_detail_ready)
 	stock_app_button.tooltip_text = "Open STOCKBOT."
 	news_app_button.tooltip_text = "Open the event-driven news desk."
 	social_app_button.tooltip_text = "Open the mobile-style social feed."
@@ -540,6 +578,7 @@ func _ready() -> void:
 	broker_net_toggle.tooltip_text = "Toggle net broker flow so each broker appears on only one side."
 	buy_button.tooltip_text = "Switch the ticket to buy mode."
 	sell_button.tooltip_text = "Switch the ticket to sell mode."
+	order_ticket_toggle_button.tooltip_text = "Hide the order ticket."
 	submit_order_button.tooltip_text = "Submit the active order."
 	news_meet_contact_button.tooltip_text = "Meet the contact connected to this story."
 	profile_meet_contact_button.tooltip_text = "Meet a contact connected to this company."
@@ -553,6 +592,7 @@ func _ready() -> void:
 	_set_active_app(APP_ID_DESKTOP)
 	_refresh_all()
 	_apply_global_font_size_overrides()
+	call_deferred("_start_background_company_detail_hydration")
 	call_deferred("_show_tutorial_if_needed")
 
 
@@ -562,6 +602,19 @@ func _input(event: InputEvent) -> void:
 		if _is_console_toggle_key(key_event):
 			_toggle_console_overlay()
 			get_viewport().set_input_as_handled()
+			return
+	if event is InputEventMouseButton:
+		var mouse_button: InputEventMouseButton = event
+		if mouse_button.button_index == MOUSE_BUTTON_LEFT:
+			if mouse_button.pressed:
+				var clicked_app_id: String = _desktop_window_id_at_position(mouse_button.position)
+				if not clicked_app_id.is_empty():
+					_focus_desktop_app_window(clicked_app_id)
+			elif not desktop_dragging_app_id.is_empty():
+				desktop_dragging_app_id = ""
+	if event is InputEventMouseMotion and not desktop_dragging_app_id.is_empty():
+		var mouse_motion: InputEventMouseMotion = event
+		_update_desktop_window_drag(mouse_motion.position)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -573,6 +626,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if console_overlay != null and console_overlay.visible and key_event.keycode == KEY_ESCAPE:
 			_hide_console_overlay()
+			get_viewport().set_input_as_handled()
+			return
+		if rupslb_meeting_overlay != null and rupslb_meeting_overlay.visible and key_event.keycode == KEY_ESCAPE:
+			_close_rupslb_meeting_overlay()
+			get_viewport().set_input_as_handled()
+			return
+		if corporate_meeting_overlay != null and corporate_meeting_overlay.visible and key_event.keycode == KEY_ESCAPE:
+			_close_corporate_meeting_modal()
 			get_viewport().set_input_as_handled()
 			return
 		if debug_overlay.visible and key_event.keycode == KEY_ESCAPE:
@@ -601,9 +662,19 @@ func _apply_trade_layout_ratios() -> void:
 	main_trade_split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	main_trade_split.size_flags_stretch_ratio = TRADE_CENTER_SECTION_RATIO + TRADE_RIGHT_SECTION_RATIO
 	work_area_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	work_area_panel.size_flags_stretch_ratio = TRADE_CENTER_SECTION_RATIO
-	action_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	action_panel.size_flags_stretch_ratio = TRADE_RIGHT_SECTION_RATIO
+	order_ticket_toggle_button.custom_minimum_size = Vector2(ORDER_TICKET_TOGGLE_WIDTH, 0)
+	order_ticket_toggle_button.visible = true
+	if order_ticket_collapsed:
+		work_area_panel.size_flags_stretch_ratio = TRADE_CENTER_SECTION_RATIO + TRADE_RIGHT_SECTION_RATIO
+		action_panel.visible = false
+		action_panel.size_flags_horizontal = Control.SIZE_FILL
+		action_panel.size_flags_stretch_ratio = 0.0
+	else:
+		work_area_panel.size_flags_stretch_ratio = TRADE_CENTER_SECTION_RATIO
+		action_panel.visible = true
+		action_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		action_panel.size_flags_stretch_ratio = TRADE_RIGHT_SECTION_RATIO
+	_refresh_order_ticket_toggle_state()
 
 
 func _apply_dashboard_perk_visibility() -> void:
@@ -633,6 +704,19 @@ func _update_responsive_layout() -> void:
 	)
 	_update_desktop_figma_layout()
 	_apply_window_layout()
+
+
+func _on_order_ticket_toggle_pressed() -> void:
+	order_ticket_collapsed = not order_ticket_collapsed
+	_apply_trade_layout_ratios()
+	main_trade_split.queue_sort()
+
+
+func _refresh_order_ticket_toggle_state() -> void:
+	if order_ticket_toggle_button == null:
+		return
+	order_ticket_toggle_button.text = "<" if order_ticket_collapsed else ">"
+	order_ticket_toggle_button.tooltip_text = "Show the order ticket." if order_ticket_collapsed else "Hide the order ticket."
 
 
 func _refresh_all() -> void:
@@ -688,6 +772,7 @@ func _on_portfolio_changed() -> void:
 		_refresh_dashboard()
 	if debug_overlay.visible:
 		_refresh_debug_overlay()
+	_start_background_company_detail_hydration()
 	_log_perf_elapsed("_on_portfolio_changed", started_at_usec)
 
 
@@ -708,8 +793,9 @@ func _on_watchlist_changed() -> void:
 	if active_section_id == "dashboard":
 		_refresh_dashboard()
 	_refresh_desktop()
-	if active_app_id == APP_ID_NETWORK:
+	if _is_desktop_app_window_open(APP_ID_NETWORK):
 		_refresh_network()
+	_start_background_company_detail_hydration()
 	_log_perf_elapsed("_on_watchlist_changed", started_at_usec)
 
 
@@ -832,8 +918,6 @@ func _refresh_header() -> void:
 	top_equity_label.text = "EQUITY %s" % _format_currency(RunState.get_total_equity())
 	top_cash_label.text = "CASH AVAILABLE %s" % _format_currency(float(portfolio.get("cash", 0.0)))
 	objective_label.text = ""
-	advance_day_button.disabled = not RunState.has_active_run()
-	advance_day_button.text = "Advance Day"
 	_set_label_tone(top_market_label, _color_for_change(RunState.market_sentiment))
 	_set_label_tone(top_cash_label, COLOR_ACCENT)
 	_set_label_tone(top_section_label, COLOR_WARNING)
@@ -1061,11 +1145,11 @@ func _refresh_network() -> void:
 
 
 func _refresh_daily_action_displays() -> void:
-	if active_app_id == APP_ID_NETWORK:
+	if _is_desktop_app_window_open(APP_ID_NETWORK):
 		_refresh_network()
-	if active_app_id == APP_ID_ACADEMY:
+	if _is_desktop_app_window_open(APP_ID_ACADEMY):
 		_refresh_academy()
-	if active_app_id == APP_ID_UPGRADES:
+	if _is_desktop_app_window_open(APP_ID_UPGRADES):
 		_refresh_upgrades()
 
 
@@ -1125,30 +1209,31 @@ func _ensure_figma_desktop_ui() -> void:
 
 	desktop_figma_top_bar = PanelContainer.new()
 	desktop_figma_top_bar.name = "DesktopFigmaTopBar"
-	desktop_figma_top_bar.custom_minimum_size = Vector2(0, 80)
+	var top_bar_height: float = float(_desktop_scaled_px(84.0, 72, 96))
+	desktop_figma_top_bar.custom_minimum_size = Vector2(0, top_bar_height)
 	desktop_figma_top_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	desktop_vbox.add_child(desktop_figma_top_bar)
 	desktop_vbox.move_child(desktop_figma_top_bar, 0)
 
-	var top_margin := MarginContainer.new()
-	top_margin.name = "DesktopFigmaTopMargin"
-	top_margin.add_theme_constant_override("margin_left", 24)
-	top_margin.add_theme_constant_override("margin_top", 14)
-	top_margin.add_theme_constant_override("margin_right", 24)
-	top_margin.add_theme_constant_override("margin_bottom", 14)
-	desktop_figma_top_bar.add_child(top_margin)
+	desktop_figma_top_margin = MarginContainer.new()
+	desktop_figma_top_margin.name = "DesktopFigmaTopMargin"
+	desktop_figma_top_margin.add_theme_constant_override("margin_left", _desktop_scaled_px(28.0, 18, 36))
+	desktop_figma_top_margin.add_theme_constant_override("margin_top", 0)
+	desktop_figma_top_margin.add_theme_constant_override("margin_right", 0)
+	desktop_figma_top_margin.add_theme_constant_override("margin_bottom", 0)
+	desktop_figma_top_bar.add_child(desktop_figma_top_margin)
 
 	var top_row := HBoxContainer.new()
 	top_row.name = "DesktopFigmaTopRow"
-	top_row.add_theme_constant_override("separation", 24)
+	top_row.add_theme_constant_override("separation", _desktop_scaled_px(18.0, 12, 24))
 	top_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_margin.add_child(top_row)
+	desktop_figma_top_margin.add_child(top_row)
 
 	var date_row := HBoxContainer.new()
 	date_row.name = "DesktopFigmaDateRow"
 	date_row.add_theme_constant_override("separation", 10)
 	date_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	date_row.custom_minimum_size = Vector2(260, 0)
+	date_row.custom_minimum_size = Vector2(float(_desktop_scaled_px(240.0, 180, 270)), 0)
 	top_row.add_child(date_row)
 	date_row.add_child(_make_desktop_icon_rect(str(DESKTOP_ICON_PATHS.get("date", "")), Vector2(24, 24)))
 
@@ -1164,21 +1249,23 @@ func _ensure_figma_desktop_ui() -> void:
 	cash_spacer_left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top_row.add_child(cash_spacer_left)
 
-	var cash_panel := PanelContainer.new()
-	cash_panel.name = "DesktopFigmaCashPanel"
-	cash_panel.custom_minimum_size = Vector2(300, 48)
-	top_row.add_child(cash_panel)
-	_style_panel(cash_panel, COLOR_DESKTOP_PANEL, 8)
+	desktop_figma_cash_panel = PanelContainer.new()
+	desktop_figma_cash_panel.name = "DesktopFigmaCashPanel"
+	desktop_figma_cash_panel.custom_minimum_size = Vector2(
+		float(_desktop_scaled_px(228.0, 180, 252)),
+		float(_desktop_scaled_px(42.0, 36, 48))
+	)
+	top_row.add_child(desktop_figma_cash_panel)
 	var cash_margin := MarginContainer.new()
 	cash_margin.name = "DesktopFigmaCashMargin"
-	cash_margin.add_theme_constant_override("margin_left", 16)
-	cash_margin.add_theme_constant_override("margin_top", 6)
-	cash_margin.add_theme_constant_override("margin_right", 16)
-	cash_margin.add_theme_constant_override("margin_bottom", 6)
-	cash_panel.add_child(cash_margin)
+	cash_margin.add_theme_constant_override("margin_left", _desktop_scaled_px(18.0, 12, 22))
+	cash_margin.add_theme_constant_override("margin_top", _desktop_scaled_px(7.0, 5, 9))
+	cash_margin.add_theme_constant_override("margin_right", _desktop_scaled_px(18.0, 12, 22))
+	cash_margin.add_theme_constant_override("margin_bottom", _desktop_scaled_px(7.0, 5, 9))
+	desktop_figma_cash_panel.add_child(cash_margin)
 	var cash_row := HBoxContainer.new()
 	cash_row.name = "DesktopFigmaCashRow"
-	cash_row.add_theme_constant_override("separation", 10)
+	cash_row.add_theme_constant_override("separation", _desktop_scaled_px(10.0, 8, 12))
 	cash_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	cash_margin.add_child(cash_row)
 	cash_row.add_child(_make_desktop_icon_rect(str(DESKTOP_ICON_PATHS.get("cash", "")), Vector2(24, 24)))
@@ -1198,13 +1285,16 @@ func _ensure_figma_desktop_ui() -> void:
 	desktop_advance_day_button = Button.new()
 	desktop_advance_day_button.name = "DesktopAdvanceDayButton"
 	desktop_advance_day_button.text = "ADVANCE DAY"
-	desktop_advance_day_button.custom_minimum_size = Vector2(232, 50)
+	desktop_advance_day_button.custom_minimum_size = Vector2(
+		float(_desktop_scaled_px(258.0, 220, 288)),
+		top_bar_height
+	)
 	desktop_advance_day_button.icon = _desktop_texture(str(DESKTOP_ICON_PATHS.get("advance", "")))
 	desktop_advance_day_button.expand_icon = false
-	desktop_advance_day_button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	desktop_advance_day_button.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	desktop_advance_day_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	desktop_advance_day_button.add_theme_constant_override("icon_max_width", 24)
-	desktop_advance_day_button.add_theme_constant_override("h_separation", 8)
+	desktop_advance_day_button.add_theme_constant_override("icon_max_width", _desktop_scaled_px(30.0, 24, 34))
+	desktop_advance_day_button.add_theme_constant_override("h_separation", _desktop_scaled_px(12.0, 8, 16))
 	desktop_advance_day_button.tooltip_text = "Advance to the next trading day."
 	desktop_advance_day_button.pressed.connect(_on_next_day_pressed)
 	top_row.add_child(desktop_advance_day_button)
@@ -1217,28 +1307,45 @@ func _ensure_figma_desktop_ui() -> void:
 	desktop_vbox.add_child(desktop_figma_canvas_panel)
 	desktop_vbox.move_child(desktop_figma_canvas_panel, 1)
 
-	var canvas_margin := MarginContainer.new()
-	canvas_margin.name = "DesktopFigmaCanvasMargin"
-	canvas_margin.add_theme_constant_override("margin_left", 40)
-	canvas_margin.add_theme_constant_override("margin_top", 40)
-	canvas_margin.add_theme_constant_override("margin_right", 40)
-	canvas_margin.add_theme_constant_override("margin_bottom", 40)
-	canvas_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	canvas_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	desktop_figma_canvas_panel.add_child(canvas_margin)
+	desktop_figma_canvas_margin = MarginContainer.new()
+	desktop_figma_canvas_margin.name = "DesktopFigmaCanvasMargin"
+	var frame_padding: int = _desktop_scaled_px(16.0, 10, 20)
+	desktop_figma_canvas_margin.add_theme_constant_override("margin_left", frame_padding)
+	desktop_figma_canvas_margin.add_theme_constant_override("margin_top", frame_padding)
+	desktop_figma_canvas_margin.add_theme_constant_override("margin_right", frame_padding)
+	desktop_figma_canvas_margin.add_theme_constant_override("margin_bottom", frame_padding)
+	desktop_figma_canvas_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	desktop_figma_canvas_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	desktop_figma_canvas_panel.add_child(desktop_figma_canvas_margin)
 
-	var grid_center := CenterContainer.new()
-	grid_center.name = "DesktopFigmaShortcutCenter"
-	grid_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid_center.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	canvas_margin.add_child(grid_center)
+	desktop_figma_canvas_content_margin = MarginContainer.new()
+	desktop_figma_canvas_content_margin.name = "DesktopFigmaCanvasContent"
+	desktop_figma_canvas_content_margin.add_theme_constant_override("margin_left", _desktop_scaled_px(52.0, 28, 64))
+	desktop_figma_canvas_content_margin.add_theme_constant_override("margin_top", _desktop_scaled_px(46.0, 24, 58))
+	desktop_figma_canvas_content_margin.add_theme_constant_override("margin_right", _desktop_scaled_px(52.0, 28, 64))
+	desktop_figma_canvas_content_margin.add_theme_constant_override("margin_bottom", _desktop_scaled_px(42.0, 20, 52))
+	desktop_figma_canvas_content_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	desktop_figma_canvas_content_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	desktop_figma_canvas_margin.add_child(desktop_figma_canvas_content_margin)
+
+	var canvas_vbox := VBoxContainer.new()
+	canvas_vbox.name = "DesktopFigmaCanvasVBox"
+	canvas_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	canvas_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	canvas_vbox.add_theme_constant_override("separation", 0)
+	desktop_figma_canvas_content_margin.add_child(canvas_vbox)
 
 	desktop_shortcut_grid = GridContainer.new()
 	desktop_shortcut_grid.name = "DesktopFigmaShortcutGrid"
 	desktop_shortcut_grid.columns = 7
-	desktop_shortcut_grid.add_theme_constant_override("h_separation", 40)
-	desktop_shortcut_grid.add_theme_constant_override("v_separation", 36)
-	grid_center.add_child(desktop_shortcut_grid)
+	desktop_shortcut_grid.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	desktop_shortcut_grid.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	desktop_shortcut_grid.add_theme_constant_override("h_separation", _desktop_scaled_px(104.0, 68, 120))
+	desktop_shortcut_grid.add_theme_constant_override("v_separation", _desktop_scaled_px(38.0, 24, 46))
+	canvas_vbox.add_child(desktop_shortcut_grid)
+	var canvas_spacer := Control.new()
+	canvas_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	canvas_vbox.add_child(canvas_spacer)
 
 	_reparent_desktop_shortcuts_to_figma_grid()
 
@@ -1313,29 +1420,30 @@ func _reparent_desktop_shortcuts_to_figma_grid() -> void:
 
 
 func _configure_desktop_shortcut_tile(tile: Control, button: Button, label: Label, app_id: String, display_text: String) -> void:
-	tile.custom_minimum_size = Vector2(144, 178)
+	tile.custom_minimum_size = Vector2(156, 184)
 	tile.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	tile.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	if tile is VBoxContainer:
 		var tile_box: VBoxContainer = tile
 		tile_box.alignment = BoxContainer.ALIGNMENT_CENTER
-		tile_box.add_theme_constant_override("separation", 12)
+		tile_box.add_theme_constant_override("separation", 14)
 
 	button.text = ""
-	button.custom_minimum_size = Vector2(128, 128)
+	button.custom_minimum_size = Vector2(132, 132)
 	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	button.expand_icon = false
 	button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	button.icon = _desktop_texture(_get_desktop_icon_path(app_id, "shortcut"))
-	button.add_theme_constant_override("icon_max_width", 44)
+	button.add_theme_constant_override("icon_max_width", 50)
 	_style_desktop_shortcut_button(button)
 	_ensure_desktop_shortcut_corner_marker(button)
 
 	label.text = display_text
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.custom_minimum_size = Vector2(128, 28)
+	label.custom_minimum_size = Vector2.ZERO
+	label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	label.add_theme_font_size_override("font_size", 15)
 	label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
 	_style_desktop_label_plaque(label)
@@ -1403,26 +1511,100 @@ func _make_desktop_icon_rect(path: String, minimum_size: Vector2) -> TextureRect
 	return icon
 
 
+func _desktop_reference_scale() -> float:
+	var viewport_size: Vector2 = get_viewport_rect().size
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		return 1.0
+	var width_scale: float = viewport_size.x / DESKTOP_REFERENCE_VIEWPORT.x
+	var height_scale: float = viewport_size.y / DESKTOP_REFERENCE_VIEWPORT.y
+	return clamp(min(width_scale, height_scale), 0.65, 1.2)
+
+
+func _desktop_scaled_px(reference_px: float, min_px: int, max_px: int) -> int:
+	return clampi(int(round(reference_px * _desktop_reference_scale())), min_px, max_px)
+
+
 func _update_desktop_figma_layout() -> void:
 	if desktop_shortcut_grid == null:
 		return
 	var viewport_width: float = get_viewport_rect().size.x
-	if viewport_width >= 1280.0:
+	if viewport_width >= 1500.0:
 		desktop_shortcut_grid.columns = 7
-	elif viewport_width >= 960.0:
+	elif viewport_width >= 1040.0:
 		desktop_shortcut_grid.columns = 4
-	elif viewport_width >= 680.0:
+	elif viewport_width >= 720.0:
 		desktop_shortcut_grid.columns = 3
 	else:
 		desktop_shortcut_grid.columns = 2
 
-	var canvas_margin: MarginContainer = get_node_or_null("DesktopLayer/DesktopMargin/DesktopVBox/DesktopFigmaCanvasPanel/DesktopFigmaCanvasMargin") as MarginContainer
-	if canvas_margin != null:
-		var side_margin: int = 40 if viewport_width >= 920.0 else 18
-		canvas_margin.add_theme_constant_override("margin_left", side_margin)
-		canvas_margin.add_theme_constant_override("margin_right", side_margin)
-		canvas_margin.add_theme_constant_override("margin_top", 32 if viewport_width >= 920.0 else 18)
-		canvas_margin.add_theme_constant_override("margin_bottom", 0)
+	var desktop_margin: MarginContainer = $DesktopLayer/DesktopMargin
+	desktop_margin.add_theme_constant_override("margin_left", 0)
+	desktop_margin.add_theme_constant_override("margin_top", 0)
+	desktop_margin.add_theme_constant_override("margin_right", 0)
+	desktop_margin.add_theme_constant_override("margin_bottom", 0)
+
+	var top_bar_height: float = float(_desktop_scaled_px(84.0, 72, 96))
+	if desktop_figma_top_bar != null:
+		desktop_figma_top_bar.custom_minimum_size = Vector2(0, top_bar_height)
+	if desktop_figma_top_margin != null:
+		desktop_figma_top_margin.add_theme_constant_override("margin_left", _desktop_scaled_px(28.0, 18, 36))
+		desktop_figma_top_margin.add_theme_constant_override("margin_top", 0)
+		desktop_figma_top_margin.add_theme_constant_override("margin_right", 0)
+		desktop_figma_top_margin.add_theme_constant_override("margin_bottom", 0)
+	if desktop_figma_cash_panel != null:
+		desktop_figma_cash_panel.custom_minimum_size = Vector2(
+			float(_desktop_scaled_px(228.0, 180, 252)),
+			float(_desktop_scaled_px(42.0, 36, 48))
+		)
+	if desktop_advance_day_button != null:
+		desktop_advance_day_button.custom_minimum_size = Vector2(
+			float(_desktop_scaled_px(258.0, 220, 288)),
+			top_bar_height
+		)
+		desktop_advance_day_button.add_theme_constant_override("icon_max_width", _desktop_scaled_px(30.0, 24, 34))
+		desktop_advance_day_button.add_theme_constant_override("h_separation", _desktop_scaled_px(12.0, 8, 16))
+
+	if desktop_figma_canvas_margin != null:
+		var frame_padding: int = _desktop_scaled_px(16.0, 10, 20)
+		desktop_figma_canvas_margin.add_theme_constant_override("margin_left", frame_padding)
+		desktop_figma_canvas_margin.add_theme_constant_override("margin_top", frame_padding)
+		desktop_figma_canvas_margin.add_theme_constant_override("margin_right", frame_padding)
+		desktop_figma_canvas_margin.add_theme_constant_override("margin_bottom", frame_padding)
+
+	if desktop_figma_canvas_content_margin != null:
+		var content_side_margin: int = _desktop_scaled_px(22.0, 12, 28)
+		var content_top_margin: int = _desktop_scaled_px(24.0, 14, 30)
+		var content_bottom_margin: int = _desktop_scaled_px(24.0, 14, 30)
+		if desktop_shortcut_grid.columns >= 7:
+			content_side_margin = _desktop_scaled_px(52.0, 28, 64)
+			content_top_margin = _desktop_scaled_px(46.0, 24, 58)
+			content_bottom_margin = _desktop_scaled_px(42.0, 20, 52)
+		elif desktop_shortcut_grid.columns == 4:
+			content_side_margin = _desktop_scaled_px(34.0, 20, 44)
+			content_top_margin = _desktop_scaled_px(34.0, 20, 42)
+			content_bottom_margin = _desktop_scaled_px(30.0, 18, 38)
+		elif desktop_shortcut_grid.columns == 3:
+			content_side_margin = _desktop_scaled_px(26.0, 16, 34)
+			content_top_margin = _desktop_scaled_px(28.0, 18, 34)
+			content_bottom_margin = _desktop_scaled_px(26.0, 16, 32)
+		desktop_figma_canvas_content_margin.add_theme_constant_override("margin_left", content_side_margin)
+		desktop_figma_canvas_content_margin.add_theme_constant_override("margin_top", content_top_margin)
+		desktop_figma_canvas_content_margin.add_theme_constant_override("margin_right", content_side_margin)
+		desktop_figma_canvas_content_margin.add_theme_constant_override("margin_bottom", content_bottom_margin)
+
+	var h_separation: int = _desktop_scaled_px(24.0, 14, 32)
+	var v_separation: int = _desktop_scaled_px(26.0, 16, 34)
+	if desktop_shortcut_grid.columns >= 7:
+		h_separation = _desktop_scaled_px(104.0, 68, 120)
+		v_separation = _desktop_scaled_px(38.0, 24, 46)
+	elif desktop_shortcut_grid.columns == 4:
+		h_separation = _desktop_scaled_px(56.0, 32, 72)
+		v_separation = _desktop_scaled_px(34.0, 22, 40)
+	elif desktop_shortcut_grid.columns == 3:
+		h_separation = _desktop_scaled_px(32.0, 20, 40)
+		v_separation = _desktop_scaled_px(28.0, 18, 34)
+	desktop_shortcut_grid.add_theme_constant_override("h_separation", h_separation)
+	desktop_shortcut_grid.add_theme_constant_override("v_separation", v_separation)
 
 
 func _refresh_figma_desktop_status() -> void:
@@ -1461,22 +1643,32 @@ func _format_desktop_figma_cash(value: float) -> String:
 
 func _style_figma_desktop_ui() -> void:
 	if desktop_figma_top_bar != null:
-		_style_panel(desktop_figma_top_bar, COLOR_DESKTOP_CREAM, 0)
+		var top_bar_style := StyleBoxFlat.new()
+		top_bar_style.bg_color = COLOR_DESKTOP_CREAM
+		top_bar_style.border_color = Color(COLOR_DESKTOP_FRAME.r, COLOR_DESKTOP_FRAME.g, COLOR_DESKTOP_FRAME.b, 0.95)
+		top_bar_style.border_width_bottom = 4
+		top_bar_style.set_corner_radius_all(0)
+		top_bar_style.shadow_color = Color(0.26, 0.22, 0.15, 0.14)
+		top_bar_style.shadow_size = 8
+		top_bar_style.shadow_offset = Vector2(0, 6)
+		desktop_figma_top_bar.add_theme_stylebox_override("panel", top_bar_style)
 	if desktop_figma_date_label != null:
 		desktop_figma_date_label.add_theme_font_size_override("font_size", 20)
 		desktop_figma_date_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	if desktop_figma_cash_panel != null:
+		_style_desktop_cash_panel(desktop_figma_cash_panel)
 	if desktop_figma_cash_label != null:
 		desktop_figma_cash_label.add_theme_font_size_override("font_size", 20)
 		desktop_figma_cash_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
 	if desktop_figma_canvas_panel != null:
 		var canvas_style := StyleBoxFlat.new()
 		canvas_style.bg_color = COLOR_DESKTOP_CREAM
-		canvas_style.border_color = Color(COLOR_DESKTOP_OLIVE.r, COLOR_DESKTOP_OLIVE.g, COLOR_DESKTOP_OLIVE.b, 0.38)
-		canvas_style.set_border_width_all(8)
+		canvas_style.border_color = COLOR_DESKTOP_FRAME
+		canvas_style.set_border_width_all(_desktop_scaled_px(14.0, 10, 18))
 		canvas_style.set_corner_radius_all(0)
-		canvas_style.shadow_color = Color(0.22, 0.22, 0.12, 0.12)
-		canvas_style.shadow_size = 8
-		canvas_style.shadow_offset = Vector2(0, -4)
+		canvas_style.shadow_color = Color(0.25, 0.22, 0.16, 0.12)
+		canvas_style.shadow_size = 6
+		canvas_style.shadow_offset = Vector2(0, 2)
 		desktop_figma_canvas_panel.add_theme_stylebox_override("panel", canvas_style)
 	if desktop_bottom_nav_bar != null:
 		_style_panel(desktop_bottom_nav_bar, COLOR_DESKTOP_PANEL, 0)
@@ -1503,17 +1695,28 @@ func _style_figma_desktop_ui() -> void:
 		_style_desktop_bottom_nav_button(button, str(app_id) == active_app_id)
 
 
+func _style_desktop_cash_panel(panel: PanelContainer) -> void:
+	if panel == null:
+		return
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.956863, 0.913725, 0.780392, 1)
+	style.border_color = Color(COLOR_DESKTOP_BROWN.r, COLOR_DESKTOP_BROWN.g, COLOR_DESKTOP_BROWN.b, 0.12)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(0)
+	panel.add_theme_stylebox_override("panel", style)
+
+
 func _style_desktop_shortcut_button(button: Button) -> void:
 	if button == null:
 		return
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = COLOR_DESKTOP_PANEL
-	normal.border_color = COLOR_DESKTOP_BROWN
+	normal.border_color = Color(0.870588, 0.788235, 0.647059, 1)
 	normal.set_border_width_all(4)
 	normal.set_corner_radius_all(0)
-	normal.shadow_color = Color(0.22, 0.20, 0.12, 0.20)
+	normal.shadow_color = Color(0.24, 0.22, 0.15, 0.18)
 	normal.shadow_size = 0
-	normal.shadow_offset = Vector2(4, 4)
+	normal.shadow_offset = Vector2(5, 5)
 	button.add_theme_stylebox_override("normal", normal)
 	var hover := normal.duplicate()
 	hover.bg_color = Color(0.992157, 0.941176, 0.760784, 1)
@@ -1531,10 +1734,14 @@ func _style_desktop_label_plaque(label: Label) -> void:
 	if label == null:
 		return
 	var plaque := StyleBoxFlat.new()
-	plaque.bg_color = COLOR_DESKTOP_PANEL
-	plaque.border_color = Color(COLOR_DESKTOP_BROWN.r, COLOR_DESKTOP_BROWN.g, COLOR_DESKTOP_BROWN.b, 0.45)
-	plaque.set_border_width_all(2)
+	plaque.bg_color = Color(0.992157, 0.956863, 0.878431, 0.96)
+	plaque.border_color = Color(COLOR_DESKTOP_BROWN.r, COLOR_DESKTOP_BROWN.g, COLOR_DESKTOP_BROWN.b, 0.12)
+	plaque.set_border_width_all(1)
 	plaque.set_corner_radius_all(0)
+	plaque.content_margin_left = 10
+	plaque.content_margin_top = 4
+	plaque.content_margin_right = 10
+	plaque.content_margin_bottom = 4
 	label.add_theme_stylebox_override("normal", plaque)
 	label.add_theme_font_size_override("font_size", 15)
 	label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
@@ -1543,11 +1750,11 @@ func _style_desktop_label_plaque(label: Label) -> void:
 func _style_desktop_advance_button(button: Button) -> void:
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = COLOR_DESKTOP_GOLD
-	normal.border_color = COLOR_DESKTOP_BROWN
-	normal.set_border_width_all(3)
-	normal.set_corner_radius_all(6)
-	normal.content_margin_left = 16
-	normal.content_margin_right = 14
+	normal.border_color = COLOR_DESKTOP_GOLD
+	normal.set_border_width_all(0)
+	normal.set_corner_radius_all(0)
+	normal.content_margin_left = 24
+	normal.content_margin_right = 22
 	normal.content_margin_top = 8
 	normal.content_margin_bottom = 8
 	button.add_theme_stylebox_override("normal", normal)
@@ -1557,9 +1764,13 @@ func _style_desktop_advance_button(button: Button) -> void:
 	var pressed := normal.duplicate()
 	pressed.bg_color = Color(0.862745, 0.580392, 0.0392157, 1)
 	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
-	button.add_theme_color_override("font_hover_color", COLOR_DESKTOP_BROWN)
-	button.add_theme_color_override("font_pressed_color", COLOR_DESKTOP_BROWN)
+	button.add_theme_stylebox_override("focus", hover)
+	button.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
+	button.add_theme_color_override("font_hover_color", COLOR_DESKTOP_TEXT)
+	button.add_theme_color_override("font_pressed_color", COLOR_DESKTOP_TEXT)
+	button.add_theme_color_override("icon_normal_color", COLOR_DESKTOP_TEXT)
+	button.add_theme_color_override("icon_hover_color", COLOR_DESKTOP_TEXT)
+	button.add_theme_color_override("icon_pressed_color", COLOR_DESKTOP_TEXT)
 	button.add_theme_font_size_override("font_size", 18)
 
 
@@ -1582,6 +1793,538 @@ func _style_desktop_bottom_nav_button(button: Button, active: bool) -> void:
 	button.add_theme_color_override("icon_hover_color", COLOR_DESKTOP_BROWN)
 	button.add_theme_color_override("icon_pressed_color", COLOR_DESKTOP_BROWN)
 	button.add_theme_font_size_override("font_size", 12)
+
+
+func _ensure_desktop_window_layer() -> void:
+	if desktop_window_layer != null:
+		return
+	desktop_window_layer = Control.new()
+	desktop_window_layer.name = "DesktopWindowLayer"
+	desktop_window_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	desktop_window_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(desktop_window_layer)
+	var debug_overlay_node: Node = get_node_or_null("DebugOverlay")
+	if debug_overlay_node != null:
+		move_child(desktop_window_layer, debug_overlay_node.get_index())
+
+
+func _initialize_desktop_app_windows() -> void:
+	if desktop_window_layer == null or not desktop_app_windows.is_empty():
+		return
+	app_window_backdrop.visible = false
+	app_window_title_bar.visible = false
+	_register_desktop_app_window(APP_ID_STOCK, "STOCKBOT", [stock_window_container, app_content_margin])
+	_register_desktop_app_window(APP_ID_NEWS, "News Browser", [news_window])
+	_register_desktop_app_window(APP_ID_SOCIAL, "Twooter", [social_window])
+	_register_desktop_app_window(APP_ID_NETWORK, "Network", [network_window])
+	if academy_window != null:
+		_register_desktop_app_window(APP_ID_ACADEMY, "Academy", [academy_window])
+	_register_desktop_app_window(APP_ID_UPGRADES, "Upgrades", [upgrade_window])
+	_apply_desktop_window_layouts()
+
+
+func _register_desktop_app_window(app_id: String, title: String, content_nodes: Array) -> void:
+	if desktop_app_windows.has(app_id):
+		return
+	var window := Control.new()
+	window.name = "%sDesktopWindow" % title.replace(" ", "")
+	window.visible = false
+	window.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	window.custom_minimum_size = _desktop_window_min_size_for_app(app_id)
+	window.mouse_filter = Control.MOUSE_FILTER_PASS
+	desktop_window_layer.add_child(window)
+
+	var frame := PanelContainer.new()
+	frame.name = "Frame"
+	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	window.add_child(frame)
+
+	var title_bar := PanelContainer.new()
+	title_bar.name = "TitleBar"
+	title_bar.anchor_left = 0.0
+	title_bar.anchor_right = 1.0
+	title_bar.offset_left = 0
+	title_bar.offset_top = 0
+	title_bar.offset_right = 0
+	title_bar.offset_bottom = DESKTOP_WINDOW_TITLE_BAR_HEIGHT
+	title_bar.mouse_filter = Control.MOUSE_FILTER_PASS
+	window.add_child(title_bar)
+
+	var title_margin := MarginContainer.new()
+	title_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	title_margin.add_theme_constant_override("margin_left", 10)
+	title_margin.add_theme_constant_override("margin_top", 6)
+	title_margin.add_theme_constant_override("margin_right", 10)
+	title_margin.add_theme_constant_override("margin_bottom", 6)
+	title_bar.add_child(title_margin)
+
+	var title_row := HBoxContainer.new()
+	title_row.name = "TitleRow"
+	title_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_theme_constant_override("separation", 8)
+	title_margin.add_child(title_row)
+
+	var drag_handle := MarginContainer.new()
+	drag_handle.name = "DragHandle"
+	drag_handle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	drag_handle.mouse_filter = Control.MOUSE_FILTER_STOP
+	drag_handle.mouse_default_cursor_shape = Control.CURSOR_MOVE
+	drag_handle.gui_input.connect(_on_desktop_window_drag_handle_gui_input.bind(app_id))
+	title_row.add_child(drag_handle)
+
+	var drag_label := Label.new()
+	drag_label.name = "TitleLabel"
+	drag_label.text = title
+	drag_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	drag_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	drag_handle.add_child(drag_label)
+
+	var minimize_button := Button.new()
+	minimize_button.name = "MinimizeButton"
+	minimize_button.text = "_"
+	minimize_button.custom_minimum_size = Vector2(28, 24)
+	minimize_button.tooltip_text = "Hide this window."
+	minimize_button.pressed.connect(_on_desktop_window_minimize_pressed.bind(app_id))
+	title_row.add_child(minimize_button)
+
+	var close_button := Button.new()
+	close_button.name = "CloseButton"
+	close_button.text = "X"
+	close_button.custom_minimum_size = Vector2(28, 24)
+	close_button.tooltip_text = "Close this window."
+	close_button.pressed.connect(_on_desktop_window_close_pressed.bind(app_id))
+	title_row.add_child(close_button)
+
+	var content_host := Control.new()
+	content_host.name = "ContentHost"
+	content_host.set_anchors_preset(Control.PRESET_FULL_RECT)
+	content_host.offset_top = DESKTOP_WINDOW_TITLE_BAR_HEIGHT
+	content_host.clip_contents = true
+	content_host.mouse_filter = Control.MOUSE_FILTER_PASS
+	window.add_child(content_host)
+
+	for content_node_value in content_nodes:
+		var content_node: Control = content_node_value as Control
+		if content_node == null:
+			continue
+		_reparent_desktop_window_content(content_node, content_host)
+
+	desktop_app_windows[app_id] = {
+		"window": window,
+		"frame": frame,
+		"title_bar": title_bar,
+		"title_label": drag_label,
+		"minimize_button": minimize_button,
+		"close_button": close_button,
+		"content_host": content_host,
+		"rect_initialized": false
+	}
+
+
+func _reparent_desktop_window_content(content_node: Control, host: Control) -> void:
+	var previous_parent: Node = content_node.get_parent()
+	if previous_parent != null:
+		previous_parent.remove_child(content_node)
+	host.add_child(content_node)
+	content_node.visible = true
+	content_node.set_anchors_preset(Control.PRESET_FULL_RECT)
+	content_node.offset_left = 0
+	content_node.offset_top = 0
+	content_node.offset_right = 0
+	content_node.offset_bottom = 0
+	content_node.grow_horizontal = Control.GROW_DIRECTION_END
+	content_node.grow_vertical = Control.GROW_DIRECTION_END
+
+
+func _desktop_window_min_size_for_app(app_id: String) -> Vector2:
+	match app_id:
+		APP_ID_STOCK:
+			return Vector2(920, 560)
+		APP_ID_NEWS:
+			return Vector2(820, 560)
+		APP_ID_SOCIAL:
+			return Vector2(380, 520)
+		APP_ID_NETWORK:
+			return Vector2(760, 500)
+		APP_ID_ACADEMY:
+			return Vector2(720, 500)
+		APP_ID_UPGRADES:
+			return Vector2(640, 460)
+		_:
+			return Vector2(DESKTOP_WINDOW_MIN_WIDTH, DESKTOP_WINDOW_MIN_HEIGHT)
+
+
+func _desktop_window_work_rect() -> Rect2:
+	var viewport_size: Vector2 = get_viewport_rect().size
+	var inset_left: float = 4.0
+	var inset_top: float = 4.0
+	var inset_right: float = 4.0
+	var inset_bottom: float = 4.0
+	return Rect2(
+		Vector2(inset_left, inset_top),
+		Vector2(
+			max(viewport_size.x - inset_left - inset_right, 240.0),
+			max(viewport_size.y - inset_top - inset_bottom, 180.0)
+		)
+	)
+
+
+func _desktop_window_default_rect(app_id: String) -> Rect2:
+	var work_rect: Rect2 = _desktop_window_work_rect()
+	var size := _desktop_window_min_size_for_app(app_id)
+	match app_id:
+		APP_ID_STOCK:
+			size.x = min(max(work_rect.size.x - 20.0, size.x), work_rect.size.x)
+			size.y = min(max(work_rect.size.y - 28.0, size.y), work_rect.size.y)
+			return Rect2(work_rect.position + Vector2(10, 10), size)
+		APP_ID_NEWS:
+			size.x = min(max(work_rect.size.x * 0.8, size.x), work_rect.size.x - 12.0)
+			size.y = min(max(work_rect.size.y * 0.84, size.y), work_rect.size.y - 12.0)
+			return Rect2(work_rect.position + Vector2(26, 18), size)
+		APP_ID_SOCIAL:
+			size.x = clamp(work_rect.size.x * 0.34, size.x, min(SOCIAL_WINDOW_MAX_WIDTH + 36.0, work_rect.size.x))
+			size.y = clamp(work_rect.size.y * 0.78, size.y, min(SOCIAL_WINDOW_MAX_HEIGHT + 24.0, work_rect.size.y))
+			return Rect2(
+				Vector2(max(work_rect.position.x + work_rect.size.x - size.x - 18.0, work_rect.position.x), work_rect.position.y + 14.0),
+				size
+			)
+		APP_ID_NETWORK:
+			size.x = min(max(work_rect.size.x * 0.76, size.x), work_rect.size.x - 16.0)
+			size.y = min(max(work_rect.size.y * 0.76, size.y), work_rect.size.y - 16.0)
+			return Rect2(work_rect.position + Vector2(48, 30), size)
+		APP_ID_ACADEMY:
+			size.x = min(max(work_rect.size.x * 0.7, size.x), work_rect.size.x - 16.0)
+			size.y = min(max(work_rect.size.y * 0.74, size.y), work_rect.size.y - 16.0)
+			return Rect2(work_rect.position + Vector2(60, 40), size)
+		APP_ID_UPGRADES:
+			size.x = min(max(work_rect.size.x * 0.64, size.x), work_rect.size.x - 16.0)
+			size.y = min(max(work_rect.size.y * 0.7, size.y), work_rect.size.y - 16.0)
+			return Rect2(work_rect.position + Vector2(72, 48), size)
+		_:
+			size.x = min(size.x, work_rect.size.x)
+			size.y = min(size.y, work_rect.size.y)
+			return Rect2(work_rect.position, size)
+
+
+func _desktop_window_initial_rect(app_id: String) -> Rect2:
+	var rect: Rect2 = _desktop_window_default_rect(app_id)
+	var top_app_id: String = _top_visible_desktop_window_id()
+	if top_app_id.is_empty():
+		return rect
+	var top_meta: Dictionary = desktop_app_windows.get(top_app_id, {})
+	var top_window: Control = top_meta.get("window", null) as Control
+	if top_window == null:
+		return rect
+	rect.position = top_window.position + Vector2(56, 56)
+	return _clamp_desktop_rect_to_work_area(app_id, rect)
+
+
+func _apply_desktop_window_layouts() -> void:
+	if desktop_window_layer == null:
+		return
+	_attach_content_full_rect(stock_window_container)
+	_attach_content_full_rect(app_content_margin)
+	app_content_margin.add_theme_constant_override("margin_left", 0)
+	app_content_margin.add_theme_constant_override("margin_top", 0)
+	app_content_margin.add_theme_constant_override("margin_right", 0)
+	app_content_margin.add_theme_constant_override("margin_bottom", 0)
+	news_window.add_theme_constant_override("margin_left", 0)
+	news_window.add_theme_constant_override("margin_top", 0)
+	news_window.add_theme_constant_override("margin_right", 0)
+	news_window.add_theme_constant_override("margin_bottom", 0)
+	social_window.add_theme_constant_override("margin_left", 0)
+	social_window.add_theme_constant_override("margin_top", 0)
+	social_window.add_theme_constant_override("margin_right", 0)
+	social_window.add_theme_constant_override("margin_bottom", 0)
+	network_window.add_theme_constant_override("margin_left", 0)
+	network_window.add_theme_constant_override("margin_top", 0)
+	network_window.add_theme_constant_override("margin_right", 0)
+	network_window.add_theme_constant_override("margin_bottom", 0)
+	if academy_window != null:
+		academy_window.add_theme_constant_override("margin_left", 0)
+		academy_window.add_theme_constant_override("margin_top", 0)
+		academy_window.add_theme_constant_override("margin_right", 0)
+		academy_window.add_theme_constant_override("margin_bottom", 0)
+		_attach_content_full_rect(academy_window)
+	upgrade_window.add_theme_constant_override("margin_left", 0)
+	upgrade_window.add_theme_constant_override("margin_top", 0)
+	upgrade_window.add_theme_constant_override("margin_right", 0)
+	upgrade_window.add_theme_constant_override("margin_bottom", 0)
+	_attach_content_full_rect(news_window)
+	_attach_content_full_rect(social_window)
+	_attach_content_full_rect(network_window)
+	_attach_content_full_rect(upgrade_window)
+
+	for app_id_value in desktop_app_windows.keys():
+		var app_id: String = str(app_id_value)
+		var meta: Dictionary = desktop_app_windows.get(app_id, {})
+		var window: Control = meta.get("window", null) as Control
+		if window == null:
+			continue
+		window.custom_minimum_size = _desktop_window_min_size_for_app(app_id)
+		if bool(meta.get("rect_initialized", false)):
+			_clamp_desktop_window_to_viewport(app_id)
+
+
+func _attach_content_full_rect(content_node: Control) -> void:
+	if content_node == null:
+		return
+	content_node.set_anchors_preset(Control.PRESET_FULL_RECT)
+	content_node.offset_left = 0
+	content_node.offset_top = 0
+	content_node.offset_right = 0
+	content_node.offset_bottom = 0
+
+
+func _open_desktop_app_window(app_id: String) -> void:
+	var meta: Dictionary = desktop_app_windows.get(app_id, {})
+	if meta.is_empty():
+		return
+	if not bool(meta.get("rect_initialized", false)):
+		_set_desktop_window_rect(app_id, _desktop_window_initial_rect(app_id))
+		meta["rect_initialized"] = true
+		desktop_app_windows[app_id] = meta
+	var window: Control = meta.get("window", null) as Control
+	if window == null:
+		return
+	window.visible = true
+	_focus_desktop_app_window(app_id)
+
+
+func _focus_desktop_app_window(app_id: String) -> void:
+	var meta: Dictionary = desktop_app_windows.get(app_id, {})
+	if meta.is_empty():
+		return
+	var window: Control = meta.get("window", null) as Control
+	if window == null:
+		return
+	if window.get_parent() == desktop_window_layer:
+		desktop_window_layer.move_child(window, desktop_window_layer.get_child_count() - 1)
+	active_app_id = app_id
+	_refresh_desktop_window_themes()
+	_refresh_desktop()
+
+
+func _close_desktop_app_window(app_id: String) -> void:
+	var meta: Dictionary = desktop_app_windows.get(app_id, {})
+	if meta.is_empty():
+		return
+	var window: Control = meta.get("window", null) as Control
+	if window == null:
+		return
+	window.visible = false
+	if desktop_dragging_app_id == app_id:
+		desktop_dragging_app_id = ""
+	if active_app_id == app_id:
+		active_app_id = _top_visible_desktop_window_id()
+		if active_app_id.is_empty():
+			active_app_id = APP_ID_DESKTOP
+	_refresh_desktop_window_themes()
+	_refresh_desktop()
+
+
+func _top_visible_desktop_window_id() -> String:
+	if desktop_window_layer == null:
+		return ""
+	for child_index in range(desktop_window_layer.get_child_count() - 1, -1, -1):
+		var child: Control = desktop_window_layer.get_child(child_index) as Control
+		if child == null or not child.visible:
+			continue
+		for app_id_value in desktop_app_windows.keys():
+			var app_id: String = str(app_id_value)
+			var meta: Dictionary = desktop_app_windows.get(app_id, {})
+			if meta.get("window", null) == child:
+				return app_id
+	return ""
+
+
+func _clamp_desktop_rect_to_work_area(app_id: String, rect: Rect2) -> Rect2:
+	var work_rect: Rect2 = _desktop_window_work_rect()
+	var min_size: Vector2 = _desktop_window_min_size_for_app(app_id)
+	var effective_min_size := Vector2(
+		min(min_size.x, max(work_rect.size.x, 240.0)),
+		min(min_size.y, max(work_rect.size.y, 180.0))
+	)
+	var clamped_size := rect.size
+	clamped_size.x = clamp(clamped_size.x, effective_min_size.x, max(work_rect.size.x, effective_min_size.x))
+	clamped_size.y = clamp(clamped_size.y, effective_min_size.y, max(work_rect.size.y, effective_min_size.y))
+	var clamped_position := Vector2(
+		clamp(rect.position.x, work_rect.position.x, max(work_rect.position.x + work_rect.size.x - clamped_size.x, work_rect.position.x)),
+		clamp(rect.position.y, work_rect.position.y, max(work_rect.position.y + work_rect.size.y - clamped_size.y, work_rect.position.y))
+	)
+	return Rect2(clamped_position, clamped_size)
+
+
+func _set_desktop_window_rect(app_id: String, rect: Rect2) -> void:
+	var meta: Dictionary = desktop_app_windows.get(app_id, {})
+	if meta.is_empty():
+		return
+	var window: Control = meta.get("window", null) as Control
+	if window == null:
+		return
+	var clamped_rect: Rect2 = _clamp_desktop_rect_to_work_area(app_id, rect)
+	window.position = clamped_rect.position
+	window.size = clamped_rect.size
+
+
+func _clamp_desktop_window_to_viewport(app_id: String) -> void:
+	var meta: Dictionary = desktop_app_windows.get(app_id, {})
+	if meta.is_empty():
+		return
+	var window: Control = meta.get("window", null) as Control
+	if window == null:
+		return
+	_set_desktop_window_rect(app_id, Rect2(window.position, window.size))
+
+
+func _window_fill_color_for_app(app_id: String) -> Color:
+	if app_id == APP_ID_STOCK:
+		return COLOR_STOCK_WINDOW_BG
+	if app_id == APP_ID_SOCIAL:
+		return Color(0.94902, 0.956863, 0.976471, 1)
+	return COLOR_WINDOW_BG
+
+
+func _window_text_color_for_app(app_id: String) -> Color:
+	return COLOR_TEXT if app_id == APP_ID_STOCK else COLOR_WINDOW_TEXT
+
+
+func _refresh_desktop_window_themes() -> void:
+	for app_id_value in desktop_app_windows.keys():
+		var app_id: String = str(app_id_value)
+		var meta: Dictionary = desktop_app_windows.get(app_id, {})
+		if meta.is_empty():
+			continue
+		var frame: PanelContainer = meta.get("frame", null) as PanelContainer
+		var title_bar: PanelContainer = meta.get("title_bar", null) as PanelContainer
+		var title_label: Label = meta.get("title_label", null) as Label
+		var minimize_button: Button = meta.get("minimize_button", null) as Button
+		var close_button: Button = meta.get("close_button", null) as Button
+		if frame == null or title_bar == null or title_label == null or minimize_button == null or close_button == null:
+			continue
+		var fill_color: Color = _window_fill_color_for_app(app_id)
+		var text_color: Color = _window_text_color_for_app(app_id)
+		var is_active: bool = active_app_id == app_id
+		var frame_style := StyleBoxFlat.new()
+		frame_style.bg_color = fill_color
+		frame_style.border_color = COLOR_ACCENT if is_active else COLOR_BORDER
+		frame_style.set_border_width_all(2 if is_active else 1)
+		frame_style.corner_radius_top_left = 8
+		frame_style.corner_radius_top_right = 8
+		frame_style.corner_radius_bottom_left = 8
+		frame_style.corner_radius_bottom_right = 8
+		frame.add_theme_stylebox_override("panel", frame_style)
+		var title_fill: Color = fill_color.lightened(0.04) if text_color == COLOR_WINDOW_TEXT else fill_color
+		_style_window_title_bar(title_bar, title_fill)
+		title_label.add_theme_color_override("font_color", text_color)
+		title_label.add_theme_font_size_override("font_size", STOCK_APP_FONT_SIZE if app_id == APP_ID_STOCK else DEFAULT_APP_FONT_SIZE)
+		_style_button(minimize_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+		_style_button(close_button, Color(0.368627, 0.160784, 0.176471, 1), Color(0.709804, 0.34902, 0.372549, 1), COLOR_TEXT, 0)
+
+
+func _is_desktop_app_window_open(app_id: String) -> bool:
+	var meta: Dictionary = desktop_app_windows.get(app_id, {})
+	if meta.is_empty():
+		return active_app_id == app_id
+	var window: Control = meta.get("window", null) as Control
+	return window != null and window.visible
+
+
+func is_desktop_app_open(app_id: String) -> bool:
+	return _is_desktop_app_window_open(app_id.to_lower())
+
+
+func get_active_desktop_app_id() -> String:
+	return active_app_id
+
+
+func get_desktop_app_window_title(app_id: String) -> String:
+	var meta: Dictionary = desktop_app_windows.get(app_id.to_lower(), {})
+	if meta.is_empty():
+		return ""
+	var title_label: Label = meta.get("title_label", null) as Label
+	return title_label.text if title_label != null else ""
+
+
+func close_desktop_app(app_id: String) -> void:
+	_close_desktop_app_window(app_id.to_lower())
+
+
+func is_rupslb_meeting_overlay_visible() -> bool:
+	return rupslb_meeting_overlay != null and rupslb_meeting_overlay.visible
+
+
+func get_rupslb_meeting_stage_id() -> String:
+	if rupslb_meeting_overlay == null or not rupslb_meeting_overlay.has_method("get_current_stage_id"):
+		return ""
+	return str(rupslb_meeting_overlay.call("get_current_stage_id"))
+
+
+func _desktop_window_id_at_position(mouse_position: Vector2) -> String:
+	if desktop_window_layer == null:
+		return ""
+	for child_index in range(desktop_window_layer.get_child_count() - 1, -1, -1):
+		var child: Control = desktop_window_layer.get_child(child_index) as Control
+		if child == null or not child.visible:
+			continue
+		if child.get_global_rect().has_point(mouse_position):
+			for app_id_value in desktop_app_windows.keys():
+				var app_id: String = str(app_id_value)
+				var meta: Dictionary = desktop_app_windows.get(app_id, {})
+				if meta.get("window", null) == child:
+					return app_id
+	return ""
+
+
+func _on_desktop_window_drag_handle_gui_input(event: InputEvent, app_id: String) -> void:
+	if event is InputEventMouseButton:
+		var mouse_button: InputEventMouseButton = event
+		if mouse_button.button_index == MOUSE_BUTTON_LEFT and mouse_button.pressed:
+			var meta: Dictionary = desktop_app_windows.get(app_id, {})
+			var window: Control = meta.get("window", null) as Control
+			if window == null:
+				return
+			_focus_desktop_app_window(app_id)
+			desktop_dragging_app_id = app_id
+			desktop_drag_offset = mouse_button.global_position - window.global_position
+			get_viewport().set_input_as_handled()
+
+
+func _update_desktop_window_drag(mouse_position: Vector2) -> void:
+	if desktop_dragging_app_id.is_empty():
+		return
+	var meta: Dictionary = desktop_app_windows.get(desktop_dragging_app_id, {})
+	if meta.is_empty():
+		return
+	var window: Control = meta.get("window", null) as Control
+	if window == null:
+		return
+	var next_rect := Rect2(mouse_position - desktop_drag_offset, window.size)
+	_set_desktop_window_rect(desktop_dragging_app_id, next_rect)
+
+
+func _on_desktop_window_minimize_pressed(app_id: String) -> void:
+	_close_desktop_app_window(app_id)
+
+
+func _on_desktop_window_close_pressed(app_id: String) -> void:
+	_close_desktop_app_window(app_id)
+
+
+func _refresh_app_window_content(app_id: String) -> void:
+	if app_id == APP_ID_STOCK:
+		call_deferred("_update_responsive_layout")
+	elif app_id == APP_ID_NEWS:
+		_refresh_news()
+	elif app_id == APP_ID_SOCIAL:
+		_refresh_social()
+	elif app_id == APP_ID_NETWORK:
+		_refresh_network()
+	elif app_id == APP_ID_ACADEMY:
+		_refresh_academy()
+	elif app_id == APP_ID_UPGRADES:
+		_refresh_upgrades()
 
 
 func _ensure_academy_ui() -> void:
@@ -2490,6 +3233,13 @@ func _show_network_contact(contact: Dictionary) -> void:
 		network_contact_name_label.text = "No leads yet."
 		network_contact_meta_label.text = ""
 		network_contact_body_label.text = "Explore the world more. Read News, open company Profile pages, and follow referrals to discover people before they appear here."
+		if network_corporate_action_label != null:
+			network_corporate_action_label.visible = false
+			network_corporate_action_label.text = ""
+		if network_open_meeting_button != null:
+			network_open_meeting_button.visible = false
+			network_open_meeting_button.disabled = true
+			network_open_meeting_button.set_meta("meeting_id", "")
 		network_meet_button.disabled = true
 		network_tip_button.disabled = true
 		network_request_button.disabled = true
@@ -2525,6 +3275,28 @@ func _show_network_contact(contact: Dictionary) -> void:
 	network_referral_button.disabled = not (is_met and affiliation_type == "floater" and not referral_company_id.is_empty() and has_action_points)
 	if not has_action_points and not is_met:
 		network_meet_button.disabled = true
+	var company_snapshot: Dictionary = GameManager.get_company_corporate_action_snapshot(_network_contact_target_company(contact))
+	var primary_chain: Dictionary = company_snapshot.get("primary_chain", {})
+	var meeting_id: String = str(primary_chain.get("meeting_id", ""))
+	if meeting_id.is_empty():
+		var upcoming_meetings: Array = company_snapshot.get("upcoming_meetings", [])
+		if not upcoming_meetings.is_empty():
+			meeting_id = str(upcoming_meetings[0].get("id", ""))
+	if network_corporate_action_label != null:
+		var action_text: String = ""
+		if not primary_chain.is_empty():
+			action_text = str(primary_chain.get("public_summary", ""))
+			var intel_summary: String = str(primary_chain.get("intel_summary", ""))
+			if not intel_summary.is_empty():
+				action_text += "\nIntel: %s" % intel_summary
+		elif not company_snapshot.get("upcoming_meetings", []).is_empty():
+			action_text = str(company_snapshot.get("upcoming_meetings", [])[0].get("public_summary", ""))
+		network_corporate_action_label.text = action_text
+		network_corporate_action_label.visible = not action_text.is_empty()
+	if network_open_meeting_button != null:
+		network_open_meeting_button.visible = not meeting_id.is_empty()
+		network_open_meeting_button.disabled = meeting_id.is_empty()
+		network_open_meeting_button.set_meta("meeting_id", meeting_id)
 
 
 func _current_network_contact() -> Dictionary:
@@ -2733,6 +3505,10 @@ func _show_news_article(article: Dictionary) -> void:
 		news_meet_contact_button.visible = false
 		news_meet_contact_button.disabled = true
 		news_meet_contact_button.set_meta("contact_id", "")
+		if news_open_meeting_button != null:
+			news_open_meeting_button.visible = false
+			news_open_meeting_button.disabled = true
+			news_open_meeting_button.set_meta("meeting_id", "")
 		return
 
 	var trade_date: Dictionary = article.get("trade_date", {})
@@ -2751,6 +3527,12 @@ func _show_news_article(article: Dictionary) -> void:
 	news_meet_contact_button.disabled = contact.is_empty() or not bool(contact.get("can_meet", false))
 	news_meet_contact_button.text = "Meet %s" % str(contact.get("display_name", "Contact")) if not contact.is_empty() else "Meet Contact"
 	news_meet_contact_button.set_meta("contact_id", str(contact.get("id", "")))
+	if news_open_meeting_button != null:
+		var meeting_id: String = str(article.get("meeting_id", ""))
+		news_open_meeting_button.visible = not meeting_id.is_empty()
+		news_open_meeting_button.disabled = meeting_id.is_empty()
+		news_open_meeting_button.text = "Open %s" % str(article.get("venue_type", "Meeting")).replace("_", " ").capitalize() if not meeting_id.is_empty() else "Open Meeting"
+		news_open_meeting_button.set_meta("meeting_id", meeting_id)
 	if not contact.is_empty():
 		news_detail_hint_label.text = "Network lead: %s, %s." % [
 			str(contact.get("display_name", "")),
@@ -2827,8 +3609,9 @@ func _refresh_dashboard() -> void:
 		dashboard_calendar_month_label.text = "-"
 		_refresh_dashboard_calendar({})
 		_refresh_dashboard_movers([])
-		dashboard_placeholder_bottom_title_label.text = "Upcoming Reports"
+		dashboard_placeholder_bottom_title_label.text = "Upcoming Meetings / Reports"
 		dashboard_placeholder_bottom_body_label.text = "No active report calendar."
+		_refresh_dashboard_meetings([])
 		return
 
 	var index_snapshot: Dictionary = _build_dashboard_index_snapshot()
@@ -2854,9 +3637,38 @@ func _refresh_dashboard() -> void:
 	]
 	_refresh_dashboard_calendar(trade_date)
 	_refresh_dashboard_movers(company_rows)
-	dashboard_placeholder_bottom_title_label.text = "Upcoming Reports"
+	dashboard_placeholder_bottom_title_label.text = "Upcoming Meetings / Reports"
 	dashboard_placeholder_bottom_body_label.text = _format_upcoming_report_rows(GameManager.get_upcoming_report_rows(8))
+	_refresh_dashboard_meetings(GameManager.get_corporate_meeting_snapshot().get("upcoming_rows", []))
 	_set_label_tone(dashboard_index_points_value_label, _color_for_change(float(index_snapshot.get("day_change_pct", 0.0))))
+
+
+func _refresh_dashboard_meetings(rows: Array) -> void:
+	if dashboard_meeting_buttons == null:
+		return
+	for child in dashboard_meeting_buttons.get_children():
+		dashboard_meeting_buttons.remove_child(child)
+		child.queue_free()
+	if rows.is_empty():
+		return
+	var display_rows: Array = rows.slice(0, min(rows.size(), 4))
+	for row_value in display_rows:
+		var row: Dictionary = row_value
+		var button := Button.new()
+		button.text = "%s  |  %s  |  %s" % [
+			str(row.get("ticker", "")),
+			str(row.get("meeting_label", "Meeting")),
+			GameManager.format_trade_date(row.get("trade_date", {}))
+		]
+		button.clip_text = true
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.tooltip_text = str(row.get("public_summary", "Open meeting"))
+		button.pressed.connect(func() -> void:
+			_open_corporate_meeting_modal(str(row.get("id", "")))
+		)
+		dashboard_meeting_buttons.add_child(button)
+		_style_button(button, COLOR_DESKTOP_PANEL, COLOR_DESKTOP_FRAME, COLOR_DESKTOP_TEXT, 0)
 
 
 func _build_dashboard_index_snapshot() -> Dictionary:
@@ -3174,6 +3986,15 @@ func _refresh_after_company_selection() -> void:
 		_refresh_debug_overlay()
 
 
+func _on_company_detail_ready(company_id: String) -> void:
+	if company_id.is_empty():
+		return
+	if company_id == selected_company_id:
+		_refresh_trade_workspace()
+	if debug_overlay.visible:
+		_refresh_debug_overlay()
+
+
 func _refresh_portfolio() -> void:
 	var portfolio: Dictionary = GameManager.get_portfolio_snapshot()
 	var cash_value: float = float(portfolio.get("cash", 0.0))
@@ -3201,6 +4022,7 @@ func _refresh_help() -> void:
 
 func _refresh_debug_overlay() -> void:
 	_update_debug_generator_buttons_enabled(RunState.has_active_run())
+	_refresh_debug_corporate_action_controls()
 	if not RunState.has_active_run():
 		upcoming_events_label.text = "No active run."
 		current_events_label.text = "No active run."
@@ -3291,6 +4113,8 @@ func _on_console_command_submitted(command_text: String) -> void:
 
 func _build_debug_generator_controls() -> void:
 	debug_generator_buttons.clear()
+	debug_start_rupslb_button = null
+	debug_start_rupslb_status_label = null
 	for child in debug_generator_groups.get_children():
 		child.queue_free()
 
@@ -3329,6 +4153,8 @@ func _build_debug_generator_controls() -> void:
 			debug_generator_buttons[event_id] = generator_button
 
 	_update_debug_generator_buttons_enabled(RunState.has_active_run())
+	_build_debug_corporate_action_controls()
+	_refresh_debug_corporate_action_controls()
 
 
 func _update_debug_generator_buttons_enabled(is_enabled: bool) -> void:
@@ -3347,6 +4173,120 @@ func _on_debug_generate_event_pressed(event_id: String) -> void:
 	)
 	if bool(result.get("success", false)):
 		_refresh_all()
+
+
+func _build_debug_corporate_action_controls() -> void:
+	if debug_generator_groups == null:
+		return
+	var group_label := Label.new()
+	group_label.name = "DebugCorporateActionsLabel"
+	group_label.text = "Corporate Actions"
+	group_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	group_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	_set_label_tone(group_label, COLOR_TEXT)
+	debug_generator_groups.add_child(group_label)
+
+	var status_label := Label.new()
+	status_label.name = "DebugStartRupslbStatusLabel"
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_tone(status_label, COLOR_MUTED)
+	debug_generator_groups.add_child(status_label)
+	debug_start_rupslb_status_label = status_label
+
+	var action_button := Button.new()
+	action_button.name = "DebugStartRupslbButton"
+	action_button.custom_minimum_size = Vector2(170, 34)
+	action_button.text = "Start RUPSLB"
+	action_button.pressed.connect(_on_debug_start_rupslb_pressed)
+	_style_button(action_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	debug_generator_groups.add_child(action_button)
+	debug_start_rupslb_button = action_button
+
+
+func _refresh_debug_corporate_action_controls() -> void:
+	if debug_start_rupslb_button == null or debug_start_rupslb_status_label == null:
+		return
+	var state: Dictionary = _debug_rupslb_target_state()
+	debug_start_rupslb_button.disabled = not bool(state.get("enabled", false))
+	debug_start_rupslb_button.tooltip_text = str(state.get("tooltip_text", "Schedule a next-day rights issue RUPSLB for the selected held stock."))
+	debug_start_rupslb_status_label.text = str(state.get("status_text", "Pick a stock first."))
+
+
+func _debug_rupslb_target_state() -> Dictionary:
+	if not RunState.has_active_run():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "No active run. Start or load a run first.",
+			"tooltip_text": "Start or load a run first."
+		}
+	if selected_company_id.is_empty():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "Target: none | Pick a stock first.",
+			"tooltip_text": "Select a stock in STOCKBOT first."
+		}
+	var definition: Dictionary = RunState.get_effective_company_definition(selected_company_id, false, false)
+	if definition.is_empty():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "Target: none | Pick a stock first.",
+			"tooltip_text": "Select a valid stock in STOCKBOT first."
+		}
+	var ticker: String = str(definition.get("ticker", selected_company_id.to_upper()))
+	var holding: Dictionary = RunState.get_holding(selected_company_id)
+	var lot_size: int = max(GameManager.get_lot_size(), 1)
+	var shares: int = int(holding.get("shares", 0))
+	var lots_owned: int = int(floor(float(shares) / float(lot_size)))
+	if shares < lot_size:
+		return {
+			"enabled": false,
+			"company_id": selected_company_id,
+			"ticker": ticker,
+			"status_text": "Target: %s | Own at least 1 lot first." % ticker,
+			"tooltip_text": "Buy at least 1 lot of %s before scheduling the debug RUPSLB." % ticker
+		}
+	var corporate_action_snapshot: Dictionary = GameManager.get_company_corporate_action_snapshot(selected_company_id)
+	if bool(corporate_action_snapshot.get("has_live_chain", false)):
+		return {
+			"enabled": false,
+			"company_id": selected_company_id,
+			"ticker": ticker,
+			"status_text": "Target: %s | That company already has a live corporate action." % ticker,
+			"tooltip_text": "Finish or clear the current corporate-action chain before forcing another one."
+		}
+	var next_trade_date: Dictionary = portfolio_trading_calendar.advance_trade_days(GameManager.get_current_trade_date(), 1)
+	return {
+		"enabled": true,
+		"company_id": selected_company_id,
+		"ticker": ticker,
+		"status_text": "Target: %s | Held %d lot(s) | Schedules RUPSLB for %s." % [
+			ticker,
+			lots_owned,
+			GameManager.format_trade_date(next_trade_date)
+		],
+		"tooltip_text": "Schedule a next-day rights issue RUPSLB for %s." % ticker
+	}
+
+
+func _on_debug_start_rupslb_pressed() -> void:
+	var state: Dictionary = _debug_rupslb_target_state()
+	if not bool(state.get("enabled", false)):
+		_show_toast(str(state.get("status_text", "Could not schedule RUPSLB.")), false)
+		_refresh_debug_corporate_action_controls()
+		return
+	var company_id: String = str(state.get("company_id", ""))
+	var result: Dictionary = GameManager.debug_schedule_next_day_rights_issue_rupslb(company_id)
+	_show_toast(str(result.get("message", "Debug corporate action updated.")), bool(result.get("success", false)))
+	_refresh_debug_overlay()
+	if not bool(result.get("success", false)):
+		return
+	_refresh_dashboard()
+	_refresh_news()
+	_refresh_network()
 
 
 func _sync_selected_company_with_active_stock_list() -> void:
@@ -3585,7 +4525,40 @@ func _get_portfolio_company_ids() -> Array:
 	return company_ids
 
 
+func _prioritized_company_detail_ids() -> Array:
+	var prioritized_ids: Array = []
+	var seen_ids: Dictionary = {}
+	var candidate_ids: Array = []
+	if not selected_company_id.is_empty():
+		candidate_ids.append(selected_company_id)
+	candidate_ids.append_array(_get_portfolio_company_ids())
+	candidate_ids.append_array(GameManager.get_watchlist_company_ids())
+	for company_id_value in candidate_ids:
+		var company_id: String = str(company_id_value)
+		if company_id.is_empty() or seen_ids.has(company_id):
+			continue
+		seen_ids[company_id] = true
+		prioritized_ids.append(company_id)
+	return prioritized_ids
+
+
+func _start_background_company_detail_hydration() -> void:
+	if not RunState.has_active_run():
+		return
+	GameManager.start_background_company_detail_hydration(_prioritized_company_detail_ids())
+
+
+func _request_selected_company_detail(priority: bool = true) -> void:
+	if selected_company_id.is_empty():
+		return
+	if str(RunState.get_company_detail_status(selected_company_id)) == "ready":
+		return
+	var priority_ids: Array = [selected_company_id] if priority else []
+	GameManager.start_background_company_detail_hydration(priority_ids)
+
+
 func _refresh_trade_workspace() -> void:
+	_request_selected_company_detail()
 	var snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id, true, true, true)
 	_apply_trade_workspace_snapshot(snapshot)
 
@@ -3672,7 +4645,9 @@ func _apply_trade_workspace_snapshot(snapshot: Dictionary) -> void:
 		_set_label_tone(profile_price_label, COLOR_TEXT)
 		return
 
-	var financial_statement_snapshot: Dictionary = snapshot.get("financial_statement_snapshot", {})
+	var detail_status: String = str(snapshot.get("detail_status", "ready"))
+	var detail_ready: bool = detail_status == "ready"
+	var financial_statement_snapshot: Dictionary = snapshot.get("financial_statement_snapshot", {}) if detail_ready else {}
 	_sync_financial_statement_selection(str(snapshot.get("id", "")), financial_statement_snapshot)
 	lot_spin_box.set_value_no_signal(float(_selected_lots()))
 	profile_company_name_label.text = "%s  |  %s" % [snapshot.get("ticker", ""), snapshot.get("name", "")]
@@ -3687,25 +4662,30 @@ func _apply_trade_workspace_snapshot(snapshot: Dictionary) -> void:
 		_format_currency(float(snapshot.get("previous_close", 0.0))),
 		_format_change(float(snapshot.get("daily_change_pct", 0.0)))
 	]
-	profile_factor_label.text = "Company profile: quality %d  |  growth %d  |  risk %d  |  founded %d  |  age %dy  |  employees %s  |  revenue %s" % [
-		int(snapshot.get("quality_score", 0)),
-		int(snapshot.get("growth_score", 0)),
-		int(snapshot.get("risk_score", 0)),
-		int(snapshot.get("founded_year", 0)),
-		int(snapshot.get("company_age", 0)),
-		_format_grouped_integer(int(snapshot.get("employee_count", 0))),
-		_format_compact_currency(float(snapshot.get("profile_revenue", 0.0)))
-	]
-	profile_tags_label.text = "Tags: %s" % _join_or_default(snapshot.get("profile_tags", []), "none")
+	if detail_ready:
+		profile_factor_label.text = "Company profile: quality %d  |  growth %d  |  risk %d  |  founded %d  |  age %dy  |  employees %s  |  revenue %s" % [
+			int(snapshot.get("quality_score", 0)),
+			int(snapshot.get("growth_score", 0)),
+			int(snapshot.get("risk_score", 0)),
+			int(snapshot.get("founded_year", 0)),
+			int(snapshot.get("company_age", 0)),
+			_format_grouped_integer(int(snapshot.get("employee_count", 0))),
+			_format_compact_currency(float(snapshot.get("profile_revenue", 0.0)))
+		]
+		profile_tags_label.text = "Tags: %s" % _join_or_default(snapshot.get("profile_tags", []), "none")
+	else:
+		profile_factor_label.text = "Company profile: preparing company profile..."
+		profile_tags_label.text = "Tags: preparing company tags..."
 	profile_management_label.text = _format_profile_management(snapshot)
 	profile_shareholders_label.text = _format_profile_shareholders(snapshot)
-	profile_description_label.text = "Description: %s" % str(snapshot.get(
-		"profile_description",
-		"No generated profile description for this company."
-	))
+	profile_description_label.text = "Description: %s" % (
+		str(snapshot.get("profile_description", "No generated profile description for this company."))
+		if detail_ready
+		else "Preparing company profile..."
+	)
 	_refresh_profile_network_contact(str(snapshot.get("id", "")))
 	key_stats_financial_label.text = "Financials:\n%s" % _format_financial_block(snapshot.get("financials", {}))
-	financials_year_label.text = _format_statement_year_label(financial_statement_snapshot)
+	financials_year_label.text = _format_statement_year_label(financial_statement_snapshot) if detail_ready else "Building statement history..."
 	analyzer_setup_label.text = "Setup read:\n%s" % _build_setup_read(snapshot)
 	analyzer_support_label.text = "Supportive signals:\n%s" % _build_support_signals(snapshot)
 	analyzer_risk_label.text = "Risk signals:\n%s" % _build_risk_signals(snapshot)
@@ -3714,16 +4694,20 @@ func _apply_trade_workspace_snapshot(snapshot: Dictionary) -> void:
 		_join_or_default(snapshot.get("narrative_tags", []), "none")
 	]
 	analyzer_history_label.text = "Recent closes:\n%s" % _format_history(snapshot.get("price_history", []))
-	financial_history_summary_label.text = _format_financial_history_summary(
-		snapshot.get("financial_history", []),
-		snapshot.get("financials", {})
+	financial_history_summary_label.text = (
+		_format_financial_history_summary(snapshot.get("financial_history", []), snapshot.get("financials", {}))
+		if detail_ready
+		else "Generating company detail..."
 	)
 	_refresh_financial_history_table(
 		snapshot.get("financial_history", []),
-		snapshot.get("financials", {})
+		snapshot.get("financials", {}),
+		"Generating company detail..." if not detail_ready else ""
 	)
 	_refresh_broker_table(snapshot.get("broker_flow", {}))
 	_refresh_statement_sections(financial_statement_snapshot)
+	if not detail_ready:
+		financials_period_label.text = "Detailed quarterly statements will appear once the company profile finishes generating."
 	_refresh_order_controls(snapshot)
 	_set_label_tone(profile_price_label, _color_for_change(float(snapshot.get("daily_change_pct", 0.0))))
 
@@ -3752,6 +4736,8 @@ func _refresh_profile_network_contact(company_id: String) -> void:
 
 
 func _format_profile_management(snapshot: Dictionary) -> String:
+	if str(snapshot.get("detail_status", "ready")) != "ready":
+		return "Management: preparing company roster..."
 	var roster: Array = snapshot.get("management_roster", [])
 	if roster.is_empty():
 		return "Management: not generated for this company yet."
@@ -4023,13 +5009,13 @@ func _on_upgrades_changed() -> void:
 	_refresh_trade_workspace_holdings_state()
 	_refresh_portfolio()
 	_refresh_desktop()
-	if active_app_id == APP_ID_NEWS:
+	if _is_desktop_app_window_open(APP_ID_NEWS):
 		_refresh_news()
-	elif active_app_id == APP_ID_SOCIAL:
+	if _is_desktop_app_window_open(APP_ID_SOCIAL):
 		_refresh_social()
-	elif active_app_id == APP_ID_NETWORK:
+	if _is_desktop_app_window_open(APP_ID_NETWORK):
 		_refresh_network()
-	elif active_app_id == APP_ID_UPGRADES:
+	if _is_desktop_app_window_open(APP_ID_UPGRADES):
 		_refresh_upgrades()
 	if debug_overlay.visible:
 		_refresh_debug_overlay()
@@ -4196,6 +5182,12 @@ func _on_news_meet_contact_pressed() -> void:
 	_meet_contact_from_context(contact_id, {"source_type": "news", "source_id": selected_news_article_id})
 
 
+func _on_news_open_meeting_pressed() -> void:
+	if news_open_meeting_button == null:
+		return
+	_open_corporate_meeting_modal(str(news_open_meeting_button.get_meta("meeting_id", "")))
+
+
 func _on_profile_meet_contact_pressed() -> void:
 	var contact_id: String = str(profile_meet_contact_button.get_meta("contact_id", ""))
 	_meet_contact_from_context(contact_id, {"source_type": "profile", "source_id": selected_company_id})
@@ -4242,6 +5234,164 @@ func _on_network_referral_pressed() -> void:
 	var result: Dictionary = GameManager.request_contact_referral(str(contact.get("id", "")), company_id)
 	_show_toast(str(result.get("message", "Network referral updated.")), bool(result.get("success", false)))
 	_log_perf_elapsed("_on_network_referral_pressed", started_at_usec)
+
+
+func _on_network_open_meeting_pressed() -> void:
+	if network_open_meeting_button == null:
+		return
+	_open_corporate_meeting_modal(str(network_open_meeting_button.get_meta("meeting_id", "")))
+
+
+func _open_corporate_meeting_modal(meeting_id: String) -> void:
+	if meeting_id.is_empty():
+		return
+	var detail: Dictionary = GameManager.get_corporate_meeting_detail(meeting_id)
+	if bool(detail.get("interactive_v1", false)):
+		_open_rupslb_meeting_overlay(meeting_id)
+		return
+	if corporate_meeting_overlay == null:
+		return
+	if rupslb_meeting_overlay != null:
+		rupslb_meeting_overlay.visible = false
+	current_corporate_meeting_id = meeting_id
+	_refresh_corporate_meeting_modal()
+	corporate_meeting_overlay.visible = true
+	corporate_meeting_overlay.move_to_front()
+
+
+func _close_corporate_meeting_modal() -> void:
+	current_corporate_meeting_id = ""
+	if corporate_meeting_overlay != null:
+		corporate_meeting_overlay.visible = false
+
+
+func _open_rupslb_meeting_overlay(meeting_id: String) -> void:
+	if meeting_id.is_empty() or rupslb_meeting_overlay == null:
+		return
+	current_corporate_meeting_id = meeting_id
+	var result: Dictionary = GameManager.start_corporate_meeting_session(meeting_id)
+	if not bool(result.get("success", false)):
+		_show_toast(str(result.get("message", "Unable to open RUPSLB session.")), false)
+		return
+	if corporate_meeting_overlay != null:
+		corporate_meeting_overlay.visible = false
+	_refresh_rupslb_meeting_overlay()
+	rupslb_meeting_overlay.visible = true
+	rupslb_meeting_overlay.move_to_front()
+
+
+func _close_rupslb_meeting_overlay() -> void:
+	if not current_corporate_meeting_id.is_empty():
+		GameManager.close_corporate_meeting_session(current_corporate_meeting_id)
+	current_corporate_meeting_id = ""
+	if rupslb_meeting_overlay != null:
+		rupslb_meeting_overlay.visible = false
+
+
+func _refresh_rupslb_meeting_overlay() -> void:
+	if current_corporate_meeting_id.is_empty() or rupslb_meeting_overlay == null:
+		return
+	var snapshot: Dictionary = GameManager.get_corporate_meeting_session_snapshot(current_corporate_meeting_id)
+	if snapshot.is_empty():
+		_show_toast("Interactive RUPSLB session is no longer available.", false)
+		_close_rupslb_meeting_overlay()
+		return
+	rupslb_meeting_overlay.call("configure", snapshot)
+
+
+func _on_rupslb_stage_advance_requested(next_stage_id: String) -> void:
+	if current_corporate_meeting_id.is_empty():
+		return
+	var result: Dictionary = GameManager.set_corporate_meeting_session_stage(current_corporate_meeting_id, next_stage_id)
+	if not bool(result.get("success", false)):
+		_show_toast(str(result.get("message", "Could not advance meeting stage.")), false)
+		return
+	_refresh_rupslb_meeting_overlay()
+
+
+func _on_rupslb_vote_requested(vote_choice: String) -> void:
+	if current_corporate_meeting_id.is_empty():
+		return
+	var session_snapshot: Dictionary = GameManager.get_corporate_meeting_session_snapshot(current_corporate_meeting_id)
+	var agenda_payload: Array = session_snapshot.get("agenda_payload", [])
+	var agenda_id: String = ""
+	if not agenda_payload.is_empty():
+		agenda_id = str(agenda_payload[0].get("id", ""))
+	var result: Dictionary = GameManager.submit_corporate_meeting_vote(current_corporate_meeting_id, agenda_id, vote_choice)
+	_show_toast(str(result.get("message", "Vote updated.")), bool(result.get("success", false)))
+	if not bool(result.get("success", false)):
+		return
+	_refresh_rupslb_meeting_overlay()
+	_refresh_dashboard()
+	_refresh_network()
+
+
+func _refresh_corporate_meeting_modal() -> void:
+	if corporate_meeting_overlay == null:
+		return
+	var detail: Dictionary = GameManager.get_corporate_meeting_detail(current_corporate_meeting_id)
+	if detail.is_empty():
+		_close_corporate_meeting_modal()
+		return
+	var trade_date_text: String = GameManager.format_trade_date(detail.get("trade_date", {}))
+	corporate_meeting_title_label.text = "%s  |  %s" % [
+		str(detail.get("company_name", detail.get("ticker", "Meeting"))),
+		str(detail.get("meeting_label", "Meeting"))
+	]
+	corporate_meeting_meta_label.text = "%s  |  %s  |  %s  |  Stance %s" % [
+		str(detail.get("ticker", "")),
+		trade_date_text,
+		str(detail.get("family_label", "General meeting")),
+		str(detail.get("management_stance", "clarify"))
+	]
+	corporate_meeting_summary_label.text = str(detail.get("public_summary", "No public summary yet."))
+	var agenda_lines: Array = []
+	for agenda_value in detail.get("agenda_payload", []):
+		var agenda: Dictionary = agenda_value
+		agenda_lines.append("- %s: %s" % [
+			str(agenda.get("label", "Agenda")),
+			str(agenda.get("description", ""))
+		])
+	corporate_meeting_agenda_label.text = "Agenda\n%s" % ("\n".join(agenda_lines) if not agenda_lines.is_empty() else "No agenda items published yet.")
+	var intel: Dictionary = detail.get("intel", {})
+	var intel_text: String = "No private intel recorded yet."
+	if not intel.is_empty():
+		intel_text = _format_corporate_intel_text(intel)
+	corporate_meeting_intel_label.text = "Private Intel\n%s" % intel_text
+	var attended: bool = bool(detail.get("attended", false))
+	corporate_meeting_attendance_label.text = "Attendance\n%s" % ("Already marked as attended." if attended else "Attendance is free in this milestone.")
+	corporate_meeting_attend_button.disabled = attended
+	corporate_meeting_attend_button.text = "Attended" if attended else "Attend"
+
+
+func _on_corporate_meeting_attend_pressed() -> void:
+	if current_corporate_meeting_id.is_empty():
+		return
+	var result: Dictionary = GameManager.attend_corporate_meeting(current_corporate_meeting_id)
+	_show_toast(str(result.get("message", "Meeting updated.")), bool(result.get("success", false)))
+	_refresh_corporate_meeting_modal()
+	_refresh_dashboard()
+	_refresh_network()
+
+
+func _format_corporate_intel_text(intel: Dictionary) -> String:
+	var lines: Array = []
+	var family_id: String = str(intel.get("family", ""))
+	if not family_id.is_empty():
+		lines.append("Family: %s" % family_id.replace("_", " ").capitalize())
+	var truth_level: String = str(intel.get("best_known_truth_level", intel.get("truth_level", "")))
+	if not truth_level.is_empty():
+		lines.append("Truth: %s" % truth_level)
+	var state: String = str(intel.get("best_known_current_timeline_state", intel.get("current_timeline_state", "")))
+	if not state.is_empty():
+		lines.append("State: %s" % state.replace("_", " "))
+	var stance: String = str(intel.get("best_known_management_stance", intel.get("management_stance", "")))
+	if not stance.is_empty():
+		lines.append("Management: %s" % stance)
+	var next_step: String = str(intel.get("best_known_next_expected_step", intel.get("next_expected_step", "")))
+	if not next_step.is_empty():
+		lines.append("Next: %s" % next_step)
+	return "\n".join(lines)
 
 
 func _meet_contact_from_context(contact_id: String, source_context: Dictionary) -> void:
@@ -4653,6 +5803,150 @@ func _ensure_console_overlay() -> void:
 	console_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	console_status_label.text = "Type a command, then press Enter."
 	console_vbox.add_child(console_status_label)
+
+
+func _ensure_corporate_action_ui() -> void:
+	if dashboard_meeting_buttons == null:
+		dashboard_meeting_buttons = VBoxContainer.new()
+		dashboard_meeting_buttons.name = "DashboardMeetingButtons"
+		dashboard_meeting_buttons.add_theme_constant_override("separation", 6)
+		dashboard_meeting_buttons.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		dashboard_placeholder_bottom_body_label.get_parent().add_child(dashboard_meeting_buttons)
+
+	if news_open_meeting_button == null:
+		news_open_meeting_button = Button.new()
+		news_open_meeting_button.name = "NewsOpenMeetingButton"
+		news_open_meeting_button.text = "Open Meeting"
+		news_open_meeting_button.visible = false
+		news_open_meeting_button.disabled = true
+		news_open_meeting_button.tooltip_text = "Open the linked corporate meeting."
+		news_open_meeting_button.pressed.connect(_on_news_open_meeting_pressed)
+		var news_detail_vbox: VBoxContainer = news_meet_contact_button.get_parent()
+		news_detail_vbox.add_child(news_open_meeting_button)
+		news_detail_vbox.move_child(news_open_meeting_button, news_detail_vbox.get_children().find(news_meet_contact_button) + 1)
+
+	if network_corporate_action_label == null:
+		network_corporate_action_label = Label.new()
+		network_corporate_action_label.name = "NetworkCorporateActionLabel"
+		network_corporate_action_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		network_corporate_action_label.visible = false
+		var network_detail_vbox: VBoxContainer = network_contact_body_label.get_parent()
+		var action_row: HBoxContainer = network_meet_button.get_parent()
+		network_detail_vbox.add_child(network_corporate_action_label)
+		network_detail_vbox.move_child(network_corporate_action_label, network_detail_vbox.get_children().find(action_row))
+
+	if network_open_meeting_button == null:
+		network_open_meeting_button = Button.new()
+		network_open_meeting_button.name = "NetworkOpenMeetingButton"
+		network_open_meeting_button.text = "Open Meeting"
+		network_open_meeting_button.visible = false
+		network_open_meeting_button.disabled = true
+		network_open_meeting_button.tooltip_text = "Open the linked corporate meeting."
+		network_open_meeting_button.pressed.connect(_on_network_open_meeting_pressed)
+		var network_detail_vbox: VBoxContainer = network_contact_body_label.get_parent()
+		var action_row: HBoxContainer = network_meet_button.get_parent()
+		network_detail_vbox.add_child(network_open_meeting_button)
+		network_detail_vbox.move_child(network_open_meeting_button, network_detail_vbox.get_children().find(action_row))
+
+	if rupslb_meeting_overlay == null:
+		rupslb_meeting_overlay = RUPSLB_MEETING_OVERLAY_SCRIPT.new()
+		rupslb_meeting_overlay.name = "RupslbMeetingOverlay"
+		rupslb_meeting_overlay.visible = false
+		rupslb_meeting_overlay.connect("close_requested", Callable(self, "_close_rupslb_meeting_overlay"))
+		rupslb_meeting_overlay.connect("stage_advance_requested", Callable(self, "_on_rupslb_stage_advance_requested"))
+		rupslb_meeting_overlay.connect("vote_requested", Callable(self, "_on_rupslb_vote_requested"))
+		add_child(rupslb_meeting_overlay)
+		rupslb_meeting_overlay.move_to_front()
+
+	if corporate_meeting_overlay != null:
+		return
+
+	corporate_meeting_overlay = Control.new()
+	corporate_meeting_overlay.name = "CorporateMeetingOverlay"
+	corporate_meeting_overlay.visible = false
+	corporate_meeting_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	corporate_meeting_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(corporate_meeting_overlay)
+	corporate_meeting_overlay.move_to_front()
+
+	var scrim := ColorRect.new()
+	scrim.name = "CorporateMeetingScrim"
+	scrim.color = Color(0, 0, 0, 0.38)
+	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	corporate_meeting_overlay.add_child(scrim)
+
+	var center := CenterContainer.new()
+	center.name = "CorporateMeetingCenter"
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	corporate_meeting_overlay.add_child(center)
+
+	corporate_meeting_panel = PanelContainer.new()
+	corporate_meeting_panel.name = "CorporateMeetingPanel"
+	corporate_meeting_panel.custom_minimum_size = Vector2(680, 420)
+	center.add_child(corporate_meeting_panel)
+
+	var panel_margin := MarginContainer.new()
+	panel_margin.name = "CorporateMeetingMargin"
+	panel_margin.add_theme_constant_override("margin_left", 18)
+	panel_margin.add_theme_constant_override("margin_top", 16)
+	panel_margin.add_theme_constant_override("margin_right", 18)
+	panel_margin.add_theme_constant_override("margin_bottom", 16)
+	corporate_meeting_panel.add_child(panel_margin)
+
+	var panel_vbox := VBoxContainer.new()
+	panel_vbox.name = "CorporateMeetingVBox"
+	panel_vbox.add_theme_constant_override("separation", 10)
+	panel_margin.add_child(panel_vbox)
+
+	corporate_meeting_title_label = Label.new()
+	corporate_meeting_title_label.name = "CorporateMeetingTitleLabel"
+	corporate_meeting_title_label.text = "Corporate Meeting"
+	panel_vbox.add_child(corporate_meeting_title_label)
+
+	corporate_meeting_meta_label = Label.new()
+	corporate_meeting_meta_label.name = "CorporateMeetingMetaLabel"
+	corporate_meeting_meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel_vbox.add_child(corporate_meeting_meta_label)
+
+	corporate_meeting_summary_label = Label.new()
+	corporate_meeting_summary_label.name = "CorporateMeetingSummaryLabel"
+	corporate_meeting_summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel_vbox.add_child(corporate_meeting_summary_label)
+
+	corporate_meeting_agenda_label = Label.new()
+	corporate_meeting_agenda_label.name = "CorporateMeetingAgendaLabel"
+	corporate_meeting_agenda_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel_vbox.add_child(corporate_meeting_agenda_label)
+
+	corporate_meeting_intel_label = Label.new()
+	corporate_meeting_intel_label.name = "CorporateMeetingIntelLabel"
+	corporate_meeting_intel_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel_vbox.add_child(corporate_meeting_intel_label)
+
+	corporate_meeting_attendance_label = Label.new()
+	corporate_meeting_attendance_label.name = "CorporateMeetingAttendanceLabel"
+	corporate_meeting_attendance_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel_vbox.add_child(corporate_meeting_attendance_label)
+
+	var button_row := HBoxContainer.new()
+	button_row.name = "CorporateMeetingButtonRow"
+	button_row.alignment = BoxContainer.ALIGNMENT_END
+	button_row.add_theme_constant_override("separation", 8)
+	panel_vbox.add_child(button_row)
+
+	corporate_meeting_attend_button = Button.new()
+	corporate_meeting_attend_button.name = "CorporateMeetingAttendButton"
+	corporate_meeting_attend_button.text = "Attend"
+	corporate_meeting_attend_button.pressed.connect(_on_corporate_meeting_attend_pressed)
+	button_row.add_child(corporate_meeting_attend_button)
+
+	corporate_meeting_close_button = Button.new()
+	corporate_meeting_close_button.name = "CorporateMeetingCloseButton"
+	corporate_meeting_close_button.text = "Close"
+	corporate_meeting_close_button.pressed.connect(_close_corporate_meeting_modal)
+	button_row.add_child(corporate_meeting_close_button)
 
 
 func _populate_watchlist_picker() -> void:
@@ -5098,52 +6392,22 @@ func _set_active_app(app_id: String) -> void:
 	):
 		normalized_app_id = APP_ID_DESKTOP
 
-	active_app_id = normalized_app_id
 	desktop_layer.visible = true
-	app_window_backdrop.visible = active_app_id != APP_ID_DESKTOP
-	app_window_title_bar.visible = active_app_id != APP_ID_DESKTOP
-	stock_window_container.visible = active_app_id == APP_ID_STOCK
-	app_content_margin.visible = active_app_id == APP_ID_STOCK
-	news_window.visible = active_app_id == APP_ID_NEWS
-	social_window.visible = active_app_id == APP_ID_SOCIAL
-	network_window.visible = active_app_id == APP_ID_NETWORK
-	if academy_window != null:
-		academy_window.visible = active_app_id == APP_ID_ACADEMY
-	upgrade_window.visible = active_app_id == APP_ID_UPGRADES
+	app_window_backdrop.visible = false
+	app_window_title_bar.visible = false
+	if normalized_app_id == APP_ID_DESKTOP:
+		active_app_id = APP_ID_DESKTOP
+		_hide_debug_overlay()
+		_hide_toast()
+		_apply_window_layout()
+		_apply_active_window_theme()
+		_refresh_desktop()
+		return
 
-	if active_app_id == APP_ID_STOCK:
-		app_window_title_label.text = "STOCKBOT"
-		call_deferred("_update_responsive_layout")
-	elif active_app_id == APP_ID_NEWS:
-		app_window_title_label.text = "News Browser"
-		_refresh_news()
-		_hide_debug_overlay()
-		_hide_toast()
-	elif active_app_id == APP_ID_SOCIAL:
-		app_window_title_label.text = "Twooter"
-		_refresh_social()
-		_hide_debug_overlay()
-		_hide_toast()
-	elif active_app_id == APP_ID_NETWORK:
-		app_window_title_label.text = "Network"
-		_refresh_network()
-		_hide_debug_overlay()
-		_hide_toast()
-	elif active_app_id == APP_ID_ACADEMY:
-		app_window_title_label.text = "Academy"
-		_refresh_academy()
-		_hide_debug_overlay()
-		_hide_toast()
-	elif active_app_id == APP_ID_UPGRADES:
-		app_window_title_label.text = "Upgrades"
-		_refresh_upgrades()
-		_hide_debug_overlay()
-		_hide_toast()
-	else:
-		app_window_title_label.text = ""
-		_hide_debug_overlay()
-		_hide_toast()
-
+	_open_desktop_app_window(normalized_app_id)
+	_refresh_app_window_content(normalized_app_id)
+	_hide_debug_overlay()
+	_hide_toast()
 	_apply_window_layout()
 	_apply_active_window_theme()
 	_refresh_desktop()
@@ -5219,6 +6483,7 @@ func _apply_window_layout() -> void:
 	stock_window_container.offset_top = APP_WINDOW_CONTENT_TOP_MARGIN
 	stock_window_container.offset_right = -APP_WINDOW_CONTENT_MARGIN
 	stock_window_container.offset_bottom = -APP_WINDOW_CONTENT_BOTTOM_MARGIN
+	_apply_desktop_window_layouts()
 
 
 func _apply_active_window_theme() -> void:
@@ -5232,24 +6497,25 @@ func _apply_active_window_theme() -> void:
 	app_window_title_bar.add_theme_font_size_override("font_size", app_font_size)
 	_set_label_tone(app_window_title_label, window_text)
 	app_window_title_label.add_theme_color_override("font_color", window_text)
+	_refresh_desktop_window_themes()
 
 
 func _sync_desktop_app_state() -> void:
-	var stock_active: bool = active_app_id == APP_ID_STOCK
-	var news_active: bool = active_app_id == APP_ID_NEWS
-	var social_active: bool = active_app_id == APP_ID_SOCIAL
-	var network_active: bool = active_app_id == APP_ID_NETWORK
-	var academy_active: bool = active_app_id == APP_ID_ACADEMY
-	var upgrades_active: bool = active_app_id == APP_ID_UPGRADES
-	stock_app_button.set_pressed_no_signal(stock_active)
-	news_app_button.set_pressed_no_signal(news_active)
-	social_app_button.set_pressed_no_signal(social_active)
-	network_app_button.set_pressed_no_signal(network_active)
+	var stock_open: bool = _is_desktop_app_window_open(APP_ID_STOCK)
+	var news_open: bool = _is_desktop_app_window_open(APP_ID_NEWS)
+	var social_open: bool = _is_desktop_app_window_open(APP_ID_SOCIAL)
+	var network_open: bool = _is_desktop_app_window_open(APP_ID_NETWORK)
+	var academy_open: bool = _is_desktop_app_window_open(APP_ID_ACADEMY)
+	var upgrades_open: bool = _is_desktop_app_window_open(APP_ID_UPGRADES)
+	stock_app_button.set_pressed_no_signal(stock_open)
+	news_app_button.set_pressed_no_signal(news_open)
+	social_app_button.set_pressed_no_signal(social_open)
+	network_app_button.set_pressed_no_signal(network_open)
 	if academy_app_button != null:
-		academy_app_button.set_pressed_no_signal(academy_active)
-	upgrades_app_button.set_pressed_no_signal(upgrades_active)
-	taskbar_stock_button.set_pressed_no_signal(stock_active)
-	taskbar_news_button.set_pressed_no_signal(news_active)
+		academy_app_button.set_pressed_no_signal(academy_open)
+	upgrades_app_button.set_pressed_no_signal(upgrades_open)
+	taskbar_stock_button.set_pressed_no_signal(stock_open)
+	taskbar_news_button.set_pressed_no_signal(news_open)
 	taskbar_home_button.disabled = active_app_id == APP_ID_DESKTOP
 	for app_id in desktop_bottom_nav_buttons.keys():
 		var nav_button: Button = desktop_bottom_nav_buttons[app_id]
@@ -5781,9 +7047,9 @@ func _apply_visual_theme() -> void:
 	_style_tab_container(debug_tabs, 0)
 	_style_button(add_watchlist_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(remove_watchlist_button, Color(0.27451, 0.164706, 0.180392, 1), Color(0.690196, 0.34902, 0.372549, 1), COLOR_TEXT, 0)
-	_style_button(advance_day_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
 	_style_button(buy_button, COLOR_ORDER_BUY, COLOR_ORDER_BUY_BORDER, COLOR_TEXT, 0)
 	_style_button(sell_button, COLOR_ORDER_SELL, COLOR_ORDER_SELL_BORDER, COLOR_TEXT, 0)
+	_style_button(order_ticket_toggle_button, Color(0.0823529, 0.117647, 0.156863, 0.96), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(submit_order_button, COLOR_ORDER_BUY, COLOR_ORDER_BUY_BORDER, COLOR_TEXT, 0)
 	_style_button(app_window_minimize_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(app_window_close_button, Color(0.368627, 0.160784, 0.176471, 1), Color(0.709804, 0.34902, 0.372549, 1), COLOR_TEXT, 0)
@@ -5791,11 +7057,21 @@ func _apply_visual_theme() -> void:
 	_style_button(financials_next_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(debug_close_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(news_meet_contact_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
+	if news_open_meeting_button != null:
+		_style_button(news_open_meeting_button, Color(0.866667, 0.807843, 0.635294, 1), Color(0.709804, 0.607843, 0.345098, 1), COLOR_WINDOW_TEXT, 0)
 	_style_button(profile_meet_contact_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
 	_style_button(network_meet_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
 	_style_button(network_tip_button, Color(0.117647, 0.32549, 0.239216, 1), COLOR_ORDER_BUY_BORDER, COLOR_TEXT, 0)
 	_style_button(network_request_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(network_referral_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
+	if network_open_meeting_button != null:
+		_style_button(network_open_meeting_button, Color(0.866667, 0.807843, 0.635294, 1), Color(0.709804, 0.607843, 0.345098, 1), COLOR_WINDOW_TEXT, 0)
+	if corporate_meeting_panel != null:
+		_style_panel(corporate_meeting_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
+	if corporate_meeting_attend_button != null:
+		_style_button(corporate_meeting_attend_button, Color(0.866667, 0.807843, 0.635294, 1), Color(0.709804, 0.607843, 0.345098, 1), COLOR_WINDOW_TEXT, 0)
+	if corporate_meeting_close_button != null:
+		_style_button(corporate_meeting_close_button, Color(0.835294, 0.819608, 0.772549, 1), Color(0.658824, 0.631373, 0.552941, 1), COLOR_WINDOW_TEXT, 0)
 	_style_light_option_button(news_archive_year_option)
 	_style_light_option_button(news_archive_month_option)
 	_style_item_list(company_list, 0, 0)
@@ -5833,8 +7109,21 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(news_detail_deck_label, COLOR_WINDOW_TEXT)
 	_set_label_tone(news_detail_meta_label, Color(0.352941, 0.309804, 0.203922, 1))
 	_set_label_tone(news_detail_hint_label, Color(0.352941, 0.309804, 0.203922, 1))
+	if corporate_meeting_title_label != null:
+		_set_label_tone(corporate_meeting_title_label, COLOR_WINDOW_TEXT)
+	if corporate_meeting_meta_label != null:
+		_set_label_tone(corporate_meeting_meta_label, Color(0.352941, 0.309804, 0.203922, 1))
+	if corporate_meeting_summary_label != null:
+		_set_label_tone(corporate_meeting_summary_label, COLOR_WINDOW_TEXT)
+	if corporate_meeting_agenda_label != null:
+		_set_label_tone(corporate_meeting_agenda_label, COLOR_WINDOW_TEXT)
+	if corporate_meeting_intel_label != null:
+		_set_label_tone(corporate_meeting_intel_label, Color(0.352941, 0.309804, 0.203922, 1))
+	if corporate_meeting_attendance_label != null:
+		_set_label_tone(corporate_meeting_attendance_label, Color(0.352941, 0.309804, 0.203922, 1))
 	news_detail_body.add_theme_color_override("default_color", COLOR_WINDOW_TEXT)
 	news_detail_body.add_theme_color_override("font_selected_color", COLOR_WINDOW_TEXT)
+	_refresh_desktop_window_themes()
 	_set_label_tone(social_title_label, Color(0.121569, 0.160784, 0.258824, 1))
 	_set_label_tone(social_access_status_label, Color(0.196078, 0.301961, 0.486275, 1))
 	_set_label_tone(debug_generators_hint_label, COLOR_MUTED)
@@ -5845,6 +7134,8 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(network_contact_name_label, COLOR_WINDOW_TEXT)
 	_set_label_tone(network_contact_meta_label, Color(0.352941, 0.309804, 0.203922, 1))
 	_set_label_tone(network_contact_body_label, COLOR_WINDOW_TEXT)
+	if network_corporate_action_label != null:
+		_set_label_tone(network_corporate_action_label, Color(0.352941, 0.309804, 0.203922, 1))
 	_set_label_tone(upgrade_title_label, COLOR_WINDOW_TEXT)
 	_set_label_tone(upgrade_cash_label, Color(0.454902, 0.337255, 0.141176, 1))
 	_set_label_tone(upgrade_summary_label, COLOR_WINDOW_TEXT)
@@ -6430,14 +7721,14 @@ func _refresh_financial_history_header() -> void:
 	))
 
 
-func _refresh_financial_history_table(financial_history: Array, _financials: Dictionary) -> void:
+func _refresh_financial_history_table(financial_history: Array, _financials: Dictionary, empty_text: String = "") -> void:
 	if financial_history_rows_vbox == null or financial_history_empty_label == null:
 		return
 
 	_clear_dynamic_rows(financial_history_rows_vbox, financial_history_empty_label)
 	financial_history_empty_label.visible = financial_history.is_empty()
 	if financial_history.is_empty():
-		financial_history_empty_label.text = "Generated history unavailable."
+		financial_history_empty_label.text = empty_text if not empty_text.is_empty() else "Generated history unavailable."
 		return
 
 	for history_index in range(financial_history.size() - 1, -1, -1):

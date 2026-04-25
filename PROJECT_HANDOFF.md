@@ -54,8 +54,13 @@ Read this file first in the next session.
 - A first playable `Academy` desktop app now exists
 - A first playable contact/recognition UX now exists in `Network`
 - A first playable `Upgrades` shop app now exists on the desktop
+- A first playable corporate-action / meeting-chain layer now exists behind `News`, `Twooter`, `Network`, and daily market behavior
+- Corporate meetings now have two player-facing venue surfaces:
+  - a shared meeting modal reachable from `Dashboard`, `News`, and `Network`
+  - a dedicated fullscreen staged `RUPSLB` overlay for interactive `rights_issue` meetings
 - Upgrade tiers are bought with player cash and now drive trading fees, News access, Twooter access, chart indicators, and daily Network action points
 - A backtick console-command overlay now exists for cheat/testing commands
+- A `Ctrl+L` debug overlay now also exists for deeper runtime/event testing
 - Every generated company now has a persistent public management roster with generated `CEO`, `CFO`, and `Commissioner` insiders
 - Network leads were tightened after playtesting:
   - company/Profile leads are scored by context and must match the selected company's sector, so generic `company` tags no longer allow sector-irrelevant contacts to appear
@@ -81,23 +86,37 @@ Read this file first in the next session.
   - `Shop`
   - `Exit`
 - Desktop behavior:
+  - new-run loading now uses a richer `Creating financials` stage:
+    - stage bar still uses the same `6` high-level steps
+    - a subprogress label now shows `X / Y companies prepared`
+    - a rolling mini-log under the bar now shows the latest core-profile generation tasks
+  - fresh runs now follow a `Desktop First` startup model:
+    - startup generates only core market-ready company data before desktop entry
+    - full player-facing company detail hydrates in the background after the desktop opens
+    - if the player opens a cold stock before hydration finishes, the Trade tabs now show explicit loading placeholders rather than missing-data fallbacks
   - desktop now uses a Figma-inspired shell rather than the older plain beige launcher
   - top bar shows current trade date on the left, current cash centered, and a gold `Advance Day` action on the right
+  - the shell is now edge-to-edge with no outer desktop margin; the framed canvas starts directly below the top bar
   - the main desktop area is a cream framed canvas with large launcher tiles
   - the first-pass bottom launcher bar was removed after iteration; the desktop is currently top bar + framed canvas only
   - desktop launcher/status icons now load from local SVG assets in `assets/ui/desktop/`
   - decorative accent/glow nodes still exist in the scene, but are currently hidden
   - legacy desktop header/subtitle/hint/icons/taskbar nodes still exist in the scene/script, but are hidden and moved out of the active desktop layout
 - App behavior:
-  - `STOCKBOT` opens the trading platform inside a faux app window
-  - the faux app window has a top title bar with `minimize` and `close`
-  - both window controls return the player to the desktop for now
-  - `News` opens a beige event-driven intel/news desk
-  - `Twooter` opens a smaller beige mobile-style social-feed window
-  - `Academy` opens a beige/light learning app
+  - desktop apps now open as independent runtime desktop windows layered above the shell
+  - multiple app windows can stay open at the same time
+  - the current window manager supports one window per app type; launching an already-open app focuses it instead of spawning a duplicate
+  - windows are draggable from their title bars, can overlap each other, and can move across the full desktop viewport including the top bar area
+  - title bars expose `minimize` and `close`
+  - both controls currently just hide the window; there is no separate minimized/taskbar state yet
+  - `STOCKBOT` opens the trading platform in the large dark desktop window
+  - `News` opens a large beige `News Browser` window
+  - `Twooter` opens a smaller light social-feed window
+  - `Academy` opens a beige/light learning window
   - `Network` opens a beige contact/recognition window for discovered market contacts
-  - `Shop` opens the existing beige `Upgrades` cash shop for desk upgrades
+  - `Shop` opens the existing beige `Upgrades` cash shop window
   - `Exit` returns to the main menu
+  - interactive `rights_issue` `RUPSLB` meetings do not open as normal desktop windows; they temporarily take over the screen with a dedicated fullscreen meeting overlay above the desktop shell
 - Console command overlay:
   - press `` ` `` to open it
   - press `` ` `` again to close it
@@ -106,6 +125,13 @@ Read this file first in the next session.
   - `ordalbos` sets every upgrade track to tier `1`
   - commands now queue the same debounced autosave path used by other small state changes and refresh the game UI through the usual manager signals/handlers
   - implementation lives in `GameManager.execute_console_command()` plus dynamic overlay nodes in `scripts/ui/GameRoot.gd`
+- Debug overlay:
+  - press `Ctrl+L` to open it
+  - current tabs expose event history, stock performance, market history, and generator controls
+  - the `Generators` tab now also includes a `Corporate Actions` subsection
+  - `Start RUPSLB` targets the currently selected `STOCKBOT` stock
+  - the button only enables when the player owns at least `1` lot and the selected company has no live corporate-action chain
+  - the debug action schedules a next-day `rights_issue` `RUPSLB`, keeps it hidden from current player-facing meeting surfaces, and reveals it through the normal Dashboard meeting strip after one `Advance Day`
 - Stock app identity:
   - desktop label: `STOCKBOT`
   - app-window title: `STOCKBOT`
@@ -134,12 +160,12 @@ Read this file first in the next session.
   - `Equity`
   - `Cash Available`
   - `Day / Date`
-  - `Advance Day`
+- The stock-terminal `Advance Day` button was removed; day progression now only lives on the desktop top bar
 - The old top `Focus` read in the navbar has been removed and replaced by `Cash Available`
 - The stock app window intentionally uses a dark theme, while the desktop, `News`, `Twooter`, `Academy`, `Network`, and `Upgrades` windows use beige/light themes
 - Optional UI font files now live in `assets/fonts/`; the UI auto-loads `app_font.ttf`, `app_font.otf`, then `OpenSans-Regular.ttf` for the main menu + game UI font style
 - Money formatting now uses Indonesian Rupiah style like `Rp1.000.000,00`; compact money uses comma decimals, e.g. `Rp1,25B`
-- The stock app is now contained inside a dedicated window container so the trading shell cannot spill outside the faux browser window bounds
+- The stock app is now contained inside a dedicated window container so the trading shell cannot spill outside the desktop window bounds
 - Current app-window content insets are effectively:
   - left/right: `20`
   - top: `64`
@@ -155,12 +181,13 @@ Read this file first in the next session.
 - Trade view now uses:
   - left `watchlist / all stock / portfolio` panel
   - center work area with visible `Chart`, `Key Stats`, `Financials`, `Broker`, and `Profile` tabs
-  - right order ticket
+  - a right order ticket with a narrow collapse toggle between the workspace and ticket
 - The old `Analyzer` tab is currently hidden with `TabContainer.set_tab_hidden(4, true)`, but the Analyzer node/backend stays in place so existing `GameRoot.gd` references still resolve
 - Current center-tab responsibilities are:
   - `Chart`: price chart plus range switching
     - the old subheader line under the ticker has been intentionally hidden
     - chart UI now includes:
+      - a slim left drawing toolbar with `Select`, `Horizontal Line`, `Trend Line`, `Delete`, and `Clear`
       - range buttons: `1D`, `1W`, `1M`, `1Y`, `5Y`, `YTD`
       - display-mode buttons: `Line`, `Candle`
       - simplified zoom buttons: `-`, `+`
@@ -170,6 +197,10 @@ Read this file first in the next session.
       - crosshair lines plus hover price / date badges
       - a compact hover OHLC / volume readout
       - a dedicated lower volume-bar panel synced to the same visible bars / zoom window
+      - session-only per-company user drawings in the price pane:
+        - one-click horizontal price lines
+        - two-click trend lines
+        - selected-line highlight plus delete/clear actions
     - the volume panel is intentionally visual-only for now: no helper labels like `normal activity` or `busy day`
     - `5Y` can now show a derived pre-2020 history instead of only post-start runtime bars
     - the pre-2020 layer is generated lazily per company from the existing annual + quarterly financial data
@@ -212,6 +243,7 @@ Read this file first in the next session.
 - Current default tab is `Watchlist`
 - Current right-side order ticket is now a simplified execution card:
   - darker stock-terminal styling again instead of the earlier bright prototype card
+  - the ticket can now be hidden/shown with the narrow center toggle button without changing order state or trade logic
   - top `Buy / Sell` side selectors
   - quantity input
   - max quantity is now `99.999.999` lots for late-game / cheat-assisted market-impact testing
@@ -264,6 +296,12 @@ Read this file first in the next session.
     - locked indicators show as disabled toggles
     - unlocked indicators can be toggled per session
     - tier-driven unlock order is `SMA 20`, then `EMA 20` + `SMA 50`, then `RSI 14`
+  - a first-pass manual drawing layer now also exists in `PriceChartCanvas.gd`:
+    - drawings are keyed in memory by selected company for the current scene session
+    - horizontal lines store only `price`
+    - trend lines store two chart anchors using bar/date identity plus price so they survive zoom/range changes better than raw screen-space points
+    - cursor/select mode supports hit-testing existing drawings
+    - right-click or `Esc` cancels an unfinished trend line
 
 ## Watchlist System
 - A real persistent watchlist system now exists
@@ -303,7 +341,10 @@ Read this file first in the next session.
   - top-left: `Index Gorengan` card with derived market points, traded lot, and traded value
   - bottom-left: live month calendar with the current in-game day highlighted and quarterly report filing days marked as `R`
   - top-right: `Movers` card with a `Top 15 Gainer` tab and a `Top 15 Loser` tab
-  - bottom-right: `Upcoming Reports` list showing the next scheduled company filings
+  - bottom-right: `Upcoming Meetings / Reports`
+    - current body text still lists the next scheduled company filings
+    - a short button strip above it can open up to `4` upcoming corporate meetings
+    - opening a `rights_issue` `rupslb` button now routes into the fullscreen staged meeting overlay, while other meetings still use the simpler shared meeting modal
 - Quarterly report calendar:
   - stored in `RunState.quarterly_report_calendar` and saved/loaded with the run
   - old saves backfill a deterministic report calendar from the saved roster
@@ -328,6 +369,9 @@ Read this file first in the next session.
   - latest daily `volume_lots`
   - latest daily traded `value`
   - daily breadth counts (`green / red / flat`)
+- Dashboard meeting/report consumers can use:
+  - `GameManager.get_upcoming_report_rows(limit)`
+  - `GameManager.get_corporate_meeting_snapshot(day_index := -1)`
 - The `volume_lots` / traded `value` feeding charts and the dashboard are synthetic but now less purely reactive:
   - `MarketSimulator.gd` derives a pre-price `volume_context` from free float, liquidity profile, story heat, hidden accumulation/distribution flags, broker pressure, recent volume memory, and recent price run-up
   - prior high activity can now act as a leading signal before price fully resolves
@@ -367,7 +411,7 @@ Read this file first in the next session.
 
 ## News Desk
 - `News` is no longer a blank placeholder
-- It currently lives inside the existing faux app window in `GameRoot.tscn`; there is still no separate scene for it
+- It still lives in `GameRoot.tscn` and is reparented into the runtime desktop window manager; there is still no separate scene for it
 - Current news model is:
   - the real event systems remain the source of truth
   - the news layer renders those events into readable articles
@@ -397,6 +441,7 @@ Read this file first in the next session.
   - `progress_label`
   - `category`
   - `tone`
+  - `source_chain_id`, `chain_family`, `meeting_id`, `venue_type`, and `meeting_label` when the article came from the corporate-action layer
   - target company / ticker / sector / person metadata when available
 - Current rendering behavior:
   - left side shows outlet buttons plus an article list
@@ -406,17 +451,21 @@ Read this file first in the next session.
   - article timing/availability depends on event progress and outlet intel level
   - market-wrap style articles provide fallback content so the feed is not empty on quieter sessions
   - article details can now surface a contextual Network `Meet` button when the article metadata points at a discoverable contact and the player meets recognition requirements
+  - article details can now also surface a contextual `Open Meeting` button when the article metadata points at a linked corporate venue
+    - `rights_issue` `rupslb` links now open the fullscreen staged meeting overlay
+    - other linked meeting types still open the simpler shared meeting modal
 - Current content source is editable:
   - `data/news/news_feed_data.json`
-  - this stores outlet labels, summary/tagline copy, progress labels, headline prefixes, sentence pools, and hidden-phase templates
+  - this stores outlet labels, summary/tagline copy, progress labels, headline prefixes, sentence pools, hidden-phase templates, and first-pass `corporate_action_*` headline/driver pools
 - Current generator implementation:
   - `systems/NewsFeedSystem.gd`
   - wired through `GameManager.get_news_snapshot()`
   - loaded through `DataRepository.gd`
+  - now also preserves chain/meeting metadata on rendered article rows for meeting linking and archive re-open behavior
 
 ## Twooter Feed
 - `Twooter` is no longer a blank placeholder
-- It currently lives inside the existing faux app window in `GameRoot.tscn`; there is still no separate scene for it
+- It still lives in `GameRoot.tscn` and is reparented into the runtime desktop window manager; there is still no separate scene for it
 - Current social model is:
   - the same underlying event systems still remain the source of truth
   - the social layer renders those events into short posts, reactions, and account chatter
@@ -444,6 +493,7 @@ Read this file first in the next session.
   - `visibility_label`
   - `category`
   - `tone`
+  - `source_chain_id`, `chain_family`, `meeting_id`, and `venue_type` when available from the corporate-action layer
   - target company / ticker / sector / person metadata when available
   - deterministic `likes`, `replies`, and `retwoots`
 - Current rendering behavior:
@@ -463,7 +513,7 @@ Read this file first in the next session.
 
 ## Academy App
 - `Academy` is now a first playable desktop learning app
-- It currently lives inside the existing faux app window in `GameRoot.tscn`; there is still no separate scene for it
+- It still lives in `GameRoot.tscn` and is reparented into the runtime desktop window manager; there is still no separate scene for it
 - Current category tabs are:
   - `Mindset`
   - `Fundamental`
@@ -496,7 +546,7 @@ Read this file first in the next session.
 
 ## Upgrades Shop
 - `Upgrades` is now a first playable desktop shop app
-- It currently lives inside the existing faux app window in `GameRoot.tscn`; there is still no separate scene for it
+- It still lives in `GameRoot.tscn` and is reparented into the runtime desktop window manager; there is still no separate scene for it
 - Upgrades are purchased with available portfolio cash
 - Every upgrade track starts at tier `4`, where `4` is the lowest tier and `1` is the highest tier
 - Buying an upgrade improves exactly one tier at a time:
@@ -549,7 +599,7 @@ Read this file first in the next session.
 
 ## Network App / Contact System
 - `Network` is now a first playable contact-management app
-- It currently lives inside the existing faux app window in `GameRoot.tscn`; there is still no separate scene for it
+- It still lives in `GameRoot.tscn` and is reparented into the runtime desktop window manager; there is still no separate scene for it
 - Contacts are not purchased from an upgrade shop:
   - contacts are discovered through `News` articles, company `Profile` pages, and floater referrals
   - discovered contacts are still unmet until the player presses `Meet`
@@ -564,7 +614,11 @@ Read this file first in the next session.
   - pending/completed/missed requests
   - current daily Network AP remaining/limit
   - selected-contact detail
+  - linked corporate-action summary / intel summary when the selected contact and target company map to a live chain
   - action buttons for `Meet`, `Tip`, `Request`, and `Referral`
+  - a contextual `Open Meeting` button when the selected contact is linked to an upcoming corporate venue
+    - `rights_issue` `rupslb` links now open the fullscreen staged meeting overlay
+    - other linked meeting types still open the simpler shared meeting modal
   - when no contacts/leads are available, the list shows `No leads yet. Explore the world more.` instead of dumping all floaters
 - Recognition formula currently scores `0-100` from:
   - equity progress worth up to `40`, based on current equity vs difficulty starting cash and capped when equity reaches `2x` starting cash
@@ -578,7 +632,7 @@ Read this file first in the next session.
   - `Market Name`: score `>=85`, cap `12`
 - Current Network interactions:
   - `Meet` spends `1` daily AP on success, unlocks a discovered contact, and starts relationship at the data-defined base relationship, defaulting to `25`
-  - `Tip` spends `1` daily AP on success, creates a saved company arc with `event_family = "contact"` and phases `hidden_whisper -> visible_reaction -> digestion`, then burns `2` relationship points
+  - `Tip` spends `1` daily AP on success, first tries to reveal corporate-action intel for a relevant live chain, and otherwise falls back to creating the older saved contact company arc with `event_family = "contact"` and phases `hidden_whisper -> visible_reaction -> digestion`; either success path burns `2` relationship points
   - `Request` spends `1` daily AP on success and creates a pending task to hold at least `1` lot of the target company by `current_day + 3`
   - repeat accepts for the same contact-target pair while a request is already pending now fail safely and do not spend extra AP
   - a successful request creates a contact company arc and adds `8` relationship points
@@ -612,7 +666,8 @@ Read this file first in the next session.
   - a floater is skipped as a new initial lead once they are already tied to `2` distinct companies
 - Current prototype simplification:
   - contact interactions consume daily AP but do not consume a separate event slot yet
-  - contact effects do not directly change current prices; they enter the existing active company-arc pipeline so MarketSimulator, News, and Twooter can read them like other company arcs
+  - non-corporate contact effects do not directly change current prices; they enter the existing active company-arc pipeline so MarketSimulator, News, and Twooter can read them like other company arcs
+  - corporate-action contact intel updates saved truth buckets and venue links, but does not yet create a separate multi-contact contradiction/reliability UI
 - Current content source is editable:
   - `data/network/contact_network_data.json`
   - contacts are fictional/data-authored Indonesian market roles and names, not real people
@@ -628,6 +683,7 @@ Read this file first in the next session.
   - `systems/ContactNetworkSystem.gd`
   - wired through `GameManager.get_network_snapshot()`
   - loaded through `DataRepository.gd`
+  - consulted alongside `systems/CorporateActionSystem.gd` for chain-linked tips
   - persisted through `RunState.network_contacts`, `RunState.network_discoveries`, and `RunState.network_requests`
 
 ## Company Management / Insider Generation
@@ -681,6 +737,7 @@ Read this file first in the next session.
   - on the scheduled trading day, `MarketSimulator.gd` asks `RunState.get_quarterly_report_events_for_day_number()`
   - report filings currently resolve into `earnings_beat` or `earnings_miss` events based on a deterministic surprise score from quality, growth, risk, recent sentiment, and seeded noise
   - report events are company-scoped, affect that company's daily event bias, and are recorded into `event_history`
+  - eligible filings can now also seed first-pass `earnings_call` venue rows through `CorporateActionSystem.gd`, typically `0-1` trading days after the filing day
 - Person-of-interest event generation:
   - `systems/PersonEventSystem.gd`
   - currently supports:
@@ -699,6 +756,199 @@ Read this file first in the next session.
   - persists active arcs into `RunState.active_special_events`
   - supports scripted shock phases like consecutive ARB sessions and capped ARA-style bursts on affected sectors
 
+## Corporate Action / Meeting Chain System
+- A first-pass shared corporate-action layer is now implemented through `systems/CorporateActionSystem.gd`
+- It is the authoritative source of truth for live corporate-action storylines and meeting rows; `event_history` and `active_company_arcs` are now emitted read models rather than the primary source of truth
+- The core runtime/save buckets now exist in `RunState`:
+  - `RunState.active_corporate_action_chains`
+  - `RunState.corporate_meeting_calendar`
+  - `RunState.corporate_action_intel`
+  - `RunState.attended_meetings`
+  - `RunState.corporate_meeting_sessions`
+- Current chain model:
+  - one chain represents one live storyline for one company in v1
+  - chains persist cross-node state rather than generating disconnected headlines
+  - current stored fields include:
+    - `chain_id`
+    - `family`
+    - `company_id`
+    - `counterparty_company_id`
+    - `status`
+    - `stage`
+    - `started_day_index`
+    - `last_advanced_day_index`
+    - `next_review_day_index`
+    - `truth_level`
+    - `current_timeline_state`
+    - `management_stance`
+    - `public_heat`
+    - `retail_positioning`
+    - `smart_money_phase`
+    - `frontrunner_strength`
+    - `approval_odds`
+    - `completion_odds`
+    - `delay_risk`
+    - `cancellation_risk`
+    - `market_overpricing`
+    - `funding_pressure`
+    - `expected_meeting_type`
+    - `active_meeting_id`
+    - `agenda_payload`
+    - `player_known_fields`
+    - `network_visibility`
+    - `next_expected_step`
+    - `outcome_state`
+- Current stage order is driven by `data/corporate_actions/corporate_action_catalog.json`:
+  - `hidden_positioning`
+  - `unusual_activity`
+  - `rumor_leak`
+  - `public_speculation`
+  - `management_response`
+  - `formal_agenda_or_filing`
+  - `meeting_or_call`
+  - `resolution`
+  - `execution`
+  - `aftermath`
+- Current chain semantics already support a first-pass IDX-style continuity model:
+  - rumor/speculation stages can feed public heat before formal confirmation
+  - `management_response = deny` does not automatically kill the story
+  - supporting families can enter a first-pass delayed state, flip smart money into `trapping`, then later move back into `re_accumulating`
+  - market-facing chain arcs are emitted from the current stage instead of being hardcoded one-off event rows
+- Current family rollout:
+  - enabled v1 families:
+    - `rights_issue`
+    - `stock_buyback`
+    - `stock_split`
+    - `ceo_change`
+  - cataloged but disabled for later:
+    - `private_placement`
+    - `restructuring`
+    - `strategic_merger_acquisition`
+    - `backdoor_listing`
+- Current family/scoring rules:
+  - family review runs every `5` trading days
+  - active chain caps are difficulty-bound:
+    - `Chill`: `2`
+    - `Normal`: `3`
+    - `Grind`: `5`
+  - v1 keeps one active capital/governance chain per company
+  - `rights_issue`, `private_placement`, and `stock_buyback` are mutually exclusive while one is active
+  - `stock_split` and `ceo_change` can coexist more freely
+- Current venue model:
+  - `annual_rups`
+    - seeded deterministically from `2020` through `2030`
+    - current month window is `March-June`
+  - `earnings_call`
+    - non-voting venue
+    - can be scheduled `0-1` trading days after eligible quarterly filings
+  - `rupslb`
+    - extraordinary venue
+    - scheduled dynamically once a chain reaches filing/agenda stage
+    - current default delay is `4-9` trading days after scheduling
+- Current venue/calendar behavior:
+  - `corporate_meeting_calendar` is keyed by date and stores meeting rows with linked company/family/chain metadata
+  - meeting statuses are refreshed during day advancement
+  - attendance is free in v1 and persisted in `RunState.attended_meetings`
+  - there is no AP cost or broader event-slot/time-slot cost yet
+  - debug-only next-day `rights_issue` `rupslb` meetings can now be inserted in a hidden `queued` state for the next trading day
+  - `queued` meetings are intentionally omitted from current player-facing meeting lists and company meeting surfaces until day advancement flips them into the normal visible scheduled flow
+  - interactive meeting sessions currently exist only for `rights_issue` `rupslb`
+  - `RunState.corporate_meeting_sessions` stores one session per meeting id, including:
+    - current staged-presentation step
+    - attended/closed state
+    - voting eligibility
+    - selected player vote
+    - player vote weight
+    - resolved result summary
+  - if the player ignores an interactive `rights_issue` `rupslb` and advances the day, the system auto-resolves the session as player `abstain` so the chain cannot stall indefinitely
+  - submitted meeting results do not re-price the current day; the outcome is stored and consumed on the next day-advance resolution step
+- Current public/private system integration:
+  - `CorporateActionSystem.gd` emits:
+    - visible `event_history` rows carrying `source_chain_id`, `meeting_id`, `venue_type`, and `chain_family`
+    - derived `active_company_arcs` used by the existing market pipeline
+  - `NewsFeedSystem.gd` now reads the emitted metadata and first-pass corporate-action headline pools from `data/news/news_feed_data.json`
+  - `TwooterFeedSystem.gd` now preserves the same chain/meeting metadata and varies chatter based on corporate-action family/category/tone
+  - `CompanyEventSystem.gd` explicitly ignores corporate-action read-model arcs so they are not double-generated as normal company events
+- Current Network / insider integration:
+  - `ContactNetworkSystem.request_tip()` is now two-path:
+    - if there is relevant live chain access, the contact reveals chain-linked intel into `RunState.corporate_action_intel`
+    - otherwise it falls back to the older contact company-arc flow
+  - current intel buckets store discovered facts rather than full chain copies, including best-known:
+    - `truth_level`
+    - `current_timeline_state`
+    - `management_stance`
+    - `next_expected_step`
+    - discovered fields / sources / confidence
+  - floaters are better for early rumor / positioning context
+  - insiders are better for management stance, agenda details, and timing/approval reads
+  - attending a linked meeting reveals a stronger intel slice for that chain
+- Current player-facing UI/entry points:
+  - `Dashboard` bottom-right area now shows `Upcoming Meetings / Reports`
+  - a short meeting-button strip on the dashboard can open up to `4` upcoming meetings
+  - `News` article detail can now show an `Open Meeting` button when an article is linked to a venue
+  - `Network` selected-contact detail can now show current corporate-action summary text and an `Open Meeting` button when relevant
+  - `GameRoot.gd` owns a shared corporate-meeting modal that still handles `annual_rups`, `earnings_call`, and non-interactive venue views, showing:
+    - company
+    - venue type
+    - trade date
+    - chain family
+    - stage
+    - management stance
+    - agenda list
+    - public summary
+    - player-known private intel
+    - attendance state
+  - `GameRoot.gd` also owns a dedicated fullscreen `RUPSLB` overlay for interactive `rights_issue` meetings:
+    - step order is currently:
+      - `arrival`
+      - `seating`
+      - `host_intro`
+      - `agenda_reveal`
+      - `vote`
+      - `result`
+    - the scene uses lightweight UI animation rather than full characters:
+      - abstract attendee markers move into seats
+      - the podium/host area animates into focus
+      - the agenda card and result board reveal in stages
+    - the vote step supports:
+      - `Agree`
+      - `Disagree`
+      - `Abstain`
+    - if the player holds no shares on the meeting day, the overlay shifts into observer mode and only contributes abstention
+    - the result board exposes:
+      - `agree` / `disagree` / `abstain` percentages
+      - bloc attribution across `controlling group`, `player`, and `public float`
+      - chain outcome summary for the next-day resolution
+- Current voting/outcome behavior for interactive `rights_issue` `rupslb`:
+  - voting eligibility is based on current holdings on the meeting day; there is no separate record-date system yet
+  - player influence is pure ownership-weighted and uses the current shareholding structure from `GameManager.get_company_ownership_snapshot()`
+  - outcome resolution currently uses three blocs:
+    - `controlling group`
+    - `player`
+    - `public float`
+  - controller leaning uses current approval/funding logic
+  - public-float leaning uses approval odds, public heat, management stance, market overpricing, and controlled RNG
+  - the stored meeting result marks the chain toward approved execution or cancelled aftermath on the next simulated day rather than changing the tape intraday
+- Current runtime APIs:
+  - `GameManager.get_corporate_meeting_snapshot(day_index := -1)`
+  - `GameManager.get_corporate_meeting_detail(meeting_id)`
+  - `GameManager.get_company_corporate_action_snapshot(company_id)`
+  - `GameManager.attend_corporate_meeting(meeting_id)`
+  - `GameManager.start_corporate_meeting_session(meeting_id)`
+  - `GameManager.get_corporate_meeting_session_snapshot(meeting_id)`
+  - `GameManager.set_corporate_meeting_session_stage(meeting_id, stage_id)`
+  - `GameManager.submit_corporate_meeting_vote(meeting_id, agenda_id, vote_choice)`
+  - `GameManager.close_corporate_meeting_session(meeting_id)`
+  - `GameManager.debug_force_rights_issue_rupslb(company_id)`
+  - `GameManager.debug_schedule_next_day_rights_issue_rupslb(company_id)`
+- Current v1 omissions by design:
+  - interactive voting currently covers `rights_issue` `rupslb` only
+  - `annual_rups` and `earnings_call` still use the simpler shared modal and have no staged interactive flow yet
+  - no dedicated desktop app for meetings; the venue UI is currently shared modal plus fullscreen overlay
+  - no separate shareholder record-date system yet; eligibility is based on current held shares on the meeting day
+  - no same-day market recalculation after a meeting vote; the result is applied on the next day-advance
+  - no v2/v3 families active yet, especially `strategic_merger_acquisition` and `backdoor_listing`
+
 ## Implemented Systems
 - Core autoloads:
   - `autoloads/GameManager.gd`
@@ -710,6 +960,7 @@ Read this file first in the next session.
   - `data/companies/company_words.json`
   - `data/companies/company_profile_data.json`
   - `data/brokers/broker_roster.json`
+  - `data/corporate_actions/corporate_action_catalog.json`
   - `data/sectors/sectors.json`
   - `data/events/events.json`
   - `data/news/news_feed_data.json`
@@ -760,6 +1011,14 @@ Read this file first in the next session.
   - supports referrals from met floaters to generated company insiders
   - creates contact-sourced company arcs through the existing `RunState.active_company_arcs` pipeline
   - processes due requests during day advancement
+- Corporate actions / meetings:
+  - `systems/CorporateActionSystem.gd`
+  - seeds yearly `annual_rups` venue rows and schedules first-pass `earnings_call` / `rupslb` meetings
+  - scores/starts first-pass family chains on a `5`-day review cadence
+  - advances live chains across hidden/public stages and emits derived market arcs plus visible `event_history` rows
+  - now also owns interactive `rights_issue` `rupslb` meeting sessions, voting resolution storage, and next-day chain consumption for approved/cancelled outcomes
+  - now also supports both same-day and queued-next-day debug forcing helpers for `rights_issue` `rupslb` testing
+  - owns meeting snapshots, company chain snapshots, attendance, and chain-intel reveal helpers
 - Academy:
   - `systems/AcademySystem.gd`
   - builds category/section snapshots from catalog data plus saved progress
@@ -775,19 +1034,28 @@ Read this file first in the next session.
   - `2027-2030` uses projected holiday dates for long-run simulation
 - Procedural company generation:
   - `systems/CompanyGenerator.gd`
-  - generates hidden traits
-  - generates a persistent `management_roster` with CEO/CFO/Commissioner insiders for every company
-  - generates annual financial history from `2010` to `2019`
-  - derives 2020 opening fundamentals
-  - derives `quality_score`, `growth_score`, `risk_score`, `base_volatility`, and `base_price`
-  - now also derives a quarterly `financial_statement_snapshot` with:
-    - a latest-period top-level snapshot used by the UI
-    - `40` quarterly periods from `Q1 2010` through `Q4 2019`
-    - simplified income statement lines
-    - simplified balance sheet lines
-    - simplified cash flow lines
-  - current statement layer is formula-derived from generated history, current financials, and hidden traits
-  - quarter seasonality currently uses sector-weighted quarter profiles plus seeded noise, then normalizes back into coherent yearly totals
+  - generation is now split into two phases:
+    - `generate_company_profile_core(...)`
+    - `hydrate_company_profile_detail(...)`
+  - startup/core generation now derives only market-ready data needed for day-0 simulation and opening prices:
+    - hidden traits
+    - `financials`
+    - `quality_score`, `growth_score`, `risk_score`
+    - `base_volatility`
+    - `base_price`
+    - `shares_outstanding`
+    - `detail_status = "cold"`
+  - full-detail hydration now fills in the heavier player-facing layer later:
+    - annual financial history from `2010` to `2019`
+    - persistent `management_roster` with CEO/CFO/Commissioner insiders
+    - quarterly `financial_statement_snapshot` with:
+      - a latest-period top-level snapshot used by the UI
+      - `40` quarterly periods from `Q1 2010` through `Q4 2019`
+      - simplified income statement lines
+      - simplified balance sheet lines
+      - simplified cash flow lines
+    - current statement layer is still formula-derived from generated history, current financials, and hidden traits
+    - quarter seasonality still uses sector-weighted quarter profiles plus seeded noise, then normalizes back into coherent yearly totals
   - now also exposes a chart-only historical price builder for pre-2020 `5Y` views
     - derives older bars from annual history, quarterly statements, implied share-price anchors, and seeded valuation/regime noise
     - currently targets believable long-run shape rather than exact financial-to-price realism
@@ -868,20 +1136,31 @@ Read this file first in the next session.
   - financial/runtime profile fields
   - narrative profile fields
   - the derived `financial_statement_snapshot`
+  - lazy-detail state through `detail_status`
 - `RunState.COMPANY_PROFILE_KEYS` now includes:
   - financial/runtime values like `base_price`, scores, `financials`, `financial_history`, `financial_statement_snapshot`, and `generation_traits`
   - narrative values like `archetype_label`, `company_size_label`, `founded_year`, `employee_count`, `profile_revenue`, `profile_description`, and `profile_tags`
   - company management value `management_roster`
-- Older saves are backfilled through `RunState._ensure_company_profiles()` and normalized through `RunState._normalize_company_profile()`
-- Older saves now also backfill missing quarterly statement history by rebuilding `financial_statement_snapshot` from the saved annual financial history + traits
-- Older saves now also backfill missing/invalid management rosters by rebuilding the three generated management insiders from saved company profile context
+- Runtime company detail can now legitimately persist in mixed states:
+  - `cold`
+  - `queued`
+  - `ready`
+- Old saves with already-hydrated detail still load normally
+- Newer saves may contain only core company data for some companies; missing full-detail fields are treated as valid lazily-hydratable state, not corruption
+- `RunState.load_from_dict()` no longer eagerly rebuilds every missing full company profile on load
+- profile normalization now tolerates partial company profiles and resets stale `hydrating` state back to a safe reloadable cold state
 - Snapshot access is now intentionally split by weight:
   - lightweight list/overview callers can ask for company snapshots without full `financial_history` or `quarterly_statements`
-  - the Trade workspace still requests the full stock snapshot because it needs chart history, annual history, and quarter navigation
+  - the Trade workspace still requests the full stock snapshot shape, but cold companies now return core data immediately plus `detail_status` and render loading placeholders while hydration finishes
 - Trade chart history is now also split by source:
   - runtime `price_history` / `price_bars` still start in `2020`
   - `RunState.get_company_chart_bars(company_id)` lazily prepends derived pre-2020 bars for chart rendering when needed
   - the lazy historical chart cache currently lives only in memory and is rebuilt after load; it is not persisted into the save file
+- Background company-detail hydration is now runtime-only orchestration:
+  - `RunState` owns the hydration queue and per-company `detail_status`
+  - `GameManager.start_background_company_detail_hydration(...)` seeds/starts the background loop
+  - `GameManager.company_detail_ready(company_id)` is emitted when one company finishes hydrating
+  - `GameManager.run_loading_detail_updated(subprogress_text, log_lines)` now drives the loading-screen subprogress + mini-log
 - Runtime companies persist:
   - `starting_price`
   - `ytd_open_price`
@@ -899,6 +1178,11 @@ Read this file first in the next session.
   - `RunState.network_contacts`
   - `RunState.network_discoveries`
   - `RunState.network_requests`
+- Corporate-action runtime state is saved in:
+  - `RunState.active_corporate_action_chains`
+  - `RunState.corporate_meeting_calendar`
+  - `RunState.corporate_action_intel`
+  - `RunState.attended_meetings`
 - Contact tips and completed contact requests create entries in `RunState.active_company_arcs` using `event_family = "contact"`
 - Upgrade runtime state is saved in:
   - `RunState.upgrade_tiers`
@@ -937,6 +1221,18 @@ Read this file first in the next session.
   - `GameManager.request_contact_tip(contact_id, company_id := "")`
   - `GameManager.accept_contact_request(contact_id, company_id := "")`
   - `GameManager.request_contact_referral(contact_id, company_id := "", affiliation_role := "")`
+- Corporate-action / meeting consumers can use:
+  - `GameManager.get_corporate_meeting_snapshot(day_index := -1)`
+  - `GameManager.get_corporate_meeting_detail(meeting_id)`
+  - `GameManager.get_company_corporate_action_snapshot(company_id)`
+  - `GameManager.attend_corporate_meeting(meeting_id)`
+  - `GameManager.start_corporate_meeting_session(meeting_id)`
+  - `GameManager.get_corporate_meeting_session_snapshot(meeting_id)`
+  - `GameManager.set_corporate_meeting_session_stage(meeting_id, stage_id)`
+  - `GameManager.submit_corporate_meeting_vote(meeting_id, agenda_id, vote_choice)`
+  - `GameManager.close_corporate_meeting_session(meeting_id)`
+  - `GameManager.debug_force_rights_issue_rupslb(company_id)`
+  - `GameManager.debug_schedule_next_day_rights_issue_rupslb(company_id)`
 - Upgrade consumers can use:
   - `GameManager.get_upgrade_shop_snapshot()`
   - `GameManager.purchase_upgrade(track_id)`
@@ -1009,6 +1305,8 @@ Read this file first in the next session.
   - generated derived financial statements in the company snapshot
   - derived quarterly statement count is `40`
   - latest derived statement period resolves to `Q4 2019`
+  - batched startup now leaves company detail `cold` first and supports on-demand hydration to `ready`
+  - loading screen exposes a financials-stage subprogress label and rolling mini-log
   - generated narrative company profile description
   - generated narrative company profile tags
   - chart snapshot / range-switcher wiring
@@ -1025,7 +1323,7 @@ Read this file first in the next session.
   - Academy quiz starts locked and unlocks after the required reading sections are marked read
   - `Network` desktop icon opens the Network window
   - `Upgrades` desktop icon opens a populated shop window
-  - `STOCKBOT` opens the trading shell inside the faux app window
+  - `STOCKBOT` opens the trading shell inside the desktop window
   - Dashboard grid separation is `0`
   - Dashboard `Movers` tabs exist
   - Dashboard movers render no more than `15` rows per side
@@ -1038,6 +1336,9 @@ Read this file first in the next session.
   - backtick opens/closes the console command overlay
   - `cuankus` console command adds `Rp999.999.999.999` cash
   - `ordalbos` console command maxes every upgrade track
+  - `Ctrl+L` opens the debug overlay
+  - the debug overlay exposes a `Start RUPSLB` button in the `Generators` tab
+  - the debug `Start RUPSLB` action stays disabled with clear reason text until the selected stock is valid and held at `1+` lot
   - Network recognition snapshot returns a tier label and contact cap
   - upgrade tracks start at tier `4`
   - pressing an upgrade purchase button opens confirmation before spending cash or changing tier
@@ -1059,23 +1360,57 @@ Read this file first in the next session.
   - company Profile Network leads match the selected company's sector
   - no floater becomes an initial lead for more than `2` distinct companies
   - meeting a company Profile-discovered contact persists through save/load
-  - requesting a contact tip creates an active contact company arc
+  - requesting a contact tip either reveals linked corporate-action intel or creates an active contact company arc, depending on whether the target has a live chain
   - accepted Network requests complete when the player owns at least `1` lot by the due day
   - accepted Network requests miss when the player does not own the requested target by the due day
   - connected-floater referral requires relationship, spends `10` relationship on success, creates a referred insider lead, and the referred insider can be met/persisted
   - insider tips default to the insider's affiliated company
+  - corporate-meeting snapshot returns seeded upcoming venue rows
+  - attending a corporate meeting marks it attended and persists through save/load
+  - forced interactive `rights_issue` `rupslb` sessions can be spawned deterministically for test coverage
+  - queued next-day debug `rights_issue` `rupslb` meetings stay hidden from the current meeting snapshot until one `Advance Day` passes
+  - queued next-day debug `rights_issue` `rupslb` meetings appear in the Dashboard meeting strip after one `Advance Day` and still open through the fullscreen interactive overlay
+  - observer-only meeting flow rejects `Agree` / `Disagree` when the player owns `0` shares
+  - shareholder meeting flow progresses through `arrival`, `seating`, `host_intro`, `agenda_reveal`, `vote`, and `result`
+  - interactive `rupslb` session stage/result persists through save/load and reopens at the saved step
+  - submitting an interactive `rights_issue` vote stores the meeting result without re-simulating the same day
+  - the next simulated day consumes the stored meeting result and advances the linked chain out of `meeting_or_call`
   - watchlist popup add flow works
   - `All Stock` add button immediately adds into the watchlist and persists through the autosave path
   - `Portfolio` tab appears in the trade sidebar and lists held stocks when present
   - note: newest UI polish is not directly asserted yet:
     - Figma-inspired desktop top bar / framed canvas shell
     - desktop launcher icon sizing / spacing / alignment polish
+    - draggable multi-window desktop behavior, default placements, and title-bar stacking
+    - chart drawing toolbar and manual line interactions
+    - order-ticket collapse / expand toggle
+    - News / Network `Open Meeting` button layout polish
     - watchlist remove button
     - `All Stock` search input
     - visual chart volume panel
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - `git diff --check` passed during the stabilization checkpoint on `2026-04-25`
+  - Godot project-load check passed during the same stabilization checkpoint on `2026-04-25`
+  - quick and full Godot headless smoke both passed during the same stabilization checkpoint on `2026-04-25`
+  - `git diff --check` passed after the lazy-detail startup / richer financials loading UX pass on `2026-04-25`
+  - Godot project-load check passed after the same lazy-detail startup pass on `2026-04-25`
+  - full Godot headless smoke passed after the same lazy-detail startup pass on `2026-04-25`
+  - `git diff --check` passed after the debug-scheduled next-day `rights_issue` `RUPSLB` trigger pass on `2026-04-24`
+  - Godot project-load check passed after the same debug-scheduled next-day `RUPSLB` pass on `2026-04-24`
+  - full Godot headless smoke passed after the same debug-scheduled next-day `RUPSLB` pass on `2026-04-24`
+  - `git diff --check` passed after the interactive `rights_issue` `RUPSLB` meeting-session / fullscreen-overlay pass on `2026-04-24`
+  - Godot project-load check passed after the same interactive `RUPSLB` pass on `2026-04-24`
+  - full Godot headless smoke passed after the same interactive `RUPSLB` pass on `2026-04-24`
+  - `git diff --check` passed after the smoke-baseline refresh for the runtime desktop window manager on `2026-04-24`
+  - Godot project-load check passed after the same smoke-baseline refresh on `2026-04-24`
+  - full Godot headless smoke passed after the same smoke-baseline refresh on `2026-04-24`
+  - `git diff --check -- scenes/game/views/MarketsView.tscn scenes/game/widgets/TradeWorkspaceWidget.tscn scripts/ui/widgets/TradeWorkspaceWidget.gd scripts/ui/widgets/PriceChartCanvas.gd scripts/ui/GameRoot.gd` passed after adding the chart drawing toolbar and order-ticket toggle on `2026-04-23`
+  - Godot project-load check passed after the same chart drawing / order-ticket pass on `2026-04-23`
+  - quick Godot headless smoke was re-run after the chart drawing / order-ticket pass on `2026-04-23`, but that earlier run stopped on the pre-fix Academy assertion before it reached the new chart interactions
+  - `git diff --check -- scripts/ui/GameRoot.gd` passed after the edge-to-edge desktop shell, draggable desktop-window manager, and follow-up title-bar stacking / drag / clamp fixes on `2026-04-23`
+  - Godot project-load check passed after the same desktop-window-manager fixes on `2026-04-23`
   - `git diff --check` passed after the debounced-save / targeted-refresh plus company-row-cache latency passes and post-buy detail regression fix on `2026-04-22`
   - Godot project-load check passed after the post-buy detail regression fix on `2026-04-22`
   - quick Godot headless smoke passed after the post-buy detail regression fix on `2026-04-22`
@@ -1085,7 +1420,7 @@ Read this file first in the next session.
     - buy submit: about `150-300ms`
     - watchlist add: about `420-480ms`
   - `git diff --check -- PROJECT_HANDOFF.md` passed after the handoff refresh for the desktop-shell / Academy state on `2026-04-22`
-  - recent desktop-shell iteration used quick `git diff --check` plus Godot project-load `--quit` checks instead of full smoke because smoke remains slow and can hang during UI-only polish passes
+  - recent desktop-shell / desktop-window-manager iteration used quick `git diff --check` plus Godot project-load `--quit` checks instead of full smoke because smoke remains slow and can hang during UI-only polish passes
   - `git diff --check -- scenes/game/widgets/OrderWidget.tscn` passed after raising the order ticket lot cap to `99.999.999` on `2026-04-19`
   - `git diff --check` passed after the synthetic depth / ARA-ARB player market-impact foundation on `2026-04-19`
   - Godot project-load check passed after the synthetic depth / ARA-ARB player market-impact foundation on `2026-04-19`
@@ -1115,8 +1450,8 @@ Read this file first in the next session.
     - floaters: `221`
     - insider templates: `12`
 - Last known smoke output from `user://smoke_test_result.txt`:
-  - quick: `SMOKE_QUICK_OK normal_equity=94001565.29 days=3 summary=Zombie-led accumulation gave KUST the cleanest tape today.`
-  - full before the difficulty rebalance: `SMOKE_OK normal_equity=93997964.77 hardcore_equity=934611.5 hardcore_down_days=15 summary=Institution-led accumulation gave IDSY the cleanest tape today.`
+  - quick: `SMOKE_QUICK_OK normal_equity=94001565.29 days=3 summary=Retail-led accumulation gave WAME the cleanest tape today.`
+  - full: `SMOKE_OK normal_equity=93998965.29 grind_equity=9934611.5 grind_down_days=15 summary=Retail-led accumulation gave SUSY the cleanest tape today.`
 
 ## Known Limitations
 - Quarterly financials now exist, but they are still a derived educational layer:
@@ -1143,7 +1478,8 @@ Read this file first in the next session.
   - no richer account pages / follow system / custom finfluencer authoring UI yet
 - `Network` is now a first playable contact system, but still limited:
   - discovery currently only comes from News, company Profile context, and floater referrals
-  - there is no AGM / earnings call / IPO roadshow / RUPS / RUPSLB attendance UI yet
+  - there is now a shared meeting modal for simple venues, an interactive fullscreen `rights_issue` `RUPSLB` overlay, and chain-linked intel, but there is still no dedicated venue desktop app or richer contradiction/reliability presentation layer
+  - contacts can now reveal first-pass chain truth such as family, stance, timeline state, and next expected step, but there is still no richer contradiction / cross-contact reliability UI
   - favor cooldowns are not implemented yet
   - follow-up / report-back actions are not implemented yet
   - ignore decay is only represented through request failure for now
@@ -1158,19 +1494,39 @@ Read this file first in the next session.
   - no difficulty-specific price scaling
   - only Network actions currently use Daily Action Points
 - Taskbar scaffold exists, but is currently hidden
-- No draggable / resizable window manager yet
+- There is now a draggable desktop window manager, but it is still limited:
+  - one window per app type
+  - no resize/maximize flow yet
+  - `minimize` and `close` both currently just hide the window
+  - there is no taskbar/dock restore UI yet beyond reopening/focusing from desktop icons
+  - window size/position do not persist across save/load or relaunch
 - There is now a dedicated `News` UI with archive browsing, but the archive still reuses the current article list/detail layout rather than a separate long-form history browser
 - Person-event ids still use `trump_*` / `musk_*` internally even though displayed names are now `Tonald Drump` / `Melon Tusk`
 - Watchlist now has add/remove flows, but no multi-list management yet
 - Trade list now has basic All Stock search, but no sort tools yet
 - `Load Run` now uses a loading screen, but the smoke flow still does not explicitly click through the saved-run path
+- The broader corporate-action layer now exists, but it is still v1:
+  - only `rights_issue`, `stock_buyback`, `stock_split`, and `ceo_change` are currently enabled
+  - `private_placement`, `restructuring`, `strategic_merger_acquisition`, and `backdoor_listing` exist in catalog form only and are not active yet
+  - only `rights_issue` `rupslb` currently has interactive staged voting
+  - `annual_rups` and `earnings_call` still use the simpler shared meeting modal
+  - there is still no record-date/shareholder registry system; current held shares on the meeting day gate voting
+  - venue attendance remains free and there is still no AP cost or broader event-slot time economy
+  - same-day market prices are not recalculated after a vote; results feed the next simulated day instead
+  - next-day queued meeting reveal currently exists only through the debug overlay helper; there is no normal gameplay action that schedules a future `RUPSLB` directly for player testing
+  - staged venue presentation is currently limited to the `rights_issue` `rupslb` overlay:
+    - abstract attendee markers rather than full character actors
+    - no branching Q&A or agenda-by-agenda voting yet
+    - no interactive voting yet for the other enabled families
+  - first-pass delay/deny/rerun behavior exists for supporting families, but the more violent Indonesia-style shakeout / dump-then-rerun patterns still need deeper tuning and more family coverage
 - Portfolio tables are still display-focused:
   - no sorting
   - no filtering
   - no row actions yet
 - Dashboard is now more terminal-like, but still early-pass:
   - top-right now contains `Movers`
-  - the bottom-right box is intentionally still an empty placeholder
+  - the bottom-right box now mixes upcoming meeting buttons plus report rows, but it is still a simple first-pass block rather than a richer calendar/event browser
+  - debug-scheduled next-day `RUPSLB` meetings currently reveal through that bottom-right meeting strip only; the month calendar grid still marks quarterly reports only
   - there is no deeper click-through from the index card or calendar yet
   - there is no market frequency metric on the card yet
 - Trade view still needs deeper polish later:
@@ -1185,7 +1541,12 @@ Read this file first in the next session.
   - volume bars are now shown under the chart, but there is still no player-facing volume lesson / academy integration yet
   - indicator toggles and unlocks now exist, but indicator UX is still basic
   - only a minimal RSI lower panel exists; there are no richer optional indicator panes yet
-  - crosshair / hover readout now exist, but there is still no draggable chart interaction yet
+  - crosshair / hover readout now exist, and a first-pass manual drawing toolbar exists, but chart interaction is still limited:
+    - drawings are session-only and are not persisted through save/load
+    - no drag-to-move / drag-endpoint editing yet
+    - no color/style picker, labels, rays, channels, Fibonacci tools, or undo stack
+    - drawings are price-pane only; they do not anchor into the lower volume / RSI panels
+  - the order ticket can now be collapsed, but the collapsed state is session-only and there is no animation or per-layout persistence yet
   - broker tape is now much richer, but still a derived display layer:
     - it is not a true per-broker execution engine
     - broker rows are generated deterministically from aggregate flow + broker roster + company fit
@@ -1194,13 +1555,22 @@ Read this file first in the next session.
     - not a fully simulated day-by-day market tape
     - not yet surfaced as a dense historical table anywhere else in the UI
     - should be treated as believable long-run context, not canonical event-by-event history
+  - startup is much faster now because full detail is lazy, but the lazy-detail system is still first-pass:
+    - once background hydration finishes for much of the roster, later saves become heavier because more full company detail is now present in the save payload
+    - the hydration queue itself is not persisted; after reload, unfinished companies simply return to cold/queued states and can hydrate again
+    - Trade tabs now handle cold stocks gracefully, but the player can still briefly see placeholder text like `Generating company detail...`, `Building statement history...`, and `Loading extended history...` if they open a stock before hydration finishes
+    - the chart/history path still depends on hydrated financial history + statements for richer pre-2020 context
 - Company generation is still intentionally split across layers rather than one single end-to-end pipeline:
   - `CompanyRosterGenerator.gd` still owns identity generation
-  - `CompanyGenerator.gd` still owns financial/runtime stat generation
+  - `CompanyGenerator.gd` now owns both core startup generation and deferred full-detail hydration
   - `CompanyNarrativeGenerator.gd` now adds deterministic archetype/size/description flavor on top
 - `company_profile_data.json` is now the editable narrative content source, but it is tailored to the repo's existing sector ids rather than the broader external reference schema
 
 ## Recommended Next Steps (Confirm user first)
+- If startup feels good now but later day-advance/save work feels heavier, target the hydrated-detail persistence cost next:
+  - reduce how much fully hydrated company detail is serialized into the save payload
+  - or defer/trim save flushes triggered after background hydration batches
+  - keep using the new `[perf][startup]`, `[perf][ui]`, and `[perf][save]` logs to compare before/after
 - Finish the next performance pass if click latency still feels rough after more playtesting:
   - focus specifically on watchlist / company-list diffing now, because that is the main remaining click hotspot after the latest latency pass
   - stop rebuilding the watchlist list, all-stock rows, and portfolio sidebar together for every single watchlist mutation
@@ -1230,8 +1600,20 @@ Read this file first in the next session.
   - sort / filter presets
   - maybe multi-list support later
 - Deepen the Network/contact system:
-  - add in-world discovery through AGM, earnings call, IPO roadshow, RUPS, and RUPSLB attendance
-  - add event-slot or daily-action costs for meeting contacts if/when the broader time system exists
+  - deepen the implemented shared corporate-action chain system rather than bolting on isolated meeting UIs
+  - keep `earnings_call`, `annual_rups`, and `rupslb` as formal venues reading/writing the same underlying chain object
+  - deepen how `News`, `Twooter`, `Network`, and market reaction consume the same chain state so rumor, denial, delay, shakeout, approval, and execution feel more connected and dramatic
+  - let floaters and insiders leak more differentiated layers of truth, especially timing changes such as `real but delayed`, `renegotiated`, or `smart money is distributing before rerunning`
+  - add event-slot or daily-action costs for venue attendance / meeting contacts if/when the broader time system exists
+  - next corporate-action feature step is to expand the new interactive `rupslb` flow beyond `rights_issue`:
+    - add more agenda families
+    - add record-date/shareholder-registry rules
+    - deepen staged presentation / result nuance
+  - second family rollout after the current v1 families feel good:
+    - `private_placement`
+    - `restructuring`
+    - `strategic_merger_acquisition`
+  - save `backdoor_listing` for a later special pass as the most composite/high-volatility Indonesia-specific chain
   - deepen referrals beyond the current no-cooldown floater-to-insider prototype
   - add favor cooldowns and tune relationship burn for on-demand tips
   - add follow-up/report-back after acting on tips
@@ -1242,6 +1624,8 @@ Read this file first in the next session.
   - add a clearer UI for public management vs discovered/meet-ready insider leads
   - tune relationship gains/losses and contact arc market impact after playtesting
 - Deepen the chart:
+  - decide whether the new manual chart drawings should persist through save/load via `RunState` after more playtesting
+  - add drag/edit handles and endpoint movement for the new trend/horizontal line tools
   - deepen the current indicator unlock/toggle UX
   - add richer lower indicator panes beyond the minimal RSI panel
   - academy/tutorial lesson for volume interpretation

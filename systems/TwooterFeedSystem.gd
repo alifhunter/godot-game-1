@@ -341,6 +341,11 @@ func _build_post(
 		"trade_date": source_data.get("trade_date", current_trade_date).duplicate(true),
 		"tone": str(source_data.get("tone", context.get("tone", "mixed"))),
 		"category": str(source_data.get("category", "")),
+		"event_family": str(source_data.get("event_family", "")),
+		"source_chain_id": str(source_data.get("source_chain_id", "")),
+		"chain_family": str(source_data.get("chain_family", "")),
+		"meeting_id": str(source_data.get("meeting_id", "")),
+		"venue_type": str(source_data.get("venue_type", "")),
 		"target_ticker": str(context.get("target_ticker", "")),
 		"target_company_name": str(context.get("target_company_name", "")),
 		"sector_name": str(context.get("sector_name", "")),
@@ -379,6 +384,10 @@ func _pick_generic_account(unlocked_accounts: Array, minimum_tier: int, seed_key
 
 
 func _voice_key_for_event(event_data: Dictionary) -> String:
+	var event_family: String = str(event_data.get("event_family", ""))
+	var category: String = str(event_data.get("category", ""))
+	if event_family == "corporate_action" and not category.is_empty():
+		return category
 	var scope: String = str(event_data.get("scope", "company"))
 	var tone: String = str(event_data.get("tone", "mixed"))
 	if scope == "market":
@@ -389,6 +398,10 @@ func _voice_key_for_event(event_data: Dictionary) -> String:
 
 
 func _scope_voice_key(event_data: Dictionary) -> String:
+	var event_family: String = str(event_data.get("event_family", ""))
+	var category: String = str(event_data.get("category", ""))
+	if event_family == "corporate_action" and not category.is_empty():
+		return category
 	var scope: String = str(event_data.get("scope", "company"))
 	var tone: String = str(event_data.get("tone", "mixed"))
 	if scope == "market":
@@ -403,7 +416,10 @@ func _pick_voice_text(feed_data: Dictionary, voice_id: String, text_key: String,
 	var voice_pool: Array = voice_templates.get(voice_id, {}).get(text_key, [])
 	if voice_pool.is_empty():
 		if text_key != "market_wrap":
-			voice_pool = voice_templates.get(voice_id, {}).get("company_positive", [])
+			var tone_key: String = "company_%s" % str(context.get("tone", "positive"))
+			voice_pool = voice_templates.get(voice_id, {}).get(tone_key, [])
+			if voice_pool.is_empty():
+				voice_pool = voice_templates.get(voice_id, {}).get("company_positive", [])
 		if voice_pool.is_empty():
 			return ""
 	return _render_template(_pick_from_pool(voice_pool, seed_key), context)

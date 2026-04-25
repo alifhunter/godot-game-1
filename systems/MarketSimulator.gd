@@ -7,11 +7,20 @@ var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
 var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
 
 
-func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
+func simulate_day(run_state, data_repository, broker_flow_system, corporate_action_system) -> Dictionary:
 	var day_number: int = int(run_state.day_index) + 1
 	var trade_date: Dictionary = run_state.get_current_trade_date()
 	var macro_state: Dictionary = run_state.get_current_macro_state()
 	var difficulty_config: Dictionary = run_state.get_difficulty_config()
+	var report_events: Array = run_state.get_quarterly_report_events_for_day_number(day_number, trade_date)
+	var corporate_action_resolution: Dictionary = corporate_action_system.resolve_day(
+		run_state,
+		data_repository,
+		trade_date,
+		day_number,
+		macro_state,
+		report_events
+	)
 	var company_arc_resolution: Dictionary = company_event_system.resolve_day(
 		run_state,
 		trade_date,
@@ -19,6 +28,7 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 		macro_state
 	)
 	var active_company_arcs: Array = company_arc_resolution.get("active_arcs", []).duplicate(true)
+	active_company_arcs.append_array(corporate_action_resolution.get("active_company_arcs", []).duplicate(true))
 	var special_event_resolution: Dictionary = special_event_system.resolve_day(
 		run_state,
 		trade_date,
@@ -62,7 +72,6 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 		difficulty_config,
 		macro_state
 	)
-	var report_events: Array = run_state.get_quarterly_report_events_for_day_number(day_number, trade_date)
 	var companies_result: Dictionary = {}
 
 	for company_id_value in run_state.company_order:
@@ -233,9 +242,15 @@ func simulate_day(run_state, data_repository, broker_flow_system) -> Dictionary:
 		"report_events": report_events.duplicate(true),
 		"started_company_arcs": company_arc_resolution.get("started_events", []).duplicate(true),
 		"company_arc_phase_events": company_arc_resolution.get("phase_events", []).duplicate(true),
+		"corporate_action_events": corporate_action_resolution.get("corporate_action_events", []).duplicate(true),
 		"active_company_arcs": active_company_arcs,
 		"started_special_events": special_event_resolution.get("started_events", []).duplicate(true),
 		"active_special_events": active_special_events,
+		"active_corporate_action_chains": corporate_action_resolution.get("active_corporate_action_chains", {}).duplicate(true),
+		"corporate_meeting_calendar": corporate_action_resolution.get("corporate_meeting_calendar", {}).duplicate(true),
+		"corporate_action_intel": corporate_action_resolution.get("corporate_action_intel", {}).duplicate(true),
+		"attended_meetings": corporate_action_resolution.get("attended_meetings", {}).duplicate(true),
+		"corporate_meeting_sessions": corporate_action_resolution.get("corporate_meeting_sessions", {}).duplicate(true),
 		"macro_state": macro_state.duplicate(true),
 		"trade_date": trade_date.duplicate(true)
 	}

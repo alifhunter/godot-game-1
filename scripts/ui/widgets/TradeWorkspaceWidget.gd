@@ -16,6 +16,7 @@ var _chart_display_mode: String = "line"
 var _active_indicator_ids: Array = []
 var _company_snapshot: Dictionary = {}
 var _indicator_buttons: Dictionary = {}
+var _drawing_tool_buttons: Dictionary = {}
 var _cached_chart_key: String = ""
 var _cached_chart_snapshot: Dictionary = {}
 
@@ -23,7 +24,12 @@ var _cached_chart_snapshot: Dictionary = {}
 @onready var chart_header_label: Label = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartHeaderLabel
 @onready var chart_subheader_label: Label = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartSubheaderLabel
 @onready var chart_meta_label: Label = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartMetaLabel
-@onready var chart_canvas: PriceChartCanvas = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartCanvas
+@onready var chart_canvas: PriceChartCanvas = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartCanvas
+@onready var select_tool_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartDrawingToolbar/SelectToolButton
+@onready var horizontal_line_tool_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartDrawingToolbar/HorizontalLineToolButton
+@onready var trend_line_tool_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartDrawingToolbar/TrendLineToolButton
+@onready var delete_drawing_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartDrawingToolbar/DeleteDrawingButton
+@onready var clear_drawings_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartDrawingToolbar/ClearDrawingsButton
 @onready var range_1d_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow/Range1DButton
 @onready var range_1w_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow/Range1WButton
 @onready var range_1m_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow/Range1MButton
@@ -59,12 +65,31 @@ func _ready() -> void:
 	)
 	zoom_out_button.pressed.connect(_on_zoom_out_pressed)
 	zoom_in_button.pressed.connect(_on_zoom_in_pressed)
+	select_tool_button.pressed.connect(_on_drawing_tool_pressed.bind("select"))
+	horizontal_line_tool_button.pressed.connect(_on_drawing_tool_pressed.bind("horizontal"))
+	trend_line_tool_button.pressed.connect(_on_drawing_tool_pressed.bind("trend"))
+	delete_drawing_button.pressed.connect(chart_canvas.delete_selected_drawing)
+	clear_drawings_button.pressed.connect(chart_canvas.clear_drawings_for_active_company)
+	_drawing_tool_buttons = {
+		"select": select_tool_button,
+		"horizontal": horizontal_line_tool_button,
+		"trend": trend_line_tool_button
+	}
 	for button_value in _chart_range_button_map().values():
 		_style_chart_range_button(button_value)
 	_style_chart_range_button(display_line_button)
 	_style_chart_range_button(display_candle_button)
 	_style_chart_range_button(zoom_out_button)
 	_style_chart_range_button(zoom_in_button)
+	for button_value in _drawing_tool_buttons.values():
+		_style_chart_range_button(button_value)
+	_style_chart_range_button(delete_drawing_button)
+	_style_chart_range_button(clear_drawings_button)
+	select_tool_button.tooltip_text = "Select chart drawings."
+	horizontal_line_tool_button.tooltip_text = "Place a horizontal price line."
+	trend_line_tool_button.tooltip_text = "Draw a trend line with two clicks."
+	delete_drawing_button.tooltip_text = "Delete the selected chart drawing."
+	clear_drawings_button.tooltip_text = "Clear this stock's session drawings."
 	_ensure_indicator_row()
 	chart_header_label.add_theme_color_override("font_color", COLOR_TEXT)
 	chart_subheader_label.add_theme_color_override("font_color", COLOR_MUTED)
@@ -72,6 +97,7 @@ func _ready() -> void:
 	chart_meta_label.add_theme_color_override("font_color", COLOR_MUTED)
 	_update_chart_range_buttons()
 	_update_chart_display_mode_buttons()
+	_update_drawing_tool_buttons()
 	_update_zoom_buttons()
 	_refresh_indicator_controls()
 
@@ -80,6 +106,7 @@ func set_company_snapshot(snapshot: Dictionary) -> void:
 	var previous_company_id: String = str(_company_snapshot.get("id", ""))
 	var next_company_id: String = str(snapshot.get("id", ""))
 	_company_snapshot = snapshot
+	chart_canvas.set_active_company_id(next_company_id)
 	if previous_company_id != next_company_id or next_company_id.is_empty():
 		chart_canvas.reset_zoom()
 		_cached_chart_key = ""
@@ -122,6 +149,7 @@ func _refresh_chart() -> void:
 		return
 
 	var chart_snapshot: Dictionary = _get_cached_chart_snapshot()
+	var detail_ready: bool = str(_company_snapshot.get("detail_status", "ready")) == "ready"
 	chart_header_label.text = "%s  |  %s" % [
 		_company_snapshot.get("ticker", ""),
 		_company_snapshot.get("name", "")
@@ -135,13 +163,18 @@ func _refresh_chart() -> void:
 	]
 
 	if chart_snapshot.is_empty():
-		chart_meta_label.text = "%s | Not enough price history yet." % GameManager.get_chart_range_label(_selected_range_id)
+		chart_meta_label.text = "%s | %s" % [
+			GameManager.get_chart_range_label(_selected_range_id),
+			"Loading extended history..." if not detail_ready else "Not enough price history yet."
+		]
 		chart_canvas.clear_chart()
 		_update_chart_display_mode_buttons()
 		_update_zoom_buttons()
 		return
 
 	chart_meta_label.text = _build_chart_meta_text(chart_snapshot)
+	if not detail_ready:
+		chart_meta_label.text += " | Loading extended history..."
 	chart_canvas.set_chart_snapshot(_decorate_chart_snapshot(chart_snapshot))
 	_update_chart_display_mode_buttons()
 	_update_zoom_buttons()
@@ -164,13 +197,14 @@ func _build_chart_cache_key() -> String:
 	for indicator_id_value in _active_indicator_ids:
 		indicator_tokens.append(str(indicator_id_value))
 	var company_id: String = str(_company_snapshot.get("id", ""))
-	return "%s|%s|%s|%d|%s|%s" % [
+	return "%s|%s|%s|%d|%s|%s|%s" % [
 		company_id,
 		_selected_range_id,
 		",".join(indicator_tokens),
 		int(RunState.day_index),
 		str(_company_snapshot.get("current_price", 0.0)),
-		str(_company_snapshot.get("previous_close", 0.0))
+		str(_company_snapshot.get("previous_close", 0.0)),
+		str(_company_snapshot.get("detail_status", "ready"))
 	]
 
 
@@ -250,6 +284,18 @@ func _chart_range_button_map() -> Dictionary:
 		"5y": range_5y_button,
 		"ytd": range_ytd_button
 	}
+
+
+func _on_drawing_tool_pressed(tool_id: String) -> void:
+	chart_canvas.set_drawing_tool(tool_id)
+	_update_drawing_tool_buttons()
+
+
+func _update_drawing_tool_buttons() -> void:
+	var active_tool: String = chart_canvas.get_drawing_tool()
+	for tool_id in _drawing_tool_buttons.keys():
+		var button: Button = _drawing_tool_buttons[tool_id]
+		button.set_pressed_no_signal(str(tool_id) == active_tool)
 
 
 func _decorate_chart_snapshot(chart_snapshot: Dictionary) -> Dictionary:

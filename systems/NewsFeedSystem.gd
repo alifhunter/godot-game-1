@@ -388,6 +388,11 @@ func _build_article_record(
 		"target_sector_id": str(context.get("target_sector_id", "")),
 		"sector_name": str(context.get("sector_name", "")),
 		"person_name": str(context.get("person_name", "")),
+		"event_family": str(source_data.get("event_family", "")),
+		"source_chain_id": str(source_data.get("source_chain_id", "")),
+		"chain_family": str(source_data.get("chain_family", "")),
+		"meeting_id": str(source_data.get("meeting_id", "")),
+		"venue_type": str(source_data.get("venue_type", "")),
 		"priority": priority
 	}
 

@@ -11,7 +11,7 @@ func build_profile(
 	run_seed: int,
 	company_id: String
 ) -> Dictionary:
-	var profile_data: Dictionary = DataRepository.get_company_profile_data()
+	var profile_data: Dictionary = DataRepository.get_company_profile_data_ref()
 	if profile_data.is_empty():
 		return {}
 

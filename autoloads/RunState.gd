@@ -39,6 +39,7 @@ const REPORT_MONTH_BY_QUARTER := {
 	3: 7,
 	4: 10
 }
+const STARTUP_PERF_LOG_PREFIX := "[perf][startup]"
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
 const COMPANY_PROFILE_KEYS := [
 	"base_price",
@@ -51,6 +52,7 @@ const COMPANY_PROFILE_KEYS := [
 	"financial_statement_snapshot",
 	"generation_traits",
 	"shares_outstanding",
+	"detail_status",
 	"profile_seed",
 	"archetype_id",
 	"archetype_label",
@@ -97,6 +99,11 @@ var event_history = []
 var market_history = []
 var active_company_arcs = []
 var active_special_events = []
+var active_corporate_action_chains = {}
+var corporate_meeting_calendar = {}
+var corporate_action_intel = {}
+var attended_meetings = {}
+var corporate_meeting_sessions = {}
 var news_archive_index = {}
 var news_archive_articles = {}
 var network_contacts = {}
@@ -109,6 +116,8 @@ var academy_progress = {}
 var quarterly_report_calendar = {}
 var yearly_macro_states = {}
 var historical_chart_bar_cache = {}
+var company_detail_hydration_queue = []
+var company_detail_hydration_lookup = {}
 var difficulty_id = "normal"
 var difficulty_config = DEFAULT_DIFFICULTY_CONFIG.duplicate(true)
 var tutorial_enabled = false
@@ -145,6 +154,11 @@ func reset() -> void:
 	market_history = []
 	active_company_arcs = []
 	active_special_events = []
+	active_corporate_action_chains = {}
+	corporate_meeting_calendar = {}
+	corporate_action_intel = {}
+	attended_meetings = {}
+	corporate_meeting_sessions = {}
 	news_archive_index = {}
 	news_archive_articles = {}
 	network_contacts = {}
@@ -157,6 +171,8 @@ func reset() -> void:
 	quarterly_report_calendar = {}
 	yearly_macro_states = {}
 	historical_chart_bar_cache = {}
+	company_detail_hydration_queue = []
+	company_detail_hydration_lookup = {}
 	difficulty_id = str(DEFAULT_DIFFICULTY_CONFIG.get("id", "normal"))
 	difficulty_config = DEFAULT_DIFFICULTY_CONFIG.duplicate(true)
 	tutorial_enabled = false
@@ -174,6 +190,66 @@ func setup_new_run(
 	new_difficulty_config: Dictionary,
 	wants_tutorial: bool
 ) -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	_initialize_new_run_state(new_run_seed, new_difficulty_config, wants_tutorial)
+	for definition_value in run_company_definitions:
+		_add_company_to_new_run(definition_value)
+	_finalize_new_run_setup()
+	_log_startup_perf_elapsed("setup_new_run", started_at_usec, " companies=%d" % company_order.size())
+
+
+func setup_new_run_batched(
+	new_run_seed: int,
+	run_company_definitions: Array,
+	new_difficulty_config: Dictionary,
+	wants_tutorial: bool,
+	progress_callback: Callable = Callable(),
+	batch_size: int = 5,
+	detail_callback: Callable = Callable()
+) -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	_initialize_new_run_state(new_run_seed, new_difficulty_config, wants_tutorial)
+	var total_company_count: int = run_company_definitions.size()
+	var effective_batch_size: int = _effective_new_run_batch_size(total_company_count, batch_size)
+	var processed_company_count: int = 0
+	if total_company_count <= 0:
+		if progress_callback.is_valid():
+			progress_callback.call(0, 0)
+		_finalize_new_run_setup()
+		_log_startup_perf_elapsed("setup_new_run_batched", started_at_usec, " companies=0")
+		return
+
+	while processed_company_count < total_company_count:
+		var batch_started_at_usec: int = Time.get_ticks_usec()
+		var batch_end_index: int = min(processed_company_count + effective_batch_size, total_company_count)
+		var batch_company_count: int = batch_end_index - processed_company_count
+		var batch_company_ids: Array = []
+		for definition_index in range(processed_company_count, batch_end_index):
+			var definition: Dictionary = run_company_definitions[definition_index]
+			_add_company_to_new_run(definition)
+			batch_company_ids.append(str(definition.get("id", "")))
+		processed_company_count = batch_end_index
+		if progress_callback.is_valid():
+			progress_callback.call(processed_company_count, total_company_count)
+		if detail_callback.is_valid():
+			detail_callback.call(processed_company_count, total_company_count, batch_company_ids)
+		_log_startup_perf_elapsed(
+			"new_run_financial_batch",
+			batch_started_at_usec,
+			" companies=%d/%d batch_size=%d" % [processed_company_count, total_company_count, batch_company_count]
+		)
+		if processed_company_count < total_company_count:
+			await get_tree().process_frame
+
+	_finalize_new_run_setup()
+	_log_startup_perf_elapsed("setup_new_run_batched", started_at_usec, " companies=%d" % company_order.size())
+
+
+func _initialize_new_run_state(
+	new_run_seed: int,
+	new_difficulty_config: Dictionary,
+	wants_tutorial: bool
+) -> void:
 	reset()
 	run_seed = new_run_seed
 	difficulty_config = new_difficulty_config.duplicate(true)
@@ -187,40 +263,68 @@ func setup_new_run(
 	player_portfolio["cash"] = float(difficulty_config.get("starting_cash", DEFAULT_DIFFICULTY_CONFIG.get("starting_cash", 0.0)))
 	_ensure_macro_state_for_year(int(current_trade_date.get("year", 2020)))
 
-	for definition in run_company_definitions:
-		var base_definition: Dictionary = definition.duplicate(true)
-		var company_id = str(base_definition.get("id", ""))
-		if company_id.is_empty():
-			continue
 
-		self.company_definitions[company_id] = base_definition
-		var sector_definition: Dictionary = DataRepository.get_sector_definition(str(base_definition.get("sector_id", "")))
-		var company_profile: Dictionary = company_generator.generate_company_profile(base_definition, sector_definition, run_seed)
-		var effective_definition: Dictionary = _apply_company_profile_to_definition(base_definition, company_profile)
-		var base_price: float = IDX_PRICE_RULES.normalize_last_price(float(effective_definition.get("base_price", 0.0)))
-		company_order.append(company_id)
-		companies[company_id] = {
-			"company_id": company_id,
-			"current_price": base_price,
-			"previous_close": base_price,
-			"starting_price": base_price,
-			"ytd_open_price": base_price,
-			"ytd_reference_year": int(current_trade_date.get("year", 2020)),
-			"price_history": [base_price],
-			"price_bars": [],
-			"sentiment": 0.0,
-			"active_event_tags": [],
-			"active_events": [],
-			"hidden_story_flags": _seed_hidden_story_flags(base_definition),
-			"broker_flow": _empty_broker_flow(),
-			"daily_change_pct": 0.0,
-			"market_depth_context": {},
-			"player_market_impact": {},
-			"company_profile": company_profile
-		}
+func _add_company_to_new_run(definition_value: Dictionary) -> void:
+	var base_definition: Dictionary = definition_value.duplicate(true)
+	var company_id: String = str(base_definition.get("id", ""))
+	if company_id.is_empty():
+		return
 
+	self.company_definitions[company_id] = base_definition
+	var sector_definition: Dictionary = DataRepository.get_sector_definition(str(base_definition.get("sector_id", "")))
+	var company_profile: Dictionary = company_generator.generate_company_profile_core(base_definition, sector_definition, run_seed)
+	var effective_definition: Dictionary = _apply_company_profile_to_definition(base_definition, company_profile)
+	var base_price: float = IDX_PRICE_RULES.normalize_last_price(float(effective_definition.get("base_price", 0.0)))
+	company_order.append(company_id)
+	companies[company_id] = {
+		"company_id": company_id,
+		"current_price": base_price,
+		"previous_close": base_price,
+		"starting_price": base_price,
+		"ytd_open_price": base_price,
+		"ytd_reference_year": int(current_trade_date.get("year", 2020)),
+		"price_history": [base_price],
+		"price_bars": [],
+		"sentiment": 0.0,
+		"active_event_tags": [],
+		"active_events": [],
+		"hidden_story_flags": _seed_hidden_story_flags(base_definition),
+		"broker_flow": _empty_broker_flow(),
+		"daily_change_pct": 0.0,
+		"market_depth_context": {},
+		"player_market_impact": {},
+		"company_profile": company_profile
+	}
+
+
+func _finalize_new_run_setup() -> void:
 	last_equity_value = get_total_equity()
 	quarterly_report_calendar = _build_quarterly_report_calendar()
+
+
+func _effective_new_run_batch_size(total_company_count: int, requested_batch_size: int) -> int:
+	if total_company_count <= 0:
+		return 1
+	var safe_requested_batch_size: int = requested_batch_size
+	if safe_requested_batch_size <= 0:
+		safe_requested_batch_size = 5
+	if total_company_count <= 20 and safe_requested_batch_size <= 5:
+		return 10
+	return max(safe_requested_batch_size, 1)
+
+
+func _should_log_startup_perf() -> bool:
+	return OS.is_debug_build()
+
+
+func _log_startup_perf_elapsed(label: String, started_at_usec: int, extra: String = "") -> void:
+	if not _should_log_startup_perf():
+		return
+	var elapsed_msec: float = max(float(Time.get_ticks_usec() - started_at_usec) / 1000.0, 0.0)
+	if extra.is_empty():
+		print("%s %s %.2fms" % [STARTUP_PERF_LOG_PREFIX, label, elapsed_msec])
+		return
+	print("%s %s %.2fms%s" % [STARTUP_PERF_LOG_PREFIX, label, elapsed_msec, extra])
 
 
 func load_from_dict(data: Dictionary) -> void:
@@ -237,6 +341,11 @@ func load_from_dict(data: Dictionary) -> void:
 	market_history = data.get("market_history", []).duplicate(true)
 	active_company_arcs = data.get("active_company_arcs", []).duplicate(true)
 	active_special_events = data.get("active_special_events", []).duplicate(true)
+	active_corporate_action_chains = data.get("active_corporate_action_chains", {}).duplicate(true)
+	corporate_meeting_calendar = data.get("corporate_meeting_calendar", {}).duplicate(true)
+	corporate_action_intel = data.get("corporate_action_intel", {}).duplicate(true)
+	attended_meetings = data.get("attended_meetings", {}).duplicate(true)
+	corporate_meeting_sessions = data.get("corporate_meeting_sessions", {}).duplicate(true)
 	news_archive_index = data.get("news_archive_index", {}).duplicate(true)
 	news_archive_articles = data.get("news_archive_articles", {}).duplicate(true)
 	network_contacts = data.get("network_contacts", {}).duplicate(true)
@@ -278,8 +387,6 @@ func load_from_dict(data: Dictionary) -> void:
 	for company_id in data.get("companies", {}).keys():
 		companies[str(company_id)] = _normalize_company_runtime(data["companies"][company_id].duplicate(true))
 
-	_ensure_company_profiles()
-
 	player_portfolio = data.get("player_portfolio", {
 		"cash": 0.0,
 		"holdings": {},
@@ -308,6 +415,11 @@ func to_save_dict() -> Dictionary:
 		"market_history": market_history.duplicate(true),
 		"active_company_arcs": active_company_arcs.duplicate(true),
 		"active_special_events": active_special_events.duplicate(true),
+		"active_corporate_action_chains": active_corporate_action_chains.duplicate(true),
+		"corporate_meeting_calendar": corporate_meeting_calendar.duplicate(true),
+		"corporate_action_intel": corporate_action_intel.duplicate(true),
+		"attended_meetings": attended_meetings.duplicate(true),
+		"corporate_meeting_sessions": corporate_meeting_sessions.duplicate(true),
 		"news_archive_index": news_archive_index.duplicate(true),
 		"news_archive_articles": news_archive_articles.duplicate(true),
 		"network_contacts": network_contacts.duplicate(true),
@@ -331,6 +443,121 @@ func get_company(company_id: String) -> Dictionary:
 	if not companies.has(company_id):
 		return {}
 	return companies[company_id]
+
+
+func get_company_detail_status(company_id: String) -> String:
+	var company: Dictionary = get_company(company_id)
+	if company.is_empty():
+		return ""
+	var company_profile: Dictionary = company.get("company_profile", {})
+	if company_profile.is_empty():
+		return ""
+	return str(company_profile.get("detail_status", "ready"))
+
+
+func ensure_company_core_profile(company_id: String) -> bool:
+	if company_id.is_empty() or not companies.has(company_id):
+		return false
+	var runtime: Dictionary = companies[company_id].duplicate(true)
+	var company_profile: Dictionary = runtime.get("company_profile", {})
+	if not company_profile.is_empty():
+		return true
+	var template: Dictionary = _get_base_company_definition(company_id)
+	if template.is_empty():
+		return false
+	var sector_definition: Dictionary = DataRepository.get_sector_definition(str(template.get("sector_id", "")))
+	company_profile = company_generator.generate_company_profile_core(template, sector_definition, run_seed)
+	runtime["company_profile"] = company_profile
+	companies[company_id] = runtime
+	return true
+
+
+func ensure_company_full_detail(company_id: String) -> bool:
+	if company_id.is_empty() or not companies.has(company_id):
+		return false
+	if not ensure_company_core_profile(company_id):
+		return false
+	var runtime: Dictionary = companies[company_id].duplicate(true)
+	var company_profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
+	if company_profile.is_empty():
+		return false
+	if str(company_profile.get("detail_status", "ready")) == "ready":
+		return true
+	var template: Dictionary = _get_base_company_definition(company_id)
+	if template.is_empty():
+		return false
+	var sector_definition: Dictionary = DataRepository.get_sector_definition(str(template.get("sector_id", "")))
+	company_profile["detail_status"] = "hydrating"
+	runtime["company_profile"] = company_profile
+	companies[company_id] = runtime
+	var hydrated_profile: Dictionary = company_generator.hydrate_company_profile_detail(
+		company_profile,
+		template,
+		sector_definition,
+		run_seed
+	)
+	hydrated_profile["detail_status"] = "ready"
+	runtime["company_profile"] = _normalize_company_profile(hydrated_profile)
+	companies[company_id] = runtime
+	historical_chart_bar_cache.erase(company_id)
+	company_detail_hydration_lookup.erase(company_id)
+	var queued_index: int = company_detail_hydration_queue.find(company_id)
+	if queued_index >= 0:
+		company_detail_hydration_queue.remove_at(queued_index)
+	return true
+
+
+func queue_company_detail_hydration(company_id: String, priority: bool = false) -> void:
+	if company_id.is_empty() or not companies.has(company_id):
+		return
+	if not ensure_company_core_profile(company_id):
+		return
+	var runtime: Dictionary = companies[company_id].duplicate(true)
+	var company_profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
+	if company_profile.is_empty():
+		return
+	var current_status: String = str(company_profile.get("detail_status", "ready"))
+	if current_status == "ready" or current_status == "hydrating":
+		return
+	company_profile["detail_status"] = "queued"
+	runtime["company_profile"] = company_profile
+	companies[company_id] = runtime
+	if company_detail_hydration_lookup.has(company_id):
+		if priority:
+			var existing_index: int = company_detail_hydration_queue.find(company_id)
+			if existing_index > 0:
+				company_detail_hydration_queue.remove_at(existing_index)
+				company_detail_hydration_queue.push_front(company_id)
+		return
+	company_detail_hydration_lookup[company_id] = true
+	if priority:
+		company_detail_hydration_queue.push_front(company_id)
+	else:
+		company_detail_hydration_queue.append(company_id)
+
+
+func has_pending_company_detail_hydration() -> bool:
+	return not company_detail_hydration_queue.is_empty()
+
+
+func dequeue_company_detail_hydration() -> String:
+	while not company_detail_hydration_queue.is_empty():
+		var company_id: String = str(company_detail_hydration_queue.pop_front())
+		company_detail_hydration_lookup.erase(company_id)
+		if company_id.is_empty() or not companies.has(company_id):
+			continue
+		var runtime: Dictionary = companies[company_id].duplicate(true)
+		var company_profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
+		if company_profile.is_empty():
+			continue
+		var detail_status: String = str(company_profile.get("detail_status", "ready"))
+		if detail_status == "ready":
+			continue
+		company_profile["detail_status"] = "hydrating"
+		runtime["company_profile"] = company_profile
+		companies[company_id] = runtime
+		return company_id
+	return ""
 
 
 func get_company_chart_bars(company_id: String) -> Array:
@@ -608,8 +835,15 @@ func apply_day_result(day_result: Dictionary) -> void:
 		_record_event(company_arc_phase_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	for special_event_value in day_result.get("started_special_events", []):
 		_record_event(special_event_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
+	for corporate_event_value in day_result.get("corporate_action_events", []):
+		_record_event(corporate_event_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	active_company_arcs = day_result.get("active_company_arcs", []).duplicate(true)
 	active_special_events = day_result.get("active_special_events", []).duplicate(true)
+	active_corporate_action_chains = day_result.get("active_corporate_action_chains", {}).duplicate(true)
+	corporate_meeting_calendar = day_result.get("corporate_meeting_calendar", {}).duplicate(true)
+	corporate_action_intel = day_result.get("corporate_action_intel", {}).duplicate(true)
+	attended_meetings = day_result.get("attended_meetings", {}).duplicate(true)
+	corporate_meeting_sessions = day_result.get("corporate_meeting_sessions", {}).duplicate(true)
 
 	for company_id in day_result.get("companies", {}).keys():
 		companies[str(company_id)] = _normalize_company_runtime(day_result["companies"][company_id].duplicate(true))
@@ -811,6 +1045,46 @@ func get_active_company_arcs() -> Array:
 
 func get_active_special_events() -> Array:
 	return active_special_events.duplicate(true)
+
+
+func get_active_corporate_action_chains() -> Dictionary:
+	return active_corporate_action_chains.duplicate(true)
+
+
+func set_active_corporate_action_chains(next_chains: Dictionary) -> void:
+	active_corporate_action_chains = next_chains.duplicate(true)
+
+
+func get_corporate_meeting_calendar() -> Dictionary:
+	return corporate_meeting_calendar.duplicate(true)
+
+
+func set_corporate_meeting_calendar(next_calendar: Dictionary) -> void:
+	corporate_meeting_calendar = next_calendar.duplicate(true)
+
+
+func get_corporate_action_intel() -> Dictionary:
+	return corporate_action_intel.duplicate(true)
+
+
+func set_corporate_action_intel(next_intel: Dictionary) -> void:
+	corporate_action_intel = next_intel.duplicate(true)
+
+
+func get_attended_meetings() -> Dictionary:
+	return attended_meetings.duplicate(true)
+
+
+func set_attended_meetings(next_attended_meetings: Dictionary) -> void:
+	attended_meetings = next_attended_meetings.duplicate(true)
+
+
+func get_corporate_meeting_sessions() -> Dictionary:
+	return corporate_meeting_sessions.duplicate(true)
+
+
+func set_corporate_meeting_sessions(next_sessions: Dictionary) -> void:
+	corporate_meeting_sessions = next_sessions.duplicate(true)
 
 
 func get_network_contacts() -> Dictionary:
@@ -1481,9 +1755,21 @@ func _upsert_news_archive_article(outlet_id: String, outlet_label: String, artic
 		"outlet_id": outlet_id,
 		"outlet_label": outlet_label,
 		"headline": str(article.get("headline", "")),
+		"deck": str(article.get("deck", "")),
 		"body": str(article.get("body", "")),
 		"trade_date": trade_date,
-		"day_index": int(article.get("day_index", -1))
+		"day_index": int(article.get("day_index", -1)),
+		"target_company_id": str(article.get("target_company_id", "")),
+		"target_ticker": str(article.get("target_ticker", "")),
+		"target_company_name": str(article.get("target_company_name", "")),
+		"target_sector_id": str(article.get("target_sector_id", "")),
+		"tone": str(article.get("tone", "")),
+		"category": str(article.get("category", "")),
+		"event_family": str(article.get("event_family", "")),
+		"source_chain_id": str(article.get("source_chain_id", "")),
+		"chain_family": str(article.get("chain_family", "")),
+		"meeting_id": str(article.get("meeting_id", "")),
+		"venue_type": str(article.get("venue_type", ""))
 	}
 	news_archive_articles[archive_article_id] = article_record
 
@@ -1491,7 +1777,11 @@ func _upsert_news_archive_article(outlet_id: String, outlet_label: String, artic
 		"id": archive_article_id,
 		"headline": str(article_record.get("headline", "")),
 		"trade_date": trade_date.duplicate(true),
-		"day_index": int(article_record.get("day_index", -1))
+		"day_index": int(article_record.get("day_index", -1)),
+		"meeting_id": str(article_record.get("meeting_id", "")),
+		"venue_type": str(article_record.get("venue_type", "")),
+		"target_company_id": str(article_record.get("target_company_id", "")),
+		"chain_family": str(article_record.get("chain_family", ""))
 	}
 
 	var outlet_bucket: Dictionary = news_archive_index.get(outlet_id, {
@@ -1763,6 +2053,12 @@ func _normalize_company_profile(company_profile: Dictionary) -> Dictionary:
 		return {}
 
 	normalized_profile["base_price"] = IDX_PRICE_RULES.normalize_last_price(float(normalized_profile.get("base_price", 0.0)))
+	var detail_status: String = str(normalized_profile.get("detail_status", "ready"))
+	if detail_status == "hydrating":
+		detail_status = "cold"
+	if not ["cold", "queued", "ready"].has(detail_status):
+		detail_status = "ready"
+	normalized_profile["detail_status"] = detail_status
 	normalized_profile["profile_seed"] = int(normalized_profile.get("profile_seed", 0))
 	normalized_profile["company_size_id"] = int(normalized_profile.get("company_size_id", 0))
 	normalized_profile["company_age"] = int(normalized_profile.get("company_age", 0))
@@ -1971,52 +2267,7 @@ func _ensure_macro_state_for_year(year: int) -> void:
 func _ensure_company_profiles() -> void:
 	for company_id_value in company_order:
 		var company_id: String = str(company_id_value)
-		if not companies.has(company_id):
-			continue
-
-		var runtime: Dictionary = companies[company_id].duplicate(true)
-		var company_profile: Dictionary = runtime.get("company_profile", {})
-		if company_profile.is_empty():
-			var template: Dictionary = _get_base_company_definition(company_id)
-			if template.is_empty():
-				continue
-
-			var sector_definition: Dictionary = DataRepository.get_sector_definition(str(template.get("sector_id", "")))
-			company_profile = company_generator.generate_company_profile(template, sector_definition, run_seed)
-			runtime["company_profile"] = company_profile
-			companies[company_id] = runtime
-			continue
-
-		var statement_snapshot: Dictionary = company_profile.get("financial_statement_snapshot", {})
-		if statement_snapshot.get("quarterly_statements", []).is_empty():
-			var template: Dictionary = _get_base_company_definition(company_id)
-			if template.is_empty():
-				continue
-
-			var refreshed_statement_snapshot: Dictionary = company_generator.build_financial_statement_snapshot_from_profile(
-				company_profile,
-				str(template.get("sector_id", "")),
-				run_seed,
-				company_id
-			)
-			if not refreshed_statement_snapshot.is_empty():
-				company_profile["financial_statement_snapshot"] = refreshed_statement_snapshot
-				runtime["company_profile"] = company_profile
-				companies[company_id] = runtime
-
-		if company_profile.get("management_roster", []).size() != 3:
-			var management_template: Dictionary = _get_base_company_definition(company_id)
-			if management_template.is_empty():
-				continue
-
-			var management_sector_definition: Dictionary = DataRepository.get_sector_definition(str(management_template.get("sector_id", "")))
-			company_profile["management_roster"] = company_generator.build_management_roster(
-				management_template,
-				management_sector_definition,
-				run_seed
-			)
-			runtime["company_profile"] = company_profile
-			companies[company_id] = runtime
+		ensure_company_core_profile(company_id)
 
 
 func _get_base_company_definition(company_id: String) -> Dictionary:

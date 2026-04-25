@@ -141,6 +141,11 @@ const QUARTER_WEIGHT_PROFILES := {
 
 
 func generate_company_profile(template: Dictionary, sector_definition: Dictionary, run_seed: int) -> Dictionary:
+	var core_profile: Dictionary = generate_company_profile_core(template, sector_definition, run_seed)
+	return hydrate_company_profile_detail(core_profile, template, sector_definition, run_seed)
+
+
+func generate_company_profile_core(template: Dictionary, sector_definition: Dictionary, run_seed: int) -> Dictionary:
 	var company_id: String = str(template.get("id", "company"))
 	var sector_id: String = str(sector_definition.get("id", template.get("sector_id", "")))
 	var sector_profile: Dictionary = _sector_profile(sector_id)
@@ -164,17 +169,48 @@ func generate_company_profile(template: Dictionary, sector_definition: Dictionar
 	var risk_score: int = _derive_risk_score(traits, financials)
 	var base_volatility: float = _derive_base_volatility(traits, risk_score)
 	var generated_base_price: float = IDX_PRICE_RULES.normalize_last_price(float(latest_year.get("implied_share_price", target_price)))
-	var generated_profile: Dictionary = {
+	return {
 		"base_price": generated_base_price,
 		"quality_score": quality_score,
 		"growth_score": growth_score,
 		"risk_score": risk_score,
 		"base_volatility": base_volatility,
 		"financials": financials,
-		"financial_history": financial_history,
 		"generation_traits": traits,
-		"shares_outstanding": shares_outstanding
+		"shares_outstanding": shares_outstanding,
+		"detail_status": "cold"
 	}
+
+
+func hydrate_company_profile_detail(
+	core_profile: Dictionary,
+	template: Dictionary,
+	sector_definition: Dictionary,
+	run_seed: int
+) -> Dictionary:
+	var generated_profile: Dictionary = core_profile.duplicate(true)
+	var company_id: String = str(template.get("id", "company"))
+	var sector_id: String = str(sector_definition.get("id", template.get("sector_id", "")))
+	var sector_profile: Dictionary = _sector_profile(sector_id)
+	var traits: Dictionary = generated_profile.get("generation_traits", {}).duplicate(true)
+	if traits.is_empty():
+		traits = _build_traits(template, sector_profile, run_seed, company_id)
+		generated_profile["generation_traits"] = traits
+	var financial_history: Array = _build_financial_history(
+		template,
+		sector_profile,
+		traits,
+		run_seed,
+		company_id
+	)
+	var shares_outstanding: float = max(float(generated_profile.get("shares_outstanding", 0.0)), 0.0)
+	if shares_outstanding <= 0.0:
+		var latest_year: Dictionary = financial_history[financial_history.size() - 1].duplicate(true)
+		var target_price: float = _derive_target_price(template, traits, run_seed, company_id)
+		shares_outstanding = _derive_shares_outstanding(float(latest_year.get("market_cap", 0.0)), target_price, template)
+		generated_profile["shares_outstanding"] = shares_outstanding
+	financial_history = _apply_share_price_history(financial_history, shares_outstanding)
+	generated_profile["financial_history"] = financial_history
 	generated_profile["financial_statement_snapshot"] = build_financial_statement_snapshot_from_profile(
 		generated_profile,
 		sector_id,
@@ -184,7 +220,7 @@ func generate_company_profile(template: Dictionary, sector_definition: Dictionar
 	var narrative_profile: Dictionary = company_narrative_generator.build_profile(
 		template,
 		sector_definition,
-		financials,
+		generated_profile.get("financials", {}),
 		run_seed,
 		company_id
 	)
@@ -195,11 +231,12 @@ func generate_company_profile(template: Dictionary, sector_definition: Dictionar
 		sector_definition,
 		run_seed
 	)
+	generated_profile["detail_status"] = "ready"
 	return generated_profile
 
 
 func build_management_roster(template: Dictionary, sector_definition: Dictionary, run_seed: int) -> Array:
-	var network_data: Dictionary = DataRepository.get_contact_network_data()
+	var network_data: Dictionary = DataRepository.get_contact_network_data_ref()
 	var company_id: String = str(template.get("id", "company"))
 	var company_name: String = str(template.get("name", company_id.to_upper()))
 	var sector_id: String = str(sector_definition.get("id", template.get("sector_id", "")))

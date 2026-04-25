@@ -107,6 +107,33 @@
     "rumor_negative": [
       "early talk is making traders more careful"
     ],
+    "corporate_action_rumor_positive": [
+      "quiet accumulation is making the story harder to ignore"
+    ],
+    "corporate_action_speculation_positive": [
+      "public speculation is bringing in faster money"
+    ],
+    "corporate_action_denial_negative": [
+      "management pushback is shaking out weaker hands"
+    ],
+    "corporate_action_clarification_mixed": [
+      "the story is still alive, but the timing looks less certain"
+    ],
+    "corporate_action_filing_positive": [
+      "a formal filing is giving the market something concrete to trade"
+    ],
+    "corporate_meeting_mixed": [
+      "the room outcome matters more now than the rumor itself"
+    ],
+    "corporate_action_resolution_positive": [
+      "approval keeps the chain alive and shifts attention to execution"
+    ],
+    "corporate_action_execution_positive": [
+      "execution is now deciding whether the rerating can hold"
+    ],
+    "corporate_action_cancellation_negative": [
+      "the failed setup is forcing the market to reset expectations fast"
+    ],
     "earnings_positive": [
       "good numbers are helping the company look stronger"
     ],

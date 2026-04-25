@@ -97,7 +97,40 @@ text = "-"
 custom_minimum_size = Vector2(42, 0)
 text = "+"
 
-[node name="ChartCanvas" type="Control" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart"]
+[node name="ChartBodyRow" type="HBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="ChartDrawingToolbar" type="VBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow"]
+custom_minimum_size = Vector2(44, 0)
+theme_override_constants/separation = 8
+
+[node name="SelectToolButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartDrawingToolbar"]
+custom_minimum_size = Vector2(42, 36)
+button_pressed = true
+toggle_mode = true
+text = "S"
+
+[node name="HorizontalLineToolButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartDrawingToolbar"]
+custom_minimum_size = Vector2(42, 36)
+toggle_mode = true
+text = "H"
+
+[node name="TrendLineToolButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartDrawingToolbar"]
+custom_minimum_size = Vector2(42, 36)
+toggle_mode = true
+text = "T"
+
+[node name="DeleteDrawingButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartDrawingToolbar"]
+custom_minimum_size = Vector2(42, 36)
+text = "Del"
+
+[node name="ClearDrawingsButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartDrawingToolbar"]
+custom_minimum_size = Vector2(42, 36)
+text = "Clr"
+
+[node name="ChartCanvas" type="Control" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow"]
 custom_minimum_size = Vector2(0, 360)
 size_flags_horizontal = 3
 size_flags_vertical = 3

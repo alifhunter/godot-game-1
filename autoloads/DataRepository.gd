@@ -6,6 +6,7 @@ const COMPANY_PROFILE_DATA_PATH := "res://data/companies/company_profile_data.js
 const BROKER_ROSTER_PATH := "res://data/brokers/broker_roster.json"
 const SECTORS_PATH := "res://data/sectors/sectors.json"
 const EVENTS_PATH := "res://data/events/events.json"
+const CORPORATE_ACTION_CATALOG_PATH := "res://data/corporate_actions/corporate_action_catalog.json"
 const NEWS_FEED_DATA_PATH := "res://data/news/news_feed_data.json"
 const TWOOTER_FEED_DATA_PATH := "res://data/social/twooter_feed_data.json"
 const CONTACT_NETWORK_DATA_PATH := "res://data/network/contact_network_data.json"
@@ -18,6 +19,7 @@ var company_profile_data = {}
 var broker_roster = []
 var sectors = []
 var event_definitions = []
+var corporate_action_catalog = {}
 var news_feed_data = {}
 var twooter_feed_data = {}
 var contact_network_data = {}
@@ -40,6 +42,7 @@ func reload_all() -> void:
 	broker_roster = _load_array_json(BROKER_ROSTER_PATH)
 	sectors = _load_array_json(SECTORS_PATH)
 	event_definitions = _load_array_json(EVENTS_PATH)
+	corporate_action_catalog = _load_dictionary_json(CORPORATE_ACTION_CATALOG_PATH)
 	news_feed_data = _load_dictionary_json(NEWS_FEED_DATA_PATH)
 	twooter_feed_data = _load_dictionary_json(TWOOTER_FEED_DATA_PATH)
 	contact_network_data = _load_dictionary_json(CONTACT_NETWORK_DATA_PATH)
@@ -84,6 +87,10 @@ func get_company_profile_data() -> Dictionary:
 	return company_profile_data.duplicate(true)
 
 
+func get_company_profile_data_ref() -> Dictionary:
+	return company_profile_data
+
+
 func get_broker_roster() -> Array:
 	return broker_roster.duplicate(true)
 
@@ -100,12 +107,20 @@ func get_news_feed_data() -> Dictionary:
 	return news_feed_data.duplicate(true)
 
 
+func get_corporate_action_catalog() -> Dictionary:
+	return corporate_action_catalog.duplicate(true)
+
+
 func get_twooter_feed_data() -> Dictionary:
 	return twooter_feed_data.duplicate(true)
 
 
 func get_contact_network_data() -> Dictionary:
 	return contact_network_data.duplicate(true)
+
+
+func get_contact_network_data_ref() -> Dictionary:
+	return contact_network_data
 
 
 func get_upgrade_catalog() -> Dictionary:

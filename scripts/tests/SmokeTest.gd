@@ -23,6 +23,9 @@ const GRIND_FULL_DAYS := 30
 const QUICK_SMOKE_FLAG_PATH := "user://quick_smoke.flag"
 
 var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
+var batched_setup_progress_calls := 0
+var batched_setup_progress_done := 0
+var batched_setup_progress_total := 0
 
 
 func _ready() -> void:
@@ -43,6 +46,12 @@ func _ready() -> void:
 	var menu_result: Dictionary = await _validate_main_menu_flow()
 	if not bool(menu_result.get("success", false)):
 		push_error(str(menu_result.get("message", "Main menu smoke test failed.")))
+		get_tree().quit(1)
+		return
+
+	var batched_setup_result: Dictionary = await _validate_batched_new_run_setup()
+	if not bool(batched_setup_result.get("success", false)):
+		push_error(str(batched_setup_result.get("message", "Batched startup smoke test failed.")))
 		get_tree().quit(1)
 		return
 
@@ -96,6 +105,12 @@ func _write_smoke_result(smoke_line: String) -> void:
 	var result_file = FileAccess.open("user://smoke_test_result.txt", FileAccess.WRITE)
 	if result_file != null:
 		result_file.store_string(smoke_line)
+
+
+func _capture_batched_new_run_progress(done_count: int, total_count: int) -> void:
+	batched_setup_progress_calls += 1
+	batched_setup_progress_done = done_count
+	batched_setup_progress_total = total_count
 
 
 func _validate_main_menu_flow() -> Dictionary:
@@ -206,16 +221,137 @@ func _validate_main_menu_flow() -> Dictionary:
 		}
 
 	var loading_progress_bar: ProgressBar = main_menu.find_child("LoadingProgressBar", true, false) as ProgressBar
-	if loading_progress_bar == null:
+	var loading_subprogress_label: Label = main_menu.find_child("LoadingSubprogressLabel", true, false) as Label
+	var loading_note_label: Label = main_menu.find_child("LoadingNoteLabel", true, false) as Label
+	if loading_progress_bar == null or loading_subprogress_label == null or loading_note_label == null:
 		main_menu.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the loading screen to expose a progress bar node."
+			"message": "Smoke test expected the loading screen to expose progress, subprogress, and rolling-note nodes."
 		}
 
 	main_menu.queue_free()
 	await get_tree().process_frame
+	return {"success": true}
+
+
+func _validate_batched_new_run_setup() -> Dictionary:
+	if not RunState.has_method("setup_new_run_batched"):
+		return {
+			"success": false,
+			"message": "Smoke test expected RunState to expose setup_new_run_batched for loading-screen startup generation."
+		}
+
+	var run_seed: int = 135791
+	var difficulty_config: Dictionary = GameManager.get_difficulty_config(GameManager.DEFAULT_DIFFICULTY_ID)
+	var company_definitions: Array = GameManager.build_company_roster(run_seed, difficulty_config)
+	batched_setup_progress_calls = 0
+	batched_setup_progress_done = 0
+	batched_setup_progress_total = 0
+	await RunState.setup_new_run_batched(
+		run_seed,
+		company_definitions,
+		difficulty_config,
+		false,
+		Callable(self, "_capture_batched_new_run_progress")
+	)
+
+	if not RunState.has_active_run():
+		return {
+			"success": false,
+			"message": "Smoke test expected the batched startup path to create an active run."
+		}
+
+	if RunState.company_order.size() != company_definitions.size():
+		return {
+			"success": false,
+			"message": "Smoke test expected the batched startup path to generate %d companies, got %d." % [company_definitions.size(), RunState.company_order.size()]
+		}
+
+	if batched_setup_progress_calls <= 1:
+		return {
+			"success": false,
+			"message": "Smoke test expected batched startup progress to advance across multiple batches."
+		}
+
+	if batched_setup_progress_done != company_definitions.size() or batched_setup_progress_total != company_definitions.size():
+		return {
+			"success": false,
+			"message": "Smoke test expected batched startup progress to finish at %d/%d, got %d/%d." % [
+				company_definitions.size(),
+				company_definitions.size(),
+				batched_setup_progress_done,
+				batched_setup_progress_total
+			]
+		}
+
+	if RunState.quarterly_report_calendar.is_empty():
+		return {
+			"success": false,
+			"message": "Smoke test expected the batched startup path to build the quarterly report calendar."
+		}
+
+	var first_company_id: String = str(RunState.company_order[0]) if not RunState.company_order.is_empty() else ""
+	var first_company: Dictionary = RunState.get_company(first_company_id)
+	var first_profile: Dictionary = first_company.get("company_profile", {})
+	if first_company_id.is_empty() or first_profile.is_empty():
+		return {
+			"success": false,
+			"message": "Smoke test expected the batched startup path to generate a company profile for the first company."
+		}
+
+	if str(first_profile.get("detail_status", "")) != "cold":
+		return {
+			"success": false,
+			"message": "Smoke test expected the batched startup path to leave startup company detail cold until hydration runs."
+		}
+
+	if first_profile.get("financials", {}).is_empty():
+		return {
+			"success": false,
+			"message": "Smoke test expected the batched startup path to preserve core market-ready financials."
+		}
+
+	if not first_profile.get("financial_history", []).is_empty():
+		return {
+			"success": false,
+			"message": "Smoke test expected the batched startup path to defer full financial history generation."
+		}
+
+	if not RunState.ensure_company_full_detail(first_company_id):
+		return {
+			"success": false,
+			"message": "Smoke test expected the batched startup path to allow on-demand full company detail hydration."
+		}
+
+	first_company = RunState.get_company(first_company_id)
+	first_profile = first_company.get("company_profile", {})
+	if str(first_profile.get("detail_status", "")) != "ready":
+		return {
+			"success": false,
+			"message": "Smoke test expected hydrated company detail to move into the ready state."
+		}
+
+	if first_profile.get("financial_history", []).is_empty():
+		return {
+			"success": false,
+			"message": "Smoke test expected on-demand hydration to generate financial history."
+		}
+
+	var statement_snapshot: Dictionary = first_profile.get("financial_statement_snapshot", {})
+	if statement_snapshot.get("quarterly_statements", []).is_empty():
+		return {
+			"success": false,
+			"message": "Smoke test expected on-demand hydration to generate quarterly statement history."
+		}
+
+	if first_profile.get("management_roster", []).size() != 3:
+		return {
+			"success": false,
+			"message": "Smoke test expected on-demand hydration to generate the 3-role management roster."
+		}
+
 	return {"success": true}
 
 
@@ -248,8 +384,6 @@ func _run_scenario(
 	var upgrades_app_button: Button = game_root.find_child("UpgradesAppButton", true, false) as Button
 	var taskbar_stock_button: Button = game_root.find_child("TaskbarStockButton", true, false) as Button
 	var taskbar_news_button: Button = game_root.find_child("TaskbarNewsButton", true, false) as Button
-	var app_window_title_label: Label = game_root.find_child("AppWindowTitleLabel", true, false) as Label
-	var app_window_close_button: Button = game_root.find_child("AppWindowCloseButton", true, false) as Button
 	var news_window: Control = game_root.find_child("NewsWindow", true, false) as Control
 	var news_article_list: ItemList = game_root.find_child("NewsArticleList", true, false) as ItemList
 	var news_outlet_buttons: HBoxContainer = game_root.find_child("NewsOutletButtons", true, false) as HBoxContainer
@@ -278,12 +412,17 @@ func _run_scenario(
 			"message": "Smoke test could not find the prototype desktop icons, Academy icon, Upgrades icon, and taskbar launch buttons."
 		}
 
-	if app_window_title_label == null or app_window_close_button == null:
+	if (
+		not game_root.has_method("is_desktop_app_open") or
+		not game_root.has_method("get_active_desktop_app_id") or
+		not game_root.has_method("get_desktop_app_window_title") or
+		not game_root.has_method("close_desktop_app")
+	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the faux app window to expose a title bar and close button."
+			"message": "Smoke test expected GameRoot to expose desktop window manager helpers for app-open, active-app, title, and close checks."
 		}
 
 	var upgrade_defaults: Dictionary = RunState.get_upgrade_tiers()
@@ -313,6 +452,471 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected every generated company to receive a Q1 report date spread across January."
 		}
+
+	var opening_meeting_snapshot: Dictionary = GameManager.get_corporate_meeting_snapshot()
+	var opening_meeting_rows: Array = opening_meeting_snapshot.get("upcoming_rows", [])
+	if opening_meeting_rows.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the corporate meeting snapshot to seed at least one upcoming venue."
+		}
+	var opening_meeting_id: String = str(opening_meeting_rows[0].get("id", ""))
+	var attend_meeting_result: Dictionary = GameManager.attend_corporate_meeting(opening_meeting_id)
+	if not bool(attend_meeting_result.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected corporate meeting attendance to be markable in v1."
+		}
+	var saved_meeting_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(saved_meeting_state)
+	if not bool(RunState.get_attended_meetings().get(opening_meeting_id, {}).get("attended", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected attended corporate meetings to persist through save/load."
+		}
+
+	if difficulty_id == GameManager.DEFAULT_DIFFICULTY_ID:
+		var interactive_test_base_state: Dictionary = RunState.to_save_dict()
+		if (
+			not GameManager.has_method("debug_force_rights_issue_rupslb") or
+			not GameManager.has_method("debug_schedule_next_day_rights_issue_rupslb") or
+			not GameManager.has_method("start_corporate_meeting_session") or
+			not GameManager.has_method("get_corporate_meeting_session_snapshot") or
+			not GameManager.has_method("set_corporate_meeting_session_stage") or
+			not GameManager.has_method("submit_corporate_meeting_vote") or
+			not GameManager.has_method("close_corporate_meeting_session") or
+			not game_root.has_method("is_rupslb_meeting_overlay_visible") or
+			not game_root.has_method("get_rupslb_meeting_stage_id")
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the interactive RUPSLB session helpers to be exposed through GameManager and GameRoot."
+			}
+
+		var rupslb_candidate_ids: Array = []
+		for company_index in range(RunState.company_order.size() - 1, -1, -1):
+			var candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(candidate_company_id).get("has_live_chain", false)):
+				continue
+			rupslb_candidate_ids.append(candidate_company_id)
+			if rupslb_candidate_ids.size() >= 2:
+				break
+		if rupslb_candidate_ids.size() < 2:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find at least two companies without live corporate-action chains for deterministic RUPSLB coverage."
+			}
+
+		var observer_company_id: String = str(rupslb_candidate_ids[0])
+		var eligible_company_id: String = str(rupslb_candidate_ids[1])
+
+		var forced_observer_result: Dictionary = GameManager.debug_force_rights_issue_rupslb(observer_company_id)
+		if not bool(forced_observer_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the debug helper to force a same-day observer RUPSLB meeting."
+			}
+		var observer_meeting_id: String = str(forced_observer_result.get("meeting", {}).get("id", ""))
+		var observer_start_result: Dictionary = GameManager.start_corporate_meeting_session(observer_meeting_id)
+		var observer_session_snapshot: Dictionary = GameManager.get_corporate_meeting_session_snapshot(observer_meeting_id)
+		if (
+			not bool(observer_start_result.get("success", false)) or
+			observer_session_snapshot.is_empty() or
+			bool(observer_session_snapshot.get("session", {}).get("voting_eligible", true))
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected a zero-position player to attend the forced RUPSLB only as an observer."
+			}
+		var observer_agenda_id: String = ""
+		var observer_agenda_payload: Array = observer_session_snapshot.get("agenda_payload", [])
+		if not observer_agenda_payload.is_empty():
+			observer_agenda_id = str(observer_agenda_payload[0].get("id", ""))
+		var observer_illegal_vote_result: Dictionary = GameManager.submit_corporate_meeting_vote(observer_meeting_id, observer_agenda_id, "agree")
+		if bool(observer_illegal_vote_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected observer-only RUPSLB sessions to reject agree/disagree votes without share ownership."
+			}
+		var observer_abstain_result: Dictionary = GameManager.submit_corporate_meeting_vote(observer_meeting_id, observer_agenda_id, "abstain")
+		if (
+			not bool(observer_abstain_result.get("success", false)) or
+			GameManager.get_corporate_meeting_session_snapshot(observer_meeting_id).get("result_summary", {}).is_empty()
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected observer-only RUPSLB sessions to resolve through an abstain path."
+			}
+		GameManager.close_corporate_meeting_session(observer_meeting_id)
+
+		var eligible_buy_result: Dictionary = GameManager.buy_lots(eligible_company_id, 1)
+		if not bool(eligible_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before the forced shareholder RUPSLB flow."
+			}
+		var forced_eligible_result: Dictionary = GameManager.debug_force_rights_issue_rupslb(eligible_company_id)
+		if not bool(forced_eligible_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the debug helper to force a same-day shareholder RUPSLB meeting."
+			}
+		var eligible_chain_id: String = str(forced_eligible_result.get("chain", {}).get("chain_id", ""))
+		var eligible_meeting_id: String = str(forced_eligible_result.get("meeting", {}).get("id", ""))
+		game_root._open_corporate_meeting_modal(eligible_meeting_id)
+		await get_tree().process_frame
+		var rupslb_overlay: Control = game_root.find_child("RupslbMeetingOverlay", true, false) as Control
+		var rupslb_continue_button: Button = game_root.find_child("RupslbContinueButton", true, false) as Button
+		var rupslb_agree_button: Button = game_root.find_child("RupslbAgreeButton", true, false) as Button
+		var rupslb_close_button: Button = game_root.find_child("RupslbCloseButton", true, false) as Button
+		var rupslb_result_label: Label = game_root.find_child("RupslbResultLabel", true, false) as Label
+		if (
+			rupslb_overlay == null or
+			rupslb_continue_button == null or
+			rupslb_agree_button == null or
+			rupslb_close_button == null or
+			rupslb_result_label == null or
+			not rupslb_overlay.visible or
+			not game_root.is_rupslb_meeting_overlay_visible() or
+			game_root.get_rupslb_meeting_stage_id() != "arrival"
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected opening an interactive RUPSLB meeting to enter the dedicated fullscreen overlay at the Arrival stage."
+			}
+
+		for expected_stage_id in ["seating", "host_intro", "agenda_reveal", "vote"]:
+			rupslb_continue_button.emit_signal("pressed")
+			await get_tree().process_frame
+			if game_root.get_rupslb_meeting_stage_id() != expected_stage_id:
+				game_root.queue_free()
+				await get_tree().process_frame
+				return {
+					"success": false,
+					"message": "Smoke test expected the interactive RUPSLB flow to progress through %s in order." % expected_stage_id
+				}
+
+		if not rupslb_agree_button.visible:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected shareholder-eligible RUPSLB sessions to expose agree/disagree voting buttons."
+			}
+
+		rupslb_agree_button.emit_signal("pressed")
+		await get_tree().process_frame
+		if (
+			game_root.get_rupslb_meeting_stage_id() != "result" or
+			rupslb_result_label.text.is_empty()
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected casting a RUPSLB vote to move the meeting into the result board stage."
+			}
+
+		rupslb_close_button.emit_signal("pressed")
+		await get_tree().process_frame
+		if game_root.is_rupslb_meeting_overlay_visible():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected closing the interactive RUPSLB overlay to hide the fullscreen meeting experience."
+			}
+
+		var saved_rupslb_state: Dictionary = RunState.to_save_dict()
+		RunState.load_from_dict(saved_rupslb_state)
+		var resumed_session_snapshot: Dictionary = GameManager.get_corporate_meeting_session_snapshot(eligible_meeting_id)
+		if (
+			resumed_session_snapshot.is_empty() or
+			str(resumed_session_snapshot.get("current_stage_id", "")) != "result" or
+			resumed_session_snapshot.get("result_summary", {}).is_empty()
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected interactive RUPSLB meeting sessions to persist their stage and result through save/load."
+			}
+
+		game_root._open_corporate_meeting_modal(eligible_meeting_id)
+		await get_tree().process_frame
+		if not game_root.is_rupslb_meeting_overlay_visible() or game_root.get_rupslb_meeting_stage_id() != "result":
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected reopening a saved RUPSLB session to resume on the persisted result board stage."
+			}
+
+		rupslb_close_button = game_root.find_child("RupslbCloseButton", true, false) as Button
+		if rupslb_close_button != null:
+			rupslb_close_button.emit_signal("pressed")
+			await get_tree().process_frame
+
+		var chain_before_resolution: Dictionary = RunState.get_active_corporate_action_chains().get(eligible_chain_id, {}).duplicate(true)
+		if str(chain_before_resolution.get("stage", "")) != "meeting_or_call":
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the forced rights issue chain to stay in meeting_or_call until the next simulated day."
+			}
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var chain_after_resolution: Dictionary = RunState.get_active_corporate_action_chains().get(eligible_chain_id, {}).duplicate(true)
+		if (
+			str(chain_after_resolution.get("stage", "")) == "meeting_or_call" or
+			not bool(RunState.get_corporate_meeting_sessions().get(eligible_meeting_id, {}).get("consumed", false))
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the next simulation day to consume the saved RUPSLB vote result and move the chain past meeting_or_call."
+			}
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
+
+		var debug_schedule_candidate_ids: Array = []
+		for company_index in range(RunState.company_order.size() - 1, -1, -1):
+			var debug_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(debug_candidate_company_id).get("has_live_chain", false)):
+				continue
+			debug_schedule_candidate_ids.append(debug_candidate_company_id)
+			if debug_schedule_candidate_ids.size() >= 2:
+				break
+		if debug_schedule_candidate_ids.size() < 2:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find at least two chain-free companies for the debug-scheduled next-day RUPSLB flow."
+			}
+
+		var debug_non_owned_company_id: String = str(debug_schedule_candidate_ids[0])
+		var debug_target_company_id: String = str(debug_schedule_candidate_ids[1])
+		var debug_toggle_event: InputEventKey = InputEventKey.new()
+		debug_toggle_event.pressed = true
+		debug_toggle_event.ctrl_pressed = true
+		debug_toggle_event.keycode = KEY_L
+		game_root._unhandled_input(debug_toggle_event)
+		await get_tree().process_frame
+
+		var debug_overlay: Control = game_root.find_child("DebugOverlay", true, false) as Control
+		var debug_start_rupslb_button: Button = game_root.find_child("DebugStartRupslbButton", true, false) as Button
+		var debug_start_rupslb_status_label: Label = game_root.find_child("DebugStartRupslbStatusLabel", true, false) as Label
+		if (
+			debug_overlay == null or
+			not debug_overlay.visible or
+			debug_start_rupslb_button == null or
+			debug_start_rupslb_status_label == null
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the debug overlay to expose a Start RUPSLB control."
+			}
+
+		game_root.selected_company_id = ""
+		game_root._refresh_debug_overlay()
+		await get_tree().process_frame
+		if (
+			not debug_start_rupslb_button.disabled or
+			debug_start_rupslb_status_label.text.find("Pick a stock first.") == -1
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the debug Start RUPSLB control to stay disabled until a stock is selected."
+			}
+
+		game_root._on_all_stock_selected(debug_non_owned_company_id)
+		await get_tree().process_frame
+		if (
+			not debug_start_rupslb_button.disabled or
+			debug_start_rupslb_status_label.text.find("Own at least 1 lot first.") == -1
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the debug Start RUPSLB control to require at least one owned lot."
+			}
+
+		var debug_target_buy_result: Dictionary = GameManager.buy_lots(debug_target_company_id, 1)
+		if not bool(debug_target_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before using the debug-scheduled next-day RUPSLB action."
+			}
+
+		game_root._on_all_stock_selected(debug_target_company_id)
+		await get_tree().process_frame
+		if debug_start_rupslb_button.disabled:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the debug Start RUPSLB control to enable for the selected held stock."
+			}
+
+		var debug_target_ticker: String = str(GameManager.get_company_snapshot(debug_target_company_id, false, false, false).get("ticker", ""))
+		debug_start_rupslb_button.emit_signal("pressed")
+		await get_tree().process_frame
+		if game_root.is_rupslb_meeting_overlay_visible():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected scheduling a next-day debug RUPSLB not to auto-open the fullscreen meeting overlay immediately."
+			}
+
+		var debug_chain_snapshot: Dictionary = GameManager.get_company_corporate_action_snapshot(debug_target_company_id)
+		var debug_primary_chain: Dictionary = debug_chain_snapshot.get("primary_chain", {})
+		var debug_chain_id: String = str(debug_primary_chain.get("chain_id", ""))
+		if debug_chain_id.is_empty() or str(debug_primary_chain.get("family", "")) != "rights_issue":
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the debug Start RUPSLB action to create a rights issue chain for the selected stock."
+			}
+
+		var queued_meeting: Dictionary = {}
+		for date_key_value in RunState.get_corporate_meeting_calendar().keys():
+			var queued_meetings: Array = RunState.get_corporate_meeting_calendar().get(str(date_key_value), [])
+			for meeting_value in queued_meetings:
+				var meeting: Dictionary = meeting_value
+				if str(meeting.get("source_chain_id", "")) == debug_chain_id:
+					queued_meeting = meeting.duplicate(true)
+					break
+			if not queued_meeting.is_empty():
+				break
+		var queued_meeting_id: String = str(queued_meeting.get("id", ""))
+		if (
+			queued_meeting.is_empty() or
+			str(queued_meeting.get("status", "")) != "queued"
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the debug Start RUPSLB action to create a hidden queued meeting for the next trade day."
+			}
+
+		for row_value in GameManager.get_corporate_meeting_snapshot().get("upcoming_rows", []):
+			var row: Dictionary = row_value
+			if str(row.get("id", "")) == queued_meeting_id:
+				game_root.queue_free()
+				await get_tree().process_frame
+				return {
+					"success": false,
+					"message": "Smoke test expected the queued debug RUPSLB meeting to stay hidden from today's upcoming meeting snapshot."
+				}
+
+		if (
+			not debug_start_rupslb_button.disabled or
+			debug_start_rupslb_status_label.text.find("already has a live corporate action") == -1
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the debug Start RUPSLB control to disable again once the selected company has a live chain."
+			}
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+
+		var queued_meeting_visible_next_day: bool = false
+		for row_value in GameManager.get_corporate_meeting_snapshot().get("upcoming_rows", []):
+			var row: Dictionary = row_value
+			if str(row.get("id", "")) == queued_meeting_id:
+				queued_meeting_visible_next_day = true
+				break
+		if not queued_meeting_visible_next_day:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the queued debug RUPSLB meeting to appear in the upcoming meeting snapshot after one Advance Day."
+			}
+
+		var dashboard_meeting_buttons: VBoxContainer = game_root.find_child("DashboardMeetingButtons", true, false) as VBoxContainer
+		var scheduled_dashboard_button: Button = null
+		if dashboard_meeting_buttons != null:
+			for child in dashboard_meeting_buttons.get_children():
+				var meeting_button: Button = child as Button
+				if meeting_button == null:
+					continue
+				if meeting_button.text.find(debug_target_ticker) != -1 and meeting_button.text.find("RUPSLB") != -1:
+					scheduled_dashboard_button = meeting_button
+					break
+		if scheduled_dashboard_button == null:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the queued debug RUPSLB meeting to surface in the dashboard meeting buttons on the next day."
+			}
+
+		scheduled_dashboard_button.emit_signal("pressed")
+		await get_tree().process_frame
+		if not game_root.is_rupslb_meeting_overlay_visible() or game_root.get_rupslb_meeting_stage_id() != "arrival":
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected opening the next-day debug RUPSLB from the dashboard to enter the fullscreen meeting overlay."
+			}
+
+		var scheduled_rupslb_close_button: Button = game_root.find_child("RupslbCloseButton", true, false) as Button
+		if scheduled_rupslb_close_button != null:
+			scheduled_rupslb_close_button.emit_signal("pressed")
+			await get_tree().process_frame
+
+		if debug_overlay.visible:
+			game_root._unhandled_input(debug_toggle_event)
+			await get_tree().process_frame
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
 
 	var initial_news_snapshot: Dictionary = GameManager.get_news_snapshot()
 	if _count_unlocked_rows(initial_news_snapshot.get("outlets", [])) != 1:
@@ -345,7 +949,9 @@ func _run_scenario(
 	if (
 		academy_window == null or
 		not academy_window.visible or
-		app_window_title_label.text != "Academy" or
+		not game_root.is_desktop_app_open("academy") or
+		game_root.get_active_desktop_app_id() != "academy" or
+		game_root.get_desktop_app_window_title("academy") != "Academy" or
 		academy_category_tabs == null or
 		academy_category_tabs.get_child_count() != 4 or
 		academy_section_list == null or
@@ -446,14 +1052,14 @@ func _run_scenario(
 			"message": "Smoke test expected Academy glossary search to return seeded technical terms."
 		}
 
-	app_window_close_button.emit_signal("pressed")
+	game_root.close_desktop_app("academy")
 	await get_tree().process_frame
-	if not desktop_layer.visible:
+	if not desktop_layer.visible or game_root.is_desktop_app_open("academy"):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected closing the Academy window to return the player to the desktop."
+			"message": "Smoke test expected closing the Academy desktop window to hide the app while keeping the desktop visible."
 		}
 
 	upgrades_app_button.emit_signal("pressed")
@@ -461,7 +1067,9 @@ func _run_scenario(
 	if (
 		upgrade_window == null or
 		not upgrade_window.visible or
-		app_window_title_label.text != "Upgrades" or
+		not game_root.is_desktop_app_open("upgrades") or
+		game_root.get_active_desktop_app_id() != "upgrades" or
+		game_root.get_desktop_app_window_title("upgrades") != "Upgrades" or
 		upgrade_cards_vbox == null or
 		upgrade_cards_vbox.get_child_count() < RunState.UPGRADE_TRACK_IDS.size()
 	):
@@ -666,14 +1274,14 @@ func _run_scenario(
 				"message": "Smoke test expected unaffordable upgrades to fail without improving the tier."
 			}
 
-	app_window_close_button.emit_signal("pressed")
+	game_root.close_desktop_app("upgrades")
 	await get_tree().process_frame
-	if not desktop_layer.visible:
+	if not desktop_layer.visible or game_root.is_desktop_app_open("upgrades"):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected closing the Upgrades window to return the player to the desktop."
+			"message": "Smoke test expected closing the Upgrades desktop window to hide the app while keeping the desktop visible."
 		}
 
 	news_app_button.emit_signal("pressed")
@@ -681,7 +1289,9 @@ func _run_scenario(
 	if (
 		news_window == null or
 		not news_window.visible or
-		app_window_title_label.text != "News Browser" or
+		not game_root.is_desktop_app_open("news") or
+		game_root.get_active_desktop_app_id() != "news" or
+		game_root.get_desktop_app_window_title("news") != "News Browser" or
 		news_article_list == null or
 		news_outlet_buttons == null or
 		news_outlet_buttons.get_child_count() < 4 or
@@ -694,14 +1304,14 @@ func _run_scenario(
 			"message": "Smoke test expected the News icon to open the event-driven news desk with outlet buttons and populated stories."
 		}
 
-	app_window_close_button.emit_signal("pressed")
+	game_root.close_desktop_app("news")
 	await get_tree().process_frame
-	if not desktop_layer.visible:
+	if not desktop_layer.visible or game_root.is_desktop_app_open("news"):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected closing an app window to return the player to the desktop."
+			"message": "Smoke test expected closing the News desktop window to hide the app while keeping the desktop visible."
 		}
 
 	social_app_button.emit_signal("pressed")
@@ -709,7 +1319,9 @@ func _run_scenario(
 	if (
 		social_window == null or
 		not social_window.visible or
-		app_window_title_label.text != "Twooter" or
+		not game_root.is_desktop_app_open("social") or
+		game_root.get_active_desktop_app_id() != "social" or
+		game_root.get_desktop_app_window_title("social") != "Twooter" or
 		social_feed_cards == null or
 		social_feed_cards.get_child_count() <= 0
 	):
@@ -720,14 +1332,14 @@ func _run_scenario(
 			"message": "Smoke test expected the Twooter icon to open the simplified mobile-style social feed with populated post cards."
 		}
 
-	app_window_close_button.emit_signal("pressed")
+	game_root.close_desktop_app("social")
 	await get_tree().process_frame
-	if not desktop_layer.visible:
+	if not desktop_layer.visible or game_root.is_desktop_app_open("social"):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected closing the Twooter window to return the player to the desktop."
+			"message": "Smoke test expected closing the Twooter desktop window to hide the app while keeping the desktop visible."
 		}
 
 	network_app_button.emit_signal("pressed")
@@ -736,7 +1348,9 @@ func _run_scenario(
 	if (
 		network_window == null or
 		not network_window.visible or
-		app_window_title_label.text != "Network" or
+		not game_root.is_desktop_app_open("network") or
+		game_root.get_active_desktop_app_id() != "network" or
+		game_root.get_desktop_app_window_title("network") != "Network" or
 		network_contacts_list == null or
 		str(network_snapshot.get("recognition", {}).get("label", "")).is_empty() or
 		int(network_snapshot.get("contact_cap", 0)) <= 0
@@ -748,24 +1362,28 @@ func _run_scenario(
 			"message": "Smoke test expected the Network icon to open a contact window with recognition data."
 		}
 
-	app_window_close_button.emit_signal("pressed")
+	game_root.close_desktop_app("network")
 	await get_tree().process_frame
-	if not desktop_layer.visible:
+	if not desktop_layer.visible or game_root.is_desktop_app_open("network"):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected closing the Network window to return the player to the desktop."
+			"message": "Smoke test expected closing the Network desktop window to hide the app while keeping the desktop visible."
 		}
 
 	stock_app_button.emit_signal("pressed")
 	await get_tree().process_frame
-	if app_window_title_label.text != "STOCKBOT":
+	if (
+		not game_root.is_desktop_app_open("stock") or
+		game_root.get_active_desktop_app_id() != "stock" or
+		game_root.get_desktop_app_window_title("stock") != "STOCKBOT"
+	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the STOCKBOT icon to open the trading platform inside the faux app window."
+			"message": "Smoke test expected the STOCKBOT icon to open the trading platform inside the runtime desktop window manager."
 		}
 	if difficulty_id == GameManager.DEFAULT_DIFFICULTY_ID:
 		var sma_toggle: CheckButton = game_root.find_child("IndicatorToggle_sma_20", true, false) as CheckButton
@@ -822,6 +1440,19 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected Dashboard movers, report calendar text, zero dashboard separation, and hidden Analyzer tab."
 		}
+
+	if not RunState.has_method("ensure_company_full_detail") or not RunState.ensure_company_full_detail(tracked_company_id):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected RunState to hydrate full company detail on demand for the selected stock."
+		}
+	if secondary_company_id != tracked_company_id:
+		RunState.ensure_company_full_detail(secondary_company_id)
+	game_root.selected_company_id = tracked_company_id
+	game_root._refresh_trade_workspace()
+	await get_tree().process_frame
 
 	add_watchlist_button.emit_signal("pressed")
 	await get_tree().process_frame
@@ -1281,8 +1912,9 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected %s to generate CEO, CFO, and Commissioner management insiders." % tracked_company_id.to_upper()
-		}
+	}
 	for company_id_value in RunState.company_order:
+		RunState.ensure_company_full_detail(str(company_id_value))
 		var roster_snapshot: Dictionary = GameManager.get_company_snapshot(str(company_id_value), false, false, false)
 		if roster_snapshot.get("management_roster", []).size() != 3:
 			game_root.queue_free()

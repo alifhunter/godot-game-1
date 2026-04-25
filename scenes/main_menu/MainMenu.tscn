@@ -202,6 +202,10 @@ show_percentage = false
 [node name="LoadingStepLabel" type="Label" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox"]
 text = "Step 1/5"
 
+[node name="LoadingSubprogressLabel" type="Label" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox"]
+autowrap_mode = 3
+text = ""
+
 [node name="LoadingNoteLabel" type="Label" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox"]
 autowrap_mode = 3
 text = "Larger rosters can take a moment, especially on Grind where 50 companies are generated."

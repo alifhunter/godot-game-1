@@ -169,8 +169,26 @@ func meet_contact(run_state, data_repository, contact_id: String, source_context
 	return {"success": true, "message": "Met %s." % str(contact.get("display_name", "Contact")), "contact": runtime.duplicate(true)}
 
 
-func request_tip(run_state, data_repository, contact_id: String, company_id: String = "") -> Dictionary:
+func request_tip(run_state, data_repository, corporate_action_system, contact_id: String, company_id: String = "") -> Dictionary:
+	var contact: Dictionary = _contact_definition(run_state, data_repository, contact_id)
+	if contact.is_empty():
+		return {"success": false, "message": "Unknown contact."}
+	if not _is_met(run_state, contact_id):
+		return {"success": false, "message": "Meet this contact first."}
 	var resolved_company_id: String = _resolve_target_company_id(run_state, data_repository, contact_id, company_id)
+	if resolved_company_id.is_empty():
+		return {"success": false, "message": "No target company is available for that tip."}
+	var intel_result: Dictionary = corporate_action_system.request_contact_tip_intel(
+		run_state,
+		data_repository,
+		contact,
+		resolved_company_id
+	)
+	if bool(intel_result.get("success", false)):
+		_adjust_relationship(run_state, contact_id, -2)
+		intel_result["contact_id"] = contact_id
+		intel_result["target_company_id"] = resolved_company_id
+		return intel_result
 	var build_result: Dictionary = _build_and_store_contact_arc(run_state, data_repository, contact_id, resolved_company_id, "tip")
 	if not bool(build_result.get("success", false)):
 		return build_result

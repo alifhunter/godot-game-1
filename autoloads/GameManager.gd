@@ -14,7 +14,9 @@ signal run_started
 signal run_loaded
 signal run_loading_started(difficulty_id)
 signal run_loading_progress(stage_id, stage_label, stage_index, stage_count, progress_ratio)
+signal run_loading_detail_updated(subprogress_text, log_lines)
 signal run_loading_finished
+signal company_detail_ready(company_id)
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu/MainMenu.tscn"
 const GAME_SCENE := "res://scenes/game/GameRoot.tscn"
@@ -44,6 +46,7 @@ const LOAD_RUN_LOADING_STEPS := [
 	{"id": "restore_state", "label": "Restoring run state"},
 	{"id": "load_launch", "label": "Opening trading desk"}
 ]
+const STARTUP_PERF_LOG_PREFIX := "[perf][startup]"
 const DIFFICULTY_PRESETS := {
 	"chill": {
 		"id": "chill",
@@ -98,10 +101,14 @@ var chart_system = preload("res://systems/ChartSystem.gd").new()
 var news_feed_system = preload("res://systems/NewsFeedSystem.gd").new()
 var twooter_feed_system = preload("res://systems/TwooterFeedSystem.gd").new()
 var contact_network_system = preload("res://systems/ContactNetworkSystem.gd").new()
+var corporate_action_system = preload("res://systems/CorporateActionSystem.gd").new()
 var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
 var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
 var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
 var academy_system = preload("res://systems/AcademySystem.gd").new()
+var background_company_detail_hydration_running: bool = false
+var background_company_detail_hydration_save_counter: int = 0
+var loading_detail_log_lines: Array = []
 
 
 func _ready() -> void:
@@ -137,6 +144,9 @@ func start_new_run(run_seed: int = 0, difficulty_id: String = DEFAULT_DIFFICULTY
 	var difficulty_config: Dictionary = get_difficulty_config(difficulty_id)
 	var company_definitions: Array = build_company_roster(run_seed, difficulty_config)
 	RunState.setup_new_run(run_seed, company_definitions, difficulty_config, tutorial_enabled)
+	background_company_detail_hydration_running = false
+	background_company_detail_hydration_save_counter = 0
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	simulate_opening_session(false)
 	_save_active_run_now("start_new_run")
 	run_started.emit()
@@ -152,7 +162,11 @@ func start_new_run_with_loading(
 		run_seed = int(Time.get_unix_time_from_system())
 
 	var difficulty_config: Dictionary = get_difficulty_config(difficulty_id)
+	background_company_detail_hydration_running = false
+	background_company_detail_hydration_save_counter = 0
+	loading_detail_log_lines.clear()
 	run_loading_started.emit(str(difficulty_config.get("id", difficulty_id)))
+	_emit_run_loading_detail("", [])
 	_emit_run_loading_step(0)
 	await get_tree().process_frame
 
@@ -161,7 +175,19 @@ func start_new_run_with_loading(
 	await get_tree().process_frame
 
 	_emit_run_loading_step(2)
-	RunState.setup_new_run(run_seed, company_definitions, difficulty_config, tutorial_enabled)
+	await get_tree().process_frame
+	var financials_started_at_usec: int = Time.get_ticks_usec()
+	await RunState.setup_new_run_batched(
+		run_seed,
+		company_definitions,
+		difficulty_config,
+		tutorial_enabled,
+		Callable(self, "_on_new_run_financial_batch_progress"),
+		5,
+		Callable(self, "_on_new_run_financial_batch_detail")
+	)
+	_log_startup_perf_elapsed("new_run_financials_total", financials_started_at_usec, " companies=%d" % company_definitions.size())
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	await get_tree().process_frame
 
 	_emit_run_loading_step(3)
@@ -175,6 +201,7 @@ func start_new_run_with_loading(
 
 	_emit_run_loading_step(5)
 	await _hold_loading_stage(NEW_RUN_FINAL_STEP_HOLD_SECONDS)
+	_emit_run_loading_detail("", [])
 	run_loading_finished.emit()
 	_enter_game_scene()
 
@@ -185,6 +212,9 @@ func load_run_from_save() -> bool:
 		return false
 
 	RunState.load_from_dict(saved_run)
+	background_company_detail_hydration_running = false
+	background_company_detail_hydration_save_counter = 0
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	run_loaded.emit()
 	_enter_game_scene()
 	return true
@@ -201,6 +231,9 @@ func load_run_from_save_with_loading() -> bool:
 
 	_emit_load_run_loading_step(1)
 	RunState.load_from_dict(saved_run)
+	background_company_detail_hydration_running = false
+	background_company_detail_hydration_save_counter = 0
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	run_loaded.emit()
 	await get_tree().process_frame
 
@@ -232,10 +265,11 @@ func simulate_opening_session(save_after: bool = false) -> Dictionary:
 func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool = true) -> Dictionary:
 	if not RunState.has_active_run():
 		return {}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
 
 	if emit_runtime_signals:
 		day_started.emit(RunState.day_index + 1)
-	var day_result: Dictionary = market_simulator.simulate_day(RunState, DataRepository, broker_flow_system)
+	var day_result: Dictionary = market_simulator.simulate_day(RunState, DataRepository, broker_flow_system, corporate_action_system)
 	RunState.apply_day_result(day_result)
 	var network_results: Array = contact_network_system.process_due_requests(RunState, DataRepository)
 	if not network_results.is_empty() and emit_runtime_signals:
@@ -419,6 +453,46 @@ func execute_console_command(command_text: String) -> Dictionary:
 	}
 
 
+func debug_force_rights_issue_rupslb(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_force_rights_issue_rupslb(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not force a same-day rights issue RUPSLB for that company."}
+	return {
+		"success": true,
+		"message": "Forced same-day rights issue RUPSLB created.",
+		"chain": result.get("chain", {}).duplicate(true),
+		"meeting": result.get("meeting", {}).duplicate(true)
+	}
+
+
+func debug_schedule_next_day_rights_issue_rupslb(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	var holding: Dictionary = RunState.get_holding(company_id)
+	if int(holding.get("shares", 0)) < get_lot_size():
+		return {"success": false, "message": "Own at least 1 lot first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_schedule_next_day_rights_issue_rupslb(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not schedule a next-day rights issue RUPSLB for that company."}
+	_request_autosave("debug_schedule_next_day_rupslb")
+	var meeting: Dictionary = result.get("meeting", {}).duplicate(true)
+	return {
+		"success": true,
+		"message": "Scheduled next-day rights issue RUPSLB for %s on %s." % [
+			str(meeting.get("ticker", company_id.to_upper())),
+			format_trade_date(meeting.get("trade_date", {}))
+		],
+		"chain": result.get("chain", {}).duplicate(true),
+		"meeting": meeting
+	}
+
+
 func get_unlocked_news_intel_level() -> int:
 	return _content_level_for_upgrade("news_content")
 
@@ -553,6 +627,98 @@ func get_upcoming_report_rows(limit: int = 8) -> Array:
 	return RunState.get_upcoming_quarterly_reports(limit)
 
 
+func get_corporate_meeting_snapshot(day_index: int = -1) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"day_index": 0, "trade_date": {}, "today_rows": [], "upcoming_rows": [], "all_rows": []}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	return corporate_action_system.get_meeting_snapshot(RunState, day_index)
+
+
+func get_corporate_meeting_detail(meeting_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	return corporate_action_system.get_meeting_detail(RunState, meeting_id)
+
+
+func get_company_corporate_action_snapshot(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	return corporate_action_system.get_company_snapshot(RunState, company_id)
+
+
+func attend_corporate_meeting(meeting_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.attend_meeting(RunState, meeting_id)
+	if bool(result.get("success", false)):
+		_request_autosave("corporate_meeting_attend")
+		network_changed.emit()
+	return result
+
+
+func start_corporate_meeting_session(meeting_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.start_meeting_session(RunState, DataRepository, meeting_id)
+	if bool(result.get("success", false)):
+		_request_autosave("corporate_meeting_session_start")
+		network_changed.emit()
+	return result
+
+
+func get_corporate_meeting_session_snapshot(meeting_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	return corporate_action_system.get_meeting_session_snapshot(RunState, DataRepository, meeting_id)
+
+
+func set_corporate_meeting_session_stage(meeting_id: String, stage_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.set_meeting_session_stage(RunState, DataRepository, meeting_id, stage_id)
+	if bool(result.get("success", false)):
+		_request_autosave("corporate_meeting_session_stage")
+	return result
+
+
+func submit_corporate_meeting_vote(meeting_id: String, agenda_id: String, vote_choice: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var detail: Dictionary = corporate_action_system.get_meeting_detail(RunState, meeting_id)
+	if detail.is_empty():
+		return {"success": false, "message": "Meeting not found."}
+	var ownership_snapshot: Dictionary = get_company_ownership_snapshot(str(detail.get("company_id", "")))
+	var result: Dictionary = corporate_action_system.submit_meeting_vote(
+		RunState,
+		DataRepository,
+		meeting_id,
+		agenda_id,
+		vote_choice,
+		ownership_snapshot
+	)
+	if bool(result.get("success", false)):
+		_request_autosave("corporate_meeting_vote")
+		network_changed.emit()
+	return result
+
+
+func close_corporate_meeting_session(meeting_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.close_meeting_session(RunState, meeting_id)
+	if bool(result.get("success", false)):
+		_request_autosave("corporate_meeting_session_close")
+	return result
+
+
 func get_company_ownership_snapshot(company_id: String) -> Dictionary:
 	var definition: Dictionary = RunState.get_effective_company_definition(company_id, false, false)
 	var holding: Dictionary = RunState.get_holding(company_id)
@@ -602,6 +768,9 @@ func get_company_ownership_snapshot(company_id: String) -> Dictionary:
 		"shares_owned": shares_owned,
 		"shares_outstanding": shares_outstanding,
 		"ownership_pct": ownership_pct,
+		"player_pct": ownership_pct,
+		"controller_pct": remaining_control_pct,
+		"public_pct": public_float_pct,
 		"is_major_shareholder": ownership_pct >= PLAYER_MAJOR_SHAREHOLDER_THRESHOLD,
 		"major_shareholder_threshold": PLAYER_MAJOR_SHAREHOLDER_THRESHOLD,
 		"shareholder_rows": shareholder_rows
@@ -658,6 +827,7 @@ func get_company_snapshot(
 	var shareholder_rows: Array = ownership_snapshot.get("shareholder_rows", [])
 	var snapshot: Dictionary = {
 		"id": company_id,
+		"detail_status": str(definition.get("detail_status", "ready")),
 		"ticker": definition.get("ticker", company_id.to_upper()),
 		"name": definition.get("name", ""),
 		"sector_id": str(definition.get("sector_id", "")),
@@ -994,7 +1164,8 @@ func request_contact_tip(contact_id: String, company_id: String = "") -> Diction
 		return {"success": false, "message": "No active run."}
 	if not RunState.can_spend_daily_action(1):
 		return {"success": false, "message": "No daily action points left."}
-	var result: Dictionary = contact_network_system.request_tip(RunState, DataRepository, contact_id, company_id)
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = contact_network_system.request_tip(RunState, DataRepository, corporate_action_system, contact_id, company_id)
 	if bool(result.get("success", false)):
 		RunState.spend_daily_action(1)
 		_request_autosave("network_tip")
@@ -1245,18 +1416,21 @@ func get_difficulty_options() -> Array:
 
 
 func build_company_roster(run_seed: int, selected_difficulty_config: Dictionary) -> Array:
+	var started_at_usec: int = Time.get_ticks_usec()
 	var difficulty_config: Dictionary = selected_difficulty_config.duplicate(true)
 	if difficulty_config.is_empty():
 		difficulty_config = get_difficulty_config(DEFAULT_DIFFICULTY_ID)
 
 	var company_count: int = int(difficulty_config.get("company_count", DataRepository.get_company_archetypes().size()))
-	return company_roster_generator.generate_roster(
+	var generated_roster: Array = company_roster_generator.generate_roster(
 		DataRepository.get_company_archetypes(),
 		DataRepository.get_sector_definitions(),
 		DataRepository.get_company_word_data(),
 		run_seed,
 		company_count
 	)
+	_log_startup_perf_elapsed("build_company_roster", started_at_usec, " companies=%d" % generated_roster.size())
+	return generated_roster
 
 
 func get_difficulty_config(difficulty_id: String) -> Dictionary:
@@ -1477,6 +1651,27 @@ func _emit_run_loading_step(step_index: int) -> void:
 	_emit_loading_step_from_list(NEW_RUN_LOADING_STEPS, step_index)
 
 
+func _on_new_run_financial_batch_progress(done_count: int, total_count: int) -> void:
+	if total_count <= 0:
+		_emit_run_loading_step_with_progress(2, 1.0)
+		return
+	_emit_run_loading_step_with_progress(2, float(done_count) / float(total_count))
+
+
+func _on_new_run_financial_batch_detail(done_count: int, total_count: int, batch_company_ids: Array) -> void:
+	var subprogress_text: String = "%d / %d companies prepared" % [done_count, max(total_count, 0)]
+	for company_id_value in batch_company_ids:
+		var company_id: String = str(company_id_value)
+		if company_id.is_empty():
+			continue
+		var definition: Dictionary = RunState.get_effective_company_definition(company_id, false, false)
+		var ticker: String = str(definition.get("ticker", company_id.to_upper()))
+		loading_detail_log_lines.append("Built core profile for %s" % ticker)
+	while loading_detail_log_lines.size() > 3:
+		loading_detail_log_lines.remove_at(0)
+	_emit_run_loading_detail(subprogress_text, loading_detail_log_lines)
+
+
 func _hold_loading_stage(duration_seconds: float) -> void:
 	if duration_seconds <= 0.0:
 		await get_tree().process_frame
@@ -1489,7 +1684,15 @@ func _emit_load_run_loading_step(step_index: int) -> void:
 	_emit_loading_step_from_list(LOAD_RUN_LOADING_STEPS, step_index)
 
 
-func _emit_loading_step_from_list(steps: Array, step_index: int) -> void:
+func _emit_run_loading_step_with_progress(step_index: int, stage_progress_ratio: float) -> void:
+	_emit_loading_step_from_list(NEW_RUN_LOADING_STEPS, step_index, stage_progress_ratio)
+
+
+func _emit_run_loading_detail(subprogress_text: String, log_lines: Array) -> void:
+	run_loading_detail_updated.emit(subprogress_text, log_lines.duplicate())
+
+
+func _emit_loading_step_from_list(steps: Array, step_index: int, stage_progress_ratio: float = 0.0) -> void:
 	if steps.is_empty():
 		run_loading_progress.emit("", "", 0, 0, 1.0)
 		return
@@ -1497,7 +1700,9 @@ func _emit_loading_step_from_list(steps: Array, step_index: int) -> void:
 	var clamped_index: int = clamp(step_index, 0, steps.size() - 1)
 	var step: Dictionary = steps[clamped_index]
 	var denominator: float = max(float(steps.size() - 1), 1.0)
-	var progress_ratio: float = float(clamped_index) / denominator
+	var current_step_progress: float = float(clamped_index) / denominator
+	var next_step_progress: float = min(float(clamped_index + 1), denominator) / denominator
+	var progress_ratio: float = lerp(current_step_progress, next_step_progress, clamp(stage_progress_ratio, 0.0, 1.0))
 	run_loading_progress.emit(
 		str(step.get("id", "")),
 		str(step.get("label", "")),
@@ -1505,6 +1710,56 @@ func _emit_loading_step_from_list(steps: Array, step_index: int) -> void:
 		steps.size(),
 		progress_ratio
 	)
+
+
+func start_background_company_detail_hydration(priority_company_ids: Array = []) -> void:
+	if not RunState.has_active_run():
+		return
+	for company_id_value in priority_company_ids:
+		RunState.queue_company_detail_hydration(str(company_id_value), true)
+	var should_queue_full_roster: bool = priority_company_ids.is_empty() or (
+		not background_company_detail_hydration_running and
+		not RunState.has_pending_company_detail_hydration()
+	)
+	if should_queue_full_roster:
+		for company_id_value in RunState.company_order:
+			RunState.queue_company_detail_hydration(str(company_id_value), false)
+	if background_company_detail_hydration_running:
+		return
+	background_company_detail_hydration_running = true
+	call_deferred("_background_company_detail_hydration_loop")
+
+
+func _background_company_detail_hydration_loop() -> void:
+	while RunState.has_pending_company_detail_hydration():
+		var company_id: String = RunState.dequeue_company_detail_hydration()
+		if company_id.is_empty():
+			break
+		if RunState.ensure_company_full_detail(company_id):
+			background_company_detail_hydration_save_counter += 1
+			company_detail_ready.emit(company_id)
+			if background_company_detail_hydration_save_counter >= 3:
+				_request_autosave("background_company_detail_hydration")
+				background_company_detail_hydration_save_counter = 0
+		await get_tree().process_frame
+	background_company_detail_hydration_running = false
+	if background_company_detail_hydration_save_counter > 0:
+		_request_autosave("background_company_detail_hydration")
+		background_company_detail_hydration_save_counter = 0
+
+
+func _should_log_startup_perf() -> bool:
+	return OS.is_debug_build()
+
+
+func _log_startup_perf_elapsed(label: String, started_at_usec: int, extra: String = "") -> void:
+	if not _should_log_startup_perf():
+		return
+	var elapsed_msec: float = max(float(Time.get_ticks_usec() - started_at_usec) / 1000.0, 0.0)
+	if extra.is_empty():
+		print("%s %s %.2fms" % [STARTUP_PERF_LOG_PREFIX, label, elapsed_msec])
+		return
+	print("%s %s %.2fms%s" % [STARTUP_PERF_LOG_PREFIX, label, elapsed_msec, extra])
 
 
 func _enter_game_scene() -> void:
