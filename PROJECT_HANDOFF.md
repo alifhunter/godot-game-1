@@ -1386,6 +1386,11 @@ Read this file first in the next session.
 - Smoke scene:
   - `scenes/tests/SmokeTest.tscn`
   - `scripts/tests/SmokeTest.gd`
+- Normal-play perf scene:
+  - `scenes/tests/NormalPlayPerfTest.tscn`
+  - `scripts/tests/NormalPlayPerfTest.gd`
+  - runs a short headless normal-play path: fresh Normal run, desktop settle, open Network, advance with Network open, advance from desktop, open Stock, advance with Stock open, open News + Network, advance again, then flush pending save
+  - writes a compact one-line result to `res://logs/normal_play_perf_result.txt` when run with `--smoke-local-io`
 - Full smoke command remains:
   - `& "C:\Users\Alif\Desktop\Godot_v4.6.1-stable_win64_console.exe" --headless --path . --scene res://scenes/tests/SmokeTest.tscn`
 - Quick smoke mode now exists for faster iteration:
@@ -1398,6 +1403,8 @@ Read this file first in the next session.
   - recent quick smoke runtimes have been roughly `47-134s`, compared with roughly `9-10 minutes` for the current full smoke
 - Recommended headless quick smoke command when the Godot editor is open:
   - `& "C:\Users\Alif\Desktop\Godot_v4.6.1-stable_win64_console.exe" --headless --path . --log-file logs\smoke-headless.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`
+- Recommended headless normal-play perf command:
+  - `& "C:\Users\Alif\Desktop\Godot_v4.6.1-stable_win64_console.exe" --headless --path . --log-file res://logs/normal_play_perf.log --scene res://scenes/tests/NormalPlayPerfTest.tscn -- --smoke-local-io`
 - Handy quick smoke PowerShell:
   - `$userDir = Join-Path $env:APPDATA 'Godot\app_userdata\The Daytrader Game'`
   - `New-Item -ItemType Directory -Force -Path $userDir | Out-Null`
@@ -1527,6 +1534,10 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - `git diff --check`, Godot project-load check, and the new normal-play perf scene passed after the normal-play performance baseline pass on `2026-04-25`
+    - latest local headless perf result: `open_network=50.20ms`, `advance_network_open=2124.02ms`, `advance_desktop_only=2012.12ms`, `open_stock=64.41ms`, `advance_stock_open=1683.27ms`, `open_news=146.45ms`, `open_network_with_news=79.89ms`, `advance_news_network_open=1996.05ms`, `flush_pending_save=13.81ms`, `local_save_bytes=7604791`
+    - relevant engine perf logs from the same run: raw `save_run` during advances was roughly `294-400ms`; `flush_pending_save:advance_day` was roughly `504-620ms`; `_refresh_markets` stayed around `23-32ms` on stock open and around `182-282ms` in heavier post-day paths
+    - takeaway: the hidden-window refresh cleanup is working, but `Advance Day` is still mostly dominated by synchronous save/simulation work rather than Network/News hidden UI refreshes
   - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after the Network AP/relationship pacing pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after the Network Journal filter / request-detail clarity pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after the Network detail-scroll / grouped-Journal detail pass on `2026-04-25`
@@ -1729,11 +1740,11 @@ Read this file first in the next session.
 - `company_profile_data.json` is now the editable narrative content source, but it is tailored to the repo's existing sector ids rather than the broader external reference schema
 
 ## Recommended Next Steps (Confirm user first)
-- Validate save/runtime performance in a normal play session after the hydrated-detail persistence and hidden-window refresh cleanups:
-  - compare `[perf][save]` logs before/after opening several stocks, advancing days, returning to menu, and loading a saved run
-  - confirm that `Advance Day` feels lighter when `STOCKBOT` is closed and the player is sitting in `Network` / `News` / desktop
-  - if explicit stock browsing still makes saves too heavy, consider a second pass that persists only the selected/recently opened full-detail subset
-- If click latency still feels rough after more playtesting, continue with narrower visible-stock refreshes:
+- If continuing performance work, target `Advance Day` save/simulation cost next rather than adding new feature loops:
+  - the normal-play perf pass shows raw `save_run` at roughly `294-400ms`, advance-day flushes around `504-620ms`, and a project-local save payload around `7.6MB`
+  - likely next pass: reduce the full JSON save payload further for explicit company-detail browsing, or split/cache expensive save serialization so `Advance Day` blocks less
+  - keep watchlist sorting/filter presets and deeper Network/corporate-action loops on hold until this performance thread feels settled
+- If click latency still feels rough after the save path is settled, continue with narrower visible-stock refreshes:
   - consider diffing visible All Stock rows when search/filter state is unchanged
   - look for remaining broad refresh callers where the selected stock did not actually change
   - keep using the new `[perf][ui]` / `[perf][save]` debug logs while tuning
