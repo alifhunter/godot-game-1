@@ -762,12 +762,7 @@ func _refresh_all() -> void:
 		selected_company_id = ""
 		_refresh_header()
 		_refresh_sidebar()
-		_refresh_news()
-		_refresh_social()
-		_refresh_network()
-		_refresh_academy()
-		_refresh_upgrades()
-		_refresh_markets()
+		_refresh_open_desktop_apps()
 		_refresh_debug_overlay()
 		_log_perf_elapsed("_refresh_all", started_at_usec)
 		return
@@ -776,17 +771,27 @@ func _refresh_all() -> void:
 
 	_refresh_header()
 	_refresh_sidebar()
-	_refresh_news()
-	_refresh_social()
-	_refresh_network()
-	_refresh_academy()
-	_refresh_upgrades()
 	_refresh_dashboard()
-	_refresh_markets()
+	_refresh_open_desktop_apps()
 	_refresh_portfolio()
 	_refresh_help()
 	_refresh_debug_overlay()
 	_log_perf_elapsed("_refresh_all", started_at_usec)
+
+
+func _refresh_open_desktop_apps() -> void:
+	if _is_desktop_app_window_open(APP_ID_STOCK):
+		_refresh_markets()
+	if _is_desktop_app_window_open(APP_ID_NEWS):
+		_refresh_news()
+	if _is_desktop_app_window_open(APP_ID_SOCIAL):
+		_refresh_social()
+	if _is_desktop_app_window_open(APP_ID_NETWORK):
+		_refresh_network()
+	if _is_desktop_app_window_open(APP_ID_ACADEMY):
+		_refresh_academy()
+	if _is_desktop_app_window_open(APP_ID_UPGRADES):
+		_refresh_upgrades()
 
 
 func _on_portfolio_changed() -> void:
@@ -1999,7 +2004,7 @@ func _desktop_window_min_size_for_app(app_id: String) -> Vector2:
 		APP_ID_SOCIAL:
 			return Vector2(380, 520)
 		APP_ID_NETWORK:
-			return Vector2(760, 500)
+			return Vector2(780, 620)
 		APP_ID_ACADEMY:
 			return Vector2(720, 500)
 		APP_ID_UPGRADES:
@@ -2043,9 +2048,9 @@ func _desktop_window_default_rect(app_id: String) -> Rect2:
 				size
 			)
 		APP_ID_NETWORK:
-			size.x = min(max(work_rect.size.x * 0.76, size.x), work_rect.size.x - 16.0)
-			size.y = min(max(work_rect.size.y * 0.76, size.y), work_rect.size.y - 16.0)
-			return Rect2(work_rect.position + Vector2(48, 30), size)
+			size.x = min(max(work_rect.size.x * 0.78, size.x), work_rect.size.x - 12.0)
+			size.y = min(max(work_rect.size.y * 0.88, size.y), work_rect.size.y - 12.0)
+			return Rect2(work_rect.position + Vector2(28, 14), size)
 		APP_ID_ACADEMY:
 			size.x = min(max(work_rect.size.x * 0.7, size.x), work_rect.size.x - 16.0)
 			size.y = min(max(work_rect.size.y * 0.74, size.y), work_rect.size.y - 16.0)
@@ -2367,6 +2372,7 @@ func _on_desktop_window_close_pressed(app_id: String) -> void:
 
 func _refresh_app_window_content(app_id: String) -> void:
 	if app_id == APP_ID_STOCK:
+		_refresh_markets()
 		call_deferred("_update_responsive_layout")
 	elif app_id == APP_ID_NEWS:
 		_refresh_news()
@@ -6648,8 +6654,8 @@ func _ensure_corporate_action_ui() -> void:
 
 	if network_journal_list == null:
 		var network_list_vbox: VBoxContainer = network_requests_list.get_parent()
-		network_contacts_list.custom_minimum_size = Vector2(0, 160)
-		network_requests_list.custom_minimum_size = Vector2(0, 90)
+		network_contacts_list.custom_minimum_size = Vector2(0, 132)
+		network_requests_list.custom_minimum_size = Vector2(0, 76)
 		network_journal_label = Label.new()
 		network_journal_label.name = "NetworkJournalLabel"
 		network_journal_label.text = "Journal"
@@ -6679,7 +6685,7 @@ func _ensure_corporate_action_ui() -> void:
 
 		network_journal_list = ItemList.new()
 		network_journal_list.name = "NetworkJournalList"
-		network_journal_list.custom_minimum_size = Vector2(0, 110)
+		network_journal_list.custom_minimum_size = Vector2(0, 88)
 		network_journal_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		network_journal_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		network_journal_list.tooltip_text = "Recent tips, requests, referrals, follow-ups, and source checks."

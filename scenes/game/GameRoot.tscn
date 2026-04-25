@@ -654,7 +654,7 @@ theme_override_constants/separation = 8
 text = "Contacts"
 
 [node name="NetworkContactsList" type="ItemList" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel/NetworkListMargin/NetworkListVBox"]
-custom_minimum_size = Vector2(0, 160)
+custom_minimum_size = Vector2(0, 132)
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
@@ -662,7 +662,7 @@ size_flags_vertical = 3
 text = "Requests"
 
 [node name="NetworkRequestsList" type="ItemList" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel/NetworkListMargin/NetworkListVBox"]
-custom_minimum_size = Vector2(0, 90)
+custom_minimum_size = Vector2(0, 76)
 size_flags_horizontal = 3
 size_flags_vertical = 3
 

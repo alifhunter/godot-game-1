@@ -301,6 +301,10 @@ Read this file first in the next session.
     - tab changes update row selection state first
     - the Trade workspace, dashboard, and desktop refresh only if the selected company actually changes
     - recent smoke timing put the tab switch covered by smoke at about `26ms`
+  - `_refresh_all()` now refreshes only desktop app windows that are actually open:
+    - hidden `STOCKBOT`, `News`, `Twooter`, `Network`, `Academy`, and `Upgrades` windows are no longer rebuilt during every broad day/app refresh
+    - opening `STOCKBOT` explicitly runs `_refresh_markets()` so hidden stale market UI is rebuilt on demand
+    - this specifically reduces `Advance Day` / broad refresh work when the player is sitting in `Network`, `News`, or the desktop instead of the stock terminal
 - Chart system status:
   - chart range switcher supports `1D`, `1W`, `1M`, `1Y`, `5Y`, `YTD`
   - chart display-mode switcher supports `Line` and `Candle`
@@ -681,6 +685,10 @@ Read this file first in the next session.
     - `rights_issue` `rupslb` links now open the fullscreen staged meeting overlay
     - other linked meeting types still open the simpler shared meeting modal
   - when no contacts/leads are available, the list shows `No leads yet. Explore the world more.` instead of dumping all floaters
+- Current Network window layout notes:
+  - the default runtime desktop window is taller (`780x620` minimum and about `88%` of available height by default)
+  - Contacts / Requests / Journal list minimum heights are tightened so the bottom action row stays inside the clipped content host
+  - smoke now asserts that the Network action row fits inside the visible window content
 - Recognition formula currently scores `0-100` from:
   - equity progress worth up to `40`, based on current equity vs difficulty starting cash and capped when equity reaches `2x` starting cash
   - holdings / invested exposure worth up to `30`, split between number of companies held at `1+` lot and invested market value as a share of equity
@@ -1721,12 +1729,13 @@ Read this file first in the next session.
 - `company_profile_data.json` is now the editable narrative content source, but it is tailored to the repo's existing sector ids rather than the broader external reference schema
 
 ## Recommended Next Steps (Confirm user first)
-- Validate save/runtime performance in a normal play session after the hydrated-detail persistence cleanup:
+- Validate save/runtime performance in a normal play session after the hydrated-detail persistence and hidden-window refresh cleanups:
   - compare `[perf][save]` logs before/after opening several stocks, advancing days, returning to menu, and loading a saved run
+  - confirm that `Advance Day` feels lighter when `STOCKBOT` is closed and the player is sitting in `Network` / `News` / desktop
   - if explicit stock browsing still makes saves too heavy, consider a second pass that persists only the selected/recently opened full-detail subset
-- If click latency still feels rough after more playtesting, continue with broader `_refresh_markets()` coupling:
+- If click latency still feels rough after more playtesting, continue with narrower visible-stock refreshes:
   - consider diffing visible All Stock rows when search/filter state is unchanged
-  - look for broad refresh callers where the selected stock did not actually change
+  - look for remaining broad refresh callers where the selected stock did not actually change
   - keep using the new `[perf][ui]` / `[perf][save]` debug logs while tuning
 - Deepen the Upgrades system:
   - tune or polish the new purchase confirmation copy if playtesting says the modal is too wordy/slow

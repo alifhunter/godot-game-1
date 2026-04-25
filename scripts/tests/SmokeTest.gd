@@ -797,6 +797,7 @@ func _run_scenario(
 	var social_feed_cards: VBoxContainer = game_root.find_child("SocialFeedCards", true, false) as VBoxContainer
 	var network_window: Control = game_root.find_child("NetworkWindow", true, false) as Control
 	var network_contacts_list: ItemList = game_root.find_child("NetworkContactsList", true, false) as ItemList
+	var network_action_row: HBoxContainer = game_root.find_child("NetworkActionRow", true, false) as HBoxContainer
 	var network_requests_list: ItemList = game_root.find_child("NetworkRequestsList", true, false) as ItemList
 	var academy_window: Control = game_root.find_child("AcademyWindow", true, false) as Control
 	var academy_category_tabs: HBoxContainer = game_root.find_child("AcademyCategoryTabs", true, false) as HBoxContainer
@@ -1889,6 +1890,7 @@ func _run_scenario(
 
 	network_app_button.emit_signal("pressed")
 	await get_tree().process_frame
+	await get_tree().process_frame
 	var network_snapshot: Dictionary = GameManager.get_network_snapshot()
 	if (
 		network_window == null or
@@ -1905,6 +1907,24 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected the Network icon to open a contact window with recognition data."
+		}
+
+	var network_content_host: Control = network_window.get_parent() as Control
+	if network_action_row == null or network_content_host == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Network window to expose an action row inside its content host."
+		}
+	var network_action_rect: Rect2 = network_action_row.get_global_rect()
+	var network_host_rect: Rect2 = network_content_host.get_global_rect()
+	if network_action_rect.end.y > network_host_rect.end.y + 1.0:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network action controls to fit inside the visible window content."
 		}
 
 	game_root.close_desktop_app("network")
