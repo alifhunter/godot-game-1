@@ -2965,6 +2965,33 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected asked source conflicts to stay visible with disabled button and follow-up copy."
 		}
+	var post_source_check_snapshot: Dictionary = GameManager.get_network_snapshot()
+	if not _network_snapshot_has_journal_data(post_source_check_snapshot):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network snapshot to expose a recent activity journal with tips, requests, referrals, follow-ups, and source checks."
+		}
+	var network_journal_list: ItemList = game_root.find_child("NetworkJournalList", true, false) as ItemList
+	if network_journal_list == null or network_journal_list.item_count <= 0:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network UI to render the recent activity journal list."
+		}
+	if (
+		network_contacts_list.custom_minimum_size.y > 180.0 or
+		network_requests_list.custom_minimum_size.y > 110.0 or
+		network_journal_list.custom_minimum_size.y > 130.0
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network list column heights to stay compact enough for Contacts, Requests, and Journal."
+		}
 	var duplicate_source_check_result: Dictionary = GameManager.ask_contact_source_check(contact_id)
 	if bool(duplicate_source_check_result.get("success", false)):
 		game_root.queue_free()
@@ -3523,6 +3550,33 @@ func _network_snapshot_has_source_check_answer(network_snapshot: Dictionary) -> 
 		):
 			return true
 	return false
+
+
+func _network_snapshot_has_journal_data(network_snapshot: Dictionary) -> bool:
+	var rows: Array = network_snapshot.get("journal", [])
+	if rows.size() < 6:
+		return false
+	var required_types := {
+		"tip": false,
+		"tip_result": false,
+		"followup": false,
+		"source_check": false,
+		"request": false,
+		"referral": false
+	}
+	for row_value in rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var row_type: String = str(row.get("type", ""))
+		if required_types.has(row_type):
+			required_types[row_type] = true
+		if str(row.get("title", "")).is_empty() or str(row.get("detail", "")).is_empty():
+			return false
+	for is_present in required_types.values():
+		if not bool(is_present):
+			return false
+	return true
 
 
 func _first_referral_setup(company_id: String) -> Dictionary:

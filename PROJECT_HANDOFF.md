@@ -22,16 +22,13 @@ Read this file first in the next session.
   - remote URL: `https://github.com/alifhunter/godot-game-1.git`
   - committed checkpoint: `615a415 Add Network tip memory and source checks`
   - committed checkpoint: `b857ab8 Make Network source conflicts actionable`
-  - latest Network conflict UX polish and global fishbowl display-effect changes are currently uncommitted unless committed after this handoff
+  - committed checkpoint: `16330c6 Polish Network conflicts and add fishbowl display`
+  - latest Network Journal changes are currently uncommitted unless committed after this handoff
   - uncommitted files are expected to include:
-    - `project.godot`
-    - `autoloads/FishbowlOverlay.gd`
-    - `autoloads/FishbowlOverlay.gd.uid`
-    - `assets/shaders/fishbowl_screen.gdshader`
-    - `assets/shaders/fishbowl_screen.gdshader.uid`
     - `systems/ContactNetworkSystem.gd`
     - `scripts/ui/GameRoot.gd`
     - `scripts/tests/SmokeTest.gd`
+    - `scenes/game/GameRoot.tscn`
     - `PROJECT_HANDOFF.md`
 
 ## Current Playable State
@@ -663,6 +660,10 @@ Read this file first in the next session.
   - floater vs company-insider state in the contact list/detail
   - referred leads
   - pending/completed/missed requests
+  - compact `Journal` list for recent Network activity
+    - derived from existing tips, resolved tip outcomes, follow-ups, source checks, requests, and referral discoveries
+    - newest entries appear first and currently cap at `18` rows
+    - it is a read-only activity log, not a separate persisted data bucket
   - current daily Network AP remaining/limit
   - selected-contact detail
   - linked corporate-action summary / intel summary when the selected contact and target company map to a live chain
@@ -782,6 +783,7 @@ Read this file first in the next session.
     - `tip_history`
     - `tip_reliability_label` / `tip_reliability_score`
     - cross-contact source checks and whether a direct conflict can still be asked about
+    - `journal` rows for recent Network activity; these are built from existing saved tip/request/discovery state
 
 ## Company Management / Insider Generation
 - Every generated company now persists a compact public `management_roster`
@@ -1469,6 +1471,9 @@ Read this file first in the next session.
   - Network tip-memory journal rows persist through save/load, resolve after several days, classify player action, and surface player-aware last-read notes on contacts
   - Network contact snapshots expose compact read-history rows plus `tip_reliability_label` / `tip_reliability_score`, and the Network detail renders those rows in a small `Read History` panel
   - Network contact snapshots expose cross-contact read disagreement data, and the Network detail renders it in a small `Source Cross-Check` panel
+  - Network snapshots expose recent activity `journal` rows, and the Network window renders them in a compact `Journal` list
+  - Network list-column height budgets were tightened after the Journal pass so Contacts, Requests, and Journal fit in the desktop window without cutting off the bottom; Journal rows render as compact one-line summaries with truncation
+  - Network Contacts / Requests labels and light-list item states now force the dark newspaper text palette, including hover/selected/disabled states, so the light Network panels no longer show unreadable white text
   - accepted Network requests complete when the player owns at least `1` lot by the due day
   - accepted Network requests miss when the player does not own the requested target by the due day
   - connected-floater referral requires relationship, spends `10` relationship on success, creates a referred insider lead, and the referred insider can be met/persisted
@@ -1499,6 +1504,9 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - `git diff --check` and direct GameRoot headless launch passed after the Network Contacts / Requests readability fix on `2026-04-25`
+  - `git diff --check`, Godot project-load check, and direct GameRoot headless launch passed after the Network Journal cutoff fix on `2026-04-25`; quick smoke was attempted but timed out before `SmokeTest` started, so latest successful quick smoke remains the earlier Network Journal pass
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the Network Journal update on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the global fishbowl display-effect update on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the Network conflict UX polish update on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the actionable Network Source Cross-Check update on `2026-04-25`
@@ -1611,6 +1619,7 @@ Read this file first in the next session.
   - follow-up actions exist for resolved tips, but there is no broader report-back system for other favors or requests yet
   - ignore decay is only represented through request failure for now
   - cross-reference / conflicting-tip reliability checks are first-pass only: direct conflicts can be asked about once, but there is no multi-step source interview, clue journal, or contact-vs-contact dialogue yet
+  - the Network Journal is read-only and recent-only; there are no filters, search, detail drawer, export, or pinned clue/task rows yet
   - contact interactions now consume daily AP, but there is no richer daily-action journal or non-Network action economy yet
   - no perk-driven extra contact slots, cooldown reductions, or sector starting-relationship modifiers yet beyond the current Daily Action Points upgrade track
   - Profile currently shows public management names, but simply opening Profile does not privately discover those insiders
@@ -1732,7 +1741,7 @@ Read this file first in the next session.
   - deepen the new actionable cross-contact conflict pass:
     - add multiple ask styles such as `Ask for evidence`, `Push back`, and `Compare source`
     - let the answer create a clue / task / contact referral instead of only a stored note
-    - add a clearer conflict-history journal so repeated names and sources become readable over time
+    - deepen the new Journal so repeated names and sources become searchable/filterable over time
   - add event-slot or daily-action costs for venue attendance / meeting contacts if/when the broader time system exists
   - next corporate-action feature step is to expand the new interactive `rupslb` flow beyond `rights_issue`:
     - add more agenda families
@@ -1749,7 +1758,7 @@ Read this file first in the next session.
   - add ignore/ghosting decay beyond the current missed-request relationship penalty
   - deepen the implemented cross-contact read system from one-shot `Ask About Conflict` into richer investigation/dialogue choices
   - add perk hooks such as extra contact slots, reduced contact cooldown, and sector-specific starting relationship
-  - add richer contact detail pages and a clearer request journal
+  - add richer contact detail pages and expand the Journal with filters, detail drawers, pinned clues, and request-specific views
   - add a clearer UI for public management vs discovered/meet-ready insider leads
   - tune relationship gains/losses and contact arc market impact after playtesting
 - Deepen the chart:

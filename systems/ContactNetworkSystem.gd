@@ -7,6 +7,7 @@ const REFERRAL_CONNECTION_THRESHOLD := 50
 const MAX_COMPANY_LEADS_PER_FLOATER := 2
 const TIP_MEMORY_RESOLVE_DAYS := 3
 const MAX_TIP_MEMORY_ROWS := 96
+const MAX_NETWORK_JOURNAL_ROWS := 18
 
 
 func build_snapshot(run_state, data_repository) -> Dictionary:
@@ -75,6 +76,7 @@ func build_snapshot(run_state, data_repository) -> Dictionary:
 		"contacts": contact_rows,
 		"discoveries": discovered_rows,
 		"requests": _request_rows(requests),
+		"journal": _network_journal_rows(run_state, data_repository, requests, discoveries),
 		"met_count": contact_rows.size(),
 		"contact_cap": int(recognition.get("contact_cap", 2))
 	}
@@ -1864,6 +1866,183 @@ func _request_rows(requests: Dictionary) -> Array:
 		return int(a.get("due_day_index", 0)) < int(b.get("due_day_index", 0))
 	)
 	return rows
+
+
+func _network_journal_rows(run_state, data_repository, requests: Dictionary, discoveries: Dictionary) -> Array:
+	var rows: Array = []
+	for tip_value in run_state.get_network_tip_journal().values():
+		if typeof(tip_value) != TYPE_DICTIONARY:
+			continue
+		var tip: Dictionary = tip_value
+		rows.append(_network_tip_journal_row(tip))
+		if str(tip.get("status", "pending")) != "pending":
+			rows.append(_network_tip_resolution_journal_row(tip))
+		if not str(tip.get("followup_note", "")).is_empty():
+			rows.append(_network_tip_followup_journal_row(tip))
+		if not str(tip.get("source_check_note", "")).is_empty():
+			rows.append(_network_source_check_journal_row(tip))
+	for request_value in requests.values():
+		if typeof(request_value) != TYPE_DICTIONARY:
+			continue
+		rows.append(_network_request_journal_row(run_state, data_repository, request_value))
+	for discovery_value in discoveries.values():
+		if typeof(discovery_value) != TYPE_DICTIONARY:
+			continue
+		var discovery: Dictionary = discovery_value
+		if str(discovery.get("source_type", "")) == "referral":
+			rows.append(_network_referral_journal_row(run_state, data_repository, discovery))
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_sort: int = int(a.get("sort_index", int(a.get("day_index", 0)) * 10))
+		var b_sort: int = int(b.get("sort_index", int(b.get("day_index", 0)) * 10))
+		if a_sort == b_sort:
+			return str(a.get("id", "")) > str(b.get("id", ""))
+		return a_sort > b_sort
+	)
+	if rows.size() > MAX_NETWORK_JOURNAL_ROWS:
+		rows = rows.slice(0, MAX_NETWORK_JOURNAL_ROWS)
+	return rows
+
+
+func _network_tip_journal_row(tip: Dictionary) -> Dictionary:
+	var day_index: int = int(tip.get("created_day_index", 0))
+	var ticker: String = str(tip.get("target_ticker", ""))
+	var read_label: String = str(tip.get("truth_label", "Network Read"))
+	return {
+		"id": "%s:tip" % str(tip.get("id", "")),
+		"type": "tip",
+		"day_index": day_index,
+		"sort_index": day_index * 10 + 1,
+		"contact_id": str(tip.get("contact_id", "")),
+		"contact_name": str(tip.get("contact_name", "Contact")),
+		"target_company_id": str(tip.get("target_company_id", "")),
+		"target_ticker": ticker,
+		"status": str(tip.get("status", "pending")),
+		"title": "Tip | %s | %s" % [ticker, read_label],
+		"detail": "%s gave a %s read. %s" % [
+			str(tip.get("contact_name", "Contact")),
+			str(tip.get("confidence_label", "soft")),
+			str(tip.get("tip_read", ""))
+		]
+	}
+
+
+func _network_tip_resolution_journal_row(tip: Dictionary) -> Dictionary:
+	var day_index: int = int(tip.get("resolved_day_index", tip.get("created_day_index", 0)))
+	return {
+		"id": "%s:resolved" % str(tip.get("id", "")),
+		"type": "tip_result",
+		"day_index": day_index,
+		"sort_index": day_index * 10 + 4,
+		"contact_id": str(tip.get("contact_id", "")),
+		"contact_name": str(tip.get("contact_name", "Contact")),
+		"target_company_id": str(tip.get("target_company_id", "")),
+		"target_ticker": str(tip.get("target_ticker", "")),
+		"status": str(tip.get("status", "resolved")),
+		"title": "Tip Result | %s | %s" % [
+			str(tip.get("target_ticker", "")),
+			str(tip.get("outcome_label", "Still pending"))
+		],
+		"detail": "%s | %s" % [
+			str(tip.get("outcome_note", "")),
+			str(tip.get("player_action_label", "No action"))
+		]
+	}
+
+
+func _network_tip_followup_journal_row(tip: Dictionary) -> Dictionary:
+	var day_index: int = int(tip.get("followup_day_index", tip.get("resolved_day_index", tip.get("created_day_index", 0))))
+	return {
+		"id": "%s:followup" % str(tip.get("id", "")),
+		"type": "followup",
+		"day_index": day_index,
+		"sort_index": day_index * 10 + 6,
+		"contact_id": str(tip.get("contact_id", "")),
+		"contact_name": str(tip.get("contact_name", "Contact")),
+		"target_company_id": str(tip.get("target_company_id", "")),
+		"target_ticker": str(tip.get("target_ticker", "")),
+		"status": "recorded",
+		"title": "Follow-up | %s | %s" % [
+			str(tip.get("target_ticker", "")),
+			str(tip.get("followup_label", "Follow-up"))
+		],
+		"detail": str(tip.get("followup_note", ""))
+	}
+
+
+func _network_source_check_journal_row(tip: Dictionary) -> Dictionary:
+	var day_index: int = int(tip.get("source_check_day_index", tip.get("created_day_index", 0)))
+	return {
+		"id": "%s:source_check" % str(tip.get("id", "")),
+		"type": "source_check",
+		"day_index": day_index,
+		"sort_index": day_index * 10 + 7,
+		"contact_id": str(tip.get("contact_id", "")),
+		"contact_name": str(tip.get("contact_name", "Contact")),
+		"target_company_id": str(tip.get("target_company_id", "")),
+		"target_ticker": str(tip.get("target_ticker", "")),
+		"status": "recorded",
+		"title": "Source Check | %s | %s" % [
+			str(tip.get("target_ticker", "")),
+			str(tip.get("source_check_peer_contact_name", "conflict"))
+		],
+		"detail": str(tip.get("source_check_note", ""))
+	}
+
+
+func _network_request_journal_row(run_state, data_repository, request: Dictionary) -> Dictionary:
+	var contact_id: String = str(request.get("contact_id", ""))
+	var company_id: String = str(request.get("target_company_id", ""))
+	var status: String = str(request.get("status", "pending"))
+	var day_index: int = int(request.get("completed_day_index", request.get("created_day_index", 0))) if status != "pending" else int(request.get("created_day_index", 0))
+	var contact_name: String = _contact_display_name(run_state, data_repository, contact_id)
+	var ticker: String = _company_ticker(run_state, company_id)
+	var detail: String = "Due day %d." % int(request.get("due_day_index", 0))
+	if status == "completed":
+		detail = "Completed after you held at least 1 lot."
+	elif status == "missed":
+		detail = "Missed because you did not hold the requested target."
+	return {
+		"id": "%s:request" % str(request.get("id", "")),
+		"type": "request",
+		"day_index": day_index,
+		"sort_index": day_index * 10 + 3,
+		"contact_id": contact_id,
+		"contact_name": contact_name,
+		"target_company_id": company_id,
+		"target_ticker": ticker,
+		"status": status,
+		"title": "Request | %s | %s" % [ticker, status.capitalize()],
+		"detail": "%s | %s" % [contact_name, detail]
+	}
+
+
+func _network_referral_journal_row(run_state, data_repository, discovery: Dictionary) -> Dictionary:
+	var referred_contact_id: String = str(discovery.get("contact_id", ""))
+	var source_contact_id: String = str(discovery.get("referred_by_contact_id", discovery.get("source_id", "")))
+	var day_index: int = int(discovery.get("day_index", 0))
+	var referred_name: String = _contact_display_name(run_state, data_repository, referred_contact_id)
+	var source_name: String = _contact_display_name(run_state, data_repository, source_contact_id)
+	var company_id: String = str(discovery.get("target_company_id", ""))
+	return {
+		"id": "%s:referral" % referred_contact_id,
+		"type": "referral",
+		"day_index": day_index,
+		"sort_index": day_index * 10 + 5,
+		"contact_id": referred_contact_id,
+		"contact_name": referred_name,
+		"target_company_id": company_id,
+		"target_ticker": _company_ticker(run_state, company_id),
+		"status": "discovered",
+		"title": "Referral | %s" % referred_name,
+		"detail": "%s introduced this lead." % source_name
+	}
+
+
+func _contact_display_name(run_state, data_repository, contact_id: String) -> String:
+	var contact: Dictionary = _contact_definition(run_state, data_repository, contact_id)
+	if contact.is_empty():
+		return "Contact"
+	return str(contact.get("display_name", "Contact"))
 
 
 func _recognition_tier(score: float) -> Dictionary:

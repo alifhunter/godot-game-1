@@ -278,7 +278,9 @@ var news_open_meeting_button: Button = null
 @onready var network_summary_label: Label = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkSummaryLabel
 @onready var network_list_panel: PanelContainer = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel
 @onready var network_detail_panel: PanelContainer = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel
+@onready var network_contacts_label: Label = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel/NetworkListMargin/NetworkListVBox/NetworkContactsLabel
 @onready var network_contacts_list: ItemList = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel/NetworkListMargin/NetworkListVBox/NetworkContactsList
+@onready var network_requests_label: Label = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel/NetworkListMargin/NetworkListVBox/NetworkRequestsLabel
 @onready var network_requests_list: ItemList = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkListPanel/NetworkListMargin/NetworkListVBox/NetworkRequestsList
 @onready var network_contact_name_label: Label = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkContactNameLabel
 @onready var network_contact_meta_label: Label = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox/NetworkContactMetaLabel
@@ -293,6 +295,8 @@ var network_followup_button: MenuButton = null
 var network_tip_history_label: Label = null
 var network_crosscheck_label: Label = null
 var network_source_check_button: Button = null
+var network_journal_label: Label = null
+var network_journal_list: ItemList = null
 var academy_window: MarginContainer = null
 var academy_window_body: PanelContainer = null
 var academy_title_label: Label = null
@@ -1158,6 +1162,8 @@ func _refresh_network() -> void:
 		network_summary_label.text = "Start a run to meet market contacts."
 		network_contacts_list.clear()
 		network_requests_list.clear()
+		if network_journal_list != null:
+			network_journal_list.clear()
 		_show_network_contact({})
 		_log_perf_elapsed("_refresh_network", started_at_usec)
 		return
@@ -1177,6 +1183,7 @@ func _refresh_network() -> void:
 	]
 	_rebuild_network_contact_list()
 	_rebuild_network_request_list()
+	_rebuild_network_journal_list()
 	_log_perf_elapsed("_refresh_network", started_at_usec)
 
 
@@ -3266,6 +3273,31 @@ func _rebuild_network_request_list() -> void:
 		])
 	if requests.is_empty():
 		network_requests_list.add_item("No active requests.")
+
+
+func _rebuild_network_journal_list() -> void:
+	if network_journal_list == null:
+		return
+	network_journal_list.clear()
+	var rows: Array = current_network_snapshot.get("journal", [])
+	for row_value in rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var line: String = "D%d  |  %s" % [
+			int(row.get("day_index", 0)),
+			str(row.get("title", "Network note"))
+		]
+		var detail: String = str(row.get("detail", ""))
+		if not detail.is_empty():
+			line += "  -  %s" % detail
+		if line.length() > 150:
+			line = line.substr(0, 147) + "..."
+		network_journal_list.add_item(line)
+		network_journal_list.set_item_metadata(network_journal_list.item_count - 1, row.duplicate(true))
+	if rows.is_empty():
+		network_journal_list.add_item("No journal entries yet.")
+		network_journal_list.set_item_disabled(0, true)
 
 
 func _show_network_contact(contact: Dictionary) -> void:
@@ -6369,6 +6401,24 @@ func _ensure_corporate_action_ui() -> void:
 		var network_action_row: HBoxContainer = network_meet_button.get_parent()
 		network_action_row.add_child(network_source_check_button)
 
+	if network_journal_list == null:
+		var network_list_vbox: VBoxContainer = network_requests_list.get_parent()
+		network_contacts_list.custom_minimum_size = Vector2(0, 160)
+		network_requests_list.custom_minimum_size = Vector2(0, 90)
+		network_journal_label = Label.new()
+		network_journal_label.name = "NetworkJournalLabel"
+		network_journal_label.text = "Journal"
+		network_list_vbox.add_child(network_journal_label)
+
+		network_journal_list = ItemList.new()
+		network_journal_list.name = "NetworkJournalList"
+		network_journal_list.custom_minimum_size = Vector2(0, 110)
+		network_journal_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		network_journal_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		network_journal_list.tooltip_text = "Recent tips, requests, referrals, follow-ups, and source checks."
+		network_journal_list.allow_reselect = true
+		network_list_vbox.add_child(network_journal_list)
+
 	if rupslb_meeting_overlay == null:
 		rupslb_meeting_overlay = RUPSLB_MEETING_OVERLAY_SCRIPT.new()
 		rupslb_meeting_overlay.name = "RupslbMeetingOverlay"
@@ -7690,6 +7740,8 @@ func _apply_visual_theme() -> void:
 	_style_light_item_list(news_article_list)
 	_style_light_item_list(network_contacts_list)
 	_style_light_item_list(network_requests_list)
+	if network_journal_list != null:
+		_style_light_item_list(network_journal_list)
 	if watchlist_picker_list != null:
 		_style_item_list(watchlist_picker_list, 0, 0)
 	if console_input != null:
@@ -7749,9 +7801,13 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(network_title_label, COLOR_WINDOW_TEXT)
 	_set_label_tone(network_recognition_label, Color(0.454902, 0.337255, 0.141176, 1))
 	_set_label_tone(network_summary_label, COLOR_WINDOW_TEXT)
+	_set_label_tone(network_contacts_label, COLOR_WINDOW_TEXT)
+	_set_label_tone(network_requests_label, COLOR_WINDOW_TEXT)
 	_set_label_tone(network_contact_name_label, COLOR_WINDOW_TEXT)
 	_set_label_tone(network_contact_meta_label, Color(0.352941, 0.309804, 0.203922, 1))
 	_set_label_tone(network_contact_body_label, COLOR_WINDOW_TEXT)
+	if network_journal_label != null:
+		_set_label_tone(network_journal_label, COLOR_WINDOW_TEXT)
 	if network_corporate_action_label != null:
 		_set_label_tone(network_corporate_action_label, Color(0.352941, 0.309804, 0.203922, 1))
 	if network_tip_history_label != null:
@@ -8201,7 +8257,11 @@ func _style_light_item_list(item_list: ItemList) -> void:
 	item_list.add_theme_stylebox_override("panel_focus", panel_style)
 	item_list.add_theme_stylebox_override("cursor", cursor_style)
 	item_list.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	item_list.add_theme_color_override("font_hovered_color", COLOR_WINDOW_TEXT)
 	item_list.add_theme_color_override("font_selected_color", COLOR_WINDOW_TEXT)
+	item_list.add_theme_color_override("font_hovered_selected_color", COLOR_WINDOW_TEXT)
+	item_list.add_theme_color_override("font_disabled_color", Color(0.352941, 0.309804, 0.203922, 0.82))
+	item_list.add_theme_color_override("guide_color", Color(0, 0, 0, 0))
 
 
 func _style_item_list(item_list: ItemList, panel_radius: int = 8, cursor_radius: int = 6) -> void:
