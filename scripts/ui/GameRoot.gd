@@ -3716,6 +3716,7 @@ func _build_news_article_card(article: Dictionary) -> PanelContainer:
 	image_label.text = _news_image_slot_label(str(article.get("image_slot", "brief")))
 	image_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	image_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_set_label_tone(image_label, Color(0.454902, 0.337255, 0.141176, 1))
 	image_frame.add_child(image_label)
 
 	var status_label := Label.new()
@@ -3730,6 +3731,7 @@ func _build_news_article_card(article: Dictionary) -> PanelContainer:
 	headline_label.text = str(article.get("headline", ""))
 	headline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_apply_font_override_to_control(headline_label, 15, _get_app_font())
+	_set_label_tone(headline_label, COLOR_WINDOW_TEXT)
 	vbox.add_child(headline_label)
 
 	var deck_label := Label.new()
@@ -5886,6 +5888,10 @@ func _on_next_day_pressed() -> void:
 func _on_day_progressed(_day_index: int) -> void:
 	status_message = "Market closed."
 	_suppress_next_portfolio_refresh()
+	if _is_desktop_app_window_open(APP_ID_NEWS):
+		selected_news_archive_year = 0
+		selected_news_archive_month = 0
+		selected_news_article_id = ""
 	_refresh_all()
 
 

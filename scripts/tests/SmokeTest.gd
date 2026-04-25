@@ -1333,6 +1333,23 @@ func _run_scenario(
 			"message": "Smoke test expected News articles to preserve author, public label, and asset-slot metadata in the archive and detail view."
 		}
 
+	var card_headline_label: Label = game_root.find_child("NewsArticleCardHeadlineLabel", true, false) as Label
+	var card_image_label: Label = game_root.find_child("NewsArticleCardImagePlaceholder", true, false) as Label
+	var card_headline_color: Color = card_headline_label.get_theme_color("font_color") if card_headline_label != null else Color.WHITE
+	var card_image_color: Color = card_image_label.get_theme_color("font_color") if card_image_label != null else Color.WHITE
+	if (
+		card_headline_label == null or
+		card_image_label == null or
+		((card_headline_color.r + card_headline_color.g + card_headline_color.b) / 3.0) > 0.72 or
+		((card_image_color.r + card_image_color.g + card_image_color.b) / 3.0) > 0.72
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected newspaper card text and image placeholders to use readable dark colors."
+		}
+
 	var forbidden_news_terms: Array = ["source_chain_id", "chain_family", "meeting_id", "venue_type", "progress_label", "tone"]
 	var news_detail_meta_label: Label = game_root.find_child("NewsDetailMetaLabel", true, false) as Label
 	var news_detail_body: RichTextLabel = game_root.find_child("NewsDetailBody", true, false) as RichTextLabel
@@ -1376,6 +1393,21 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected at least one News article to surface a valid Network source lead."
 		}
+
+	if news_article_list.item_count > 1:
+		news_article_list.select(1)
+		game_root._on_news_article_selected(1)
+		await get_tree().process_frame
+		var first_article_after_reload: String = str(news_article_list.get_item_metadata(0).get("id", ""))
+		game_root._on_day_progressed(RunState.day_index + 1)
+		await get_tree().process_frame
+		if game_root.selected_news_article_id != first_article_after_reload:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected an open News window to reload to the latest story after day progress."
+			}
 
 	game_root.close_desktop_app("news")
 	await get_tree().process_frame

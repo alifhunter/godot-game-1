@@ -458,10 +458,12 @@ Read this file first in the next session.
   - top area has a masthead, logo placeholder frame, trade-date line, and publication/outlet buttons
   - left side shows archive filters plus article cards
   - article cards include a reserved image frame, public section/status, headline, deck, byline, and a `Read Story` action
+  - article card headline and placeholder-frame text are explicitly dark on the pale newspaper cards so the reserved asset frames stay readable until real images/logos are dropped in
   - the article list can browse archived articles by outlet, year, and month
   - a hidden legacy `NewsArticleList` is still populated for compatibility/smoke plumbing, but the visible player surface is the card stack
   - right side shows article detail as a newspaper story with reserved hero frame, headline, deck, byline, date, public chips, and body
   - full article bodies are loaded when an archived article is selected, rather than dumping all history into the list at once
+  - if the News window is open during `Advance Day`, it clears the stale article/archive selection and reloads to the newest visible story
   - article timing/availability depends on event progress and outlet intel level
   - market-wrap style articles provide fallback content so the feed is not empty on quieter sessions
   - player-facing system/debug metadata is intentionally hidden; raw `progress_label`, `tone`, `chain_family`, `meeting_id`, and similar fields stay internal
@@ -1411,6 +1413,7 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the News card readability / open-window day reload fix on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the News newspaper / author-network pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the stock-list tab switching latency pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, and full Godot headless smoke passed after the watchlist/company-list latency pass on `2026-04-25`
