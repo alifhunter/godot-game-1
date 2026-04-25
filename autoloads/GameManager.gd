@@ -115,7 +115,6 @@ var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
 var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
 var academy_system = preload("res://systems/AcademySystem.gd").new()
 var background_company_detail_hydration_running: bool = false
-var background_company_detail_hydration_save_counter: int = 0
 var loading_detail_log_lines: Array = []
 
 
@@ -153,7 +152,6 @@ func start_new_run(run_seed: int = 0, difficulty_id: String = DEFAULT_DIFFICULTY
 	var company_definitions: Array = build_company_roster(run_seed, difficulty_config)
 	RunState.setup_new_run(run_seed, company_definitions, difficulty_config, tutorial_enabled)
 	background_company_detail_hydration_running = false
-	background_company_detail_hydration_save_counter = 0
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	simulate_opening_session(false)
 	_save_active_run_now("start_new_run")
@@ -171,7 +169,6 @@ func start_new_run_with_loading(
 
 	var difficulty_config: Dictionary = get_difficulty_config(difficulty_id)
 	background_company_detail_hydration_running = false
-	background_company_detail_hydration_save_counter = 0
 	loading_detail_log_lines.clear()
 	run_loading_started.emit(str(difficulty_config.get("id", difficulty_id)))
 	_emit_run_loading_detail("", [])
@@ -221,7 +218,6 @@ func load_run_from_save() -> bool:
 
 	RunState.load_from_dict(saved_run)
 	background_company_detail_hydration_running = false
-	background_company_detail_hydration_save_counter = 0
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	run_loaded.emit()
 	_enter_game_scene()
@@ -240,7 +236,6 @@ func load_run_from_save_with_loading() -> bool:
 	_emit_load_run_loading_step(1)
 	RunState.load_from_dict(saved_run)
 	background_company_detail_hydration_running = false
-	background_company_detail_hydration_save_counter = 0
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	run_loaded.emit()
 	await get_tree().process_frame
@@ -1794,17 +1789,10 @@ func _background_company_detail_hydration_loop() -> void:
 		var company_id: String = RunState.dequeue_company_detail_hydration()
 		if company_id.is_empty():
 			break
-		if RunState.ensure_company_full_detail(company_id):
-			background_company_detail_hydration_save_counter += 1
+		if RunState.ensure_company_full_detail(company_id, false):
 			company_detail_ready.emit(company_id)
-			if background_company_detail_hydration_save_counter >= 3:
-				_request_autosave("background_company_detail_hydration")
-				background_company_detail_hydration_save_counter = 0
 		await get_tree().process_frame
 	background_company_detail_hydration_running = false
-	if background_company_detail_hydration_save_counter > 0:
-		_request_autosave("background_company_detail_hydration")
-		background_company_detail_hydration_save_counter = 0
 
 
 func _should_log_startup_perf() -> bool:

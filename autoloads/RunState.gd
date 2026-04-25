@@ -40,6 +40,8 @@ const REPORT_MONTH_BY_QUARTER := {
 	4: 10
 }
 const STARTUP_PERF_LOG_PREFIX := "[perf][startup]"
+const COMPANY_DETAIL_PERSISTENCE_PERSISTENT := "persistent"
+const COMPANY_DETAIL_PERSISTENCE_EPHEMERAL := "ephemeral"
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
 const COMPANY_PROFILE_KEYS := [
 	"base_price",
@@ -404,7 +406,7 @@ func to_save_dict() -> Dictionary:
 		"seed": run_seed,
 		"day_index": day_index,
 		"market_sentiment": market_sentiment,
-		"companies": companies.duplicate(true),
+		"companies": _build_companies_save_payload(),
 		"company_definitions": company_definitions.duplicate(true),
 		"company_order": company_order.duplicate(),
 		"watchlist_company_ids": watchlist_company_ids.duplicate(),
@@ -476,7 +478,7 @@ func ensure_company_core_profile(company_id: String) -> bool:
 	return true
 
 
-func ensure_company_full_detail(company_id: String) -> bool:
+func ensure_company_full_detail(company_id: String, persist_detail: bool = true) -> bool:
 	if company_id.is_empty() or not companies.has(company_id):
 		return false
 	if not ensure_company_core_profile(company_id):
@@ -486,6 +488,10 @@ func ensure_company_full_detail(company_id: String) -> bool:
 	if company_profile.is_empty():
 		return false
 	if str(company_profile.get("detail_status", "ready")) == "ready":
+		if persist_detail and str(company_profile.get("detail_persistence", COMPANY_DETAIL_PERSISTENCE_PERSISTENT)) != COMPANY_DETAIL_PERSISTENCE_PERSISTENT:
+			company_profile["detail_persistence"] = COMPANY_DETAIL_PERSISTENCE_PERSISTENT
+			runtime["company_profile"] = company_profile
+			companies[company_id] = runtime
 		return true
 	var template: Dictionary = _get_base_company_definition(company_id)
 	if template.is_empty():
@@ -501,6 +507,7 @@ func ensure_company_full_detail(company_id: String) -> bool:
 		run_seed
 	)
 	hydrated_profile["detail_status"] = "ready"
+	hydrated_profile["detail_persistence"] = COMPANY_DETAIL_PERSISTENCE_PERSISTENT if persist_detail else COMPANY_DETAIL_PERSISTENCE_EPHEMERAL
 	runtime["company_profile"] = _normalize_company_profile(hydrated_profile)
 	companies[company_id] = runtime
 	historical_chart_bar_cache.erase(company_id)
@@ -509,6 +516,31 @@ func ensure_company_full_detail(company_id: String) -> bool:
 	if queued_index >= 0:
 		company_detail_hydration_queue.remove_at(queued_index)
 	return true
+
+
+func _build_companies_save_payload() -> Dictionary:
+	var save_companies: Dictionary = {}
+	for company_id_value in companies.keys():
+		var company_id: String = str(company_id_value)
+		var runtime: Dictionary = companies[company_id_value].duplicate(true)
+		var company_profile: Dictionary = runtime.get("company_profile", {})
+		if typeof(company_profile) == TYPE_DICTIONARY:
+			runtime["company_profile"] = _build_company_profile_save_payload(company_profile)
+		save_companies[company_id] = runtime
+	return save_companies
+
+
+func _build_company_profile_save_payload(company_profile: Dictionary) -> Dictionary:
+	var save_profile: Dictionary = company_profile.duplicate(true)
+	if str(save_profile.get("detail_persistence", COMPANY_DETAIL_PERSISTENCE_PERSISTENT)) != COMPANY_DETAIL_PERSISTENCE_EPHEMERAL:
+		return save_profile
+
+	save_profile["detail_status"] = "cold"
+	save_profile.erase("detail_persistence")
+	save_profile.erase("financial_history")
+	save_profile.erase("financial_statement_snapshot")
+	save_profile.erase("management_roster")
+	return save_profile
 
 
 func queue_company_detail_hydration(company_id: String, priority: bool = false) -> void:
@@ -2095,6 +2127,15 @@ func _normalize_company_profile(company_profile: Dictionary) -> Dictionary:
 	if not ["cold", "queued", "ready"].has(detail_status):
 		detail_status = "ready"
 	normalized_profile["detail_status"] = detail_status
+	var detail_persistence: String = str(normalized_profile.get(
+		"detail_persistence",
+		COMPANY_DETAIL_PERSISTENCE_PERSISTENT if detail_status == "ready" else ""
+	))
+	if detail_status != "ready":
+		detail_persistence = ""
+	elif not [COMPANY_DETAIL_PERSISTENCE_PERSISTENT, COMPANY_DETAIL_PERSISTENCE_EPHEMERAL].has(detail_persistence):
+		detail_persistence = COMPANY_DETAIL_PERSISTENCE_PERSISTENT
+	normalized_profile["detail_persistence"] = detail_persistence
 	normalized_profile["profile_seed"] = int(normalized_profile.get("profile_seed", 0))
 	normalized_profile["company_size_id"] = int(normalized_profile.get("company_size_id", 0))
 	normalized_profile["company_age"] = int(normalized_profile.get("company_age", 0))

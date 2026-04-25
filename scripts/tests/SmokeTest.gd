@@ -698,6 +698,62 @@ func _validate_batched_new_run_setup() -> Dictionary:
 			"message": "Smoke test expected on-demand hydration to generate the 3-role management roster."
 		}
 
+	var background_company_id: String = str(RunState.company_order[1]) if RunState.company_order.size() > 1 else ""
+	if not background_company_id.is_empty():
+		if not SaveManager.flush_pending_save():
+			return {
+				"success": false,
+				"message": "Smoke test expected pending saves to flush before testing background detail hydration."
+			}
+
+		GameManager.start_background_company_detail_hydration([background_company_id])
+		for _wait_index in range(12):
+			await get_tree().process_frame
+			if not GameManager.background_company_detail_hydration_running and not RunState.has_pending_company_detail_hydration():
+				break
+
+		var background_profile: Dictionary = RunState.get_company(background_company_id).get("company_profile", {})
+		if str(background_profile.get("detail_status", "")) != "ready":
+			return {
+				"success": false,
+				"message": "Smoke test expected background hydration to generate ready company detail."
+			}
+
+		if str(background_profile.get("detail_persistence", "")) != RunState.COMPANY_DETAIL_PERSISTENCE_EPHEMERAL:
+			return {
+				"success": false,
+				"message": "Smoke test expected background-hydrated company detail to be marked as ephemeral cache."
+			}
+
+		if SaveManager.has_pending_save():
+			return {
+				"success": false,
+				"message": "Smoke test expected background detail hydration not to queue an autosave."
+			}
+
+		var background_saved_state: Dictionary = RunState.to_save_dict()
+		var saved_companies: Dictionary = background_saved_state.get("companies", {})
+		var saved_first_profile: Dictionary = saved_companies.get(first_company_id, {}).get("company_profile", {})
+		var saved_background_profile: Dictionary = saved_companies.get(background_company_id, {}).get("company_profile", {})
+		if str(saved_first_profile.get("detail_status", "")) != "ready" or saved_first_profile.get("financial_history", []).is_empty():
+			return {
+				"success": false,
+				"message": "Smoke test expected on-demand company detail to remain persisted in the save payload."
+			}
+		if str(saved_background_profile.get("detail_status", "")) != "cold" or not saved_background_profile.get("financial_history", []).is_empty():
+			return {
+				"success": false,
+				"message": "Smoke test expected ephemeral background detail to be trimmed back to cold data in the save payload."
+			}
+
+		RunState.load_from_dict(background_saved_state)
+		var reloaded_background_profile: Dictionary = RunState.get_company(background_company_id).get("company_profile", {})
+		if str(reloaded_background_profile.get("detail_status", "")) != "cold" or not reloaded_background_profile.get("financial_history", []).is_empty():
+			return {
+				"success": false,
+				"message": "Smoke test expected trimmed background detail to reload as lazily hydratable cold data."
+			}
+
 	return {"success": true}
 
 

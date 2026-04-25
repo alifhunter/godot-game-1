@@ -1241,8 +1241,9 @@ Read this file first in the next session.
 - Runtime `company_profile` now persists:
   - financial/runtime profile fields
   - narrative profile fields
-  - the derived `financial_statement_snapshot`
+  - the derived `financial_statement_snapshot` only for company detail the player explicitly opened/hydrated
   - lazy-detail state through `detail_status`
+  - internal `detail_persistence`, which is `persistent` for on-demand detail and `ephemeral` for background cache detail
 - `RunState.COMPANY_PROFILE_KEYS` now includes:
   - financial/runtime values like `base_price`, scores, `financials`, `financial_history`, `financial_statement_snapshot`, and `generation_traits`
   - narrative values like `archetype_label`, `company_size_label`, `founded_year`, `employee_count`, `profile_revenue`, `profile_description`, and `profile_tags`
@@ -1266,6 +1267,10 @@ Read this file first in the next session.
   - `RunState` owns the hydration queue and per-company `detail_status`
   - `GameManager.start_background_company_detail_hydration(...)` seeds/starts the background loop
   - `GameManager.company_detail_ready(company_id)` is emitted when one company finishes hydrating
+  - background hydration calls `RunState.ensure_company_full_detail(company_id, false)`, so generated full detail is treated as an in-session cache
+  - background hydration no longer queues autosaves after every few hydrated companies
+  - `RunState.to_save_dict()` trims background-only detail back to cold/core data by dropping `financial_history`, `financial_statement_snapshot`, and `management_roster`
+  - on-demand hydration still uses persistent detail, so explicitly opened / tested company detail survives save/load normally
   - `GameManager.run_loading_detail_updated(subprogress_text, log_lines)` now drives the loading-screen subprogress + mini-log
 - Runtime companies persist:
   - `starting_price`
@@ -1705,7 +1710,7 @@ Read this file first in the next session.
     - not yet surfaced as a dense historical table anywhere else in the UI
     - should be treated as believable long-run context, not canonical event-by-event history
   - startup is much faster now because full detail is lazy, but the lazy-detail system is still first-pass:
-    - once background hydration finishes for much of the roster, later saves become heavier because more full company detail is now present in the save payload
+    - background-hydrated detail is now an ephemeral session cache and is trimmed from save payloads, but companies explicitly opened/hydrated by the player still persist full detail
     - the hydration queue itself is not persisted; after reload, unfinished companies simply return to cold/queued states and can hydrate again
     - Trade tabs now handle cold stocks gracefully, but the player can still briefly see placeholder text like `Generating company detail...`, `Building statement history...`, and `Loading extended history...` if they open a stock before hydration finishes
     - the chart/history path still depends on hydrated financial history + statements for richer pre-2020 context
@@ -1716,10 +1721,9 @@ Read this file first in the next session.
 - `company_profile_data.json` is now the editable narrative content source, but it is tailored to the repo's existing sector ids rather than the broader external reference schema
 
 ## Recommended Next Steps (Confirm user first)
-- If startup feels good now but later day-advance/save work feels heavier, target the hydrated-detail persistence cost next:
-  - reduce how much fully hydrated company detail is serialized into the save payload
-  - or defer/trim save flushes triggered after background hydration batches
-  - keep using the new `[perf][startup]`, `[perf][ui]`, and `[perf][save]` logs to compare before/after
+- Validate save/runtime performance in a normal play session after the hydrated-detail persistence cleanup:
+  - compare `[perf][save]` logs before/after opening several stocks, advancing days, returning to menu, and loading a saved run
+  - if explicit stock browsing still makes saves too heavy, consider a second pass that persists only the selected/recently opened full-detail subset
 - If click latency still feels rough after more playtesting, continue with broader `_refresh_markets()` coupling:
   - consider diffing visible All Stock rows when search/filter state is unchanged
   - look for broad refresh callers where the selected stock did not actually change
