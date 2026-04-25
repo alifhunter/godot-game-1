@@ -22,6 +22,7 @@ const NORMAL_QUICK_DAYS := 3
 const GRIND_FULL_DAYS := 30
 const QUICK_SMOKE_FLAG_PATH := "user://quick_smoke.flag"
 const NEWS_FEED_SYSTEM_SCRIPT = preload("res://systems/NewsFeedSystem.gd")
+const TWOOTER_FEED_SYSTEM_SCRIPT = preload("res://systems/TwooterFeedSystem.gd")
 
 var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 var batched_setup_progress_calls := 0
@@ -47,6 +48,12 @@ func _ready() -> void:
 	var enriched_news_validation: String = _validate_enriched_news_generation()
 	if not enriched_news_validation.is_empty():
 		push_error(enriched_news_validation)
+		get_tree().quit(1)
+		return
+
+	var enriched_social_validation: String = _validate_enriched_social_generation()
+	if not enriched_social_validation.is_empty():
+		push_error(enriched_social_validation)
 		get_tree().quit(1)
 		return
 
@@ -243,6 +250,163 @@ func _validate_enriched_news_generation() -> String:
 			var article_id: String = str(article.get("id", ""))
 			if first_body_by_id.has(article_id) and str(article.get("body", "")) != str(first_body_by_id.get(article_id, "")):
 				return "Smoke test expected enriched News article copy to be deterministic for article %s." % article_id
+	return ""
+
+
+func _validate_enriched_social_generation() -> String:
+	var social_system = TWOOTER_FEED_SYSTEM_SCRIPT.new()
+	var feed_data: Dictionary = DataRepository.get_twooter_feed_data()
+	var trade_date: Dictionary = {
+		"weekday": 3,
+		"day": 8,
+		"month": 1,
+		"year": 2020,
+		"day_index": 7
+	}
+	var company_rows: Array = [{
+		"id": "mock_bank",
+		"ticker": "MBNK",
+		"name": "Mock Bank Tbk",
+		"sector_id": "finance",
+		"sector_name": "Finance",
+		"current_price": 1200.0,
+		"daily_change_pct": 0.036,
+		"broker_flow": {"flow_tag": "accumulation"}
+	}]
+	var market_history: Array = [{
+		"day_index": 7,
+		"trade_date": trade_date.duplicate(true),
+		"average_change_pct": 0.006,
+		"advancers": 20,
+		"decliners": 10,
+		"biggest_winner": {"ticker": "MBNK"},
+		"biggest_loser": {"ticker": "DROP"}
+	}]
+	var event_history: Array = [
+		{
+			"event_id": "rights_issue",
+			"event_family": "corporate_action",
+			"scope": "company",
+			"category": "corporate_action_rumor",
+			"tone": "positive",
+			"target_company_id": "mock_bank",
+			"target_ticker": "MBNK",
+			"target_company_name": "Mock Bank Tbk",
+			"target_sector_id": "finance",
+			"summary": "Early rights issue talk is drawing attention before any formal notice.",
+			"source_chain_id": "mock_chain",
+			"chain_family": "rights_issue",
+			"day_index": 6,
+			"trade_date": {"weekday": 2, "day": 7, "month": 1, "year": 2020, "day_index": 6}
+		},
+		{
+			"event_id": "rights_issue",
+			"event_family": "corporate_action",
+			"scope": "company",
+			"category": "corporate_action_filing",
+			"tone": "positive",
+			"target_company_id": "mock_bank",
+			"target_ticker": "MBNK",
+			"target_company_name": "Mock Bank Tbk",
+			"target_sector_id": "finance",
+			"summary": "Mock Bank Tbk now has a formal RUPSLB notice tied to the rights issue plan.",
+			"source_chain_id": "mock_chain",
+			"chain_family": "rights_issue",
+			"meeting_id": "mock_meeting",
+			"venue_type": "rupslb",
+			"day_index": 7,
+			"trade_date": trade_date.duplicate(true)
+		}
+	]
+	var first_snapshot: Dictionary = social_system.build_social_snapshot(
+		null,
+		feed_data,
+		company_rows,
+		market_history,
+		event_history,
+		[],
+		[],
+		trade_date,
+		4
+	)
+	var second_snapshot: Dictionary = social_system.build_social_snapshot(
+		null,
+		feed_data,
+		company_rows,
+		market_history,
+		event_history,
+		[],
+		[],
+		trade_date,
+		4
+	)
+	var posts: Array = first_snapshot.get("posts", [])
+	var has_thread_post: bool = false
+	var has_continuity_post: bool = false
+	var has_new_fictional_account_post: bool = false
+	var forbidden_terms: Array = [
+		"source_chain_id",
+		"chain_family",
+		"meeting_id",
+		"venue_type",
+		"current_timeline_state",
+		"hidden_positioning",
+		"formal_agenda_or_filing",
+		"meeting_or_call"
+	]
+	var new_account_ids := {
+		"market_diary_id": true,
+		"oil_tape_watch": true,
+		"stockmap_notes": true,
+		"emiten_concepts": true,
+		"quality_hold_id": true,
+		"macro_classroom": true
+	}
+	for post_value in posts:
+		var post: Dictionary = post_value
+		if new_account_ids.has(str(post.get("account_id", ""))):
+			has_new_fictional_account_post = true
+		if not post.get("thread_lines", []).is_empty():
+			has_thread_post = true
+		if not str(post.get("public_continuity_phrase", "")).is_empty():
+			has_continuity_post = true
+		var visible_text: String = "%s\n%s\n%s\n%s" % [
+			str(post.get("post_text", "")),
+			"\n".join(post.get("thread_lines", [])),
+			str(post.get("context_hint", "")),
+			str(post.get("public_topic_label", ""))
+		]
+		var searchable_text: String = visible_text.to_lower()
+		for forbidden_term_value in forbidden_terms:
+			var forbidden_term: String = str(forbidden_term_value)
+			if searchable_text.find(forbidden_term) != -1:
+				return "Smoke test expected enriched Twooter copy to avoid raw system wording like %s." % forbidden_term
+	if not has_thread_post:
+		return "Smoke test expected enriched Twooter generation to include at least one thread post."
+	if not has_continuity_post:
+		return "Smoke test expected enriched Twooter generation to include a continuity-aware post."
+	if not has_new_fictional_account_post:
+		return "Smoke test expected enriched Twooter generation to surface a new fictional inspired account."
+	var first_posts_by_id: Dictionary = {}
+	for post_value in posts:
+		var post: Dictionary = post_value
+		first_posts_by_id[str(post.get("id", ""))] = {
+			"text": str(post.get("post_text", "")),
+			"thread": post.get("thread_lines", []).duplicate(true),
+			"account_id": str(post.get("account_id", ""))
+		}
+	for post_value in second_snapshot.get("posts", []):
+		var post: Dictionary = post_value
+		var post_id: String = str(post.get("id", ""))
+		if not first_posts_by_id.has(post_id):
+			continue
+		var first_post: Dictionary = first_posts_by_id.get(post_id, {})
+		if (
+			str(first_post.get("text", "")) != str(post.get("post_text", "")) or
+			str(first_post.get("account_id", "")) != str(post.get("account_id", "")) or
+			first_post.get("thread", []) != post.get("thread_lines", [])
+		):
+			return "Smoke test expected enriched Twooter copy to be deterministic for post %s." % post_id
 	return ""
 
 
@@ -1597,6 +1761,35 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected the Twooter icon to open the simplified mobile-style social feed with populated post cards."
+		}
+
+	var social_thread_button: Button = game_root.find_child("SocialThreadToggleButton", true, false) as Button
+	var social_thread_lines: VBoxContainer = game_root.find_child("SocialThreadLines", true, false) as VBoxContainer
+	var social_card_count_before_thread_toggle: int = social_feed_cards.get_child_count()
+	if social_thread_button == null or social_thread_lines == null or social_thread_lines.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Twooter to render collapsed expandable thread cards."
+		}
+	social_thread_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if not social_thread_lines.visible or social_feed_cards.get_child_count() != social_card_count_before_thread_toggle:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected expanding a Twooter thread to preserve feed order and reveal thread lines."
+		}
+	social_thread_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if social_thread_lines.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Twooter thread cards to collapse again."
 		}
 
 	game_root.close_desktop_app("social")

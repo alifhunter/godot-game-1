@@ -501,9 +501,9 @@ Read this file first in the next session.
   - buying Twooter Content upgrades unlocks account tiers `2`, `3`, and `4`
   - the old temporary hardcoded unlocked access tier of `4` has been removed
 - Current account tiers are:
-  - Tier `1`: `Gorengan Hunter`, `Rumor Lokal`
-  - Tier `2`: `Flow Warung`, `Waduh Macro`
-  - Tier `3`: `Investor Kantor`, `Funda Thread`
+  - Tier `1`: `Gorengan Hunter`, `Rumor Lokal`, `Market Diary ID`
+  - Tier `2`: `Flow Warung`, `Waduh Macro`, `Oil Tape Watch`, `Stockmap Notes`
+  - Tier `3`: `Investor Kantor`, `Funda Thread`, `Emiten Concepts`, `Quality Hold ID`, `Macro Classroom`
   - Tier `4`: `Tonald Drump`, `Melon Tusk`
 - Current feed sources are:
   - active hidden `company_arc` phases for earlier chatter
@@ -516,7 +516,9 @@ Read this file first in the next session.
   - `tier`
   - `verified`
   - `post_text`
+  - optional `thread_lines`
   - `visibility_label`
+  - public player-facing labels: `public_topic_label`, `public_confidence_label`, and `public_continuity_phrase`
   - `category`
   - `tone`
   - `source_chain_id`, `chain_family`, `meeting_id`, and `venue_type` when available from the corporate-action layer
@@ -527,15 +529,19 @@ Read this file first in the next session.
   - top row shows the current prototype access-tier status
   - the body is now a single scrollable feed
   - each post renders as a simple stacked card with account, handle, post text, compact meta/context, and reactions
+  - thread-capable posts render a compact `Thread` button; pressing it expands/collapses numbered thread lines in-place without opening a detail view
   - there are no per-account filter tabs/buttons in the current UI
   - there is no separate selected-post detail pane in the current UI
+  - there are still no profile pages, follow buttons, relationship state, or player-reply mechanics in Twooter
 - Current content source is editable:
   - `data/social/twooter_feed_data.json`
-  - this stores tier labels, account definitions, handles, verification flags, and post/template pools
+  - this stores tier labels, account definitions, handles, verification flags, post templates, thread templates, and continuity copy
 - Current generator implementation:
   - `systems/TwooterFeedSystem.gd`
   - wired through `GameManager.get_twooter_snapshot()`
   - loaded through `DataRepository.gd`
+  - builds a lightweight in-snapshot story memory from recent event history and active arcs so related posts can naturally reference prior rumor/denial/filing/meeting beats
+  - account selection now lightly prefers new fictional accounts for specific contexts such as market diary posts, rights-issue threads, earnings/quality reads, and commodity/macro education
 
 ## Academy App
 - `Academy` is now a first playable desktop learning app
@@ -1417,6 +1423,7 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the Twooter content enrichment / expandable threads pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the News content enrichment / continuity pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the News card readability / open-window day reload fix on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the News newspaper / author-network pass on `2026-04-25`

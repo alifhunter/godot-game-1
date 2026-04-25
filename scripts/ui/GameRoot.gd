@@ -187,6 +187,7 @@ var selected_network_contact_id: String = ""
 var selected_academy_category_id: String = "technical"
 var selected_academy_section_id: String = "intro"
 var academy_quiz_option_buttons: Dictionary = {}
+var expanded_social_thread_ids: Dictionary = {}
 var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 
 @onready var desktop_layer: Control = $DesktopLayer
@@ -3463,11 +3464,40 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 	var context_hint: String = str(post.get("context_hint", ""))
 	if not context_hint.is_empty():
 		var context_label: Label = Label.new()
+		context_label.name = "SocialContextHintLabel"
 		context_label.text = context_hint
 		context_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		context_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 		context_label.add_theme_color_override("font_color", Color(0.345098, 0.384314, 0.458824, 1))
 		content.add_child(context_label)
+
+	var thread_lines: Array = post.get("thread_lines", [])
+	if not thread_lines.is_empty():
+		var thread_button: Button = Button.new()
+		thread_button.name = "SocialThreadToggleButton"
+		thread_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		thread_button.text = "Hide Thread" if bool(expanded_social_thread_ids.get(str(post.get("id", "")), false)) else "Thread"
+		thread_button.tooltip_text = "Expand this Twooter thread."
+		content.add_child(thread_button)
+
+		var thread_container: VBoxContainer = VBoxContainer.new()
+		thread_container.name = "SocialThreadLines"
+		thread_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		thread_container.add_theme_constant_override("separation", 5)
+		thread_container.visible = bool(expanded_social_thread_ids.get(str(post.get("id", "")), false))
+		content.add_child(thread_container)
+		for thread_index in range(thread_lines.size()):
+			var thread_line: Label = Label.new()
+			thread_line.name = "SocialThreadLineLabel"
+			var thread_text: String = str(thread_lines[thread_index])
+			thread_line.text = thread_text if thread_text.begins_with("%d." % (thread_index + 1)) else "%d. %s" % [thread_index + 1, thread_text]
+			thread_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			thread_line.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+			thread_line.add_theme_color_override("font_color", Color(0.094118, 0.141176, 0.207843, 1))
+			thread_container.add_child(thread_line)
+		thread_button.pressed.connect(func() -> void:
+			_on_social_thread_toggled(str(post.get("id", "")), thread_container, thread_button)
+		)
 
 	var reactions_label: Label = Label.new()
 	reactions_label.text = "%d likes  |  %d replies  |  %d retwoots" % [
@@ -3489,15 +3519,24 @@ func _build_social_card_meta_line(post: Dictionary) -> String:
 		meta_parts.append(GameManager.format_trade_date(trade_date))
 	if not str(post.get("visibility_label", "")).is_empty():
 		meta_parts.append(str(post.get("visibility_label", "")))
+	if not str(post.get("public_topic_label", "")).is_empty():
+		meta_parts.append(str(post.get("public_topic_label", "")))
+	if not str(post.get("public_confidence_label", "")).is_empty():
+		meta_parts.append(str(post.get("public_confidence_label", "")))
 	if not str(post.get("target_ticker", "")).is_empty():
 		meta_parts.append(str(post.get("target_ticker", "")))
 	elif not str(post.get("person_name", "")).is_empty():
 		meta_parts.append(str(post.get("person_name", "")))
 	elif not str(post.get("sector_name", "")).is_empty():
 		meta_parts.append(str(post.get("sector_name", "")))
-	if not str(post.get("category", "")).is_empty():
-		meta_parts.append(_titleize_snake_case(str(post.get("category", ""))))
 	return "  |  ".join(meta_parts)
+
+
+func _on_social_thread_toggled(post_id: String, thread_container: VBoxContainer, thread_button: Button) -> void:
+	var next_visible: bool = not thread_container.visible
+	thread_container.visible = next_visible
+	expanded_social_thread_ids[post_id] = next_visible
+	thread_button.text = "Hide Thread" if next_visible else "Thread"
 
 
 func _style_social_post_card(panel: PanelContainer, tone: String) -> void:
