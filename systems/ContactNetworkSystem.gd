@@ -4,6 +4,9 @@ const LOT_SIZE := 100
 const REFERRAL_RELATIONSHIP_THRESHOLD := 45
 const REFERRAL_RELATIONSHIP_COST := 10
 const REFERRAL_CONNECTION_THRESHOLD := 50
+const TIP_RELATIONSHIP_COST := 2
+const REQUEST_RELATIONSHIP_SUCCESS := 10
+const REQUEST_RELATIONSHIP_FAILURE := -4
 const MAX_COMPANY_LEADS_PER_FLOATER := 2
 const TIP_MEMORY_RESOLVE_DAYS := 3
 const MAX_TIP_MEMORY_ROWS := 96
@@ -200,6 +203,9 @@ func request_tip(run_state, data_repository, corporate_action_system, contact_id
 		return {"success": false, "message": "Unknown contact."}
 	if not _is_met(run_state, contact_id):
 		return {"success": false, "message": "Meet this contact first."}
+	var runtime: Dictionary = run_state.get_network_contacts().get(contact_id, {})
+	if int(runtime.get("last_tip_request_day_index", -9999)) == run_state.day_index:
+		return {"success": false, "message": "You already asked this contact for a read today. Let the tape breathe until tomorrow."}
 	var resolved_company_id: String = _resolve_target_company_id(run_state, data_repository, contact_id, company_id)
 	if resolved_company_id.is_empty():
 		return {"success": false, "message": "No target company is available for that tip."}
@@ -210,7 +216,8 @@ func request_tip(run_state, data_repository, corporate_action_system, contact_id
 		resolved_company_id
 	)
 	if bool(intel_result.get("success", false)):
-		_adjust_relationship(run_state, contact_id, -2)
+		_adjust_relationship(run_state, contact_id, -TIP_RELATIONSHIP_COST)
+		_mark_contact_day_flag(run_state, contact_id, "last_tip_request_day_index")
 		var decorated_intel_result: Dictionary = _decorate_tip_result(
 			run_state,
 			data_repository,
@@ -225,7 +232,8 @@ func request_tip(run_state, data_repository, corporate_action_system, contact_id
 	var build_result: Dictionary = _build_and_store_contact_arc(run_state, data_repository, contact_id, resolved_company_id, "tip")
 	if not bool(build_result.get("success", false)):
 		return build_result
-	_adjust_relationship(run_state, contact_id, -2)
+	_adjust_relationship(run_state, contact_id, -TIP_RELATIONSHIP_COST)
+	_mark_contact_day_flag(run_state, contact_id, "last_tip_request_day_index")
 	var decorated_build_result: Dictionary = _decorate_contact_arc_tip_result(run_state, data_repository, contact, resolved_company_id, build_result)
 	_record_tip_memory(run_state, contact, resolved_company_id, decorated_build_result)
 	return decorated_build_result
@@ -251,11 +259,21 @@ func accept_request(run_state, data_repository, contact_id: String, company_id: 
 		"status": "pending",
 		"created_day_index": run_state.day_index,
 		"due_day_index": run_state.day_index + 3,
-		"relationship_delta_success": 8,
-		"relationship_delta_failure": -6
+		"relationship_delta_success": REQUEST_RELATIONSHIP_SUCCESS,
+		"relationship_delta_failure": REQUEST_RELATIONSHIP_FAILURE
 	}
 	run_state.set_network_requests(requests)
-	return {"success": true, "message": "%s gave you a position request." % str(contact.get("display_name", "Contact")), "request_id": request_id}
+	return {
+		"success": true,
+		"message": "%s gave you a position request. Hold at least 1 lot within 3 days for +%d relationship, or miss it for %d." % [
+			str(contact.get("display_name", "Contact")),
+			REQUEST_RELATIONSHIP_SUCCESS,
+			REQUEST_RELATIONSHIP_FAILURE
+		],
+		"request_id": request_id,
+		"relationship_delta_success": REQUEST_RELATIONSHIP_SUCCESS,
+		"relationship_delta_failure": REQUEST_RELATIONSHIP_FAILURE
+	}
 
 
 func request_referral(run_state, data_repository, contact_id: String, company_id: String = "", affiliation_role: String = "") -> Dictionary:
@@ -269,6 +287,8 @@ func request_referral(run_state, data_repository, contact_id: String, company_id
 	var relationship: int = int(run_state.get_network_contacts().get(contact_id, {}).get("relationship", 0))
 	if relationship < REFERRAL_RELATIONSHIP_THRESHOLD:
 		return {"success": false, "message": "Relationship must reach %d before asking for referrals." % REFERRAL_RELATIONSHIP_THRESHOLD}
+	if int(run_state.get_network_contacts().get(contact_id, {}).get("last_referral_day_index", -9999)) == run_state.day_index:
+		return {"success": false, "message": "You already asked this contact for an introduction today."}
 
 	var target_company_id: String = company_id
 	if target_company_id.is_empty():
@@ -297,6 +317,7 @@ func request_referral(run_state, data_repository, contact_id: String, company_id
 	}
 	run_state.set_network_discoveries(discoveries)
 	_adjust_relationship(run_state, contact_id, -REFERRAL_RELATIONSHIP_COST)
+	_mark_contact_day_flag(run_state, contact_id, "last_referral_day_index")
 	return {
 		"success": true,
 		"message": "%s introduced you to %s." % [
@@ -1816,6 +1837,8 @@ func _contact_row(contact: Dictionary, runtime: Dictionary, discovery: Dictionar
 		"last_tip_player_action_label": str(runtime.get("last_tip_player_action_label", "")),
 		"last_tip_player_action_alignment": str(runtime.get("last_tip_player_action_alignment", "")),
 		"last_tip_day_index": int(runtime.get("last_tip_day_index", 0)),
+		"last_tip_request_day_index": int(runtime.get("last_tip_request_day_index", -9999)),
+		"last_referral_day_index": int(runtime.get("last_referral_day_index", -9999)),
 		"last_tip_followup_id": str(runtime.get("last_tip_followup_id", "")),
 		"last_tip_followup_label": str(runtime.get("last_tip_followup_label", "")),
 		"last_tip_followup_note": str(runtime.get("last_tip_followup_note", "")),
@@ -1861,7 +1884,10 @@ func _request_rows(requests: Dictionary) -> Array:
 	var rows: Array = []
 	for request_value in requests.values():
 		var request: Dictionary = request_value
-		rows.append(request.duplicate(true))
+		var row: Dictionary = request.duplicate(true)
+		row["relationship_delta_success"] = int(row.get("relationship_delta_success", REQUEST_RELATIONSHIP_SUCCESS))
+		row["relationship_delta_failure"] = int(row.get("relationship_delta_failure", REQUEST_RELATIONSHIP_FAILURE))
+		rows.append(row)
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a.get("due_day_index", 0)) < int(b.get("due_day_index", 0))
 	)
@@ -2104,6 +2130,14 @@ func _adjust_relationship(run_state, contact_id: String, delta: int) -> void:
 	var contacts: Dictionary = run_state.get_network_contacts()
 	var runtime: Dictionary = contacts.get(contact_id, {})
 	runtime["relationship"] = clampi(int(runtime.get("relationship", 25)) + delta, 0, 100)
+	contacts[contact_id] = runtime
+	run_state.set_network_contacts(contacts)
+
+
+func _mark_contact_day_flag(run_state, contact_id: String, flag_key: String) -> void:
+	var contacts: Dictionary = run_state.get_network_contacts()
+	var runtime: Dictionary = contacts.get(contact_id, {})
+	runtime[flag_key] = run_state.day_index
 	contacts[contact_id] = runtime
 	run_state.set_network_contacts(contacts)
 

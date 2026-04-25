@@ -3549,17 +3549,25 @@ func _show_network_contact(contact: Dictionary) -> void:
 	network_contact_body_label.text = contact_body_text
 	_update_network_tip_history_panel(contact)
 	_update_network_crosscheck_panel(contact)
-	var has_action_points: bool = int(GameManager.get_daily_action_snapshot().get("remaining", 0)) > 0
+	var remaining_ap: int = int(GameManager.get_daily_action_snapshot().get("remaining", 0))
 	var referral_company_id: String = selected_company_id
 	if referral_company_id.is_empty():
 		referral_company_id = _network_contact_target_company(contact)
-	network_meet_button.disabled = is_met or not bool(contact.get("can_meet", false))
-	network_tip_button.disabled = not is_met or not has_action_points
-	network_request_button.disabled = not is_met or not has_action_points
-	network_referral_button.disabled = not (is_met and affiliation_type == "floater" and not referral_company_id.is_empty() and has_action_points)
-	_update_network_followup_button(contact, is_met, has_action_points)
-	_update_network_source_check_button(contact, is_met, has_action_points)
-	if not has_action_points and not is_met:
+	var tip_cooldown_active: bool = int(contact.get("last_tip_request_day_index", -9999)) == RunState.day_index
+	var referral_cooldown_active: bool = int(contact.get("last_referral_day_index", -9999)) == RunState.day_index
+	network_meet_button.text = "Meet (%d AP)" % GameManager.get_network_action_cost("meet")
+	network_tip_button.text = "Ask Tip (%d AP)" % GameManager.get_network_action_cost("tip")
+	network_request_button.text = "Accept Request (%d AP)" % GameManager.get_network_action_cost("request")
+	network_referral_button.text = "Ask Referral (%d AP)" % GameManager.get_network_action_cost("referral")
+	network_meet_button.disabled = is_met or not bool(contact.get("can_meet", false)) or remaining_ap < GameManager.get_network_action_cost("meet")
+	network_tip_button.disabled = not is_met or tip_cooldown_active or remaining_ap < GameManager.get_network_action_cost("tip")
+	network_tip_button.tooltip_text = "Already asked this contact for a read today." if tip_cooldown_active else "Ask for a fresh market read."
+	network_request_button.disabled = not is_met or remaining_ap < GameManager.get_network_action_cost("request")
+	network_referral_button.disabled = not (is_met and affiliation_type == "floater" and not referral_company_id.is_empty() and not referral_cooldown_active and remaining_ap >= GameManager.get_network_action_cost("referral"))
+	network_referral_button.tooltip_text = "Already asked this contact for an introduction today." if referral_cooldown_active else "Ask this contact to introduce a connected insider."
+	_update_network_followup_button(contact, is_met, remaining_ap)
+	_update_network_source_check_button(contact, is_met, remaining_ap)
+	if remaining_ap < GameManager.get_network_action_cost("meet") and not is_met:
 		network_meet_button.disabled = true
 	var company_snapshot: Dictionary = GameManager.get_company_corporate_action_snapshot(_network_contact_target_company(contact))
 	var primary_chain: Dictionary = company_snapshot.get("primary_chain", {})
@@ -3599,13 +3607,14 @@ func _current_network_contact() -> Dictionary:
 	return {}
 
 
-func _update_network_followup_button(contact: Dictionary, is_met: bool, has_action_points: bool) -> void:
+func _update_network_followup_button(contact: Dictionary, is_met: bool, remaining_ap: int) -> void:
 	if network_followup_button == null:
 		return
 	var options: Array = contact.get("tip_followup_options", [])
 	var can_follow_up: bool = is_met and bool(contact.get("can_follow_up_tip", false)) and not options.is_empty()
 	network_followup_button.visible = can_follow_up
-	network_followup_button.disabled = not can_follow_up or not has_action_points
+	network_followup_button.text = "Follow Up (%d AP)" % GameManager.get_network_action_cost("followup")
+	network_followup_button.disabled = not can_follow_up or remaining_ap < GameManager.get_network_action_cost("followup")
 	var popup: PopupMenu = network_followup_button.get_popup()
 	popup.clear()
 	for option_value in options:
@@ -3620,23 +3629,23 @@ func _update_network_followup_button(contact: Dictionary, is_met: bool, has_acti
 	network_followup_button.tooltip_text = "Follow up on the selected contact's latest resolved read."
 
 
-func _update_network_source_check_button(contact: Dictionary, is_met: bool, has_action_points: bool) -> void:
+func _update_network_source_check_button(contact: Dictionary, is_met: bool, remaining_ap: int) -> void:
 	if network_source_check_button == null:
 		return
 	var has_direct_conflict: bool = bool(contact.get("has_direct_source_conflict", false))
 	var can_ask: bool = is_met and bool(contact.get("can_ask_source_check", false))
 	var has_answer: bool = not str(contact.get("source_check_note", "")).is_empty()
 	network_source_check_button.visible = is_met and has_direct_conflict
-	network_source_check_button.disabled = not can_ask or not has_action_points
+	network_source_check_button.disabled = not can_ask or remaining_ap < GameManager.get_network_action_cost("source_check")
 	if has_answer:
 		network_source_check_button.text = "Conflict Asked"
 		network_source_check_button.disabled = true
 		network_source_check_button.tooltip_text = "This conflict already has a follow-up answer in the Source Cross-Check panel."
-	elif not has_action_points:
-		network_source_check_button.text = "Ask About Conflict"
+	elif remaining_ap < GameManager.get_network_action_cost("source_check"):
+		network_source_check_button.text = "Ask About Conflict (%d AP)" % GameManager.get_network_action_cost("source_check")
 		network_source_check_button.tooltip_text = "No daily action points left."
 	else:
-		network_source_check_button.text = "Ask About Conflict"
+		network_source_check_button.text = "Ask About Conflict (%d AP)" % GameManager.get_network_action_cost("source_check")
 		network_source_check_button.tooltip_text = "Spend 1 action point to ask this contact why another source disagrees."
 
 

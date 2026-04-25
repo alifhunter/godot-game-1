@@ -2106,6 +2106,7 @@ func _run_scenario(
 		}
 
 	_set_test_contact_relationship(contact_id, 45)
+	var daily_actions_before_referral: int = int(GameManager.get_daily_action_snapshot().get("used", 0))
 	var referral_result: Dictionary = GameManager.request_contact_referral(contact_id, tracked_company_id)
 	var referred_contact_id: String = str(referral_result.get("contact_id", ""))
 	if not bool(referral_result.get("success", false)) or referred_contact_id.is_empty():
@@ -2115,6 +2116,13 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected a connected floater to refer a company insider once relationship is high enough."
 		}
+	if int(GameManager.get_daily_action_snapshot().get("used", 0)) != daily_actions_before_referral + GameManager.get_network_action_cost("referral"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network referral to spend the configured referral AP cost."
+		}
 	var post_referral_contacts: Dictionary = RunState.get_network_contacts()
 	if int(post_referral_contacts.get(contact_id, {}).get("relationship", 0)) != 35:
 		game_root.queue_free()
@@ -2122,6 +2130,14 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected successful Network referral to spend 10 relationship points."
+		}
+	var duplicate_referral_same_day: Dictionary = GameManager.request_contact_referral(contact_id, tracked_company_id)
+	if bool(duplicate_referral_same_day.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network referrals to have a same-day soft cooldown per contact."
 		}
 
 	var meet_referred_result: Dictionary = GameManager.meet_contact(referred_contact_id, {"source_type": "referral", "source_id": contact_id})
@@ -2143,6 +2159,7 @@ func _run_scenario(
 			"message": "Smoke test expected referred company insiders to persist through save/load after meeting."
 		}
 
+	var daily_actions_before_insider_tip: int = int(GameManager.get_daily_action_snapshot().get("used", 0))
 	var insider_tip_result: Dictionary = GameManager.request_contact_tip(referred_contact_id)
 	if not bool(insider_tip_result.get("success", false)) or not _has_contact_arc(referred_contact_id, tracked_company_id, "tip"):
 		game_root.queue_free()
@@ -2150,6 +2167,13 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected company insider tips to default to the insider's affiliated company."
+		}
+	if int(GameManager.get_daily_action_snapshot().get("used", 0)) != daily_actions_before_insider_tip + GameManager.get_network_action_cost("tip"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network tips to spend the configured tip AP cost."
 		}
 	var insider_tip_public_error: String = _validate_network_tip_public_payload(insider_tip_result, "company insider tip")
 	if not insider_tip_public_error.is_empty():
@@ -2167,6 +2191,14 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected asking a Network contact for a tip to create a contact company arc."
+		}
+	var duplicate_tip_same_day: Dictionary = GameManager.request_contact_tip(contact_id, secondary_company_id)
+	if bool(duplicate_tip_same_day.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network tips to have a same-day soft cooldown per contact."
 		}
 	var floater_tip_public_error: String = _validate_network_tip_public_payload(tip_result, "floater tip")
 	if not floater_tip_public_error.is_empty():
@@ -2785,6 +2817,13 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected Network contact requests to be accepted for success and failure paths."
+		}
+	if int(request_success_result.get("relationship_delta_success", 0)) != 10 or int(request_success_result.get("relationship_delta_failure", 0)) != -4:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network request rewards/failures to expose the tuned relationship deltas."
 		}
 	if bool(duplicate_request_result.get("success", false)):
 		game_root.queue_free()

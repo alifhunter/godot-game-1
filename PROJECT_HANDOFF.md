@@ -1482,6 +1482,8 @@ Read this file first in the next session.
   - Network Journal rows are grouped into `Tips`, `Requests`, `Referrals`, and `Source Checks`; selecting a row shows a compact `NetworkJournalDetailLabel` with day/status/contact/ticker/detail context
   - Network Journal now has an `All / Tips / Req / Refs / Checks` filter row; section headers are visually distinct from selectable rows, and selecting a contact highlights related Journal rows by contact/company/ticker
   - Network request rows now carry metadata and can be clicked to show request detail context in the same detail panel
+  - Network AP pacing is now explicit: meet/request/follow-up/source-check cost `1 AP`, tip/referral cost `2 AP`
+  - Network same-day soft cooldowns now block repeatedly asking the same contact for tips or referrals; request outcomes now use clearer tuned relationship deltas of `+10` on completion and `-4` on miss
   - accepted Network requests complete when the player owns at least `1` lot by the due day
   - accepted Network requests miss when the player does not own the requested target by the due day
   - connected-floater referral requires relationship, spends `10` relationship on success, creates a referred insider lead, and the referred insider can be met/persisted
@@ -1512,6 +1514,7 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after the Network AP/relationship pacing pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after the Network Journal filter / request-detail clarity pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after the Network detail-scroll / grouped-Journal detail pass on `2026-04-25`
   - quick-smoke hang was resolved by fixing a `SmokeTest.gd` parse error and adding project-local smoke IO for headless runs; `SaveManager` still uses `user://daytrader_save.json` in normal gameplay
@@ -1721,22 +1724,6 @@ Read this file first in the next session.
   - consider diffing visible All Stock rows when search/filter state is unchanged
   - look for broad refresh callers where the selected stock did not actually change
   - keep using the new `[perf][ui]` / `[perf][save]` debug logs while tuning
-  - if latency feels acceptable after this pass, resume the planned content push with `News` first
-- Deepen the real `News` content now that the newspaper shell and author/network bridge exist:
-  - tune the new `News Content` upgrade pacing if playtesting says access opens too slowly/quickly
-  - keep the same outlet names:
-    - `Gorengan Daily`
-    - `Waduh Finance`
-    - `Harian Investor`
-    - `Ordal News`
-  - expand/edit outlet voice, author voice, headline prefixes, and sentence pools in `data/news/news_feed_data.json`
-  - later replace the reserved logo / portrait / article image frames with real bitmap assets using the existing asset fields
-  - decide whether more event families need dedicated templates beyond the current first-pass pools
-- Deepen the real `Twooter` content now that the first simplified social feed exists:
-  - tune the new `Twooter Content` upgrade pacing if playtesting says access opens too slowly/quickly
-  - keep `Tonald Drump` / `Melon Tusk` as the current highest-tier accounts
-  - expand/edit account voice and template pools in `data/social/twooter_feed_data.json`
-  - add more user-authored finfluencer accounts later
 - Deepen the Upgrades system:
   - tune or polish the new purchase confirmation copy if playtesting says the modal is too wordy/slow
   - tune fixed upgrade costs after playtesting Chill/Normal/Grind cash pressure
@@ -1763,6 +1750,20 @@ Read this file first in the next session.
     - `restructuring`
     - `strategic_merger_acquisition`
   - save `backdoor_listing` for a later special pass as the most composite/high-volatility Indonesia-specific chain
+- Could-have / nice-to-have later:
+  - deepen the real `News` content now that the newspaper shell and author/network bridge exist:
+    - tune `News Content` upgrade pacing if playtesting says access opens too slowly/quickly
+    - keep the current outlet names: `Gorengan Daily`, `Waduh Finance`, `Harian Investor`, and `Ordal News`
+    - expand/edit outlet voice, author voice, headline prefixes, and sentence pools in `data/news/news_feed_data.json`
+    - later replace the reserved logo / portrait / article image frames with real bitmap assets using the existing asset fields
+  - deepen the real `Twooter` content now that the first simplified social feed exists:
+    - tune `Twooter Content` upgrade pacing if playtesting says access opens too slowly/quickly
+    - keep `Tonald Drump` / `Melon Tusk` as the current highest-tier accounts
+    - expand/edit account voice and template pools in `data/social/twooter_feed_data.json`
+    - add more user-authored finfluencer accounts later
+  - cross-source convergence hints between `News`, `Twooter`, and `Network`, such as light `also seen in News`, `Twooter chatter`, or `Network lead exists` notes for the same ticker
+  - keep this informational only if added; do not make it the next priority, and do not add new relationship mechanics just for convergence
+  - consider this only after the current News/Twooter/Network loops feel individually useful and the contact/action economy is better balanced
   - deepen referrals beyond the current no-cooldown floater-to-insider prototype
   - add favor cooldowns and tune relationship burn for on-demand tips
   - broaden report-back beyond the current resolved-tip `Follow Up` button so requests, referrals, and meeting favors can also produce relationship/story consequences

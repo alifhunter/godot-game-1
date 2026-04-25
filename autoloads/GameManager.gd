@@ -41,6 +41,14 @@ const NEW_RUN_LOADING_STEPS := [
 	{"id": "save", "label": "Saving run"},
 	{"id": "launch", "label": "Opening trading desk"}
 ]
+const NETWORK_ACTION_COSTS := {
+	"meet": 1,
+	"tip": 2,
+	"request": 1,
+	"referral": 2,
+	"followup": 1,
+	"source_check": 1
+}
 const LOAD_RUN_LOADING_STEPS := [
 	{"id": "load_save", "label": "Reading save file"},
 	{"id": "restore_state", "label": "Restoring run state"},
@@ -530,6 +538,22 @@ func try_spend_daily_action(action_id: String, metadata: Dictionary = {}) -> Dic
 	result["action_id"] = action_id
 	result["metadata"] = metadata.duplicate(true)
 	return result
+
+
+func get_network_action_cost(action_id: String) -> int:
+	return int(NETWORK_ACTION_COSTS.get(action_id, 1))
+
+
+func _can_spend_network_action(action_id: String) -> bool:
+	return RunState.can_spend_daily_action(get_network_action_cost(action_id))
+
+
+func _spend_network_action(action_id: String) -> Dictionary:
+	return RunState.spend_daily_action(get_network_action_cost(action_id))
+
+
+func _network_action_no_ap_message(action_id: String) -> String:
+	return "Need %d AP for this Network action." % get_network_action_cost(action_id)
 
 
 func get_academy_snapshot(category_id: String = "technical", section_id: String = "") -> Dictionary:
@@ -1149,11 +1173,12 @@ func discover_network_contacts_for_company(company_id: String) -> Array:
 func meet_contact(contact_id: String, source_context: Dictionary = {}) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
-	if not RunState.can_spend_daily_action(1):
-		return {"success": false, "message": "No daily action points left."}
+	if not _can_spend_network_action("meet"):
+		return {"success": false, "message": _network_action_no_ap_message("meet")}
 	var result: Dictionary = contact_network_system.meet_contact(RunState, DataRepository, contact_id, source_context)
 	if bool(result.get("success", false)):
-		RunState.spend_daily_action(1)
+		_spend_network_action("meet")
+		result["action_cost"] = get_network_action_cost("meet")
 		_request_autosave("network_meet")
 		daily_actions_changed.emit()
 		network_changed.emit()
@@ -1163,12 +1188,13 @@ func meet_contact(contact_id: String, source_context: Dictionary = {}) -> Dictio
 func request_contact_tip(contact_id: String, company_id: String = "") -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
-	if not RunState.can_spend_daily_action(1):
-		return {"success": false, "message": "No daily action points left."}
+	if not _can_spend_network_action("tip"):
+		return {"success": false, "message": _network_action_no_ap_message("tip")}
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	var result: Dictionary = contact_network_system.request_tip(RunState, DataRepository, corporate_action_system, contact_id, company_id)
 	if bool(result.get("success", false)):
-		RunState.spend_daily_action(1)
+		_spend_network_action("tip")
+		result["action_cost"] = get_network_action_cost("tip")
 		_request_autosave("network_tip")
 		daily_actions_changed.emit()
 		network_changed.emit()
@@ -1178,11 +1204,12 @@ func request_contact_tip(contact_id: String, company_id: String = "") -> Diction
 func accept_contact_request(contact_id: String, company_id: String = "") -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
-	if not RunState.can_spend_daily_action(1):
-		return {"success": false, "message": "No daily action points left."}
+	if not _can_spend_network_action("request"):
+		return {"success": false, "message": _network_action_no_ap_message("request")}
 	var result: Dictionary = contact_network_system.accept_request(RunState, DataRepository, contact_id, company_id)
 	if bool(result.get("success", false)):
-		RunState.spend_daily_action(1)
+		_spend_network_action("request")
+		result["action_cost"] = get_network_action_cost("request")
 		_request_autosave("network_request")
 		daily_actions_changed.emit()
 		network_changed.emit()
@@ -1192,11 +1219,12 @@ func accept_contact_request(contact_id: String, company_id: String = "") -> Dict
 func request_contact_referral(contact_id: String, company_id: String = "", affiliation_role: String = "") -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
-	if not RunState.can_spend_daily_action(1):
-		return {"success": false, "message": "No daily action points left."}
+	if not _can_spend_network_action("referral"):
+		return {"success": false, "message": _network_action_no_ap_message("referral")}
 	var result: Dictionary = contact_network_system.request_referral(RunState, DataRepository, contact_id, company_id, affiliation_role)
 	if bool(result.get("success", false)):
-		RunState.spend_daily_action(1)
+		_spend_network_action("referral")
+		result["action_cost"] = get_network_action_cost("referral")
 		_request_autosave("network_referral")
 		daily_actions_changed.emit()
 		network_changed.emit()
@@ -1206,11 +1234,12 @@ func request_contact_referral(contact_id: String, company_id: String = "", affil
 func follow_up_contact_tip(contact_id: String, followup_id: String) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
-	if not RunState.can_spend_daily_action(1):
-		return {"success": false, "message": "No daily action points left."}
+	if not _can_spend_network_action("followup"):
+		return {"success": false, "message": _network_action_no_ap_message("followup")}
 	var result: Dictionary = contact_network_system.follow_up_tip(RunState, DataRepository, contact_id, followup_id)
 	if bool(result.get("success", false)):
-		RunState.spend_daily_action(1)
+		_spend_network_action("followup")
+		result["action_cost"] = get_network_action_cost("followup")
 		_request_autosave("network_tip_followup")
 		daily_actions_changed.emit()
 		network_changed.emit()
@@ -1220,11 +1249,12 @@ func follow_up_contact_tip(contact_id: String, followup_id: String) -> Dictionar
 func ask_contact_source_check(contact_id: String) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
-	if not RunState.can_spend_daily_action(1):
-		return {"success": false, "message": "No daily action points left."}
+	if not _can_spend_network_action("source_check"):
+		return {"success": false, "message": _network_action_no_ap_message("source_check")}
 	var result: Dictionary = contact_network_system.ask_source_check(RunState, DataRepository, contact_id)
 	if bool(result.get("success", false)):
-		RunState.spend_daily_action(1)
+		_spend_network_action("source_check")
+		result["action_cost"] = get_network_action_cost("source_check")
 		_request_autosave("network_source_check")
 		daily_actions_changed.emit()
 		network_changed.emit()
