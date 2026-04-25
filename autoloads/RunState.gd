@@ -1779,7 +1779,10 @@ func _upsert_news_archive_article(outlet_id: String, outlet_label: String, artic
 		"outlet_logo_asset": str(article.get("outlet_logo_asset", "")),
 		"author_portrait_asset": str(article.get("author_portrait_asset", "")),
 		"article_image_asset": str(article.get("article_image_asset", "")),
-		"image_slot": str(article.get("image_slot", ""))
+		"image_slot": str(article.get("image_slot", "")),
+		"public_story_angle": str(article.get("public_story_angle", "")),
+		"public_confidence_label": str(article.get("public_confidence_label", "")),
+		"public_continuity_phrase": str(article.get("public_continuity_phrase", ""))
 	}
 	news_archive_articles[archive_article_id] = article_record
 
@@ -1799,7 +1802,10 @@ func _upsert_news_archive_article(outlet_id: String, outlet_label: String, artic
 		"public_section_label": str(article_record.get("public_section_label", "")),
 		"public_status_label": str(article_record.get("public_status_label", "")),
 		"article_image_asset": str(article_record.get("article_image_asset", "")),
-		"image_slot": str(article_record.get("image_slot", ""))
+		"image_slot": str(article_record.get("image_slot", "")),
+		"public_story_angle": str(article_record.get("public_story_angle", "")),
+		"public_confidence_label": str(article_record.get("public_confidence_label", "")),
+		"public_continuity_phrase": str(article_record.get("public_continuity_phrase", ""))
 	}
 
 	var outlet_bucket: Dictionary = news_archive_index.get(outlet_id, {

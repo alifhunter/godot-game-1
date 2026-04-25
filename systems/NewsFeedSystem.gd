@@ -33,6 +33,8 @@ func build_news_snapshot(
 		var day_index: int = int(market_entry.get("day_index", -1))
 		market_history_lookup[day_index] = market_entry.duplicate(true)
 		latest_market_entry = market_entry.duplicate(true)
+	var current_day_index: int = int(current_trade_date.get("day_index", current_trade_date.get("day", 0)))
+	var story_memory: Dictionary = _build_story_memory(event_history, active_company_arcs, current_day_index)
 
 	var outlet_rows: Array = []
 	var feeds: Dictionary = {}
@@ -51,7 +53,8 @@ func build_news_snapshot(
 			event_history,
 			active_special_events,
 			active_company_arcs,
-			current_trade_date
+			current_trade_date,
+			story_memory
 		)
 
 	return {
@@ -70,7 +73,8 @@ func _build_outlet_feed(
 	event_history: Array,
 	active_special_events: Array,
 	active_company_arcs: Array,
-	current_trade_date: Dictionary
+	current_trade_date: Dictionary,
+	story_memory: Dictionary
 ) -> Dictionary:
 	var articles: Array = []
 	var seen_ids: Dictionary = {}
@@ -84,7 +88,8 @@ func _build_outlet_feed(
 		market_history_lookup,
 		latest_market_entry,
 		active_company_arcs,
-		current_trade_date
+		current_trade_date,
+		story_memory
 	):
 		_append_unique_article(articles, seen_ids, article_value)
 	for article_value in _build_active_special_articles(
@@ -94,7 +99,8 @@ func _build_outlet_feed(
 		market_history_lookup,
 		latest_market_entry,
 		active_special_events,
-		current_trade_date
+		current_trade_date,
+		story_memory
 	):
 		_append_unique_article(articles, seen_ids, article_value)
 	for article_value in _build_recent_event_articles(
@@ -104,7 +110,8 @@ func _build_outlet_feed(
 		market_history_lookup,
 		latest_market_entry,
 		event_history,
-		current_trade_date
+		current_trade_date,
+		story_memory
 	):
 		_append_unique_article(articles, seen_ids, article_value)
 
@@ -112,7 +119,8 @@ func _build_outlet_feed(
 		outlet,
 		feed_data,
 		latest_market_entry,
-		current_trade_date
+		current_trade_date,
+		story_memory
 	)
 	if not market_wrap.is_empty():
 		_append_unique_article(articles, seen_ids, market_wrap)
@@ -144,7 +152,8 @@ func _build_hidden_arc_articles(
 	market_history_lookup: Dictionary,
 	latest_market_entry: Dictionary,
 	active_company_arcs: Array,
-	current_trade_date: Dictionary
+	current_trade_date: Dictionary,
+	story_memory: Dictionary
 ) -> Array:
 	if int(outlet.get("intel_level", 1)) < 4:
 		return []
@@ -165,7 +174,8 @@ func _build_hidden_arc_articles(
 			_market_entry_for_day(market_history_lookup, latest_market_entry, int(current_trade_date.get("day_index", -1))),
 			current_trade_date,
 			"whisper",
-			article_id
+			article_id,
+			story_memory
 		)
 		articles.append(_build_article_record(
 			outlet,
@@ -190,7 +200,8 @@ func _build_active_special_articles(
 	market_history_lookup: Dictionary,
 	latest_market_entry: Dictionary,
 	active_special_events: Array,
-	current_trade_date: Dictionary
+	current_trade_date: Dictionary,
+	story_memory: Dictionary
 ) -> Array:
 	var outlet_level: int = int(outlet.get("intel_level", 1))
 	var articles: Array = []
@@ -216,7 +227,8 @@ func _build_active_special_articles(
 			_market_entry_for_day(market_history_lookup, latest_market_entry, current_day_index),
 			current_trade_date,
 			stage_key,
-			article_id
+			article_id,
+			story_memory
 		)
 		articles.append(_build_article_record(
 			outlet,
@@ -241,7 +253,8 @@ func _build_recent_event_articles(
 	market_history_lookup: Dictionary,
 	latest_market_entry: Dictionary,
 	event_history: Array,
-	current_trade_date: Dictionary
+	current_trade_date: Dictionary,
+	story_memory: Dictionary
 ) -> Array:
 	var outlet_level: int = int(outlet.get("intel_level", 1))
 	var current_day_index: int = int(current_trade_date.get("day_index", current_trade_date.get("day", 0)))
@@ -289,7 +302,8 @@ func _build_recent_event_articles(
 			_market_entry_for_day(market_history_lookup, latest_market_entry, int(event_data.get("day_index", current_day_index))),
 			event_trade_date,
 			stage_key,
-			article_id
+			article_id,
+			story_memory
 		)
 		articles.append(_build_article_record(
 			outlet,
@@ -312,7 +326,8 @@ func _build_market_wrap_article(
 	outlet: Dictionary,
 	feed_data: Dictionary,
 	latest_market_entry: Dictionary,
-	current_trade_date: Dictionary
+	current_trade_date: Dictionary,
+	story_memory: Dictionary
 ) -> Dictionary:
 	if latest_market_entry.is_empty():
 		return {}
@@ -333,7 +348,8 @@ func _build_market_wrap_article(
 		latest_market_entry,
 		latest_market_entry.get("trade_date", current_trade_date).duplicate(true),
 		"market_wrap",
-		article_id
+		article_id,
+		story_memory
 	)
 	return _build_article_record(
 		outlet,
@@ -375,12 +391,15 @@ func _build_article_record(
 	var public_status_label: String = _public_status_label(feed_data, progress_key, stage_key, source_data)
 	var public_section_label: String = _public_section_label(source_data, context)
 	var image_slot: String = _image_slot_for_article(source_data, context, stage_key)
+	var public_story_angle: String = str(context.get("public_story_angle", ""))
+	var public_confidence_label: String = str(context.get("public_confidence_label", ""))
+	var public_continuity_phrase: String = str(context.get("public_continuity_phrase", ""))
 
 	return {
 		"id": article_id,
 		"headline": _compose_headline(outlet, voice_profile, headline, "%s|prefix" % voice_seed),
 		"deck": deck,
-		"body": _build_article_body(voice_profile, context, stage_key, voice_seed),
+		"body": _build_article_body(feed_data, voice_profile, source_data, context, stage_key, voice_seed),
 		"day_index": day_index,
 		"trade_date": trade_date.duplicate(true),
 		"progress_label": str(feed_data.get("progress_labels", {}).get(progress_key, "Developing")),
@@ -407,25 +426,52 @@ func _build_article_record(
 		"author_portrait_asset": str(author.get("portrait_asset", "")),
 		"article_image_asset": str(source_data.get("article_image_asset", "")),
 		"image_slot": image_slot,
+		"public_story_angle": public_story_angle,
+		"public_confidence_label": public_confidence_label,
+		"public_continuity_phrase": public_continuity_phrase,
 		"priority": priority
 	}
 
 
-func _build_article_body(voice_profile: Dictionary, context: Dictionary, stage_key: String, seed_key: String) -> String:
+func _build_article_body(
+	feed_data: Dictionary,
+	voice_profile: Dictionary,
+	source_data: Dictionary,
+	context: Dictionary,
+	stage_key: String,
+	seed_key: String
+) -> String:
 	var lead_template: String = _pick_voice_template(voice_profile, "lead_templates", stage_key, "%s|lead" % seed_key)
 	var context_template: String = str(_pick_from_pool(voice_profile.get("context_templates", []), "%s|context" % seed_key))
 	var impact_template: String = str(_pick_from_pool(voice_profile.get("impact_templates", []), "%s|impact" % seed_key))
+	var market_reaction_template: String = _pick_body_slot_template(feed_data, "market_reaction_templates", source_data, "%s|reaction" % seed_key)
+	var source_color_template: String = _pick_body_slot_template(feed_data, "source_color_templates", source_data, "%s|source" % seed_key)
+	var continuity_slot: String = "with_prior" if not str(context.get("public_continuity_phrase", "")).is_empty() else "without_prior"
+	var continuity_template: String = _pick_body_slot_template(feed_data, "continuity_templates", {"category": continuity_slot}, "%s|continuity" % seed_key)
+	var closing_template: String = _pick_body_slot_template(feed_data, "closing_templates", source_data, "%s|closing" % seed_key)
 
 	var paragraphs: Array = []
 	var lead_paragraph: String = _join_sentences([_render_template(lead_template, context)])
 	var context_paragraph: String = _join_sentences([_render_template(context_template, context)])
+	var market_reaction_paragraph: String = _join_sentences([_render_template(market_reaction_template, context)])
+	var source_color_paragraph: String = _join_sentences([_render_template(source_color_template, context)])
+	var continuity_paragraph: String = _join_sentences([_render_template(continuity_template, context)])
 	var impact_paragraph: String = _join_sentences([_render_template(impact_template, context)])
+	var closing_paragraph: String = _join_sentences([_render_template(closing_template, context)])
 	if not lead_paragraph.is_empty():
 		paragraphs.append(lead_paragraph)
 	if not context_paragraph.is_empty():
 		paragraphs.append(context_paragraph)
+	if not market_reaction_paragraph.is_empty():
+		paragraphs.append(market_reaction_paragraph)
+	if not source_color_paragraph.is_empty():
+		paragraphs.append(source_color_paragraph)
+	if not continuity_paragraph.is_empty():
+		paragraphs.append(continuity_paragraph)
 	if not impact_paragraph.is_empty():
 		paragraphs.append(impact_paragraph)
+	if not closing_paragraph.is_empty():
+		paragraphs.append(closing_paragraph)
 	return _join_paragraphs(paragraphs)
 
 
@@ -436,7 +482,8 @@ func _build_story_context(
 	market_entry: Dictionary,
 	trade_date: Dictionary,
 	stage_key: String,
-	seed_key: String
+	seed_key: String,
+	story_memory: Dictionary
 ) -> Dictionary:
 	var tone: String = str(source_data.get("tone", "mixed"))
 	if tone.is_empty():
@@ -497,7 +544,7 @@ func _build_story_context(
 		stage_key
 	)
 	var price_action_label: String = _price_action_label(price_change_pct, company_row.is_empty())
-	var detail_hint: String = _sanitize_fragment(str(source_data.get("headline_detail", source_data.get("description", ""))))
+	var detail_hint: String = _public_detail_hint(source_data, phase_phrase)
 	var whisper_phrase: String = _pick_reference_signal(feed_data, "whisper_hedges", "%s|whisper" % seed_key)
 	var desk_watch: String = _pick_reference_signal(feed_data, "desk_watch", "%s|desk" % seed_key)
 	var formal_phrase: String = _pick_reference_signal(feed_data, "formal_markers", "%s|formal" % seed_key)
@@ -506,6 +553,9 @@ func _build_story_context(
 	var market_jargon: String = _pick_reference_signal(feed_data, "market_jargon", "%s|jargon" % seed_key)
 	var driver_phrase: String = _pick_driver_phrase(feed_data, source_data, tone, "%s|driver" % seed_key)
 	var watch_phrase: String = _pick_watch_phrase(feed_data, stage_key, "%s|watch" % seed_key)
+	var continuity_phrase: String = _continuity_phrase_for_source(source_data, int(trade_date.get("day_index", source_data.get("day_index", -1))), story_memory)
+	var public_confidence_label: String = _public_confidence_label(stage_key, source_data)
+	var public_story_angle: String = _public_story_angle(source_data, stage_key, tone, scope)
 
 	return {
 		"target_company_id": target_company_id,
@@ -542,7 +592,11 @@ func _build_story_context(
 		"phase_phrase": phase_phrase,
 		"flow_label": flow_label,
 		"stance_word": _stance_word(tone),
-		"trade_day_label": _format_trade_day_label(trade_date)
+		"trade_day_label": _format_trade_day_label(trade_date),
+		"public_story_angle": public_story_angle,
+		"public_confidence_label": public_confidence_label,
+		"public_continuity_phrase": continuity_phrase,
+		"continuity_phrase": continuity_phrase
 	}
 
 
@@ -578,6 +632,167 @@ func _primary_sector_id_from_source(source_data: Dictionary) -> String:
 	if not affected_sector_ids.is_empty():
 		return str(affected_sector_ids[0])
 	return ""
+
+
+func _build_story_memory(event_history: Array, active_company_arcs: Array, current_day_index: int) -> Dictionary:
+	var memory: Dictionary = {}
+	for event_value in event_history:
+		var event_data: Dictionary = event_value
+		_record_story_memory_entry(memory, event_data, current_day_index)
+	for arc_value in active_company_arcs:
+		var arc: Dictionary = arc_value
+		_record_story_memory_entry(memory, arc, current_day_index)
+	return memory
+
+
+func _record_story_memory_entry(memory: Dictionary, source_data: Dictionary, current_day_index: int) -> void:
+	var day_index: int = int(source_data.get("day_index", current_day_index))
+	if day_index < 0 or day_index > current_day_index:
+		return
+	var entry: Dictionary = {
+		"day_index": day_index,
+		"label": _public_memory_label(source_data),
+		"category": str(source_data.get("category", "")),
+		"target_company_id": str(source_data.get("target_company_id", "")),
+		"source_chain_id": str(source_data.get("source_chain_id", "")),
+		"headline": str(source_data.get("headline", ""))
+	}
+	for key_value in _story_memory_keys(source_data):
+		var key: String = str(key_value)
+		if key.is_empty():
+			continue
+		var entries: Array = memory.get(key, []).duplicate(true)
+		entries.append(entry.duplicate(true))
+		entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return int(a.get("day_index", -1)) > int(b.get("day_index", -1))
+		)
+		if entries.size() > 4:
+			entries = entries.slice(0, 4)
+		memory[key] = entries
+
+
+func _story_memory_keys(source_data: Dictionary) -> Array:
+	var keys: Array = []
+	var chain_id: String = str(source_data.get("source_chain_id", ""))
+	if chain_id.is_empty():
+		chain_id = str(source_data.get("arc_id", ""))
+	if not chain_id.is_empty():
+		keys.append("chain|%s" % chain_id)
+
+	var company_id: String = str(source_data.get("target_company_id", source_data.get("company_id", "")))
+	if not company_id.is_empty():
+		var category_family: String = _category_family_key(source_data)
+		keys.append("company|%s|%s" % [company_id, category_family])
+		keys.append("company|%s" % company_id)
+
+	var sector_id: String = str(source_data.get("target_sector_id", ""))
+	if not sector_id.is_empty():
+		keys.append("sector|%s|%s" % [sector_id, _category_family_key(source_data)])
+	return keys
+
+
+func _continuity_phrase_for_source(source_data: Dictionary, article_day_index: int, story_memory: Dictionary) -> String:
+	if article_day_index < 0:
+		return ""
+	var best_entry: Dictionary = {}
+	for key_value in _story_memory_keys(source_data):
+		var key: String = str(key_value)
+		var entries: Array = story_memory.get(key, [])
+		for entry_value in entries:
+			var entry: Dictionary = entry_value
+			if entry.is_empty():
+				continue
+			var prior_day_index: int = int(entry.get("day_index", -1))
+			if prior_day_index < 0 or prior_day_index >= article_day_index:
+				continue
+			if best_entry.is_empty() or prior_day_index > int(best_entry.get("day_index", -1)):
+				best_entry = entry.duplicate(true)
+	if best_entry.is_empty():
+		return ""
+
+	var age_days: int = max(article_day_index - int(best_entry.get("day_index", article_day_index)), 1)
+	var label: String = str(best_entry.get("label", "earlier update"))
+	if age_days == 1:
+		return "This follows yesterday's %s" % label
+	if age_days <= 5:
+		return "This follows the recent %s" % label
+	return "This follows an earlier %s" % label
+
+
+func _public_memory_label(source_data: Dictionary) -> String:
+	var category: String = str(source_data.get("category", ""))
+	if category == "corporate_action_rumor":
+		return "market talk"
+	if category == "corporate_action_speculation":
+		return "public speculation"
+	if category == "corporate_action_denial":
+		return "company response"
+	if category == "corporate_action_clarification":
+		return "clarification"
+	if category == "corporate_action_filing":
+		return "formal notice"
+	if category == "corporate_meeting":
+		return "meeting notice"
+	if category == "corporate_action_resolution":
+		return "approval update"
+	if category == "corporate_action_execution":
+		return "execution update"
+	if category == "corporate_action_cancellation":
+		return "setback"
+	if category == "earnings":
+		return "earnings print"
+	if category == "sector_rotation":
+		return "sector move"
+	if category == "management":
+		return "management update"
+	if category == "market_wrap":
+		return "market close"
+	return "company update"
+
+
+func _public_detail_hint(source_data: Dictionary, phase_phrase: String) -> String:
+	var category: String = str(source_data.get("category", ""))
+	var summary: String = _sanitize_fragment(str(source_data.get("summary", "")))
+	if not summary.is_empty() and not _looks_like_system_summary(summary):
+		return summary
+	var headline_detail: String = _sanitize_fragment(str(source_data.get("headline_detail", "")))
+	if not headline_detail.is_empty() and not _looks_like_system_summary(headline_detail):
+		return headline_detail
+	var description: String = _sanitize_fragment(str(source_data.get("description", "")))
+	if not description.is_empty() and not _looks_like_system_summary(description):
+		return description
+
+	if category == "corporate_action_rumor":
+		return "early corporate-action talk is starting to show up in the tape"
+	if category == "corporate_action_speculation":
+		return "public speculation is turning a quiet setup into a louder market story"
+	if category == "corporate_action_denial":
+		return "the company response has made timing less certain without fully ending the story"
+	if category == "corporate_action_clarification":
+		return "the company has given the market a cleaner version of what it wants people to know"
+	if category == "corporate_action_filing":
+		return "a formal filing or notice has made the setup easier for traders to track"
+	if category == "corporate_meeting":
+		return "the story has moved toward a meeting or call where the next public clue should appear"
+	if category == "corporate_action_resolution":
+		return "the market now has an outcome to trade instead of only expectation"
+	if category == "corporate_action_execution":
+		return "the story is shifting from approval into execution"
+	if category == "corporate_action_cancellation":
+		return "the setup has lost momentum and the market is resetting expectations"
+	if category.begins_with("corporate_action"):
+		return "the corporate-action track is now in %s" % phase_phrase
+	return ""
+
+
+func _looks_like_system_summary(value: String) -> bool:
+	var lowered_value: String = value.to_lower()
+	return (
+		lowered_value.contains("management stance") or
+		lowered_value.contains("current_timeline_state") or
+		lowered_value.contains("source_chain_id") or
+		lowered_value.contains(" stage of a ")
+	)
 
 
 func _voice_profile(feed_data: Dictionary, outlet: Dictionary) -> Dictionary:
@@ -638,6 +853,111 @@ func _pick_watch_phrase(feed_data: Dictionary, stage_key: String, seed_key: Stri
 	if pool.is_empty():
 		pool = watch_phrases.get("recap", [])
 	return str(_pick_from_pool(pool, seed_key))
+
+
+func _pick_body_slot_template(feed_data: Dictionary, slot_key: String, source_data: Dictionary, seed_key: String) -> String:
+	var body_slots: Dictionary = feed_data.get("body_slots", {})
+	var slot_groups: Dictionary = body_slots.get(slot_key, {})
+	for key_value in _body_template_keys(source_data):
+		var key: String = str(key_value)
+		var pool: Array = slot_groups.get(key, [])
+		if pool.is_empty():
+			continue
+		return str(_pick_from_pool(pool, "%s|%s" % [seed_key, key]))
+	return str(_pick_from_pool(slot_groups.get("fallback", []), "%s|fallback" % seed_key))
+
+
+func _body_template_keys(source_data: Dictionary) -> Array:
+	var category: String = str(source_data.get("category", ""))
+	var tone: String = str(source_data.get("tone", ""))
+	var event_family: String = str(source_data.get("event_family", ""))
+	var scope: String = str(source_data.get("scope", ""))
+	var keys: Array = []
+	if not category.is_empty() and not tone.is_empty():
+		keys.append("%s_%s" % [category, tone])
+	if not category.is_empty():
+		keys.append(category)
+	if category.begins_with("corporate_action"):
+		keys.append("corporate_action")
+	if category == "corporate_meeting":
+		keys.append("corporate_meeting")
+	if category == "rumor_positive" or category == "rumor_negative" or category == "rumor":
+		keys.append("rumor")
+	if event_family == "special" or scope == "market":
+		keys.append("special")
+	if not event_family.is_empty() and not tone.is_empty():
+		keys.append("%s_%s" % [event_family, tone])
+	if not event_family.is_empty():
+		keys.append(event_family)
+	if not scope.is_empty():
+		keys.append(scope)
+	keys.append(_category_family_key(source_data))
+	keys.append("fallback")
+	return keys
+
+
+func _category_family_key(source_data: Dictionary) -> String:
+	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("corporate_action"):
+		return "corporate_action"
+	if category == "corporate_meeting":
+		return "corporate_meeting"
+	if category.contains("rumor"):
+		return "rumor"
+	if category in ["earnings", "sector_rotation", "management", "market_wrap"]:
+		return category
+	var event_family: String = str(source_data.get("event_family", ""))
+	if event_family == "special":
+		return "special"
+	if str(source_data.get("scope", "")) == "market":
+		return "market_wrap"
+	if not event_family.is_empty():
+		return event_family
+	return "company"
+
+
+func _public_confidence_label(stage_key: String, source_data: Dictionary) -> String:
+	var category: String = str(source_data.get("category", ""))
+	if category == "corporate_action_filing" or category == "corporate_action_resolution" or category == "corporate_action_execution":
+		return "Filing-backed"
+	if category == "corporate_meeting":
+		return "Calendar watch"
+	if category == "corporate_action_denial" or category == "corporate_action_clarification":
+		return "Company response"
+	match stage_key:
+		"whisper":
+			return "Early read"
+		"confirmation":
+			return "Confirmed"
+		"analysis":
+			return "Follow-up"
+		"market_wrap":
+			return "Close read"
+		_:
+			return "Public recap"
+
+
+func _public_story_angle(source_data: Dictionary, stage_key: String, tone: String, scope: String) -> String:
+	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("corporate_action"):
+		return "Corporate action"
+	if category == "corporate_meeting":
+		return "Boardroom calendar"
+	if category == "earnings":
+		return "Earnings quality"
+	if category == "sector_rotation":
+		return "Sector rotation"
+	if category == "management":
+		return "Management change"
+	if category == "market_wrap" or stage_key == "market_wrap" or scope == "market":
+		return "Market breadth"
+	if category.contains("rumor"):
+		return "Market talk"
+	if tone == "negative":
+		return "Risk watch"
+	if tone == "positive":
+		return "Momentum watch"
+	return "Developing story"
 
 
 func _author_for_article(feed_data: Dictionary, outlet: Dictionary, source_data: Dictionary, context: Dictionary, article_id: String) -> Dictionary:

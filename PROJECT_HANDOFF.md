@@ -447,6 +447,7 @@ Read this file first in the next session.
   - `body`
   - `author_id`, `author_name`, `author_role`, and sometimes `author_contact_id`
   - public player-facing labels: `public_section_label` and `public_status_label`
+  - content-tuning metadata: `public_story_angle`, `public_confidence_label`, and `public_continuity_phrase`
   - asset-ready placeholders: `outlet_logo_asset`, `author_portrait_asset`, `article_image_asset`, and `image_slot`
   - `progress_label`
   - `category`
@@ -463,6 +464,8 @@ Read this file first in the next session.
   - a hidden legacy `NewsArticleList` is still populated for compatibility/smoke plumbing, but the visible player surface is the card stack
   - right side shows article detail as a newspaper story with reserved hero frame, headline, deck, byline, date, public chips, and body
   - full article bodies are loaded when an archived article is selected, rather than dumping all history into the list at once
+  - article bodies now use 5-6 paragraph newspaper prose with deterministic slots for lead, context, market reaction, source color, continuity, and closing watch note
+  - article copy now leans into light local market flavor (`bandar`, `ritel`, `tape`, `RUPSLB`) while keeping raw system phase/debug labels hidden
   - if the News window is open during `Advance Day`, it clears the stale article/archive selection and reloads to the newest visible story
   - article timing/availability depends on event progress and outlet intel level
   - market-wrap style articles provide fallback content so the feed is not empty on quieter sessions
@@ -478,12 +481,13 @@ Read this file first in the next session.
   - author leads are subtle: bylines always render as normal article bylines, and only some articles expose a meetable source via the existing Network discovery flow
 - Current content source is editable:
   - `data/news/news_feed_data.json`
-  - this stores outlet labels, author metadata, summary/tagline copy, progress labels, headline prefixes, sentence pools, hidden-phase templates, and first-pass `corporate_action_*` headline/driver pools
+  - this stores outlet labels, author metadata, summary/tagline copy, progress labels, headline prefixes, sentence pools, body-slot pools, hidden-phase templates, and `corporate_action_*` headline/driver pools
 - Current generator implementation:
   - `systems/NewsFeedSystem.gd`
   - wired through `GameManager.get_news_snapshot()`
   - loaded through `DataRepository.gd`
   - now also preserves chain/meeting metadata on rendered article rows for meeting linking and archive re-open behavior
+  - builds a lightweight in-snapshot story memory from recent event history and active arcs so related follow-up articles can say things like `This follows yesterday's market talk`
 
 ## Twooter Feed
 - `Twooter` is no longer a blank placeholder
@@ -1413,6 +1417,7 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the News content enrichment / continuity pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the News card readability / open-window day reload fix on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the News newspaper / author-network pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the stock-list tab switching latency pass on `2026-04-25`

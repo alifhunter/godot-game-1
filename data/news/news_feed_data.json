@@ -291,6 +291,146 @@
       "The close gives a hint, but tomorrow will say more."
     ]
   },
+  "body_slots": {
+    "market_reaction_templates": {
+      "market_wrap": [
+        "On the tape, {breadth_summary}. That breadth matters because {market_jargon}, so the close was not just about the index print.",
+        "The session left a mixed trail: {breadth_summary}. Ritel money had names to chase, but the board did not look equally strong everywhere."
+      ],
+      "corporate_action": [
+        "The tape around {focus_label} is doing what corporate-action stories often do: it is pulling in faster money before the full paperwork is easy to read.",
+        "For traders, the important part is not only the headline. It is whether bandar-style accumulation keeps showing up after the first noisy move."
+      ],
+      "corporate_meeting": [
+        "With the meeting angle now public, the market is watching whether shareholders treat the agenda as routine or as a real turning point.",
+        "RUPSLB and call-linked stories can move in waves, because traders often price the room before the room has actually spoken."
+      ],
+      "earnings": [
+        "The market is reading the numbers through price action first. {focus_label} is {price_action_label}, and {flow_label}.",
+        "For earnings, the first reaction is only part of the story. The better clue is whether buyers defend the name after the headline has cooled."
+      ],
+      "rumor": [
+        "Rumor-driven tape is fragile. If ritel chases too fast while volume thins, the story can reverse before anyone gets a clean explanation.",
+        "The early move is useful, but not clean. Traders are watching whether the bid is real or just a noisy rotation through hot names."
+      ],
+      "sector_rotation": [
+        "Sector rotation needs breadth to matter. If only one or two names carry the move, the signal is weaker than the headline sounds.",
+        "The sector read is still about leadership. Buyers need to keep showing up beyond the obvious names for this to become more than a one-day trade."
+      ],
+      "management": [
+        "Management headlines usually need a second read. The market first trades the surprise, then decides whether the change actually improves execution.",
+        "The tape is treating the people angle as important, but the next proof will come from whether operations or guidance start to look cleaner."
+      ],
+      "special": [
+        "Macro-style stories rarely hit every stock the same way. The first filter is who has exposure, and the second is who already had weak holders.",
+        "The wider market is reacting first and asking questions later, which makes breadth and sector leadership more important than the index move alone."
+      ],
+      "company": [
+        "The company-specific tape is still the useful clue. {focus_label} is {price_action_label}, and {flow_label}.",
+        "For a single-name story, traders are less interested in perfect wording and more interested in whether the bid survives the first reaction."
+      ],
+      "fallback": [
+        "Across the market, {breadth_summary}. That keeps the read practical: price action has to confirm the story before conviction improves.",
+        "The headline gives traders a reason to look, but the tape still has to prove whether the move deserves more attention."
+      ]
+    },
+    "source_color_templates": {
+      "market_wrap": [
+        "Desk chatter was focused on whether the close was broad enough to matter, not only whether the index finished green or red.",
+        "Several traders were still separating clean leadership from one-session noise, especially in names that moved without strong follow-through."
+      ],
+      "corporate_action": [
+        "People close to the flow are still careful with wording. The useful clue is timing: when formal steps appear, old whispers become much easier to trade.",
+        "One market source framed it simply: if the corporate route is real, the next public step should leave a cleaner trail than today's tape."
+      ],
+      "corporate_meeting": [
+        "Meeting-linked stories are usually about who has prepared before the notice becomes obvious. That is why the calendar matters as much as the headline.",
+        "The room is not just ceremony for traders. A visible agenda can turn soft speculation into something with dates, votes, and consequences."
+      ],
+      "earnings": [
+        "Analysts are likely to focus on whether the result changes the next few quarters, while shorter-term traders focus on whether volume confirms the move.",
+        "The cleanest earnings reactions usually happen when the numbers and the tape point in the same direction. This one still needs that second confirmation."
+      ],
+      "rumor": [
+        "A broker-side source would still call this early. The story is tradable, but not yet the kind of clean signal that lets everyone relax.",
+        "The rumor is visible enough to move screens, but not yet strong enough to remove execution risk from the trade."
+      ],
+      "sector_rotation": [
+        "Sector desks are watching whether the move spreads from the first leaders into second-line names. That spread is often where conviction shows up.",
+        "The better sector clue is rotation quality: strong names should stay supported while weaker names stop dragging the group lower."
+      ],
+      "management": [
+        "People who follow governance are watching tone as much as title. A new name only matters if the market believes the person can change the next chapter.",
+        "For now, the personnel angle gives traders a fresh story, but the heavier question is whether execution actually improves."
+      ],
+      "special": [
+        "Dealers are watching positioning rather than only headlines. Crowded names can move harder than clean names when a broad story hits.",
+        "The source read is cautious: the first move can be emotional, but the second move usually tells which sectors truly benefit."
+      ],
+      "company": [
+        "The name now has a reason to stay on watchlists, but conviction still depends on whether volume and price action agree.",
+        "For now, the story is useful because it gives traders a focus. It becomes more serious only if the tape keeps confirming it."
+      ],
+      "fallback": [
+        "The desk read is still practical: watch price, volume, and whether the next session respects today's direction.",
+        "The story has enough shape to matter, but not enough certainty to ignore the tape."
+      ]
+    },
+    "continuity_templates": {
+      "with_prior": [
+        "{continuity_phrase}. That gives today's story a longer tail, because the market is no longer reacting to a single fresh headline.",
+        "{continuity_phrase}. The important change is that traders now have a previous reference point instead of a blank slate.",
+        "{continuity_phrase}. That prior clue makes the current move easier to compare against the earlier reaction."
+      ],
+      "without_prior": [
+        "There is not much public history around this item yet, so the first clean read still has to come from follow-through.",
+        "For now this is a fresh read, which means the next session will carry more information than the first headline.",
+        "Because the public trail is still thin, traders are treating the tape as the first real filter."
+      ]
+    },
+    "closing_templates": {
+      "market_wrap": [
+        "The practical read for tomorrow is simple: if breadth improves, the close will look less fragile. If it narrows again, the market may treat today's move as noise.",
+        "Tomorrow's open matters because a broad market needs more than one late-session push to prove buyers are really back."
+      ],
+      "corporate_action": [
+        "The next useful clue is whether a formal notice, filing, or meeting path appears. Until then, the story remains tradable but not fully settled.",
+        "Players watching this name should separate loud tape from confirmed steps. The better edge usually comes when both start pointing the same way."
+      ],
+      "corporate_meeting": [
+        "The meeting path gives the story a date to orbit. Now the market has to decide whether the agenda is already priced or still has room to surprise.",
+        "From here, the key is whether the room outcome confirms the trade or forces a reset."
+      ],
+      "earnings": [
+        "The next session should show whether investors treat the result as a one-day print or a reason to keep repricing the company.",
+        "For now, the numbers have opened the door. Follow-through will decide whether the market walks through it."
+      ],
+      "rumor": [
+        "The next test is whether the rumor gains a cleaner public trail. Without that, fast money can leave as quickly as it arrived.",
+        "This remains a watchlist story rather than a settled one. Strong follow-through would make it harder for the market to ignore."
+      ],
+      "sector_rotation": [
+        "The next clue is whether the move spreads across the sector or stays trapped in the first leaders.",
+        "If breadth improves inside the sector, the rotation gets more believable. If not, it stays tactical."
+      ],
+      "management": [
+        "The next proof will not come from the title change alone. It will come from whether guidance, execution, or disclosure gets cleaner.",
+        "The market has a new person to price. Now it needs a reason to believe the company changes with them."
+      ],
+      "special": [
+        "The wider story is still moving, so the next session should be read through sector leadership rather than only the index.",
+        "For players, the useful clue is who keeps moving after the first shock has faded."
+      ],
+      "company": [
+        "The next session should show whether this becomes a real setup or just another headline that briefly moved the tape.",
+        "The story has earned attention. Keeping that attention will depend on cleaner follow-through."
+      ],
+      "fallback": [
+        "{watch_phrase}",
+        "For now, the best read is to keep the headline in context and let the next tape confirm or reject it."
+      ]
+    }
+  },
   "voice_profiles": {
     "gorengan_daily": {
       "headline_prefixes": [

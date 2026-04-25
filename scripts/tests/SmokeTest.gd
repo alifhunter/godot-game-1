@@ -21,6 +21,7 @@ const NORMAL_FULL_DAYS := 10
 const NORMAL_QUICK_DAYS := 3
 const GRIND_FULL_DAYS := 30
 const QUICK_SMOKE_FLAG_PATH := "user://quick_smoke.flag"
+const NEWS_FEED_SYSTEM_SCRIPT = preload("res://systems/NewsFeedSystem.gd")
 
 var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 var batched_setup_progress_calls := 0
@@ -40,6 +41,12 @@ func _ready() -> void:
 	var calendar_validation: String = _validate_trading_calendar_extension()
 	if not calendar_validation.is_empty():
 		push_error(calendar_validation)
+		get_tree().quit(1)
+		return
+
+	var enriched_news_validation: String = _validate_enriched_news_generation()
+	if not enriched_news_validation.is_empty():
+		push_error(enriched_news_validation)
 		get_tree().quit(1)
 		return
 
@@ -90,6 +97,153 @@ func _ready() -> void:
 	_write_smoke_result(smoke_line)
 	await get_tree().create_timer(1.0).timeout
 	get_tree().quit()
+
+
+func _validate_enriched_news_generation() -> String:
+	var news_system = NEWS_FEED_SYSTEM_SCRIPT.new()
+	var feed_data: Dictionary = DataRepository.get_news_feed_data()
+	var trade_date: Dictionary = {
+		"weekday": 3,
+		"day": 8,
+		"month": 1,
+		"year": 2020,
+		"day_index": 7
+	}
+	var company_rows: Array = [{
+		"id": "mock_bank",
+		"ticker": "MBNK",
+		"name": "Mock Bank Tbk",
+		"sector_id": "finance",
+		"sector_name": "Finance",
+		"current_price": 1200.0,
+		"daily_change_pct": 0.036,
+		"broker_flow": {"flow_tag": "accumulation"}
+	}]
+	var market_history: Array = [
+		{
+			"day_index": 6,
+			"trade_date": {"weekday": 2, "day": 7, "month": 1, "year": 2020, "day_index": 6},
+			"average_change_pct": 0.004,
+			"advancers": 18,
+			"decliners": 12,
+			"biggest_winner": {"ticker": "MBNK"},
+			"biggest_loser": {"ticker": "DROP"}
+		},
+		{
+			"day_index": 7,
+			"trade_date": trade_date.duplicate(true),
+			"average_change_pct": 0.006,
+			"advancers": 20,
+			"decliners": 10,
+			"biggest_winner": {"ticker": "MBNK"},
+			"biggest_loser": {"ticker": "DROP"}
+		}
+	]
+	var event_history: Array = [
+		{
+			"event_id": "rights_issue",
+			"event_family": "corporate_action",
+			"scope": "company",
+			"category": "corporate_action_rumor",
+			"tone": "positive",
+			"target_company_id": "mock_bank",
+			"target_ticker": "MBNK",
+			"target_company_name": "Mock Bank Tbk",
+			"target_sector_id": "finance",
+			"headline": "MBNK rumor flow starts",
+			"summary": "Early rights issue talk is drawing attention before any formal notice.",
+			"source_chain_id": "mock_chain",
+			"chain_family": "rights_issue",
+			"day_index": 6,
+			"trade_date": {"weekday": 2, "day": 7, "month": 1, "year": 2020, "day_index": 6}
+		},
+		{
+			"event_id": "rights_issue",
+			"event_family": "corporate_action",
+			"scope": "company",
+			"category": "corporate_action_filing",
+			"tone": "positive",
+			"target_company_id": "mock_bank",
+			"target_ticker": "MBNK",
+			"target_company_name": "Mock Bank Tbk",
+			"target_sector_id": "finance",
+			"headline": "MBNK formally schedules RUPSLB",
+			"summary": "Mock Bank Tbk now has a formal RUPSLB notice tied to the rights issue plan.",
+			"source_chain_id": "mock_chain",
+			"chain_family": "rights_issue",
+			"meeting_id": "mock_meeting",
+			"venue_type": "rupslb",
+			"day_index": 7,
+			"trade_date": trade_date.duplicate(true)
+		}
+	]
+	var first_snapshot: Dictionary = news_system.build_news_snapshot(
+		null,
+		feed_data,
+		company_rows,
+		market_history,
+		event_history,
+		[],
+		[],
+		trade_date,
+		4
+	)
+	var second_snapshot: Dictionary = news_system.build_news_snapshot(
+		null,
+		feed_data,
+		company_rows,
+		market_history,
+		event_history,
+		[],
+		[],
+		trade_date,
+		4
+	)
+	var continuity_article: Dictionary = {}
+	for feed_value in first_snapshot.get("feeds", {}).values():
+		var feed: Dictionary = feed_value
+		for article_value in feed.get("articles", []):
+			var article: Dictionary = article_value
+			if not str(article.get("public_continuity_phrase", "")).is_empty():
+				continuity_article = article
+				break
+		if not continuity_article.is_empty():
+			break
+	if continuity_article.is_empty():
+		return "Smoke test expected enriched News generation to create a continuity phrase for related corporate-action history."
+	if str(continuity_article.get("public_story_angle", "")).is_empty() or str(continuity_article.get("public_confidence_label", "")).is_empty():
+		return "Smoke test expected enriched News articles to expose public story angle and confidence metadata."
+	var body: String = str(continuity_article.get("body", ""))
+	var paragraph_count: int = body.split("\n\n", false).size()
+	if paragraph_count < 5:
+		return "Smoke test expected enriched News article bodies to have at least 5 paragraphs, found %d." % paragraph_count
+	var forbidden_terms: Array = [
+		"source_chain_id",
+		"current_timeline_state",
+		"management stance",
+		"hidden_positioning",
+		"formal_agenda_or_filing",
+		"meeting_or_call"
+	]
+	var searchable_body: String = body.to_lower()
+	for forbidden_term_value in forbidden_terms:
+		var forbidden_term: String = str(forbidden_term_value)
+		if searchable_body.find(forbidden_term) != -1:
+			return "Smoke test expected enriched News copy to avoid raw system wording like %s." % forbidden_term
+	var first_body_by_id: Dictionary = {}
+	for feed_value in first_snapshot.get("feeds", {}).values():
+		var feed: Dictionary = feed_value
+		for article_value in feed.get("articles", []):
+			var article: Dictionary = article_value
+			first_body_by_id[str(article.get("id", ""))] = str(article.get("body", ""))
+	for feed_value in second_snapshot.get("feeds", {}).values():
+		var feed: Dictionary = feed_value
+		for article_value in feed.get("articles", []):
+			var article: Dictionary = article_value
+			var article_id: String = str(article.get("id", ""))
+			if first_body_by_id.has(article_id) and str(article.get("body", "")) != str(first_body_by_id.get(article_id, "")):
+				return "Smoke test expected enriched News article copy to be deterministic for article %s." % article_id
+	return ""
 
 
 func _get_smoke_mode() -> String:
@@ -1322,7 +1476,10 @@ func _run_scenario(
 		str(news_article_record.get("author_role", "")).is_empty() or
 		str(news_article_record.get("public_section_label", "")).is_empty() or
 		str(news_article_record.get("public_status_label", "")).is_empty() or
+		str(news_article_record.get("public_story_angle", "")).is_empty() or
+		str(news_article_record.get("public_confidence_label", "")).is_empty() or
 		str(news_article_record.get("image_slot", "")).is_empty() or
+		str(news_article_record.get("body", "")).split("\n\n", false).size() < 5 or
 		news_detail_byline_label.text.find("By ") == -1 or
 		news_detail_chips_label.text.is_empty()
 	):
@@ -1350,7 +1507,7 @@ func _run_scenario(
 			"message": "Smoke test expected newspaper card text and image placeholders to use readable dark colors."
 		}
 
-	var forbidden_news_terms: Array = ["source_chain_id", "chain_family", "meeting_id", "venue_type", "progress_label", "tone"]
+	var forbidden_news_terms: Array = ["source_chain_id", "chain_family", "meeting_id", "venue_type", "progress_label", "tone", "current_timeline_state", "management stance", "hidden_positioning", "formal_agenda_or_filing", "meeting_or_call"]
 	var news_detail_meta_label: Label = game_root.find_child("NewsDetailMetaLabel", true, false) as Label
 	var news_detail_body: RichTextLabel = game_root.find_child("NewsDetailBody", true, false) as RichTextLabel
 	var visible_news_text: String = "%s\n%s\n%s\n%s" % [
@@ -1371,7 +1528,12 @@ func _run_scenario(
 	var saved_news_archive_state: Dictionary = RunState.to_save_dict()
 	RunState.load_from_dict(saved_news_archive_state)
 	var reloaded_news_article: Dictionary = GameManager.get_news_archive_article(news_article_id)
-	if str(reloaded_news_article.get("author_name", "")) != str(news_article_record.get("author_name", "")) or str(reloaded_news_article.get("image_slot", "")) != str(news_article_record.get("image_slot", "")):
+	if (
+		str(reloaded_news_article.get("author_name", "")) != str(news_article_record.get("author_name", "")) or
+		str(reloaded_news_article.get("image_slot", "")) != str(news_article_record.get("image_slot", "")) or
+		str(reloaded_news_article.get("public_story_angle", "")) != str(news_article_record.get("public_story_angle", "")) or
+		str(reloaded_news_article.get("public_confidence_label", "")) != str(news_article_record.get("public_confidence_label", ""))
+	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
