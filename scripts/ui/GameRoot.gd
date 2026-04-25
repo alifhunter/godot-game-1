@@ -5479,12 +5479,18 @@ func _on_stock_list_tab_changed(_tab_index: int) -> void:
 	if suppress_stock_list_tab_refresh:
 		suppress_stock_list_tab_refresh = false
 		return
+	var started_at_usec: int = Time.get_ticks_usec()
+	var previous_selected_company_id: String = selected_company_id
 	_sync_selected_company_with_active_stock_list()
-	_refresh_markets()
-	_refresh_dashboard()
-	_refresh_desktop()
-	if debug_overlay.visible:
-		_refresh_debug_overlay()
+	_refresh_company_selection_state()
+	if selected_company_id != previous_selected_company_id:
+		_refresh_trade_workspace()
+		_refresh_dashboard()
+		_refresh_desktop()
+		if debug_overlay.visible:
+			_refresh_debug_overlay()
+		_start_background_company_detail_hydration()
+	_log_perf_elapsed("_on_stock_list_tab_changed", started_at_usec)
 
 
 func _on_add_watchlist_pressed() -> void:

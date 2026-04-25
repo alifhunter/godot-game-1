@@ -281,6 +281,10 @@ Read this file first in the next session.
     - `watchlist_changed` now updates the Watchlist `ItemList` and visible All Stock add buttons directly instead of calling the full `_refresh_markets()` path
     - All Stock `Add` now behaves as an in-place membership action instead of selecting the added stock and forcing a full Trade workspace refresh
     - recent smoke timings put picker adds around `57-72ms` and All Stock adds around `35-56ms`
+  - stock-list tab switching now has a narrower refresh path:
+    - tab changes update row selection state first
+    - the Trade workspace, dashboard, and desktop refresh only if the selected company actually changes
+    - recent smoke timing put the tab switch covered by smoke at about `26ms`
 - Chart system status:
   - chart range switcher supports `1D`, `1W`, `1M`, `1Y`, `5Y`, `YTD`
   - chart display-mode switcher supports `Line` and `Candle`
@@ -1285,7 +1289,7 @@ Read this file first in the next session.
   - `& "C:\Users\Alif\Desktop\Godot_v4.6.1-stable_win64_console.exe" --headless --path . --scene res://scenes/tests/SmokeTest.tscn`
 - Debug performance instrumentation now exists in debug/headless runs:
   - `[perf][save]` logs autosave requests, debounced saves, flushes, and raw disk-write duration
-  - `[perf][ui]` logs `_refresh_all()`, `_refresh_markets()`, `_refresh_network()`, `_refresh_upgrades()`, and key buy/watchlist/upgrade/network handlers
+  - `[perf][ui]` logs `_refresh_all()`, `_refresh_markets()`, `_refresh_network()`, `_refresh_upgrades()`, `_on_stock_list_tab_changed()`, and key buy/watchlist/upgrade/network handlers
 - Smoke coverage now includes:
   - main menu `New Game` -> difficulty selector flow
   - difficulty selector card stays within `90%` of the viewport width
@@ -1394,6 +1398,7 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the stock-list tab switching latency pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, and full Godot headless smoke passed after the watchlist/company-list latency pass on `2026-04-25`
   - `git diff --check` passed during the stabilization checkpoint on `2026-04-25`
   - Godot project-load check passed during the same stabilization checkpoint on `2026-04-25`
@@ -1424,6 +1429,7 @@ Read this file first in the next session.
     - buy submit: about `150-300ms`
     - watchlist picker add: about `57-72ms`
     - All Stock add: about `35-56ms`
+    - stock-list tab switch covered by smoke: about `26ms`
   - `git diff --check -- PROJECT_HANDOFF.md` passed after the handoff refresh for the desktop-shell / Academy state on `2026-04-22`
   - recent desktop-shell / desktop-window-manager iteration used quick `git diff --check` plus Godot project-load `--quit` checks instead of full smoke because smoke remains slow and can hang during UI-only polish passes
   - `git diff --check -- scenes/game/widgets/OrderWidget.tscn` passed after raising the order ticket lot cap to `99.999.999` on `2026-04-19`
@@ -1539,8 +1545,8 @@ Read this file first in the next session.
   - candle mode is currently display-only and uses daily / weekly / monthly OHLC bars depending on range
   - `1D` intentionally does not allow candles because the sim only resolves one OHLC bar per day
   - the player market-impact layer now has synthetic daily bid/ask depth, but there is still no visible order-book queue, partial-fill execution, or intraday lock/tape visualization
-  - click latency is improved again after the company-row-cache / narrower trade-refresh and watchlist/company-list passes, but `Trade` is still heavier than ideal:
-    - some stock-list-tab flows still use `_refresh_markets()` and still couple company-list refresh with trade-workspace refresh
+  - click latency is improved again after the company-row-cache / narrower trade-refresh, watchlist/company-list, and stock-list-tab passes, but `Trade` is still heavier than ideal:
+    - full `_refresh_markets()` still couples company-list refresh with trade-workspace refresh in broader refresh flows
     - critical flush points like `Advance Day`, return-to-menu, quit, and close still serialize the full JSON save synchronously
   - volume bars are now shown under the chart, but there is still no player-facing volume lesson / academy integration yet
   - indicator toggles and unlocks now exist, but indicator UX is still basic
@@ -1575,9 +1581,9 @@ Read this file first in the next session.
   - reduce how much fully hydrated company detail is serialized into the save payload
   - or defer/trim save flushes triggered after background hydration batches
   - keep using the new `[perf][startup]`, `[perf][ui]`, and `[perf][save]` logs to compare before/after
-- If click latency still feels rough after more playtesting, continue with stock-list tab switching and broader `_refresh_markets()` coupling:
-  - avoid refreshing the Trade workspace when tab changes do not change the selected stock
+- If click latency still feels rough after more playtesting, continue with broader `_refresh_markets()` coupling:
   - consider diffing visible All Stock rows when search/filter state is unchanged
+  - look for broad refresh callers where the selected stock did not actually change
   - keep using the new `[perf][ui]` / `[perf][save]` debug logs while tuning
   - if latency feels acceptable after this pass, resume the planned content push with `News` first
 - Deepen the real `News` content now that the first event-driven desk exists:
