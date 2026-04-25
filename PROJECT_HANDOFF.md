@@ -1480,6 +1480,8 @@ Read this file first in the next session.
   - Network Contacts / Requests labels and light-list item states now force the dark newspaper text palette, including hover/selected/disabled states, so the light Network panels no longer show unreadable white text
   - Network detail content now sits inside `NetworkDetailScroll`, keeping contact actions fixed at the bottom while long reads/history/source-check copy can scroll
   - Network Journal rows are grouped into `Tips`, `Requests`, `Referrals`, and `Source Checks`; selecting a row shows a compact `NetworkJournalDetailLabel` with day/status/contact/ticker/detail context
+  - Network Journal now has an `All / Tips / Req / Refs / Checks` filter row; section headers are visually distinct from selectable rows, and selecting a contact highlights related Journal rows by contact/company/ticker
+  - Network request rows now carry metadata and can be clicked to show request detail context in the same detail panel
   - accepted Network requests complete when the player owns at least `1` lot by the due day
   - accepted Network requests miss when the player does not own the requested target by the due day
   - connected-floater referral requires relationship, spends `10` relationship on success, creates a referred insider lead, and the referred insider can be met/persisted
@@ -1510,6 +1512,7 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after the Network Journal filter / request-detail clarity pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after the Network detail-scroll / grouped-Journal detail pass on `2026-04-25`
   - quick-smoke hang was resolved by fixing a `SmokeTest.gd` parse error and adding project-local smoke IO for headless runs; `SaveManager` still uses `user://daytrader_save.json` in normal gameplay
   - `git diff --check` and direct GameRoot headless launch passed after the Network Contacts / Requests readability fix on `2026-04-25`

@@ -190,6 +190,7 @@ var selected_news_archive_month: int = 0
 var selected_news_article_id: String = ""
 var selected_network_contact_id: String = ""
 var selected_network_journal_id: String = ""
+var selected_network_journal_filter: String = "all"
 var selected_academy_category_id: String = "technical"
 var selected_academy_section_id: String = "intro"
 var academy_quiz_option_buttons: Dictionary = {}
@@ -297,6 +298,8 @@ var network_tip_history_label: Label = null
 var network_crosscheck_label: Label = null
 var network_source_check_button: Button = null
 var network_journal_label: Label = null
+var network_journal_filter_row: HBoxContainer = null
+var network_journal_filter_buttons: Dictionary = {}
 var network_journal_list: ItemList = null
 var network_detail_scroll: ScrollContainer = null
 var network_detail_scroll_content: VBoxContainer = null
@@ -562,6 +565,7 @@ func _ready() -> void:
 	news_archive_year_option.item_selected.connect(_on_news_archive_year_selected)
 	news_archive_month_option.item_selected.connect(_on_news_archive_month_selected)
 	network_contacts_list.item_selected.connect(_on_network_contact_selected)
+	network_requests_list.item_selected.connect(_on_network_request_selected)
 	if network_journal_list != null:
 		network_journal_list.item_selected.connect(_on_network_journal_selected)
 	if academy_section_list != null:
@@ -3277,8 +3281,10 @@ func _rebuild_network_request_list() -> void:
 			_ticker_for_company(str(request.get("target_company_id", ""))),
 			int(request.get("due_day_index", 0))
 		])
+		network_requests_list.set_item_metadata(network_requests_list.item_count - 1, request.duplicate(true))
 	if requests.is_empty():
 		network_requests_list.add_item("No active requests.")
+		network_requests_list.set_item_disabled(0, true)
 
 
 func _rebuild_network_journal_list() -> void:
@@ -3287,6 +3293,7 @@ func _rebuild_network_journal_list() -> void:
 	network_journal_list.clear()
 	var rows: Array = current_network_snapshot.get("journal", [])
 	var selected_item_index: int = -1
+	var selected_contact: Dictionary = _selected_network_contact_for_journal_context()
 	var grouped_rows: Dictionary = {
 		"tips": [],
 		"requests": [],
@@ -3300,6 +3307,8 @@ func _rebuild_network_journal_list() -> void:
 		var group_key: String = _network_journal_group_key(str(row.get("type", "")))
 		if not grouped_rows.has(group_key):
 			group_key = "tips"
+		if selected_network_journal_filter != "all" and selected_network_journal_filter != group_key:
+			continue
 		var rows_for_group: Array = grouped_rows.get(group_key, [])
 		rows_for_group.append(row)
 		grouped_rows[group_key] = rows_for_group
@@ -3308,7 +3317,10 @@ func _rebuild_network_journal_list() -> void:
 		if group_rows.is_empty():
 			continue
 		network_journal_list.add_item(_network_journal_group_label(group_key))
-		network_journal_list.set_item_disabled(network_journal_list.item_count - 1, true)
+		var header_index: int = network_journal_list.item_count - 1
+		network_journal_list.set_item_disabled(header_index, true)
+		network_journal_list.set_item_custom_fg_color(header_index, Color(0.454902, 0.337255, 0.141176, 1))
+		network_journal_list.set_item_custom_bg_color(header_index, Color(0.866667, 0.807843, 0.635294, 0.58))
 		for row_value in group_rows:
 			var row: Dictionary = row_value
 			var line: String = "D%d  |  %s" % [
@@ -3323,10 +3335,18 @@ func _rebuild_network_journal_list() -> void:
 			network_journal_list.add_item(line)
 			var item_index: int = network_journal_list.item_count - 1
 			network_journal_list.set_item_metadata(item_index, row.duplicate(true))
+			if _network_journal_row_matches_contact(row, selected_contact):
+				network_journal_list.set_item_custom_bg_color(item_index, Color(0.835294, 0.764706, 0.529412, 0.30))
+				network_journal_list.set_item_custom_fg_color(item_index, COLOR_WINDOW_TEXT)
 			if str(row.get("id", "")) == selected_network_journal_id:
 				selected_item_index = item_index
 	if rows.is_empty():
 		network_journal_list.add_item("No journal entries yet.")
+		network_journal_list.set_item_disabled(0, true)
+		selected_network_journal_id = ""
+		_show_network_journal_detail({})
+	elif network_journal_list.item_count <= 0:
+		network_journal_list.add_item("No journal entries for this filter.")
 		network_journal_list.set_item_disabled(0, true)
 		selected_network_journal_id = ""
 		_show_network_journal_detail({})
@@ -3338,6 +3358,36 @@ func _rebuild_network_journal_list() -> void:
 	elif not selected_network_journal_id.is_empty():
 		selected_network_journal_id = ""
 		_show_network_journal_detail({})
+
+
+func _selected_network_contact_for_journal_context() -> Dictionary:
+	if selected_network_contact_id.is_empty():
+		return {}
+	for row_value in current_network_snapshot.get("contacts", []):
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		if str(row.get("id", "")) == selected_network_contact_id:
+			return row
+	for row_value in current_network_snapshot.get("discoveries", []):
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		if str(row.get("id", "")) == selected_network_contact_id:
+			return row
+	return {}
+
+
+func _network_journal_row_matches_contact(row: Dictionary, contact: Dictionary) -> bool:
+	if contact.is_empty():
+		return false
+	if not str(row.get("contact_id", "")).is_empty() and str(row.get("contact_id", "")) == str(contact.get("id", "")):
+		return true
+	var row_company_id: String = str(row.get("target_company_id", ""))
+	if not row_company_id.is_empty() and row_company_id == _network_contact_target_company(contact):
+		return true
+	var row_ticker: String = str(row.get("target_ticker", ""))
+	return not row_ticker.is_empty() and row_ticker == _ticker_for_company(_network_contact_target_company(contact))
 
 
 func _network_journal_group_key(row_type: String) -> String:
@@ -3364,6 +3414,17 @@ func _network_journal_group_label(group_key: String) -> String:
 			return "Tips"
 
 
+func _refresh_network_journal_filter_buttons() -> void:
+	for filter_id_value in network_journal_filter_buttons.keys():
+		var filter_id: String = str(filter_id_value)
+		var button: Button = network_journal_filter_buttons.get(filter_id, null) as Button
+		if button == null:
+			continue
+		var is_selected: bool = filter_id == selected_network_journal_filter
+		button.disabled = is_selected
+		_style_network_journal_filter_button(button, is_selected)
+
+
 func _show_network_journal_detail(row: Dictionary) -> void:
 	if network_journal_detail_label == null:
 		return
@@ -3372,8 +3433,9 @@ func _show_network_journal_detail(row: Dictionary) -> void:
 		network_journal_detail_label.text = ""
 		return
 	var row_type: String = str(row.get("type", "tip"))
+	var title_prefix: String = "Request" if row_type == "request" else "Journal"
 	var lines: Array = [
-		"Journal: %s" % str(row.get("title", "Network note")),
+		"%s: %s" % [title_prefix, str(row.get("title", "Network note"))],
 		"Day %d  |  %s  |  %s" % [
 			int(row.get("day_index", 0)),
 			_network_journal_group_label(_network_journal_group_key(row_type)),
@@ -3392,6 +3454,41 @@ func _show_network_journal_detail(row: Dictionary) -> void:
 		lines.append(detail)
 	network_journal_detail_label.text = "\n".join(lines)
 	network_journal_detail_label.visible = true
+
+
+func _network_request_detail_row(request: Dictionary) -> Dictionary:
+	var target_company_id: String = str(request.get("target_company_id", ""))
+	var ticker: String = _ticker_for_company(target_company_id)
+	var status: String = str(request.get("status", "pending"))
+	var contact_name: String = str(request.get("contact_name", "Contact"))
+	if contact_name == "Contact":
+		for contact_value in current_network_snapshot.get("contacts", []):
+			if typeof(contact_value) != TYPE_DICTIONARY:
+				continue
+			var contact: Dictionary = contact_value
+			if str(contact.get("id", "")) == str(request.get("contact_id", "")):
+				contact_name = str(contact.get("display_name", "Contact"))
+				break
+	var detail: String = "Due day %d. Hold at least 1 lot of %s by the due day to complete this request." % [
+		int(request.get("due_day_index", 0)),
+		ticker
+	]
+	if status == "completed":
+		detail = "Completed after you held at least 1 lot of %s." % ticker
+	elif status == "missed":
+		detail = "Missed because you did not hold the requested target."
+	return {
+		"id": "%s:request_detail" % str(request.get("id", "")),
+		"type": "request",
+		"day_index": int(request.get("created_day_index", current_network_snapshot.get("day_index", 0))),
+		"contact_id": str(request.get("contact_id", "")),
+		"contact_name": contact_name,
+		"target_company_id": target_company_id,
+		"target_ticker": ticker,
+		"status": status,
+		"title": "Request | %s | %s" % [ticker, status.capitalize()],
+		"detail": "%s | %s" % [contact_name, detail]
+	}
 
 
 func _show_network_contact(contact: Dictionary) -> void:
@@ -5780,6 +5877,18 @@ func _on_network_contact_selected(index: int) -> void:
 		network_journal_list.deselect_all()
 	_show_network_journal_detail({})
 	_show_network_contact(contact)
+	_rebuild_network_journal_list()
+
+
+func _on_network_request_selected(index: int) -> void:
+	var metadata: Variant = network_requests_list.get_item_metadata(index)
+	if typeof(metadata) != TYPE_DICTIONARY:
+		return
+	var request: Dictionary = metadata
+	selected_network_journal_id = ""
+	if network_journal_list != null:
+		network_journal_list.deselect_all()
+	_show_network_journal_detail(_network_request_detail_row(request))
 
 
 func _on_network_journal_selected(index: int) -> void:
@@ -5791,6 +5900,13 @@ func _on_network_journal_selected(index: int) -> void:
 	var row: Dictionary = metadata
 	selected_network_journal_id = str(row.get("id", ""))
 	_show_network_journal_detail(row)
+
+
+func _on_network_journal_filter_pressed(filter_id: String) -> void:
+	selected_network_journal_filter = filter_id
+	selected_network_journal_id = ""
+	_refresh_network_journal_filter_buttons()
+	_rebuild_network_journal_list()
 
 
 func _on_network_meet_pressed() -> void:
@@ -6529,6 +6645,28 @@ func _ensure_corporate_action_ui() -> void:
 		network_journal_label.name = "NetworkJournalLabel"
 		network_journal_label.text = "Journal"
 		network_list_vbox.add_child(network_journal_label)
+
+		network_journal_filter_row = HBoxContainer.new()
+		network_journal_filter_row.name = "NetworkJournalFilterRow"
+		network_journal_filter_row.add_theme_constant_override("separation", 4)
+		network_list_vbox.add_child(network_journal_filter_row)
+		for filter_value in [
+			{"id": "all", "label": "All"},
+			{"id": "tips", "label": "Tips"},
+			{"id": "requests", "label": "Req"},
+			{"id": "referrals", "label": "Refs"},
+			{"id": "source_checks", "label": "Checks"}
+		]:
+			var filter_id: String = str(filter_value.get("id", "all"))
+			var filter_button := Button.new()
+			filter_button.name = "NetworkJournalFilter%sButton" % filter_id.capitalize().replace("_", "")
+			filter_button.text = str(filter_value.get("label", filter_id.capitalize()))
+			filter_button.custom_minimum_size = Vector2(42, 24)
+			filter_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			filter_button.tooltip_text = "Show %s journal rows." % str(filter_value.get("label", filter_id))
+			filter_button.pressed.connect(_on_network_journal_filter_pressed.bind(filter_id))
+			network_journal_filter_buttons[filter_id] = filter_button
+			network_journal_filter_row.add_child(filter_button)
 
 		network_journal_list = ItemList.new()
 		network_journal_list.name = "NetworkJournalList"
@@ -7898,6 +8036,7 @@ func _apply_visual_theme() -> void:
 	_style_light_item_list(network_requests_list)
 	if network_journal_list != null:
 		_style_light_item_list(network_journal_list)
+	_refresh_network_journal_filter_buttons()
 	if watchlist_picker_list != null:
 		_style_item_list(watchlist_picker_list, 0, 0)
 	if console_input != null:
@@ -8390,6 +8529,12 @@ func _style_stock_list_row_button(button: Button, is_selected: bool) -> void:
 	var border_color: Color = COLOR_NAV_ACTIVE_BORDER if is_selected else COLOR_BORDER
 	_style_button(button, fill_color, border_color, COLOR_TEXT, 0)
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+
+
+func _style_network_journal_filter_button(button: Button, is_selected: bool) -> void:
+	var fill_color: Color = Color(0.835294, 0.764706, 0.529412, 0.82) if is_selected else Color(0.952941, 0.94902, 0.87451, 1)
+	var border_color: Color = Color(0.52549, 0.396078, 0.160784, 1) if is_selected else Color(0.572549, 0.482353, 0.309804, 0.8)
+	_style_button(button, fill_color, border_color, COLOR_WINDOW_TEXT, 0)
 
 
 func _style_light_item_list(item_list: ItemList) -> void:

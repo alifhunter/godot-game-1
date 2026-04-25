@@ -3022,6 +3022,41 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected selecting a Network Journal row to show a readable Journal detail panel."
 		}
+	var network_journal_filter_row: HBoxContainer = game_root.find_child("NetworkJournalFilterRow", true, false) as HBoxContainer
+	var network_journal_requests_filter_button: Button = game_root.find_child("NetworkJournalFilterRequestsButton", true, false) as Button
+	if network_journal_filter_row == null or network_journal_requests_filter_button == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network Journal to expose filter buttons."
+		}
+	network_journal_requests_filter_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if not network_journal_requests_filter_button.disabled:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the selected Network Journal filter button to become disabled/active."
+		}
+	var selectable_request_index: int = -1
+	for request_item_index in range(network_requests_list.item_count):
+		var request_metadata: Variant = network_requests_list.get_item_metadata(request_item_index)
+		if typeof(request_metadata) == TYPE_DICTIONARY:
+			selectable_request_index = request_item_index
+			break
+	if selectable_request_index >= 0:
+		network_requests_list.select(selectable_request_index)
+		game_root.call("_on_network_request_selected", selectable_request_index)
+		await get_tree().process_frame
+		if not network_journal_detail_label.visible or network_journal_detail_label.text.find("Request:") < 0:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected selecting a Network request row to show request detail context."
+			}
 	if (
 		network_contacts_list.custom_minimum_size.y > 180.0 or
 		network_requests_list.custom_minimum_size.y > 110.0 or
