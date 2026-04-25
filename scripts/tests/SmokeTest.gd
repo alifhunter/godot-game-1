@@ -57,6 +57,12 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 
+	var fishbowl_validation: String = _validate_fishbowl_overlay()
+	if not fishbowl_validation.is_empty():
+		push_error(fishbowl_validation)
+		get_tree().quit(1)
+		return
+
 	var menu_result: Dictionary = await _validate_main_menu_flow()
 	if not bool(menu_result.get("success", false)):
 		push_error(str(menu_result.get("message", "Main menu smoke test failed.")))
@@ -104,6 +110,20 @@ func _ready() -> void:
 	_write_smoke_result(smoke_line)
 	await get_tree().create_timer(1.0).timeout
 	get_tree().quit()
+
+
+func _validate_fishbowl_overlay() -> String:
+	var overlay: CanvasLayer = get_node_or_null("/root/FishbowlOverlay") as CanvasLayer
+	if overlay == null:
+		return "Smoke test expected the global FishbowlOverlay autoload to exist."
+	var rect: ColorRect = overlay.get_node_or_null("FishbowlScreenOverlay") as ColorRect
+	if rect == null:
+		return "Smoke test expected FishbowlOverlay to create a fullscreen ColorRect."
+	if rect.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+		return "Smoke test expected FishbowlOverlay to ignore mouse input."
+	if not (rect.material is ShaderMaterial):
+		return "Smoke test expected FishbowlOverlay to use a ShaderMaterial."
+	return ""
 
 
 func _validate_enriched_news_generation() -> String:
@@ -2930,6 +2950,21 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected source-check answers to persist in the tip journal and surface on contacts."
 		}
+	game_root.set("selected_network_contact_id", contact_id)
+	game_root.call("_refresh_network")
+	await get_tree().process_frame
+	if (
+		not source_check_button.visible or
+		not source_check_button.disabled or
+		source_check_button.text != "Conflict Asked" or
+		crosscheck_label.text.find("Conflict Follow-up") < 0
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected asked source conflicts to stay visible with disabled button and follow-up copy."
+		}
 	var duplicate_source_check_result: Dictionary = GameManager.ask_contact_source_check(contact_id)
 	if bool(duplicate_source_check_result.get("success", false)):
 		game_root.queue_free()
@@ -3458,7 +3493,11 @@ func _network_snapshot_has_crosscheck_data(network_snapshot: Dictionary) -> bool
 			bool(contact.get("can_ask_source_check", false))
 		):
 			var first_row: Dictionary = rows[0]
-			if not str(first_row.get("truth_label", "")).is_empty() and not str(first_row.get("contact_name", "")).is_empty():
+			if (
+				not str(first_row.get("truth_label", "")).is_empty() and
+				not str(first_row.get("contact_name", "")).is_empty() and
+				not str(first_row.get("source_role", "")).is_empty()
+			):
 				return true
 	return false
 
@@ -3478,6 +3517,7 @@ func _network_snapshot_has_source_check_answer(network_snapshot: Dictionary) -> 
 		var contact: Dictionary = contact_value
 		if (
 			str(contact.get("cross_contact_label", "")) == "Conflicting sources" and
+			bool(contact.get("has_direct_source_conflict", false)) and
 			not str(contact.get("source_check_note", "")).is_empty() and
 			not bool(contact.get("can_ask_source_check", true))
 		):

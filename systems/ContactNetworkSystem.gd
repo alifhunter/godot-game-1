@@ -1236,7 +1236,8 @@ func _cross_contact_summary(current: Dictionary, peers: Array) -> Dictionary:
 	if rows.size() > 3:
 		rows = rows.slice(0, 3)
 	var source_check_note: String = str(current.get("source_check_note", ""))
-	var can_ask_source_check: bool = label == "Conflicting sources" and source_check_note.is_empty()
+	var has_direct_source_conflict: bool = label == "Conflicting sources"
+	var can_ask_source_check: bool = has_direct_source_conflict and source_check_note.is_empty()
 	return {
 		"label": label,
 		"note": note,
@@ -1248,6 +1249,7 @@ func _cross_contact_summary(current: Dictionary, peers: Array) -> Dictionary:
 		"current_stance": current_stance,
 		"rows": rows.duplicate(true),
 		"created_day_index": int(current.get("created_day_index", 0)),
+		"has_direct_source_conflict": has_direct_source_conflict,
 		"can_ask_source_check": can_ask_source_check,
 		"source_check_label": str(current.get("source_check_label", "")),
 		"source_check_note": source_check_note,
@@ -1278,6 +1280,7 @@ func _apply_cross_contact_read(row: Dictionary, cross_checks: Dictionary) -> voi
 		row["cross_contact_label"] = ""
 		row["cross_contact_note"] = ""
 		row["cross_contact_rows"] = []
+		row["has_direct_source_conflict"] = false
 		row["can_ask_source_check"] = false
 		row["source_check_label"] = ""
 		row["source_check_note"] = ""
@@ -1286,6 +1289,7 @@ func _apply_cross_contact_read(row: Dictionary, cross_checks: Dictionary) -> voi
 	row["cross_contact_label"] = str(cross_check.get("label", "Mixed sources"))
 	row["cross_contact_note"] = str(cross_check.get("note", ""))
 	row["cross_contact_rows"] = cross_check.get("rows", []).duplicate(true)
+	row["has_direct_source_conflict"] = bool(cross_check.get("has_direct_source_conflict", false))
 	row["can_ask_source_check"] = bool(cross_check.get("can_ask_source_check", false))
 	row["source_check_label"] = str(cross_check.get("source_check_label", ""))
 	row["source_check_note"] = str(cross_check.get("source_check_note", ""))
@@ -1545,7 +1549,7 @@ func _public_tip_opening(truth_label: String, ticker: String, family_label: Stri
 			return "%s has a live read, but it is still early enough to demand confirmation." % ticker
 
 
-func _public_tip_source_color(contact: Dictionary, source_role: String, ticker: String) -> String:
+func _public_tip_source_color(contact: Dictionary, source_role: String, _ticker: String) -> String:
 	var reliability: float = clamp(float(contact.get("reliability", 0.6)), 0.0, 1.0)
 	match source_role:
 		"flow desk":
@@ -1824,6 +1828,7 @@ func _contact_row(contact: Dictionary, runtime: Dictionary, discovery: Dictionar
 		"cross_contact_label": "",
 		"cross_contact_note": "",
 		"cross_contact_rows": [],
+		"has_direct_source_conflict": false,
 		"can_ask_source_check": false,
 		"source_check_label": "",
 		"source_check_note": "",

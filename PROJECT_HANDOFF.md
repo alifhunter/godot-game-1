@@ -10,14 +10,25 @@ Read this file first in the next session.
 - First player-visible session on a fresh run: `Friday, 3 January 2020`
 - Fresh runs simulate the first trading session immediately before handing control to the player, so the market already has a previous close, current price move, and chart-ready early history
 - Current shell is now `desktop-first`, not the old direct dashboard flow
+- A global fishbowl display effect now runs as an autoloaded screen-space overlay across the whole game, including Main Menu and GameRoot
+  - `autoloads/FishbowlOverlay.gd` creates a top-layer mouse-transparent `ColorRect`
+  - `assets/shaders/fishbowl_screen.gdshader` applies very subtle curvature with neutral zoom and a visible black vignette
+  - current tuned defaults: `curvature = 0.01`, `zoom_compensation = 1.0`, `vignette_strength = 0.22`
+  - this is a visual-only overlay, so input is not remapped through the curve; curvature is intentionally low to avoid noticeable cursor drift
+  - current pass has no in-game toggle/slider yet; tune shader uniforms directly if the effect needs another pass
 - Version control:
   - local Git repo initialized on branch `main`
   - GitHub remote configured as `origin`
   - remote URL: `https://github.com/alifhunter/godot-game-1.git`
   - committed checkpoint: `615a415 Add Network tip memory and source checks`
-  - latest actionable Source Cross-Check changes are currently uncommitted unless committed after this handoff
-  - uncommitted actionable Source Cross-Check files are expected to include:
-    - `autoloads/GameManager.gd`
+  - committed checkpoint: `b857ab8 Make Network source conflicts actionable`
+  - latest Network conflict UX polish and global fishbowl display-effect changes are currently uncommitted unless committed after this handoff
+  - uncommitted files are expected to include:
+    - `project.godot`
+    - `autoloads/FishbowlOverlay.gd`
+    - `autoloads/FishbowlOverlay.gd.uid`
+    - `assets/shaders/fishbowl_screen.gdshader`
+    - `assets/shaders/fishbowl_screen.gdshader.uid`
     - `systems/ContactNetworkSystem.gd`
     - `scripts/ui/GameRoot.gd`
     - `scripts/tests/SmokeTest.gd`
@@ -661,6 +672,7 @@ Read this file first in the next session.
     - includes a simple derived reliability label such as `One useful read`, `Reliable lately`, `Mixed record`, or `Cold lately`
   - compact `Source Cross-Check` panel when another recent contact has read the same target
     - labels the comparison as `Source agreement`, `Mixed sources`, or `Conflicting sources`
+    - peer rows now include the other contact's source role when available, such as flow desk, research desk, journalist/source book, or corporate/legal context
     - this panel is derived from recent tip journal rows and is not separately saved
     - direct conflicts can now expose an `Ask About Conflict` action that spends `1` AP, asks the selected contact to explain the disagreement, and records the answer on the related tip journal row
   - action buttons for `Meet`, `Tip`, `Request`, `Referral`, contextual `Follow Up`, and contextual `Ask About Conflict`
@@ -699,7 +711,8 @@ Read this file first in the next session.
   - `Ask About Conflict` spends `1` daily AP on success and appears when the selected contact has a direct constructive-vs-caution cross-contact conflict that has not already been asked about
     - the answer branches on relationship, contact reliability, source role, selected contact stance, and the opposing source's read
     - source-check answers are stored back into `network_tip_journal` as `source_check_label`, `source_check_note`, `source_check_day_index`, `source_check_relationship_delta`, `source_check_peer_contact_id`, and `source_check_peer_contact_name`
-    - each source conflict can only be asked once; the stored answer then appears under the `Source Cross-Check` panel
+    - each source conflict can only be asked once; the stored answer then appears as `Conflict Follow-up` under the `Source Cross-Check` panel
+    - after asking, the button stays visible as disabled `Conflict Asked`; if the player has no AP before asking, the tooltip says there are no daily action points left
   - `Request` spends `1` daily AP on success and creates a pending task to hold at least `1` lot of the target company by `current_day + 3`
   - repeat accepts for the same contact-target pair while a request is already pending now fail safely and do not spend extra AP
   - a successful request creates a contact company arc and adds `8` relationship points
@@ -1486,6 +1499,8 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the global fishbowl display-effect update on `2026-04-25`
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the Network conflict UX polish update on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the actionable Network Source Cross-Check update on `2026-04-25`
   - handoff-only precision update: `git diff --check` passed on `2026-04-25`; no Godot rerun was needed because only `PROJECT_HANDOFF.md` changed in that update
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the Network cross-contact contradiction update on `2026-04-25`
@@ -1575,6 +1590,7 @@ Read this file first in the next session.
   - there is no export / comparison UI yet
 - No deeper onboarding beyond the current tutorial popup
 - No player-custom widget layout yet
+- The global fishbowl display effect is currently always on and tuned through shader uniforms only; there is no player-facing accessibility toggle, strength slider, per-scene override, or input-coordinate remap yet
 - `2027-2030` holiday rows are projected simulation data and may differ from future official IDX calendars
 - `News` is now a deterministic newspaper desk with enriched article bodies, but still limited:
   - outlet access is now upgrade-driven by `News Content`, and article bodies now render as fuller 5-6 paragraph stories

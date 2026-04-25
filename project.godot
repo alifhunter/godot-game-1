@@ -21,6 +21,7 @@ GameManager="*res://autoloads/GameManager.gd"
 RunState="*res://autoloads/RunState.gd"
 DataRepository="*res://autoloads/DataRepository.gd"
 SaveManager="*res://autoloads/SaveManager.gd"
+FishbowlOverlay="*res://autoloads/FishbowlOverlay.gd"
 
 [display]
 

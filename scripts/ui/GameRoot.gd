@@ -3400,11 +3400,21 @@ func _update_network_followup_button(contact: Dictionary, is_met: bool, has_acti
 func _update_network_source_check_button(contact: Dictionary, is_met: bool, has_action_points: bool) -> void:
 	if network_source_check_button == null:
 		return
+	var has_direct_conflict: bool = bool(contact.get("has_direct_source_conflict", false))
 	var can_ask: bool = is_met and bool(contact.get("can_ask_source_check", false))
-	network_source_check_button.visible = can_ask
+	var has_answer: bool = not str(contact.get("source_check_note", "")).is_empty()
+	network_source_check_button.visible = is_met and has_direct_conflict
 	network_source_check_button.disabled = not can_ask or not has_action_points
-	network_source_check_button.text = "Ask About Conflict"
-	network_source_check_button.tooltip_text = "Spend 1 action point to ask this contact why another source disagrees."
+	if has_answer:
+		network_source_check_button.text = "Conflict Asked"
+		network_source_check_button.disabled = true
+		network_source_check_button.tooltip_text = "This conflict already has a follow-up answer in the Source Cross-Check panel."
+	elif not has_action_points:
+		network_source_check_button.text = "Ask About Conflict"
+		network_source_check_button.tooltip_text = "No daily action points left."
+	else:
+		network_source_check_button.text = "Ask About Conflict"
+		network_source_check_button.tooltip_text = "Spend 1 action point to ask this contact why another source disagrees."
 
 
 func _network_followup_menu_id(followup_id: String) -> int:
@@ -3474,8 +3484,12 @@ func _network_crosscheck_text(contact: Dictionary) -> String:
 		if typeof(row_value) != TYPE_DICTIONARY:
 			continue
 		var row: Dictionary = row_value
+		var source_role: String = str(row.get("source_role", ""))
+		var contact_label: String = str(row.get("contact_name", "Another contact"))
+		if not source_role.is_empty():
+			contact_label += " (%s)" % source_role
 		var line: String = "- %s: %s" % [
-			str(row.get("contact_name", "Another contact")),
+			contact_label,
 			str(row.get("truth_label", "different read"))
 		]
 		var confidence_label: String = str(row.get("confidence_label", ""))
@@ -3484,7 +3498,7 @@ func _network_crosscheck_text(contact: Dictionary) -> String:
 		lines.append(line)
 	var source_check_note: String = str(contact.get("source_check_note", ""))
 	if not source_check_note.is_empty():
-		lines.append("Asked: %s" % source_check_note)
+		lines.append("Conflict Follow-up | %s" % source_check_note)
 	return "\n".join(lines)
 
 
