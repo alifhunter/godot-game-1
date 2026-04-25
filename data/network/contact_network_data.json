@@ -89,6 +89,103 @@
                           },
     "contacts":  [
                      {
+                         "id":  "journalist_ayu_larasati",
+                         "display_name":  "Ayu Larasati",
+                         "role":  "Market Reporter",
+                         "sector_ids":  [
+                                            "consumer",
+                                            "transport",
+                                            "property",
+                                            "noncyclical"
+                                        ],
+                         "categories":  [
+                                            "market_wrap",
+                                            "rumor",
+                                            "social_post",
+                                            "company"
+                                        ],
+                         "recognition_required":  0,
+                         "base_relationship":  22,
+                         "reliability":  0.56,
+                         "tone":  "mixed",
+                         "intro":  "Writes retail-facing market color and keeps a loose source book of junior analysts, client dealers, and company-adjacent operators who are usually three or four steps away from the room.",
+                         "affiliation_type":  "floater"
+                     },
+                     {
+                         "id":  "journalist_raka_pradipta",
+                         "display_name":  "Raka Pradipta",
+                         "role":  "Corporate Desk Reporter",
+                         "sector_ids":  [
+                                            "finance",
+                                            "basicindustry",
+                                            "infra",
+                                            "energy"
+                                        ],
+                         "categories":  [
+                                            "corporate_action",
+                                            "corporate_meeting",
+                                            "management",
+                                            "mna",
+                                            "rumor"
+                                        ],
+                         "recognition_required":  10,
+                         "base_relationship":  24,
+                         "reliability":  0.63,
+                         "tone":  "mixed",
+                         "intro":  "Covers filings, meeting notices, and boardroom language. Usually hears things through lawyers, notaries, and old investor-relations staff before any insider will talk directly.",
+                         "affiliation_type":  "floater"
+                     },
+                     {
+                         "id":  "journalist_maya_wicaksono",
+                         "display_name":  "Maya Wicaksono",
+                         "role":  "Senior Markets Writer",
+                         "sector_ids":  [
+                                            "finance",
+                                            "consumer",
+                                            "industrial",
+                                            "health",
+                                            "tech"
+                                        ],
+                         "categories":  [
+                                            "earnings",
+                                            "sector_rotation",
+                                            "policy_post",
+                                            "macro_shock",
+                                            "market_wrap"
+                                        ],
+                         "recognition_required":  20,
+                         "base_relationship":  26,
+                         "reliability":  0.68,
+                         "tone":  "mixed",
+                         "intro":  "Keeps the institutional diary: analyst calls, fund-manager tone, and policy chatter. Her best leads are indirect, but they often point toward who deserves a warmer introduction.",
+                         "affiliation_type":  "floater"
+                     },
+                     {
+                         "id":  "journalist_dian_permatasari",
+                         "display_name":  "Dian Permatasari",
+                         "role":  "Boardroom Columnist",
+                         "sector_ids":  [
+                                            "finance",
+                                            "property",
+                                            "energy",
+                                            "basicindustry",
+                                            "infra"
+                                        ],
+                         "categories":  [
+                                            "corporate_action",
+                                            "rumor",
+                                            "company_arc",
+                                            "management",
+                                            "corporate_meeting"
+                                        ],
+                         "recognition_required":  35,
+                         "base_relationship":  28,
+                         "reliability":  0.72,
+                         "tone":  "mixed",
+                         "intro":  "Writes carefully around boardroom moves and family-office signals. Often knows the fourth-ring connector who knows the third-ring connector who knows the real decision maker.",
+                         "affiliation_type":  "floater"
+                     },
+                     {
                          "id":  "budi_supply_chain",
                          "display_name":  "Budi Santoso",
                          "role":  "Supply Chain Analyst",

@@ -1769,19 +1769,37 @@ func _upsert_news_archive_article(outlet_id: String, outlet_label: String, artic
 		"source_chain_id": str(article.get("source_chain_id", "")),
 		"chain_family": str(article.get("chain_family", "")),
 		"meeting_id": str(article.get("meeting_id", "")),
-		"venue_type": str(article.get("venue_type", ""))
+		"venue_type": str(article.get("venue_type", "")),
+		"author_id": str(article.get("author_id", "")),
+		"author_name": str(article.get("author_name", "")),
+		"author_role": str(article.get("author_role", "")),
+		"author_contact_id": str(article.get("author_contact_id", "")),
+		"public_section_label": str(article.get("public_section_label", "")),
+		"public_status_label": str(article.get("public_status_label", "")),
+		"outlet_logo_asset": str(article.get("outlet_logo_asset", "")),
+		"author_portrait_asset": str(article.get("author_portrait_asset", "")),
+		"article_image_asset": str(article.get("article_image_asset", "")),
+		"image_slot": str(article.get("image_slot", ""))
 	}
 	news_archive_articles[archive_article_id] = article_record
 
 	var summary_entry: Dictionary = {
 		"id": archive_article_id,
 		"headline": str(article_record.get("headline", "")),
+		"deck": str(article_record.get("deck", "")),
 		"trade_date": trade_date.duplicate(true),
 		"day_index": int(article_record.get("day_index", -1)),
 		"meeting_id": str(article_record.get("meeting_id", "")),
 		"venue_type": str(article_record.get("venue_type", "")),
 		"target_company_id": str(article_record.get("target_company_id", "")),
-		"chain_family": str(article_record.get("chain_family", ""))
+		"target_ticker": str(article_record.get("target_ticker", "")),
+		"chain_family": str(article_record.get("chain_family", "")),
+		"author_name": str(article_record.get("author_name", "")),
+		"author_role": str(article_record.get("author_role", "")),
+		"public_section_label": str(article_record.get("public_section_label", "")),
+		"public_status_label": str(article_record.get("public_status_label", "")),
+		"article_image_asset": str(article_record.get("article_image_asset", "")),
+		"image_slot": str(article_record.get("image_slot", ""))
 	}
 
 	var outlet_bucket: Dictionary = news_archive_index.get(outlet_id, {

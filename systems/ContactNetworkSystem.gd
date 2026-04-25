@@ -108,7 +108,7 @@ func build_recognition_snapshot(run_state) -> Dictionary:
 func discover_from_article(run_state, data_repository, article: Dictionary) -> Array:
 	var company_id: String = str(article.get("target_company_id", ""))
 	var sector_id: String = str(article.get("target_sector_id", ""))
-	return _discover_matching_contacts(
+	var discovered: Array = _discover_matching_contacts(
 		run_state,
 		data_repository,
 		company_id,
@@ -118,6 +118,18 @@ func discover_from_article(run_state, data_repository, article: Dictionary) -> A
 		str(article.get("id", "")),
 		true
 	)
+	var author_contact_id: String = str(article.get("author_contact_id", ""))
+	if not author_contact_id.is_empty():
+		discovered.append_array(_discover_article_author_contact(
+			run_state,
+			data_repository,
+			author_contact_id,
+			company_id,
+			sector_id,
+			str(article.get("category", "")),
+			str(article.get("id", ""))
+		))
+	return discovered
 
 
 func discover_for_company(run_state, data_repository, company_id: String) -> Array:
@@ -371,6 +383,45 @@ func _discover_matching_contacts(
 			break
 	run_state.set_network_discoveries(discoveries)
 	return discovered
+
+
+func _discover_article_author_contact(
+	run_state,
+	data_repository,
+	author_contact_id: String,
+	company_id: String,
+	sector_id: String,
+	category: String,
+	source_id: String
+) -> Array:
+	var contact: Dictionary = _contact_definition(run_state, data_repository, author_contact_id)
+	if contact.is_empty() or str(contact.get("affiliation_type", "floater")) != "floater":
+		return []
+	var recognition: Dictionary = build_recognition_snapshot(run_state)
+	var contacts: Dictionary = run_state.get_network_contacts()
+	if bool(contacts.get(author_contact_id, {}).get("met", false)):
+		return []
+	if int(recognition.get("score", 0)) < int(contact.get("recognition_required", 0)):
+		return []
+	if _floater_discovery_score(contact, company_id, sector_id, category, "news") < 0.0:
+		return []
+	var discoveries: Dictionary = run_state.get_network_discoveries()
+	var discovery: Dictionary = discoveries.get(author_contact_id, {})
+	var target_company_ids: Array = _contact_company_targets(discovery)
+	if not company_id.is_empty() and not target_company_ids.has(company_id):
+		target_company_ids.append(company_id)
+	discovery["contact_id"] = author_contact_id
+	discovery["discovered"] = true
+	discovery["source_type"] = "news"
+	discovery["source_id"] = source_id
+	discovery["target_company_id"] = company_id if not company_id.is_empty() else str(discovery.get("target_company_id", ""))
+	discovery["target_company_ids"] = target_company_ids
+	discovery["target_sector_id"] = sector_id
+	discovery["lead_score"] = max(int(discovery.get("lead_score", 0)), 96)
+	discovery["day_index"] = run_state.day_index
+	discoveries[author_contact_id] = discovery
+	run_state.set_network_discoveries(discoveries)
+	return [_contact_row(contact, contacts.get(author_contact_id, {}), discovery, recognition)]
 
 
 func _discovery_limit_for_source(source_type: String, run_state) -> int:

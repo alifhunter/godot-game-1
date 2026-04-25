@@ -35,6 +35,63 @@
       "summary": "The earliest outlet, but still written in plain language."
     }
   ],
+  "authors": [
+    {
+      "id": "ayu_larasati",
+      "display_name": "Ayu Larasati",
+      "role": "Market Reporter",
+      "outlet_ids": ["gorengan_daily"],
+      "specialties": ["market_wrap", "rumor", "social_post", "company"],
+      "sector_ids": ["consumer", "transport", "property", "noncyclical"],
+      "contact_id": "journalist_ayu_larasati",
+      "portrait_asset": "",
+      "lead_frequency": 0.35
+    },
+    {
+      "id": "raka_pradipta",
+      "display_name": "Raka Pradipta",
+      "role": "Corporate Desk",
+      "outlet_ids": ["waduh_finance"],
+      "specialties": ["corporate_action", "corporate_meeting", "management", "mna"],
+      "sector_ids": ["finance", "basicindustry", "infra", "energy"],
+      "contact_id": "journalist_raka_pradipta",
+      "portrait_asset": "",
+      "lead_frequency": 0.45
+    },
+    {
+      "id": "maya_wicaksono",
+      "display_name": "Maya Wicaksono",
+      "role": "Senior Markets Writer",
+      "outlet_ids": ["harian_investor"],
+      "specialties": ["earnings", "sector_rotation", "policy_post", "macro_shock", "market_wrap"],
+      "sector_ids": ["finance", "consumer", "industrial", "health", "tech"],
+      "contact_id": "journalist_maya_wicaksono",
+      "portrait_asset": "",
+      "lead_frequency": 0.3
+    },
+    {
+      "id": "dian_permatasari",
+      "display_name": "Dian Permatasari",
+      "role": "Boardroom Columnist",
+      "outlet_ids": ["ordal_news"],
+      "specialties": ["corporate_action", "rumor", "company_arc", "management"],
+      "sector_ids": ["finance", "property", "energy", "basicindustry", "infra"],
+      "contact_id": "journalist_dian_permatasari",
+      "portrait_asset": "",
+      "lead_frequency": 0.55
+    },
+    {
+      "id": "andika_flow_column",
+      "display_name": "Andika Wahyudi",
+      "role": "Flow Columnist",
+      "outlet_ids": ["gorengan_daily", "waduh_finance"],
+      "specialties": ["market_wrap", "sector_rotation", "rumor"],
+      "sector_ids": ["finance", "consumer", "industrial"],
+      "contact_id": "andika_brokerage_sales",
+      "portrait_asset": "",
+      "lead_frequency": 0.2
+    }
+  ],
   "progress_labels": {
     "early": "Desk note",
     "developing": "Developing",

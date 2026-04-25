@@ -387,6 +387,10 @@ func _run_scenario(
 	var news_window: Control = game_root.find_child("NewsWindow", true, false) as Control
 	var news_article_list: ItemList = game_root.find_child("NewsArticleList", true, false) as ItemList
 	var news_outlet_buttons: HBoxContainer = game_root.find_child("NewsOutletButtons", true, false) as HBoxContainer
+	var news_article_cards: VBoxContainer = game_root.find_child("NewsArticleCards", true, false) as VBoxContainer
+	var news_detail_byline_label: Label = game_root.find_child("NewsDetailBylineLabel", true, false) as Label
+	var news_detail_chips_label: Label = game_root.find_child("NewsDetailChipsLabel", true, false) as Label
+	var news_detail_hero_frame: PanelContainer = game_root.find_child("NewsDetailHeroFrame", true, false) as PanelContainer
 	var social_window: Control = game_root.find_child("SocialWindow", true, false) as Control
 	var social_feed_cards: VBoxContainer = game_root.find_child("SocialFeedCards", true, false) as VBoxContainer
 	var network_window: Control = game_root.find_child("NetworkWindow", true, false) as Control
@@ -1294,14 +1298,83 @@ func _run_scenario(
 		game_root.get_desktop_app_window_title("news") != "News Browser" or
 		news_article_list == null or
 		news_outlet_buttons == null or
+		news_article_cards == null or
+		news_detail_byline_label == null or
+		news_detail_chips_label == null or
+		news_detail_hero_frame == null or
 		news_outlet_buttons.get_child_count() < 4 or
-		news_article_list.item_count <= 0
+		news_article_list.item_count <= 0 or
+		news_article_cards.get_child_count() <= 0
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the News icon to open the event-driven news desk with outlet buttons and populated stories."
+			"message": "Smoke test expected the News icon to open the newspaper-style News app with outlet buttons, story cards, byline, and image frame."
+		}
+
+	var news_article_summary: Dictionary = news_article_list.get_item_metadata(0)
+	var news_article_id: String = str(news_article_summary.get("id", ""))
+	var news_article_record: Dictionary = GameManager.get_news_archive_article(news_article_id)
+	if (
+		news_article_record.is_empty() or
+		str(news_article_record.get("author_name", "")).is_empty() or
+		str(news_article_record.get("author_role", "")).is_empty() or
+		str(news_article_record.get("public_section_label", "")).is_empty() or
+		str(news_article_record.get("public_status_label", "")).is_empty() or
+		str(news_article_record.get("image_slot", "")).is_empty() or
+		news_detail_byline_label.text.find("By ") == -1 or
+		news_detail_chips_label.text.is_empty()
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected News articles to preserve author, public label, and asset-slot metadata in the archive and detail view."
+		}
+
+	var forbidden_news_terms: Array = ["source_chain_id", "chain_family", "meeting_id", "venue_type", "progress_label", "tone"]
+	var news_detail_meta_label: Label = game_root.find_child("NewsDetailMetaLabel", true, false) as Label
+	var news_detail_body: RichTextLabel = game_root.find_child("NewsDetailBody", true, false) as RichTextLabel
+	var visible_news_text: String = "%s\n%s\n%s\n%s" % [
+		str(news_detail_meta_label.text if news_detail_meta_label != null else ""),
+		str(news_detail_byline_label.text),
+		str(news_detail_chips_label.text),
+		str(news_detail_body.text if news_detail_body != null else "")
+	]
+	for forbidden_term in forbidden_news_terms:
+		if visible_news_text.find(str(forbidden_term)) != -1:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected News detail UI to hide raw system metadata like %s." % str(forbidden_term)
+			}
+
+	var saved_news_archive_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(saved_news_archive_state)
+	var reloaded_news_article: Dictionary = GameManager.get_news_archive_article(news_article_id)
+	if str(reloaded_news_article.get("author_name", "")) != str(news_article_record.get("author_name", "")) or str(reloaded_news_article.get("image_slot", "")) != str(news_article_record.get("image_slot", "")):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected archived News author and asset-slot fields to survive save/load."
+		}
+
+	var source_leads: Array = GameManager.get_network_snapshot().get("discoveries", [])
+	var has_news_source_lead: bool = false
+	for lead_value in source_leads:
+		var lead: Dictionary = lead_value
+		if str(lead.get("source_type", "")) == "news" and str(lead.get("source_id", "")) == news_article_id:
+			has_news_source_lead = true
+			break
+	if not has_news_source_lead:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected at least one News article to surface a valid Network source lead."
 		}
 
 	game_root.close_desktop_app("news")

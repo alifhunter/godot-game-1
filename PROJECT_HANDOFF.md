@@ -445,25 +445,38 @@ Read this file first in the next session.
   - `headline`
   - `deck`
   - `body`
+  - `author_id`, `author_name`, `author_role`, and sometimes `author_contact_id`
+  - public player-facing labels: `public_section_label` and `public_status_label`
+  - asset-ready placeholders: `outlet_logo_asset`, `author_portrait_asset`, `article_image_asset`, and `image_slot`
   - `progress_label`
   - `category`
   - `tone`
   - `source_chain_id`, `chain_family`, `meeting_id`, `venue_type`, and `meeting_label` when the article came from the corporate-action layer
   - target company / ticker / sector / person metadata when available
 - Current rendering behavior:
-  - left side shows outlet buttons plus an article list
+  - News now uses a newspaper-style surface rather than a raw event-list feel
+  - top area has a masthead, logo placeholder frame, trade-date line, and publication/outlet buttons
+  - left side shows archive filters plus article cards
+  - article cards include a reserved image frame, public section/status, headline, deck, byline, and a `Read Story` action
   - the article list can browse archived articles by outlet, year, and month
-  - right side shows article detail
+  - a hidden legacy `NewsArticleList` is still populated for compatibility/smoke plumbing, but the visible player surface is the card stack
+  - right side shows article detail as a newspaper story with reserved hero frame, headline, deck, byline, date, public chips, and body
   - full article bodies are loaded when an archived article is selected, rather than dumping all history into the list at once
   - article timing/availability depends on event progress and outlet intel level
   - market-wrap style articles provide fallback content so the feed is not empty on quieter sessions
-  - article details can now surface a contextual Network `Meet` button when the article metadata points at a discoverable contact and the player meets recognition requirements
-  - article details can now also surface a contextual `Open Meeting` button when the article metadata points at a linked corporate venue
+  - player-facing system/debug metadata is intentionally hidden; raw `progress_label`, `tone`, `chain_family`, `meeting_id`, and similar fields stay internal
+  - article details can now surface a contextual `Meet Source` button when the article or byline metadata points at a discoverable contact and the player meets recognition requirements
+  - article details can now also surface natural meeting actions such as `Attend RUPSLB`, `View Meeting Notice`, or `Read Call Notice` when the article metadata points at a linked corporate venue
     - `rights_issue` `rupslb` links now open the fullscreen staged meeting overlay
     - other linked meeting types still open the simpler shared meeting modal
+- News authors:
+  - `data/news/news_feed_data.json` now has an `authors` block with dedicated journalists plus a rare existing-contact columnist mapping
+  - new journalist contacts live in `data/network/contact_network_data.json` as normal `floater` contacts
+  - `NewsFeedSystem.gd` deterministically assigns authors by outlet, category/event family, sector fit, and article id
+  - author leads are subtle: bylines always render as normal article bylines, and only some articles expose a meetable source via the existing Network discovery flow
 - Current content source is editable:
   - `data/news/news_feed_data.json`
-  - this stores outlet labels, summary/tagline copy, progress labels, headline prefixes, sentence pools, hidden-phase templates, and first-pass `corporate_action_*` headline/driver pools
+  - this stores outlet labels, author metadata, summary/tagline copy, progress labels, headline prefixes, sentence pools, hidden-phase templates, and first-pass `corporate_action_*` headline/driver pools
 - Current generator implementation:
   - `systems/NewsFeedSystem.gd`
   - wired through `GameManager.get_news_snapshot()`
@@ -682,9 +695,9 @@ Read this file first in the next session.
   - insider templates use `affiliation_role` values of `ceo`, `cfo`, or `commissioner`
   - generated company insiders are created from insider templates at run generation and are not fixed global executives
   - current data validation summary from the latest implementation pass:
-    - total authored contacts: `233`
+    - total authored contacts: `237`
     - duplicate ids: `0`
-    - floaters: `221`
+    - floaters: `225`
     - insider templates: `12`
 - Current implementation:
   - `systems/ContactNetworkSystem.gd`
@@ -1398,6 +1411,7 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the News newspaper / author-network pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the stock-list tab switching latency pass on `2026-04-25`
   - `git diff --check`, Godot project-load check, and full Godot headless smoke passed after the watchlist/company-list latency pass on `2026-04-25`
   - `git diff --check` passed during the stabilization checkpoint on `2026-04-25`
@@ -1586,14 +1600,15 @@ Read this file first in the next session.
   - look for broad refresh callers where the selected stock did not actually change
   - keep using the new `[perf][ui]` / `[perf][save]` debug logs while tuning
   - if latency feels acceptable after this pass, resume the planned content push with `News` first
-- Deepen the real `News` content now that the first event-driven desk exists:
+- Deepen the real `News` content now that the newspaper shell and author/network bridge exist:
   - tune the new `News Content` upgrade pacing if playtesting says access opens too slowly/quickly
   - keep the same outlet names:
     - `Gorengan Daily`
     - `Waduh Finance`
     - `Harian Investor`
     - `Ordal News`
-  - expand/edit outlet voice, headline prefixes, and sentence pools in `data/news/news_feed_data.json`
+  - expand/edit outlet voice, author voice, headline prefixes, and sentence pools in `data/news/news_feed_data.json`
+  - later replace the reserved logo / portrait / article image frames with real bitmap assets using the existing asset fields
   - decide whether more event families need dedicated templates beyond the current first-pass pools
 - Deepen the real `Twooter` content now that the first simplified social feed exists:
   - tune the new `Twooter Content` upgrade pacing if playtesting says access opens too slowly/quickly

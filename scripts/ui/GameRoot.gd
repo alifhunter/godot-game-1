@@ -249,6 +249,14 @@ var desktop_drag_offset: Vector2 = Vector2.ZERO
 @onready var news_detail_body: RichTextLabel = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailBody
 @onready var news_detail_hint_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailHintLabel
 @onready var news_meet_contact_button: Button = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsMeetContactButton
+var news_masthead_logo_frame: PanelContainer = null
+var news_masthead_date_label: Label = null
+var news_article_cards_scroll: ScrollContainer = null
+var news_article_cards: VBoxContainer = null
+var news_detail_hero_frame: PanelContainer = null
+var news_detail_byline_label: Label = null
+var news_detail_chips_label: Label = null
+var news_detail_action_row: HBoxContainer = null
 var news_open_meeting_button: Button = null
 @onready var social_window: MarginContainer = $SocialWindow
 @onready var social_window_body: PanelContainer = $SocialWindow/SocialWindowBody
@@ -492,6 +500,7 @@ func _ready() -> void:
 	_ensure_console_overlay()
 	_ensure_academy_ui()
 	_ensure_corporate_action_ui()
+	_ensure_news_newspaper_ui()
 	_ensure_figma_desktop_ui()
 	_ensure_desktop_window_layer()
 	_initialize_desktop_app_windows()
@@ -965,7 +974,7 @@ func _refresh_desktop() -> void:
 
 func _refresh_news() -> void:
 	current_news_snapshot = {}
-	news_title_label.text = "News"
+	news_title_label.text = "The Market Papers"
 	if not RunState.has_active_run():
 		selected_news_outlet_id = ""
 		selected_news_archive_year = 0
@@ -976,6 +985,9 @@ func _refresh_news() -> void:
 		news_intel_status_label.text = ""
 		news_feed_summary_label.text = ""
 		news_article_list.clear()
+		_rebuild_news_article_cards([])
+		if news_masthead_date_label != null:
+			news_masthead_date_label.text = ""
 		_show_news_article({})
 		_apply_font_overrides_to_subtree(news_outlet_buttons)
 		return
@@ -988,7 +1000,10 @@ func _refresh_news() -> void:
 		selected_news_archive_month = 0
 		selected_news_article_id = ""
 
-	news_intel_status_label.text = "Intel %d active" % int(current_news_snapshot.get("intel_level", 1))
+	var current_trade_date: Dictionary = GameManager.get_current_trade_date()
+	if news_masthead_date_label != null:
+		news_masthead_date_label.text = GameManager.format_trade_date(current_trade_date)
+	news_intel_status_label.text = ""
 	_rebuild_news_outlet_buttons(outlets)
 	_refresh_news_archive_filters()
 	_refresh_news_article_list()
@@ -1074,7 +1089,8 @@ func _refresh_news_archive_month_options() -> void:
 func _refresh_news_article_list() -> void:
 	news_article_list.clear()
 	var articles: Array = _current_news_archive_article_summaries()
-	news_feed_summary_label.text = ""
+	var feed: Dictionary = current_news_snapshot.get("feeds", {}).get(selected_news_outlet_id, {})
+	news_feed_summary_label.text = str(feed.get("tagline", ""))
 
 	for article_value in articles:
 		var article: Dictionary = article_value
@@ -1082,6 +1098,8 @@ func _refresh_news_article_list() -> void:
 		news_article_list.add_item(line)
 		var item_index: int = news_article_list.item_count - 1
 		news_article_list.set_item_tooltip(item_index, "")
+		news_article_list.set_item_metadata(item_index, article.duplicate(true))
+	_rebuild_news_article_cards(articles)
 
 	var selected_index: int = -1
 	for article_index in range(articles.size()):
@@ -1093,6 +1111,7 @@ func _refresh_news_article_list() -> void:
 		selected_index = 0
 		selected_news_article_id = str(articles[0].get("id", ""))
 
+	_rebuild_news_article_cards(articles)
 	if selected_index >= 0:
 		news_article_list.select(selected_index)
 		_show_news_article(GameManager.get_news_archive_article(selected_news_article_id))
@@ -3507,8 +3526,14 @@ func _show_news_article(article: Dictionary) -> void:
 		news_detail_headline_label.text = "No article selected."
 		news_detail_deck_label.text = ""
 		news_detail_meta_label.text = ""
+		if news_detail_byline_label != null:
+			news_detail_byline_label.text = ""
+		if news_detail_chips_label != null:
+			news_detail_chips_label.text = ""
+		_set_news_detail_hero_slot("")
 		news_detail_body.text = "Choose a story from the list."
 		news_detail_hint_label.text = ""
+		news_detail_hint_label.visible = false
 		news_meet_contact_button.visible = false
 		news_meet_contact_button.disabled = true
 		news_meet_contact_button.set_meta("contact_id", "")
@@ -3525,28 +3550,35 @@ func _show_news_article(article: Dictionary) -> void:
 
 	news_detail_outlet_label.text = str(article.get("outlet_label", "News"))
 	news_detail_headline_label.text = str(article.get("headline", ""))
-	news_detail_deck_label.text = ""
+	news_detail_deck_label.text = str(article.get("deck", ""))
 	news_detail_meta_label.text = trade_date_text
+	if news_detail_byline_label != null:
+		news_detail_byline_label.text = _news_byline_text(article)
+	if news_detail_chips_label != null:
+		news_detail_chips_label.text = _news_article_chip_line(article)
+	_set_news_detail_hero_slot(str(article.get("image_slot", "brief")))
 	news_detail_body.text = str(article.get("body", ""))
 	GameManager.discover_network_contacts_from_article(article)
 	var contact: Dictionary = _contact_for_context("news", str(article.get("id", "")), str(article.get("target_company_id", "")))
 	news_meet_contact_button.visible = not contact.is_empty()
 	news_meet_contact_button.disabled = contact.is_empty() or not bool(contact.get("can_meet", false))
-	news_meet_contact_button.text = "Meet %s" % str(contact.get("display_name", "Contact")) if not contact.is_empty() else "Meet Contact"
+	news_meet_contact_button.text = "Meet Source" if not contact.is_empty() else "Meet Source"
 	news_meet_contact_button.set_meta("contact_id", str(contact.get("id", "")))
 	if news_open_meeting_button != null:
 		var meeting_id: String = str(article.get("meeting_id", ""))
 		news_open_meeting_button.visible = not meeting_id.is_empty()
 		news_open_meeting_button.disabled = meeting_id.is_empty()
-		news_open_meeting_button.text = "Open %s" % str(article.get("venue_type", "Meeting")).replace("_", " ").capitalize() if not meeting_id.is_empty() else "Open Meeting"
+		news_open_meeting_button.text = _news_meeting_action_label(article) if not meeting_id.is_empty() else "View Notice"
 		news_open_meeting_button.set_meta("meeting_id", meeting_id)
 	if not contact.is_empty():
-		news_detail_hint_label.text = "Network lead: %s, %s." % [
+		news_detail_hint_label.text = "Source lead: %s, %s." % [
 			str(contact.get("display_name", "")),
 			str(contact.get("role", ""))
 		]
+		news_detail_hint_label.visible = true
 	else:
 		news_detail_hint_label.text = ""
+		news_detail_hint_label.visible = false
 
 
 func _current_news_archive_article_summaries() -> Array:
@@ -3561,6 +3593,180 @@ func _current_news_archive_article_summaries() -> Array:
 
 func _build_news_article_list_line(article: Dictionary) -> String:
 	return str(article.get("headline", ""))
+
+
+func _news_byline_text(article: Dictionary) -> String:
+	var author_name: String = str(article.get("author_name", "News Desk"))
+	var author_role: String = str(article.get("author_role", "Reporter"))
+	if author_name.is_empty():
+		author_name = "News Desk"
+	if author_role.is_empty():
+		return "By %s" % author_name
+	return "By %s, %s" % [author_name, author_role]
+
+
+func _news_article_status_line(article: Dictionary) -> String:
+	var parts: Array = []
+	var section_label: String = str(article.get("public_section_label", ""))
+	var status_label: String = str(article.get("public_status_label", ""))
+	if not section_label.is_empty():
+		parts.append(section_label)
+	if not status_label.is_empty():
+		parts.append(status_label)
+	var trade_date: Dictionary = article.get("trade_date", {})
+	if not trade_date.is_empty():
+		parts.append(GameManager.format_trade_date(trade_date))
+	return "  |  ".join(parts)
+
+
+func _news_article_chip_line(article: Dictionary) -> String:
+	var chips: Array = []
+	var section_label: String = str(article.get("public_section_label", ""))
+	var status_label: String = str(article.get("public_status_label", ""))
+	var target_ticker: String = str(article.get("target_ticker", ""))
+	if not section_label.is_empty():
+		chips.append(section_label)
+	if not status_label.is_empty():
+		chips.append(status_label)
+	if not target_ticker.is_empty():
+		chips.append(target_ticker)
+	return "  /  ".join(chips)
+
+
+func _news_image_slot_label(image_slot: String) -> String:
+	match image_slot:
+		"boardroom":
+			return "BOARDROOM IMAGE"
+		"market":
+			return "MARKET PHOTO"
+		"company":
+			return "COMPANY IMAGE"
+		_:
+			return "ARTICLE IMAGE"
+
+
+func _set_news_detail_hero_slot(image_slot: String) -> void:
+	if news_detail_hero_frame == null:
+		return
+	var placeholder: Label = news_detail_hero_frame.get_node_or_null("NewsDetailHeroPlaceholder") as Label
+	if placeholder != null:
+		placeholder.text = _news_image_slot_label(image_slot)
+
+
+func _news_meeting_action_label(article: Dictionary) -> String:
+	var venue_type: String = str(article.get("venue_type", ""))
+	if venue_type == "rupslb":
+		return "Attend RUPSLB"
+	if venue_type == "annual_rups":
+		return "View Meeting Notice"
+	if venue_type == "earnings_call":
+		return "Read Call Notice"
+	return "View Meeting Notice"
+
+
+func _rebuild_news_article_cards(articles: Array) -> void:
+	if news_article_cards == null:
+		return
+	for child in news_article_cards.get_children():
+		news_article_cards.remove_child(child)
+		child.queue_free()
+	if articles.is_empty():
+		var empty_label := Label.new()
+		empty_label.name = "NewsArticleCardsEmptyLabel"
+		empty_label.text = "No stories filed for this issue yet."
+		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		news_article_cards.add_child(empty_label)
+		return
+	for article_value in articles:
+		var article: Dictionary = article_value
+		news_article_cards.add_child(_build_news_article_card(article))
+	if news_article_cards_scroll != null and news_article_cards_scroll.get_v_scroll_bar() != null:
+		news_article_cards_scroll.get_v_scroll_bar().value = 0.0
+
+
+func _build_news_article_card(article: Dictionary) -> PanelContainer:
+	var article_id: String = str(article.get("id", ""))
+	var card := PanelContainer.new()
+	card.name = "NewsArticleCard_%s" % article_id.replace("|", "_")
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_news_article_card(card, article_id == selected_news_article_id)
+
+	var margin := MarginContainer.new()
+	margin.name = "NewsArticleCardMargin"
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	card.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.name = "NewsArticleCardVBox"
+	vbox.add_theme_constant_override("separation", 6)
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.add_child(vbox)
+
+	var image_frame := PanelContainer.new()
+	image_frame.name = "NewsArticleCardImageFrame"
+	image_frame.custom_minimum_size = Vector2(0, 64)
+	image_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_news_asset_frame(image_frame)
+	vbox.add_child(image_frame)
+	var image_label := Label.new()
+	image_label.name = "NewsArticleCardImagePlaceholder"
+	image_label.text = _news_image_slot_label(str(article.get("image_slot", "brief")))
+	image_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	image_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	image_frame.add_child(image_label)
+
+	var status_label := Label.new()
+	status_label.name = "NewsArticleCardStatusLabel"
+	status_label.text = _news_article_status_line(article)
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_set_label_tone(status_label, Color(0.454902, 0.337255, 0.141176, 1))
+	vbox.add_child(status_label)
+
+	var headline_label := Label.new()
+	headline_label.name = "NewsArticleCardHeadlineLabel"
+	headline_label.text = str(article.get("headline", ""))
+	headline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_apply_font_override_to_control(headline_label, 15, _get_app_font())
+	vbox.add_child(headline_label)
+
+	var deck_label := Label.new()
+	deck_label.name = "NewsArticleCardDeckLabel"
+	deck_label.text = str(article.get("deck", ""))
+	deck_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_set_label_tone(deck_label, Color(0.352941, 0.309804, 0.203922, 1))
+	vbox.add_child(deck_label)
+
+	var byline_label := Label.new()
+	byline_label.name = "NewsArticleCardBylineLabel"
+	byline_label.text = _news_byline_text(article)
+	byline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_set_label_tone(byline_label, Color(0.454902, 0.337255, 0.141176, 1))
+	vbox.add_child(byline_label)
+
+	var read_button := Button.new()
+	read_button.name = "NewsArticleCardReadButton"
+	read_button.text = "Read Story"
+	read_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	read_button.pressed.connect(_on_news_article_card_pressed.bind(article_id))
+	_style_button(read_button, Color(0.866667, 0.807843, 0.635294, 1), Color(0.709804, 0.607843, 0.345098, 1), COLOR_WINDOW_TEXT, 0)
+	vbox.add_child(read_button)
+	return card
+
+
+func _on_news_article_card_pressed(article_id: String) -> void:
+	if article_id.is_empty():
+		return
+	selected_news_article_id = article_id
+	var articles: Array = _current_news_archive_article_summaries()
+	for article_index in range(articles.size()):
+		if str(articles[article_index].get("id", "")) == article_id:
+			news_article_list.select(article_index)
+			break
+	_rebuild_news_article_cards(articles)
+	_show_news_article(GameManager.get_news_archive_article(selected_news_article_id))
 
 
 func _ticker_for_company(company_id: String) -> String:
@@ -5214,6 +5420,7 @@ func _on_news_article_selected(index: int) -> void:
 	if index < 0 or index >= articles.size():
 		return
 	selected_news_article_id = str(articles[index].get("id", ""))
+	_rebuild_news_article_cards(articles)
 	_show_news_article(GameManager.get_news_archive_article(selected_news_article_id))
 
 
@@ -5993,6 +6200,89 @@ func _ensure_corporate_action_ui() -> void:
 	corporate_meeting_close_button.text = "Close"
 	corporate_meeting_close_button.pressed.connect(_close_corporate_meeting_modal)
 	button_row.add_child(corporate_meeting_close_button)
+
+
+func _ensure_news_newspaper_ui() -> void:
+	news_title_label.text = "The Market Papers"
+	news_intel_status_label.visible = false
+	news_feed_summary_label.visible = true
+	news_feed_summary_label.text = "Select a publication and story."
+	news_detail_deck_label.visible = true
+	news_detail_hint_label.visible = false
+	news_article_list.visible = false
+	news_article_list.custom_minimum_size = Vector2.ZERO
+
+	var header_row: HBoxContainer = news_title_label.get_parent()
+	if news_masthead_logo_frame == null:
+		news_masthead_logo_frame = PanelContainer.new()
+		news_masthead_logo_frame.name = "NewsMastheadLogoFrame"
+		news_masthead_logo_frame.custom_minimum_size = Vector2(74, 44)
+		header_row.add_child(news_masthead_logo_frame)
+		header_row.move_child(news_masthead_logo_frame, 0)
+		var logo_label := Label.new()
+		logo_label.name = "NewsMastheadLogoPlaceholder"
+		logo_label.text = "LOGO"
+		logo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		logo_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		news_masthead_logo_frame.add_child(logo_label)
+	if news_masthead_date_label == null:
+		news_masthead_date_label = Label.new()
+		news_masthead_date_label.name = "NewsMastheadDateLabel"
+		news_masthead_date_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		news_masthead_date_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		header_row.add_child(news_masthead_date_label)
+
+	var feed_vbox: VBoxContainer = news_article_list.get_parent()
+	if news_article_cards_scroll == null:
+		news_article_cards_scroll = ScrollContainer.new()
+		news_article_cards_scroll.name = "NewsArticleCardsScroll"
+		news_article_cards_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		news_article_cards_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		news_article_cards_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		feed_vbox.add_child(news_article_cards_scroll)
+		feed_vbox.move_child(news_article_cards_scroll, feed_vbox.get_children().find(news_article_list))
+		news_article_cards = VBoxContainer.new()
+		news_article_cards.name = "NewsArticleCards"
+		news_article_cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		news_article_cards.add_theme_constant_override("separation", 10)
+		news_article_cards_scroll.add_child(news_article_cards)
+
+	var detail_vbox: VBoxContainer = news_detail_headline_label.get_parent()
+	if news_detail_hero_frame == null:
+		news_detail_hero_frame = PanelContainer.new()
+		news_detail_hero_frame.name = "NewsDetailHeroFrame"
+		news_detail_hero_frame.custom_minimum_size = Vector2(0, 136)
+		news_detail_hero_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		detail_vbox.add_child(news_detail_hero_frame)
+		detail_vbox.move_child(news_detail_hero_frame, detail_vbox.get_children().find(news_detail_headline_label))
+		var hero_label := Label.new()
+		hero_label.name = "NewsDetailHeroPlaceholder"
+		hero_label.text = "IMAGE SLOT"
+		hero_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hero_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		news_detail_hero_frame.add_child(hero_label)
+	if news_detail_byline_label == null:
+		news_detail_byline_label = Label.new()
+		news_detail_byline_label.name = "NewsDetailBylineLabel"
+		news_detail_byline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		detail_vbox.add_child(news_detail_byline_label)
+		detail_vbox.move_child(news_detail_byline_label, detail_vbox.get_children().find(news_detail_meta_label))
+	if news_detail_chips_label == null:
+		news_detail_chips_label = Label.new()
+		news_detail_chips_label.name = "NewsDetailChipsLabel"
+		news_detail_chips_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		detail_vbox.add_child(news_detail_chips_label)
+		detail_vbox.move_child(news_detail_chips_label, detail_vbox.get_children().find(news_detail_body))
+	if news_detail_action_row == null:
+		news_detail_action_row = HBoxContainer.new()
+		news_detail_action_row.name = "NewsDetailActionRow"
+		news_detail_action_row.add_theme_constant_override("separation", 8)
+		detail_vbox.add_child(news_detail_action_row)
+		detail_vbox.move_child(news_detail_action_row, detail_vbox.get_children().find(news_meet_contact_button))
+	if news_meet_contact_button.get_parent() != news_detail_action_row:
+		news_meet_contact_button.reparent(news_detail_action_row)
+	if news_open_meeting_button != null and news_open_meeting_button.get_parent() != news_detail_action_row:
+		news_open_meeting_button.reparent(news_detail_action_row)
 
 
 func _populate_watchlist_picker() -> void:
@@ -7039,6 +7329,10 @@ func _apply_visual_theme() -> void:
 	_style_panel(news_window_body, COLOR_WINDOW_BG, 0)
 	_style_panel(news_feed_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
 	_style_panel(news_detail_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
+	if news_masthead_logo_frame != null:
+		_style_news_asset_frame(news_masthead_logo_frame)
+	if news_detail_hero_frame != null:
+		_style_news_asset_frame(news_detail_hero_frame)
 	_style_panel(social_window_body, Color(0.94902, 0.956863, 0.976471, 1), 0)
 	_style_panel(network_window_body, COLOR_WINDOW_BG, 0)
 	_style_panel(network_list_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
@@ -7155,6 +7449,12 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(news_detail_deck_label, COLOR_WINDOW_TEXT)
 	_set_label_tone(news_detail_meta_label, Color(0.352941, 0.309804, 0.203922, 1))
 	_set_label_tone(news_detail_hint_label, Color(0.352941, 0.309804, 0.203922, 1))
+	if news_masthead_date_label != null:
+		_set_label_tone(news_masthead_date_label, Color(0.352941, 0.309804, 0.203922, 1))
+	if news_detail_byline_label != null:
+		_set_label_tone(news_detail_byline_label, Color(0.454902, 0.337255, 0.141176, 1))
+	if news_detail_chips_label != null:
+		_set_label_tone(news_detail_chips_label, Color(0.454902, 0.337255, 0.141176, 1))
 	if corporate_meeting_title_label != null:
 		_set_label_tone(corporate_meeting_title_label, COLOR_WINDOW_TEXT)
 	if corporate_meeting_meta_label != null:
@@ -7506,6 +7806,30 @@ func _style_light_option_button(option_button: OptionButton) -> void:
 	popup.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
 	popup.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
 	popup.add_theme_color_override("font_disabled_color", Color(0.541176, 0.494118, 0.396078, 1))
+
+
+func _style_news_asset_frame(panel: PanelContainer) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.894118, 0.870588, 0.745098, 1)
+	style.border_color = Color(0.572549, 0.482353, 0.309804, 0.85)
+	style.set_border_width_all(1)
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 0
+	style.corner_radius_bottom_right = 0
+	style.corner_radius_bottom_left = 0
+	panel.add_theme_stylebox_override("panel", style)
+
+
+func _style_news_article_card(card: PanelContainer, is_selected: bool) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.984314, 0.964706, 0.882353, 1) if is_selected else Color(0.960784, 0.941176, 0.839216, 1)
+	style.border_color = Color(0.47451, 0.384314, 0.227451, 1) if is_selected else Color(0.658824, 0.588235, 0.427451, 0.75)
+	style.set_border_width_all(2 if is_selected else 1)
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 0
+	style.corner_radius_bottom_right = 0
+	style.corner_radius_bottom_left = 0
+	card.add_theme_stylebox_override("panel", style)
 
 
 func _style_news_outlet_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:

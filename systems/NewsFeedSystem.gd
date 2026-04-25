@@ -371,6 +371,10 @@ func _build_article_record(
 		headline = str(source_data.get("headline", context.get("focus_label", "Market note")))
 	if deck.is_empty():
 		deck = str(context.get("detail_blend", context.get("driver_phrase", "")))
+	var author: Dictionary = _author_for_article(feed_data, outlet, source_data, context, article_id)
+	var public_status_label: String = _public_status_label(feed_data, progress_key, stage_key, source_data)
+	var public_section_label: String = _public_section_label(source_data, context)
+	var image_slot: String = _image_slot_for_article(source_data, context, stage_key)
 
 	return {
 		"id": article_id,
@@ -393,6 +397,16 @@ func _build_article_record(
 		"chain_family": str(source_data.get("chain_family", "")),
 		"meeting_id": str(source_data.get("meeting_id", "")),
 		"venue_type": str(source_data.get("venue_type", "")),
+		"author_id": str(author.get("id", "")),
+		"author_name": str(author.get("display_name", "")),
+		"author_role": str(author.get("role", "")),
+		"author_contact_id": str(author.get("contact_id", "")) if bool(author.get("author_lead_available", false)) else "",
+		"public_section_label": public_section_label,
+		"public_status_label": public_status_label,
+		"outlet_logo_asset": str(outlet.get("logo_asset", "")),
+		"author_portrait_asset": str(author.get("portrait_asset", "")),
+		"article_image_asset": str(source_data.get("article_image_asset", "")),
+		"image_slot": image_slot,
 		"priority": priority
 	}
 
@@ -624,6 +638,89 @@ func _pick_watch_phrase(feed_data: Dictionary, stage_key: String, seed_key: Stri
 	if pool.is_empty():
 		pool = watch_phrases.get("recap", [])
 	return str(_pick_from_pool(pool, seed_key))
+
+
+func _author_for_article(feed_data: Dictionary, outlet: Dictionary, source_data: Dictionary, context: Dictionary, article_id: String) -> Dictionary:
+	var outlet_id: String = str(outlet.get("id", ""))
+	var category: String = str(source_data.get("category", ""))
+	var event_family: String = str(source_data.get("event_family", ""))
+	var sector_id: String = str(context.get("target_sector_id", ""))
+	var candidates: Array = []
+	for author_value in feed_data.get("authors", []):
+		var author: Dictionary = author_value
+		var outlet_ids: Array = author.get("outlet_ids", [])
+		if not outlet_ids.is_empty() and not (outlet_id in outlet_ids):
+			continue
+		var score: float = 10.0
+		if category in author.get("specialties", []):
+			score += 40.0
+		if event_family in author.get("specialties", []):
+			score += 30.0
+		if sector_id in author.get("sector_ids", []):
+			score += 20.0
+		score += float(abs(hash("%s|%s" % [str(author.get("id", "")), article_id])) % 1000) / 1000.0
+		candidates.append({"author": author, "score": score})
+	if candidates.is_empty():
+		return {
+			"id": "desk_%s" % outlet_id,
+			"display_name": str(outlet.get("label", "News Desk")),
+			"role": "News Desk",
+			"contact_id": "",
+			"portrait_asset": "",
+			"author_lead_available": false
+		}
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("score", 0.0)) > float(b.get("score", 0.0))
+	)
+	var picked: Dictionary = candidates[0].get("author", {}).duplicate(true)
+	var lead_frequency: float = clamp(float(picked.get("lead_frequency", 0.0)), 0.0, 1.0)
+	var lead_roll: float = float(abs(hash("%s|lead" % article_id)) % 1000) / 1000.0
+	picked["author_lead_available"] = not str(picked.get("contact_id", "")).is_empty() and lead_roll <= lead_frequency
+	return picked
+
+
+func _public_status_label(feed_data: Dictionary, progress_key: String, stage_key: String, source_data: Dictionary) -> String:
+	var category: String = str(source_data.get("category", ""))
+	if category.contains("denial"):
+		return "Company Response"
+	if category.contains("resolution") or category.contains("execution"):
+		return "Confirmed"
+	if stage_key == "whisper":
+		return "Market Talk"
+	if stage_key == "confirmation":
+		return "Developing"
+	if stage_key == "analysis":
+		return "Follow-up"
+	return str(feed_data.get("progress_labels", {}).get(progress_key, "Brief"))
+
+
+func _public_section_label(source_data: Dictionary, context: Dictionary) -> String:
+	var category: String = str(source_data.get("category", ""))
+	var event_family: String = str(source_data.get("event_family", ""))
+	if category.begins_with("corporate_action") or category == "corporate_meeting":
+		return "Boardroom"
+	if event_family == "market" or category == "market_wrap":
+		return "Market Brief"
+	if category == "earnings":
+		return "Earnings"
+	if category == "sector_rotation":
+		return "Sector Watch"
+	if category == "management":
+		return "Management"
+	if not str(context.get("sector_name", "")).is_empty() and str(context.get("scope", "")) == "sector":
+		return str(context.get("sector_name", "Sector Watch"))
+	return "Companies"
+
+
+func _image_slot_for_article(source_data: Dictionary, context: Dictionary, stage_key: String) -> String:
+	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("corporate_action") or category == "corporate_meeting":
+		return "boardroom"
+	if stage_key == "market_wrap" or str(context.get("scope", "")) == "market":
+		return "market"
+	if not str(context.get("target_company_id", "")).is_empty():
+		return "company"
+	return "brief"
 
 
 func _market_entry_for_day(market_history_lookup: Dictionary, latest_market_entry: Dictionary, day_index: int) -> Dictionary:
