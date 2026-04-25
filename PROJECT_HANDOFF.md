@@ -1379,8 +1379,12 @@ Read this file first in the next session.
   - create `user://quick_smoke.flag` before running the same smoke scene
   - in Windows terms, the flag path is `C:\Users\Alif\AppData\Roaming\Godot\app_userdata\The Daytrader Game\quick_smoke.flag`
   - the test deletes the flag as soon as it starts, so quick mode is one-shot
+  - alternatively pass `-- --smoke-quick` after the scene path to force quick mode without touching `user://quick_smoke.flag`
+  - pass `-- --smoke-local-io` to make smoke writes use project-local `res://logs` files instead of the live `user://` save/result files
   - quick mode runs menu flow plus a shorter Normal scenario and skips the long Grind/event-arc regression pass
   - recent quick smoke runtimes have been roughly `47-134s`, compared with roughly `9-10 minutes` for the current full smoke
+- Recommended headless quick smoke command when the Godot editor is open:
+  - `& "C:\Users\Alif\Desktop\Godot_v4.6.1-stable_win64_console.exe" --headless --path . --log-file logs\smoke-headless.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`
 - Handy quick smoke PowerShell:
   - `$userDir = Join-Path $env:APPDATA 'Godot\app_userdata\The Daytrader Game'`
   - `New-Item -ItemType Directory -Force -Path $userDir | Out-Null`
@@ -1474,6 +1478,8 @@ Read this file first in the next session.
   - Network snapshots expose recent activity `journal` rows, and the Network window renders them in a compact `Journal` list
   - Network list-column height budgets were tightened after the Journal pass so Contacts, Requests, and Journal fit in the desktop window without cutting off the bottom; Journal rows render as compact one-line summaries with truncation
   - Network Contacts / Requests labels and light-list item states now force the dark newspaper text palette, including hover/selected/disabled states, so the light Network panels no longer show unreadable white text
+  - Network detail content now sits inside `NetworkDetailScroll`, keeping contact actions fixed at the bottom while long reads/history/source-check copy can scroll
+  - Network Journal rows are grouped into `Tips`, `Requests`, `Referrals`, and `Source Checks`; selecting a row shows a compact `NetworkJournalDetailLabel` with day/status/contact/ticker/detail context
   - accepted Network requests complete when the player owns at least `1` lot by the due day
   - accepted Network requests miss when the player does not own the requested target by the due day
   - connected-floater referral requires relationship, spends `10` relationship on success, creates a referred insider lead, and the referred insider can be met/persisted
@@ -1504,6 +1510,8 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after the Network detail-scroll / grouped-Journal detail pass on `2026-04-25`
+  - quick-smoke hang was resolved by fixing a `SmokeTest.gd` parse error and adding project-local smoke IO for headless runs; `SaveManager` still uses `user://daytrader_save.json` in normal gameplay
   - `git diff --check` and direct GameRoot headless launch passed after the Network Contacts / Requests readability fix on `2026-04-25`
   - `git diff --check`, Godot project-load check, and direct GameRoot headless launch passed after the Network Journal cutoff fix on `2026-04-25`; quick smoke was attempted but timed out before `SmokeTest` started, so latest successful quick smoke remains the earlier Network Journal pass
   - `git diff --check`, Godot project-load check, and quick Godot headless smoke passed after the Network Journal update on `2026-04-25`

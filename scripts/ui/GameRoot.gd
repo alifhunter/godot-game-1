@@ -189,6 +189,7 @@ var selected_news_archive_year: int = 0
 var selected_news_archive_month: int = 0
 var selected_news_article_id: String = ""
 var selected_network_contact_id: String = ""
+var selected_network_journal_id: String = ""
 var selected_academy_category_id: String = "technical"
 var selected_academy_section_id: String = "intro"
 var academy_quiz_option_buttons: Dictionary = {}
@@ -297,6 +298,9 @@ var network_crosscheck_label: Label = null
 var network_source_check_button: Button = null
 var network_journal_label: Label = null
 var network_journal_list: ItemList = null
+var network_detail_scroll: ScrollContainer = null
+var network_detail_scroll_content: VBoxContainer = null
+var network_journal_detail_label: Label = null
 var academy_window: MarginContainer = null
 var academy_window_body: PanelContainer = null
 var academy_title_label: Label = null
@@ -558,6 +562,8 @@ func _ready() -> void:
 	news_archive_year_option.item_selected.connect(_on_news_archive_year_selected)
 	news_archive_month_option.item_selected.connect(_on_news_archive_month_selected)
 	network_contacts_list.item_selected.connect(_on_network_contact_selected)
+	if network_journal_list != null:
+		network_journal_list.item_selected.connect(_on_network_journal_selected)
 	if academy_section_list != null:
 		academy_section_list.item_selected.connect(_on_academy_section_selected)
 	if academy_mark_read_button != null:
@@ -3280,24 +3286,112 @@ func _rebuild_network_journal_list() -> void:
 		return
 	network_journal_list.clear()
 	var rows: Array = current_network_snapshot.get("journal", [])
+	var selected_item_index: int = -1
+	var grouped_rows: Dictionary = {
+		"tips": [],
+		"requests": [],
+		"referrals": [],
+		"source_checks": []
+	}
 	for row_value in rows:
 		if typeof(row_value) != TYPE_DICTIONARY:
 			continue
 		var row: Dictionary = row_value
-		var line: String = "D%d  |  %s" % [
-			int(row.get("day_index", 0)),
-			str(row.get("title", "Network note"))
-		]
-		var detail: String = str(row.get("detail", ""))
-		if not detail.is_empty():
-			line += "  -  %s" % detail
-		if line.length() > 150:
-			line = line.substr(0, 147) + "..."
-		network_journal_list.add_item(line)
-		network_journal_list.set_item_metadata(network_journal_list.item_count - 1, row.duplicate(true))
+		var group_key: String = _network_journal_group_key(str(row.get("type", "")))
+		if not grouped_rows.has(group_key):
+			group_key = "tips"
+		var rows_for_group: Array = grouped_rows.get(group_key, [])
+		rows_for_group.append(row)
+		grouped_rows[group_key] = rows_for_group
+	for group_key in ["tips", "requests", "referrals", "source_checks"]:
+		var group_rows: Array = grouped_rows.get(group_key, [])
+		if group_rows.is_empty():
+			continue
+		network_journal_list.add_item(_network_journal_group_label(group_key))
+		network_journal_list.set_item_disabled(network_journal_list.item_count - 1, true)
+		for row_value in group_rows:
+			var row: Dictionary = row_value
+			var line: String = "D%d  |  %s" % [
+				int(row.get("day_index", 0)),
+				str(row.get("title", "Network note"))
+			]
+			var detail: String = str(row.get("detail", ""))
+			if not detail.is_empty():
+				line += "  -  %s" % detail
+			if line.length() > 150:
+				line = line.substr(0, 147) + "..."
+			network_journal_list.add_item(line)
+			var item_index: int = network_journal_list.item_count - 1
+			network_journal_list.set_item_metadata(item_index, row.duplicate(true))
+			if str(row.get("id", "")) == selected_network_journal_id:
+				selected_item_index = item_index
 	if rows.is_empty():
 		network_journal_list.add_item("No journal entries yet.")
 		network_journal_list.set_item_disabled(0, true)
+		selected_network_journal_id = ""
+		_show_network_journal_detail({})
+	elif selected_item_index >= 0:
+		network_journal_list.select(selected_item_index)
+		var selected_metadata: Variant = network_journal_list.get_item_metadata(selected_item_index)
+		if typeof(selected_metadata) == TYPE_DICTIONARY:
+			_show_network_journal_detail(selected_metadata)
+	elif not selected_network_journal_id.is_empty():
+		selected_network_journal_id = ""
+		_show_network_journal_detail({})
+
+
+func _network_journal_group_key(row_type: String) -> String:
+	match row_type:
+		"request":
+			return "requests"
+		"referral":
+			return "referrals"
+		"source_check":
+			return "source_checks"
+		_:
+			return "tips"
+
+
+func _network_journal_group_label(group_key: String) -> String:
+	match group_key:
+		"requests":
+			return "Requests"
+		"referrals":
+			return "Referrals"
+		"source_checks":
+			return "Source Checks"
+		_:
+			return "Tips"
+
+
+func _show_network_journal_detail(row: Dictionary) -> void:
+	if network_journal_detail_label == null:
+		return
+	if row.is_empty():
+		network_journal_detail_label.visible = false
+		network_journal_detail_label.text = ""
+		return
+	var row_type: String = str(row.get("type", "tip"))
+	var lines: Array = [
+		"Journal: %s" % str(row.get("title", "Network note")),
+		"Day %d  |  %s  |  %s" % [
+			int(row.get("day_index", 0)),
+			_network_journal_group_label(_network_journal_group_key(row_type)),
+			str(row.get("status", "recorded")).capitalize()
+		]
+	]
+	var contact_name: String = str(row.get("contact_name", ""))
+	if not contact_name.is_empty():
+		lines.append("Contact: %s" % contact_name)
+	var ticker: String = str(row.get("target_ticker", ""))
+	if not ticker.is_empty():
+		lines.append("Ticker: %s" % ticker)
+	var detail: String = str(row.get("detail", ""))
+	if not detail.is_empty():
+		lines.append("")
+		lines.append(detail)
+	network_journal_detail_label.text = "\n".join(lines)
+	network_journal_detail_label.visible = true
 
 
 func _show_network_contact(contact: Dictionary) -> void:
@@ -5681,7 +5775,22 @@ func _on_network_contact_selected(index: int) -> void:
 		return
 	var contact: Dictionary = metadata
 	selected_network_contact_id = str(contact.get("id", ""))
+	selected_network_journal_id = ""
+	if network_journal_list != null:
+		network_journal_list.deselect_all()
+	_show_network_journal_detail({})
 	_show_network_contact(contact)
+
+
+func _on_network_journal_selected(index: int) -> void:
+	if network_journal_list == null:
+		return
+	var metadata: Variant = network_journal_list.get_item_metadata(index)
+	if typeof(metadata) != TYPE_DICTIONARY:
+		return
+	var row: Dictionary = metadata
+	selected_network_journal_id = str(row.get("id", ""))
+	_show_network_journal_detail(row)
 
 
 func _on_network_meet_pressed() -> void:
@@ -6401,6 +6510,17 @@ func _ensure_corporate_action_ui() -> void:
 		var network_action_row: HBoxContainer = network_meet_button.get_parent()
 		network_action_row.add_child(network_source_check_button)
 
+	if network_journal_detail_label == null:
+		network_journal_detail_label = Label.new()
+		network_journal_detail_label.name = "NetworkJournalDetailLabel"
+		network_journal_detail_label.visible = false
+		network_journal_detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		network_journal_detail_label.text = ""
+		var network_detail_vbox: VBoxContainer = network_contact_body_label.get_parent()
+		var action_row: HBoxContainer = network_meet_button.get_parent()
+		network_detail_vbox.add_child(network_journal_detail_label)
+		network_detail_vbox.move_child(network_journal_detail_label, network_detail_vbox.get_children().find(action_row))
+
 	if network_journal_list == null:
 		var network_list_vbox: VBoxContainer = network_requests_list.get_parent()
 		network_contacts_list.custom_minimum_size = Vector2(0, 160)
@@ -6418,6 +6538,8 @@ func _ensure_corporate_action_ui() -> void:
 		network_journal_list.tooltip_text = "Recent tips, requests, referrals, follow-ups, and source checks."
 		network_journal_list.allow_reselect = true
 		network_list_vbox.add_child(network_journal_list)
+
+	_ensure_network_detail_scroll()
 
 	if rupslb_meeting_overlay == null:
 		rupslb_meeting_overlay = RUPSLB_MEETING_OVERLAY_SCRIPT.new()
@@ -6518,6 +6640,40 @@ func _ensure_corporate_action_ui() -> void:
 	corporate_meeting_close_button.text = "Close"
 	corporate_meeting_close_button.pressed.connect(_close_corporate_meeting_modal)
 	button_row.add_child(corporate_meeting_close_button)
+
+
+func _ensure_network_detail_scroll() -> void:
+	if network_detail_scroll != null:
+		return
+	var detail_vbox: VBoxContainer = network_contact_body_label.get_parent()
+	var action_row: HBoxContainer = network_meet_button.get_parent()
+	if detail_vbox == null or action_row == null or action_row.get_parent() != detail_vbox:
+		return
+
+	network_detail_scroll = ScrollContainer.new()
+	network_detail_scroll.name = "NetworkDetailScroll"
+	network_detail_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	network_detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	network_detail_scroll.follow_focus = true
+	detail_vbox.add_child(network_detail_scroll)
+	detail_vbox.move_child(network_detail_scroll, 0)
+
+	network_detail_scroll_content = VBoxContainer.new()
+	network_detail_scroll_content.name = "NetworkDetailScrollContent"
+	network_detail_scroll_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	network_detail_scroll_content.add_theme_constant_override("separation", 10)
+	network_detail_scroll.add_child(network_detail_scroll_content)
+
+	var children_to_move: Array = []
+	for child_value in detail_vbox.get_children():
+		var child: Node = child_value
+		if child == network_detail_scroll or child == action_row:
+			continue
+		children_to_move.append(child)
+	for child_value in children_to_move:
+		var child: Node = child_value
+		detail_vbox.remove_child(child)
+		network_detail_scroll_content.add_child(child)
 
 
 func _ensure_news_newspaper_ui() -> void:
@@ -7808,6 +7964,8 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(network_contact_body_label, COLOR_WINDOW_TEXT)
 	if network_journal_label != null:
 		_set_label_tone(network_journal_label, COLOR_WINDOW_TEXT)
+	if network_journal_detail_label != null:
+		_set_label_tone(network_journal_detail_label, Color(0.352941, 0.309804, 0.203922, 1))
 	if network_corporate_action_label != null:
 		_set_label_tone(network_corporate_action_label, Color(0.352941, 0.309804, 0.203922, 1))
 	if network_tip_history_label != null:

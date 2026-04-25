@@ -21,6 +21,8 @@ const NORMAL_FULL_DAYS := 10
 const NORMAL_QUICK_DAYS := 3
 const GRIND_FULL_DAYS := 30
 const QUICK_SMOKE_FLAG_PATH := "user://quick_smoke.flag"
+const SMOKE_QUICK_ARG := "--smoke-quick"
+const SMOKE_LOCAL_IO_ARG := "--smoke-local-io"
 const NEWS_FEED_SYSTEM_SCRIPT = preload("res://systems/NewsFeedSystem.gd")
 const TWOOTER_FEED_SYSTEM_SCRIPT = preload("res://systems/TwooterFeedSystem.gd")
 
@@ -431,6 +433,8 @@ func _validate_enriched_social_generation() -> String:
 
 
 func _get_smoke_mode() -> String:
+	if OS.get_cmdline_user_args().has(SMOKE_QUICK_ARG):
+		return SMOKE_MODE_QUICK
 	if FileAccess.file_exists(QUICK_SMOKE_FLAG_PATH):
 		var user_dir := DirAccess.open("user://")
 		if user_dir != null:
@@ -440,7 +444,11 @@ func _get_smoke_mode() -> String:
 
 
 func _write_smoke_result(smoke_line: String) -> void:
-	var result_file = FileAccess.open("user://smoke_test_result.txt", FileAccess.WRITE)
+	var result_path: String = "user://smoke_test_result.txt"
+	if OS.get_cmdline_user_args().has(SMOKE_LOCAL_IO_ARG):
+		result_path = "res://logs/smoke_test_result.txt"
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://logs"))
+	var result_file = FileAccess.open(result_path, FileAccess.WRITE)
 	if result_file != null:
 		result_file.store_string(smoke_line)
 
@@ -733,6 +741,7 @@ func _run_scenario(
 	var social_feed_cards: VBoxContainer = game_root.find_child("SocialFeedCards", true, false) as VBoxContainer
 	var network_window: Control = game_root.find_child("NetworkWindow", true, false) as Control
 	var network_contacts_list: ItemList = game_root.find_child("NetworkContactsList", true, false) as ItemList
+	var network_requests_list: ItemList = game_root.find_child("NetworkRequestsList", true, false) as ItemList
 	var academy_window: Control = game_root.find_child("AcademyWindow", true, false) as Control
 	var academy_category_tabs: HBoxContainer = game_root.find_child("AcademyCategoryTabs", true, false) as HBoxContainer
 	var academy_section_list: ItemList = game_root.find_child("AcademySectionList", true, false) as ItemList
@@ -2980,6 +2989,38 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected Network UI to render the recent activity journal list."
+		}
+	var network_detail_scroll: ScrollContainer = game_root.find_child("NetworkDetailScroll", true, false) as ScrollContainer
+	var network_journal_detail_label: Label = game_root.find_child("NetworkJournalDetailLabel", true, false) as Label
+	if network_detail_scroll == null or network_journal_detail_label == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Network detail content to be scrollable and include a Journal detail label."
+		}
+	var selectable_journal_index: int = -1
+	for journal_item_index in range(network_journal_list.item_count):
+		var journal_metadata: Variant = network_journal_list.get_item_metadata(journal_item_index)
+		if typeof(journal_metadata) == TYPE_DICTIONARY:
+			selectable_journal_index = journal_item_index
+			break
+	if selectable_journal_index < 0:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected grouped Network Journal rows to keep selectable item metadata below the section headers."
+		}
+	network_journal_list.select(selectable_journal_index)
+	game_root.call("_on_network_journal_selected", selectable_journal_index)
+	await get_tree().process_frame
+	if not network_journal_detail_label.visible or network_journal_detail_label.text.find("Journal:") < 0:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected selecting a Network Journal row to show a readable Journal detail panel."
 		}
 	if (
 		network_contacts_list.custom_minimum_size.y > 180.0 or

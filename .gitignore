@@ -5,6 +5,7 @@
 /android/
 /build/
 /exports/
+/logs/
 
 # Editor cruft
 .DS_Store

@@ -1,6 +1,8 @@
 extends Node
 
 const SAVE_PATH := "user://daytrader_save.json"
+const SMOKE_SAVE_PATH := "res://logs/daytrader_smoke_save.json"
+const SMOKE_LOCAL_IO_ARG := "--smoke-local-io"
 const DEFAULT_REQUEST_DELAY_SECONDS := 0.35
 const PERF_LOG_PREFIX := "[perf][save]"
 
@@ -11,7 +13,7 @@ func _ready() -> void:
 
 
 func has_save() -> bool:
-	return FileAccess.file_exists(SAVE_PATH)
+	return FileAccess.file_exists(_save_path())
 
 
 func request_save(reason: String, delay_seconds: float = DEFAULT_REQUEST_DELAY_SECONDS) -> void:
@@ -43,7 +45,8 @@ func has_pending_save() -> bool:
 
 func save_run(run_state: Dictionary) -> bool:
 	var started_at_usec: int = Time.get_ticks_usec()
-	var save_file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	_ensure_save_parent_dir()
+	var save_file = FileAccess.open(_save_path(), FileAccess.WRITE)
 	if save_file == null:
 		push_error("Unable to open save file for writing.")
 		return false
@@ -57,7 +60,7 @@ func load_run() -> Dictionary:
 	if not has_save():
 		return {}
 
-	var raw_text = FileAccess.get_file_as_string(SAVE_PATH)
+	var raw_text = FileAccess.get_file_as_string(_save_path())
 	var parsed = JSON.parse_string(raw_text)
 	if typeof(parsed) != TYPE_DICTIONARY:
 		push_error("Save file is malformed.")
@@ -71,7 +74,22 @@ func delete_save() -> void:
 		_save_timer.stop()
 	_pending_reason = ""
 	if has_save():
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(_save_path()))
+
+
+func _save_path() -> String:
+	if OS.get_cmdline_user_args().has(SMOKE_LOCAL_IO_ARG):
+		return SMOKE_SAVE_PATH
+	return SAVE_PATH
+
+
+func _ensure_save_parent_dir() -> void:
+	var save_path: String = _save_path()
+	if not save_path.begins_with("res://"):
+		return
+	var absolute_path: String = ProjectSettings.globalize_path(save_path)
+	var parent_path: String = absolute_path.get_base_dir()
+	DirAccess.make_dir_recursive_absolute(parent_path)
 
 
 func _ensure_save_timer() -> void:
