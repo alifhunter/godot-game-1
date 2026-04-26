@@ -1071,19 +1071,21 @@ func get_report_calendar_month(year_value: int, month_value: int) -> Dictionary:
 	var reports: Array = []
 	if quarterly_report_calendar.is_empty() and not company_order.is_empty():
 		quarterly_report_calendar = _build_quarterly_report_calendar()
+	var month_prefix: String = "%04d-%02d-" % [year_value, month_value]
 	for date_key_value in quarterly_report_calendar.keys():
 		var date_key: String = str(date_key_value)
-		var date_info: Dictionary = _date_from_key(date_key)
-		if int(date_info.get("year", 0)) != year_value or int(date_info.get("month", 0)) != month_value:
+		if not date_key.begins_with(month_prefix):
 			continue
-		var day_value: int = int(date_info.get("day", 0))
+		var day_value: int = int(date_key.substr(8, 2))
 		var day_key: String = str(day_value)
 		if not reports_by_day.has(day_key):
 			reports_by_day[day_key] = []
-		for report_value in _reports_for_date_key(date_key):
+		var date_reports: Array = quarterly_report_calendar.get(date_key, [])
+		for report_value in date_reports:
 			var report: Dictionary = report_value
-			reports_by_day[day_key].append(report.duplicate(true))
-			reports.append(report.duplicate(true))
+			var report_row: Dictionary = report.duplicate(true)
+			reports_by_day[day_key].append(report_row)
+			reports.append(report_row)
 	reports.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if int(a.get("trading_day_number", 0)) == int(b.get("trading_day_number", 0)):
 			return str(a.get("ticker", "")) < str(b.get("ticker", ""))
@@ -1108,7 +1110,8 @@ func get_upcoming_quarterly_reports(limit: int = 8) -> Array:
 		var date_key: String = str(date_key_value)
 		if date_key < current_key:
 			continue
-		for report_value in _reports_for_date_key(date_key):
+		var date_reports: Array = quarterly_report_calendar.get(date_key, [])
+		for report_value in date_reports:
 			var report: Dictionary = report_value
 			reports.append(report.duplicate(true))
 			if limit > 0 and reports.size() >= limit:

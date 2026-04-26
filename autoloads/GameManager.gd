@@ -744,8 +744,6 @@ func get_dashboard_event_snapshot(force_refresh: bool = false) -> Dictionary:
 func get_corporate_meeting_snapshot(day_index: int = -1) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"day_index": 0, "trade_date": {}, "today_rows": [], "upcoming_rows": [], "all_rows": []}
-	if day_index <= 0 or day_index == RunState.day_index:
-		return get_dashboard_event_snapshot().get("corporate_meeting_snapshot", {}).duplicate(true)
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	return corporate_action_system.get_meeting_snapshot(RunState, day_index)
 
@@ -765,7 +763,7 @@ func _rebuild_dashboard_event_snapshot_cache(cache_key: String = "", log_phase_d
 	)
 	_log_advance_perf_elapsed(log_phase_details, "build_dashboard_event_cache:report_calendar", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
-	var meeting_snapshot: Dictionary = corporate_action_system.get_meeting_snapshot(RunState)
+	var meeting_snapshot: Dictionary = corporate_action_system.get_dashboard_meeting_snapshot(RunState, -1, 12)
 	_log_advance_perf_elapsed(log_phase_details, "build_dashboard_event_cache:meeting_snapshot", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	var upcoming_report_rows: Array = RunState.get_upcoming_quarterly_reports(DASHBOARD_REPORT_ROW_CACHE_LIMIT)

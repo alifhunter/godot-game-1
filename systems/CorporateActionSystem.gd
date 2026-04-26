@@ -168,6 +168,62 @@ func get_meeting_snapshot(run_state, day_index: int = -1) -> Dictionary:
 	}
 
 
+func get_dashboard_meeting_snapshot(run_state, day_index: int = -1, limit: int = 12) -> Dictionary:
+	var current_day_index: int = day_index if day_index > 0 else run_state.day_index
+	var current_trade_date: Dictionary = run_state.get_current_trade_date()
+	var calendar: Dictionary = run_state.get_corporate_meeting_calendar()
+	var attended_meetings: Dictionary = run_state.get_attended_meetings()
+	var holding_share_cache: Dictionary = {}
+	var today_rows: Array = []
+	var upcoming_rows: Array = []
+	var date_keys: Array = calendar.keys()
+	date_keys.sort()
+	for date_key_value in date_keys:
+		var date_key: String = str(date_key_value)
+		var meetings: Array = calendar.get(date_key, [])
+		if meetings.is_empty():
+			continue
+		var first_meeting: Dictionary = meetings[0]
+		var date_trading_day_number: int = int(first_meeting.get("trading_day_number", 0))
+		if date_trading_day_number < current_day_index:
+			continue
+		var needs_today_rows: bool = date_trading_day_number == current_day_index + 1
+		var needs_upcoming_rows: bool = limit <= 0 or upcoming_rows.size() < limit
+		if not needs_today_rows and not needs_upcoming_rows:
+			break
+		var date_rows: Array = []
+		for meeting_value in meetings:
+			if typeof(meeting_value) != TYPE_DICTIONARY:
+				continue
+			var meeting: Dictionary = meeting_value
+			if not _meeting_is_player_visible(meeting):
+				continue
+			var trading_day_number: int = int(meeting.get("trading_day_number", 0))
+			if trading_day_number < current_day_index:
+				continue
+			var row: Dictionary = _meeting_row(meeting, run_state, attended_meetings, holding_share_cache)
+			if trading_day_number == current_day_index + 1:
+				today_rows.append(row)
+			date_rows.append(row)
+		date_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return str(a.get("company_name", "")) < str(b.get("company_name", ""))
+		)
+		for row_value in date_rows:
+			if limit > 0 and upcoming_rows.size() >= limit:
+				break
+			upcoming_rows.append(row_value)
+	today_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return str(a.get("company_name", "")) < str(b.get("company_name", ""))
+	)
+	return {
+		"day_index": current_day_index,
+		"trade_date": current_trade_date,
+		"today_rows": today_rows,
+		"upcoming_rows": upcoming_rows,
+		"all_rows": []
+	}
+
+
 func get_meeting_detail(run_state, meeting_id: String) -> Dictionary:
 	if meeting_id.is_empty():
 		return {}
@@ -1269,6 +1325,17 @@ func _ensure_annual_rups_meetings(run_state, catalog: Dictionary, calendar: Dict
 	var annual_config: Dictionary = catalog.get("annual_rups", {})
 	var start_year: int = int(annual_config.get("start_year", 2020))
 	var end_year: int = int(annual_config.get("end_year", 2030))
+	var existing_meeting_ids: Dictionary = {}
+	for meetings_value in calendar.values():
+		if typeof(meetings_value) != TYPE_ARRAY:
+			continue
+		var meetings: Array = meetings_value
+		for meeting_value in meetings:
+			if typeof(meeting_value) != TYPE_DICTIONARY:
+				continue
+			var meeting_id_value: String = str(meeting_value.get("id", ""))
+			if not meeting_id_value.is_empty():
+				existing_meeting_ids[meeting_id_value] = true
 	var changed: bool = false
 	for company_id_value in run_state.company_order:
 		var company_id: String = str(company_id_value)
@@ -1277,12 +1344,13 @@ func _ensure_annual_rups_meetings(run_state, catalog: Dictionary, calendar: Dict
 			continue
 		for year_value in range(start_year, end_year + 1):
 			var meeting_id: String = "annual_rups|%s|%d" % [company_id, year_value]
-			if not _meeting_by_id(calendar, meeting_id).is_empty():
+			if existing_meeting_ids.has(meeting_id):
 				continue
 			var meeting: Dictionary = _build_annual_rups_meeting(catalog, definition, company_id, year_value)
 			if meeting.is_empty():
 				continue
 			_add_meeting(calendar, meeting)
+			existing_meeting_ids[meeting_id] = true
 			changed = true
 	return changed
 
