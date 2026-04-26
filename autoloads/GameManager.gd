@@ -55,6 +55,7 @@ const LOAD_RUN_LOADING_STEPS := [
 	{"id": "load_launch", "label": "Opening trading desk"}
 ]
 const STARTUP_PERF_LOG_PREFIX := "[perf][startup]"
+const ADVANCE_PERF_LOG_PREFIX := "[perf][advance]"
 const DIFFICULTY_PRESETS := {
 	"chill": {
 		"id": "chill",
@@ -268,29 +269,67 @@ func simulate_opening_session(save_after: bool = false) -> Dictionary:
 func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool = true) -> Dictionary:
 	if not RunState.has_active_run():
 		return {}
+	var log_advance_perf: bool = _should_log_advance_perf(save_after, emit_runtime_signals)
+	var total_started_at_usec: int = Time.get_ticks_usec()
+	var phase_started_at_usec: int = total_started_at_usec
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	_log_advance_perf_elapsed(log_advance_perf, "ensure_corporate_actions", phase_started_at_usec)
 
 	if emit_runtime_signals:
+		phase_started_at_usec = Time.get_ticks_usec()
 		day_started.emit(RunState.day_index + 1)
+		_log_advance_perf_elapsed(log_advance_perf, "emit_day_started", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	var day_result: Dictionary = market_simulator.simulate_day(RunState, DataRepository, broker_flow_system, corporate_action_system)
+	_log_advance_perf_elapsed(log_advance_perf, "simulate_day", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	RunState.apply_day_result(day_result)
+	_log_advance_perf_elapsed(log_advance_perf, "apply_day_result", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	var network_results: Array = contact_network_system.process_due_requests(RunState, DataRepository)
+	_log_advance_perf_elapsed(log_advance_perf, "process_due_requests", phase_started_at_usec, " count=%d" % network_results.size())
+	phase_started_at_usec = Time.get_ticks_usec()
 	var network_tip_results: Array = contact_network_system.process_due_tip_memories(RunState, DataRepository)
+	_log_advance_perf_elapsed(log_advance_perf, "process_due_tip_memories", phase_started_at_usec, " count=%d" % network_tip_results.size())
 	if (not network_results.is_empty() or not network_tip_results.is_empty()) and emit_runtime_signals:
+		phase_started_at_usec = Time.get_ticks_usec()
 		network_changed.emit()
+		_log_advance_perf_elapsed(log_advance_perf, "emit_network_changed", phase_started_at_usec)
 	if emit_runtime_signals:
+		phase_started_at_usec = Time.get_ticks_usec()
 		broker_flow_generated.emit(RunState.day_index)
+		_log_advance_perf_elapsed(log_advance_perf, "emit_broker_flow_generated", phase_started_at_usec)
+		phase_started_at_usec = Time.get_ticks_usec()
 		price_formed.emit(RunState.day_index)
+		_log_advance_perf_elapsed(log_advance_perf, "emit_price_formed", phase_started_at_usec)
+		phase_started_at_usec = Time.get_ticks_usec()
 		daily_actions_changed.emit()
+		_log_advance_perf_elapsed(log_advance_perf, "emit_daily_actions_changed", phase_started_at_usec)
 
+	phase_started_at_usec = Time.get_ticks_usec()
 	var summary: Dictionary = summary_system.build_daily_summary(RunState, DataRepository)
+	_log_advance_perf_elapsed(log_advance_perf, "build_daily_summary", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	RunState.set_daily_summary(summary)
-	RunState.record_news_snapshot(_build_news_snapshot())
+	_log_advance_perf_elapsed(log_advance_perf, "set_daily_summary", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
+	var news_snapshot: Dictionary = _build_news_snapshot()
+	_log_advance_perf_elapsed(log_advance_perf, "build_news_snapshot", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
+	RunState.record_news_snapshot(news_snapshot)
+	_log_advance_perf_elapsed(log_advance_perf, "record_news_snapshot", phase_started_at_usec)
 	if save_after:
+		phase_started_at_usec = Time.get_ticks_usec()
 		_save_active_run_now("advance_day")
+		_log_advance_perf_elapsed(log_advance_perf, "save_active_run", phase_started_at_usec)
 	if emit_runtime_signals:
+		phase_started_at_usec = Time.get_ticks_usec()
 		summary_ready.emit(summary)
+		_log_advance_perf_elapsed(log_advance_perf, "emit_summary_ready", phase_started_at_usec)
+		phase_started_at_usec = Time.get_ticks_usec()
 		portfolio_changed.emit()
+		_log_advance_perf_elapsed(log_advance_perf, "emit_portfolio_changed", phase_started_at_usec)
+	_log_advance_perf_elapsed(log_advance_perf, "total", total_started_at_usec, " save_after=%s emit_runtime_signals=%s" % [str(save_after), str(emit_runtime_signals)])
 	return {
 		"day_result": day_result,
 		"summary": summary
@@ -1884,6 +1923,10 @@ func _should_log_startup_perf() -> bool:
 	return OS.is_debug_build()
 
 
+func _should_log_advance_perf(save_after: bool, emit_runtime_signals: bool) -> bool:
+	return OS.is_debug_build() and (save_after or emit_runtime_signals)
+
+
 func _log_startup_perf_elapsed(label: String, started_at_usec: int, extra: String = "") -> void:
 	if not _should_log_startup_perf():
 		return
@@ -1892,6 +1935,16 @@ func _log_startup_perf_elapsed(label: String, started_at_usec: int, extra: Strin
 		print("%s %s %.2fms" % [STARTUP_PERF_LOG_PREFIX, label, elapsed_msec])
 		return
 	print("%s %s %.2fms%s" % [STARTUP_PERF_LOG_PREFIX, label, elapsed_msec, extra])
+
+
+func _log_advance_perf_elapsed(enabled: bool, label: String, started_at_usec: int, extra: String = "") -> void:
+	if not enabled:
+		return
+	var elapsed_msec: float = max(float(Time.get_ticks_usec() - started_at_usec) / 1000.0, 0.0)
+	if extra.is_empty():
+		print("%s %s %.2fms" % [ADVANCE_PERF_LOG_PREFIX, label, elapsed_msec])
+		return
+	print("%s %s %.2fms%s" % [ADVANCE_PERF_LOG_PREFIX, label, elapsed_msec, extra])
 
 
 func _enter_game_scene() -> void:

@@ -774,43 +774,82 @@ func _refresh_order_ticket_toggle_state() -> void:
 
 func _refresh_all() -> void:
 	var started_at_usec: int = Time.get_ticks_usec()
+	var phase_started_at_usec: int = started_at_usec
+	var log_phase_details: bool = advance_day_processing
 	_invalidate_company_rows_cache()
 	_refresh_desktop()
+	_log_perf_phase(log_phase_details, "_refresh_all:desktop", phase_started_at_usec)
 	if not RunState.has_active_run():
 		status_message = "No active run. Return to menu to begin."
 		selected_company_id = ""
+		phase_started_at_usec = Time.get_ticks_usec()
 		_refresh_header()
+		_log_perf_phase(log_phase_details, "_refresh_all:header", phase_started_at_usec)
+		phase_started_at_usec = Time.get_ticks_usec()
 		_refresh_sidebar()
-		_refresh_open_desktop_apps()
+		_log_perf_phase(log_phase_details, "_refresh_all:sidebar", phase_started_at_usec)
+		phase_started_at_usec = Time.get_ticks_usec()
+		_refresh_open_desktop_apps(log_phase_details)
+		_log_perf_phase(log_phase_details, "_refresh_all:open_apps", phase_started_at_usec)
+		phase_started_at_usec = Time.get_ticks_usec()
 		_refresh_debug_overlay()
+		_log_perf_phase(log_phase_details, "_refresh_all:debug_overlay", phase_started_at_usec)
 		_log_perf_elapsed("_refresh_all", started_at_usec)
 		return
 
+	phase_started_at_usec = Time.get_ticks_usec()
 	_sync_selected_company_with_active_stock_list()
+	_log_perf_phase(log_phase_details, "_refresh_all:sync_selected_stock", phase_started_at_usec)
 
+	phase_started_at_usec = Time.get_ticks_usec()
 	_refresh_header()
+	_log_perf_phase(log_phase_details, "_refresh_all:header", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	_refresh_sidebar()
+	_log_perf_phase(log_phase_details, "_refresh_all:sidebar", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	_refresh_dashboard()
-	_refresh_open_desktop_apps()
+	_log_perf_phase(log_phase_details, "_refresh_all:dashboard", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
+	_refresh_open_desktop_apps(log_phase_details)
+	_log_perf_phase(log_phase_details, "_refresh_all:open_apps", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	_refresh_portfolio()
+	_log_perf_phase(log_phase_details, "_refresh_all:portfolio", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	_refresh_help()
+	_log_perf_phase(log_phase_details, "_refresh_all:help", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	_refresh_debug_overlay()
+	_log_perf_phase(log_phase_details, "_refresh_all:debug_overlay", phase_started_at_usec)
 	_log_perf_elapsed("_refresh_all", started_at_usec)
 
 
-func _refresh_open_desktop_apps() -> void:
+func _refresh_open_desktop_apps(log_phase_details: bool = false) -> void:
 	if _is_desktop_app_window_open(APP_ID_STOCK):
+		var stock_started_at_usec: int = Time.get_ticks_usec()
 		_refresh_markets()
+		_log_perf_phase(log_phase_details, "_refresh_open_apps:stock", stock_started_at_usec)
 	if _is_desktop_app_window_open(APP_ID_NEWS):
+		var news_started_at_usec: int = Time.get_ticks_usec()
 		_refresh_news()
+		_log_perf_phase(log_phase_details, "_refresh_open_apps:news", news_started_at_usec)
 	if _is_desktop_app_window_open(APP_ID_SOCIAL):
+		var social_started_at_usec: int = Time.get_ticks_usec()
 		_refresh_social()
+		_log_perf_phase(log_phase_details, "_refresh_open_apps:social", social_started_at_usec)
 	if _is_desktop_app_window_open(APP_ID_NETWORK):
+		var network_started_at_usec: int = Time.get_ticks_usec()
 		_refresh_network()
+		_log_perf_phase(log_phase_details, "_refresh_open_apps:network", network_started_at_usec)
 	if _is_desktop_app_window_open(APP_ID_ACADEMY):
+		var academy_started_at_usec: int = Time.get_ticks_usec()
 		_refresh_academy()
+		_log_perf_phase(log_phase_details, "_refresh_open_apps:academy", academy_started_at_usec)
 	if _is_desktop_app_window_open(APP_ID_UPGRADES):
+		var upgrades_started_at_usec: int = Time.get_ticks_usec()
 		_refresh_upgrades()
+		_log_perf_phase(log_phase_details, "_refresh_open_apps:upgrades", upgrades_started_at_usec)
 
 
 func _on_portfolio_changed() -> void:
@@ -929,6 +968,12 @@ func _log_perf_elapsed(label: String, started_at_usec: int) -> void:
 		return
 	var elapsed_ms: float = float(Time.get_ticks_usec() - started_at_usec) / 1000.0
 	print("%s %s %.2fms" % [PERF_LOG_PREFIX, label, elapsed_ms])
+
+
+func _log_perf_phase(enabled: bool, label: String, started_at_usec: int) -> void:
+	if not enabled:
+		return
+	_log_perf_elapsed(label, started_at_usec)
 
 
 func _apply_font_size_override_to_tree(node: Node, font_size: int, app_font: Font = null) -> void:
@@ -6931,6 +6976,7 @@ func _on_next_day_pressed() -> void:
 		return
 	if not RunState.has_active_run():
 		return
+	var started_at_usec: int = Time.get_ticks_usec()
 	advance_day_processing = true
 	pending_daily_recap_snapshot = {}
 	_set_advance_day_phase("Closing Market")
@@ -6944,9 +6990,11 @@ func _on_next_day_pressed() -> void:
 	GameManager.advance_day()
 	if advance_day_processing:
 		_finish_advance_day_processing()
+	_log_perf_elapsed("_on_next_day_pressed", started_at_usec)
 
 
 func _on_day_progressed(_day_index: int) -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
 	status_message = "Market closed."
 	_suppress_next_portfolio_refresh()
 	if _is_desktop_app_window_open(APP_ID_NEWS):
@@ -6954,14 +7002,23 @@ func _on_day_progressed(_day_index: int) -> void:
 		selected_news_archive_month = 0
 		selected_news_article_id = ""
 	_refresh_all()
+	_log_perf_elapsed("_on_day_progressed", started_at_usec)
 
 
 func _on_summary_ready(_summary: Dictionary) -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	var phase_started_at_usec: int = started_at_usec
 	_refresh_dashboard()
+	_log_perf_phase(advance_day_processing, "_on_summary_ready:dashboard", phase_started_at_usec)
 	if advance_day_processing:
+		phase_started_at_usec = Time.get_ticks_usec()
 		pending_daily_recap_snapshot = GameManager.get_daily_recap_snapshot()
+		_log_perf_phase(true, "_on_summary_ready:daily_recap_snapshot", phase_started_at_usec)
+		phase_started_at_usec = Time.get_ticks_usec()
 		_finish_advance_day_processing()
+		_log_perf_phase(true, "_on_summary_ready:finish_processing", phase_started_at_usec)
 		call_deferred("_show_daily_recap_if_pending")
+	_log_perf_elapsed("_on_summary_ready", started_at_usec)
 
 
 func _set_advance_day_phase(label: String) -> void:
