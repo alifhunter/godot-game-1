@@ -38,11 +38,11 @@ Read this file first in the next session.
     - `fc14108 Build Key Stats card dashboard`
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
-    - latest checkpoint message: `Add Dashboard sector cards`
+    - latest checkpoint message: `Polish Dashboard index recap`
   - after checkpoint commits, `git status --short` should be clean except ignored local `logs/` output
 
 ## Latest Session Snapshot
-- Most recent work focused on the core daily loop, Academy authoring pipeline, `Advance Day` visible-refresh performance, lightweight UI animation polish, Daily Activity cache cost, Dashboard cache cost, deferred save durability, shareholder-only corporate meeting attendance, the STOCKBOT `Key Stats` dashboard layout, removal of player-facing system helper copy, Network contact-list gating, Dashboard calendar event inspection, and Dashboard sector performance cards.
+- Most recent work focused on the core daily loop, Academy authoring pipeline, `Advance Day` visible-refresh performance, lightweight UI animation polish, Daily Activity cache cost, Dashboard cache cost, deferred save durability, shareholder-only corporate meeting attendance, the STOCKBOT `Key Stats` dashboard layout, removal of player-facing system helper copy, Network contact-list gating, Dashboard calendar event inspection, Dashboard sector performance cards, and the Dashboard `Index Gorengan` recap polish.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses, shows short processing phases on the desktop button, and now has a snappy press/phase pulse that resets to neutral after processing.
   - Daily Recap is now a custom `GameRoot.gd` overlay rather than a stock Godot dialog, so it can share the same dark-brown title-bar chrome as `News`, `Academy`, `Network`, and `Shop`.
@@ -73,6 +73,13 @@ Read this file first in the next session.
     - sector cards are colored green/red from equal-weight average daily sector move
     - each card shows stock count, green/red breadth, and loudest tape
     - clicking a sector card replaces the card grid with that sector's stock list and a `Sectors` back button
+  - Dashboard section titles now use `OpenSans-SemiBold.ttf`, `16px`, and white STOCKBOT text for `Index Gorengan`, `Movers`, `Calendar`, and `Sector Performance`.
+  - Dashboard top-left `Index Gorengan` is now a compact market recap card:
+    - large current index points with two decimals
+    - point delta plus percent move colored green/red
+    - a lightweight real sparkline built from all generated companies' recent price bars
+    - `All Market` shows only `Lot` and `Value`; unavailable `Regular` and `Freq` rows are intentionally omitted
+    - the old date/points-lot-value grid and helper hint are hidden
 - Performance status:
   - Desktop badge drawing uses cached counts in `RunState.desktop_app_badge_counts`.
   - `last_day_results` now saves a compact recap/event summary instead of duplicating the full per-company day result and corporate meeting payloads.
@@ -126,9 +133,9 @@ Read this file first in the next session.
 - Last successful verification in this session:
   - `git diff --check`
   - Godot project-load check
-  - quick smoke with `--log-file logs\smoke-dashboard-sector-cards.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
-  - the quick smoke now asserts the Key Stats dashboard cards, populated row groups, `Net Income` / `EPS` / `Revenue` pill switching, the separate `Financials` tab rows/navigation, hidden Financials/Broker helper labels, uniform Dashboard calendar grid shape, Dashboard calendar event popup/buttons, and Dashboard sector card-to-stock-list navigation
-  - latest normal-play perf scene from the previous UI animation pass printed `NORMAL_PLAY_PERF_OK`; it was not rerun for the fade-only recap/border tweak or Key Stats dashboard pass
+  - quick smoke with `--log-file logs\smoke-dashboard-index-recap.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
+  - the quick smoke now asserts the Key Stats dashboard cards, populated row groups, `Net Income` / `EPS` / `Revenue` pill switching, the separate `Financials` tab rows/navigation, hidden Financials/Broker helper labels, uniform Dashboard calendar grid shape, Dashboard calendar event popup/buttons, Dashboard sector card-to-stock-list navigation, Dashboard section title styling, the new `Index Gorengan` recap values, the real sparkline point count, and hidden old index grid/hint/date nodes
+  - normal-play perf scene with `--log-file logs\normal-play-dashboard-index-recap.log --scene res://scenes/tests/NormalPlayPerfTest.tscn -- --smoke-local-io`, which printed `NORMAL_PLAY_PERF_OK open_network=42.47ms advance_network_open_recap_ready=1208.58ms advance_network_open=1500.78ms advance_desktop_only_recap_ready=1133.38ms advance_desktop_only=1561.44ms open_stock=101.2ms advance_stock_open_recap_ready=1007.93ms advance_stock_open=1314.42ms open_news=195.54ms open_network_with_news=33.42ms advance_news_network_open_recap_ready=957.95ms advance_news_network_open=1455.98ms flush_pending_save=241.43ms local_save_bytes=2010467`
   - note: the quick smoke may print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` on Windows; treat it as non-blocking Godot/Windows certificate-store noise unless it appears before smoke output or affects network/API work
 
 ## Current Playable State

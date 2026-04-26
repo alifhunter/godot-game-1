@@ -2353,6 +2353,13 @@ func _run_scenario(
 	var dashboard_sector_detail: VBoxContainer = game_root.find_child("DashboardSectorDetail", true, false) as VBoxContainer
 	var dashboard_sector_stock_rows: VBoxContainer = game_root.find_child("DashboardSectorStockRows", true, false) as VBoxContainer
 	var dashboard_sector_back_button: Button = game_root.find_child("DashboardSectorBackButton", true, false) as Button
+	var dashboard_index_title_label: Label = game_root.get("dashboard_index_title_label") as Label
+	var dashboard_movers_title_label: Label = game_root.get("dashboard_movers_title_label") as Label
+	var dashboard_calendar_title_label: Label = game_root.get("dashboard_calendar_title_label") as Label
+	var dashboard_sector_title_label: Label = game_root.get("dashboard_placeholder_bottom_title_label") as Label
+	var dashboard_index_smoke_state: Dictionary = {}
+	if game_root.has_method("_get_dashboard_index_recap_smoke_state"):
+		dashboard_index_smoke_state = game_root.call("_get_dashboard_index_recap_smoke_state")
 	if (
 		dashboard_grid == null or
 		int(dashboard_grid.get_theme_constant("h_separation")) != 0 or
@@ -2377,6 +2384,68 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected Dashboard movers, sector cards, uniform calendar grid, zero dashboard separation, and hidden Analyzer tab."
+		}
+
+	var dashboard_title_labels := [
+		dashboard_index_title_label,
+		dashboard_movers_title_label,
+		dashboard_calendar_title_label,
+		dashboard_sector_title_label
+	]
+	for title_label_value in dashboard_title_labels:
+		var title_label: Label = title_label_value
+		var title_font: Font = title_label.get_theme_font("font") if title_label != null else null
+		if (
+			title_label == null or
+			title_label.get_theme_font_size("font_size") != 16 or
+			not _color_close(title_label.get_theme_color("font_color"), Color(0.92549, 0.941176, 0.956863, 1)) or
+			title_font == null or
+			not title_font.resource_path.ends_with("OpenSans-SemiBold.ttf")
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected Dashboard section titles to use 16px semibold white text."
+			}
+
+	var dashboard_index_points_text: String = str(dashboard_index_smoke_state.get("points_text", ""))
+	var dashboard_index_change_text: String = str(dashboard_index_smoke_state.get("change_text", ""))
+	var dashboard_index_lot_text: String = str(dashboard_index_smoke_state.get("lot_text", ""))
+	var dashboard_index_value_text: String = str(dashboard_index_smoke_state.get("value_text", ""))
+	var sparkline_point_count: int = int(dashboard_index_smoke_state.get("sparkline_point_count", 0))
+	if (
+		dashboard_index_smoke_state.is_empty() or
+		not bool(dashboard_index_smoke_state.get("recap_exists", false)) or
+		dashboard_index_points_text.strip_edges().is_empty() or
+		dashboard_index_points_text == "-" or
+		not dashboard_index_change_text.contains("(") or
+		int(dashboard_index_smoke_state.get("row_count", 0)) < 2 or
+		dashboard_index_lot_text == "-" or
+		dashboard_index_lot_text.is_empty() or
+		dashboard_index_value_text == "-" or
+		dashboard_index_value_text.is_empty() or
+		sparkline_point_count <= 1 or
+		bool(dashboard_index_smoke_state.get("old_date_visible", true)) or
+		bool(dashboard_index_smoke_state.get("old_grid_visible", true)) or
+		bool(dashboard_index_smoke_state.get("old_hint_visible", true))
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Dashboard index recap to render points, change, All Market values, a real sparkline, and hide the old index grid. Details: recap=%s points='%s' change='%s' rows=%d lot='%s' value='%s' sparkline=%d old_date_visible=%s old_grid_visible=%s old_hint_visible=%s" % [
+				str(bool(dashboard_index_smoke_state.get("recap_exists", false))),
+				dashboard_index_points_text,
+				dashboard_index_change_text,
+				int(dashboard_index_smoke_state.get("row_count", -1)),
+				dashboard_index_lot_text,
+				dashboard_index_value_text,
+				sparkline_point_count,
+				str(dashboard_index_smoke_state.get("old_date_visible", "<missing>")),
+				str(dashboard_index_smoke_state.get("old_grid_visible", "<missing>")),
+				str(dashboard_index_smoke_state.get("old_hint_visible", "<missing>"))
+			]
 		}
 
 	var dashboard_sector_card: Control = null
@@ -3999,6 +4068,15 @@ func _control_animation_settled(control: Control) -> bool:
 	if control == null:
 		return false
 	return control.scale.is_equal_approx(Vector2.ONE) and is_equal_approx(control.modulate.a, 1.0)
+
+
+func _color_close(actual: Color, expected: Color, tolerance: float = 0.01) -> bool:
+	return (
+		absf(actual.r - expected.r) <= tolerance and
+		absf(actual.g - expected.g) <= tolerance and
+		absf(actual.b - expected.b) <= tolerance and
+		absf(actual.a - expected.a) <= tolerance
+	)
 
 
 func _desktop_window_animation_settled(game_root: Node, window_name: String) -> bool:

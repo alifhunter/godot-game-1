@@ -153,6 +153,9 @@ const DASHBOARD_WEEKDAY_NAMES := ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun
 const DASHBOARD_MONTH_NAMES := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 const DASHBOARD_CALENDAR_CELL_HEIGHT := 46.0
 const DASHBOARD_CALENDAR_WEEKDAY_HEIGHT := 24.0
+const DASHBOARD_SECTION_TITLE_FONT_SIZE := 16
+const DASHBOARD_SECTION_TITLE_FONT_PATH := "res://assets/fonts/OpenSans-SemiBold.ttf"
+const DASHBOARD_INDEX_SPARKLINE_POINT_LIMIT := 40
 const CONSOLE_TOGGLE_KEY_CODE := 96
 const PERF_LOG_PREFIX := "[perf][ui]"
 const KEY_STATS_METRIC_NET_INCOME := "net_income"
@@ -163,6 +166,7 @@ const KEY_STATS_ROW_VALUE_WIDTH := 116.0
 const KEY_STATS_METRIC_LABEL_WIDTH := 78.0
 const KEY_STATS_METRIC_VALUE_WIDTH := 74.0
 const RUPSLB_MEETING_OVERLAY_SCRIPT = preload("res://scripts/ui/widgets/RupslbMeetingOverlay.gd")
+const DASHBOARD_SPARKLINE_SCRIPT = preload("res://scripts/ui/widgets/DashboardSparklineCanvas.gd")
 
 var selected_company_id: String = ""
 var displayed_company_ids: Array = []
@@ -200,6 +204,8 @@ var debug_start_rupslb_button: Button = null
 var debug_start_rupslb_status_label: Label = null
 var cached_app_font: Font = null
 var has_checked_app_font: bool = false
+var cached_dashboard_title_font: Font = null
+var has_checked_dashboard_title_font: bool = false
 var suppress_next_portfolio_refresh: bool = false
 var pending_watchlist_selected_company_id: String = ""
 var pending_watchlist_target_tab: int = -1
@@ -403,6 +409,7 @@ var academy_glossary_list: ItemList = null
 @onready var dashboard_index_panel: PanelContainer = %DashboardView/DashboardGrid/IndexPanel
 @onready var dashboard_index_title_label: Label = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexTitleLabel
 @onready var dashboard_index_date_label: Label = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexDateLabel
+@onready var dashboard_index_stats_grid: GridContainer = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid
 @onready var dashboard_index_points_value_label: Label = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid/IndexPointsValueLabel
 @onready var dashboard_index_lots_value_label: Label = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid/IndexLotsValueLabel
 @onready var dashboard_index_value_value_label: Label = %DashboardView/DashboardGrid/IndexPanel/IndexMargin/IndexVBox/IndexStatsGrid/IndexValueValueLabel
@@ -415,6 +422,7 @@ var academy_glossary_list: ItemList = null
 @onready var dashboard_top_losers_rows: VBoxContainer = %DashboardView/DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs/TopLosers/TopLosersRows
 @onready var dashboard_top_losers_empty_label: Label = %DashboardView/DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs/TopLosers/TopLosersRows/TopLosersEmptyLabel
 @onready var dashboard_calendar_panel: PanelContainer = %DashboardView/DashboardGrid/CalendarPanel
+@onready var dashboard_calendar_title_label: Label = %DashboardView/DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarTitleLabel
 @onready var dashboard_calendar_month_label: Label = %DashboardView/DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarMonthLabel
 @onready var dashboard_calendar_week_header: GridContainer = %DashboardView/DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader
 @onready var dashboard_calendar_days_grid: GridContainer = %DashboardView/DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarDaysGrid
@@ -549,6 +557,13 @@ var dashboard_calendar_event_title_label: Label = null
 var dashboard_calendar_event_body_label: Label = null
 var dashboard_calendar_event_actions_vbox: VBoxContainer = null
 var dashboard_calendar_event_close_button: Button = null
+var dashboard_index_recap_panel: VBoxContainer = null
+var dashboard_index_points_label: Label = null
+var dashboard_index_change_label: Label = null
+var dashboard_index_sparkline: Control = null
+var dashboard_index_all_market_rows: VBoxContainer = null
+var dashboard_index_all_market_lot_value_label: Label = null
+var dashboard_index_all_market_value_value_label: Label = null
 var dashboard_sector_cards_scroll: ScrollContainer = null
 var dashboard_sector_cards_grid: GridContainer = null
 var dashboard_sector_detail_vbox: VBoxContainer = null
@@ -580,6 +595,7 @@ func _ready() -> void:
 	_ensure_upgrade_purchase_dialog()
 	_ensure_daily_recap_dialog()
 	_ensure_dashboard_calendar_event_popup()
+	_ensure_dashboard_index_recap_ui()
 	_ensure_dashboard_sector_ui()
 	_ensure_console_overlay()
 	_ensure_academy_ui()
@@ -843,6 +859,155 @@ func _style_dashboard_calendar_grid() -> void:
 		dashboard_calendar_days_grid.add_theme_constant_override("h_separation", 4)
 		dashboard_calendar_days_grid.add_theme_constant_override("v_separation", 4)
 		dashboard_calendar_days_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+
+func _ensure_dashboard_index_recap_ui() -> void:
+	if dashboard_index_recap_panel != null:
+		return
+	var index_vbox: VBoxContainer = dashboard_index_title_label.get_parent() as VBoxContainer
+	if index_vbox == null:
+		return
+
+	dashboard_index_date_label.visible = false
+	dashboard_index_stats_grid.visible = false
+	dashboard_index_hint_label.visible = false
+
+	dashboard_index_recap_panel = VBoxContainer.new()
+	dashboard_index_recap_panel.name = "DashboardIndexRecapPanel"
+	dashboard_index_recap_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dashboard_index_recap_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dashboard_index_recap_panel.add_theme_constant_override("separation", 12)
+	index_vbox.add_child(dashboard_index_recap_panel)
+
+	var top_row := HBoxContainer.new()
+	top_row.name = "DashboardIndexTopRow"
+	top_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_row.add_theme_constant_override("separation", 14)
+	dashboard_index_recap_panel.add_child(top_row)
+
+	var point_stack := VBoxContainer.new()
+	point_stack.name = "DashboardIndexPointStack"
+	point_stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	point_stack.add_theme_constant_override("separation", 2)
+	top_row.add_child(point_stack)
+
+	dashboard_index_points_label = Label.new()
+	dashboard_index_points_label.name = "DashboardIndexPointsLabel"
+	dashboard_index_points_label.text = "-"
+	dashboard_index_points_label.clip_text = true
+	point_stack.add_child(dashboard_index_points_label)
+
+	dashboard_index_change_label = Label.new()
+	dashboard_index_change_label.name = "DashboardIndexChangeLabel"
+	dashboard_index_change_label.text = "-"
+	dashboard_index_change_label.clip_text = true
+	point_stack.add_child(dashboard_index_change_label)
+
+	dashboard_index_sparkline = DASHBOARD_SPARKLINE_SCRIPT.new()
+	dashboard_index_sparkline.name = "DashboardIndexSparkline"
+	dashboard_index_sparkline.custom_minimum_size = Vector2(168, 58)
+	dashboard_index_sparkline.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dashboard_index_sparkline.size_flags_vertical = Control.SIZE_FILL
+	top_row.add_child(dashboard_index_sparkline)
+
+	var all_market_label := Label.new()
+	all_market_label.name = "DashboardIndexAllMarketTitleLabel"
+	all_market_label.text = "All Market"
+	dashboard_index_recap_panel.add_child(all_market_label)
+
+	dashboard_index_all_market_rows = VBoxContainer.new()
+	dashboard_index_all_market_rows.name = "DashboardIndexAllMarketRows"
+	dashboard_index_all_market_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dashboard_index_all_market_rows.add_theme_constant_override("separation", 4)
+	dashboard_index_recap_panel.add_child(dashboard_index_all_market_rows)
+
+	dashboard_index_all_market_lot_value_label = _build_dashboard_index_recap_row("Lot", "DashboardIndexAllMarketLotValueLabel")
+	dashboard_index_all_market_value_value_label = _build_dashboard_index_recap_row("Value", "DashboardIndexAllMarketValueValueLabel")
+	_style_dashboard_index_recap_ui()
+
+
+func _build_dashboard_index_recap_row(label_text: String, value_name: String) -> Label:
+	var row := HBoxContainer.new()
+	row.name = "DashboardIndex%sRow" % label_text.replace(" ", "")
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 8)
+	dashboard_index_all_market_rows.add_child(row)
+
+	var caption := Label.new()
+	caption.name = "DashboardIndex%sCaptionLabel" % label_text.replace(" ", "")
+	caption.text = label_text
+	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caption.clip_text = true
+	row.add_child(caption)
+
+	var value_label := Label.new()
+	value_label.name = value_name
+	value_label.text = "-"
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value_label.custom_minimum_size = Vector2(116, 0)
+	row.add_child(value_label)
+	return value_label
+
+
+func _style_dashboard_index_recap_ui() -> void:
+	if dashboard_index_date_label != null:
+		dashboard_index_date_label.visible = false
+	if dashboard_index_stats_grid != null:
+		dashboard_index_stats_grid.visible = false
+	if dashboard_index_hint_label != null:
+		dashboard_index_hint_label.visible = false
+	if dashboard_index_recap_panel != null:
+		dashboard_index_recap_panel.add_theme_constant_override("separation", 12)
+	if dashboard_index_points_label != null:
+		_set_label_tone(dashboard_index_points_label, COLOR_TEXT)
+		dashboard_index_points_label.add_theme_font_size_override("font_size", 24)
+		var title_font: Font = _get_dashboard_title_font()
+		if title_font != null:
+			dashboard_index_points_label.add_theme_font_override("font", title_font)
+	if dashboard_index_change_label != null:
+		dashboard_index_change_label.add_theme_font_size_override("font_size", 14)
+	var all_market_title: Label = null
+	if dashboard_index_recap_panel != null:
+		all_market_title = dashboard_index_recap_panel.find_child("DashboardIndexAllMarketTitleLabel", true, false) as Label
+	if all_market_title != null:
+		_set_label_tone(all_market_title, COLOR_TEXT)
+		all_market_title.add_theme_font_size_override("font_size", 14)
+		var section_font: Font = _get_dashboard_title_font()
+		if section_font != null:
+			all_market_title.add_theme_font_override("font", section_font)
+	if dashboard_index_all_market_rows != null:
+		dashboard_index_all_market_rows.add_theme_constant_override("separation", 4)
+		for row_child in dashboard_index_all_market_rows.get_children():
+			var row: HBoxContainer = row_child as HBoxContainer
+			if row == null:
+				continue
+			row.add_theme_constant_override("separation", 8)
+			for child in row.get_children():
+				var label: Label = child as Label
+				if label == null:
+					continue
+				label.add_theme_font_size_override("font_size", 14)
+				if str(label.name).ends_with("CaptionLabel"):
+					_set_label_tone(label, COLOR_MUTED)
+	if dashboard_index_sparkline != null and dashboard_index_sparkline.has_method("set_palette"):
+		dashboard_index_sparkline.call("set_palette", COLOR_POSITIVE, COLOR_NEGATIVE, COLOR_WARNING, Color(COLOR_MUTED.r, COLOR_MUTED.g, COLOR_MUTED.b, 0.28))
+
+
+func _style_dashboard_section_titles() -> void:
+	_style_dashboard_section_title(dashboard_index_title_label)
+	_style_dashboard_section_title(dashboard_movers_title_label)
+	_style_dashboard_section_title(dashboard_calendar_title_label)
+	_style_dashboard_section_title(dashboard_placeholder_bottom_title_label)
+
+
+func _style_dashboard_section_title(label: Label) -> void:
+	if label == null:
+		return
+	_set_label_tone(label, COLOR_TEXT)
+	label.add_theme_font_size_override("font_size", DASHBOARD_SECTION_TITLE_FONT_SIZE)
+	var title_font: Font = _get_dashboard_title_font()
+	if title_font != null:
+		label.add_theme_font_override("font", title_font)
 
 
 func _ensure_key_stats_dashboard_ui() -> void:
@@ -1956,6 +2121,8 @@ func _on_network_changed() -> void:
 func _apply_global_font_size_overrides() -> void:
 	_apply_font_size_override_to_tree(self, DEFAULT_APP_FONT_SIZE, _get_app_font())
 	_style_figma_desktop_ui()
+	_style_dashboard_index_recap_ui()
+	_style_dashboard_section_titles()
 
 
 func _apply_font_overrides_to_subtree(node: Node) -> void:
@@ -2062,6 +2229,20 @@ func _get_app_font() -> Font:
 			cached_app_font = font_resource
 			return cached_app_font
 	return null
+
+
+func _get_dashboard_title_font() -> Font:
+	if has_checked_dashboard_title_font:
+		return cached_dashboard_title_font
+
+	has_checked_dashboard_title_font = true
+	if ResourceLoader.exists(DASHBOARD_SECTION_TITLE_FONT_PATH):
+		var font_resource := load(DASHBOARD_SECTION_TITLE_FONT_PATH)
+		if font_resource is Font:
+			cached_dashboard_title_font = font_resource
+			return cached_dashboard_title_font
+	cached_dashboard_title_font = _get_app_font()
+	return cached_dashboard_title_font
 
 
 func _refresh_header() -> void:
@@ -6020,6 +6201,7 @@ func _refresh_dashboard() -> void:
 		dashboard_index_lots_value_label.text = "-"
 		dashboard_index_value_value_label.text = "-"
 		dashboard_index_hint_label.text = "Use New Game or Load Run to begin."
+		_refresh_dashboard_index_recap({})
 		dashboard_calendar_month_label.text = "-"
 		_refresh_dashboard_calendar({})
 		_refresh_dashboard_movers([])
@@ -6049,6 +6231,7 @@ func _refresh_dashboard() -> void:
 		int(index_snapshot.get("flat_count", 0)),
 		_format_change(RunState.market_sentiment)
 	]
+	_refresh_dashboard_index_recap(index_snapshot)
 	_log_perf_phase(log_phase_details, "_refresh_dashboard:index_labels", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	dashboard_calendar_month_label.text = "%s %d" % [
@@ -6069,8 +6252,77 @@ func _refresh_dashboard() -> void:
 	_log_perf_phase(log_phase_details, "_refresh_dashboard:sectors", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	_set_label_tone(dashboard_index_points_value_label, _color_for_change(float(index_snapshot.get("day_change_pct", 0.0))))
+	_style_dashboard_section_titles()
 	_log_perf_phase(log_phase_details, "_refresh_dashboard:tone", phase_started_at_usec)
 	_log_perf_phase(log_phase_details, "_refresh_dashboard", started_at_usec)
+
+
+func _refresh_dashboard_index_recap(index_snapshot: Dictionary) -> void:
+	_ensure_dashboard_index_recap_ui()
+	if (
+		dashboard_index_points_label == null or
+		dashboard_index_change_label == null or
+		dashboard_index_all_market_lot_value_label == null or
+		dashboard_index_all_market_value_value_label == null
+	):
+		return
+
+	var has_snapshot: bool = not index_snapshot.is_empty()
+	if not has_snapshot:
+		dashboard_index_points_label.text = "-"
+		dashboard_index_change_label.text = "-"
+		dashboard_index_all_market_lot_value_label.text = "-"
+		dashboard_index_all_market_value_value_label.text = "-"
+		_set_label_tone(dashboard_index_points_label, COLOR_TEXT)
+		_set_label_tone(dashboard_index_change_label, COLOR_MUTED)
+		_set_label_tone(dashboard_index_all_market_lot_value_label, COLOR_MUTED)
+		_set_label_tone(dashboard_index_all_market_value_value_label, COLOR_MUTED)
+		if dashboard_index_sparkline != null and dashboard_index_sparkline.has_method("set_points"):
+			dashboard_index_sparkline.call("set_points", [])
+		return
+
+	var points: float = float(index_snapshot.get("points", 0.0))
+	var point_change: float = float(index_snapshot.get("point_change", 0.0))
+	var change_pct: float = float(index_snapshot.get("day_change_pct", 0.0))
+	var tone_color: Color = _color_for_change(change_pct)
+	dashboard_index_points_label.text = _format_decimal(points, 2, true)
+	dashboard_index_change_label.text = "%s (%s)" % [
+		_format_signed_decimal(point_change, 2, true),
+		_format_change(change_pct)
+	]
+	dashboard_index_all_market_lot_value_label.text = _format_compact_lots(float(index_snapshot.get("traded_lots", 0.0)))
+	dashboard_index_all_market_value_value_label.text = _format_compact_currency(float(index_snapshot.get("traded_value", 0.0)))
+	_set_label_tone(dashboard_index_points_label, COLOR_TEXT)
+	_set_label_tone(dashboard_index_change_label, tone_color)
+	_set_label_tone(dashboard_index_all_market_lot_value_label, tone_color)
+	_set_label_tone(dashboard_index_all_market_value_value_label, tone_color)
+	if dashboard_index_sparkline != null:
+		if dashboard_index_sparkline.has_method("set_points"):
+			dashboard_index_sparkline.call("set_points", index_snapshot.get("sparkline_points", []))
+		if dashboard_index_sparkline.has_method("set_line_tone"):
+			dashboard_index_sparkline.call("set_line_tone", change_pct)
+	_style_dashboard_index_recap_ui()
+
+
+func _get_dashboard_index_recap_smoke_state() -> Dictionary:
+	_ensure_dashboard_index_recap_ui()
+	var sparkline_point_count: int = 0
+	if dashboard_index_sparkline != null and dashboard_index_sparkline.has_method("get_point_count"):
+		sparkline_point_count = int(dashboard_index_sparkline.call("get_point_count"))
+	elif dashboard_index_sparkline != null:
+		sparkline_point_count = int(dashboard_index_sparkline.get_meta("point_count", 0))
+	return {
+		"recap_exists": dashboard_index_recap_panel != null,
+		"points_text": dashboard_index_points_label.text if dashboard_index_points_label != null else "",
+		"change_text": dashboard_index_change_label.text if dashboard_index_change_label != null else "",
+		"row_count": dashboard_index_all_market_rows.get_child_count() if dashboard_index_all_market_rows != null else 0,
+		"lot_text": dashboard_index_all_market_lot_value_label.text if dashboard_index_all_market_lot_value_label != null else "",
+		"value_text": dashboard_index_all_market_value_value_label.text if dashboard_index_all_market_value_value_label != null else "",
+		"sparkline_point_count": sparkline_point_count,
+		"old_date_visible": dashboard_index_date_label.visible if dashboard_index_date_label != null else true,
+		"old_grid_visible": dashboard_index_stats_grid.visible if dashboard_index_stats_grid != null else true,
+		"old_hint_visible": dashboard_index_hint_label.visible if dashboard_index_hint_label != null else true
+	}
 
 
 func _refresh_dashboard_meetings(rows: Array) -> void:
@@ -6388,13 +6640,13 @@ func _on_dashboard_sector_back_pressed() -> void:
 
 func _build_dashboard_index_snapshot() -> Dictionary:
 	var weighted_ratio_sum: float = 0.0
+	var previous_weighted_ratio_sum: float = 0.0
 	var weight_total: float = 0.0
 	var traded_lots: float = 0.0
 	var traded_value: float = 0.0
 	var advancers: int = 0
 	var decliners: int = 0
 	var flat_count: int = 0
-	var weighted_day_change_sum: float = 0.0
 
 	for company_id_value in RunState.company_order:
 		var company_id: String = str(company_id_value)
@@ -6404,14 +6656,22 @@ func _build_dashboard_index_snapshot() -> Dictionary:
 
 		var current_price: float = float(runtime.get("current_price", 0.0))
 		var starting_price: float = max(float(runtime.get("starting_price", current_price)), 1.0)
-		var company_profile: Dictionary = runtime.get("company_profile", {})
-		var financials: Dictionary = company_profile.get("financials", {})
-		var weight: float = max(float(financials.get("market_cap", current_price * 1000000000.0)), current_price * 1000000.0)
+		var weight: float = _dashboard_index_weight_for_runtime(runtime, current_price)
+		var previous_close: float = current_price
+		var price_bars: Array = runtime.get("price_bars", [])
+		if not price_bars.is_empty():
+			var latest_bar: Dictionary = price_bars[price_bars.size() - 1]
+			current_price = float(latest_bar.get("close", current_price))
+			previous_close = float(latest_bar.get("open", latest_bar.get("previous_close", current_price)))
+			traded_lots += float(latest_bar.get("volume_lots", 0.0))
+			traded_value += float(latest_bar.get("value", 0.0))
+		elif absf(float(runtime.get("daily_change_pct", 0.0))) > 0.000001:
+			previous_close = current_price / max(1.0 + float(runtime.get("daily_change_pct", 0.0)), 0.0001)
 		weighted_ratio_sum += (current_price / starting_price) * weight
+		previous_weighted_ratio_sum += (max(previous_close, 0.0) / starting_price) * weight
 		weight_total += weight
 
 		var daily_change_pct: float = float(runtime.get("daily_change_pct", 0.0))
-		weighted_day_change_sum += daily_change_pct * weight
 		if daily_change_pct > 0.0:
 			advancers += 1
 		elif daily_change_pct < 0.0:
@@ -6419,27 +6679,104 @@ func _build_dashboard_index_snapshot() -> Dictionary:
 		else:
 			flat_count += 1
 
-		var price_bars: Array = runtime.get("price_bars", [])
-		if not price_bars.is_empty():
-			var latest_bar: Dictionary = price_bars[price_bars.size() - 1]
-			traded_lots += float(latest_bar.get("volume_lots", 0.0))
-			traded_value += float(latest_bar.get("value", 0.0))
-
 	var points: float = 1000.0
+	var previous_points: float = 1000.0
+	var point_change: float = 0.0
 	var day_change_pct: float = 0.0
 	if weight_total > 0.0:
 		points = 1000.0 * (weighted_ratio_sum / weight_total)
-		day_change_pct = weighted_day_change_sum / weight_total
+		previous_points = 1000.0 * (previous_weighted_ratio_sum / weight_total)
+		point_change = points - previous_points
+		if previous_points > 0.0:
+			day_change_pct = point_change / previous_points
 
 	return {
 		"points": points,
+		"previous_points": previous_points,
+		"point_change": point_change,
 		"traded_lots": traded_lots,
 		"traded_value": traded_value,
 		"advancers": advancers,
 		"decliners": decliners,
 		"flat_count": flat_count,
-		"day_change_pct": day_change_pct
+		"day_change_pct": day_change_pct,
+		"sparkline_points": _build_dashboard_index_sparkline_points()
 	}
+
+
+func _dashboard_index_weight_for_runtime(runtime: Dictionary, current_price: float) -> float:
+	var company_profile: Dictionary = runtime.get("company_profile", {})
+	var financials: Dictionary = company_profile.get("financials", {})
+	return max(float(financials.get("market_cap", current_price * 1000000000.0)), current_price * 1000000.0)
+
+
+func _build_dashboard_index_sparkline_points() -> Array:
+	var company_series_rows: Array = []
+	var max_series_size: int = 0
+	for company_id_value in RunState.company_order:
+		var company_id: String = str(company_id_value)
+		var runtime: Dictionary = RunState.get_company(company_id)
+		if runtime.is_empty():
+			continue
+		var close_series: Array = _dashboard_index_close_series_for_runtime(runtime)
+		if close_series.size() < 2:
+			continue
+		var current_price: float = float(runtime.get("current_price", close_series[close_series.size() - 1]))
+		var starting_price: float = max(float(runtime.get("starting_price", close_series[0])), 1.0)
+		var weight: float = _dashboard_index_weight_for_runtime(runtime, current_price)
+		if weight <= 0.0:
+			continue
+		company_series_rows.append({
+			"series": close_series,
+			"starting_price": starting_price,
+			"weight": weight
+		})
+		max_series_size = max(max_series_size, close_series.size())
+
+	var point_count: int = min(DASHBOARD_INDEX_SPARKLINE_POINT_LIMIT, max_series_size)
+	if point_count < 2 or company_series_rows.is_empty():
+		return []
+
+	var points: Array = []
+	for point_index in range(point_count):
+		var offset_from_end: int = point_count - point_index
+		var weighted_ratio_sum: float = 0.0
+		var weight_total: float = 0.0
+		for row_value in company_series_rows:
+			var row: Dictionary = row_value
+			var series: Array = row.get("series", [])
+			if series.size() < offset_from_end:
+				continue
+			var close_value: float = float(series[series.size() - offset_from_end])
+			var starting_price: float = max(float(row.get("starting_price", close_value)), 1.0)
+			var weight: float = float(row.get("weight", 0.0))
+			weighted_ratio_sum += (close_value / starting_price) * weight
+			weight_total += weight
+		if weight_total > 0.0:
+			points.append(1000.0 * (weighted_ratio_sum / weight_total))
+	return points
+
+
+func _dashboard_index_close_series_for_runtime(runtime: Dictionary) -> Array:
+	var close_series: Array = []
+	var price_bars: Array = runtime.get("price_bars", [])
+	if not price_bars.is_empty():
+		var first_bar_value = price_bars[0]
+		if typeof(first_bar_value) == TYPE_DICTIONARY:
+			var first_bar: Dictionary = first_bar_value
+			close_series.append(float(first_bar.get("open", runtime.get("starting_price", runtime.get("current_price", 0.0)))))
+		for bar_value in price_bars:
+			if typeof(bar_value) != TYPE_DICTIONARY:
+				continue
+			var bar: Dictionary = bar_value
+			close_series.append(float(bar.get("close", runtime.get("current_price", 0.0))))
+		if close_series.size() >= 2:
+			return close_series
+
+	var price_history: Array = runtime.get("price_history", [])
+	for price_value in price_history:
+		close_series.append(float(price_value))
+	return close_series
 
 
 func _refresh_dashboard_movers(company_rows: Array) -> void:
@@ -11046,11 +11383,11 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(sidebar_intro_label, COLOR_MUTED)
 	_set_label_tone(sidebar_focus_label, COLOR_ACCENT)
 	_set_label_tone(sidebar_hint_label, COLOR_MUTED)
-	_set_label_tone(dashboard_index_title_label, COLOR_ACCENT)
+	_style_dashboard_section_titles()
+	_style_dashboard_index_recap_ui()
 	_set_label_tone(dashboard_index_date_label, COLOR_MUTED)
 	_set_label_tone(dashboard_index_hint_label, COLOR_WARNING)
 	_set_label_tone(dashboard_calendar_month_label, COLOR_ACCENT)
-	_set_label_tone(dashboard_movers_title_label, COLOR_ACCENT)
 	_set_label_tone(dashboard_top_gainers_empty_label, COLOR_MUTED)
 	_set_label_tone(dashboard_top_losers_empty_label, COLOR_MUTED)
 	_set_label_tone(dashboard_placeholder_bottom_body_label, COLOR_MUTED)
@@ -12067,6 +12404,13 @@ func _format_last_price(value: float) -> String:
 	return "%sRp%s" % [
 		"-" if value < 0.0 else "",
 		_format_decimal(absf(value), 0, true)
+	]
+
+
+func _format_signed_decimal(value: float, decimal_places: int = 2, use_grouping: bool = true) -> String:
+	return "%s%s" % [
+		"+" if value >= 0.0 else "-",
+		_format_decimal(absf(value), decimal_places, use_grouping)
 	]
 
 
