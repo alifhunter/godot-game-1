@@ -874,13 +874,32 @@ func _run_scenario(
 			"message": "Smoke test expected the corporate meeting snapshot to seed at least one upcoming venue."
 		}
 	var opening_meeting_id: String = str(opening_meeting_rows[0].get("id", ""))
+	var opening_meeting_detail: Dictionary = GameManager.get_corporate_meeting_detail(opening_meeting_id)
+	if bool(opening_meeting_detail.get("requires_shareholder", false)):
+		var blocked_attend_result: Dictionary = GameManager.attend_corporate_meeting(opening_meeting_id)
+		if bool(blocked_attend_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected shareholder-only RUPS/RUPSLB attendance to reject zero-position players."
+			}
+		var meeting_company_id: String = str(opening_meeting_detail.get("company_id", ""))
+		var meeting_buy_result: Dictionary = GameManager.buy_lots(meeting_company_id, 1)
+		if not bool(meeting_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before attending a shareholder-only meeting."
+			}
 	var attend_meeting_result: Dictionary = GameManager.attend_corporate_meeting(opening_meeting_id)
 	if not bool(attend_meeting_result.get("success", false)):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected corporate meeting attendance to be markable in v1."
+			"message": "Smoke test expected eligible corporate meeting attendance to be markable in v1."
 		}
 	var saved_meeting_state: Dictionary = RunState.to_save_dict()
 	RunState.load_from_dict(saved_meeting_state)
@@ -917,6 +936,8 @@ func _run_scenario(
 			var candidate_company_id: String = str(RunState.company_order[company_index])
 			if bool(GameManager.get_company_corporate_action_snapshot(candidate_company_id).get("has_live_chain", false)):
 				continue
+			if int(RunState.get_holding(candidate_company_id).get("shares", 0)) > 0:
+				continue
 			rupslb_candidate_ids.append(candidate_company_id)
 			if rupslb_candidate_ids.size() >= 2:
 				break
@@ -928,55 +949,54 @@ func _run_scenario(
 				"message": "Smoke test expected to find at least two companies without live corporate-action chains for deterministic RUPSLB coverage."
 			}
 
-		var observer_company_id: String = str(rupslb_candidate_ids[0])
+		var blocked_company_id: String = str(rupslb_candidate_ids[0])
 		var eligible_company_id: String = str(rupslb_candidate_ids[1])
 
-		var forced_observer_result: Dictionary = GameManager.debug_force_rights_issue_rupslb(observer_company_id)
-		if not bool(forced_observer_result.get("success", false)):
+		var forced_blocked_result: Dictionary = GameManager.debug_force_rights_issue_rupslb(blocked_company_id)
+		if not bool(forced_blocked_result.get("success", false)):
 			game_root.queue_free()
 			await get_tree().process_frame
 			return {
 				"success": false,
-				"message": "Smoke test expected the debug helper to force a same-day observer RUPSLB meeting."
+				"message": "Smoke test expected the debug helper to force a same-day zero-position RUPSLB meeting."
 			}
-		var observer_meeting_id: String = str(forced_observer_result.get("meeting", {}).get("id", ""))
-		var observer_start_result: Dictionary = GameManager.start_corporate_meeting_session(observer_meeting_id)
-		var observer_session_snapshot: Dictionary = GameManager.get_corporate_meeting_session_snapshot(observer_meeting_id)
+		var blocked_meeting_id: String = str(forced_blocked_result.get("meeting", {}).get("id", ""))
+		var blocked_detail: Dictionary = GameManager.get_corporate_meeting_detail(blocked_meeting_id)
 		if (
-			not bool(observer_start_result.get("success", false)) or
-			observer_session_snapshot.is_empty() or
-			bool(observer_session_snapshot.get("session", {}).get("voting_eligible", true))
+			not bool(blocked_detail.get("requires_shareholder", false)) or
+			bool(blocked_detail.get("attendance_eligible", true))
 		):
 			game_root.queue_free()
 			await get_tree().process_frame
 			return {
 				"success": false,
-				"message": "Smoke test expected a zero-position player to attend the forced RUPSLB only as an observer."
+				"message": "Smoke test expected forced zero-position RUPSLB detail to be shareholder-gated."
 			}
-		var observer_agenda_id: String = ""
-		var observer_agenda_payload: Array = observer_session_snapshot.get("agenda_payload", [])
-		if not observer_agenda_payload.is_empty():
-			observer_agenda_id = str(observer_agenda_payload[0].get("id", ""))
-		var observer_illegal_vote_result: Dictionary = GameManager.submit_corporate_meeting_vote(observer_meeting_id, observer_agenda_id, "agree")
-		if bool(observer_illegal_vote_result.get("success", false)):
+		var blocked_attend_result: Dictionary = GameManager.attend_corporate_meeting(blocked_meeting_id)
+		if bool(blocked_attend_result.get("success", false)):
 			game_root.queue_free()
 			await get_tree().process_frame
 			return {
 				"success": false,
-				"message": "Smoke test expected observer-only RUPSLB sessions to reject agree/disagree votes without share ownership."
+				"message": "Smoke test expected zero-position RUPSLB attendance to be rejected."
 			}
-		var observer_abstain_result: Dictionary = GameManager.submit_corporate_meeting_vote(observer_meeting_id, observer_agenda_id, "abstain")
-		if (
-			not bool(observer_abstain_result.get("success", false)) or
-			GameManager.get_corporate_meeting_session_snapshot(observer_meeting_id).get("result_summary", {}).is_empty()
-		):
+		var blocked_start_result: Dictionary = GameManager.start_corporate_meeting_session(blocked_meeting_id)
+		if bool(blocked_start_result.get("success", false)):
 			game_root.queue_free()
 			await get_tree().process_frame
 			return {
 				"success": false,
-				"message": "Smoke test expected observer-only RUPSLB sessions to resolve through an abstain path."
+				"message": "Smoke test expected zero-position RUPSLB sessions to stay closed without shareholder ownership."
 			}
-		GameManager.close_corporate_meeting_session(observer_meeting_id)
+		game_root._open_corporate_meeting_modal(blocked_meeting_id)
+		await get_tree().process_frame
+		if game_root.is_rupslb_meeting_overlay_visible():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the UI to block zero-position RUPSLB overlay entry."
+			}
 
 		var eligible_buy_result: Dictionary = GameManager.buy_lots(eligible_company_id, 1)
 		if not bool(eligible_buy_result.get("success", false)):

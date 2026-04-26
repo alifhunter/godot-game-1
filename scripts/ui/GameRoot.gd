@@ -4194,8 +4194,12 @@ func _show_network_contact(contact: Dictionary) -> void:
 		network_corporate_action_label.text = action_text
 		network_corporate_action_label.visible = not action_text.is_empty()
 	if network_open_meeting_button != null:
+		var meeting_detail: Dictionary = GameManager.get_corporate_meeting_detail(meeting_id) if not meeting_id.is_empty() else {}
+		var meeting_blocked_reason: String = _corporate_meeting_open_blocked_reason(meeting_detail)
 		network_open_meeting_button.visible = not meeting_id.is_empty()
-		network_open_meeting_button.disabled = meeting_id.is_empty()
+		network_open_meeting_button.disabled = meeting_id.is_empty() or not meeting_blocked_reason.is_empty()
+		network_open_meeting_button.text = "Shareholders Only" if not meeting_blocked_reason.is_empty() else "Open Meeting"
+		network_open_meeting_button.tooltip_text = meeting_blocked_reason if not meeting_blocked_reason.is_empty() else "Open the linked corporate meeting."
 		network_open_meeting_button.set_meta("meeting_id", meeting_id)
 
 
@@ -4605,9 +4609,12 @@ func _show_news_article(article: Dictionary) -> void:
 	news_meet_contact_button.set_meta("contact_id", str(contact.get("id", "")))
 	if news_open_meeting_button != null:
 		var meeting_id: String = str(article.get("meeting_id", ""))
+		var meeting_detail: Dictionary = GameManager.get_corporate_meeting_detail(meeting_id) if not meeting_id.is_empty() else {}
+		var meeting_blocked_reason: String = _corporate_meeting_open_blocked_reason(meeting_detail)
 		news_open_meeting_button.visible = not meeting_id.is_empty()
-		news_open_meeting_button.disabled = meeting_id.is_empty()
-		news_open_meeting_button.text = _news_meeting_action_label(article) if not meeting_id.is_empty() else "View Notice"
+		news_open_meeting_button.disabled = meeting_id.is_empty() or not meeting_blocked_reason.is_empty()
+		news_open_meeting_button.text = "Shareholders Only" if not meeting_blocked_reason.is_empty() else (_news_meeting_action_label(article) if not meeting_id.is_empty() else "View Notice")
+		news_open_meeting_button.tooltip_text = meeting_blocked_reason if not meeting_blocked_reason.is_empty() else "Open the linked corporate meeting."
 		news_open_meeting_button.set_meta("meeting_id", meeting_id)
 	if not contact.is_empty():
 		news_detail_hint_label.text = "Source lead: %s, %s." % [
@@ -4701,6 +4708,18 @@ func _news_meeting_action_label(article: Dictionary) -> String:
 	if venue_type == "earnings_call":
 		return "Read Call Notice"
 	return "View Meeting Notice"
+
+
+func _corporate_meeting_open_blocked_reason(detail: Dictionary) -> String:
+	if detail.is_empty():
+		return "Meeting not found."
+	if (
+		bool(detail.get("interactive_v1", false)) and
+		bool(detail.get("requires_shareholder", false)) and
+		not bool(detail.get("attendance_eligible", true))
+	):
+		return str(detail.get("attendance_blocked_reason", "Shareholder ownership is required to attend this meeting."))
+	return ""
 
 
 func _rebuild_news_article_cards(articles: Array) -> void:
@@ -4937,7 +4956,15 @@ func _refresh_dashboard_meetings(rows: Array) -> void:
 		button.clip_text = true
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.tooltip_text = str(row.get("public_summary", "Open meeting"))
+		var meeting_blocked_reason: String = ""
+		if (
+			bool(row.get("interactive_v1", false)) and
+			bool(row.get("requires_shareholder", false)) and
+			not bool(row.get("attendance_eligible", true))
+		):
+			meeting_blocked_reason = str(row.get("attendance_blocked_reason", "Shareholder ownership is required to attend this meeting."))
+		button.disabled = not meeting_blocked_reason.is_empty()
+		button.tooltip_text = meeting_blocked_reason if not meeting_blocked_reason.is_empty() else str(row.get("public_summary", "Open meeting"))
 		button.pressed.connect(func() -> void:
 			_open_corporate_meeting_modal(str(row.get("id", "")))
 		)
@@ -6607,6 +6634,13 @@ func _open_corporate_meeting_modal(meeting_id: String) -> void:
 	if meeting_id.is_empty():
 		return
 	var detail: Dictionary = GameManager.get_corporate_meeting_detail(meeting_id)
+	if detail.is_empty():
+		_show_toast("Meeting not found.", false)
+		return
+	var meeting_blocked_reason: String = _corporate_meeting_open_blocked_reason(detail)
+	if not meeting_blocked_reason.is_empty():
+		_show_toast(meeting_blocked_reason, false)
+		return
 	if bool(detail.get("interactive_v1", false)):
 		_open_rupslb_meeting_overlay(meeting_id)
 		return
@@ -6720,9 +6754,18 @@ func _refresh_corporate_meeting_modal() -> void:
 		intel_text = _format_corporate_intel_text(intel)
 	corporate_meeting_intel_label.text = "Private Intel\n%s" % intel_text
 	var attended: bool = bool(detail.get("attended", false))
-	corporate_meeting_attendance_label.text = "Attendance\n%s" % ("Already marked as attended." if attended else "Attendance is free in this milestone.")
-	corporate_meeting_attend_button.disabled = attended
-	corporate_meeting_attend_button.text = "Attended" if attended else "Attend"
+	var requires_shareholder: bool = bool(detail.get("requires_shareholder", false))
+	var attendance_eligible: bool = bool(detail.get("attendance_eligible", true))
+	var attendance_text: String = "Attendance is open in this milestone."
+	if attended:
+		attendance_text = "Already marked as attended."
+	elif requires_shareholder and not attendance_eligible:
+		attendance_text = str(detail.get("attendance_blocked_reason", "Shareholder ownership is required to attend this meeting."))
+	elif requires_shareholder:
+		attendance_text = "Shareholder verified: %d share(s) held." % int(detail.get("player_shares_owned", 0))
+	corporate_meeting_attendance_label.text = "Attendance\n%s" % attendance_text
+	corporate_meeting_attend_button.disabled = attended or not attendance_eligible
+	corporate_meeting_attend_button.text = "Attended" if attended else ("Shareholders Only" if not attendance_eligible else "Attend")
 
 
 func _on_corporate_meeting_attend_pressed() -> void:

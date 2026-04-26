@@ -191,6 +191,11 @@ func get_meeting_detail(run_state, meeting_id: String) -> Dictionary:
 	detail["family_label"] = _family_label(str(detail.get("chain_family", "")))
 	detail["meeting_label"] = _meeting_type_label(str(detail.get("meeting_type", "")))
 	detail["interactive_v1"] = _is_interactive_rupslb_meeting(detail)
+	var attendance_gate: Dictionary = _meeting_attendance_gate(run_state, detail)
+	detail["requires_shareholder"] = bool(attendance_gate.get("requires_shareholder", false))
+	detail["attendance_eligible"] = bool(attendance_gate.get("eligible", true))
+	detail["attendance_blocked_reason"] = str(attendance_gate.get("blocked_reason", ""))
+	detail["player_shares_owned"] = int(attendance_gate.get("shares_owned", 0))
 	if detail["interactive_v1"]:
 		detail["session"] = run_state.get_corporate_meeting_sessions().get(meeting_id, {}).duplicate(true)
 	return detail
@@ -249,6 +254,13 @@ func attend_meeting(run_state, meeting_id: String) -> Dictionary:
 	var meeting: Dictionary = _meeting_by_id(calendar, meeting_id)
 	if meeting.is_empty():
 		return {"success": false, "message": "Meeting not found."}
+	var attendance_gate: Dictionary = _meeting_attendance_gate(run_state, meeting)
+	if not bool(attendance_gate.get("eligible", true)):
+		return {
+			"success": false,
+			"message": str(attendance_gate.get("blocked_reason", "Shareholder ownership is required to attend this meeting.")),
+			"meeting": get_meeting_detail(run_state, meeting_id)
+		}
 	var attended_meetings: Dictionary = run_state.get_attended_meetings()
 	if bool(attended_meetings.get(meeting_id, {}).get("attended", false)):
 		return {"success": true, "message": "Already marked as attended.", "meeting": get_meeting_detail(run_state, meeting_id)}
@@ -256,7 +268,8 @@ func attend_meeting(run_state, meeting_id: String) -> Dictionary:
 		"meeting_id": meeting_id,
 		"attended": true,
 		"day_index": run_state.day_index,
-		"chain_id": str(meeting.get("source_chain_id", ""))
+		"chain_id": str(meeting.get("source_chain_id", "")),
+		"shares_owned": int(attendance_gate.get("shares_owned", 0))
 	}
 	_set_meeting_flag(calendar, meeting_id, "attended", true)
 	run_state.set_attended_meetings(attended_meetings)
@@ -325,6 +338,8 @@ func get_meeting_session_snapshot(run_state, data_repository, meeting_id: String
 	var detail: Dictionary = get_meeting_detail(run_state, meeting_id)
 	if detail.is_empty() or not _is_interactive_rupslb_meeting(detail):
 		return {}
+	if bool(detail.get("requires_shareholder", false)) and not bool(detail.get("attendance_eligible", true)):
+		return {}
 	var sessions: Dictionary = run_state.get_corporate_meeting_sessions()
 	var session: Dictionary = sessions.get(meeting_id, {}).duplicate(true)
 	if session.is_empty():
@@ -345,7 +360,7 @@ func get_meeting_session_snapshot(run_state, data_repository, meeting_id: String
 	if not result_summary.is_empty():
 		current_stage_id = "result"
 		session["presentation_stage"] = "result"
-	var observer_copy: String = str(presentation.get("observer_copy", "You can attend as an observer, but voting requires a live shareholder position on the meeting day."))
+	var observer_copy: String = str(presentation.get("observer_copy", "Only verified shareholders can enter the vote room on the meeting day."))
 	var vote_prompt: String = str(presentation.get("vote_prompt", "Cast your vote on the proposed agenda."))
 	var host_intro_lines: Array = presentation.get("host_intro_lines", []).duplicate(true)
 	var host_intro_text: String = ""
@@ -412,6 +427,11 @@ func submit_meeting_vote(
 	var detail: Dictionary = get_meeting_detail(run_state, meeting_id)
 	if detail.is_empty() or not _is_interactive_rupslb_meeting(detail):
 		return {"success": false, "message": "Interactive meeting not found."}
+	if bool(detail.get("requires_shareholder", false)) and not bool(detail.get("attendance_eligible", true)):
+		return {
+			"success": false,
+			"message": str(detail.get("attendance_blocked_reason", "Shareholder ownership is required to attend this meeting."))
+		}
 	var sessions: Dictionary = run_state.get_corporate_meeting_sessions()
 	var session: Dictionary = sessions.get(meeting_id, {}).duplicate(true)
 	if session.is_empty():
@@ -1457,6 +1477,32 @@ func _is_interactive_rupslb_meeting(meeting: Dictionary) -> bool:
 	return meeting_type == "rupslb" and INTERACTIVE_RUPSLB_FAMILY_IDS.has(str(meeting.get("chain_family", "")))
 
 
+func _meeting_requires_shareholder(meeting: Dictionary) -> bool:
+	var meeting_type: String = str(meeting.get("meeting_type", meeting.get("venue_type", "")))
+	return meeting_type in ["annual_rups", "rupslb"]
+
+
+func _meeting_attendance_gate(run_state, meeting: Dictionary) -> Dictionary:
+	var requires_shareholder: bool = _meeting_requires_shareholder(meeting)
+	var company_id: String = str(meeting.get("company_id", ""))
+	var shares_owned: int = int(run_state.get_holding(company_id).get("shares", 0)) if not company_id.is_empty() else 0
+	var eligible: bool = not requires_shareholder or shares_owned > 0
+	var blocked_reason: String = ""
+	if not eligible:
+		var label: String = _meeting_type_label(str(meeting.get("meeting_type", meeting.get("venue_type", ""))))
+		var ticker: String = str(meeting.get("ticker", company_id.to_upper()))
+		blocked_reason = "%s attendance requires owning shares of %s. Buy at least 1 lot before attending." % [
+			label,
+			ticker
+		]
+	return {
+		"requires_shareholder": requires_shareholder,
+		"eligible": eligible,
+		"shares_owned": shares_owned,
+		"blocked_reason": blocked_reason
+	}
+
+
 func _normalized_session_stage(stage_id: String) -> String:
 	var normalized_stage_id: String = stage_id.strip_edges().to_lower()
 	if SESSION_STAGE_ORDER.has(normalized_stage_id):
@@ -1488,7 +1534,7 @@ func _meeting_presentation_copy(catalog: Dictionary, family_id: String) -> Dicti
 				"The chair opens the meeting and frames the agenda for the room.",
 				"Management moves to the podium and starts walking shareholders through the rationale."
 			],
-			"observer_copy": "You can attend as an observer, but only shareholders can cast a weighted vote on the meeting day.",
+			"observer_copy": "Only verified shareholders can enter the vote room on the meeting day.",
 			"vote_prompt": "Cast your vote on the published agenda.",
 			"approved_result_copy": "The room clears the proposal and the market will react on the next simulation day.",
 			"rejected_result_copy": "The room rejects the proposal and the market will react on the next simulation day."
@@ -1876,6 +1922,7 @@ func _meeting_is_player_visible(meeting: Dictionary) -> bool:
 
 func _meeting_row(meeting: Dictionary, run_state) -> Dictionary:
 	var attended: bool = bool(run_state.get_attended_meetings().get(str(meeting.get("id", "")), {}).get("attended", false))
+	var attendance_gate: Dictionary = _meeting_attendance_gate(run_state, meeting)
 	return {
 		"id": str(meeting.get("id", "")),
 		"meeting_type": str(meeting.get("meeting_type", "")),
@@ -1893,7 +1940,11 @@ func _meeting_row(meeting: Dictionary, run_state) -> Dictionary:
 		"public_summary": str(meeting.get("public_summary", "")),
 		"stage": str(meeting.get("stage", "")),
 		"management_stance": str(meeting.get("management_stance", "")),
-		"interactive_v1": _is_interactive_rupslb_meeting(meeting)
+		"interactive_v1": _is_interactive_rupslb_meeting(meeting),
+		"requires_shareholder": bool(attendance_gate.get("requires_shareholder", false)),
+		"attendance_eligible": bool(attendance_gate.get("eligible", true)),
+		"attendance_blocked_reason": str(attendance_gate.get("blocked_reason", "")),
+		"player_shares_owned": int(attendance_gate.get("shares_owned", 0))
 	}
 
 

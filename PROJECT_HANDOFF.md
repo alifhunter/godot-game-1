@@ -32,7 +32,7 @@ Read this file first in the next session.
   - after checkpoint commits, `git status --short` should be clean except ignored local `logs/` output
 
 ## Latest Session Snapshot
-- Most recent work focused on the core daily loop, Academy authoring pipeline, and `Advance Day` save-path performance.
+- Most recent work focused on the core daily loop, Academy authoring pipeline, `Advance Day` save-path performance, and shareholder-only corporate meeting attendance.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses and shows short processing phases on the desktop button.
   - Daily Recap is now a custom `GameRoot.gd` overlay rather than a stock Godot dialog, so it can share the same dark-brown title-bar chrome as `News`, `Academy`, `Network`, and `Shop`.
@@ -111,6 +111,10 @@ Read this file first in the next session.
 - Corporate meetings now have two player-facing venue surfaces:
   - a shared meeting modal reachable from `Dashboard`, `News`, and `Network`
   - a dedicated fullscreen staged `RUPSLB` overlay for interactive `rights_issue` meetings
+- `annual_rups` and `rupslb` attendance now requires current player ownership of that company:
+  - zero-position players can still read simple public meeting notices where applicable, but the attendance action is disabled with shareholder-only reason text
+  - zero-position players cannot open interactive `rights_issue` `RUPSLB` sessions
+  - the current prototype uses held shares on the meeting day; there is no separate record-date/shareholder-registry system yet
 - Upgrade tiers are bought with player cash and now drive trading fees, News access, Twooter access, chart indicators, and daily Network action points
 - A backtick console-command overlay now exists for cheat/testing commands
 - A `Ctrl+L` debug overlay now also exists for deeper runtime/event testing
@@ -1075,6 +1079,7 @@ Read this file first in the next session.
   - a short meeting-button strip on the dashboard can open up to `4` upcoming meetings
   - `News` article detail can now show an `Open Meeting` button when an article is linked to a venue
   - `Network` selected-contact detail can now show current corporate-action summary text and an `Open Meeting` button when relevant
+  - shareholder-only `RUPSLB` links show disabled `Shareholders Only` actions with explanatory tooltips/toasts when the player owns `0` shares
   - `GameRoot.gd` owns a shared corporate-meeting modal that still handles `annual_rups`, `earnings_call`, and non-interactive venue views, showing:
     - company
     - venue type
@@ -1102,13 +1107,13 @@ Read this file first in the next session.
       - `Agree`
       - `Disagree`
       - `Abstain`
-    - if the player holds no shares on the meeting day, the overlay shifts into observer mode and only contributes abstention
+    - if the player holds no shares on the meeting day, the overlay does not open and the session APIs reject attendance/session start
     - the result board exposes:
       - `agree` / `disagree` / `abstain` percentages
       - bloc attribution across `controlling group`, `player`, and `public float`
       - chain outcome summary for the next-day resolution
 - Current voting/outcome behavior for interactive `rights_issue` `rupslb`:
-  - voting eligibility is based on current holdings on the meeting day; there is no separate record-date system yet
+  - attendance and voting eligibility are based on current holdings on the meeting day; there is no separate record-date system yet
   - player influence is pure ownership-weighted and uses the current shareholding structure from `GameManager.get_company_ownership_snapshot()`
   - outcome resolution currently uses three blocs:
     - `controlling group`
@@ -1614,11 +1619,11 @@ Read this file first in the next session.
   - connected-floater referral requires relationship, spends `10` relationship on success, creates a referred insider lead, and the referred insider can be met/persisted
   - insider tips default to the insider's affiliated company
   - corporate-meeting snapshot returns seeded upcoming venue rows
-  - attending a corporate meeting marks it attended and persists through save/load
+  - eligible corporate meeting attendance marks the meeting attended and persists through save/load
   - forced interactive `rights_issue` `rupslb` sessions can be spawned deterministically for test coverage
   - queued next-day debug `rights_issue` `rupslb` meetings stay hidden from the current meeting snapshot until one `Advance Day` passes
   - queued next-day debug `rights_issue` `rupslb` meetings appear in the Dashboard meeting strip after one `Advance Day` and still open through the fullscreen interactive overlay
-  - observer-only meeting flow rejects `Agree` / `Disagree` when the player owns `0` shares
+  - zero-position `RUPS` / `RUPSLB` attendance is rejected, and zero-position interactive `RUPSLB` overlay entry stays closed
   - shareholder meeting flow progresses through `arrival`, `seating`, `host_intro`, `agenda_reveal`, `vote`, and `result`
   - interactive `rupslb` session stage/result persists through save/load and reopens at the saved step
   - submitting an interactive `rights_issue` vote stores the meeting result without re-simulating the same day
@@ -1642,12 +1647,13 @@ Read this file first in the next session.
   - Most recent pass on `2026-04-26`:
     - `git diff --check` passed
     - Godot project-load check passed
-    - normal-play perf scene passed with `NORMAL_PLAY_PERF_OK`
+    - quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
+    - this covered shareholder-only `RUPS` / `RUPSLB` attendance rejection for zero-position players, blocked zero-position interactive `RUPSLB` overlay entry, and the shareholder-owned interactive `RUPSLB` vote flow
+    - non-blocking Windows/Godot note: this smoke run can print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; do not treat that trailing message as a gameplay/test failure by itself
+  - Latest normal-play perf scene pass with `NORMAL_PLAY_PERF_OK` on `2026-04-26`:
     - latest local headless perf result with Apply Day fast path: `open_network=34.95ms`, `advance_network_open=1819.84ms`, `advance_desktop_only=1972.03ms`, `open_stock=96.52ms`, `advance_stock_open=1975.07ms`, `open_news=162.33ms`, `open_network_with_news=83.92ms`, `advance_news_network_open=2450.09ms`, `flush_pending_save=21.01ms`, `local_save_bytes=2010467`
     - relevant engine perf logs from the same run: `simulate_day` roughly `260-393ms`; `apply_day_result` roughly `25-35ms`; `[perf][apply] normalize_companies` roughly `20-27ms`; `emit_price_formed` roughly `170-396ms` depending open apps; `save_active_run` roughly `200-334ms`; `emit_summary_ready` roughly `235-344ms`; total backend Advance Day roughly `1.18-1.56s`
-    - quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
     - this covered Advance Day instrumentation, the day-result company normalization fast path, compact `last_day_results` save payload, legacy last-day payload normalization, custom Daily Recap title chrome, simplified player-facing recap copy, readable Advance Day processing text, badge cache behavior, badge save/load persistence, and badge clearing on app open
-    - non-blocking Windows/Godot note: this smoke run can print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; do not treat that trailing message as a gameplay/test failure by itself
   - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after fixing Daily Recap readability, Advance Day processing text contrast, and caching desktop badge counts on `2026-04-26`
     - first quick-smoke attempt hit the recurring Godot `user://logs` crash before test output; rerunning with `--log-file res://logs/godot_smoke.log` passed and printed `SMOKE_QUICK_OK`
     - normal-play perf scene also passed after the cache change; the badge drawing path is now cache-only, though broader app-open timing is still noisy and News content rendering itself can remain heavier than Network
@@ -1814,8 +1820,8 @@ Read this file first in the next session.
   - `private_placement`, `restructuring`, `strategic_merger_acquisition`, and `backdoor_listing` exist in catalog form only and are not active yet
   - only `rights_issue` `rupslb` currently has interactive staged voting
   - `annual_rups` and `earnings_call` still use the simpler shared meeting modal
-  - there is still no record-date/shareholder registry system; current held shares on the meeting day gate voting
-  - venue attendance remains free and there is still no AP cost or broader event-slot time economy
+  - there is still no record-date/shareholder registry system; current held shares on the meeting day gate `RUPS` / `RUPSLB` attendance and voting
+  - eligible venue attendance remains free and there is still no AP cost or broader event-slot time economy
   - same-day market prices are not recalculated after a vote; results feed the next simulated day instead
   - next-day queued meeting reveal currently exists only through the debug overlay helper; there is no normal gameplay action that schedules a future `RUPSLB` directly for player testing
   - staged venue presentation is currently limited to the `rights_issue` `rupslb` overlay:
