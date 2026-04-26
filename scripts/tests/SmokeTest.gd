@@ -1824,9 +1824,11 @@ func _run_scenario(
 
 	news_app_button.emit_signal("pressed")
 	await get_tree().process_frame
+	await _wait_for_ui_animation_settle()
 	if (
 		news_window == null or
 		not news_window.visible or
+		not _desktop_window_animation_settled(game_root, "NewsBrowserDesktopWindow") or
 		not game_root.is_desktop_app_open("news") or
 		game_root.get_active_desktop_app_id() != "news" or
 		game_root.get_desktop_app_window_title("news") != "News Browser" or
@@ -1982,7 +1984,10 @@ func _run_scenario(
 		}
 	for _frame in range(10):
 		await get_tree().process_frame
+	await _wait_for_ui_animation_settle()
 	var daily_recap_dialog: Control = game_root.find_child("DailyRecapDialog", true, false) as Control
+	var daily_recap_frame: Control = game_root.find_child("DailyRecapFrame", true, false) as Control
+	var daily_recap_scrim: ColorRect = game_root.find_child("DailyRecapScrim", true, false) as ColorRect
 	var daily_recap_body_label: Label = game_root.find_child("DailyRecapBodyLabel", true, false) as Label
 	var daily_recap_content_panel: PanelContainer = game_root.find_child("DailyRecapContentPanel", true, false) as PanelContainer
 	var daily_recap_title_bar: PanelContainer = game_root.find_child("DailyRecapTitleBar", true, false) as PanelContainer
@@ -2001,8 +2006,13 @@ func _run_scenario(
 		RunState.day_index != day_before_button_advance + 1 or
 		desktop_advance_day_button.disabled or
 		desktop_advance_day_button.text != "ADVANCE DAY" or
+		not _control_animation_settled(desktop_advance_day_button) or
 		daily_recap_dialog == null or
 		not daily_recap_dialog.visible or
+		daily_recap_frame == null or
+		not _control_animation_settled(daily_recap_frame) or
+		daily_recap_scrim == null or
+		not is_equal_approx(daily_recap_scrim.color.a, 0.18) or
 		daily_recap_body_label == null or
 		daily_recap_body_label.text.find("Index Gorengan today:") == -1 or
 		daily_recap_body_label.text.find("Market mood:") != -1 or
@@ -2137,6 +2147,7 @@ func _run_scenario(
 
 	social_app_button.emit_signal("pressed")
 	await get_tree().process_frame
+	await _wait_for_ui_animation_settle()
 	if social_badge.visible:
 		game_root.queue_free()
 		await get_tree().process_frame
@@ -2147,6 +2158,7 @@ func _run_scenario(
 	if (
 		social_window == null or
 		not social_window.visible or
+		not _desktop_window_animation_settled(game_root, "TwooterDesktopWindow") or
 		not game_root.is_desktop_app_open("social") or
 		game_root.get_active_desktop_app_id() != "social" or
 		game_root.get_desktop_app_window_title("social") != "Twooter" or
@@ -2202,6 +2214,7 @@ func _run_scenario(
 	network_app_button.emit_signal("pressed")
 	await get_tree().process_frame
 	await get_tree().process_frame
+	await _wait_for_ui_animation_settle()
 	if network_badge.visible:
 		game_root.queue_free()
 		await get_tree().process_frame
@@ -2213,6 +2226,7 @@ func _run_scenario(
 	if (
 		network_window == null or
 		not network_window.visible or
+		not _desktop_window_animation_settled(game_root, "NetworkDesktopWindow") or
 		not game_root.is_desktop_app_open("network") or
 		game_root.get_active_desktop_app_id() != "network" or
 		game_root.get_desktop_app_window_title("network") != "Network" or
@@ -2257,7 +2271,9 @@ func _run_scenario(
 
 	stock_app_button.emit_signal("pressed")
 	await get_tree().process_frame
+	await _wait_for_ui_animation_settle()
 	if (
+		not _desktop_window_animation_settled(game_root, "STOCKBOTDesktopWindow") or
 		not game_root.is_desktop_app_open("stock") or
 		game_root.get_active_desktop_app_id() != "stock" or
 		game_root.get_desktop_app_window_title("stock") != "STOCKBOT"
@@ -3700,6 +3716,22 @@ func _count_down_days(price_history: Array) -> int:
 		if float(price_history[index]) < float(price_history[index - 1]):
 			down_days += 1
 	return down_days
+
+
+func _wait_for_ui_animation_settle() -> void:
+	await get_tree().create_timer(0.24).timeout
+	await get_tree().process_frame
+
+
+func _control_animation_settled(control: Control) -> bool:
+	if control == null:
+		return false
+	return control.scale.is_equal_approx(Vector2.ONE) and is_equal_approx(control.modulate.a, 1.0)
+
+
+func _desktop_window_animation_settled(game_root: Node, window_name: String) -> bool:
+	var window: Control = game_root.find_child(window_name, true, false) as Control
+	return _control_animation_settled(window)
 
 
 func _validate_contact_network_data() -> String:

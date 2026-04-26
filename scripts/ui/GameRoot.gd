@@ -97,6 +97,13 @@ const COLOR_NAV_FILL := Color(0.126, 0.188, 0.251, 1)
 const COLOR_NAV_ACTIVE_FILL := Color(0.219608, 0.439216, 0.65098, 1)
 const COLOR_NAV_ACTIVE_BORDER := Color(0.690196, 0.87451, 1, 1)
 const TOAST_DURATION_SECONDS := 5.0
+const UI_ANIMATIONS_ENABLED := true
+const UI_ADVANCE_BUTTON_PRESS_SECONDS := 0.09
+const UI_ADVANCE_PHASE_PULSE_SECONDS := 0.12
+const UI_DAILY_RECAP_REVEAL_SECONDS := 0.16
+const UI_DESKTOP_WINDOW_OPEN_SECONDS := 0.14
+const UI_DESKTOP_WINDOW_FOCUS_SECONDS := 0.10
+const UI_DAILY_RECAP_SCRIM_ALPHA := 0.18
 const SHOW_DASHBOARD_DESK_PANEL := false
 const SHOW_DASHBOARD_BALANCE_BLOCK := false
 const SHOW_DASHBOARD_BROKER_READ := false
@@ -247,6 +254,10 @@ var pending_daily_recap_snapshot: Dictionary = {}
 var daily_recap_dialog: Control = null
 var daily_recap_body_label: Label = null
 var daily_recap_continue_button: Button = null
+var advance_day_button_tween: Tween = null
+var daily_recap_tween: Tween = null
+var desktop_window_open_tweens: Dictionary = {}
+var desktop_window_focus_tweens: Dictionary = {}
 @onready var app_window_backdrop: Control = $AppWindowBackdrop
 @onready var app_window_margin: MarginContainer = $AppWindowBackdrop/AppWindowMargin
 @onready var app_window_panel: PanelContainer = $AppWindowBackdrop/AppWindowMargin/AppWindowPanel
@@ -2373,6 +2384,27 @@ func _attach_content_full_rect(content_node: Control) -> void:
 	content_node.offset_bottom = 0
 
 
+func _create_ui_tween() -> Tween:
+	var tween := create_tween()
+	tween.set_trans(Tween.TRANS_QUAD)
+	tween.set_ease(Tween.EASE_OUT)
+	return tween
+
+
+func _center_control_pivot(control: Control) -> void:
+	if control == null:
+		return
+	if control.size.x > 0.0 and control.size.y > 0.0:
+		control.pivot_offset = control.size * 0.5
+
+
+func _reset_control_animation_state(control: Control) -> void:
+	if control == null:
+		return
+	control.scale = Vector2.ONE
+	control.modulate = Color.WHITE
+
+
 func _open_desktop_app_window(app_id: String) -> void:
 	var meta: Dictionary = desktop_app_windows.get(app_id, {})
 	if meta.is_empty():
@@ -2384,8 +2416,11 @@ func _open_desktop_app_window(app_id: String) -> void:
 	var window: Control = meta.get("window", null) as Control
 	if window == null:
 		return
+	var was_visible: bool = window.visible
 	window.visible = true
 	_focus_desktop_app_window(app_id)
+	if not was_visible:
+		_play_desktop_window_open_animation(app_id)
 
 
 func _focus_desktop_app_window(app_id: String) -> void:
@@ -2404,6 +2439,7 @@ func _focus_desktop_app_window(app_id: String) -> void:
 		_refresh_app_window_content(app_id)
 	_refresh_desktop_window_themes()
 	_refresh_desktop()
+	_play_desktop_window_focus_animation(app_id)
 
 
 func _close_desktop_app_window(app_id: String) -> void:
@@ -2413,6 +2449,7 @@ func _close_desktop_app_window(app_id: String) -> void:
 	var window: Control = meta.get("window", null) as Control
 	if window == null:
 		return
+	_reset_desktop_window_animation_state(app_id)
 	window.visible = false
 	if desktop_dragging_app_id == app_id:
 		desktop_dragging_app_id = ""
@@ -2422,6 +2459,66 @@ func _close_desktop_app_window(app_id: String) -> void:
 			active_app_id = APP_ID_DESKTOP
 	_refresh_desktop_window_themes()
 	_refresh_desktop()
+
+
+func _play_desktop_window_open_animation(app_id: String) -> void:
+	var meta: Dictionary = desktop_app_windows.get(app_id, {})
+	var window: Control = meta.get("window", null) as Control
+	if window == null:
+		return
+	_stop_desktop_window_tween(desktop_window_open_tweens, app_id)
+	_center_control_pivot(window)
+	if not UI_ANIMATIONS_ENABLED:
+		_reset_control_animation_state(window)
+		return
+	window.scale = Vector2(0.985, 0.985)
+	window.modulate = Color(1, 1, 1, 0)
+	var tween := _create_ui_tween()
+	tween.set_parallel(true)
+	desktop_window_open_tweens[app_id] = tween
+	tween.tween_property(window, "scale", Vector2.ONE, UI_DESKTOP_WINDOW_OPEN_SECONDS)
+	tween.tween_property(window, "modulate", Color.WHITE, UI_DESKTOP_WINDOW_OPEN_SECONDS)
+	tween.finished.connect(func() -> void:
+		desktop_window_open_tweens.erase(app_id)
+	)
+
+
+func _play_desktop_window_focus_animation(app_id: String) -> void:
+	var meta: Dictionary = desktop_app_windows.get(app_id, {})
+	var title_bar: Control = meta.get("title_bar", null) as Control
+	if title_bar == null:
+		return
+	_stop_desktop_window_tween(desktop_window_focus_tweens, app_id)
+	if not UI_ANIMATIONS_ENABLED:
+		title_bar.modulate = Color.WHITE
+		return
+	title_bar.modulate = Color(1.08, 1.08, 1.08, 1)
+	var tween := _create_ui_tween()
+	desktop_window_focus_tweens[app_id] = tween
+	tween.tween_property(title_bar, "modulate", Color.WHITE, UI_DESKTOP_WINDOW_FOCUS_SECONDS)
+	tween.finished.connect(func() -> void:
+		desktop_window_focus_tweens.erase(app_id)
+	)
+
+
+func _stop_desktop_window_tween(tweens: Dictionary, app_id: String) -> void:
+	var tween: Tween = tweens.get(app_id, null) as Tween
+	if tween != null:
+		tween.kill()
+	tweens.erase(app_id)
+
+
+func _reset_desktop_window_animation_state(app_id: String) -> void:
+	var meta: Dictionary = desktop_app_windows.get(app_id, {})
+	if meta.is_empty():
+		return
+	_stop_desktop_window_tween(desktop_window_open_tweens, app_id)
+	_stop_desktop_window_tween(desktop_window_focus_tweens, app_id)
+	var window: Control = meta.get("window", null) as Control
+	_reset_control_animation_state(window)
+	var title_bar: Control = meta.get("title_bar", null) as Control
+	if title_bar != null:
+		title_bar.modulate = Color.WHITE
 
 
 func _top_visible_desktop_window_id() -> String:
@@ -7137,7 +7234,8 @@ func _on_next_day_pressed() -> void:
 	var started_at_usec: int = Time.get_ticks_usec()
 	advance_day_processing = true
 	pending_daily_recap_snapshot = {}
-	_set_advance_day_phase("Closing Market")
+	_set_advance_day_phase("Closing Market", false)
+	_play_advance_day_button_feedback()
 	await get_tree().process_frame
 	_set_advance_day_phase("Printing News")
 	await get_tree().process_frame
@@ -7185,12 +7283,14 @@ func _on_summary_ready(_summary: Dictionary) -> void:
 	_log_perf_elapsed("_on_summary_ready", started_at_usec)
 
 
-func _set_advance_day_phase(label: String) -> void:
+func _set_advance_day_phase(label: String, play_pulse: bool = true) -> void:
 	status_message = label
 	if desktop_advance_day_button != null:
 		desktop_advance_day_button.disabled = true
 		desktop_advance_day_button.text = "%s..." % label.to_upper()
 		desktop_advance_day_button.tooltip_text = "Processing the next trading day."
+		if play_pulse:
+			_play_advance_day_phase_pulse()
 	_refresh_dashboard()
 	_refresh_desktop()
 
@@ -7201,6 +7301,7 @@ func _finish_advance_day_processing() -> void:
 		desktop_advance_day_button.disabled = false
 		desktop_advance_day_button.text = "ADVANCE DAY"
 		desktop_advance_day_button.tooltip_text = "Advance to the next trading day."
+		_reset_advance_day_button_animation_state()
 	_refresh_desktop()
 
 
@@ -7211,7 +7312,141 @@ func _show_daily_recap_if_pending() -> void:
 	pending_daily_recap_snapshot = {}
 	daily_recap_dialog.visible = true
 	daily_recap_dialog.move_to_front()
+	_play_daily_recap_reveal()
 	_schedule_advance_day_post_recap_save_flush()
+
+
+func _play_advance_day_button_feedback() -> void:
+	if desktop_advance_day_button == null:
+		return
+	if advance_day_button_tween != null:
+		advance_day_button_tween.kill()
+		advance_day_button_tween = null
+	_center_control_pivot(desktop_advance_day_button)
+	if not UI_ANIMATIONS_ENABLED:
+		_reset_control_animation_state(desktop_advance_day_button)
+		return
+	desktop_advance_day_button.scale = Vector2.ONE
+	desktop_advance_day_button.modulate = Color.WHITE
+	advance_day_button_tween = _create_ui_tween()
+	advance_day_button_tween.tween_property(
+		desktop_advance_day_button,
+		"scale",
+		Vector2(0.97, 0.97),
+		UI_ADVANCE_BUTTON_PRESS_SECONDS * 0.45
+	)
+	advance_day_button_tween.tween_property(
+		desktop_advance_day_button,
+		"scale",
+		Vector2.ONE,
+		UI_ADVANCE_BUTTON_PRESS_SECONDS * 0.55
+	)
+
+
+func _play_advance_day_phase_pulse() -> void:
+	if desktop_advance_day_button == null:
+		return
+	if advance_day_button_tween != null:
+		advance_day_button_tween.kill()
+		advance_day_button_tween = null
+	_center_control_pivot(desktop_advance_day_button)
+	if not UI_ANIMATIONS_ENABLED:
+		_reset_control_animation_state(desktop_advance_day_button)
+		return
+	desktop_advance_day_button.scale = Vector2.ONE
+	desktop_advance_day_button.modulate = Color.WHITE
+	advance_day_button_tween = _create_ui_tween()
+	advance_day_button_tween.tween_property(
+		desktop_advance_day_button,
+		"scale",
+		Vector2(1.012, 1.012),
+		UI_ADVANCE_PHASE_PULSE_SECONDS * 0.5
+	)
+	advance_day_button_tween.parallel().tween_property(
+		desktop_advance_day_button,
+		"modulate",
+		Color(1.06, 1.05, 0.92, 1),
+		UI_ADVANCE_PHASE_PULSE_SECONDS * 0.5
+	)
+	advance_day_button_tween.tween_property(
+		desktop_advance_day_button,
+		"scale",
+		Vector2.ONE,
+		UI_ADVANCE_PHASE_PULSE_SECONDS * 0.5
+	)
+	advance_day_button_tween.parallel().tween_property(
+		desktop_advance_day_button,
+		"modulate",
+		Color.WHITE,
+		UI_ADVANCE_PHASE_PULSE_SECONDS * 0.5
+	)
+
+
+func _reset_advance_day_button_animation_state() -> void:
+	if advance_day_button_tween != null:
+		advance_day_button_tween.kill()
+		advance_day_button_tween = null
+	_reset_control_animation_state(desktop_advance_day_button)
+
+
+func _play_daily_recap_reveal() -> void:
+	if daily_recap_dialog == null:
+		return
+	if daily_recap_tween != null:
+		daily_recap_tween.kill()
+		daily_recap_tween = null
+	var scrim: ColorRect = daily_recap_dialog.find_child("DailyRecapScrim", true, false) as ColorRect
+	var frame: Control = daily_recap_dialog.find_child("DailyRecapFrame", true, false) as Control
+	if scrim == null and frame == null:
+		return
+	if not UI_ANIMATIONS_ENABLED:
+		_reset_daily_recap_animation_state()
+		return
+	if scrim != null:
+		var start_color: Color = scrim.color
+		start_color.a = 0.0
+		scrim.color = start_color
+	if frame != null:
+		_center_control_pivot(frame)
+		frame.scale = Vector2(0.975, 0.975)
+		frame.modulate = Color(1, 1, 1, 0)
+	daily_recap_tween = _create_ui_tween()
+	daily_recap_tween.set_parallel(true)
+	if scrim != null:
+		daily_recap_tween.tween_property(
+			scrim,
+			"color:a",
+			UI_DAILY_RECAP_SCRIM_ALPHA,
+			UI_DAILY_RECAP_REVEAL_SECONDS
+		)
+	if frame != null:
+		daily_recap_tween.tween_property(
+			frame,
+			"scale",
+			Vector2.ONE,
+			UI_DAILY_RECAP_REVEAL_SECONDS
+		)
+		daily_recap_tween.tween_property(
+			frame,
+			"modulate",
+			Color.WHITE,
+			UI_DAILY_RECAP_REVEAL_SECONDS
+		)
+
+
+func _reset_daily_recap_animation_state() -> void:
+	if daily_recap_tween != null:
+		daily_recap_tween.kill()
+		daily_recap_tween = null
+	if daily_recap_dialog == null:
+		return
+	var scrim: ColorRect = daily_recap_dialog.find_child("DailyRecapScrim", true, false) as ColorRect
+	if scrim != null:
+		var color: Color = scrim.color
+		color.a = UI_DAILY_RECAP_SCRIM_ALPHA
+		scrim.color = color
+	var frame: Control = daily_recap_dialog.find_child("DailyRecapFrame", true, false) as Control
+	_reset_control_animation_state(frame)
 
 
 func _build_daily_recap_text(snapshot: Dictionary) -> String:
@@ -7361,7 +7596,7 @@ func _ensure_daily_recap_dialog() -> void:
 
 	var scrim := ColorRect.new()
 	scrim.name = "DailyRecapScrim"
-	scrim.color = Color(0.0, 0.0, 0.0, 0.18)
+	scrim.color = Color(0.0, 0.0, 0.0, UI_DAILY_RECAP_SCRIM_ALPHA)
 	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
 	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	daily_recap_dialog.add_child(scrim)
@@ -7478,6 +7713,7 @@ func _ensure_daily_recap_dialog() -> void:
 
 func _hide_daily_recap() -> void:
 	if daily_recap_dialog != null:
+		_reset_daily_recap_animation_state()
 		daily_recap_dialog.visible = false
 
 
