@@ -210,8 +210,9 @@ theme_override_constants/separation = 10
 text = "FINANCIALS"
 
 [node name="FinancialsYearLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox"]
+visible = false
 autowrap_mode = 3
-text = "Derived financial statements appear here."
+text = ""
 
 [node name="FinancialsPeriodRow" type="HBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Financials/FinancialsPanel/FinancialsMargin/FinancialsVBox"]
 theme_override_constants/separation = 8
@@ -286,12 +287,14 @@ theme_override_constants/separation = 10
 text = "BROKER FLOW"
 
 [node name="BrokerSummaryLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Broker/BrokerPanel/BrokerMargin/BrokerVBox"]
+visible = false
 autowrap_mode = 3
-text = "Broker tape unavailable."
+text = ""
 
 [node name="BrokerMeterLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Broker/BrokerPanel/BrokerMargin/BrokerVBox"]
+visible = false
 autowrap_mode = 3
-text = "Broker Action: Neutral"
+text = ""
 
 [node name="BrokerMeterBar" type="ProgressBar" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Broker/BrokerPanel/BrokerMargin/BrokerVBox"]
 custom_minimum_size = Vector2(0, 16)

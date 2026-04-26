@@ -144,43 +144,66 @@ text = "Calendar"
 text = "-"
 
 [node name="CalendarWeekHeader" type="GridContainer" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox"]
+size_flags_horizontal = 3
 columns = 7
-theme_override_constants/h_separation = 6
+theme_override_constants/h_separation = 4
 theme_override_constants/v_separation = 4
 
 [node name="WeekMonLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader"]
+custom_minimum_size = Vector2(0, 24)
+size_flags_horizontal = 3
 horizontal_alignment = 1
+vertical_alignment = 1
 text = "Mon"
 
 [node name="WeekTueLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader"]
+custom_minimum_size = Vector2(0, 24)
+size_flags_horizontal = 3
 horizontal_alignment = 1
+vertical_alignment = 1
 text = "Tue"
 
 [node name="WeekWedLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader"]
+custom_minimum_size = Vector2(0, 24)
+size_flags_horizontal = 3
 horizontal_alignment = 1
+vertical_alignment = 1
 text = "Wed"
 
 [node name="WeekThuLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader"]
+custom_minimum_size = Vector2(0, 24)
+size_flags_horizontal = 3
 horizontal_alignment = 1
+vertical_alignment = 1
 text = "Thu"
 
 [node name="WeekFriLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader"]
+custom_minimum_size = Vector2(0, 24)
+size_flags_horizontal = 3
 horizontal_alignment = 1
+vertical_alignment = 1
 text = "Fri"
 
 [node name="WeekSatLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader"]
+custom_minimum_size = Vector2(0, 24)
+size_flags_horizontal = 3
 horizontal_alignment = 1
+vertical_alignment = 1
 text = "Sat"
 
 [node name="WeekSunLabel" type="Label" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader"]
+custom_minimum_size = Vector2(0, 24)
+size_flags_horizontal = 3
 horizontal_alignment = 1
+vertical_alignment = 1
 text = "Sun"
 
 [node name="CalendarDaysGrid" type="GridContainer" parent="DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox"]
+size_flags_horizontal = 3
 size_flags_vertical = 3
 columns = 7
-theme_override_constants/h_separation = 6
-theme_override_constants/v_separation = 6
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 4
 
 [node name="PlaceholderBottomPanel" type="PanelContainer" parent="DashboardGrid"]
 size_flags_horizontal = 3

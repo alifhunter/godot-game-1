@@ -151,6 +151,8 @@ const SOCIAL_WINDOW_MIN_HEIGHT := 520.0
 const DASHBOARD_MOVER_LIMIT := 15
 const DASHBOARD_WEEKDAY_NAMES := ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 const DASHBOARD_MONTH_NAMES := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+const DASHBOARD_CALENDAR_CELL_HEIGHT := 46.0
+const DASHBOARD_CALENDAR_WEEKDAY_HEIGHT := 24.0
 const CONSOLE_TOGGLE_KEY_CODE := 96
 const PERF_LOG_PREFIX := "[perf][ui]"
 const KEY_STATS_METRIC_NET_INCOME := "net_income"
@@ -413,6 +415,7 @@ var academy_glossary_list: ItemList = null
 @onready var dashboard_top_losers_empty_label: Label = %DashboardView/DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs/TopLosers/TopLosersRows/TopLosersEmptyLabel
 @onready var dashboard_calendar_panel: PanelContainer = %DashboardView/DashboardGrid/CalendarPanel
 @onready var dashboard_calendar_month_label: Label = %DashboardView/DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarMonthLabel
+@onready var dashboard_calendar_week_header: GridContainer = %DashboardView/DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarWeekHeader
 @onready var dashboard_calendar_days_grid: GridContainer = %DashboardView/DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarDaysGrid
 @onready var dashboard_placeholder_bottom_panel: PanelContainer = %DashboardView/DashboardGrid/PlaceholderBottomPanel
 @onready var dashboard_placeholder_bottom_title_label: Label = %DashboardView/DashboardGrid/PlaceholderBottomPanel/PlaceholderBottomMargin/PlaceholderBottomVBox/PlaceholderBottomTitleLabel
@@ -573,6 +576,8 @@ func _ready() -> void:
 	_initialize_desktop_app_windows()
 	_initialize_desktop_badge_seen_defaults()
 	_ensure_key_stats_dashboard_ui()
+	_remove_financial_and_broker_helper_text()
+	_style_dashboard_calendar_grid()
 	_apply_visual_theme()
 	_apply_compact_layout()
 	_apply_trade_layout_ratios()
@@ -787,6 +792,39 @@ func _update_responsive_layout() -> void:
 	_update_desktop_figma_layout()
 	_update_key_stats_dashboard_layout()
 	_apply_window_layout()
+
+
+func _remove_financial_and_broker_helper_text() -> void:
+	if financials_year_label != null:
+		financials_year_label.text = ""
+		financials_year_label.visible = false
+	if broker_summary_label != null:
+		broker_summary_label.text = ""
+		broker_summary_label.visible = false
+	if broker_meter_label != null:
+		broker_meter_label.text = ""
+		broker_meter_label.visible = false
+
+
+func _style_dashboard_calendar_grid() -> void:
+	if dashboard_calendar_week_header != null:
+		dashboard_calendar_week_header.columns = 7
+		dashboard_calendar_week_header.add_theme_constant_override("h_separation", 4)
+		dashboard_calendar_week_header.add_theme_constant_override("v_separation", 4)
+		for child in dashboard_calendar_week_header.get_children():
+			var weekday_label: Label = child as Label
+			if weekday_label == null:
+				continue
+			weekday_label.custom_minimum_size = Vector2(0, DASHBOARD_CALENDAR_WEEKDAY_HEIGHT)
+			weekday_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			weekday_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			weekday_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			_set_label_tone(weekday_label, COLOR_MUTED)
+	if dashboard_calendar_days_grid != null:
+		dashboard_calendar_days_grid.columns = 7
+		dashboard_calendar_days_grid.add_theme_constant_override("h_separation", 4)
+		dashboard_calendar_days_grid.add_theme_constant_override("v_separation", 4)
+		dashboard_calendar_days_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 
 func _ensure_key_stats_dashboard_ui() -> void:
@@ -6188,6 +6226,7 @@ func _refresh_dashboard_calendar(current_date: Dictionary, cached_report_snapsho
 	if dashboard_calendar_days_grid == null:
 		return
 
+	_style_dashboard_calendar_grid()
 	_clear_container_children(dashboard_calendar_days_grid)
 	if current_date.is_empty():
 		return
@@ -6223,9 +6262,19 @@ func _refresh_dashboard_calendar(current_date: Dictionary, cached_report_snapsho
 
 
 func _build_dashboard_calendar_spacer() -> Control:
-	var spacer: Control = Control.new()
-	spacer.custom_minimum_size = Vector2(0, 34)
+	var spacer: PanelContainer = PanelContainer.new()
+	spacer.custom_minimum_size = Vector2(0, DASHBOARD_CALENDAR_CELL_HEIGHT)
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.size_flags_vertical = Control.SIZE_FILL
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.0588235, 0.0823529, 0.109804, 0.34)
+	style.border_color = Color(0.141176, 0.176471, 0.215686, 0.28)
+	style.set_border_width_all(1)
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 0
+	style.corner_radius_bottom_right = 0
+	style.corner_radius_bottom_left = 0
+	spacer.add_theme_stylebox_override("panel", style)
 	return spacer
 
 
@@ -6272,8 +6321,9 @@ func _format_upcoming_report_rows(reports: Array) -> String:
 
 func _build_dashboard_calendar_day_cell(day_value: int, is_current_day: bool, is_trade_day: bool, reports: Array = []) -> Control:
 	var panel: PanelContainer = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(0, 34)
+	panel.custom_minimum_size = Vector2(0, DASHBOARD_CALENDAR_CELL_HEIGHT)
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.size_flags_vertical = Control.SIZE_FILL
 	panel.tooltip_text = _format_report_tooltip(reports)
 
 	var label: Label = Label.new()
@@ -6282,6 +6332,8 @@ func _build_dashboard_calendar_day_cell(day_value: int, is_current_day: bool, is
 		label.text = "%d\n%dR" % [day_value, reports.size()]
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.add_child(label)
 
 	var fill_color: Color = Color(0.0784314, 0.109804, 0.141176, 0.85)
@@ -7048,10 +7100,13 @@ func _apply_trade_workspace_snapshot(snapshot: Dictionary) -> void:
 		profile_meet_contact_button.disabled = true
 		profile_meet_contact_button.set_meta("contact_id", "")
 		key_stats_financial_label.text = "Financials:"
-		financials_year_label.text = "Derived financial statements unavailable."
+		financials_year_label.text = ""
+		financials_year_label.visible = false
 		financials_period_label.text = "Viewing latest available period."
-		broker_summary_label.text = "Broker tape unavailable."
-		broker_meter_label.text = "Broker Action: Neutral"
+		broker_summary_label.text = ""
+		broker_summary_label.visible = false
+		broker_meter_label.text = ""
+		broker_meter_label.visible = false
 		broker_meter_bar.value = 50.0
 		analyzer_setup_label.text = "Setup read:"
 		analyzer_support_label.text = "Supportive signals:"
@@ -7106,7 +7161,8 @@ func _apply_trade_workspace_snapshot(snapshot: Dictionary) -> void:
 	)
 	_refresh_profile_network_contact(str(snapshot.get("id", "")))
 	key_stats_financial_label.text = "Financials:\n%s" % _format_financial_block(snapshot.get("financials", {}))
-	financials_year_label.text = _format_statement_year_label(financial_statement_snapshot) if detail_ready else "Building statement history..."
+	financials_year_label.text = ""
+	financials_year_label.visible = false
 	analyzer_setup_label.text = "Setup read:\n%s" % _build_setup_read(snapshot)
 	analyzer_support_label.text = "Supportive signals:\n%s" % _build_support_signals(snapshot)
 	analyzer_risk_label.text = "Risk signals:\n%s" % _build_risk_signals(snapshot)
@@ -11031,37 +11087,20 @@ func _refresh_broker_table(broker_flow: Dictionary) -> void:
 	var row_count: int = max(buy_brokers.size(), sell_brokers.size())
 	broker_empty_label.visible = row_count == 0
 	if row_count == 0:
-		broker_summary_label.text = "Broker tape unavailable."
-		broker_meter_label.text = "Broker Action: Neutral"
+		broker_summary_label.text = ""
+		broker_summary_label.visible = false
+		broker_meter_label.text = ""
+		broker_meter_label.visible = false
 		broker_meter_bar.value = 50.0
 		_style_broker_meter(Color(0.603922, 0.623529, 0.662745, 0.92))
 		return
 
-	var dominant_buy_text: String = _broker_side_display_label(
-		str(broker_flow.get("dominant_buy_broker_code", "")),
-		str(broker_flow.get("dominant_buy_broker_name", "")),
-		str(broker_flow.get("dominant_buy_broker_type", ""))
-	)
-	var dominant_sell_text: String = _broker_side_display_label(
-		str(broker_flow.get("dominant_sell_broker_code", "")),
-		str(broker_flow.get("dominant_sell_broker_name", "")),
-		str(broker_flow.get("dominant_sell_broker_type", ""))
-	)
 	var action_meter_score: float = float(broker_flow.get("action_meter_score", 0.0))
-	var action_meter_label: String = str(broker_flow.get("action_meter_label", "Neutral"))
 	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
-	var view_label: String = "Net" if broker_net_mode else "Split"
-	broker_summary_label.text = "Lead buyer: %s  |  Lead seller: %s  |  Tape: %s  |  View: %s" % [
-		dominant_buy_text,
-		dominant_sell_text,
-		_flow_badge(flow_tag),
-		view_label
-	]
-	broker_meter_label.text = "Broker Action: %s  |  Aggregate flow %s  |  Smart money %s" % [
-		action_meter_label,
-		_format_change(float(broker_flow.get("net_pressure", 0.0))),
-		_format_change(float(broker_flow.get("smart_money_pressure", 0.0)))
-	]
+	broker_summary_label.text = ""
+	broker_summary_label.visible = false
+	broker_meter_label.text = ""
+	broker_meter_label.visible = false
 	broker_meter_bar.value = clamp((action_meter_score + 1.0) * 50.0, 0.0, 100.0)
 	_style_broker_meter(_color_for_flow(flow_tag))
 
@@ -11146,32 +11185,6 @@ func _build_broker_table_row(buy_row: Dictionary, sell_row: Dictionary) -> Contr
 	return row_wrap
 
 
-func _broker_side_display_label(broker_code: String, broker_name: String, broker_type: String) -> String:
-	if broker_code.is_empty():
-		return str(broker_type).capitalize() if not broker_type.is_empty() else "Balanced"
-	var short_name: String = broker_name
-	if short_name.begins_with("PT. "):
-		short_name = short_name.trim_prefix("PT. ")
-	return "%s (%s)" % [broker_code, short_name if not short_name.is_empty() else broker_type.capitalize()]
-
-
-func _format_statement_year_label(financial_statement_snapshot: Dictionary) -> String:
-	if financial_statement_snapshot.is_empty():
-		return "Derived financial statements unavailable."
-
-	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
-	if quarterly_statements.is_empty():
-		return "Derived %s statements  |  simplified learning model built from the generated company history." % str(
-			financial_statement_snapshot.get("statement_period_label", "latest")
-		)
-
-	return "%d derived quarters  |  %s -> %s  |  simplified learning model built from generated company history." % [
-		quarterly_statements.size(),
-		str(financial_statement_snapshot.get("history_start_period_label", "Q1 2010")),
-		str(financial_statement_snapshot.get("history_end_period_label", "Q4 2019"))
-	]
-
-
 func _sync_financial_statement_selection(company_id: String, financial_statement_snapshot: Dictionary) -> void:
 	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
 	if company_id != selected_financial_statement_company_id:
@@ -11204,7 +11217,8 @@ func _shift_financial_statement_selection(offset: int) -> void:
 		0,
 		quarterly_statements.size() - 1
 	)
-	financials_year_label.text = _format_statement_year_label(financial_statement_snapshot)
+	financials_year_label.text = ""
+	financials_year_label.visible = false
 	_refresh_statement_sections(financial_statement_snapshot)
 	_refresh_key_stats_dashboard(current_trade_snapshot)
 

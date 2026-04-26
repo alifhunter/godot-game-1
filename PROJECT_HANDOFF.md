@@ -35,11 +35,12 @@ Read this file first in the next session.
     - `d6a2a35 Count Twooter activity without feed rebuild`
     - `1485334 Add snappy UI animation polish`
     - `4275c7a Smooth Daily Recap reveal`
-    - latest checkpoint message: `Build Key Stats card dashboard`
+    - `fc14108 Build Key Stats card dashboard`
+    - latest checkpoint message: `Hide helper text and tidy dashboard calendar`
   - after checkpoint commits, `git status --short` should be clean except ignored local `logs/` output
 
 ## Latest Session Snapshot
-- Most recent work focused on the core daily loop, Academy authoring pipeline, `Advance Day` visible-refresh performance, lightweight UI animation polish, Daily Activity cache cost, Dashboard cache cost, deferred save durability, shareholder-only corporate meeting attendance, and the STOCKBOT `Key Stats` dashboard layout.
+- Most recent work focused on the core daily loop, Academy authoring pipeline, `Advance Day` visible-refresh performance, lightweight UI animation polish, Daily Activity cache cost, Dashboard cache cost, deferred save durability, shareholder-only corporate meeting attendance, the STOCKBOT `Key Stats` dashboard layout, and removal of player-facing system helper copy.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses, shows short processing phases on the desktop button, and now has a snappy press/phase pulse that resets to neutral after processing.
   - Daily Recap is now a custom `GameRoot.gd` overlay rather than a stock Godot dialog, so it can share the same dark-brown title-bar chrome as `News`, `Academy`, `Network`, and `Shop`.
@@ -59,6 +60,9 @@ Read this file first in the next session.
   - The center metric table has `Net Income`, `EPS`, and `Revenue` pills and shows the last three generated fiscal years with `Q1-Q4`, `Annualised`, and `TTM` rows.
   - The overview derives TTM, per-share, valuation, cash-flow, EV, and profitability approximations from the existing generated annual/quarterly data; there are no save-schema or simulator changes.
   - The separate `Financials` tab remains the detailed quarter-by-quarter reader with the existing `Older / Newer` controls.
+  - The `Financials` tab no longer shows the old derived-quarter/system-explanation helper line above the period controls.
+  - The `Broker` tab no longer shows the two system-helper summary lines above the meter/table; the meter, scale row, `Net` toggle, and broker rows remain.
+  - Dashboard calendar cells now render as a uniform 7-column grid with styled empty leading/trailing cells so the month block lines up with the weekday header.
 - Performance status:
   - Desktop badge drawing uses cached counts in `RunState.desktop_app_badge_counts`.
   - `last_day_results` now saves a compact recap/event summary instead of duplicating the full per-company day result and corporate meeting payloads.
@@ -112,8 +116,8 @@ Read this file first in the next session.
 - Last successful verification in this session:
   - `git diff --check`
   - Godot project-load check
-  - quick smoke with `--log-file logs\smoke-keystats-dashboard.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
-  - the quick smoke now asserts the Key Stats dashboard cards, populated row groups, `Net Income` / `EPS` / `Revenue` pill switching, and the separate `Financials` tab rows/navigation
+  - quick smoke with `--log-file logs\smoke-helper-calendar-cleanup.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
+  - the quick smoke now asserts the Key Stats dashboard cards, populated row groups, `Net Income` / `EPS` / `Revenue` pill switching, the separate `Financials` tab rows/navigation, hidden Financials/Broker helper labels, and uniform Dashboard calendar grid shape
   - latest normal-play perf scene from the previous UI animation pass printed `NORMAL_PLAY_PERF_OK`; it was not rerun for the fade-only recap/border tweak or Key Stats dashboard pass
   - note: the quick smoke may print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` on Windows; treat it as non-blocking Godot/Windows certificate-store noise unless it appears before smoke output or affects network/API work
 
@@ -348,12 +352,13 @@ Read this file first in the next session.
     - current data covers `40` derived quarters from `Q1 2010` through `Q4 2019`
     - current default landing period is the latest available quarter, `Q4 2019`
     - the tab now has `Older / Newer` period navigation inside the panel
+    - the old derived-quarter helper line is hidden in the UI; period/navigation and statement rows carry the visible surface
     - quarterly statement lines are derived from generated annual history + hidden traits and are meant to be internally coherent, not GAAP-accurate
   - `Broker`: derived broker tape plus action meter
     - split view shows ranked `buy` and `sell` broker tables side by side
     - `Net` toggle now also exists, so each broker appears only on one side based on net value for the session
     - current rows show code, traded value, lots, and average price
-    - current `Broker Action` meter is derived from aggregate group flow plus the broker table composition
+    - the visible meter remains derived from aggregate group flow plus broker table composition, but the old two-line helper summary above it is hidden
   - hidden `Analyzer`: setup read, supportive signals, risk signals, visible inputs, and recent closes; kept as backend/scene scaffold only for now
   - `Profile`: company identity, sector, archetype, size, board, live price snapshot, generated company profile scores, founded year, age, employee count, profile revenue, profile tags, and generated narrative description
     - company Profile can now surface a contextual `Meet` button when a discoverable Network contact matches the selected company and the player meets recognition requirements

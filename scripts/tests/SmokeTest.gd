@@ -2330,6 +2330,8 @@ func _run_scenario(
 	var movers_tabs: TabContainer = game_root.find_child("MoversTabs", true, false) as TabContainer
 	var work_tabs: TabContainer = game_root.find_child("WorkTabs", true, false) as TabContainer
 	var upcoming_reports_label: Label = game_root.find_child("PlaceholderBottomBodyLabel", true, false) as Label
+	var calendar_week_header: GridContainer = game_root.find_child("CalendarWeekHeader", true, false) as GridContainer
+	var calendar_days_grid: GridContainer = game_root.find_child("CalendarDaysGrid", true, false) as GridContainer
 	if (
 		dashboard_grid == null or
 		int(dashboard_grid.get_theme_constant("h_separation")) != 0 or
@@ -2339,13 +2341,18 @@ func _run_scenario(
 		work_tabs == null or
 		not work_tabs.is_tab_hidden(4) or
 		upcoming_reports_label == null or
-		not upcoming_reports_label.text.contains("Q1 2020")
+		not upcoming_reports_label.text.contains("Q1 2020") or
+		calendar_week_header == null or
+		calendar_week_header.get_child_count() != 7 or
+		calendar_days_grid == null or
+		calendar_days_grid.get_child_count() < 35 or
+		calendar_days_grid.get_child_count() % 7 != 0
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected Dashboard movers, report calendar text, zero dashboard separation, and hidden Analyzer tab."
+			"message": "Smoke test expected Dashboard movers, report calendar text, uniform calendar grid, zero dashboard separation, and hidden Analyzer tab."
 		}
 
 	if not RunState.has_method("ensure_company_full_detail") or not RunState.ensure_company_full_detail(tracked_company_id):
@@ -3060,6 +3067,27 @@ func _run_scenario(
 			"message": "Smoke test expected switching Key Stats EPS and Revenue pills to rebuild the center metric table."
 		}
 
+	var financials_year_helper_label: Label = game_root.find_child("FinancialsYearLabel", true, false) as Label
+	var broker_summary_helper_label: Label = game_root.find_child("BrokerSummaryLabel", true, false) as Label
+	var broker_meter_helper_label: Label = game_root.find_child("BrokerMeterLabel", true, false) as Label
+	if (
+		financials_year_helper_label == null or
+		financials_year_helper_label.visible or
+		not financials_year_helper_label.text.is_empty() or
+		broker_summary_helper_label == null or
+		broker_summary_helper_label.visible or
+		not broker_summary_helper_label.text.is_empty() or
+		broker_meter_helper_label == null or
+		broker_meter_helper_label.visible or
+		not broker_meter_helper_label.text.is_empty()
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Financials and Broker system helper text labels to stay hidden."
+		}
+
 	var income_statement_rows: VBoxContainer = game_root.find_child("IncomeStatementRows", true, false) as VBoxContainer
 	var balance_sheet_rows: VBoxContainer = game_root.find_child("BalanceSheetRows", true, false) as VBoxContainer
 	var cash_flow_rows: VBoxContainer = game_root.find_child("CashFlowRows", true, false) as VBoxContainer
@@ -3270,9 +3298,9 @@ func _run_scenario(
 			"message": "Smoke test buy failed on %s because the dashboard buy button did not produce a trade entry." % difficulty_id
 		}
 
-	var broker_summary_label: Label = game_root.find_child("BrokerSummaryLabel", true, false) as Label
 	var broker_rows_vbox: VBoxContainer = game_root.find_child("BrokerRows", true, false) as VBoxContainer
-	if financial_history_summary_label == null or broker_summary_label == null or broker_rows_vbox == null:
+	var broker_meter_bar: ProgressBar = game_root.find_child("BrokerMeterBar", true, false) as ProgressBar
+	if financial_history_summary_label == null or broker_rows_vbox == null or broker_meter_bar == null:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
@@ -3283,7 +3311,6 @@ func _run_scenario(
 	var rendered_broker_rows_after_buy: int = broker_rows_vbox.get_child_count() - 1
 	if (
 		not financial_history_summary_label.text.contains("Generated 2010-2019 history") or
-		not broker_summary_label.text.contains("Lead buyer:") or
 		rendered_broker_rows_after_buy <= 0
 	):
 		game_root.queue_free()
@@ -3291,6 +3318,16 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected Key Stats history and Broker rows to stay populated after the opening buy refresh."
+		}
+	if (
+		(broker_summary_helper_label != null and (broker_summary_helper_label.visible or not broker_summary_helper_label.text.is_empty())) or
+		(broker_meter_helper_label != null and (broker_meter_helper_label.visible or not broker_meter_helper_label.text.is_empty()))
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Broker helper text to stay hidden after the opening buy refresh."
 		}
 
 	var toast_panel: PanelContainer = game_root.find_child("ToastPanel", true, false) as PanelContainer
