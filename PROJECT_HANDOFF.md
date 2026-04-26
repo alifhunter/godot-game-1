@@ -28,11 +28,11 @@ Read this file first in the next session.
     - `dd88e18 Add Academy editor and daily loop polish`
     - `96fd0b4 Trim last day save payload`
     - `c61a289 Instrument Advance Day performance`
-    - latest checkpoint message: `Speed up Advance Day apply normalization`
+    - latest checkpoint message: `Cache Dashboard event snapshots`
   - after checkpoint commits, `git status --short` should be clean except ignored local `logs/` output
 
 ## Latest Session Snapshot
-- Most recent work focused on the core daily loop, Academy authoring pipeline, `Advance Day` save-path performance, and shareholder-only corporate meeting attendance.
+- Most recent work focused on the core daily loop, Academy authoring pipeline, `Advance Day` visible-refresh performance, and shareholder-only corporate meeting attendance.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses and shows short processing phases on the desktop button.
   - Daily Recap is now a custom `GameRoot.gd` overlay rather than a stock Godot dialog, so it can share the same dark-brown title-bar chrome as `News`, `Academy`, `Network`, and `Shop`.
@@ -56,11 +56,16 @@ Read this file first in the next session.
     - current price scalars, latest price history entry, and the latest OHLC bar are still normalized
     - static `company_profile` data and already-normalized historical bars stay on the fast path
     - latest perf run shows `normalize_companies` around `20-27ms` and `apply_day_result` around `25-35ms` for `30` companies
-  - Latest normal-play perf profile shows the remaining big buckets are `simulate_day`, `emit_price_formed` UI refresh, `save_active_run`, and `emit_summary_ready` dashboard/recap work.
-  - Latest normal-play perf scene summary: `open_network=34.95ms`, `advance_network_open=1819.84ms`, `advance_desktop_only=1972.03ms`, `open_stock=96.52ms`, `advance_stock_open=1975.07ms`, `open_news=162.33ms`, `open_network_with_news=83.92ms`, `advance_news_network_open=2450.09ms`, `flush_pending_save=21.01ms`, `local_save_bytes=2010467`.
-  - Current backend Advance Day logs show `simulate_day` around `260-393ms`, `save_active_run` around `200-334ms`, `emit_price_formed` around `170-396ms` depending open apps, and `emit_summary_ready` around `235-344ms`.
+  - Dashboard event data now has an ephemeral `GameManager` cache for the current day:
+    - `GameManager.get_dashboard_event_snapshot()` exposes the current report-calendar month, upcoming report rows, the current corporate-meeting snapshot, and upcoming meeting rows
+    - `GameManager._advance_day_internal()` prebuilds that cache once before the synchronous UI refresh signals
+    - `GameRoot.gd` reads the cached snapshot for Dashboard calendar/report/meeting sections instead of rebuilding each source independently
+    - `RunState.get_upcoming_quarterly_reports(limit)` now short-circuits once it has enough rows instead of scanning every future filing when a small limit is requested
+  - Latest normal-play perf profile shows the remaining big buckets are `simulate_day`, `save_active_run`, open-window refreshes, and `GameManager.get_daily_recap_snapshot()`.
+  - Latest normal-play perf scene summary: `open_network=51.69ms`, `advance_network_open=1805.83ms`, `advance_desktop_only=1867.14ms`, `open_stock=95.96ms`, `advance_stock_open=1893.53ms`, `open_news=295.44ms`, `open_network_with_news=183.50ms`, `advance_news_network_open=3032.32ms`, `flush_pending_save=28.80ms`, `local_save_bytes=2010467`.
+  - Current backend Advance Day logs show `build_dashboard_event_cache` around `120-212ms`, `emit_price_formed` around `90-454ms` depending open apps, `save_active_run` around `284-308ms`, and `emit_summary_ready` around `187-307ms`; Dashboard report rows still render around `0.16-0.26ms` and meeting buttons around `4-9ms` in that noisy run.
   - Broader app-open timings are still noisy in headless perf runs; `News` can still be heavier than `Network` because it renders article content and can trigger article-source discovery.
-  - `Advance Day` is now mostly dominated by market simulation, save serialization, and post-day UI refreshes, not company apply normalization or desktop badge drawing.
+  - `Advance Day` is now mostly dominated by market simulation, save serialization, open app refreshes, and daily recap snapshot work, not company apply normalization, report-row rebuilding, or meeting-row rebuilding.
 - Last successful verification in this session:
   - `git diff --check`
   - Godot project-load check
@@ -439,6 +444,7 @@ Read this file first in the next session.
   - public API:
     - `GameManager.get_report_calendar_snapshot(year, month)`
     - `GameManager.get_upcoming_report_rows(limit)`
+    - `GameManager.get_dashboard_event_snapshot(force_refresh := false)`
 - Dashboard movers are built from `GameManager.get_company_rows()`:
   - gainers sort by `daily_change_pct` descending and filter `> 0`
   - losers sort by `daily_change_pct` ascending and filter `< 0`
@@ -452,6 +458,7 @@ Read this file first in the next session.
   - daily breadth counts (`green / red / flat`)
 - Dashboard meeting/report consumers can use:
   - `GameManager.get_upcoming_report_rows(limit)`
+  - `GameManager.get_dashboard_event_snapshot(force_refresh := false)`
   - `GameManager.get_corporate_meeting_snapshot(day_index := -1)`
 - The `volume_lots` / traded `value` feeding charts and the dashboard are synthetic but now less purely reactive:
   - `MarketSimulator.gd` derives a pre-price `volume_context` from free float, liquidity profile, story heat, hidden accumulation/distribution flags, broker pressure, recent volume memory, and recent price run-up
@@ -1033,7 +1040,7 @@ Read this file first in the next session.
 - Current venue/calendar behavior:
   - `corporate_meeting_calendar` is keyed by date and stores meeting rows with linked company/family/chain metadata
   - meeting statuses are refreshed during day advancement
-  - attendance is free in v1 and persisted in `RunState.attended_meetings`
+  - eligible attendance has no AP/cash cost in v1 and is persisted in `RunState.attended_meetings`; `RUPS` / `RUPSLB` attendance requires current share ownership
   - there is no AP cost or broader event-slot/time-slot cost yet
   - debug-only next-day `rights_issue` `rupslb` meetings can now be inserted in a hidden `queued` state for the next trading day
   - `queued` meetings are intentionally omitted from current player-facing meeting lists and company meeting surfaces until day advancement flips them into the normal visible scheduled flow
@@ -1145,7 +1152,7 @@ Read this file first in the next session.
 ## Implemented Systems
 - Core autoloads:
   - `autoloads/GameManager.gd`
-    - owns day advancement orchestration, `get_daily_recap_snapshot()`, cached desktop badge snapshot helpers, upgrade/shop APIs, Network/corporate-action facades, console commands, and save flush calls
+    - owns day advancement orchestration, `get_daily_recap_snapshot()`, cached desktop badge snapshot helpers, cached Dashboard event snapshots, upgrade/shop APIs, Network/corporate-action facades, console commands, and save flush calls
   - `autoloads/RunState.gd`
     - owns runtime save state, including new `desktop_app_seen_days` and `desktop_app_badge_counts` helpers used by desktop badges
   - `autoloads/DataRepository.gd`
@@ -1411,6 +1418,10 @@ Read this file first in the next session.
   - `desktop_app_seen_days` tracks whether the app has been opened on the current day
   - `desktop_app_badge_counts` stores the current day's cached activity counts so desktop refresh can stay cheap
   - missing legacy save data defaults to current day / zero counts to avoid stale old-save badges
+- Dashboard event snapshots are cached ephemerally in `GameManager.dashboard_event_snapshot_cache`:
+  - not saved to disk
+  - invalidated on run start/load, buy/sell, corporate meeting attendance/session start/vote, and debug RUPSLB scheduling/forcing
+  - rebuilt during `Advance Day` before UI refresh signals so Dashboard can reuse one current-day report/meeting snapshot
 - `RunState.last_day_results` is saved as a compact recap/event context:
   - keeps day number, trade date, market sentiment, starting equity, and small event arrays used for recent-day context
   - strips duplicated `companies`, active state snapshots, corporate calendars, and meeting/session payloads during apply/save/load
@@ -1648,9 +1659,12 @@ Read this file first in the next session.
     - `git diff --check` passed
     - Godot project-load check passed
     - quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
-    - this covered shareholder-only `RUPS` / `RUPSLB` attendance rejection for zero-position players, blocked zero-position interactive `RUPSLB` overlay entry, and the shareholder-owned interactive `RUPSLB` vote flow
+    - normal-play perf scene passed with `NORMAL_PLAY_PERF_OK`
+    - latest local headless perf result with cached Dashboard event snapshots: `open_network=51.69ms`, `advance_network_open=1805.83ms`, `advance_desktop_only=1867.14ms`, `open_stock=95.96ms`, `advance_stock_open=1893.53ms`, `open_news=295.44ms`, `open_network_with_news=183.50ms`, `advance_news_network_open=3032.32ms`, `flush_pending_save=28.80ms`, `local_save_bytes=2010467`
+    - relevant engine perf logs from the same run: `build_dashboard_event_cache` roughly `120-212ms`; `_refresh_dashboard:report_rows` roughly `0.16-0.26ms`; `_refresh_dashboard:meetings` roughly `4-9ms`; `_on_summary_ready` roughly `187-307ms`; total backend Advance Day roughly `1.58-2.24s`
+    - this covered cached Dashboard event snapshots, limit-based upcoming-report lookup, shareholder-only `RUPS` / `RUPSLB` attendance rejection for zero-position players, blocked zero-position interactive `RUPSLB` overlay entry, and the shareholder-owned interactive `RUPSLB` vote flow
     - non-blocking Windows/Godot note: this smoke run can print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; do not treat that trailing message as a gameplay/test failure by itself
-  - Latest normal-play perf scene pass with `NORMAL_PLAY_PERF_OK` on `2026-04-26`:
+  - Previous normal-play perf scene pass with `NORMAL_PLAY_PERF_OK` on `2026-04-26`:
     - latest local headless perf result with Apply Day fast path: `open_network=34.95ms`, `advance_network_open=1819.84ms`, `advance_desktop_only=1972.03ms`, `open_stock=96.52ms`, `advance_stock_open=1975.07ms`, `open_news=162.33ms`, `open_network_with_news=83.92ms`, `advance_news_network_open=2450.09ms`, `flush_pending_save=21.01ms`, `local_save_bytes=2010467`
     - relevant engine perf logs from the same run: `simulate_day` roughly `260-393ms`; `apply_day_result` roughly `25-35ms`; `[perf][apply] normalize_companies` roughly `20-27ms`; `emit_price_formed` roughly `170-396ms` depending open apps; `save_active_run` roughly `200-334ms`; `emit_summary_ready` roughly `235-344ms`; total backend Advance Day roughly `1.18-1.56s`
     - this covered Advance Day instrumentation, the day-result company normalization fast path, compact `last_day_results` save payload, legacy last-day payload normalization, custom Daily Recap title chrome, simplified player-facing recap copy, readable Advance Day processing text, badge cache behavior, badge save/load persistence, and badge clearing on app open
@@ -1881,12 +1895,14 @@ Read this file first in the next session.
   - treat a trailing `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` as non-blocking Windows/Godot noise
 - Continue performance work from the trimmed save payload:
   - use the `[perf][advance]`, `[perf][apply]`, `[perf][ui]`, and `[perf][save]` logs to choose the next target from `simulate_day`, `emit_price_formed`, `save_active_run`, and `emit_summary_ready`
-  - target Dashboard/recap refresh cost next if staying on the visible `Advance Day` feel: `_refresh_dashboard:meetings`, `_refresh_dashboard:report_rows`, calendar, movers, and `GameManager.get_daily_recap_snapshot()` are the current visible UI buckets
+  - target Daily Recap snapshot cost next if staying on the visible `Advance Day` feel: `GameManager.get_daily_recap_snapshot()` still rebuilds News/Twooter/Network activity context for the recap and badges
+  - target open-window refresh cost next if focusing on `News` + `Network` open during `Advance Day`; visible Dashboard report/meeting rebuilding is now cached
   - target save serialization next if focusing on backend stutter: `save_active_run` still includes synchronous JSON save/flush work in critical Advance Day, return-to-menu, quit, and close paths
   - target `simulate_day` after UI/save work if daily market generation remains a bottleneck under `Grind` company counts
   - keep `last_day_results` save payload summary-only unless a concrete feature needs more fields
   - keep badge drawing cache-only through `RunState.desktop_app_badge_counts`
-  - likely implementation paths: cache upcoming meeting/report rows for the daily recap/dashboard pass, defer non-critical open-window refreshes, reduce duplicated corporate/calendar save payloads, or split expensive save serialization away from immediate UI response
+  - keep Dashboard event snapshots ephemeral unless a future load-time dashboard optimization needs persistence
+  - likely implementation paths: cache Daily Recap activity counts earlier in day advance, defer non-critical open-window refreshes, reduce duplicated corporate/calendar save payloads, or split expensive save serialization away from immediate UI response
 - Academy content pipeline:
   - keep `tools/academy_editor/academy_source.json` as the authoring source and export to `data/academy/academy_catalog.json`
   - use `content_blocks` for new lessons; keep legacy `pages` as export compatibility only

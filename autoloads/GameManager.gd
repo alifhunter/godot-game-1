@@ -56,6 +56,7 @@ const LOAD_RUN_LOADING_STEPS := [
 ]
 const STARTUP_PERF_LOG_PREFIX := "[perf][startup]"
 const ADVANCE_PERF_LOG_PREFIX := "[perf][advance]"
+const DASHBOARD_REPORT_ROW_CACHE_LIMIT := 8
 const DIFFICULTY_PRESETS := {
 	"chill": {
 		"id": "chill",
@@ -117,6 +118,7 @@ var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
 var academy_system = preload("res://systems/AcademySystem.gd").new()
 var background_company_detail_hydration_running: bool = false
 var loading_detail_log_lines: Array = []
+var dashboard_event_snapshot_cache: Dictionary = {}
 
 
 func _ready() -> void:
@@ -153,6 +155,7 @@ func start_new_run(run_seed: int = 0, difficulty_id: String = DEFAULT_DIFFICULTY
 	var company_definitions: Array = build_company_roster(run_seed, difficulty_config)
 	RunState.setup_new_run(run_seed, company_definitions, difficulty_config, tutorial_enabled)
 	background_company_detail_hydration_running = false
+	_invalidate_dashboard_event_snapshot_cache()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	simulate_opening_session(false)
 	_save_active_run_now("start_new_run")
@@ -193,6 +196,7 @@ func start_new_run_with_loading(
 		Callable(self, "_on_new_run_financial_batch_detail")
 	)
 	_log_startup_perf_elapsed("new_run_financials_total", financials_started_at_usec, " companies=%d" % company_definitions.size())
+	_invalidate_dashboard_event_snapshot_cache()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	await get_tree().process_frame
 
@@ -219,6 +223,7 @@ func load_run_from_save() -> bool:
 
 	RunState.load_from_dict(saved_run)
 	background_company_detail_hydration_running = false
+	_invalidate_dashboard_event_snapshot_cache()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	run_loaded.emit()
 	_enter_game_scene()
@@ -237,6 +242,7 @@ func load_run_from_save_with_loading() -> bool:
 	_emit_load_run_loading_step(1)
 	RunState.load_from_dict(saved_run)
 	background_company_detail_hydration_running = false
+	_invalidate_dashboard_event_snapshot_cache()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	run_loaded.emit()
 	await get_tree().process_frame
@@ -291,6 +297,9 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	phase_started_at_usec = Time.get_ticks_usec()
 	var network_tip_results: Array = contact_network_system.process_due_tip_memories(RunState, DataRepository)
 	_log_advance_perf_elapsed(log_advance_perf, "process_due_tip_memories", phase_started_at_usec, " count=%d" % network_tip_results.size())
+	phase_started_at_usec = Time.get_ticks_usec()
+	_rebuild_dashboard_event_snapshot_cache()
+	_log_advance_perf_elapsed(log_advance_perf, "build_dashboard_event_cache", phase_started_at_usec)
 	if (not network_results.is_empty() or not network_tip_results.is_empty()) and emit_runtime_signals:
 		phase_started_at_usec = Time.get_ticks_usec()
 		network_changed.emit()
@@ -339,6 +348,7 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 func buy_company(company_id: String, shares: int = 1) -> Dictionary:
 	var result: Dictionary = RunState.buy_company(company_id, shares)
 	if result.get("success", false):
+		_invalidate_dashboard_event_snapshot_cache()
 		_request_autosave("buy_company")
 		portfolio_changed.emit()
 	return result
@@ -347,6 +357,7 @@ func buy_company(company_id: String, shares: int = 1) -> Dictionary:
 func sell_company(company_id: String, shares: int = 1) -> Dictionary:
 	var result: Dictionary = RunState.sell_company(company_id, shares)
 	if result.get("success", false):
+		_invalidate_dashboard_event_snapshot_cache()
 		_request_autosave("sell_company")
 		portfolio_changed.emit()
 	return result
@@ -503,6 +514,7 @@ func debug_force_rights_issue_rupslb(company_id: String) -> Dictionary:
 	var result: Dictionary = corporate_action_system.debug_force_rights_issue_rupslb(RunState, DataRepository, company_id)
 	if result.is_empty():
 		return {"success": false, "message": "Could not force a same-day rights issue RUPSLB for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
 	return {
 		"success": true,
 		"message": "Forced same-day rights issue RUPSLB created.",
@@ -523,6 +535,7 @@ func debug_schedule_next_day_rights_issue_rupslb(company_id: String) -> Dictiona
 	var result: Dictionary = corporate_action_system.debug_schedule_next_day_rights_issue_rupslb(RunState, DataRepository, company_id)
 	if result.is_empty():
 		return {"success": false, "message": "Could not schedule a next-day rights issue RUPSLB for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
 	_request_autosave("debug_schedule_next_day_rupslb")
 	var meeting: Dictionary = result.get("meeting", {}).duplicate(true)
 	return {
@@ -679,18 +692,131 @@ func get_report_calendar_snapshot(year_value: int = 0, month_value: int = 0) -> 
 	var trade_date: Dictionary = RunState.get_current_trade_date()
 	var resolved_year: int = int(trade_date.get("year", 2020)) if year_value <= 0 else year_value
 	var resolved_month: int = int(trade_date.get("month", 1)) if month_value <= 0 else month_value
+	if _is_current_report_calendar_month(resolved_year, resolved_month):
+		return get_dashboard_event_snapshot().get("report_calendar_snapshot", {}).duplicate(true)
 	return RunState.get_report_calendar_month(resolved_year, resolved_month)
 
 
 func get_upcoming_report_rows(limit: int = 8) -> Array:
+	if limit > 0 and limit <= DASHBOARD_REPORT_ROW_CACHE_LIMIT:
+		var rows: Array = get_dashboard_event_snapshot().get("upcoming_report_rows", []).duplicate(true)
+		if rows.size() > limit:
+			rows = rows.slice(0, limit)
+		return rows
 	return RunState.get_upcoming_quarterly_reports(limit)
+
+
+func get_dashboard_event_snapshot(force_refresh: bool = false) -> Dictionary:
+	if not RunState.has_active_run():
+		return _empty_dashboard_event_snapshot()
+	var cache_key: String = _dashboard_event_snapshot_cache_key()
+	if (
+		force_refresh or
+		dashboard_event_snapshot_cache.is_empty() or
+		str(dashboard_event_snapshot_cache.get("cache_key", "")) != cache_key
+	):
+		_rebuild_dashboard_event_snapshot_cache(cache_key)
+	return dashboard_event_snapshot_cache.duplicate(true)
 
 
 func get_corporate_meeting_snapshot(day_index: int = -1) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"day_index": 0, "trade_date": {}, "today_rows": [], "upcoming_rows": [], "all_rows": []}
+	if day_index <= 0 or day_index == RunState.day_index:
+		return get_dashboard_event_snapshot().get("corporate_meeting_snapshot", {}).duplicate(true)
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	return corporate_action_system.get_meeting_snapshot(RunState, day_index)
+
+
+func _rebuild_dashboard_event_snapshot_cache(cache_key: String = "") -> Dictionary:
+	if not RunState.has_active_run():
+		dashboard_event_snapshot_cache = _empty_dashboard_event_snapshot()
+		return dashboard_event_snapshot_cache
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var trade_date: Dictionary = RunState.get_current_trade_date()
+	var report_calendar_snapshot: Dictionary = RunState.get_report_calendar_month(
+		int(trade_date.get("year", 2020)),
+		int(trade_date.get("month", 1))
+	)
+	var meeting_snapshot: Dictionary = corporate_action_system.get_meeting_snapshot(RunState)
+	var resolved_cache_key: String = cache_key if not cache_key.is_empty() else _dashboard_event_snapshot_cache_key()
+	dashboard_event_snapshot_cache = {
+		"cache_key": resolved_cache_key,
+		"day_index": RunState.day_index,
+		"trade_date": trade_date,
+		"report_calendar_snapshot": report_calendar_snapshot,
+		"upcoming_report_rows": RunState.get_upcoming_quarterly_reports(DASHBOARD_REPORT_ROW_CACHE_LIMIT),
+		"corporate_meeting_snapshot": meeting_snapshot,
+		"upcoming_meeting_rows": meeting_snapshot.get("upcoming_rows", []).duplicate(true)
+	}
+	return dashboard_event_snapshot_cache
+
+
+func _invalidate_dashboard_event_snapshot_cache() -> void:
+	dashboard_event_snapshot_cache = {}
+
+
+func _empty_dashboard_event_snapshot() -> Dictionary:
+	return {
+		"cache_key": "",
+		"day_index": RunState.day_index if RunState.has_active_run() else 0,
+		"trade_date": RunState.get_current_trade_date() if RunState.has_active_run() else {},
+		"report_calendar_snapshot": {},
+		"upcoming_report_rows": [],
+		"corporate_meeting_snapshot": {
+			"day_index": RunState.day_index if RunState.has_active_run() else 0,
+			"trade_date": RunState.get_current_trade_date() if RunState.has_active_run() else {},
+			"today_rows": [],
+			"upcoming_rows": [],
+			"all_rows": []
+		},
+		"upcoming_meeting_rows": []
+	}
+
+
+func _is_current_report_calendar_month(year_value: int, month_value: int) -> bool:
+	if not RunState.has_active_run():
+		return false
+	var trade_date: Dictionary = RunState.get_current_trade_date()
+	return int(trade_date.get("year", 2020)) == year_value and int(trade_date.get("month", 1)) == month_value
+
+
+func _dashboard_event_snapshot_cache_key() -> String:
+	if not RunState.has_active_run():
+		return ""
+	var trade_date: Dictionary = RunState.get_current_trade_date()
+	var holding_parts: Array = []
+	var holdings: Dictionary = RunState.player_portfolio.get("holdings", {})
+	for company_id_value in holdings.keys():
+		var company_id: String = str(company_id_value)
+		var holding: Dictionary = holdings.get(company_id, {})
+		holding_parts.append("%s:%d" % [company_id, int(holding.get("shares", 0))])
+	holding_parts.sort()
+	var attended_parts: Array = []
+	for meeting_id_value in RunState.attended_meetings.keys():
+		var meeting_id: String = str(meeting_id_value)
+		var attended_row: Dictionary = RunState.attended_meetings.get(meeting_id, {})
+		if bool(attended_row.get("attended", false)):
+			attended_parts.append("%s:%d" % [meeting_id, int(attended_row.get("day_index", 0))])
+	attended_parts.sort()
+	var meeting_parts: Array = []
+	for date_key_value in RunState.corporate_meeting_calendar.keys():
+		var date_key: String = str(date_key_value)
+		for meeting_value in RunState.corporate_meeting_calendar.get(date_key, []):
+			var meeting: Dictionary = meeting_value
+			meeting_parts.append("%s:%s:%d" % [
+				str(meeting.get("id", "")),
+				str(meeting.get("status", "")),
+				int(meeting.get("trading_day_number", 0))
+			])
+	meeting_parts.sort()
+	return "%d|%s|%s|%s|%s" % [
+		RunState.day_index,
+		trading_calendar.to_key(trade_date),
+		str(hash("|".join(holding_parts))),
+		str(hash("|".join(attended_parts))),
+		str(hash("|".join(meeting_parts)))
+	]
 
 
 func get_corporate_meeting_detail(meeting_id: String) -> Dictionary:
@@ -713,6 +839,7 @@ func attend_corporate_meeting(meeting_id: String) -> Dictionary:
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	var result: Dictionary = corporate_action_system.attend_meeting(RunState, meeting_id)
 	if bool(result.get("success", false)):
+		_invalidate_dashboard_event_snapshot_cache()
 		_request_autosave("corporate_meeting_attend")
 		network_changed.emit()
 	return result
@@ -724,6 +851,7 @@ func start_corporate_meeting_session(meeting_id: String) -> Dictionary:
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	var result: Dictionary = corporate_action_system.start_meeting_session(RunState, DataRepository, meeting_id)
 	if bool(result.get("success", false)):
+		_invalidate_dashboard_event_snapshot_cache()
 		_request_autosave("corporate_meeting_session_start")
 		network_changed.emit()
 	return result
@@ -763,6 +891,7 @@ func submit_corporate_meeting_vote(meeting_id: String, agenda_id: String, vote_c
 		ownership_snapshot
 	)
 	if bool(result.get("success", false)):
+		_invalidate_dashboard_event_snapshot_cache()
 		_request_autosave("corporate_meeting_vote")
 		network_changed.emit()
 	return result
@@ -1134,6 +1263,7 @@ func get_daily_recap_snapshot() -> Dictionary:
 	if not RunState.has_active_run():
 		return {}
 	var summary: Dictionary = get_latest_summary()
+	var dashboard_event_snapshot: Dictionary = get_dashboard_event_snapshot()
 	var news_snapshot: Dictionary = _build_news_snapshot()
 	var social_snapshot: Dictionary = get_twooter_snapshot()
 	var network_snapshot: Dictionary = get_network_snapshot()
@@ -1149,6 +1279,7 @@ func get_daily_recap_snapshot() -> Dictionary:
 		"summary": summary,
 		"market_sentiment": RunState.market_sentiment,
 		"portfolio": get_portfolio_snapshot(),
+		"dashboard_events": dashboard_event_snapshot,
 		"activity_counts": activity_counts,
 		"badges": get_desktop_app_badge_snapshot(activity_counts),
 		"daily_action": get_daily_action_snapshot()

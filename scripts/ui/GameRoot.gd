@@ -4898,6 +4898,7 @@ func _refresh_dashboard() -> void:
 	_log_perf_phase(log_phase_details, "_refresh_dashboard:company_rows", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	var trade_date: Dictionary = GameManager.get_current_trade_date()
+	var dashboard_event_snapshot: Dictionary = GameManager.get_dashboard_event_snapshot()
 	var trading_day_number: int = max(RunState.day_index + 1, 1)
 	dashboard_index_date_label.text = "Day %d  |  %s" % [
 		trading_day_number,
@@ -4918,17 +4919,17 @@ func _refresh_dashboard() -> void:
 		DASHBOARD_MONTH_NAMES[clamp(int(trade_date.get("month", 1)) - 1, 0, DASHBOARD_MONTH_NAMES.size() - 1)],
 		int(trade_date.get("year", 2020))
 	]
-	_refresh_dashboard_calendar(trade_date)
+	_refresh_dashboard_calendar(trade_date, dashboard_event_snapshot.get("report_calendar_snapshot", {}))
 	_log_perf_phase(log_phase_details, "_refresh_dashboard:calendar", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	_refresh_dashboard_movers(company_rows)
 	_log_perf_phase(log_phase_details, "_refresh_dashboard:movers", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	dashboard_placeholder_bottom_title_label.text = "Upcoming Meetings / Reports"
-	dashboard_placeholder_bottom_body_label.text = _format_upcoming_report_rows(GameManager.get_upcoming_report_rows(8))
+	dashboard_placeholder_bottom_body_label.text = _format_upcoming_report_rows(dashboard_event_snapshot.get("upcoming_report_rows", []))
 	_log_perf_phase(log_phase_details, "_refresh_dashboard:report_rows", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
-	_refresh_dashboard_meetings(GameManager.get_corporate_meeting_snapshot().get("upcoming_rows", []))
+	_refresh_dashboard_meetings(dashboard_event_snapshot.get("upcoming_meeting_rows", []))
 	_log_perf_phase(log_phase_details, "_refresh_dashboard:meetings", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	_set_label_tone(dashboard_index_points_value_label, _color_for_change(float(index_snapshot.get("day_change_pct", 0.0))))
@@ -5100,7 +5101,7 @@ func _build_dashboard_mover_row(company_row: Dictionary, rank_number: int) -> Co
 	return row_wrap
 
 
-func _refresh_dashboard_calendar(current_date: Dictionary) -> void:
+func _refresh_dashboard_calendar(current_date: Dictionary, cached_report_snapshot: Dictionary = {}) -> void:
 	if dashboard_calendar_days_grid == null:
 		return
 
@@ -5111,7 +5112,9 @@ func _refresh_dashboard_calendar(current_date: Dictionary) -> void:
 	var year_value: int = int(current_date.get("year", 2020))
 	var month_value: int = int(current_date.get("month", 1))
 	var current_day: int = int(current_date.get("day", 1))
-	var report_snapshot: Dictionary = GameManager.get_report_calendar_snapshot(year_value, month_value)
+	var report_snapshot: Dictionary = cached_report_snapshot
+	if report_snapshot.is_empty():
+		report_snapshot = GameManager.get_report_calendar_snapshot(year_value, month_value)
 	var reports_by_day: Dictionary = report_snapshot.get("reports_by_day", {})
 	var first_weekday: int = _weekday_for_date(year_value, month_value, 1)
 	var days_in_month: int = _days_in_month(year_value, month_value)

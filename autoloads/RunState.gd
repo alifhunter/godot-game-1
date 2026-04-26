@@ -1098,20 +1098,17 @@ func get_report_calendar_month(year_value: int, month_value: int) -> Dictionary:
 func get_upcoming_quarterly_reports(limit: int = 8) -> Array:
 	var reports: Array = []
 	var current_key: String = trading_calendar.to_key(current_trade_date)
-	for date_key_value in get_quarterly_report_calendar().keys():
+	var date_keys: Array = get_quarterly_report_calendar().keys()
+	date_keys.sort()
+	for date_key_value in date_keys:
 		var date_key: String = str(date_key_value)
 		if date_key < current_key:
 			continue
 		for report_value in _reports_for_date_key(date_key):
 			var report: Dictionary = report_value
 			reports.append(report.duplicate(true))
-	reports.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		if int(a.get("trading_day_number", 0)) == int(b.get("trading_day_number", 0)):
-			return str(a.get("ticker", "")) < str(b.get("ticker", ""))
-		return int(a.get("trading_day_number", 0)) < int(b.get("trading_day_number", 0))
-	)
-	if limit > 0 and reports.size() > limit:
-		reports = reports.slice(0, limit)
+			if limit > 0 and reports.size() >= limit:
+				return reports
 	return reports
 
 

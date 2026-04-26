@@ -864,6 +864,26 @@ func _run_scenario(
 			"message": "Smoke test expected every generated company to receive a Q1 report date spread across January."
 		}
 
+	if not GameManager.has_method("get_dashboard_event_snapshot"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected GameManager to expose the cached dashboard event snapshot."
+		}
+	var dashboard_event_snapshot: Dictionary = GameManager.get_dashboard_event_snapshot()
+	if (
+		dashboard_event_snapshot.get("upcoming_report_rows", []).is_empty() or
+		dashboard_event_snapshot.get("upcoming_meeting_rows", []).is_empty() or
+		dashboard_event_snapshot.get("report_calendar_snapshot", {}).is_empty()
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the cached dashboard event snapshot to include reports, meetings, and the current report calendar."
+		}
+
 	var opening_meeting_snapshot: Dictionary = GameManager.get_corporate_meeting_snapshot()
 	var opening_meeting_rows: Array = opening_meeting_snapshot.get("upcoming_rows", [])
 	if opening_meeting_rows.is_empty():
