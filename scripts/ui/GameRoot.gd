@@ -240,6 +240,8 @@ var desktop_app_windows: Dictionary = {}
 var desktop_dragging_app_id: String = ""
 var desktop_drag_offset: Vector2 = Vector2.ZERO
 var advance_day_processing: bool = false
+var deferred_open_app_refresh_pending: bool = false
+var deferred_open_app_refresh_scheduled: bool = false
 var pending_daily_recap_snapshot: Dictionary = {}
 var daily_recap_dialog: Control = null
 var daily_recap_body_label: Label = null
@@ -772,7 +774,7 @@ func _refresh_order_ticket_toggle_state() -> void:
 	order_ticket_toggle_button.tooltip_text = "Show the order ticket." if order_ticket_collapsed else "Hide the order ticket."
 
 
-func _refresh_all() -> void:
+func _refresh_all(refresh_open_apps: bool = true) -> void:
 	var started_at_usec: int = Time.get_ticks_usec()
 	var phase_started_at_usec: int = started_at_usec
 	var log_phase_details: bool = advance_day_processing
@@ -789,8 +791,11 @@ func _refresh_all() -> void:
 		_refresh_sidebar()
 		_log_perf_phase(log_phase_details, "_refresh_all:sidebar", phase_started_at_usec)
 		phase_started_at_usec = Time.get_ticks_usec()
-		_refresh_open_desktop_apps(log_phase_details)
-		_log_perf_phase(log_phase_details, "_refresh_all:open_apps", phase_started_at_usec)
+		if refresh_open_apps:
+			_refresh_open_desktop_apps(log_phase_details)
+			_log_perf_phase(log_phase_details, "_refresh_all:open_apps", phase_started_at_usec)
+		else:
+			_log_perf_phase(log_phase_details, "_refresh_all:open_apps_deferred", phase_started_at_usec)
 		phase_started_at_usec = Time.get_ticks_usec()
 		_refresh_debug_overlay()
 		_log_perf_phase(log_phase_details, "_refresh_all:debug_overlay", phase_started_at_usec)
@@ -811,8 +816,11 @@ func _refresh_all() -> void:
 	_refresh_dashboard()
 	_log_perf_phase(log_phase_details, "_refresh_all:dashboard", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
-	_refresh_open_desktop_apps(log_phase_details)
-	_log_perf_phase(log_phase_details, "_refresh_all:open_apps", phase_started_at_usec)
+	if refresh_open_apps:
+		_refresh_open_desktop_apps(log_phase_details)
+		_log_perf_phase(log_phase_details, "_refresh_all:open_apps", phase_started_at_usec)
+	else:
+		_log_perf_phase(log_phase_details, "_refresh_all:open_apps_deferred", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	_refresh_portfolio()
 	_log_perf_phase(log_phase_details, "_refresh_all:portfolio", phase_started_at_usec)
@@ -850,6 +858,39 @@ func _refresh_open_desktop_apps(log_phase_details: bool = false) -> void:
 		var upgrades_started_at_usec: int = Time.get_ticks_usec()
 		_refresh_upgrades()
 		_log_perf_phase(log_phase_details, "_refresh_open_apps:upgrades", upgrades_started_at_usec)
+
+
+func _queue_deferred_open_app_refresh() -> void:
+	if not RunState.has_active_run():
+		return
+	deferred_open_app_refresh_pending = true
+
+
+func _schedule_deferred_open_app_refresh() -> void:
+	if not deferred_open_app_refresh_pending or deferred_open_app_refresh_scheduled:
+		return
+	deferred_open_app_refresh_scheduled = true
+	call_deferred("_run_deferred_open_app_refresh_after_frame")
+
+
+func _run_deferred_open_app_refresh_after_frame() -> void:
+	await get_tree().process_frame
+	deferred_open_app_refresh_scheduled = false
+	if not deferred_open_app_refresh_pending:
+		return
+	var waiting_for_recap: bool = (
+		not pending_daily_recap_snapshot.is_empty() and
+		daily_recap_dialog != null and
+		daily_recap_body_label != null
+	)
+	if advance_day_processing or waiting_for_recap:
+		_schedule_deferred_open_app_refresh()
+		return
+	var started_at_usec: int = Time.get_ticks_usec()
+	deferred_open_app_refresh_pending = false
+	_refresh_open_desktop_apps(true)
+	_refresh_desktop()
+	_log_perf_elapsed("_refresh_deferred_open_apps", started_at_usec)
 
 
 func _on_portfolio_changed() -> void:
@@ -903,6 +944,9 @@ func _on_watchlist_changed() -> void:
 
 
 func _on_network_changed() -> void:
+	if advance_day_processing:
+		_queue_deferred_open_app_refresh()
+		return
 	_refresh_network()
 
 
@@ -1269,6 +1313,9 @@ func _refresh_network() -> void:
 
 
 func _refresh_daily_action_displays() -> void:
+	if advance_day_processing:
+		_queue_deferred_open_app_refresh()
+		return
 	if _is_desktop_app_window_open(APP_ID_NETWORK):
 		_refresh_network()
 	if _is_desktop_app_window_open(APP_ID_ACADEMY):
@@ -7056,6 +7103,7 @@ func _on_next_day_pressed() -> void:
 	GameManager.advance_day()
 	if advance_day_processing:
 		_finish_advance_day_processing()
+		_schedule_deferred_open_app_refresh()
 	_log_perf_elapsed("_on_next_day_pressed", started_at_usec)
 
 
@@ -7067,7 +7115,11 @@ func _on_day_progressed(_day_index: int) -> void:
 		selected_news_archive_year = 0
 		selected_news_archive_month = 0
 		selected_news_article_id = ""
-	_refresh_all()
+	if advance_day_processing:
+		_queue_deferred_open_app_refresh()
+		_refresh_all(false)
+	else:
+		_refresh_all()
 	_log_perf_elapsed("_on_day_progressed", started_at_usec)
 
 
@@ -7084,6 +7136,7 @@ func _on_summary_ready(_summary: Dictionary) -> void:
 		_finish_advance_day_processing()
 		_log_perf_phase(true, "_on_summary_ready:finish_processing", phase_started_at_usec)
 		call_deferred("_show_daily_recap_if_pending")
+		_schedule_deferred_open_app_refresh()
 	_log_perf_elapsed("_on_summary_ready", started_at_usec)
 
 
