@@ -33,7 +33,8 @@ Read this file first in the next session.
     - `0941b56 Defer Advance Day save flush`
     - `c996b5c Slim Dashboard event cache`
     - `d6a2a35 Count Twooter activity without feed rebuild`
-    - latest checkpoint message: `Add snappy UI animation polish`
+    - `1485334 Add snappy UI animation polish`
+    - latest checkpoint message: `Smooth Daily Recap reveal`
   - after checkpoint commits, `git status --short` should be clean except ignored local `logs/` output
 
 ## Latest Session Snapshot
@@ -41,7 +42,7 @@ Read this file first in the next session.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses, shows short processing phases on the desktop button, and now has a snappy press/phase pulse that resets to neutral after processing.
   - Daily Recap is now a custom `GameRoot.gd` overlay rather than a stock Godot dialog, so it can share the same dark-brown title-bar chrome as `News`, `Academy`, `Network`, and `Shop`.
-  - Daily Recap becomes visible immediately for recap-ready timing and post-recap save flushing, then fades/scales in over a short local tween.
+  - Daily Recap becomes visible immediately for recap-ready timing and post-recap save flushing, then uses a smooth fade-only reveal; the outer frame border is intentionally removed so only the title bar and inner content outline frame the recap.
   - Daily Recap visible copy is deliberately player-facing:
     - shows trade date, `Index Gorengan today`, portfolio/equity, best/weakest tape, app activity counts, and AP reset
     - hides accumulation/distribution rows, broker labels, and broker-colored summary explanations such as `zombie-led accumulation`
@@ -104,8 +105,8 @@ Read this file first in the next session.
 - Last successful verification in this session:
   - `git diff --check`
   - Godot project-load check
-  - normal-play perf scene with `NORMAL_PLAY_PERF_OK`
-  - quick smoke with `--smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
+  - quick smoke with `--log-file logs\smoke-recap-animation.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
+  - latest normal-play perf scene from the previous UI animation pass printed `NORMAL_PLAY_PERF_OK`; it was not rerun for the fade-only recap/border tweak
   - note: the quick smoke may print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` on Windows; treat it as non-blocking Godot/Windows certificate-store noise unless it appears before smoke output or affects network/API work
 
 ## Current Playable State
@@ -1681,7 +1682,7 @@ Read this file first in the next session.
   - watchlist popup add flow works
   - `All Stock` add button immediately adds into the watchlist and persists through the autosave path
   - `Portfolio` tab appears in the trade sidebar and lists held stocks when present
-  - note: the snappy animation polish is now asserted at settled state in smoke; older visual polish below remains mostly visual:
+  - note: the snappy animation / recap border polish is now asserted at settled state in smoke; older visual polish below remains mostly visual:
     - Figma-inspired desktop top bar / framed canvas shell
     - desktop launcher icon sizing / spacing / alignment polish
     - draggable multi-window desktop behavior, default placements, and title-bar stacking
@@ -1694,15 +1695,16 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
-  - Most recent pass on `2026-04-26`:
+  - Most recent UI-only pass on `2026-04-26`:
     - `git diff --check` passed
     - Godot project-load check passed
-    - quick Godot headless smoke with `--log-file logs\smoke-ui-animation.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
-    - normal-play perf scene with `--log-file logs\normal_play_perf_ui_animation_rerun.log --scene res://scenes/tests/NormalPlayPerfTest.tscn -- --smoke-local-io` passed with `NORMAL_PLAY_PERF_OK`
+    - quick Godot headless smoke with `--log-file logs\smoke-recap-animation.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
+    - this covered smoother fade-only Daily Recap reveal settling to neutral, removed Daily Recap outer frame border, snappy Advance Day button feedback settling to neutral, desktop app window open/focus animation settling to neutral, Summary and News split perf logs, count-only Twooter current-day activity matching the rendered Twooter post count, shared News/Twooter feed context reuse during Advance Day, deferred UI save flush after Daily Recap visibility, direct `GameManager.advance_day()` immediate flush, queued per-app open-window refreshes, cached Daily Recap activity counts, persisted desktop badge counts, cached Dashboard event snapshots, shareholder-only `RUPS` / `RUPSLB` attendance rejection for zero-position players, blocked zero-position interactive `RUPSLB` overlay entry, and the shareholder-owned interactive `RUPSLB` vote flow
+    - non-blocking Windows/Godot note: this smoke run can print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; do not treat that trailing message as a gameplay/test failure by itself
+  - Latest normal-play perf scene pass with `NORMAL_PLAY_PERF_OK` on `2026-04-26`:
+    - command used `--log-file logs\normal_play_perf_ui_animation_rerun.log --scene res://scenes/tests/NormalPlayPerfTest.tscn -- --smoke-local-io`
     - latest local headless perf result after snappy UI animation polish: `open_network=53.88ms`, `advance_network_open_recap_ready=1209.79ms`, `advance_network_open=1608.44ms`, `advance_desktop_only_recap_ready=1204.26ms`, `advance_desktop_only=1534.0ms`, `open_stock=122.77ms`, `advance_stock_open_recap_ready=1248.48ms`, `advance_stock_open=1688.24ms`, `open_news=329.36ms`, `open_network_with_news=77.49ms`, `advance_news_network_open_recap_ready=1357.87ms`, `advance_news_network_open=2081.38ms`, `flush_pending_save=350.6ms`, `local_save_bytes=2010467`
     - relevant engine perf logs from the same run: UI-button Advance Day backend uses `request_save` around `0.08-0.17ms` instead of `save_active_run`; post-recap save flush logs separately around `315-361ms`; `build_dashboard_event_cache` roughly `24-29ms`; `build_daily_activity_cache` roughly `1-2ms`; `build_daily_activity_cache:social_count` roughly `0.6-0.9ms`; `build_daily_summary` roughly `90-116ms`; `build_news_snapshot` roughly `92-125ms` on most passes with one News-heavy pass up to `223ms`; `emit_price_formed` roughly `99-120ms`; `_on_summary_ready:daily_recap_snapshot` roughly `4-5ms`; `_on_summary_ready` roughly `57-85ms`
-    - this covered snappy Advance Day button feedback settling to neutral, Daily Recap immediate visibility plus settled reveal state, desktop app window open/focus animation settling to neutral, Summary and News split perf logs, count-only Twooter current-day activity matching the rendered Twooter post count, shared News/Twooter feed context reuse during Advance Day, deferred UI save flush after Daily Recap visibility, direct `GameManager.advance_day()` immediate flush, queued per-app open-window refreshes, cached Daily Recap activity counts, persisted desktop badge counts, cached Dashboard event snapshots, shareholder-only `RUPS` / `RUPSLB` attendance rejection for zero-position players, blocked zero-position interactive `RUPSLB` overlay entry, and the shareholder-owned interactive `RUPSLB` vote flow
-    - non-blocking Windows/Godot note: this smoke run can print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; do not treat that trailing message as a gameplay/test failure by itself
   - Previous normal-play perf scene pass with `NORMAL_PLAY_PERF_OK` on `2026-04-26`:
     - latest local headless perf result after Dashboard cache slimming: `open_network=53.91ms`, `advance_network_open_recap_ready=896.59ms`, `advance_network_open=1186.13ms`, `advance_desktop_only_recap_ready=833.75ms`, `advance_desktop_only=1085.33ms`, `open_stock=93.41ms`, `advance_stock_open_recap_ready=916.69ms`, `advance_stock_open=1219.14ms`, `open_news=249.03ms`, `open_network_with_news=47.43ms`, `advance_news_network_open_recap_ready=900.37ms`, `advance_news_network_open=1395.51ms`, `flush_pending_save=256.53ms`, `local_save_bytes=2010467`
     - relevant engine perf logs from the same run: UI-button Advance Day backend uses `request_save` around `0.05ms` instead of `save_active_run`; post-recap save flush logs separately around `230-259ms`; `build_dashboard_event_cache` roughly `18-23ms`; `build_dashboard_event_cache:ensure_corporate_actions` roughly `10-13ms`; `build_dashboard_event_cache:meeting_snapshot` roughly `5ms`; `build_daily_activity_cache` roughly `30-39ms`; `emit_price_formed` roughly `68-81ms`; `_on_summary_ready:daily_recap_snapshot` roughly `3-4ms`; `_on_summary_ready` roughly `44-48ms`; deferred app refreshes log per app, with `network` around `20-24ms`, `stock` around `32ms`, and `news` around `204ms`

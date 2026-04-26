@@ -100,7 +100,7 @@ const TOAST_DURATION_SECONDS := 5.0
 const UI_ANIMATIONS_ENABLED := true
 const UI_ADVANCE_BUTTON_PRESS_SECONDS := 0.09
 const UI_ADVANCE_PHASE_PULSE_SECONDS := 0.12
-const UI_DAILY_RECAP_REVEAL_SECONDS := 0.16
+const UI_DAILY_RECAP_REVEAL_SECONDS := 0.22
 const UI_DESKTOP_WINDOW_OPEN_SECONDS := 0.14
 const UI_DESKTOP_WINDOW_FOCUS_SECONDS := 0.10
 const UI_DAILY_RECAP_SCRIM_ALPHA := 0.18
@@ -7407,10 +7407,9 @@ func _play_daily_recap_reveal() -> void:
 		start_color.a = 0.0
 		scrim.color = start_color
 	if frame != null:
-		_center_control_pivot(frame)
-		frame.scale = Vector2(0.975, 0.975)
 		frame.modulate = Color(1, 1, 1, 0)
 	daily_recap_tween = _create_ui_tween()
+	daily_recap_tween.set_trans(Tween.TRANS_SINE)
 	daily_recap_tween.set_parallel(true)
 	if scrim != null:
 		daily_recap_tween.tween_property(
@@ -7420,12 +7419,6 @@ func _play_daily_recap_reveal() -> void:
 			UI_DAILY_RECAP_REVEAL_SECONDS
 		)
 	if frame != null:
-		daily_recap_tween.tween_property(
-			frame,
-			"scale",
-			Vector2.ONE,
-			UI_DAILY_RECAP_REVEAL_SECONDS
-		)
 		daily_recap_tween.tween_property(
 			frame,
 			"modulate",
@@ -7724,8 +7717,8 @@ func _style_daily_recap_dialog() -> void:
 	if frame != null:
 		var frame_style := StyleBoxFlat.new()
 		frame_style.bg_color = COLOR_DESKTOP_CREAM
-		frame_style.border_color = COLOR_ACADEMY_BROWN
-		frame_style.set_border_width_all(2)
+		frame_style.border_color = Color(COLOR_ACADEMY_BROWN.r, COLOR_ACADEMY_BROWN.g, COLOR_ACADEMY_BROWN.b, 0)
+		frame_style.set_border_width_all(0)
 		frame_style.set_corner_radius_all(0)
 		frame.add_theme_stylebox_override("panel", frame_style)
 	var title_bar: PanelContainer = daily_recap_dialog.get_node_or_null("DailyRecapCenter/DailyRecapFrame/DailyRecapFrameVBox/DailyRecapTitleBar") as PanelContainer

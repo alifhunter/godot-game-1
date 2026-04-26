@@ -1986,11 +1986,14 @@ func _run_scenario(
 		await get_tree().process_frame
 	await _wait_for_ui_animation_settle()
 	var daily_recap_dialog: Control = game_root.find_child("DailyRecapDialog", true, false) as Control
-	var daily_recap_frame: Control = game_root.find_child("DailyRecapFrame", true, false) as Control
+	var daily_recap_frame: PanelContainer = game_root.find_child("DailyRecapFrame", true, false) as PanelContainer
 	var daily_recap_scrim: ColorRect = game_root.find_child("DailyRecapScrim", true, false) as ColorRect
 	var daily_recap_body_label: Label = game_root.find_child("DailyRecapBodyLabel", true, false) as Label
 	var daily_recap_content_panel: PanelContainer = game_root.find_child("DailyRecapContentPanel", true, false) as PanelContainer
 	var daily_recap_title_bar: PanelContainer = game_root.find_child("DailyRecapTitleBar", true, false) as PanelContainer
+	var recap_frame_style: StyleBoxFlat = null
+	if daily_recap_frame != null:
+		recap_frame_style = daily_recap_frame.get_theme_stylebox("panel") as StyleBoxFlat
 	var recap_panel_style: StyleBoxFlat = null
 	if daily_recap_content_panel != null:
 		recap_panel_style = daily_recap_content_panel.get_theme_stylebox("panel") as StyleBoxFlat
@@ -2011,6 +2014,11 @@ func _run_scenario(
 		not daily_recap_dialog.visible or
 		daily_recap_frame == null or
 		not _control_animation_settled(daily_recap_frame) or
+		recap_frame_style == null or
+		recap_frame_style.border_width_left != 0 or
+		recap_frame_style.border_width_top != 0 or
+		recap_frame_style.border_width_right != 0 or
+		recap_frame_style.border_width_bottom != 0 or
 		daily_recap_scrim == null or
 		not is_equal_approx(daily_recap_scrim.color.a, 0.18) or
 		daily_recap_body_label == null or
