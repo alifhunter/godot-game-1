@@ -2023,6 +2023,20 @@ func _run_scenario(
 
 	var recap_snapshot: Dictionary = GameManager.get_daily_recap_snapshot()
 	var recap_counts: Dictionary = recap_snapshot.get("activity_counts", {})
+	var activity_snapshot: Dictionary = GameManager.get_daily_activity_snapshot()
+	var cached_badge_counts: Dictionary = RunState.get_desktop_app_badge_counts()
+	if (
+		int(activity_snapshot.get("day_index", -1)) != RunState.day_index or
+		activity_snapshot.get("activity_counts", {}) != recap_counts or
+		int(cached_badge_counts.get("day_index", -1)) != RunState.day_index or
+		cached_badge_counts.get("counts", {}) != recap_counts
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Daily Recap activity counts to come from the current-day cache and persist into desktop badge counts."
+		}
 	var expect_news_badge: bool = int(recap_counts.get("news", 0)) > 0
 	var expect_social_badge: bool = int(recap_counts.get("social", 0)) > 0
 	var expect_network_badge: bool = int(recap_counts.get("network", 0)) > 0

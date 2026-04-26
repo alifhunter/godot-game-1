@@ -119,6 +119,7 @@ var academy_system = preload("res://systems/AcademySystem.gd").new()
 var background_company_detail_hydration_running: bool = false
 var loading_detail_log_lines: Array = []
 var dashboard_event_snapshot_cache: Dictionary = {}
+var daily_activity_snapshot_cache: Dictionary = {}
 
 
 func _ready() -> void:
@@ -156,6 +157,7 @@ func start_new_run(run_seed: int = 0, difficulty_id: String = DEFAULT_DIFFICULTY
 	RunState.setup_new_run(run_seed, company_definitions, difficulty_config, tutorial_enabled)
 	background_company_detail_hydration_running = false
 	_invalidate_dashboard_event_snapshot_cache()
+	_invalidate_daily_activity_snapshot_cache()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	simulate_opening_session(false)
 	_save_active_run_now("start_new_run")
@@ -197,6 +199,7 @@ func start_new_run_with_loading(
 	)
 	_log_startup_perf_elapsed("new_run_financials_total", financials_started_at_usec, " companies=%d" % company_definitions.size())
 	_invalidate_dashboard_event_snapshot_cache()
+	_invalidate_daily_activity_snapshot_cache()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	await get_tree().process_frame
 
@@ -224,6 +227,7 @@ func load_run_from_save() -> bool:
 	RunState.load_from_dict(saved_run)
 	background_company_detail_hydration_running = false
 	_invalidate_dashboard_event_snapshot_cache()
+	_invalidate_daily_activity_snapshot_cache()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	run_loaded.emit()
 	_enter_game_scene()
@@ -243,6 +247,7 @@ func load_run_from_save_with_loading() -> bool:
 	RunState.load_from_dict(saved_run)
 	background_company_detail_hydration_running = false
 	_invalidate_dashboard_event_snapshot_cache()
+	_invalidate_daily_activity_snapshot_cache()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	run_loaded.emit()
 	await get_tree().process_frame
@@ -327,6 +332,9 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	phase_started_at_usec = Time.get_ticks_usec()
 	RunState.record_news_snapshot(news_snapshot)
 	_log_advance_perf_elapsed(log_advance_perf, "record_news_snapshot", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
+	_rebuild_daily_activity_snapshot_cache(news_snapshot)
+	_log_advance_perf_elapsed(log_advance_perf, "build_daily_activity_cache", phase_started_at_usec)
 	if save_after:
 		phase_started_at_usec = Time.get_ticks_usec()
 		_save_active_run_now("advance_day")
@@ -456,6 +464,7 @@ func purchase_upgrade(track_id: String) -> Dictionary:
 
 	RunState.player_portfolio["cash"] = cash_available - cost
 	RunState.set_upgrade_tier(normalized_track_id, next_tier)
+	_invalidate_daily_activity_snapshot_cache()
 	_request_autosave("purchase_upgrade")
 	upgrades_changed.emit()
 	portfolio_changed.emit()
@@ -490,6 +499,7 @@ func execute_console_command(command_text: String) -> Dictionary:
 		"ordalbos":
 			for track_id in RunState.UPGRADE_TRACK_IDS:
 				RunState.set_upgrade_tier(str(track_id), 1)
+			_invalidate_daily_activity_snapshot_cache()
 			_request_autosave("console_ordalbos")
 			upgrades_changed.emit()
 			daily_actions_changed.emit()
@@ -1259,20 +1269,26 @@ func get_latest_summary() -> Dictionary:
 	return RunState.daily_summary.duplicate(true)
 
 
+func get_daily_activity_snapshot(force_refresh: bool = false) -> Dictionary:
+	if not RunState.has_active_run():
+		return _empty_daily_activity_snapshot()
+	var cache_key: String = _daily_activity_snapshot_cache_key()
+	if (
+		force_refresh or
+		daily_activity_snapshot_cache.is_empty() or
+		str(daily_activity_snapshot_cache.get("cache_key", "")) != cache_key
+	):
+		_rebuild_daily_activity_snapshot_cache({}, cache_key)
+	return daily_activity_snapshot_cache.duplicate(true)
+
+
 func get_daily_recap_snapshot() -> Dictionary:
 	if not RunState.has_active_run():
 		return {}
 	var summary: Dictionary = get_latest_summary()
 	var dashboard_event_snapshot: Dictionary = get_dashboard_event_snapshot()
-	var news_snapshot: Dictionary = _build_news_snapshot()
-	var social_snapshot: Dictionary = get_twooter_snapshot()
-	var network_snapshot: Dictionary = get_network_snapshot()
-	var activity_counts: Dictionary = {
-		"news": _count_news_articles(news_snapshot),
-		"social": social_snapshot.get("posts", []).size(),
-		"network": _count_network_current_day_activity(network_snapshot),
-	}
-	RunState.set_desktop_app_badge_counts(activity_counts)
+	var daily_activity_snapshot: Dictionary = get_daily_activity_snapshot()
+	var activity_counts: Dictionary = daily_activity_snapshot.get("activity_counts", {}).duplicate(true)
 	return {
 		"day_index": RunState.day_index,
 		"trade_date": get_current_trade_date(),
@@ -1308,6 +1324,74 @@ func get_desktop_app_badge_snapshot(activity_counts: Dictionary = {}) -> Diction
 			"seen_day_index": seen_day
 		}
 	return rows
+
+
+func _rebuild_daily_activity_snapshot_cache(news_snapshot: Dictionary = {}, cache_key: String = "") -> Dictionary:
+	if not RunState.has_active_run():
+		daily_activity_snapshot_cache = _empty_daily_activity_snapshot()
+		return daily_activity_snapshot_cache
+	var resolved_news_snapshot: Dictionary = news_snapshot
+	if resolved_news_snapshot.is_empty():
+		resolved_news_snapshot = _build_news_snapshot()
+	var social_snapshot: Dictionary = get_twooter_snapshot()
+	var network_snapshot: Dictionary = get_network_snapshot()
+	var activity_counts: Dictionary = {
+		"news": _count_news_articles(resolved_news_snapshot),
+		"social": social_snapshot.get("posts", []).size(),
+		"network": _count_network_current_day_activity(network_snapshot),
+	}
+	RunState.set_desktop_app_badge_counts(activity_counts)
+	var resolved_cache_key: String = cache_key if not cache_key.is_empty() else _daily_activity_snapshot_cache_key()
+	daily_activity_snapshot_cache = {
+		"cache_key": resolved_cache_key,
+		"day_index": RunState.day_index,
+		"trade_date": RunState.get_current_trade_date(),
+		"activity_counts": activity_counts,
+		"badge_counts": RunState.get_desktop_app_badge_counts()
+	}
+	return daily_activity_snapshot_cache
+
+
+func _invalidate_daily_activity_snapshot_cache() -> void:
+	daily_activity_snapshot_cache = {}
+
+
+func _empty_daily_activity_snapshot() -> Dictionary:
+	return {
+		"cache_key": "",
+		"day_index": RunState.day_index if RunState.has_active_run() else 0,
+		"trade_date": RunState.get_current_trade_date() if RunState.has_active_run() else {},
+		"activity_counts": {
+			"news": 0,
+			"social": 0,
+			"network": 0
+		},
+		"badge_counts": RunState.get_desktop_app_badge_counts() if RunState.has_active_run() else {
+			"day_index": 0,
+			"counts": {
+				"news": 0,
+				"social": 0,
+				"network": 0
+			}
+		}
+	}
+
+
+func _daily_activity_snapshot_cache_key() -> String:
+	if not RunState.has_active_run():
+		return ""
+	var trade_date: Dictionary = RunState.get_current_trade_date()
+	return "%d|%s|news:%d|social:%d|events:%d|tips:%d|requests:%d|discoveries:%d|contacts:%d" % [
+		RunState.day_index,
+		trading_calendar.to_key(trade_date),
+		get_unlocked_news_intel_level(),
+		get_unlocked_twooter_access_tier(),
+		RunState.event_history.size(),
+		RunState.network_tip_journal.size(),
+		RunState.network_requests.size(),
+		RunState.network_discoveries.size(),
+		RunState.network_contacts.size()
+	]
 
 
 func mark_desktop_app_seen(app_id: String) -> void:
@@ -1407,6 +1491,7 @@ func discover_network_contacts_from_article(article: Dictionary) -> Array:
 		return []
 	var discovered: Array = contact_network_system.discover_from_article(RunState, DataRepository, article)
 	if not discovered.is_empty():
+		_invalidate_daily_activity_snapshot_cache()
 		_request_autosave("discover_network_from_article")
 	return discovered
 
@@ -1416,6 +1501,7 @@ func discover_network_contacts_for_company(company_id: String) -> Array:
 		return []
 	var discovered: Array = contact_network_system.discover_for_company(RunState, DataRepository, company_id)
 	if not discovered.is_empty():
+		_invalidate_daily_activity_snapshot_cache()
 		_request_autosave("discover_network_for_company")
 	return discovered
 
@@ -1429,6 +1515,7 @@ func meet_contact(contact_id: String, source_context: Dictionary = {}) -> Dictio
 	if bool(result.get("success", false)):
 		_spend_network_action("meet")
 		result["action_cost"] = get_network_action_cost("meet")
+		_invalidate_daily_activity_snapshot_cache()
 		_request_autosave("network_meet")
 		daily_actions_changed.emit()
 		network_changed.emit()
@@ -1445,6 +1532,7 @@ func request_contact_tip(contact_id: String, company_id: String = "") -> Diction
 	if bool(result.get("success", false)):
 		_spend_network_action("tip")
 		result["action_cost"] = get_network_action_cost("tip")
+		_invalidate_daily_activity_snapshot_cache()
 		_request_autosave("network_tip")
 		daily_actions_changed.emit()
 		network_changed.emit()
@@ -1460,6 +1548,7 @@ func accept_contact_request(contact_id: String, company_id: String = "") -> Dict
 	if bool(result.get("success", false)):
 		_spend_network_action("request")
 		result["action_cost"] = get_network_action_cost("request")
+		_invalidate_daily_activity_snapshot_cache()
 		_request_autosave("network_request")
 		daily_actions_changed.emit()
 		network_changed.emit()
@@ -1475,6 +1564,7 @@ func request_contact_referral(contact_id: String, company_id: String = "", affil
 	if bool(result.get("success", false)):
 		_spend_network_action("referral")
 		result["action_cost"] = get_network_action_cost("referral")
+		_invalidate_daily_activity_snapshot_cache()
 		_request_autosave("network_referral")
 		daily_actions_changed.emit()
 		network_changed.emit()
@@ -1490,6 +1580,7 @@ func follow_up_contact_tip(contact_id: String, followup_id: String) -> Dictionar
 	if bool(result.get("success", false)):
 		_spend_network_action("followup")
 		result["action_cost"] = get_network_action_cost("followup")
+		_invalidate_daily_activity_snapshot_cache()
 		_request_autosave("network_tip_followup")
 		daily_actions_changed.emit()
 		network_changed.emit()
@@ -1505,6 +1596,7 @@ func ask_contact_source_check(contact_id: String) -> Dictionary:
 	if bool(result.get("success", false)):
 		_spend_network_action("source_check")
 		result["action_cost"] = get_network_action_cost("source_check")
+		_invalidate_daily_activity_snapshot_cache()
 		_request_autosave("network_source_check")
 		daily_actions_changed.emit()
 		network_changed.emit()
@@ -1630,6 +1722,7 @@ func debug_generate_event(event_id: String) -> Dictionary:
 	else:
 		return {"success": false, "message": "No debug generator is defined for that event family."}
 
+	_invalidate_daily_activity_snapshot_cache()
 	_request_autosave("debug_generate_event")
 	return {
 		"success": true,
