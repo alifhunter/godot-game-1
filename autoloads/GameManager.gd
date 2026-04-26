@@ -329,19 +329,20 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 		_log_advance_perf_elapsed(log_advance_perf, "emit_daily_actions_changed", phase_started_at_usec)
 
 	phase_started_at_usec = Time.get_ticks_usec()
-	var summary: Dictionary = summary_system.build_daily_summary(RunState, DataRepository)
+	var summary: Dictionary = summary_system.build_daily_summary(RunState, DataRepository, log_advance_perf)
 	_log_advance_perf_elapsed(log_advance_perf, "build_daily_summary", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	RunState.set_daily_summary(summary)
 	_log_advance_perf_elapsed(log_advance_perf, "set_daily_summary", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
-	var news_snapshot: Dictionary = _build_news_snapshot()
+	var feed_context: Dictionary = _build_news_feed_context(log_advance_perf)
+	var news_snapshot: Dictionary = _build_news_snapshot(-1, log_advance_perf, feed_context)
 	_log_advance_perf_elapsed(log_advance_perf, "build_news_snapshot", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	RunState.record_news_snapshot(news_snapshot)
 	_log_advance_perf_elapsed(log_advance_perf, "record_news_snapshot", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
-	_rebuild_daily_activity_snapshot_cache(news_snapshot, "", log_advance_perf)
+	_rebuild_daily_activity_snapshot_cache(news_snapshot, "", log_advance_perf, feed_context)
 	_log_advance_perf_elapsed(log_advance_perf, "build_daily_activity_cache", phase_started_at_usec)
 	if save_after:
 		phase_started_at_usec = Time.get_ticks_usec()
@@ -1345,7 +1346,7 @@ func get_desktop_app_badge_snapshot(activity_counts: Dictionary = {}) -> Diction
 	return rows
 
 
-func _rebuild_daily_activity_snapshot_cache(news_snapshot: Dictionary = {}, cache_key: String = "", log_phase_details: bool = false) -> Dictionary:
+func _rebuild_daily_activity_snapshot_cache(news_snapshot: Dictionary = {}, cache_key: String = "", log_phase_details: bool = false, feed_context: Dictionary = {}) -> Dictionary:
 	if not RunState.has_active_run():
 		daily_activity_snapshot_cache = _empty_daily_activity_snapshot()
 		return daily_activity_snapshot_cache
@@ -1355,15 +1356,15 @@ func _rebuild_daily_activity_snapshot_cache(news_snapshot: Dictionary = {}, cach
 		resolved_news_snapshot = _build_news_snapshot()
 	_log_advance_perf_elapsed(log_phase_details, "build_daily_activity_cache:resolve_news", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
-	var social_snapshot: Dictionary = get_twooter_snapshot()
-	_log_advance_perf_elapsed(log_phase_details, "build_daily_activity_cache:social_snapshot", phase_started_at_usec)
+	var social_activity_count: int = _count_twooter_current_day_activity(feed_context)
+	_log_advance_perf_elapsed(log_phase_details, "build_daily_activity_cache:social_count", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	var network_activity_count: int = contact_network_system.count_current_day_activity(RunState)
 	_log_advance_perf_elapsed(log_phase_details, "build_daily_activity_cache:network_count", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	var activity_counts: Dictionary = {
 		"news": _count_news_articles(resolved_news_snapshot),
-		"social": social_snapshot.get("posts", []).size(),
+		"social": social_activity_count,
 		"network": network_activity_count,
 	}
 	_log_advance_perf_elapsed(log_phase_details, "build_daily_activity_cache:count_activity", phase_started_at_usec)
@@ -1448,6 +1449,44 @@ func _count_news_articles(news_snapshot: Dictionary) -> int:
 				continue
 			seen_article_ids[article_id] = true
 	return seen_article_ids.size()
+
+
+func _count_twooter_current_day_activity(feed_context: Dictionary = {}) -> int:
+	var social_trade_date: Dictionary = {}
+	if feed_context.has("trade_date"):
+		social_trade_date = feed_context.get("trade_date", {}).duplicate(true)
+	else:
+		social_trade_date = get_current_trade_date()
+		social_trade_date["day_index"] = RunState.day_index
+	var market_history: Array = []
+	if feed_context.has("market_history"):
+		market_history = feed_context.get("market_history", [])
+	else:
+		market_history = get_market_history()
+	var event_history: Array = []
+	if feed_context.has("event_history"):
+		event_history = feed_context.get("event_history", [])
+	else:
+		event_history = get_event_history()
+	var active_special_events: Array = []
+	if feed_context.has("active_special_events"):
+		active_special_events = feed_context.get("active_special_events", [])
+	else:
+		active_special_events = get_active_special_events()
+	var active_company_arcs: Array = []
+	if feed_context.has("active_company_arcs"):
+		active_company_arcs = feed_context.get("active_company_arcs", [])
+	else:
+		active_company_arcs = get_active_company_arcs()
+	return twooter_feed_system.count_social_posts(
+		DataRepository.get_twooter_feed_data(),
+		market_history,
+		event_history,
+		active_special_events,
+		active_company_arcs,
+		social_trade_date,
+		get_unlocked_twooter_access_tier()
+	)
 
 
 func _count_network_current_day_activity(network_snapshot: Dictionary) -> int:
@@ -1760,9 +1799,41 @@ func debug_generate_event(event_id: String) -> Dictionary:
 	}
 
 
-func _build_news_snapshot(unlocked_intel_level: int = -1) -> Dictionary:
+func _build_news_feed_context(log_phase_details: bool = false) -> Dictionary:
+	var phase_started_at_usec: int = Time.get_ticks_usec()
+	var news_trade_date: Dictionary = get_current_trade_date()
+	news_trade_date["day_index"] = RunState.day_index
+	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:trade_date", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
+	var company_rows: Array = get_company_rows()
+	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:company_rows", phase_started_at_usec, " count=%d" % company_rows.size())
+	phase_started_at_usec = Time.get_ticks_usec()
+	var market_history: Array = get_market_history()
+	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:market_history", phase_started_at_usec, " count=%d" % market_history.size())
+	phase_started_at_usec = Time.get_ticks_usec()
+	var event_history: Array = get_event_history()
+	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:event_history", phase_started_at_usec, " count=%d" % event_history.size())
+	phase_started_at_usec = Time.get_ticks_usec()
+	var active_special_events: Array = get_active_special_events()
+	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:special_events", phase_started_at_usec, " count=%d" % active_special_events.size())
+	phase_started_at_usec = Time.get_ticks_usec()
+	var active_company_arcs: Array = get_active_company_arcs()
+	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:company_arcs", phase_started_at_usec, " count=%d" % active_company_arcs.size())
+	return {
+		"trade_date": news_trade_date,
+		"company_rows": company_rows,
+		"market_history": market_history,
+		"event_history": event_history,
+		"active_special_events": active_special_events,
+		"active_company_arcs": active_company_arcs
+	}
+
+
+func _build_news_snapshot(unlocked_intel_level: int = -1, log_phase_details: bool = false, feed_context: Dictionary = {}) -> Dictionary:
+	var phase_started_at_usec: int = Time.get_ticks_usec()
 	if unlocked_intel_level < 1:
 		unlocked_intel_level = get_unlocked_news_intel_level()
+	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:access", phase_started_at_usec)
 	if not RunState.has_active_run():
 		return {
 			"intel_level": max(unlocked_intel_level, 1),
@@ -1770,20 +1841,26 @@ func _build_news_snapshot(unlocked_intel_level: int = -1) -> Dictionary:
 			"feeds": {}
 		}
 
-	var news_trade_date: Dictionary = get_current_trade_date()
-	news_trade_date["day_index"] = RunState.day_index
-
-	return news_feed_system.build_news_snapshot(
+	var resolved_feed_context: Dictionary = feed_context
+	if resolved_feed_context.is_empty():
+		resolved_feed_context = _build_news_feed_context(log_phase_details)
+	phase_started_at_usec = Time.get_ticks_usec()
+	var feed_data: Dictionary = DataRepository.get_news_feed_data()
+	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:feed_data", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
+	var news_snapshot: Dictionary = news_feed_system.build_news_snapshot(
 		RunState,
-		DataRepository.get_news_feed_data(),
-		get_company_rows(),
-		get_market_history(),
-		get_event_history(),
-		get_active_special_events(),
-		get_active_company_arcs(),
-		news_trade_date,
+		feed_data,
+		resolved_feed_context.get("company_rows", []),
+		resolved_feed_context.get("market_history", []),
+		resolved_feed_context.get("event_history", []),
+		resolved_feed_context.get("active_special_events", []),
+		resolved_feed_context.get("active_company_arcs", []),
+		resolved_feed_context.get("trade_date", {}),
 		unlocked_intel_level
 	)
+	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:feed_system", phase_started_at_usec)
+	return news_snapshot
 
 
 func get_news_snapshot(unlocked_intel_level: int = -1) -> Dictionary:

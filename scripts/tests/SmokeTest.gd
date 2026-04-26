@@ -2052,6 +2052,14 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected Daily Recap activity counts to come from the current-day cache and persist into desktop badge counts."
 		}
+	var current_twooter_post_count: int = GameManager.get_twooter_snapshot().get("posts", []).size()
+	if int(recap_counts.get("social", -1)) != current_twooter_post_count:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected count-only Twooter activity to match the rendered Twooter post count."
+		}
 	var expect_news_badge: bool = int(recap_counts.get("news", 0)) > 0
 	var expect_social_badge: bool = int(recap_counts.get("social", 0)) > 0
 	var expect_network_badge: bool = int(recap_counts.get("network", 0)) > 0

@@ -75,6 +75,101 @@ func build_social_snapshot(
 	}
 
 
+func count_social_posts(
+	feed_data: Dictionary,
+	market_history: Array,
+	event_history: Array,
+	active_special_events: Array,
+	active_company_arcs: Array,
+	current_trade_date: Dictionary,
+	unlocked_access_tier: int = -1
+) -> int:
+	var accounts: Array = feed_data.get("accounts", [])
+	var resolved_access_tier: int = unlocked_access_tier
+	if resolved_access_tier < 1:
+		resolved_access_tier = int(feed_data.get("prototype_default_access_tier", 4))
+	resolved_access_tier = clamp(resolved_access_tier, 1, 4)
+
+	var unlocked_accounts: Array = []
+	for account_value in accounts:
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var account: Dictionary = account_value
+		if int(account.get("tier", 1)) <= resolved_access_tier:
+			unlocked_accounts.append(account)
+
+	var current_day_index: int = int(current_trade_date.get("day_index", current_trade_date.get("day", 0)))
+	var post_ids: Array = []
+	var seen_ids: Dictionary = {}
+	for arc_value in active_company_arcs:
+		if typeof(arc_value) != TYPE_DICTIONARY:
+			continue
+		var arc: Dictionary = arc_value
+		if str(arc.get("phase_visibility", "visible")) != "hidden":
+			continue
+		if _pick_generic_account(unlocked_accounts, 3, "hidden|%s" % str(arc.get("arc_id", ""))).is_empty():
+			continue
+		_append_unique_post_id(post_ids, seen_ids, "hidden_arc|%s" % str(arc.get("arc_id", "")))
+
+	for event_value in active_special_events:
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event_data: Dictionary = event_value
+		var start_day_index: int = int(event_data.get("start_day_index", current_day_index))
+		var duration_days: int = max(int(event_data.get("duration_days", 1)), 1)
+		var elapsed_days: int = max(current_day_index - start_day_index + 1, 1)
+		var progress_ratio: float = clamp(float(elapsed_days) / float(duration_days), 0.0, 1.0)
+		var minimum_tier: int = _required_tier_for_progress(progress_ratio)
+		if _pick_generic_account(unlocked_accounts, minimum_tier, "special|%s|%s" % [str(event_data.get("event_id", "")), start_day_index]).is_empty():
+			continue
+		_append_unique_post_id(post_ids, seen_ids, "active_special|%s|%s" % [str(event_data.get("event_id", "")), start_day_index])
+
+	var recent_history: Array = event_history.duplicate(true)
+	recent_history.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("day_index", -1)) > int(b.get("day_index", -1))
+	)
+	if recent_history.size() > MAX_EVENT_LOOKBACK:
+		recent_history = recent_history.slice(0, MAX_EVENT_LOOKBACK)
+	var source_counts: Dictionary = {}
+	for event_value in recent_history:
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event_data: Dictionary = event_value
+		var source_key: String = str(event_data.get("event_id", "")) + "|" + str(event_data.get("target_company_id", ""))
+		source_counts[source_key] = int(source_counts.get(source_key, 0))
+		if int(source_counts.get(source_key, 0)) >= MAX_RECENT_POSTS_PER_SOURCE:
+			continue
+		var post_id: String = ""
+		if str(event_data.get("event_family", "")) == "person":
+			var person_id: String = str(event_data.get("person_id", ""))
+			for account_value in unlocked_accounts:
+				var account: Dictionary = account_value
+				if str(account.get("person_id", "")) == person_id:
+					post_id = "persona|%s|%s|%s" % [person_id, str(event_data.get("event_id", "")), int(event_data.get("day_index", -1))]
+					break
+		if post_id.is_empty():
+			var age_days: int = max(current_day_index - int(event_data.get("day_index", current_day_index)), 0)
+			var minimum_tier: int = _required_tier_for_event_age(age_days)
+			var company_id: String = str(event_data.get("target_company_id", ""))
+			if _pick_generic_account(unlocked_accounts, minimum_tier, "event|%s|%s" % [str(event_data.get("event_id", "")), company_id]).is_empty():
+				continue
+			post_id = "event|%s|%s|%s" % [str(event_data.get("event_id", "")), int(event_data.get("day_index", -1)), company_id]
+		source_counts[source_key] = int(source_counts.get(source_key, 0)) + 1
+		_append_unique_post_id(post_ids, seen_ids, post_id)
+
+	if not market_history.is_empty() and not _pick_generic_account(unlocked_accounts, 1, "market_wrap").is_empty():
+		var latest_entry: Dictionary = market_history[market_history.size() - 1]
+		_append_unique_post_id(post_ids, seen_ids, "market_wrap|%s" % int(latest_entry.get("day_index", -1)))
+
+	if post_ids.is_empty() and not _pick_generic_account(unlocked_accounts, 1, "fallback").is_empty():
+		_append_unique_post_id(post_ids, seen_ids, "fallback|%s" % current_day_index)
+
+	var post_limit: int = int(feed_data.get("post_limit", 18))
+	if post_limit > 0 and post_ids.size() > post_limit:
+		return post_limit
+	return post_ids.size()
+
+
 func _build_hidden_arc_posts(
 	feed_data: Dictionary,
 	unlocked_accounts: Array,
@@ -721,6 +816,13 @@ func _append_unique_post(posts: Array, seen_ids: Dictionary, post: Dictionary) -
 		return
 	seen_ids[post_id] = true
 	posts.append(post)
+
+
+func _append_unique_post_id(post_ids: Array, seen_ids: Dictionary, post_id: String) -> void:
+	if post_id.is_empty() or seen_ids.has(post_id):
+		return
+	seen_ids[post_id] = true
+	post_ids.append(post_id)
 
 
 func _required_tier_for_progress(progress_ratio: float) -> int:
