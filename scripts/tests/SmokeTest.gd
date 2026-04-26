@@ -784,6 +784,7 @@ func _run_scenario(
 	var network_app_button: Button = game_root.find_child("NetworkAppButton", true, false) as Button
 	var academy_app_button: Button = game_root.find_child("AcademyAppButton", true, false) as Button
 	var upgrades_app_button: Button = game_root.find_child("UpgradesAppButton", true, false) as Button
+	var desktop_advance_day_button: Button = game_root.find_child("DesktopAdvanceDayButton", true, false) as Button
 	var taskbar_stock_button: Button = game_root.find_child("TaskbarStockButton", true, false) as Button
 	var taskbar_news_button: Button = game_root.find_child("TaskbarNewsButton", true, false) as Button
 	var news_window: Control = game_root.find_child("NewsWindow", true, false) as Control
@@ -802,6 +803,8 @@ func _run_scenario(
 	var academy_window: Control = game_root.find_child("AcademyWindow", true, false) as Control
 	var academy_category_tabs: HBoxContainer = game_root.find_child("AcademyCategoryTabs", true, false) as HBoxContainer
 	var academy_section_list: ItemList = game_root.find_child("AcademySectionList", true, false) as ItemList
+	var academy_banner_frame: PanelContainer = game_root.find_child("AcademyLessonBannerFrame", true, false) as PanelContainer
+	var academy_action_row: HBoxContainer = game_root.find_child("AcademyActionRow", true, false) as HBoxContainer
 	var upgrade_window: Control = game_root.find_child("UpgradeWindow", true, false) as Control
 	var upgrade_cards_vbox: VBoxContainer = game_root.find_child("UpgradeCardsVBox", true, false) as VBoxContainer
 	if desktop_layer == null or not desktop_layer.visible:
@@ -812,12 +815,12 @@ func _run_scenario(
 			"message": "Smoke test expected GameRoot to open on the new desktop layer before the trading app is launched."
 		}
 
-	if stock_app_button == null or news_app_button == null or social_app_button == null or network_app_button == null or academy_app_button == null or upgrades_app_button == null or taskbar_stock_button == null or taskbar_news_button == null:
+	if stock_app_button == null or news_app_button == null or social_app_button == null or network_app_button == null or academy_app_button == null or upgrades_app_button == null or desktop_advance_day_button == null or taskbar_stock_button == null or taskbar_news_button == null:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test could not find the prototype desktop icons, Academy icon, Upgrades icon, and taskbar launch buttons."
+			"message": "Smoke test could not find the prototype desktop icons, Advance Day button, Academy icon, Upgrades icon, and taskbar launch buttons."
 		}
 
 	if (
@@ -1354,6 +1357,7 @@ func _run_scenario(
 
 	academy_app_button.emit_signal("pressed")
 	await get_tree().process_frame
+	var academy_category_count: int = int(DataRepository.get_academy_catalog().get("categories", []).size())
 	if (
 		academy_window == null or
 		not academy_window.visible or
@@ -1361,15 +1365,81 @@ func _run_scenario(
 		game_root.get_active_desktop_app_id() != "academy" or
 		game_root.get_desktop_app_window_title("academy") != "Academy" or
 		academy_category_tabs == null or
-		academy_category_tabs.get_child_count() != 4 or
+		academy_category_tabs.get_child_count() != academy_category_count or
 		academy_section_list == null or
-		academy_section_list.item_count != 8
+		academy_section_list.item_count != 8 or
+		academy_banner_frame == null or
+		not academy_banner_frame.visible or
+		academy_action_row == null or
+		not academy_action_row.visible
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the Academy icon to open a lesson window with four categories and eight Technical sections."
+			"message": "Smoke test expected the Academy icon to open a lesson window with catalog categories, eight Technical sections, a banner frame, and an action row."
+		}
+
+	var academy_content_host: Control = academy_window.get_parent() as Control
+	if academy_content_host == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test could not resolve the Academy desktop content host."
+		}
+	var academy_action_rect: Rect2 = academy_action_row.get_global_rect()
+	var academy_host_rect: Rect2 = academy_content_host.get_global_rect()
+	if academy_action_rect.end.y > academy_host_rect.end.y + 1.0:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Academy action row to fit inside the visible desktop window."
+		}
+
+	var academy_text_block: PanelContainer = game_root._build_academy_content_block({
+		"type": "text",
+		"heading": "Smoke Content Block",
+		"body": "Academy content blocks render without replacing the quiz/check system.",
+		"infoboxes": [{"title": "Smoke Infobox", "body": "Nested notes render inside text cards."}],
+		"images": [{"asset_path": "res://assets/academy/lessons/smoke_missing_inline_image.png", "caption": "Inline missing images fall back safely.", "alt": "Missing inline smoke image"}]
+	}) as PanelContainer
+	var academy_key_insights_block: PanelContainer = game_root._build_academy_content_block({
+		"type": "key_insights",
+		"title": "Smoke Key Insights",
+		"bullets": ["Blue insight cards render.", "Bullets stay readable."]
+	}) as PanelContainer
+	var academy_image_block: PanelContainer = game_root._build_academy_content_block({
+		"type": "image",
+		"asset_path": "res://assets/academy/lessons/smoke_missing_image.png",
+		"caption": "Missing images should fall back safely.",
+		"alt": "Missing smoke image"
+	}) as PanelContainer
+	var academy_text_title: Label = academy_text_block.find_child("AcademyTextBlockTitle", true, false) as Label
+	var academy_infobox_card: PanelContainer = academy_text_block.find_child("AcademyInfoboxCard", true, false) as PanelContainer
+	var academy_inline_image_placeholder: Label = academy_text_block.find_child("AcademyTextInlineImagePlaceholder", true, false) as Label
+	var academy_image_placeholder: Label = academy_image_block.find_child("AcademyInlineImagePlaceholder", true, false) as Label
+	var academy_content_blocks_ok: bool = (
+		academy_text_block != null and
+		academy_text_title != null and
+		academy_text_title.get_theme_font_size("font_size") == 16 and
+		academy_infobox_card != null and
+		academy_inline_image_placeholder != null and
+		academy_inline_image_placeholder.text == "MISSING IMAGE" and
+		academy_key_insights_block != null and
+		academy_image_placeholder != null and
+		academy_image_placeholder.text == "MISSING IMAGE"
+	)
+	academy_text_block.queue_free()
+	academy_key_insights_block.queue_free()
+	academy_image_block.queue_free()
+	if not academy_content_blocks_ok:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Academy content_blocks to render text cards, inline text images, nested infoboxes, key insights, and missing-image placeholders."
 		}
 
 	var coming_soon_snapshot: Dictionary = GameManager.get_academy_snapshot("mindset", "")
@@ -1399,7 +1469,16 @@ func _run_scenario(
 			"message": "Smoke test expected Academy inline checks to accept and store correct answers."
 		}
 
-	for required_section_id in ["intro", "market_structure", "candlesticks", "patterns"]:
+	var academy_required_section_ids: Array = []
+	for category_value in DataRepository.get_academy_catalog().get("categories", []):
+		var category: Dictionary = category_value
+		if str(category.get("id", "")) != "technical":
+			continue
+		for required_id_value in category.get("quiz_required_section_ids", []):
+			academy_required_section_ids.append(str(required_id_value))
+	if academy_required_section_ids.is_empty():
+		academy_required_section_ids = ["intro", "market_structure", "candlesticks", "patterns"]
+	for required_section_id in academy_required_section_ids:
 		var read_result: Dictionary = GameManager.mark_academy_section_read("technical", str(required_section_id))
 		if not bool(read_result.get("success", false)):
 			game_root.queue_free()
@@ -1415,7 +1494,7 @@ func _run_scenario(
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected reading Intro, Market Structure, Candlesticks, and Patterns to unlock the Technical quiz."
+			"message": "Smoke test expected reading required Technical Academy sections to unlock the Technical quiz."
 		}
 
 	var saved_academy_state: Dictionary = RunState.to_save_dict()
@@ -1692,6 +1771,10 @@ func _run_scenario(
 			"message": "Smoke test expected closing the Upgrades desktop window to hide the app while keeping the desktop visible."
 		}
 
+	var news_badge: Label = news_app_button.get_node_or_null("DesktopShortcutBadge") as Label
+	var social_badge: Label = social_app_button.get_node_or_null("DesktopShortcutBadge") as Label
+	var network_badge: Label = network_app_button.get_node_or_null("DesktopShortcutBadge") as Label
+
 	news_app_button.emit_signal("pressed")
 	await get_tree().process_frame
 	if (
@@ -1831,8 +1914,132 @@ func _run_scenario(
 			"message": "Smoke test expected closing the News desktop window to hide the app while keeping the desktop visible."
 		}
 
+	var pre_badge_test_state: Dictionary = RunState.to_save_dict()
+	var day_before_button_advance: int = RunState.day_index
+	desktop_advance_day_button.emit_signal("pressed")
+	desktop_advance_day_button.emit_signal("pressed")
+	if not desktop_advance_day_button.disabled:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Advance Day button to disable immediately while processing."
+		}
+	var advance_disabled_text_color: Color = desktop_advance_day_button.get_theme_color("font_disabled_color")
+	if ((advance_disabled_text_color.r + advance_disabled_text_color.g + advance_disabled_text_color.b) / 3.0) > 0.55:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Advance Day processing text to keep a dark, readable disabled font color."
+		}
+	for _frame in range(10):
+		await get_tree().process_frame
+	var daily_recap_dialog: Control = game_root.find_child("DailyRecapDialog", true, false) as Control
+	var daily_recap_body_label: Label = game_root.find_child("DailyRecapBodyLabel", true, false) as Label
+	var daily_recap_content_panel: PanelContainer = game_root.find_child("DailyRecapContentPanel", true, false) as PanelContainer
+	var daily_recap_title_bar: PanelContainer = game_root.find_child("DailyRecapTitleBar", true, false) as PanelContainer
+	var recap_panel_style: StyleBoxFlat = null
+	if daily_recap_content_panel != null:
+		recap_panel_style = daily_recap_content_panel.get_theme_stylebox("panel") as StyleBoxFlat
+	var recap_title_style: StyleBoxFlat = null
+	if daily_recap_title_bar != null:
+		recap_title_style = daily_recap_title_bar.get_theme_stylebox("panel") as StyleBoxFlat
+	var recap_text_color: Color = daily_recap_body_label.get_theme_color("font_color") if daily_recap_body_label != null else Color.WHITE
+	var recap_text_luma: float = (recap_text_color.r + recap_text_color.g + recap_text_color.b) / 3.0
+	var recap_bg_luma: float = -1.0
+	if recap_panel_style != null:
+		recap_bg_luma = (recap_panel_style.bg_color.r + recap_panel_style.bg_color.g + recap_panel_style.bg_color.b) / 3.0
+	if (
+		RunState.day_index != day_before_button_advance + 1 or
+		desktop_advance_day_button.disabled or
+		desktop_advance_day_button.text != "ADVANCE DAY" or
+		daily_recap_dialog == null or
+		not daily_recap_dialog.visible or
+		daily_recap_body_label == null or
+		daily_recap_body_label.text.find("Index Gorengan today:") == -1 or
+		daily_recap_body_label.text.find("Market mood:") != -1 or
+		daily_recap_body_label.text.find("Portfolio:") == -1 or
+		daily_recap_body_label.text.find("Activity:") == -1 or
+		daily_recap_body_label.text.find("Accumulation") != -1 or
+		daily_recap_body_label.text.find("Distribution") != -1 or
+		daily_recap_body_label.text.to_lower().find("zombie") != -1 or
+		daily_recap_title_bar == null or
+		recap_title_style == null or
+		recap_title_style.bg_color != Color(0.509804, 0.231373, 0.0941176, 1) or
+		daily_recap_content_panel == null or
+		recap_panel_style == null or
+		recap_bg_luma < 0.78 or
+		recap_text_luma > 0.45
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected one guarded Advance Day press to advance once, re-enable the button, and show a useful daily recap modal."
+		}
+	daily_recap_dialog.visible = false
+	await get_tree().process_frame
+
+	var recap_snapshot: Dictionary = GameManager.get_daily_recap_snapshot()
+	var recap_counts: Dictionary = recap_snapshot.get("activity_counts", {})
+	var expect_news_badge: bool = int(recap_counts.get("news", 0)) > 0
+	var expect_social_badge: bool = int(recap_counts.get("social", 0)) > 0
+	var expect_network_badge: bool = int(recap_counts.get("network", 0)) > 0
+	if (
+		news_badge == null or
+		social_badge == null or
+		network_badge == null or
+		(expect_news_badge and not news_badge.visible) or
+		(expect_social_badge and not social_badge.visible) or
+		(expect_network_badge and not network_badge.visible)
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected News, Twooter, and Network desktop badges to appear when current-day activity exists."
+		}
+	var saved_badge_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(saved_badge_state)
+	game_root._refresh_desktop()
+	await get_tree().process_frame
+	if (
+		(expect_news_badge and not news_badge.visible) or
+		(expect_social_badge and not social_badge.visible) or
+		(expect_network_badge and not network_badge.visible)
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected desktop badge seen-day state to persist through save/load."
+		}
+
+	news_app_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if news_badge.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected opening News to clear the News desktop badge."
+		}
+	game_root.close_desktop_app("news")
+	await get_tree().process_frame
+	RunState.load_from_dict(pre_badge_test_state)
+	game_root._refresh_all()
+	await get_tree().process_frame
+
 	social_app_button.emit_signal("pressed")
 	await get_tree().process_frame
+	if social_badge.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected opening Twooter to clear the Twooter desktop badge."
+		}
 	if (
 		social_window == null or
 		not social_window.visible or
@@ -1891,6 +2098,13 @@ func _run_scenario(
 	network_app_button.emit_signal("pressed")
 	await get_tree().process_frame
 	await get_tree().process_frame
+	if network_badge.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected opening Network to clear the Network desktop badge."
+		}
 	var network_snapshot: Dictionary = GameManager.get_network_snapshot()
 	if (
 		network_window == null or

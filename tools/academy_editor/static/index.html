@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Academy Editor</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Academy Editor</h1>
+      <p>Dev-only source editor for the in-game Academy catalog.</p>
+    </div>
+    <div class="actions">
+      <button id="reloadBtn">Reload</button>
+      <button id="saveBtn">Save Source</button>
+      <button id="validateBtn">Validate</button>
+      <button id="exportBtn" class="primary">Export Runtime JSON</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <aside class="rail">
+      <section>
+        <div class="section-title">Categories</div>
+        <div id="categoryList" class="list"></div>
+        <button id="addCategoryBtn" class="wide">Add Category</button>
+      </section>
+      <section>
+        <div class="section-title">Sections</div>
+        <div id="sectionList" class="list"></div>
+        <button id="addSectionBtn" class="wide">Add Section</button>
+      </section>
+      <section>
+        <div class="section-title">Global</div>
+        <button id="glossaryBtn" class="wide">Glossary</button>
+      </section>
+    </aside>
+
+    <section class="editor">
+      <div id="message" class="message">Loading...</div>
+      <div id="form"></div>
+    </section>
+
+    <aside class="preview">
+      <div class="section-title">Preview</div>
+      <div id="previewPane" class="preview-pane"></div>
+      <div class="section-title">Validation</div>
+      <pre id="validationPane" class="validation-pane"></pre>
+    </aside>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

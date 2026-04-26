@@ -108,6 +108,8 @@ var attended_meetings = {}
 var corporate_meeting_sessions = {}
 var news_archive_index = {}
 var news_archive_articles = {}
+var desktop_app_seen_days = {}
+var desktop_app_badge_counts = {}
 var network_contacts = {}
 var network_discoveries = {}
 var network_requests = {}
@@ -164,6 +166,8 @@ func reset() -> void:
 	corporate_meeting_sessions = {}
 	news_archive_index = {}
 	news_archive_articles = {}
+	desktop_app_seen_days = {}
+	desktop_app_badge_counts = {}
 	network_contacts = {}
 	network_discoveries = {}
 	network_requests = {}
@@ -352,6 +356,8 @@ func load_from_dict(data: Dictionary) -> void:
 	corporate_meeting_sessions = data.get("corporate_meeting_sessions", {}).duplicate(true)
 	news_archive_index = data.get("news_archive_index", {}).duplicate(true)
 	news_archive_articles = data.get("news_archive_articles", {}).duplicate(true)
+	desktop_app_seen_days = data.get("desktop_app_seen_days", {}).duplicate(true)
+	desktop_app_badge_counts = data.get("desktop_app_badge_counts", {}).duplicate(true)
 	network_contacts = data.get("network_contacts", {}).duplicate(true)
 	network_discoveries = data.get("network_discoveries", {}).duplicate(true)
 	network_requests = data.get("network_requests", {}).duplicate(true)
@@ -427,6 +433,8 @@ func to_save_dict() -> Dictionary:
 		"corporate_meeting_sessions": corporate_meeting_sessions.duplicate(true),
 		"news_archive_index": news_archive_index.duplicate(true),
 		"news_archive_articles": news_archive_articles.duplicate(true),
+		"desktop_app_seen_days": desktop_app_seen_days.duplicate(true),
+		"desktop_app_badge_counts": desktop_app_badge_counts.duplicate(true),
 		"network_contacts": network_contacts.duplicate(true),
 		"network_discoveries": network_discoveries.duplicate(true),
 		"network_requests": network_requests.duplicate(true),
@@ -897,6 +905,59 @@ func set_daily_summary(summary: Dictionary) -> void:
 	daily_summary = summary.duplicate(true)
 	_record_market_history(summary)
 	last_equity_value = get_total_equity()
+
+
+func get_desktop_app_seen_day(app_id: String) -> int:
+	var normalized_app_id: String = app_id.strip_edges().to_lower()
+	if normalized_app_id.is_empty():
+		return day_index
+	return int(desktop_app_seen_days.get(normalized_app_id, day_index))
+
+
+func mark_desktop_app_seen(app_id: String, seen_day_index: int = -1) -> void:
+	var normalized_app_id: String = app_id.strip_edges().to_lower()
+	if normalized_app_id.is_empty():
+		return
+	var resolved_day_index: int = day_index if seen_day_index < 0 else seen_day_index
+	desktop_app_seen_days[normalized_app_id] = resolved_day_index
+
+
+func get_desktop_app_seen_days() -> Dictionary:
+	return desktop_app_seen_days.duplicate(true)
+
+
+func set_desktop_app_badge_counts(activity_counts: Dictionary, badge_day_index: int = -1) -> void:
+	var resolved_day_index: int = day_index if badge_day_index < 0 else badge_day_index
+	desktop_app_badge_counts = {
+		"day_index": resolved_day_index,
+		"counts": {
+			"news": max(int(activity_counts.get("news", 0)), 0),
+			"social": max(int(activity_counts.get("social", 0)), 0),
+			"network": max(int(activity_counts.get("network", 0)), 0)
+		}
+	}
+
+
+func get_desktop_app_badge_counts() -> Dictionary:
+	if desktop_app_badge_counts.is_empty():
+		return {
+			"day_index": day_index,
+			"counts": {
+				"news": 0,
+				"social": 0,
+				"network": 0
+			}
+		}
+	var badge_day_index: int = int(desktop_app_badge_counts.get("day_index", day_index))
+	var counts: Dictionary = desktop_app_badge_counts.get("counts", {}).duplicate(true)
+	return {
+		"day_index": badge_day_index,
+		"counts": {
+			"news": max(int(counts.get("news", 0)), 0),
+			"social": max(int(counts.get("social", 0)), 0),
+			"network": max(int(counts.get("network", 0)), 0)
+		}
+	}
 
 
 func get_difficulty_config() -> Dictionary:

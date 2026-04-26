@@ -9,7 +9,7 @@ Read this file first in the next session.
 - Seed date in-game: `Thursday, 2 January 2020`
 - First player-visible session on a fresh run: `Friday, 3 January 2020`
 - Fresh runs simulate the first trading session immediately before handing control to the player, so the market already has a previous close, current price move, and chart-ready early history
-- Current shell is now `desktop-first`, not the old direct dashboard flow
+- Current shell: `desktop-first`
 - A global fishbowl display effect now runs as an autoloaded screen-space overlay across the whole game, including Main Menu and GameRoot
   - `autoloads/FishbowlOverlay.gd` creates a top-layer mouse-transparent `ColorRect`
   - `assets/shaders/fishbowl_screen.gdshader` applies very subtle curvature with neutral zoom and a visible black vignette
@@ -23,13 +23,44 @@ Read this file first in the next session.
   - committed checkpoint: `615a415 Add Network tip memory and source checks`
   - committed checkpoint: `b857ab8 Make Network source conflicts actionable`
   - committed checkpoint: `16330c6 Polish Network conflicts and add fishbowl display`
-  - latest Network Journal changes are currently uncommitted unless committed after this handoff
+  - latest committed checkpoint: `cbeb722 Add normal play performance baseline`
   - uncommitted files are expected to include:
-    - `systems/ContactNetworkSystem.gd`
+    - `assets/academy/lessons/.gitkeep`
+    - `autoloads/GameManager.gd`
+    - `autoloads/RunState.gd`
+    - `data/academy/academy_catalog.json`
     - `scripts/ui/GameRoot.gd`
     - `scripts/tests/SmokeTest.gd`
-    - `scenes/game/GameRoot.tscn`
+    - `systems/AcademySystem.gd`
+    - `tools/academy_editor/`
     - `PROJECT_HANDOFF.md`
+  - untracked `scripts/tests/NormalPlayPerfTest.gd.uid` may also be present from Godot/editor import; it has not been touched intentionally
+
+## Latest Session Snapshot
+- Most recent work focused on the core daily loop and Academy authoring pipeline.
+- Daily loop status:
+  - `Advance Day` is guarded against double-presses and shows short processing phases on the desktop button.
+  - Daily Recap is now a custom `GameRoot.gd` overlay rather than a stock Godot dialog, so it can share the same dark-brown title-bar chrome as `News`, `Academy`, `Network`, and `Shop`.
+  - Daily Recap visible copy is deliberately player-facing:
+    - shows trade date, `Index Gorengan today`, portfolio/equity, best/weakest tape, app activity counts, and AP reset
+    - hides accumulation/distribution rows, broker labels, and broker-colored summary explanations such as `zombie-led accumulation`
+  - Desktop badges for `News`, `Twooter`, and `Network` are still approximate current-day counts, but the counts are cached when the recap snapshot is built so opening/focusing apps no longer recomputes heavy feed snapshots just to draw badges.
+- Academy status:
+  - Runtime Academy has the newspaper-module layout with top category tabs, left `CORE MODULES` rail, one main scroll area, reserved banner frame, fixed action row, card-style lesson blocks, nested infoboxes, inline images, and blue `key_insights` blocks.
+  - The dev-only local web editor in `tools/academy_editor/` is the source-authoring path for Academy content and exports directly to `data/academy/academy_catalog.json`.
+  - Editor/runtime support image uploads into `assets/academy/lessons/`; missing image paths fall back to placeholders rather than breaking runtime UI.
+- Performance status:
+  - Desktop badge drawing uses cached counts in `RunState.desktop_app_badge_counts`.
+  - Broader app-open timings are still noisy in headless perf runs; `News` can still be heavier than `Network` because it renders article content and can trigger article-source discovery.
+  - `Advance Day` is still mostly dominated by simulation/save work, not desktop badge drawing.
+- Last successful verification in this session:
+  - `git diff --check`
+  - `python tools/academy_editor/server.py --validate`
+  - `python tools/academy_editor/server.py --export --dry-run`
+  - Godot project-load check
+  - direct `GameRoot.tscn` headless launch
+  - quick smoke with `--smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
+  - note: the quick smoke may print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` on Windows; treat it as non-blocking Godot/Windows certificate-store noise unless it appears before smoke output or affects network/API work
 
 ## Current Playable State
 - Main menu supports `New Game`, `Load Run`, `Quit`
@@ -112,6 +143,17 @@ Read this file first in the next session.
     - if the player opens a cold stock before hydration finishes, the Trade tabs now show explicit loading placeholders rather than missing-data fallbacks
   - desktop now uses a Figma-inspired shell rather than the older plain beige launcher
   - top bar shows current trade date on the left, current cash centered, and a gold `Advance Day` action on the right
+  - `Advance Day` now has a guarded processing state:
+    - the button disables while processing and cycles through short phase copy such as `Closing Market`, `Printing News`, `Updating Contacts`, and `Saving Run`
+    - processing copy now keeps dark readable disabled text on the gold button
+    - double-clicks / repeat presses are ignored while the day is processing
+    - after the day finishes, a `Daily Recap` modal summarizes `Index Gorengan today`, portfolio delta, best/weakest tape, News/Twooter/Network activity counts, and AP reset state
+    - Daily Recap now uses the same custom dark-brown title-bar chrome as `News`, `Academy`, `Network`, and `Shop`, with warm cream content, dark text, and a readable brown `Continue` button
+    - Daily Recap intentionally hides broker/internal-style reads such as accumulation/distribution rows and broker-colored summary explanations
+  - desktop notification badges now exist for `News`, `Twooter`, and `Network`
+    - badges are based on current-day activity counts and clear when the relevant app is opened/focused
+    - seen-day state is persisted in `RunState.desktop_app_seen_days`; missing legacy state initializes to the current day so old saves do not show stale badges
+    - current-day badge counts are cached in `RunState.desktop_app_badge_counts` when the daily recap snapshot is built, so desktop badge refresh no longer rebuilds News/Twooter/Network snapshots while opening/focusing app windows
   - the shell is now edge-to-edge with no outer desktop margin; the framed canvas starts directly below the top bar
   - the main desktop area is a cream framed canvas with large launcher tiles
   - the first-pass bottom launcher bar was removed after iteration; the desktop is currently top bar + framed canvas only
@@ -124,11 +166,12 @@ Read this file first in the next session.
   - the current window manager supports one window per app type; launching an already-open app focuses it instead of spawning a duplicate
   - windows are draggable from their title bars, can overlap each other, and can move across the full desktop viewport including the top bar area
   - title bars expose `minimize` and `close`
+  - `News`, `Academy`, `Network`, and `Shop/Upgrades` now share the same warm dark-brown title-bar chrome with light title text
   - both controls currently just hide the window; there is no separate minimized/taskbar state yet
   - `STOCKBOT` opens the trading platform in the large dark desktop window
   - `News` opens a large beige `News Browser` window
   - `Twooter` opens a smaller light social-feed window
-  - `Academy` opens a beige/light learning window
+  - `Academy` opens a warm newspaper-module learning window
   - `Network` opens a beige contact/recognition window for discovered market contacts
   - `Shop` opens the existing beige `Upgrades` cash shop window
   - `Exit` returns to the main menu
@@ -178,7 +221,8 @@ Read this file first in the next session.
   - `Day / Date`
 - The stock-terminal `Advance Day` button was removed; day progression now only lives on the desktop top bar
 - The old top `Focus` read in the navbar has been removed and replaced by `Cash Available`
-- The stock app window intentionally uses a dark theme, while the desktop, `News`, `Twooter`, `Academy`, `Network`, and `Upgrades` windows use beige/light themes
+- The stock app window intentionally uses a dark theme, while the desktop, `News`, `Twooter`, `Academy`, `Network`, and `Upgrades` content areas use beige/light themes
+- `News`, `Academy`, `Network`, and `Upgrades` use shared Academy-style dark-brown desktop-window title chrome; `Twooter` keeps the lighter social window chrome for now
 - Optional UI font files now live in `assets/fonts/`; the UI auto-loads `app_font.ttf`, `app_font.otf`, then `OpenSans-Regular.ttf` for the main menu + game UI font style
 - Money formatting now uses Indonesian Rupiah style like `Rp1.000.000,00`; compact money uses comma decimals, e.g. `Rp1,25B`
 - The stock app is now contained inside a dedicated window container so the trading shell cannot spill outside the desktop window bounds
@@ -568,12 +612,35 @@ Read this file first in the next session.
 - It still lives in `GameRoot.tscn` and is reparented into the runtime desktop window manager; there is still no separate scene for it
 - Current category tabs are:
   - `Mindset`
+  - `Money Management`
   - `Fundamental`
   - `Technical`
   - `Transactional`
 - Current module status:
   - `Technical` is the only fully playable module
-  - the other three categories are visible but still `Coming soon`
+  - the other four categories are visible but still `Coming soon`
+- Current Academy layout:
+  - desktop wrapper/title bar is unchanged, but the content area was rebuilt into a course-dashboard shell
+  - top category tabs use dark-brown active state and warm bordered inactive tabs
+  - left rail is now `CORE MODULES`, using the existing `AcademySectionList` node for compatibility
+  - main pane has one vertical scroll area that includes the selection chip, large lesson title, short deck line, reserved banner frame, and lesson body; the action row stays fixed below the scroll
+  - reserved banner labels currently read naturally as `CHART MODULE`, `MARKET STRUCTURE`, `QUIZ BOARD`, or `GLOSSARY`; no bitmap lesson assets are required yet
+  - primary lesson action is now `MARK AS COMPLETE`; completed lessons show `COMPLETED`
+- Dev-only Academy content editor:
+  - local web editor lives in `tools/academy_editor/`
+  - run with `python tools/academy_editor/server.py`, then open `http://127.0.0.1:8765`
+  - it uses Python stdlib only; no npm dependency is required
+  - editable source lives in `tools/academy_editor/academy_source.json`
+  - if the source catalog is still `null`, the editor imports the current runtime `data/academy/academy_catalog.json`
+  - editor can save source, validate, dry-run/export runtime JSON, edit categories/sections/lesson blocks/quick checks/quiz/glossary, and upload images
+  - uploaded images are copied to `assets/academy/lessons/` and stored as `res://assets/academy/lessons/...`
+  - lesson sections may now include optional `content_blocks`; text blocks render as full warm cards and can include nested inline images plus nested infobox note cards
+  - `key_insights` blocks render as blue cards with a prominent blue left border, title, and bullet list
+  - image blocks render as framed `TextureRect` panels with caption/placeholder fallback
+  - inline text-block images use the same upload/path rules as top-level image blocks and fall back to placeholders if missing
+  - old hardcoded Intro principle/example cards are no longer rendered, and the legacy Intro principle infoboxes were removed from both the editor source and runtime export
+  - quick-check option buttons use light Academy buttons with dark readable text; text-card titles are fixed at 16px
+  - legacy `pages` remain supported as fallback, and exports generate `pages` from text blocks for compatibility
 - Technical module currently includes:
   - `01 Intro`
   - `02 Market Structure`
@@ -585,13 +652,14 @@ Read this file first in the next session.
   - `08 Glossary`
 - Current Technical behavior:
   - sections `01-06` and `08 Glossary` are open-access
-  - `07 Quiz` stays locked until `01 Intro`, `02 Market Structure`, `03 Candlesticks`, and `04 Patterns` are marked read
+  - `07 Quiz` stays locked until every section listed in `quiz_required_section_ids` is marked read; current source requires `01 Intro` through `06 Thinking Framework`
   - section progress persists in save data through `RunState.academy_progress`
   - glossary search is implemented
   - quiz passing score is `80%`
   - passing grants a non-gameplay `Technical Basics` badge
 - Current implementation:
   - content data: `data/academy/academy_catalog.json`
+  - editable dev source/tooling: `tools/academy_editor/`
   - system/backend: `systems/AcademySystem.gd`
   - state/API: `RunState.gd`, `GameManager.gd`, `DataRepository.gd`
   - UI: `scenes/game/GameRoot.tscn`, `scripts/ui/GameRoot.gd`
@@ -1066,7 +1134,9 @@ Read this file first in the next session.
 ## Implemented Systems
 - Core autoloads:
   - `autoloads/GameManager.gd`
+    - owns day advancement orchestration, `get_daily_recap_snapshot()`, cached desktop badge snapshot helpers, upgrade/shop APIs, Network/corporate-action facades, console commands, and save flush calls
   - `autoloads/RunState.gd`
+    - owns runtime save state, including new `desktop_app_seen_days` and `desktop_app_badge_counts` helpers used by desktop badges
   - `autoloads/DataRepository.gd`
   - `autoloads/SaveManager.gd`
 - Data repository content loading now includes:
@@ -1137,6 +1207,18 @@ Read this file first in the next session.
   - `systems/AcademySystem.gd`
   - builds category/section snapshots from catalog data plus saved progress
   - resolves read state, quiz lock state, quiz scoring, glossary results, and earned badge state
+- Main runtime UI:
+  - `scripts/ui/GameRoot.gd`
+  - owns the desktop shell, app-window manager, News/Twooter/Academy/Network/Shop UI construction, Daily Recap custom modal, desktop badges, and the guarded `Advance Day` button state
+  - Daily Recap implementation notes:
+    - created dynamically in `_ensure_daily_recap_dialog()`
+    - shown from `_show_daily_recap_if_pending()` after `summary_ready`
+    - body copy is built by `_build_daily_recap_text()`
+    - deliberately avoids broker/internal reads that are still present in backend summaries
+  - desktop badge implementation notes:
+    - badge labels live under desktop shortcut buttons
+    - `_refresh_desktop_notification_badges()` reads `GameManager.get_desktop_app_badge_snapshot()`
+    - badge refresh is expected to be cheap/cache-only unless explicit activity counts are passed during recap construction
 - IDX price rules:
   - `systems/IDXPriceRules.gd`
   - tick size ladder implemented
@@ -1311,6 +1393,13 @@ Read this file first in the next session.
 - Academy runtime state is saved in:
   - `RunState.academy_progress`
   - older saves backfill missing academy progress safely
+- Desktop app notification seen state is saved in:
+  - `RunState.desktop_app_seen_days`
+  - `RunState.desktop_app_badge_counts`
+  - currently used for `News`, `Twooter`, and `Network` badges
+  - `desktop_app_seen_days` tracks whether the app has been opened on the current day
+  - `desktop_app_badge_counts` stores the current day's cached activity counts so desktop refresh can stay cheap
+  - missing legacy save data defaults to current day / zero counts to avoid stale old-save badges
 - Watchlist membership is now also saved in `RunState.watchlist_company_ids`
 - News articles now have a lightweight persistent archive:
   - `RunState.news_archive_index`
@@ -1446,10 +1535,16 @@ Read this file first in the next session.
   - lazy `5Y` chart history reaching back before `2020`
   - lazy `5Y` chart history rebuilding after save / load
   - desktop shell appears first
+  - desktop `Advance Day` button disables immediately while processing and cannot advance two days from one rapid click burst
+  - `Advance Day` processing text keeps a readable dark disabled font color
+  - Daily Recap appears after day advance, uses a light content panel with dark readable text, and uses the dark-brown Academy-style title chrome
+  - Daily Recap visible text contains `Index Gorengan today` and no longer exposes `Market mood`, accumulation/distribution rows, or broker-style words such as `zombie`
+  - News/Twooter/Network badges appear from current-day activity counts, persist through save/load, and clear when the relevant app is opened
   - `News` opens the event-driven desk with outlet buttons and populated stories
   - `Twooter` opens the simplified mobile-style social feed with populated post cards
   - `Academy` desktop icon opens the Academy window
-  - Academy shows four category tabs and the Technical module section list
+  - Academy shows the catalog category tabs, including `Money Management`, and the Technical module rail still exposes eight sections
+  - Academy exposes the reserved lesson banner frame and keeps the selected module/action row inside the visible Academy window
   - Academy quiz starts locked and unlocks after the required reading sections are marked read
   - `Network` desktop icon opens the Network window
   - `Upgrades` desktop icon opens a populated shop window
@@ -1534,6 +1629,27 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - Most recent pass on `2026-04-26`:
+    - `git diff --check` passed
+    - `python tools/academy_editor/server.py --validate` passed
+    - `python tools/academy_editor/server.py --export --dry-run` passed
+    - Godot project-load check passed
+    - direct `GameRoot.tscn` headless launch passed
+    - quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
+    - this covered the custom Daily Recap title chrome, simplified player-facing recap copy, readable Advance Day processing text, badge cache behavior, badge save/load persistence, and badge clearing on app open
+    - non-blocking Windows/Godot note: this smoke run can print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; do not treat that trailing message as a gameplay/test failure by itself
+  - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after fixing Daily Recap readability, Advance Day processing text contrast, and caching desktop badge counts on `2026-04-26`
+    - first quick-smoke attempt hit the recurring Godot `user://logs` crash before test output; rerunning with `--log-file res://logs/godot_smoke.log` passed and printed `SMOKE_QUICK_OK`
+    - normal-play perf scene also passed after the cache change; the badge drawing path is now cache-only, though broader app-open timing is still noisy and News content rendering itself can remain heavier than Network
+  - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after changing Daily Recap to custom Academy-style title chrome and removing broker-style recap rows/copy on `2026-04-26`
+  - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after adding the guarded Advance Day transition, Daily Recap modal, and News/Twooter/Network desktop badges on `2026-04-26`
+  - `python tools/academy_editor/server.py --validate`, `python tools/academy_editor/server.py --export --dry-run`, `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after adding inline image support inside Academy text blocks on `2026-04-25`
+  - `python tools/academy_editor/server.py --validate`, `python tools/academy_editor/server.py --export --dry-run`, `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after removing the legacy Intro principle/example cards, fixing quick-check button readability, and syncing Academy quiz-prerequisite smoke coverage to the catalog source on `2026-04-25`
+  - `python tools/academy_editor/server.py --validate`, `python tools/academy_editor/server.py --export --dry-run`, `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after adding Academy text-card infoboxes and blue Key Insights blocks on `2026-04-25`
+  - `python tools/academy_editor/server.py --validate`, `python tools/academy_editor/server.py --export --dry-run`, `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after adding the dev-only Academy content editor and runtime `content_blocks` rendering on `2026-04-25`
+  - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after sharing the Academy dark-brown title-bar chrome with `News`, `Network`, and `Shop/Upgrades` on `2026-04-25`
+  - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after the Academy newspaper-module redesign on `2026-04-25`
+    - first quick-smoke attempt hit the recurring Godot `user://logs` crash before test output; rerunning with `--log-file res://logs/godot_smoke.log` passed and printed `SMOKE_QUICK_OK`
   - `git diff --check`, Godot project-load check, and the new normal-play perf scene passed after the normal-play performance baseline pass on `2026-04-25`
     - latest local headless perf result: `open_network=50.20ms`, `advance_network_open=2124.02ms`, `advance_desktop_only=2012.12ms`, `open_stock=64.41ms`, `advance_stock_open=1683.27ms`, `open_news=146.45ms`, `open_network_with_news=79.89ms`, `advance_news_network_open=1996.05ms`, `flush_pending_save=13.81ms`, `local_save_bytes=7604791`
     - relevant engine perf logs from the same run: raw `save_run` during advances was roughly `294-400ms`; `flush_pending_save:advance_day` was roughly `504-620ms`; `_refresh_markets` stayed around `23-32ms` on stock open and around `182-282ms` in heavier post-day paths
@@ -1643,6 +1759,10 @@ Read this file first in the next session.
   - there is now a lightweight outlet/year/month article archive, but no search / pagination / bookmarking yet
   - current article text is still template-driven and intentionally editable; future work should tune/add prose pools rather than rebuild the UI
   - no richer article-specific imagery / attachments / linked company cards yet
+- Daily Recap is intentionally a one-day informational modal:
+  - there is no recap archive/history yet
+  - badge counts are current-day approximate counts, not per-item unread tracking
+  - the modal avoids broker/internal readouts by design, so deeper broker-flow diagnostics should stay in debug/dev surfaces rather than the player recap
 - `Twooter` is now a deterministic social feed with enriched fictional account voices and expandable threads, but still limited:
   - account access is now upgrade-driven by `Twooter Content`, and thread-capable accounts can render numbered expandable thread lines
   - there is no search / archive / pagination / bookmarking yet
@@ -1740,80 +1860,46 @@ Read this file first in the next session.
 - `company_profile_data.json` is now the editable narrative content source, but it is tailored to the repo's existing sector ids rather than the broader external reference schema
 
 ## Recommended Next Steps (Confirm user first)
-- If continuing performance work, target `Advance Day` save/simulation cost next rather than adding new feature loops:
-  - the normal-play perf pass shows raw `save_run` at roughly `294-400ms`, advance-day flushes around `504-620ms`, and a project-local save payload around `7.6MB`
-  - likely next pass: reduce the full JSON save payload further for explicit company-detail browsing, or split/cache expensive save serialization so `Advance Day` blocks less
-  - keep watchlist sorting/filter presets and deeper Network/corporate-action loops on hold until this performance thread feels settled
-- If click latency still feels rough after the save path is settled, continue with narrower visible-stock refreshes:
-  - consider diffing visible All Stock rows when search/filter state is unchanged
-  - look for remaining broad refresh callers where the selected stock did not actually change
-  - keep using the new `[perf][ui]` / `[perf][save]` debug logs while tuning
-- Deepen the Upgrades system:
-  - tune or polish the new purchase confirmation copy if playtesting says the modal is too wordy/slow
-  - tune fixed upgrade costs after playtesting Chill/Normal/Grind cash pressure
-  - consider upgrade descriptions/tooltips that teach why each tier matters
-  - decide whether Daily Action Points should eventually cover non-Network world interactions
-- Add watchlist management polish:
-  - sort / filter presets
-  - maybe multi-list support later
-- Deepen the Network/contact system:
-  - deepen the implemented shared corporate-action chain system rather than bolting on isolated meeting UIs
-  - keep `earnings_call`, `annual_rups`, and `rupslb` as formal venues reading/writing the same underlying chain object
-  - deepen how `News`, `Twooter`, `Network`, and market reaction consume the same chain state so rumor, denial, delay, shakeout, approval, and execution feel more connected and dramatic
-  - deepen the new actionable cross-contact conflict pass:
-    - add multiple ask styles such as `Ask for evidence`, `Push back`, and `Compare source`
-    - let the answer create a clue / task / contact referral instead of only a stored note
-    - deepen the new Journal so repeated names and sources become searchable/filterable over time
-  - add event-slot or daily-action costs for venue attendance / meeting contacts if/when the broader time system exists
-  - next corporate-action feature step is to expand the new interactive `rupslb` flow beyond `rights_issue`:
-    - add more agenda families
-    - add record-date/shareholder-registry rules
-    - deepen staged presentation / result nuance
-  - second family rollout after the current v1 families feel good:
-    - `private_placement`
-    - `restructuring`
-    - `strategic_merger_acquisition`
-  - save `backdoor_listing` for a later special pass as the most composite/high-volatility Indonesia-specific chain
-- Could-have / nice-to-have later:
-  - deepen the real `News` content now that the newspaper shell and author/network bridge exist:
-    - tune `News Content` upgrade pacing if playtesting says access opens too slowly/quickly
-    - keep the current outlet names: `Gorengan Daily`, `Waduh Finance`, `Harian Investor`, and `Ordal News`
-    - expand/edit outlet voice, author voice, headline prefixes, and sentence pools in `data/news/news_feed_data.json`
-    - later replace the reserved logo / portrait / article image frames with real bitmap assets using the existing asset fields
-  - deepen the real `Twooter` content now that the first simplified social feed exists:
-    - tune `Twooter Content` upgrade pacing if playtesting says access opens too slowly/quickly
-    - keep `Tonald Drump` / `Melon Tusk` as the current highest-tier accounts
-    - expand/edit account voice and template pools in `data/social/twooter_feed_data.json`
-    - add more user-authored finfluencer accounts later
-  - cross-source convergence hints between `News`, `Twooter`, and `Network`, such as light `also seen in News`, `Twooter chatter`, or `Network lead exists` notes for the same ticker
-  - keep this informational only if added; do not make it the next priority, and do not add new relationship mechanics just for convergence
-  - consider this only after the current News/Twooter/Network loops feel individually useful and the contact/action economy is better balanced
-  - deepen referrals beyond the current no-cooldown floater-to-insider prototype
-  - add favor cooldowns and tune relationship burn for on-demand tips
-  - broaden report-back beyond the current resolved-tip `Follow Up` button so requests, referrals, and meeting favors can also produce relationship/story consequences
-  - add ignore/ghosting decay beyond the current missed-request relationship penalty
-  - deepen the implemented cross-contact read system from one-shot `Ask About Conflict` into richer investigation/dialogue choices
-  - add perk hooks such as extra contact slots, reduced contact cooldown, and sector-specific starting relationship
-  - add richer contact detail pages and expand the Journal with filters, detail drawers, pinned clues, and request-specific views
-  - add a clearer UI for public management vs discovered/meet-ready insider leads
-  - tune relationship gains/losses and contact arc market impact after playtesting
-- Deepen the chart:
-  - decide whether the new manual chart drawings should persist through save/load via `RunState` after more playtesting
-  - add drag/edit handles and endpoint movement for the new trend/horizontal line tools
-  - deepen the current indicator unlock/toggle UX
-  - add richer lower indicator panes beyond the minimal RSI panel
-  - academy/tutorial lesson for volume interpretation
-  - event markers / timeline
-  - hover pinning / richer hover cards
-  - drag / pan interaction
-  - if desired later, a true intraday layer built on top of the current daily sim rather than replacing it
-- Deepen the market-impact layer after playtesting:
-  - tune synthetic depth thresholds for ARA/ARB locks across Chill/Normal/Grind
-  - add player-facing pre-trade impact warnings for very large orders
-  - consider a lightweight intraday tape view for limit-lock days before attempting a full matching engine
-- Extend trading calendar beyond `2030`
-- Deepen quarterly reports so filed reports can update post-2020 financial statements, not just trigger earnings events
-- Add score-explanation UI for quality / growth / risk
+- Stabilize the current Academy + daily-loop checkpoint:
+  - review the uncommitted files listed in the Project Snapshot
+  - decide whether to keep or ignore `scripts/tests/NormalPlayPerfTest.gd.uid`
+  - run `git diff --check`, Academy editor validate/export dry-run, Godot project-load, direct `GameRoot.tscn` launch, and quick smoke before committing
+  - treat a trailing `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` as non-blocking Windows/Godot noise
+- Performance remains the highest-value engineering thread:
+  - target `Advance Day` save/simulation cost, since current headless smoke still shows heavy synchronous `save_run` and `flush_pending_save:advance_day` phases
+  - keep badge drawing cache-only through `RunState.desktop_app_badge_counts`
+  - use the `[perf][ui]` and `[perf][save]` logs to separate save serialization, market simulation, app rendering, and open-window refresh costs
+  - likely implementation paths: trim persisted company-detail payloads further, split expensive save serialization, or defer non-critical post-day UI refresh work
+- Academy content pipeline:
+  - keep `tools/academy_editor/academy_source.json` as the authoring source and export to `data/academy/academy_catalog.json`
+  - use `content_blocks` for new lessons; keep legacy `pages` as export compatibility only
+  - build out `Money Management` or `Mindset` next if the goal is more teaching content
+  - add real lesson images under `assets/academy/lessons/` only when the layout/content is stable
+  - consider a small source/runtime sync check so future edits do not accidentally bypass the editor source
+- Daily loop and desktop UX:
+  - playtest Daily Recap pacing and wording across several in-game days
+  - keep badge counts as approximate current-day activity summaries unless true per-item unread tracking becomes a dedicated feature
+  - add a recap archive only if players ask to review past days
+  - add a fishbowl accessibility toggle/strength slider if the global screen effect feels tiring
+- Network and corporate-action planning:
+  - deepen the shared corporate-action chain object that `News`, `Twooter`, `Network`, market reaction, `earnings_call`, `annual_rups`, and `rupslb` already read/write
+  - expand interactive `rupslb` beyond `rights_issue` with more agenda families, record-date/shareholder-registry rules, and richer result nuance
+  - deepen cross-contact conflict handling with actions like `Ask for evidence`, `Push back`, and `Compare source`
+  - evolve Journal rows into searchable/filterable clues and tasks when source-check gameplay becomes a major loop
+  - add favor cooldowns, report-back outcomes, relationship burn tuning, and perk hooks once Network pacing settles
+- Trading and chart planning:
+  - continue narrower visible-stock refresh work if click latency remains noticeable after save-path tuning
+  - add All Stock sort/filter presets and richer watchlist management
+  - decide whether manual chart drawings should persist through save/load via `RunState`
+  - add drag/edit handles, richer indicator panes, event markers, hover pinning, pan interaction, and a volume-interpretation Academy lesson
+  - keep any true intraday layer additive on top of the daily sim
+- Economy and market planning:
+  - tune Upgrades costs, confirmation copy, and tier descriptions after Chill/Normal/Grind playtests
+  - decide whether Daily Action Points should cover non-Network world interactions
+  - tune synthetic depth thresholds for ARA/ARB locks and add pre-trade impact warnings for very large orders
+  - deepen quarterly reports so filed reports update post-2020 financial statements
+  - add score-explanation UI for quality / growth / risk
+  - extend the trading calendar beyond `2030`
 
 ## Good Re-entry Prompt
 Use something like:

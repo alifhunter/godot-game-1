@@ -251,7 +251,11 @@ func _section_snapshots(category: Dictionary, progress: Dictionary) -> Array:
 		section_row["read"] = bool(read_lookup.get(section_id, false))
 		section_row["locked"] = locked
 		if locked:
-			section_row["lock_reason"] = "Read Intro, Market Structure, Candlesticks, and Patterns first."
+			var unread_labels: Array[String] = []
+			for unread_value in quiz_state.get("unread_required_sections", []):
+				var unread: Dictionary = unread_value
+				unread_labels.append(str(unread.get("label", "")))
+			section_row["lock_reason"] = "Read %s first." % ", ".join(unread_labels)
 		rows.append(section_row)
 	return rows
 

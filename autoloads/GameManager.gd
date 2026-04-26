@@ -1091,6 +1091,91 @@ func get_latest_summary() -> Dictionary:
 	return RunState.daily_summary.duplicate(true)
 
 
+func get_daily_recap_snapshot() -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+	var summary: Dictionary = get_latest_summary()
+	var news_snapshot: Dictionary = _build_news_snapshot()
+	var social_snapshot: Dictionary = get_twooter_snapshot()
+	var network_snapshot: Dictionary = get_network_snapshot()
+	var activity_counts: Dictionary = {
+		"news": _count_news_articles(news_snapshot),
+		"social": social_snapshot.get("posts", []).size(),
+		"network": _count_network_current_day_activity(network_snapshot),
+	}
+	RunState.set_desktop_app_badge_counts(activity_counts)
+	return {
+		"day_index": RunState.day_index,
+		"trade_date": get_current_trade_date(),
+		"summary": summary,
+		"market_sentiment": RunState.market_sentiment,
+		"portfolio": get_portfolio_snapshot(),
+		"activity_counts": activity_counts,
+		"badges": get_desktop_app_badge_snapshot(activity_counts),
+		"daily_action": get_daily_action_snapshot()
+	}
+
+
+func get_desktop_app_badge_snapshot(activity_counts: Dictionary = {}) -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+	var resolved_counts: Dictionary = activity_counts
+	var badge_day_index: int = RunState.day_index
+	if resolved_counts.is_empty():
+		var cached_badges: Dictionary = RunState.get_desktop_app_badge_counts()
+		resolved_counts = cached_badges.get("counts", {})
+		badge_day_index = int(cached_badges.get("day_index", RunState.day_index))
+	var rows: Dictionary = {}
+	for app_id in ["news", "social", "network"]:
+		var count: int = max(int(resolved_counts.get(app_id, 0)), 0)
+		var seen_day: int = RunState.get_desktop_app_seen_day(app_id)
+		var visible: bool = count > 0 and badge_day_index == RunState.day_index and seen_day < badge_day_index
+		rows[app_id] = {
+			"visible": visible,
+			"count": count,
+			"label": str(min(count, 9)) if count > 0 and count < 10 else ("9+" if count >= 10 else "!"),
+			"day_index": badge_day_index,
+			"seen_day_index": seen_day
+		}
+	return rows
+
+
+func mark_desktop_app_seen(app_id: String) -> void:
+	if RunState.get_desktop_app_seen_day(app_id) >= RunState.day_index:
+		return
+	RunState.mark_desktop_app_seen(app_id)
+	_request_autosave("desktop_app_seen")
+
+
+func _count_news_articles(news_snapshot: Dictionary) -> int:
+	var seen_article_ids: Dictionary = {}
+	var outlet_lookup: Dictionary = {}
+	for outlet_value in news_snapshot.get("outlets", []):
+		var outlet: Dictionary = outlet_value
+		outlet_lookup[str(outlet.get("id", ""))] = bool(outlet.get("unlocked", true))
+	for feed_value in news_snapshot.get("feeds", {}).values():
+		var feed: Dictionary = feed_value
+		var outlet_id: String = str(feed.get("outlet_id", ""))
+		if not bool(outlet_lookup.get(outlet_id, true)):
+			continue
+		for article_value in feed.get("articles", []):
+			var article: Dictionary = article_value
+			var article_id: String = str(article.get("id", article.get("headline", "")))
+			if article_id.is_empty() or seen_article_ids.has(article_id):
+				continue
+			seen_article_ids[article_id] = true
+	return seen_article_ids.size()
+
+
+func _count_network_current_day_activity(network_snapshot: Dictionary) -> int:
+	var count: int = 0
+	for row_value in network_snapshot.get("journal", []):
+		var row: Dictionary = row_value
+		if int(row.get("day_index", -9999)) == RunState.day_index:
+			count += 1
+	return count
+
+
 func get_trade_history() -> Array:
 	var rows: Array = []
 	var raw_history: Array = RunState.get_trade_history()

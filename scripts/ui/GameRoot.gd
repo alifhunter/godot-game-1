@@ -87,6 +87,12 @@ const COLOR_ORDER_SELL := Color(0.27451, 0.164706, 0.180392, 1)
 const COLOR_ORDER_SELL_BORDER := Color(0.690196, 0.34902, 0.372549, 1)
 const COLOR_WINDOW_BG := Color(0.909804, 0.909804, 0.803922, 1)
 const COLOR_WINDOW_TEXT := Color(0.184314, 0.172549, 0.109804, 1)
+const COLOR_ACADEMY_CREAM := Color(0.988235, 0.960784, 0.854902, 1)
+const COLOR_ACADEMY_PANEL := Color(0.972549, 0.94902, 0.847059, 1)
+const COLOR_ACADEMY_RAIL := Color(0.917647, 0.878431, 0.721569, 1)
+const COLOR_ACADEMY_BROWN := Color(0.509804, 0.231373, 0.0941176, 1)
+const COLOR_ACADEMY_BORDER := Color(0.52549, 0.396078, 0.160784, 1)
+const COLOR_ACADEMY_GREEN := Color(0.811765, 0.886275, 0.529412, 1)
 const COLOR_NAV_FILL := Color(0.126, 0.188, 0.251, 1)
 const COLOR_NAV_ACTIVE_FILL := Color(0.219608, 0.439216, 0.65098, 1)
 const COLOR_NAV_ACTIVE_BORDER := Color(0.690196, 0.87451, 1, 1)
@@ -228,10 +234,16 @@ var desktop_figma_canvas_content_margin: MarginContainer = null
 var desktop_shortcut_grid: GridContainer = null
 var desktop_bottom_nav_bar: PanelContainer = null
 var desktop_bottom_nav_buttons: Dictionary = {}
+var desktop_shortcut_badges: Dictionary = {}
 var desktop_window_layer: Control = null
 var desktop_app_windows: Dictionary = {}
 var desktop_dragging_app_id: String = ""
 var desktop_drag_offset: Vector2 = Vector2.ZERO
+var advance_day_processing: bool = false
+var pending_daily_recap_snapshot: Dictionary = {}
+var daily_recap_dialog: Control = null
+var daily_recap_body_label: Label = null
+var daily_recap_continue_button: Button = null
 @onready var app_window_backdrop: Control = $AppWindowBackdrop
 @onready var app_window_margin: MarginContainer = $AppWindowBackdrop/AppWindowMargin
 @onready var app_window_panel: PanelContainer = $AppWindowBackdrop/AppWindowMargin/AppWindowPanel
@@ -312,9 +324,14 @@ var academy_category_tabs: HBoxContainer = null
 var academy_section_tabs: GridContainer = null
 var academy_summary_label: Label = null
 var academy_section_list: ItemList = null
+var academy_selection_chip_label: Label = null
 var academy_lesson_title_label: Label = null
 var academy_lesson_meta_label: Label = null
+var academy_lesson_banner_frame: PanelContainer = null
+var academy_lesson_banner_label: Label = null
+var academy_lesson_scroll: ScrollContainer = null
 var academy_lesson_content_vbox: VBoxContainer = null
+var academy_action_row: HBoxContainer = null
 var academy_mark_read_button: Button = null
 var academy_next_button: Button = null
 var academy_side_title_label: Label = null
@@ -518,6 +535,7 @@ func _ready() -> void:
 	_ensure_tutorial_dialog()
 	_ensure_watchlist_picker_dialog()
 	_ensure_upgrade_purchase_dialog()
+	_ensure_daily_recap_dialog()
 	_ensure_console_overlay()
 	_ensure_academy_ui()
 	_ensure_corporate_action_ui()
@@ -525,6 +543,7 @@ func _ready() -> void:
 	_ensure_figma_desktop_ui()
 	_ensure_desktop_window_layer()
 	_initialize_desktop_app_windows()
+	_initialize_desktop_badge_seen_defaults()
 	_apply_visual_theme()
 	_apply_compact_layout()
 	_apply_trade_layout_ratios()
@@ -979,6 +998,7 @@ func _refresh_desktop() -> void:
 		taskbar_status_label.text = "No active run loaded."
 		taskbar_clock_label.text = "MENU"
 		_refresh_figma_desktop_status()
+		_refresh_desktop_notification_badges()
 		return
 
 	var current_trade_date: Dictionary = GameManager.get_current_trade_date()
@@ -999,6 +1019,7 @@ func _refresh_desktop() -> void:
 		GameManager.format_trade_date(current_trade_date)
 	]
 	_refresh_figma_desktop_status()
+	_refresh_desktop_notification_badges()
 
 
 func _refresh_news() -> void:
@@ -1496,6 +1517,7 @@ func _configure_desktop_shortcut_tile(tile: Control, button: Button, label: Labe
 	button.add_theme_constant_override("icon_max_width", 50)
 	_style_desktop_shortcut_button(button)
 	_ensure_desktop_shortcut_corner_marker(button)
+	_ensure_desktop_shortcut_badge(button, app_id)
 
 	label.text = display_text
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1520,6 +1542,76 @@ func _ensure_desktop_shortcut_corner_marker(button: Button) -> void:
 	marker.offset_right = -2
 	marker.offset_bottom = 16
 	button.add_child(marker)
+
+
+func _ensure_desktop_shortcut_badge(button: Button, app_id: String) -> void:
+	if app_id != APP_ID_NEWS and app_id != APP_ID_SOCIAL and app_id != APP_ID_NETWORK:
+		return
+	var badge: Label = button.get_node_or_null("DesktopShortcutBadge") as Label
+	if badge == null:
+		badge = Label.new()
+		badge.name = "DesktopShortcutBadge"
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		badge.add_theme_font_size_override("font_size", 12)
+		badge.add_theme_color_override("font_color", COLOR_DESKTOP_CREAM)
+		badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		badge.offset_left = -34
+		badge.offset_top = 8
+		badge.offset_right = -8
+		badge.offset_bottom = 34
+		button.add_child(badge)
+	_style_desktop_notification_badge(badge)
+	desktop_shortcut_badges[app_id] = badge
+
+
+func _style_desktop_notification_badge(badge: Label) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = COLOR_DESKTOP_BROWN
+	style.border_color = COLOR_DESKTOP_GOLD
+	style.set_border_width_all(2)
+	style.corner_radius_top_left = 13
+	style.corner_radius_top_right = 13
+	style.corner_radius_bottom_left = 13
+	style.corner_radius_bottom_right = 13
+	badge.add_theme_stylebox_override("normal", style)
+
+
+func _refresh_desktop_notification_badges() -> void:
+	if desktop_shortcut_badges.is_empty():
+		return
+	var badge_snapshot: Dictionary = GameManager.get_desktop_app_badge_snapshot()
+	for app_id_value in desktop_shortcut_badges.keys():
+		var app_id: String = str(app_id_value)
+		var badge: Label = desktop_shortcut_badges.get(app_id, null) as Label
+		if badge == null:
+			continue
+		var badge_row: Dictionary = badge_snapshot.get(app_id, {})
+		badge.visible = bool(badge_row.get("visible", false))
+		badge.text = str(badge_row.get("label", "!"))
+
+
+func _initialize_desktop_badge_seen_defaults() -> void:
+	if not RunState.has_active_run():
+		return
+	var seen_days: Dictionary = RunState.get_desktop_app_seen_days()
+	for app_id in [APP_ID_NEWS, APP_ID_SOCIAL, APP_ID_NETWORK]:
+		if not seen_days.has(app_id):
+			RunState.mark_desktop_app_seen(app_id)
+
+
+func _is_badge_tracked_app(app_id: String) -> bool:
+	return app_id == APP_ID_NEWS or app_id == APP_ID_SOCIAL or app_id == APP_ID_NETWORK
+
+
+func _mark_desktop_app_seen_if_needed(app_id: String) -> void:
+	if not _is_badge_tracked_app(app_id) or not RunState.has_active_run():
+		return
+	if RunState.get_desktop_app_seen_day(app_id) >= RunState.day_index:
+		return
+	GameManager.mark_desktop_app_seen(app_id)
+	_refresh_desktop_notification_badges()
 
 
 func _add_desktop_bottom_nav_button(parent: HBoxContainer, app_id: String, label_text: String, callback: Callable) -> void:
@@ -1673,13 +1765,17 @@ func _refresh_figma_desktop_status() -> void:
 		desktop_figma_cash_label.text = "RP 0"
 		if desktop_advance_day_button != null:
 			desktop_advance_day_button.disabled = true
+			if not advance_day_processing:
+				desktop_advance_day_button.text = "ADVANCE DAY"
 		return
 	var current_trade_date: Dictionary = GameManager.get_current_trade_date()
 	var portfolio: Dictionary = GameManager.get_portfolio_snapshot()
 	desktop_figma_date_label.text = _format_desktop_figma_date(current_trade_date).to_upper()
 	desktop_figma_cash_label.text = _format_desktop_figma_cash(float(portfolio.get("cash", 0.0)))
 	if desktop_advance_day_button != null:
-		desktop_advance_day_button.disabled = false
+		desktop_advance_day_button.disabled = advance_day_processing
+		if not advance_day_processing:
+			desktop_advance_day_button.text = "ADVANCE DAY"
 
 
 func _format_desktop_figma_date(date_info: Dictionary) -> String:
@@ -1823,12 +1919,20 @@ func _style_desktop_advance_button(button: Button) -> void:
 	pressed.bg_color = Color(0.862745, 0.580392, 0.0392157, 1)
 	button.add_theme_stylebox_override("pressed", pressed)
 	button.add_theme_stylebox_override("focus", hover)
+	var disabled := normal.duplicate()
+	disabled.bg_color = Color(0.937255, 0.752941, 0.211765, 1)
+	disabled.border_color = Color(0.937255, 0.752941, 0.211765, 1)
+	button.add_theme_stylebox_override("disabled", disabled)
 	button.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
 	button.add_theme_color_override("font_hover_color", COLOR_DESKTOP_TEXT)
 	button.add_theme_color_override("font_pressed_color", COLOR_DESKTOP_TEXT)
+	button.add_theme_color_override("font_disabled_color", COLOR_DESKTOP_TEXT)
+	button.add_theme_color_override("font_focus_color", COLOR_DESKTOP_TEXT)
 	button.add_theme_color_override("icon_normal_color", COLOR_DESKTOP_TEXT)
 	button.add_theme_color_override("icon_hover_color", COLOR_DESKTOP_TEXT)
 	button.add_theme_color_override("icon_pressed_color", COLOR_DESKTOP_TEXT)
+	button.add_theme_color_override("icon_disabled_color", COLOR_DESKTOP_TEXT)
+	button.add_theme_color_override("icon_focus_color", COLOR_DESKTOP_TEXT)
 	button.add_theme_font_size_override("font_size", 18)
 
 
@@ -2006,7 +2110,7 @@ func _desktop_window_min_size_for_app(app_id: String) -> Vector2:
 		APP_ID_NETWORK:
 			return Vector2(780, 620)
 		APP_ID_ACADEMY:
-			return Vector2(720, 500)
+			return Vector2(860, 620)
 		APP_ID_UPGRADES:
 			return Vector2(640, 460)
 		_:
@@ -2052,9 +2156,9 @@ func _desktop_window_default_rect(app_id: String) -> Rect2:
 			size.y = min(max(work_rect.size.y * 0.88, size.y), work_rect.size.y - 12.0)
 			return Rect2(work_rect.position + Vector2(28, 14), size)
 		APP_ID_ACADEMY:
-			size.x = min(max(work_rect.size.x * 0.7, size.x), work_rect.size.x - 16.0)
-			size.y = min(max(work_rect.size.y * 0.74, size.y), work_rect.size.y - 16.0)
-			return Rect2(work_rect.position + Vector2(60, 40), size)
+			size.x = min(max(work_rect.size.x * 0.78, size.x), work_rect.size.x - 12.0)
+			size.y = min(max(work_rect.size.y * 0.86, size.y), work_rect.size.y - 12.0)
+			return Rect2(work_rect.position + Vector2(24, 18), size)
 		APP_ID_UPGRADES:
 			size.x = min(max(work_rect.size.x * 0.64, size.x), work_rect.size.x - 16.0)
 			size.y = min(max(work_rect.size.y * 0.7, size.y), work_rect.size.y - 16.0)
@@ -2160,6 +2264,7 @@ func _focus_desktop_app_window(app_id: String) -> void:
 	if window.get_parent() == desktop_window_layer:
 		desktop_window_layer.move_child(window, desktop_window_layer.get_child_count() - 1)
 	active_app_id = app_id
+	_mark_desktop_app_seen_if_needed(app_id)
 	_refresh_desktop_window_themes()
 	_refresh_desktop()
 
@@ -2239,13 +2344,24 @@ func _clamp_desktop_window_to_viewport(app_id: String) -> void:
 func _window_fill_color_for_app(app_id: String) -> Color:
 	if app_id == APP_ID_STOCK:
 		return COLOR_STOCK_WINDOW_BG
+	if _uses_academy_window_chrome(app_id):
+		return COLOR_ACADEMY_BROWN
 	if app_id == APP_ID_SOCIAL:
 		return Color(0.94902, 0.956863, 0.976471, 1)
 	return COLOR_WINDOW_BG
 
 
 func _window_text_color_for_app(app_id: String) -> Color:
-	return COLOR_TEXT if app_id == APP_ID_STOCK else COLOR_WINDOW_TEXT
+	return COLOR_TEXT if app_id == APP_ID_STOCK or _uses_academy_window_chrome(app_id) else COLOR_WINDOW_TEXT
+
+
+func _uses_academy_window_chrome(app_id: String) -> bool:
+	return (
+		app_id == APP_ID_ACADEMY or
+		app_id == APP_ID_NEWS or
+		app_id == APP_ID_NETWORK or
+		app_id == APP_ID_UPGRADES
+	)
 
 
 func _refresh_desktop_window_themes() -> void:
@@ -2429,17 +2545,17 @@ func _ensure_academy_ui() -> void:
 
 	var academy_margin := MarginContainer.new()
 	academy_margin.name = "AcademyWindowMargin"
-	academy_margin.add_theme_constant_override("margin_left", 16)
-	academy_margin.add_theme_constant_override("margin_top", 16)
-	academy_margin.add_theme_constant_override("margin_right", 16)
-	academy_margin.add_theme_constant_override("margin_bottom", 16)
+	academy_margin.add_theme_constant_override("margin_left", 14)
+	academy_margin.add_theme_constant_override("margin_top", 14)
+	academy_margin.add_theme_constant_override("margin_right", 14)
+	academy_margin.add_theme_constant_override("margin_bottom", 14)
 	academy_window_body.add_child(academy_margin)
 
 	var academy_vbox := VBoxContainer.new()
 	academy_vbox.name = "AcademyWindowVBox"
 	academy_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	academy_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	academy_vbox.add_theme_constant_override("separation", 10)
+	academy_vbox.add_theme_constant_override("separation", 12)
 	academy_margin.add_child(academy_vbox)
 
 	var header_row := HBoxContainer.new()
@@ -2461,11 +2577,13 @@ func _ensure_academy_ui() -> void:
 
 	academy_category_tabs = HBoxContainer.new()
 	academy_category_tabs.name = "AcademyCategoryTabs"
-	academy_category_tabs.add_theme_constant_override("separation", 8)
+	academy_category_tabs.add_theme_constant_override("separation", 0)
+	academy_category_tabs.custom_minimum_size = Vector2(0, 38)
 	academy_vbox.add_child(academy_category_tabs)
 
 	academy_section_tabs = GridContainer.new()
 	academy_section_tabs.name = "AcademySectionTabs"
+	academy_section_tabs.visible = false
 	academy_section_tabs.columns = 4
 	academy_section_tabs.add_theme_constant_override("h_separation", 8)
 	academy_section_tabs.add_theme_constant_override("v_separation", 8)
@@ -2481,80 +2599,126 @@ func _ensure_academy_ui() -> void:
 	content_split.name = "AcademyContentSplit"
 	content_split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content_split.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content_split.split_offset = 230
+	content_split.split_offset = 242
 	academy_vbox.add_child(content_split)
 
 	var list_panel := PanelContainer.new()
 	list_panel.name = "AcademySectionListPanel"
-	list_panel.visible = false
-	list_panel.custom_minimum_size = Vector2(220, 0)
+	list_panel.visible = true
+	list_panel.custom_minimum_size = Vector2(240, 0)
 	content_split.add_child(list_panel)
-	_style_panel(list_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
+	_style_panel(list_panel, COLOR_ACADEMY_RAIL, 0)
 	var list_margin := MarginContainer.new()
-	list_margin.add_theme_constant_override("margin_left", 10)
-	list_margin.add_theme_constant_override("margin_top", 10)
-	list_margin.add_theme_constant_override("margin_right", 10)
-	list_margin.add_theme_constant_override("margin_bottom", 10)
+	list_margin.add_theme_constant_override("margin_left", 0)
+	list_margin.add_theme_constant_override("margin_top", 12)
+	list_margin.add_theme_constant_override("margin_right", 0)
+	list_margin.add_theme_constant_override("margin_bottom", 12)
 	list_panel.add_child(list_margin)
 	var list_vbox := VBoxContainer.new()
-	list_vbox.add_theme_constant_override("separation", 8)
+	list_vbox.add_theme_constant_override("separation", 10)
 	list_margin.add_child(list_vbox)
 	var list_title := Label.new()
-	list_title.text = "Sections"
-	list_vbox.add_child(list_title)
+	list_title.name = "AcademyCoreModulesLabel"
+	list_title.text = "CORE MODULES"
+	list_title.add_theme_font_size_override("font_size", 11)
+	list_title.add_theme_constant_override("line_spacing", 0)
+	var list_title_margin := MarginContainer.new()
+	list_title_margin.add_theme_constant_override("margin_left", 14)
+	list_title_margin.add_theme_constant_override("margin_right", 14)
+	list_title_margin.add_child(list_title)
+	list_vbox.add_child(list_title_margin)
 	academy_section_list = ItemList.new()
 	academy_section_list.name = "AcademySectionList"
 	academy_section_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	list_vbox.add_child(academy_section_list)
+	academy_section_list.fixed_column_width = 0
+	academy_section_list.same_column_width = false
+	academy_section_list.max_text_lines = 2
+	var list_inner_margin := MarginContainer.new()
+	list_inner_margin.add_theme_constant_override("margin_left", 12)
+	list_inner_margin.add_theme_constant_override("margin_right", 12)
+	list_inner_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list_inner_margin.add_child(academy_section_list)
+	list_vbox.add_child(list_inner_margin)
 
 	var lesson_panel := PanelContainer.new()
 	lesson_panel.name = "AcademyLessonPanel"
 	lesson_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lesson_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content_split.add_child(lesson_panel)
-	_style_panel(lesson_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
+	_style_panel(lesson_panel, COLOR_ACADEMY_CREAM, 0)
 	var lesson_margin := MarginContainer.new()
-	lesson_margin.add_theme_constant_override("margin_left", 14)
-	lesson_margin.add_theme_constant_override("margin_top", 12)
-	lesson_margin.add_theme_constant_override("margin_right", 14)
-	lesson_margin.add_theme_constant_override("margin_bottom", 12)
+	lesson_margin.add_theme_constant_override("margin_left", 26)
+	lesson_margin.add_theme_constant_override("margin_top", 24)
+	lesson_margin.add_theme_constant_override("margin_right", 26)
+	lesson_margin.add_theme_constant_override("margin_bottom", 16)
 	lesson_panel.add_child(lesson_margin)
 	var lesson_vbox := VBoxContainer.new()
-	lesson_vbox.add_theme_constant_override("separation", 8)
+	lesson_vbox.add_theme_constant_override("separation", 12)
 	lesson_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lesson_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	lesson_margin.add_child(lesson_vbox)
+	academy_lesson_scroll = ScrollContainer.new()
+	academy_lesson_scroll.name = "AcademyLessonScroll"
+	academy_lesson_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	academy_lesson_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lesson_vbox.add_child(academy_lesson_scroll)
+	var lesson_scroll_vbox := VBoxContainer.new()
+	lesson_scroll_vbox.name = "AcademyLessonScrollVBox"
+	lesson_scroll_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lesson_scroll_vbox.add_theme_constant_override("separation", 12)
+	academy_lesson_scroll.add_child(lesson_scroll_vbox)
+	academy_selection_chip_label = Label.new()
+	academy_selection_chip_label.name = "AcademySelectionChipLabel"
+	academy_selection_chip_label.text = "CURRENT SELECTION"
+	academy_selection_chip_label.add_theme_font_size_override("font_size", 10)
+	academy_selection_chip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	academy_selection_chip_label.custom_minimum_size = Vector2(150, 20)
+	lesson_scroll_vbox.add_child(academy_selection_chip_label)
 	academy_lesson_title_label = Label.new()
 	academy_lesson_title_label.name = "AcademyLessonTitleLabel"
-	academy_lesson_title_label.visible = false
-	lesson_vbox.add_child(academy_lesson_title_label)
+	academy_lesson_title_label.visible = true
+	academy_lesson_title_label.add_theme_font_size_override("font_size", 30)
+	academy_lesson_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lesson_scroll_vbox.add_child(academy_lesson_title_label)
 	academy_lesson_meta_label = Label.new()
 	academy_lesson_meta_label.name = "AcademyLessonMetaLabel"
-	academy_lesson_meta_label.visible = false
+	academy_lesson_meta_label.visible = true
 	academy_lesson_meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	lesson_vbox.add_child(academy_lesson_meta_label)
-	var lesson_scroll := ScrollContainer.new()
-	lesson_scroll.name = "AcademyLessonScroll"
-	lesson_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lesson_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	lesson_vbox.add_child(lesson_scroll)
+	lesson_scroll_vbox.add_child(academy_lesson_meta_label)
+	academy_lesson_banner_frame = PanelContainer.new()
+	academy_lesson_banner_frame.name = "AcademyLessonBannerFrame"
+	academy_lesson_banner_frame.custom_minimum_size = Vector2(0, 150)
+	academy_lesson_banner_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lesson_scroll_vbox.add_child(academy_lesson_banner_frame)
+	_style_academy_banner_frame(academy_lesson_banner_frame)
+	var banner_center := CenterContainer.new()
+	academy_lesson_banner_frame.add_child(banner_center)
+	academy_lesson_banner_label = Label.new()
+	academy_lesson_banner_label.name = "AcademyLessonBannerLabel"
+	academy_lesson_banner_label.text = "CHART MODULE"
+	academy_lesson_banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	academy_lesson_banner_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	academy_lesson_banner_label.add_theme_font_size_override("font_size", 16)
+	banner_center.add_child(academy_lesson_banner_label)
 	academy_lesson_content_vbox = VBoxContainer.new()
 	academy_lesson_content_vbox.name = "AcademyLessonContentVBox"
 	academy_lesson_content_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	academy_lesson_content_vbox.add_theme_constant_override("separation", 10)
-	lesson_scroll.add_child(academy_lesson_content_vbox)
-	var action_row := HBoxContainer.new()
-	action_row.name = "AcademyActionRow"
-	action_row.add_theme_constant_override("separation", 8)
-	lesson_vbox.add_child(action_row)
+	lesson_scroll_vbox.add_child(academy_lesson_content_vbox)
+	academy_action_row = HBoxContainer.new()
+	academy_action_row.name = "AcademyActionRow"
+	academy_action_row.add_theme_constant_override("separation", 10)
+	lesson_vbox.add_child(academy_action_row)
 	academy_mark_read_button = Button.new()
 	academy_mark_read_button.name = "AcademyMarkReadButton"
-	academy_mark_read_button.text = "Mark Read"
-	action_row.add_child(academy_mark_read_button)
+	academy_mark_read_button.text = "MARK AS COMPLETE"
+	academy_mark_read_button.custom_minimum_size = Vector2(170, 44)
+	academy_action_row.add_child(academy_mark_read_button)
 	academy_next_button = Button.new()
 	academy_next_button.name = "AcademyNextButton"
 	academy_next_button.text = "Next Section"
-	action_row.add_child(academy_next_button)
+	academy_next_button.custom_minimum_size = Vector2(130, 44)
+	academy_action_row.add_child(academy_next_button)
 
 	var side_panel := PanelContainer.new()
 	side_panel.name = "AcademySidePanel"
@@ -2587,10 +2751,11 @@ func _ensure_academy_ui() -> void:
 	academy_glossary_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	side_vbox.add_child(academy_glossary_list)
 	_apply_academy_text_theme()
-	_style_button(academy_mark_read_button, Color(0.968627, 0.964706, 0.898039, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_WINDOW_TEXT, 0)
-	_style_button(academy_next_button, Color(0.968627, 0.964706, 0.898039, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_WINDOW_TEXT, 0)
-	_apply_academy_button_padding(academy_mark_read_button)
-	_apply_academy_button_padding(academy_next_button)
+	_style_academy_primary_button(academy_mark_read_button)
+	_style_button(academy_next_button, Color(0.894118, 0.85098, 0.678431, 1), COLOR_ACADEMY_BORDER, COLOR_WINDOW_TEXT, 0)
+	_apply_academy_button_padding(academy_mark_read_button, 14)
+	_apply_academy_button_padding(academy_next_button, 14)
+	_restyle_academy_controls()
 
 
 func _refresh_academy() -> void:
@@ -2605,11 +2770,16 @@ func _refresh_academy() -> void:
 		_clear_container_children(academy_category_tabs)
 		_clear_container_children(academy_section_tabs)
 		_clear_container_children(academy_lesson_content_vbox)
+		if academy_selection_chip_label != null:
+			academy_selection_chip_label.text = "NO RUN LOADED"
+		if academy_lesson_banner_label != null:
+			academy_lesson_banner_label.text = "ACADEMY"
 		academy_lesson_title_label.text = "No lesson"
 		academy_lesson_meta_label.text = ""
 		academy_mark_read_button.disabled = true
 		academy_next_button.disabled = true
 		_apply_font_overrides_to_subtree(academy_window)
+		_restyle_academy_controls()
 		return
 
 	current_academy_snapshot = GameManager.get_academy_snapshot(selected_academy_category_id, selected_academy_section_id)
@@ -2622,6 +2792,7 @@ func _refresh_academy() -> void:
 	_refresh_academy_content()
 	_apply_academy_text_theme()
 	_apply_font_overrides_to_subtree(academy_window)
+	_restyle_academy_controls()
 
 
 func _apply_academy_text_theme() -> void:
@@ -2669,8 +2840,10 @@ func _rebuild_academy_category_tabs() -> void:
 		var button := Button.new()
 		var category_id: String = str(category.get("id", ""))
 		button.name = "AcademyCategoryButton_%s" % category_id
-		button.text = str(category.get("label", category_id.capitalize()))
+		button.text = str(category.get("label", category_id.capitalize())).to_upper()
 		button.toggle_mode = true
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.custom_minimum_size = Vector2(0, 36)
 		button.set_pressed_no_signal(category_id == selected_academy_category_id)
 		button.pressed.connect(_on_academy_category_pressed.bind(category_id))
 		academy_category_tabs.add_child(button)
@@ -2678,23 +2851,25 @@ func _rebuild_academy_category_tabs() -> void:
 
 
 func _style_academy_category_tab(button: Button, selected: bool) -> void:
-	var fill: Color = Color(0.968627, 0.964706, 0.898039, 1)
-	var border: Color = Color(0.454902, 0.337255, 0.141176, 0.45)
+	var fill: Color = COLOR_ACADEMY_CREAM
+	var border: Color = COLOR_ACADEMY_BORDER
+	var font_color: Color = COLOR_ACADEMY_BROWN
 	if selected:
-		fill = Color(0.909804, 0.909804, 0.803922, 1)
-		border = Color(0.819608, 0.631373, 0.254902, 1)
+		fill = COLOR_ACADEMY_BROWN
+		border = COLOR_ACADEMY_BROWN.darkened(0.22)
+		font_color = COLOR_TEXT
 	var normal: StyleBoxFlat = StyleBoxFlat.new()
 	normal.bg_color = fill
 	normal.border_color = border
-	normal.set_border_width_all(1 if not selected else 2)
-	normal.corner_radius_top_left = 8
-	normal.corner_radius_top_right = 8
-	normal.corner_radius_bottom_left = 8
-	normal.corner_radius_bottom_right = 8
-	normal.content_margin_left = 24
-	normal.content_margin_right = 24
-	normal.content_margin_top = 24
-	normal.content_margin_bottom = 24
+	normal.set_border_width_all(1)
+	normal.corner_radius_top_left = 0
+	normal.corner_radius_top_right = 0
+	normal.corner_radius_bottom_left = 0
+	normal.corner_radius_bottom_right = 0
+	normal.content_margin_left = 14
+	normal.content_margin_right = 14
+	normal.content_margin_top = 10
+	normal.content_margin_bottom = 10
 	var hover: StyleBoxFlat = normal.duplicate()
 	hover.bg_color = fill.lightened(0.05)
 	var pressed: StyleBoxFlat = normal.duplicate()
@@ -2703,9 +2878,9 @@ func _style_academy_category_tab(button: Button, selected: bool) -> void:
 	button.add_theme_stylebox_override("hover", hover)
 	button.add_theme_stylebox_override("pressed", pressed)
 	button.add_theme_stylebox_override("focus", pressed)
-	button.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	button.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
-	button.add_theme_color_override("font_pressed_color", COLOR_WINDOW_TEXT)
+	button.add_theme_color_override("font_color", font_color)
+	button.add_theme_color_override("font_hover_color", font_color)
+	button.add_theme_color_override("font_pressed_color", font_color)
 
 
 func _apply_academy_button_padding(button: Button, padding: int = 24) -> void:
@@ -2721,21 +2896,200 @@ func _apply_academy_button_padding(button: Button, padding: int = 24) -> void:
 		button.add_theme_stylebox_override(style_name, flat_style)
 
 
+func _style_academy_primary_button(button: Button) -> void:
+	_style_button(button, COLOR_ACADEMY_BROWN, COLOR_ACADEMY_BROWN.darkened(0.22), COLOR_TEXT, 0)
+	var normal_style: StyleBoxFlat = button.get_theme_stylebox("normal") as StyleBoxFlat
+	if normal_style != null:
+		var disabled_style: StyleBoxFlat = normal_style.duplicate()
+		disabled_style.bg_color = COLOR_ACADEMY_BROWN.lightened(0.24)
+		disabled_style.border_color = COLOR_ACADEMY_BROWN.darkened(0.12)
+		button.add_theme_stylebox_override("disabled", disabled_style)
+	button.add_theme_color_override("font_disabled_color", Color(1.0, 0.976471, 0.929412, 0.78))
+
+
+func _style_academy_selection_chip(label: Label) -> void:
+	var chip_style := StyleBoxFlat.new()
+	chip_style.bg_color = COLOR_ACADEMY_GREEN
+	chip_style.border_color = COLOR_ACADEMY_GREEN.darkened(0.18)
+	chip_style.set_border_width_all(0)
+	chip_style.corner_radius_top_left = 0
+	chip_style.corner_radius_top_right = 0
+	chip_style.corner_radius_bottom_left = 0
+	chip_style.corner_radius_bottom_right = 0
+	chip_style.content_margin_left = 10
+	chip_style.content_margin_right = 10
+	chip_style.content_margin_top = 4
+	chip_style.content_margin_bottom = 4
+	label.add_theme_stylebox_override("normal", chip_style)
+	label.add_theme_color_override("font_color", Color(0.247059, 0.278431, 0.117647, 1))
+
+
+func _style_academy_banner_frame(panel: PanelContainer) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.2, 0.196078, 0.156863, 0.92)
+	style.border_color = Color(0.12549, 0.113725, 0.0823529, 1)
+	style.set_border_width_all(2)
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 0
+	style.corner_radius_bottom_left = 0
+	style.corner_radius_bottom_right = 0
+	panel.add_theme_stylebox_override("panel", style)
+
+
+func _style_academy_content_block(panel: PanelContainer, fill_color: Color, border_left: int = 1) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = COLOR_ACADEMY_BORDER
+	style.border_width_left = border_left
+	style.border_width_top = 0 if border_left > 1 else 1
+	style.border_width_right = 0 if border_left > 1 else 1
+	style.border_width_bottom = 0 if border_left > 1 else 1
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 0
+	style.corner_radius_bottom_left = 0
+	style.corner_radius_bottom_right = 0
+	panel.add_theme_stylebox_override("panel", style)
+
+
+func _style_academy_text_card(panel: PanelContainer) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = COLOR_ACADEMY_CREAM
+	style.border_color = Color(0.658824, 0.533333, 0.278431, 0.92)
+	style.set_border_width_all(1)
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 0
+	style.corner_radius_bottom_left = 0
+	style.corner_radius_bottom_right = 0
+	panel.add_theme_stylebox_override("panel", style)
+
+
+func _style_academy_infobox_card(panel: PanelContainer) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.945098, 0.894118, 0.705882, 1)
+	style.border_color = Color(0.658824, 0.533333, 0.278431, 0.95)
+	style.set_border_width_all(1)
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 0
+	style.corner_radius_bottom_left = 0
+	style.corner_radius_bottom_right = 0
+	panel.add_theme_stylebox_override("panel", style)
+
+
+func _style_academy_key_insights_card(panel: PanelContainer) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.835294, 0.898039, 0.968627, 1)
+	style.border_color = Color(0.133333, 0.376471, 0.694118, 1)
+	style.border_width_left = 5
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 0
+	style.corner_radius_bottom_left = 0
+	style.corner_radius_bottom_right = 0
+	panel.add_theme_stylebox_override("panel", style)
+
+
+func _style_academy_quick_check_button(button: Button) -> void:
+	_style_button(button, Color(0.945098, 0.894118, 0.705882, 1), COLOR_ACADEMY_BORDER, COLOR_WINDOW_TEXT, 0)
+	_apply_academy_button_padding(button, 10)
+	button.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	button.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
+	button.add_theme_color_override("font_pressed_color", COLOR_WINDOW_TEXT)
+	button.add_theme_color_override("font_focus_color", COLOR_WINDOW_TEXT)
+
+
+func _restyle_academy_controls() -> void:
+	if academy_window_body != null:
+		_style_panel(academy_window_body, COLOR_ACADEMY_CREAM, 0)
+	if academy_section_list != null:
+		_style_light_item_list(academy_section_list)
+	if academy_glossary_list != null:
+		_style_light_item_list(academy_glossary_list)
+	if academy_category_tabs != null:
+		for child in academy_category_tabs.get_children():
+			var tab_button: Button = child as Button
+			if tab_button == null:
+				continue
+			var tab_id: String = tab_button.name.trim_prefix("AcademyCategoryButton_")
+			_style_academy_category_tab(tab_button, tab_id == selected_academy_category_id)
+	if academy_selection_chip_label != null:
+		_style_academy_selection_chip(academy_selection_chip_label)
+		academy_selection_chip_label.add_theme_font_size_override("font_size", 10)
+	if academy_lesson_title_label != null:
+		academy_lesson_title_label.add_theme_color_override("font_color", COLOR_ACADEMY_BROWN)
+		academy_lesson_title_label.add_theme_font_size_override("font_size", 30)
+	if academy_lesson_meta_label != null:
+		academy_lesson_meta_label.add_theme_color_override("font_color", Color(0.25098, 0.223529, 0.156863, 1))
+		academy_lesson_meta_label.add_theme_font_size_override("font_size", 14)
+	if academy_lesson_banner_frame != null:
+		_style_academy_banner_frame(academy_lesson_banner_frame)
+	if academy_lesson_banner_label != null:
+		academy_lesson_banner_label.add_theme_color_override("font_color", Color(0.898039, 0.870588, 0.745098, 1))
+		academy_lesson_banner_label.add_theme_font_size_override("font_size", 16)
+	if academy_mark_read_button != null:
+		_style_academy_primary_button(academy_mark_read_button)
+		_apply_academy_button_padding(academy_mark_read_button, 14)
+	if academy_next_button != null:
+		_style_button(academy_next_button, Color(0.894118, 0.85098, 0.678431, 1), COLOR_ACADEMY_BORDER, COLOR_WINDOW_TEXT, 0)
+		_apply_academy_button_padding(academy_next_button, 14)
+	if academy_lesson_content_vbox != null:
+		_restyle_academy_content_nodes(academy_lesson_content_vbox)
+
+
+func _restyle_academy_content_nodes(node: Node) -> void:
+	if node.name == "AcademyTextBlockTitle" and node is Label:
+		var label: Label = node
+		label.add_theme_font_size_override("font_size", 16)
+		label.add_theme_color_override("font_color", Color(0.129412, 0.101961, 0.058824, 1))
+	if node.name == "AcademyKeyInsightsTitle" and node is Label:
+		var insights_label: Label = node
+		insights_label.add_theme_font_size_override("font_size", 16)
+		insights_label.add_theme_color_override("font_color", Color(0.054902, 0.164706, 0.313726, 1))
+	if node.name == "AcademyQuickCheckOptionButton" and node is Button:
+		_style_academy_quick_check_button(node as Button)
+	for child in node.get_children():
+		_restyle_academy_content_nodes(child)
+
+
 func _rebuild_academy_section_list() -> void:
 	academy_section_list.clear()
 	var sections: Array = current_academy_snapshot.get("sections", [])
 	for index in range(sections.size()):
 		var section: Dictionary = sections[index]
-		var label: String = str(section.get("label", "Section"))
-		if bool(section.get("locked", false)):
-			label = "%s (Locked)" % label
-		elif bool(section.get("read", false)):
-			label = "%s (Read)" % label
+		var section_id: String = str(section.get("id", ""))
+		var order: int = int(section.get("order", index + 1))
+		var title: String = str(section.get("title", section.get("label", "Section")))
+		var status_label: String = _academy_module_status_label(section)
+		var label: String = "%d    %s\n     %s" % [order, title, status_label]
 		academy_section_list.add_item(label)
 		academy_section_list.set_item_metadata(index, section.duplicate(true))
 		academy_section_list.set_item_disabled(index, bool(section.get("locked", false)))
-		if str(section.get("id", "")) == selected_academy_section_id:
+		academy_section_list.set_item_custom_fg_color(index, COLOR_WINDOW_TEXT if not bool(section.get("locked", false)) else Color(0.329412, 0.313725, 0.266667, 0.78))
+		academy_section_list.set_item_custom_bg_color(index, _academy_module_row_color(section, section_id == selected_academy_section_id))
+		if section_id == selected_academy_section_id:
 			academy_section_list.select(index)
+
+
+func _academy_module_status_label(section: Dictionary) -> String:
+	var kind: String = str(section.get("kind", "lesson"))
+	if kind == "quiz":
+		return "Quiz locked" if bool(section.get("locked", false)) else "Quiz"
+	if kind == "glossary":
+		return "Glossary"
+	if bool(section.get("read", false)):
+		return "Completed"
+	return "Not learned"
+
+
+func _academy_module_row_color(section: Dictionary, selected: bool) -> Color:
+	if selected:
+		return Color(0.87451, 0.831373, 0.666667, 1)
+	if bool(section.get("read", false)):
+		return Color(0.917647, 0.933333, 0.741176, 1)
+	if bool(section.get("locked", false)):
+		return Color(0.839216, 0.815686, 0.72549, 0.45)
+	return Color(0.968627, 0.941176, 0.815686, 0.62)
 
 
 func _rebuild_academy_section_tabs() -> void:
@@ -2832,8 +3186,12 @@ func _refresh_academy_content() -> void:
 
 	if bool(current_academy_snapshot.get("coming_soon", false)):
 		academy_summary_label.text = str(current_academy_snapshot.get("category_label", "Academy")).to_upper()
+		if academy_selection_chip_label != null:
+			academy_selection_chip_label.text = "TRACK PREVIEW"
 		academy_lesson_title_label.text = str(current_academy_snapshot.get("category_label", "Academy"))
 		academy_lesson_meta_label.text = str(current_academy_snapshot.get("coming_soon_copy", "Coming soon."))
+		if academy_lesson_banner_label != null:
+			academy_lesson_banner_label.text = "COMING SOON"
 		academy_mark_read_button.visible = false
 		academy_next_button.visible = false
 		_refresh_academy_side_panel()
@@ -2842,8 +3200,12 @@ func _refresh_academy_content() -> void:
 	var section: Dictionary = current_academy_snapshot.get("selected_section", {})
 	if section.is_empty():
 		academy_summary_label.text = ""
+		if academy_selection_chip_label != null:
+			academy_selection_chip_label.text = "CHOOSE MODULE"
 		academy_lesson_title_label.text = "Choose a section"
 		academy_lesson_meta_label.text = ""
+		if academy_lesson_banner_label != null:
+			academy_lesson_banner_label.text = "ACADEMY"
 		academy_mark_read_button.visible = false
 		academy_next_button.visible = false
 		_refresh_academy_side_panel()
@@ -2851,8 +3213,12 @@ func _refresh_academy_content() -> void:
 
 	var kind: String = str(section.get("kind", "lesson"))
 	academy_summary_label.text = str(section.get("label", "")).to_upper()
+	if academy_selection_chip_label != null:
+		academy_selection_chip_label.text = _academy_selection_chip_text(section)
 	academy_lesson_title_label.text = str(section.get("title", section.get("label", "Lesson")))
-	academy_lesson_meta_label.text = ""
+	academy_lesson_meta_label.text = _academy_lesson_deck(section)
+	if academy_lesson_banner_label != null:
+		academy_lesson_banner_label.text = _academy_banner_label_for_section(section)
 	if kind == "quiz":
 		_build_academy_quiz(section)
 	elif kind == "glossary":
@@ -2862,39 +3228,101 @@ func _refresh_academy_content() -> void:
 
 	academy_mark_read_button.visible = kind == "lesson"
 	academy_mark_read_button.disabled = bool(section.get("read", false))
-	academy_mark_read_button.text = "Completed" if bool(section.get("read", false)) else "Complete Section"
+	academy_mark_read_button.text = "COMPLETED" if bool(section.get("read", false)) else "MARK AS COMPLETE"
 	academy_next_button.visible = true
 	academy_next_button.disabled = _next_academy_section_id().is_empty()
 	_refresh_academy_side_panel()
 
 
+func _academy_selection_chip_text(section: Dictionary) -> String:
+	var kind: String = str(section.get("kind", "lesson"))
+	if kind == "quiz":
+		return "CURRENT SELECTION: QUIZ"
+	if kind == "glossary":
+		return "CURRENT SELECTION: GLOSSARY"
+	var order: int = int(section.get("order", 0))
+	return "CURRENT SELECTION: MODULE %d" % max(order, 1)
+
+
+func _academy_lesson_deck(section: Dictionary) -> String:
+	var kind: String = str(section.get("kind", "lesson"))
+	if kind == "quiz":
+		return "Score 80 percent or better to earn Technical Basics."
+	if kind == "glossary":
+		return "Search the core vocabulary used across the Technical track."
+	var completion_signal_text: String = str(section.get("completion_signal", "")).strip_edges()
+	if not completion_signal_text.is_empty():
+		var softened_signal: String = completion_signal_text.substr(0, 1).to_lower() + completion_signal_text.substr(1)
+		return "In this chapter, %s" % softened_signal
+	return "In this chapter, build one repeatable market-reading habit."
+
+
+func _academy_banner_label_for_section(section: Dictionary) -> String:
+	var kind: String = str(section.get("kind", "lesson"))
+	if kind == "quiz":
+		return "QUIZ BOARD"
+	if kind == "glossary":
+		return "GLOSSARY"
+	var section_id: String = str(section.get("id", ""))
+	match section_id:
+		"market_structure":
+			return "MARKET STRUCTURE"
+		"candlesticks":
+			return "CANDLE STUDY"
+		"patterns":
+			return "PATTERN BOARD"
+		"moving_average":
+			return "TREND MODULE"
+		"thinking_framework":
+			return "ROUTINE BOARD"
+		_:
+			return "CHART MODULE"
+
+
 func _build_academy_lesson(section: Dictionary) -> void:
-	var paragraphs: Array = []
-	for page_value in section.get("pages", []):
-		var page: Dictionary = page_value
-		var body: String = str(page.get("body", "")).strip_edges()
-		if not body.is_empty():
-			paragraphs.append(body)
-	if not paragraphs.is_empty():
-		academy_lesson_content_vbox.add_child(_build_academy_text_block(
-			_academy_lesson_card_title(section),
-			"\n\n".join(paragraphs)
-		))
-		if str(section.get("id", "")) == "intro":
-			academy_lesson_content_vbox.add_child(_build_academy_principles_row())
-
-	for example_value in section.get("examples", []):
-		var example: Dictionary = example_value
-		academy_lesson_content_vbox.add_child(_build_academy_example_block(str(example.get("title", "Chart cue")), str(example.get("type", ""))))
-
-	for card_value in section.get("pattern_cards", []):
-		var card: Dictionary = card_value
-		academy_lesson_content_vbox.add_child(_build_academy_text_block(str(card.get("label", "Pattern")), str(card.get("cue", ""))))
+	var content_blocks: Array = section.get("content_blocks", [])
+	if not content_blocks.is_empty():
+		for block_value in content_blocks:
+			var block: Dictionary = block_value
+			academy_lesson_content_vbox.add_child(_build_academy_content_block(block))
+	else:
+		var paragraphs: Array = []
+		for page_value in section.get("pages", []):
+			var page: Dictionary = page_value
+			var body: String = str(page.get("body", "")).strip_edges()
+			if not body.is_empty():
+				paragraphs.append(body)
+		if not paragraphs.is_empty():
+			academy_lesson_content_vbox.add_child(_build_academy_text_block(
+				_academy_lesson_card_title(section),
+				"\n\n".join(paragraphs)
+			))
 
 	var stored_checks: Dictionary = RunState.get_academy_progress().get("inline_checks", {}).get(selected_academy_category_id, {}).get(str(section.get("id", "")), {})
 	for check_value in section.get("checks", []):
 		var check: Dictionary = check_value
 		academy_lesson_content_vbox.add_child(_build_academy_check_block(str(section.get("id", "")), check, stored_checks.get(str(check.get("id", "")), {})))
+
+
+func _build_academy_content_block(block: Dictionary) -> Control:
+	var block_type: String = str(block.get("type", "text"))
+	if block_type == "image":
+		return _build_academy_image_block(
+			str(block.get("asset_path", "")),
+			str(block.get("caption", "")),
+			str(block.get("alt", "Academy image"))
+		)
+	if block_type == "key_insights":
+		return _build_academy_key_insights_block(
+			str(block.get("title", "Key Insights")),
+			block.get("bullets", [])
+		)
+	return _build_academy_text_block(
+		str(block.get("heading", "Lesson")),
+		str(block.get("body", "")),
+		block.get("infoboxes", []),
+		block.get("images", [])
+	)
 
 
 func _academy_lesson_card_title(section: Dictionary) -> String:
@@ -2912,60 +3340,6 @@ func _academy_lesson_card_title(section: Dictionary) -> String:
 	if section_id == "thinking_framework":
 		return "A repeatable routine beats guessing"
 	return str(section.get("title", "Lesson"))
-
-
-func _build_academy_principles_row() -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.name = "AcademyPrinciplesRow"
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 12)
-	var principles: Array = [
-		{
-			"title": "Markets discount everything",
-			"body": "All known information is already reflected in price."
-		},
-		{
-			"title": "Price moves in trends",
-			"body": "Trends persist until a reversal signal appears."
-		},
-		{
-			"title": "History repeats",
-			"body": "Market psychology is consistent; patterns recur."
-		}
-	]
-	for principle_value in principles:
-		var principle: Dictionary = principle_value
-		row.add_child(_build_academy_principle_card(
-			str(principle.get("title", "")),
-			str(principle.get("body", ""))
-		))
-	return row
-
-
-func _build_academy_principle_card(title: String, body: String) -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_panel(panel, Color(0.952941, 0.94902, 0.87451, 1), 8, 1, 1, 1, 1)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 14)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_right", 14)
-	margin.add_theme_constant_override("margin_bottom", 12)
-	panel.add_child(margin)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
-	margin.add_child(vbox)
-	var title_label := Label.new()
-	title_label.text = title
-	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	title_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	vbox.add_child(title_label)
-	var body_label := Label.new()
-	body_label.text = body
-	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body_label.add_theme_color_override("font_color", Color(0.352941, 0.309804, 0.203922, 1))
-	vbox.add_child(body_label)
-	return panel
 
 
 func _build_academy_quiz(_section: Dictionary) -> void:
@@ -3034,10 +3408,11 @@ func _build_academy_glossary_section() -> void:
 	_style_line_input(search_input)
 
 
-func _build_academy_text_block(title: String, body: String) -> PanelContainer:
+func _build_academy_text_block(title: String, body: String, infoboxes: Array = [], images: Array = []) -> PanelContainer:
 	var panel := PanelContainer.new()
+	panel.name = "AcademyTextBlock"
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_panel(panel, Color(0.968627, 0.964706, 0.898039, 1), 8, 1, 1, 1, 1)
+	_style_academy_text_card(panel)
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 20)
 	margin.add_theme_constant_override("margin_top", 18)
@@ -3048,9 +3423,10 @@ func _build_academy_text_block(title: String, body: String) -> PanelContainer:
 	vbox.add_theme_constant_override("separation", 10)
 	margin.add_child(vbox)
 	var title_label := Label.new()
+	title_label.name = "AcademyTextBlockTitle"
 	title_label.text = title
 	title_label.add_theme_font_size_override("font_size", 16)
-	title_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	title_label.add_theme_color_override("font_color", Color(0.129412, 0.101961, 0.058824, 1))
 	vbox.add_child(title_label)
 	var body_label := Label.new()
 	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -3058,6 +3434,185 @@ func _build_academy_text_block(title: String, body: String) -> PanelContainer:
 	body_label.add_theme_font_size_override("font_size", 14)
 	body_label.add_theme_color_override("font_color", Color(0.352941, 0.309804, 0.203922, 1))
 	vbox.add_child(body_label)
+	for image_value in images:
+		var image: Dictionary = image_value
+		var image_path: String = str(image.get("asset_path", "")).strip_edges()
+		var image_caption: String = str(image.get("caption", "")).strip_edges()
+		var image_alt: String = str(image.get("alt", "Academy image")).strip_edges()
+		vbox.add_child(_build_academy_text_inline_image_block(image_path, image_caption, image_alt))
+	for infobox_value in infoboxes:
+		var infobox: Dictionary = infobox_value
+		var infobox_title: String = str(infobox.get("title", "")).strip_edges()
+		var infobox_body: String = str(infobox.get("body", "")).strip_edges()
+		if infobox_title.is_empty() and infobox_body.is_empty():
+			continue
+		vbox.add_child(_build_academy_infobox_card(infobox_title, infobox_body))
+	return panel
+
+
+func _build_academy_text_inline_image_block(asset_path: String, caption: String = "", alt_text: String = "") -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.name = "AcademyTextInlineImageBlock"
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_academy_content_block(panel, Color(0.258824, 0.25098, 0.196078, 1), 1)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 8)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_right", 8)
+	margin.add_theme_constant_override("margin_bottom", 8)
+	panel.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	margin.add_child(vbox)
+	var image_frame := PanelContainer.new()
+	image_frame.name = "AcademyTextInlineImageFrame"
+	image_frame.custom_minimum_size = Vector2(0, 150)
+	image_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(image_frame)
+	_style_academy_banner_frame(image_frame)
+	var center := CenterContainer.new()
+	image_frame.add_child(center)
+	var image_texture: Texture2D = null
+	if not asset_path.is_empty() and ResourceLoader.exists(asset_path):
+		image_texture = load(asset_path) as Texture2D
+	if image_texture != null:
+		var texture_rect := TextureRect.new()
+		texture_rect.name = "AcademyTextInlineImageTexture"
+		texture_rect.texture = image_texture
+		texture_rect.custom_minimum_size = Vector2(0, 140)
+		texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		texture_rect.tooltip_text = alt_text
+		center.add_child(texture_rect)
+	else:
+		var placeholder := Label.new()
+		placeholder.name = "AcademyTextInlineImagePlaceholder"
+		placeholder.text = "IMAGE PLACEHOLDER" if asset_path.is_empty() else "MISSING IMAGE"
+		placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		placeholder.add_theme_color_override("font_color", Color(0.898039, 0.870588, 0.745098, 1))
+		center.add_child(placeholder)
+	if not caption.strip_edges().is_empty():
+		var caption_label := Label.new()
+		caption_label.name = "AcademyTextInlineImageCaption"
+		caption_label.text = caption
+		caption_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		caption_label.add_theme_color_override("font_color", Color(0.898039, 0.870588, 0.745098, 1))
+		vbox.add_child(caption_label)
+	return panel
+
+
+func _build_academy_infobox_card(title: String, body: String) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.name = "AcademyInfoboxCard"
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_academy_infobox_card(panel)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	panel.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(vbox)
+	if not title.is_empty():
+		var title_label := Label.new()
+		title_label.text = title
+		title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		title_label.add_theme_color_override("font_color", COLOR_ACADEMY_BROWN)
+		vbox.add_child(title_label)
+	if not body.is_empty():
+		var body_label := Label.new()
+		body_label.text = body
+		body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		body_label.add_theme_color_override("font_color", Color(0.352941, 0.309804, 0.203922, 1))
+		vbox.add_child(body_label)
+	return panel
+
+
+func _build_academy_key_insights_block(title: String, bullets: Array) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.name = "AcademyKeyInsightsBlock"
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_academy_key_insights_card(panel)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 20)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	panel.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	margin.add_child(vbox)
+	var title_label := Label.new()
+	title_label.name = "AcademyKeyInsightsTitle"
+	title_label.text = title if not title.strip_edges().is_empty() else "Key Insights"
+	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title_label.add_theme_color_override("font_color", Color(0.054902, 0.164706, 0.313726, 1))
+	title_label.add_theme_font_size_override("font_size", 16)
+	vbox.add_child(title_label)
+	for bullet_value in bullets:
+		var bullet_text: String = str(bullet_value).strip_edges()
+		if bullet_text.is_empty():
+			continue
+		var bullet_label := Label.new()
+		bullet_label.text = "- %s" % bullet_text
+		bullet_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		bullet_label.add_theme_color_override("font_color", Color(0.07451, 0.156863, 0.270588, 1))
+		vbox.add_child(bullet_label)
+	return panel
+
+
+func _build_academy_image_block(asset_path: String, caption: String = "", alt_text: String = "") -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.name = "AcademyImageBlock"
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_academy_banner_frame(panel)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	panel.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	margin.add_child(vbox)
+	var image_frame := PanelContainer.new()
+	image_frame.name = "AcademyInlineImageFrame"
+	image_frame.custom_minimum_size = Vector2(0, 190)
+	image_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(image_frame)
+	_style_academy_banner_frame(image_frame)
+	var center := CenterContainer.new()
+	image_frame.add_child(center)
+	var image_texture: Texture2D = null
+	if not asset_path.is_empty() and ResourceLoader.exists(asset_path):
+		image_texture = load(asset_path) as Texture2D
+	if image_texture != null:
+		var texture_rect := TextureRect.new()
+		texture_rect.name = "AcademyInlineImageTexture"
+		texture_rect.texture = image_texture
+		texture_rect.custom_minimum_size = Vector2(0, 180)
+		texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		texture_rect.tooltip_text = alt_text
+		center.add_child(texture_rect)
+	else:
+		var placeholder := Label.new()
+		placeholder.name = "AcademyInlineImagePlaceholder"
+		placeholder.text = "IMAGE PLACEHOLDER" if asset_path.is_empty() else "MISSING IMAGE"
+		placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		placeholder.add_theme_color_override("font_color", Color(0.898039, 0.870588, 0.745098, 1))
+		center.add_child(placeholder)
+	if not caption.strip_edges().is_empty():
+		var caption_label := Label.new()
+		caption_label.name = "AcademyInlineImageCaption"
+		caption_label.text = caption
+		caption_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		caption_label.add_theme_color_override("font_color", Color(0.898039, 0.870588, 0.745098, 1))
+		vbox.add_child(caption_label)
 	return panel
 
 
@@ -3075,11 +3630,11 @@ func _build_academy_check_block(section_id: String, check: Dictionary, stored_re
 	for option_value in check.get("options", []):
 		var option: Dictionary = option_value
 		var button := Button.new()
+		button.name = "AcademyQuickCheckOptionButton"
 		button.text = str(option.get("label", "Answer"))
 		button.pressed.connect(_on_academy_inline_check_pressed.bind(section_id, str(check.get("id", "")), str(option.get("id", ""))))
 		options_row.add_child(button)
-		_style_button(button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
-		_apply_academy_button_padding(button)
+		_style_academy_quick_check_button(button)
 	if not stored_result.is_empty():
 		var result_label := Label.new()
 		result_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -6372,9 +6927,23 @@ func _on_toast_close_pressed() -> void:
 
 
 func _on_next_day_pressed() -> void:
-	status_message = "Advancing day..."
-	_refresh_dashboard()
+	if advance_day_processing:
+		return
+	if not RunState.has_active_run():
+		return
+	advance_day_processing = true
+	pending_daily_recap_snapshot = {}
+	_set_advance_day_phase("Closing Market")
+	await get_tree().process_frame
+	_set_advance_day_phase("Printing News")
+	await get_tree().process_frame
+	_set_advance_day_phase("Updating Contacts")
+	await get_tree().process_frame
+	_set_advance_day_phase("Saving Run")
+	await get_tree().process_frame
 	GameManager.advance_day()
+	if advance_day_processing:
+		_finish_advance_day_processing()
 
 
 func _on_day_progressed(_day_index: int) -> void:
@@ -6389,6 +6958,84 @@ func _on_day_progressed(_day_index: int) -> void:
 
 func _on_summary_ready(_summary: Dictionary) -> void:
 	_refresh_dashboard()
+	if advance_day_processing:
+		pending_daily_recap_snapshot = GameManager.get_daily_recap_snapshot()
+		_finish_advance_day_processing()
+		call_deferred("_show_daily_recap_if_pending")
+
+
+func _set_advance_day_phase(label: String) -> void:
+	status_message = label
+	if desktop_advance_day_button != null:
+		desktop_advance_day_button.disabled = true
+		desktop_advance_day_button.text = "%s..." % label.to_upper()
+		desktop_advance_day_button.tooltip_text = "Processing the next trading day."
+	_refresh_dashboard()
+	_refresh_desktop()
+
+
+func _finish_advance_day_processing() -> void:
+	advance_day_processing = false
+	if desktop_advance_day_button != null:
+		desktop_advance_day_button.disabled = false
+		desktop_advance_day_button.text = "ADVANCE DAY"
+		desktop_advance_day_button.tooltip_text = "Advance to the next trading day."
+	_refresh_desktop()
+
+
+func _show_daily_recap_if_pending() -> void:
+	if pending_daily_recap_snapshot.is_empty() or daily_recap_dialog == null or daily_recap_body_label == null:
+		return
+	daily_recap_body_label.text = _build_daily_recap_text(pending_daily_recap_snapshot)
+	pending_daily_recap_snapshot = {}
+	daily_recap_dialog.visible = true
+	daily_recap_dialog.move_to_front()
+
+
+func _build_daily_recap_text(snapshot: Dictionary) -> String:
+	var summary: Dictionary = snapshot.get("summary", {})
+	var trade_date: Dictionary = snapshot.get("trade_date", {})
+	var activity_counts: Dictionary = snapshot.get("activity_counts", {})
+	var daily_action: Dictionary = snapshot.get("daily_action", {})
+	var lines: Array[String] = []
+	lines.append("%s" % GameManager.format_trade_date(trade_date))
+	lines.append("Index Gorengan today: %s" % _format_change(float(snapshot.get("market_sentiment", 0.0))))
+	lines.append("Portfolio: %s | Equity %s" % [
+		_format_signed_currency(float(summary.get("portfolio_delta", 0.0))),
+		_format_currency(float(summary.get("portfolio_value", snapshot.get("portfolio", {}).get("equity", 0.0))))
+	])
+	lines.append("")
+	lines.append(_daily_recap_mover_line("Best tape", summary.get("biggest_winner", {})))
+	lines.append(_daily_recap_mover_line("Weakest tape", summary.get("biggest_loser", {})))
+	lines.append("")
+	lines.append("Activity: News %d | Twooter %d | Network %d" % [
+		int(activity_counts.get("news", 0)),
+		int(activity_counts.get("social", 0)),
+		int(activity_counts.get("network", 0))
+	])
+	lines.append("AP reset: %d / %d remaining" % [
+		int(daily_action.get("remaining", 0)),
+		int(daily_action.get("limit", 0))
+	])
+	return "\n".join(lines)
+
+
+func _daily_recap_mover_line(label: String, row: Dictionary) -> String:
+	if row.is_empty():
+		return "%s: -" % label
+	return "%s: %s %s" % [
+		label,
+		str(row.get("ticker", "----")),
+		_format_change(float(row.get("change_pct", 0.0)))
+	]
+
+
+func _daily_recap_market_mood(sentiment: float) -> String:
+	if sentiment >= 0.015:
+		return "Risk-on %s" % _format_change(sentiment)
+	if sentiment <= -0.015:
+		return "Defensive %s" % _format_change(sentiment)
+	return "Mixed %s" % _format_change(sentiment)
 
 
 func _on_lot_size_changed(value: float) -> void:
@@ -6477,6 +7124,179 @@ func _ensure_upgrade_purchase_dialog() -> void:
 	upgrade_purchase_body_label.text = ""
 	upgrade_purchase_body_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
 	dialog_margin.add_child(upgrade_purchase_body_label)
+
+
+func _ensure_daily_recap_dialog() -> void:
+	if daily_recap_dialog != null:
+		return
+
+	daily_recap_dialog = Control.new()
+	daily_recap_dialog.name = "DailyRecapDialog"
+	daily_recap_dialog.visible = false
+	daily_recap_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	daily_recap_dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(daily_recap_dialog)
+
+	var scrim := ColorRect.new()
+	scrim.name = "DailyRecapScrim"
+	scrim.color = Color(0.0, 0.0, 0.0, 0.18)
+	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	daily_recap_dialog.add_child(scrim)
+
+	var center := CenterContainer.new()
+	center.name = "DailyRecapCenter"
+	center.mouse_filter = Control.MOUSE_FILTER_PASS
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	daily_recap_dialog.add_child(center)
+
+	var frame := PanelContainer.new()
+	frame.name = "DailyRecapFrame"
+	frame.custom_minimum_size = Vector2(640, 430)
+	frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	center.add_child(frame)
+
+	var frame_vbox := VBoxContainer.new()
+	frame_vbox.name = "DailyRecapFrameVBox"
+	frame_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	frame_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	frame_vbox.add_theme_constant_override("separation", 0)
+	frame.add_child(frame_vbox)
+
+	var title_bar := PanelContainer.new()
+	title_bar.name = "DailyRecapTitleBar"
+	title_bar.custom_minimum_size = Vector2(0, DESKTOP_WINDOW_TITLE_BAR_HEIGHT)
+	title_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	frame_vbox.add_child(title_bar)
+
+	var title_margin := MarginContainer.new()
+	title_margin.add_theme_constant_override("margin_left", 12)
+	title_margin.add_theme_constant_override("margin_top", 4)
+	title_margin.add_theme_constant_override("margin_right", 8)
+	title_margin.add_theme_constant_override("margin_bottom", 4)
+	title_bar.add_child(title_margin)
+
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 8)
+	title_margin.add_child(title_row)
+
+	var title_label := Label.new()
+	title_label.name = "DailyRecapTitleLabel"
+	title_label.text = "Daily Recap"
+	title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_label.add_theme_color_override("font_color", COLOR_TEXT)
+	title_row.add_child(title_label)
+
+	var close_button := Button.new()
+	close_button.name = "DailyRecapCloseButton"
+	close_button.text = "X"
+	close_button.custom_minimum_size = Vector2(32, 24)
+	close_button.pressed.connect(_hide_daily_recap)
+	title_row.add_child(close_button)
+
+	var body_margin := MarginContainer.new()
+	body_margin.name = "DailyRecapOuterMargin"
+	body_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body_margin.add_theme_constant_override("margin_left", 16)
+	body_margin.add_theme_constant_override("margin_top", 16)
+	body_margin.add_theme_constant_override("margin_right", 16)
+	body_margin.add_theme_constant_override("margin_bottom", 14)
+	frame_vbox.add_child(body_margin)
+
+	var body_vbox := VBoxContainer.new()
+	body_vbox.name = "DailyRecapBodyVBox"
+	body_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body_vbox.add_theme_constant_override("separation", 14)
+	body_margin.add_child(body_vbox)
+
+	var content_panel := PanelContainer.new()
+	content_panel.name = "DailyRecapContentPanel"
+	content_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body_vbox.add_child(content_panel)
+
+	var content_margin := MarginContainer.new()
+	content_margin.name = "DailyRecapContentMargin"
+	content_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content_margin.add_theme_constant_override("margin_left", 22)
+	content_margin.add_theme_constant_override("margin_top", 18)
+	content_margin.add_theme_constant_override("margin_right", 22)
+	content_margin.add_theme_constant_override("margin_bottom", 18)
+	content_panel.add_child(content_margin)
+
+	daily_recap_body_label = Label.new()
+	daily_recap_body_label.name = "DailyRecapBodyLabel"
+	daily_recap_body_label.custom_minimum_size = Vector2(580, 330)
+	daily_recap_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	daily_recap_body_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	daily_recap_body_label.text = ""
+	daily_recap_body_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	daily_recap_body_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	daily_recap_body_label.add_theme_constant_override("line_spacing", 5)
+	content_margin.add_child(daily_recap_body_label)
+
+	var action_row := HBoxContainer.new()
+	action_row.name = "DailyRecapActionRow"
+	action_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	body_vbox.add_child(action_row)
+
+	daily_recap_continue_button = Button.new()
+	daily_recap_continue_button.name = "DailyRecapContinueButton"
+	daily_recap_continue_button.text = "Continue"
+	daily_recap_continue_button.custom_minimum_size = Vector2(112, 38)
+	daily_recap_continue_button.pressed.connect(_hide_daily_recap)
+	action_row.add_child(daily_recap_continue_button)
+	_style_daily_recap_dialog()
+
+
+func _hide_daily_recap() -> void:
+	if daily_recap_dialog != null:
+		daily_recap_dialog.visible = false
+
+
+func _style_daily_recap_dialog() -> void:
+	if daily_recap_dialog == null:
+		return
+	var frame: PanelContainer = daily_recap_dialog.get_node_or_null("DailyRecapCenter/DailyRecapFrame") as PanelContainer
+	if frame != null:
+		var frame_style := StyleBoxFlat.new()
+		frame_style.bg_color = COLOR_DESKTOP_CREAM
+		frame_style.border_color = COLOR_ACADEMY_BROWN
+		frame_style.set_border_width_all(2)
+		frame_style.set_corner_radius_all(0)
+		frame.add_theme_stylebox_override("panel", frame_style)
+	var title_bar: PanelContainer = daily_recap_dialog.get_node_or_null("DailyRecapCenter/DailyRecapFrame/DailyRecapFrameVBox/DailyRecapTitleBar") as PanelContainer
+	if title_bar != null:
+		_style_window_title_bar(title_bar, COLOR_ACADEMY_BROWN)
+	var title_label: Label = daily_recap_dialog.find_child("DailyRecapTitleLabel", true, false) as Label
+	if title_label != null:
+		title_label.add_theme_color_override("font_color", COLOR_TEXT)
+		title_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	var close_button: Button = daily_recap_dialog.find_child("DailyRecapCloseButton", true, false) as Button
+	if close_button != null:
+		_style_button(close_button, Color(0.368627, 0.160784, 0.176471, 1), Color(0.709804, 0.34902, 0.372549, 1), COLOR_TEXT, 0)
+	if daily_recap_continue_button != null:
+		_style_button(daily_recap_continue_button, COLOR_ACADEMY_BROWN, COLOR_ACADEMY_BORDER, COLOR_TEXT, 0)
+		daily_recap_continue_button.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	var content_panel: PanelContainer = daily_recap_dialog.find_child("DailyRecapContentPanel", true, false) as PanelContainer
+	if content_panel != null:
+		_style_daily_recap_content_panel(content_panel)
+
+
+func _style_daily_recap_content_panel(panel: PanelContainer) -> void:
+	if panel == null:
+		return
+	var content_style := StyleBoxFlat.new()
+	content_style.bg_color = Color(0.992157, 0.964706, 0.870588, 1)
+	content_style.border_color = Color(0.52549, 0.396078, 0.160784, 0.85)
+	content_style.set_border_width_all(1)
+	content_style.set_corner_radius_all(0)
+	panel.add_theme_stylebox_override("panel", content_style)
 
 
 func _ensure_console_overlay() -> void:
@@ -7965,7 +8785,7 @@ func _apply_visual_theme() -> void:
 	_style_panel(network_list_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
 	_style_panel(network_detail_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
 	if academy_window_body != null:
-		_style_panel(academy_window_body, COLOR_WINDOW_BG, 0)
+		_restyle_academy_controls()
 		_apply_academy_text_theme()
 	_style_panel(upgrade_window_body, COLOR_WINDOW_BG, 0)
 	if console_panel != null:
@@ -8131,6 +8951,9 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(upgrade_summary_label, COLOR_WINDOW_TEXT)
 	if upgrade_purchase_body_label != null:
 		_set_label_tone(upgrade_purchase_body_label, COLOR_WINDOW_TEXT)
+	if daily_recap_body_label != null:
+		_set_label_tone(daily_recap_body_label, COLOR_WINDOW_TEXT)
+	_style_daily_recap_dialog()
 	if console_title_label != null:
 		_set_label_tone(console_title_label, COLOR_TEXT)
 	if console_hint_label != null:

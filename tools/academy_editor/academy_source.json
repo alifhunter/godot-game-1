@@ -1,0 +1,1267 @@
+{
+  "schema_version": 1,
+  "catalog": {
+    "categories": [
+      {
+        "id": "mindset",
+        "label": "Mindset",
+        "status": "coming_soon",
+        "summary": "Train the decision habits that keep trading from turning into guessing.",
+        "coming_soon_copy": "Coming soon. This academy track will cover patience, journaling, bias checks, and risk discipline.",
+        "sections": []
+      },
+      {
+        "id": "money_management",
+        "label": "Money Management",
+        "status": "coming_soon",
+        "summary": "Learn how to size positions, protect cash, and survive losing streaks.",
+        "coming_soon_copy": "Coming soon. This academy track will cover position sizing, cash discipline, drawdown limits, and trade review.",
+        "sections": []
+      },
+      {
+        "id": "fundamental",
+        "label": "Fundamental",
+        "status": "coming_soon",
+        "summary": "Learn how to read business quality, financial statements, and valuation clues.",
+        "coming_soon_copy": "Coming soon. This academy track will cover revenue, margin, balance sheet strength, growth, and valuation context.",
+        "sections": []
+      },
+      {
+        "id": "technical",
+        "label": "Technical",
+        "status": "playable",
+        "summary": "Learn the basics of technical analysis and apply that knowledge by making a thinking framework.",
+        "quiz_passing_score": 0.8,
+        "quiz_required_section_ids": [
+          "intro",
+          "market_structure",
+          "candlesticks",
+          "patterns",
+          "moving_average",
+          "thinking_framework"
+        ],
+        "badge": {
+          "id": "technical_basics",
+          "label": "Technical Basics",
+          "description": "Passed the Technical Academy foundation quiz."
+        },
+        "sections": [
+          {
+            "id": "intro",
+            "order": 0,
+            "label": "01 Intro",
+            "title": "01 Getting to Know Technical Analysis",
+            "kind": "lesson",
+            "completion_signal": "You can explain that TA studies price and volume, then uses probability rather than prediction.",
+            "pages": [
+              {
+                "heading": "Concept",
+                "body": "Technical Analysis studies price and volume behavior. It does not tell you the future; it helps you frame likely scenarios and choose where your risk is clear."
+              },
+              {
+                "heading": "Chart Cue",
+                "body": "Start by asking what price is doing first: trending, ranging, breaking out, or breaking down. Volume tells you whether participation is expanding or drying up."
+              },
+              {
+                "heading": "How To Read It",
+                "body": "Use fundamentals to understand the business, then use technicals to time entries, exits, invalidation, and review. On IDX charts, daily candles give context while 1H or 15M charts can refine timing."
+              },
+              {
+                "heading": "Common Mistake",
+                "body": "Do not add indicators before reading price action. Indicators can confirm a view, but they should not replace structure."
+              }
+            ],
+            "checks": [
+              {
+                "id": "intro_data",
+                "question": "Which data does Technical Analysis read most directly?",
+                "options": [
+                  {
+                    "id": "price_volume",
+                    "label": "Price and volume",
+                    "correct": true,
+                    "feedback": "Right. TA begins with price behavior and participation."
+                  },
+                  {
+                    "id": "director_bio",
+                    "label": "Director biography",
+                    "correct": false,
+                    "feedback": "That can matter for fundamentals, but it is not the main TA input."
+                  },
+                  {
+                    "id": "dividend_policy",
+                    "label": "Dividend policy only",
+                    "correct": false,
+                    "feedback": "Dividends can affect a thesis, but TA is built from price and volume."
+                  }
+                ]
+              },
+              {
+                "id": "intro_probability",
+                "question": "What is the healthiest way to use TA?",
+                "options": [
+                  {
+                    "id": "certainty",
+                    "label": "Predict exact future prices",
+                    "correct": false,
+                    "feedback": "TA should not be treated as certainty."
+                  },
+                  {
+                    "id": "probability",
+                    "label": "Frame probabilities and risk",
+                    "correct": true,
+                    "feedback": "Correct. The point is better decisions under uncertainty."
+                  },
+                  {
+                    "id": "ignore_risk",
+                    "label": "Ignore invalidation if the pattern looks nice",
+                    "correct": false,
+                    "feedback": "A nice pattern without invalidation is still a risky guess."
+                  }
+                ]
+              }
+            ],
+            "content_blocks": [
+              {
+                "type": "text",
+                "heading": "What is technical analysis?",
+                "body": "Technical analysis evaluates securities by analyzing statistical data generated by market activity, primarily price and volume. Unlike fundamental analysis (which reads financial statements), TA focuses on chart patterns and price behavior to anticipate future price direction.",
+                "infoboxes": [
+                  {
+                    "title": "Markets discount everything ",
+                    "body": "All known information is already priced in."
+                  },
+                  {
+                    "title": "Price moves in trends",
+                    "body": "Trends persist until a reversal signal appears.\n"
+                  },
+                  {
+                    "title": "History repeats",
+                    "body": "Market psychology is consistent, patterns recur.\n"
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "heading": "TA vs Fundamental: how they work together",
+                "body": "Fundamental analysis tells you whether a company is worth buying. Technical analysis tells you when to buy it. It is wise to combine both, use TA for execution discipline. Never use TA alone without understanding what the business does. ",
+                "infoboxes": []
+              },
+              {
+                "type": "text",
+                "heading": "IDX context",
+                "body": "IDX (Bursa Efek Indonesia) has over 900 listed companies and a rapidly growing retail investor base. Short-term price moves are heavily sentiment-driven, making TA especially relevant. The most significant price moves tend to occur in the first and last 30 minutes of each trading session. IDX trading hours: pre-opening 08:45–09:00 WIB, session I 09:00–12:00, session II 13:30–16:00.",
+                "infoboxes": []
+              },
+              {
+                "type": "text",
+                "heading": "Common Mistake",
+                "body": "Do not add indicators before reading price action. Indicators can confirm a view, but they should not replace structure.",
+                "infoboxes": []
+              },
+              {
+                "type": "key_insights",
+                "title": "Key Insights",
+                "bullets": [
+                  "Indicators confirm that price action decides. Use MA, MACD, RSI, and volume to support your reading of the chart, not to replace it."
+                ]
+              }
+            ]
+          },
+          {
+            "id": "market_structure",
+            "order": 2,
+            "label": "02 Market Structure",
+            "title": "02 Market Structure",
+            "kind": "lesson",
+            "completion_signal": "You can identify whether a chart is trending, ranging, broken, or worth deeper analysis.",
+            "pages": [
+              {
+                "heading": "Concept",
+                "body": "Structure is the market's skeleton. Bullish structure often makes higher highs and higher lows. Bearish structure often makes lower highs and lower lows. Sideways structure moves inside a range."
+              },
+              {
+                "heading": "Chart Cue",
+                "body": "Mark support and resistance as areas, not exact magic lines. Look for bases, trendline breaks, accumulation, distribution, and whether the bigger timeframe agrees."
+              },
+              {
+                "heading": "How To Read It",
+                "body": "Begin from the bigger timeframe. If daily structure is healthy, a lower timeframe can help with precision. If daily structure is broken, a lower timeframe bounce may still be only noise."
+              },
+              {
+                "heading": "Common Mistake",
+                "body": "Avoid calling every dip a support and every green candle a breakout. Structure needs location, follow-through, and volume context."
+              }
+            ],
+            "examples": [
+              {
+                "type": "market_structure",
+                "title": "Higher lows vs lower highs"
+              }
+            ],
+            "checks": [
+              {
+                "id": "structure_trend",
+                "question": "A chart keeps printing higher highs and higher lows. What structure is this?",
+                "options": [
+                  {
+                    "id": "uptrend",
+                    "label": "Uptrend",
+                    "correct": true,
+                    "feedback": "Correct. Higher highs and higher lows are classic bullish structure."
+                  },
+                  {
+                    "id": "downtrend",
+                    "label": "Downtrend",
+                    "correct": false,
+                    "feedback": "Downtrends usually print lower highs and lower lows."
+                  },
+                  {
+                    "id": "random",
+                    "label": "No structure can be read",
+                    "correct": false,
+                    "feedback": "Structure can often be read from swing behavior."
+                  }
+                ]
+              },
+              {
+                "id": "structure_area",
+                "question": "Why mark support and resistance as areas?",
+                "options": [
+                  {
+                    "id": "exact",
+                    "label": "Because the exact line always holds",
+                    "correct": false,
+                    "feedback": "Exact lines are fragile; markets often test zones."
+                  },
+                  {
+                    "id": "zone",
+                    "label": "Because price often reacts around zones",
+                    "correct": true,
+                    "feedback": "Right. Areas reduce false precision."
+                  },
+                  {
+                    "id": "hide_loss",
+                    "label": "So invalidation is never needed",
+                    "correct": false,
+                    "feedback": "You still need invalidation."
+                  }
+                ]
+              }
+            ],
+            "content_blocks": [
+              {
+                "type": "text",
+                "heading": "Concept",
+                "body": "Structure is the market's skeleton. Bullish structure often makes higher highs and higher lows. Bearish structure often makes lower highs and lower lows. Sideways structure moves inside a range.",
+                "infoboxes": []
+              },
+              {
+                "type": "text",
+                "heading": "Chart Cue",
+                "body": "Mark support and resistance as areas, not exact magic lines. Look for bases, trendline breaks, accumulation, distribution, and whether the bigger timeframe agrees.",
+                "infoboxes": []
+              },
+              {
+                "type": "text",
+                "heading": "How To Read It",
+                "body": "Begin from the bigger timeframe. If daily structure is healthy, a lower timeframe can help with precision. If daily structure is broken, a lower timeframe bounce may still be only noise.",
+                "infoboxes": []
+              },
+              {
+                "type": "text",
+                "heading": "Common Mistake",
+                "body": "Avoid calling every dip a support and every green candle a breakout. Structure needs location, follow-through, and volume context.",
+                "infoboxes": []
+              }
+            ]
+          },
+          {
+            "id": "candlesticks",
+            "order": 3,
+            "label": "03 Candlesticks",
+            "title": "03 Candlesticks",
+            "kind": "lesson",
+            "completion_signal": "You can read OHLC, body, wick, timeframe context, and confirmation before acting on candles.",
+            "pages": [
+              {
+                "heading": "Concept",
+                "body": "A candle compresses open, high, low, and close into one visual. The body shows the open-close fight. The wick shows rejected prices."
+              },
+              {
+                "heading": "Chart Cue",
+                "body": "Single-candle patterns include doji variants, shooting star, hammer, inverted hammer, marubozu, and spinning top. Multi-candle patterns include engulfing, harami, morning star, evening star, three white soldiers, and three black crows."
+              },
+              {
+                "heading": "How To Read It",
+                "body": "A candle pattern matters more at a key area than in the middle of nowhere. Confirmation can come from the next candle, structure, volume, or a broader setup."
+              },
+              {
+                "heading": "Common Mistake",
+                "body": "Do not buy every hammer or sell every doji. A candle is a clue, not a full trade plan."
+              }
+            ],
+            "examples": [
+              {
+                "type": "candles",
+                "title": "Body, wick, and confirmation"
+              }
+            ],
+            "pattern_cards": [
+              {
+                "label": "Hammer",
+                "cue": "Long lower wick near support; watch for follow-through."
+              },
+              {
+                "label": "Shooting Star",
+                "cue": "Long upper wick near resistance; watch for rejection."
+              },
+              {
+                "label": "Engulfing",
+                "cue": "Second candle overwhelms prior body; context decides meaning."
+              },
+              {
+                "label": "Doji",
+                "cue": "Indecision; strongest when it appears at a meaningful area."
+              }
+            ],
+            "checks": [
+              {
+                "id": "candle_wick",
+                "question": "A long upper wick near resistance usually suggests what?",
+                "options": [
+                  {
+                    "id": "rejection",
+                    "label": "Buying was rejected at higher prices",
+                    "correct": true,
+                    "feedback": "Correct. The wick shows a failed push higher."
+                  },
+                  {
+                    "id": "guaranteed_breakout",
+                    "label": "A guaranteed breakout tomorrow",
+                    "correct": false,
+                    "feedback": "No single candle guarantees a breakout."
+                  },
+                  {
+                    "id": "ignore_context",
+                    "label": "Context no longer matters",
+                    "correct": false,
+                    "feedback": "Context still matters most."
+                  }
+                ]
+              },
+              {
+                "id": "candle_confirmation",
+                "question": "What makes a candle pattern safer to act on?",
+                "options": [
+                  {
+                    "id": "bigger_font",
+                    "label": "A bigger chart label",
+                    "correct": false,
+                    "feedback": "Labels do not create edge."
+                  },
+                  {
+                    "id": "confirmation",
+                    "label": "Confirmation from area, volume, or follow-through",
+                    "correct": true,
+                    "feedback": "Right. Candles need confirmation."
+                  },
+                  {
+                    "id": "random_entry",
+                    "label": "Entering before the candle closes",
+                    "correct": false,
+                    "feedback": "Early entries carry extra fakeout risk."
+                  }
+                ]
+              }
+            ],
+            "content_blocks": [
+              {
+                "type": "text",
+                "heading": "Anatomy",
+                "body": "Each candle records four prices per period: Open, High, Low, Close (OHLC). The body spans Open to Close, and it shows who won the session. Wicks show how far each side pushed before losing. Longer wicks = stronger rejection of those price levels.",
+                "infoboxes": []
+              },
+              {
+                "type": "text",
+                "heading": "Chart Cue",
+                "body": "Single-candle patterns include doji variants, shooting star, hammer, inverted hammer, marubozu, and spinning top. Multi-candle patterns include engulfing, harami, morning star, evening star, three white soldiers, and three black crows.",
+                "infoboxes": []
+              },
+              {
+                "type": "text",
+                "heading": "How To Read It",
+                "body": "A candle pattern matters more at a key area than in the middle of nowhere. Confirmation can come from the next candle, structure, volume, or a broader setup.",
+                "infoboxes": []
+              },
+              {
+                "type": "text",
+                "heading": "Common Mistake",
+                "body": "Do not buy every hammer or sell every doji. A candle is a clue, not a full trade plan.",
+                "infoboxes": []
+              }
+            ]
+          },
+          {
+            "id": "patterns",
+            "order": 4,
+            "label": "04 Patterns",
+            "title": "Patterns",
+            "kind": "lesson",
+            "completion_signal": "You can validate a pattern by structure, location, volume, and invalidation.",
+            "pages": [
+              {
+                "heading": "Concept",
+                "body": "Patterns are repeated structures that show how supply and demand are changing. Useful patterns include range or box, VCP, double bottom, cup and handle, head and shoulders, and ascending triangle."
+              },
+              {
+                "heading": "Chart Cue",
+                "body": "A valid setup should be visible in structure, appear in a sensible location, show volume behavior that supports the story, and have a clear invalidation point."
+              },
+              {
+                "heading": "How To Read It",
+                "body": "For a breakout, look for tightening volatility, pressure near resistance, and volume expansion. For reversal patterns, look for failed breakdowns, higher lows, or clear rejection."
+              },
+              {
+                "heading": "Common Mistake",
+                "body": "Do not force a famous pattern onto messy price action. If the setup is unclear, no trade is also a decision."
+              }
+            ],
+            "examples": [
+              {
+                "type": "pattern_breakout",
+                "title": "Box, tightening, breakout"
+              }
+            ],
+            "pattern_cards": [
+              {
+                "label": "VCP",
+                "cue": "Swings tighten as selling pressure dries up."
+              },
+              {
+                "label": "Double Bottom",
+                "cue": "Second low holds; confirmation comes through neckline strength."
+              },
+              {
+                "label": "Cup and Handle",
+                "cue": "Rounded recovery followed by a smaller consolidation."
+              },
+              {
+                "label": "Head and Shoulders",
+                "cue": "Trend weakens through lower right shoulder and neckline break."
+              }
+            ],
+            "checks": [
+              {
+                "id": "pattern_validation",
+                "question": "Which set best validates a chart pattern?",
+                "options": [
+                  {
+                    "id": "name_only",
+                    "label": "A famous pattern name only",
+                    "correct": false,
+                    "feedback": "The name alone is not enough."
+                  },
+                  {
+                    "id": "validation",
+                    "label": "Structure, location, volume, and invalidation",
+                    "correct": true,
+                    "feedback": "Correct. That is the checklist."
+                  },
+                  {
+                    "id": "one_green_candle",
+                    "label": "One green candle anywhere",
+                    "correct": false,
+                    "feedback": "A single candle without context is weak."
+                  }
+                ]
+              },
+              {
+                "id": "pattern_force",
+                "question": "What should you do when the pattern is unclear?",
+                "options": [
+                  {
+                    "id": "force",
+                    "label": "Force the closest pattern name",
+                    "correct": false,
+                    "feedback": "Forcing patterns creates false confidence."
+                  },
+                  {
+                    "id": "wait",
+                    "label": "Wait or skip until structure is clearer",
+                    "correct": true,
+                    "feedback": "Good. No trade can be the cleanest trade."
+                  },
+                  {
+                    "id": "all_in",
+                    "label": "Buy more so the pattern works",
+                    "correct": false,
+                    "feedback": "Position size does not fix an unclear setup."
+                  }
+                ]
+              }
+            ],
+            "content_blocks": [
+              {
+                "type": "text",
+                "heading": "Concept",
+                "body": "Patterns are repeated structures that show how supply and demand are changing. Useful patterns include range or box, VCP, double bottom, cup and handle, head and shoulders, and ascending triangle."
+              },
+              {
+                "type": "text",
+                "heading": "Chart Cue",
+                "body": "A valid setup should be visible in structure, appear in a sensible location, show volume behavior that supports the story, and have a clear invalidation point."
+              },
+              {
+                "type": "text",
+                "heading": "How To Read It",
+                "body": "For a breakout, look for tightening volatility, pressure near resistance, and volume expansion. For reversal patterns, look for failed breakdowns, higher lows, or clear rejection."
+              },
+              {
+                "type": "text",
+                "heading": "Common Mistake",
+                "body": "Do not force a famous pattern onto messy price action. If the setup is unclear, no trade is also a decision."
+              }
+            ]
+          },
+          {
+            "id": "moving_average",
+            "order": 5,
+            "label": "05 Moving Average",
+            "title": "Moving Average",
+            "kind": "lesson",
+            "completion_signal": "You can use moving averages as context and confirmation, not as blind buy or sell buttons.",
+            "pages": [
+              {
+                "heading": "Concept",
+                "body": "Moving averages smooth price. SMA gives equal weight, EMA reacts faster, and WMA weights recent prices. All of them lag because they use past data."
+              },
+              {
+                "heading": "Chart Cue",
+                "body": "Common periods include 5, 10, 20, 60, 100, and 200. Slope can show trend quality, while MA 200 often acts as a long-term context line."
+              },
+              {
+                "heading": "How To Read It",
+                "body": "Use MA slope, dynamic support or resistance, and confluence with structure. Golden cross and death cross are context signals, not automatic orders."
+              },
+              {
+                "heading": "Common Mistake",
+                "body": "Do not buy only because price touches an MA. Ask whether structure, volume, and risk still make sense."
+              },
+              {
+                "heading": "MACD Note",
+                "body": "MACD can confirm momentum with crossovers, improving histogram, or divergence. It should support your read, not replace it."
+              }
+            ],
+            "examples": [
+              {
+                "type": "moving_average",
+                "title": "Slope, confluence, and lag"
+              }
+            ],
+            "checks": [
+              {
+                "id": "ma_lag",
+                "question": "Why are moving averages called lagging indicators?",
+                "options": [
+                  {
+                    "id": "past_data",
+                    "label": "They are calculated from past prices",
+                    "correct": true,
+                    "feedback": "Correct. They smooth history, so they respond after price changes."
+                  },
+                  {
+                    "id": "future_data",
+                    "label": "They know tomorrow's close",
+                    "correct": false,
+                    "feedback": "No indicator knows tomorrow."
+                  },
+                  {
+                    "id": "volume_only",
+                    "label": "They only use volume",
+                    "correct": false,
+                    "feedback": "Moving averages are price-based unless stated otherwise."
+                  }
+                ]
+              }
+            ],
+            "content_blocks": [
+              {
+                "type": "text",
+                "heading": "Concept",
+                "body": "Moving averages smooth price. SMA gives equal weight, EMA reacts faster, and WMA weights recent prices. All of them lag because they use past data."
+              },
+              {
+                "type": "text",
+                "heading": "Chart Cue",
+                "body": "Common periods include 5, 10, 20, 60, 100, and 200. Slope can show trend quality, while MA 200 often acts as a long-term context line."
+              },
+              {
+                "type": "text",
+                "heading": "How To Read It",
+                "body": "Use MA slope, dynamic support or resistance, and confluence with structure. Golden cross and death cross are context signals, not automatic orders."
+              },
+              {
+                "type": "text",
+                "heading": "Common Mistake",
+                "body": "Do not buy only because price touches an MA. Ask whether structure, volume, and risk still make sense."
+              },
+              {
+                "type": "text",
+                "heading": "MACD Note",
+                "body": "MACD can confirm momentum with crossovers, improving histogram, or divergence. It should support your read, not replace it."
+              }
+            ]
+          },
+          {
+            "id": "thinking_framework",
+            "order": 6,
+            "label": "06 Thinking Framework",
+            "title": "Thinking Framework",
+            "kind": "lesson",
+            "completion_signal": "You can run the 6-step technical routine without guessing.",
+            "pages": [
+              {
+                "heading": "Concept",
+                "body": "The routine is: start with context, mark key areas, identify the setup, add confirmation, build the trade plan, then execute and review."
+              },
+              {
+                "heading": "Chart Cue",
+                "body": "For JPFA-style practice, read the daily context first, then use 1H structure for a cup-and-handle style precision entry. For SSIA-style practice, watch support near MA 200, doji confirmation, and MACD divergence."
+              },
+              {
+                "heading": "How To Read It",
+                "body": "The framework keeps you from jumping straight to a signal. Every trade needs context, area, setup, confirmation, risk, and review."
+              },
+              {
+                "heading": "Common Mistake",
+                "body": "Skipping the plan step turns analysis into impulse. Know entry, invalidation, target area, and position size before clicking buy."
+              }
+            ],
+            "examples": [
+              {
+                "type": "framework",
+                "title": "Six-step chart routine"
+              }
+            ],
+            "checks": [
+              {
+                "id": "framework_first",
+                "question": "What is the first step in the 6-step framework?",
+                "options": [
+                  {
+                    "id": "context",
+                    "label": "Start with context",
+                    "correct": true,
+                    "feedback": "Correct. Big-picture context comes first."
+                  },
+                  {
+                    "id": "execute",
+                    "label": "Execute immediately",
+                    "correct": false,
+                    "feedback": "Execution comes after the plan."
+                  },
+                  {
+                    "id": "indicator",
+                    "label": "Add every indicator",
+                    "correct": false,
+                    "feedback": "Indicators are confirmation tools, not the starting point."
+                  }
+                ]
+              }
+            ],
+            "content_blocks": [
+              {
+                "type": "text",
+                "heading": "Concept",
+                "body": "The routine is: start with context, mark key areas, identify the setup, add confirmation, build the trade plan, then execute and review."
+              },
+              {
+                "type": "text",
+                "heading": "Chart Cue",
+                "body": "For JPFA-style practice, read the daily context first, then use 1H structure for a cup-and-handle style precision entry. For SSIA-style practice, watch support near MA 200, doji confirmation, and MACD divergence."
+              },
+              {
+                "type": "text",
+                "heading": "How To Read It",
+                "body": "The framework keeps you from jumping straight to a signal. Every trade needs context, area, setup, confirmation, risk, and review."
+              },
+              {
+                "type": "text",
+                "heading": "Common Mistake",
+                "body": "Skipping the plan step turns analysis into impulse. Know entry, invalidation, target area, and position size before clicking buy."
+              }
+            ]
+          },
+          {
+            "id": "quiz",
+            "order": 7,
+            "label": "07 Quiz",
+            "title": "Technical Basics Quiz",
+            "kind": "quiz",
+            "completion_signal": "Score 80 percent or better to earn Technical Basics."
+          },
+          {
+            "id": "glossary",
+            "order": 8,
+            "label": "08 Glossary",
+            "title": "Glossary",
+            "kind": "glossary",
+            "completion_signal": "Use this any time you need a quick definition."
+          }
+        ],
+        "quiz_questions": [
+          {
+            "id": "q_intro_1",
+            "category": "Intro",
+            "prompt": "Technical Analysis most directly studies which pair?",
+            "options": [
+              {
+                "id": "a",
+                "label": "Price and volume"
+              },
+              {
+                "id": "b",
+                "label": "Only board biographies"
+              },
+              {
+                "id": "c",
+                "label": "Only dividend dates"
+              },
+              {
+                "id": "d",
+                "label": "Rumors without charts"
+              }
+            ],
+            "correct_answer_id": "a",
+            "feedback_correct": "Yes. Price and volume are the base inputs.",
+            "feedback_wrong": "Review Intro: TA starts with price and volume."
+          },
+          {
+            "id": "q_intro_2",
+            "category": "Intro",
+            "prompt": "What mindset should a beginner use with TA?",
+            "options": [
+              {
+                "id": "a",
+                "label": "TA gives certainty"
+              },
+              {
+                "id": "b",
+                "label": "TA frames probability and risk"
+              },
+              {
+                "id": "c",
+                "label": "TA removes the need for stops"
+              },
+              {
+                "id": "d",
+                "label": "TA only works after news"
+              }
+            ],
+            "correct_answer_id": "b",
+            "feedback_correct": "Correct. TA is probabilistic.",
+            "feedback_wrong": "TA is a probability tool, not a crystal ball."
+          },
+          {
+            "id": "q_intro_3",
+            "category": "Intro",
+            "prompt": "What should be read before indicators?",
+            "options": [
+              {
+                "id": "a",
+                "label": "Price action and structure"
+              },
+              {
+                "id": "b",
+                "label": "Nothing, indicators first"
+              },
+              {
+                "id": "c",
+                "label": "Random target prices"
+              },
+              {
+                "id": "d",
+                "label": "Only chat hype"
+              }
+            ],
+            "correct_answer_id": "a",
+            "feedback_correct": "Right. Price action first.",
+            "feedback_wrong": "The routine starts with price action and structure."
+          },
+          {
+            "id": "q_structure_1",
+            "category": "Market Structure",
+            "prompt": "Higher highs and higher lows usually describe what?",
+            "options": [
+              {
+                "id": "a",
+                "label": "Uptrend"
+              },
+              {
+                "id": "b",
+                "label": "Downtrend"
+              },
+              {
+                "id": "c",
+                "label": "No movement"
+              },
+              {
+                "id": "d",
+                "label": "Guaranteed reversal"
+              }
+            ],
+            "correct_answer_id": "a",
+            "feedback_correct": "Correct.",
+            "feedback_wrong": "Higher highs and higher lows point to bullish structure."
+          },
+          {
+            "id": "q_structure_2",
+            "category": "Market Structure",
+            "prompt": "Support and resistance should usually be marked as...",
+            "options": [
+              {
+                "id": "a",
+                "label": "Areas"
+              },
+              {
+                "id": "b",
+                "label": "Perfect one-rupiah lines"
+              },
+              {
+                "id": "c",
+                "label": "Ignored zones"
+              },
+              {
+                "id": "d",
+                "label": "Only moving averages"
+              }
+            ],
+            "correct_answer_id": "a",
+            "feedback_correct": "Correct. Areas reduce false precision.",
+            "feedback_wrong": "Support and resistance behave more like areas than exact lines."
+          },
+          {
+            "id": "q_structure_3",
+            "category": "Market Structure",
+            "prompt": "Why start from the bigger timeframe?",
+            "options": [
+              {
+                "id": "a",
+                "label": "To understand context before precision"
+              },
+              {
+                "id": "b",
+                "label": "To avoid all risk"
+              },
+              {
+                "id": "c",
+                "label": "Because lower timeframes are illegal"
+              },
+              {
+                "id": "d",
+                "label": "Because volume disappears"
+              }
+            ],
+            "correct_answer_id": "a",
+            "feedback_correct": "Right. Context first, precision later.",
+            "feedback_wrong": "Bigger timeframe context keeps small moves in perspective."
+          },
+          {
+            "id": "q_candle_1",
+            "category": "Candlesticks",
+            "prompt": "A candle body shows the relationship between...",
+            "options": [
+              {
+                "id": "a",
+                "label": "Open and close"
+              },
+              {
+                "id": "b",
+                "label": "Ticker and sector"
+              },
+              {
+                "id": "c",
+                "label": "News and rumors"
+              },
+              {
+                "id": "d",
+                "label": "Broker code and lot size"
+              }
+            ],
+            "correct_answer_id": "a",
+            "feedback_correct": "Correct.",
+            "feedback_wrong": "The body is built from open and close."
+          },
+          {
+            "id": "q_candle_2",
+            "category": "Candlesticks",
+            "prompt": "A long upper wick near resistance can suggest...",
+            "options": [
+              {
+                "id": "a",
+                "label": "Rejection at higher prices"
+              },
+              {
+                "id": "b",
+                "label": "A guaranteed ARA"
+              },
+              {
+                "id": "c",
+                "label": "No seller exists"
+              },
+              {
+                "id": "d",
+                "label": "The candle is invalid"
+              }
+            ],
+            "correct_answer_id": "a",
+            "feedback_correct": "Correct.",
+            "feedback_wrong": "A long upper wick often shows rejection, especially near resistance."
+          },
+          {
+            "id": "q_candle_3",
+            "category": "Candlesticks",
+            "prompt": "Which answer is a multi-candle pattern?",
+            "options": [
+              {
+                "id": "a",
+                "label": "Engulfing"
+              },
+              {
+                "id": "b",
+                "label": "Wick"
+              },
+              {
+                "id": "c",
+                "label": "Open price"
+              },
+              {
+                "id": "d",
+                "label": "Board lot"
+              }
+            ],
+            "correct_answer_id": "a",
+            "feedback_correct": "Correct.",
+            "feedback_wrong": "Engulfing uses more than one candle."
+          },
+          {
+            "id": "q_candle_4",
+            "category": "Candlesticks",
+            "prompt": "What should you do before acting on a candle signal?",
+            "options": [
+              {
+                "id": "a",
+                "label": "Check context and confirmation"
+              },
+              {
+                "id": "b",
+                "label": "Ignore the close"
+              },
+              {
+                "id": "c",
+                "label": "Buy every doji"
+              },
+              {
+                "id": "d",
+                "label": "Remove invalidation"
+              }
+            ],
+            "correct_answer_id": "a",
+            "feedback_correct": "Correct.",
+            "feedback_wrong": "Candle clues need context and confirmation."
+          },
+          {
+            "id": "q_pattern_1",
+            "category": "Patterns",
+            "prompt": "A good pattern should include which validation set?",
+            "options": [
+              {
+                "id": "a",
+                "label": "Structure, location, volume, invalidation"
+              },
+              {
+                "id": "b",
+                "label": "Name only"
+              },
+              {
+                "id": "c",
+                "label": "One random candle"
+              },
+              {
+                "id": "d",
+                "label": "No risk point"
+              }
+            ],
+            "correct_answer_id": "a",
+            "feedback_correct": "Correct.",
+            "feedback_wrong": "Pattern validation needs structure, location, volume, and invalidation."
+          },
+          {
+            "id": "q_pattern_2",
+            "category": "Patterns",
+            "prompt": "VCP mainly looks for...",
+            "options": [
+              {
+                "id": "a",
+                "label": "Tightening volatility as selling pressure dries up"
+              },
+              {
+                "id": "b",
+                "label": "Wider and wider panic forever"
+              },
+              {
+                "id": "c",
+                "label": "No structure at all"
+              },
+              {
+                "id": "d",
+                "label": "Only dividend yield"
+              }
+            ],
+            "correct_answer_id": "a",
+            "feedback_correct": "Correct.",
+            "feedback_wrong": "VCP is about contractions and pressure drying up."
+          },
+          {
+            "id": "q_pattern_3",
+            "category": "Patterns",
+            "prompt": "What is the safest next action when a pattern is unclear?",
+            "options": [
+              {
+                "id": "a",
+                "label": "Wait or skip"
+              },
+              {
+                "id": "b",
+                "label": "Force the pattern"
+              },
+              {
+                "id": "c",
+                "label": "Go all in"
+              },
+              {
+                "id": "d",
+                "label": "Ignore timeframe"
+              }
+            ],
+            "correct_answer_id": "a",
+            "feedback_correct": "Correct.",
+            "feedback_wrong": "If it is unclear, waiting is a valid decision."
+          },
+          {
+            "id": "q_framework_1",
+            "category": "Thinking Framework",
+            "prompt": "Put the first two framework steps in order.",
+            "options": [
+              {
+                "id": "a",
+                "label": "Context, then key areas"
+              },
+              {
+                "id": "b",
+                "label": "Execute, then invent context"
+              },
+              {
+                "id": "c",
+                "label": "Indicators, then rumors"
+              },
+              {
+                "id": "d",
+                "label": "Review, then entry"
+              }
+            ],
+            "correct_answer_id": "a",
+            "feedback_correct": "Correct.",
+            "feedback_wrong": "The framework begins with context, then key areas."
+          },
+          {
+            "id": "q_framework_2",
+            "category": "Thinking Framework",
+            "prompt": "Before execution, the trade plan should know...",
+            "options": [
+              {
+                "id": "a",
+                "label": "Entry, invalidation, target area, and size"
+              },
+              {
+                "id": "b",
+                "label": "Only the pattern name"
+              },
+              {
+                "id": "c",
+                "label": "Only the ticker logo"
+              },
+              {
+                "id": "d",
+                "label": "Nothing, decide later"
+              }
+            ],
+            "correct_answer_id": "a",
+            "feedback_correct": "Correct.",
+            "feedback_wrong": "A plan needs entry, invalidation, target, and position size."
+          }
+        ]
+      },
+      {
+        "id": "transactional",
+        "label": "Transactional",
+        "status": "coming_soon",
+        "summary": "Practice order execution, sizing, scaling, exits, and post-trade review.",
+        "coming_soon_copy": "Coming soon. This academy track will cover transaction planning, sizing, execution discipline, and review.",
+        "sections": []
+      }
+    ],
+    "glossary": [
+      {
+        "term": "Accumulation",
+        "definition": "A phase where stronger hands appear to absorb supply before a possible markup."
+      },
+      {
+        "term": "Area",
+        "definition": "A price zone used for support or resistance instead of a single exact line."
+      },
+      {
+        "term": "Base",
+        "definition": "A consolidation structure where price pauses and prepares for a possible next move."
+      },
+      {
+        "term": "Bearish",
+        "definition": "A condition or view that favors lower prices."
+      },
+      {
+        "term": "Breakdown",
+        "definition": "A move below a support area that may signal weakness."
+      },
+      {
+        "term": "Breakout",
+        "definition": "A move above a resistance area that may signal fresh demand."
+      },
+      {
+        "term": "Bullish",
+        "definition": "A condition or view that favors higher prices."
+      },
+      {
+        "term": "Body",
+        "definition": "The candle area between open and close."
+      },
+      {
+        "term": "Cup and Handle",
+        "definition": "A rounded recovery followed by a smaller consolidation before a possible breakout."
+      },
+      {
+        "term": "Death Cross",
+        "definition": "A bearish context signal when a shorter moving average crosses below a longer one."
+      },
+      {
+        "term": "Distribution",
+        "definition": "A phase where supply appears to be sold into strength."
+      },
+      {
+        "term": "Divergence",
+        "definition": "A disagreement between price movement and an indicator such as MACD."
+      },
+      {
+        "term": "Doji",
+        "definition": "A candle where open and close are close together, often signaling indecision."
+      },
+      {
+        "term": "Downtrend",
+        "definition": "A structure that often forms lower highs and lower lows."
+      },
+      {
+        "term": "EMA",
+        "definition": "Exponential moving average, a moving average that reacts more to recent prices."
+      },
+      {
+        "term": "Golden Cross",
+        "definition": "A bullish context signal when a shorter moving average crosses above a longer one."
+      },
+      {
+        "term": "Hammer",
+        "definition": "A candle with a long lower wick that can show rejection of lower prices near support."
+      },
+      {
+        "term": "Harami",
+        "definition": "A two-candle pattern where the second body sits inside the prior body."
+      },
+      {
+        "term": "Head and Shoulders",
+        "definition": "A reversal structure with a head, two shoulders, and a neckline."
+      },
+      {
+        "term": "Invalidation",
+        "definition": "The price condition that tells you your trade idea is wrong."
+      },
+      {
+        "term": "Lower High/Lower Low",
+        "definition": "Bearish swing behavior where each high and low forms below the previous one."
+      },
+      {
+        "term": "MACD",
+        "definition": "A momentum indicator often used for crossover, histogram, and divergence confirmation."
+      },
+      {
+        "term": "MA 200",
+        "definition": "A 200-period moving average often used for long-term trend context."
+      },
+      {
+        "term": "Moving Average",
+        "definition": "A smoothed price line calculated from past prices."
+      },
+      {
+        "term": "Neckline",
+        "definition": "A key confirmation area in patterns such as head and shoulders or double bottom."
+      },
+      {
+        "term": "Noise",
+        "definition": "Short-term movement that does not change the bigger structure."
+      },
+      {
+        "term": "Resistance",
+        "definition": "A price area where supply may slow or reject upward movement."
+      },
+      {
+        "term": "Risk-Reward",
+        "definition": "The comparison between planned downside risk and possible upside reward."
+      },
+      {
+        "term": "Wick",
+        "definition": "The candle line that shows prices traded beyond the body and then rejected or left behind."
+      },
+      {
+        "term": "Sideways",
+        "definition": "A range-bound structure without a clear uptrend or downtrend."
+      },
+      {
+        "term": "SMA",
+        "definition": "Simple moving average, a moving average that weights each period equally."
+      },
+      {
+        "term": "Support",
+        "definition": "A price area where demand may slow or reject downward movement."
+      },
+      {
+        "term": "Trendline",
+        "definition": "A line connecting swing points to visualize trend direction or breaks."
+      },
+      {
+        "term": "Uptrend",
+        "definition": "A structure that often forms higher highs and higher lows."
+      },
+      {
+        "term": "VCP",
+        "definition": "Volatility Contraction Pattern, where swings tighten as supply dries up."
+      },
+      {
+        "term": "Volume",
+        "definition": "The number of shares traded, used to judge participation."
+      },
+      {
+        "term": "WMA",
+        "definition": "Weighted moving average, a moving average that gives chosen periods more influence."
+      }
+    ]
+  },
+  "notes": "Imported from data/academy/academy_catalog.json."
+}
