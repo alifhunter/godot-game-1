@@ -204,6 +204,7 @@ var suppress_next_portfolio_refresh: bool = false
 var pending_watchlist_selected_company_id: String = ""
 var pending_watchlist_target_tab: int = -1
 var suppress_stock_list_tab_refresh: bool = false
+var selected_dashboard_sector_id: String = ""
 var active_order_side: String = "buy"
 var order_ticket_collapsed: bool = false
 var broker_net_mode: bool = false
@@ -546,7 +547,14 @@ var dashboard_meeting_buttons: VBoxContainer = null
 var dashboard_calendar_event_popup: Control = null
 var dashboard_calendar_event_title_label: Label = null
 var dashboard_calendar_event_body_label: Label = null
+var dashboard_calendar_event_actions_vbox: VBoxContainer = null
 var dashboard_calendar_event_close_button: Button = null
+var dashboard_sector_cards_scroll: ScrollContainer = null
+var dashboard_sector_cards_grid: GridContainer = null
+var dashboard_sector_detail_vbox: VBoxContainer = null
+var dashboard_sector_back_button: Button = null
+var dashboard_sector_detail_title_label: Label = null
+var dashboard_sector_detail_rows: VBoxContainer = null
 var corporate_meeting_overlay: Control = null
 var corporate_meeting_panel: PanelContainer = null
 var corporate_meeting_title_label: Label = null
@@ -572,6 +580,7 @@ func _ready() -> void:
 	_ensure_upgrade_purchase_dialog()
 	_ensure_daily_recap_dialog()
 	_ensure_dashboard_calendar_event_popup()
+	_ensure_dashboard_sector_ui()
 	_ensure_console_overlay()
 	_ensure_academy_ui()
 	_ensure_corporate_action_ui()
@@ -6014,9 +6023,7 @@ func _refresh_dashboard() -> void:
 		dashboard_calendar_month_label.text = "-"
 		_refresh_dashboard_calendar({})
 		_refresh_dashboard_movers([])
-		dashboard_placeholder_bottom_title_label.text = "Upcoming Meetings / Reports"
-		dashboard_placeholder_bottom_body_label.text = "No active report calendar."
-		_refresh_dashboard_meetings([])
+		_refresh_dashboard_sector_panel([])
 		_log_perf_phase(log_phase_details, "_refresh_dashboard:no_active_run", started_at_usec)
 		return
 
@@ -6058,12 +6065,8 @@ func _refresh_dashboard() -> void:
 	_refresh_dashboard_movers(company_rows)
 	_log_perf_phase(log_phase_details, "_refresh_dashboard:movers", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
-	dashboard_placeholder_bottom_title_label.text = "Upcoming Meetings / Reports"
-	dashboard_placeholder_bottom_body_label.text = _format_upcoming_report_rows(dashboard_event_snapshot.get("upcoming_report_rows", []))
-	_log_perf_phase(log_phase_details, "_refresh_dashboard:report_rows", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
-	_refresh_dashboard_meetings(dashboard_event_snapshot.get("upcoming_meeting_rows", []))
-	_log_perf_phase(log_phase_details, "_refresh_dashboard:meetings", phase_started_at_usec)
+	_refresh_dashboard_sector_panel(company_rows)
+	_log_perf_phase(log_phase_details, "_refresh_dashboard:sectors", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	_set_label_tone(dashboard_index_points_value_label, _color_for_change(float(index_snapshot.get("day_change_pct", 0.0))))
 	_log_perf_phase(log_phase_details, "_refresh_dashboard:tone", phase_started_at_usec)
@@ -6104,6 +6107,283 @@ func _refresh_dashboard_meetings(rows: Array) -> void:
 		)
 		dashboard_meeting_buttons.add_child(button)
 		_style_button(button, COLOR_DESKTOP_PANEL, COLOR_DESKTOP_FRAME, COLOR_DESKTOP_TEXT, 0)
+
+
+func _refresh_dashboard_sector_panel(company_rows: Array) -> void:
+	_ensure_dashboard_sector_ui()
+	dashboard_placeholder_bottom_title_label.text = "Sector Performance"
+	if dashboard_meeting_buttons != null:
+		dashboard_meeting_buttons.visible = false
+	if dashboard_sector_cards_grid == null or dashboard_sector_detail_rows == null:
+		return
+
+	_clear_container_children(dashboard_sector_cards_grid)
+	_clear_container_children(dashboard_sector_detail_rows)
+
+	var sector_rows: Array = _build_dashboard_sector_rows(company_rows)
+	if sector_rows.is_empty():
+		selected_dashboard_sector_id = ""
+		dashboard_placeholder_bottom_body_label.visible = true
+		dashboard_placeholder_bottom_body_label.text = "No sector data."
+		if dashboard_sector_cards_scroll != null:
+			dashboard_sector_cards_scroll.visible = false
+		if dashboard_sector_detail_vbox != null:
+			dashboard_sector_detail_vbox.visible = false
+		return
+
+	dashboard_placeholder_bottom_body_label.visible = false
+	var selected_row: Dictionary = _dashboard_sector_row_by_id(sector_rows, selected_dashboard_sector_id)
+	if selected_dashboard_sector_id.is_empty() or selected_row.is_empty():
+		selected_dashboard_sector_id = ""
+		if dashboard_sector_cards_scroll != null:
+			dashboard_sector_cards_scroll.visible = true
+		if dashboard_sector_detail_vbox != null:
+			dashboard_sector_detail_vbox.visible = false
+		for row_value in sector_rows:
+			var row: Dictionary = row_value
+			dashboard_sector_cards_grid.add_child(_build_dashboard_sector_card(row))
+		return
+
+	if dashboard_sector_cards_scroll != null:
+		dashboard_sector_cards_scroll.visible = false
+	if dashboard_sector_detail_vbox != null:
+		dashboard_sector_detail_vbox.visible = true
+	_refresh_dashboard_sector_detail(selected_row)
+
+
+func _build_dashboard_sector_rows(company_rows: Array) -> Array:
+	var grouped_rows: Dictionary = {}
+	for row_value in company_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var company_row: Dictionary = row_value
+		var sector_id: String = str(company_row.get("sector_id", "")).strip_edges()
+		if sector_id.is_empty():
+			continue
+		var sector_name: String = str(company_row.get("sector_name", "")).strip_edges()
+		if sector_name.is_empty():
+			var sector_definition: Dictionary = DataRepository.get_sector_definition(sector_id)
+			sector_name = str(sector_definition.get("name", sector_id.capitalize()))
+		if not grouped_rows.has(sector_id):
+			grouped_rows[sector_id] = {
+				"id": sector_id,
+				"name": sector_name,
+				"company_count": 0,
+				"advancers": 0,
+				"decliners": 0,
+				"flat_count": 0,
+				"change_sum": 0.0,
+				"strongest_ticker": "",
+				"strongest_change_pct": 0.0,
+				"stocks": []
+			}
+
+		var sector_row: Dictionary = grouped_rows[sector_id]
+		var daily_change_pct: float = float(company_row.get("daily_change_pct", 0.0))
+		sector_row["company_count"] = int(sector_row.get("company_count", 0)) + 1
+		sector_row["change_sum"] = float(sector_row.get("change_sum", 0.0)) + daily_change_pct
+		if daily_change_pct > 0.0:
+			sector_row["advancers"] = int(sector_row.get("advancers", 0)) + 1
+		elif daily_change_pct < 0.0:
+			sector_row["decliners"] = int(sector_row.get("decliners", 0)) + 1
+		else:
+			sector_row["flat_count"] = int(sector_row.get("flat_count", 0)) + 1
+		if (
+			str(sector_row.get("strongest_ticker", "")).is_empty() or
+			absf(daily_change_pct) > absf(float(sector_row.get("strongest_change_pct", 0.0)))
+		):
+			sector_row["strongest_ticker"] = str(company_row.get("ticker", ""))
+			sector_row["strongest_change_pct"] = daily_change_pct
+		var stock_rows: Array = sector_row.get("stocks", [])
+		stock_rows.append({
+			"id": str(company_row.get("id", "")),
+			"ticker": str(company_row.get("ticker", "")),
+			"name": str(company_row.get("name", "")),
+			"current_price": float(company_row.get("current_price", 0.0)),
+			"daily_change_pct": daily_change_pct
+		})
+		sector_row["stocks"] = stock_rows
+		grouped_rows[sector_id] = sector_row
+
+	var sector_rows: Array = []
+	for sector_id_value in grouped_rows.keys():
+		var sector_row: Dictionary = grouped_rows[sector_id_value].duplicate(true)
+		var company_count: int = int(sector_row.get("company_count", 0))
+		sector_row["average_change_pct"] = 0.0
+		if company_count > 0:
+			sector_row["average_change_pct"] = float(sector_row.get("change_sum", 0.0)) / float(company_count)
+		var stocks: Array = sector_row.get("stocks", [])
+		stocks.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return float(a.get("daily_change_pct", 0.0)) > float(b.get("daily_change_pct", 0.0))
+		)
+		sector_row["stocks"] = stocks
+		sector_rows.append(sector_row)
+	sector_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("average_change_pct", 0.0)) > float(b.get("average_change_pct", 0.0))
+	)
+	return sector_rows
+
+
+func _dashboard_sector_row_by_id(sector_rows: Array, sector_id: String) -> Dictionary:
+	if sector_id.is_empty():
+		return {}
+	for row_value in sector_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		if str(row.get("id", "")) == sector_id:
+			return row
+	return {}
+
+
+func _build_dashboard_sector_card(row: Dictionary) -> Control:
+	var panel := PanelContainer.new()
+	var sector_id: String = str(row.get("id", ""))
+	panel.name = "DashboardSectorCard_%s" % sector_id
+	panel.custom_minimum_size = Vector2(0, 82)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.set_meta("sector_id", sector_id)
+	panel.set_meta("average_change_pct", float(row.get("average_change_pct", 0.0)))
+	panel.tooltip_text = "%s | %d stocks | Loudest tape %s %s" % [
+		str(row.get("name", "Unknown")),
+		int(row.get("company_count", 0)),
+		str(row.get("strongest_ticker", "n/a")),
+		_format_change(float(row.get("strongest_change_pct", 0.0)))
+	]
+	panel.gui_input.connect(_on_dashboard_sector_card_gui_input.bind(sector_id))
+	_style_dashboard_sector_card(panel, float(row.get("average_change_pct", 0.0)))
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 8)
+	panel.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	margin.add_child(vbox)
+
+	var top_row := HBoxContainer.new()
+	top_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(top_row)
+
+	var name_label := Label.new()
+	name_label.name = "DashboardSectorCardNameLabel"
+	name_label.text = str(row.get("name", "Unknown"))
+	name_label.clip_text = true
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_tone(name_label, COLOR_TEXT)
+	top_row.add_child(name_label)
+
+	var change_label := Label.new()
+	change_label.name = "DashboardSectorCardChangeLabel"
+	change_label.text = _format_change(float(row.get("average_change_pct", 0.0)))
+	change_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	change_label.custom_minimum_size = Vector2(76, 0)
+	_set_label_tone(change_label, _color_for_change(float(row.get("average_change_pct", 0.0))))
+	top_row.add_child(change_label)
+
+	var breadth_label := Label.new()
+	breadth_label.name = "DashboardSectorCardBreadthLabel"
+	breadth_label.text = "%d stocks  |  %d green  |  %d red" % [
+		int(row.get("company_count", 0)),
+		int(row.get("advancers", 0)),
+		int(row.get("decliners", 0))
+	]
+	breadth_label.clip_text = true
+	_set_label_tone(breadth_label, COLOR_MUTED)
+	vbox.add_child(breadth_label)
+
+	var strongest_label := Label.new()
+	strongest_label.name = "DashboardSectorCardStrongestLabel"
+	strongest_label.text = "Loudest %s %s" % [
+		str(row.get("strongest_ticker", "n/a")),
+		_format_change(float(row.get("strongest_change_pct", 0.0)))
+	]
+	strongest_label.clip_text = true
+	_set_label_tone(strongest_label, COLOR_WARNING)
+	vbox.add_child(strongest_label)
+
+	return panel
+
+
+func _style_dashboard_sector_card(panel: PanelContainer, change_pct: float) -> void:
+	var fill_color: Color = Color(0.0823529, 0.117647, 0.156863, 0.94)
+	var border_color: Color = COLOR_BORDER
+	if change_pct > 0.0005:
+		fill_color = Color(0.0784314, 0.168627, 0.137255, 0.96)
+		border_color = Color(COLOR_POSITIVE.r, COLOR_POSITIVE.g, COLOR_POSITIVE.b, 0.86)
+	elif change_pct < -0.0005:
+		fill_color = Color(0.184314, 0.0941176, 0.105882, 0.96)
+		border_color = Color(COLOR_NEGATIVE.r, COLOR_NEGATIVE.g, COLOR_NEGATIVE.b, 0.86)
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = border_color
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(0)
+	panel.add_theme_stylebox_override("panel", style)
+
+
+func _refresh_dashboard_sector_detail(row: Dictionary) -> void:
+	if dashboard_sector_detail_title_label == null or dashboard_sector_detail_rows == null:
+		return
+	dashboard_sector_detail_title_label.text = "%s  %s" % [
+		str(row.get("name", "Unknown")),
+		_format_change(float(row.get("average_change_pct", 0.0)))
+	]
+	_set_label_tone(dashboard_sector_detail_title_label, _color_for_change(float(row.get("average_change_pct", 0.0))))
+	var stocks: Array = row.get("stocks", [])
+	for stock_value in stocks:
+		var stock: Dictionary = stock_value
+		dashboard_sector_detail_rows.add_child(_build_dashboard_sector_stock_row(stock))
+	if stocks.is_empty():
+		var empty_label := Label.new()
+		empty_label.name = "DashboardSectorStockEmptyLabel"
+		empty_label.text = "No stocks in this sector."
+		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_set_label_tone(empty_label, COLOR_MUTED)
+		dashboard_sector_detail_rows.add_child(empty_label)
+
+
+func _build_dashboard_sector_stock_row(stock: Dictionary) -> Control:
+	var row := HBoxContainer.new()
+	row.name = "DashboardSectorStockRow_%s" % str(stock.get("id", ""))
+	row.add_theme_constant_override("separation", 8)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(_build_table_cell(str(stock.get("ticker", "")), 58.0, COLOR_TEXT))
+	var name_label: Label = _build_table_cell(str(stock.get("name", "")), 0.0, COLOR_MUTED, true)
+	row.add_child(name_label)
+	row.add_child(_build_table_cell(
+		_format_currency(float(stock.get("current_price", 0.0))),
+		86.0,
+		COLOR_TEXT,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	row.add_child(_build_table_cell(
+		_format_change(float(stock.get("daily_change_pct", 0.0))),
+		72.0,
+		_color_for_change(float(stock.get("daily_change_pct", 0.0))),
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	return row
+
+
+func _on_dashboard_sector_card_gui_input(event: InputEvent, sector_id: String) -> void:
+	if event is InputEventMouseButton:
+		var mouse_button: InputEventMouseButton = event
+		if mouse_button.button_index == MOUSE_BUTTON_LEFT and mouse_button.pressed:
+			selected_dashboard_sector_id = sector_id
+			_refresh_dashboard_sector_panel(_get_company_rows_cached())
+			get_viewport().set_input_as_handled()
+
+
+func _on_dashboard_sector_back_pressed() -> void:
+	selected_dashboard_sector_id = ""
+	_refresh_dashboard_sector_panel(_get_company_rows_cached())
 
 
 func _build_dashboard_index_snapshot() -> Dictionary:
@@ -6387,6 +6667,13 @@ func _build_dashboard_calendar_day_cell(
 	panel.set_meta("report_count", reports.size())
 	panel.set_meta("meeting_count", meetings.size())
 	panel.set_meta("has_events", not reports.is_empty() or not meetings.is_empty())
+	var meeting_ids: Array = []
+	for meeting_value in meetings:
+		var meeting: Dictionary = meeting_value
+		var meeting_id: String = str(meeting.get("id", ""))
+		if not meeting_id.is_empty():
+			meeting_ids.append(meeting_id)
+	panel.set_meta("meeting_ids", meeting_ids)
 	panel.gui_input.connect(_on_dashboard_calendar_day_cell_gui_input.bind(
 		date_info.duplicate(true),
 		reports.duplicate(true),
@@ -6465,6 +6752,7 @@ func _show_dashboard_calendar_event_popup(date_info: Dictionary, reports: Array,
 		dashboard_calendar_event_title_label.text = GameManager.format_trade_date(date_info)
 	if dashboard_calendar_event_body_label != null:
 		dashboard_calendar_event_body_label.text = _build_dashboard_calendar_event_popup_body(reports, meetings)
+	_refresh_dashboard_calendar_event_actions(meetings)
 	dashboard_calendar_event_popup.visible = true
 	dashboard_calendar_event_popup.move_to_front()
 
@@ -6502,6 +6790,43 @@ func _build_dashboard_calendar_event_popup_body(reports: Array, meetings: Array)
 	if lines.is_empty():
 		lines.append("No scheduled events.")
 	return "\n".join(lines)
+
+
+func _refresh_dashboard_calendar_event_actions(meetings: Array) -> void:
+	if dashboard_calendar_event_actions_vbox == null:
+		return
+	_clear_container_children(dashboard_calendar_event_actions_vbox)
+	for meeting_value in meetings:
+		if typeof(meeting_value) != TYPE_DICTIONARY:
+			continue
+		var meeting: Dictionary = meeting_value
+		var meeting_id: String = str(meeting.get("id", ""))
+		if meeting_id.is_empty():
+			continue
+		var button := Button.new()
+		button.name = "DashboardCalendarMeetingButton_%s" % meeting_id
+		button.text = "Open %s  |  %s" % [
+			str(meeting.get("meeting_label", "Meeting")),
+			str(meeting.get("ticker", ""))
+		]
+		button.clip_text = true
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var blocked_reason: String = ""
+		if (
+			bool(meeting.get("interactive_v1", false)) and
+			bool(meeting.get("requires_shareholder", false)) and
+			not bool(meeting.get("attendance_eligible", true))
+		):
+			blocked_reason = str(meeting.get("attendance_blocked_reason", "Shareholder ownership is required to attend this meeting."))
+		button.disabled = not blocked_reason.is_empty()
+		button.tooltip_text = blocked_reason if not blocked_reason.is_empty() else str(meeting.get("public_summary", "Open meeting"))
+		button.pressed.connect(func() -> void:
+			_hide_dashboard_calendar_event_popup()
+			_open_corporate_meeting_modal(meeting_id)
+		)
+		dashboard_calendar_event_actions_vbox.add_child(button)
+		_style_button(button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 
 
 func _clear_container_children(container: Node) -> void:
@@ -8921,12 +9246,24 @@ func _ensure_dashboard_calendar_event_popup() -> void:
 	body_margin.add_theme_constant_override("margin_bottom", 16)
 	vbox.add_child(body_margin)
 
+	var body_vbox := VBoxContainer.new()
+	body_vbox.name = "DashboardCalendarEventBodyVBox"
+	body_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_vbox.add_theme_constant_override("separation", 10)
+	body_margin.add_child(body_vbox)
+
 	dashboard_calendar_event_body_label = Label.new()
 	dashboard_calendar_event_body_label.name = "DashboardCalendarEventBodyLabel"
 	dashboard_calendar_event_body_label.custom_minimum_size = Vector2(408, 92)
 	dashboard_calendar_event_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	dashboard_calendar_event_body_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	body_margin.add_child(dashboard_calendar_event_body_label)
+	body_vbox.add_child(dashboard_calendar_event_body_label)
+
+	dashboard_calendar_event_actions_vbox = VBoxContainer.new()
+	dashboard_calendar_event_actions_vbox.name = "DashboardCalendarEventActions"
+	dashboard_calendar_event_actions_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dashboard_calendar_event_actions_vbox.add_theme_constant_override("separation", 6)
+	body_vbox.add_child(dashboard_calendar_event_actions_vbox)
 
 	_style_dashboard_calendar_event_popup()
 
@@ -8947,6 +9284,8 @@ func _style_dashboard_calendar_event_popup() -> void:
 		_set_label_tone(dashboard_calendar_event_body_label, COLOR_TEXT)
 		dashboard_calendar_event_body_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 		dashboard_calendar_event_body_label.add_theme_constant_override("line_spacing", 4)
+	if dashboard_calendar_event_actions_vbox != null:
+		dashboard_calendar_event_actions_vbox.add_theme_constant_override("separation", 6)
 	if dashboard_calendar_event_close_button != null:
 		_style_button(
 			dashboard_calendar_event_close_button,
@@ -8955,6 +9294,85 @@ func _style_dashboard_calendar_event_popup() -> void:
 			COLOR_TEXT,
 			0
 		)
+
+
+func _ensure_dashboard_sector_ui() -> void:
+	if dashboard_sector_cards_scroll != null:
+		return
+	var parent_vbox: VBoxContainer = dashboard_placeholder_bottom_body_label.get_parent() as VBoxContainer
+	if parent_vbox == null:
+		return
+
+	dashboard_placeholder_bottom_body_label.visible = false
+	dashboard_placeholder_bottom_body_label.text = ""
+
+	dashboard_sector_cards_scroll = ScrollContainer.new()
+	dashboard_sector_cards_scroll.name = "DashboardSectorCardsScroll"
+	dashboard_sector_cards_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dashboard_sector_cards_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	parent_vbox.add_child(dashboard_sector_cards_scroll)
+
+	dashboard_sector_cards_grid = GridContainer.new()
+	dashboard_sector_cards_grid.name = "DashboardSectorCardsGrid"
+	dashboard_sector_cards_grid.columns = 2
+	dashboard_sector_cards_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dashboard_sector_cards_grid.add_theme_constant_override("h_separation", 8)
+	dashboard_sector_cards_grid.add_theme_constant_override("v_separation", 8)
+	dashboard_sector_cards_scroll.add_child(dashboard_sector_cards_grid)
+
+	dashboard_sector_detail_vbox = VBoxContainer.new()
+	dashboard_sector_detail_vbox.name = "DashboardSectorDetail"
+	dashboard_sector_detail_vbox.visible = false
+	dashboard_sector_detail_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dashboard_sector_detail_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dashboard_sector_detail_vbox.add_theme_constant_override("separation", 8)
+	parent_vbox.add_child(dashboard_sector_detail_vbox)
+
+	var detail_header := HBoxContainer.new()
+	detail_header.name = "DashboardSectorDetailHeader"
+	detail_header.add_theme_constant_override("separation", 8)
+	dashboard_sector_detail_vbox.add_child(detail_header)
+
+	dashboard_sector_back_button = Button.new()
+	dashboard_sector_back_button.name = "DashboardSectorBackButton"
+	dashboard_sector_back_button.text = "Sectors"
+	dashboard_sector_back_button.custom_minimum_size = Vector2(86, 30)
+	dashboard_sector_back_button.pressed.connect(_on_dashboard_sector_back_pressed)
+	detail_header.add_child(dashboard_sector_back_button)
+
+	dashboard_sector_detail_title_label = Label.new()
+	dashboard_sector_detail_title_label.name = "DashboardSectorDetailTitleLabel"
+	dashboard_sector_detail_title_label.clip_text = true
+	dashboard_sector_detail_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail_header.add_child(dashboard_sector_detail_title_label)
+
+	var stock_scroll := ScrollContainer.new()
+	stock_scroll.name = "DashboardSectorStockScroll"
+	stock_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stock_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dashboard_sector_detail_vbox.add_child(stock_scroll)
+
+	dashboard_sector_detail_rows = VBoxContainer.new()
+	dashboard_sector_detail_rows.name = "DashboardSectorStockRows"
+	dashboard_sector_detail_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dashboard_sector_detail_rows.add_theme_constant_override("separation", 6)
+	stock_scroll.add_child(dashboard_sector_detail_rows)
+
+	_style_dashboard_sector_ui()
+
+
+func _style_dashboard_sector_ui() -> void:
+	if dashboard_sector_cards_grid != null:
+		dashboard_sector_cards_grid.columns = 2
+		dashboard_sector_cards_grid.add_theme_constant_override("h_separation", 8)
+		dashboard_sector_cards_grid.add_theme_constant_override("v_separation", 8)
+	if dashboard_sector_detail_vbox != null:
+		dashboard_sector_detail_vbox.add_theme_constant_override("separation", 8)
+	if dashboard_sector_back_button != null:
+		_style_button(dashboard_sector_back_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	if dashboard_sector_detail_title_label != null:
+		_set_label_tone(dashboard_sector_detail_title_label, COLOR_TEXT)
+		dashboard_sector_detail_title_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 
 
 func _ensure_console_overlay() -> void:
@@ -9038,6 +9456,7 @@ func _ensure_corporate_action_ui() -> void:
 	if dashboard_meeting_buttons == null:
 		dashboard_meeting_buttons = VBoxContainer.new()
 		dashboard_meeting_buttons.name = "DashboardMeetingButtons"
+		dashboard_meeting_buttons.visible = false
 		dashboard_meeting_buttons.add_theme_constant_override("separation", 6)
 		dashboard_meeting_buttons.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		dashboard_placeholder_bottom_body_label.get_parent().add_child(dashboard_meeting_buttons)
@@ -10433,6 +10852,7 @@ func _apply_visual_theme() -> void:
 	_style_panel(dashboard_movers_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_style_panel(dashboard_placeholder_bottom_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_style_dashboard_calendar_event_popup()
+	_style_dashboard_sector_ui()
 	_style_panel(news_window_body, COLOR_WINDOW_BG, 0)
 	_style_panel(news_feed_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
 	_style_panel(news_detail_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)

@@ -1335,22 +1335,40 @@ func _run_scenario(
 				"message": "Smoke test expected the queued debug RUPSLB meeting to appear in the upcoming meeting snapshot after one Advance Day."
 			}
 
-		var dashboard_meeting_buttons: VBoxContainer = game_root.find_child("DashboardMeetingButtons", true, false) as VBoxContainer
-		var scheduled_dashboard_button: Button = null
-		if dashboard_meeting_buttons != null:
-			for child in dashboard_meeting_buttons.get_children():
-				var meeting_button: Button = child as Button
-				if meeting_button == null:
+		game_root._refresh_dashboard()
+		await get_tree().process_frame
+		var dashboard_calendar_grid: GridContainer = game_root.find_child("CalendarDaysGrid", true, false) as GridContainer
+		var scheduled_dashboard_day_cell: Control = null
+		if dashboard_calendar_grid != null:
+			for child in dashboard_calendar_grid.get_children():
+				var day_cell: Control = child as Control
+				if day_cell == null:
 					continue
-				if meeting_button.text.find(debug_target_ticker) != -1 and meeting_button.text.find("RUPSLB") != -1:
-					scheduled_dashboard_button = meeting_button
+				var meeting_ids: Array = day_cell.get_meta("meeting_ids", [])
+				if meeting_ids.has(queued_meeting_id):
+					scheduled_dashboard_day_cell = day_cell
 					break
-		if scheduled_dashboard_button == null:
+		if scheduled_dashboard_day_cell == null:
 			game_root.queue_free()
 			await get_tree().process_frame
 			return {
 				"success": false,
-				"message": "Smoke test expected the queued debug RUPSLB meeting to surface in the dashboard meeting buttons on the next day."
+				"message": "Smoke test expected the queued debug RUPSLB meeting to surface on a clickable Dashboard calendar day."
+			}
+
+		var scheduled_calendar_click := InputEventMouseButton.new()
+		scheduled_calendar_click.button_index = MOUSE_BUTTON_LEFT
+		scheduled_calendar_click.pressed = true
+		scheduled_calendar_click.position = scheduled_dashboard_day_cell.get_global_rect().get_center()
+		scheduled_dashboard_day_cell.emit_signal("gui_input", scheduled_calendar_click)
+		await get_tree().process_frame
+		var scheduled_dashboard_button: Button = game_root.find_child("DashboardCalendarMeetingButton_%s" % queued_meeting_id, true, false) as Button
+		if scheduled_dashboard_button == null or scheduled_dashboard_button.disabled or scheduled_dashboard_button.text.find(debug_target_ticker) == -1:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the Dashboard calendar popup to expose an enabled button for the debug RUPSLB."
 			}
 
 		scheduled_dashboard_button.emit_signal("pressed")
@@ -2329,9 +2347,12 @@ func _run_scenario(
 	var dashboard_grid: GridContainer = game_root.find_child("DashboardGrid", true, false) as GridContainer
 	var movers_tabs: TabContainer = game_root.find_child("MoversTabs", true, false) as TabContainer
 	var work_tabs: TabContainer = game_root.find_child("WorkTabs", true, false) as TabContainer
-	var upcoming_reports_label: Label = game_root.find_child("PlaceholderBottomBodyLabel", true, false) as Label
 	var calendar_week_header: GridContainer = game_root.find_child("CalendarWeekHeader", true, false) as GridContainer
 	var calendar_days_grid: GridContainer = game_root.find_child("CalendarDaysGrid", true, false) as GridContainer
+	var dashboard_sector_cards_grid: GridContainer = game_root.find_child("DashboardSectorCardsGrid", true, false) as GridContainer
+	var dashboard_sector_detail: VBoxContainer = game_root.find_child("DashboardSectorDetail", true, false) as VBoxContainer
+	var dashboard_sector_stock_rows: VBoxContainer = game_root.find_child("DashboardSectorStockRows", true, false) as VBoxContainer
+	var dashboard_sector_back_button: Button = game_root.find_child("DashboardSectorBackButton", true, false) as Button
 	if (
 		dashboard_grid == null or
 		int(dashboard_grid.get_theme_constant("h_separation")) != 0 or
@@ -2340,19 +2361,58 @@ func _run_scenario(
 		movers_tabs.get_tab_count() < 2 or
 		work_tabs == null or
 		not work_tabs.is_tab_hidden(4) or
-		upcoming_reports_label == null or
-		not upcoming_reports_label.text.contains("Q1 2020") or
 		calendar_week_header == null or
 		calendar_week_header.get_child_count() != 7 or
 		calendar_days_grid == null or
 		calendar_days_grid.get_child_count() < 35 or
-		calendar_days_grid.get_child_count() % 7 != 0
+		calendar_days_grid.get_child_count() % 7 != 0 or
+		dashboard_sector_cards_grid == null or
+		dashboard_sector_cards_grid.get_child_count() <= 0 or
+		dashboard_sector_detail == null or
+		dashboard_sector_stock_rows == null or
+		dashboard_sector_back_button == null
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected Dashboard movers, report calendar text, uniform calendar grid, zero dashboard separation, and hidden Analyzer tab."
+			"message": "Smoke test expected Dashboard movers, sector cards, uniform calendar grid, zero dashboard separation, and hidden Analyzer tab."
+		}
+
+	var dashboard_sector_card: Control = null
+	for sector_card_child in dashboard_sector_cards_grid.get_children():
+		var sector_card: Control = sector_card_child as Control
+		if sector_card != null and not str(sector_card.get_meta("sector_id", "")).is_empty():
+			dashboard_sector_card = sector_card
+			break
+	if dashboard_sector_card == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Dashboard sector cards to expose clickable sector metadata."
+		}
+	var sector_card_click := InputEventMouseButton.new()
+	sector_card_click.button_index = MOUSE_BUTTON_LEFT
+	sector_card_click.pressed = true
+	sector_card_click.position = dashboard_sector_card.get_global_rect().get_center()
+	dashboard_sector_card.emit_signal("gui_input", sector_card_click)
+	await get_tree().process_frame
+	if not dashboard_sector_detail.visible or dashboard_sector_stock_rows.get_child_count() <= 0:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected clicking a Dashboard sector card to show that sector's stock list."
+		}
+	dashboard_sector_back_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if dashboard_sector_detail.visible or dashboard_sector_cards_grid.get_child_count() <= 0:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Dashboard sector detail back button to restore sector cards."
 		}
 
 	var calendar_event_day_cell: Control = null

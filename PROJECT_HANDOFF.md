@@ -37,11 +37,12 @@ Read this file first in the next session.
     - `4275c7a Smooth Daily Recap reveal`
     - `fc14108 Build Key Stats card dashboard`
     - `54033bf Hide helper text and tidy dashboard calendar`
-    - latest checkpoint message: `Gate Network contacts and add calendar event popup`
+    - `4bc42c0 Gate Network contacts and add calendar event popup`
+    - latest checkpoint message: `Add Dashboard sector cards`
   - after checkpoint commits, `git status --short` should be clean except ignored local `logs/` output
 
 ## Latest Session Snapshot
-- Most recent work focused on the core daily loop, Academy authoring pipeline, `Advance Day` visible-refresh performance, lightweight UI animation polish, Daily Activity cache cost, Dashboard cache cost, deferred save durability, shareholder-only corporate meeting attendance, the STOCKBOT `Key Stats` dashboard layout, removal of player-facing system helper copy, Network contact-list gating, and Dashboard calendar event inspection.
+- Most recent work focused on the core daily loop, Academy authoring pipeline, `Advance Day` visible-refresh performance, lightweight UI animation polish, Daily Activity cache cost, Dashboard cache cost, deferred save durability, shareholder-only corporate meeting attendance, the STOCKBOT `Key Stats` dashboard layout, removal of player-facing system helper copy, Network contact-list gating, Dashboard calendar event inspection, and Dashboard sector performance cards.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses, shows short processing phases on the desktop button, and now has a snappy press/phase pulse that resets to neutral after processing.
   - Daily Recap is now a custom `GameRoot.gd` overlay rather than a stock Godot dialog, so it can share the same dark-brown title-bar chrome as `News`, `Academy`, `Network`, and `Shop`.
@@ -64,10 +65,14 @@ Read this file first in the next session.
   - The `Financials` tab no longer shows the old derived-quarter/system-explanation helper line above the period controls.
   - The `Broker` tab no longer shows the two system-helper summary lines above the meter/table; the meter, scale row, `Net` toggle, and broker rows remain.
   - Dashboard calendar cells now render as a uniform 7-column grid with styled empty leading/trailing cells so the month block lines up with the weekday header.
-  - Dashboard calendar day cells are clickable and open a small read-only event popup:
+  - Dashboard calendar day cells are clickable and open a small event popup:
     - report days show filing tickers/periods
-    - meeting days show meeting ticker/label and public summary
+    - meeting days show meeting ticker/label, public summary, and an `Open` button for each meeting
     - empty days show a simple `No scheduled events.` message
+  - Dashboard bottom-right is now `Sector Performance` instead of `Upcoming Meetings / Reports`:
+    - sector cards are colored green/red from equal-weight average daily sector move
+    - each card shows stock count, green/red breadth, and loudest tape
+    - clicking a sector card replaces the card grid with that sector's stock list and a `Sectors` back button
 - Performance status:
   - Desktop badge drawing uses cached counts in `RunState.desktop_app_badge_counts`.
   - `last_day_results` now saves a compact recap/event summary instead of duplicating the full per-company day result and corporate meeting payloads.
@@ -121,8 +126,8 @@ Read this file first in the next session.
 - Last successful verification in this session:
   - `git diff --check`
   - Godot project-load check
-  - quick smoke with `--log-file logs\smoke-helper-calendar-cleanup.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
-  - the quick smoke now asserts the Key Stats dashboard cards, populated row groups, `Net Income` / `EPS` / `Revenue` pill switching, the separate `Financials` tab rows/navigation, hidden Financials/Broker helper labels, and uniform Dashboard calendar grid shape
+  - quick smoke with `--log-file logs\smoke-dashboard-sector-cards.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
+  - the quick smoke now asserts the Key Stats dashboard cards, populated row groups, `Net Income` / `EPS` / `Revenue` pill switching, the separate `Financials` tab rows/navigation, hidden Financials/Broker helper labels, uniform Dashboard calendar grid shape, Dashboard calendar event popup/buttons, and Dashboard sector card-to-stock-list navigation
   - latest normal-play perf scene from the previous UI animation pass printed `NORMAL_PLAY_PERF_OK`; it was not rerun for the fade-only recap/border tweak or Key Stats dashboard pass
   - note: the quick smoke may print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` on Windows; treat it as non-blocking Godot/Windows certificate-store noise unless it appears before smoke output or affects network/API work
 
@@ -487,10 +492,10 @@ Read this file first in the next session.
   - top-left: `Index Gorengan` card with derived market points, traded lot, and traded value
   - bottom-left: live month calendar with the current in-game day highlighted and quarterly report filing days marked as `R`
   - top-right: `Movers` card with a `Top 15 Gainer` tab and a `Top 15 Loser` tab
-  - bottom-right: `Upcoming Meetings / Reports`
-    - current body text still lists the next scheduled company filings
-    - a short button strip above it can open up to `4` upcoming corporate meetings
-    - opening a `rights_issue` `rupslb` button now routes into the fullscreen staged meeting overlay, while other meetings still use the simpler shared meeting modal
+  - bottom-right: `Sector Performance`
+    - cards show sector average daily performance, stock count, green/red breadth, and loudest tape
+    - clicking a sector card swaps the card grid into a compact stock list for that sector
+    - the `Sectors` button returns to the sector-card grid
 - Quarterly report calendar:
   - stored in `RunState.quarterly_report_calendar` and saved/loaded with the run
   - old saves backfill a deterministic report calendar from the saved roster
@@ -516,7 +521,7 @@ Read this file first in the next session.
   - latest daily `volume_lots`
   - latest daily traded `value`
   - daily breadth counts (`green / red / flat`)
-- Dashboard meeting/report consumers can use:
+- Dashboard meeting/report consumers can use the calendar event popup plus:
   - `GameManager.get_upcoming_report_rows(limit)`
   - `GameManager.get_dashboard_event_snapshot(force_refresh := false)`
   - `GameManager.get_corporate_meeting_snapshot(day_index := -1)`
@@ -1142,8 +1147,8 @@ Read this file first in the next session.
   - contact rows now derive recent read-history summaries from `network_tip_journal`, including target ticker, outcome, player action, follow-up label, and a simple reliability label such as `Reliable lately`, `Mixed record`, or `Cold lately`
   - contact rows now also derive recent cross-contact source checks from `network_tip_journal`, surfacing `Source agreement`, `Mixed sources`, or `Conflicting sources` when other contacts recently read the same target differently
 - Current player-facing UI/entry points:
-  - `Dashboard` bottom-right area now shows `Upcoming Meetings / Reports`
-  - a short meeting-button strip on the dashboard can open up to `4` upcoming meetings
+  - `Dashboard` bottom-right area now shows sector performance cards and lets the player drill into stocks by sector
+  - `Dashboard` calendar event popups can open meetings for clicked event days
   - `News` article detail can now show an `Open Meeting` button when an article is linked to a venue
   - `Network` selected-contact detail can now show current corporate-action summary text and an `Open Meeting` button when relevant
   - shareholder-only `RUPSLB` links show disabled `Shareholders Only` actions with explanatory tooltips/toasts when the player owns `0` shares
