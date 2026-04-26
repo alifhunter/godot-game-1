@@ -4854,6 +4854,9 @@ func _refresh_sidebar() -> void:
 
 
 func _refresh_dashboard() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	var phase_started_at_usec: int = started_at_usec
+	var log_phase_details: bool = advance_day_processing
 	if not RunState.has_active_run():
 		dashboard_index_date_label.text = "No active run."
 		dashboard_index_points_value_label.text = "-"
@@ -4866,10 +4869,15 @@ func _refresh_dashboard() -> void:
 		dashboard_placeholder_bottom_title_label.text = "Upcoming Meetings / Reports"
 		dashboard_placeholder_bottom_body_label.text = "No active report calendar."
 		_refresh_dashboard_meetings([])
+		_log_perf_phase(log_phase_details, "_refresh_dashboard:no_active_run", started_at_usec)
 		return
 
 	var index_snapshot: Dictionary = _build_dashboard_index_snapshot()
+	_log_perf_phase(log_phase_details, "_refresh_dashboard:index_snapshot", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	var company_rows: Array = _get_company_rows_cached()
+	_log_perf_phase(log_phase_details, "_refresh_dashboard:company_rows", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	var trade_date: Dictionary = GameManager.get_current_trade_date()
 	var trading_day_number: int = max(RunState.day_index + 1, 1)
 	dashboard_index_date_label.text = "Day %d  |  %s" % [
@@ -4885,16 +4893,28 @@ func _refresh_dashboard() -> void:
 		int(index_snapshot.get("flat_count", 0)),
 		_format_change(RunState.market_sentiment)
 	]
+	_log_perf_phase(log_phase_details, "_refresh_dashboard:index_labels", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	dashboard_calendar_month_label.text = "%s %d" % [
 		DASHBOARD_MONTH_NAMES[clamp(int(trade_date.get("month", 1)) - 1, 0, DASHBOARD_MONTH_NAMES.size() - 1)],
 		int(trade_date.get("year", 2020))
 	]
 	_refresh_dashboard_calendar(trade_date)
+	_log_perf_phase(log_phase_details, "_refresh_dashboard:calendar", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	_refresh_dashboard_movers(company_rows)
+	_log_perf_phase(log_phase_details, "_refresh_dashboard:movers", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	dashboard_placeholder_bottom_title_label.text = "Upcoming Meetings / Reports"
 	dashboard_placeholder_bottom_body_label.text = _format_upcoming_report_rows(GameManager.get_upcoming_report_rows(8))
+	_log_perf_phase(log_phase_details, "_refresh_dashboard:report_rows", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	_refresh_dashboard_meetings(GameManager.get_corporate_meeting_snapshot().get("upcoming_rows", []))
+	_log_perf_phase(log_phase_details, "_refresh_dashboard:meetings", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	_set_label_tone(dashboard_index_points_value_label, _color_for_change(float(index_snapshot.get("day_change_pct", 0.0))))
+	_log_perf_phase(log_phase_details, "_refresh_dashboard:tone", phase_started_at_usec)
+	_log_perf_phase(log_phase_details, "_refresh_dashboard", started_at_usec)
 
 
 func _refresh_dashboard_meetings(rows: Array) -> void:

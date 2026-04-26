@@ -27,7 +27,8 @@ Read this file first in the next session.
     - `cbeb722 Add normal play performance baseline`
     - `dd88e18 Add Academy editor and daily loop polish`
     - `96fd0b4 Trim last day save payload`
-    - latest checkpoint message: `Instrument Advance Day performance`
+    - `c61a289 Instrument Advance Day performance`
+    - latest checkpoint message: `Speed up Advance Day apply normalization`
   - after checkpoint commits, `git status --short` should be clean except ignored local `logs/` output
 
 ## Latest Session Snapshot
@@ -49,17 +50,20 @@ Read this file first in the next session.
   - Normal-play perf scene now reports a project-local save payload around `2.0MB` after the last-day trim.
   - Advance Day now has phase-level backend instrumentation:
     - `GameManager._advance_day_internal()` prints `[perf][advance]` logs for corporate-action init, market simulation, `RunState.apply_day_result`, Network due processing, summary/news/archive work, save flush, synchronous signal emission, and total time
-    - `GameRoot.gd` prints extra `[perf][ui]` subphase logs during Advance Day button processing, including `_refresh_all:*`, `_refresh_open_apps:*`, `_on_day_progressed`, and `_on_summary_ready:*`
-  - Latest normal-play perf profile shows the remaining big buckets are `simulate_day`, `apply_day_result`, `emit_price_formed` UI refresh, `save_active_run`, and `emit_summary_ready` dashboard/recap work.
-  - Recent normal-play perf logs show raw `save_run` during advance-day paths around `98-121ms` and `flush_pending_save:advance_day` around `298-336ms`.
+    - `RunState.apply_day_result()` prints `[perf][apply]` logs for state setup, event recording, active-state payloads, company normalization, calendar/prune work, and total time
+    - `GameRoot.gd` prints extra `[perf][ui]` subphase logs during Advance Day button processing, including `_refresh_all:*`, `_refresh_open_apps:*`, `_refresh_dashboard:*`, `_on_day_progressed`, and `_on_summary_ready:*`
+  - `RunState.apply_day_result()` uses a day-result normalizer for simulated company payloads:
+    - current price scalars, latest price history entry, and the latest OHLC bar are still normalized
+    - static `company_profile` data and already-normalized historical bars stay on the fast path
+    - latest perf run shows `normalize_companies` around `20-27ms` and `apply_day_result` around `25-35ms` for `30` companies
+  - Latest normal-play perf profile shows the remaining big buckets are `simulate_day`, `emit_price_formed` UI refresh, `save_active_run`, and `emit_summary_ready` dashboard/recap work.
+  - Latest normal-play perf scene summary: `open_network=34.95ms`, `advance_network_open=1819.84ms`, `advance_desktop_only=1972.03ms`, `open_stock=96.52ms`, `advance_stock_open=1975.07ms`, `open_news=162.33ms`, `open_network_with_news=83.92ms`, `advance_news_network_open=2450.09ms`, `flush_pending_save=21.01ms`, `local_save_bytes=2010467`.
+  - Current backend Advance Day logs show `simulate_day` around `260-393ms`, `save_active_run` around `200-334ms`, `emit_price_formed` around `170-396ms` depending open apps, and `emit_summary_ready` around `235-344ms`.
   - Broader app-open timings are still noisy in headless perf runs; `News` can still be heavier than `Network` because it renders article content and can trigger article-source discovery.
-  - `Advance Day` is still mostly dominated by market simulation, save serialization, and post-day UI refreshes, not desktop badge drawing.
+  - `Advance Day` is now mostly dominated by market simulation, save serialization, and post-day UI refreshes, not company apply normalization or desktop badge drawing.
 - Last successful verification in this session:
   - `git diff --check`
-  - `python tools/academy_editor/server.py --validate`
-  - `python tools/academy_editor/server.py --export --dry-run`
   - Godot project-load check
-  - direct `GameRoot.tscn` headless launch
   - normal-play perf scene with `NORMAL_PLAY_PERF_OK`
   - quick smoke with `--smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
   - note: the quick smoke may print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` on Windows; treat it as non-blocking Godot/Windows certificate-store noise unless it appears before smoke output or affects network/API work
@@ -1637,15 +1641,12 @@ Read this file first in the next session.
 - Current verification status:
   - Most recent pass on `2026-04-26`:
     - `git diff --check` passed
-    - `python tools/academy_editor/server.py --validate` passed
-    - `python tools/academy_editor/server.py --export --dry-run` passed
     - Godot project-load check passed
-    - direct `GameRoot.tscn` headless launch passed
     - normal-play perf scene passed with `NORMAL_PLAY_PERF_OK`
-    - latest local headless perf result with Advance Day instrumentation: `open_network=42.82ms`, `advance_network_open=2668.09ms`, `advance_desktop_only=2796.41ms`, `open_stock=100.89ms`, `advance_stock_open=2858.45ms`, `open_news=222.08ms`, `open_network_with_news=108.55ms`, `advance_news_network_open=3625.49ms`, `flush_pending_save=24.04ms`, `local_save_bytes=2010467`
-    - relevant engine perf logs from the same run: `simulate_day` roughly `342-413ms`; `apply_day_result` roughly `303-367ms`; `emit_price_formed` roughly `205-573ms` depending open apps; `save_active_run` roughly `298-336ms`; `emit_summary_ready` roughly `280-340ms`; total backend Advance Day roughly `1.78-2.25s`
+    - latest local headless perf result with Apply Day fast path: `open_network=34.95ms`, `advance_network_open=1819.84ms`, `advance_desktop_only=1972.03ms`, `open_stock=96.52ms`, `advance_stock_open=1975.07ms`, `open_news=162.33ms`, `open_network_with_news=83.92ms`, `advance_news_network_open=2450.09ms`, `flush_pending_save=21.01ms`, `local_save_bytes=2010467`
+    - relevant engine perf logs from the same run: `simulate_day` roughly `260-393ms`; `apply_day_result` roughly `25-35ms`; `[perf][apply] normalize_companies` roughly `20-27ms`; `emit_price_formed` roughly `170-396ms` depending open apps; `save_active_run` roughly `200-334ms`; `emit_summary_ready` roughly `235-344ms`; total backend Advance Day roughly `1.18-1.56s`
     - quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
-    - this covered Advance Day instrumentation, compact `last_day_results` save payload, legacy last-day payload normalization, custom Daily Recap title chrome, simplified player-facing recap copy, readable Advance Day processing text, badge cache behavior, badge save/load persistence, and badge clearing on app open
+    - this covered Advance Day instrumentation, the day-result company normalization fast path, compact `last_day_results` save payload, legacy last-day payload normalization, custom Daily Recap title chrome, simplified player-facing recap copy, readable Advance Day processing text, badge cache behavior, badge save/load persistence, and badge clearing on app open
     - non-blocking Windows/Godot note: this smoke run can print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; do not treat that trailing message as a gameplay/test failure by itself
   - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after fixing Daily Recap readability, Advance Day processing text contrast, and caching desktop badge counts on `2026-04-26`
     - first quick-smoke attempt hit the recurring Godot `user://logs` crash before test output; rerunning with `--log-file res://logs/godot_smoke.log` passed and printed `SMOKE_QUICK_OK`
@@ -1873,13 +1874,13 @@ Read this file first in the next session.
   - run `git status --short` before starting a new pass and preserve ignored local `logs/` output as disposable test data
   - treat a trailing `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` as non-blocking Windows/Godot noise
 - Continue performance work from the trimmed save payload:
-  - use the new `[perf][advance]` phase logs to choose the next target from `simulate_day`, `apply_day_result`, `emit_price_formed`, `save_active_run`, and `emit_summary_ready`
-  - inspect why `RunState.apply_day_result()` and dashboard/recap refreshes are large before attempting broader refactors
-  - target remaining `Advance Day` simulation and post-day UI refresh cost now that `last_day_results` no longer duplicates the full company table
+  - use the `[perf][advance]`, `[perf][apply]`, `[perf][ui]`, and `[perf][save]` logs to choose the next target from `simulate_day`, `emit_price_formed`, `save_active_run`, and `emit_summary_ready`
+  - target Dashboard/recap refresh cost next if staying on the visible `Advance Day` feel: `_refresh_dashboard:meetings`, `_refresh_dashboard:report_rows`, calendar, movers, and `GameManager.get_daily_recap_snapshot()` are the current visible UI buckets
+  - target save serialization next if focusing on backend stutter: `save_active_run` still includes synchronous JSON save/flush work in critical Advance Day, return-to-menu, quit, and close paths
+  - target `simulate_day` after UI/save work if daily market generation remains a bottleneck under `Grind` company counts
   - keep `last_day_results` save payload summary-only unless a concrete feature needs more fields
   - keep badge drawing cache-only through `RunState.desktop_app_badge_counts`
-  - use the `[perf][advance]`, `[perf][ui]`, and `[perf][save]` logs to separate save serialization, market simulation, app rendering, and open-window refresh costs
-  - likely implementation paths: reduce duplicated corporate/calendar save payloads, split expensive save serialization, or defer non-critical post-day UI refresh work
+  - likely implementation paths: cache upcoming meeting/report rows for the daily recap/dashboard pass, defer non-critical open-window refreshes, reduce duplicated corporate/calendar save payloads, or split expensive save serialization away from immediate UI response
 - Academy content pipeline:
   - keep `tools/academy_editor/academy_source.json` as the authoring source and export to `data/academy/academy_catalog.json`
   - use `content_blocks` for new lessons; keep legacy `pages` as export compatibility only

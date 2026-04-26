@@ -33,6 +33,7 @@ const MAX_MARKET_HISTORY := 512
 const MAX_PRICE_BARS_HISTORY := 1600
 const CHART_HISTORY_VISIBLE_BARS := 1260
 const REPORT_CALENDAR_END_YEAR := 2030
+const APPLY_DAY_PERF_LOG_PREFIX := "[perf][apply]"
 const REPORT_MONTH_BY_QUARTER := {
 	1: 1,
 	2: 4,
@@ -325,6 +326,10 @@ func _should_log_startup_perf() -> bool:
 	return OS.is_debug_build()
 
 
+func _should_log_apply_day_perf() -> bool:
+	return OS.is_debug_build()
+
+
 func _log_startup_perf_elapsed(label: String, started_at_usec: int, extra: String = "") -> void:
 	if not _should_log_startup_perf():
 		return
@@ -333,6 +338,16 @@ func _log_startup_perf_elapsed(label: String, started_at_usec: int, extra: Strin
 		print("%s %s %.2fms" % [STARTUP_PERF_LOG_PREFIX, label, elapsed_msec])
 		return
 	print("%s %s %.2fms%s" % [STARTUP_PERF_LOG_PREFIX, label, elapsed_msec, extra])
+
+
+func _log_apply_day_perf_elapsed(enabled: bool, label: String, started_at_usec: int, extra: String = "") -> void:
+	if not enabled:
+		return
+	var elapsed_msec: float = max(float(Time.get_ticks_usec() - started_at_usec) / 1000.0, 0.0)
+	if extra.is_empty():
+		print("%s %s %.2fms" % [APPLY_DAY_PERF_LOG_PREFIX, label, elapsed_msec])
+		return
+	print("%s %s %.2fms%s" % [APPLY_DAY_PERF_LOG_PREFIX, label, elapsed_msec, extra])
 
 
 func load_from_dict(data: Dictionary) -> void:
@@ -887,11 +902,16 @@ func get_total_equity() -> float:
 
 
 func apply_day_result(day_result: Dictionary) -> void:
+	var log_apply_perf: bool = _should_log_apply_day_perf()
+	var total_started_at_usec: int = Time.get_ticks_usec()
+	var phase_started_at_usec: int = total_started_at_usec
 	day_index += 1
 	daily_action_day_index = day_index
 	daily_actions_used = 0
 	market_sentiment = float(day_result.get("market_sentiment", market_sentiment))
 	last_day_results = _build_last_day_results_save_payload(day_result)
+	_log_apply_day_perf_elapsed(log_apply_perf, "basic_state", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	var previous_trade_date: Dictionary = current_trade_date.duplicate(true)
 	_record_event(day_result.get("scheduled_event", {}), day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	for report_event_value in day_result.get("report_events", []):
@@ -904,6 +924,8 @@ func apply_day_result(day_result: Dictionary) -> void:
 		_record_event(special_event_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	for corporate_event_value in day_result.get("corporate_action_events", []):
 		_record_event(corporate_event_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
+	_log_apply_day_perf_elapsed(log_apply_perf, "record_events", phase_started_at_usec, " events=%d" % event_history.size())
+	phase_started_at_usec = Time.get_ticks_usec()
 	active_company_arcs = day_result.get("active_company_arcs", []).duplicate(true)
 	active_special_events = day_result.get("active_special_events", []).duplicate(true)
 	active_corporate_action_chains = day_result.get("active_corporate_action_chains", {}).duplicate(true)
@@ -911,10 +933,16 @@ func apply_day_result(day_result: Dictionary) -> void:
 	corporate_action_intel = day_result.get("corporate_action_intel", {}).duplicate(true)
 	attended_meetings = day_result.get("attended_meetings", {}).duplicate(true)
 	corporate_meeting_sessions = day_result.get("corporate_meeting_sessions", {}).duplicate(true)
+	_log_apply_day_perf_elapsed(log_apply_perf, "active_state_payloads", phase_started_at_usec)
 
+	phase_started_at_usec = Time.get_ticks_usec()
+	var applied_company_count: int = 0
 	for company_id in day_result.get("companies", {}).keys():
-		companies[str(company_id)] = _normalize_company_runtime(day_result["companies"][company_id].duplicate(true))
+		companies[str(company_id)] = _normalize_day_result_company_runtime(day_result["companies"][company_id])
+		applied_company_count += 1
+	_log_apply_day_perf_elapsed(log_apply_perf, "normalize_companies", phase_started_at_usec, " companies=%d" % applied_company_count)
 
+	phase_started_at_usec = Time.get_ticks_usec()
 	current_trade_date = trading_calendar.next_trade_date(current_trade_date)
 	var previous_year: int = int(previous_trade_date.get("year", 2020))
 	var current_year: int = int(current_trade_date.get("year", previous_year))
@@ -922,6 +950,8 @@ func apply_day_result(day_result: Dictionary) -> void:
 		_reset_ytd_open_prices_for_year(current_year)
 	_ensure_macro_state_for_year(current_year)
 	_prune_player_market_flows(day_index)
+	_log_apply_day_perf_elapsed(log_apply_perf, "calendar_and_prune", phase_started_at_usec)
+	_log_apply_day_perf_elapsed(log_apply_perf, "total", total_started_at_usec, " companies=%d" % applied_company_count)
 
 
 func set_daily_summary(summary: Dictionary) -> void:
@@ -2093,10 +2123,47 @@ func _normalize_company_runtime(runtime: Dictionary) -> Dictionary:
 	return normalized_runtime
 
 
+func _normalize_day_result_company_runtime(runtime: Dictionary) -> Dictionary:
+	var normalized_runtime: Dictionary = runtime.duplicate()
+	normalized_runtime["current_price"] = IDX_PRICE_RULES.normalize_last_price(float(normalized_runtime.get("current_price", 0.0)))
+	normalized_runtime["previous_close"] = IDX_PRICE_RULES.normalize_last_price(float(normalized_runtime.get("previous_close", normalized_runtime.get("current_price", 0.0))))
+	normalized_runtime["starting_price"] = IDX_PRICE_RULES.normalize_last_price(float(normalized_runtime.get("starting_price", normalized_runtime.get("current_price", 0.0))))
+	normalized_runtime["ytd_open_price"] = IDX_PRICE_RULES.normalize_last_price(float(normalized_runtime.get("ytd_open_price", normalized_runtime.get("starting_price", normalized_runtime.get("current_price", 0.0)))))
+	normalized_runtime["ytd_reference_year"] = int(normalized_runtime.get("ytd_reference_year", int(current_trade_date.get("year", 2020))))
+	normalized_runtime["price_history"] = _normalize_day_result_price_history(normalized_runtime.get("price_history", []))
+	normalized_runtime["price_bars"] = _normalize_day_result_price_bars(
+		normalized_runtime.get("price_bars", []),
+		normalized_runtime.get("price_history", [])
+	)
+	if normalized_runtime["price_history"].is_empty() and not normalized_runtime["price_bars"].is_empty():
+		normalized_runtime["price_history"] = _rebuild_price_history_from_bars(normalized_runtime["price_bars"])
+	var company_profile_value = normalized_runtime.get("company_profile", {})
+	normalized_runtime["company_profile"] = company_profile_value if typeof(company_profile_value) == TYPE_DICTIONARY else {}
+	normalized_runtime["active_event_tags"] = normalized_runtime.get("active_event_tags", []).duplicate()
+	normalized_runtime["active_events"] = normalized_runtime.get("active_events", []).duplicate(true)
+	normalized_runtime["hidden_story_flags"] = normalized_runtime.get("hidden_story_flags", []).duplicate()
+	normalized_runtime["ar_limits"] = normalized_runtime.get("ar_limits", {}).duplicate(true)
+	normalized_runtime["volume_context"] = normalized_runtime.get("volume_context", {}).duplicate(true)
+	normalized_runtime["market_depth_context"] = normalized_runtime.get("market_depth_context", {}).duplicate(true)
+	normalized_runtime["player_market_impact"] = normalized_runtime.get("player_market_impact", {}).duplicate(true)
+	return normalized_runtime
+
+
 func _normalize_price_history(price_history: Array) -> Array:
 	var normalized_history: Array = []
 	for price in price_history:
 		normalized_history.append(IDX_PRICE_RULES.normalize_last_price(float(price)))
+	return normalized_history
+
+
+func _normalize_day_result_price_history(price_history_value: Variant) -> Array:
+	if typeof(price_history_value) != TYPE_ARRAY:
+		return []
+	var normalized_history: Array = price_history_value.duplicate()
+	if normalized_history.is_empty():
+		return []
+	var latest_index: int = normalized_history.size() - 1
+	normalized_history[latest_index] = IDX_PRICE_RULES.normalize_last_price(float(normalized_history[latest_index]))
 	return normalized_history
 
 
@@ -2115,6 +2182,26 @@ func _normalize_price_bars(price_bars: Array, price_history: Array) -> Array:
 			normalized_bars.size() - MAX_PRICE_BARS_HISTORY,
 			normalized_bars.size()
 		)
+	return normalized_bars
+
+
+func _normalize_day_result_price_bars(price_bars_value: Variant, price_history: Array) -> Array:
+	if typeof(price_bars_value) != TYPE_ARRAY:
+		return _rebuild_price_bars_from_history(price_history)
+	var normalized_bars: Array = price_bars_value.duplicate()
+	if normalized_bars.is_empty():
+		return _rebuild_price_bars_from_history(price_history)
+	if normalized_bars.size() > MAX_PRICE_BARS_HISTORY:
+		normalized_bars = normalized_bars.slice(
+			normalized_bars.size() - MAX_PRICE_BARS_HISTORY,
+			normalized_bars.size()
+		)
+
+	var latest_index: int = normalized_bars.size() - 1
+	var latest_bar_value = normalized_bars[latest_index]
+	if typeof(latest_bar_value) != TYPE_DICTIONARY:
+		return _normalize_price_bars(price_bars_value, price_history)
+	normalized_bars[latest_index] = _normalize_price_bar(latest_bar_value.duplicate(true))
 	return normalized_bars
 
 
