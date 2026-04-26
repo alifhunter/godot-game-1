@@ -2001,6 +2001,33 @@ func _run_scenario(
 			"message": "Smoke test expected News, Twooter, and Network desktop badges to appear when current-day activity exists."
 		}
 	var saved_badge_state: Dictionary = RunState.to_save_dict()
+	var saved_last_day_results: Dictionary = saved_badge_state.get("last_day_results", {})
+	var saved_last_day_trade_date: Dictionary = saved_last_day_results.get("trade_date", {})
+	if (
+		saved_last_day_results.has("companies") or
+		saved_last_day_results.has("corporate_meeting_calendar") or
+		not saved_last_day_results.has("starting_equity") or
+		saved_last_day_trade_date.is_empty()
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected last_day_results saves to keep recap context without duplicating company or meeting payloads."
+		}
+	var legacy_badge_state: Dictionary = saved_badge_state.duplicate(true)
+	var legacy_last_day_results: Dictionary = saved_last_day_results.duplicate(true)
+	legacy_last_day_results["companies"] = {"legacy": {"company_profile": {"financial_history": [1, 2, 3]}}}
+	legacy_last_day_results["corporate_meeting_calendar"] = {"legacy": []}
+	legacy_badge_state["last_day_results"] = legacy_last_day_results
+	RunState.load_from_dict(legacy_badge_state)
+	if RunState.last_day_results.has("companies") or RunState.last_day_results.has("corporate_meeting_calendar"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected legacy last_day_results payloads to be trimmed during save/load normalization."
+		}
 	RunState.load_from_dict(saved_badge_state)
 	game_root._refresh_desktop()
 	await get_tree().process_frame

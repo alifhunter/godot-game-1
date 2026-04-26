@@ -342,7 +342,7 @@ func load_from_dict(data: Dictionary) -> void:
 	market_sentiment = float(data.get("market_sentiment", 0.0))
 	last_equity_value = float(data.get("last_equity_value", 0.0))
 	daily_summary = data.get("daily_summary", {}).duplicate(true)
-	last_day_results = data.get("last_day_results", {}).duplicate(true)
+	last_day_results = _build_last_day_results_save_payload(data.get("last_day_results", {}))
 	trade_history = data.get("trade_history", []).duplicate(true)
 	player_market_flows = data.get("player_market_flows", {}).duplicate(true)
 	event_history = data.get("event_history", []).duplicate(true)
@@ -418,7 +418,7 @@ func to_save_dict() -> Dictionary:
 		"watchlist_company_ids": watchlist_company_ids.duplicate(),
 		"player_portfolio": player_portfolio.duplicate(true),
 		"daily_summary": daily_summary.duplicate(true),
-		"last_day_results": last_day_results.duplicate(true),
+		"last_day_results": _build_last_day_results_save_payload(last_day_results),
 		"last_equity_value": last_equity_value,
 		"trade_history": trade_history.duplicate(true),
 		"player_market_flows": player_market_flows.duplicate(true),
@@ -549,6 +549,29 @@ func _build_company_profile_save_payload(company_profile: Dictionary) -> Diction
 	save_profile.erase("financial_statement_snapshot")
 	save_profile.erase("management_roster")
 	return save_profile
+
+
+func _build_last_day_results_save_payload(source_results: Variant) -> Dictionary:
+	if typeof(source_results) != TYPE_DICTIONARY:
+		return {}
+
+	var source: Dictionary = source_results
+	if source.is_empty():
+		return {}
+
+	var save_results: Dictionary = {
+		"day_number": int(source.get("day_number", day_index)),
+		"trade_date": source.get("trade_date", {}).duplicate(true),
+		"market_sentiment": float(source.get("market_sentiment", market_sentiment)),
+		"starting_equity": float(source.get("starting_equity", last_equity_value)),
+		"scheduled_event": source.get("scheduled_event", {}).duplicate(true),
+		"report_events": source.get("report_events", []).duplicate(true),
+		"started_company_arcs": source.get("started_company_arcs", []).duplicate(true),
+		"company_arc_phase_events": source.get("company_arc_phase_events", []).duplicate(true),
+		"corporate_action_events": source.get("corporate_action_events", []).duplicate(true),
+		"started_special_events": source.get("started_special_events", []).duplicate(true)
+	}
+	return save_results
 
 
 func queue_company_detail_hydration(company_id: String, priority: bool = false) -> void:
@@ -868,7 +891,7 @@ func apply_day_result(day_result: Dictionary) -> void:
 	daily_action_day_index = day_index
 	daily_actions_used = 0
 	market_sentiment = float(day_result.get("market_sentiment", market_sentiment))
-	last_day_results = day_result.duplicate(true)
+	last_day_results = _build_last_day_results_save_payload(day_result)
 	var previous_trade_date: Dictionary = current_trade_date.duplicate(true)
 	_record_event(day_result.get("scheduled_event", {}), day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	for report_event_value in day_result.get("report_events", []):

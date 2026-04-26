@@ -20,24 +20,16 @@ Read this file first in the next session.
   - local Git repo initialized on branch `main`
   - GitHub remote configured as `origin`
   - remote URL: `https://github.com/alifhunter/godot-game-1.git`
-  - committed checkpoint: `615a415 Add Network tip memory and source checks`
-  - committed checkpoint: `b857ab8 Make Network source conflicts actionable`
-  - committed checkpoint: `16330c6 Polish Network conflicts and add fishbowl display`
-  - latest committed checkpoint: `cbeb722 Add normal play performance baseline`
-  - uncommitted files are expected to include:
-    - `assets/academy/lessons/.gitkeep`
-    - `autoloads/GameManager.gd`
-    - `autoloads/RunState.gd`
-    - `data/academy/academy_catalog.json`
-    - `scripts/ui/GameRoot.gd`
-    - `scripts/tests/SmokeTest.gd`
-    - `systems/AcademySystem.gd`
-    - `tools/academy_editor/`
-    - `PROJECT_HANDOFF.md`
-  - untracked `scripts/tests/NormalPlayPerfTest.gd.uid` may also be present from Godot/editor import; it has not been touched intentionally
+  - recent committed checkpoints include:
+    - `615a415 Add Network tip memory and source checks`
+    - `b857ab8 Make Network source conflicts actionable`
+    - `16330c6 Polish Network conflicts and add fishbowl display`
+    - `cbeb722 Add normal play performance baseline`
+    - `dd88e18 Add Academy editor and daily loop polish`
+  - after checkpoint commits, `git status --short` should be clean except ignored local `logs/` output
 
 ## Latest Session Snapshot
-- Most recent work focused on the core daily loop and Academy authoring pipeline.
+- Most recent work focused on the core daily loop, Academy authoring pipeline, and `Advance Day` save-path performance.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses and shows short processing phases on the desktop button.
   - Daily Recap is now a custom `GameRoot.gd` overlay rather than a stock Godot dialog, so it can share the same dark-brown title-bar chrome as `News`, `Academy`, `Network`, and `Shop`.
@@ -51,14 +43,18 @@ Read this file first in the next session.
   - Editor/runtime support image uploads into `assets/academy/lessons/`; missing image paths fall back to placeholders rather than breaking runtime UI.
 - Performance status:
   - Desktop badge drawing uses cached counts in `RunState.desktop_app_badge_counts`.
+  - `last_day_results` now saves a compact recap/event summary instead of duplicating the full per-company day result and corporate meeting payloads.
+  - Normal-play perf scene now reports a project-local save payload around `2.0MB` after the last-day trim.
+  - Recent normal-play perf logs show raw `save_run` during advance-day paths around `101-166ms` and `flush_pending_save:advance_day` around `256-402ms`.
   - Broader app-open timings are still noisy in headless perf runs; `News` can still be heavier than `Network` because it renders article content and can trigger article-source discovery.
-  - `Advance Day` is still mostly dominated by simulation/save work, not desktop badge drawing.
+  - `Advance Day` is still mostly dominated by market simulation, save serialization, and post-day UI refreshes, not desktop badge drawing.
 - Last successful verification in this session:
   - `git diff --check`
   - `python tools/academy_editor/server.py --validate`
   - `python tools/academy_editor/server.py --export --dry-run`
   - Godot project-load check
   - direct `GameRoot.tscn` headless launch
+  - normal-play perf scene with `NORMAL_PLAY_PERF_OK`
   - quick smoke with `--smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
   - note: the quick smoke may print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` on Windows; treat it as non-blocking Godot/Windows certificate-store noise unless it appears before smoke output or affects network/API work
 
@@ -1400,6 +1396,10 @@ Read this file first in the next session.
   - `desktop_app_seen_days` tracks whether the app has been opened on the current day
   - `desktop_app_badge_counts` stores the current day's cached activity counts so desktop refresh can stay cheap
   - missing legacy save data defaults to current day / zero counts to avoid stale old-save badges
+- `RunState.last_day_results` is saved as a compact recap/event context:
+  - keeps day number, trade date, market sentiment, starting equity, and small event arrays used for recent-day context
+  - strips duplicated `companies`, active state snapshots, corporate calendars, and meeting/session payloads during apply/save/load
+  - old saves with heavy `last_day_results` normalize down on load
 - Watchlist membership is now also saved in `RunState.watchlist_company_ids`
 - News articles now have a lightweight persistent archive:
   - `RunState.news_archive_index`
@@ -1635,8 +1635,11 @@ Read this file first in the next session.
     - `python tools/academy_editor/server.py --export --dry-run` passed
     - Godot project-load check passed
     - direct `GameRoot.tscn` headless launch passed
+    - normal-play perf scene passed with `NORMAL_PLAY_PERF_OK`
+    - latest local headless perf result after trimming `last_day_results`: `open_network=44.01ms`, `advance_network_open=2702.7ms`, `advance_desktop_only=2839.81ms`, `open_stock=125.57ms`, `advance_stock_open=2958.37ms`, `open_news=211.42ms`, `open_network_with_news=118.83ms`, `advance_news_network_open=3582.61ms`, `flush_pending_save=25.6ms`, `local_save_bytes=2010467`
+    - relevant engine perf logs from the same run: raw `save_run` during advances was roughly `101-166ms`; `flush_pending_save:advance_day` was roughly `256-402ms`
     - quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
-    - this covered the custom Daily Recap title chrome, simplified player-facing recap copy, readable Advance Day processing text, badge cache behavior, badge save/load persistence, and badge clearing on app open
+    - this covered the compact `last_day_results` save payload, legacy last-day payload normalization, custom Daily Recap title chrome, simplified player-facing recap copy, readable Advance Day processing text, badge cache behavior, badge save/load persistence, and badge clearing on app open
     - non-blocking Windows/Godot note: this smoke run can print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; do not treat that trailing message as a gameplay/test failure by itself
   - `git diff --check`, Godot project-load check, direct GameRoot headless launch, and quick Godot headless smoke with `--smoke-quick --smoke-local-io` passed after fixing Daily Recap readability, Advance Day processing text contrast, and caching desktop badge counts on `2026-04-26`
     - first quick-smoke attempt hit the recurring Godot `user://logs` crash before test output; rerunning with `--log-file res://logs/godot_smoke.log` passed and printed `SMOKE_QUICK_OK`
@@ -1860,16 +1863,15 @@ Read this file first in the next session.
 - `company_profile_data.json` is now the editable narrative content source, but it is tailored to the repo's existing sector ids rather than the broader external reference schema
 
 ## Recommended Next Steps (Confirm user first)
-- Stabilize the current Academy + daily-loop checkpoint:
-  - review the uncommitted files listed in the Project Snapshot
-  - decide whether to keep or ignore `scripts/tests/NormalPlayPerfTest.gd.uid`
-  - run `git diff --check`, Academy editor validate/export dry-run, Godot project-load, direct `GameRoot.tscn` launch, and quick smoke before committing
+- Keep the checkpoint clean:
+  - run `git status --short` before starting a new pass and preserve ignored local `logs/` output as disposable test data
   - treat a trailing `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` as non-blocking Windows/Godot noise
-- Performance remains the highest-value engineering thread:
-  - target `Advance Day` save/simulation cost, since current headless smoke still shows heavy synchronous `save_run` and `flush_pending_save:advance_day` phases
+- Continue performance work from the trimmed save payload:
+  - target remaining `Advance Day` simulation and post-day UI refresh cost now that `last_day_results` no longer duplicates the full company table
+  - keep `last_day_results` save payload summary-only unless a concrete feature needs more fields
   - keep badge drawing cache-only through `RunState.desktop_app_badge_counts`
   - use the `[perf][ui]` and `[perf][save]` logs to separate save serialization, market simulation, app rendering, and open-window refresh costs
-  - likely implementation paths: trim persisted company-detail payloads further, split expensive save serialization, or defer non-critical post-day UI refresh work
+  - likely implementation paths: reduce duplicated corporate/calendar save payloads, split expensive save serialization, or defer non-critical post-day UI refresh work
 - Academy content pipeline:
   - keep `tools/academy_editor/academy_source.json` as the authoring source and export to `data/academy/academy_catalog.json`
   - use `content_blocks` for new lessons; keep legacy `pages` as export compatibility only
