@@ -2355,6 +2355,54 @@ func _run_scenario(
 			"message": "Smoke test expected Dashboard movers, report calendar text, uniform calendar grid, zero dashboard separation, and hidden Analyzer tab."
 		}
 
+	var calendar_event_day_cell: Control = null
+	for calendar_child in calendar_days_grid.get_children():
+		var day_cell: Control = calendar_child as Control
+		if day_cell != null and bool(day_cell.get_meta("has_events", false)):
+			calendar_event_day_cell = day_cell
+			break
+	if calendar_event_day_cell == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Dashboard calendar to expose at least one clickable event day."
+		}
+	var calendar_click_event := InputEventMouseButton.new()
+	calendar_click_event.button_index = MOUSE_BUTTON_LEFT
+	calendar_click_event.pressed = true
+	calendar_click_event.position = calendar_event_day_cell.get_global_rect().get_center()
+	calendar_event_day_cell.emit_signal("gui_input", calendar_click_event)
+	await get_tree().process_frame
+	var calendar_event_popup: Control = game_root.find_child("DashboardCalendarEventPopup", true, false) as Control
+	var calendar_event_body_label: Label = game_root.find_child("DashboardCalendarEventBodyLabel", true, false) as Label
+	var calendar_event_close_button: Button = game_root.find_child("DashboardCalendarEventCloseButton", true, false) as Button
+	if (
+		calendar_event_popup == null or
+		not calendar_event_popup.visible or
+		calendar_event_body_label == null or
+		(
+			not calendar_event_body_label.text.contains("Reports") and
+			not calendar_event_body_label.text.contains("Meetings")
+		) or
+		calendar_event_close_button == null
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected clicking a Dashboard calendar event day to open an event popup."
+		}
+	calendar_event_close_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if calendar_event_popup.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Dashboard calendar event popup to close from its close button."
+		}
+
 	if not RunState.has_method("ensure_company_full_detail") or not RunState.ensure_company_full_detail(tracked_company_id):
 		game_root.queue_free()
 		await get_tree().process_frame
@@ -2457,6 +2505,21 @@ func _run_scenario(
 			"message": "Smoke test expected company Profile Network discovery to produce at least one matching lead."
 		}
 
+	game_root._refresh_network()
+	await get_tree().process_frame
+	var discovered_only_network_text: String = _collect_item_list_text(network_contacts_list)
+	if (
+		discovered_only_network_text.contains("Lead Floater") or
+		discovered_only_network_text.contains("Lead Insider") or
+		discovered_only_network_text.contains("Referred Insider")
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Network contacts list to hide discovered leads until the player meets them."
+		}
+
 	for company_index in range(min(RunState.company_order.size(), 8)):
 		GameManager.discover_network_contacts_for_company(str(RunState.company_order[company_index]))
 	var lead_limit_validation: String = _validate_floater_company_lead_limit()
@@ -2502,6 +2565,17 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected successful Network actions to spend daily action points."
+		}
+
+	game_root._refresh_network()
+	await get_tree().process_frame
+	var met_network_text: String = _collect_item_list_text(network_contacts_list)
+	if not met_network_text.contains("Met ") or met_network_text.contains("Lead "):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Network contacts list to show met contacts without showing unmet leads."
 		}
 
 	var saved_network_state: Dictionary = RunState.to_save_dict()
@@ -4301,6 +4375,15 @@ func _count_unlocked_rows(rows: Array) -> int:
 func _collect_node_text(root: Node) -> String:
 	var parts: Array = []
 	_collect_node_text_into(root, parts)
+	return "\n".join(parts)
+
+
+func _collect_item_list_text(item_list: ItemList) -> String:
+	if item_list == null:
+		return ""
+	var parts: Array = []
+	for item_index in range(item_list.item_count):
+		parts.append(item_list.get_item_text(item_index))
 	return "\n".join(parts)
 
 

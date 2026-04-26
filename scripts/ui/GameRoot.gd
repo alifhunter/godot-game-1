@@ -543,6 +543,10 @@ var academy_glossary_list: ItemList = null
 @onready var toast_close_button: Button = $ToastOverlay/ToastPanel/ToastMargin/ToastHBox/ToastCloseButton
 @onready var toast_timer: Timer = $ToastTimer
 var dashboard_meeting_buttons: VBoxContainer = null
+var dashboard_calendar_event_popup: Control = null
+var dashboard_calendar_event_title_label: Label = null
+var dashboard_calendar_event_body_label: Label = null
+var dashboard_calendar_event_close_button: Button = null
 var corporate_meeting_overlay: Control = null
 var corporate_meeting_panel: PanelContainer = null
 var corporate_meeting_title_label: Label = null
@@ -567,6 +571,7 @@ func _ready() -> void:
 	_ensure_watchlist_picker_dialog()
 	_ensure_upgrade_purchase_dialog()
 	_ensure_daily_recap_dialog()
+	_ensure_dashboard_calendar_event_popup()
 	_ensure_console_overlay()
 	_ensure_academy_ui()
 	_ensure_corporate_action_ui()
@@ -721,6 +726,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if corporate_meeting_overlay != null and corporate_meeting_overlay.visible and key_event.keycode == KEY_ESCAPE:
 			_close_corporate_meeting_modal()
+			get_viewport().set_input_as_handled()
+			return
+		if dashboard_calendar_event_popup != null and dashboard_calendar_event_popup.visible and key_event.keycode == KEY_ESCAPE:
+			_hide_dashboard_calendar_event_popup()
 			get_viewport().set_input_as_handled()
 			return
 		if debug_overlay.visible and key_event.keycode == KEY_ESCAPE:
@@ -4962,10 +4971,9 @@ func _rebuild_network_contact_list() -> void:
 	network_contacts_list.clear()
 	var rows: Array = []
 	rows.append_array(current_network_snapshot.get("contacts", []))
-	rows.append_array(current_network_snapshot.get("discoveries", []))
 	if rows.is_empty():
 		selected_network_contact_id = ""
-		network_contacts_list.add_item("No leads yet. Explore the world more.")
+		network_contacts_list.add_item("No contacts yet. Meet a lead from News or a company Profile first.")
 		network_contacts_list.set_item_disabled(0, true)
 		_show_network_contact({})
 		return
@@ -6040,7 +6048,11 @@ func _refresh_dashboard() -> void:
 		DASHBOARD_MONTH_NAMES[clamp(int(trade_date.get("month", 1)) - 1, 0, DASHBOARD_MONTH_NAMES.size() - 1)],
 		int(trade_date.get("year", 2020))
 	]
-	_refresh_dashboard_calendar(trade_date, dashboard_event_snapshot.get("report_calendar_snapshot", {}))
+	_refresh_dashboard_calendar(
+		trade_date,
+		dashboard_event_snapshot.get("report_calendar_snapshot", {}),
+		dashboard_event_snapshot.get("upcoming_meeting_rows", [])
+	)
 	_log_perf_phase(log_phase_details, "_refresh_dashboard:calendar", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	_refresh_dashboard_movers(company_rows)
@@ -6222,7 +6234,11 @@ func _build_dashboard_mover_row(company_row: Dictionary, rank_number: int) -> Co
 	return row_wrap
 
 
-func _refresh_dashboard_calendar(current_date: Dictionary, cached_report_snapshot: Dictionary = {}) -> void:
+func _refresh_dashboard_calendar(
+	current_date: Dictionary,
+	cached_report_snapshot: Dictionary = {},
+	meeting_rows: Array = []
+) -> void:
 	if dashboard_calendar_days_grid == null:
 		return
 
@@ -6255,7 +6271,15 @@ func _refresh_dashboard_calendar(current_date: Dictionary, cached_report_snapsho
 		var is_current_day: bool = day_value == current_day
 		var is_trade_day: bool = weekday_value < 5 and not portfolio_trading_calendar.is_holiday(day_info)
 		var day_reports: Array = reports_by_day.get(str(day_value), [])
-		dashboard_calendar_days_grid.add_child(_build_dashboard_calendar_day_cell(day_value, is_current_day, is_trade_day, day_reports))
+		var day_meetings: Array = _dashboard_calendar_meetings_for_day(meeting_rows, year_value, month_value, day_value)
+		dashboard_calendar_days_grid.add_child(_build_dashboard_calendar_day_cell(
+			day_value,
+			is_current_day,
+			is_trade_day,
+			day_reports,
+			day_meetings,
+			day_info
+		))
 
 	while dashboard_calendar_days_grid.get_child_count() % 7 != 0:
 		dashboard_calendar_days_grid.add_child(_build_dashboard_calendar_spacer())
@@ -6278,14 +6302,39 @@ func _build_dashboard_calendar_spacer() -> Control:
 	return spacer
 
 
-func _format_report_tooltip(reports: Array) -> String:
-	if reports.is_empty():
+func _dashboard_calendar_meetings_for_day(meeting_rows: Array, year_value: int, month_value: int, day_value: int) -> Array:
+	var rows: Array = []
+	for meeting_value in meeting_rows:
+		if typeof(meeting_value) != TYPE_DICTIONARY:
+			continue
+		var meeting: Dictionary = meeting_value
+		var trade_date: Dictionary = meeting.get("trade_date", {})
+		if (
+			int(trade_date.get("year", 0)) == year_value and
+			int(trade_date.get("month", 0)) == month_value and
+			int(trade_date.get("day", 0)) == day_value
+		):
+			rows.append(meeting.duplicate(true))
+	return rows
+
+
+func _format_calendar_event_tooltip(reports: Array, meetings: Array) -> String:
+	if reports.is_empty() and meetings.is_empty():
 		return ""
-	var tickers: Array = []
+	var parts: Array = []
+	var report_labels: Array = []
 	for report_value in reports:
 		var report: Dictionary = report_value
-		tickers.append("%s %s" % [str(report.get("ticker", "")), str(report.get("period_label", ""))])
-	return "Reports: %s" % ", ".join(tickers)
+		report_labels.append("%s %s" % [str(report.get("ticker", "")), str(report.get("period_label", ""))])
+	if not report_labels.is_empty():
+		parts.append("Reports: %s" % ", ".join(report_labels))
+	var meeting_labels: Array = []
+	for meeting_value in meetings:
+		var meeting: Dictionary = meeting_value
+		meeting_labels.append("%s %s" % [str(meeting.get("ticker", "")), str(meeting.get("meeting_label", "Meeting"))])
+	if not meeting_labels.is_empty():
+		parts.append("Meetings: %s" % ", ".join(meeting_labels))
+	return "\n".join(parts)
 
 
 func _format_upcoming_report_rows(reports: Array) -> String:
@@ -6319,17 +6368,40 @@ func _format_upcoming_report_rows(reports: Array) -> String:
 	return "\n".join(lines)
 
 
-func _build_dashboard_calendar_day_cell(day_value: int, is_current_day: bool, is_trade_day: bool, reports: Array = []) -> Control:
+func _build_dashboard_calendar_day_cell(
+	day_value: int,
+	is_current_day: bool,
+	is_trade_day: bool,
+	reports: Array = [],
+	meetings: Array = [],
+	date_info: Dictionary = {}
+) -> Control:
 	var panel: PanelContainer = PanelContainer.new()
+	panel.name = "DashboardCalendarDay_%02d" % day_value
 	panel.custom_minimum_size = Vector2(0, DASHBOARD_CALENDAR_CELL_HEIGHT)
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_FILL
-	panel.tooltip_text = _format_report_tooltip(reports)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.tooltip_text = _format_calendar_event_tooltip(reports, meetings)
+	panel.set_meta("day", day_value)
+	panel.set_meta("report_count", reports.size())
+	panel.set_meta("meeting_count", meetings.size())
+	panel.set_meta("has_events", not reports.is_empty() or not meetings.is_empty())
+	panel.gui_input.connect(_on_dashboard_calendar_day_cell_gui_input.bind(
+		date_info.duplicate(true),
+		reports.duplicate(true),
+		meetings.duplicate(true)
+	))
 
 	var label: Label = Label.new()
 	label.text = str(day_value)
+	var badges: Array = []
 	if not reports.is_empty():
-		label.text = "%d\n%dR" % [day_value, reports.size()]
+		badges.append("%dR" % reports.size())
+	if not meetings.is_empty():
+		badges.append("%dM" % meetings.size())
+	if not badges.is_empty():
+		label.text = "%d\n%s" % [day_value, " ".join(badges)]
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -6343,10 +6415,14 @@ func _build_dashboard_calendar_day_cell(day_value: int, is_current_day: bool, is
 		fill_color = Color(0.054902, 0.0705882, 0.0901961, 0.72)
 		border_color = Color(0.141176, 0.176471, 0.215686, 0.6)
 		text_color = COLOR_MUTED
-	if not reports.is_empty():
+	if not reports.is_empty() or not meetings.is_empty():
 		fill_color = Color(0.192157, 0.152941, 0.0823529, 0.96)
 		border_color = COLOR_WARNING
 		text_color = Color(1, 0.941176, 0.760784, 1)
+	if reports.is_empty() and not meetings.is_empty():
+		fill_color = Color(0.0901961, 0.164706, 0.168627, 0.96)
+		border_color = COLOR_ACCENT
+		text_color = Color(0.815686, 0.933333, 1, 1)
 	if is_current_day:
 		fill_color = Color(0.219608, 0.439216, 0.65098, 0.92)
 		border_color = COLOR_NAV_ACTIVE_BORDER
@@ -6366,6 +6442,66 @@ func _build_dashboard_calendar_day_cell(day_value: int, is_current_day: bool, is
 	panel.add_theme_stylebox_override("panel", style)
 	_set_label_tone(label, text_color)
 	return panel
+
+
+func _on_dashboard_calendar_day_cell_gui_input(
+	event: InputEvent,
+	date_info: Dictionary,
+	reports: Array,
+	meetings: Array
+) -> void:
+	if event is InputEventMouseButton:
+		var mouse_button: InputEventMouseButton = event
+		if mouse_button.button_index == MOUSE_BUTTON_LEFT and mouse_button.pressed:
+			_show_dashboard_calendar_event_popup(date_info, reports, meetings)
+			get_viewport().set_input_as_handled()
+
+
+func _show_dashboard_calendar_event_popup(date_info: Dictionary, reports: Array, meetings: Array) -> void:
+	_ensure_dashboard_calendar_event_popup()
+	if dashboard_calendar_event_popup == null:
+		return
+	if dashboard_calendar_event_title_label != null:
+		dashboard_calendar_event_title_label.text = GameManager.format_trade_date(date_info)
+	if dashboard_calendar_event_body_label != null:
+		dashboard_calendar_event_body_label.text = _build_dashboard_calendar_event_popup_body(reports, meetings)
+	dashboard_calendar_event_popup.visible = true
+	dashboard_calendar_event_popup.move_to_front()
+
+
+func _hide_dashboard_calendar_event_popup() -> void:
+	if dashboard_calendar_event_popup != null:
+		dashboard_calendar_event_popup.visible = false
+
+
+func _build_dashboard_calendar_event_popup_body(reports: Array, meetings: Array) -> String:
+	var lines: Array = []
+	if not reports.is_empty():
+		lines.append("Reports")
+		for report_value in reports:
+			var report: Dictionary = report_value
+			var ticker: String = str(report.get("ticker", "")).strip_edges()
+			var period_label: String = str(report.get("period_label", "")).strip_edges()
+			if ticker.is_empty() and period_label.is_empty():
+				continue
+			lines.append("- %s %s" % [ticker, period_label])
+	if not meetings.is_empty():
+		if not lines.is_empty():
+			lines.append("")
+		lines.append("Meetings")
+		for meeting_value in meetings:
+			var meeting: Dictionary = meeting_value
+			var meeting_line: String = "- %s | %s" % [
+				str(meeting.get("ticker", "")).strip_edges(),
+				str(meeting.get("meeting_label", "Meeting")).strip_edges()
+			]
+			var summary: String = str(meeting.get("public_summary", "")).strip_edges()
+			if not summary.is_empty():
+				meeting_line += "\n  %s" % summary
+			lines.append(meeting_line)
+	if lines.is_empty():
+		lines.append("No scheduled events.")
+	return "\n".join(lines)
 
 
 func _clear_container_children(container: Node) -> void:
@@ -8702,6 +8838,125 @@ func _style_daily_recap_content_panel(panel: PanelContainer) -> void:
 	panel.add_theme_stylebox_override("panel", content_style)
 
 
+func _ensure_dashboard_calendar_event_popup() -> void:
+	if dashboard_calendar_event_popup != null:
+		return
+
+	dashboard_calendar_event_popup = Control.new()
+	dashboard_calendar_event_popup.name = "DashboardCalendarEventPopup"
+	dashboard_calendar_event_popup.visible = false
+	dashboard_calendar_event_popup.mouse_filter = Control.MOUSE_FILTER_STOP
+	dashboard_calendar_event_popup.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(dashboard_calendar_event_popup)
+
+	var scrim := ColorRect.new()
+	scrim.name = "DashboardCalendarEventScrim"
+	scrim.color = Color(0.0, 0.0, 0.0, 0.34)
+	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scrim.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton:
+			var mouse_button: InputEventMouseButton = event
+			if mouse_button.button_index == MOUSE_BUTTON_LEFT and mouse_button.pressed:
+				_hide_dashboard_calendar_event_popup()
+	)
+	dashboard_calendar_event_popup.add_child(scrim)
+
+	var center := CenterContainer.new()
+	center.name = "DashboardCalendarEventCenter"
+	center.mouse_filter = Control.MOUSE_FILTER_PASS
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dashboard_calendar_event_popup.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.name = "DashboardCalendarEventPanel"
+	panel.custom_minimum_size = Vector2(440, 0)
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	center.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.name = "DashboardCalendarEventVBox"
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 0)
+	panel.add_child(vbox)
+
+	var title_bar := PanelContainer.new()
+	title_bar.name = "DashboardCalendarEventTitleBar"
+	title_bar.custom_minimum_size = Vector2(0, 38)
+	title_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(title_bar)
+
+	var title_margin := MarginContainer.new()
+	title_margin.add_theme_constant_override("margin_left", 12)
+	title_margin.add_theme_constant_override("margin_top", 4)
+	title_margin.add_theme_constant_override("margin_right", 8)
+	title_margin.add_theme_constant_override("margin_bottom", 4)
+	title_bar.add_child(title_margin)
+
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 8)
+	title_margin.add_child(title_row)
+
+	dashboard_calendar_event_title_label = Label.new()
+	dashboard_calendar_event_title_label.name = "DashboardCalendarEventTitleLabel"
+	dashboard_calendar_event_title_label.text = "Calendar Events"
+	dashboard_calendar_event_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	dashboard_calendar_event_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(dashboard_calendar_event_title_label)
+
+	dashboard_calendar_event_close_button = Button.new()
+	dashboard_calendar_event_close_button.name = "DashboardCalendarEventCloseButton"
+	dashboard_calendar_event_close_button.text = "X"
+	dashboard_calendar_event_close_button.custom_minimum_size = Vector2(32, 24)
+	dashboard_calendar_event_close_button.pressed.connect(_hide_dashboard_calendar_event_popup)
+	title_row.add_child(dashboard_calendar_event_close_button)
+
+	var body_margin := MarginContainer.new()
+	body_margin.name = "DashboardCalendarEventBodyMargin"
+	body_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_margin.add_theme_constant_override("margin_left", 16)
+	body_margin.add_theme_constant_override("margin_top", 14)
+	body_margin.add_theme_constant_override("margin_right", 16)
+	body_margin.add_theme_constant_override("margin_bottom", 16)
+	vbox.add_child(body_margin)
+
+	dashboard_calendar_event_body_label = Label.new()
+	dashboard_calendar_event_body_label.name = "DashboardCalendarEventBodyLabel"
+	dashboard_calendar_event_body_label.custom_minimum_size = Vector2(408, 92)
+	dashboard_calendar_event_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dashboard_calendar_event_body_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	body_margin.add_child(dashboard_calendar_event_body_label)
+
+	_style_dashboard_calendar_event_popup()
+
+
+func _style_dashboard_calendar_event_popup() -> void:
+	if dashboard_calendar_event_popup == null:
+		return
+	var panel: PanelContainer = dashboard_calendar_event_popup.find_child("DashboardCalendarEventPanel", true, false) as PanelContainer
+	if panel != null:
+		_style_panel(panel, COLOR_PANEL_BLUE_ALT, 0)
+	var title_bar: PanelContainer = dashboard_calendar_event_popup.find_child("DashboardCalendarEventTitleBar", true, false) as PanelContainer
+	if title_bar != null:
+		_style_panel(title_bar, COLOR_PANEL_BLUE, 0)
+	if dashboard_calendar_event_title_label != null:
+		_set_label_tone(dashboard_calendar_event_title_label, COLOR_TEXT)
+		dashboard_calendar_event_title_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	if dashboard_calendar_event_body_label != null:
+		_set_label_tone(dashboard_calendar_event_body_label, COLOR_TEXT)
+		dashboard_calendar_event_body_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+		dashboard_calendar_event_body_label.add_theme_constant_override("line_spacing", 4)
+	if dashboard_calendar_event_close_button != null:
+		_style_button(
+			dashboard_calendar_event_close_button,
+			Color(0.368627, 0.160784, 0.176471, 1),
+			Color(0.709804, 0.34902, 0.372549, 1),
+			COLOR_TEXT,
+			0
+		)
+
+
 func _ensure_console_overlay() -> void:
 	if console_overlay != null:
 		return
@@ -10177,6 +10432,7 @@ func _apply_visual_theme() -> void:
 	_style_panel(dashboard_calendar_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_style_panel(dashboard_movers_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_style_panel(dashboard_placeholder_bottom_panel, COLOR_PANEL_BLUE_ALT, 0)
+	_style_dashboard_calendar_event_popup()
 	_style_panel(news_window_body, COLOR_WINDOW_BG, 0)
 	_style_panel(news_feed_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
 	_style_panel(news_detail_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)

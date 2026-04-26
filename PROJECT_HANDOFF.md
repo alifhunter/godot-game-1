@@ -36,11 +36,12 @@ Read this file first in the next session.
     - `1485334 Add snappy UI animation polish`
     - `4275c7a Smooth Daily Recap reveal`
     - `fc14108 Build Key Stats card dashboard`
-    - latest checkpoint message: `Hide helper text and tidy dashboard calendar`
+    - `54033bf Hide helper text and tidy dashboard calendar`
+    - latest checkpoint message: `Gate Network contacts and add calendar event popup`
   - after checkpoint commits, `git status --short` should be clean except ignored local `logs/` output
 
 ## Latest Session Snapshot
-- Most recent work focused on the core daily loop, Academy authoring pipeline, `Advance Day` visible-refresh performance, lightweight UI animation polish, Daily Activity cache cost, Dashboard cache cost, deferred save durability, shareholder-only corporate meeting attendance, the STOCKBOT `Key Stats` dashboard layout, and removal of player-facing system helper copy.
+- Most recent work focused on the core daily loop, Academy authoring pipeline, `Advance Day` visible-refresh performance, lightweight UI animation polish, Daily Activity cache cost, Dashboard cache cost, deferred save durability, shareholder-only corporate meeting attendance, the STOCKBOT `Key Stats` dashboard layout, removal of player-facing system helper copy, Network contact-list gating, and Dashboard calendar event inspection.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses, shows short processing phases on the desktop button, and now has a snappy press/phase pulse that resets to neutral after processing.
   - Daily Recap is now a custom `GameRoot.gd` overlay rather than a stock Godot dialog, so it can share the same dark-brown title-bar chrome as `News`, `Academy`, `Network`, and `Shop`.
@@ -63,6 +64,10 @@ Read this file first in the next session.
   - The `Financials` tab no longer shows the old derived-quarter/system-explanation helper line above the period controls.
   - The `Broker` tab no longer shows the two system-helper summary lines above the meter/table; the meter, scale row, `Net` toggle, and broker rows remain.
   - Dashboard calendar cells now render as a uniform 7-column grid with styled empty leading/trailing cells so the month block lines up with the weekday header.
+  - Dashboard calendar day cells are clickable and open a small read-only event popup:
+    - report days show filing tickers/periods
+    - meeting days show meeting ticker/label and public summary
+    - empty days show a simple `No scheduled events.` message
 - Performance status:
   - Desktop badge drawing uses cached counts in `RunState.desktop_app_badge_counts`.
   - `last_day_results` now saves a compact recap/event summary instead of duplicating the full per-company day result and corporate meeting payloads.
@@ -176,6 +181,7 @@ Read this file first in the next session.
   - company/Profile leads are scored by context and must match the selected company's sector, so generic `company` tags no longer allow sector-irrelevant contacts to appear
   - Profile/News discovery is no longer hard-capped at `4` leads
   - the same floater can be an initial company lead for no more than `2` distinct companies
+  - the Network app's left `Contacts` list now shows only met contacts; discovered-but-unmet leads stay discoverable through their News/Profile action surface until the player spends an interaction to meet them
 
 ## Current Player Flow
 - Current fresh-run flow is:
