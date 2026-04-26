@@ -2991,6 +2991,99 @@ func _run_scenario(
 			"message": "Smoke test expected the generated company history table to show the 2010-2019 history for %s." % tracked_company_id.to_upper()
 		}
 
+	var key_stats_card_names := [
+		"KeyStatsCurrentValuationCard",
+		"KeyStatsPerShareCard",
+		"KeyStatsMetricTableCard",
+		"KeyStatsProfitabilityCard",
+		"KeyStatsIncomeStatementCard",
+		"KeyStatsBalanceSheetCard",
+		"KeyStatsCashFlowStatementCard"
+	]
+	for key_stats_card_name in key_stats_card_names:
+		if game_root.find_child(str(key_stats_card_name), true, false) == null:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the Key Stats dashboard card %s to exist." % str(key_stats_card_name)
+			}
+
+	var key_stats_row_names := [
+		"KeyStatsCurrentValuationRows",
+		"KeyStatsPerShareRows",
+		"KeyStatsMetricTableRows",
+		"KeyStatsProfitabilityRows",
+		"KeyStatsIncomeStatementRows",
+		"KeyStatsBalanceSheetRows",
+		"KeyStatsCashFlowStatementRows"
+	]
+	for key_stats_rows_name in key_stats_row_names:
+		var key_stats_rows: VBoxContainer = game_root.find_child(str(key_stats_rows_name), true, false) as VBoxContainer
+		if key_stats_rows == null or key_stats_rows.get_child_count() <= 0:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the Key Stats dashboard row group %s to render populated rows." % str(key_stats_rows_name)
+			}
+
+	var key_stats_metric_rows: VBoxContainer = game_root.find_child("KeyStatsMetricTableRows", true, false) as VBoxContainer
+	var key_stats_net_income_button: Button = game_root.find_child("KeyStatsMetricNetIncomeButton", true, false) as Button
+	var key_stats_eps_button: Button = game_root.find_child("KeyStatsMetricEpsButton", true, false) as Button
+	var key_stats_revenue_button: Button = game_root.find_child("KeyStatsMetricRevenueButton", true, false) as Button
+	if key_stats_metric_rows == null or key_stats_net_income_button == null or key_stats_eps_button == null or key_stats_revenue_button == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Key Stats metric table and Net Income/EPS/Revenue pills to exist."
+		}
+
+	var key_stats_net_income_text: String = _collect_node_text(key_stats_metric_rows)
+	key_stats_eps_button.emit_signal("pressed")
+	await get_tree().process_frame
+	var key_stats_eps_text: String = _collect_node_text(key_stats_metric_rows)
+	key_stats_revenue_button.emit_signal("pressed")
+	await get_tree().process_frame
+	var key_stats_revenue_text: String = _collect_node_text(key_stats_metric_rows)
+	if (
+		key_stats_net_income_text.is_empty() or
+		key_stats_eps_text == key_stats_net_income_text or
+		key_stats_revenue_text == key_stats_eps_text or
+		key_stats_revenue_text == key_stats_net_income_text
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected switching Key Stats EPS and Revenue pills to rebuild the center metric table."
+		}
+
+	var income_statement_rows: VBoxContainer = game_root.find_child("IncomeStatementRows", true, false) as VBoxContainer
+	var balance_sheet_rows: VBoxContainer = game_root.find_child("BalanceSheetRows", true, false) as VBoxContainer
+	var cash_flow_rows: VBoxContainer = game_root.find_child("CashFlowRows", true, false) as VBoxContainer
+	var financials_previous_button: Button = game_root.find_child("FinancialsPreviousButton", true, false) as Button
+	var financials_next_button: Button = game_root.find_child("FinancialsNextButton", true, false) as Button
+	if (
+		income_statement_rows == null or
+		balance_sheet_rows == null or
+		cash_flow_rows == null or
+		income_statement_rows.get_child_count() <= 1 or
+		balance_sheet_rows.get_child_count() <= 1 or
+		cash_flow_rows.get_child_count() <= 1 or
+		financials_previous_button == null or
+		financials_next_button == null or
+		financials_previous_button.disabled or
+		not financials_next_button.disabled
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the separate Financials tab rows and period navigation to remain populated."
+		}
+
 	var range_1d_button: Button = game_root.find_child("Range1DButton", true, false) as Button
 	var range_5y_button: Button = game_root.find_child("Range5YButton", true, false) as Button
 	var range_ytd_button: Button = game_root.find_child("RangeYTDButton", true, false) as Button
@@ -4166,6 +4259,21 @@ func _count_unlocked_rows(rows: Array) -> int:
 		if bool(row.get("unlocked", false)):
 			count += 1
 	return count
+
+
+func _collect_node_text(root: Node) -> String:
+	var parts: Array = []
+	_collect_node_text_into(root, parts)
+	return "\n".join(parts)
+
+
+func _collect_node_text_into(node: Node, parts: Array) -> void:
+	if node is Label:
+		parts.append((node as Label).text)
+	elif node is Button:
+		parts.append((node as Button).text)
+	for child in node.get_children():
+		_collect_node_text_into(child, parts)
 
 
 func _build_academy_answers(use_correct_answers: bool) -> Dictionary:

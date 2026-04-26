@@ -34,11 +34,12 @@ Read this file first in the next session.
     - `c996b5c Slim Dashboard event cache`
     - `d6a2a35 Count Twooter activity without feed rebuild`
     - `1485334 Add snappy UI animation polish`
-    - latest checkpoint message: `Smooth Daily Recap reveal`
+    - `4275c7a Smooth Daily Recap reveal`
+    - latest checkpoint message: `Build Key Stats card dashboard`
   - after checkpoint commits, `git status --short` should be clean except ignored local `logs/` output
 
 ## Latest Session Snapshot
-- Most recent work focused on the core daily loop, Academy authoring pipeline, `Advance Day` visible-refresh performance, lightweight UI animation polish, Daily Activity cache cost, Dashboard cache cost, deferred save durability, and shareholder-only corporate meeting attendance.
+- Most recent work focused on the core daily loop, Academy authoring pipeline, `Advance Day` visible-refresh performance, lightweight UI animation polish, Daily Activity cache cost, Dashboard cache cost, deferred save durability, shareholder-only corporate meeting attendance, and the STOCKBOT `Key Stats` dashboard layout.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses, shows short processing phases on the desktop button, and now has a snappy press/phase pulse that resets to neutral after processing.
   - Daily Recap is now a custom `GameRoot.gd` overlay rather than a stock Godot dialog, so it can share the same dark-brown title-bar chrome as `News`, `Academy`, `Network`, and `Shop`.
@@ -52,6 +53,12 @@ Read this file first in the next session.
   - Runtime Academy has the newspaper-module layout with top category tabs, left `CORE MODULES` rail, one main scroll area, reserved banner frame, fixed action row, card-style lesson blocks, nested infoboxes, inline images, and blue `key_insights` blocks.
   - The dev-only local web editor in `tools/academy_editor/` is the source-authoring path for Academy content and exports directly to `data/academy/academy_catalog.json`.
   - Editor/runtime support image uploads into `assets/academy/lessons/`; missing image paths fall back to placeholders rather than breaking runtime UI.
+- STOCKBOT status:
+  - `Key Stats` is now a dark STOCKBOT-style card dashboard rather than a simple text block.
+  - Current dashboard sections are `Current Valuation`, `Per Share`, a center metric table, `Profitability`, `Income Statement`, `Balance Sheet`, and `Cash Flow Statement`.
+  - The center metric table has `Net Income`, `EPS`, and `Revenue` pills and shows the last three generated fiscal years with `Q1-Q4`, `Annualised`, and `TTM` rows.
+  - The overview derives TTM, per-share, valuation, cash-flow, EV, and profitability approximations from the existing generated annual/quarterly data; there are no save-schema or simulator changes.
+  - The separate `Financials` tab remains the detailed quarter-by-quarter reader with the existing `Older / Newer` controls.
 - Performance status:
   - Desktop badge drawing uses cached counts in `RunState.desktop_app_badge_counts`.
   - `last_day_results` now saves a compact recap/event summary instead of duplicating the full per-company day result and corporate meeting payloads.
@@ -105,8 +112,9 @@ Read this file first in the next session.
 - Last successful verification in this session:
   - `git diff --check`
   - Godot project-load check
-  - quick smoke with `--log-file logs\smoke-recap-animation.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
-  - latest normal-play perf scene from the previous UI animation pass printed `NORMAL_PLAY_PERF_OK`; it was not rerun for the fade-only recap/border tweak
+  - quick smoke with `--log-file logs\smoke-keystats-dashboard.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
+  - the quick smoke now asserts the Key Stats dashboard cards, populated row groups, `Net Income` / `EPS` / `Revenue` pill switching, and the separate `Financials` tab rows/navigation
+  - latest normal-play perf scene from the previous UI animation pass printed `NORMAL_PLAY_PERF_OK`; it was not rerun for the fade-only recap/border tweak or Key Stats dashboard pass
   - note: the quick smoke may print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` on Windows; treat it as non-blocking Godot/Windows certificate-store noise unless it appears before smoke output or affects network/API work
 
 ## Current Playable State
@@ -328,8 +336,13 @@ Read this file first in the next session.
       - `Line`: default everywhere
       - `Candle`: available on `1W`, `1M`, `1Y`, `5Y`, and `YTD`
       - `1D` intentionally forces `Line` mode because the current sim only generates one daily OHLC bar per trade day and there is no intraday tape yet
-  - `Key Stats`: top-level financial summary plus generated `2010-2019` history table
-    - current history table is shown descending, so `2019` is first and `2010` is last
+  - `Key Stats`: STOCKBOT-colored card dashboard for financial overview
+    - left column: `Current Valuation` and `Per Share`
+    - center column: `Net Income` / `EPS` / `Revenue` pill-driven table plus `Profitability`
+    - right column: `Income Statement`, `Balance Sheet`, and `Cash Flow Statement`
+    - center table covers the latest three generated fiscal years and shows `Q1-Q4`, `Annualised`, and `TTM`
+    - derived rows use existing generated financial data only; EV, cash, free cash flow, and forward/PEG rows are in-game approximations
+    - the legacy generated history nodes still exist hidden for compatibility/test coverage
   - `Financials`: derived simplified `Income Statement`, `Balance Sheet`, and `Cash Flow`
     - this is intentionally a learning-oriented abstraction, not a full accounting engine
     - current data covers `40` derived quarters from `Q1 2010` through `Q4 2019`
@@ -1823,6 +1836,7 @@ Read this file first in the next session.
   - not a full accounting engine
   - not based on real filing logic like depreciation schedules, working-capital ledgers, minority-interest ownership trees, or tax assets/liabilities
   - designed to be coherent and learnable rather than standards-accurate
+- `Key Stats` uses derived overview approximations for labels that the game does not explicitly store yet, especially cash, EV, forward PE, PEG, capex, and free cash flow
 - The `Financials` tab currently shows one quarter at a time:
   - there is no dense multi-quarter grid/table yet
   - there is no annual/quarter toggle yet

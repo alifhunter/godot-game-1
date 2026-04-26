@@ -153,6 +153,13 @@ const DASHBOARD_WEEKDAY_NAMES := ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun
 const DASHBOARD_MONTH_NAMES := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 const CONSOLE_TOGGLE_KEY_CODE := 96
 const PERF_LOG_PREFIX := "[perf][ui]"
+const KEY_STATS_METRIC_NET_INCOME := "net_income"
+const KEY_STATS_METRIC_EPS := "eps"
+const KEY_STATS_METRIC_REVENUE := "revenue"
+const KEY_STATS_YEAR_COLUMN_LIMIT := 3
+const KEY_STATS_ROW_VALUE_WIDTH := 116.0
+const KEY_STATS_METRIC_LABEL_WIDTH := 78.0
+const KEY_STATS_METRIC_VALUE_WIDTH := 74.0
 const RUPSLB_MEETING_OVERLAY_SCRIPT = preload("res://scripts/ui/widgets/RupslbMeetingOverlay.gd")
 
 var selected_company_id: String = ""
@@ -176,6 +183,7 @@ var active_app_id: String = APP_ID_DESKTOP
 var status_message: String = "Ready."
 var selected_financial_statement_index: int = -1
 var selected_financial_statement_company_id: String = ""
+var selected_key_stats_metric: String = KEY_STATS_METRIC_NET_INCOME
 var current_trade_snapshot: Dictionary = {}
 var cached_company_rows: Array = []
 var cached_company_row_lookup: Dictionary = {}
@@ -543,6 +551,12 @@ var corporate_meeting_attendance_label: Label = null
 var corporate_meeting_attend_button: Button = null
 var corporate_meeting_close_button: Button = null
 var rupslb_meeting_overlay: Control = null
+var key_stats_dashboard_grid: GridContainer = null
+var key_stats_dashboard_columns: Dictionary = {}
+var key_stats_card_rows: Dictionary = {}
+var key_stats_metric_buttons: Dictionary = {}
+var key_stats_metric_table_rows: VBoxContainer = null
+var key_stats_metric_footer_rows: VBoxContainer = null
 
 
 func _ready() -> void:
@@ -558,6 +572,7 @@ func _ready() -> void:
 	_ensure_desktop_window_layer()
 	_initialize_desktop_app_windows()
 	_initialize_desktop_badge_seen_defaults()
+	_ensure_key_stats_dashboard_ui()
 	_apply_visual_theme()
 	_apply_compact_layout()
 	_apply_trade_layout_ratios()
@@ -770,7 +785,886 @@ func _update_responsive_layout() -> void:
 		max(min(viewport_size.y - 48.0, 680.0), 460.0)
 	)
 	_update_desktop_figma_layout()
+	_update_key_stats_dashboard_layout()
 	_apply_window_layout()
+
+
+func _ensure_key_stats_dashboard_ui() -> void:
+	if key_stats_dashboard_grid != null:
+		return
+	if key_stats_panel == null:
+		return
+	var key_stats_vbox: VBoxContainer = key_stats_panel.get_node_or_null("KeyStatsMargin/KeyStatsVBox") as VBoxContainer
+	if key_stats_vbox == null:
+		return
+	var old_title: Control = key_stats_vbox.get_node_or_null("KeyStatsTitle") as Control
+	if old_title != null:
+		old_title.visible = false
+	key_stats_financial_label.visible = false
+	financial_history_summary_label.visible = false
+	var financial_history_table: Control = key_stats_vbox.get_node_or_null("FinancialHistoryTable") as Control
+	if financial_history_table != null:
+		financial_history_table.visible = false
+
+	key_stats_dashboard_grid = GridContainer.new()
+	key_stats_dashboard_grid.name = "KeyStatsDashboardGrid"
+	key_stats_dashboard_grid.columns = 3
+	key_stats_dashboard_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	key_stats_dashboard_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	key_stats_dashboard_grid.add_theme_constant_override("h_separation", 12)
+	key_stats_dashboard_grid.add_theme_constant_override("v_separation", 12)
+	key_stats_vbox.add_child(key_stats_dashboard_grid)
+
+	var left_column: VBoxContainer = _build_key_stats_dashboard_column("KeyStatsLeftColumn")
+	var center_column: VBoxContainer = _build_key_stats_dashboard_column("KeyStatsCenterColumn")
+	var right_column: VBoxContainer = _build_key_stats_dashboard_column("KeyStatsRightColumn")
+	key_stats_dashboard_columns = {
+		"left": left_column,
+		"center": center_column,
+		"right": right_column
+	}
+
+	_build_key_stats_card("current_valuation", "Current Valuation", "KeyStatsCurrentValuationCard", "KeyStatsCurrentValuationRows", left_column)
+	_build_key_stats_card("per_share", "Per Share", "KeyStatsPerShareCard", "KeyStatsPerShareRows", left_column)
+	_build_key_stats_metric_card(center_column)
+	_build_key_stats_card("profitability", "Profitability", "KeyStatsProfitabilityCard", "KeyStatsProfitabilityRows", center_column)
+	_build_key_stats_card("income_statement", "Income Statement", "KeyStatsIncomeStatementCard", "KeyStatsIncomeStatementRows", right_column)
+	_build_key_stats_card("balance_sheet", "Balance Sheet", "KeyStatsBalanceSheetCard", "KeyStatsBalanceSheetRows", right_column)
+	_build_key_stats_card("cash_flow", "Cash Flow Statement", "KeyStatsCashFlowStatementCard", "KeyStatsCashFlowStatementRows", right_column)
+	_style_key_stats_dashboard_ui()
+	_update_key_stats_dashboard_layout()
+	_refresh_key_stats_dashboard({})
+
+
+func _build_key_stats_dashboard_column(column_name: String) -> VBoxContainer:
+	var column := VBoxContainer.new()
+	column.name = column_name
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.size_flags_vertical = Control.SIZE_FILL
+	column.add_theme_constant_override("separation", 12)
+	key_stats_dashboard_grid.add_child(column)
+	return column
+
+
+func _build_key_stats_card(
+	card_id: String,
+	title: String,
+	card_name: String,
+	rows_name: String,
+	parent_node: Node
+) -> VBoxContainer:
+	var card: PanelContainer = PanelContainer.new()
+	card.name = card_name
+	card.custom_minimum_size = Vector2(250, 0)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.size_flags_vertical = Control.SIZE_FILL
+	parent_node.add_child(card)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	card.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 7)
+	margin.add_child(vbox)
+
+	var title_label := Label.new()
+	title_label.name = "%sTitle" % card_name
+	title_label.text = title
+	title_label.add_theme_color_override("font_color", COLOR_TEXT)
+	title_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 2)
+	vbox.add_child(title_label)
+
+	var separator := HSeparator.new()
+	vbox.add_child(separator)
+
+	var rows := VBoxContainer.new()
+	rows.name = rows_name
+	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rows.add_theme_constant_override("separation", 5)
+	vbox.add_child(rows)
+	key_stats_card_rows[card_id] = rows
+	return rows
+
+
+func _build_key_stats_metric_card(parent_node: Node) -> void:
+	var card: PanelContainer = PanelContainer.new()
+	card.name = "KeyStatsMetricTableCard"
+	card.custom_minimum_size = Vector2(280, 0)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent_node.add_child(card)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	card.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 7)
+	margin.add_child(vbox)
+
+	var button_row := HBoxContainer.new()
+	button_row.name = "KeyStatsMetricPillRow"
+	button_row.add_theme_constant_override("separation", 6)
+	vbox.add_child(button_row)
+
+	var metrics := [
+		{"id": KEY_STATS_METRIC_NET_INCOME, "label": "Net Income", "name": "KeyStatsMetricNetIncomeButton"},
+		{"id": KEY_STATS_METRIC_EPS, "label": "EPS", "name": "KeyStatsMetricEpsButton"},
+		{"id": KEY_STATS_METRIC_REVENUE, "label": "Revenue", "name": "KeyStatsMetricRevenueButton"}
+	]
+	for metric_value in metrics:
+		var metric: Dictionary = metric_value
+		var button := Button.new()
+		button.name = str(metric.get("name", ""))
+		button.text = str(metric.get("label", ""))
+		button.custom_minimum_size = Vector2(72, 30)
+		button.pressed.connect(_on_key_stats_metric_button_pressed.bind(str(metric.get("id", ""))))
+		button_row.add_child(button)
+		key_stats_metric_buttons[str(metric.get("id", ""))] = button
+
+	var separator := HSeparator.new()
+	vbox.add_child(separator)
+
+	key_stats_metric_table_rows = VBoxContainer.new()
+	key_stats_metric_table_rows.name = "KeyStatsMetricTableRows"
+	key_stats_metric_table_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	key_stats_metric_table_rows.add_theme_constant_override("separation", 5)
+	vbox.add_child(key_stats_metric_table_rows)
+
+	var footer_separator := HSeparator.new()
+	vbox.add_child(footer_separator)
+
+	key_stats_metric_footer_rows = VBoxContainer.new()
+	key_stats_metric_footer_rows.name = "KeyStatsMetricFooterRows"
+	key_stats_metric_footer_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	key_stats_metric_footer_rows.add_theme_constant_override("separation", 5)
+	vbox.add_child(key_stats_metric_footer_rows)
+
+
+func _style_key_stats_dashboard_ui() -> void:
+	if key_stats_dashboard_grid == null:
+		return
+	_style_key_stats_card_tree(key_stats_dashboard_grid)
+	_refresh_key_stats_metric_button_styles()
+
+
+func _style_key_stats_card_tree(node: Node) -> void:
+	for child in node.get_children():
+		var card: PanelContainer = child as PanelContainer
+		if card != null:
+			_style_panel(card, COLOR_PANEL_BLUE_ALT, 0)
+		_style_key_stats_card_tree(child)
+
+
+func _update_key_stats_dashboard_layout() -> void:
+	if key_stats_dashboard_grid == null:
+		return
+	var content_width: float = work_area_panel.get_rect().size.x
+	if content_width <= 0.0:
+		content_width = get_viewport_rect().size.x - 520.0
+	if content_width >= 940.0:
+		key_stats_dashboard_grid.columns = 3
+	elif content_width >= 620.0:
+		key_stats_dashboard_grid.columns = 2
+	else:
+		key_stats_dashboard_grid.columns = 1
+
+
+func _on_key_stats_metric_button_pressed(metric_id: String) -> void:
+	if metric_id.is_empty() or selected_key_stats_metric == metric_id:
+		return
+	selected_key_stats_metric = metric_id
+	_refresh_key_stats_metric_button_styles()
+	_refresh_key_stats_dashboard(current_trade_snapshot)
+
+
+func _refresh_key_stats_metric_button_styles() -> void:
+	for metric_id_value in key_stats_metric_buttons.keys():
+		var metric_id: String = str(metric_id_value)
+		var button: Button = key_stats_metric_buttons.get(metric_id, null) as Button
+		if button == null:
+			continue
+		if metric_id == selected_key_stats_metric:
+			_style_button(button, COLOR_NAV_ACTIVE_FILL, COLOR_ACCENT, COLOR_TEXT, 0)
+		else:
+			_style_button(button, Color(0.0823529, 0.117647, 0.156863, 0.98), COLOR_BORDER, COLOR_MUTED, 0)
+
+
+func _refresh_key_stats_dashboard(snapshot: Dictionary) -> void:
+	if key_stats_dashboard_grid == null:
+		return
+
+	if snapshot.is_empty():
+		var empty_rows: Array = [{"label": "Status", "value": "Pick a stock"}]
+		_refresh_key_stats_rows("current_valuation", empty_rows)
+		_refresh_key_stats_rows("per_share", empty_rows)
+		_refresh_key_stats_rows("profitability", empty_rows)
+		_refresh_key_stats_rows("income_statement", empty_rows)
+		_refresh_key_stats_rows("balance_sheet", empty_rows)
+		_refresh_key_stats_rows("cash_flow", empty_rows)
+		_refresh_key_stats_metric_table({}, {})
+		return
+
+	var context: Dictionary = _build_key_stats_context(snapshot)
+	_refresh_key_stats_rows("current_valuation", _build_key_stats_valuation_rows(context))
+	_refresh_key_stats_rows("per_share", _build_key_stats_per_share_rows(context))
+	_refresh_key_stats_rows("profitability", _build_key_stats_profitability_rows(context))
+	_refresh_key_stats_rows("income_statement", _build_key_stats_income_statement_rows(context))
+	_refresh_key_stats_rows("balance_sheet", _build_key_stats_balance_sheet_rows(context))
+	_refresh_key_stats_rows("cash_flow", _build_key_stats_cash_flow_rows(context))
+	_refresh_key_stats_metric_table(snapshot, context)
+
+
+func _refresh_key_stats_rows(card_id: String, rows: Array) -> void:
+	var container: VBoxContainer = key_stats_card_rows.get(card_id, null) as VBoxContainer
+	if container == null:
+		return
+	_refresh_key_stats_rows_in_container(container, rows)
+
+
+func _refresh_key_stats_rows_in_container(container: VBoxContainer, rows: Array) -> void:
+	_clear_key_stats_container(container)
+	for row_value in rows:
+		var row: Dictionary = row_value
+		container.add_child(_build_key_stats_value_row(
+			str(row.get("label", "")),
+			str(row.get("value", "-")),
+			row.get("color", COLOR_TEXT)
+		))
+
+
+func _clear_key_stats_container(container: VBoxContainer) -> void:
+	for child in container.get_children():
+		container.remove_child(child)
+		child.queue_free()
+
+
+func _build_key_stats_value_row(label_text: String, value_text: String, value_color: Color = COLOR_TEXT) -> Control:
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 8)
+
+	var label := Label.new()
+	label.text = label_text
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.add_theme_color_override("font_color", COLOR_MUTED)
+	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE, _get_app_font())
+	row.add_child(label)
+
+	var value := Label.new()
+	value.text = value_text
+	value.custom_minimum_size = Vector2(KEY_STATS_ROW_VALUE_WIDTH, 0)
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	value.clip_text = true
+	value.add_theme_color_override("font_color", value_color)
+	_apply_font_override_to_control(value, DEFAULT_APP_FONT_SIZE, _get_app_font())
+	row.add_child(value)
+	return row
+
+
+func _build_key_stats_context(snapshot: Dictionary) -> Dictionary:
+	var financials: Dictionary = snapshot.get("financials", {})
+	var financial_history: Array = snapshot.get("financial_history", [])
+	var financial_statement_snapshot: Dictionary = snapshot.get("financial_statement_snapshot", {})
+	var selected_period: Dictionary = {}
+	if not financial_statement_snapshot.is_empty():
+		selected_period = _selected_statement_period(financial_statement_snapshot)
+	var latest_quarters: Array = _key_stats_latest_quarters(financial_statement_snapshot, 4)
+	if selected_period.is_empty() and not latest_quarters.is_empty():
+		selected_period = latest_quarters[0]
+
+	var latest_history: Dictionary = _key_stats_latest_history_entry(financial_history)
+	var current_price: float = max(float(snapshot.get("current_price", snapshot.get("previous_close", 0.0))), 0.0)
+	var shares_outstanding: float = max(float(financials.get("shares_outstanding", snapshot.get("shares_outstanding", 0.0))), 0.0)
+	var statement_shares: float = _key_stats_statement_value_from_period(selected_period, "balance_sheet", "shares_outstanding")
+	if shares_outstanding <= 0.0 and statement_shares > 0.0:
+		shares_outstanding = statement_shares
+
+	var market_cap: float = max(float(financials.get("market_cap", 0.0)), 0.0)
+	if market_cap <= 0.0 and shares_outstanding > 0.0 and current_price > 0.0:
+		market_cap = current_price * shares_outstanding
+
+	var revenue_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "income_statement", "revenue", float(financials.get("revenue", latest_history.get("revenue", 0.0))))
+	var net_income_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "income_statement", "net_income", float(financials.get("net_income", latest_history.get("net_income", 0.0))))
+	var gross_profit_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "income_statement", "gross_profit", max(revenue_ttm * 0.25, net_income_ttm))
+	var operating_income_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "income_statement", "operating_income", net_income_ttm * 1.18)
+	var income_before_tax_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "income_statement", "income_before_tax", net_income_ttm * 1.22)
+	var ebitda_ttm: float = operating_income_ttm + max(revenue_ttm * 0.035, 0.0)
+
+	var current_assets: float = _key_stats_statement_value_from_period(selected_period, "balance_sheet", "current_assets")
+	var total_assets: float = _key_stats_statement_value_from_period(selected_period, "balance_sheet", "total_assets")
+	var current_liabilities: float = _key_stats_statement_value_from_period(selected_period, "balance_sheet", "current_liabilities")
+	var total_liabilities: float = _key_stats_statement_value_from_period(selected_period, "balance_sheet", "total_liabilities")
+	var equity: float = _key_stats_statement_value_from_period(selected_period, "balance_sheet", "equity")
+	var estimated_cash: float = current_assets * 0.18 if current_assets > 0.0 else revenue_ttm * 0.025
+	var working_capital: float = current_assets - current_liabilities
+
+	var cash_from_operating_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "cash_flow", "cash_from_operating", max(net_income_ttm + (revenue_ttm * 0.025), 0.0))
+	var cash_from_investing_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "cash_flow", "cash_from_investing", -max(revenue_ttm * 0.08, 0.0))
+	var cash_from_financing_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "cash_flow", "cash_from_financing", 0.0)
+	var capital_expenditure_ttm: float = max(-cash_from_investing_ttm, 0.0)
+	var free_cash_flow_ttm: float = cash_from_operating_ttm - capital_expenditure_ttm
+	var enterprise_value: float = max(market_cap + total_liabilities - estimated_cash, 0.0)
+
+	var selected_revenue_q: float = _key_stats_statement_value_from_period(selected_period, "income_statement", "revenue")
+	var selected_gross_profit_q: float = _key_stats_statement_value_from_period(selected_period, "income_statement", "gross_profit")
+	var selected_operating_income_q: float = _key_stats_statement_value_from_period(selected_period, "income_statement", "operating_income")
+	var selected_net_income_q: float = _key_stats_statement_value_from_period(selected_period, "income_statement", "net_income")
+	if selected_revenue_q <= 0.0:
+		selected_revenue_q = revenue_ttm / 4.0
+	if selected_gross_profit_q <= 0.0:
+		selected_gross_profit_q = gross_profit_ttm / 4.0
+	if is_zero_approx(selected_operating_income_q):
+		selected_operating_income_q = operating_income_ttm / 4.0
+	if is_zero_approx(selected_net_income_q):
+		selected_net_income_q = net_income_ttm / 4.0
+
+	var eps_ttm: float = _key_stats_safe_divide(net_income_ttm, shares_outstanding)
+	var eps_annualised: float = _key_stats_safe_divide(selected_net_income_q * 4.0, shares_outstanding)
+	var revenue_per_share: float = _key_stats_safe_divide(revenue_ttm, shares_outstanding)
+	var cash_per_share: float = _key_stats_safe_divide(estimated_cash, shares_outstanding)
+	var book_value_per_share: float = _key_stats_safe_divide(equity, shares_outstanding)
+	var operating_cashflow_per_share: float = _key_stats_safe_divide(cash_from_operating_ttm, shares_outstanding)
+	var free_cashflow_per_share: float = _key_stats_safe_divide(free_cash_flow_ttm, shares_outstanding)
+
+	return {
+		"financials": financials,
+		"financial_history": financial_history,
+		"financial_statement_snapshot": financial_statement_snapshot,
+		"selected_period": selected_period,
+		"current_price": current_price,
+		"shares_outstanding": shares_outstanding,
+		"market_cap": market_cap,
+		"revenue_ttm": revenue_ttm,
+		"net_income_ttm": net_income_ttm,
+		"gross_profit_ttm": gross_profit_ttm,
+		"operating_income_ttm": operating_income_ttm,
+		"income_before_tax_ttm": income_before_tax_ttm,
+		"ebitda_ttm": ebitda_ttm,
+		"current_assets": current_assets,
+		"total_assets": total_assets,
+		"current_liabilities": current_liabilities,
+		"total_liabilities": total_liabilities,
+		"equity": equity,
+		"estimated_cash": estimated_cash,
+		"working_capital": working_capital,
+		"cash_from_operating_ttm": cash_from_operating_ttm,
+		"cash_from_investing_ttm": cash_from_investing_ttm,
+		"cash_from_financing_ttm": cash_from_financing_ttm,
+		"capital_expenditure_ttm": capital_expenditure_ttm,
+		"free_cash_flow_ttm": free_cash_flow_ttm,
+		"enterprise_value": enterprise_value,
+		"selected_revenue_q": selected_revenue_q,
+		"selected_gross_profit_q": selected_gross_profit_q,
+		"selected_operating_income_q": selected_operating_income_q,
+		"selected_net_income_q": selected_net_income_q,
+		"eps_ttm": eps_ttm,
+		"eps_annualised": eps_annualised,
+		"revenue_per_share": revenue_per_share,
+		"cash_per_share": cash_per_share,
+		"book_value_per_share": book_value_per_share,
+		"operating_cashflow_per_share": operating_cashflow_per_share,
+		"free_cashflow_per_share": free_cashflow_per_share
+	}
+
+
+func _build_key_stats_valuation_rows(context: Dictionary) -> Array:
+	var financials: Dictionary = context.get("financials", {})
+	var current_price: float = float(context.get("current_price", 0.0))
+	var market_cap: float = float(context.get("market_cap", 0.0))
+	var net_income_ttm: float = float(context.get("net_income_ttm", 0.0))
+	var revenue_ttm: float = float(context.get("revenue_ttm", 0.0))
+	var equity: float = float(context.get("equity", 0.0))
+	var cash_from_operating_ttm: float = float(context.get("cash_from_operating_ttm", 0.0))
+	var free_cash_flow_ttm: float = float(context.get("free_cash_flow_ttm", 0.0))
+	var operating_income_ttm: float = float(context.get("operating_income_ttm", 0.0))
+	var ebitda_ttm: float = float(context.get("ebitda_ttm", 0.0))
+	var enterprise_value: float = float(context.get("enterprise_value", 0.0))
+	var eps_ttm: float = float(context.get("eps_ttm", 0.0))
+	var eps_annualised: float = float(context.get("eps_annualised", 0.0))
+	var earnings_growth: float = float(financials.get("earnings_growth_yoy", 0.0))
+	var earnings_cagr: float = float(financials.get("earnings_cagr_10y", earnings_growth))
+	var forward_net_income: float = net_income_ttm * max(1.0 + (earnings_growth / 100.0), 0.05)
+	var pe_ttm: float = _key_stats_safe_divide(current_price, eps_ttm)
+	var forward_pe: float = _key_stats_safe_divide(market_cap, forward_net_income)
+	return [
+		{"label": "Current PE Ratio (Annualised)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(current_price, eps_annualised), eps_annualised > 0.0)},
+		{"label": "Current PE Ratio (TTM)", "value": _format_key_stats_ratio_value(pe_ttm, eps_ttm > 0.0)},
+		{"label": "Forward PE Ratio", "value": _format_key_stats_ratio_value(forward_pe, forward_net_income > 0.0)},
+		{"label": "Earnings Yield (TTM)", "value": _format_key_stats_percent_ratio(_key_stats_safe_divide(net_income_ttm, market_cap), market_cap > 0.0)},
+		{"label": "Current Price to Sales (TTM)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(market_cap, revenue_ttm), revenue_ttm > 0.0)},
+		{"label": "Current Price to Book Value", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(market_cap, equity), equity > 0.0)},
+		{"label": "Current Price To Cashflow (TTM)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(market_cap, cash_from_operating_ttm), cash_from_operating_ttm > 0.0)},
+		{"label": "Current Price To Free Cashflow (TTM)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(market_cap, free_cash_flow_ttm), free_cash_flow_ttm > 0.0)},
+		{"label": "EV to EBIT (TTM)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(enterprise_value, operating_income_ttm), operating_income_ttm > 0.0)},
+		{"label": "EV to EBITDA (TTM)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(enterprise_value, ebitda_ttm), ebitda_ttm > 0.0)},
+		{"label": "PEG Ratio", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(pe_ttm, earnings_growth), earnings_growth > 0.0 and pe_ttm > 0.0)},
+		{"label": "PEG Ratio (3yr)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(pe_ttm, earnings_cagr), earnings_cagr > 0.0 and pe_ttm > 0.0)},
+		{"label": "PEG (Forward)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(forward_pe, max(earnings_growth + 2.0, 0.0)), earnings_growth > -2.0 and forward_pe > 0.0)}
+	]
+
+
+func _build_key_stats_per_share_rows(context: Dictionary) -> Array:
+	return [
+		{"label": "Current EPS (TTM)", "value": _format_key_stats_decimal_value(float(context.get("eps_ttm", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)},
+		{"label": "Current EPS (Annualised)", "value": _format_key_stats_decimal_value(float(context.get("eps_annualised", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)},
+		{"label": "Revenue Per Share (TTM)", "value": _format_key_stats_decimal_value(float(context.get("revenue_per_share", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)},
+		{"label": "Cash Per Share (Quarter)", "value": _format_key_stats_decimal_value(float(context.get("cash_per_share", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)},
+		{"label": "Book Value Per Share", "value": _format_key_stats_decimal_value(float(context.get("book_value_per_share", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)},
+		{"label": "Operating Cashflow Per Share (TTM)", "value": _format_key_stats_decimal_value(float(context.get("operating_cashflow_per_share", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)},
+		{"label": "Free Cashflow Per Share (TTM)", "value": _format_key_stats_decimal_value(float(context.get("free_cashflow_per_share", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)}
+	]
+
+
+func _build_key_stats_profitability_rows(context: Dictionary) -> Array:
+	var financials: Dictionary = context.get("financials", {})
+	var selected_revenue_q: float = float(context.get("selected_revenue_q", 0.0))
+	var selected_gross_profit_q: float = float(context.get("selected_gross_profit_q", 0.0))
+	var selected_operating_income_q: float = float(context.get("selected_operating_income_q", 0.0))
+	var selected_net_income_q: float = float(context.get("selected_net_income_q", 0.0))
+	var net_income_ttm: float = float(context.get("net_income_ttm", 0.0))
+	var revenue_ttm: float = float(context.get("revenue_ttm", 0.0))
+	var total_assets: float = float(context.get("total_assets", 0.0))
+	var equity: float = float(context.get("equity", 0.0))
+	var total_liabilities: float = float(context.get("total_liabilities", 0.0))
+	var computed_roe: float = _key_stats_safe_divide(net_income_ttm, equity) * 100.0
+	var roe_value: float = float(financials.get("roe", computed_roe))
+	var debt_to_equity: float = float(financials.get("debt_to_equity", _key_stats_safe_divide(total_liabilities, equity)))
+	return [
+		{"label": "Gross Profit Margin (Quarter)", "value": _format_key_stats_percent_ratio(_key_stats_safe_divide(selected_gross_profit_q, selected_revenue_q), selected_revenue_q > 0.0)},
+		{"label": "Operating Profit Margin (Quarter)", "value": _format_key_stats_percent_ratio(_key_stats_safe_divide(selected_operating_income_q, selected_revenue_q), selected_revenue_q > 0.0)},
+		{"label": "Net Profit Margin (Quarter)", "value": _format_key_stats_percent_ratio(_key_stats_safe_divide(selected_net_income_q, selected_revenue_q), selected_revenue_q > 0.0)},
+		{"label": "ROE (Annualised)", "value": _format_key_stats_percent_value(roe_value, equity > 0.0 or financials.has("roe"))},
+		{"label": "Asset Turnover (TTM)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(revenue_ttm, total_assets), total_assets > 0.0)},
+		{"label": "Debt To Equity", "value": _format_key_stats_ratio_value(debt_to_equity, equity > 0.0 or financials.has("debt_to_equity"))}
+	]
+
+
+func _build_key_stats_income_statement_rows(context: Dictionary) -> Array:
+	return [
+		{"label": "Revenue (TTM)", "value": _format_compact_currency(float(context.get("revenue_ttm", 0.0)))},
+		{"label": "Gross Profit (TTM)", "value": _format_compact_currency(float(context.get("gross_profit_ttm", 0.0)))},
+		{"label": "EBITDA (TTM)", "value": _format_compact_currency(float(context.get("ebitda_ttm", 0.0)))},
+		{"label": "Net Income (TTM)", "value": _format_compact_currency(float(context.get("net_income_ttm", 0.0))), "color": _key_stats_amount_color(float(context.get("net_income_ttm", 0.0)))}
+	]
+
+
+func _build_key_stats_balance_sheet_rows(context: Dictionary) -> Array:
+	var equity: float = float(context.get("equity", 0.0))
+	return [
+		{"label": "Cash (Quarter)", "value": _format_compact_currency(float(context.get("estimated_cash", 0.0)))},
+		{"label": "Total Assets (Quarter)", "value": _format_compact_currency(float(context.get("total_assets", 0.0)))},
+		{"label": "Total Liabilities (Quarter)", "value": _format_compact_currency(float(context.get("total_liabilities", 0.0)))},
+		{"label": "Working Capital (Quarter)", "value": _format_compact_currency(float(context.get("working_capital", 0.0))), "color": _key_stats_amount_color(float(context.get("working_capital", 0.0)))},
+		{"label": "Common Equity", "value": _format_compact_currency(equity * 0.998)},
+		{"label": "Total Equity", "value": _format_compact_currency(equity)}
+	]
+
+
+func _build_key_stats_cash_flow_rows(context: Dictionary) -> Array:
+	return [
+		{"label": "Cash From Operations (TTM)", "value": _format_compact_currency(float(context.get("cash_from_operating_ttm", 0.0))), "color": _key_stats_amount_color(float(context.get("cash_from_operating_ttm", 0.0)))},
+		{"label": "Cash From Investing (TTM)", "value": _format_compact_currency(float(context.get("cash_from_investing_ttm", 0.0))), "color": _key_stats_amount_color(float(context.get("cash_from_investing_ttm", 0.0)))},
+		{"label": "Cash From Financing (TTM)", "value": _format_compact_currency(float(context.get("cash_from_financing_ttm", 0.0))), "color": _key_stats_amount_color(float(context.get("cash_from_financing_ttm", 0.0)))},
+		{"label": "Capital Expenditure (TTM)", "value": _format_compact_currency(float(context.get("capital_expenditure_ttm", 0.0)))},
+		{"label": "Free Cash Flow (TTM)", "value": _format_compact_currency(float(context.get("free_cash_flow_ttm", 0.0))), "color": _key_stats_amount_color(float(context.get("free_cash_flow_ttm", 0.0)))}
+	]
+
+
+func _refresh_key_stats_metric_table(snapshot: Dictionary, context: Dictionary) -> void:
+	if key_stats_metric_table_rows == null or key_stats_metric_footer_rows == null:
+		return
+	_clear_key_stats_container(key_stats_metric_table_rows)
+	_clear_key_stats_container(key_stats_metric_footer_rows)
+
+	if snapshot.is_empty() or context.is_empty():
+		key_stats_metric_table_rows.add_child(_build_key_stats_value_row("Period", "-"))
+		key_stats_metric_footer_rows.add_child(_build_key_stats_value_row("Market Cap", "-"))
+		return
+
+	var financial_history: Array = context.get("financial_history", [])
+	var financial_statement_snapshot: Dictionary = context.get("financial_statement_snapshot", {})
+	var years: Array = _key_stats_recent_years(financial_history, financial_statement_snapshot)
+	key_stats_metric_table_rows.add_child(_build_key_stats_metric_row("Period", _key_stats_year_labels(years), COLOR_WARNING, COLOR_WARNING))
+	for quarter in range(1, 5):
+		key_stats_metric_table_rows.add_child(_build_key_stats_metric_row(
+			"Q%d" % quarter,
+			_key_stats_metric_values_for_quarter(financial_statement_snapshot, selected_key_stats_metric, years, quarter)
+		))
+	key_stats_metric_table_rows.add_child(_build_key_stats_metric_row(
+		"Annualised",
+		_key_stats_metric_values_for_annual(financial_statement_snapshot, financial_history, selected_key_stats_metric, years)
+	))
+	key_stats_metric_table_rows.add_child(_build_key_stats_metric_row(
+		"TTM",
+		_key_stats_metric_values_for_ttm(financial_statement_snapshot, financial_history, selected_key_stats_metric, years)
+	))
+
+	key_stats_metric_footer_rows.add_child(_build_key_stats_value_row("Market Cap", _format_compact_currency(float(context.get("market_cap", 0.0)))))
+	key_stats_metric_footer_rows.add_child(_build_key_stats_value_row("Enterprise Value", _format_compact_currency(float(context.get("enterprise_value", 0.0)))))
+	key_stats_metric_footer_rows.add_child(_build_key_stats_value_row("Current Share Outstanding", _format_key_stats_compact_number(float(context.get("shares_outstanding", 0.0)))))
+	var financials: Dictionary = context.get("financials", {})
+	key_stats_metric_footer_rows.add_child(_build_key_stats_value_row("Free Float", _format_key_stats_percent_value(float(financials.get("free_float_pct", 0.0)), financials.has("free_float_pct"))))
+
+
+func _build_key_stats_metric_row(
+	label_text: String,
+	values: Array,
+	label_color: Color = COLOR_MUTED,
+	value_color: Color = COLOR_TEXT
+) -> Control:
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 8)
+
+	var label := Label.new()
+	label.text = label_text
+	label.custom_minimum_size = Vector2(KEY_STATS_METRIC_LABEL_WIDTH, 0)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_color_override("font_color", label_color)
+	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE, _get_app_font())
+	row.add_child(label)
+
+	for value_text in values:
+		var value := Label.new()
+		value.text = str(value_text)
+		value.custom_minimum_size = Vector2(KEY_STATS_METRIC_VALUE_WIDTH, 0)
+		value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		value.clip_text = true
+		value.add_theme_color_override("font_color", value_color)
+		_apply_font_override_to_control(value, DEFAULT_APP_FONT_SIZE, _get_app_font())
+		row.add_child(value)
+	return row
+
+
+func _key_stats_year_labels(years: Array) -> Array:
+	var labels: Array = []
+	for year_value in years:
+		labels.append(str(int(year_value)))
+	while labels.size() < KEY_STATS_YEAR_COLUMN_LIMIT:
+		labels.append("-")
+	return labels
+
+
+func _key_stats_metric_values_for_quarter(
+	financial_statement_snapshot: Dictionary,
+	metric_id: String,
+	years: Array,
+	quarter: int
+) -> Array:
+	var values: Array = []
+	for year_value in years:
+		var statement: Dictionary = _key_stats_statement_for_year_quarter(financial_statement_snapshot, int(year_value), quarter)
+		values.append(_format_key_stats_metric_result(metric_id, _key_stats_metric_result_from_statement(statement, metric_id)))
+	while values.size() < KEY_STATS_YEAR_COLUMN_LIMIT:
+		values.append("-")
+	return values
+
+
+func _key_stats_metric_values_for_annual(
+	financial_statement_snapshot: Dictionary,
+	financial_history: Array,
+	metric_id: String,
+	years: Array
+) -> Array:
+	var values: Array = []
+	for year_value in years:
+		values.append(_format_key_stats_metric_result(metric_id, _key_stats_metric_annual_result(financial_statement_snapshot, financial_history, metric_id, int(year_value))))
+	while values.size() < KEY_STATS_YEAR_COLUMN_LIMIT:
+		values.append("-")
+	return values
+
+
+func _key_stats_metric_values_for_ttm(
+	financial_statement_snapshot: Dictionary,
+	financial_history: Array,
+	metric_id: String,
+	years: Array
+) -> Array:
+	var values: Array = []
+	for year_value in years:
+		values.append(_format_key_stats_metric_result(metric_id, _key_stats_metric_ttm_result(financial_statement_snapshot, financial_history, metric_id, int(year_value))))
+	while values.size() < KEY_STATS_YEAR_COLUMN_LIMIT:
+		values.append("-")
+	return values
+
+
+func _key_stats_recent_years(financial_history: Array, financial_statement_snapshot: Dictionary) -> Array:
+	var seen_years: Dictionary = {}
+	for statement_value in financial_statement_snapshot.get("quarterly_statements", []):
+		if typeof(statement_value) != TYPE_DICTIONARY:
+			continue
+		var statement: Dictionary = statement_value
+		var year: int = int(statement.get("statement_year", 0))
+		if year > 0:
+			seen_years[year] = true
+	if seen_years.is_empty():
+		for history_value in financial_history:
+			if typeof(history_value) != TYPE_DICTIONARY:
+				continue
+			var history_entry: Dictionary = history_value
+			var year_from_history: int = int(history_entry.get("year", 0))
+			if year_from_history > 0:
+				seen_years[year_from_history] = true
+
+	var years: Array = []
+	for year_key in seen_years.keys():
+		years.append(int(year_key))
+	years.sort()
+
+	var recent_years: Array = []
+	for year_index in range(years.size() - 1, -1, -1):
+		recent_years.append(int(years[year_index]))
+		if recent_years.size() >= KEY_STATS_YEAR_COLUMN_LIMIT:
+			break
+	return recent_years
+
+
+func _key_stats_metric_result_from_statement(statement: Dictionary, metric_id: String) -> Dictionary:
+	if statement.is_empty():
+		return {"valid": false, "value": 0.0}
+	if metric_id == KEY_STATS_METRIC_EPS:
+		var net_income: float = _key_stats_statement_value_from_period(statement, "income_statement", "net_income")
+		var shares_outstanding: float = _key_stats_statement_value_from_period(statement, "balance_sheet", "shares_outstanding")
+		return {"valid": shares_outstanding > 0.0, "value": _key_stats_safe_divide(net_income, shares_outstanding)}
+	if metric_id == KEY_STATS_METRIC_REVENUE:
+		return {
+			"valid": _key_stats_period_has_statement_line(statement, "income_statement", "revenue"),
+			"value": _key_stats_statement_value_from_period(statement, "income_statement", "revenue")
+		}
+	return {
+		"valid": _key_stats_period_has_statement_line(statement, "income_statement", "net_income"),
+		"value": _key_stats_statement_value_from_period(statement, "income_statement", "net_income")
+	}
+
+
+func _key_stats_metric_annual_result(
+	financial_statement_snapshot: Dictionary,
+	financial_history: Array,
+	metric_id: String,
+	year: int
+) -> Dictionary:
+	var total: float = 0.0
+	var valid_count: int = 0
+	for quarter in range(1, 5):
+		var statement: Dictionary = _key_stats_statement_for_year_quarter(financial_statement_snapshot, year, quarter)
+		var result: Dictionary = _key_stats_metric_result_from_statement(statement, metric_id)
+		if bool(result.get("valid", false)):
+			total += float(result.get("value", 0.0))
+			valid_count += 1
+	if valid_count > 0:
+		return {"valid": true, "value": total}
+	return _key_stats_history_metric_result(financial_history, metric_id, year)
+
+
+func _key_stats_metric_ttm_result(
+	financial_statement_snapshot: Dictionary,
+	financial_history: Array,
+	metric_id: String,
+	year: int
+) -> Dictionary:
+	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
+	var end_index: int = -1
+	for statement_index in range(quarterly_statements.size()):
+		var statement: Dictionary = quarterly_statements[statement_index]
+		if int(statement.get("statement_year", 0)) != year:
+			continue
+		end_index = statement_index
+		if int(statement.get("statement_quarter", 0)) == 4:
+			break
+	if end_index < 0:
+		return _key_stats_history_metric_result(financial_history, metric_id, year)
+
+	var total: float = 0.0
+	var valid_count: int = 0
+	var start_index: int = max(end_index - 3, 0)
+	for statement_index in range(start_index, end_index + 1):
+		var result: Dictionary = _key_stats_metric_result_from_statement(quarterly_statements[statement_index], metric_id)
+		if bool(result.get("valid", false)):
+			total += float(result.get("value", 0.0))
+			valid_count += 1
+	if valid_count > 0:
+		return {"valid": true, "value": total}
+	return _key_stats_history_metric_result(financial_history, metric_id, year)
+
+
+func _key_stats_history_metric_result(financial_history: Array, metric_id: String, year: int) -> Dictionary:
+	for history_value in financial_history:
+		if typeof(history_value) != TYPE_DICTIONARY:
+			continue
+		var history_entry: Dictionary = history_value
+		if int(history_entry.get("year", 0)) != year:
+			continue
+		if metric_id == KEY_STATS_METRIC_REVENUE:
+			return {"valid": history_entry.has("revenue"), "value": float(history_entry.get("revenue", 0.0))}
+		if metric_id == KEY_STATS_METRIC_EPS:
+			var shares_outstanding: float = float(history_entry.get("shares_outstanding", 0.0))
+			return {
+				"valid": shares_outstanding > 0.0 and history_entry.has("net_income"),
+				"value": _key_stats_safe_divide(float(history_entry.get("net_income", 0.0)), shares_outstanding)
+			}
+		return {"valid": history_entry.has("net_income"), "value": float(history_entry.get("net_income", 0.0))}
+	return {"valid": false, "value": 0.0}
+
+
+func _format_key_stats_metric_result(metric_id: String, result: Dictionary) -> String:
+	if not bool(result.get("valid", false)):
+		return "-"
+	var value: float = float(result.get("value", 0.0))
+	if metric_id == KEY_STATS_METRIC_EPS:
+		return _format_decimal(value, 2, true)
+	return _format_compact_currency(value)
+
+
+func _key_stats_statement_for_year_quarter(
+	financial_statement_snapshot: Dictionary,
+	year: int,
+	quarter: int
+) -> Dictionary:
+	for statement_value in financial_statement_snapshot.get("quarterly_statements", []):
+		if typeof(statement_value) != TYPE_DICTIONARY:
+			continue
+		var statement: Dictionary = statement_value
+		if int(statement.get("statement_year", 0)) == year and int(statement.get("statement_quarter", 0)) == quarter:
+			return statement
+	return {}
+
+
+func _key_stats_latest_history_entry(financial_history: Array) -> Dictionary:
+	if financial_history.is_empty():
+		return {}
+	for history_index in range(financial_history.size() - 1, -1, -1):
+		if typeof(financial_history[history_index]) == TYPE_DICTIONARY:
+			return financial_history[history_index]
+	return {}
+
+
+func _key_stats_latest_quarters(financial_statement_snapshot: Dictionary, count: int = 4) -> Array:
+	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
+	if quarterly_statements.is_empty():
+		return []
+
+	var end_index: int = quarterly_statements.size() - 1
+	if selected_financial_statement_index >= 0:
+		end_index = clampi(selected_financial_statement_index, 0, quarterly_statements.size() - 1)
+	var start_index: int = max(end_index - max(count - 1, 0), 0)
+	var periods: Array = []
+	for statement_index in range(end_index, start_index - 1, -1):
+		periods.append(quarterly_statements[statement_index])
+	return periods
+
+
+func _key_stats_ttm_sum(
+	financial_statement_snapshot: Dictionary,
+	section_id: String,
+	line_id: String,
+	fallback_value: float
+) -> float:
+	var latest_quarters: Array = _key_stats_latest_quarters(financial_statement_snapshot, 4)
+	if latest_quarters.size() < 4:
+		return fallback_value
+	var total: float = 0.0
+	var found_count: int = 0
+	for period_value in latest_quarters:
+		if typeof(period_value) != TYPE_DICTIONARY:
+			continue
+		var period: Dictionary = period_value
+		if not _key_stats_period_has_statement_line(period, section_id, line_id):
+			continue
+		total += _key_stats_statement_value_from_period(period, section_id, line_id)
+		found_count += 1
+	return total if found_count > 0 else fallback_value
+
+
+func _key_stats_statement_value_from_period(period: Dictionary, section_id: String, line_id: String) -> float:
+	if period.is_empty():
+		return 0.0
+	return _key_stats_statement_value(period.get(section_id, []), line_id)
+
+
+func _key_stats_statement_value(lines: Array, line_id: String) -> float:
+	for line_value in lines:
+		if typeof(line_value) != TYPE_DICTIONARY:
+			continue
+		var line_item: Dictionary = line_value
+		if str(line_item.get("id", "")) == line_id:
+			return float(line_item.get("value", 0.0))
+	return 0.0
+
+
+func _key_stats_period_has_statement_line(period: Dictionary, section_id: String, line_id: String) -> bool:
+	if period.is_empty():
+		return false
+	var lines: Array = period.get(section_id, [])
+	for line_value in lines:
+		if typeof(line_value) != TYPE_DICTIONARY:
+			continue
+		var line_item: Dictionary = line_value
+		if str(line_item.get("id", "")) == line_id:
+			return true
+	return false
+
+
+func _key_stats_safe_divide(numerator: float, denominator: float) -> float:
+	if is_zero_approx(denominator):
+		return 0.0
+	return numerator / denominator
+
+
+func _format_key_stats_ratio_value(value: float, is_valid: bool = true) -> String:
+	if not is_valid:
+		return "-"
+	return _format_decimal(value, 2, false)
+
+
+func _format_key_stats_decimal_value(value: float, is_valid: bool = true) -> String:
+	if not is_valid:
+		return "-"
+	return _format_decimal(value, 2, true)
+
+
+func _format_key_stats_percent_value(value: float, is_valid: bool = true) -> String:
+	if not is_valid:
+		return "-"
+	return _format_percent_value(value)
+
+
+func _format_key_stats_percent_ratio(value: float, is_valid: bool = true) -> String:
+	if not is_valid:
+		return "-"
+	return _format_percent_value(value * 100.0)
+
+
+func _format_key_stats_compact_number(value: float) -> String:
+	var absolute_value: float = absf(value)
+	if absolute_value >= 1000000000.0:
+		return "%s%sB" % ["-" if value < 0.0 else "", _format_decimal(absolute_value / 1000000000.0, 2, false)]
+	if absolute_value >= 1000000.0:
+		return "%s%sM" % ["-" if value < 0.0 else "", _format_decimal(absolute_value / 1000000.0, 2, false)]
+	if absolute_value >= 1000.0:
+		return "%s%sK" % ["-" if value < 0.0 else "", _format_decimal(absolute_value / 1000.0, 2, false)]
+	return _format_decimal(value, 0, true)
+
+
+func _key_stats_amount_color(value: float) -> Color:
+	if value < 0.0:
+		return COLOR_NEGATIVE
+	if value > 0.0:
+		return COLOR_POSITIVE
+	return COLOR_TEXT
 
 
 func _on_order_ticket_toggle_pressed() -> void:
@@ -6166,6 +7060,7 @@ func _apply_trade_workspace_snapshot(snapshot: Dictionary) -> void:
 		analyzer_history_label.text = "Recent closes:"
 		financial_history_summary_label.text = "Generated history unavailable."
 		_refresh_financial_history_table([], {})
+		_refresh_key_stats_dashboard({})
 		_refresh_broker_table({})
 		_refresh_statement_sections({})
 		_set_label_tone(profile_price_label, COLOR_TEXT)
@@ -6230,6 +7125,7 @@ func _apply_trade_workspace_snapshot(snapshot: Dictionary) -> void:
 		snapshot.get("financials", {}),
 		"Generating company detail..." if not detail_ready else ""
 	)
+	_refresh_key_stats_dashboard(snapshot if detail_ready else {})
 	_refresh_broker_table(snapshot.get("broker_flow", {}))
 	_refresh_statement_sections(financial_statement_snapshot)
 	if not detail_ready:
@@ -9290,6 +10186,7 @@ func _apply_visual_theme() -> void:
 	_style_button(sell_button, COLOR_ORDER_SELL, COLOR_ORDER_SELL_BORDER, COLOR_TEXT, 0)
 	_style_button(order_ticket_toggle_button, Color(0.0823529, 0.117647, 0.156863, 0.96), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(submit_order_button, COLOR_ORDER_BUY, COLOR_ORDER_BUY_BORDER, COLOR_TEXT, 0)
+	_style_key_stats_dashboard_ui()
 	_style_button(app_window_minimize_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(app_window_close_button, Color(0.368627, 0.160784, 0.176471, 1), Color(0.709804, 0.34902, 0.372549, 1), COLOR_TEXT, 0)
 	_style_button(financials_previous_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
@@ -10309,6 +11206,7 @@ func _shift_financial_statement_selection(offset: int) -> void:
 	)
 	financials_year_label.text = _format_statement_year_label(financial_statement_snapshot)
 	_refresh_statement_sections(financial_statement_snapshot)
+	_refresh_key_stats_dashboard(current_trade_snapshot)
 
 
 func _selected_statement_period(financial_statement_snapshot: Dictionary) -> Dictionary:
