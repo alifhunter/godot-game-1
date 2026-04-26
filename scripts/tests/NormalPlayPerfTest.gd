@@ -35,19 +35,19 @@ func _run_perf_pass() -> void:
 		return
 
 	await _measure_button("open_network", network_button, 3)
-	await _measure_button("advance_network_open", advance_button, 4)
+	await _measure_advance_button("advance_network_open", advance_button, game_root, 4)
 	game_root.close_desktop_app("network")
 	await _settle_frames(2)
 
-	await _measure_button("advance_desktop_only", advance_button, 4)
+	await _measure_advance_button("advance_desktop_only", advance_button, game_root, 4)
 	await _measure_button("open_stock", stock_button, 4)
-	await _measure_button("advance_stock_open", advance_button, 4)
+	await _measure_advance_button("advance_stock_open", advance_button, game_root, 4)
 	game_root.close_desktop_app("stock")
 	await _settle_frames(2)
 
 	await _measure_button("open_news", news_button, 3)
 	await _measure_button("open_network_with_news", network_button, 3)
-	await _measure_button("advance_news_network_open", advance_button, 4)
+	await _measure_advance_button("advance_news_network_open", advance_button, game_root, 4)
 
 	await _measure_callable("flush_pending_save", Callable(SaveManager, "flush_pending_save"), 2)
 	var save_size: int = _project_local_save_size()
@@ -62,6 +62,23 @@ func _run_perf_pass() -> void:
 func _measure_button(label: String, button: Button, settle_frames: int) -> void:
 	var started_at_usec: int = Time.get_ticks_usec()
 	button.emit_signal("pressed")
+	await _settle_frames(settle_frames)
+	_record_result(label, started_at_usec)
+
+
+func _measure_advance_button(label: String, button: Button, game_root: Node, settle_frames: int) -> void:
+	var recap_dialog: Control = game_root.find_child("DailyRecapDialog", true, false) as Control
+	if recap_dialog != null:
+		recap_dialog.visible = false
+	var starting_day_index: int = RunState.day_index
+	var started_at_usec: int = Time.get_ticks_usec()
+	button.emit_signal("pressed")
+	for _frame_index in range(90):
+		recap_dialog = game_root.find_child("DailyRecapDialog", true, false) as Control
+		if RunState.day_index > starting_day_index and recap_dialog != null and recap_dialog.visible and not button.disabled:
+			break
+		await get_tree().process_frame
+	_record_result("%s_recap_ready" % label, started_at_usec)
 	await _settle_frames(settle_frames)
 	_record_result(label, started_at_usec)
 

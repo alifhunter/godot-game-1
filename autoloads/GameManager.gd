@@ -148,6 +148,10 @@ func _flush_pending_save_if_needed() -> bool:
 	return SaveManager.flush_pending_save()
 
 
+func flush_pending_save_if_needed() -> bool:
+	return _flush_pending_save_if_needed()
+
+
 func start_new_run(run_seed: int = 0, difficulty_id: String = DEFAULT_DIFFICULTY_ID, tutorial_enabled: bool = false) -> void:
 	if run_seed == 0:
 		run_seed = int(Time.get_unix_time_from_system())
@@ -273,11 +277,15 @@ func advance_day() -> void:
 	_advance_day_internal(true, true)
 
 
+func advance_day_deferred_save() -> void:
+	_advance_day_internal(true, true, false)
+
+
 func simulate_opening_session(save_after: bool = false) -> Dictionary:
 	return _advance_day_internal(save_after, false)
 
 
-func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool = true) -> Dictionary:
+func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool = true, flush_save_immediately: bool = true) -> Dictionary:
 	if not RunState.has_active_run():
 		return {}
 	var log_advance_perf: bool = _should_log_advance_perf(save_after, emit_runtime_signals)
@@ -303,7 +311,7 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	var network_tip_results: Array = contact_network_system.process_due_tip_memories(RunState, DataRepository)
 	_log_advance_perf_elapsed(log_advance_perf, "process_due_tip_memories", phase_started_at_usec, " count=%d" % network_tip_results.size())
 	phase_started_at_usec = Time.get_ticks_usec()
-	_rebuild_dashboard_event_snapshot_cache()
+	_rebuild_dashboard_event_snapshot_cache("", log_advance_perf)
 	_log_advance_perf_elapsed(log_advance_perf, "build_dashboard_event_cache", phase_started_at_usec)
 	if (not network_results.is_empty() or not network_tip_results.is_empty()) and emit_runtime_signals:
 		phase_started_at_usec = Time.get_ticks_usec()
@@ -333,12 +341,16 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	RunState.record_news_snapshot(news_snapshot)
 	_log_advance_perf_elapsed(log_advance_perf, "record_news_snapshot", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
-	_rebuild_daily_activity_snapshot_cache(news_snapshot)
+	_rebuild_daily_activity_snapshot_cache(news_snapshot, "", log_advance_perf)
 	_log_advance_perf_elapsed(log_advance_perf, "build_daily_activity_cache", phase_started_at_usec)
 	if save_after:
 		phase_started_at_usec = Time.get_ticks_usec()
-		_save_active_run_now("advance_day")
-		_log_advance_perf_elapsed(log_advance_perf, "save_active_run", phase_started_at_usec)
+		if flush_save_immediately:
+			_save_active_run_now("advance_day")
+			_log_advance_perf_elapsed(log_advance_perf, "save_active_run", phase_started_at_usec)
+		else:
+			_request_autosave("advance_day")
+			_log_advance_perf_elapsed(log_advance_perf, "request_save", phase_started_at_usec)
 	if emit_runtime_signals:
 		phase_started_at_usec = Time.get_ticks_usec()
 		summary_ready.emit(summary)
@@ -346,7 +358,7 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 		phase_started_at_usec = Time.get_ticks_usec()
 		portfolio_changed.emit()
 		_log_advance_perf_elapsed(log_advance_perf, "emit_portfolio_changed", phase_started_at_usec)
-	_log_advance_perf_elapsed(log_advance_perf, "total", total_started_at_usec, " save_after=%s emit_runtime_signals=%s" % [str(save_after), str(emit_runtime_signals)])
+	_log_advance_perf_elapsed(log_advance_perf, "total", total_started_at_usec, " save_after=%s emit_runtime_signals=%s flush_save_immediately=%s" % [str(save_after), str(emit_runtime_signals), str(flush_save_immediately)])
 	return {
 		"day_result": day_result,
 		"summary": summary
@@ -738,24 +750,33 @@ func get_corporate_meeting_snapshot(day_index: int = -1) -> Dictionary:
 	return corporate_action_system.get_meeting_snapshot(RunState, day_index)
 
 
-func _rebuild_dashboard_event_snapshot_cache(cache_key: String = "") -> Dictionary:
+func _rebuild_dashboard_event_snapshot_cache(cache_key: String = "", log_phase_details: bool = false) -> Dictionary:
 	if not RunState.has_active_run():
 		dashboard_event_snapshot_cache = _empty_dashboard_event_snapshot()
 		return dashboard_event_snapshot_cache
+	var phase_started_at_usec: int = Time.get_ticks_usec()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	_log_advance_perf_elapsed(log_phase_details, "build_dashboard_event_cache:ensure_corporate_actions", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	var trade_date: Dictionary = RunState.get_current_trade_date()
 	var report_calendar_snapshot: Dictionary = RunState.get_report_calendar_month(
 		int(trade_date.get("year", 2020)),
 		int(trade_date.get("month", 1))
 	)
+	_log_advance_perf_elapsed(log_phase_details, "build_dashboard_event_cache:report_calendar", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	var meeting_snapshot: Dictionary = corporate_action_system.get_meeting_snapshot(RunState)
+	_log_advance_perf_elapsed(log_phase_details, "build_dashboard_event_cache:meeting_snapshot", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
+	var upcoming_report_rows: Array = RunState.get_upcoming_quarterly_reports(DASHBOARD_REPORT_ROW_CACHE_LIMIT)
+	_log_advance_perf_elapsed(log_phase_details, "build_dashboard_event_cache:upcoming_reports", phase_started_at_usec)
 	var resolved_cache_key: String = cache_key if not cache_key.is_empty() else _dashboard_event_snapshot_cache_key()
 	dashboard_event_snapshot_cache = {
 		"cache_key": resolved_cache_key,
 		"day_index": RunState.day_index,
 		"trade_date": trade_date,
 		"report_calendar_snapshot": report_calendar_snapshot,
-		"upcoming_report_rows": RunState.get_upcoming_quarterly_reports(DASHBOARD_REPORT_ROW_CACHE_LIMIT),
+		"upcoming_report_rows": upcoming_report_rows,
 		"corporate_meeting_snapshot": meeting_snapshot,
 		"upcoming_meeting_rows": meeting_snapshot.get("upcoming_rows", []).duplicate(true)
 	}
@@ -1326,21 +1347,31 @@ func get_desktop_app_badge_snapshot(activity_counts: Dictionary = {}) -> Diction
 	return rows
 
 
-func _rebuild_daily_activity_snapshot_cache(news_snapshot: Dictionary = {}, cache_key: String = "") -> Dictionary:
+func _rebuild_daily_activity_snapshot_cache(news_snapshot: Dictionary = {}, cache_key: String = "", log_phase_details: bool = false) -> Dictionary:
 	if not RunState.has_active_run():
 		daily_activity_snapshot_cache = _empty_daily_activity_snapshot()
 		return daily_activity_snapshot_cache
+	var phase_started_at_usec: int = Time.get_ticks_usec()
 	var resolved_news_snapshot: Dictionary = news_snapshot
 	if resolved_news_snapshot.is_empty():
 		resolved_news_snapshot = _build_news_snapshot()
+	_log_advance_perf_elapsed(log_phase_details, "build_daily_activity_cache:resolve_news", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	var social_snapshot: Dictionary = get_twooter_snapshot()
-	var network_snapshot: Dictionary = get_network_snapshot()
+	_log_advance_perf_elapsed(log_phase_details, "build_daily_activity_cache:social_snapshot", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
+	var network_activity_count: int = contact_network_system.count_current_day_activity(RunState)
+	_log_advance_perf_elapsed(log_phase_details, "build_daily_activity_cache:network_count", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	var activity_counts: Dictionary = {
 		"news": _count_news_articles(resolved_news_snapshot),
 		"social": social_snapshot.get("posts", []).size(),
-		"network": _count_network_current_day_activity(network_snapshot),
+		"network": network_activity_count,
 	}
+	_log_advance_perf_elapsed(log_phase_details, "build_daily_activity_cache:count_activity", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	RunState.set_desktop_app_badge_counts(activity_counts)
+	_log_advance_perf_elapsed(log_phase_details, "build_daily_activity_cache:set_badges", phase_started_at_usec)
 	var resolved_cache_key: String = cache_key if not cache_key.is_empty() else _daily_activity_snapshot_cache_key()
 	daily_activity_snapshot_cache = {
 		"cache_key": resolved_cache_key,

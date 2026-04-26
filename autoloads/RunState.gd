@@ -1069,7 +1069,9 @@ func get_quarterly_report_events_for_day_number(trading_day_number: int, trade_d
 func get_report_calendar_month(year_value: int, month_value: int) -> Dictionary:
 	var reports_by_day: Dictionary = {}
 	var reports: Array = []
-	for date_key_value in get_quarterly_report_calendar().keys():
+	if quarterly_report_calendar.is_empty() and not company_order.is_empty():
+		quarterly_report_calendar = _build_quarterly_report_calendar()
+	for date_key_value in quarterly_report_calendar.keys():
 		var date_key: String = str(date_key_value)
 		var date_info: Dictionary = _date_from_key(date_key)
 		if int(date_info.get("year", 0)) != year_value or int(date_info.get("month", 0)) != month_value:
@@ -1098,7 +1100,9 @@ func get_report_calendar_month(year_value: int, month_value: int) -> Dictionary:
 func get_upcoming_quarterly_reports(limit: int = 8) -> Array:
 	var reports: Array = []
 	var current_key: String = trading_calendar.to_key(current_trade_date)
-	var date_keys: Array = get_quarterly_report_calendar().keys()
+	if quarterly_report_calendar.is_empty() and not company_order.is_empty():
+		quarterly_report_calendar = _build_quarterly_report_calendar()
+	var date_keys: Array = quarterly_report_calendar.keys()
 	date_keys.sort()
 	for date_key_value in date_keys:
 		var date_key: String = str(date_key_value)

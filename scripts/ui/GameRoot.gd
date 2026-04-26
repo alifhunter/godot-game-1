@@ -240,8 +240,9 @@ var desktop_app_windows: Dictionary = {}
 var desktop_dragging_app_id: String = ""
 var desktop_drag_offset: Vector2 = Vector2.ZERO
 var advance_day_processing: bool = false
-var deferred_open_app_refresh_pending: bool = false
+var deferred_open_app_refresh_queue: Array = []
 var deferred_open_app_refresh_scheduled: bool = false
+var advance_day_post_recap_save_flush_scheduled: bool = false
 var pending_daily_recap_snapshot: Dictionary = {}
 var daily_recap_dialog: Control = null
 var daily_recap_body_label: Label = null
@@ -863,11 +864,14 @@ func _refresh_open_desktop_apps(log_phase_details: bool = false) -> void:
 func _queue_deferred_open_app_refresh() -> void:
 	if not RunState.has_active_run():
 		return
-	deferred_open_app_refresh_pending = true
+	for app_id_value in _open_desktop_app_refresh_order():
+		var app_id: String = str(app_id_value)
+		if not deferred_open_app_refresh_queue.has(app_id):
+			deferred_open_app_refresh_queue.append(app_id)
 
 
 func _schedule_deferred_open_app_refresh() -> void:
-	if not deferred_open_app_refresh_pending or deferred_open_app_refresh_scheduled:
+	if deferred_open_app_refresh_queue.is_empty() or deferred_open_app_refresh_scheduled:
 		return
 	deferred_open_app_refresh_scheduled = true
 	call_deferred("_run_deferred_open_app_refresh_after_frame")
@@ -876,7 +880,7 @@ func _schedule_deferred_open_app_refresh() -> void:
 func _run_deferred_open_app_refresh_after_frame() -> void:
 	await get_tree().process_frame
 	deferred_open_app_refresh_scheduled = false
-	if not deferred_open_app_refresh_pending:
+	if deferred_open_app_refresh_queue.is_empty():
 		return
 	var waiting_for_recap: bool = (
 		not pending_daily_recap_snapshot.is_empty() and
@@ -886,11 +890,49 @@ func _run_deferred_open_app_refresh_after_frame() -> void:
 	if advance_day_processing or waiting_for_recap:
 		_schedule_deferred_open_app_refresh()
 		return
+	var app_id: String = str(deferred_open_app_refresh_queue.pop_front())
+	if app_id.is_empty() or not _is_desktop_app_window_open(app_id):
+		_schedule_deferred_open_app_refresh()
+		return
 	var started_at_usec: int = Time.get_ticks_usec()
-	deferred_open_app_refresh_pending = false
-	_refresh_open_desktop_apps(true)
+	_refresh_app_window_content(app_id)
 	_refresh_desktop()
-	_log_perf_elapsed("_refresh_deferred_open_apps", started_at_usec)
+	_log_perf_elapsed("_refresh_deferred_open_app:%s" % app_id, started_at_usec)
+	_schedule_deferred_open_app_refresh()
+
+
+func _open_desktop_app_refresh_order() -> Array:
+	var ordered: Array = []
+	var top_app_id: String = _top_visible_desktop_window_id()
+	if not top_app_id.is_empty():
+		ordered.append(top_app_id)
+	if active_app_id != APP_ID_DESKTOP and not ordered.has(active_app_id) and _is_desktop_app_window_open(active_app_id):
+		ordered.append(active_app_id)
+	for app_id in [APP_ID_STOCK, APP_ID_NEWS, APP_ID_SOCIAL, APP_ID_NETWORK, APP_ID_ACADEMY, APP_ID_UPGRADES]:
+		if _is_desktop_app_window_open(app_id) and not ordered.has(app_id):
+			ordered.append(app_id)
+	return ordered
+
+
+func _remove_deferred_open_app_refresh(app_id: String) -> void:
+	while deferred_open_app_refresh_queue.has(app_id):
+		deferred_open_app_refresh_queue.erase(app_id)
+
+
+func _schedule_advance_day_post_recap_save_flush() -> void:
+	if advance_day_post_recap_save_flush_scheduled:
+		return
+	advance_day_post_recap_save_flush_scheduled = true
+	call_deferred("_flush_advance_day_save_after_recap")
+
+
+func _flush_advance_day_save_after_recap() -> void:
+	await get_tree().process_frame
+	advance_day_post_recap_save_flush_scheduled = false
+	var started_at_usec: int = Time.get_ticks_usec()
+	GameManager.flush_pending_save_if_needed()
+	_log_perf_elapsed("_flush_advance_day_save_after_recap", started_at_usec)
+	_schedule_deferred_open_app_refresh()
 
 
 func _on_portfolio_changed() -> void:
@@ -2357,6 +2399,9 @@ func _focus_desktop_app_window(app_id: String) -> void:
 		desktop_window_layer.move_child(window, desktop_window_layer.get_child_count() - 1)
 	active_app_id = app_id
 	_mark_desktop_app_seen_if_needed(app_id)
+	if deferred_open_app_refresh_queue.has(app_id) and not advance_day_processing and pending_daily_recap_snapshot.is_empty():
+		_remove_deferred_open_app_refresh(app_id)
+		_refresh_app_window_content(app_id)
 	_refresh_desktop_window_themes()
 	_refresh_desktop()
 
@@ -7100,10 +7145,10 @@ func _on_next_day_pressed() -> void:
 	await get_tree().process_frame
 	_set_advance_day_phase("Saving Run")
 	await get_tree().process_frame
-	GameManager.advance_day()
+	GameManager.advance_day_deferred_save()
 	if advance_day_processing:
 		_finish_advance_day_processing()
-		_schedule_deferred_open_app_refresh()
+		_schedule_advance_day_post_recap_save_flush()
 	_log_perf_elapsed("_on_next_day_pressed", started_at_usec)
 
 
@@ -7136,7 +7181,7 @@ func _on_summary_ready(_summary: Dictionary) -> void:
 		_finish_advance_day_processing()
 		_log_perf_phase(true, "_on_summary_ready:finish_processing", phase_started_at_usec)
 		call_deferred("_show_daily_recap_if_pending")
-		_schedule_deferred_open_app_refresh()
+		_schedule_advance_day_post_recap_save_flush()
 	_log_perf_elapsed("_on_summary_ready", started_at_usec)
 
 
@@ -7166,6 +7211,7 @@ func _show_daily_recap_if_pending() -> void:
 	pending_daily_recap_snapshot = {}
 	daily_recap_dialog.visible = true
 	daily_recap_dialog.move_to_front()
+	_schedule_advance_day_post_recap_save_flush()
 
 
 func _build_daily_recap_text(snapshot: Dictionary) -> String:
@@ -8363,6 +8409,7 @@ func _set_active_app(app_id: String) -> void:
 		_refresh_desktop()
 		return
 
+	_remove_deferred_open_app_refresh(normalized_app_id)
 	_open_desktop_app_window(normalized_app_id)
 	_refresh_app_window_content(normalized_app_id)
 	_hide_debug_overlay()

@@ -128,6 +128,8 @@ func get_meeting_snapshot(run_state, day_index: int = -1) -> Dictionary:
 	var current_day_index: int = day_index if day_index > 0 else run_state.day_index
 	var current_trade_date: Dictionary = run_state.get_current_trade_date()
 	var calendar: Dictionary = run_state.get_corporate_meeting_calendar()
+	var attended_meetings: Dictionary = run_state.get_attended_meetings()
+	var holding_share_cache: Dictionary = {}
 	var rows: Array = []
 	var today_rows: Array = []
 	for date_key_value in calendar.keys():
@@ -137,7 +139,7 @@ func get_meeting_snapshot(run_state, day_index: int = -1) -> Dictionary:
 			var meeting: Dictionary = meeting_value
 			if not _meeting_is_player_visible(meeting):
 				continue
-			var row: Dictionary = _meeting_row(meeting, run_state)
+			var row: Dictionary = _meeting_row(meeting, run_state, attended_meetings, holding_share_cache)
 			rows.append(row)
 			if int(meeting.get("trading_day_number", -1)) == current_day_index + 1:
 				today_rows.append(row)
@@ -1482,10 +1484,16 @@ func _meeting_requires_shareholder(meeting: Dictionary) -> bool:
 	return meeting_type in ["annual_rups", "rupslb"]
 
 
-func _meeting_attendance_gate(run_state, meeting: Dictionary) -> Dictionary:
+func _meeting_attendance_gate(run_state, meeting: Dictionary, holding_share_cache: Dictionary = {}) -> Dictionary:
 	var requires_shareholder: bool = _meeting_requires_shareholder(meeting)
 	var company_id: String = str(meeting.get("company_id", ""))
-	var shares_owned: int = int(run_state.get_holding(company_id).get("shares", 0)) if not company_id.is_empty() else 0
+	var shares_owned: int = 0
+	if not company_id.is_empty():
+		if holding_share_cache.has(company_id):
+			shares_owned = int(holding_share_cache.get(company_id, 0))
+		else:
+			shares_owned = int(run_state.get_holding(company_id).get("shares", 0))
+			holding_share_cache[company_id] = shares_owned
 	var eligible: bool = not requires_shareholder or shares_owned > 0
 	var blocked_reason: String = ""
 	if not eligible:
@@ -1920,9 +1928,10 @@ func _meeting_is_player_visible(meeting: Dictionary) -> bool:
 	return str(meeting.get("status", "scheduled")) != "queued"
 
 
-func _meeting_row(meeting: Dictionary, run_state) -> Dictionary:
-	var attended: bool = bool(run_state.get_attended_meetings().get(str(meeting.get("id", "")), {}).get("attended", false))
-	var attendance_gate: Dictionary = _meeting_attendance_gate(run_state, meeting)
+func _meeting_row(meeting: Dictionary, run_state, attended_meetings: Variant = null, holding_share_cache: Dictionary = {}) -> Dictionary:
+	var resolved_attended_meetings: Dictionary = attended_meetings if typeof(attended_meetings) == TYPE_DICTIONARY else run_state.get_attended_meetings()
+	var attended: bool = bool(resolved_attended_meetings.get(str(meeting.get("id", "")), {}).get("attended", false))
+	var attendance_gate: Dictionary = _meeting_attendance_gate(run_state, meeting, holding_share_cache)
 	return {
 		"id": str(meeting.get("id", "")),
 		"meeting_type": str(meeting.get("meeting_type", "")),

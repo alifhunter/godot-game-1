@@ -1143,6 +1143,13 @@ func _run_scenario(
 
 		GameManager.advance_day()
 		await get_tree().process_frame
+		if SaveManager.has_pending_save():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected direct GameManager.advance_day() to flush immediately."
+			}
 		var chain_after_resolution: Dictionary = RunState.get_active_corporate_action_chains().get(eligible_chain_id, {}).duplicate(true)
 		if (
 			str(chain_after_resolution.get("stage", "")) == "meeting_or_call" or
@@ -2017,6 +2024,14 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected one guarded Advance Day press to advance once, re-enable the button, and show a useful daily recap modal."
+		}
+	var post_recap_saved_run: Dictionary = SaveManager.load_run()
+	if SaveManager.has_pending_save() or int(post_recap_saved_run.get("day_index", -1)) != RunState.day_index:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the deferred Advance Day save to flush after the daily recap appears."
 		}
 	daily_recap_dialog.visible = false
 	await get_tree().process_frame

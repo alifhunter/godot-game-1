@@ -85,6 +85,38 @@ func build_snapshot(run_state, data_repository) -> Dictionary:
 	}
 
 
+func count_current_day_activity(run_state) -> int:
+	var target_day_index: int = int(run_state.day_index)
+	var count: int = 0
+	for tip_value in run_state.get_network_tip_journal().values():
+		if typeof(tip_value) != TYPE_DICTIONARY:
+			continue
+		var tip: Dictionary = tip_value
+		if int(tip.get("created_day_index", 0)) == target_day_index:
+			count += 1
+		if str(tip.get("status", "pending")) != "pending" and int(tip.get("resolved_day_index", tip.get("created_day_index", 0))) == target_day_index:
+			count += 1
+		if not str(tip.get("followup_note", "")).is_empty() and int(tip.get("followup_day_index", tip.get("resolved_day_index", tip.get("created_day_index", 0)))) == target_day_index:
+			count += 1
+		if not str(tip.get("source_check_note", "")).is_empty() and int(tip.get("source_check_day_index", tip.get("created_day_index", 0))) == target_day_index:
+			count += 1
+	for request_value in run_state.get_network_requests().values():
+		if typeof(request_value) != TYPE_DICTIONARY:
+			continue
+		var request: Dictionary = request_value
+		var status: String = str(request.get("status", "pending"))
+		var request_day_index: int = int(request.get("completed_day_index", request.get("created_day_index", 0))) if status != "pending" else int(request.get("created_day_index", 0))
+		if request_day_index == target_day_index:
+			count += 1
+	for discovery_value in run_state.get_network_discoveries().values():
+		if typeof(discovery_value) != TYPE_DICTIONARY:
+			continue
+		var discovery: Dictionary = discovery_value
+		if str(discovery.get("source_type", "")) == "referral" and int(discovery.get("day_index", 0)) == target_day_index:
+			count += 1
+	return count
+
+
 func build_recognition_snapshot(run_state) -> Dictionary:
 	var starting_cash: float = max(float(run_state.get_difficulty_config().get("starting_cash", 1.0)), 1.0)
 	var equity: float = max(run_state.get_total_equity(), 0.0)
