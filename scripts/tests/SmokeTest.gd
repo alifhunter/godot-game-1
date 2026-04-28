@@ -3225,6 +3225,7 @@ func _run_scenario(
 	var key_stats_card_names := [
 		"KeyStatsCurrentValuationCard",
 		"KeyStatsPerShareCard",
+		"KeyStatsDividendCard",
 		"KeyStatsMetricTableCard",
 		"KeyStatsProfitabilityCard",
 		"KeyStatsIncomeStatementCard",
@@ -3243,6 +3244,7 @@ func _run_scenario(
 	var key_stats_row_names := [
 		"KeyStatsCurrentValuationRows",
 		"KeyStatsPerShareRows",
+		"KeyStatsDividendRows",
 		"KeyStatsMetricTableRows",
 		"KeyStatsProfitabilityRows",
 		"KeyStatsIncomeStatementRows",
@@ -3258,6 +3260,21 @@ func _run_scenario(
 				"success": false,
 				"message": "Smoke test expected the Key Stats dashboard row group %s to render populated rows." % str(key_stats_rows_name)
 			}
+
+	var key_stats_dividend_rows: VBoxContainer = game_root.find_child("KeyStatsDividendRows", true, false) as VBoxContainer
+	var key_stats_dividend_text: String = _collect_node_text(key_stats_dividend_rows)
+	if (
+		key_stats_dividend_text.is_empty() or
+		not key_stats_dividend_text.contains("Declared DPS") or
+		not key_stats_dividend_text.contains("Payout Ratio") or
+		not key_stats_dividend_text.contains("Record / Pay")
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Key Stats to expose the Dividend card with DPS, payout, and timetable rows."
+		}
 
 	var key_stats_metric_rows: VBoxContainer = game_root.find_child("KeyStatsMetricTableRows", true, false) as VBoxContainer
 	var key_stats_net_income_button: Button = game_root.find_child("KeyStatsMetricNetIncomeButton", true, false) as Button

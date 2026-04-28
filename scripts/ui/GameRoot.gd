@@ -1075,6 +1075,7 @@ func _ensure_key_stats_dashboard_ui() -> void:
 
 	_build_key_stats_card("current_valuation", "Current Valuation", "KeyStatsCurrentValuationCard", "KeyStatsCurrentValuationRows", left_column)
 	_build_key_stats_card("per_share", "Per Share", "KeyStatsPerShareCard", "KeyStatsPerShareRows", left_column)
+	_build_key_stats_card("dividend", "Dividend", "KeyStatsDividendCard", "KeyStatsDividendRows", left_column)
 	_build_key_stats_metric_card(center_column)
 	_build_key_stats_card("profitability", "Profitability", "KeyStatsProfitabilityCard", "KeyStatsProfitabilityRows", center_column)
 	_build_key_stats_card("income_statement", "Income Statement", "KeyStatsIncomeStatementCard", "KeyStatsIncomeStatementRows", right_column)
@@ -1255,6 +1256,7 @@ func _refresh_key_stats_dashboard(snapshot: Dictionary) -> void:
 		var empty_rows: Array = [{"label": "Status", "value": "Pick a stock"}]
 		_refresh_key_stats_rows("current_valuation", empty_rows)
 		_refresh_key_stats_rows("per_share", empty_rows)
+		_refresh_key_stats_rows("dividend", empty_rows)
 		_refresh_key_stats_rows("profitability", empty_rows)
 		_refresh_key_stats_rows("income_statement", empty_rows)
 		_refresh_key_stats_rows("balance_sheet", empty_rows)
@@ -1265,6 +1267,7 @@ func _refresh_key_stats_dashboard(snapshot: Dictionary) -> void:
 	var context: Dictionary = _build_key_stats_context(snapshot)
 	_refresh_key_stats_rows("current_valuation", _build_key_stats_valuation_rows(context))
 	_refresh_key_stats_rows("per_share", _build_key_stats_per_share_rows(context))
+	_refresh_key_stats_rows("dividend", _build_key_stats_dividend_rows(context))
 	_refresh_key_stats_rows("profitability", _build_key_stats_profitability_rows(context))
 	_refresh_key_stats_rows("income_statement", _build_key_stats_income_statement_rows(context))
 	_refresh_key_stats_rows("balance_sheet", _build_key_stats_balance_sheet_rows(context))
@@ -1386,11 +1389,18 @@ func _build_key_stats_context(snapshot: Dictionary) -> Dictionary:
 	var book_value_per_share: float = _key_stats_safe_divide(equity, shares_outstanding)
 	var operating_cashflow_per_share: float = _key_stats_safe_divide(cash_from_operating_ttm, shares_outstanding)
 	var free_cashflow_per_share: float = _key_stats_safe_divide(free_cash_flow_ttm, shares_outstanding)
+	var company_id: String = str(snapshot.get("id", ""))
+	var dividend_context: Dictionary = _build_key_stats_dividend_context(
+		GameManager.get_corporate_dividend_snapshot(company_id) if not company_id.is_empty() else {},
+		current_price
+	)
 
 	return {
+		"company_id": company_id,
 		"financials": financials,
 		"financial_history": financial_history,
 		"financial_statement_snapshot": financial_statement_snapshot,
+		"dividend_context": dividend_context,
 		"selected_period": selected_period,
 		"current_price": current_price,
 		"shares_outstanding": shares_outstanding,
@@ -1473,6 +1483,54 @@ func _build_key_stats_per_share_rows(context: Dictionary) -> Array:
 		{"label": "Book Value Per Share", "value": _format_key_stats_decimal_value(float(context.get("book_value_per_share", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)},
 		{"label": "Operating Cashflow Per Share (TTM)", "value": _format_key_stats_decimal_value(float(context.get("operating_cashflow_per_share", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)},
 		{"label": "Free Cashflow Per Share (TTM)", "value": _format_key_stats_decimal_value(float(context.get("free_cashflow_per_share", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)}
+	]
+
+
+func _build_key_stats_dividend_context(dividend_snapshot: Dictionary, current_price: float) -> Dictionary:
+	var current_day_number: int = RunState.day_index + 1
+	var declared_row: Dictionary = _first_key_stats_dividend_row(dividend_snapshot.get("declared_rows", []))
+	var next_row: Dictionary = declared_row
+	if next_row.is_empty():
+		next_row = _first_key_stats_dividend_row(dividend_snapshot.get("upcoming_rows", []))
+	var paid_row: Dictionary = _last_key_stats_dividend_row(dividend_snapshot.get("paid_rows", []))
+	var basis_row: Dictionary = next_row if not next_row.is_empty() else paid_row
+	var next_dps: float = float(next_row.get("amount_per_share", 0.0)) if not next_row.is_empty() else 0.0
+	return {
+		"status": _key_stats_dividend_status_label(next_row),
+		"has_declared": not declared_row.is_empty(),
+		"declared_dps": float(declared_row.get("amount_per_share", 0.0)) if not declared_row.is_empty() else 0.0,
+		"next_dps": next_dps,
+		"next_yield": _key_stats_safe_divide(next_dps, current_price),
+		"payout_ratio": float(basis_row.get("payout_ratio", 0.0)) if not basis_row.is_empty() else 0.0,
+		"record_day_number": int(next_row.get("record_day_number", 0)) if not next_row.is_empty() else 0,
+		"payment_day_number": int(next_row.get("payment_day_number", 0)) if not next_row.is_empty() else 0,
+		"eligible_shares": int(next_row.get("eligible_shares", 0)) if not next_row.is_empty() else 0,
+		"projected_amount": float(next_row.get("projected_amount", 0.0)) if not next_row.is_empty() else 0.0,
+		"last_paid_dps": float(paid_row.get("amount_per_share", 0.0)) if not paid_row.is_empty() else 0.0,
+		"current_day_number": current_day_number
+	}
+
+
+func _build_key_stats_dividend_rows(context: Dictionary) -> Array:
+	var dividend_context: Dictionary = context.get("dividend_context", {})
+	var current_day_number: int = int(dividend_context.get("current_day_number", RunState.day_index + 1))
+	var has_declared: bool = bool(dividend_context.get("has_declared", false))
+	var next_dps: float = float(dividend_context.get("next_dps", 0.0))
+	var payout_ratio: float = float(dividend_context.get("payout_ratio", 0.0))
+	var projected_amount: float = float(dividend_context.get("projected_amount", 0.0))
+	return [
+		{"label": "Status", "value": str(dividend_context.get("status", "No scheduled"))},
+		{"label": "Declared DPS", "value": _format_currency(float(dividend_context.get("declared_dps", 0.0))) if has_declared else "-"},
+		{"label": "Next DPS", "value": _format_currency(next_dps) if next_dps > 0.0 else "-"},
+		{"label": "Next Yield", "value": _format_key_stats_percent_ratio(float(dividend_context.get("next_yield", 0.0)), next_dps > 0.0)},
+		{"label": "Payout Ratio", "value": _format_key_stats_percent_ratio(payout_ratio, payout_ratio > 0.0)},
+		{"label": "Record / Pay", "value": _format_key_stats_dividend_timetable(
+			int(dividend_context.get("record_day_number", 0)),
+			int(dividend_context.get("payment_day_number", 0)),
+			current_day_number
+		)},
+		{"label": "Your Est.", "value": _format_currency(projected_amount) if next_dps > 0.0 else "-", "color": COLOR_POSITIVE if projected_amount > 0.0 else COLOR_MUTED},
+		{"label": "Last Paid DPS", "value": _format_currency(float(dividend_context.get("last_paid_dps", 0.0))) if float(dividend_context.get("last_paid_dps", 0.0)) > 0.0 else "-"}
 	]
 
 
@@ -1865,6 +1923,56 @@ func _key_stats_period_has_statement_line(period: Dictionary, section_id: String
 		if str(line_item.get("id", "")) == line_id:
 			return true
 	return false
+
+
+func _first_key_stats_dividend_row(rows: Array) -> Dictionary:
+	for row_value in rows:
+		if typeof(row_value) == TYPE_DICTIONARY:
+			return row_value
+	return {}
+
+
+func _last_key_stats_dividend_row(rows: Array) -> Dictionary:
+	for row_index in range(rows.size() - 1, -1, -1):
+		if typeof(rows[row_index]) == TYPE_DICTIONARY:
+			return rows[row_index]
+	return {}
+
+
+func _key_stats_dividend_status_label(row: Dictionary) -> String:
+	if row.is_empty():
+		return "No scheduled"
+	match str(row.get("status", "scheduled")):
+		"approved":
+			return "Declared"
+		"ex_date":
+			return "Ex-date"
+		"recorded":
+			return "Recorded"
+		"paid":
+			return "Paid"
+		_:
+			return "Proposed"
+
+
+func _format_key_stats_dividend_timetable(record_day_number: int, payment_day_number: int, current_day_number: int) -> String:
+	if record_day_number <= 0 and payment_day_number <= 0:
+		return "-"
+	return "%s / %s" % [
+		_format_key_stats_day_delta(record_day_number, current_day_number),
+		_format_key_stats_day_delta(payment_day_number, current_day_number)
+	]
+
+
+func _format_key_stats_day_delta(day_number: int, current_day_number: int) -> String:
+	if day_number <= 0:
+		return "-"
+	var delta: int = day_number - current_day_number
+	if delta == 0:
+		return "Today"
+	if delta > 0:
+		return "D+%d" % delta
+	return "D%d" % delta
 
 
 func _key_stats_safe_divide(numerator: float, denominator: float) -> float:

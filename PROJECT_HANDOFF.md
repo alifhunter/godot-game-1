@@ -38,12 +38,13 @@ Read this file first in the next session.
     - `fc14108 Build Key Stats card dashboard`
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
-    - latest checkpoint message: `Add cash dividend corporate actions`
+    - latest checkpoint message: `Show dividends in Key Stats`
   - after checkpoint commits, `git status --short` should generally be clean except ignored local `logs/` output
-  - current local note: cash dividends are now real corporate actions; `Life` reads declared dividend rows from the corporate-action calendar instead of inventing synthetic income
+  - current local note: the STOCKBOT `Key Stats` dashboard now includes a dividend card fed by the real cash-dividend corporate-action calendar
 
 ## Latest Session Snapshot
-- Most recent work added a first-pass cash dividend corporate-action system and connected `Life` to declared dividend income.
+- Most recent work added a `Dividend` card to STOCKBOT `Key Stats`, using the real cash-dividend corporate-action calendar for DPS, yield, payout, timetable, and player-estimated proceeds.
+- The previous pass added a first-pass cash dividend corporate-action system and connected `Life` to declared dividend income.
 - The previous major pass turned `Thesis Board` into a stronger learning loop: a two-column evidence builder, staged white-paper report overlay, evidence-discipline guidance, player-led chart pattern claims from STOCKBOT charts, and compact thesis evidence persistence.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses, shows short processing phases on the desktop button, and now has a snappy press/phase pulse that resets to neutral after processing.
@@ -145,7 +146,8 @@ Read this file first in the next session.
   - Dividend income now comes from in-game `cash_dividend` corporate actions after declaration; there is no external dividend data feed.
 - STOCKBOT status:
   - `Key Stats` is now a dark STOCKBOT-style card dashboard rather than a simple text block.
-  - Current dashboard sections are `Current Valuation`, `Per Share`, a center metric table, `Profitability`, `Income Statement`, `Balance Sheet`, and `Cash Flow Statement`.
+  - Current dashboard sections are `Current Valuation`, `Per Share`, `Dividend`, a center metric table, `Profitability`, `Income Statement`, `Balance Sheet`, and `Cash Flow Statement`.
+  - The `Dividend` card reads `GameManager.get_corporate_dividend_snapshot(company_id)` and shows compact status, declared DPS, next DPS, implied yield, payout ratio, record/payment timing, player estimated proceeds, and last paid DPS.
   - The center metric table has `Net Income`, `EPS`, and `Revenue` pills and shows the last three generated fiscal years with `Q1-Q4`, `Annualised`, and `TTM` rows.
   - The overview derives TTM, per-share, valuation, cash-flow, EV, and profitability approximations from the existing generated annual/quarterly data; there are no save-schema or simulator changes.
   - The separate `Financials` tab remains the detailed quarter-by-quarter reader with the existing `Older / Newer` controls.
@@ -1886,6 +1888,12 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - Key Stats dividend card pass on `2026-04-28`:
+    - `git diff --check` passed
+    - Godot project-load check passed with `--log-file logs\project-load-key-stats-dividend.log --quit`
+    - quick Godot headless smoke with `--log-file logs\smoke-key-stats-dividend.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
+    - smoke now asserts the `KeyStatsDividendCard` and `KeyStatsDividendRows` exist and expose `Declared DPS`, `Payout Ratio`, and `Record / Pay` rows
+    - non-blocking Windows/Godot note: this smoke run can print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; treat it as trailing platform noise unless it appears before test success or affects network/API work
   - Cash dividend corporate-action pass on `2026-04-28`:
     - `git diff --check` passed
     - Godot project-load check passed with `--log-file logs\project-load-dividends.log --quit`
