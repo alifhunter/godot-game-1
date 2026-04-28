@@ -38,13 +38,16 @@ Read this file first in the next session.
     - `fc14108 Build Key Stats card dashboard`
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
-    - latest checkpoint message: `Show dividends in Key Stats`
+    - latest checkpoint message: `Add private placement and stock dividends`
   - after checkpoint commits, `git status --short` should generally be clean except ignored local `logs/` output
-  - current local note: the STOCKBOT `Key Stats` dashboard now includes a dividend card fed by the real cash-dividend corporate-action calendar
+  - current local note: corporate actions now include enabled `private_placement` RUPSLB chains and `stock_dividend` distributions alongside cash dividends
 
 ## Latest Session Snapshot
-- Most recent work added a `Dividend` card to STOCKBOT `Key Stats`, using the real cash-dividend corporate-action calendar for DPS, yield, payout, timetable, and player-estimated proceeds.
-- The previous pass added a first-pass cash dividend corporate-action system and connected `Life` to declared dividend income.
+- Most recent work enabled `private_placement` as an interactive RUPSLB corporate-action family and added `stock_dividend` distributions tied to the dividend calendar.
+- Private placements now generate deterministic issuance terms, pass through the RUPSLB vote flow, emit application payloads at execution, increase shares outstanding, apply a theoretical ex-placement price adjustment, reduce free float for locked strategic shares, and record share-structure adjustments.
+- Stock dividends now progress through scheduled/approved/ex/record/paid states, grant bonus shares to record-date holders, adjust company shares outstanding and historical price references, and appear in portfolio history plus STOCKBOT Key Stats dividend rows.
+- The previous pass added a `Dividend` card to STOCKBOT `Key Stats`, using the real dividend corporate-action calendar for DPS, yield, payout, timetable, stock ratio, and player-estimated proceeds/shares.
+- The previous dividend pass added a first-pass cash dividend corporate-action system and connected `Life` to declared dividend income.
 - The previous major pass turned `Thesis Board` into a stronger learning loop: a two-column evidence builder, staged white-paper report overlay, evidence-discipline guidance, player-led chart pattern claims from STOCKBOT charts, and compact thesis evidence persistence.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses, shows short processing phases on the desktop button, and now has a snappy press/phase pulse that resets to neutral after processing.
@@ -144,10 +147,11 @@ Read this file first in the next session.
     - last updated day/date
   - Life V1 is deliberately a planning view only; it does not deduct month-end cash yet.
   - Dividend income now comes from in-game `cash_dividend` corporate actions after declaration; there is no external dividend data feed.
+  - `stock_dividend` actions affect held shares, company share count, and price basis, but they do not count as monthly cash income in `Life`.
 - STOCKBOT status:
   - `Key Stats` is now a dark STOCKBOT-style card dashboard rather than a simple text block.
   - Current dashboard sections are `Current Valuation`, `Per Share`, `Dividend`, a center metric table, `Profitability`, `Income Statement`, `Balance Sheet`, and `Cash Flow Statement`.
-  - The `Dividend` card reads `GameManager.get_corporate_dividend_snapshot(company_id)` and shows compact status, declared DPS, next DPS, implied yield, payout ratio, record/payment timing, player estimated proceeds, and last paid DPS.
+  - The `Dividend` card reads `GameManager.get_corporate_dividend_snapshot(company_id)` and shows compact status, declared DPS, next DPS, implied yield, payout ratio, record/payment timing, stock dividend ratio, estimated bonus shares, player estimated proceeds, and last paid DPS.
   - The center metric table has `Net Income`, `EPS`, and `Revenue` pills and shows the last three generated fiscal years with `Q1-Q4`, `Annualised`, and `TTM` rows.
   - The overview derives TTM, per-share, valuation, cash-flow, EV, and profitability approximations from the existing generated annual/quarterly data; there are no save-schema or simulator changes.
   - The separate `Financials` tab remains the detailed quarter-by-quarter reader with the existing `Older / Newer` controls.
@@ -226,9 +230,10 @@ Read this file first in the next session.
   - UI-button recap readiness is now mostly dominated by market simulation, Summary row collection, News company-row/feed rendering, and recap UI work; save serialization and open app refresh cost still exist, but they are shifted into post-recap settled time.
 - Last successful verification in this session:
   - `git diff --check`
-  - Godot project-load check
-  - quick smoke with `--log-file logs\smoke-life-v1.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
-  - the quick smoke now asserts old-save Life backfill, Life desktop open/close behavior, settled window animation state, populated housing/lifestyle selectors, monthly budget rows, runway summary, Life plan autosave/save-load persistence, and flushed `player_life` persistence to disk
+  - Godot project-load check with `--log-file logs\project-load-private-placement-stock-dividend-3.log --quit`
+  - quick smoke with `--log-file logs\smoke-private-placement-stock-dividend.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
+  - the quick smoke now asserts private placement RUPSLB scheduling/voting/execution, share dilution, share-structure adjustment records, stock dividend scheduling/payment, player bonus shares, company share-count adjustment, and portfolio history side `stock_dividend`
+  - existing quick-smoke coverage still asserts old-save Life backfill, Life desktop open/close behavior, settled window animation state, populated housing/lifestyle selectors, monthly budget rows, runway summary, Life plan autosave/save-load persistence, and flushed `player_life` persistence to disk
   - the quick smoke also still asserts old-save Thesis backfill, Thesis desktop open/focus/close behavior, settled window animation state, two-column Thesis Board layout, hidden report overlay at startup, staged report preparation, white-paper reveal, thesis create/save/load persistence, populated evidence options, passive Evidence discipline strip text, absence of the removed `Focus Gap` shortcut, add/remove evidence autosaves, generated report verdict/grade/discipline rows/target/claim-led sections, report copy avoiding raw system/debug wording, no raw `quality/growth/risk + number` report phrasing, evidence-discipline and chart-pattern next-check report copy, frozen reports after `Advance Day`, review refresh after at least one simulated day, Pattern chart tool existence, deterministic Good/Plausible/Weak/Contradicted pattern fixture states, disabled Add-to-Thesis without a matching open thesis, single/multiple thesis destination flow, compact chart-pattern evidence persistence, and player-led chart-pattern report copy
   - existing quick-smoke coverage still asserts the Key Stats dashboard cards, populated row groups, `Net Income` / `EPS` / `Revenue` pill switching, the separate `Financials` tab rows/navigation, hidden Financials/Broker helper labels, uniform Dashboard calendar grid shape, Dashboard calendar event popup/buttons, Dashboard sector card-to-stock-list navigation, Dashboard section title styling, the new `Index Gorengan` recap values, the real sparkline point count, and hidden old index grid/hint/date nodes
   - normal-play perf scene with `--log-file logs\normal-play-dashboard-index-recap.log --scene res://scenes/tests/NormalPlayPerfTest.tscn -- --smoke-local-io`, which printed `NORMAL_PLAY_PERF_OK open_network=42.47ms advance_network_open_recap_ready=1208.58ms advance_network_open=1500.78ms advance_desktop_only_recap_ready=1133.38ms advance_desktop_only=1561.44ms open_stock=101.2ms advance_stock_open_recap_ready=1007.93ms advance_stock_open=1314.42ms open_news=195.54ms open_network_with_news=33.42ms advance_news_network_open_recap_ready=957.95ms advance_news_network_open=1455.98ms flush_pending_save=241.43ms local_save_bytes=2010467`
@@ -278,10 +283,10 @@ Read this file first in the next session.
 - A first playable corporate-action / meeting-chain layer now exists behind `News`, `Twooter`, `Network`, and daily market behavior
 - Corporate meetings now have two player-facing venue surfaces:
   - a shared meeting modal reachable from `Dashboard`, `News`, and `Network`
-  - a dedicated fullscreen staged `RUPSLB` overlay for interactive `rights_issue` meetings
+  - a dedicated fullscreen staged `RUPSLB` overlay for interactive `rights_issue` and `private_placement` meetings
 - `annual_rups` and `rupslb` attendance now requires current player ownership of that company:
   - zero-position players can still read simple public meeting notices where applicable, but the attendance action is disabled with shareholder-only reason text
-  - zero-position players cannot open interactive `rights_issue` `RUPSLB` sessions
+  - zero-position players cannot open interactive `rights_issue` / `private_placement` `RUPSLB` sessions
   - the current prototype uses held shares on the meeting day; there is no separate record-date/shareholder-registry system yet
 - Upgrade tiers are bought with player cash and now drive trading fees, News access, Twooter access, chart indicators, and daily Network action points
 - A backtick console-command overlay now exists for cheat/testing commands
@@ -1162,6 +1167,7 @@ Read this file first in the next session.
     - `cancellation_risk`
     - `market_overpricing`
     - `funding_pressure`
+    - `placement_terms` for `private_placement` chains
     - `expected_meeting_type`
     - `active_meeting_id`
     - `agenda_payload`
@@ -1188,11 +1194,11 @@ Read this file first in the next session.
 - Current family rollout:
   - enabled v1 families:
     - `rights_issue`
+    - `private_placement`
     - `stock_buyback`
     - `stock_split`
     - `ceo_change`
   - cataloged but disabled for later:
-    - `private_placement`
     - `restructuring`
     - `strategic_merger_acquisition`
     - `backdoor_listing`
@@ -1224,16 +1230,19 @@ Read this file first in the next session.
   - ex-date and payment timing use deterministic trading-day delays from the catalog; record date is one trading day after ex-date
   - record-date eligibility uses the player's held shares on record day, and payment credits cash on payment day through `RunState.apply_day_result()`
   - paid dividends are added to portfolio history with side `dividend` so the Portfolio history can show share count and received cash
-  - `GameManager.get_corporate_dividend_snapshot(company_id := "")` exposes upcoming/declared/paid rows for UI and tests
+  - `stock_dividend` is also enabled and follows the same scheduled/approved/ex/record/paid lifecycle with a deterministic distribution ratio
+  - stock dividend payment grants bonus shares to record-date holders with portfolio history side `stock_dividend`, increases company shares outstanding, and applies an ex-stock-dividend price/history adjustment
+  - `GameManager.get_corporate_dividend_snapshot(company_id := "")` exposes upcoming/declared/paid `cash_dividend` and `stock_dividend` rows for UI and tests
   - `GameManager.debug_schedule_next_day_cash_dividend(company_id)` exists for deterministic smoke coverage and debugging
+  - `GameManager.debug_schedule_next_day_stock_dividend(company_id)` exists for deterministic smoke coverage and debugging
 - Current venue/calendar behavior:
   - `corporate_meeting_calendar` is keyed by date and stores meeting rows with linked company/family/chain metadata
   - meeting statuses are refreshed during day advancement
   - eligible attendance has no AP/cash cost in v1 and is persisted in `RunState.attended_meetings`; `RUPS` / `RUPSLB` attendance requires current share ownership
   - there is no AP cost or broader event-slot/time-slot cost yet
-  - debug-only next-day `rights_issue` `rupslb` meetings can now be inserted in a hidden `queued` state for the next trading day
+  - debug-only next-day `rights_issue` and `private_placement` `rupslb` meetings can now be inserted in a hidden `queued` state for the next trading day
   - `queued` meetings are intentionally omitted from current player-facing meeting lists and company meeting surfaces until day advancement flips them into the normal visible scheduled flow
-  - interactive meeting sessions currently exist only for `rights_issue` `rupslb`
+  - interactive meeting sessions currently exist for `rights_issue` and `private_placement` `rupslb`
   - `RunState.corporate_meeting_sessions` stores one session per meeting id, including:
     - current staged-presentation step
     - attended/closed state
@@ -1888,6 +1897,13 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - Private placement + stock dividend pass on `2026-04-28`:
+    - `git diff --check` passed
+    - Godot project-load check passed with `--log-file logs\project-load-private-placement-stock-dividend-3.log --quit`
+    - quick Godot headless smoke with `--log-file logs\smoke-private-placement-stock-dividend.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
+    - smoke now asserts deterministic private placement RUPSLB scheduling, shareholder session/vote flow, execution application payloads, shares-outstanding dilution, and share-structure adjustment records
+    - smoke now asserts deterministic stock dividend scheduling, declared-to-paid lifecycle, player bonus-share delivery, company shares-outstanding adjustment, day-result distribution payloads, and portfolio history side `stock_dividend`
+    - non-blocking Windows/Godot note: this smoke run printed `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; treat it as trailing platform noise unless it appears before test success or affects network/API work
   - Key Stats dividend card pass on `2026-04-28`:
     - `git diff --check` passed
     - Godot project-load check passed with `--log-file logs\project-load-key-stats-dividend.log --quit`
@@ -2044,7 +2060,7 @@ Read this file first in the next session.
     - floaters: `225`
     - insider templates: `12`
 - Last known smoke output from `user://smoke_test_result.txt`:
-  - quick: `SMOKE_QUICK_OK normal_equity=94001565.29 days=3 summary=Retail-led accumulation gave WAME the cleanest tape today.`
+  - quick: `SMOKE_QUICK_OK normal_equity=94094275.24 days=3 summary=Retail-led accumulation gave WAME the cleanest tape today.`
   - full: `SMOKE_OK normal_equity=93998965.29 grind_equity=9934611.5 grind_down_days=15 summary=Retail-led accumulation gave SUSY the cleanest tape today.`
 
 ## Known Limitations
@@ -2107,15 +2123,15 @@ Read this file first in the next session.
 - Trade list now has basic All Stock search, but no sort tools yet
 - `Load Run` now uses a loading screen, but the smoke flow still does not explicitly click through the saved-run path
 - The broader corporate-action layer now exists, but it is still v1:
-  - only `rights_issue`, `stock_buyback`, `stock_split`, and `ceo_change` are currently enabled
-  - `private_placement`, `restructuring`, `strategic_merger_acquisition`, and `backdoor_listing` exist in catalog form only and are not active yet
-  - only `rights_issue` `rupslb` currently has interactive staged voting
+  - `rights_issue`, `private_placement`, `stock_buyback`, `stock_split`, and `ceo_change` are currently enabled
+  - `restructuring`, `strategic_merger_acquisition`, and `backdoor_listing` exist in catalog form only and are not active yet
+  - only `rights_issue` and `private_placement` `rupslb` currently have interactive staged voting
   - `annual_rups` and `earnings_call` still use the simpler shared meeting modal
   - there is still no record-date/shareholder registry system; current held shares on the meeting day gate `RUPS` / `RUPSLB` attendance and voting
   - eligible venue attendance remains free and there is still no AP cost or broader event-slot time economy
   - same-day market prices are not recalculated after a vote; results feed the next simulated day instead
   - next-day queued meeting reveal currently exists only through the debug overlay helper; there is no normal gameplay action that schedules a future `RUPSLB` directly for player testing
-  - staged venue presentation is currently limited to the `rights_issue` `rupslb` overlay:
+  - staged venue presentation is currently limited to the `rights_issue` / `private_placement` `rupslb` overlay:
     - abstract attendee markers rather than full character actors
     - no branching Q&A or agenda-by-agenda voting yet
     - no interactive voting yet for the other enabled families
@@ -2213,8 +2229,8 @@ Read this file first in the next session.
   - consider housing/cars/status upgrades after the monthly cash-flow loop is working and readable
 - Network and corporate-action planning:
   - deepen the shared corporate-action chain object that `News`, `Twooter`, `Network`, market reaction, `earnings_call`, `annual_rups`, and `rupslb` already read/write
-  - tune annual cash-dividend eligibility, payout ratios, and market reaction once longer playtests show whether income is too rare or too generous
-  - expand interactive `rupslb` beyond `rights_issue` with more agenda families, record-date/shareholder-registry rules, and richer result nuance
+  - tune annual cash-dividend eligibility, stock-dividend distribution ratios, private-placement issuance discounts, and market reaction once longer playtests show whether income/dilution are too rare or too generous
+  - expand interactive `rupslb` beyond `rights_issue` / `private_placement` with more agenda families, record-date/shareholder-registry rules, and richer result nuance
   - deepen cross-contact conflict handling with actions like `Ask for evidence`, `Push back`, and `Compare source`
   - evolve Journal rows into searchable/filterable clues and tasks when source-check gameplay becomes a major loop
   - add favor cooldowns, report-back outcomes, relationship burn tuning, and perk hooks once Network pacing settles

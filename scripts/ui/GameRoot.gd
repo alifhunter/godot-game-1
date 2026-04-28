@@ -1488,24 +1488,34 @@ func _build_key_stats_per_share_rows(context: Dictionary) -> Array:
 
 func _build_key_stats_dividend_context(dividend_snapshot: Dictionary, current_price: float) -> Dictionary:
 	var current_day_number: int = RunState.day_index + 1
-	var declared_row: Dictionary = _first_key_stats_dividend_row(dividend_snapshot.get("declared_rows", []))
-	var next_row: Dictionary = declared_row
-	if next_row.is_empty():
-		next_row = _first_key_stats_dividend_row(dividend_snapshot.get("upcoming_rows", []))
+	var declared_rows: Array = dividend_snapshot.get("declared_rows", [])
+	var upcoming_rows: Array = dividend_snapshot.get("upcoming_rows", [])
+	var declared_cash_row: Dictionary = _first_key_stats_dividend_row_by_type(declared_rows, "cash_dividend")
+	var next_cash_row: Dictionary = declared_cash_row
+	if next_cash_row.is_empty():
+		next_cash_row = _first_key_stats_dividend_row_by_type(upcoming_rows, "cash_dividend")
+	var declared_stock_row: Dictionary = _first_key_stats_dividend_row_by_type(declared_rows, "stock_dividend")
+	var next_stock_row: Dictionary = declared_stock_row
+	if next_stock_row.is_empty():
+		next_stock_row = _first_key_stats_dividend_row_by_type(upcoming_rows, "stock_dividend")
+	var next_row: Dictionary = next_cash_row if not next_cash_row.is_empty() else next_stock_row
 	var paid_row: Dictionary = _last_key_stats_dividend_row(dividend_snapshot.get("paid_rows", []))
 	var basis_row: Dictionary = next_row if not next_row.is_empty() else paid_row
-	var next_dps: float = float(next_row.get("amount_per_share", 0.0)) if not next_row.is_empty() else 0.0
+	var next_dps: float = float(next_cash_row.get("amount_per_share", 0.0)) if not next_cash_row.is_empty() else 0.0
 	return {
 		"status": _key_stats_dividend_status_label(next_row),
-		"has_declared": not declared_row.is_empty(),
-		"declared_dps": float(declared_row.get("amount_per_share", 0.0)) if not declared_row.is_empty() else 0.0,
+		"has_declared": not declared_cash_row.is_empty(),
+		"declared_dps": float(declared_cash_row.get("amount_per_share", 0.0)) if not declared_cash_row.is_empty() else 0.0,
 		"next_dps": next_dps,
 		"next_yield": _key_stats_safe_divide(next_dps, current_price),
 		"payout_ratio": float(basis_row.get("payout_ratio", 0.0)) if not basis_row.is_empty() else 0.0,
-		"record_day_number": int(next_row.get("record_day_number", 0)) if not next_row.is_empty() else 0,
-		"payment_day_number": int(next_row.get("payment_day_number", 0)) if not next_row.is_empty() else 0,
-		"eligible_shares": int(next_row.get("eligible_shares", 0)) if not next_row.is_empty() else 0,
-		"projected_amount": float(next_row.get("projected_amount", 0.0)) if not next_row.is_empty() else 0.0,
+		"record_day_number": int(next_cash_row.get("record_day_number", 0)) if not next_cash_row.is_empty() else 0,
+		"payment_day_number": int(next_cash_row.get("payment_day_number", 0)) if not next_cash_row.is_empty() else 0,
+		"eligible_shares": int(next_cash_row.get("eligible_shares", 0)) if not next_cash_row.is_empty() else 0,
+		"projected_amount": float(next_cash_row.get("projected_amount", 0.0)) if not next_cash_row.is_empty() else 0.0,
+		"stock_ratio": float(next_stock_row.get("stock_dividend_ratio", 0.0)) if not next_stock_row.is_empty() else 0.0,
+		"stock_bonus_estimate": int(next_stock_row.get("projected_bonus_shares", 0)) if not next_stock_row.is_empty() else 0,
+		"stock_payment_day_number": int(next_stock_row.get("payment_day_number", 0)) if not next_stock_row.is_empty() else 0,
 		"last_paid_dps": float(paid_row.get("amount_per_share", 0.0)) if not paid_row.is_empty() else 0.0,
 		"current_day_number": current_day_number
 	}
@@ -1518,6 +1528,8 @@ func _build_key_stats_dividend_rows(context: Dictionary) -> Array:
 	var next_dps: float = float(dividend_context.get("next_dps", 0.0))
 	var payout_ratio: float = float(dividend_context.get("payout_ratio", 0.0))
 	var projected_amount: float = float(dividend_context.get("projected_amount", 0.0))
+	var stock_ratio: float = float(dividend_context.get("stock_ratio", 0.0))
+	var stock_bonus_estimate: int = int(dividend_context.get("stock_bonus_estimate", 0))
 	return [
 		{"label": "Status", "value": str(dividend_context.get("status", "No scheduled"))},
 		{"label": "Declared DPS", "value": _format_currency(float(dividend_context.get("declared_dps", 0.0))) if has_declared else "-"},
@@ -1529,6 +1541,8 @@ func _build_key_stats_dividend_rows(context: Dictionary) -> Array:
 			int(dividend_context.get("payment_day_number", 0)),
 			current_day_number
 		)},
+		{"label": "Stock Ratio", "value": _format_key_stats_percent_ratio(stock_ratio, stock_ratio > 0.0)},
+		{"label": "Stock Est.", "value": "%d share(s)" % stock_bonus_estimate if stock_ratio > 0.0 else "-"},
 		{"label": "Your Est.", "value": _format_currency(projected_amount) if next_dps > 0.0 else "-", "color": COLOR_POSITIVE if projected_amount > 0.0 else COLOR_MUTED},
 		{"label": "Last Paid DPS", "value": _format_currency(float(dividend_context.get("last_paid_dps", 0.0))) if float(dividend_context.get("last_paid_dps", 0.0)) > 0.0 else "-"}
 	]
@@ -1928,6 +1942,13 @@ func _key_stats_period_has_statement_line(period: Dictionary, section_id: String
 func _first_key_stats_dividend_row(rows: Array) -> Dictionary:
 	for row_value in rows:
 		if typeof(row_value) == TYPE_DICTIONARY:
+			return row_value
+	return {}
+
+
+func _first_key_stats_dividend_row_by_type(rows: Array, action_type: String) -> Dictionary:
+	for row_value in rows:
+		if typeof(row_value) == TYPE_DICTIONARY and str(row_value.get("action_type", "")) == action_type:
 			return row_value
 	return {}
 
@@ -8469,9 +8490,9 @@ func _build_trade_history_row(trade: Dictionary) -> Control:
 	row_wrap.add_child(row)
 
 	var side: String = str(trade.get("side", "")).to_upper()
-	var action_color: Color = COLOR_POSITIVE if side == "BUY" or side == "DIVIDEND" else COLOR_NEGATIVE
+	var action_color: Color = COLOR_POSITIVE if side == "BUY" or side == "DIVIDEND" or side == "STOCK_DIVIDEND" else COLOR_NEGATIVE
 	var qty_text: String = "%d lot(s)" % int(trade.get("lots", 0))
-	if side == "DIVIDEND":
+	if side == "DIVIDEND" or side == "STOCK_DIVIDEND":
 		qty_text = "%d share(s)" % int(trade.get("shares", 0))
 	var price_text: String = "-" if side.is_empty() else _format_currency(float(trade.get("price_per_share", 0.0)))
 

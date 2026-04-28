@@ -1397,6 +1397,161 @@ func _run_scenario(
 		game_root._refresh_all()
 		await get_tree().process_frame
 
+		var private_placement_company_id: String = ""
+		for company_index in range(RunState.company_order.size() - 1, -1, -1):
+			var private_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(private_candidate_company_id).get("has_live_chain", false)):
+				continue
+			private_placement_company_id = private_candidate_company_id
+			break
+		if private_placement_company_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find a chain-free company for private placement RUPSLB coverage."
+			}
+		var private_before_definition: Dictionary = RunState.get_effective_company_definition(private_placement_company_id, false, false)
+		var private_before_financials: Dictionary = private_before_definition.get("financials", {})
+		var private_shares_before: float = float(private_before_financials.get("shares_outstanding", private_before_definition.get("shares_outstanding", 0.0)))
+		if private_shares_before <= 0.0:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected private placement target shares outstanding to be available before execution."
+			}
+		var private_buy_result: Dictionary = GameManager.buy_lots(private_placement_company_id, 1)
+		if not bool(private_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before the private placement RUPSLB flow."
+			}
+		var private_schedule_result: Dictionary = GameManager.debug_schedule_next_day_private_placement_rupslb(private_placement_company_id)
+		var private_chain: Dictionary = private_schedule_result.get("chain", {})
+		var private_meeting: Dictionary = private_schedule_result.get("meeting", {})
+		var private_chain_id: String = str(private_chain.get("chain_id", ""))
+		var private_meeting_id: String = str(private_meeting.get("id", ""))
+		if (
+			not bool(private_schedule_result.get("success", false)) or
+			private_chain_id.is_empty() or
+			private_meeting_id.is_empty() or
+			str(private_chain.get("family", "")) != "private_placement" or
+			private_chain.get("placement_terms", {}).is_empty()
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected private placement debug scheduling to create a placement chain with issuance terms."
+			}
+
+		var private_chain_store: Dictionary = RunState.get_active_corporate_action_chains()
+		var private_live_chain: Dictionary = private_chain_store.get(private_chain_id, {}).duplicate(true)
+		private_live_chain["approval_odds"] = 0.99
+		private_live_chain["funding_pressure"] = 0.95
+		private_live_chain["frontrunner_strength"] = 0.95
+		private_live_chain["market_overpricing"] = 0.0
+		private_live_chain["management_stance"] = "confirm"
+		private_chain_store[private_chain_id] = private_live_chain
+		RunState.set_active_corporate_action_chains(private_chain_store)
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var private_meeting_visible: bool = false
+		for private_row_value in GameManager.get_corporate_meeting_snapshot().get("upcoming_rows", []):
+			if typeof(private_row_value) != TYPE_DICTIONARY:
+				continue
+			var private_row: Dictionary = private_row_value
+			if str(private_row.get("id", "")) == private_meeting_id and str(private_row.get("chain_family", "")) == "private_placement":
+				private_meeting_visible = true
+				break
+		if not private_meeting_visible:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the private placement RUPSLB to appear in upcoming meetings after one Advance Day."
+			}
+
+		var private_start_result: Dictionary = GameManager.start_corporate_meeting_session(private_meeting_id)
+		if not bool(private_start_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected private placement RUPSLB sessions to open for shareholders."
+			}
+		var private_vote_result: Dictionary = GameManager.submit_corporate_meeting_vote(private_meeting_id, "", "agree")
+		var private_vote_summary: Dictionary = private_vote_result.get("session", {}).get("result_summary", {})
+		if not bool(private_vote_result.get("success", false)) or not bool(private_vote_summary.get("approved", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the private placement RUPSLB agree vote to approve the agenda."
+			}
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var private_after_vote_chain: Dictionary = RunState.get_active_corporate_action_chains().get(private_chain_id, {})
+		if (
+			str(private_after_vote_chain.get("stage", "")) != "execution" or
+			not bool(RunState.get_corporate_meeting_sessions().get(private_meeting_id, {}).get("consumed", false))
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected approved private placement votes to move the chain into execution on the next simulated day."
+			}
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var private_application_found: bool = false
+		for private_application_value in RunState.last_day_results.get("corporate_action_applications", []):
+			if typeof(private_application_value) != TYPE_DICTIONARY:
+				continue
+			var private_application: Dictionary = private_application_value
+			if str(private_application.get("chain_id", "")) == private_chain_id and str(private_application.get("application_type", "")) == "private_placement":
+				private_application_found = true
+				break
+		if not private_application_found:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected private placement execution to emit an application payload."
+			}
+		var private_after_definition: Dictionary = RunState.get_effective_company_definition(private_placement_company_id, false, false)
+		var private_after_financials: Dictionary = private_after_definition.get("financials", {})
+		var private_shares_after: float = float(private_after_financials.get("shares_outstanding", private_after_definition.get("shares_outstanding", 0.0)))
+		if private_shares_after <= private_shares_before:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected private placement execution to increase company shares outstanding."
+			}
+		var private_adjustment_found: bool = false
+		for private_adjustment_value in RunState.get_company(private_placement_company_id).get("company_profile", {}).get("corporate_action_adjustments", []):
+			if typeof(private_adjustment_value) == TYPE_DICTIONARY and str(private_adjustment_value.get("type", "")) == "private_placement":
+				private_adjustment_found = true
+				break
+		if not private_adjustment_found:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected private placement execution to record a company share-structure adjustment."
+			}
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
+
 	var initial_news_snapshot: Dictionary = GameManager.get_news_snapshot()
 	if _count_unlocked_rows(initial_news_snapshot.get("outlets", [])) != 1:
 		game_root.queue_free()
@@ -4223,6 +4378,69 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 			break
 	if not dividend_trade_found:
 		return "Smoke test expected paid dividends to appear in portfolio history."
+
+	var stock_dividend_shares_before: int = int(RunState.get_holding(dividend_company_id).get("shares", 0))
+	var stock_dividend_definition_before: Dictionary = RunState.get_effective_company_definition(dividend_company_id, false, false)
+	var stock_dividend_financials_before: Dictionary = stock_dividend_definition_before.get("financials", {})
+	var stock_dividend_company_shares_before: float = float(stock_dividend_financials_before.get("shares_outstanding", stock_dividend_definition_before.get("shares_outstanding", 0.0)))
+	var stock_dividend_schedule_result: Dictionary = GameManager.debug_schedule_next_day_stock_dividend(dividend_company_id)
+	var scheduled_stock_dividend: Dictionary = stock_dividend_schedule_result.get("dividend", {})
+	var stock_dividend_ratio: float = float(scheduled_stock_dividend.get("stock_dividend_ratio", 0.0))
+	if (
+		not bool(stock_dividend_schedule_result.get("success", false)) or
+		scheduled_stock_dividend.is_empty() or
+		stock_dividend_ratio <= 0.0
+	):
+		return "Smoke test expected debug stock dividend scheduling to create a stock dividend action with a positive ratio."
+	var stock_dividend_id: String = str(scheduled_stock_dividend.get("id", ""))
+	var stock_dividend_expected_bonus: int = int(floor(float(stock_dividend_shares_before) * stock_dividend_ratio))
+	if stock_dividend_expected_bonus <= 0:
+		return "Smoke test expected the held dividend stock to qualify for a positive stock dividend share distribution."
+	var stock_dividend_snapshot: Dictionary = GameManager.get_corporate_dividend_snapshot(dividend_company_id)
+	var stock_dividend_upcoming_found: bool = false
+	for stock_upcoming_value in stock_dividend_snapshot.get("upcoming_rows", []):
+		if typeof(stock_upcoming_value) == TYPE_DICTIONARY and str(stock_upcoming_value.get("id", "")) == stock_dividend_id:
+			stock_dividend_upcoming_found = true
+			break
+	if not stock_dividend_upcoming_found:
+		return "Smoke test expected scheduled stock dividends to appear in the corporate dividend snapshot."
+
+	for _stock_dividend_day_index in range(4):
+		GameManager.advance_day()
+		await get_tree().process_frame
+	stock_dividend_snapshot = GameManager.get_corporate_dividend_snapshot(dividend_company_id)
+	var paid_stock_dividend_found: bool = false
+	for stock_paid_value in stock_dividend_snapshot.get("paid_rows", []):
+		if typeof(stock_paid_value) != TYPE_DICTIONARY:
+			continue
+		var stock_paid_row: Dictionary = stock_paid_value
+		if (
+			str(stock_paid_row.get("id", "")) == stock_dividend_id and
+			int(stock_paid_row.get("distributed_bonus_shares", 0)) >= stock_dividend_expected_bonus
+		):
+			paid_stock_dividend_found = true
+			break
+	if not paid_stock_dividend_found:
+		return "Smoke test expected stock dividends to move from declared to paid state with bonus shares."
+	if int(RunState.get_holding(dividend_company_id).get("shares", 0)) < stock_dividend_shares_before + stock_dividend_expected_bonus:
+		return "Smoke test expected paid stock dividends to increase the player share count."
+	var stock_dividend_company_shares_after: float = float(RunState.get_effective_company_definition(dividend_company_id, false, false).get("financials", {}).get("shares_outstanding", 0.0))
+	if stock_dividend_company_shares_after <= stock_dividend_company_shares_before:
+		return "Smoke test expected stock dividends to increase company shares outstanding."
+	var stock_dividend_distribution_found: bool = false
+	for stock_distribution_value in RunState.last_day_results.get("stock_dividend_distributions", []):
+		if typeof(stock_distribution_value) == TYPE_DICTIONARY and str(stock_distribution_value.get("dividend_id", "")) == stock_dividend_id:
+			stock_dividend_distribution_found = true
+			break
+	if not stock_dividend_distribution_found:
+		return "Smoke test expected stock dividend payment day results to include the share distribution payload."
+	var stock_dividend_trade_found: bool = false
+	for stock_trade_value in GameManager.get_trade_history():
+		if typeof(stock_trade_value) == TYPE_DICTIONARY and str(stock_trade_value.get("side", "")).to_lower() == "stock_dividend":
+			stock_dividend_trade_found = true
+			break
+	if not stock_dividend_trade_found:
+		return "Smoke test expected paid stock dividends to appear in portfolio history."
 
 	game_root.close_desktop_app("life")
 	await get_tree().process_frame

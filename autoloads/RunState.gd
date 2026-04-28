@@ -597,6 +597,8 @@ func _build_last_day_results_save_payload(source_results: Variant) -> Dictionary
 		"company_arc_phase_events": source.get("company_arc_phase_events", []).duplicate(true),
 		"corporate_action_events": source.get("corporate_action_events", []).duplicate(true),
 		"dividend_payments": source.get("dividend_payments", []).duplicate(true),
+		"stock_dividend_distributions": source.get("stock_dividend_distributions", []).duplicate(true),
+		"corporate_action_applications": source.get("corporate_action_applications", []).duplicate(true),
 		"started_special_events": source.get("started_special_events", []).duplicate(true)
 	}
 	return save_results
@@ -955,6 +957,8 @@ func apply_day_result(day_result: Dictionary) -> void:
 	for company_id in day_result.get("companies", {}).keys():
 		companies[str(company_id)] = _normalize_day_result_company_runtime(day_result["companies"][company_id])
 		applied_company_count += 1
+	_apply_corporate_action_applications(day_result.get("corporate_action_applications", []))
+	_apply_stock_dividend_distributions(day_result.get("stock_dividend_distributions", []))
 	_log_apply_day_perf_elapsed(log_apply_perf, "normalize_companies", phase_started_at_usec, " companies=%d" % applied_company_count)
 
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -1795,6 +1799,189 @@ func _apply_dividend_payments(payments: Array) -> void:
 			amount,
 			cash_after
 		)
+
+
+func _apply_corporate_action_applications(applications: Array) -> void:
+	if applications.is_empty():
+		return
+	for application_value in applications:
+		if typeof(application_value) != TYPE_DICTIONARY:
+			continue
+		var application: Dictionary = application_value
+		match str(application.get("application_type", "")):
+			"private_placement":
+				_apply_private_placement_application(application)
+
+
+func _apply_private_placement_application(application: Dictionary) -> void:
+	var company_id: String = str(application.get("company_id", ""))
+	if company_id.is_empty() or not companies.has(company_id):
+		return
+	var new_shares: float = max(float(application.get("new_shares", 0.0)), 0.0)
+	if new_shares <= 0.0:
+		return
+	var definition: Dictionary = get_effective_company_definition(company_id, false, false)
+	var runtime: Dictionary = companies.get(company_id, {}).duplicate(true)
+	var financials: Dictionary = definition.get("financials", {})
+	var old_shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", 0.0))), 1.0)
+	var old_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var gross_proceeds: float = max(float(application.get("gross_proceeds", 0.0)), 0.0)
+	var new_shares_outstanding: float = old_shares_outstanding + new_shares
+	var theoretical_price: float = (old_price * old_shares_outstanding + gross_proceeds) / new_shares_outstanding
+	var price_factor: float = clamp(theoretical_price / old_price, 0.65, 1.15)
+	var new_price: float = _apply_company_price_factor(company_id, price_factor, false)
+	var old_free_float_pct: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, 0.02, 0.95)
+	var new_free_float_pct: float = clamp((old_shares_outstanding * old_free_float_pct) / new_shares_outstanding, 0.02, 0.95) * 100.0
+	_set_company_share_structure(
+		company_id,
+		new_shares_outstanding,
+		new_price * new_shares_outstanding,
+		new_free_float_pct,
+		{
+			"type": "private_placement",
+			"chain_id": str(application.get("chain_id", "")),
+			"new_shares": new_shares,
+			"issue_price": float(application.get("issue_price", 0.0)),
+			"gross_proceeds": gross_proceeds,
+			"discount_pct": float(application.get("discount_pct", 0.0)),
+			"investor_label": str(application.get("investor_label", "")),
+			"day_index": int(application.get("day_index", day_index))
+		}
+	)
+
+
+func _apply_stock_dividend_distributions(distributions: Array) -> void:
+	if distributions.is_empty():
+		return
+	for distribution_value in distributions:
+		if typeof(distribution_value) != TYPE_DICTIONARY:
+			continue
+		var distribution: Dictionary = distribution_value
+		var company_id: String = str(distribution.get("company_id", ""))
+		var ratio: float = max(float(distribution.get("stock_dividend_ratio", 0.0)), 0.0)
+		if company_id.is_empty() or not companies.has(company_id) or ratio <= 0.0:
+			continue
+		var bonus_shares: int = max(int(distribution.get("bonus_shares", 0)), 0)
+		if bonus_shares > 0:
+			var holdings: Dictionary = player_portfolio.get("holdings", {})
+			var holding: Dictionary = holdings.get(company_id, {
+				"company_id": company_id,
+				"shares": 0,
+				"average_price": 0.0
+			})
+			var current_shares: int = max(int(holding.get("shares", 0)), 0)
+			var current_average: float = float(holding.get("average_price", 0.0))
+			var new_share_total: int = current_shares + bonus_shares
+			if new_share_total > 0:
+				holding["shares"] = new_share_total
+				holding["average_price"] = (current_average * float(current_shares)) / float(new_share_total)
+				holdings[company_id] = holding
+				player_portfolio["holdings"] = holdings
+				_record_trade(
+					company_id,
+					"stock_dividend",
+					{
+						"lots": int(floor(float(bonus_shares) / float(LOT_SIZE))),
+						"shares": bonus_shares,
+						"price_per_share": float(companies.get(company_id, {}).get("current_price", 0.0)),
+						"gross_value": 0.0,
+						"fee_rate": 0.0,
+						"fee": 0.0
+					},
+					0.0,
+					0.0,
+					float(player_portfolio.get("cash", 0.0))
+				)
+		var definition: Dictionary = get_effective_company_definition(company_id, false, false)
+		var financials: Dictionary = definition.get("financials", {})
+		var old_shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", 0.0))), 1.0)
+		var new_shares_outstanding: float = old_shares_outstanding * (1.0 + ratio)
+		var new_price: float = _apply_company_price_factor(company_id, 1.0 / (1.0 + ratio), true)
+		_set_company_share_structure(
+			company_id,
+			new_shares_outstanding,
+			new_price * new_shares_outstanding,
+			float(financials.get("free_float_pct", 35.0)),
+			{
+				"type": "stock_dividend",
+				"dividend_id": str(distribution.get("dividend_id", "")),
+				"stock_dividend_ratio": ratio,
+				"bonus_shares": bonus_shares,
+				"day_index": int(distribution.get("day_index", day_index))
+			}
+		)
+
+
+func _apply_company_price_factor(company_id: String, price_factor: float, adjust_history: bool) -> float:
+	if company_id.is_empty() or not companies.has(company_id):
+		return 0.0
+	var runtime: Dictionary = companies[company_id].duplicate(true)
+	var safe_factor: float = clamp(price_factor, 0.05, 20.0)
+	var current_price: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("current_price", 0.0)) * safe_factor)
+	runtime["current_price"] = current_price
+	runtime["previous_close"] = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("previous_close", current_price)) * safe_factor) if adjust_history else float(runtime.get("previous_close", current_price))
+	var price_history: Array = runtime.get("price_history", []).duplicate()
+	if adjust_history:
+		for price_index in range(price_history.size()):
+			price_history[price_index] = IDX_PRICE_RULES.normalize_last_price(float(price_history[price_index]) * safe_factor)
+	elif not price_history.is_empty():
+		price_history[price_history.size() - 1] = current_price
+	runtime["price_history"] = price_history
+	var price_bars: Array = runtime.get("price_bars", []).duplicate(true)
+	if adjust_history:
+		for bar_index in range(price_bars.size()):
+			price_bars[bar_index] = _scale_price_bar(price_bars[bar_index], safe_factor)
+	elif not price_bars.is_empty():
+		price_bars[price_bars.size() - 1] = _scale_price_bar(price_bars[price_bars.size() - 1], safe_factor)
+	runtime["price_bars"] = price_bars
+	companies[company_id] = runtime
+	return current_price
+
+
+func _scale_price_bar(bar_value: Variant, price_factor: float) -> Variant:
+	if typeof(bar_value) != TYPE_DICTIONARY:
+		return bar_value
+	var bar: Dictionary = bar_value.duplicate(true)
+	for price_key in ["open", "high", "low", "close"]:
+		if bar.has(price_key):
+			bar[price_key] = IDX_PRICE_RULES.normalize_last_price(float(bar.get(price_key, 0.0)) * price_factor)
+	return bar
+
+
+func _set_company_share_structure(
+	company_id: String,
+	shares_outstanding: float,
+	market_cap: float,
+	free_float_pct: float,
+	adjustment: Dictionary
+) -> void:
+	if company_id.is_empty() or not companies.has(company_id):
+		return
+	var runtime: Dictionary = companies[company_id].duplicate(true)
+	var profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
+	var financials: Dictionary = get_effective_company_definition(company_id, false, false).get("financials", {}).duplicate(true)
+	if not profile.get("financials", {}).is_empty():
+		financials = profile.get("financials", {}).duplicate(true)
+	financials["shares_outstanding"] = max(shares_outstanding, 1.0)
+	financials["market_cap"] = max(market_cap, 0.0)
+	financials["free_float_pct"] = clamp(free_float_pct, 0.0, 100.0)
+	profile["shares_outstanding"] = max(shares_outstanding, 1.0)
+	profile["financials"] = financials
+	var adjustments: Array = profile.get("corporate_action_adjustments", []).duplicate(true)
+	adjustments.append(adjustment.duplicate(true))
+	if adjustments.size() > 24:
+		adjustments = adjustments.slice(adjustments.size() - 24, adjustments.size())
+	profile["corporate_action_adjustments"] = adjustments
+	runtime["company_profile"] = profile
+	var depth_context: Dictionary = runtime.get("market_depth_context", {}).duplicate(true)
+	if not depth_context.is_empty():
+		depth_context["shares_outstanding"] = max(shares_outstanding, 1.0)
+		var free_float_ratio: float = clamp(free_float_pct / 100.0, 0.0, 1.0)
+		depth_context["free_float_ratio"] = free_float_ratio
+		depth_context["free_float_shares"] = max(shares_outstanding * free_float_ratio, 1.0)
+		depth_context["free_float_value"] = max(depth_context["free_float_shares"] * float(runtime.get("current_price", 0.0)), 1.0)
+		runtime["market_depth_context"] = depth_context
+	companies[company_id] = runtime
 
 
 func _record_player_market_flow(company_id: String, side: String, estimate: Dictionary) -> void:

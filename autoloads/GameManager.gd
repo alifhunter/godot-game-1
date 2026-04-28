@@ -617,6 +617,29 @@ func debug_schedule_next_day_rights_issue_rupslb(company_id: String) -> Dictiona
 	}
 
 
+func debug_schedule_next_day_private_placement_rupslb(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	var holding: Dictionary = RunState.get_holding(company_id)
+	if int(holding.get("shares", 0)) < get_lot_size():
+		return {"success": false, "message": "Own at least 1 lot first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_schedule_next_day_private_placement_rupslb(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not schedule a next-day private placement RUPSLB for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_schedule_next_day_private_placement_rupslb")
+	var meeting: Dictionary = result.get("meeting", {}).duplicate(true)
+	return {
+		"success": true,
+		"message": "Scheduled next-day private placement RUPSLB for %s." % str(meeting.get("ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true),
+		"meeting": meeting
+	}
+
+
 func debug_schedule_next_day_cash_dividend(company_id: String) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
@@ -632,6 +655,25 @@ func debug_schedule_next_day_cash_dividend(company_id: String) -> Dictionary:
 	return {
 		"success": true,
 		"message": "Scheduled next-day cash dividend for %s." % str(dividend.get("ticker", company_id.to_upper())),
+		"dividend": dividend
+	}
+
+
+func debug_schedule_next_day_stock_dividend(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_schedule_next_day_stock_dividend(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not schedule a next-day stock dividend for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_schedule_next_day_stock_dividend")
+	var dividend: Dictionary = result.get("dividend", {}).duplicate(true)
+	return {
+		"success": true,
+		"message": "Scheduled next-day stock dividend for %s." % str(dividend.get("ticker", company_id.to_upper())),
 		"dividend": dividend
 	}
 

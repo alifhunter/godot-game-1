@@ -1736,6 +1736,8 @@ func _public_family_label(family_id: String) -> String:
 	match family_id:
 		"rights_issue":
 			return "rights issue"
+		"private_placement":
+			return "private placement"
 		"stock_split":
 			return "stock split"
 		"stock_buyback":
@@ -1746,6 +1748,8 @@ func _public_family_label(family_id: String) -> String:
 			return "leadership change"
 		"dividend_special":
 			return "special dividend"
+		"stock_dividend":
+			return "stock dividend"
 		_:
 			return family_id.replace("_", " ")
 

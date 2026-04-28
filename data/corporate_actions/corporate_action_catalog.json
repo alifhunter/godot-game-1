@@ -15,6 +15,16 @@
     "minimum_payout_ratio": 0.08,
     "maximum_payout_ratio": 0.42
   },
+  "stock_dividend": {
+    "enabled": true,
+    "ex_delay_min_days": 2,
+    "ex_delay_max_days": 4,
+    "payment_delay_min_days": 6,
+    "payment_delay_max_days": 12,
+    "minimum_distribution_ratio": 0.05,
+    "maximum_distribution_ratio": 0.18,
+    "annual_probability_pct": 16
+  },
   "meeting_defaults": {
     "earnings_call": {
       "delay_min_days": 0,
@@ -240,7 +250,7 @@
     },
     {
       "id": "private_placement",
-      "enabled": false,
+      "enabled": true,
       "label": "Private Placement",
       "default_venue_type": "rupslb",
       "mutually_exclusive_families": [
@@ -257,7 +267,25 @@
           "label": "Approve private placement",
           "description": "Shareholders review a targeted placement structure and proposed strategic investor entry."
         }
-      ]
+      ],
+      "meeting_presentation": {
+        "stage_labels": {
+          "arrival": "Arrival",
+          "seating": "Seating",
+          "host_intro": "Host Intro",
+          "agenda_reveal": "Placement Terms",
+          "vote": "Vote",
+          "result": "Result Board"
+        },
+        "host_intro_lines": [
+          "The chair opens the extraordinary meeting and frames the private placement as a fast capital-raising decision.",
+          "Management says the placement brings in a targeted investor, but shareholders are watching the dilution and discount closely."
+        ],
+        "observer_copy": "You can watch the room, but only shareholders with a live position on the meeting day can cast a weighted vote.",
+        "vote_prompt": "The host now asks shareholders to vote on the proposed private placement agenda.",
+        "approved_result_copy": "The room approves the private placement proposal. The market will digest the dilution and proceeds on the next simulation day.",
+        "rejected_result_copy": "The room rejects the private placement proposal. The market will react to the failed capital-raising attempt on the next simulation day."
+      }
     },
     {
       "id": "restructuring",

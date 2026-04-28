@@ -298,6 +298,28 @@
 	"description": "A listed company moves through a cash dividend timetable."
   },
   {
+	"id": "stock_dividend",
+	"scope": "company",
+	"event_family": "corporate_action",
+	"category": "corporate_action_execution",
+	"tone": "mixed",
+	"duration_days": 1,
+	"sentiment_shift": 0.0,
+	"broker_bias": "institution",
+	"description": "A listed company moves through a stock dividend timetable."
+  },
+  {
+	"id": "private_placement",
+	"scope": "company",
+	"event_family": "corporate_action",
+	"category": "corporate_action_filing",
+	"tone": "mixed",
+	"duration_days": 3,
+	"sentiment_shift": 0.03,
+	"broker_bias": "institution",
+	"description": "A listed company pursues a targeted private placement."
+  },
+  {
 	"id": "commodity_price_shock",
 	"scope": "market",
 	"event_family": "special",

@@ -11,12 +11,14 @@ const V1_FAMILY_IDS := {
 	"rights_issue": true,
 	"stock_buyback": true,
 	"stock_split": true,
-	"ceo_change": true
+	"ceo_change": true,
+	"private_placement": true
 }
 const INTEL_LADDER := ["weak", "medium", "strong", "very_strong"]
 const SESSION_STAGE_ORDER := ["arrival", "seating", "host_intro", "agenda_reveal", "vote", "result"]
 const INTERACTIVE_RUPSLB_FAMILY_IDS := {
-	"rights_issue": true
+	"rights_issue": true,
+	"private_placement": true
 }
 
 var trading_calendar = TRADING_CALENDAR.new()
@@ -30,6 +32,7 @@ func ensure_initialized(run_state, data_repository) -> void:
 	var dividend_calendar: Dictionary = run_state.get_corporate_dividend_calendar()
 	var changed_meetings: bool = _ensure_annual_rups_meetings(run_state, catalog, calendar)
 	var changed_dividends: bool = _ensure_cash_dividend_actions(run_state, catalog, calendar, dividend_calendar)
+	changed_dividends = _ensure_stock_dividend_actions(run_state, catalog, calendar, dividend_calendar) or changed_dividends
 	if changed_meetings or changed_dividends:
 		run_state.set_corporate_meeting_calendar(calendar)
 	if changed_dividends:
@@ -55,6 +58,8 @@ func resolve_day(
 			"corporate_meeting_sessions": run_state.get_corporate_meeting_sessions(),
 			"corporate_action_events": [],
 			"dividend_payments": [],
+			"stock_dividend_distributions": [],
+			"corporate_action_applications": [],
 			"active_company_arcs": []
 		}
 
@@ -66,10 +71,13 @@ func resolve_day(
 	var meeting_sessions: Dictionary = run_state.get_corporate_meeting_sessions()
 	var corporate_action_events: Array = []
 	var dividend_payments: Array = []
+	var stock_dividend_distributions: Array = []
+	var corporate_action_applications: Array = []
 	var dividend_active_arcs: Array = []
 
 	_ensure_annual_rups_meetings(run_state, catalog, calendar)
 	_ensure_cash_dividend_actions(run_state, catalog, calendar, dividend_calendar)
+	_ensure_stock_dividend_actions(run_state, catalog, calendar, dividend_calendar)
 	_schedule_earnings_calls_for_reports(run_state, catalog, calendar, report_events, day_number)
 	_refresh_meeting_statuses(calendar, attended_meetings, day_number)
 	var dividend_resolution: Dictionary = _advance_cash_dividends(
@@ -82,6 +90,16 @@ func resolve_day(
 	corporate_action_events.append_array(dividend_resolution.get("events", []))
 	dividend_payments.append_array(dividend_resolution.get("payments", []))
 	dividend_active_arcs.append_array(dividend_resolution.get("active_arcs", []))
+	var stock_dividend_resolution: Dictionary = _advance_stock_dividends(
+		run_state,
+		catalog,
+		dividend_calendar,
+		trade_date,
+		day_number
+	)
+	corporate_action_events.append_array(stock_dividend_resolution.get("events", []))
+	stock_dividend_distributions.append_array(stock_dividend_resolution.get("distributions", []))
+	dividend_active_arcs.append_array(stock_dividend_resolution.get("active_arcs", []))
 
 	if _should_run_family_review(catalog, day_number):
 		var spawn_result: Dictionary = _maybe_spawn_chain(
@@ -118,6 +136,7 @@ func resolve_day(
 		)
 		var advanced_chain: Dictionary = advance_result.get("chain", {}).duplicate(true)
 		corporate_action_events.append_array(advance_result.get("events", []))
+		corporate_action_applications.append_array(advance_result.get("applications", []))
 		if advanced_chain.is_empty():
 			continue
 		if str(advanced_chain.get("status", "active")) == "completed" and str(advanced_chain.get("stage", "")) != "aftermath":
@@ -144,6 +163,8 @@ func resolve_day(
 		"corporate_meeting_sessions": meeting_sessions,
 		"corporate_action_events": corporate_action_events,
 		"dividend_payments": dividend_payments,
+		"stock_dividend_distributions": stock_dividend_distributions,
+		"corporate_action_applications": corporate_action_applications,
 		"active_company_arcs": active_company_arcs
 	}
 
@@ -757,6 +778,14 @@ func debug_force_rights_issue_rupslb(run_state, data_repository, company_id: Str
 
 
 func debug_schedule_next_day_rights_issue_rupslb(run_state, data_repository, company_id: String) -> Dictionary:
+	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "rights_issue")
+
+
+func debug_schedule_next_day_private_placement_rupslb(run_state, data_repository, company_id: String) -> Dictionary:
+	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "private_placement")
+
+
+func _debug_schedule_next_day_rupslb(run_state, data_repository, company_id: String, family_id: String) -> Dictionary:
 	var catalog: Dictionary = data_repository.get_corporate_action_catalog()
 	if catalog.is_empty() or company_id.is_empty():
 		return {}
@@ -770,7 +799,7 @@ func debug_schedule_next_day_rights_issue_rupslb(run_state, data_repository, com
 	var current_day_number: int = max(trading_calendar.trade_index_for_date(current_trade_date), 1)
 	var meeting_date: Dictionary = trading_calendar.advance_trade_days(current_trade_date, 1)
 	var meeting_day_number: int = max(trading_calendar.trade_index_for_date(meeting_date), current_day_number + 1)
-	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, "rights_issue", current_day_number)
+	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, family_id, current_day_number)
 	if chain.is_empty():
 		return {}
 	var meeting_id: String = "rupslb|%s|%s|debug_next" % [company_id, str(chain.get("chain_id", ""))]
@@ -796,7 +825,7 @@ func debug_schedule_next_day_rights_issue_rupslb(run_state, data_repository, com
 		"trading_day_number": meeting_day_number,
 		"status": "queued",
 		"source_chain_id": str(chain.get("chain_id", "")),
-		"chain_family": "rights_issue",
+		"chain_family": family_id,
 		"stage": "meeting_or_call",
 		"management_stance": "confirm",
 		"agenda_payload": chain.get("agenda_payload", []).duplicate(true),
@@ -843,6 +872,40 @@ func debug_schedule_next_day_cash_dividend(run_state, data_repository, company_i
 	if record.is_empty():
 		return {}
 	record["id"] = "cash_dividend|%s|debug|%d" % [company_id, approval_day_number]
+	record["source_meeting_id"] = ""
+	record["debug_forced"] = true
+	var dividend_calendar: Dictionary = run_state.get_corporate_dividend_calendar()
+	dividend_calendar[str(record.get("id", ""))] = record
+	run_state.set_corporate_dividend_calendar(dividend_calendar)
+	return {"dividend": record}
+
+
+func debug_schedule_next_day_stock_dividend(run_state, data_repository, company_id: String) -> Dictionary:
+	var catalog: Dictionary = data_repository.get_corporate_action_catalog()
+	if catalog.is_empty() or company_id.is_empty():
+		return {}
+	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+	if definition.is_empty():
+		return {}
+	var current_trade_date: Dictionary = run_state.get_current_trade_date()
+	var approval_date: Dictionary = current_trade_date.duplicate(true)
+	var approval_day_number: int = max(trading_calendar.trade_index_for_date(approval_date), int(run_state.day_index) + 1)
+	var year_value: int = int(approval_date.get("year", 2020))
+	var record: Dictionary = _build_stock_dividend_record(
+		run_state,
+		catalog,
+		definition,
+		company_id,
+		year_value,
+		approval_date,
+		approval_day_number,
+		"debug_stock_dividend",
+		true,
+		true
+	)
+	if record.is_empty():
+		return {}
+	record["id"] = "stock_dividend|%s|debug|%d" % [company_id, approval_day_number]
 	record["source_meeting_id"] = ""
 	record["debug_forced"] = true
 	var dividend_calendar: Dictionary = run_state.get_corporate_dividend_calendar()
@@ -993,6 +1056,18 @@ func _score_family_for_company(run_state, definition: Dictionary, runtime: Dicti
 				max(-since_start_pct, 0.0) * 0.35 +
 				controller_support * 0.12
 			)
+		"private_placement":
+			score = (
+				max(debt_to_equity - 0.65, 0.0) * 0.24 +
+				max(0.0 - margin, 0.0) * 0.012 +
+				max(0.0 - earnings_growth, 0.0) * 0.008 +
+				max(0.62 - balance_sheet_strength, 0.0) * 0.58 +
+				capital_intensity * 0.26 +
+				controller_support * 0.26 +
+				story_heat * 0.18 +
+				max(0.55 - free_float_pct, 0.0) * 0.22 +
+				max(0.55 - risk_appetite, 0.0) * 0.08
+			)
 		_:
 			score = 0.0
 	return score * float(family.get("story_bias", 1.0))
@@ -1053,7 +1128,7 @@ func _build_new_chain(run_state, catalog: Dictionary, company_id: String, family
 	var chain_id: String = "ca|%s|%s|%d" % [family_id, company_id, day_number]
 	var stage_id: String = "hidden_positioning"
 	var next_review_day_index: int = day_number + 1
-	return {
+	var chain: Dictionary = {
 		"chain_id": chain_id,
 		"family": family_id,
 		"company_id": company_id,
@@ -1089,6 +1164,39 @@ func _build_new_chain(run_state, catalog: Dictionary, company_id: String, family
 		"target_sector_id": str(definition.get("sector_id", "")),
 		"family_label": _family_label(family_id)
 	}
+	if family_id == "private_placement":
+		chain["placement_terms"] = _build_private_placement_terms(definition, runtime, day_number)
+	return chain
+
+
+func _build_private_placement_terms(definition: Dictionary, runtime: Dictionary, day_number: int) -> Dictionary:
+	var company_id: String = str(definition.get("id", runtime.get("company_id", "")))
+	var financials: Dictionary = definition.get("financials", {})
+	var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", 0.0))), 1.0)
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var issuance_pct: float = float(_stable_range("%s|placement_pct|%d" % [company_id, day_number], 5, 12)) / 100.0
+	var discount_pct: float = float(_stable_range("%s|placement_discount|%d" % [company_id, day_number], 6, 18)) / 100.0
+	var new_shares: int = int(round(shares_outstanding * issuance_pct / 1000.0)) * 1000
+	new_shares = max(new_shares, 1000)
+	var issue_price: float = _round_currency(max(current_price * (1.0 - discount_pct), 1.0))
+	var gross_proceeds: float = _round_currency(float(new_shares) * issue_price)
+	var investor_rows: Array = [
+		"strategic investor",
+		"controller affiliate",
+		"anchor fund",
+		"industry partner"
+	]
+	var investor_label: String = str(investor_rows[_stable_range("%s|placement_investor|%d" % [company_id, day_number], 0, investor_rows.size() - 1)])
+	return {
+		"issuance_pct": issuance_pct,
+		"discount_pct": discount_pct,
+		"new_shares": new_shares,
+		"issue_price": issue_price,
+		"gross_proceeds": gross_proceeds,
+		"investor_label": investor_label,
+		"old_shares_outstanding": shares_outstanding,
+		"new_shares_outstanding": shares_outstanding + float(new_shares)
+	}
 
 
 func _advance_chain(
@@ -1106,6 +1214,7 @@ func _advance_chain(
 	var stage_id: String = str(chain.get("stage", "hidden_positioning"))
 	var next_stage_id: String = stage_id
 	var events: Array = []
+	var applications: Array = []
 	match stage_id:
 		"hidden_positioning":
 			next_stage_id = "unusual_activity"
@@ -1276,6 +1385,10 @@ func _advance_chain(
 			chain["outcome_state"] = "completed"
 			chain["smart_money_phase"] = "distributing"
 			chain["next_expected_step"] = "The market is moving into aftermath mode."
+			if str(chain.get("family", "")) == "private_placement":
+				var placement_application: Dictionary = _build_private_placement_application(chain, trade_date, day_number)
+				if not placement_application.is_empty():
+					applications.append(placement_application)
 			events.append(_build_public_event(
 				catalog,
 				chain,
@@ -1300,7 +1413,27 @@ func _advance_chain(
 		chain["current_timeline_state"] = "approved"
 	elif next_stage_id == "aftermath" and str(chain.get("outcome_state", "")) == "approved":
 		chain["current_timeline_state"] = "completed"
-	return {"chain": chain, "events": events}
+	return {"chain": chain, "events": events, "applications": applications}
+
+
+func _build_private_placement_application(chain: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
+	var terms: Dictionary = chain.get("placement_terms", {}).duplicate(true)
+	if terms.is_empty():
+		return {}
+	return {
+		"application_type": "private_placement",
+		"chain_id": str(chain.get("chain_id", "")),
+		"company_id": str(chain.get("company_id", "")),
+		"ticker": str(chain.get("target_ticker", "")),
+		"new_shares": int(terms.get("new_shares", 0)),
+		"issue_price": float(terms.get("issue_price", 0.0)),
+		"gross_proceeds": float(terms.get("gross_proceeds", 0.0)),
+		"issuance_pct": float(terms.get("issuance_pct", 0.0)),
+		"discount_pct": float(terms.get("discount_pct", 0.0)),
+		"investor_label": str(terms.get("investor_label", "strategic investor")),
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
 
 
 func _build_chain_arc(catalog: Dictionary, chain: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
@@ -1572,6 +1705,154 @@ func _cash_dividend_payout_ratio(catalog: Dictionary, definition: Dictionary, ru
 	return clamp(ratio, minimum_ratio, maximum_ratio)
 
 
+func _ensure_stock_dividend_actions(run_state, catalog: Dictionary, calendar: Dictionary, dividend_calendar: Dictionary) -> bool:
+	var dividend_config: Dictionary = catalog.get("stock_dividend", {})
+	if not bool(dividend_config.get("enabled", true)):
+		return false
+	var annual_config: Dictionary = catalog.get("annual_rups", {})
+	var start_year: int = int(annual_config.get("start_year", 2020))
+	var end_year: int = int(annual_config.get("end_year", 2030))
+	var changed: bool = false
+	for company_id_value in run_state.company_order:
+		var company_id: String = str(company_id_value)
+		var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+		if definition.is_empty():
+			continue
+		for year_value in range(start_year, end_year + 1):
+			var dividend_id: String = "stock_dividend|%s|%d" % [company_id, year_value]
+			if dividend_calendar.has(dividend_id):
+				continue
+			var meeting_id: String = "annual_rups|%s|%d" % [company_id, year_value]
+			var meeting: Dictionary = _meeting_by_id(calendar, meeting_id)
+			if meeting.is_empty():
+				continue
+			var record: Dictionary = _build_stock_dividend_record(
+				run_state,
+				catalog,
+				definition,
+				company_id,
+				year_value,
+				meeting.get("trade_date", {}),
+				int(meeting.get("trading_day_number", 0)),
+				meeting_id
+			)
+			if record.is_empty():
+				continue
+			dividend_calendar[dividend_id] = record
+			_attach_stock_dividend_to_annual_meeting(calendar, record)
+			changed = true
+	return changed
+
+
+func _build_stock_dividend_record(
+	run_state,
+	catalog: Dictionary,
+	definition: Dictionary,
+	company_id: String,
+	year_value: int,
+	approval_date: Dictionary,
+	approval_day_number: int,
+	meeting_id: String,
+	force: bool = false,
+	fast_debug: bool = false
+) -> Dictionary:
+	if approval_date.is_empty() or approval_day_number <= 0:
+		return {}
+	var runtime: Dictionary = run_state.get_company(company_id)
+	var financials: Dictionary = definition.get("financials", {})
+	var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", 0.0))), 1.0)
+	var distribution_ratio: float = _stock_dividend_distribution_ratio(catalog, definition, runtime, company_id, year_value, force)
+	if distribution_ratio <= 0.0:
+		return {}
+	var dividend_config: Dictionary = catalog.get("stock_dividend", {})
+	var ex_delay_min: int = int(dividend_config.get("ex_delay_min_days", 2))
+	var ex_delay_max: int = int(dividend_config.get("ex_delay_max_days", 4))
+	var payment_delay_min: int = int(dividend_config.get("payment_delay_min_days", 6))
+	var payment_delay_max: int = int(dividend_config.get("payment_delay_max_days", 12))
+	if fast_debug:
+		ex_delay_min = 1
+		ex_delay_max = 1
+		payment_delay_min = 1
+		payment_delay_max = 1
+	var ex_delay: int = _stable_range("%s|stock_dividend_ex|%d" % [company_id, year_value], ex_delay_min, ex_delay_max)
+	var ex_date: Dictionary = trading_calendar.advance_trade_days(approval_date, ex_delay)
+	var record_date: Dictionary = trading_calendar.advance_trade_days(ex_date, 1)
+	var payment_delay: int = _stable_range("%s|stock_dividend_payment|%d" % [company_id, year_value], payment_delay_min, payment_delay_max)
+	var payment_date: Dictionary = trading_calendar.advance_trade_days(record_date, payment_delay)
+	return {
+		"id": "stock_dividend|%s|%d" % [company_id, year_value],
+		"action_type": "stock_dividend",
+		"distribution_type": "stock",
+		"company_id": company_id,
+		"ticker": str(definition.get("ticker", company_id.to_upper())),
+		"company_name": str(definition.get("name", company_id.to_upper())),
+		"target_sector_id": str(definition.get("sector_id", "")),
+		"fiscal_year": year_value - 1,
+		"approval_year": year_value,
+		"source_meeting_id": meeting_id,
+		"approval_trade_date": approval_date.duplicate(true),
+		"approval_date_key": trading_calendar.to_key(approval_date),
+		"approval_day_number": approval_day_number,
+		"ex_trade_date": ex_date.duplicate(true),
+		"ex_date_key": trading_calendar.to_key(ex_date),
+		"ex_day_number": trading_calendar.trade_index_for_date(ex_date),
+		"record_trade_date": record_date.duplicate(true),
+		"record_date_key": trading_calendar.to_key(record_date),
+		"record_day_number": trading_calendar.trade_index_for_date(record_date),
+		"payment_trade_date": payment_date.duplicate(true),
+		"payment_date_key": trading_calendar.to_key(payment_date),
+		"payment_day_number": trading_calendar.trade_index_for_date(payment_date),
+		"amount_per_share": 0.0,
+		"stock_dividend_ratio": distribution_ratio,
+		"projected_total_bonus_shares": int(floor(shares_outstanding * distribution_ratio)),
+		"dividend_yield": 0.0,
+		"status": "scheduled",
+		"payment_status": "pending",
+		"record_shares_owned": -1,
+		"distributed_bonus_shares": 0,
+		"paid_amount": 0.0,
+		"created_day_index": run_state.day_index
+	}
+
+
+func _stock_dividend_distribution_ratio(
+	catalog: Dictionary,
+	definition: Dictionary,
+	runtime: Dictionary,
+	company_id: String,
+	year_value: int,
+	force: bool = false
+) -> float:
+	var dividend_config: Dictionary = catalog.get("stock_dividend", {})
+	var minimum_ratio: float = float(dividend_config.get("minimum_distribution_ratio", 0.05))
+	var maximum_ratio: float = float(dividend_config.get("maximum_distribution_ratio", 0.18))
+	if force:
+		return clamp(minimum_ratio + 0.05, minimum_ratio, maximum_ratio)
+	var probability_pct: int = int(dividend_config.get("annual_probability_pct", 16))
+	if _stable_range("%s|stock_dividend_probability|%d" % [company_id, year_value], 0, 99) >= probability_pct:
+		return 0.0
+	var financials: Dictionary = definition.get("financials", {})
+	var profile: Dictionary = runtime.get("company_profile", {})
+	var traits: Dictionary = profile.get("generation_traits", definition.get("generation_traits", {}))
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 0.0))), 1.0)
+	var revenue_growth: float = float(financials.get("revenue_growth_yoy", 0.0))
+	var earnings_growth: float = float(financials.get("earnings_growth_yoy", 0.0))
+	var margin: float = float(financials.get("net_profit_margin", 0.0))
+	var story_heat: float = float(traits.get("story_heat", 0.5))
+	var liquidity_profile: float = float(traits.get("liquidity_profile", 0.5))
+	if current_price < 650.0 or margin <= 0.0 or revenue_growth < 4.0:
+		return 0.0
+	var ratio: float = (
+		minimum_ratio +
+		clamp((current_price - 650.0) / 4500.0, 0.0, 0.08) +
+		max(revenue_growth, 0.0) * 0.0012 +
+		max(earnings_growth, 0.0) * 0.0008 +
+		story_heat * 0.025 +
+		liquidity_profile * 0.012
+	)
+	return clamp(ratio, minimum_ratio, maximum_ratio)
+
+
 func _advance_cash_dividends(
 	run_state,
 	catalog: Dictionary,
@@ -1588,6 +1869,8 @@ func _advance_cash_dividends(
 		var dividend_id: String = str(dividend_id_value)
 		var record: Dictionary = dividend_calendar.get(dividend_id, {}).duplicate(true)
 		if record.is_empty() or str(record.get("status", "")) == "paid":
+			continue
+		if str(record.get("action_type", "cash_dividend")) != "cash_dividend":
 			continue
 		if int(record.get("approval_day_number", 0)) <= day_number and str(record.get("status", "scheduled")) == "scheduled":
 			record["status"] = "approved"
@@ -1627,6 +1910,68 @@ func _advance_cash_dividends(
 	return {
 		"events": events,
 		"payments": payments,
+		"active_arcs": active_arcs
+	}
+
+
+func _advance_stock_dividends(
+	run_state,
+	catalog: Dictionary,
+	dividend_calendar: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var events: Array = []
+	var distributions: Array = []
+	var active_arcs: Array = []
+	var dividend_ids: Array = dividend_calendar.keys()
+	dividend_ids.sort()
+	for dividend_id_value in dividend_ids:
+		var dividend_id: String = str(dividend_id_value)
+		var record: Dictionary = dividend_calendar.get(dividend_id, {}).duplicate(true)
+		if record.is_empty() or str(record.get("status", "")) == "paid":
+			continue
+		if str(record.get("action_type", "")) != "stock_dividend":
+			continue
+		if int(record.get("approval_day_number", 0)) <= day_number and str(record.get("status", "scheduled")) == "scheduled":
+			record["status"] = "approved"
+			events.append(_build_stock_dividend_event(record, trade_date, day_number, "approved"))
+			active_arcs.append(_build_stock_dividend_arc(record, trade_date, day_number, "approved"))
+		if int(record.get("ex_day_number", 0)) <= day_number and str(record.get("status", "")) == "approved":
+			record["status"] = "ex_date"
+			events.append(_build_stock_dividend_event(record, trade_date, day_number, "ex_date"))
+			active_arcs.append(_build_stock_dividend_arc(record, trade_date, day_number, "ex_date"))
+		if int(record.get("record_day_number", 0)) <= day_number and int(record.get("record_shares_owned", -1)) < 0:
+			var holding: Dictionary = run_state.get_holding(str(record.get("company_id", "")))
+			record["record_shares_owned"] = max(int(holding.get("shares", 0)), 0)
+			if str(record.get("status", "")) == "ex_date":
+				record["status"] = "recorded"
+		if int(record.get("payment_day_number", 0)) <= day_number and str(record.get("payment_status", "pending")) != "paid":
+			var eligible_shares: int = max(int(record.get("record_shares_owned", 0)), 0)
+			var distribution_ratio: float = max(float(record.get("stock_dividend_ratio", 0.0)), 0.0)
+			var bonus_shares: int = max(int(floor(float(eligible_shares) * distribution_ratio)), 0)
+			record["status"] = "paid"
+			record["payment_status"] = "paid"
+			record["distributed_bonus_shares"] = bonus_shares
+			record["paid_day_number"] = day_number
+			record["paid_trade_date"] = trade_date.duplicate(true)
+			if distribution_ratio > 0.0:
+				distributions.append({
+					"dividend_id": dividend_id,
+					"company_id": str(record.get("company_id", "")),
+					"ticker": str(record.get("ticker", "")),
+					"eligible_shares": eligible_shares,
+					"bonus_shares": bonus_shares,
+					"stock_dividend_ratio": distribution_ratio,
+					"trade_date": trade_date.duplicate(true),
+					"day_index": day_number
+				})
+			events.append(_build_stock_dividend_event(record, trade_date, day_number, "paid"))
+			active_arcs.append(_build_stock_dividend_arc(record, trade_date, day_number, "paid"))
+		dividend_calendar[dividend_id] = record
+	return {
+		"events": events,
+		"distributions": distributions,
 		"active_arcs": active_arcs
 	}
 
@@ -1713,6 +2058,85 @@ func _build_cash_dividend_arc(record: Dictionary, trade_date: Dictionary, day_nu
 	}
 
 
+func _build_stock_dividend_event(record: Dictionary, trade_date: Dictionary, day_number: int, stage_id: String) -> Dictionary:
+	var ticker: String = str(record.get("ticker", ""))
+	var company_name: String = str(record.get("company_name", ticker))
+	var distribution_ratio: float = float(record.get("stock_dividend_ratio", 0.0))
+	var ratio_text: String = _format_distribution_percent(distribution_ratio)
+	var headline: String = "%s stock dividend update" % ticker
+	var summary: String = "%s has a stock dividend action in progress." % company_name
+	var category: String = "corporate_action_filing"
+	var tone: String = "positive"
+	var sentiment_shift: float = 0.05
+	match stage_id:
+		"approved":
+			headline = "%s approves stock dividend" % ticker
+			summary = "%s shareholders approve a %s stock dividend distribution." % [company_name, ratio_text]
+			category = "corporate_action_resolution"
+			sentiment_shift = 0.06
+		"ex_date":
+			headline = "%s trades ex-stock dividend" % ticker
+			summary = "%s starts trading ex-stock dividend; new buyers no longer receive this share distribution." % company_name
+			category = "corporate_action_execution"
+			tone = "mixed"
+			sentiment_shift = -0.02
+		"paid":
+			headline = "%s distributes stock dividend" % ticker
+			summary = "%s completes its %s stock dividend share distribution." % [company_name, ratio_text]
+			category = "corporate_action_execution"
+			sentiment_shift = 0.02
+	return {
+		"event_id": "stock_dividend",
+		"scope": "company",
+		"event_family": "corporate_action",
+		"category": category,
+		"tone": tone,
+		"target_company_id": str(record.get("company_id", "")),
+		"target_ticker": ticker,
+		"target_company_name": company_name,
+		"target_sector_id": str(record.get("target_sector_id", "")),
+		"headline": headline,
+		"summary": summary,
+		"description": summary,
+		"sentiment_shift": sentiment_shift,
+		"source_chain_id": "",
+		"chain_family": "stock_dividend",
+		"dividend_id": str(record.get("id", "")),
+		"stock_dividend_ratio": distribution_ratio,
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
+
+
+func _build_stock_dividend_arc(record: Dictionary, trade_date: Dictionary, day_number: int, stage_id: String) -> Dictionary:
+	var event: Dictionary = _build_stock_dividend_event(record, trade_date, day_number, stage_id)
+	return {
+		"arc_id": str(record.get("id", "")),
+		"event_id": "stock_dividend",
+		"event_family": "company_arc",
+		"scope": "company",
+		"category": str(event.get("category", "corporate_action_execution")),
+		"tone": str(event.get("tone", "mixed")),
+		"target_company_id": str(record.get("company_id", "")),
+		"target_ticker": str(record.get("ticker", "")),
+		"target_company_name": str(record.get("company_name", "")),
+		"target_sector_id": str(record.get("target_sector_id", "")),
+		"description": str(event.get("summary", "")),
+		"source_system": "corporate_action",
+		"source_chain_id": "",
+		"chain_family": "stock_dividend",
+		"current_phase_id": stage_id,
+		"current_phase_label": "Stock dividend",
+		"phase_sentiment_shift": float(event.get("sentiment_shift", 0.0)),
+		"phase_volatility_multiplier": 1.03,
+		"phase_visibility": "visible",
+		"phase_hidden_flag": "",
+		"dividend_id": str(record.get("id", "")),
+		"day_index": day_number,
+		"trade_date": trade_date.duplicate(true)
+	}
+
+
 func _attach_cash_dividend_to_annual_meeting(calendar: Dictionary, record: Dictionary) -> bool:
 	var meeting_id: String = str(record.get("source_meeting_id", ""))
 	if meeting_id.is_empty():
@@ -1745,6 +2169,38 @@ func _attach_cash_dividend_to_annual_meeting(calendar: Dictionary, record: Dicti
 	return false
 
 
+func _attach_stock_dividend_to_annual_meeting(calendar: Dictionary, record: Dictionary) -> bool:
+	var meeting_id: String = str(record.get("source_meeting_id", ""))
+	if meeting_id.is_empty():
+		return false
+	for date_key_value in calendar.keys():
+		var date_key: String = str(date_key_value)
+		var meetings: Array = calendar.get(date_key, []).duplicate(true)
+		for meeting_index in range(meetings.size()):
+			if str(meetings[meeting_index].get("id", "")) != meeting_id:
+				continue
+			var meeting: Dictionary = meetings[meeting_index].duplicate(true)
+			var agenda_payload: Array = meeting.get("agenda_payload", []).duplicate(true)
+			var agenda_id: String = "stock_dividend_approval"
+			var has_dividend_agenda: bool = false
+			for agenda_value in agenda_payload:
+				if typeof(agenda_value) == TYPE_DICTIONARY and str(agenda_value.get("id", "")) == agenda_id:
+					has_dividend_agenda = true
+					break
+			if not has_dividend_agenda:
+				agenda_payload.append({
+					"id": agenda_id,
+					"label": "Approve stock dividend",
+					"description": "Shareholders review the proposed %s stock dividend distribution and timetable." % _format_distribution_percent(float(record.get("stock_dividend_ratio", 0.0)))
+				})
+				meeting["agenda_payload"] = agenda_payload
+				meeting["public_summary"] = "%s is holding its annual RUPS, including a proposed stock dividend agenda." % str(meeting.get("company_name", ""))
+				meetings[meeting_index] = meeting
+				calendar[date_key] = meetings
+				return true
+	return false
+
+
 func _dividend_row(run_state, record: Dictionary) -> Dictionary:
 	var current_day_number: int = int(run_state.day_index) + 1
 	var holding: Dictionary = run_state.get_holding(str(record.get("company_id", "")))
@@ -1752,9 +2208,11 @@ func _dividend_row(run_state, record: Dictionary) -> Dictionary:
 	if int(record.get("record_shares_owned", -1)) < 0 and int(record.get("record_day_number", 0)) >= current_day_number:
 		eligible_shares = max(int(holding.get("shares", 0)), 0)
 	var projected_amount: float = _round_currency(float(record.get("amount_per_share", 0.0)) * float(eligible_shares))
+	var projected_bonus_shares: int = int(floor(float(eligible_shares) * max(float(record.get("stock_dividend_ratio", 0.0)), 0.0)))
 	var row: Dictionary = record.duplicate(true)
 	row["eligible_shares"] = eligible_shares
 	row["projected_amount"] = projected_amount
+	row["projected_bonus_shares"] = projected_bonus_shares
 	return row
 
 
@@ -1766,6 +2224,10 @@ func _stable_range(seed_key: String, min_value: int, max_value: int) -> int:
 
 func _round_currency(value: float) -> float:
 	return round(value * 100.0) / 100.0
+
+
+func _format_distribution_percent(value: float) -> String:
+	return "%.2f%%" % [value * 100.0]
 
 
 func _ensure_annual_rups_meetings(run_state, catalog: Dictionary, calendar: Dictionary) -> bool:
