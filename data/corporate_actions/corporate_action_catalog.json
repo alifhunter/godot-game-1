@@ -38,6 +38,16 @@
     "price_support_per_pct": 1.6,
     "maximum_price_support_pct": 0.18
   },
+  "rights_issue": {
+    "enabled": true,
+    "minimum_ratio_denominator": 3,
+    "maximum_ratio_denominator": 8,
+    "minimum_discount_pct": 0.12,
+    "maximum_discount_pct": 0.32,
+    "minimum_new_shares": 1000,
+    "maximum_price_adjustment_down_pct": 0.35,
+    "maximum_price_adjustment_up_pct": 0.08
+  },
   "meeting_defaults": {
     "earnings_call": {
       "delay_min_days": 0,

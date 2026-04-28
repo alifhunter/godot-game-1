@@ -1822,10 +1822,141 @@ func _apply_corporate_action_applications(applications: Array) -> void:
 			continue
 		var application: Dictionary = application_value
 		match str(application.get("application_type", "")):
+			"rights_issue":
+				_apply_rights_issue_application(application)
 			"private_placement":
 				_apply_private_placement_application(application)
 			"stock_buyback":
 				_apply_stock_buyback_application(application)
+
+
+func _apply_rights_issue_application(application: Dictionary) -> void:
+	var company_id: String = str(application.get("company_id", ""))
+	if company_id.is_empty() or not companies.has(company_id):
+		return
+	var new_shares: float = max(float(application.get("new_shares", 0.0)), 0.0)
+	if new_shares <= 0.0:
+		return
+	var definition: Dictionary = get_effective_company_definition(company_id, false, false)
+	var runtime: Dictionary = companies.get(company_id, {}).duplicate(true)
+	var financials: Dictionary = definition.get("financials", {})
+	var old_shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", 0.0))), 1.0)
+	var old_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var gross_proceeds: float = max(float(application.get("gross_proceeds", 0.0)), 0.0)
+	var new_shares_outstanding: float = max(float(application.get("new_shares_outstanding", old_shares_outstanding + new_shares)), 1.0)
+	var theoretical_price: float = float(application.get("theoretical_ex_rights_price", 0.0))
+	if theoretical_price <= 0.0:
+		theoretical_price = (old_price * old_shares_outstanding + gross_proceeds) / new_shares_outstanding
+	var max_down: float = clamp(float(application.get("maximum_price_adjustment_down_pct", 0.35)), 0.0, 0.9)
+	var max_up: float = clamp(float(application.get("maximum_price_adjustment_up_pct", 0.08)), 0.0, 0.5)
+	var price_factor: float = clamp(theoretical_price / old_price, 1.0 - max_down, 1.0 + max_up)
+	var new_price: float = _apply_company_price_factor(company_id, price_factor, false)
+	var free_float_pct: float = float(financials.get("free_float_pct", 35.0))
+	var player_record_shares: int = max(int(application.get("player_record_shares", 0)), 0)
+	var player_entitled_shares: int = max(int(application.get("player_entitled_shares", 0)), 0)
+	var exercise_price: float = max(float(application.get("exercise_price", 0.0)), 0.0)
+	var exercise_cost: float = round(float(player_entitled_shares) * exercise_price * 100.0) / 100.0
+	var player_status: String = "not_eligible"
+	var player_exercised_shares: int = 0
+	if player_entitled_shares > 0:
+		if exercise_cost <= float(player_portfolio.get("cash", 0.0)) + 0.0001:
+			player_status = "exercised"
+			player_exercised_shares = player_entitled_shares
+		else:
+			player_status = "lapsed_insufficient_cash"
+	_set_company_share_structure(
+		company_id,
+		new_shares_outstanding,
+		new_price * new_shares_outstanding,
+		free_float_pct,
+		{
+			"type": "rights_issue",
+			"chain_id": str(application.get("chain_id", "")),
+			"meeting_id": str(application.get("meeting_id", "")),
+			"ratio_numerator": int(application.get("ratio_numerator", 1)),
+			"ratio_denominator": int(application.get("ratio_denominator", 1)),
+			"entitlement_ratio": float(application.get("entitlement_ratio", 0.0)),
+			"new_shares": new_shares,
+			"exercise_price": exercise_price,
+			"gross_proceeds": gross_proceeds,
+			"discount_pct": float(application.get("discount_pct", 0.0)),
+			"theoretical_ex_rights_price": theoretical_price,
+			"old_shares_outstanding": old_shares_outstanding,
+			"new_shares_outstanding": new_shares_outstanding,
+			"player_record_shares": player_record_shares,
+			"player_entitled_shares": player_entitled_shares,
+			"player_exercised_shares": player_exercised_shares,
+			"player_rights_status": player_status,
+			"player_exercise_cost": exercise_cost,
+			"day_index": int(application.get("day_index", day_index))
+		}
+	)
+	_apply_player_rights_issue_entitlement(
+		company_id,
+		player_entitled_shares,
+		exercise_price,
+		exercise_cost,
+		player_status
+	)
+
+
+func _apply_player_rights_issue_entitlement(
+	company_id: String,
+	entitled_shares: int,
+	exercise_price: float,
+	exercise_cost: float,
+	status: String
+) -> void:
+	if company_id.is_empty() or entitled_shares <= 0:
+		return
+	if status == "exercised":
+		var holdings: Dictionary = player_portfolio.get("holdings", {})
+		var holding: Dictionary = holdings.get(company_id, {
+			"company_id": company_id,
+			"shares": 0,
+			"average_price": 0.0
+		})
+		var current_shares: int = max(int(holding.get("shares", 0)), 0)
+		var current_average: float = float(holding.get("average_price", 0.0))
+		var new_share_total: int = current_shares + entitled_shares
+		if new_share_total > 0:
+			holding["shares"] = new_share_total
+			holding["average_price"] = ((current_average * float(current_shares)) + exercise_cost) / float(new_share_total)
+			holdings[company_id] = holding
+			player_portfolio["holdings"] = holdings
+		var cash_after: float = float(player_portfolio.get("cash", 0.0)) - exercise_cost
+		player_portfolio["cash"] = cash_after
+		_record_trade(
+			company_id,
+			"rights_issue_exercise",
+			{
+				"lots": int(floor(float(entitled_shares) / float(LOT_SIZE))),
+				"shares": entitled_shares,
+				"price_per_share": exercise_price,
+				"gross_value": exercise_cost,
+				"fee_rate": 0.0,
+				"fee": 0.0
+			},
+			0.0,
+			-exercise_cost,
+			cash_after
+		)
+		return
+	_record_trade(
+		company_id,
+		"rights_issue_lapsed",
+		{
+			"lots": int(floor(float(entitled_shares) / float(LOT_SIZE))),
+			"shares": entitled_shares,
+			"price_per_share": exercise_price,
+			"gross_value": exercise_cost,
+			"fee_rate": 0.0,
+			"fee": 0.0
+		},
+		0.0,
+		0.0,
+		float(player_portfolio.get("cash", 0.0))
+	)
 
 
 func _apply_private_placement_application(application: Dictionary) -> void:

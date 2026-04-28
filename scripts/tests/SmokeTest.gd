@@ -1166,6 +1166,99 @@ func _run_scenario(
 				"message": "Smoke test expected the next simulation day to consume the saved RUPSLB vote result and move the chain past meeting_or_call."
 			}
 
+		var rights_before_definition: Dictionary = RunState.get_effective_company_definition(eligible_company_id, false, false)
+		var rights_before_financials: Dictionary = rights_before_definition.get("financials", {})
+		var rights_shares_before: float = float(rights_before_financials.get("shares_outstanding", rights_before_definition.get("shares_outstanding", 0.0)))
+		var rights_holding_before: int = int(RunState.get_holding(eligible_company_id).get("shares", 0))
+		var rights_cash_before: float = float(RunState.player_portfolio.get("cash", 0.0))
+		if rights_shares_before <= 0.0 or rights_holding_before <= 0:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected rights issue target shares outstanding and player holdings before execution."
+			}
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var rights_application: Dictionary = {}
+		for rights_application_value in RunState.last_day_results.get("corporate_action_applications", []):
+			if typeof(rights_application_value) != TYPE_DICTIONARY:
+				continue
+			var rights_candidate_application: Dictionary = rights_application_value
+			if str(rights_candidate_application.get("chain_id", "")) == eligible_chain_id and str(rights_candidate_application.get("application_type", "")) == "rights_issue":
+				rights_application = rights_candidate_application.duplicate(true)
+				break
+		if rights_application.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected approved rights issue execution to emit an application payload."
+			}
+		var rights_after_definition: Dictionary = RunState.get_effective_company_definition(eligible_company_id, false, false)
+		var rights_after_financials: Dictionary = rights_after_definition.get("financials", {})
+		var rights_shares_after: float = float(rights_after_financials.get("shares_outstanding", rights_after_definition.get("shares_outstanding", 0.0)))
+		if rights_shares_after <= rights_shares_before:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected rights issue execution to increase company shares outstanding."
+			}
+		var rights_adjustment: Dictionary = {}
+		for rights_adjustment_value in RunState.get_company(eligible_company_id).get("company_profile", {}).get("corporate_action_adjustments", []):
+			if typeof(rights_adjustment_value) == TYPE_DICTIONARY and str(rights_adjustment_value.get("type", "")) == "rights_issue":
+				rights_adjustment = rights_adjustment_value.duplicate(true)
+				break
+		if rights_adjustment.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected rights issue execution to record a company share-structure adjustment."
+			}
+		var rights_entitled_shares: int = int(rights_application.get("player_entitled_shares", 0))
+		var rights_exercise_cost: float = float(rights_entitled_shares) * float(rights_application.get("exercise_price", 0.0))
+		var rights_holding_after: int = int(RunState.get_holding(eligible_company_id).get("shares", 0))
+		var rights_trade_side: String = ""
+		for rights_trade_index in range(RunState.trade_history.size() - 1, -1, -1):
+			var rights_trade: Dictionary = RunState.trade_history[rights_trade_index]
+			if str(rights_trade.get("company_id", "")) == eligible_company_id and str(rights_trade.get("side", "")).begins_with("rights_issue"):
+				rights_trade_side = str(rights_trade.get("side", ""))
+				break
+		if rights_entitled_shares <= 0:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected one record-date lot to produce a positive rights entitlement."
+			}
+		if rights_exercise_cost <= rights_cash_before + 0.0001:
+			if (
+				rights_holding_after < rights_holding_before + rights_entitled_shares or
+				rights_trade_side != "rights_issue_exercise" or
+				str(rights_adjustment.get("player_rights_status", "")) != "exercised"
+			):
+				game_root.queue_free()
+				await get_tree().process_frame
+				return {
+					"success": false,
+					"message": "Smoke test expected affordable rights entitlements to auto-exercise into player holdings."
+				}
+		else:
+			if (
+				rights_holding_after != rights_holding_before or
+				rights_trade_side != "rights_issue_lapsed" or
+				str(rights_adjustment.get("player_rights_status", "")) != "lapsed_insufficient_cash"
+			):
+				game_root.queue_free()
+				await get_tree().process_frame
+				return {
+					"success": false,
+					"message": "Smoke test expected unaffordable rights entitlements to lapse without adding shares."
+				}
+
 		RunState.load_from_dict(interactive_test_base_state)
 		game_root._refresh_all()
 		await get_tree().process_frame

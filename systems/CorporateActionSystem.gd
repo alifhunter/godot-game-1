@@ -364,6 +364,8 @@ func get_company_snapshot(run_state, company_id: String) -> Dictionary:
 		}
 		if chain.has("placement_terms"):
 			chain_row["placement_terms"] = chain.get("placement_terms", {}).duplicate(true)
+		if chain.has("rights_terms"):
+			chain_row["rights_terms"] = chain.get("rights_terms", {}).duplicate(true)
 		if chain.has("buyback_terms"):
 			chain_row["buyback_terms"] = chain.get("buyback_terms", {}).duplicate(true)
 		chain_rows.append(chain_row)
@@ -1264,11 +1266,55 @@ func _build_new_chain(run_state, catalog: Dictionary, company_id: String, family
 		"target_sector_id": str(definition.get("sector_id", "")),
 		"family_label": _family_label(family_id)
 	}
+	if family_id == "rights_issue":
+		chain["rights_terms"] = _build_rights_issue_terms(catalog, definition, runtime, day_number)
 	if family_id == "private_placement":
 		chain["placement_terms"] = _build_private_placement_terms(definition, runtime, day_number)
 	if family_id == "stock_buyback":
 		chain["buyback_terms"] = _build_stock_buyback_terms(catalog, definition, runtime, day_number)
 	return chain
+
+
+func _build_rights_issue_terms(catalog: Dictionary, definition: Dictionary, runtime: Dictionary, day_number: int) -> Dictionary:
+	var company_id: String = str(definition.get("id", runtime.get("company_id", "")))
+	var financials: Dictionary = definition.get("financials", {})
+	var config: Dictionary = catalog.get("rights_issue", {})
+	var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", 0.0))), 1.0)
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var min_denominator: int = max(int(config.get("minimum_ratio_denominator", 3)), 1)
+	var max_denominator: int = max(int(config.get("maximum_ratio_denominator", 8)), min_denominator)
+	var ratio_denominator: int = _stable_range("%s|rights_ratio_denominator|%d" % [company_id, day_number], min_denominator, max_denominator)
+	var ratio_numerator: int = 1
+	var entitlement_ratio: float = float(ratio_numerator) / float(max(ratio_denominator, 1))
+	var min_discount_pct: float = clamp(float(config.get("minimum_discount_pct", 0.12)), 0.0, 0.8)
+	var max_discount_pct: float = clamp(float(config.get("maximum_discount_pct", 0.32)), min_discount_pct, 0.9)
+	var discount_pct: float = float(_stable_range(
+		"%s|rights_discount|%d" % [company_id, day_number],
+		int(round(min_discount_pct * 10000.0)),
+		int(round(max_discount_pct * 10000.0))
+	)) / 10000.0
+	var minimum_new_shares: int = max(int(config.get("minimum_new_shares", 1000)), 1)
+	var new_shares: int = int(round(shares_outstanding * entitlement_ratio / 1000.0)) * 1000
+	new_shares = max(new_shares, minimum_new_shares)
+	var exercise_price: float = _round_currency(max(current_price * (1.0 - discount_pct), 1.0))
+	var gross_proceeds: float = _round_currency(float(new_shares) * exercise_price)
+	var new_shares_outstanding: float = shares_outstanding + float(new_shares)
+	var theoretical_ex_rights_price: float = _round_currency((current_price * shares_outstanding + gross_proceeds) / new_shares_outstanding)
+	return {
+		"ratio_numerator": ratio_numerator,
+		"ratio_denominator": ratio_denominator,
+		"entitlement_ratio": entitlement_ratio,
+		"issuance_pct": entitlement_ratio,
+		"discount_pct": discount_pct,
+		"new_shares": new_shares,
+		"exercise_price": exercise_price,
+		"gross_proceeds": gross_proceeds,
+		"old_shares_outstanding": shares_outstanding,
+		"new_shares_outstanding": new_shares_outstanding,
+		"theoretical_ex_rights_price": theoretical_ex_rights_price,
+		"maximum_price_adjustment_down_pct": clamp(float(config.get("maximum_price_adjustment_down_pct", 0.35)), 0.0, 0.9),
+		"maximum_price_adjustment_up_pct": clamp(float(config.get("maximum_price_adjustment_up_pct", 0.08)), 0.0, 0.5)
+	}
 
 
 func _build_private_placement_terms(definition: Dictionary, runtime: Dictionary, day_number: int) -> Dictionary:
@@ -1551,6 +1597,10 @@ func _advance_chain(
 			chain["outcome_state"] = "completed"
 			chain["smart_money_phase"] = "distributing"
 			chain["next_expected_step"] = "The market is moving into aftermath mode."
+			if str(chain.get("family", "")) == "rights_issue":
+				var rights_application: Dictionary = _build_rights_issue_application(run_state, calendar, chain, trade_date, day_number)
+				if not rights_application.is_empty():
+					applications.append(rights_application)
 			if str(chain.get("family", "")) == "private_placement":
 				var placement_application: Dictionary = _build_private_placement_application(chain, trade_date, day_number)
 				if not placement_application.is_empty():
@@ -1584,6 +1634,58 @@ func _advance_chain(
 	elif next_stage_id == "aftermath" and str(chain.get("outcome_state", "")) == "approved":
 		chain["current_timeline_state"] = "completed"
 	return {"chain": chain, "events": events, "applications": applications}
+
+
+func _build_rights_issue_application(
+	run_state,
+	calendar: Dictionary,
+	chain: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var terms: Dictionary = chain.get("rights_terms", {}).duplicate(true)
+	if terms.is_empty():
+		return {}
+	var new_shares: int = int(terms.get("new_shares", 0))
+	if new_shares <= 0:
+		return {}
+	var meeting_id: String = str(chain.get("active_meeting_id", ""))
+	var shareholder_record: Dictionary = _shareholder_record_entry_for(run_state, "meeting", meeting_id)
+	var meeting: Dictionary = _meeting_by_id(calendar, meeting_id)
+	var player_record_shares: int = max(int(shareholder_record.get("shares_owned", meeting.get("record_shares_owned", 0))), 0)
+	var entitlement_ratio: float = max(float(terms.get("entitlement_ratio", 0.0)), 0.0)
+	var player_entitled_shares: int = int(floor(float(player_record_shares) * entitlement_ratio))
+	var exercise_price: float = float(terms.get("exercise_price", 0.0))
+	var record_trade_date: Dictionary = {}
+	var record_trade_date_value: Variant = shareholder_record.get("record_trade_date", meeting.get("record_trade_date", {}))
+	if typeof(record_trade_date_value) == TYPE_DICTIONARY:
+		record_trade_date = record_trade_date_value.duplicate(true)
+	return {
+		"application_type": "rights_issue",
+		"chain_id": str(chain.get("chain_id", "")),
+		"company_id": str(chain.get("company_id", "")),
+		"ticker": str(chain.get("target_ticker", "")),
+		"meeting_id": meeting_id,
+		"shareholder_record_key": str(shareholder_record.get("registry_key", _shareholder_registry_key("meeting", meeting_id))),
+		"record_day_number": int(shareholder_record.get("record_day_number", meeting.get("record_day_number", 0))),
+		"record_trade_date": record_trade_date,
+		"player_record_shares": player_record_shares,
+		"player_entitled_shares": player_entitled_shares,
+		"ratio_numerator": int(terms.get("ratio_numerator", 1)),
+		"ratio_denominator": int(terms.get("ratio_denominator", 1)),
+		"entitlement_ratio": entitlement_ratio,
+		"new_shares": new_shares,
+		"exercise_price": exercise_price,
+		"gross_proceeds": float(terms.get("gross_proceeds", 0.0)),
+		"discount_pct": float(terms.get("discount_pct", 0.0)),
+		"old_shares_outstanding": float(terms.get("old_shares_outstanding", 0.0)),
+		"new_shares_outstanding": float(terms.get("new_shares_outstanding", 0.0)),
+		"theoretical_ex_rights_price": float(terms.get("theoretical_ex_rights_price", 0.0)),
+		"maximum_price_adjustment_down_pct": float(terms.get("maximum_price_adjustment_down_pct", 0.35)),
+		"maximum_price_adjustment_up_pct": float(terms.get("maximum_price_adjustment_up_pct", 0.08)),
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
 
 
 func _build_private_placement_application(chain: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
@@ -3596,6 +3698,15 @@ func _next_step_hint(stage_id: String, chain: Dictionary) -> String:
 
 
 func _meeting_public_summary(chain: Dictionary) -> String:
+	if str(chain.get("family", "")) == "rights_issue":
+		var rights_terms: Dictionary = chain.get("rights_terms", {})
+		if not rights_terms.is_empty():
+			return "%s is in the %s stage of a rights issue mandate, with a 1-for-%d entitlement at Rp%s per share." % [
+				str(chain.get("target_company_name", "")),
+				str(chain.get("stage", "")).replace("_", " "),
+				int(rights_terms.get("ratio_denominator", 1)),
+				String.num(float(rights_terms.get("exercise_price", 0.0)), 2)
+			]
 	if str(chain.get("family", "")) == "stock_buyback":
 		var terms: Dictionary = chain.get("buyback_terms", {})
 		if not terms.is_empty():

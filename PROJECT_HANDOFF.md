@@ -38,12 +38,16 @@ Read this file first in the next session.
     - `fc14108 Build Key Stats card dashboard`
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
-    - latest checkpoint message: `Add stock buyback execution`
+    - latest checkpoint message: `Add rights issue execution`
   - after checkpoint commits, `git status --short` should generally be clean except ignored local `logs/` output
-  - current local note: `stock_buyback` now has deterministic terms, execution payloads, share retirement, free-float updates, and smoke coverage
+  - current local note: `rights_issue` now has deterministic terms, execution payloads, company dilution/TERP effects, and player auto-exercise/lapse handling
 
 ## Latest Session Snapshot
-- Most recent work made `stock_buyback` a real executable corporate-action family instead of only a scored/cataloged storyline.
+- Most recent work made `rights_issue` execution real after the interactive `RUPSLB` approval flow.
+- Rights issue chains now generate deterministic terms: ratio denominator, entitlement ratio, exercise price, discount, gross proceeds, old/new shares outstanding, and theoretical ex-rights price.
+- Approved rights issues now emit a `rights_issue` application payload at execution; `RunState` applies the company-level dilution, updates market cap/free float, applies a capped TERP-style price adjustment, and records a `rights_issue` share-structure adjustment.
+- Player treatment is first-pass but playable: record-date shareholders receive an entitlement; if cash is enough the entitlement auto-exercises into new shares with portfolio history side `rights_issue_exercise`, otherwise the entitlement is recorded as `rights_issue_lapsed` without adding shares.
+- The previous pass made `stock_buyback` a real executable corporate-action family instead of only a scored/cataloged storyline.
 - Stock buyback chains now generate deterministic authorization/execution terms, including authorized shares, executed/retired shares, buyback premium, budget, old/new shares outstanding, and old/new free float.
 - Stock buyback execution now emits a `stock_buyback` application payload; `RunState` applies it by retiring shares, reducing free float, applying capped price-support, updating market cap/depth context, and recording a `stock_buyback` corporate-action adjustment.
 - `GameManager.debug_force_stock_buyback_execution(company_id)` exists for deterministic testing and debugging, and quick smoke now verifies the buyback terms -> application -> share-structure adjustment path.
@@ -1175,6 +1179,7 @@ Read this file first in the next session.
     - `cancellation_risk`
     - `market_overpricing`
     - `funding_pressure`
+    - `rights_terms` for `rights_issue` chains
     - `placement_terms` for `private_placement` chains
     - `buyback_terms` for `stock_buyback` chains
     - `expected_meeting_type`
@@ -1202,7 +1207,7 @@ Read this file first in the next session.
   - market-facing chain arcs are emitted from the current stage instead of being hardcoded one-off event rows
 - Current family rollout:
   - enabled v1 families:
-    - `rights_issue`
+    - `rights_issue` with interactive RUPSLB voting and execution effects
     - `private_placement`
     - `stock_buyback` with non-interactive execution effects
     - `stock_split`
@@ -1913,6 +1918,13 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - Rights issue execution pass on `2026-04-28`:
+    - `git diff --check` passed
+    - Godot project-load check passed with `--log-file logs\rights-issue-load.log --quit`
+    - quick Godot headless smoke with `--log-file logs\smoke-rights-issue-execution.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
+    - smoke now asserts approved interactive rights issue `RUPSLB` execution emits an application payload, increases company shares outstanding, records a share-structure adjustment, and auto-exercises or lapses the player's record-date entitlement based on cash
+    - committed as `Add rights issue execution`
+    - non-blocking Windows/Godot note: this smoke run printed `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; treat it as trailing platform noise unless it appears before test success or affects network/API work
   - Stock buyback execution pass on `2026-04-28`:
     - `git diff --check` passed
     - Godot project-load check passed with `--log-file logs\stock-buyback-load.log --quit`
@@ -2152,7 +2164,7 @@ Read this file first in the next session.
 - Trade list now has basic All Stock search, but no sort tools yet
 - `Load Run` now uses a loading screen, but the smoke flow still does not explicitly click through the saved-run path
 - The broader corporate-action layer now exists, but it is still v1:
-  - `rights_issue`, `private_placement`, `stock_buyback`, `stock_split`, and `ceo_change` are currently enabled; `stock_buyback` now has non-interactive execution effects while `stock_split` and `ceo_change` are still mostly storyline scaffolds
+  - `rights_issue`, `private_placement`, `stock_buyback`, `stock_split`, and `ceo_change` are currently enabled; `rights_issue`, `private_placement`, and `stock_buyback` now have execution effects while `stock_split` and `ceo_change` are still mostly storyline scaffolds
   - `restructuring`, `strategic_merger_acquisition`, and `backdoor_listing` exist in catalog form only and are not active yet
   - only `rights_issue` and `private_placement` `rupslb` currently have interactive staged voting
   - `annual_rups` and `earnings_call` still use the simpler shared meeting modal
@@ -2258,7 +2270,7 @@ Read this file first in the next session.
   - consider housing/cars/status upgrades after the monthly cash-flow loop is working and readable
 - Network and corporate-action planning:
   - deepen the shared corporate-action chain object that `News`, `Twooter`, `Network`, market reaction, `earnings_call`, `annual_rups`, and `rupslb` already read/write
-  - tune annual cash-dividend eligibility, stock-dividend distribution ratios, private-placement issuance discounts, stock-buyback sizing/price support, and market reaction once longer playtests show whether income/dilution/capital returns are too rare or too generous
+  - tune annual cash-dividend eligibility, stock-dividend distribution ratios, rights issue ratios/exercise pricing, private-placement issuance discounts, stock-buyback sizing/price support, and market reaction once longer playtests show whether income/dilution/capital returns are too rare or too generous
   - expand interactive `rupslb` beyond `rights_issue` / `private_placement` with more agenda families, richer result nuance, and better record-date UI copy
   - deepen cross-contact conflict handling with actions like `Ask for evidence`, `Push back`, and `Compare source`
   - evolve Journal rows into searchable/filterable clues and tasks when source-check gameplay becomes a major loop
