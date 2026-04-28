@@ -9029,7 +9029,17 @@ func _refresh_corporate_meeting_modal() -> void:
 	elif requires_shareholder and not attendance_eligible:
 		attendance_text = str(detail.get("attendance_blocked_reason", "Shareholder ownership is required to attend this meeting."))
 	elif requires_shareholder:
-		attendance_text = "Shareholder verified: %d share(s) held." % int(detail.get("player_shares_owned", 0))
+		var record_day_number: int = int(detail.get("record_day_number", 0))
+		if bool(detail.get("shareholder_recorded", false)):
+			attendance_text = "Shareholder verified: %d share(s) recorded on Day %d." % [
+				int(detail.get("player_shares_owned", 0)),
+				record_day_number
+			]
+		else:
+			attendance_text = "Projected eligibility: %d share(s). Registry records on Day %d." % [
+				int(detail.get("player_shares_owned", 0)),
+				record_day_number
+			]
 	corporate_meeting_attendance_label.text = "Attendance\n%s" % attendance_text
 	corporate_meeting_attend_button.disabled = attended or not attendance_eligible
 	corporate_meeting_attend_button.text = "Attended" if attended else ("Shareholders Only" if not attendance_eligible else "Attend")

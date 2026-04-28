@@ -30,13 +30,24 @@ func ensure_initialized(run_state, data_repository) -> void:
 		return
 	var calendar: Dictionary = run_state.get_corporate_meeting_calendar()
 	var dividend_calendar: Dictionary = run_state.get_corporate_dividend_calendar()
+	var shareholder_registry: Dictionary = run_state.get_shareholder_registry()
 	var changed_meetings: bool = _ensure_annual_rups_meetings(run_state, catalog, calendar)
 	var changed_dividends: bool = _ensure_cash_dividend_actions(run_state, catalog, calendar, dividend_calendar)
 	changed_dividends = _ensure_stock_dividend_actions(run_state, catalog, calendar, dividend_calendar) or changed_dividends
+	var current_day_number: int = max(int(run_state.day_index) + 1, 1)
+	changed_meetings = _capture_due_meeting_shareholder_records(
+		run_state,
+		calendar,
+		shareholder_registry,
+		run_state.get_current_trade_date(),
+		current_day_number
+	) or changed_meetings
 	if changed_meetings or changed_dividends:
 		run_state.set_corporate_meeting_calendar(calendar)
 	if changed_dividends:
 		run_state.set_corporate_dividend_calendar(dividend_calendar)
+	if changed_meetings:
+		run_state.set_shareholder_registry(shareholder_registry)
 
 
 func resolve_day(
@@ -56,6 +67,7 @@ func resolve_day(
 			"corporate_dividend_calendar": run_state.get_corporate_dividend_calendar(),
 			"attended_meetings": run_state.get_attended_meetings(),
 			"corporate_meeting_sessions": run_state.get_corporate_meeting_sessions(),
+			"shareholder_registry": run_state.get_shareholder_registry(),
 			"corporate_action_events": [],
 			"dividend_payments": [],
 			"stock_dividend_distributions": [],
@@ -69,6 +81,7 @@ func resolve_day(
 	var dividend_calendar: Dictionary = run_state.get_corporate_dividend_calendar()
 	var attended_meetings: Dictionary = run_state.get_attended_meetings()
 	var meeting_sessions: Dictionary = run_state.get_corporate_meeting_sessions()
+	var shareholder_registry: Dictionary = run_state.get_shareholder_registry()
 	var corporate_action_events: Array = []
 	var dividend_payments: Array = []
 	var stock_dividend_distributions: Array = []
@@ -79,11 +92,13 @@ func resolve_day(
 	_ensure_cash_dividend_actions(run_state, catalog, calendar, dividend_calendar)
 	_ensure_stock_dividend_actions(run_state, catalog, calendar, dividend_calendar)
 	_schedule_earnings_calls_for_reports(run_state, catalog, calendar, report_events, day_number)
+	_capture_due_meeting_shareholder_records(run_state, calendar, shareholder_registry, trade_date, day_number)
 	_refresh_meeting_statuses(calendar, attended_meetings, day_number)
 	var dividend_resolution: Dictionary = _advance_cash_dividends(
 		run_state,
 		catalog,
 		dividend_calendar,
+		shareholder_registry,
 		trade_date,
 		day_number
 	)
@@ -94,6 +109,7 @@ func resolve_day(
 		run_state,
 		catalog,
 		dividend_calendar,
+		shareholder_registry,
 		trade_date,
 		day_number
 	)
@@ -153,6 +169,11 @@ func resolve_day(
 			active_company_arcs.append(arc)
 	active_company_arcs.append_array(dividend_active_arcs)
 	meeting_sessions = run_state.get_corporate_meeting_sessions()
+	var persisted_shareholder_registry: Dictionary = run_state.get_shareholder_registry()
+	for registry_key_value in persisted_shareholder_registry.keys():
+		var registry_key: String = str(registry_key_value)
+		if not shareholder_registry.has(registry_key):
+			shareholder_registry[registry_key] = persisted_shareholder_registry.get(registry_key, {}).duplicate(true)
 
 	return {
 		"active_corporate_action_chains": next_chains,
@@ -161,6 +182,7 @@ func resolve_day(
 		"corporate_dividend_calendar": dividend_calendar,
 		"attended_meetings": attended_meetings,
 		"corporate_meeting_sessions": meeting_sessions,
+		"shareholder_registry": shareholder_registry,
 		"corporate_action_events": corporate_action_events,
 		"dividend_payments": dividend_payments,
 		"stock_dividend_distributions": stock_dividend_distributions,
@@ -299,6 +321,14 @@ func get_meeting_detail(run_state, meeting_id: String) -> Dictionary:
 	detail["attendance_eligible"] = bool(attendance_gate.get("eligible", true))
 	detail["attendance_blocked_reason"] = str(attendance_gate.get("blocked_reason", ""))
 	detail["player_shares_owned"] = int(attendance_gate.get("shares_owned", 0))
+	detail["current_shares_owned"] = int(attendance_gate.get("current_shares_owned", 0))
+	detail["record_day_number"] = int(attendance_gate.get("record_day_number", 0))
+	detail["record_trade_date"] = attendance_gate.get("record_trade_date", {}).duplicate(true)
+	detail["record_date_key"] = str(attendance_gate.get("record_date_key", ""))
+	detail["shareholder_record_key"] = str(attendance_gate.get("shareholder_record_key", ""))
+	detail["shareholder_recorded"] = bool(attendance_gate.get("shareholder_recorded", false))
+	detail["shareholder_record_pending"] = bool(attendance_gate.get("shareholder_record_pending", false))
+	detail["ownership_snapshot"] = _ownership_snapshot_for_meeting(run_state, detail)
 	if detail["interactive_v1"]:
 		detail["session"] = run_state.get_corporate_meeting_sessions().get(meeting_id, {}).duplicate(true)
 	return detail
@@ -415,7 +445,13 @@ func attend_meeting(run_state, meeting_id: String) -> Dictionary:
 		"attended": true,
 		"day_index": run_state.day_index,
 		"chain_id": str(meeting.get("source_chain_id", "")),
-		"shares_owned": int(attendance_gate.get("shares_owned", 0))
+		"shares_owned": int(attendance_gate.get("shares_owned", 0)),
+		"current_shares_owned": int(attendance_gate.get("current_shares_owned", 0)),
+		"record_day_number": int(attendance_gate.get("record_day_number", 0)),
+		"record_trade_date": attendance_gate.get("record_trade_date", {}).duplicate(true),
+		"record_date_key": str(attendance_gate.get("record_date_key", "")),
+		"shareholder_record_key": str(attendance_gate.get("shareholder_record_key", "")),
+		"shareholder_recorded": bool(attendance_gate.get("shareholder_recorded", false))
 	}
 	_set_meeting_flag(calendar, meeting_id, "attended", true)
 	run_state.set_attended_meetings(attended_meetings)
@@ -506,7 +542,7 @@ func get_meeting_session_snapshot(run_state, data_repository, meeting_id: String
 	if not result_summary.is_empty():
 		current_stage_id = "result"
 		session["presentation_stage"] = "result"
-	var observer_copy: String = str(presentation.get("observer_copy", "Only verified shareholders can enter the vote room on the meeting day."))
+	var observer_copy: String = str(presentation.get("observer_copy", "Only record-date shareholders can enter the vote room."))
 	var vote_prompt: String = str(presentation.get("vote_prompt", "Cast your vote on the proposed agenda."))
 	var host_intro_lines: Array = presentation.get("host_intro_lines", []).duplicate(true)
 	var host_intro_text: String = ""
@@ -583,17 +619,20 @@ func submit_meeting_vote(
 	if session.is_empty():
 		session = _build_meeting_session_record(run_state, detail)
 	var normalized_vote_choice: String = _normalized_vote_choice(vote_choice)
-	var player_weight_pct: float = float(session.get("player_vote_weight_pct", ownership_snapshot.get("ownership_pct", 0.0)))
+	var effective_ownership_snapshot: Dictionary = _ownership_snapshot_for_meeting(run_state, detail)
+	if effective_ownership_snapshot.is_empty():
+		effective_ownership_snapshot = ownership_snapshot.duplicate(true)
+	var player_weight_pct: float = float(session.get("player_vote_weight_pct", effective_ownership_snapshot.get("ownership_pct", 0.0)))
 	var voting_eligible: bool = bool(session.get("voting_eligible", player_weight_pct > 0.0))
 	if not voting_eligible and normalized_vote_choice != "abstain":
-		return {"success": false, "message": "Voting requires current shareholder ownership on the meeting day."}
+		return {"success": false, "message": "Voting requires shareholder eligibility on the meeting record date."}
 	var chain: Dictionary = detail.get("chain", {}).duplicate(true)
 	var result_summary: Dictionary = _resolve_interactive_meeting_vote(
 		data_repository.get_corporate_action_catalog(),
 		meeting_id,
 		chain,
 		detail,
-		ownership_snapshot,
+		effective_ownership_snapshot,
 		normalized_vote_choice
 	)
 	session["selected_vote"] = normalized_vote_choice
@@ -724,14 +763,15 @@ func debug_force_rights_issue_rupslb(run_state, data_repository, company_id: Str
 	var chains: Dictionary = run_state.get_active_corporate_action_chains()
 	if _company_has_live_chain(chains, company_id):
 		return {}
-	var day_number: int = max(run_state.day_index, 1)
-	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, "rights_issue", day_number)
+	var current_trade_date: Dictionary = run_state.get_current_trade_date()
+	var current_day_number: int = max(max(trading_calendar.trade_index_for_date(current_trade_date), int(run_state.day_index) + 1), 1)
+	var chain_day_number: int = max(int(run_state.day_index), 1)
+	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, "rights_issue", chain_day_number)
 	if chain.is_empty():
 		return {}
 	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
 	if definition.is_empty():
 		return {}
-	var current_trade_date: Dictionary = run_state.get_current_trade_date()
 	var meeting_id: String = "rupslb|%s|%s|debug" % [company_id, str(chain.get("chain_id", ""))]
 	var meeting: Dictionary = {
 		"id": meeting_id,
@@ -743,7 +783,7 @@ func debug_force_rights_issue_rupslb(run_state, data_repository, company_id: Str
 		"target_sector_id": str(definition.get("sector_id", "")),
 		"trade_date": current_trade_date.duplicate(true),
 		"date_key": trading_calendar.to_key(current_trade_date),
-		"trading_day_number": day_number,
+		"trading_day_number": current_day_number,
 		"status": "scheduled",
 		"source_chain_id": str(chain.get("chain_id", "")),
 		"chain_family": "rights_issue",
@@ -759,10 +799,20 @@ func debug_force_rights_issue_rupslb(run_state, data_repository, company_id: Str
 	chain["public_heat"] = max(float(chain.get("public_heat", 0.0)), 0.42)
 	chain["retail_positioning"] = max(float(chain.get("retail_positioning", 0.0)), 0.24)
 	chain["active_meeting_id"] = meeting_id
-	chain["last_advanced_day_index"] = day_number
-	chain["next_review_day_index"] = day_number + 1
+	chain["last_advanced_day_index"] = chain_day_number
+	chain["next_review_day_index"] = chain_day_number + 1
 	chain["next_expected_step"] = "The room is waiting on the vote."
 	meeting["public_summary"] = _meeting_public_summary(chain)
+	meeting = _with_meeting_record_date(meeting, current_day_number)
+	var shareholder_registry: Dictionary = run_state.get_shareholder_registry()
+	_capture_shareholder_record_for_meeting(
+		run_state,
+		shareholder_registry,
+		meeting,
+		current_trade_date,
+		current_day_number
+	)
+	run_state.set_shareholder_registry(shareholder_registry)
 	var calendar: Dictionary = run_state.get_corporate_meeting_calendar()
 	_add_meeting(calendar, meeting)
 	run_state.set_corporate_meeting_calendar(calendar)
@@ -832,6 +882,16 @@ func _debug_schedule_next_day_rupslb(run_state, data_repository, company_id: Str
 		"public_summary": _meeting_public_summary(chain),
 		"attended": false
 	}
+	meeting = _with_meeting_record_date(meeting, current_day_number)
+	var shareholder_registry: Dictionary = run_state.get_shareholder_registry()
+	_capture_shareholder_record_for_meeting(
+		run_state,
+		shareholder_registry,
+		meeting,
+		current_trade_date,
+		current_day_number
+	)
+	run_state.set_shareholder_registry(shareholder_registry)
 	var calendar: Dictionary = run_state.get_corporate_meeting_calendar()
 	_add_meeting(calendar, meeting)
 	run_state.set_corporate_meeting_calendar(calendar)
@@ -1857,6 +1917,7 @@ func _advance_cash_dividends(
 	run_state,
 	catalog: Dictionary,
 	dividend_calendar: Dictionary,
+	shareholder_registry: Dictionary,
 	trade_date: Dictionary,
 	day_number: int
 ) -> Dictionary:
@@ -1881,8 +1942,21 @@ func _advance_cash_dividends(
 			events.append(_build_cash_dividend_event(record, trade_date, day_number, "ex_date"))
 			active_arcs.append(_build_cash_dividend_arc(record, trade_date, day_number, "ex_date"))
 		if int(record.get("record_day_number", 0)) <= day_number and int(record.get("record_shares_owned", -1)) < 0:
-			var holding: Dictionary = run_state.get_holding(str(record.get("company_id", "")))
-			record["record_shares_owned"] = max(int(holding.get("shares", 0)), 0)
+			var record_entry: Dictionary = _ensure_shareholder_record(
+				run_state,
+				shareholder_registry,
+				"dividend",
+				dividend_id,
+				str(record.get("company_id", "")),
+				str(record.get("ticker", "")),
+				int(record.get("record_day_number", 0)),
+				record.get("record_trade_date", {}),
+				trade_date,
+				day_number
+			)
+			record["shareholder_record_key"] = _shareholder_registry_key("dividend", dividend_id)
+			record["record_shares_owned"] = max(int(record_entry.get("shares_owned", 0)), 0)
+			record["shareholder_recorded"] = true
 			if str(record.get("status", "")) == "ex_date":
 				record["status"] = "recorded"
 		if int(record.get("payment_day_number", 0)) <= day_number and str(record.get("payment_status", "pending")) != "paid":
@@ -1918,6 +1992,7 @@ func _advance_stock_dividends(
 	run_state,
 	catalog: Dictionary,
 	dividend_calendar: Dictionary,
+	shareholder_registry: Dictionary,
 	trade_date: Dictionary,
 	day_number: int
 ) -> Dictionary:
@@ -1942,8 +2017,21 @@ func _advance_stock_dividends(
 			events.append(_build_stock_dividend_event(record, trade_date, day_number, "ex_date"))
 			active_arcs.append(_build_stock_dividend_arc(record, trade_date, day_number, "ex_date"))
 		if int(record.get("record_day_number", 0)) <= day_number and int(record.get("record_shares_owned", -1)) < 0:
-			var holding: Dictionary = run_state.get_holding(str(record.get("company_id", "")))
-			record["record_shares_owned"] = max(int(holding.get("shares", 0)), 0)
+			var record_entry: Dictionary = _ensure_shareholder_record(
+				run_state,
+				shareholder_registry,
+				"dividend",
+				dividend_id,
+				str(record.get("company_id", "")),
+				str(record.get("ticker", "")),
+				int(record.get("record_day_number", 0)),
+				record.get("record_trade_date", {}),
+				trade_date,
+				day_number
+			)
+			record["shareholder_record_key"] = _shareholder_registry_key("dividend", dividend_id)
+			record["record_shares_owned"] = max(int(record_entry.get("shares_owned", 0)), 0)
+			record["shareholder_recorded"] = true
 			if str(record.get("status", "")) == "ex_date":
 				record["status"] = "recorded"
 		if int(record.get("payment_day_number", 0)) <= day_number and str(record.get("payment_status", "pending")) != "paid":
@@ -2204,12 +2292,23 @@ func _attach_stock_dividend_to_annual_meeting(calendar: Dictionary, record: Dict
 func _dividend_row(run_state, record: Dictionary) -> Dictionary:
 	var current_day_number: int = int(run_state.day_index) + 1
 	var holding: Dictionary = run_state.get_holding(str(record.get("company_id", "")))
+	var current_shares: int = max(int(holding.get("shares", 0)), 0)
+	var shareholder_record_key: String = _shareholder_registry_key("dividend", str(record.get("id", "")))
+	var shareholder_record: Dictionary = _shareholder_record_entry_for(run_state, "dividend", str(record.get("id", "")))
 	var eligible_shares: int = max(int(record.get("record_shares_owned", -1)), 0)
-	if int(record.get("record_shares_owned", -1)) < 0 and int(record.get("record_day_number", 0)) >= current_day_number:
+	var shareholder_recorded: bool = int(record.get("record_shares_owned", -1)) >= 0
+	if not shareholder_record.is_empty():
+		eligible_shares = max(int(shareholder_record.get("shares_owned", 0)), 0)
+		shareholder_recorded = true
+	if not shareholder_recorded and int(record.get("record_day_number", 0)) >= current_day_number:
 		eligible_shares = max(int(holding.get("shares", 0)), 0)
 	var projected_amount: float = _round_currency(float(record.get("amount_per_share", 0.0)) * float(eligible_shares))
 	var projected_bonus_shares: int = int(floor(float(eligible_shares) * max(float(record.get("stock_dividend_ratio", 0.0)), 0.0)))
 	var row: Dictionary = record.duplicate(true)
+	row["shareholder_record_key"] = shareholder_record_key
+	row["shareholder_recorded"] = shareholder_recorded
+	row["shareholder_record_pending"] = not shareholder_recorded and int(record.get("record_day_number", 0)) > current_day_number
+	row["current_shares_owned"] = current_shares
 	row["eligible_shares"] = eligible_shares
 	row["projected_amount"] = projected_amount
 	row["projected_bonus_shares"] = projected_bonus_shares
@@ -2275,7 +2374,7 @@ func _build_annual_rups_meeting(catalog: Dictionary, definition: Dictionary, com
 	if meeting_date.is_empty():
 		return {}
 	var trading_day_number: int = trading_calendar.trade_index_for_date(meeting_date)
-	return {
+	var meeting: Dictionary = {
 		"id": "annual_rups|%s|%d" % [company_id, year_value],
 		"meeting_type": "annual_rups",
 		"venue_type": "annual_rups",
@@ -2301,6 +2400,7 @@ func _build_annual_rups_meeting(catalog: Dictionary, definition: Dictionary, com
 		"public_summary": "%s is holding its annual RUPS governance meeting." % str(definition.get("name", company_id.to_upper())),
 		"attended": false
 	}
+	return _with_meeting_record_date(meeting)
 
 
 func _schedule_earnings_calls_for_reports(run_state, catalog: Dictionary, calendar: Dictionary, report_events: Array, day_number: int) -> void:
@@ -2406,6 +2506,17 @@ func _ensure_chain_meeting(run_state, catalog: Dictionary, chain: Dictionary, ca
 		"public_summary": _meeting_public_summary(chain),
 		"attended": false
 	}
+	meeting = _with_meeting_record_date(meeting, day_number)
+	if int(meeting.get("record_day_number", 0)) <= day_number:
+		var shareholder_registry: Dictionary = run_state.get_shareholder_registry()
+		_capture_shareholder_record_for_meeting(
+			run_state,
+			shareholder_registry,
+			meeting,
+			base_date,
+			day_number
+		)
+		run_state.set_shareholder_registry(shareholder_registry)
 	_add_meeting(calendar, meeting)
 	return meeting_id
 
@@ -2441,6 +2552,17 @@ func _attach_chain_to_existing_annual_meeting(run_state, chain: Dictionary, cale
 		meeting["management_stance"] = str(chain.get("management_stance", ""))
 		meeting["agenda_payload"] = chain.get("agenda_payload", []).duplicate(true)
 		meeting["public_summary"] = _meeting_public_summary(chain)
+		meeting = _with_meeting_record_date(meeting)
+		if int(meeting.get("record_day_number", 0)) <= current_day_number:
+			var shareholder_registry: Dictionary = run_state.get_shareholder_registry()
+			_capture_shareholder_record_for_meeting(
+				run_state,
+				shareholder_registry,
+				meeting,
+				run_state.get_current_trade_date(),
+				current_day_number
+			)
+			run_state.set_shareholder_registry(shareholder_registry)
 		meetings[meeting_index] = meeting
 		calendar[str(meeting.get("date_key", ""))] = meetings
 		return meeting_id
@@ -2461,29 +2583,235 @@ func _meeting_requires_shareholder(meeting: Dictionary) -> bool:
 	return meeting_type in ["annual_rups", "rupslb"]
 
 
+func _shareholder_registry_key(record_type: String, source_id: String) -> String:
+	var normalized_type: String = record_type.strip_edges().to_lower()
+	var normalized_source_id: String = source_id.strip_edges()
+	if normalized_type.is_empty() or normalized_source_id.is_empty():
+		return ""
+	return "%s|%s" % [normalized_type, normalized_source_id]
+
+
+func _with_meeting_record_date(meeting: Dictionary, minimum_record_day_number: int = 0) -> Dictionary:
+	if meeting.is_empty() or not _meeting_requires_shareholder(meeting):
+		return meeting.duplicate(true)
+	var normalized_meeting: Dictionary = meeting.duplicate(true)
+	var meeting_day_number: int = int(normalized_meeting.get("trading_day_number", 0))
+	if meeting_day_number <= 0:
+		return normalized_meeting
+	var record_day_number: int = int(normalized_meeting.get("record_day_number", 0))
+	if record_day_number <= 0:
+		record_day_number = max(meeting_day_number - 2, 1)
+	if minimum_record_day_number > 0:
+		record_day_number = max(record_day_number, min(minimum_record_day_number, meeting_day_number))
+	record_day_number = clamp(record_day_number, 1, meeting_day_number)
+	var record_trade_date: Dictionary = normalized_meeting.get("record_trade_date", {}).duplicate(true)
+	if record_trade_date.is_empty() or int(normalized_meeting.get("record_day_number", 0)) != record_day_number:
+		record_trade_date = trading_calendar.trade_date_for_index(record_day_number)
+	normalized_meeting["record_day_number"] = record_day_number
+	normalized_meeting["record_trade_date"] = record_trade_date.duplicate(true)
+	normalized_meeting["record_date_key"] = trading_calendar.to_key(record_trade_date)
+	normalized_meeting["shareholder_record_key"] = _shareholder_registry_key("meeting", str(normalized_meeting.get("id", "")))
+	if not normalized_meeting.has("record_shares_owned"):
+		normalized_meeting["record_shares_owned"] = -1
+	return normalized_meeting
+
+
+func _capture_due_meeting_shareholder_records(
+	run_state,
+	calendar: Dictionary,
+	shareholder_registry: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> bool:
+	var changed: bool = false
+	for date_key_value in calendar.keys():
+		var date_key: String = str(date_key_value)
+		var meetings: Array = calendar.get(date_key, []).duplicate(true)
+		var date_changed: bool = false
+		for meeting_index in range(meetings.size()):
+			if typeof(meetings[meeting_index]) != TYPE_DICTIONARY:
+				continue
+			var meeting: Dictionary = meetings[meeting_index].duplicate(true)
+			if not _meeting_requires_shareholder(meeting):
+				continue
+			var previous_record_day_number: int = int(meeting.get("record_day_number", 0))
+			var previous_record_shares_owned: int = int(meeting.get("record_shares_owned", -1))
+			var previous_shareholder_record_key: String = str(meeting.get("shareholder_record_key", ""))
+			meeting = _with_meeting_record_date(meeting)
+			if (
+				previous_record_day_number != int(meeting.get("record_day_number", 0)) or
+				previous_shareholder_record_key != str(meeting.get("shareholder_record_key", ""))
+			):
+				date_changed = true
+			if int(meeting.get("record_day_number", 0)) <= day_number:
+				if _capture_shareholder_record_for_meeting(run_state, shareholder_registry, meeting, trade_date, day_number):
+					date_changed = true
+			if previous_record_shares_owned != int(meeting.get("record_shares_owned", -1)):
+				date_changed = true
+			if date_changed:
+				meetings[meeting_index] = meeting
+		if date_changed:
+			calendar[date_key] = meetings
+			changed = true
+	return changed
+
+
+func _capture_shareholder_record_for_meeting(
+	run_state,
+	shareholder_registry: Dictionary,
+	meeting: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> bool:
+	if meeting.is_empty() or not _meeting_requires_shareholder(meeting):
+		return false
+	var meeting_id: String = str(meeting.get("id", ""))
+	var record_day_number: int = int(meeting.get("record_day_number", 0))
+	if record_day_number <= 0 or day_number < record_day_number:
+		return false
+	var entry: Dictionary = _ensure_shareholder_record(
+		run_state,
+		shareholder_registry,
+		"meeting",
+		meeting_id,
+		str(meeting.get("company_id", "")),
+		str(meeting.get("ticker", "")),
+		record_day_number,
+		meeting.get("record_trade_date", {}),
+		trade_date,
+		day_number
+	)
+	if entry.is_empty():
+		return false
+	var previous_shares: int = int(meeting.get("record_shares_owned", -1))
+	var previous_key: String = str(meeting.get("shareholder_record_key", ""))
+	var was_recorded: bool = bool(meeting.get("shareholder_recorded", false))
+	meeting["shareholder_record_key"] = _shareholder_registry_key("meeting", meeting_id)
+	meeting["record_shares_owned"] = max(int(entry.get("shares_owned", 0)), 0)
+	meeting["shareholder_recorded"] = true
+	meeting["shareholder_record_captured_day_number"] = int(entry.get("captured_day_number", day_number))
+	meeting["shareholder_record_captured_trade_date"] = entry.get("captured_trade_date", {}).duplicate(true)
+	return (
+		previous_shares != int(meeting.get("record_shares_owned", -1)) or
+		previous_key != str(meeting.get("shareholder_record_key", "")) or
+		not was_recorded
+	)
+
+
+func _ensure_shareholder_record(
+	run_state,
+	shareholder_registry: Dictionary,
+	record_type: String,
+	source_id: String,
+	company_id: String,
+	ticker: String,
+	record_day_number: int,
+	record_trade_date: Dictionary,
+	capture_trade_date: Dictionary,
+	capture_day_number: int
+) -> Dictionary:
+	var registry_key: String = _shareholder_registry_key(record_type, source_id)
+	if registry_key.is_empty() or company_id.is_empty() or record_day_number <= 0:
+		return {}
+	if shareholder_registry.has(registry_key):
+		var existing_entry: Dictionary = shareholder_registry.get(registry_key, {})
+		return existing_entry.duplicate(true)
+	if capture_day_number < record_day_number:
+		return {}
+	var holding: Dictionary = run_state.get_holding(company_id)
+	var resolved_record_trade_date: Dictionary = record_trade_date.duplicate(true)
+	if resolved_record_trade_date.is_empty():
+		resolved_record_trade_date = trading_calendar.trade_date_for_index(record_day_number)
+	var resolved_capture_trade_date: Dictionary = capture_trade_date.duplicate(true)
+	if resolved_capture_trade_date.is_empty():
+		resolved_capture_trade_date = trading_calendar.trade_date_for_index(capture_day_number)
+	var entry: Dictionary = {
+		"registry_key": registry_key,
+		"record_type": record_type,
+		"source_id": source_id,
+		"company_id": company_id,
+		"ticker": ticker,
+		"record_day_number": record_day_number,
+		"record_trade_date": resolved_record_trade_date.duplicate(true),
+		"record_date_key": trading_calendar.to_key(resolved_record_trade_date),
+		"shares_owned": max(int(holding.get("shares", 0)), 0),
+		"captured_day_number": capture_day_number,
+		"captured_trade_date": resolved_capture_trade_date.duplicate(true),
+		"captured_date_key": trading_calendar.to_key(resolved_capture_trade_date)
+	}
+	shareholder_registry[registry_key] = entry
+	return entry.duplicate(true)
+
+
+func _shareholder_record_entry_for(run_state, record_type: String, source_id: String) -> Dictionary:
+	var registry_key: String = _shareholder_registry_key(record_type, source_id)
+	if registry_key.is_empty():
+		return {}
+	var shareholder_registry: Dictionary = run_state.get_shareholder_registry()
+	if not shareholder_registry.has(registry_key):
+		return {}
+	var entry: Dictionary = shareholder_registry.get(registry_key, {})
+	return entry.duplicate(true)
+
+
 func _meeting_attendance_gate(run_state, meeting: Dictionary, holding_share_cache: Dictionary = {}) -> Dictionary:
 	var requires_shareholder: bool = _meeting_requires_shareholder(meeting)
-	var company_id: String = str(meeting.get("company_id", ""))
-	var shares_owned: int = 0
+	var normalized_meeting: Dictionary = _with_meeting_record_date(meeting)
+	var company_id: String = str(normalized_meeting.get("company_id", ""))
+	var current_shares_owned: int = 0
 	if not company_id.is_empty():
 		if holding_share_cache.has(company_id):
-			shares_owned = int(holding_share_cache.get(company_id, 0))
+			current_shares_owned = int(holding_share_cache.get(company_id, 0))
 		else:
-			shares_owned = int(run_state.get_holding(company_id).get("shares", 0))
-			holding_share_cache[company_id] = shares_owned
+			current_shares_owned = int(run_state.get_holding(company_id).get("shares", 0))
+			holding_share_cache[company_id] = current_shares_owned
+	var shares_owned: int = current_shares_owned
+	var record_day_number: int = int(normalized_meeting.get("record_day_number", 0))
+	var current_day_number: int = max(int(run_state.day_index) + 1, 1)
+	var shareholder_recorded: bool = false
+	var record_pending: bool = false
+	var record_entry: Dictionary = _shareholder_record_entry_for(run_state, "meeting", str(normalized_meeting.get("id", "")))
+	if requires_shareholder and not record_entry.is_empty():
+		shares_owned = max(int(record_entry.get("shares_owned", 0)), 0)
+		shareholder_recorded = true
+	elif requires_shareholder and int(normalized_meeting.get("record_shares_owned", -1)) >= 0:
+		shares_owned = max(int(normalized_meeting.get("record_shares_owned", 0)), 0)
+		shareholder_recorded = true
+	elif requires_shareholder:
+		record_pending = record_day_number > current_day_number
 	var eligible: bool = not requires_shareholder or shares_owned > 0
 	var blocked_reason: String = ""
 	if not eligible:
-		var label: String = _meeting_type_label(str(meeting.get("meeting_type", meeting.get("venue_type", ""))))
-		var ticker: String = str(meeting.get("ticker", company_id.to_upper()))
-		blocked_reason = "%s attendance requires owning shares of %s. Buy at least 1 lot before attending." % [
-			label,
-			ticker
-		]
+		var label: String = _meeting_type_label(str(normalized_meeting.get("meeting_type", normalized_meeting.get("venue_type", ""))))
+		var ticker: String = str(normalized_meeting.get("ticker", company_id.to_upper()))
+		if shareholder_recorded:
+			blocked_reason = "%s attendance requires shares of %s on the shareholder record date (Day %d). Buying after that date does not grant eligibility." % [
+				label,
+				ticker,
+				record_day_number
+			]
+		elif record_pending:
+			blocked_reason = "%s attendance requires shares of %s before the shareholder registry records on Day %d." % [
+				label,
+				ticker,
+				record_day_number
+			]
+		else:
+			blocked_reason = "%s attendance requires owning shares of %s before the shareholder record date." % [
+				label,
+				ticker
+			]
 	return {
 		"requires_shareholder": requires_shareholder,
 		"eligible": eligible,
 		"shares_owned": shares_owned,
+		"current_shares_owned": current_shares_owned,
+		"record_day_number": record_day_number,
+		"record_trade_date": normalized_meeting.get("record_trade_date", {}).duplicate(true),
+		"record_date_key": str(normalized_meeting.get("record_date_key", "")),
+		"shareholder_record_key": str(normalized_meeting.get("shareholder_record_key", "")),
+		"shareholder_recorded": shareholder_recorded,
+		"shareholder_record_pending": record_pending,
 		"blocked_reason": blocked_reason
 	}
 
@@ -2519,7 +2847,7 @@ func _meeting_presentation_copy(catalog: Dictionary, family_id: String) -> Dicti
 				"The chair opens the meeting and frames the agenda for the room.",
 				"Management moves to the podium and starts walking shareholders through the rationale."
 			],
-			"observer_copy": "Only verified shareholders can enter the vote room on the meeting day.",
+			"observer_copy": "Only record-date shareholders can enter the vote room.",
 			"vote_prompt": "Cast your vote on the published agenda.",
 			"approved_result_copy": "The room clears the proposal and the market will react on the next simulation day.",
 			"rejected_result_copy": "The room rejects the proposal and the market will react on the next simulation day."
@@ -2529,7 +2857,7 @@ func _meeting_presentation_copy(catalog: Dictionary, family_id: String) -> Dicti
 
 func _build_meeting_session_record(run_state, meeting: Dictionary) -> Dictionary:
 	var company_id: String = str(meeting.get("company_id", ""))
-	var ownership_snapshot: Dictionary = _ownership_snapshot_from_run_state(run_state, company_id)
+	var ownership_snapshot: Dictionary = _ownership_snapshot_for_meeting(run_state, meeting)
 	var agenda_payload: Array = meeting.get("agenda_payload", []).duplicate(true)
 	return {
 		"meeting_id": str(meeting.get("id", "")),
@@ -2551,8 +2879,26 @@ func _build_meeting_session_record(run_state, meeting: Dictionary) -> Dictionary
 
 
 func _ownership_snapshot_from_run_state(run_state, company_id: String) -> Dictionary:
-	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
 	var holding: Dictionary = run_state.get_holding(company_id)
+	return _ownership_snapshot_for_shares(run_state, company_id, int(holding.get("shares", 0)))
+
+
+func _ownership_snapshot_for_meeting(run_state, meeting: Dictionary) -> Dictionary:
+	var company_id: String = str(meeting.get("company_id", ""))
+	var attendance_gate: Dictionary = _meeting_attendance_gate(run_state, meeting)
+	var snapshot: Dictionary = _ownership_snapshot_for_shares(run_state, company_id, int(attendance_gate.get("shares_owned", 0)))
+	snapshot["record_day_number"] = int(attendance_gate.get("record_day_number", 0))
+	snapshot["record_trade_date"] = attendance_gate.get("record_trade_date", {}).duplicate(true)
+	snapshot["record_date_key"] = str(attendance_gate.get("record_date_key", ""))
+	snapshot["shareholder_record_key"] = str(attendance_gate.get("shareholder_record_key", ""))
+	snapshot["shareholder_recorded"] = bool(attendance_gate.get("shareholder_recorded", false))
+	snapshot["shareholder_record_pending"] = bool(attendance_gate.get("shareholder_record_pending", false))
+	snapshot["current_shares_owned"] = int(attendance_gate.get("current_shares_owned", 0))
+	return snapshot
+
+
+func _ownership_snapshot_for_shares(run_state, company_id: String, shares_owned: int) -> Dictionary:
+	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
 	if definition.is_empty():
 		return {
 			"company_id": company_id,
@@ -2568,7 +2914,7 @@ func _ownership_snapshot_from_run_state(run_state, company_id: String) -> Dictio
 		float(definition.get("shares_outstanding", financials.get("shares_outstanding", 0.0))),
 		0.0
 	)
-	var shares_owned: int = int(holding.get("shares", 0))
+	shares_owned = max(shares_owned, 0)
 	var ownership_pct: float = 0.0
 	if shares_outstanding > 0.0:
 		ownership_pct = clamp(float(shares_owned) / shares_outstanding, 0.0, 1.0)
@@ -2678,7 +3024,7 @@ func _resolve_interactive_meeting_vote(
 				"disagree_pct": player_no_pct,
 				"abstain_pct": player_abstain_pct,
 				"decision": player_vote_choice,
-				"note": "Player influence uses owned shares on the meeting day."
+				"note": "Player influence uses shares captured on the shareholder record date."
 			},
 			{
 				"bloc_id": "public",
@@ -2714,7 +3060,7 @@ func _consume_interactive_meeting_resolution(
 		session = _build_meeting_session_record(run_state, detail)
 	var result_summary: Dictionary = session.get("resolved_result_summary", {}).duplicate(true)
 	if result_summary.is_empty():
-		var ownership_snapshot: Dictionary = _ownership_snapshot_from_run_state(run_state, str(chain.get("company_id", "")))
+		var ownership_snapshot: Dictionary = _ownership_snapshot_for_meeting(run_state, detail)
 		result_summary = _resolve_interactive_meeting_vote(
 			catalog,
 			meeting_id,
@@ -2930,7 +3276,14 @@ func _meeting_row(meeting: Dictionary, run_state, attended_meetings: Variant = n
 		"requires_shareholder": bool(attendance_gate.get("requires_shareholder", false)),
 		"attendance_eligible": bool(attendance_gate.get("eligible", true)),
 		"attendance_blocked_reason": str(attendance_gate.get("blocked_reason", "")),
-		"player_shares_owned": int(attendance_gate.get("shares_owned", 0))
+		"player_shares_owned": int(attendance_gate.get("shares_owned", 0)),
+		"current_shares_owned": int(attendance_gate.get("current_shares_owned", 0)),
+		"record_day_number": int(attendance_gate.get("record_day_number", 0)),
+		"record_trade_date": attendance_gate.get("record_trade_date", {}).duplicate(true),
+		"record_date_key": str(attendance_gate.get("record_date_key", "")),
+		"shareholder_record_key": str(attendance_gate.get("shareholder_record_key", "")),
+		"shareholder_recorded": bool(attendance_gate.get("shareholder_recorded", false)),
+		"shareholder_record_pending": bool(attendance_gate.get("shareholder_record_pending", false))
 	}
 
 

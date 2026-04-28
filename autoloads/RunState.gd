@@ -108,6 +108,7 @@ var corporate_action_intel = {}
 var corporate_dividend_calendar = {}
 var attended_meetings = {}
 var corporate_meeting_sessions = {}
+var shareholder_registry = {}
 var news_archive_index = {}
 var news_archive_articles = {}
 var desktop_app_seen_days = {}
@@ -169,6 +170,7 @@ func reset() -> void:
 	corporate_dividend_calendar = {}
 	attended_meetings = {}
 	corporate_meeting_sessions = {}
+	shareholder_registry = {}
 	news_archive_index = {}
 	news_archive_articles = {}
 	desktop_app_seen_days = {}
@@ -376,6 +378,7 @@ func load_from_dict(data: Dictionary) -> void:
 	corporate_dividend_calendar = data.get("corporate_dividend_calendar", {}).duplicate(true)
 	attended_meetings = data.get("attended_meetings", {}).duplicate(true)
 	corporate_meeting_sessions = data.get("corporate_meeting_sessions", {}).duplicate(true)
+	shareholder_registry = data.get("shareholder_registry", {}).duplicate(true)
 	news_archive_index = data.get("news_archive_index", {}).duplicate(true)
 	news_archive_articles = data.get("news_archive_articles", {}).duplicate(true)
 	desktop_app_seen_days = data.get("desktop_app_seen_days", {}).duplicate(true)
@@ -456,6 +459,7 @@ func to_save_dict() -> Dictionary:
 		"corporate_dividend_calendar": corporate_dividend_calendar.duplicate(true),
 		"attended_meetings": attended_meetings.duplicate(true),
 		"corporate_meeting_sessions": corporate_meeting_sessions.duplicate(true),
+		"shareholder_registry": shareholder_registry.duplicate(true),
 		"news_archive_index": news_archive_index.duplicate(true),
 		"news_archive_articles": news_archive_articles.duplicate(true),
 		"desktop_app_seen_days": desktop_app_seen_days.duplicate(true),
@@ -949,6 +953,7 @@ func apply_day_result(day_result: Dictionary) -> void:
 	corporate_dividend_calendar = day_result.get("corporate_dividend_calendar", corporate_dividend_calendar).duplicate(true)
 	attended_meetings = day_result.get("attended_meetings", {}).duplicate(true)
 	corporate_meeting_sessions = day_result.get("corporate_meeting_sessions", {}).duplicate(true)
+	shareholder_registry = day_result.get("shareholder_registry", shareholder_registry).duplicate(true)
 	_apply_dividend_payments(day_result.get("dividend_payments", []))
 	_log_apply_day_perf_elapsed(log_apply_perf, "active_state_payloads", phase_started_at_usec)
 
@@ -1266,6 +1271,14 @@ func get_corporate_meeting_sessions() -> Dictionary:
 
 func set_corporate_meeting_sessions(next_sessions: Dictionary) -> void:
 	corporate_meeting_sessions = next_sessions.duplicate(true)
+
+
+func get_shareholder_registry() -> Dictionary:
+	return shareholder_registry.duplicate(true)
+
+
+func set_shareholder_registry(next_registry: Dictionary) -> void:
+	shareholder_registry = next_registry.duplicate(true)
 
 
 func get_network_contacts() -> Dictionary:

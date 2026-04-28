@@ -187,7 +187,7 @@
           "The chair opens the extraordinary meeting and frames the rights issue as a funding decision for the company’s next phase.",
           "Management steps to the podium and argues that the rights issue is meant to stabilize the balance sheet and extend operational runway."
         ],
-        "observer_copy": "You can watch the room, but only shareholders with a live position on the meeting day can cast a weighted vote.",
+        "observer_copy": "You can watch the room, but only shareholders recorded before the meeting can cast a weighted vote.",
         "vote_prompt": "The host now asks shareholders to vote on the proposed rights issue agenda.",
         "approved_result_copy": "The room approves the rights issue proposal. The market will only digest that outcome on the next simulation day.",
         "rejected_result_copy": "The room rejects the rights issue proposal. The market will only digest that outcome on the next simulation day."
@@ -281,7 +281,7 @@
           "The chair opens the extraordinary meeting and frames the private placement as a fast capital-raising decision.",
           "Management says the placement brings in a targeted investor, but shareholders are watching the dilution and discount closely."
         ],
-        "observer_copy": "You can watch the room, but only shareholders with a live position on the meeting day can cast a weighted vote.",
+        "observer_copy": "You can watch the room, but only shareholders recorded before the meeting can cast a weighted vote.",
         "vote_prompt": "The host now asks shareholders to vote on the proposed private placement agenda.",
         "approved_result_copy": "The room approves the private placement proposal. The market will digest the dilution and proceeds on the next simulation day.",
         "rejected_result_copy": "The room rejects the private placement proposal. The market will react to the failed capital-raising attempt on the next simulation day."

@@ -1024,7 +1024,9 @@ func submit_corporate_meeting_vote(meeting_id: String, agenda_id: String, vote_c
 	var detail: Dictionary = corporate_action_system.get_meeting_detail(RunState, meeting_id)
 	if detail.is_empty():
 		return {"success": false, "message": "Meeting not found."}
-	var ownership_snapshot: Dictionary = get_company_ownership_snapshot(str(detail.get("company_id", "")))
+	var ownership_snapshot: Dictionary = detail.get("ownership_snapshot", {}).duplicate(true)
+	if ownership_snapshot.is_empty():
+		ownership_snapshot = get_company_ownership_snapshot(str(detail.get("company_id", "")))
 	var result: Dictionary = corporate_action_system.submit_meeting_vote(
 		RunState,
 		DataRepository,

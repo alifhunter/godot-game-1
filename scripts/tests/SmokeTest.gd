@@ -1321,6 +1321,25 @@ func _run_scenario(
 				"message": "Smoke test expected the debug Start RUPSLB control to disable again once the selected company has a live chain."
 			}
 
+		if int(queued_meeting.get("record_shares_owned", -1)) < GameManager.get_lot_size():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected debug RUPSLB scheduling to capture the player's shares on the shareholder record date."
+			}
+		var debug_target_sell_result: Dictionary = GameManager.sell_lots(debug_target_company_id, 1)
+		if (
+			not bool(debug_target_sell_result.get("success", false)) or
+			int(RunState.get_holding(debug_target_company_id).get("shares", 0)) > 0
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to sell the debug RUPSLB holding after record-date capture."
+			}
+
 		GameManager.advance_day()
 		await get_tree().process_frame
 
@@ -1336,6 +1355,20 @@ func _run_scenario(
 			return {
 				"success": false,
 				"message": "Smoke test expected the queued debug RUPSLB meeting to appear in the upcoming meeting snapshot after one Advance Day."
+			}
+
+		var queued_record_detail: Dictionary = GameManager.get_corporate_meeting_detail(queued_meeting_id)
+		if (
+			not bool(queued_record_detail.get("attendance_eligible", false)) or
+			int(queued_record_detail.get("player_shares_owned", 0)) < GameManager.get_lot_size() or
+			int(queued_record_detail.get("current_shares_owned", 0)) != 0 or
+			not bool(queued_record_detail.get("shareholder_recorded", false))
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected record-date RUPSLB eligibility to survive selling the shares before the meeting opens."
 			}
 
 		game_root._refresh_dashboard()
@@ -4332,7 +4365,6 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 	var dividend_buy_result: Dictionary = GameManager.buy_lots(dividend_company_id, 1)
 	if not bool(dividend_buy_result.get("success", false)):
 		return "Smoke test expected buying one lot for dividend coverage to succeed."
-	var cash_after_dividend_buy: float = float(GameManager.get_portfolio_snapshot().get("cash", 0.0))
 	var dividend_schedule_result: Dictionary = GameManager.debug_schedule_next_day_cash_dividend(dividend_company_id)
 	var scheduled_dividend: Dictionary = dividend_schedule_result.get("dividend", {})
 	if (
@@ -4355,9 +4387,29 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 	):
 		return "Smoke test expected Life to use declared dividend corporate actions instead of synthetic dividend estimates."
 
-	for _dividend_day_index in range(3):
-		GameManager.advance_day()
-		await get_tree().process_frame
+	GameManager.advance_day()
+	await get_tree().process_frame
+	GameManager.advance_day()
+	await get_tree().process_frame
+	dividend_snapshot = GameManager.get_corporate_dividend_snapshot(dividend_company_id)
+	var cash_dividend_recorded_shares: int = -1
+	for recorded_cash_row_value in dividend_snapshot.get("declared_rows", []):
+		if typeof(recorded_cash_row_value) != TYPE_DICTIONARY:
+			continue
+		var recorded_cash_row: Dictionary = recorded_cash_row_value
+		if str(recorded_cash_row.get("id", "")) == dividend_id and bool(recorded_cash_row.get("shareholder_recorded", false)):
+			cash_dividend_recorded_shares = int(recorded_cash_row.get("eligible_shares", 0))
+			break
+	if cash_dividend_recorded_shares < GameManager.get_lot_size():
+		return "Smoke test expected cash dividend record-date capture to preserve the held shares."
+	var cash_dividend_sell_result: Dictionary = GameManager.sell_lots(dividend_company_id, 1)
+	if not bool(cash_dividend_sell_result.get("success", false)):
+		return "Smoke test expected selling the dividend holding after record date to succeed."
+	if int(RunState.get_holding(dividend_company_id).get("shares", 0)) >= cash_dividend_recorded_shares:
+		return "Smoke test expected current shares to fall below recorded cash-dividend eligibility after selling."
+	var cash_before_dividend_payment: float = float(GameManager.get_portfolio_snapshot().get("cash", 0.0))
+	GameManager.advance_day()
+	await get_tree().process_frame
 	dividend_snapshot = GameManager.get_corporate_dividend_snapshot(dividend_company_id)
 	var paid_dividend_found: bool = false
 	for paid_row_value in dividend_snapshot.get("paid_rows", []):
@@ -4369,8 +4421,8 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 			break
 	if not paid_dividend_found:
 		return "Smoke test expected cash dividends to move from declared to paid state with a positive paid amount."
-	if float(GameManager.get_portfolio_snapshot().get("cash", 0.0)) <= cash_after_dividend_buy:
-		return "Smoke test expected paid cash dividends to credit player cash."
+	if float(GameManager.get_portfolio_snapshot().get("cash", 0.0)) <= cash_before_dividend_payment:
+		return "Smoke test expected paid cash dividends to credit player cash even after the record-date holder sells."
 	var dividend_trade_found: bool = false
 	for trade_value in GameManager.get_trade_history():
 		if typeof(trade_value) == TYPE_DICTIONARY and str(trade_value.get("side", "")).to_lower() == "dividend":
@@ -4379,6 +4431,10 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 	if not dividend_trade_found:
 		return "Smoke test expected paid dividends to appear in portfolio history."
 
+	if int(RunState.get_holding(dividend_company_id).get("shares", 0)) < GameManager.get_lot_size():
+		var stock_dividend_buy_result: Dictionary = GameManager.buy_lots(dividend_company_id, 1)
+		if not bool(stock_dividend_buy_result.get("success", false)):
+			return "Smoke test expected buying one lot again for stock dividend coverage to succeed."
 	var stock_dividend_shares_before: int = int(RunState.get_holding(dividend_company_id).get("shares", 0))
 	var stock_dividend_definition_before: Dictionary = RunState.get_effective_company_definition(dividend_company_id, false, false)
 	var stock_dividend_financials_before: Dictionary = stock_dividend_definition_before.get("financials", {})

@@ -38,12 +38,15 @@ Read this file first in the next session.
     - `fc14108 Build Key Stats card dashboard`
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
-    - latest checkpoint message: `Add private placement and stock dividends`
+    - latest checkpoint message: `Add shareholder record date registry`
   - after checkpoint commits, `git status --short` should generally be clean except ignored local `logs/` output
-  - current local note: corporate actions now include enabled `private_placement` RUPSLB chains and `stock_dividend` distributions alongside cash dividends
+  - current local note: corporate actions now persist a shareholder record-date registry for `RUPS` / `RUPSLB`, cash dividends, and stock dividends
 
 ## Latest Session Snapshot
-- Most recent work enabled `private_placement` as an interactive RUPSLB corporate-action family and added `stock_dividend` distributions tied to the dividend calendar.
+- Most recent work added a persisted shareholder record-date registry for corporate meetings and dividends.
+- `RUPS` / `RUPSLB` attendance and interactive voting now use shares captured on the meeting record date, so selling after the record date no longer removes eligibility and buying after the record date no longer grants it.
+- Cash and stock dividends now share the same registry concept for record-date share counts, while the dividend snapshot exposes recorded/pending status, eligible shares, current shares, and projected proceeds/bonus shares.
+- The previous pass enabled `private_placement` as an interactive RUPSLB corporate-action family and added `stock_dividend` distributions tied to the dividend calendar.
 - Private placements now generate deterministic issuance terms, pass through the RUPSLB vote flow, emit application payloads at execution, increase shares outstanding, apply a theoretical ex-placement price adjustment, reduce free float for locked strategic shares, and record share-structure adjustments.
 - Stock dividends now progress through scheduled/approved/ex/record/paid states, grant bonus shares to record-date holders, adjust company shares outstanding and historical price references, and appear in portfolio history plus STOCKBOT Key Stats dividend rows.
 - The previous pass added a `Dividend` card to STOCKBOT `Key Stats`, using the real dividend corporate-action calendar for DPS, yield, payout, timetable, stock ratio, and player-estimated proceeds/shares.
@@ -284,10 +287,10 @@ Read this file first in the next session.
 - Corporate meetings now have two player-facing venue surfaces:
   - a shared meeting modal reachable from `Dashboard`, `News`, and `Network`
   - a dedicated fullscreen staged `RUPSLB` overlay for interactive `rights_issue` and `private_placement` meetings
-- `annual_rups` and `rupslb` attendance now requires current player ownership of that company:
+- `annual_rups` and `rupslb` attendance now requires shareholder record-date eligibility for that company:
   - zero-position players can still read simple public meeting notices where applicable, but the attendance action is disabled with shareholder-only reason text
   - zero-position players cannot open interactive `rights_issue` / `private_placement` `RUPSLB` sessions
-  - the current prototype uses held shares on the meeting day; there is no separate record-date/shareholder-registry system yet
+  - buying after the record date does not grant eligibility; selling after the record date does not remove already-recorded eligibility
 - Upgrade tiers are bought with player cash and now drive trading fees, News access, Twooter access, chart indicators, and daily Network action points
 - A backtick console-command overlay now exists for cheat/testing commands
 - A `Ctrl+L` debug overlay now also exists for deeper runtime/event testing
@@ -1141,6 +1144,7 @@ Read this file first in the next session.
   - `RunState.corporate_action_intel`
   - `RunState.attended_meetings`
   - `RunState.corporate_meeting_sessions`
+  - `RunState.shareholder_registry`
 - Current chain model:
   - one chain represents one live storyline for one company in v1
   - chains persist cross-node state rather than generating disconnected headlines
@@ -1228,7 +1232,7 @@ Read this file first in the next session.
   - generated Annual RUPS rows receive a `Cash dividend approval` agenda item when a dividend exists for that year
   - dividend records progress through `scheduled`, `approved`, `ex_date`, `recorded`, and `paid`
   - ex-date and payment timing use deterministic trading-day delays from the catalog; record date is one trading day after ex-date
-  - record-date eligibility uses the player's held shares on record day, and payment credits cash on payment day through `RunState.apply_day_result()`
+  - record-date eligibility is captured into `RunState.shareholder_registry` and mirrored back onto the dividend record; payment uses the recorded share count, not current holdings
   - paid dividends are added to portfolio history with side `dividend` so the Portfolio history can show share count and received cash
   - `stock_dividend` is also enabled and follows the same scheduled/approved/ex/record/paid lifecycle with a deterministic distribution ratio
   - stock dividend payment grants bonus shares to record-date holders with portfolio history side `stock_dividend`, increases company shares outstanding, and applies an ex-stock-dividend price/history adjustment
@@ -1238,7 +1242,10 @@ Read this file first in the next session.
 - Current venue/calendar behavior:
   - `corporate_meeting_calendar` is keyed by date and stores meeting rows with linked company/family/chain metadata
   - meeting statuses are refreshed during day advancement
-  - eligible attendance has no AP/cash cost in v1 and is persisted in `RunState.attended_meetings`; `RUPS` / `RUPSLB` attendance requires current share ownership
+  - eligible attendance has no AP/cash cost in v1 and is persisted in `RunState.attended_meetings`; `RUPS` / `RUPSLB` attendance requires shareholder-registry eligibility
+  - shareholder-only meetings carry `record_day_number`, `record_trade_date`, `shareholder_record_key`, and `record_shares_owned`
+  - normal meeting record dates default to two trading days before the venue date; debug next-day RUPSLB helpers capture the registry immediately on the scheduling day
+  - `RunState.shareholder_registry` stores compact records keyed by `meeting|...` or `dividend|...`, including company/ticker, record date, captured date, and recorded player shares
   - there is no AP cost or broader event-slot/time-slot cost yet
   - debug-only next-day `rights_issue` and `private_placement` `rupslb` meetings can now be inserted in a hidden `queued` state for the next trading day
   - `queued` meetings are intentionally omitted from current player-facing meeting lists and company meeting surfaces until day advancement flips them into the normal visible scheduled flow
@@ -1312,14 +1319,14 @@ Read this file first in the next session.
       - `Agree`
       - `Disagree`
       - `Abstain`
-    - if the player holds no shares on the meeting day, the overlay does not open and the session APIs reject attendance/session start
+    - if the player was not a record-date shareholder, the overlay does not open and the session APIs reject attendance/session start
     - the result board exposes:
       - `agree` / `disagree` / `abstain` percentages
       - bloc attribution across `controlling group`, `player`, and `public float`
       - chain outcome summary for the next-day resolution
-- Current voting/outcome behavior for interactive `rights_issue` `rupslb`:
-  - attendance and voting eligibility are based on current holdings on the meeting day; there is no separate record-date system yet
-  - player influence is pure ownership-weighted and uses the current shareholding structure from `GameManager.get_company_ownership_snapshot()`
+- Current voting/outcome behavior for interactive `rights_issue` / `private_placement` `rupslb`:
+  - attendance and voting eligibility are based on the shareholder record-date snapshot
+  - player influence is pure ownership-weighted and uses the recorded eligible shares, while controller/public blocs still derive from the current company share structure
   - outcome resolution currently uses three blocs:
     - `controlling group`
     - `player`
@@ -1340,10 +1347,10 @@ Read this file first in the next session.
   - `GameManager.debug_force_rights_issue_rupslb(company_id)`
   - `GameManager.debug_schedule_next_day_rights_issue_rupslb(company_id)`
 - Current v1 omissions by design:
-  - interactive voting currently covers `rights_issue` `rupslb` only
+  - interactive voting currently covers `rights_issue` and `private_placement` `rupslb` only
   - `annual_rups` and `earnings_call` still use the simpler shared modal and have no staged interactive flow yet
   - no dedicated desktop app for meetings; the venue UI is currently shared modal plus fullscreen overlay
-  - no separate shareholder record-date system yet; eligibility is based on current held shares on the meeting day
+  - record-date registry is gameplay-level only; there is no separate KSEI-style investor identity/book-entry UI yet
   - no same-day market recalculation after a meeting vote; the result is applied on the next day-advance
   - no v2/v3 families active yet, especially `strategic_merger_acquisition` and `backdoor_listing`
 
@@ -1897,6 +1904,12 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - Shareholder record-date registry pass on `2026-04-28`:
+    - `git diff --check` passed
+    - Godot project-load check passed with `--log-file logs\project-load-shareholder-registry-2.log --quit`
+    - quick Godot headless smoke with `--log-file logs\smoke-shareholder-registry-2.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
+    - smoke now asserts next-day debug `RUPSLB` scheduling captures record-date shares, selling afterward still leaves the meeting/session eligible, and cash dividends still pay recorded holders after they sell before payment day
+    - non-blocking Windows/Godot note: this smoke run printed `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; treat it as trailing platform noise unless it appears before test success or affects network/API work
   - Private placement + stock dividend pass on `2026-04-28`:
     - `git diff --check` passed
     - Godot project-load check passed with `--log-file logs\project-load-private-placement-stock-dividend-3.log --quit`
@@ -2127,7 +2140,7 @@ Read this file first in the next session.
   - `restructuring`, `strategic_merger_acquisition`, and `backdoor_listing` exist in catalog form only and are not active yet
   - only `rights_issue` and `private_placement` `rupslb` currently have interactive staged voting
   - `annual_rups` and `earnings_call` still use the simpler shared meeting modal
-  - there is still no record-date/shareholder registry system; current held shares on the meeting day gate `RUPS` / `RUPSLB` attendance and voting
+  - shareholder gating now uses the persisted record-date registry, but there is no richer investor-book UI yet
   - eligible venue attendance remains free and there is still no AP cost or broader event-slot time economy
   - same-day market prices are not recalculated after a vote; results feed the next simulated day instead
   - next-day queued meeting reveal currently exists only through the debug overlay helper; there is no normal gameplay action that schedules a future `RUPSLB` directly for player testing
@@ -2230,7 +2243,7 @@ Read this file first in the next session.
 - Network and corporate-action planning:
   - deepen the shared corporate-action chain object that `News`, `Twooter`, `Network`, market reaction, `earnings_call`, `annual_rups`, and `rupslb` already read/write
   - tune annual cash-dividend eligibility, stock-dividend distribution ratios, private-placement issuance discounts, and market reaction once longer playtests show whether income/dilution are too rare or too generous
-  - expand interactive `rupslb` beyond `rights_issue` / `private_placement` with more agenda families, record-date/shareholder-registry rules, and richer result nuance
+  - expand interactive `rupslb` beyond `rights_issue` / `private_placement` with more agenda families, richer result nuance, and better record-date UI copy
   - deepen cross-contact conflict handling with actions like `Ask for evidence`, `Push back`, and `Compare source`
   - evolve Journal rows into searchable/filterable clues and tasks when source-check gameplay becomes a major loop
   - add favor cooldowns, report-back outcomes, relationship burn tuning, and perk hooks once Network pacing settles
