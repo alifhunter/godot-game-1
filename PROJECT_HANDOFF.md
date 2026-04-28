@@ -38,12 +38,13 @@ Read this file first in the next session.
     - `fc14108 Build Key Stats card dashboard`
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
-    - latest checkpoint message: `Remove Thesis Focus Gap shortcut`
+    - latest checkpoint message: `Add Life cash-flow planner`
   - after checkpoint commits, `git status --short` should generally be clean except ignored local `logs/` output
-  - current local note: the Thesis Board evidence-discipline strip is now passive guidance only; the `Focus Gap` shortcut has been removed and guarded by smoke coverage
+  - current local note: the `Life` desktop app now has a conservative V1 planning loop for housing, lifestyle, monthly outflow, estimated dividends, net monthly cash flow, runway, compact persistence, and smoke coverage
 
 ## Latest Session Snapshot
-- Most recent work focused on turning `Thesis Board` into a stronger learning loop: a two-column evidence builder, staged white-paper report overlay, evidence-discipline guidance, player-led chart pattern claims from STOCKBOT charts, and compact thesis evidence persistence.
+- Most recent work added `Life` as a first playable desktop planning app after the Thesis tuning pass.
+- The previous major pass turned `Thesis Board` into a stronger learning loop: a two-column evidence builder, staged white-paper report overlay, evidence-discipline guidance, player-led chart pattern claims from STOCKBOT charts, and compact thesis evidence persistence.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses, shows short processing phases on the desktop button, and now has a snappy press/phase pulse that resets to neutral after processing.
   - Daily Recap is now a custom `GameRoot.gd` overlay rather than a stock Godot dialog, so it can share the same dark-brown title-bar chrome as `News`, `Academy`, `Network`, and `Shop`.
@@ -126,6 +127,22 @@ Read this file first in the next session.
     - the generated white paper explicitly says the player marked the pattern and includes the system coaching read plus next-check language, instead of pretending the system auto-discovered the setup
   - Review state compares the frozen report against current price, held position, broker flow, and updated context and returns `Strengthening`, `Weakening`, `Unchanged`, or `Needs Review`.
   - Thesis review work is not part of the Advance Day recap-critical path; it runs on demand/app refresh and through Thesis APIs.
+- Life status:
+  - `Life` is now a first playable desktop app registered as app id `life`.
+  - Desktop shortcut/nav SVGs live in `assets/ui/desktop/life_shortcut.svg` and `assets/ui/desktop/life_nav.svg`.
+  - Runtime UI is built by `scripts/ui/widgets/LifeWidget.gd` and opens as a warm cash-flow planning window with:
+    - cash, equity, monthly outflow, estimated dividends, net monthly, and runway summary cards
+    - housing choices: `Family support`, `Kost room`, and `Apartment`
+    - lifestyle choices: `Frugal`, `Balanced`, and `Status`
+    - budget rows for housing, basics, lifestyle, estimated dividends, and monthly gap
+    - a portfolio-income section that estimates monthly dividend contribution from current holdings
+  - `RunState.player_life` persists only compact player choices:
+    - housing id
+    - lifestyle id
+    - optional monthly extra/buffer
+    - last updated day/date
+  - Life V1 is deliberately a planning view only; it does not deduct month-end cash yet.
+  - Dividend income is an in-game estimate derived from current holdings and generated company financial characteristics, not an external data feed.
 - STOCKBOT status:
   - `Key Stats` is now a dark STOCKBOT-style card dashboard rather than a simple text block.
   - Current dashboard sections are `Current Valuation`, `Per Share`, a center metric table, `Profitability`, `Income Statement`, `Balance Sheet`, and `Cash Flow Statement`.
@@ -208,8 +225,9 @@ Read this file first in the next session.
 - Last successful verification in this session:
   - `git diff --check`
   - Godot project-load check
-  - quick smoke with `--log-file logs\smoke-thesis-tuning-rerun.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
-  - the quick smoke now asserts old-save Thesis backfill, Thesis desktop open/focus/close behavior, settled window animation state, two-column Thesis Board layout, hidden report overlay at startup, staged report preparation, white-paper reveal, thesis create/save/load persistence, populated evidence options, passive Evidence discipline strip text, absence of the removed `Focus Gap` shortcut, add/remove evidence autosaves, generated report verdict/grade/discipline rows/target/claim-led sections, report copy avoiding raw system/debug wording, no raw `quality/growth/risk + number` report phrasing, evidence-discipline and chart-pattern next-check report copy, frozen reports after `Advance Day`, review refresh after at least one simulated day, Pattern chart tool existence, deterministic Good/Plausible/Weak/Contradicted pattern fixture states, disabled Add-to-Thesis without a matching open thesis, single/multiple thesis destination flow, compact chart-pattern evidence persistence, and player-led chart-pattern report copy
+  - quick smoke with `--log-file logs\smoke-life-v1.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
+  - the quick smoke now asserts old-save Life backfill, Life desktop open/close behavior, settled window animation state, populated housing/lifestyle selectors, monthly budget rows, runway summary, Life plan autosave/save-load persistence, and flushed `player_life` persistence to disk
+  - the quick smoke also still asserts old-save Thesis backfill, Thesis desktop open/focus/close behavior, settled window animation state, two-column Thesis Board layout, hidden report overlay at startup, staged report preparation, white-paper reveal, thesis create/save/load persistence, populated evidence options, passive Evidence discipline strip text, absence of the removed `Focus Gap` shortcut, add/remove evidence autosaves, generated report verdict/grade/discipline rows/target/claim-led sections, report copy avoiding raw system/debug wording, no raw `quality/growth/risk + number` report phrasing, evidence-discipline and chart-pattern next-check report copy, frozen reports after `Advance Day`, review refresh after at least one simulated day, Pattern chart tool existence, deterministic Good/Plausible/Weak/Contradicted pattern fixture states, disabled Add-to-Thesis without a matching open thesis, single/multiple thesis destination flow, compact chart-pattern evidence persistence, and player-led chart-pattern report copy
   - existing quick-smoke coverage still asserts the Key Stats dashboard cards, populated row groups, `Net Income` / `EPS` / `Revenue` pill switching, the separate `Financials` tab rows/navigation, hidden Financials/Broker helper labels, uniform Dashboard calendar grid shape, Dashboard calendar event popup/buttons, Dashboard sector card-to-stock-list navigation, Dashboard section title styling, the new `Index Gorengan` recap values, the real sparkline point count, and hidden old index grid/hint/date nodes
   - normal-play perf scene with `--log-file logs\normal-play-dashboard-index-recap.log --scene res://scenes/tests/NormalPlayPerfTest.tscn -- --smoke-local-io`, which printed `NORMAL_PLAY_PERF_OK open_network=42.47ms advance_network_open_recap_ready=1208.58ms advance_network_open=1500.78ms advance_desktop_only_recap_ready=1133.38ms advance_desktop_only=1561.44ms open_stock=101.2ms advance_stock_open_recap_ready=1007.93ms advance_stock_open=1314.42ms open_news=195.54ms open_network_with_news=33.42ms advance_news_network_open_recap_ready=957.95ms advance_news_network_open=1455.98ms flush_pending_save=241.43ms local_save_bytes=2010467`
   - note: the quick smoke may print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` on Windows; treat it as non-blocking Godot/Windows certificate-store noise unless it appears before smoke output or affects network/API work
@@ -252,6 +270,7 @@ Read this file first in the next session.
 - A first-pass smaller mobile-style social-feed UX now also exists in `Twooter`
 - A first playable `Academy` desktop app now exists
 - A first playable `Thesis Board` desktop app now exists for manual research capture, deterministic report generation, and after-action thesis review
+- A first playable `Life` desktop app now exists for monthly cash-flow planning, housing/lifestyle choices, estimated dividends, and runway
 - A first playable contact/recognition UX now exists in `Network`
 - A first playable `Upgrades` shop app now exists on the desktop
 - A first playable corporate-action / meeting-chain layer now exists behind `News`, `Twooter`, `Network`, and daily market behavior
@@ -288,6 +307,7 @@ Read this file first in the next session.
   - `Twooter`
   - `Academy`
   - `Thesis Board`
+  - `Life`
   - `Network`
   - `Shop`
   - `Exit`
@@ -325,13 +345,14 @@ Read this file first in the next session.
   - the current window manager supports one window per app type; launching an already-open app focuses it instead of spawning a duplicate
   - windows are draggable from their title bars, can overlap each other, and can move across the full desktop viewport including the top bar area
   - title bars expose `minimize` and `close`
-  - `News`, `Academy`, `Network`, and `Shop/Upgrades` now share the same warm dark-brown title-bar chrome with light title text
+  - `News`, `Academy`, `Thesis Board`, `Life`, `Network`, and `Shop/Upgrades` now share the same warm dark-brown title-bar chrome with light title text
   - both controls currently just hide the window; there is no separate minimized/taskbar state yet
   - `STOCKBOT` opens the trading platform in the large dark desktop window
   - `News` opens a large beige `News Browser` window
   - `Twooter` opens a smaller light social-feed window
   - `Academy` opens a warm newspaper-module learning window
   - `Thesis Board` opens a warm research-note builder window
+  - `Life` opens a warm monthly cash-flow planning window
   - `Network` opens a beige contact/recognition window for discovered market contacts
   - `Shop` opens the existing beige `Upgrades` cash shop window
   - `Exit` returns to the main menu
@@ -2159,8 +2180,9 @@ Read this file first in the next session.
   - consider a richer report export/view mode only if players want to read thesis notes as standalone analyst-style documents
   - keep thesis review out of the Advance Day recap-critical path unless future UX explicitly needs automatic daily thesis alerts
 - Life app planning:
-  - build the `Life` app after Thesis Board stabilizes
-  - start with realistic monthly obligations such as rent, basic expenses, dividends/income, and lifestyle choices rather than gamey timers
+  - playtest whether the current housing/lifestyle costs create useful pressure on `Normal` and `Grind` without feeling punitive
+  - decide when monthly obligations should become real cash deductions; V1 is planning-only and deliberately avoids surprise penalties
+  - add an explicit cash-flow history only after deductions or recurring income become actual gameplay
   - connect the system to Academy's money-management/mindset themes so urgency comes from financial planning, not artificial pressure
   - consider housing/cars/status upgrades after the monthly cash-flow loop is working and readable
 - Network and corporate-action planning:

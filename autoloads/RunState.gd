@@ -116,6 +116,7 @@ var network_discoveries = {}
 var network_requests = {}
 var network_tip_journal = {}
 var player_theses = {}
+var player_life = {}
 var upgrade_tiers = {}
 var daily_action_day_index = 0
 var daily_actions_used = 0
@@ -175,6 +176,7 @@ func reset() -> void:
 	network_requests = {}
 	network_tip_journal = {}
 	player_theses = {}
+	player_life = _default_life_state()
 	upgrade_tiers = _default_upgrade_tiers()
 	daily_action_day_index = 0
 	daily_actions_used = 0
@@ -380,6 +382,7 @@ func load_from_dict(data: Dictionary) -> void:
 	network_requests = data.get("network_requests", {}).duplicate(true)
 	network_tip_journal = data.get("network_tip_journal", {}).duplicate(true)
 	player_theses = _normalize_player_theses(data.get("player_theses", {}))
+	player_life = _normalize_life_state(data.get("player_life", {}))
 	upgrade_tiers = _normalize_upgrade_tiers(data.get("upgrade_tiers", {}))
 	daily_action_day_index = int(data.get("daily_action_day_index", day_index))
 	daily_actions_used = max(int(data.get("daily_actions_used", 0)), 0)
@@ -458,6 +461,7 @@ func to_save_dict() -> Dictionary:
 		"network_requests": network_requests.duplicate(true),
 		"network_tip_journal": network_tip_journal.duplicate(true),
 		"player_theses": _normalize_player_theses(player_theses),
+		"player_life": get_player_life(),
 		"upgrade_tiers": get_upgrade_tiers(),
 		"daily_action_day_index": daily_action_day_index,
 		"daily_actions_used": daily_actions_used,
@@ -1301,6 +1305,15 @@ func set_player_theses(next_theses: Dictionary) -> void:
 	player_theses = _normalize_player_theses(next_theses)
 
 
+func get_player_life() -> Dictionary:
+	player_life = _normalize_life_state(player_life)
+	return player_life.duplicate(true)
+
+
+func set_player_life(next_life: Dictionary) -> void:
+	player_life = _normalize_life_state(next_life)
+
+
 func get_academy_progress() -> Dictionary:
 	academy_progress = _normalize_academy_progress(academy_progress)
 	return academy_progress.duplicate(true)
@@ -1547,6 +1560,36 @@ func _normalize_academy_progress(source_progress: Variant) -> Dictionary:
 	normalized["completed_modules"] = _normalize_unique_string_array(source.get("completed_modules", []))
 	normalized["last_category_id"] = str(source.get("last_category_id", "technical"))
 	normalized["last_section_id"] = str(source.get("last_section_id", "intro"))
+	return normalized
+
+
+func _default_life_state() -> Dictionary:
+	return {
+		"housing_id": "kost_room",
+		"lifestyle_id": "balanced",
+		"monthly_extra": 0.0,
+		"updated_day_index": day_index
+	}
+
+
+func _normalize_life_state(source_life: Variant) -> Dictionary:
+	var normalized: Dictionary = _default_life_state()
+	if typeof(source_life) != TYPE_DICTIONARY:
+		return normalized
+
+	var source: Dictionary = source_life
+	var housing_id: String = str(source.get("housing_id", normalized.get("housing_id", "")))
+	if not (housing_id in ["family_home", "kost_room", "apartment"]):
+		housing_id = str(normalized.get("housing_id", "kost_room"))
+	var lifestyle_id: String = str(source.get("lifestyle_id", normalized.get("lifestyle_id", "")))
+	if not (lifestyle_id in ["frugal", "balanced", "status"]):
+		lifestyle_id = str(normalized.get("lifestyle_id", "balanced"))
+	normalized["housing_id"] = housing_id
+	normalized["lifestyle_id"] = lifestyle_id
+	normalized["monthly_extra"] = max(float(source.get("monthly_extra", 0.0)), 0.0)
+	normalized["updated_day_index"] = max(int(source.get("updated_day_index", day_index)), 0)
+	if source.has("updated_trade_date") and typeof(source.get("updated_trade_date")) == TYPE_DICTIONARY:
+		normalized["updated_trade_date"] = source.get("updated_trade_date", {}).duplicate(true)
 	return normalized
 
 

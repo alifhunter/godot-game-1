@@ -9,6 +9,7 @@ signal upgrades_changed
 signal daily_actions_changed
 signal academy_changed
 signal thesis_changed
+signal life_changed
 signal summary_ready(summary)
 signal broker_flow_generated(day_index)
 signal run_started
@@ -50,6 +51,47 @@ const NETWORK_ACTION_COSTS := {
 	"followup": 1,
 	"source_check": 1
 }
+const LIFE_BASIC_EXPENSES_MONTHLY := 2250000.0
+const LIFE_HOUSING_OPTIONS := [
+	{
+		"id": "family_home",
+		"label": "Family support",
+		"monthly_cost": 750000.0,
+		"detail": "Lowest fixed cost. Good while building capital, but not fully independent."
+	},
+	{
+		"id": "kost_room",
+		"label": "Kost room",
+		"monthly_cost": 2500000.0,
+		"detail": "Simple monthly rent with predictable overhead."
+	},
+	{
+		"id": "apartment",
+		"label": "Apartment",
+		"monthly_cost": 7500000.0,
+		"detail": "Higher comfort and privacy, but it raises the monthly hurdle."
+	}
+]
+const LIFE_LIFESTYLE_OPTIONS := [
+	{
+		"id": "frugal",
+		"label": "Frugal",
+		"monthly_cost": 1750000.0,
+		"detail": "Keeps optional spending tight and maximizes runway."
+	},
+	{
+		"id": "balanced",
+		"label": "Balanced",
+		"monthly_cost": 3750000.0,
+		"detail": "Normal discretionary budget with some room for comfort."
+	},
+	{
+		"id": "status",
+		"label": "Status",
+		"monthly_cost": 9000000.0,
+		"detail": "Lifestyle inflation. Comfortable, but demanding on cash flow."
+	}
+]
 const LOAD_RUN_LOADING_STEPS := [
 	{"id": "load_save", "label": "Reading save file"},
 	{"id": "restore_state", "label": "Restoring run state"},
@@ -1221,6 +1263,131 @@ func get_portfolio_snapshot() -> Dictionary:
 		"equity": RunState.get_total_equity(),
 		"holdings": holdings_rows
 	}
+
+
+func get_life_snapshot() -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+
+	var life_state: Dictionary = RunState.get_player_life()
+	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, str(life_state.get("housing_id", "")))
+	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, str(life_state.get("lifestyle_id", "")))
+	var portfolio: Dictionary = get_portfolio_snapshot()
+	var dividend_estimate: Dictionary = _estimate_life_monthly_dividends(portfolio)
+	var monthly_extra: float = max(float(life_state.get("monthly_extra", 0.0)), 0.0)
+	var housing_cost: float = float(housing.get("monthly_cost", 0.0))
+	var lifestyle_cost: float = float(lifestyle.get("monthly_cost", 0.0))
+	var monthly_outflow: float = housing_cost + LIFE_BASIC_EXPENSES_MONTHLY + lifestyle_cost + monthly_extra
+	var estimated_monthly_dividends: float = float(dividend_estimate.get("estimated_monthly_dividends", 0.0))
+	var net_monthly: float = estimated_monthly_dividends - monthly_outflow
+	var cash: float = float(portfolio.get("cash", 0.0))
+	var runway_months: float = 999.0
+	if monthly_outflow > 0.0:
+		runway_months = cash / monthly_outflow
+	var status_label: String = "Comfortable runway"
+	if runway_months < 6.0:
+		status_label = "Cash pressure"
+	elif runway_months < 12.0:
+		status_label = "Thin runway"
+	elif runway_months < 24.0:
+		status_label = "Manageable runway"
+
+	return {
+		"state": life_state,
+		"trade_date": get_current_trade_date(),
+		"cash": cash,
+		"equity": float(portfolio.get("equity", 0.0)),
+		"market_value": float(portfolio.get("market_value", 0.0)),
+		"housing": housing,
+		"lifestyle": lifestyle,
+		"housing_options": LIFE_HOUSING_OPTIONS.duplicate(true),
+		"lifestyle_options": LIFE_LIFESTYLE_OPTIONS.duplicate(true),
+		"basic_expenses_monthly": LIFE_BASIC_EXPENSES_MONTHLY,
+		"monthly_extra": monthly_extra,
+		"monthly_outflow": monthly_outflow,
+		"estimated_monthly_dividends": estimated_monthly_dividends,
+		"estimated_annual_dividends": estimated_monthly_dividends * 12.0,
+		"net_monthly": net_monthly,
+		"runway_months": runway_months,
+		"status_label": status_label,
+		"dividend_rows": dividend_estimate.get("rows", []).duplicate(true),
+		"note": "Planning view only. This does not deduct cash at month end yet."
+	}
+
+
+func set_life_plan(housing_id: String, lifestyle_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var life_state: Dictionary = RunState.get_player_life()
+	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, housing_id)
+	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, lifestyle_id)
+	life_state["housing_id"] = str(housing.get("id", "kost_room"))
+	life_state["lifestyle_id"] = str(lifestyle.get("id", "balanced"))
+	life_state["updated_day_index"] = RunState.day_index
+	life_state["updated_trade_date"] = get_current_trade_date()
+	RunState.set_player_life(life_state)
+	_request_autosave("life_plan")
+	life_changed.emit()
+	return {
+		"success": true,
+		"message": "Life plan updated.",
+		"snapshot": get_life_snapshot()
+	}
+
+
+func _life_option_by_id(options: Array, option_id: String) -> Dictionary:
+	for option_value in options:
+		if typeof(option_value) != TYPE_DICTIONARY:
+			continue
+		var option: Dictionary = option_value
+		if str(option.get("id", "")) == option_id:
+			return option.duplicate(true)
+	if options.is_empty() or typeof(options[0]) != TYPE_DICTIONARY:
+		return {}
+	return options[0].duplicate(true)
+
+
+func _estimate_life_monthly_dividends(portfolio: Dictionary) -> Dictionary:
+	var rows: Array = []
+	var estimated_monthly_dividends: float = 0.0
+	for holding_value in portfolio.get("holdings", []):
+		if typeof(holding_value) != TYPE_DICTIONARY:
+			continue
+		var holding: Dictionary = holding_value
+		var company_id: String = str(holding.get("company_id", ""))
+		if company_id.is_empty():
+			continue
+		var company: Dictionary = get_company_snapshot(company_id, false, false, false)
+		var financials: Dictionary = company.get("financials", {})
+		var market_value: float = max(float(holding.get("market_value", 0.0)), 0.0)
+		var annual_yield: float = _estimate_life_dividend_yield(company, financials)
+		var monthly_income: float = market_value * annual_yield / 12.0
+		estimated_monthly_dividends += monthly_income
+		rows.append({
+			"company_id": company_id,
+			"ticker": str(holding.get("ticker", company.get("ticker", company_id.to_upper()))),
+			"market_value": market_value,
+			"annual_yield": annual_yield,
+			"monthly_income": monthly_income
+		})
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("monthly_income", 0.0)) > float(b.get("monthly_income", 0.0))
+	)
+	return {
+		"estimated_monthly_dividends": estimated_monthly_dividends,
+		"rows": rows
+	}
+
+
+func _estimate_life_dividend_yield(company: Dictionary, financials: Dictionary) -> float:
+	var net_margin: float = clamp(float(financials.get("net_profit_margin", 0.0)), -20.0, 30.0)
+	var roe: float = clamp(float(financials.get("roe", 0.0)), -20.0, 35.0)
+	var revenue_growth: float = clamp(float(financials.get("revenue_growth_yoy", 0.0)), -25.0, 40.0)
+	var quality_adjustment: float = (float(company.get("quality_score", 50)) - 50.0) * 0.00012
+	var risk_drag: float = max(float(company.get("risk_score", 50)) - 55.0, 0.0) * 0.00018
+	var growth_drag: float = max(revenue_growth - 18.0, 0.0) * 0.00008
+	var annual_yield: float = 0.012 + max(net_margin, 0.0) * 0.0014 + max(roe, 0.0) * 0.00055 + quality_adjustment - risk_drag - growth_drag
+	return clamp(annual_yield, 0.0, 0.065)
 
 
 func get_sector_rows() -> Array:

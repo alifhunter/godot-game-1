@@ -784,6 +784,7 @@ func _run_scenario(
 	var network_app_button: Button = game_root.find_child("NetworkAppButton", true, false) as Button
 	var academy_app_button: Button = game_root.find_child("AcademyAppButton", true, false) as Button
 	var thesis_app_button: Button = game_root.find_child("ThesisAppButton", true, false) as Button
+	var life_app_button: Button = game_root.find_child("LifeAppButton", true, false) as Button
 	var upgrades_app_button: Button = game_root.find_child("UpgradesAppButton", true, false) as Button
 	var desktop_advance_day_button: Button = game_root.find_child("DesktopAdvanceDayButton", true, false) as Button
 	var taskbar_stock_button: Button = game_root.find_child("TaskbarStockButton", true, false) as Button
@@ -806,6 +807,7 @@ func _run_scenario(
 	var academy_section_list: ItemList = game_root.find_child("AcademySectionList", true, false) as ItemList
 	var academy_banner_frame: PanelContainer = game_root.find_child("AcademyLessonBannerFrame", true, false) as PanelContainer
 	var academy_action_row: HBoxContainer = game_root.find_child("AcademyActionRow", true, false) as HBoxContainer
+	var life_window: Control = game_root.find_child("LifeWindow", true, false) as Control
 	var upgrade_window: Control = game_root.find_child("UpgradeWindow", true, false) as Control
 	var upgrade_cards_vbox: VBoxContainer = game_root.find_child("UpgradeCardsVBox", true, false) as VBoxContainer
 	if desktop_layer == null or not desktop_layer.visible:
@@ -816,12 +818,12 @@ func _run_scenario(
 			"message": "Smoke test expected GameRoot to open on the new desktop layer before the trading app is launched."
 		}
 
-	if stock_app_button == null or news_app_button == null or social_app_button == null or network_app_button == null or academy_app_button == null or thesis_app_button == null or upgrades_app_button == null or desktop_advance_day_button == null or taskbar_stock_button == null or taskbar_news_button == null:
+	if stock_app_button == null or news_app_button == null or social_app_button == null or network_app_button == null or academy_app_button == null or thesis_app_button == null or life_app_button == null or upgrades_app_button == null or desktop_advance_day_button == null or taskbar_stock_button == null or taskbar_news_button == null:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test could not find the prototype desktop icons, Advance Day button, Academy icon, Thesis icon, Upgrades icon, and taskbar launch buttons."
+			"message": "Smoke test could not find the prototype desktop icons, Advance Day button, Academy icon, Thesis icon, Life icon, Upgrades icon, and taskbar launch buttons."
 		}
 
 	if (
@@ -1419,6 +1421,15 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected the Technical Academy quiz to start locked."
+		}
+
+	var life_validation: String = await _validate_life_smoke(game_root, life_app_button, life_window, desktop_layer)
+	if not life_validation.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": life_validation
 		}
 
 	var thesis_board_validation: String = await _validate_thesis_board_smoke(game_root, thesis_app_button, desktop_layer)
@@ -4059,6 +4070,103 @@ func _run_scenario(
 	game_root.queue_free()
 	await get_tree().process_frame
 	return result
+
+
+func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window: Control, desktop_layer: Control) -> String:
+	if life_app_button == null:
+		return "Smoke test expected the Life desktop icon to exist."
+
+	var baseline_state: Dictionary = RunState.to_save_dict()
+	var legacy_state: Dictionary = baseline_state.duplicate(true)
+	legacy_state.erase("player_life")
+	RunState.load_from_dict(legacy_state)
+	var backfilled_life: Dictionary = RunState.get_player_life()
+	if str(backfilled_life.get("housing_id", "")).is_empty() or str(backfilled_life.get("lifestyle_id", "")).is_empty():
+		return "Smoke test expected old saves without player_life to backfill a default Life plan."
+
+	RunState.load_from_dict(baseline_state)
+	game_root._refresh_all()
+	await get_tree().process_frame
+
+	life_app_button.emit_signal("pressed")
+	await get_tree().process_frame
+	await _wait_for_ui_animation_settle()
+
+	if life_window == null:
+		life_window = game_root.find_child("LifeWindow", true, false) as Control
+	var life_summary_label: Label = game_root.find_child("LifeSummaryLabel", true, false) as Label
+	var life_housing_option: OptionButton = game_root.find_child("LifeHousingOption", true, false) as OptionButton
+	var life_lifestyle_option: OptionButton = game_root.find_child("LifeLifestyleOption", true, false) as OptionButton
+	var life_update_button: Button = game_root.find_child("LifeUpdatePlanButton", true, false) as Button
+	var life_budget_rows: VBoxContainer = game_root.find_child("LifeBudgetRows", true, false) as VBoxContainer
+	var life_runway_label: Label = game_root.find_child("LifeRunwayLabel", true, false) as Label
+	var life_dividend_rows: VBoxContainer = game_root.find_child("LifeDividendRows", true, false) as VBoxContainer
+	var life_snapshot: Dictionary = GameManager.get_life_snapshot()
+	if (
+		life_window == null or
+		not life_window.visible or
+		not game_root.is_desktop_app_open("life") or
+		game_root.get_active_desktop_app_id() != "life" or
+		game_root.get_desktop_app_window_title("life") != "Life" or
+		not _desktop_window_animation_settled(game_root, "LifeDesktopWindow") or
+		life_summary_label == null or
+		life_summary_label.text.find("Monthly outflow") == -1 or
+		life_housing_option == null or
+		life_housing_option.item_count < 3 or
+		life_lifestyle_option == null or
+		life_lifestyle_option.item_count < 3 or
+		life_update_button == null or
+		life_budget_rows == null or
+		life_budget_rows.get_child_count() < 5 or
+		life_runway_label == null or
+		life_runway_label.text.is_empty() or
+		life_dividend_rows == null or
+		life_snapshot.is_empty() or
+		float(life_snapshot.get("monthly_outflow", 0.0)) <= 0.0 or
+		not life_snapshot.has("housing_options") or
+		not life_snapshot.has("lifestyle_options")
+	):
+		return "Smoke test expected the Life icon to open a settled cash-flow planning window with populated selectors, budget rows, and runway summary."
+
+	var starting_lifestyle_id: String = str(RunState.get_player_life().get("lifestyle_id", ""))
+	var target_lifestyle_index: int = -1
+	for index in range(life_lifestyle_option.item_count):
+		if str(life_lifestyle_option.get_item_metadata(index)) != starting_lifestyle_id:
+			target_lifestyle_index = index
+			break
+	if target_lifestyle_index < 0:
+		return "Smoke test expected Life to expose at least one alternate lifestyle choice."
+	var target_lifestyle_id: String = str(life_lifestyle_option.get_item_metadata(target_lifestyle_index))
+	life_lifestyle_option.select(target_lifestyle_index)
+	life_lifestyle_option.emit_signal("item_selected", target_lifestyle_index)
+	life_update_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if str(RunState.get_player_life().get("lifestyle_id", "")) != target_lifestyle_id:
+		return "Smoke test expected updating the Life plan to persist the selected lifestyle."
+	if not SaveManager.has_pending_save():
+		return "Smoke test expected updating the Life plan to queue an autosave."
+
+	var saved_life_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(saved_life_state)
+	if str(RunState.get_player_life().get("lifestyle_id", "")) != target_lifestyle_id:
+		return "Smoke test expected Life plan choices to survive a RunState save/load round trip."
+	if not SaveManager.flush_pending_save():
+		return "Smoke test expected Life autosave flush to succeed."
+	var persisted_life_state: Dictionary = SaveManager.load_run()
+	if str(persisted_life_state.get("player_life", {}).get("lifestyle_id", "")) != target_lifestyle_id:
+		return "Smoke test expected flushed Life saves to persist player_life to disk."
+
+	game_root.close_desktop_app("life")
+	await get_tree().process_frame
+	if not desktop_layer.visible or game_root.is_desktop_app_open("life"):
+		return "Smoke test expected closing the Life desktop window to hide the app while keeping the desktop visible."
+
+	RunState.load_from_dict(baseline_state)
+	SaveManager.save_run(RunState.to_save_dict())
+	SaveManager.flush_pending_save()
+	game_root._refresh_all()
+	await get_tree().process_frame
+	return ""
 
 
 func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, desktop_layer: Control) -> String:
