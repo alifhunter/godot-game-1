@@ -8,6 +8,7 @@ signal network_changed
 signal upgrades_changed
 signal daily_actions_changed
 signal academy_changed
+signal thesis_changed
 signal summary_ready(summary)
 signal broker_flow_generated(day_index)
 signal run_started
@@ -108,6 +109,7 @@ var broker_flow_system = preload("res://systems/BrokerFlowSystem.gd").new()
 var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 var company_roster_generator = preload("res://systems/CompanyRosterGenerator.gd").new()
 var chart_system = preload("res://systems/ChartSystem.gd").new()
+var chart_pattern_system = preload("res://systems/ChartPatternSystem.gd").new()
 var news_feed_system = preload("res://systems/NewsFeedSystem.gd").new()
 var twooter_feed_system = preload("res://systems/TwooterFeedSystem.gd").new()
 var contact_network_system = preload("res://systems/ContactNetworkSystem.gd").new()
@@ -116,6 +118,7 @@ var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
 var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
 var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
 var academy_system = preload("res://systems/AcademySystem.gd").new()
+var thesis_report_system = preload("res://systems/ThesisReportSystem.gd").new()
 var background_company_detail_hydration_running: bool = false
 var loading_detail_log_lines: Array = []
 var dashboard_event_snapshot_cache: Dictionary = {}
@@ -1912,6 +1915,805 @@ func get_twooter_snapshot(unlocked_access_tier: int = -1) -> Dictionary:
 		social_trade_date,
 		unlocked_access_tier
 	)
+
+
+func get_thesis_board_snapshot() -> Dictionary:
+	if not RunState.has_active_run():
+		return {"theses": [], "companies": []}
+	var theses: Array = []
+	for thesis_value in RunState.get_player_theses().values():
+		if typeof(thesis_value) != TYPE_DICTIONARY:
+			continue
+		var thesis: Dictionary = thesis_value.duplicate(true)
+		thesis["has_report"] = not thesis.get("report", {}).is_empty()
+		thesis["evidence_count"] = thesis.get("evidence", []).size()
+		theses.append(thesis)
+	theses.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a.get("updated_day_index", 0)) == int(b.get("updated_day_index", 0)):
+			return str(a.get("title", "")) < str(b.get("title", ""))
+		return int(a.get("updated_day_index", 0)) > int(b.get("updated_day_index", 0))
+	)
+	return {
+		"day_index": RunState.day_index,
+		"trade_date": get_current_trade_date(),
+		"theses": theses,
+		"companies": _thesis_company_options()
+	}
+
+
+func get_thesis_evidence_options(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"company": {}, "categories": []}
+	var company: Dictionary = get_company_snapshot(company_id, true, true, true)
+	if company.is_empty():
+		return {"company": {}, "categories": []}
+
+	var categories: Array = [
+		{"id": "fundamentals", "label": "Fundamentals / Key Stats", "options": _thesis_fundamental_options(company)},
+		{"id": "financials", "label": "Financials", "options": _thesis_financial_options(company)},
+		{"id": "price_action", "label": "Price Action", "options": _thesis_price_action_options(company)},
+		{"id": "broker_flow", "label": "Broker Flow", "options": _thesis_broker_options(company)},
+		{"id": "ownership", "label": "Ownership", "options": _thesis_ownership_options(company)},
+		{"id": "sector_macro", "label": "Sector / Macro", "options": _thesis_sector_macro_options(company)},
+		{"id": "news", "label": "News", "options": _thesis_news_options(company)},
+		{"id": "twooter", "label": "Twooter", "options": _thesis_twooter_options(company)},
+		{"id": "network_intel", "label": "Network Intel", "options": _thesis_network_options(company)},
+		{"id": "corporate_events", "label": "Corporate Events", "options": _thesis_corporate_event_options(company)},
+		{"id": "risk_invalidation", "label": "Risk / Invalidation", "options": _thesis_risk_options(company)}
+	]
+	return {
+		"company": _thesis_company_compact(company),
+		"categories": categories
+	}
+
+
+func get_chart_pattern_catalog() -> Array:
+	return chart_pattern_system.get_pattern_catalog()
+
+
+func get_open_theses_for_company(company_id: String) -> Array:
+	if not RunState.has_active_run():
+		return []
+	var normalized_company_id: String = str(company_id)
+	var rows: Array = []
+	for thesis_value in RunState.get_player_theses().values():
+		if typeof(thesis_value) != TYPE_DICTIONARY:
+			continue
+		var thesis: Dictionary = thesis_value
+		if str(thesis.get("company_id", "")) != normalized_company_id:
+			continue
+		if str(thesis.get("status", "open")) == "closed":
+			continue
+		rows.append({
+			"id": str(thesis.get("id", "")),
+			"title": str(thesis.get("title", "")),
+			"ticker": str(thesis.get("ticker", "")),
+			"company_name": str(thesis.get("company_name", "")),
+			"stance": str(thesis.get("stance", "")),
+			"horizon": str(thesis.get("horizon", "")),
+			"evidence_count": thesis.get("evidence", []).size(),
+			"updated_day_index": int(thesis.get("updated_day_index", 0))
+		})
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a.get("updated_day_index", 0)) == int(b.get("updated_day_index", 0)):
+			return str(a.get("title", "")) < str(b.get("title", ""))
+		return int(a.get("updated_day_index", 0)) > int(b.get("updated_day_index", 0))
+	)
+	return rows
+
+
+func evaluate_chart_pattern_claim(
+	company_id: String,
+	range_id: String,
+	pattern_id: String,
+	start_anchor: Dictionary,
+	end_anchor: Dictionary
+) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var company: Dictionary = get_company_snapshot(company_id, false, false, false)
+	if company.is_empty():
+		return {"success": false, "message": "Unknown company selection."}
+	var chart_snapshot: Dictionary = get_company_chart_snapshot(company_id, range_id, [])
+	if chart_snapshot.is_empty():
+		return {"success": false, "message": "Chart history is not ready yet."}
+	return chart_pattern_system.evaluate_pattern_claim({
+		"company_id": str(company_id),
+		"ticker": str(company.get("ticker", company_id.to_upper())),
+		"range_id": str(chart_snapshot.get("range_id", range_id)),
+		"range_label": str(chart_snapshot.get("range_label", get_chart_range_label(range_id))),
+		"pattern_id": pattern_id,
+		"start_anchor": start_anchor.duplicate(true),
+		"end_anchor": end_anchor.duplicate(true),
+		"bars": chart_snapshot.get("bars", []).duplicate(true),
+		"current_price": float(company.get("current_price", 0.0)),
+		"trade_date": get_current_trade_date()
+	})
+
+
+func add_chart_pattern_evidence_to_thesis(thesis_id: String, claim: Dictionary) -> Dictionary:
+	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
+	if thesis.is_empty():
+		return {"success": false, "message": "Unknown thesis."}
+	if str(thesis.get("status", "open")) == "closed":
+		return {"success": false, "message": "This thesis is closed."}
+	if not bool(claim.get("success", false)):
+		return {"success": false, "message": str(claim.get("message", "Complete a valid chart pattern claim first."))}
+	var claim_company_id: String = str(claim.get("company_id", thesis.get("company_id", "")))
+	if not claim_company_id.is_empty() and claim_company_id != str(thesis.get("company_id", "")):
+		return {"success": false, "message": "This pattern claim belongs to a different stock."}
+	var evidence: Dictionary = claim.duplicate(true)
+	evidence["category"] = "price_action"
+	evidence["category_label"] = "Price Action"
+	evidence["source_label"] = "STOCKBOT Chart"
+	return add_thesis_evidence(thesis_id, evidence)
+
+
+func create_thesis(company_id: String, stance: String, horizon: String, title: String = "") -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var company: Dictionary = get_company_snapshot(company_id, false, true, true)
+	if company.is_empty():
+		return {"success": false, "message": "Unknown company selection."}
+	var thesis_id: String = _next_thesis_id(company_id)
+	var normalized_stance: String = _normalize_thesis_stance(stance)
+	var normalized_horizon: String = _normalize_thesis_horizon(horizon)
+	var resolved_title: String = title.strip_edges()
+	if resolved_title.is_empty():
+		resolved_title = "%s %s thesis" % [str(company.get("ticker", company_id.to_upper())), normalized_stance.capitalize()]
+	var thesis: Dictionary = {
+		"id": thesis_id,
+		"company_id": company_id,
+		"ticker": str(company.get("ticker", company_id.to_upper())),
+		"company_name": str(company.get("name", "")),
+		"title": resolved_title,
+		"stance": normalized_stance,
+		"horizon": normalized_horizon,
+		"status": "open",
+		"created_day_index": RunState.day_index,
+		"created_trade_date": get_current_trade_date(),
+		"updated_day_index": RunState.day_index,
+		"evidence": [],
+		"report": {},
+		"review": {}
+	}
+	RunState.set_player_thesis(thesis)
+	_request_autosave("thesis_create")
+	thesis_changed.emit()
+	return {"success": true, "message": "Thesis created.", "thesis": thesis}
+
+
+func update_thesis_meta(thesis_id: String, fields: Dictionary) -> Dictionary:
+	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
+	if thesis.is_empty():
+		return {"success": false, "message": "Unknown thesis."}
+	if fields.has("title"):
+		thesis["title"] = str(fields.get("title", thesis.get("title", ""))).strip_edges()
+	if fields.has("stance"):
+		thesis["stance"] = _normalize_thesis_stance(str(fields.get("stance", thesis.get("stance", "bullish"))))
+	if fields.has("horizon"):
+		thesis["horizon"] = _normalize_thesis_horizon(str(fields.get("horizon", thesis.get("horizon", "swing"))))
+	if fields.has("status"):
+		var status: String = str(fields.get("status", thesis.get("status", "open"))).to_lower()
+		thesis["status"] = "closed" if status == "closed" else "open"
+	thesis["updated_day_index"] = RunState.day_index
+	RunState.set_player_thesis(thesis)
+	_request_autosave("thesis_update")
+	thesis_changed.emit()
+	return {"success": true, "message": "Thesis updated.", "thesis": thesis}
+
+
+func add_thesis_evidence(thesis_id: String, evidence: Dictionary) -> Dictionary:
+	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
+	if thesis.is_empty():
+		return {"success": false, "message": "Unknown thesis."}
+	var evidence_rows: Array = thesis.get("evidence", [])
+	var evidence_id: String = _next_thesis_evidence_id(evidence_rows)
+	var compact_evidence: Dictionary = {
+		"id": evidence_id,
+		"category": str(evidence.get("category", "")),
+		"category_label": str(evidence.get("category_label", "")),
+		"label": str(evidence.get("label", "")),
+		"value": str(evidence.get("value", "")),
+		"detail": str(evidence.get("detail", "")),
+		"source_label": str(evidence.get("source_label", "")),
+		"impact": str(evidence.get("impact", "mixed")),
+		"day_index": RunState.day_index
+	}
+	_copy_optional_thesis_evidence_fields(compact_evidence, evidence)
+	if str(compact_evidence.get("category", "")).is_empty() or str(compact_evidence.get("label", "")).is_empty():
+		return {"success": false, "message": "Pick a valid evidence row first."}
+	evidence_rows.append(compact_evidence)
+	thesis["evidence"] = evidence_rows
+	thesis["updated_day_index"] = RunState.day_index
+	RunState.set_player_thesis(thesis)
+	_request_autosave("thesis_add_evidence")
+	thesis_changed.emit()
+	return {"success": true, "message": "Evidence added.", "thesis": thesis}
+
+
+func remove_thesis_evidence(thesis_id: String, evidence_id: String) -> Dictionary:
+	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
+	if thesis.is_empty():
+		return {"success": false, "message": "Unknown thesis."}
+	var next_rows: Array = []
+	for evidence_value in thesis.get("evidence", []):
+		if typeof(evidence_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = evidence_value
+		if str(row.get("id", "")) != evidence_id:
+			next_rows.append(row)
+	thesis["evidence"] = next_rows
+	thesis["updated_day_index"] = RunState.day_index
+	RunState.set_player_thesis(thesis)
+	_request_autosave("thesis_remove_evidence")
+	thesis_changed.emit()
+	return {"success": true, "message": "Evidence removed.", "thesis": thesis}
+
+
+func generate_thesis_report(thesis_id: String) -> Dictionary:
+	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
+	if thesis.is_empty():
+		return {"success": false, "message": "Unknown thesis."}
+	var context: Dictionary = _thesis_report_context(str(thesis.get("company_id", "")))
+	var report: Dictionary = thesis_report_system.build_report(thesis, context)
+	if report.is_empty():
+		return {"success": false, "message": "Could not generate report for this thesis."}
+	thesis["report"] = report
+	thesis["review"] = thesis_report_system.build_review(thesis, context)
+	thesis["updated_day_index"] = RunState.day_index
+	RunState.set_player_thesis(thesis)
+	_request_autosave("thesis_generate_report")
+	thesis_changed.emit()
+	return {"success": true, "message": "Research note generated.", "thesis": thesis, "report": report}
+
+
+func refresh_thesis_review(thesis_id: String) -> Dictionary:
+	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
+	if thesis.is_empty():
+		return {"success": false, "message": "Unknown thesis."}
+	var context: Dictionary = _thesis_report_context(str(thesis.get("company_id", "")))
+	var review: Dictionary = thesis_report_system.build_review(thesis, context)
+	thesis["review"] = review
+	thesis["updated_day_index"] = RunState.day_index
+	RunState.set_player_thesis(thesis)
+	_request_autosave("thesis_refresh_review")
+	thesis_changed.emit()
+	return {"success": true, "message": "Thesis review refreshed.", "thesis": thesis, "review": review}
+
+
+func close_thesis(thesis_id: String) -> Dictionary:
+	return update_thesis_meta(thesis_id, {"status": "closed"})
+
+
+func _thesis_company_options() -> Array:
+	var rows: Array = []
+	for row_value in get_company_rows():
+		var row: Dictionary = row_value
+		rows.append({
+			"id": str(row.get("id", "")),
+			"ticker": str(row.get("ticker", "")),
+			"name": str(row.get("name", "")),
+			"sector_name": str(row.get("sector_name", "")),
+			"current_price": float(row.get("current_price", 0.0)),
+			"daily_change_pct": float(row.get("daily_change_pct", 0.0))
+		})
+	return rows
+
+
+func _thesis_company_compact(company: Dictionary) -> Dictionary:
+	return {
+		"id": str(company.get("id", company.get("company_id", ""))),
+		"ticker": str(company.get("ticker", "")),
+		"name": str(company.get("name", "")),
+		"sector_name": str(company.get("sector_name", "")),
+		"current_price": float(company.get("current_price", 0.0)),
+		"daily_change_pct": float(company.get("daily_change_pct", 0.0))
+	}
+
+
+func _thesis_report_context(company_id: String) -> Dictionary:
+	return {
+		"day_index": RunState.day_index,
+		"trade_date": get_current_trade_date(),
+		"company": get_company_snapshot(company_id, true, true, true),
+		"macro_state": get_current_macro_state()
+	}
+
+
+func _thesis_fundamental_options(company: Dictionary) -> Array:
+	var financials: Dictionary = company.get("financials", {})
+	var quality_score: int = int(company.get("quality_score", 0))
+	var growth_score: int = int(company.get("growth_score", 0))
+	var risk_score: int = int(company.get("risk_score", 0))
+	return [
+		_thesis_option("fundamentals", "Business quality", _thesis_quality_band_label(quality_score), _thesis_quality_band_detail(quality_score), _impact_from_score(float(quality_score), 62.0, 48.0)),
+		_thesis_option("fundamentals", "Growth profile", _thesis_growth_band_label(growth_score), _thesis_growth_band_detail(growth_score), _impact_from_score(float(growth_score), 62.0, 48.0)),
+		_thesis_option("fundamentals", "Risk profile", _thesis_risk_band_label(risk_score), _thesis_risk_band_detail(risk_score), "negative" if risk_score >= 58 else "positive"),
+		_thesis_option("fundamentals", "ROE", _thesis_format_percent(float(financials.get("roe", 0.0)) / 100.0), "Return on equity gives a quick quality check.", _impact_from_score(float(financials.get("roe", 0.0)), 14.0, 8.0)),
+		_thesis_option("fundamentals", "Debt to equity", "%sx" % String.num(float(financials.get("debt_to_equity", 0.0)), 2), "Leverage affects how much room the thesis has for mistakes.", "negative" if float(financials.get("debt_to_equity", 0.0)) >= 1.0 else "positive")
+	]
+
+
+func _thesis_financial_options(company: Dictionary) -> Array:
+	var financials: Dictionary = company.get("financials", {})
+	var market_cap: float = float(financials.get("market_cap", 0.0))
+	var net_income: float = float(financials.get("net_income", 0.0))
+	var pe: float = _safe_divide(market_cap, net_income)
+	return [
+		_thesis_option("financials", "Revenue growth YoY", _thesis_format_percent(float(financials.get("revenue_growth_yoy", 0.0)) / 100.0), "Revenue growth helps tell whether the story is expanding or fading.", _impact_from_score(float(financials.get("revenue_growth_yoy", 0.0)), 10.0, 0.0)),
+		_thesis_option("financials", "Earnings growth YoY", _thesis_format_percent(float(financials.get("earnings_growth_yoy", 0.0)) / 100.0), "Earnings growth checks whether growth reaches the bottom line.", _impact_from_score(float(financials.get("earnings_growth_yoy", 0.0)), 8.0, 0.0)),
+		_thesis_option("financials", "Net profit margin", _thesis_format_percent(float(financials.get("net_profit_margin", 0.0)) / 100.0), "Margin quality helps separate real business strength from noisy sales.", _impact_from_score(float(financials.get("net_profit_margin", 0.0)), 8.0, 3.0)),
+		_thesis_option("valuation", "Current PE", "%sx" % String.num(pe, 2), "PE is an approximate valuation anchor from generated earnings.", "negative" if pe > 20.0 else ("positive" if pe > 0.0 and pe < 12.0 else "mixed")),
+		_thesis_option("valuation", "Market cap", _thesis_format_currency(market_cap), "Market cap helps keep expectations realistic for the company size.", "mixed")
+	]
+
+
+func _thesis_price_action_options(company: Dictionary) -> Array:
+	var price_bars: Array = company.get("price_bars", [])
+	var recent_return: float = _recent_price_bar_return(price_bars, 5)
+	return [
+		_thesis_option("price_action", "Current price", _thesis_format_currency(float(company.get("current_price", 0.0))), "This freezes the entry context for the thesis.", "mixed"),
+		_thesis_option("price_action", "Daily move", _thesis_format_percent(float(company.get("daily_change_pct", 0.0))), "The daily move shows whether the thesis is early or chasing strength.", _impact_from_change(float(company.get("daily_change_pct", 0.0)))),
+		_thesis_option("price_action", "Five-bar trend", _thesis_format_percent(recent_return), "Recent bars show whether price action confirms the setup.", _impact_from_change(recent_return)),
+		_thesis_option("price_action", "YTD move", _thesis_format_percent(float(company.get("ytd_change_pct", 0.0))), "YTD context helps avoid confusing a late move with an early setup.", _impact_from_change(float(company.get("ytd_change_pct", 0.0))))
+	]
+
+
+func _thesis_broker_options(company: Dictionary) -> Array:
+	var broker_flow: Dictionary = company.get("broker_flow", {})
+	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
+	var buyer: String = _broker_actor_label_for_thesis(broker_flow, "buy")
+	var seller: String = _broker_actor_label_for_thesis(broker_flow, "sell")
+	return [
+		_thesis_option("broker_flow", "Broker flow", flow_tag.capitalize(), "Broker flow checks whether stronger desks are supporting or leaning on the tape.", "positive" if flow_tag == "accumulation" else ("negative" if flow_tag == "distribution" else "mixed")),
+		_thesis_option("broker_flow", "Dominant buyer", buyer, "Strong buyer identity helps judge the quality of demand.", "positive" if buyer != "Balanced" else "mixed"),
+		_thesis_option("broker_flow", "Dominant seller", seller, "Strong seller identity is useful risk evidence.", "negative" if seller != "Balanced" else "mixed"),
+		_thesis_option("broker_flow", "Net pressure", String.num(float(broker_flow.get("net_pressure", 0.0)), 2), "Net pressure gives the tape read a compact direction.", _impact_from_change(float(broker_flow.get("net_pressure", 0.0))))
+	]
+
+
+func _thesis_ownership_options(company: Dictionary) -> Array:
+	var rows: Array = []
+	rows.append(_thesis_option("ownership", "Player ownership", _thesis_format_percent(float(company.get("ownership_pct", 0.0))), "Your ownership affects meeting eligibility and concentration.", "mixed"))
+	rows.append(_thesis_option("ownership", "Free float", _thesis_format_percent(float(company.get("financials", {}).get("free_float_pct", 0.0)) / 100.0), "Free float shapes liquidity and how crowded the tape can become.", "mixed"))
+	for shareholder_value in company.get("shareholder_rows", []):
+		if typeof(shareholder_value) != TYPE_DICTIONARY:
+			continue
+		var shareholder: Dictionary = shareholder_value
+		rows.append(_thesis_option("ownership", "Major holder", "%s %s" % [str(shareholder.get("name", "Holder")), _thesis_format_percent(float(shareholder.get("ownership_pct", 0.0)))], "Ownership concentration can support or constrain a thesis.", "mixed"))
+		if rows.size() >= 4:
+			break
+	return rows
+
+
+func _thesis_sector_macro_options(company: Dictionary) -> Array:
+	var rows: Array = []
+	var company_sector_id: String = str(company.get("sector_id", ""))
+	var company_sector_name: String = "Sector"
+	for sector_value in get_sector_rows():
+		var sector: Dictionary = sector_value
+		if str(sector.get("id", "")) != company_sector_id:
+			continue
+		company_sector_name = str(sector.get("name", company_sector_name))
+		rows.append(_thesis_option("sector_macro", "Sector performance", _thesis_format_percent(float(sector.get("average_change_pct", 0.0))), "Sector tape shows whether the stock is moving with or against its group.", _impact_from_change(float(sector.get("average_change_pct", 0.0)))))
+		rows.append(_thesis_option("sector_macro", "Sector breadth", "%d green / %d red" % [int(sector.get("advancers", 0)), int(sector.get("decliners", 0))], "Breadth helps separate broad sector demand from one-stock noise.", "positive" if int(sector.get("advancers", 0)) >= int(sector.get("decliners", 0)) else "negative"))
+		break
+	var macro: Dictionary = get_current_macro_state()
+	rows.append(_thesis_option("sector_macro", "Inflation backdrop", "%s%% YoY" % String.num(float(macro.get("inflation_yoy", 0.0)), 1), "Inflation pressure affects margins, consumer demand, rate expectations, and valuation tolerance.", _thesis_inflation_impact(float(macro.get("inflation_yoy", 0.0)))))
+	rows.append(_thesis_option("sector_macro", "GDP growth", "%s%%" % String.num(float(macro.get("gdp_growth", 0.0)), 1), "GDP growth is the broad demand backdrop for cyclical revenue and market risk appetite.", _thesis_gdp_impact(float(macro.get("gdp_growth", 0.0)))))
+	rows.append(_thesis_option("sector_macro", "Employment backdrop", "%s / unemployment %s%%" % [str(macro.get("employment_label", "Mixed")), String.num(float(macro.get("unemployment_rate", 0.0)), 1)], "Employment strength helps explain household demand and how much risk the market can carry.", _thesis_employment_impact(float(macro.get("employment_index", 0.0)))))
+	rows.append(_thesis_option("sector_macro", "Policy rate", _thesis_policy_rate_label(macro), "The policy-rate path changes funding cost, valuation appetite, and sector leadership.", _thesis_policy_impact(str(macro.get("central_bank_stance", "hold")))))
+	rows.append(_thesis_option("sector_macro", "Risk appetite", _thesis_risk_appetite_label(float(macro.get("risk_appetite", 0.5))), "Risk appetite is the market-wide willingness to pay for uncertainty.", _thesis_risk_appetite_impact(float(macro.get("risk_appetite", 0.5)))))
+	var sector_macro_bias: float = float(macro.get("sector_biases", {}).get(company_sector_id, 0.0))
+	rows.append(_thesis_option("sector_macro", "Sector macro bias", "%s %s" % [company_sector_name, _thesis_format_percent(sector_macro_bias)], "This is the simulator's direct macro tilt for the company's sector from inflation, GDP, employment, rates, and risk appetite.", _impact_from_change(sector_macro_bias)))
+	rows.append(_thesis_active_macro_shock_option())
+	return rows
+
+
+func _thesis_news_options(company: Dictionary) -> Array:
+	var rows: Array = []
+	var snapshot: Dictionary = get_news_snapshot()
+	for feed_value in snapshot.get("feeds", {}).values():
+		if typeof(feed_value) != TYPE_DICTIONARY:
+			continue
+		var feed: Dictionary = feed_value
+		for article_value in feed.get("articles", []):
+			if typeof(article_value) != TYPE_DICTIONARY:
+				continue
+			var article: Dictionary = article_value
+			if str(article.get("target_company_id", "")) != str(company.get("id", "")) and str(article.get("target_ticker", "")) != str(company.get("ticker", "")):
+				continue
+			rows.append(_thesis_option("news", str(article.get("headline", "News article")), str(article.get("public_status_label", article.get("tone", "mixed"))), str(article.get("deck", article.get("body", ""))).left(220), _impact_from_tone(str(article.get("tone", "mixed"))), str(feed.get("label", "News"))))
+			if rows.size() >= 5:
+				return rows
+	if rows.is_empty():
+		rows.append(_thesis_option("news", "No company-specific article", "No current article", "No fresh company-specific News article is available for this stock today.", "mixed", "News"))
+	return rows
+
+
+func _thesis_twooter_options(company: Dictionary) -> Array:
+	var rows: Array = []
+	var snapshot: Dictionary = get_twooter_snapshot()
+	for post_value in snapshot.get("posts", []):
+		if typeof(post_value) != TYPE_DICTIONARY:
+			continue
+		var post: Dictionary = post_value
+		if str(post.get("target_ticker", "")) != str(company.get("ticker", "")):
+			continue
+		rows.append(_thesis_option("twooter", "@%s" % str(post.get("account_handle", "")), str(post.get("post_text", "")).left(120), str(post.get("context_hint", "")), _impact_from_tone(str(post.get("tone", "mixed"))), "Twooter"))
+		if rows.size() >= 5:
+			return rows
+	if rows.is_empty():
+		rows.append(_thesis_option("twooter", "No company-specific chatter", "No current post", "No fresh company-specific Twooter post is available for this stock today.", "mixed", "Twooter"))
+	return rows
+
+
+func _thesis_network_options(company: Dictionary) -> Array:
+	var rows: Array = []
+	var snapshot: Dictionary = get_network_snapshot()
+	for contact_value in snapshot.get("contacts", []):
+		if typeof(contact_value) != TYPE_DICTIONARY:
+			continue
+		var contact: Dictionary = contact_value
+		if not bool(contact.get("met", false)):
+			continue
+		var company_ids: Array = contact.get("target_company_ids", [])
+		var focus_company_id: String = str(contact.get("company_id", ""))
+		if focus_company_id != str(company.get("id", "")) and not company_ids.has(str(company.get("id", ""))):
+			continue
+		rows.append(_thesis_option("network_intel", str(contact.get("display_name", contact.get("name", "Network contact"))), str(contact.get("role", contact.get("affiliation_role", "Contact"))), str(contact.get("last_tip_note", contact.get("description", "Known contact can add private context."))).left(220), "mixed", "Network"))
+		if rows.size() >= 4:
+			return rows
+	if rows.is_empty():
+		rows.append(_thesis_option("network_intel", "No met contact", "No private read", "Meet relevant contacts before treating Network as thesis evidence.", "mixed", "Network"))
+	return rows
+
+
+func _thesis_corporate_event_options(company: Dictionary) -> Array:
+	var rows: Array = []
+	for event_value in get_event_history():
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event: Dictionary = event_value
+		if str(event.get("target_company_id", "")) != str(company.get("id", "")):
+			continue
+		rows.append(_thesis_option("corporate_events", str(event.get("headline", event.get("event_id", "Corporate event"))), str(event.get("summary", event.get("category", ""))).left(140), "Corporate event history can be a catalyst or a risk depending on confirmation.", _impact_from_tone(str(event.get("tone", "mixed"))), "Corporate events"))
+		if rows.size() >= 5:
+			return rows
+	var meeting_snapshot: Dictionary = get_corporate_meeting_snapshot()
+	for meeting_value in meeting_snapshot.get("upcoming_rows", []):
+		if typeof(meeting_value) != TYPE_DICTIONARY:
+			continue
+		var meeting: Dictionary = meeting_value
+		if str(meeting.get("company_id", "")) != str(company.get("id", "")):
+			continue
+		rows.append(_thesis_option("corporate_events", str(meeting.get("label", "Corporate meeting")), str(meeting.get("ticker", "")), str(meeting.get("public_summary", "Upcoming meeting can change the setup.")).left(180), "mixed", "Meeting calendar"))
+	if rows.is_empty():
+		rows.append(_thesis_option("corporate_events", "No active corporate event", "No event selected", "No current corporate event is tied to this company.", "mixed", "Corporate events"))
+	return rows
+
+
+func _thesis_risk_options(company: Dictionary) -> Array:
+	var financials: Dictionary = company.get("financials", {})
+	var risk_score: int = int(company.get("risk_score", 0))
+	var debt_to_equity: float = float(financials.get("debt_to_equity", 0.0))
+	var daily_change: float = float(company.get("daily_change_pct", 0.0))
+	return [
+		_thesis_option("risk_invalidation", "Risk profile invalidation", _thesis_risk_band_label(risk_score), _thesis_risk_band_detail(risk_score), "negative" if risk_score >= 58 else "mixed"),
+		_thesis_option("risk_invalidation", "Leverage invalidation", "%sx debt/equity" % String.num(debt_to_equity, 2), "If leverage is high, weak earnings can break the thesis faster.", "negative" if debt_to_equity >= 1.0 else "mixed"),
+		_thesis_option("risk_invalidation", "Price invalidation", "Breaks below today's price by 5%", "If price loses the thesis level, re-check before averaging down.", "negative"),
+		_thesis_option("risk_invalidation", "Chasing risk", _thesis_format_percent(daily_change), "If the move already ran, a good story can still be a bad entry.", "negative" if daily_change > 0.05 else "mixed")
+	]
+
+
+func _thesis_option(category: String, label: String, value: String, detail: String, impact: String = "mixed", source_label: String = "") -> Dictionary:
+	return {
+		"category": category,
+		"category_label": _thesis_category_label(category),
+		"label": label,
+		"value": value,
+		"detail": detail,
+		"impact": impact,
+		"source_label": source_label
+	}
+
+
+func _copy_optional_thesis_evidence_fields(target: Dictionary, source: Dictionary) -> void:
+	for key_value in [
+		"company_id",
+		"ticker",
+		"pattern_id",
+		"pattern_label",
+		"feedback_state",
+		"feedback_reason",
+		"invalidation",
+		"chart_range",
+		"chart_range_label",
+		"region_label"
+	]:
+		var key: String = str(key_value)
+		if source.has(key):
+			target[key] = str(source.get(key, ""))
+	for key_value in ["start_price", "end_price", "current_price"]:
+		var key: String = str(key_value)
+		if source.has(key):
+			target[key] = float(source.get(key, 0.0))
+	for key_value in ["start_anchor", "end_anchor", "start_date", "end_date", "report_date"]:
+		var key: String = str(key_value)
+		if typeof(source.get(key, {})) == TYPE_DICTIONARY:
+			target[key] = source.get(key, {}).duplicate(true)
+
+
+func _thesis_category_label(category: String) -> String:
+	var labels := {
+		"fundamentals": "Fundamentals / Key Stats",
+		"financials": "Financials",
+		"valuation": "Valuation",
+		"price_action": "Price Action",
+		"broker_flow": "Broker Flow",
+		"ownership": "Ownership",
+		"sector_macro": "Sector / Macro",
+		"news": "News",
+		"twooter": "Twooter",
+		"network_intel": "Network Intel",
+		"corporate_events": "Corporate Events",
+		"risk_invalidation": "Risk / Invalidation"
+	}
+	return str(labels.get(category, category.capitalize()))
+
+
+func _next_thesis_id(company_id: String) -> String:
+	var index: int = RunState.get_player_theses().size() + 1
+	while true:
+		var thesis_id: String = "thesis_%s_%03d" % [company_id, index]
+		if RunState.get_player_thesis(thesis_id).is_empty():
+			return thesis_id
+		index += 1
+	return "thesis_%s_%03d" % [company_id, index]
+
+
+func _next_thesis_evidence_id(evidence_rows: Array) -> String:
+	var index: int = evidence_rows.size() + 1
+	while true:
+		var evidence_id: String = "evidence_%03d" % index
+		var found: bool = false
+		for row_value in evidence_rows:
+			if typeof(row_value) == TYPE_DICTIONARY and str(row_value.get("id", "")) == evidence_id:
+				found = true
+				break
+		if not found:
+			return evidence_id
+		index += 1
+	return "evidence_%03d" % index
+
+
+func _normalize_thesis_stance(stance: String) -> String:
+	var normalized: String = stance.to_lower()
+	if normalized in ["bullish", "bearish", "income", "watch"]:
+		return normalized
+	return "bullish"
+
+
+func _normalize_thesis_horizon(horizon: String) -> String:
+	var normalized: String = horizon.to_lower()
+	if normalized in ["swing", "position", "income", "event"]:
+		return normalized
+	return "swing"
+
+
+func _recent_price_bar_return(price_bars: Array, lookback: int) -> float:
+	if price_bars.size() < 2:
+		return 0.0
+	var end_bar: Dictionary = price_bars[price_bars.size() - 1]
+	var start_index: int = max(price_bars.size() - lookback, 0)
+	var start_bar: Dictionary = price_bars[start_index]
+	var start_price: float = float(start_bar.get("close", start_bar.get("price", 0.0)))
+	var end_price: float = float(end_bar.get("close", end_bar.get("price", 0.0)))
+	if is_zero_approx(start_price):
+		return 0.0
+	return (end_price - start_price) / start_price
+
+
+func _thesis_quality_band_label(score: int) -> String:
+	if score >= 80:
+		return "Excellent"
+	if score >= 65:
+		return "Strong"
+	if score >= 50:
+		return "Average"
+	if score >= 35:
+		return "Weak"
+	return "Fragile"
+
+
+func _thesis_growth_band_label(score: int) -> String:
+	if score >= 80:
+		return "Accelerating"
+	if score >= 65:
+		return "Healthy"
+	if score >= 50:
+		return "Steady"
+	if score >= 35:
+		return "Uneven"
+	return "Stalling"
+
+
+func _thesis_risk_band_label(score: int) -> String:
+	if score >= 80:
+		return "High"
+	if score >= 65:
+		return "Elevated"
+	if score >= 45:
+		return "Moderate"
+	if score >= 25:
+		return "Manageable"
+	return "Low"
+
+
+func _thesis_quality_band_detail(score: int) -> String:
+	if score >= 80:
+		return "Excellent quality can support conviction, but the entry and valuation still need confirmation."
+	if score >= 65:
+		return "Strong quality gives the thesis fundamental support if valuation is still reasonable."
+	if score >= 50:
+		return "Average quality is workable, but the stock needs help from price action, valuation, or catalysts."
+	if score >= 35:
+		return "Weak quality means the thesis needs clear confirmation before adding size."
+	return "Fragile quality means the thesis needs more than one bullish signal before it deserves conviction."
+
+
+func _thesis_growth_band_detail(score: int) -> String:
+	if score >= 80:
+		return "Accelerating growth can justify a stronger upside case if margins and tape confirm."
+	if score >= 65:
+		return "Healthy growth supports a constructive thesis when valuation is not stretched."
+	if score >= 50:
+		return "Steady growth is useful, but it rarely carries the thesis alone."
+	if score >= 35:
+		return "Uneven growth is not broken, but it needs confirmation from fresh financials or catalysts."
+	return "Stalling growth needs either a valuation gap, turnaround catalyst, or clear tape support."
+
+
+func _thesis_risk_band_detail(score: int) -> String:
+	if score >= 80:
+		return "High risk needs tight invalidation and strong evidence before the position can be sized."
+	if score >= 65:
+		return "Elevated risk means the idea can work, but only with clear confirmation and controlled size."
+	if score >= 45:
+		return "Moderate risk demands confirmation, but it does not reject the idea by itself."
+	if score >= 25:
+		return "Manageable risk gives the thesis room to develop if evidence stays consistent."
+	return "Low risk gives the thesis more room, though price and valuation still matter."
+
+
+func _thesis_policy_rate_label(macro: Dictionary) -> String:
+	var stance: String = str(macro.get("central_bank_stance", "hold")).capitalize()
+	var rate: float = float(macro.get("policy_rate", 0.0))
+	var bps: int = int(macro.get("policy_action_bps", 0))
+	return "%s to %s%% (%+d bps)" % [stance, String.num(rate, 2), bps]
+
+
+func _thesis_risk_appetite_label(risk_appetite: float) -> String:
+	if risk_appetite >= 0.64:
+		return "Risk-on"
+	if risk_appetite >= 0.54:
+		return "Constructive"
+	if risk_appetite <= 0.36:
+		return "Risk-off"
+	if risk_appetite <= 0.46:
+		return "Defensive"
+	return "Neutral"
+
+
+func _thesis_active_macro_shock_option() -> Dictionary:
+	var active_events: Array = get_active_special_events()
+	if active_events.is_empty():
+		return _thesis_option("sector_macro", "Active macro shock", "None", "No active special macro shock is currently pressuring the tape.", "mixed", "Macro shocks")
+	var event: Dictionary = active_events[0] if typeof(active_events[0]) == TYPE_DICTIONARY else {}
+	var headline: String = str(event.get("headline", event.get("headline_detail", event.get("event_id", "Macro shock"))))
+	var detail: String = str(event.get("description", event.get("headline_detail", "An active macro shock is changing volatility, market bias, or sector leadership.")))
+	return _thesis_option("sector_macro", "Active macro shock", headline, detail.left(220), _impact_from_tone(str(event.get("tone", "mixed"))), "Macro shocks")
+
+
+func _thesis_inflation_impact(inflation_yoy: float) -> String:
+	if inflation_yoy >= 4.6:
+		return "negative"
+	if inflation_yoy <= 2.8:
+		return "positive"
+	return "mixed"
+
+
+func _thesis_gdp_impact(gdp_growth: float) -> String:
+	if gdp_growth >= 5.2:
+		return "positive"
+	if gdp_growth <= 3.4:
+		return "negative"
+	return "mixed"
+
+
+func _thesis_employment_impact(employment_index: float) -> String:
+	if employment_index >= 0.58:
+		return "positive"
+	if employment_index <= 0.42:
+		return "negative"
+	return "mixed"
+
+
+func _thesis_policy_impact(central_bank_stance: String) -> String:
+	var normalized: String = central_bank_stance.to_lower()
+	if normalized == "cut":
+		return "positive"
+	if normalized == "hike":
+		return "negative"
+	return "mixed"
+
+
+func _thesis_risk_appetite_impact(risk_appetite: float) -> String:
+	if risk_appetite >= 0.54:
+		return "positive"
+	if risk_appetite <= 0.46:
+		return "negative"
+	return "mixed"
+
+
+func _impact_from_score(value: float, positive_threshold: float, negative_threshold: float) -> String:
+	if value >= positive_threshold:
+		return "positive"
+	if value <= negative_threshold:
+		return "negative"
+	return "mixed"
+
+
+func _impact_from_change(value: float) -> String:
+	if value > 0.005:
+		return "positive"
+	if value < -0.005:
+		return "negative"
+	return "mixed"
+
+
+func _impact_from_tone(tone: String) -> String:
+	var normalized: String = tone.to_lower()
+	if normalized in ["positive", "bullish", "constructive"]:
+		return "positive"
+	if normalized in ["negative", "bearish", "defensive"]:
+		return "negative"
+	return "mixed"
+
+
+func _broker_actor_label_for_thesis(broker_flow: Dictionary, side: String) -> String:
+	var broker_code_key: String = "dominant_buy_broker_code" if side == "buy" else "dominant_sell_broker_code"
+	var broker_type_key: String = "dominant_buy_broker_type" if side == "buy" else "dominant_sell_broker_type"
+	var fallback_key: String = "dominant_buyer" if side == "buy" else "dominant_seller"
+	var broker_code: String = str(broker_flow.get(broker_code_key, ""))
+	if not broker_code.is_empty():
+		return broker_code
+	var fallback_value: String = str(broker_flow.get(broker_type_key, broker_flow.get(fallback_key, "balanced")))
+	return "Balanced" if fallback_value.is_empty() else fallback_value.capitalize()
+
+
+func _thesis_format_currency(value: float) -> String:
+	var sign: String = "-" if value < 0.0 else ""
+	var abs_value: float = abs(value)
+	if abs_value >= 1000000000000.0:
+		return "%sRp%sT" % [sign, String.num(abs_value / 1000000000000.0, 2)]
+	if abs_value >= 1000000000.0:
+		return "%sRp%sB" % [sign, String.num(abs_value / 1000000000.0, 2)]
+	if abs_value >= 1000000.0:
+		return "%sRp%sM" % [sign, String.num(abs_value / 1000000.0, 2)]
+	return "%sRp%s" % [sign, String.num(abs_value, 2)]
+
+
+func _thesis_format_percent(value: float) -> String:
+	var sign: String = "+" if value > 0.0 else ""
+	return "%s%s%%" % [sign, String.num(value * 100.0, 2)]
+
+
+func _safe_divide(numerator: float, denominator: float) -> float:
+	if is_zero_approx(denominator):
+		return 0.0
+	return numerator / denominator
 
 
 func get_difficulty_options() -> Array:

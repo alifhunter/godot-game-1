@@ -8,6 +8,7 @@ const APP_ID_SOCIAL := "social"
 const APP_ID_NETWORK := "network"
 const APP_ID_ACADEMY := "academy"
 const APP_ID_UPGRADES := "upgrades"
+const APP_ID_THESIS := "thesis"
 const NETWORK_FOLLOWUP_ACTIONS := {
 	0: "thank",
 	1: "ask_why",
@@ -68,6 +69,10 @@ const DESKTOP_ICON_PATHS := {
 	"upgrades": {
 		"shortcut": "res://assets/ui/desktop/shop_shortcut.svg",
 		"nav": "res://assets/ui/desktop/shop_nav.svg"
+	},
+	"thesis": {
+		"shortcut": "res://assets/ui/desktop/thesis_shortcut.svg",
+		"nav": "res://assets/ui/desktop/thesis_nav.svg"
 	},
 	"exit": {
 		"shortcut": "res://assets/ui/desktop/exit_shortcut.svg",
@@ -167,6 +172,7 @@ const KEY_STATS_METRIC_LABEL_WIDTH := 78.0
 const KEY_STATS_METRIC_VALUE_WIDTH := 74.0
 const RUPSLB_MEETING_OVERLAY_SCRIPT = preload("res://scripts/ui/widgets/RupslbMeetingOverlay.gd")
 const DASHBOARD_SPARKLINE_SCRIPT = preload("res://scripts/ui/widgets/DashboardSparklineCanvas.gd")
+const THESIS_BOARD_WIDGET_SCRIPT = preload("res://scripts/ui/widgets/ThesisBoardWidget.gd")
 
 var selected_company_id: String = ""
 var displayed_company_ids: Array = []
@@ -242,6 +248,8 @@ var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new
 @onready var network_app_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/NetworkAppTile/NetworkAppLabel
 var academy_app_button: Button = null
 var academy_app_label: Label = null
+var thesis_app_button: Button = null
+var thesis_app_label: Label = null
 @onready var upgrades_app_button: Button = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/UpgradesAppTile/UpgradesAppButton
 @onready var upgrades_app_label: Label = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/UpgradesAppTile/UpgradesAppLabel
 @onready var exit_app_button: Button = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/ExitAppTile/ExitAppButton
@@ -349,6 +357,7 @@ var network_detail_scroll_content: VBoxContainer = null
 var network_journal_detail_label: Label = null
 var academy_window: MarginContainer = null
 var academy_window_body: PanelContainer = null
+var thesis_window: MarginContainer = null
 var academy_title_label: Label = null
 var academy_progress_label: Label = null
 var academy_category_tabs: HBoxContainer = null
@@ -599,6 +608,7 @@ func _ready() -> void:
 	_ensure_dashboard_sector_ui()
 	_ensure_console_overlay()
 	_ensure_academy_ui()
+	_ensure_thesis_ui()
 	_ensure_corporate_action_ui()
 	_ensure_news_newspaper_ui()
 	_ensure_figma_desktop_ui()
@@ -621,6 +631,8 @@ func _ready() -> void:
 	network_app_button.pressed.connect(_on_network_app_pressed)
 	if academy_app_button != null:
 		academy_app_button.pressed.connect(_on_academy_app_pressed)
+	if thesis_app_button != null:
+		thesis_app_button.pressed.connect(_on_thesis_app_pressed)
 	upgrades_app_button.pressed.connect(_on_upgrades_app_pressed)
 	exit_app_button.pressed.connect(_on_exit_app_pressed)
 	taskbar_home_button.pressed.connect(_on_taskbar_home_pressed)
@@ -685,6 +697,8 @@ func _ready() -> void:
 	network_app_button.tooltip_text = "Open the relationship network."
 	if academy_app_button != null:
 		academy_app_button.tooltip_text = "Open Academy lessons."
+	if thesis_app_button != null:
+		thesis_app_button.tooltip_text = "Open Thesis Board."
 	upgrades_app_button.tooltip_text = "Open the upgrades shop."
 	exit_app_button.tooltip_text = "Return to the main menu."
 	taskbar_home_button.tooltip_text = "Return to the desktop."
@@ -1981,6 +1995,10 @@ func _refresh_open_desktop_apps(log_phase_details: bool = false) -> void:
 		var academy_started_at_usec: int = Time.get_ticks_usec()
 		_refresh_academy()
 		_log_perf_phase(log_phase_details, "_refresh_open_apps:academy", academy_started_at_usec)
+	if _is_desktop_app_window_open(APP_ID_THESIS):
+		var thesis_started_at_usec: int = Time.get_ticks_usec()
+		_refresh_thesis()
+		_log_perf_phase(log_phase_details, "_refresh_open_apps:thesis", thesis_started_at_usec)
 	if _is_desktop_app_window_open(APP_ID_UPGRADES):
 		var upgrades_started_at_usec: int = Time.get_ticks_usec()
 		_refresh_upgrades()
@@ -2034,7 +2052,7 @@ func _open_desktop_app_refresh_order() -> Array:
 		ordered.append(top_app_id)
 	if active_app_id != APP_ID_DESKTOP and not ordered.has(active_app_id) and _is_desktop_app_window_open(active_app_id):
 		ordered.append(active_app_id)
-	for app_id in [APP_ID_STOCK, APP_ID_NEWS, APP_ID_SOCIAL, APP_ID_NETWORK, APP_ID_ACADEMY, APP_ID_UPGRADES]:
+	for app_id in [APP_ID_STOCK, APP_ID_NEWS, APP_ID_SOCIAL, APP_ID_NETWORK, APP_ID_ACADEMY, APP_ID_THESIS, APP_ID_UPGRADES]:
 		if _is_desktop_app_window_open(app_id) and not ordered.has(app_id):
 			ordered.append(app_id)
 	return ordered
@@ -2076,6 +2094,8 @@ func _on_portfolio_changed() -> void:
 	_refresh_desktop()
 	if active_section_id == "dashboard":
 		_refresh_dashboard()
+	if _is_desktop_app_window_open(APP_ID_THESIS):
+		_refresh_thesis()
 	if debug_overlay.visible:
 		_refresh_debug_overlay()
 	_start_background_company_detail_hydration()
@@ -2116,6 +2136,8 @@ func _on_network_changed() -> void:
 		_queue_deferred_open_app_refresh()
 		return
 	_refresh_network()
+	if _is_desktop_app_window_open(APP_ID_THESIS):
+		_refresh_thesis()
 
 
 func _apply_global_font_size_overrides() -> void:
@@ -2692,7 +2714,7 @@ func _ensure_figma_desktop_ui() -> void:
 
 	desktop_shortcut_grid = GridContainer.new()
 	desktop_shortcut_grid.name = "DesktopFigmaShortcutGrid"
-	desktop_shortcut_grid.columns = 7
+	desktop_shortcut_grid.columns = 8
 	desktop_shortcut_grid.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	desktop_shortcut_grid.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	desktop_shortcut_grid.add_theme_constant_override("h_separation", _desktop_scaled_px(104.0, 68, 120))
@@ -2735,6 +2757,12 @@ func _reparent_desktop_shortcuts_to_figma_grid() -> void:
 			"button": academy_app_button,
 			"label": academy_app_label,
 			"text": "ACADEMY"
+		},
+		{
+			"app_id": APP_ID_THESIS,
+			"button": thesis_app_button,
+			"label": thesis_app_label,
+			"text": "THESIS"
 		},
 		{
 			"app_id": APP_ID_NETWORK,
@@ -3109,6 +3137,8 @@ func _style_figma_desktop_ui() -> void:
 	_style_desktop_shortcut_button(social_app_button)
 	if academy_app_button != null:
 		_style_desktop_shortcut_button(academy_app_button)
+	if thesis_app_button != null:
+		_style_desktop_shortcut_button(thesis_app_button)
 	_style_desktop_shortcut_button(network_app_button)
 	_style_desktop_shortcut_button(upgrades_app_button)
 	_style_desktop_shortcut_button(exit_app_button)
@@ -3117,6 +3147,8 @@ func _style_figma_desktop_ui() -> void:
 	_style_desktop_label_plaque(social_app_label)
 	if academy_app_label != null:
 		_style_desktop_label_plaque(academy_app_label)
+	if thesis_app_label != null:
+		_style_desktop_label_plaque(thesis_app_label)
 	_style_desktop_label_plaque(network_app_label)
 	_style_desktop_label_plaque(upgrades_app_label)
 	_style_desktop_label_plaque(exit_app_label)
@@ -3257,6 +3289,8 @@ func _initialize_desktop_app_windows() -> void:
 	_register_desktop_app_window(APP_ID_NETWORK, "Network", [network_window])
 	if academy_window != null:
 		_register_desktop_app_window(APP_ID_ACADEMY, "Academy", [academy_window])
+	if thesis_window != null:
+		_register_desktop_app_window(APP_ID_THESIS, "Thesis Board", [thesis_window])
 	_register_desktop_app_window(APP_ID_UPGRADES, "Upgrades", [upgrade_window])
 	_apply_desktop_window_layouts()
 
@@ -3387,6 +3421,8 @@ func _desktop_window_min_size_for_app(app_id: String) -> Vector2:
 			return Vector2(780, 620)
 		APP_ID_ACADEMY:
 			return Vector2(860, 620)
+		APP_ID_THESIS:
+			return Vector2(920, 620)
 		APP_ID_UPGRADES:
 			return Vector2(640, 460)
 		_:
@@ -3435,6 +3471,10 @@ func _desktop_window_default_rect(app_id: String) -> Rect2:
 			size.x = min(max(work_rect.size.x * 0.78, size.x), work_rect.size.x - 12.0)
 			size.y = min(max(work_rect.size.y * 0.86, size.y), work_rect.size.y - 12.0)
 			return Rect2(work_rect.position + Vector2(24, 18), size)
+		APP_ID_THESIS:
+			size.x = min(max(work_rect.size.x * 0.82, size.x), work_rect.size.x - 12.0)
+			size.y = min(max(work_rect.size.y * 0.86, size.y), work_rect.size.y - 12.0)
+			return Rect2(work_rect.position + Vector2(32, 22), size)
 		APP_ID_UPGRADES:
 			size.x = min(max(work_rect.size.x * 0.64, size.x), work_rect.size.x - 16.0)
 			size.y = min(max(work_rect.size.y * 0.7, size.y), work_rect.size.y - 16.0)
@@ -3485,6 +3525,12 @@ func _apply_desktop_window_layouts() -> void:
 		academy_window.add_theme_constant_override("margin_right", 0)
 		academy_window.add_theme_constant_override("margin_bottom", 0)
 		_attach_content_full_rect(academy_window)
+	if thesis_window != null:
+		thesis_window.add_theme_constant_override("margin_left", 0)
+		thesis_window.add_theme_constant_override("margin_top", 0)
+		thesis_window.add_theme_constant_override("margin_right", 0)
+		thesis_window.add_theme_constant_override("margin_bottom", 0)
+		_attach_content_full_rect(thesis_window)
 	upgrade_window.add_theme_constant_override("margin_left", 0)
 	upgrade_window.add_theme_constant_override("margin_top", 0)
 	upgrade_window.add_theme_constant_override("margin_right", 0)
@@ -3723,6 +3769,7 @@ func _window_text_color_for_app(app_id: String) -> Color:
 func _uses_academy_window_chrome(app_id: String) -> bool:
 	return (
 		app_id == APP_ID_ACADEMY or
+		app_id == APP_ID_THESIS or
 		app_id == APP_ID_NEWS or
 		app_id == APP_ID_NETWORK or
 		app_id == APP_ID_UPGRADES
@@ -3863,8 +3910,55 @@ func _refresh_app_window_content(app_id: String) -> void:
 		_refresh_network()
 	elif app_id == APP_ID_ACADEMY:
 		_refresh_academy()
+	elif app_id == APP_ID_THESIS:
+		_refresh_thesis()
 	elif app_id == APP_ID_UPGRADES:
 		_refresh_upgrades()
+
+
+func _ensure_thesis_ui() -> void:
+	if thesis_window != null:
+		return
+
+	var desktop_icons_row: HBoxContainer = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow
+	var thesis_tile := VBoxContainer.new()
+	thesis_tile.name = "ThesisAppTile"
+	thesis_tile.add_theme_constant_override("separation", 10)
+	desktop_icons_row.add_child(thesis_tile)
+	var upgrades_tile: Node = desktop_icons_row.get_node_or_null("UpgradesAppTile")
+	if upgrades_tile != null:
+		desktop_icons_row.move_child(thesis_tile, upgrades_tile.get_index())
+
+	thesis_app_button = Button.new()
+	thesis_app_button.name = "ThesisAppButton"
+	thesis_app_button.custom_minimum_size = Vector2(92, 92)
+	thesis_app_button.toggle_mode = true
+	thesis_tile.add_child(thesis_app_button)
+
+	thesis_app_label = Label.new()
+	thesis_app_label.name = "ThesisAppLabel"
+	thesis_app_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	thesis_app_label.text = "Thesis"
+	thesis_app_label.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
+	thesis_tile.add_child(thesis_app_label)
+
+	thesis_window = THESIS_BOARD_WIDGET_SCRIPT.new()
+	thesis_window.name = "ThesisWindow"
+	thesis_window.visible = false
+	thesis_window.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(thesis_window)
+	var upgrade_window_node: Node = get_node_or_null("UpgradeWindow")
+	if upgrade_window_node != null:
+		move_child(thesis_window, upgrade_window_node.get_index())
+
+
+func _refresh_thesis() -> void:
+	if thesis_window == null:
+		return
+	if thesis_window.has_method("set_selected_company_id"):
+		thesis_window.call("set_selected_company_id", selected_company_id)
+	if thesis_window.has_method("refresh"):
+		thesis_window.call("refresh")
 
 
 func _ensure_academy_ui() -> void:
@@ -7219,6 +7313,8 @@ func _refresh_after_company_selection() -> void:
 	_refresh_trade_workspace()
 	_refresh_dashboard()
 	_refresh_desktop()
+	if _is_desktop_app_window_open(APP_ID_THESIS):
+		_refresh_thesis()
 	if debug_overlay.visible:
 		_refresh_debug_overlay()
 
@@ -8270,6 +8366,10 @@ func _on_network_app_pressed() -> void:
 
 func _on_academy_app_pressed() -> void:
 	_set_active_app(APP_ID_ACADEMY)
+
+
+func _on_thesis_app_pressed() -> void:
+	_set_active_app(APP_ID_THESIS)
 
 
 func _on_upgrades_app_pressed() -> void:
@@ -10585,6 +10685,7 @@ func _set_active_app(app_id: String) -> void:
 		normalized_app_id != APP_ID_SOCIAL and
 		normalized_app_id != APP_ID_NETWORK and
 		normalized_app_id != APP_ID_ACADEMY and
+		normalized_app_id != APP_ID_THESIS and
 		normalized_app_id != APP_ID_UPGRADES
 	):
 		normalized_app_id = APP_ID_DESKTOP
@@ -10665,6 +10766,11 @@ func _apply_window_layout() -> void:
 		academy_window.add_theme_constant_override("margin_top", APP_WINDOW_CONTENT_TOP_MARGIN)
 		academy_window.add_theme_constant_override("margin_right", APP_WINDOW_CONTENT_MARGIN)
 		academy_window.add_theme_constant_override("margin_bottom", APP_WINDOW_CONTENT_BOTTOM_MARGIN)
+	if thesis_window != null:
+		thesis_window.add_theme_constant_override("margin_left", APP_WINDOW_CONTENT_MARGIN)
+		thesis_window.add_theme_constant_override("margin_top", APP_WINDOW_CONTENT_TOP_MARGIN)
+		thesis_window.add_theme_constant_override("margin_right", APP_WINDOW_CONTENT_MARGIN)
+		thesis_window.add_theme_constant_override("margin_bottom", APP_WINDOW_CONTENT_BOTTOM_MARGIN)
 	upgrade_window.add_theme_constant_override("margin_left", APP_WINDOW_CONTENT_MARGIN)
 	upgrade_window.add_theme_constant_override("margin_top", APP_WINDOW_CONTENT_TOP_MARGIN)
 	upgrade_window.add_theme_constant_override("margin_right", APP_WINDOW_CONTENT_MARGIN)
@@ -10685,7 +10791,7 @@ func _apply_window_layout() -> void:
 
 
 func _apply_active_window_theme() -> void:
-	var is_light_window: bool = active_app_id == APP_ID_NEWS or active_app_id == APP_ID_SOCIAL or active_app_id == APP_ID_NETWORK or active_app_id == APP_ID_ACADEMY or active_app_id == APP_ID_UPGRADES
+	var is_light_window: bool = active_app_id == APP_ID_NEWS or active_app_id == APP_ID_SOCIAL or active_app_id == APP_ID_NETWORK or active_app_id == APP_ID_ACADEMY or active_app_id == APP_ID_THESIS or active_app_id == APP_ID_UPGRADES
 	var window_fill: Color = COLOR_WINDOW_BG if is_light_window else COLOR_STOCK_WINDOW_BG
 	var window_text: Color = COLOR_WINDOW_TEXT if is_light_window else COLOR_TEXT
 	var app_font_size: int = STOCK_APP_FONT_SIZE if active_app_id == APP_ID_STOCK else DEFAULT_APP_FONT_SIZE
@@ -10704,6 +10810,7 @@ func _sync_desktop_app_state() -> void:
 	var social_open: bool = _is_desktop_app_window_open(APP_ID_SOCIAL)
 	var network_open: bool = _is_desktop_app_window_open(APP_ID_NETWORK)
 	var academy_open: bool = _is_desktop_app_window_open(APP_ID_ACADEMY)
+	var thesis_open: bool = _is_desktop_app_window_open(APP_ID_THESIS)
 	var upgrades_open: bool = _is_desktop_app_window_open(APP_ID_UPGRADES)
 	stock_app_button.set_pressed_no_signal(stock_open)
 	news_app_button.set_pressed_no_signal(news_open)
@@ -10711,6 +10818,8 @@ func _sync_desktop_app_state() -> void:
 	network_app_button.set_pressed_no_signal(network_open)
 	if academy_app_button != null:
 		academy_app_button.set_pressed_no_signal(academy_open)
+	if thesis_app_button != null:
+		thesis_app_button.set_pressed_no_signal(thesis_open)
 	upgrades_app_button.set_pressed_no_signal(upgrades_open)
 	taskbar_stock_button.set_pressed_no_signal(stock_open)
 	taskbar_news_button.set_pressed_no_signal(news_open)
@@ -10740,9 +10849,11 @@ func _build_taskbar_status_text(focus_snapshot: Dictionary) -> String:
 		return "Network open  |  Contacts, recognition, and requests online."
 	if active_app_id == APP_ID_ACADEMY:
 		return "Academy open  |  Technical chart-reading lessons online."
+	if active_app_id == APP_ID_THESIS:
+		return "Thesis Board open  |  Research notes and evidence discipline online."
 	if active_app_id == APP_ID_UPGRADES:
 		return "Upgrades open  |  Spend cash to improve your desk."
-	return "Desktop ready  |  Open STOCKBOT, News, Twooter, Network, Academy, or Upgrades."
+	return "Desktop ready  |  Open STOCKBOT, News, Twooter, Network, Academy, Thesis, or Upgrades."
 
 
 func _section_label(section_id: String) -> String:
@@ -10798,12 +10909,13 @@ func _build_market_overview_text(macro_state: Dictionary, sector_rows: Array) ->
 			strongest_sector_move = average_change_pct
 
 	var flat_sectors: int = max(sector_rows.size() - positive_sectors - negative_sectors, 0)
-	return "Market tone: %s\nMacro: %s\nInflation %.1f%% | GDP %.1f%% | Employment %.1f%% | Policy %.2f%% (%+d bps)\nSector breadth: %d green | %d red | %d flat | Loudest sector %s %s" % [
+	return "Market tone: %s\nMacro: %s\nInflation %.1f%% | GDP %.1f%% | Employment %s | Unemployment %.1f%% | Policy %.2f%% (%+d bps)\nSector breadth: %d green | %d red | %d flat | Loudest sector %s %s" % [
 		_format_change(RunState.market_sentiment),
 		str(macro_state.get("central_bank_stance", "hold")).capitalize(),
-		float(macro_state.get("inflation_rate", 0.0)),
+		float(macro_state.get("inflation_yoy", 0.0)),
 		float(macro_state.get("gdp_growth", 0.0)),
-		float(macro_state.get("employment_rate", 0.0)),
+		str(macro_state.get("employment_label", "Mixed")),
+		float(macro_state.get("unemployment_rate", 0.0)),
 		float(macro_state.get("policy_rate", 0.0)),
 		int(macro_state.get("policy_action_bps", 0)),
 		positive_sectors,
@@ -11236,6 +11348,8 @@ func _apply_visual_theme() -> void:
 	_style_desktop_icon_button(network_app_button)
 	if academy_app_button != null:
 		_style_desktop_icon_button(academy_app_button)
+	if thesis_app_button != null:
+		_style_desktop_icon_button(thesis_app_button)
 	_style_desktop_icon_button(upgrades_app_button)
 	_style_desktop_icon_button(exit_app_button)
 	_style_button(taskbar_home_button, Color(0.117647, 0.168627, 0.223529, 1), COLOR_BORDER, COLOR_TEXT)

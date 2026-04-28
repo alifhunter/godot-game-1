@@ -115,6 +115,7 @@ var network_contacts = {}
 var network_discoveries = {}
 var network_requests = {}
 var network_tip_journal = {}
+var player_theses = {}
 var upgrade_tiers = {}
 var daily_action_day_index = 0
 var daily_actions_used = 0
@@ -173,6 +174,7 @@ func reset() -> void:
 	network_discoveries = {}
 	network_requests = {}
 	network_tip_journal = {}
+	player_theses = {}
 	upgrade_tiers = _default_upgrade_tiers()
 	daily_action_day_index = 0
 	daily_actions_used = 0
@@ -377,6 +379,7 @@ func load_from_dict(data: Dictionary) -> void:
 	network_discoveries = data.get("network_discoveries", {}).duplicate(true)
 	network_requests = data.get("network_requests", {}).duplicate(true)
 	network_tip_journal = data.get("network_tip_journal", {}).duplicate(true)
+	player_theses = _normalize_player_theses(data.get("player_theses", {}))
 	upgrade_tiers = _normalize_upgrade_tiers(data.get("upgrade_tiers", {}))
 	daily_action_day_index = int(data.get("daily_action_day_index", day_index))
 	daily_actions_used = max(int(data.get("daily_actions_used", 0)), 0)
@@ -454,6 +457,7 @@ func to_save_dict() -> Dictionary:
 		"network_discoveries": network_discoveries.duplicate(true),
 		"network_requests": network_requests.duplicate(true),
 		"network_tip_journal": network_tip_journal.duplicate(true),
+		"player_theses": _normalize_player_theses(player_theses),
 		"upgrade_tiers": get_upgrade_tiers(),
 		"daily_action_day_index": daily_action_day_index,
 		"daily_actions_used": daily_actions_used,
@@ -1273,6 +1277,30 @@ func set_network_tip_journal(next_tip_journal: Dictionary) -> void:
 	network_tip_journal = next_tip_journal.duplicate(true)
 
 
+func get_player_theses() -> Dictionary:
+	player_theses = _normalize_player_theses(player_theses)
+	return player_theses.duplicate(true)
+
+
+func get_player_thesis(thesis_id: String) -> Dictionary:
+	player_theses = _normalize_player_theses(player_theses)
+	if thesis_id.is_empty() or not player_theses.has(thesis_id):
+		return {}
+	return player_theses[thesis_id].duplicate(true)
+
+
+func set_player_thesis(thesis: Dictionary) -> void:
+	var thesis_id: String = str(thesis.get("id", ""))
+	if thesis_id.is_empty():
+		return
+	player_theses = _normalize_player_theses(player_theses)
+	player_theses[thesis_id] = _normalize_player_thesis(thesis)
+
+
+func set_player_theses(next_theses: Dictionary) -> void:
+	player_theses = _normalize_player_theses(next_theses)
+
+
 func get_academy_progress() -> Dictionary:
 	academy_progress = _normalize_academy_progress(academy_progress)
 	return academy_progress.duplicate(true)
@@ -1520,6 +1548,86 @@ func _normalize_academy_progress(source_progress: Variant) -> Dictionary:
 	normalized["last_category_id"] = str(source.get("last_category_id", "technical"))
 	normalized["last_section_id"] = str(source.get("last_section_id", "intro"))
 	return normalized
+
+
+func _normalize_player_theses(source_theses: Variant) -> Dictionary:
+	var normalized: Dictionary = {}
+	if typeof(source_theses) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_theses
+	for thesis_id_value in source.keys():
+		var thesis_id: String = str(thesis_id_value)
+		if thesis_id.is_empty() or typeof(source.get(thesis_id_value)) != TYPE_DICTIONARY:
+			continue
+		var thesis: Dictionary = _normalize_player_thesis(source.get(thesis_id_value, {}))
+		if str(thesis.get("id", "")).is_empty():
+			thesis["id"] = thesis_id
+		normalized[str(thesis.get("id", thesis_id))] = thesis
+	return normalized
+
+
+func _normalize_player_thesis(source_thesis: Variant) -> Dictionary:
+	var source: Dictionary = source_thesis if typeof(source_thesis) == TYPE_DICTIONARY else {}
+	var thesis_id: String = str(source.get("id", ""))
+	var evidence: Array = []
+	for evidence_value in source.get("evidence", []):
+		if typeof(evidence_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = evidence_value
+		var evidence_id: String = str(row.get("id", ""))
+		if evidence_id.is_empty():
+			evidence_id = "evidence_%03d" % evidence.size()
+		var normalized_row: Dictionary = {
+			"id": evidence_id,
+			"category": str(row.get("category", "")),
+			"category_label": str(row.get("category_label", "")),
+			"label": str(row.get("label", "")),
+			"value": str(row.get("value", "")),
+			"detail": str(row.get("detail", "")),
+			"source_label": str(row.get("source_label", "")),
+			"impact": str(row.get("impact", "mixed")),
+			"day_index": int(row.get("day_index", day_index))
+		}
+		for key_value in [
+			"company_id",
+			"ticker",
+			"pattern_id",
+			"pattern_label",
+			"feedback_state",
+			"feedback_reason",
+			"invalidation",
+			"chart_range",
+			"chart_range_label",
+			"region_label"
+		]:
+			var key: String = str(key_value)
+			if row.has(key):
+				normalized_row[key] = str(row.get(key, ""))
+		for key_value in ["start_price", "end_price", "current_price"]:
+			var key: String = str(key_value)
+			if row.has(key):
+				normalized_row[key] = float(row.get(key, 0.0))
+		for key_value in ["start_anchor", "end_anchor", "start_date", "end_date", "report_date"]:
+			var key: String = str(key_value)
+			if typeof(row.get(key, {})) == TYPE_DICTIONARY:
+				normalized_row[key] = row.get(key, {}).duplicate(true)
+		evidence.append(normalized_row)
+	return {
+		"id": thesis_id,
+		"company_id": str(source.get("company_id", "")),
+		"ticker": str(source.get("ticker", "")),
+		"company_name": str(source.get("company_name", "")),
+		"title": str(source.get("title", "")),
+		"stance": str(source.get("stance", "bullish")),
+		"horizon": str(source.get("horizon", "swing")),
+		"status": str(source.get("status", "open")),
+		"created_day_index": int(source.get("created_day_index", day_index)),
+		"created_trade_date": source.get("created_trade_date", {}).duplicate(true) if typeof(source.get("created_trade_date", {})) == TYPE_DICTIONARY else {},
+		"updated_day_index": int(source.get("updated_day_index", day_index)),
+		"evidence": evidence,
+		"report": source.get("report", {}).duplicate(true) if typeof(source.get("report", {})) == TYPE_DICTIONARY else {},
+		"review": source.get("review", {}).duplicate(true) if typeof(source.get("review", {})) == TYPE_DICTIONARY else {}
+	}
 
 
 func _normalize_unique_string_array(source_values: Variant) -> Array:

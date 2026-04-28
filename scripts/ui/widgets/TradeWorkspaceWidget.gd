@@ -19,12 +19,23 @@ var _indicator_buttons: Dictionary = {}
 var _drawing_tool_buttons: Dictionary = {}
 var _cached_chart_key: String = ""
 var _cached_chart_snapshot: Dictionary = {}
+var pattern_tool_button: Button = null
+var pattern_claim_panel: PanelContainer = null
+var pattern_option_button: OptionButton = null
+var pattern_status_label: Label = null
+var pattern_feedback_label: Label = null
+var pattern_thesis_option: OptionButton = null
+var pattern_add_to_thesis_button: Button = null
+var _last_pattern_claim: Dictionary = {}
+var _pattern_thesis_rows: Array = []
 
 @onready var work_tabs: TabContainer = $WorkAreaMargin/WorkAreaVBox/WorkTabs
 @onready var chart_header_label: Label = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartHeaderLabel
 @onready var chart_subheader_label: Label = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartSubheaderLabel
 @onready var chart_meta_label: Label = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartMetaLabel
+@onready var chart_body_row: HBoxContainer = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow
 @onready var chart_canvas: PriceChartCanvas = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartCanvas
+@onready var chart_drawing_toolbar: VBoxContainer = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartDrawingToolbar
 @onready var select_tool_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartDrawingToolbar/SelectToolButton
 @onready var horizontal_line_tool_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartDrawingToolbar/HorizontalLineToolButton
 @onready var trend_line_tool_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartBodyRow/ChartDrawingToolbar/TrendLineToolButton
@@ -75,6 +86,7 @@ func _ready() -> void:
 		"horizontal": horizontal_line_tool_button,
 		"trend": trend_line_tool_button
 	}
+	_ensure_pattern_tool_controls()
 	for button_value in _chart_range_button_map().values():
 		_style_chart_range_button(button_value)
 	_style_chart_range_button(display_line_button)
@@ -88,8 +100,15 @@ func _ready() -> void:
 	select_tool_button.tooltip_text = "Select chart drawings."
 	horizontal_line_tool_button.tooltip_text = "Place a horizontal price line."
 	trend_line_tool_button.tooltip_text = "Draw a trend line with two clicks."
+	if pattern_tool_button != null:
+		pattern_tool_button.tooltip_text = "Mark a player-led chart pattern claim."
 	delete_drawing_button.tooltip_text = "Delete the selected chart drawing."
 	clear_drawings_button.tooltip_text = "Clear this stock's session drawings."
+	if not chart_canvas.pattern_region_selected.is_connected(_on_chart_pattern_region_selected):
+		chart_canvas.pattern_region_selected.connect(_on_chart_pattern_region_selected)
+	if not GameManager.thesis_changed.is_connected(_on_thesis_changed):
+		GameManager.thesis_changed.connect(_on_thesis_changed)
+	_ensure_pattern_claim_panel()
 	_ensure_indicator_row()
 	chart_header_label.add_theme_color_override("font_color", COLOR_TEXT)
 	chart_subheader_label.add_theme_color_override("font_color", COLOR_MUTED)
@@ -100,6 +119,7 @@ func _ready() -> void:
 	_update_drawing_tool_buttons()
 	_update_zoom_buttons()
 	_refresh_indicator_controls()
+	_refresh_pattern_panel()
 
 
 func set_company_snapshot(snapshot: Dictionary) -> void:
@@ -111,7 +131,10 @@ func set_company_snapshot(snapshot: Dictionary) -> void:
 		chart_canvas.reset_zoom()
 		_cached_chart_key = ""
 		_cached_chart_snapshot = {}
+		_last_pattern_claim.clear()
+		chart_canvas.clear_pattern_claim_region()
 	_refresh_chart()
+	_refresh_pattern_panel()
 
 
 func set_active_indicator_ids(indicator_ids: Array) -> void:
@@ -146,6 +169,7 @@ func _refresh_chart() -> void:
 		_cached_chart_snapshot = {}
 		_update_chart_display_mode_buttons()
 		_update_zoom_buttons()
+		_refresh_pattern_panel()
 		return
 
 	var chart_snapshot: Dictionary = _get_cached_chart_snapshot()
@@ -170,6 +194,7 @@ func _refresh_chart() -> void:
 		chart_canvas.clear_chart()
 		_update_chart_display_mode_buttons()
 		_update_zoom_buttons()
+		_refresh_pattern_panel()
 		return
 
 	chart_meta_label.text = _build_chart_meta_text(chart_snapshot)
@@ -178,6 +203,7 @@ func _refresh_chart() -> void:
 	chart_canvas.set_chart_snapshot(_decorate_chart_snapshot(chart_snapshot))
 	_update_chart_display_mode_buttons()
 	_update_zoom_buttons()
+	_refresh_pattern_panel()
 
 
 func _get_cached_chart_snapshot() -> Dictionary:
@@ -217,6 +243,8 @@ func _bind_chart_range_button(button: Button, range_id: String) -> void:
 func _on_chart_range_pressed(range_id: String) -> void:
 	_selected_range_id = str(range_id).to_lower()
 	chart_canvas.reset_zoom()
+	_last_pattern_claim.clear()
+	chart_canvas.clear_pattern_claim_region()
 	_update_chart_range_buttons()
 	_refresh_chart()
 	chart_range_changed.emit(_selected_range_id)
@@ -289,6 +317,7 @@ func _chart_range_button_map() -> Dictionary:
 func _on_drawing_tool_pressed(tool_id: String) -> void:
 	chart_canvas.set_drawing_tool(tool_id)
 	_update_drawing_tool_buttons()
+	_refresh_pattern_panel()
 
 
 func _update_drawing_tool_buttons() -> void:
@@ -296,6 +325,269 @@ func _update_drawing_tool_buttons() -> void:
 	for tool_id in _drawing_tool_buttons.keys():
 		var button: Button = _drawing_tool_buttons[tool_id]
 		button.set_pressed_no_signal(str(tool_id) == active_tool)
+
+
+func _ensure_pattern_tool_controls() -> void:
+	if pattern_tool_button != null:
+		return
+	pattern_tool_button = Button.new()
+	pattern_tool_button.name = "PatternToolButton"
+	pattern_tool_button.text = "P"
+	pattern_tool_button.toggle_mode = true
+	pattern_tool_button.custom_minimum_size = Vector2(42, 36)
+	pattern_tool_button.pressed.connect(_on_drawing_tool_pressed.bind("pattern_claim"))
+	chart_drawing_toolbar.add_child(pattern_tool_button)
+	chart_drawing_toolbar.move_child(pattern_tool_button, trend_line_tool_button.get_index() + 1)
+	_drawing_tool_buttons["pattern_claim"] = pattern_tool_button
+
+
+func _ensure_pattern_claim_panel() -> void:
+	if pattern_claim_panel != null:
+		return
+	pattern_claim_panel = PanelContainer.new()
+	pattern_claim_panel.name = "ChartPatternClaimPanel"
+	pattern_claim_panel.custom_minimum_size = Vector2(280, 0)
+	pattern_claim_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	pattern_claim_panel.visible = false
+	_style_pattern_claim_panel(pattern_claim_panel)
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	pattern_claim_panel.add_child(margin)
+
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	margin.add_child(vbox)
+
+	var title_label: Label = _make_pattern_panel_label("Pattern Claim", COLOR_TEXT, 16)
+	vbox.add_child(title_label)
+
+	pattern_status_label = _make_pattern_panel_label("Choose a pattern and mark two chart points.", COLOR_MUTED, 12)
+	pattern_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(pattern_status_label)
+
+	pattern_option_button = OptionButton.new()
+	pattern_option_button.name = "ChartPatternOption"
+	pattern_option_button.custom_minimum_size = Vector2(0, 34)
+	pattern_option_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for pattern_value in GameManager.get_chart_pattern_catalog():
+		if typeof(pattern_value) != TYPE_DICTIONARY:
+			continue
+		var pattern: Dictionary = pattern_value
+		var index: int = pattern_option_button.item_count
+		pattern_option_button.add_item(str(pattern.get("label", pattern.get("id", ""))))
+		pattern_option_button.set_item_metadata(index, str(pattern.get("id", "")))
+	pattern_option_button.item_selected.connect(_on_pattern_option_selected)
+	_style_chart_range_button(pattern_option_button)
+	vbox.add_child(pattern_option_button)
+
+	pattern_feedback_label = _make_pattern_panel_label("No pattern region marked yet.", COLOR_MUTED, 12)
+	pattern_feedback_label.name = "ChartPatternFeedbackLabel"
+	pattern_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	pattern_feedback_label.custom_minimum_size = Vector2(0, 88)
+	vbox.add_child(pattern_feedback_label)
+
+	var thesis_label: Label = _make_pattern_panel_label("Destination Thesis", COLOR_TEXT, 13)
+	vbox.add_child(thesis_label)
+
+	pattern_thesis_option = OptionButton.new()
+	pattern_thesis_option.name = "ChartPatternThesisOption"
+	pattern_thesis_option.custom_minimum_size = Vector2(0, 34)
+	pattern_thesis_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_chart_range_button(pattern_thesis_option)
+	vbox.add_child(pattern_thesis_option)
+
+	pattern_add_to_thesis_button = Button.new()
+	pattern_add_to_thesis_button.name = "ChartPatternAddToThesisButton"
+	pattern_add_to_thesis_button.text = "Add to Thesis"
+	pattern_add_to_thesis_button.custom_minimum_size = Vector2(0, 36)
+	pattern_add_to_thesis_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pattern_add_to_thesis_button.pressed.connect(_on_add_pattern_to_thesis_pressed)
+	_style_chart_range_button(pattern_add_to_thesis_button)
+	vbox.add_child(pattern_add_to_thesis_button)
+
+	chart_body_row.add_child(pattern_claim_panel)
+
+
+func _refresh_pattern_panel() -> void:
+	if pattern_claim_panel == null:
+		return
+	var active: bool = chart_canvas.get_drawing_tool() == "pattern_claim"
+	pattern_claim_panel.visible = active
+	if not active:
+		return
+	if _company_snapshot.is_empty():
+		pattern_status_label.text = "Choose a stock first."
+		_set_pattern_feedback("No chart loaded.", COLOR_MUTED)
+		_refresh_pattern_destination_controls(false)
+		return
+	pattern_status_label.text = "Mark two points on the chart for %s." % str(_company_snapshot.get("ticker", "this stock"))
+	if _last_pattern_claim.is_empty():
+		_set_pattern_feedback("No pattern region marked yet.", COLOR_MUTED)
+	else:
+		_apply_pattern_feedback_text(_last_pattern_claim)
+	_refresh_pattern_destination_controls(bool(_last_pattern_claim.get("success", false)))
+
+
+func _on_pattern_option_selected(_index: int) -> void:
+	var region: Dictionary = chart_canvas.get_pattern_claim_region()
+	if region.is_empty():
+		_last_pattern_claim.clear()
+		_refresh_pattern_panel()
+		return
+	_evaluate_chart_pattern_region(region.get("start", {}), region.get("end", {}))
+
+
+func _on_chart_pattern_region_selected(start_anchor: Dictionary, end_anchor: Dictionary) -> void:
+	_evaluate_chart_pattern_region(start_anchor, end_anchor)
+
+
+func _evaluate_chart_pattern_region(start_anchor: Dictionary, end_anchor: Dictionary) -> void:
+	if _company_snapshot.is_empty():
+		_last_pattern_claim = {"success": false, "message": "Choose a stock first."}
+		_refresh_pattern_panel()
+		return
+	var pattern_id: String = _selected_pattern_id()
+	if pattern_id.is_empty():
+		_last_pattern_claim = {"success": false, "message": "Choose a pattern type first."}
+		_refresh_pattern_panel()
+		return
+	_last_pattern_claim = GameManager.evaluate_chart_pattern_claim(
+		str(_company_snapshot.get("id", "")),
+		_selected_range_id,
+		pattern_id,
+		start_anchor,
+		end_anchor
+	)
+	_refresh_pattern_panel()
+
+
+func _refresh_pattern_destination_controls(has_claim: bool) -> void:
+	if pattern_thesis_option == null or pattern_add_to_thesis_button == null:
+		return
+	pattern_thesis_option.clear()
+	_pattern_thesis_rows.clear()
+	var company_id: String = str(_company_snapshot.get("id", ""))
+	if company_id.is_empty():
+		pattern_thesis_option.add_item("No stock selected")
+		pattern_thesis_option.disabled = true
+		pattern_add_to_thesis_button.disabled = true
+		return
+	_pattern_thesis_rows = GameManager.get_open_theses_for_company(company_id)
+	if _pattern_thesis_rows.is_empty():
+		pattern_thesis_option.add_item("No open thesis")
+		pattern_thesis_option.disabled = true
+		pattern_add_to_thesis_button.disabled = true
+		pattern_add_to_thesis_button.tooltip_text = "Create a thesis for this stock in Thesis Board first."
+		if has_claim:
+			pattern_status_label.text = "Create a thesis for this stock in Thesis Board first."
+		return
+	for thesis_value in _pattern_thesis_rows:
+		if typeof(thesis_value) != TYPE_DICTIONARY:
+			continue
+		var thesis: Dictionary = thesis_value
+		var index: int = pattern_thesis_option.item_count
+		pattern_thesis_option.add_item("%s  |  %s" % [str(thesis.get("title", "Thesis")), str(thesis.get("stance", "")).capitalize()])
+		pattern_thesis_option.set_item_metadata(index, str(thesis.get("id", "")))
+	pattern_thesis_option.disabled = _pattern_thesis_rows.size() <= 1
+	pattern_add_to_thesis_button.disabled = not has_claim
+	pattern_add_to_thesis_button.tooltip_text = "" if has_claim else "Mark a pattern region before adding evidence."
+
+
+func _on_add_pattern_to_thesis_pressed() -> void:
+	if _last_pattern_claim.is_empty() or not bool(_last_pattern_claim.get("success", false)):
+		_set_pattern_feedback("Complete a pattern claim first.", COLOR_WARNING)
+		return
+	var thesis_id: String = _selected_pattern_thesis_id()
+	if thesis_id.is_empty():
+		_set_pattern_feedback("Create a thesis for this stock in Thesis Board first.", COLOR_WARNING)
+		return
+	var result: Dictionary = GameManager.add_chart_pattern_evidence_to_thesis(thesis_id, _last_pattern_claim)
+	if bool(result.get("success", false)):
+		_set_pattern_feedback("Added to Thesis as Price Action evidence.", COLOR_POSITIVE)
+	else:
+		_set_pattern_feedback(str(result.get("message", "Could not add pattern evidence.")), COLOR_WARNING)
+	_refresh_pattern_destination_controls(bool(_last_pattern_claim.get("success", false)))
+
+
+func _selected_pattern_id() -> String:
+	if pattern_option_button == null or pattern_option_button.item_count <= 0:
+		return ""
+	var selected_index: int = pattern_option_button.selected
+	if selected_index < 0:
+		selected_index = 0
+	return str(pattern_option_button.get_item_metadata(selected_index))
+
+
+func _selected_pattern_thesis_id() -> String:
+	if pattern_thesis_option == null or pattern_thesis_option.item_count <= 0:
+		return ""
+	var selected_index: int = pattern_thesis_option.selected
+	if selected_index < 0:
+		selected_index = 0
+	return str(pattern_thesis_option.get_item_metadata(selected_index))
+
+
+func _apply_pattern_feedback_text(claim: Dictionary) -> void:
+	if not bool(claim.get("success", false)):
+		_set_pattern_feedback(str(claim.get("message", claim.get("detail", "Pattern read is not ready."))), COLOR_WARNING)
+		return
+	var state: String = str(claim.get("feedback_state", claim.get("value", "")))
+	var reason: String = str(claim.get("feedback_reason", ""))
+	var invalidation: String = str(claim.get("invalidation", ""))
+	var text: String = "%s" % state
+	if not reason.is_empty():
+		text += "\n%s" % reason
+	if not invalidation.is_empty():
+		text += "\nInvalidation: %s" % invalidation
+	_set_pattern_feedback(text, _color_for_pattern_state(state))
+
+
+func _set_pattern_feedback(text: String, color: Color) -> void:
+	if pattern_feedback_label == null:
+		return
+	pattern_feedback_label.text = text
+	pattern_feedback_label.add_theme_color_override("font_color", color)
+
+
+func _color_for_pattern_state(state: String) -> Color:
+	match state:
+		"Good read":
+			return COLOR_POSITIVE
+		"Plausible, needs confirmation":
+			return COLOR_WARNING
+		"Weak read":
+			return COLOR_MUTED
+		"Contradicted":
+			return COLOR_NEGATIVE
+	return COLOR_MUTED
+
+
+func _on_thesis_changed() -> void:
+	_refresh_pattern_panel()
+
+
+func _make_pattern_panel_label(text: String, color: Color, font_size: int) -> Label:
+	var label: Label = Label.new()
+	label.text = text
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_font_size_override("font_size", font_size)
+	return label
+
+
+func _style_pattern_claim_panel(panel: PanelContainer) -> void:
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0.0666667, 0.0941176, 0.12549, 0.98)
+	style.border_color = COLOR_BORDER
+	style.set_border_width_all(1)
+	style.corner_radius_top_left = 7
+	style.corner_radius_top_right = 7
+	style.corner_radius_bottom_right = 7
+	style.corner_radius_bottom_left = 7
+	panel.add_theme_stylebox_override("panel", style)
 
 
 func _decorate_chart_snapshot(chart_snapshot: Dictionary) -> Dictionary:

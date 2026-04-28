@@ -783,6 +783,7 @@ func _run_scenario(
 	var social_app_button: Button = game_root.find_child("SocialAppButton", true, false) as Button
 	var network_app_button: Button = game_root.find_child("NetworkAppButton", true, false) as Button
 	var academy_app_button: Button = game_root.find_child("AcademyAppButton", true, false) as Button
+	var thesis_app_button: Button = game_root.find_child("ThesisAppButton", true, false) as Button
 	var upgrades_app_button: Button = game_root.find_child("UpgradesAppButton", true, false) as Button
 	var desktop_advance_day_button: Button = game_root.find_child("DesktopAdvanceDayButton", true, false) as Button
 	var taskbar_stock_button: Button = game_root.find_child("TaskbarStockButton", true, false) as Button
@@ -815,12 +816,12 @@ func _run_scenario(
 			"message": "Smoke test expected GameRoot to open on the new desktop layer before the trading app is launched."
 		}
 
-	if stock_app_button == null or news_app_button == null or social_app_button == null or network_app_button == null or academy_app_button == null or upgrades_app_button == null or desktop_advance_day_button == null or taskbar_stock_button == null or taskbar_news_button == null:
+	if stock_app_button == null or news_app_button == null or social_app_button == null or network_app_button == null or academy_app_button == null or thesis_app_button == null or upgrades_app_button == null or desktop_advance_day_button == null or taskbar_stock_button == null or taskbar_news_button == null:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test could not find the prototype desktop icons, Advance Day button, Academy icon, Upgrades icon, and taskbar launch buttons."
+			"message": "Smoke test could not find the prototype desktop icons, Advance Day button, Academy icon, Thesis icon, Upgrades icon, and taskbar launch buttons."
 		}
 
 	if (
@@ -1418,6 +1419,15 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected the Technical Academy quiz to start locked."
+		}
+
+	var thesis_board_validation: String = await _validate_thesis_board_smoke(game_root, thesis_app_button, desktop_layer)
+	if not thesis_board_validation.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": thesis_board_validation
 		}
 
 	academy_app_button.emit_signal("pressed")
@@ -4049,6 +4059,522 @@ func _run_scenario(
 	game_root.queue_free()
 	await get_tree().process_frame
 	return result
+
+
+func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, desktop_layer: Control) -> String:
+	if thesis_app_button == null:
+		return "Smoke test expected the Thesis Board desktop icon to exist."
+	if RunState.company_order.is_empty():
+		return "Smoke test expected Thesis Board coverage to have at least one generated company."
+
+	var baseline_state: Dictionary = RunState.to_save_dict()
+	var legacy_state: Dictionary = baseline_state.duplicate(true)
+	legacy_state.erase("player_theses")
+	RunState.load_from_dict(legacy_state)
+	if not RunState.get_player_theses().is_empty():
+		return "Smoke test expected old saves without player_theses to load with an empty Thesis Board state."
+
+	RunState.load_from_dict(baseline_state)
+	game_root._refresh_all()
+	await get_tree().process_frame
+
+	var thesis_company_id: String = str(RunState.company_order[0])
+	game_root._on_all_stock_selected(thesis_company_id)
+	await get_tree().process_frame
+
+	thesis_app_button.emit_signal("pressed")
+	await get_tree().process_frame
+	await _wait_for_ui_animation_settle()
+
+	var thesis_window: Control = game_root.find_child("ThesisWindow", true, false) as Control
+	var thesis_list: ItemList = game_root.find_child("ThesisList", true, false) as ItemList
+	var thesis_company_option: OptionButton = game_root.find_child("ThesisCompanyOption", true, false) as OptionButton
+	var thesis_evidence_category_option: OptionButton = game_root.find_child("ThesisEvidenceCategoryOption", true, false) as OptionButton
+	var thesis_evidence_option: OptionButton = game_root.find_child("ThesisEvidenceOption", true, false) as OptionButton
+	var thesis_evidence_list: ItemList = game_root.find_child("ThesisEvidenceList", true, false) as ItemList
+	var thesis_generate_report_button: Button = game_root.find_child("ThesisGenerateReportButton", true, false) as Button
+	var thesis_view_paper_button: Button = game_root.find_child("ThesisViewPaperButton", true, false) as Button
+	var thesis_report_panel: Control = game_root.find_child("ThesisReportPanel", true, false) as Control
+	var thesis_report_overlay: Control = game_root.find_child("ThesisReportOverlay", true, false) as Control
+	var thesis_report_preparing_panel: Control = game_root.find_child("ThesisReportPreparingPanel", true, false) as Control
+	var thesis_report_preparing_label: Label = game_root.find_child("ThesisReportPreparingLabel", true, false) as Label
+	var thesis_white_paper_panel: Control = game_root.find_child("ThesisWhitePaperPanel", true, false) as Control
+	var thesis_report_text: RichTextLabel = game_root.find_child("ThesisReportText", true, false) as RichTextLabel
+	var thesis_report_close_button: Button = game_root.find_child("ThesisReportCloseButton", true, false) as Button
+	var thesis_report_regenerate_button: Button = game_root.find_child("ThesisReportRegenerateButton", true, false) as Button
+	var thesis_use_selected_button: Button = game_root.find_child("ThesisUseSelectedStockButton", true, false) as Button
+	if (
+		thesis_window == null or
+		not thesis_window.visible or
+		not game_root.is_desktop_app_open("thesis") or
+		game_root.get_active_desktop_app_id() != "thesis" or
+		game_root.get_desktop_app_window_title("thesis") != "Thesis Board" or
+		not _desktop_window_animation_settled(game_root, "ThesisBoardDesktopWindow") or
+		thesis_list == null or
+		thesis_company_option == null or
+		thesis_evidence_category_option == null or
+		thesis_evidence_option == null or
+		thesis_evidence_list == null or
+		thesis_generate_report_button == null or
+		thesis_view_paper_button == null or
+		thesis_report_panel != null or
+		thesis_report_overlay == null or
+		thesis_report_overlay.visible or
+		thesis_report_preparing_panel == null or
+		thesis_report_preparing_label == null or
+		thesis_white_paper_panel == null or
+		thesis_white_paper_panel.visible or
+		thesis_report_text == null or
+		thesis_report_close_button == null or
+		thesis_report_regenerate_button == null or
+		thesis_use_selected_button == null
+	):
+		return "Smoke test expected the Thesis Board icon to open a settled two-column window with a hidden report overlay."
+
+	thesis_use_selected_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if thesis_company_option.item_count <= 0:
+		return "Smoke test expected the Thesis Board company picker to render generated stocks."
+
+	game_root._set_active_app("desktop")
+	await get_tree().process_frame
+	thesis_app_button.emit_signal("pressed")
+	await get_tree().process_frame
+	await _wait_for_ui_animation_settle()
+	if game_root.get_active_desktop_app_id() != "thesis" or not _desktop_window_animation_settled(game_root, "ThesisBoardDesktopWindow"):
+		return "Smoke test expected pressing an already-open Thesis Board icon to focus the app and settle its animation state."
+
+	var pattern_fixture_validation: String = _validate_chart_pattern_fixture_states()
+	if not pattern_fixture_validation.is_empty():
+		return pattern_fixture_validation
+
+	game_root._set_active_app("stock")
+	await get_tree().process_frame
+	await _wait_for_ui_animation_settle()
+	var pattern_tool_button: Button = game_root.find_child("PatternToolButton", true, false) as Button
+	var pattern_panel: Control = game_root.find_child("ChartPatternClaimPanel", true, false) as Control
+	var pattern_option: OptionButton = game_root.find_child("ChartPatternOption", true, false) as OptionButton
+	var pattern_feedback_label: Label = game_root.find_child("ChartPatternFeedbackLabel", true, false) as Label
+	var pattern_thesis_option: OptionButton = game_root.find_child("ChartPatternThesisOption", true, false) as OptionButton
+	var pattern_add_button: Button = game_root.find_child("ChartPatternAddToThesisButton", true, false) as Button
+	var chart_canvas: PriceChartCanvas = game_root.find_child("ChartCanvas", true, false) as PriceChartCanvas
+	if (
+		pattern_tool_button == null or
+		pattern_panel == null or
+		pattern_option == null or
+		pattern_feedback_label == null or
+		pattern_thesis_option == null or
+		pattern_add_button == null or
+		chart_canvas == null
+	):
+		return "Smoke test expected STOCKBOT chart Pattern controls to exist beside the existing drawing tools."
+	pattern_tool_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if chart_canvas.get_drawing_tool() != "pattern_claim" or not pattern_panel.visible:
+		return "Smoke test expected the Pattern chart tool to activate without breaking the drawing toolbar."
+	chart_canvas.debug_select_pattern_region_by_offsets(0, 6)
+	await get_tree().process_frame
+	if pattern_feedback_label.text.is_empty() or pattern_feedback_label.text == "No pattern region marked yet.":
+		return "Smoke test expected selecting two pattern anchors to produce coaching feedback."
+	if not pattern_add_button.disabled:
+		return "Smoke test expected Add to Thesis to stay disabled until an open thesis exists for the selected stock."
+
+	var create_result: Dictionary = GameManager.create_thesis(thesis_company_id, "bullish", "swing", "Smoke Thesis")
+	if not bool(create_result.get("success", false)):
+		return "Smoke test expected GameManager.create_thesis to create a thesis for a generated stock."
+	if not SaveManager.has_pending_save():
+		return "Smoke test expected creating a thesis to queue an autosave."
+	var thesis_id: String = str(create_result.get("thesis", {}).get("id", ""))
+	if thesis_id.is_empty():
+		return "Smoke test expected created theses to receive a stable id."
+	await get_tree().process_frame
+	if pattern_add_button.disabled:
+		return "Smoke test expected Add to Thesis to enable after creating an open thesis for the selected stock."
+	pattern_add_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if not _thesis_has_pattern_evidence(thesis_id):
+		return "Smoke test expected chart pattern claims to save as Price Action thesis evidence."
+
+	var second_thesis_result: Dictionary = GameManager.create_thesis(thesis_company_id, "bullish", "position", "Smoke Thesis Alt")
+	var second_thesis_id: String = str(second_thesis_result.get("thesis", {}).get("id", ""))
+	if not bool(second_thesis_result.get("success", false)) or second_thesis_id.is_empty():
+		return "Smoke test expected a second open thesis for chart-pattern destination picker coverage."
+	await get_tree().process_frame
+	if pattern_thesis_option.item_count < 2 or pattern_thesis_option.disabled:
+		return "Smoke test expected multiple open theses to show an enabled chart-pattern destination picker."
+	for picker_index in range(pattern_thesis_option.item_count):
+		if str(pattern_thesis_option.get_item_metadata(picker_index)) == second_thesis_id:
+			pattern_thesis_option.select(picker_index)
+			break
+	pattern_add_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if not _thesis_has_pattern_evidence(second_thesis_id):
+		return "Smoke test expected chart pattern evidence to add to the selected destination thesis."
+
+	game_root._set_active_app("thesis")
+	await get_tree().process_frame
+	await _wait_for_ui_animation_settle()
+	if thesis_evidence_category_option.item_count <= 0 or thesis_evidence_option.item_count <= 0:
+		return "Smoke test expected the Thesis Board evidence picker to render categories and options after creating a thesis."
+
+	var evidence_snapshot: Dictionary = GameManager.get_thesis_evidence_options(thesis_company_id)
+	var required_evidence_categories := ["fundamentals", "price_action", "broker_flow", "sector_macro", "news", "risk_invalidation"]
+	var sector_macro_labels: Array = _thesis_evidence_option_labels(evidence_snapshot, "sector_macro")
+	for macro_label_value in ["Inflation backdrop", "GDP growth", "Employment backdrop", "Policy rate", "Risk appetite", "Sector macro bias", "Active macro shock"]:
+		if not sector_macro_labels.has(str(macro_label_value)):
+			return "Smoke test expected Thesis Board sector/macro evidence to include %s." % str(macro_label_value)
+	if sector_macro_labels.has("Macro regime"):
+		return "Smoke test expected Thesis Board sector/macro evidence to use concrete macro rows instead of Macro regime."
+	var added_evidence: Array = []
+	for category_id_value in required_evidence_categories:
+		var category_id: String = str(category_id_value)
+		var evidence_option: Dictionary = _find_thesis_evidence_option(evidence_snapshot, category_id)
+		if evidence_option.is_empty():
+			return "Smoke test expected Thesis Board evidence options to include populated %s evidence." % category_id
+		var add_result: Dictionary = GameManager.add_thesis_evidence(thesis_id, evidence_option)
+		if not bool(add_result.get("success", false)):
+			return "Smoke test expected adding Thesis Board %s evidence to succeed." % category_id
+		added_evidence.append(evidence_option)
+
+	var thesis_after_adds: Dictionary = RunState.get_player_thesis(thesis_id)
+	var thesis_evidence_rows: Array = thesis_after_adds.get("evidence", [])
+	if thesis_evidence_rows.size() < required_evidence_categories.size():
+		return "Smoke test expected added Thesis Board evidence to stay on the selected thesis."
+	var removed_evidence_id: String = ""
+	for evidence_value in thesis_evidence_rows:
+		if typeof(evidence_value) != TYPE_DICTIONARY:
+			continue
+		var evidence_row: Dictionary = evidence_value
+		if str(evidence_row.get("pattern_label", "")).is_empty():
+			removed_evidence_id = str(evidence_row.get("id", ""))
+			break
+	if removed_evidence_id.is_empty():
+		return "Smoke test expected a non-pattern Thesis evidence row for remove/re-add coverage."
+	var remove_result: Dictionary = GameManager.remove_thesis_evidence(thesis_id, removed_evidence_id)
+	if not bool(remove_result.get("success", false)):
+		return "Smoke test expected removing Thesis Board evidence to succeed."
+	var readd_result: Dictionary = GameManager.add_thesis_evidence(thesis_id, added_evidence[0])
+	if not bool(readd_result.get("success", false)):
+		return "Smoke test expected re-adding Thesis Board evidence after removal to succeed."
+
+	await get_tree().process_frame
+	if thesis_evidence_list.item_count < required_evidence_categories.size():
+		return "Smoke test expected the Thesis Board selected evidence list to update after add/remove operations."
+
+	var saved_thesis_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(saved_thesis_state)
+	if RunState.get_player_thesis(thesis_id).is_empty():
+		return "Smoke test expected created theses to persist through a RunState save/load round trip."
+	if not SaveManager.flush_pending_save():
+		return "Smoke test expected Thesis Board autosave flush to succeed."
+	var persisted_thesis_state: Dictionary = SaveManager.load_run()
+	if not persisted_thesis_state.get("player_theses", {}).has(thesis_id):
+		return "Smoke test expected flushed Thesis Board saves to persist player_theses to disk."
+
+	if not thesis_view_paper_button.disabled:
+		return "Smoke test expected Thesis Board View Paper to stay disabled before report generation."
+	thesis_generate_report_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if (
+		not thesis_report_overlay.visible or
+		not thesis_report_preparing_panel.visible or
+		thesis_white_paper_panel.visible or
+		thesis_report_preparing_label.text.find("Reviewing selected evidence") == -1
+	):
+		return "Smoke test expected clicking Generate Report to show the staged preparing overlay immediately."
+	if not thesis_generate_report_button.disabled or not thesis_view_paper_button.disabled:
+		return "Smoke test expected Thesis report actions to be disabled while the paper is being prepared."
+	await get_tree().create_timer(1.25).timeout
+	await get_tree().process_frame
+	if (
+		not thesis_report_overlay.visible or
+		thesis_report_preparing_panel.visible or
+		not thesis_white_paper_panel.visible
+	):
+		return "Smoke test expected the Thesis report overlay to reveal the white paper after the staged preparation."
+	var thesis_after_report: Dictionary = RunState.get_player_thesis(thesis_id)
+	var report: Dictionary = thesis_after_report.get("report", {})
+	if (
+		str(report.get("rating", "")).is_empty() or
+		str(report.get("reasoning_grade", "")).is_empty() or
+		report.get("target", {}).is_empty() or
+		report.get("sections", []).size() < 6
+	):
+		return "Smoke test expected generated Thesis reports to include verdict, grade, target area, and analyst-style sections."
+	var required_report_sections := [
+		"Investment Thesis",
+		"Valuation & Recommendation",
+		"Investment Risks",
+		"Catalysts / Checks",
+		"Tape / Broker Flow",
+		"Learning Note"
+	]
+	for section_title in required_report_sections:
+		if not _thesis_report_has_section(report, str(section_title)):
+			return "Smoke test expected generated Thesis reports to include the %s section." % str(section_title)
+	var investment_thesis_section: Dictionary = _thesis_report_section(report, "Investment Thesis")
+	var investment_thesis_bullets: Array = investment_thesis_section.get("bullets", [])
+	var first_investment_bullet: Dictionary = investment_thesis_bullets[0] if not investment_thesis_bullets.is_empty() and typeof(investment_thesis_bullets[0]) == TYPE_DICTIONARY else {}
+	if first_investment_bullet.is_empty() or str(first_investment_bullet.get("claim", "")).is_empty() or str(first_investment_bullet.get("body", "")).is_empty():
+		return "Smoke test expected generated Thesis reports to use claim-led analyst bullets."
+
+	await get_tree().process_frame
+	var visible_report_text: String = thesis_report_text.text.to_lower()
+	for forbidden_term_value in ["source_chain_id", "chain_family", "hidden_flag", "current_timeline_state", "formal_agenda_or_filing", "meeting_or_call"]:
+		var forbidden_term: String = str(forbidden_term_value)
+		if visible_report_text.find(forbidden_term) != -1:
+			return "Smoke test expected Thesis report copy to avoid raw system/debug wording like %s." % forbidden_term
+	if visible_report_text.find("recommendation") == -1 or visible_report_text.find("reasoning grade") == -1 or visible_report_text.find("target area") == -1:
+		return "Smoke test expected the Thesis white paper to show recommendation, reasoning grade, and target area."
+	if visible_report_text.find("player marked") == -1 or visible_report_text.find("coaching feedback") == -1:
+		return "Smoke test expected the Thesis white paper to include player-led chart pattern evidence."
+	var raw_internal_score_regex := RegEx.new()
+	raw_internal_score_regex.compile("\\b(quality|growth|risk)\\s+[0-9]")
+	if raw_internal_score_regex.search(visible_report_text) != null:
+		return "Smoke test expected Thesis report copy to translate quality/growth/risk scores into player-facing bands."
+
+	thesis_report_close_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if thesis_report_overlay.visible:
+		return "Smoke test expected closing the Thesis white paper overlay to return to the board."
+	if thesis_evidence_list.item_count < required_evidence_categories.size():
+		return "Smoke test expected closing the Thesis white paper to preserve selected evidence state."
+
+	var frozen_report_price: float = float(report.get("report_price", 0.0))
+	var frozen_generated_day: int = int(report.get("generated_day_index", 0))
+	thesis_view_paper_button.emit_signal("pressed")
+	await get_tree().process_frame
+	var reopened_report: Dictionary = RunState.get_player_thesis(thesis_id).get("report", {})
+	if (
+		not thesis_report_overlay.visible or
+		not thesis_white_paper_panel.visible or
+		not is_equal_approx(float(reopened_report.get("report_price", 0.0)), frozen_report_price) or
+		int(reopened_report.get("generated_day_index", -1)) != frozen_generated_day
+	):
+		return "Smoke test expected View Paper to reopen the existing frozen Thesis report without regenerating it."
+
+	thesis_report_regenerate_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if (
+		not thesis_report_overlay.visible or
+		not thesis_report_preparing_panel.visible or
+		thesis_white_paper_panel.visible or
+		thesis_report_preparing_label.text.find("Reviewing selected evidence") == -1
+	):
+		return "Smoke test expected Regenerate to reuse the staged white-paper generation flow."
+	await get_tree().create_timer(1.25).timeout
+	await get_tree().process_frame
+	if (
+		not thesis_report_overlay.visible or
+		thesis_report_preparing_panel.visible or
+		not thesis_white_paper_panel.visible
+	):
+		return "Smoke test expected Regenerate to reveal the refreshed Thesis white paper."
+	report = RunState.get_player_thesis(thesis_id).get("report", {})
+	frozen_report_price = float(report.get("report_price", 0.0))
+	frozen_generated_day = int(report.get("generated_day_index", 0))
+
+	GameManager.advance_day()
+	await get_tree().process_frame
+	var report_after_day: Dictionary = RunState.get_player_thesis(thesis_id).get("report", {})
+	if (
+		not is_equal_approx(float(report_after_day.get("report_price", 0.0)), frozen_report_price) or
+		int(report_after_day.get("generated_day_index", -1)) != frozen_generated_day
+	):
+		return "Smoke test expected generated Thesis reports to remain frozen after Advance Day until regenerated."
+
+	var review_result: Dictionary = GameManager.refresh_thesis_review(thesis_id)
+	if not bool(review_result.get("success", false)):
+		return "Smoke test expected Thesis review refresh to succeed after Advance Day."
+	var review: Dictionary = review_result.get("review", {})
+	if str(review.get("state", "")).is_empty() or int(review.get("updated_day_index", -1)) != RunState.day_index:
+		return "Smoke test expected Thesis review to update its state after Advance Day."
+
+	game_root.close_desktop_app("thesis")
+	await get_tree().process_frame
+	if not desktop_layer.visible or game_root.is_desktop_app_open("thesis"):
+		return "Smoke test expected closing the Thesis Board desktop window to hide the app while keeping the desktop visible."
+
+	RunState.load_from_dict(baseline_state)
+	SaveManager.save_run(RunState.to_save_dict())
+	SaveManager.flush_pending_save()
+	game_root._refresh_all()
+	await get_tree().process_frame
+	return ""
+
+
+func _validate_chart_pattern_fixture_states() -> String:
+	var evaluator = load("res://systems/ChartPatternSystem.gd").new()
+	var fixtures: Array = [
+		{
+			"pattern_id": "breakout",
+			"expected": "Good read",
+			"bars": _chart_pattern_fixture_bars([
+				{"open": 100.0, "high": 101.0, "low": 98.0, "close": 99.0, "volume": 1000},
+				{"open": 99.0, "high": 102.0, "low": 98.0, "close": 100.0, "volume": 980},
+				{"open": 100.0, "high": 101.5, "low": 99.0, "close": 100.5, "volume": 1010},
+				{"open": 100.5, "high": 101.0, "low": 99.5, "close": 100.0, "volume": 2200},
+				{"open": 100.0, "high": 103.5, "low": 100.0, "close": 102.8, "volume": 2400},
+				{"open": 102.8, "high": 106.0, "low": 102.0, "close": 105.0, "volume": 2600}
+			]),
+			"start": 3,
+			"end": 5
+		},
+		{
+			"pattern_id": "breakout",
+			"expected": "Plausible, needs confirmation",
+			"bars": _chart_pattern_fixture_bars([
+				{"open": 100.0, "high": 101.0, "low": 98.0, "close": 99.0, "volume": 2500},
+				{"open": 99.0, "high": 102.0, "low": 98.0, "close": 100.0, "volume": 2500},
+				{"open": 100.0, "high": 101.5, "low": 99.0, "close": 100.5, "volume": 2500},
+				{"open": 100.5, "high": 101.0, "low": 99.5, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 103.5, "low": 100.0, "close": 102.8, "volume": 1050},
+				{"open": 102.8, "high": 106.0, "low": 102.0, "close": 105.0, "volume": 1100}
+			]),
+			"start": 3,
+			"end": 5
+		},
+		{
+			"pattern_id": "range",
+			"expected": "Weak read",
+			"bars": _chart_pattern_fixture_bars([
+				{"open": 100.0, "high": 120.0, "low": 92.0, "close": 106.0, "volume": 1000},
+				{"open": 106.0, "high": 116.0, "low": 90.0, "close": 104.0, "volume": 1000},
+				{"open": 104.0, "high": 118.0, "low": 94.0, "close": 107.0, "volume": 1000},
+				{"open": 107.0, "high": 117.0, "low": 93.0, "close": 105.0, "volume": 1000}
+			]),
+			"start": 0,
+			"end": 3
+		},
+		{
+			"pattern_id": "breakout",
+			"expected": "Contradicted",
+			"bars": _chart_pattern_fixture_bars([
+				{"open": 100.0, "high": 101.0, "low": 98.0, "close": 99.0, "volume": 1000},
+				{"open": 99.0, "high": 102.0, "low": 98.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.5, "low": 99.0, "close": 100.5, "volume": 1000},
+				{"open": 100.5, "high": 104.0, "low": 100.0, "close": 103.0, "volume": 1400},
+				{"open": 103.0, "high": 103.5, "low": 98.0, "close": 99.0, "volume": 1700},
+				{"open": 99.0, "high": 100.0, "low": 97.0, "close": 98.5, "volume": 1600}
+			]),
+			"start": 3,
+			"end": 5
+		}
+	]
+
+	for fixture_value in fixtures:
+		var fixture: Dictionary = fixture_value
+		var bars: Array = fixture.get("bars", [])
+		var result: Dictionary = evaluator.evaluate_pattern_claim({
+			"company_id": "fixture",
+			"ticker": "FIX",
+			"range_id": "fixture",
+			"range_label": "Fixture",
+			"pattern_id": str(fixture.get("pattern_id", "")),
+			"start_anchor": _chart_pattern_anchor_for_bar(bars, int(fixture.get("start", 0))),
+			"end_anchor": _chart_pattern_anchor_for_bar(bars, int(fixture.get("end", 0))),
+			"bars": bars,
+			"current_price": float(bars[bars.size() - 1].get("close", 0.0)),
+			"trade_date": bars[bars.size() - 1].get("trade_date", {})
+		})
+		if not bool(result.get("success", false)):
+			return "Smoke test expected chart pattern fixture %s to evaluate successfully." % str(fixture.get("pattern_id", ""))
+		if str(result.get("feedback_state", "")) != str(fixture.get("expected", "")):
+			return "Smoke test expected chart pattern fixture %s to reach %s, got %s." % [
+				str(fixture.get("pattern_id", "")),
+				str(fixture.get("expected", "")),
+				str(result.get("feedback_state", ""))
+			]
+	return ""
+
+
+func _chart_pattern_fixture_bars(rows: Array) -> Array:
+	var bars: Array = []
+	for index in range(rows.size()):
+		var row: Dictionary = rows[index]
+		var close_value: float = float(row.get("close", row.get("open", 0.0)))
+		bars.append({
+			"trade_date": {
+				"year": 2020,
+				"month": 1,
+				"day": index + 1,
+				"weekday": index % 5
+			},
+			"open": float(row.get("open", close_value)),
+			"high": float(row.get("high", close_value)),
+			"low": float(row.get("low", close_value)),
+			"close": close_value,
+			"volume_shares": int(row.get("volume", 1000)),
+			"value": close_value * float(row.get("volume", 1000))
+		})
+	return bars
+
+
+func _chart_pattern_anchor_for_bar(bars: Array, index: int) -> Dictionary:
+	if bars.is_empty():
+		return {}
+	var safe_index: int = clamp(index, 0, bars.size() - 1)
+	var bar: Dictionary = bars[safe_index]
+	var trade_date: Dictionary = bar.get("trade_date", {})
+	return {
+		"bar_key": "%04d-%02d-%02d" % [
+			int(trade_date.get("year", 0)),
+			int(trade_date.get("month", 0)),
+			int(trade_date.get("day", 0))
+		],
+		"date_serial": int(trade_date.get("year", 0)) * 10000 + int(trade_date.get("month", 0)) * 100 + int(trade_date.get("day", 0)),
+		"price": float(bar.get("close", 0.0))
+	}
+
+
+func _thesis_has_pattern_evidence(thesis_id: String) -> bool:
+	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
+	for evidence_value in thesis.get("evidence", []):
+		if typeof(evidence_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = evidence_value
+		if str(row.get("category", "")) == "price_action" and not str(row.get("pattern_label", "")).is_empty():
+			return true
+	return false
+
+
+func _find_thesis_evidence_option(evidence_snapshot: Dictionary, category_id: String) -> Dictionary:
+	for category_value in evidence_snapshot.get("categories", []):
+		if typeof(category_value) != TYPE_DICTIONARY:
+			continue
+		var category: Dictionary = category_value
+		if str(category.get("id", "")) != category_id:
+			continue
+		for option_value in category.get("options", []):
+			if typeof(option_value) == TYPE_DICTIONARY:
+				return option_value
+	return {}
+
+
+func _thesis_evidence_option_labels(evidence_snapshot: Dictionary, category_id: String) -> Array:
+	var labels: Array = []
+	for category_value in evidence_snapshot.get("categories", []):
+		if typeof(category_value) != TYPE_DICTIONARY:
+			continue
+		var category: Dictionary = category_value
+		if str(category.get("id", "")) != category_id:
+			continue
+		for option_value in category.get("options", []):
+			if typeof(option_value) == TYPE_DICTIONARY:
+				labels.append(str(option_value.get("label", "")))
+		break
+	return labels
+
+
+func _thesis_report_has_section(report: Dictionary, section_title: String) -> bool:
+	return not _thesis_report_section(report, section_title).is_empty()
+
+
+func _thesis_report_section(report: Dictionary, section_title: String) -> Dictionary:
+	for section_value in report.get("sections", []):
+		if typeof(section_value) == TYPE_DICTIONARY and str(section_value.get("title", "")) == section_title:
+			return section_value
+	return {}
 
 
 func _count_down_days(price_history: Array) -> int:

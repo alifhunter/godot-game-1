@@ -1,6 +1,8 @@
 extends Control
 class_name PriceChartCanvas
 
+signal pattern_region_selected(start_anchor, end_anchor)
+
 const CHART_BACKGROUND := Color(0.0431373, 0.0588235, 0.0862745, 0.98)
 const CHART_BORDER := Color(0.184314, 0.247059, 0.309804, 0.95)
 const GRID_COLOR := Color(0.172549, 0.223529, 0.282353, 0.55)
@@ -16,6 +18,9 @@ const HOVER_PANEL_TEXT := Color(0.956863, 0.976471, 1, 1)
 const DRAWING_LINE_COLOR := Color(0.980392, 0.792157, 0.392157, 0.92)
 const DRAWING_SELECTED_COLOR := Color(0.690196, 0.87451, 1, 1)
 const DRAWING_PREVIEW_COLOR := Color(0.980392, 0.792157, 0.392157, 0.55)
+const PATTERN_REGION_COLOR := Color(0.690196, 0.87451, 1, 0.92)
+const PATTERN_REGION_FILL := Color(0.560784, 0.772549, 1, 0.13)
+const PATTERN_REGION_PENDING := Color(0.560784, 0.772549, 1, 0.52)
 const DRAWING_HIT_DISTANCE := 8.0
 const PLOT_MARGIN_LEFT := 16.0
 const PLOT_MARGIN_TOP := 14.0
@@ -47,6 +52,8 @@ var _drawing_tool: String = "select"
 var _drawings_by_company: Dictionary = {}
 var _selected_drawing_id: String = ""
 var _pending_trend_anchor: Dictionary = {}
+var _pending_pattern_anchor: Dictionary = {}
+var _pattern_region: Dictionary = {}
 var _next_drawing_id: int = 1
 
 
@@ -130,15 +137,19 @@ func set_active_company_id(company_id: String) -> void:
 	_active_company_id = normalized_company_id
 	_selected_drawing_id = ""
 	_pending_trend_anchor.clear()
+	_pending_pattern_anchor.clear()
+	_pattern_region.clear()
 	queue_redraw()
 
 
 func set_drawing_tool(tool_id: String) -> void:
 	var normalized_tool: String = str(tool_id).to_lower()
-	if not ["select", "horizontal", "trend"].has(normalized_tool):
+	if not ["select", "horizontal", "trend", "pattern_claim"].has(normalized_tool):
 		normalized_tool = "select"
 	if normalized_tool != "trend":
 		_pending_trend_anchor.clear()
+	if normalized_tool != "pattern_claim":
+		_pending_pattern_anchor.clear()
 	_drawing_tool = normalized_tool
 	mouse_default_cursor_shape = Control.CURSOR_ARROW if _drawing_tool == "select" else Control.CURSOR_CROSS
 	queue_redraw()
@@ -168,6 +179,36 @@ func clear_drawings_for_active_company() -> void:
 	_drawings_by_company[_active_company_id] = []
 	_selected_drawing_id = ""
 	_pending_trend_anchor.clear()
+	queue_redraw()
+
+
+func clear_pattern_claim_region() -> void:
+	_pending_pattern_anchor.clear()
+	_pattern_region.clear()
+	queue_redraw()
+
+
+func get_pattern_claim_region() -> Dictionary:
+	return _pattern_region.duplicate(true)
+
+
+func debug_select_pattern_region_by_offsets(start_offset: int, end_offset: int) -> void:
+	var context: Dictionary = _build_drawing_context()
+	var visible_bars: Array = context.get("visible_bars", []) if not context.is_empty() else _bars.duplicate(true)
+	if visible_bars.is_empty():
+		return
+	var start_index: int = clamp(start_offset, 0, visible_bars.size() - 1)
+	var end_index: int = clamp(end_offset, 0, visible_bars.size() - 1)
+	var start_bar: Dictionary = visible_bars[start_index]
+	var end_bar: Dictionary = visible_bars[end_index]
+	var start_anchor: Dictionary = _anchor_from_bar(start_bar, start_index)
+	var end_anchor: Dictionary = _anchor_from_bar(end_bar, end_index)
+	_pattern_region = {
+		"start": start_anchor.duplicate(true),
+		"end": end_anchor.duplicate(true)
+	}
+	_pending_pattern_anchor.clear()
+	pattern_region_selected.emit(start_anchor.duplicate(true), end_anchor.duplicate(true))
 	queue_redraw()
 
 
@@ -799,6 +840,25 @@ func _handle_drawing_click(mouse_position: Vector2) -> bool:
 			_pending_trend_anchor.clear()
 		queue_redraw()
 		return true
+	if _drawing_tool == "pattern_claim":
+		var pattern_anchor: Dictionary = _anchor_from_position(mouse_position, visible_bars, price_rect, min_value, max_value)
+		if pattern_anchor.is_empty():
+			return false
+		if _pending_pattern_anchor.is_empty():
+			_pending_pattern_anchor = pattern_anchor
+			_pattern_region.clear()
+		else:
+			_pattern_region = {
+				"start": _pending_pattern_anchor.duplicate(true),
+				"end": pattern_anchor.duplicate(true)
+			}
+			_pending_pattern_anchor.clear()
+			pattern_region_selected.emit(
+				_pattern_region.get("start", {}).duplicate(true),
+				_pattern_region.get("end", {}).duplicate(true)
+			)
+		queue_redraw()
+		return true
 
 	_selected_drawing_id = _find_drawing_at_position(mouse_position, visible_bars, price_rect, min_value, max_value)
 	queue_redraw()
@@ -806,9 +866,10 @@ func _handle_drawing_click(mouse_position: Vector2) -> bool:
 
 
 func _cancel_pending_drawing() -> bool:
-	if _pending_trend_anchor.is_empty():
+	if _pending_trend_anchor.is_empty() and _pending_pattern_anchor.is_empty():
 		return false
 	_pending_trend_anchor.clear()
+	_pending_pattern_anchor.clear()
 	queue_redraw()
 	return true
 
@@ -834,6 +895,14 @@ func _anchor_from_position(
 		"bar_key": _bar_key_from_bar(bar, bar_index),
 		"date_serial": _date_serial_from_trade_date(bar.get("trade_date", {})),
 		"price": _plot_y_to_value(mouse_position.y, min_value, max_value, price_rect)
+	}
+
+
+func _anchor_from_bar(bar: Dictionary, bar_index: int) -> Dictionary:
+	return {
+		"bar_key": _bar_key_from_bar(bar, bar_index),
+		"date_serial": _date_serial_from_trade_date(bar.get("trade_date", {})),
+		"price": float(bar.get("close", bar.get("open", 0.0)))
 	}
 
 
@@ -908,6 +977,7 @@ func _bar_center_x(bar_index: int, bar_count: int, price_rect: Rect2) -> float:
 func _draw_chart_drawings(price_rect: Rect2, visible_bars: Array, min_value: float, max_value: float) -> void:
 	if _active_company_id.is_empty():
 		return
+	_draw_pattern_region(price_rect, visible_bars, min_value, max_value)
 	var drawings: Array = _drawings_for_active_company()
 	for drawing_value in drawings:
 		var drawing: Dictionary = drawing_value
@@ -927,6 +997,26 @@ func _draw_chart_drawings(price_rect: Rect2, visible_bars: Array, min_value: flo
 				draw_circle(start_position, 4.0, line_color)
 				draw_circle(end_position, 4.0, line_color)
 	_draw_pending_trend_preview(price_rect, visible_bars, min_value, max_value)
+	_draw_pending_pattern_preview(price_rect, visible_bars, min_value, max_value)
+
+
+func _draw_pattern_region(price_rect: Rect2, visible_bars: Array, min_value: float, max_value: float) -> void:
+	if _pattern_region.is_empty():
+		return
+	var start_anchor: Dictionary = _pattern_region.get("start", {})
+	var end_anchor: Dictionary = _pattern_region.get("end", {})
+	if start_anchor.is_empty() or end_anchor.is_empty():
+		return
+	var start_position: Vector2 = _screen_position_for_anchor(start_anchor, visible_bars, price_rect, min_value, max_value)
+	var end_position: Vector2 = _screen_position_for_anchor(end_anchor, visible_bars, price_rect, min_value, max_value)
+	var left_x: float = min(start_position.x, end_position.x)
+	var right_x: float = max(start_position.x, end_position.x)
+	var region_rect := Rect2(Vector2(left_x, price_rect.position.y), Vector2(max(right_x - left_x, 2.0), price_rect.size.y))
+	draw_rect(region_rect, PATTERN_REGION_FILL, true)
+	draw_rect(region_rect, PATTERN_REGION_COLOR, false, 1.2)
+	draw_line(start_position, end_position, PATTERN_REGION_COLOR, 1.6)
+	draw_circle(start_position, 4.0, PATTERN_REGION_COLOR)
+	draw_circle(end_position, 4.0, PATTERN_REGION_COLOR)
 
 
 func _draw_pending_trend_preview(price_rect: Rect2, visible_bars: Array, min_value: float, max_value: float) -> void:
@@ -935,6 +1025,19 @@ func _draw_pending_trend_preview(price_rect: Rect2, visible_bars: Array, min_val
 	var start_position: Vector2 = _screen_position_for_anchor(_pending_trend_anchor, visible_bars, price_rect, min_value, max_value)
 	draw_line(start_position, _hover_position, DRAWING_PREVIEW_COLOR, 1.4)
 	draw_circle(start_position, 3.5, DRAWING_PREVIEW_COLOR)
+
+
+func _draw_pending_pattern_preview(price_rect: Rect2, visible_bars: Array, min_value: float, max_value: float) -> void:
+	if _pending_pattern_anchor.is_empty() or not _hover_active or not price_rect.has_point(_hover_position):
+		return
+	var start_position: Vector2 = _screen_position_for_anchor(_pending_pattern_anchor, visible_bars, price_rect, min_value, max_value)
+	var left_x: float = min(start_position.x, _hover_position.x)
+	var right_x: float = max(start_position.x, _hover_position.x)
+	var region_rect := Rect2(Vector2(left_x, price_rect.position.y), Vector2(max(right_x - left_x, 2.0), price_rect.size.y))
+	draw_rect(region_rect, Color(PATTERN_REGION_FILL.r, PATTERN_REGION_FILL.g, PATTERN_REGION_FILL.b, 0.08), true)
+	draw_rect(region_rect, PATTERN_REGION_PENDING, false, 1.0)
+	draw_line(start_position, _hover_position, PATTERN_REGION_PENDING, 1.2)
+	draw_circle(start_position, 3.5, PATTERN_REGION_PENDING)
 
 
 func _find_drawing_at_position(

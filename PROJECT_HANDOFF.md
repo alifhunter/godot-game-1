@@ -38,11 +38,12 @@ Read this file first in the next session.
     - `fc14108 Build Key Stats card dashboard`
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
-    - latest checkpoint message: `Polish Dashboard index recap`
-  - after checkpoint commits, `git status --short` should be clean except ignored local `logs/` output
+    - latest checkpoint message: `Add Thesis Board evidence reports`
+  - after checkpoint commits, `git status --short` should generally be clean except ignored local `logs/` output
+  - current local note: the Thesis Board / white-paper overlay / player-led chart-pattern evidence implementation and smoke coverage are checkpointed locally, including the `scripts/ui/widgets/DashboardSparklineCanvas.gd.uid` Godot UID sidecar for the Dashboard sparkline script
 
 ## Latest Session Snapshot
-- Most recent work focused on the core daily loop, Academy authoring pipeline, `Advance Day` visible-refresh performance, lightweight UI animation polish, Daily Activity cache cost, Dashboard cache cost, deferred save durability, shareholder-only corporate meeting attendance, the STOCKBOT `Key Stats` dashboard layout, removal of player-facing system helper copy, Network contact-list gating, Dashboard calendar event inspection, Dashboard sector performance cards, and the Dashboard `Index Gorengan` recap polish.
+- Most recent work focused on turning `Thesis Board` into a stronger learning loop: a two-column evidence builder, staged white-paper report overlay, player-led chart pattern claims from STOCKBOT charts, and compact thesis evidence persistence.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses, shows short processing phases on the desktop button, and now has a snappy press/phase pulse that resets to neutral after processing.
   - Daily Recap is now a custom `GameRoot.gd` overlay rather than a stock Godot dialog, so it can share the same dark-brown title-bar chrome as `News`, `Academy`, `Network`, and `Shop`.
@@ -56,6 +57,66 @@ Read this file first in the next session.
   - Runtime Academy has the newspaper-module layout with top category tabs, left `CORE MODULES` rail, one main scroll area, reserved banner frame, fixed action row, card-style lesson blocks, nested infoboxes, inline images, and blue `key_insights` blocks.
   - The dev-only local web editor in `tools/academy_editor/` is the source-authoring path for Academy content and exports directly to `data/academy/academy_catalog.json`.
   - Editor/runtime support image uploads into `assets/academy/lessons/`; missing image paths fall back to placeholders rather than breaking runtime UI.
+- Thesis Board status:
+  - `Thesis Board` is now a first playable desktop app registered as app id `thesis`.
+  - Desktop shortcut/nav SVGs live in `assets/ui/desktop/thesis_shortcut.svg` and `assets/ui/desktop/thesis_nav.svg`.
+  - Runtime UI is built by `scripts/ui/widgets/ThesisBoardWidget.gd` and now opens as a two-column research workflow:
+    - left thesis list
+    - right company/meta/evidence builder, selected evidence, review state, and compact report actions
+  - The old always-visible right `Research Note` panel has been removed.
+  - Generated reports now live in a modal white-paper overlay inside the Thesis Board window:
+    - `Generate Report` shows staged copy such as `Reviewing selected evidence...`, `Checking valuation, tape, and risk...`, and `Formatting research note...`
+    - after the short staged flow, a centered white document surface appears over the board with report header, badge, scrollable body, footer/meta line, and `Close`, `Regenerate`, and `Refresh Review` actions
+    - `View Paper` reopens the frozen report without regenerating
+    - `Regenerate` reruns the staged flow and replaces the frozen report snapshot
+    - the overlay blocks underlying Thesis Board input while visible, and `Esc` / `Close` only hide the final paper or error state
+  - `RunState.player_theses` persists compact thesis artifacts only:
+    - thesis metadata
+    - selected evidence summaries
+    - frozen report snapshot
+    - basic review snapshot
+  - Thesis saves do not embed full News, Twooter, Network, company, chart, or financial snapshots; evidence rows store only compact player-selected summaries and optional chart-pattern metadata.
+  - `systems/ThesisReportSystem.gd` deterministically generates offline analyst-style research notes, with no LLM/API/network dependency.
+  - Report output includes verdicts such as `Buy`, `Accumulate`, `Hold/Watch`, `Trade Only`, `Avoid`, and `Dividend Hold`, plus an `A-D` reasoning grade and missing-evidence notes.
+  - Generated report sections now use claim-led analyst bullets instead of generic summary paragraphs:
+    - `Investment Thesis`
+    - `Valuation & Recommendation`
+    - `Investment Risks`
+    - `Catalysts / Checks`
+    - `Tape / Broker Flow`
+    - `Learning Note`
+  - The white-paper report renders those bullets with bold lead-ins through `RichTextLabel` BBCode, so each point reads like `FRAGILE BUSINESS QUALITY. ...` followed by a short evidence-based explanation.
+  - The report remains evidence-bound: selected evidence drives the bullets, missing evidence becomes an explicit gap, and the system should not invent external facts or fake precision.
+  - Report copy and Thesis evidence options translate hidden quality/growth/risk scores into player-facing bands:
+    - quality: `excellent`, `strong`, `average`, `weak`, `fragile`
+    - growth: `accelerating`, `healthy`, `steady`, `uneven`, `stalling`
+    - risk: `low`, `manageable`, `moderate`, `elevated`, `high`
+    - the raw `quality 29 / growth 46 / risk 48` style wording is intentionally not used in generated report prose
+  - Generated reports freeze report date, report price, selected evidence, verdict, target area, and written sections; later market movement only updates the review panel until the player regenerates.
+  - Evidence picker V1 is manual inside the Thesis app:
+    - Fundamentals / Key Stats
+    - Financials
+    - Price Action
+    - Broker Flow
+    - Ownership
+    - Sector / Macro
+    - News
+    - Twooter
+    - Network Intel
+    - Corporate Events
+    - Risk / Invalidation
+  - There is a `Use selected STOCKBOT stock` convenience button when the player already has a stock selected.
+  - STOCKBOT chart pattern evidence is now player-led:
+    - the chart toolbar has a `Pattern` tool beside select/horizontal/trend tools
+    - V1 pattern choices are `Range / Consolidation`, `Breakout`, `Failed Breakout`, `Pullback to Support`, `Higher Lows`, `Lower Highs`, and `Volume Confirmation`
+    - the player chooses a pattern type and marks two chart anchors; the chart draws the selected region with a distinct blue accent
+    - `systems/ChartPatternSystem.gd` evaluates the marked region and returns coaching states: `Good read`, `Plausible, needs confirmation`, `Weak read`, or `Contradicted`
+    - coaching is non-blocking: weak/contradicted reads can still be added to Thesis, but carry warning copy and invalidation notes
+    - `Add to Thesis` is disabled until an open thesis exists for the same stock; one open thesis is used directly, multiple open theses show a destination picker, and V1 never auto-creates a thesis
+    - saved chart-pattern evidence remains compact: pattern label, coaching state, region dates/prices, reason, invalidation hint, chart range, current price/date, and source label `STOCKBOT Chart`
+    - the generated white paper explicitly says the player marked the pattern and includes the system coaching read, instead of pretending the system auto-discovered the setup
+  - Review state compares the frozen report against current price, held position, broker flow, and updated context and returns `Strengthening`, `Weakening`, `Unchanged`, or `Needs Review`.
+  - Thesis review work is not part of the Advance Day recap-critical path; it runs on demand/app refresh and through Thesis APIs.
 - STOCKBOT status:
   - `Key Stats` is now a dark STOCKBOT-style card dashboard rather than a simple text block.
   - Current dashboard sections are `Current Valuation`, `Per Share`, a center metric table, `Profitability`, `Income Statement`, `Balance Sheet`, and `Cash Flow Statement`.
@@ -80,6 +141,11 @@ Read this file first in the next session.
     - a lightweight real sparkline built from all generated companies' recent price bars
     - `All Market` shows only `Lot` and `Value`; unavailable `Regular` and `Freq` rows are intentionally omitted
     - the old date/points-lot-value grid and helper hint are hidden
+  - STOCKBOT chart interaction now includes player-led pattern evidence:
+    - the existing select/horizontal/trend drawing tools remain unchanged
+    - `PriceChartCanvas` has a `pattern_claim` mode that captures two anchors using the chart's existing x/price mapping
+    - `TradeWorkspaceWidget` shows a compact pattern claim panel only while the Pattern tool is active
+    - the claim panel shows coaching feedback plus the available Thesis destination for the selected stock
 - Performance status:
   - Desktop badge drawing uses cached counts in `RunState.desktop_app_badge_counts`.
   - `last_day_results` now saves a compact recap/event summary instead of duplicating the full per-company day result and corporate meeting payloads.
@@ -125,16 +191,17 @@ Read this file first in the next session.
     - focusing an app that is still queued refreshes it immediately and removes it from the queue
     - deferred app catch-up logs per app, for example `_refresh_deferred_open_app:network`, `_refresh_deferred_open_app:stock`, and `_refresh_deferred_open_app:news`
   - Latest normal-play perf profile shows the remaining big buckets are `simulate_day`, Summary row collection, News company rows/feed rendering, post-recap save flush, and deferred open-window refresh work.
-  - Latest normal-play perf scene summary after UI animation polish: `open_network=53.88ms`, `advance_network_open_recap_ready=1209.79ms`, `advance_network_open=1608.44ms`, `advance_desktop_only_recap_ready=1204.26ms`, `advance_desktop_only=1534.0ms`, `open_stock=122.77ms`, `advance_stock_open_recap_ready=1248.48ms`, `advance_stock_open=1688.24ms`, `open_news=329.36ms`, `open_network_with_news=77.49ms`, `advance_news_network_open_recap_ready=1357.87ms`, `advance_news_network_open=2081.38ms`, `flush_pending_save=350.6ms`, `local_save_bytes=2010467`.
-  - Current UI-button Advance Day logs show `request_save` around `0.08-0.17ms` in the guarded backend path instead of `save_active_run`; the post-recap flush logs separately around `315-361ms` in the latest local run, and direct `GameManager.advance_day()` still logs immediate `save_active_run` for non-UI callers.
+  - Latest normal-play perf scene summary after Dashboard index recap polish: `open_network=42.47ms`, `advance_network_open_recap_ready=1208.58ms`, `advance_network_open=1500.78ms`, `advance_desktop_only_recap_ready=1133.38ms`, `advance_desktop_only=1561.44ms`, `open_stock=101.2ms`, `advance_stock_open_recap_ready=1007.93ms`, `advance_stock_open=1314.42ms`, `open_news=195.54ms`, `open_network_with_news=33.42ms`, `advance_news_network_open_recap_ready=957.95ms`, `advance_news_network_open=1455.98ms`, `flush_pending_save=241.43ms`, `local_save_bytes=2010467`.
+  - Current UI-button Advance Day logs show `request_save` in the guarded backend path instead of `save_active_run`; the post-recap flush logs separately, and direct `GameManager.advance_day()` still logs immediate `save_active_run` for non-UI callers.
   - Current backend Advance Day logs show `build_dashboard_event_cache` around `24-29ms`, `build_daily_activity_cache` around `1-2ms`, `build_daily_activity_cache:social_count` around `0.6-0.9ms`, `build_daily_summary` around `90-116ms`, `build_news_snapshot` usually around `92-125ms` with a News-heavy pass up to `223ms`, `emit_price_formed` around `99-120ms`, and `emit_summary_ready` around `57-85ms`; Daily Recap snapshot construction inside `summary_ready` is around `4-5ms`, Network activity count is near-zero, and deferred app redraws still appear after recap/save as per-app logs.
   - Broader app-open timings are still noisy in headless perf runs; `News` can still be heavier than `Network` because it renders article content and can trigger article-source discovery.
   - UI-button recap readiness is now mostly dominated by market simulation, Summary row collection, News company-row/feed rendering, and recap UI work; save serialization and open app refresh cost still exist, but they are shifted into post-recap settled time.
 - Last successful verification in this session:
   - `git diff --check`
   - Godot project-load check
-  - quick smoke with `--log-file logs\smoke-dashboard-index-recap.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
-  - the quick smoke now asserts the Key Stats dashboard cards, populated row groups, `Net Income` / `EPS` / `Revenue` pill switching, the separate `Financials` tab rows/navigation, hidden Financials/Broker helper labels, uniform Dashboard calendar grid shape, Dashboard calendar event popup/buttons, Dashboard sector card-to-stock-list navigation, Dashboard section title styling, the new `Index Gorengan` recap values, the real sparkline point count, and hidden old index grid/hint/date nodes
+  - quick smoke with `--log-file logs\smoke-chart-pattern-evidence.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
+  - the quick smoke now asserts old-save Thesis backfill, Thesis desktop open/focus/close behavior, settled window animation state, two-column Thesis Board layout, hidden report overlay at startup, staged report preparation, white-paper reveal, thesis create/save/load persistence, populated evidence options, add/remove evidence autosaves, generated report verdict/grade/target/claim-led sections, report copy avoiding raw system/debug wording, no raw `quality/growth/risk + number` report phrasing, frozen reports after `Advance Day`, review refresh after at least one simulated day, Pattern chart tool existence, deterministic Good/Plausible/Weak/Contradicted pattern fixture states, disabled Add-to-Thesis without a matching open thesis, single/multiple thesis destination flow, compact chart-pattern evidence persistence, and player-led chart-pattern report copy
+  - existing quick-smoke coverage still asserts the Key Stats dashboard cards, populated row groups, `Net Income` / `EPS` / `Revenue` pill switching, the separate `Financials` tab rows/navigation, hidden Financials/Broker helper labels, uniform Dashboard calendar grid shape, Dashboard calendar event popup/buttons, Dashboard sector card-to-stock-list navigation, Dashboard section title styling, the new `Index Gorengan` recap values, the real sparkline point count, and hidden old index grid/hint/date nodes
   - normal-play perf scene with `--log-file logs\normal-play-dashboard-index-recap.log --scene res://scenes/tests/NormalPlayPerfTest.tscn -- --smoke-local-io`, which printed `NORMAL_PLAY_PERF_OK open_network=42.47ms advance_network_open_recap_ready=1208.58ms advance_network_open=1500.78ms advance_desktop_only_recap_ready=1133.38ms advance_desktop_only=1561.44ms open_stock=101.2ms advance_stock_open_recap_ready=1007.93ms advance_stock_open=1314.42ms open_news=195.54ms open_network_with_news=33.42ms advance_news_network_open_recap_ready=957.95ms advance_news_network_open=1455.98ms flush_pending_save=241.43ms local_save_bytes=2010467`
   - note: the quick smoke may print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` on Windows; treat it as non-blocking Godot/Windows certificate-store noise unless it appears before smoke output or affects network/API work
 
@@ -175,6 +242,7 @@ Read this file first in the next session.
 - A first-pass event-reading UX now exists in `News`
 - A first-pass smaller mobile-style social-feed UX now also exists in `Twooter`
 - A first playable `Academy` desktop app now exists
+- A first playable `Thesis Board` desktop app now exists for manual research capture, deterministic report generation, and after-action thesis review
 - A first playable contact/recognition UX now exists in `Network`
 - A first playable `Upgrades` shop app now exists on the desktop
 - A first playable corporate-action / meeting-chain layer now exists behind `News`, `Twooter`, `Network`, and daily market behavior
@@ -210,6 +278,7 @@ Read this file first in the next session.
   - `News`
   - `Twooter`
   - `Academy`
+  - `Thesis Board`
   - `Network`
   - `Shop`
   - `Exit`
@@ -253,6 +322,7 @@ Read this file first in the next session.
   - `News` opens a large beige `News Browser` window
   - `Twooter` opens a smaller light social-feed window
   - `Academy` opens a warm newspaper-module learning window
+  - `Thesis Board` opens a warm research-note builder window
   - `Network` opens a beige contact/recognition window for discovered market contacts
   - `Shop` opens the existing beige `Upgrades` cash shop window
   - `Exit` returns to the main menu
@@ -285,6 +355,9 @@ Read this file first in the next session.
 - Academy app identity:
   - desktop label: `Academy`
   - app-window title: `Academy`
+- Thesis app identity:
+  - desktop label: `Thesis`
+  - app-window title: `Thesis Board`
 - Upgrades app identity:
   - desktop label: `Shop`
   - app-window title: `Upgrades`
@@ -496,8 +569,8 @@ Read this file first in the next session.
 - `Dashboard` no longer uses the old long text overview card
 - `DashboardGrid` now has `h_separation = 0` and `v_separation = 0`, so the four dashboard sections sit flush
 - Dashboard is now a `2x2` grid:
-  - top-left: `Index Gorengan` card with derived market points, traded lot, and traded value
-  - bottom-left: live month calendar with the current in-game day highlighted and quarterly report filing days marked as `R`
+  - top-left: `Index Gorengan` compact recap with derived market points, point/percent move, real aggregate sparkline, and `All Market` lot/value
+  - bottom-left: live month calendar with the current in-game day highlighted; report and meeting days can be clicked to inspect available events
   - top-right: `Movers` card with a `Top 15 Gainer` tab and a `Top 15 Loser` tab
   - bottom-right: `Sector Performance`
     - cards show sector average daily performance, stock count, green/red breadth, and loudest tape
@@ -525,9 +598,10 @@ Read this file first in the next session.
   - empty states read `No gainers this session.` / `No losers this session.`
 - Dashboard market card is currently built from:
   - live company prices vs starting prices for synthetic index points
+  - recent per-company price bars for the aggregate sparkline
   - latest daily `volume_lots`
   - latest daily traded `value`
-  - daily breadth counts (`green / red / flat`)
+  - daily point/percent change coloring
 - Dashboard meeting/report consumers can use the calendar event popup plus:
   - `GameManager.get_upcoming_report_rows(limit)`
   - `GameManager.get_dashboard_event_snapshot(force_refresh := false)`
@@ -1487,6 +1561,12 @@ Read this file first in the next session.
 - Academy runtime state is saved in:
   - `RunState.academy_progress`
   - older saves backfill missing academy progress safely
+- Thesis Board runtime state is saved in:
+  - `RunState.player_theses`
+  - older saves backfill missing thesis state to `{}`
+  - thesis records store compact metadata, evidence summaries, frozen report snapshots, and review snapshots only
+  - full source snapshots from News, Twooter, Network, companies, chart bars, or financial statements are intentionally not copied into the thesis save payload
+  - chart-pattern evidence stores only compact player artifacts such as pattern label, coaching state, marked region, reason, invalidation, chart range, and source label
 - Desktop app notification seen state is saved in:
   - `RunState.desktop_app_seen_days`
   - `RunState.desktop_app_badge_counts`
@@ -1543,6 +1623,21 @@ Read this file first in the next session.
   - `GameManager.close_corporate_meeting_session(meeting_id)`
   - `GameManager.debug_force_rights_issue_rupslb(company_id)`
   - `GameManager.debug_schedule_next_day_rights_issue_rupslb(company_id)`
+- Thesis Board consumers can use:
+  - `GameManager.thesis_changed`
+  - `GameManager.get_thesis_board_snapshot()`
+  - `GameManager.get_thesis_evidence_options(company_id)`
+  - `GameManager.get_chart_pattern_catalog()`
+  - `GameManager.get_open_theses_for_company(company_id)`
+  - `GameManager.evaluate_chart_pattern_claim(company_id, range_id, pattern_id, start_anchor, end_anchor)`
+  - `GameManager.add_chart_pattern_evidence_to_thesis(thesis_id, claim)`
+  - `GameManager.create_thesis(company_id, stance, horizon, title := "")`
+  - `GameManager.update_thesis_meta(thesis_id, fields)`
+  - `GameManager.add_thesis_evidence(thesis_id, evidence)`
+  - `GameManager.remove_thesis_evidence(thesis_id, evidence_id)`
+  - `GameManager.generate_thesis_report(thesis_id)`
+  - `GameManager.refresh_thesis_review(thesis_id)`
+  - `GameManager.close_thesis(thesis_id)`
 - Upgrade consumers can use:
   - `GameManager.get_upgrade_shop_snapshot()`
   - `GameManager.purchase_upgrade(track_id)`
@@ -1636,6 +1731,13 @@ Read this file first in the next session.
   - `1D` keeps candle mode disabled and falls back to line mode
   - lazy `5Y` chart history reaching back before `2020`
   - lazy `5Y` chart history rebuilding after save / load
+  - chart Pattern tool exists beside select/horizontal/trend drawing tools
+  - selecting a pattern type and two chart anchors produces a coaching result
+  - chart-pattern fixture bars can deterministically reach `Good read`, `Plausible, needs confirmation`, `Weak read`, and `Contradicted`
+  - chart-pattern `Add to Thesis` is disabled when no open thesis exists for the selected stock
+  - chart-pattern `Add to Thesis` succeeds for one open thesis and uses the selected destination when multiple matching theses exist
+  - chart-pattern evidence is saved as compact `price_action` thesis evidence with pattern label, coaching state, region, reason, and invalidation hint
+  - generated Thesis white papers include player-led chart-pattern evidence and system coaching language
   - desktop shell appears first
   - desktop `Advance Day` button disables immediately while processing and cannot advance two days from one rapid click burst
   - `Advance Day` processing text keeps a readable dark disabled font color
@@ -1648,6 +1750,18 @@ Read this file first in the next session.
   - Academy shows the catalog category tabs, including `Money Management`, and the Technical module rail still exposes eight sections
   - Academy exposes the reserved lesson banner frame and keeps the selected module/action row inside the visible Academy window
   - Academy quiz starts locked and unlocks after the required reading sections are marked read
+  - `Thesis Board` desktop icon opens/focuses/closes the Thesis window and settles animation state
+  - Thesis Board opens as a two-column layout and no longer shows the old always-visible `ThesisReportPanel`
+  - Thesis report overlay exists, starts hidden, shows staged preparing copy, then reveals `ThesisWhitePaperPanel` with populated report text
+  - `View Paper` reopens the frozen report without regenerating, and `Regenerate` uses the staged overlay flow
+  - old saves load with empty `player_theses`
+  - creating a Thesis Board thesis persists through save/load
+  - Thesis Board evidence picker renders populated Fundamentals, Price Action, Broker Flow, News, and Risk options
+  - adding/removing thesis evidence updates the selected evidence list and queues autosaves
+  - generated Thesis reports contain verdict, reasoning grade, target area, and all core report sections
+  - generated Thesis report copy avoids raw system/debug wording
+  - generated Thesis reports remain frozen after `Advance Day` until explicitly regenerated
+  - Thesis review updates after at least one `Advance Day`
   - `Network` desktop icon opens the Network window
   - `Upgrades` desktop icon opens a populated shop window
   - `STOCKBOT` opens the trading shell inside the desktop window
@@ -1731,6 +1845,18 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - Thesis white-paper + chart-pattern evidence pass on `2026-04-28`:
+    - `git diff --check` passed
+    - Godot project-load check passed
+    - quick Godot headless smoke with `--log-file logs\smoke-chart-pattern-evidence.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
+    - smoke covered two-column Thesis Board layout, staged white-paper overlay, report reopen/regenerate flow, deterministic chart-pattern evaluator states, Pattern tool UI, chart-anchor claim creation, disabled Add-to-Thesis without a matching open thesis, single/multiple thesis destination flow, compact chart-pattern evidence persistence, and player-led chart-pattern language in generated white papers
+    - non-blocking Windows/Godot note: this smoke run can print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; treat it as trailing platform noise unless it appears before test success or affects network/API work
+  - Thesis Board V1 pass on `2026-04-27`:
+    - `git diff --check` passed
+    - Godot project-load check passed
+    - quick Godot headless smoke with `--log-file logs\smoke-thesis-board.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
+    - first quick-smoke attempt used `--script`, which bypassed project autoloads and failed on missing `DataRepository`; the correct smoke entry remains the `SmokeTest.tscn` scene
+    - an earlier run without `--log-file` hit the recurring Godot `user://logs` crash before test output; rerunning with a repo-local log path was clean
   - Most recent UI-only pass on `2026-04-26`:
     - `git diff --check` passed
     - Godot project-load check passed
@@ -1932,11 +2058,12 @@ Read this file first in the next session.
   - no filtering
   - no row actions yet
 - Dashboard is now more terminal-like, but still early-pass:
-  - top-right now contains `Movers`
-  - the bottom-right box now mixes upcoming meeting buttons plus report rows, but it is still a simple first-pass block rather than a richer calendar/event browser
-  - debug-scheduled next-day `RUPSLB` meetings currently reveal through that bottom-right meeting strip only; the month calendar grid still marks quarterly reports only
-  - there is no deeper click-through from the index card or calendar yet
-  - there is no market frequency metric on the card yet
+  - top-left `Index Gorengan` is a compact recap with real aggregate sparkline and `All Market` lot/value, but it still has no `Regular` split or market-frequency metric
+  - top-right `Movers` is still a compact overview; there are no sort/filter controls or deeper mover detail drawer yet
+  - bottom-right `Sector Performance` now replaces the old meeting/report block and supports sector-to-stock-list drilldown, but there is no richer sector detail page yet
+  - the calendar popup can inspect report and meeting events for a clicked day and open available meeting venues, but there is no full event browser/search/filter yet
+  - debug-scheduled next-day `RUPSLB` meetings can reveal through normal event surfaces after `Advance Day`, but there is no normal gameplay action that schedules a future `RUPSLB` directly for player testing
+  - there is no deeper click-through from the index recap card yet
 - Trade view still needs deeper polish later:
   - there is still no intraday tape or intraday execution layer
   - candle mode is currently display-only and uses daily / weekly / monthly OHLC bars depending on range
@@ -1949,9 +2076,11 @@ Read this file first in the next session.
   - indicator toggles and unlocks now exist, but indicator UX is still basic
   - only a minimal RSI lower panel exists; there are no richer optional indicator panes yet
   - crosshair / hover readout now exist, and a first-pass manual drawing toolbar exists, but chart interaction is still limited:
+    - Pattern claims are player-led and saved only when added to Thesis; there is no standalone persisted chart-claim database
+    - pattern evaluation is deterministic coaching, not a full auto-detection engine and not a guarantee that the setup will work
     - drawings are session-only and are not persisted through save/load
     - no drag-to-move / drag-endpoint editing yet
-    - no color/style picker, labels, rays, channels, Fibonacci tools, or undo stack
+    - no drag-to-resize pattern regions, color/style picker, labels, rays, channels, Fibonacci tools, or undo stack
     - drawings are price-pane only; they do not anchor into the lower volume / RSI panels
   - the order ticket can now be collapsed, but the collapsed state is session-only and there is no animation or per-layout persistence yet
   - broker tape is now much richer, but still a derived display layer:
@@ -2001,6 +2130,18 @@ Read this file first in the next session.
   - keep badge counts as approximate current-day activity summaries unless true per-item unread tracking becomes a dedicated feature
   - add a recap archive only if players ask to review past days
   - add a fishbowl accessibility toggle/strength slider if the global screen effect feels tiring
+- Thesis Board planning:
+  - playtest whether the manual evidence picker plus player-led chart pattern flow feels like learning or busywork
+  - tune report wording, verdict thresholds, target-range defensibility, and missing-evidence notes after a few real play examples
+  - tune chart-pattern coaching thresholds and invalidation copy after seeing real player-marked regions
+  - add contextual `Add to Thesis` capture from News, Twooter, Network, Dashboard, and STOCKBOT non-chart rows only after the manual app + Pattern tool loop feels solid
+  - consider a richer report export/view mode only if players want to read thesis notes as standalone analyst-style documents
+  - keep thesis review out of the Advance Day recap-critical path unless future UX explicitly needs automatic daily thesis alerts
+- Life app planning:
+  - build the `Life` app after Thesis Board stabilizes
+  - start with realistic monthly obligations such as rent, basic expenses, dividends/income, and lifestyle choices rather than gamey timers
+  - connect the system to Academy's money-management/mindset themes so urgency comes from financial planning, not artificial pressure
+  - consider housing/cars/status upgrades after the monthly cash-flow loop is working and readable
 - Network and corporate-action planning:
   - deepen the shared corporate-action chain object that `News`, `Twooter`, `Network`, market reaction, `earnings_call`, `annual_rups`, and `rupslb` already read/write
   - expand interactive `rupslb` beyond `rights_issue` with more agenda families, record-date/shareholder-registry rules, and richer result nuance
