@@ -38,9 +38,9 @@ Read this file first in the next session.
     - `fc14108 Build Key Stats card dashboard`
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
-    - latest checkpoint message: `Tune Thesis evidence discipline`
+    - latest checkpoint message: `Remove Thesis Focus Gap shortcut`
   - after checkpoint commits, `git status --short` should generally be clean except ignored local `logs/` output
-  - current local note: the Thesis Board evidence-discipline tuning pass is checkpointed locally on top of the white-paper overlay / player-led chart-pattern evidence implementation
+  - current local note: the Thesis Board evidence-discipline strip is now passive guidance only; the `Focus Gap` shortcut has been removed and guarded by smoke coverage
 
 ## Latest Session Snapshot
 - Most recent work focused on turning `Thesis Board` into a stronger learning loop: a two-column evidence builder, staged white-paper report overlay, evidence-discipline guidance, player-led chart pattern claims from STOCKBOT charts, and compact thesis evidence persistence.
@@ -112,8 +112,8 @@ Read this file first in the next session.
     - Risk / Invalidation
   - The Thesis app now shows an `Evidence discipline` strip for the selected thesis:
     - summarizes the five core pillars as ready/missing
-    - `Focus Gap` jumps the evidence picker to the next missing pillar instead of auto-filling evidence
-    - this is meant to reduce picker busywork while keeping the player-led evidence loop intact
+    - the strip is passive guidance only; the earlier `Focus Gap` shortcut was removed because it steered the evidence picker too strongly
+    - this is meant to reduce confusion while keeping the player-led evidence loop intact
   - There is a `Use selected STOCKBOT stock` convenience button when the player already has a stock selected.
   - STOCKBOT chart pattern evidence is now player-led:
     - the chart toolbar has a `Pattern` tool beside select/horizontal/trend tools
@@ -209,7 +209,7 @@ Read this file first in the next session.
   - `git diff --check`
   - Godot project-load check
   - quick smoke with `--log-file logs\smoke-thesis-tuning-rerun.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
-  - the quick smoke now asserts old-save Thesis backfill, Thesis desktop open/focus/close behavior, settled window animation state, two-column Thesis Board layout, hidden report overlay at startup, staged report preparation, white-paper reveal, thesis create/save/load persistence, populated evidence options, Evidence discipline strip text, `Focus Gap` category selection, add/remove evidence autosaves, generated report verdict/grade/discipline rows/target/claim-led sections, report copy avoiding raw system/debug wording, no raw `quality/growth/risk + number` report phrasing, evidence-discipline and chart-pattern next-check report copy, frozen reports after `Advance Day`, review refresh after at least one simulated day, Pattern chart tool existence, deterministic Good/Plausible/Weak/Contradicted pattern fixture states, disabled Add-to-Thesis without a matching open thesis, single/multiple thesis destination flow, compact chart-pattern evidence persistence, and player-led chart-pattern report copy
+  - the quick smoke now asserts old-save Thesis backfill, Thesis desktop open/focus/close behavior, settled window animation state, two-column Thesis Board layout, hidden report overlay at startup, staged report preparation, white-paper reveal, thesis create/save/load persistence, populated evidence options, passive Evidence discipline strip text, absence of the removed `Focus Gap` shortcut, add/remove evidence autosaves, generated report verdict/grade/discipline rows/target/claim-led sections, report copy avoiding raw system/debug wording, no raw `quality/growth/risk + number` report phrasing, evidence-discipline and chart-pattern next-check report copy, frozen reports after `Advance Day`, review refresh after at least one simulated day, Pattern chart tool existence, deterministic Good/Plausible/Weak/Contradicted pattern fixture states, disabled Add-to-Thesis without a matching open thesis, single/multiple thesis destination flow, compact chart-pattern evidence persistence, and player-led chart-pattern report copy
   - existing quick-smoke coverage still asserts the Key Stats dashboard cards, populated row groups, `Net Income` / `EPS` / `Revenue` pill switching, the separate `Financials` tab rows/navigation, hidden Financials/Broker helper labels, uniform Dashboard calendar grid shape, Dashboard calendar event popup/buttons, Dashboard sector card-to-stock-list navigation, Dashboard section title styling, the new `Index Gorengan` recap values, the real sparkline point count, and hidden old index grid/hint/date nodes
   - normal-play perf scene with `--log-file logs\normal-play-dashboard-index-recap.log --scene res://scenes/tests/NormalPlayPerfTest.tscn -- --smoke-local-io`, which printed `NORMAL_PLAY_PERF_OK open_network=42.47ms advance_network_open_recap_ready=1208.58ms advance_network_open=1500.78ms advance_desktop_only_recap_ready=1133.38ms advance_desktop_only=1561.44ms open_stock=101.2ms advance_stock_open_recap_ready=1007.93ms advance_stock_open=1314.42ms open_news=195.54ms open_network_with_news=33.42ms advance_news_network_open_recap_ready=957.95ms advance_news_network_open=1455.98ms flush_pending_save=241.43ms local_save_bytes=2010467`
   - note: the quick smoke may print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` on Windows; treat it as non-blocking Godot/Windows certificate-store noise unless it appears before smoke output or affects network/API work
@@ -1854,11 +1854,17 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - Thesis Focus Gap removal on `2026-04-28`:
+    - `git diff --check` passed
+    - Godot project-load check passed with `--log-file logs\godot-project-load-remove-focus-gap.log --quit`
+    - quick Godot headless smoke with `--log-file logs\smoke-remove-focus-gap.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
+    - smoke now asserts the Evidence discipline strip remains visible while the removed `ThesisFocusGapButton` shortcut stays absent
+    - non-blocking Windows/Godot note: this smoke run can print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; treat it as trailing platform noise unless it appears before test success or affects network/API work
   - Thesis evidence-discipline tuning pass on `2026-04-28`:
     - `git diff --check` passed
     - Godot project-load check passed with `--log-file logs\godot-project-load-thesis-tuning-rerun.log --quit`
     - quick Godot headless smoke with `--log-file logs\smoke-thesis-tuning-rerun.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
-    - smoke covered the new Evidence discipline strip, `Focus Gap` jumping to missing fundamentals first, report `discipline_rows`, stricter report copy around evidence discipline, and chart-pattern `Next check` language in generated white papers
+    - smoke covered the new Evidence discipline strip, report `discipline_rows`, stricter report copy around evidence discipline, and chart-pattern `Next check` language in generated white papers
     - non-blocking Windows/Godot note: this smoke run can print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; treat it as trailing platform noise unless it appears before test success or affects network/API work
   - Thesis white-paper + chart-pattern evidence pass on `2026-04-28`:
     - `git diff --check` passed

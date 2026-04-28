@@ -4093,7 +4093,6 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 	var thesis_evidence_option: OptionButton = game_root.find_child("ThesisEvidenceOption", true, false) as OptionButton
 	var thesis_evidence_list: ItemList = game_root.find_child("ThesisEvidenceList", true, false) as ItemList
 	var thesis_evidence_discipline_label: Label = game_root.find_child("ThesisEvidenceDisciplineLabel", true, false) as Label
-	var thesis_focus_gap_button: Button = game_root.find_child("ThesisFocusGapButton", true, false) as Button
 	var thesis_generate_report_button: Button = game_root.find_child("ThesisGenerateReportButton", true, false) as Button
 	var thesis_view_paper_button: Button = game_root.find_child("ThesisViewPaperButton", true, false) as Button
 	var thesis_report_panel: Control = game_root.find_child("ThesisReportPanel", true, false) as Control
@@ -4118,7 +4117,6 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 		thesis_evidence_option == null or
 		thesis_evidence_list == null or
 		thesis_evidence_discipline_label == null or
-		thesis_focus_gap_button == null or
 		thesis_generate_report_button == null or
 		thesis_view_paper_button == null or
 		thesis_report_panel != null or
@@ -4222,13 +4220,8 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 		return "Smoke test expected the Thesis Board evidence picker to render categories and options after creating a thesis."
 	if thesis_evidence_discipline_label.text.find("Evidence discipline") == -1 or thesis_evidence_discipline_label.text.find("Price ready") == -1:
 		return "Smoke test expected the Thesis Board evidence discipline strip to summarize selected evidence pillars."
-	if thesis_focus_gap_button.disabled:
-		return "Smoke test expected the Thesis Board Focus Gap button to enable while core evidence pillars are missing."
-	thesis_focus_gap_button.emit_signal("pressed")
-	await get_tree().process_frame
-	var focused_gap_category: Dictionary = thesis_evidence_category_option.get_item_metadata(max(thesis_evidence_category_option.selected, 0))
-	if str(focused_gap_category.get("id", "")) != "fundamentals":
-		return "Smoke test expected Focus Gap to jump to the missing fundamentals anchor first."
+	if game_root.find_child("ThesisFocusGapButton", true, false) != null:
+		return "Smoke test expected the Thesis Board evidence discipline strip to stay passive without a Focus Gap shortcut."
 
 	var evidence_snapshot: Dictionary = GameManager.get_thesis_evidence_options(thesis_company_id)
 	var required_evidence_categories := ["fundamentals", "price_action", "broker_flow", "sector_macro", "news", "risk_invalidation"]

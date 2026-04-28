@@ -41,7 +41,6 @@ var evidence_category_option: OptionButton = null
 var evidence_option: OptionButton = null
 var evidence_detail_label: Label = null
 var evidence_discipline_label: Label = null
-var focus_gap_button: Button = null
 var add_evidence_button: Button = null
 var selected_evidence_list: ItemList = null
 var remove_evidence_button: Button = null
@@ -193,23 +192,13 @@ func _build_ui() -> void:
 	create_row.add_child(update_button)
 
 	center_vbox.add_child(_make_title("Evidence"))
-	var discipline_row := HBoxContainer.new()
-	discipline_row.name = "ThesisEvidenceDisciplineRow"
-	discipline_row.add_theme_constant_override("separation", 8)
-	center_vbox.add_child(discipline_row)
 	evidence_discipline_label = Label.new()
 	evidence_discipline_label.name = "ThesisEvidenceDisciplineLabel"
 	evidence_discipline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	evidence_discipline_label.custom_minimum_size = Vector2(0, 58)
 	evidence_discipline_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_label(evidence_discipline_label, COLOR_MUTED, 12)
-	discipline_row.add_child(evidence_discipline_label)
-	focus_gap_button = Button.new()
-	focus_gap_button.name = "ThesisFocusGapButton"
-	focus_gap_button.text = "Focus Gap"
-	focus_gap_button.custom_minimum_size = Vector2(110, 34)
-	focus_gap_button.pressed.connect(_on_focus_gap_pressed)
-	discipline_row.add_child(focus_gap_button)
+	center_vbox.add_child(evidence_discipline_label)
 
 	evidence_category_option = OptionButton.new()
 	evidence_category_option.name = "ThesisEvidenceCategoryOption"
@@ -486,8 +475,6 @@ func _refresh_selected_thesis() -> void:
 	view_paper_button.disabled = not has_report or report_generation_running
 	refresh_review_button.disabled = not has_report or report_generation_running
 	close_thesis_button.disabled = not has_thesis or report_generation_running
-	if focus_gap_button != null:
-		focus_gap_button.disabled = not has_thesis or report_generation_running
 	if report_refresh_review_button != null:
 		report_refresh_review_button.disabled = not has_report or report_generation_running
 	if report_regenerate_button != null:
@@ -581,8 +568,6 @@ func _refresh_evidence_discipline(thesis: Dictionary) -> void:
 		return
 	if thesis.is_empty():
 		evidence_discipline_label.text = "Evidence discipline: no active thesis."
-		if focus_gap_button != null:
-			focus_gap_button.disabled = true
 		return
 
 	var rows: Array = _evidence_discipline_rows(thesis)
@@ -605,9 +590,6 @@ func _refresh_evidence_discipline(thesis: Dictionary) -> void:
 		" | ".join(row_labels),
 		next_line
 	]
-	if focus_gap_button != null:
-		focus_gap_button.disabled = report_generation_running or next_gap.is_empty()
-		focus_gap_button.tooltip_text = "Core evidence pillars are covered." if next_gap.is_empty() else "Jump to the next missing evidence pillar."
 
 
 func _refresh_report(thesis: Dictionary) -> void:
@@ -808,20 +790,6 @@ func _on_evidence_option_selected(_index: int) -> void:
 	_refresh_evidence_detail()
 
 
-func _on_focus_gap_pressed() -> void:
-	var thesis: Dictionary = _selected_thesis()
-	if thesis.is_empty():
-		return
-	var gap: Dictionary = _next_evidence_gap(thesis)
-	if gap.is_empty():
-		_set_status("Core evidence pillars are already covered.")
-		return
-	var category_id: String = str(gap.get("focus_category", ""))
-	if _select_evidence_category(category_id):
-		_refresh_evidence_option_picker()
-		_set_status("Focused %s evidence gap." % str(gap.get("label", "next")))
-
-
 func _on_add_evidence_pressed() -> void:
 	if selected_thesis_id.is_empty():
 		return
@@ -920,17 +888,6 @@ func _select_option_by_id(option: OptionButton, option_id: String) -> void:
 		if str(option.get_item_metadata(index)) == option_id:
 			option.select(index)
 			return
-
-
-func _select_evidence_category(category_id: String) -> bool:
-	if category_id.is_empty() or evidence_category_option == null:
-		return false
-	for index in range(evidence_category_option.item_count):
-		var category: Dictionary = evidence_category_option.get_item_metadata(index)
-		if str(category.get("id", "")) == category_id:
-			evidence_category_option.select(index)
-			return true
-	return false
 
 
 func _evidence_discipline_rows(thesis: Dictionary) -> Array:
