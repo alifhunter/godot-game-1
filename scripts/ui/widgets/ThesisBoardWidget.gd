@@ -1018,17 +1018,17 @@ func _style_button(button: Button) -> void:
 
 
 func _format_currency(value: float) -> String:
-	var sign: String = "-" if value < 0.0 else ""
+	var sign_prefix: String = "-" if value < 0.0 else ""
 	var abs_value: float = abs(value)
 	if abs_value >= 1000000000000.0:
-		return "%sRp%sT" % [sign, String.num(abs_value / 1000000000000.0, 2)]
+		return "%sRp%sT" % [sign_prefix, String.num(abs_value / 1000000000000.0, 2)]
 	if abs_value >= 1000000000.0:
-		return "%sRp%sB" % [sign, String.num(abs_value / 1000000000.0, 2)]
+		return "%sRp%sB" % [sign_prefix, String.num(abs_value / 1000000000.0, 2)]
 	if abs_value >= 1000000.0:
-		return "%sRp%sM" % [sign, String.num(abs_value / 1000000.0, 2)]
-	return "%sRp%s" % [sign, String.num(abs_value, 2)]
+		return "%sRp%sM" % [sign_prefix, String.num(abs_value / 1000000.0, 2)]
+	return "%sRp%s" % [sign_prefix, String.num(abs_value, 2)]
 
 
 func _format_percent(value: float) -> String:
-	var sign: String = "+" if value > 0.0 else ""
-	return "%s%s%%" % [sign, String.num(value * 100.0, 2)]
+	var sign_prefix: String = "+" if value > 0.0 else ""
+	return "%s%s%%" % [sign_prefix, String.num(value * 100.0, 2)]

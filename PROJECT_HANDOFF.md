@@ -38,9 +38,9 @@ Read this file first in the next session.
     - `fc14108 Build Key Stats card dashboard`
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
-    - latest checkpoint message: `Add rights issue execution`
+    - latest checkpoint message: `Avoid shadowing sign built-in`
   - after checkpoint commits, `git status --short` should generally be clean except ignored local `logs/` output
-  - current local note: `rights_issue` now has deterministic terms, execution payloads, company dilution/TERP effects, and player auto-exercise/lapse handling
+  - current local note: formatter locals that previously shadowed Godot's built-in `sign()` are now renamed to `sign_prefix`
 
 ## Latest Session Snapshot
 - Most recent work made `rights_issue` execution real after the interactive `RUPSLB` approval flow.
@@ -1918,6 +1918,12 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - Formatter shadow warning fix on `2026-04-28`:
+    - `git diff --check` passed
+    - Godot project-load check passed with `--log-file logs\fix-shadowed-sign-load.log --quit`
+    - fixed the `SHADOWED_GLOBAL_IDENTIFIER` warning from `systems/ThesisReportSystem.gd` and the same formatter local pattern in sibling UI helpers
+    - committed as `Avoid shadowing sign built-in`
+    - non-blocking Windows/Godot note: this load check printed `ERROR: Failed to read the root certificate store.` after startup; treat it as platform noise unless it affects network/API work
   - Rights issue execution pass on `2026-04-28`:
     - `git diff --check` passed
     - Godot project-load check passed with `--log-file logs\rights-issue-load.log --quit`
