@@ -14,6 +14,13 @@ const REPORT_PREPARE_LINES := [
 	"Checking valuation, tape, and risk...",
 	"Formatting research note..."
 ]
+const EVIDENCE_DISCIPLINE_PILLARS := [
+	{"id": "anchor", "label": "Anchor", "categories": ["fundamentals", "financials", "valuation"], "focus_category": "fundamentals"},
+	{"id": "price", "label": "Price", "categories": ["price_action"], "focus_category": "price_action"},
+	{"id": "tape", "label": "Tape", "categories": ["broker_flow"], "focus_category": "broker_flow"},
+	{"id": "catalyst", "label": "Catalyst", "categories": ["sector_macro", "news", "twooter", "network_intel", "corporate_events"], "focus_category": "sector_macro"},
+	{"id": "risk", "label": "Invalidation", "categories": ["risk_invalidation"], "focus_category": "risk_invalidation"}
+]
 
 var selected_external_company_id: String = ""
 var selected_thesis_id: String = ""
@@ -33,6 +40,8 @@ var update_button: Button = null
 var evidence_category_option: OptionButton = null
 var evidence_option: OptionButton = null
 var evidence_detail_label: Label = null
+var evidence_discipline_label: Label = null
+var focus_gap_button: Button = null
 var add_evidence_button: Button = null
 var selected_evidence_list: ItemList = null
 var remove_evidence_button: Button = null
@@ -184,6 +193,24 @@ func _build_ui() -> void:
 	create_row.add_child(update_button)
 
 	center_vbox.add_child(_make_title("Evidence"))
+	var discipline_row := HBoxContainer.new()
+	discipline_row.name = "ThesisEvidenceDisciplineRow"
+	discipline_row.add_theme_constant_override("separation", 8)
+	center_vbox.add_child(discipline_row)
+	evidence_discipline_label = Label.new()
+	evidence_discipline_label.name = "ThesisEvidenceDisciplineLabel"
+	evidence_discipline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	evidence_discipline_label.custom_minimum_size = Vector2(0, 58)
+	evidence_discipline_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_label(evidence_discipline_label, COLOR_MUTED, 12)
+	discipline_row.add_child(evidence_discipline_label)
+	focus_gap_button = Button.new()
+	focus_gap_button.name = "ThesisFocusGapButton"
+	focus_gap_button.text = "Focus Gap"
+	focus_gap_button.custom_minimum_size = Vector2(110, 34)
+	focus_gap_button.pressed.connect(_on_focus_gap_pressed)
+	discipline_row.add_child(focus_gap_button)
+
 	evidence_category_option = OptionButton.new()
 	evidence_category_option.name = "ThesisEvidenceCategoryOption"
 	evidence_category_option.item_selected.connect(_on_evidence_category_selected)
@@ -459,6 +486,8 @@ func _refresh_selected_thesis() -> void:
 	view_paper_button.disabled = not has_report or report_generation_running
 	refresh_review_button.disabled = not has_report or report_generation_running
 	close_thesis_button.disabled = not has_thesis or report_generation_running
+	if focus_gap_button != null:
+		focus_gap_button.disabled = not has_thesis or report_generation_running
 	if report_refresh_review_button != null:
 		report_refresh_review_button.disabled = not has_report or report_generation_running
 	if report_regenerate_button != null:
@@ -473,6 +502,7 @@ func _refresh_selected_thesis() -> void:
 		evidence_category_option.clear()
 		evidence_option.clear()
 		evidence_detail_label.text = ""
+		_refresh_evidence_discipline({})
 		if report_overlay != null and report_overlay.visible and not report_generation_running:
 			_hide_report_overlay()
 		return
@@ -494,6 +524,7 @@ func _refresh_selected_thesis() -> void:
 	_select_option_by_id(horizon_option, str(thesis.get("horizon", "swing")))
 	_refresh_evidence_options(str(thesis.get("company_id", "")))
 	_refresh_selected_evidence(thesis)
+	_refresh_evidence_discipline(thesis)
 	_refresh_report(thesis)
 
 
@@ -543,6 +574,40 @@ func _refresh_selected_evidence(thesis: Dictionary) -> void:
 		var index: int = selected_evidence_list.item_count
 		selected_evidence_list.add_item("%s: %s  |  %s" % [str(row.get("category_label", row.get("category", ""))), str(row.get("label", "")), str(row.get("value", ""))])
 		selected_evidence_list.set_item_metadata(index, str(row.get("id", "")))
+
+
+func _refresh_evidence_discipline(thesis: Dictionary) -> void:
+	if evidence_discipline_label == null:
+		return
+	if thesis.is_empty():
+		evidence_discipline_label.text = "Evidence discipline: no active thesis."
+		if focus_gap_button != null:
+			focus_gap_button.disabled = true
+		return
+
+	var rows: Array = _evidence_discipline_rows(thesis)
+	var complete_count: int = 0
+	var row_labels: Array = []
+	for row_value in rows:
+		var row: Dictionary = row_value
+		var complete: bool = bool(row.get("complete", false))
+		if complete:
+			complete_count += 1
+		row_labels.append("%s %s" % [str(row.get("label", "")), "ready" if complete else "missing"])
+
+	var next_gap: Dictionary = _next_evidence_gap(thesis)
+	var next_line: String = "Core mix complete"
+	if not next_gap.is_empty():
+		next_line = "Next gap: %s" % str(next_gap.get("label", "Evidence"))
+	evidence_discipline_label.text = "Evidence discipline: %d/%d pillars\n%s\n%s" % [
+		complete_count,
+		rows.size(),
+		" | ".join(row_labels),
+		next_line
+	]
+	if focus_gap_button != null:
+		focus_gap_button.disabled = report_generation_running or next_gap.is_empty()
+		focus_gap_button.tooltip_text = "Core evidence pillars are covered." if next_gap.is_empty() else "Jump to the next missing evidence pillar."
 
 
 func _refresh_report(thesis: Dictionary) -> void:
@@ -743,6 +808,20 @@ func _on_evidence_option_selected(_index: int) -> void:
 	_refresh_evidence_detail()
 
 
+func _on_focus_gap_pressed() -> void:
+	var thesis: Dictionary = _selected_thesis()
+	if thesis.is_empty():
+		return
+	var gap: Dictionary = _next_evidence_gap(thesis)
+	if gap.is_empty():
+		_set_status("Core evidence pillars are already covered.")
+		return
+	var category_id: String = str(gap.get("focus_category", ""))
+	if _select_evidence_category(category_id):
+		_refresh_evidence_option_picker()
+		_set_status("Focused %s evidence gap." % str(gap.get("label", "next")))
+
+
 func _on_add_evidence_pressed() -> void:
 	if selected_thesis_id.is_empty():
 		return
@@ -841,6 +920,58 @@ func _select_option_by_id(option: OptionButton, option_id: String) -> void:
 		if str(option.get_item_metadata(index)) == option_id:
 			option.select(index)
 			return
+
+
+func _select_evidence_category(category_id: String) -> bool:
+	if category_id.is_empty() or evidence_category_option == null:
+		return false
+	for index in range(evidence_category_option.item_count):
+		var category: Dictionary = evidence_category_option.get_item_metadata(index)
+		if str(category.get("id", "")) == category_id:
+			evidence_category_option.select(index)
+			return true
+	return false
+
+
+func _evidence_discipline_rows(thesis: Dictionary) -> Array:
+	var categories: Dictionary = _thesis_category_lookup(thesis)
+	var rows: Array = []
+	for pillar_value in EVIDENCE_DISCIPLINE_PILLARS:
+		var pillar: Dictionary = pillar_value
+		rows.append({
+			"id": str(pillar.get("id", "")),
+			"label": str(pillar.get("label", "")),
+			"focus_category": str(pillar.get("focus_category", "")),
+			"complete": _pillar_complete(categories, pillar.get("categories", []))
+		})
+	return rows
+
+
+func _next_evidence_gap(thesis: Dictionary) -> Dictionary:
+	for row_value in _evidence_discipline_rows(thesis):
+		var row: Dictionary = row_value
+		if not bool(row.get("complete", false)):
+			return row
+	return {}
+
+
+func _thesis_category_lookup(thesis: Dictionary) -> Dictionary:
+	var categories: Dictionary = {}
+	for evidence_value in thesis.get("evidence", []):
+		if typeof(evidence_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = evidence_value
+		var category: String = str(row.get("category", ""))
+		if not category.is_empty():
+			categories[category] = true
+	return categories
+
+
+func _pillar_complete(categories: Dictionary, category_ids: Array) -> bool:
+	for category_id_value in category_ids:
+		if categories.has(str(category_id_value)):
+			return true
+	return false
 
 
 func _add_option_items(option: OptionButton, items: Array) -> void:

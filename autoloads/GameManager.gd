@@ -2428,6 +2428,7 @@ func _copy_optional_thesis_evidence_fields(target: Dictionary, source: Dictionar
 		"feedback_state",
 		"feedback_reason",
 		"invalidation",
+		"next_check",
 		"chart_range",
 		"chart_range_label",
 		"region_label"

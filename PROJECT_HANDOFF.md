@@ -38,12 +38,12 @@ Read this file first in the next session.
     - `fc14108 Build Key Stats card dashboard`
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
-    - latest checkpoint message: `Add Thesis Board evidence reports`
+    - latest checkpoint message: `Tune Thesis evidence discipline`
   - after checkpoint commits, `git status --short` should generally be clean except ignored local `logs/` output
-  - current local note: the Thesis Board / white-paper overlay / player-led chart-pattern evidence implementation and smoke coverage are checkpointed locally, including the `scripts/ui/widgets/DashboardSparklineCanvas.gd.uid` Godot UID sidecar for the Dashboard sparkline script
+  - current local note: the Thesis Board evidence-discipline tuning pass is checkpointed locally on top of the white-paper overlay / player-led chart-pattern evidence implementation
 
 ## Latest Session Snapshot
-- Most recent work focused on turning `Thesis Board` into a stronger learning loop: a two-column evidence builder, staged white-paper report overlay, player-led chart pattern claims from STOCKBOT charts, and compact thesis evidence persistence.
+- Most recent work focused on turning `Thesis Board` into a stronger learning loop: a two-column evidence builder, staged white-paper report overlay, evidence-discipline guidance, player-led chart pattern claims from STOCKBOT charts, and compact thesis evidence persistence.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses, shows short processing phases on the desktop button, and now has a snappy press/phase pulse that resets to neutral after processing.
   - Daily Recap is now a custom `GameRoot.gd` overlay rather than a stock Godot dialog, so it can share the same dark-brown title-bar chrome as `News`, `Academy`, `Network`, and `Shop`.
@@ -93,6 +93,11 @@ Read this file first in the next session.
     - risk: `low`, `manageable`, `moderate`, `elevated`, `high`
     - the raw `quality 29 / growth 46 / risk 48` style wording is intentionally not used in generated report prose
   - Generated reports freeze report date, report price, selected evidence, verdict, target area, and written sections; later market movement only updates the review panel until the player regenerates.
+  - Report scoring is now discipline-aware:
+    - the core checklist is `Anchor`, `Price`, `Tape`, `Catalyst`, and `Invalidation`
+    - missing pillars cap reasoning quality and make target ranges less defensible
+    - `Buy` / `Accumulate` ratings now require a stronger mix of anchor, price, invalidation, and non-contradicted pattern evidence
+    - weak or contradicted chart-pattern claims add explicit report notes instead of quietly counting as confirmation
   - Evidence picker V1 is manual inside the Thesis app:
     - Fundamentals / Key Stats
     - Financials
@@ -105,6 +110,10 @@ Read this file first in the next session.
     - Network Intel
     - Corporate Events
     - Risk / Invalidation
+  - The Thesis app now shows an `Evidence discipline` strip for the selected thesis:
+    - summarizes the five core pillars as ready/missing
+    - `Focus Gap` jumps the evidence picker to the next missing pillar instead of auto-filling evidence
+    - this is meant to reduce picker busywork while keeping the player-led evidence loop intact
   - There is a `Use selected STOCKBOT stock` convenience button when the player already has a stock selected.
   - STOCKBOT chart pattern evidence is now player-led:
     - the chart toolbar has a `Pattern` tool beside select/horizontal/trend tools
@@ -113,8 +122,8 @@ Read this file first in the next session.
     - `systems/ChartPatternSystem.gd` evaluates the marked region and returns coaching states: `Good read`, `Plausible, needs confirmation`, `Weak read`, or `Contradicted`
     - coaching is non-blocking: weak/contradicted reads can still be added to Thesis, but carry warning copy and invalidation notes
     - `Add to Thesis` is disabled until an open thesis exists for the same stock; one open thesis is used directly, multiple open theses show a destination picker, and V1 never auto-creates a thesis
-    - saved chart-pattern evidence remains compact: pattern label, coaching state, region dates/prices, reason, invalidation hint, chart range, current price/date, and source label `STOCKBOT Chart`
-    - the generated white paper explicitly says the player marked the pattern and includes the system coaching read, instead of pretending the system auto-discovered the setup
+    - saved chart-pattern evidence remains compact: pattern label, coaching state, region dates/prices, reason, next-check hint, invalidation hint, chart range, current price/date, and source label `STOCKBOT Chart`
+    - the generated white paper explicitly says the player marked the pattern and includes the system coaching read plus next-check language, instead of pretending the system auto-discovered the setup
   - Review state compares the frozen report against current price, held position, broker flow, and updated context and returns `Strengthening`, `Weakening`, `Unchanged`, or `Needs Review`.
   - Thesis review work is not part of the Advance Day recap-critical path; it runs on demand/app refresh and through Thesis APIs.
 - STOCKBOT status:
@@ -199,8 +208,8 @@ Read this file first in the next session.
 - Last successful verification in this session:
   - `git diff --check`
   - Godot project-load check
-  - quick smoke with `--log-file logs\smoke-chart-pattern-evidence.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
-  - the quick smoke now asserts old-save Thesis backfill, Thesis desktop open/focus/close behavior, settled window animation state, two-column Thesis Board layout, hidden report overlay at startup, staged report preparation, white-paper reveal, thesis create/save/load persistence, populated evidence options, add/remove evidence autosaves, generated report verdict/grade/target/claim-led sections, report copy avoiding raw system/debug wording, no raw `quality/growth/risk + number` report phrasing, frozen reports after `Advance Day`, review refresh after at least one simulated day, Pattern chart tool existence, deterministic Good/Plausible/Weak/Contradicted pattern fixture states, disabled Add-to-Thesis without a matching open thesis, single/multiple thesis destination flow, compact chart-pattern evidence persistence, and player-led chart-pattern report copy
+  - quick smoke with `--log-file logs\smoke-thesis-tuning-rerun.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK`
+  - the quick smoke now asserts old-save Thesis backfill, Thesis desktop open/focus/close behavior, settled window animation state, two-column Thesis Board layout, hidden report overlay at startup, staged report preparation, white-paper reveal, thesis create/save/load persistence, populated evidence options, Evidence discipline strip text, `Focus Gap` category selection, add/remove evidence autosaves, generated report verdict/grade/discipline rows/target/claim-led sections, report copy avoiding raw system/debug wording, no raw `quality/growth/risk + number` report phrasing, evidence-discipline and chart-pattern next-check report copy, frozen reports after `Advance Day`, review refresh after at least one simulated day, Pattern chart tool existence, deterministic Good/Plausible/Weak/Contradicted pattern fixture states, disabled Add-to-Thesis without a matching open thesis, single/multiple thesis destination flow, compact chart-pattern evidence persistence, and player-led chart-pattern report copy
   - existing quick-smoke coverage still asserts the Key Stats dashboard cards, populated row groups, `Net Income` / `EPS` / `Revenue` pill switching, the separate `Financials` tab rows/navigation, hidden Financials/Broker helper labels, uniform Dashboard calendar grid shape, Dashboard calendar event popup/buttons, Dashboard sector card-to-stock-list navigation, Dashboard section title styling, the new `Index Gorengan` recap values, the real sparkline point count, and hidden old index grid/hint/date nodes
   - normal-play perf scene with `--log-file logs\normal-play-dashboard-index-recap.log --scene res://scenes/tests/NormalPlayPerfTest.tscn -- --smoke-local-io`, which printed `NORMAL_PLAY_PERF_OK open_network=42.47ms advance_network_open_recap_ready=1208.58ms advance_network_open=1500.78ms advance_desktop_only_recap_ready=1133.38ms advance_desktop_only=1561.44ms open_stock=101.2ms advance_stock_open_recap_ready=1007.93ms advance_stock_open=1314.42ms open_news=195.54ms open_network_with_news=33.42ms advance_news_network_open_recap_ready=957.95ms advance_news_network_open=1455.98ms flush_pending_save=241.43ms local_save_bytes=2010467`
   - note: the quick smoke may print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` on Windows; treat it as non-blocking Godot/Windows certificate-store noise unless it appears before smoke output or affects network/API work
@@ -1845,6 +1854,12 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - Thesis evidence-discipline tuning pass on `2026-04-28`:
+    - `git diff --check` passed
+    - Godot project-load check passed with `--log-file logs\godot-project-load-thesis-tuning-rerun.log --quit`
+    - quick Godot headless smoke with `--log-file logs\smoke-thesis-tuning-rerun.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
+    - smoke covered the new Evidence discipline strip, `Focus Gap` jumping to missing fundamentals first, report `discipline_rows`, stricter report copy around evidence discipline, and chart-pattern `Next check` language in generated white papers
+    - non-blocking Windows/Godot note: this smoke run can print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; treat it as trailing platform noise unless it appears before test success or affects network/API work
   - Thesis white-paper + chart-pattern evidence pass on `2026-04-28`:
     - `git diff --check` passed
     - Godot project-load check passed

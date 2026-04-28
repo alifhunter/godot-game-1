@@ -1596,6 +1596,7 @@ func _normalize_player_thesis(source_thesis: Variant) -> Dictionary:
 			"feedback_state",
 			"feedback_reason",
 			"invalidation",
+			"next_check",
 			"chart_range",
 			"chart_range_label",
 			"region_label"

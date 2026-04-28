@@ -49,16 +49,18 @@ func evaluate_pattern_claim(context: Dictionary) -> Dictionary:
 	var feedback_state: String = str(feedback.get("state", STATE_WEAK))
 	var reason: String = str(feedback.get("reason", "The marked region needs more confirmation."))
 	var invalidation: String = str(feedback.get("invalidation", "Recheck if price breaks the marked structure."))
+	var next_check: String = str(feedback.get("next_check", _next_check_for_state(feedback_state)))
 	var region_label: String = _region_label(selected_bars)
 	var source_label: String = "STOCKBOT Chart"
 	var ticker: String = str(context.get("ticker", context.get("company_id", "")))
 	var range_label: String = str(context.get("range_label", context.get("range_id", ""))).to_upper()
-	var detail: String = "Player marked %s on %s%s. Feedback reads %s because %s Invalidation: %s" % [
+	var detail: String = "Player marked %s on %s%s. Feedback reads %s because %s Next check: %s Invalidation: %s" % [
 		pattern_label,
 		region_label,
 		" (%s)" % range_label if not range_label.is_empty() else "",
 		feedback_state,
 		reason,
+		next_check,
 		invalidation
 	]
 	return {
@@ -77,6 +79,7 @@ func evaluate_pattern_claim(context: Dictionary) -> Dictionary:
 		"feedback_state": feedback_state,
 		"feedback_reason": reason,
 		"invalidation": invalidation,
+		"next_check": next_check,
 		"chart_range": str(context.get("range_id", "")),
 		"chart_range_label": range_label,
 		"region_label": region_label,
@@ -440,3 +443,16 @@ func _failure(message: String) -> Dictionary:
 		"feedback_state": STATE_WEAK,
 		"detail": message
 	}
+
+
+func _next_check_for_state(state: String) -> String:
+	match state:
+		STATE_GOOD:
+			return "Watch whether the next close respects the marked structure."
+		STATE_PLAUSIBLE:
+			return "Wait for one more close or volume confirmation before treating it as support."
+		STATE_WEAK:
+			return "Use the mark as a question and look for a cleaner structure."
+		STATE_CONTRADICTED:
+			return "Do not use this as confirmation unless price rebuilds the marked level."
+	return "Recheck after the next close."

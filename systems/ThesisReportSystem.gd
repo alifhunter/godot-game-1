@@ -6,6 +6,13 @@ const RATING_WATCH := "Hold/Watch"
 const RATING_TRADE_ONLY := "Trade Only"
 const RATING_AVOID := "Avoid"
 const RATING_DIVIDEND_HOLD := "Dividend Hold"
+const CORE_DISCIPLINE_PILLARS := [
+	{"id": "anchor", "label": "Anchor", "categories": ["fundamentals", "key_stats", "financials", "valuation"], "missing_note": "Add a Fundamentals, Financials, or Valuation anchor."},
+	{"id": "price", "label": "Price", "categories": ["price_action"], "missing_note": "Add Price Action so the thesis has an entry context."},
+	{"id": "tape", "label": "Tape", "categories": ["broker_flow"], "missing_note": "Add Broker Flow to check whether the tape agrees."},
+	{"id": "catalyst", "label": "Catalyst", "categories": ["news", "twooter", "network_intel", "corporate_events", "sector_macro"], "missing_note": "Add a catalyst or market-context check."},
+	{"id": "risk", "label": "Invalidation", "categories": ["risk_invalidation"], "missing_note": "Add a Risk / Invalidation point before sizing up."}
+]
 
 
 func build_report(thesis: Dictionary, context: Dictionary) -> Dictionary:
@@ -37,6 +44,7 @@ func build_report(thesis: Dictionary, context: Dictionary) -> Dictionary:
 		"reasoning_score": score,
 		"reasoning_grade": grade,
 		"missing_notes": score_data.get("missing_notes", []).duplicate(),
+		"discipline_rows": score_data.get("discipline_rows", []).duplicate(true),
 		"target": target,
 		"implied_upside_pct": float(target.get("implied_upside_pct", 0.0)),
 		"sections": _build_sections(thesis, company, evidence, score_data, rating, target)
@@ -110,6 +118,8 @@ func _score_evidence(thesis: Dictionary, evidence: Array) -> Dictionary:
 	var positive_count: int = 0
 	var negative_count: int = 0
 	var mixed_count: int = 0
+	var weak_pattern_count: int = 0
+	var contradicted_pattern_count: int = 0
 	for evidence_value in evidence:
 		if typeof(evidence_value) != TYPE_DICTIONARY:
 			continue
@@ -117,6 +127,12 @@ func _score_evidence(thesis: Dictionary, evidence: Array) -> Dictionary:
 		var category: String = str(row.get("category", ""))
 		if not category.is_empty():
 			categories[category] = true
+		if category == "price_action":
+			var feedback_state: String = str(row.get("feedback_state", "")).to_lower()
+			if feedback_state == "weak read":
+				weak_pattern_count += 1
+			elif feedback_state == "contradicted":
+				contradicted_pattern_count += 1
 		var impact: String = str(row.get("impact", "mixed"))
 		if impact == "positive":
 			positive_count += 1
@@ -156,28 +172,37 @@ func _score_evidence(thesis: Dictionary, evidence: Array) -> Dictionary:
 		score -= 18
 	if not categories.has("risk_invalidation"):
 		score -= 12
+	var discipline_rows: Array = _discipline_rows(categories)
+	var missing_pillar_count: int = _missing_pillar_count(discipline_rows)
+	score -= missing_pillar_count * 3
+	score -= weak_pattern_count * 3
+	score -= contradicted_pattern_count * 7
 
 	var missing_notes: Array = []
-	if not _has_any_category(categories, ["fundamentals", "key_stats", "financials", "valuation"]):
-		missing_notes.append("Add at least one valuation or fundamentals anchor.")
-	if not categories.has("price_action"):
-		missing_notes.append("Add price action so the thesis has an entry context.")
-	if not categories.has("broker_flow"):
-		missing_notes.append("Add broker flow to check whether tape agrees.")
-	if not categories.has("risk_invalidation"):
-		missing_notes.append("Add a risk or invalidation point before sizing up.")
+	for discipline_value in discipline_rows:
+		var discipline_row: Dictionary = discipline_value
+		if not bool(discipline_row.get("complete", false)):
+			missing_notes.append(str(discipline_row.get("missing_note", "")))
 	if public_only:
 		missing_notes.append("Public chatter alone is not enough for an investment thesis.")
 	if contradiction_count > 0:
 		missing_notes.append("Address evidence that pushes against your stance.")
+	if weak_pattern_count > 0:
+		missing_notes.append("Treat weak chart-pattern evidence as a question, not confirmation.")
+	if contradicted_pattern_count > 0:
+		missing_notes.append("Resolve chart-pattern evidence that the coaching marked as contradicted.")
 
 	return {
 		"score": clamp(score, 0, 100),
 		"categories": categories,
+		"discipline_rows": discipline_rows,
+		"missing_pillar_count": missing_pillar_count,
 		"positive_count": positive_count,
 		"negative_count": negative_count,
 		"mixed_count": mixed_count,
 		"contradiction_count": contradiction_count,
+		"weak_pattern_count": weak_pattern_count,
+		"contradicted_pattern_count": contradicted_pattern_count,
 		"missing_notes": missing_notes
 	}
 
@@ -189,20 +214,28 @@ func _rating_for(thesis: Dictionary, company: Dictionary, score: int, score_data
 	var risk: int = int(company.get("risk_score", 0))
 	var flow_tag: String = str(company.get("broker_flow", {}).get("flow_tag", "neutral"))
 	var contradiction_count: int = int(score_data.get("contradiction_count", 0))
+	var categories: Dictionary = score_data.get("categories", {})
+	var missing_pillar_count: int = int(score_data.get("missing_pillar_count", 0))
+	var has_anchor: bool = _has_any_category(categories, ["fundamentals", "key_stats", "financials", "valuation"])
+	var has_price: bool = categories.has("price_action")
+	var has_invalidation: bool = categories.has("risk_invalidation")
+	var has_contradicted_pattern: bool = int(score_data.get("contradicted_pattern_count", 0)) > 0
 
 	if stance == "bearish":
-		if score >= 70:
+		if score >= 70 and missing_pillar_count <= 1:
 			return RATING_AVOID
 		return RATING_TRADE_ONLY
 	if stance == "income":
-		return RATING_DIVIDEND_HOLD if score >= 62 and risk <= 58 else RATING_WATCH
-	if score >= 82 and quality >= 62 and risk <= 62 and contradiction_count <= 1:
+		return RATING_DIVIDEND_HOLD if score >= 64 and risk <= 58 and has_anchor and has_invalidation else RATING_WATCH
+	if has_contradicted_pattern:
+		return RATING_WATCH if score >= 52 else RATING_AVOID
+	if score >= 84 and quality >= 62 and risk <= 62 and contradiction_count == 0 and missing_pillar_count == 0:
 		return RATING_BUY
-	if score >= 68 and (growth >= 58 or flow_tag == "accumulation"):
+	if score >= 70 and has_anchor and has_price and has_invalidation and contradiction_count <= 1 and (growth >= 58 or flow_tag == "accumulation"):
 		return RATING_ACCUMULATE
-	if score >= 52:
+	if score >= 54:
 		return RATING_WATCH
-	if flow_tag == "accumulation" and growth >= 60:
+	if flow_tag == "accumulation" and growth >= 60 and has_price:
 		return RATING_TRADE_ONLY
 	return RATING_AVOID
 
@@ -214,11 +247,15 @@ func _target_range_for(thesis: Dictionary, company: Dictionary, score: int, scor
 
 	var categories: Dictionary = score_data.get("categories", {})
 	var has_anchor: bool = _has_any_category(categories, ["fundamentals", "key_stats", "financials", "valuation"])
+	var has_entry_check: bool = categories.has("price_action")
+	var has_risk_check: bool = categories.has("risk_invalidation")
+	var missing_pillar_count: int = int(score_data.get("missing_pillar_count", 0))
 	var quality: float = float(company.get("quality_score", 50))
 	var growth: float = float(company.get("growth_score", 50))
 	var risk: float = float(company.get("risk_score", 50))
 	var stance: String = str(thesis.get("stance", "bullish")).to_lower()
 	var fair_value_bias: float = clamp(((quality - 55.0) / 220.0) + ((growth - 55.0) / 240.0) - ((risk - 45.0) / 260.0) + ((float(score) - 60.0) / 260.0), -0.28, 0.38)
+	fair_value_bias *= clamp(1.0 - float(missing_pillar_count) * 0.12, 0.52, 1.0)
 	if stance == "bearish":
 		fair_value_bias = -abs(fair_value_bias)
 	elif stance == "income":
@@ -231,10 +268,11 @@ func _target_range_for(thesis: Dictionary, company: Dictionary, score: int, scor
 	if price > 0.0:
 		implied = (midpoint - price) / price
 	var label: String = "%s - %s" % [_format_currency(low), _format_currency(high)]
-	if not has_anchor or score < 45:
+	var defensible: bool = has_anchor and has_entry_check and has_risk_check and score >= 45
+	if not defensible:
 		label = "Not defensible yet; working range %s - %s" % [_format_currency(low), _format_currency(high)]
 	return {
-		"defensible": has_anchor and score >= 45,
+		"defensible": defensible,
 		"label": label,
 		"low": low,
 		"high": high,
@@ -277,7 +315,7 @@ func _build_sections(thesis: Dictionary, company: Dictionary, evidence: Array, s
 		},
 		{
 			"title": "Learning Note",
-			"body": _learning_note(score_data.get("missing_notes", []))
+			"body": _learning_note(score_data)
 		}
 	]
 
@@ -453,6 +491,7 @@ func _price_action_sentence(row: Dictionary) -> String:
 	var feedback_state: String = str(row.get("feedback_state", row.get("value", ""))).strip_edges()
 	var reason: String = str(row.get("feedback_reason", "")).strip_edges()
 	var invalidation: String = str(row.get("invalidation", "")).strip_edges()
+	var next_check: String = str(row.get("next_check", "")).strip_edges()
 	var region: String = str(row.get("region_label", "")).strip_edges()
 	if pattern_label.is_empty():
 		return _evidence_sentence(row, "This helps judge whether the idea is early, extended, or breaking down.")
@@ -464,12 +503,16 @@ func _price_action_sentence(row: Dictionary) -> String:
 	if not feedback_state.is_empty():
 		line += " Coaching feedback reads %s" % feedback_state
 		if not reason.is_empty():
-			line += " because %s" % reason
+			line += " because %s" % _strip_terminal_period(reason)
 		line += "."
 	elif not reason.is_empty():
 		line += " Coaching note: %s" % reason
 	if not invalidation.is_empty():
 		line += " Invalidation: %s" % invalidation
+	if next_check.is_empty():
+		next_check = _pattern_state_followup(feedback_state)
+	if not next_check.is_empty():
+		line += " Next check: %s" % next_check
 	return line
 
 
@@ -619,10 +662,21 @@ func _tape_read(company: Dictionary) -> String:
 	]
 
 
-func _learning_note(missing_notes: Array) -> String:
+func _learning_note(score_data: Dictionary) -> String:
+	var missing_notes: Array = score_data.get("missing_notes", [])
+	var discipline_rows: Array = score_data.get("discipline_rows", [])
+	var discipline_complete: bool = _missing_pillar_count(discipline_rows) == 0
 	if missing_notes.is_empty():
-		return "The board has enough categories to support a disciplined decision. Keep the invalidation point visible before adding size."
-	return "Before treating this as high conviction:\n%s" % "\n".join(_bullet_lines(missing_notes, 5))
+		return "Evidence discipline is complete: Anchor, Price, Tape, Catalyst, and Invalidation are all present. Keep the invalidation point visible before adding size."
+	var discipline_gaps: Array = _discipline_gap_lines(discipline_rows)
+	var note_lines: Array = _bullet_lines(missing_notes, 5)
+	if discipline_gaps.is_empty():
+		var status_line: String = "Evidence discipline is complete, but the attached evidence still needs interpretation." if discipline_complete else "Evidence discipline needs more support."
+		return "%s\nBefore treating this as high conviction:\n%s" % [status_line, "\n".join(note_lines)]
+	return "Evidence discipline gaps:\n%s\nBefore treating this as high conviction:\n%s" % [
+		"\n".join(discipline_gaps),
+		"\n".join(note_lines)
+	]
 
 
 func _evidence_lines(evidence: Array, category_ids: Array, limit: int) -> Array:
@@ -653,6 +707,62 @@ func _has_any_category(categories: Dictionary, ids: Array) -> bool:
 		if categories.has(str(id_value)):
 			return true
 	return false
+
+
+func _discipline_rows(categories: Dictionary) -> Array:
+	var rows: Array = []
+	for pillar_value in CORE_DISCIPLINE_PILLARS:
+		var pillar: Dictionary = pillar_value
+		var complete: bool = _has_any_category(categories, pillar.get("categories", []))
+		rows.append({
+			"id": str(pillar.get("id", "")),
+			"label": str(pillar.get("label", "")),
+			"complete": complete,
+			"missing_note": str(pillar.get("missing_note", ""))
+		})
+	return rows
+
+
+func _missing_pillar_count(discipline_rows: Array) -> int:
+	var count: int = 0
+	for row_value in discipline_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		if not bool(row.get("complete", false)):
+			count += 1
+	return count
+
+
+func _discipline_gap_lines(discipline_rows: Array) -> Array:
+	var lines: Array = []
+	for row_value in discipline_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		if not bool(row.get("complete", false)):
+			lines.append("- %s: missing" % str(row.get("label", "Evidence")))
+	return lines
+
+
+func _pattern_state_followup(feedback_state: String) -> String:
+	match feedback_state:
+		"Good read":
+			return "Watch whether the next close respects the marked structure."
+		"Plausible, needs confirmation":
+			return "Wait for one more close or volume confirmation before treating it as support."
+		"Weak read":
+			return "Use the mark as a question and look for a cleaner structure."
+		"Contradicted":
+			return "Do not use this as confirmation unless price rebuilds the marked level."
+	return ""
+
+
+func _strip_terminal_period(value: String) -> String:
+	var stripped: String = value.strip_edges()
+	while stripped.ends_with("."):
+		stripped = stripped.left(stripped.length() - 1).strip_edges()
+	return stripped
 
 
 func _grade_for_score(score: int) -> String:
