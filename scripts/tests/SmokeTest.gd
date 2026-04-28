@@ -939,6 +939,7 @@ func _run_scenario(
 		if (
 			not GameManager.has_method("debug_force_rights_issue_rupslb") or
 			not GameManager.has_method("debug_schedule_next_day_rights_issue_rupslb") or
+			not GameManager.has_method("debug_force_stock_buyback_execution") or
 			not GameManager.has_method("start_corporate_meeting_session") or
 			not GameManager.has_method("get_corporate_meeting_session_snapshot") or
 			not GameManager.has_method("set_corporate_meeting_session_stage") or
@@ -1579,6 +1580,102 @@ func _run_scenario(
 			return {
 				"success": false,
 				"message": "Smoke test expected private placement execution to record a company share-structure adjustment."
+			}
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
+
+		var stock_buyback_company_id: String = ""
+		for company_index in range(RunState.company_order.size()):
+			var buyback_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(buyback_candidate_company_id).get("has_live_chain", false)):
+				continue
+			var buyback_candidate_definition: Dictionary = RunState.get_effective_company_definition(buyback_candidate_company_id, false, false)
+			var buyback_candidate_financials: Dictionary = buyback_candidate_definition.get("financials", {})
+			if not buyback_candidate_financials.has("free_float_pct"):
+				continue
+			if float(buyback_candidate_financials.get("shares_outstanding", buyback_candidate_definition.get("shares_outstanding", 0.0))) <= 1000.0:
+				continue
+			stock_buyback_company_id = buyback_candidate_company_id
+			break
+		if stock_buyback_company_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find a chain-free company for stock buyback execution coverage."
+			}
+		var buyback_before_definition: Dictionary = RunState.get_effective_company_definition(stock_buyback_company_id, false, false)
+		var buyback_before_financials: Dictionary = buyback_before_definition.get("financials", {})
+		var buyback_shares_before: float = float(buyback_before_financials.get("shares_outstanding", buyback_before_definition.get("shares_outstanding", 0.0)))
+		var buyback_free_float_before: float = float(buyback_before_financials.get("free_float_pct", 0.0))
+		var buyback_force_result: Dictionary = GameManager.debug_force_stock_buyback_execution(stock_buyback_company_id)
+		var buyback_chain: Dictionary = buyback_force_result.get("chain", {})
+		var buyback_chain_id: String = str(buyback_chain.get("chain_id", ""))
+		var buyback_terms: Dictionary = buyback_chain.get("buyback_terms", {})
+		if (
+			not bool(buyback_force_result.get("success", false)) or
+			buyback_chain_id.is_empty() or
+			str(buyback_chain.get("family", "")) != "stock_buyback" or
+			int(buyback_terms.get("executed_shares", 0)) <= 0
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected stock buyback debug forcing to create an executable buyback chain with terms."
+			}
+		var buyback_snapshot: Dictionary = GameManager.get_company_corporate_action_snapshot(stock_buyback_company_id)
+		var buyback_primary_chain: Dictionary = buyback_snapshot.get("primary_chain", {})
+		var buyback_snapshot_terms: Dictionary = buyback_primary_chain.get("buyback_terms", {})
+		if buyback_snapshot_terms.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the corporate-action snapshot to expose stock buyback terms."
+			}
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var buyback_application_found: bool = false
+		for buyback_application_value in RunState.last_day_results.get("corporate_action_applications", []):
+			if typeof(buyback_application_value) != TYPE_DICTIONARY:
+				continue
+			var buyback_application: Dictionary = buyback_application_value
+			if str(buyback_application.get("chain_id", "")) == buyback_chain_id and str(buyback_application.get("application_type", "")) == "stock_buyback":
+				buyback_application_found = true
+				break
+		if not buyback_application_found:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected stock buyback execution to emit an application payload."
+			}
+		var buyback_after_definition: Dictionary = RunState.get_effective_company_definition(stock_buyback_company_id, false, false)
+		var buyback_after_financials: Dictionary = buyback_after_definition.get("financials", {})
+		var buyback_shares_after: float = float(buyback_after_financials.get("shares_outstanding", buyback_after_definition.get("shares_outstanding", 0.0)))
+		var buyback_free_float_after: float = float(buyback_after_financials.get("free_float_pct", 0.0))
+		if buyback_shares_after >= buyback_shares_before or buyback_free_float_after > buyback_free_float_before:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected stock buyback execution to retire shares and not increase free float."
+			}
+		var buyback_adjustment_found: bool = false
+		for buyback_adjustment_value in RunState.get_company(stock_buyback_company_id).get("company_profile", {}).get("corporate_action_adjustments", []):
+			if typeof(buyback_adjustment_value) == TYPE_DICTIONARY and str(buyback_adjustment_value.get("type", "")) == "stock_buyback":
+				buyback_adjustment_found = true
+				break
+		if not buyback_adjustment_found:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected stock buyback execution to record a company share-structure adjustment."
 			}
 
 		RunState.load_from_dict(interactive_test_base_state)

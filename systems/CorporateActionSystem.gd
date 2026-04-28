@@ -350,7 +350,7 @@ func get_company_snapshot(run_state, company_id: String) -> Dictionary:
 			var active_meeting: Dictionary = _meeting_by_id(calendar, active_meeting_id)
 			if _meeting_is_player_visible(active_meeting):
 				visible_meeting_id = active_meeting_id
-		chain_rows.append({
+		var chain_row: Dictionary = {
 			"chain_id": str(chain.get("chain_id", "")),
 			"family": str(chain.get("family", "")),
 			"family_label": _family_label(str(chain.get("family", ""))),
@@ -361,7 +361,12 @@ func get_company_snapshot(run_state, company_id: String) -> Dictionary:
 			"public_summary": _meeting_public_summary(chain),
 			"intel_summary": _intel_summary(intel_bucket),
 			"intel_confidence": str(intel_bucket.get("confidence", ""))
-		})
+		}
+		if chain.has("placement_terms"):
+			chain_row["placement_terms"] = chain.get("placement_terms", {}).duplicate(true)
+		if chain.has("buyback_terms"):
+			chain_row["buyback_terms"] = chain.get("buyback_terms", {}).duplicate(true)
+		chain_rows.append(chain_row)
 	var upcoming_meetings: Array = []
 	for meeting_value in _company_meetings(calendar, company_id):
 		var meeting: Dictionary = meeting_value
@@ -835,6 +840,41 @@ func debug_schedule_next_day_private_placement_rupslb(run_state, data_repository
 	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "private_placement")
 
 
+func debug_force_stock_buyback_execution(run_state, data_repository, company_id: String) -> Dictionary:
+	var catalog: Dictionary = data_repository.get_corporate_action_catalog()
+	if catalog.is_empty() or company_id.is_empty():
+		return {}
+	var chains: Dictionary = run_state.get_active_corporate_action_chains()
+	if _company_has_live_chain(chains, company_id):
+		return {}
+	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+	if definition.is_empty():
+		return {}
+	var current_day_number: int = max(int(run_state.day_index), 1)
+	var next_day_number: int = max(int(run_state.day_index) + 1, 1)
+	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, "stock_buyback", current_day_number)
+	var buyback_terms: Dictionary = chain.get("buyback_terms", {})
+	if chain.is_empty() or buyback_terms.is_empty():
+		return {}
+	if int(buyback_terms.get("executed_shares", 0)) <= 0:
+		return {}
+	chain["stage"] = "execution"
+	chain["current_timeline_state"] = "approved"
+	chain["outcome_state"] = "approved"
+	chain["management_stance"] = "confirm"
+	chain["smart_money_phase"] = "accumulating"
+	chain["public_heat"] = max(float(chain.get("public_heat", 0.0)), 0.42)
+	chain["retail_positioning"] = max(float(chain.get("retail_positioning", 0.0)), 0.18)
+	chain["approval_odds"] = 0.99
+	chain["completion_odds"] = 0.99
+	chain["last_advanced_day_index"] = current_day_number
+	chain["next_review_day_index"] = next_day_number
+	chain["next_expected_step"] = "The buyback mandate is moving into execution."
+	chains[str(chain.get("chain_id", ""))] = chain
+	run_state.set_active_corporate_action_chains(chains)
+	return {"chain": chain}
+
+
 func _debug_schedule_next_day_rupslb(run_state, data_repository, company_id: String, family_id: String) -> Dictionary:
 	var catalog: Dictionary = data_repository.get_corporate_action_catalog()
 	if catalog.is_empty() or company_id.is_empty():
@@ -1226,6 +1266,8 @@ func _build_new_chain(run_state, catalog: Dictionary, company_id: String, family
 	}
 	if family_id == "private_placement":
 		chain["placement_terms"] = _build_private_placement_terms(definition, runtime, day_number)
+	if family_id == "stock_buyback":
+		chain["buyback_terms"] = _build_stock_buyback_terms(catalog, definition, runtime, day_number)
 	return chain
 
 
@@ -1256,6 +1298,70 @@ func _build_private_placement_terms(definition: Dictionary, runtime: Dictionary,
 		"investor_label": investor_label,
 		"old_shares_outstanding": shares_outstanding,
 		"new_shares_outstanding": shares_outstanding + float(new_shares)
+	}
+
+
+func _build_stock_buyback_terms(catalog: Dictionary, definition: Dictionary, runtime: Dictionary, day_number: int) -> Dictionary:
+	var company_id: String = str(definition.get("id", runtime.get("company_id", "")))
+	var financials: Dictionary = definition.get("financials", {})
+	var config: Dictionary = catalog.get("stock_buyback", {})
+	var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", 0.0))), 1.0)
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var free_float_pct: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, 0.02, 0.95)
+	var min_authorization_pct: float = max(float(config.get("minimum_authorization_pct", 0.02)), 0.001)
+	var max_authorization_pct: float = max(float(config.get("maximum_authorization_pct", 0.08)), min_authorization_pct)
+	var min_execution_ratio: float = clamp(float(config.get("minimum_execution_ratio", 0.55)), 0.05, 1.0)
+	var max_execution_ratio: float = clamp(float(config.get("maximum_execution_ratio", 0.95)), min_execution_ratio, 1.0)
+	var premium_min_pct: float = clamp(float(config.get("minimum_price_premium_pct", 0.01)), 0.0, 0.25)
+	var premium_max_pct: float = clamp(float(config.get("maximum_price_premium_pct", 0.06)), premium_min_pct, 0.35)
+	var price_support_per_pct: float = max(float(config.get("price_support_per_pct", 1.6)), 0.0)
+	var maximum_price_support_pct: float = clamp(float(config.get("maximum_price_support_pct", 0.18)), 0.0, 0.5)
+	var authorization_pct: float = float(_stable_range(
+		"%s|buyback_authorization|%d" % [company_id, day_number],
+		int(round(min_authorization_pct * 10000.0)),
+		int(round(max_authorization_pct * 10000.0))
+	)) / 10000.0
+	var execution_ratio: float = float(_stable_range(
+		"%s|buyback_execution|%d" % [company_id, day_number],
+		int(round(min_execution_ratio * 10000.0)),
+		int(round(max_execution_ratio * 10000.0))
+	)) / 10000.0
+	var premium_pct: float = float(_stable_range(
+		"%s|buyback_premium|%d" % [company_id, day_number],
+		int(round(premium_min_pct * 10000.0)),
+		int(round(premium_max_pct * 10000.0))
+	)) / 10000.0
+	var authorized_shares: int = int(round(shares_outstanding * authorization_pct / 1000.0)) * 1000
+	authorized_shares = max(authorized_shares, 1000)
+	var old_free_float_shares: float = max(shares_outstanding * free_float_pct, 1.0)
+	var float_absorption_cap: float = old_free_float_shares * clamp(float(config.get("maximum_float_absorption_pct", 0.35)), 0.02, 1.0)
+	var total_absorption_cap: float = shares_outstanding * clamp(float(config.get("maximum_total_absorption_pct", 0.12)), 0.01, 0.35)
+	var raw_executed_shares: float = min(float(authorized_shares) * execution_ratio, float_absorption_cap, total_absorption_cap)
+	var executed_shares: int = int(floor(raw_executed_shares / 1000.0)) * 1000
+	if executed_shares <= 0 and raw_executed_shares >= 1000.0:
+		executed_shares = 1000
+	executed_shares = int(clamp(float(executed_shares), 0.0, max(shares_outstanding - 1000.0, 0.0)))
+	var buyback_price: float = _round_currency(current_price * (1.0 + premium_pct))
+	var new_shares_outstanding: float = max(shares_outstanding - float(executed_shares), 1.0)
+	var new_free_float_shares: float = max(old_free_float_shares - float(executed_shares), 1.0)
+	var new_free_float_pct: float = clamp(new_free_float_shares / new_shares_outstanding, 0.02, 0.95)
+	return {
+		"authorization_pct": authorization_pct,
+		"execution_ratio": execution_ratio,
+		"premium_pct": premium_pct,
+		"authorized_shares": authorized_shares,
+		"executed_shares": executed_shares,
+		"shares_retired": executed_shares,
+		"buyback_price": buyback_price,
+		"buyback_budget": _round_currency(float(executed_shares) * buyback_price),
+		"price_support_per_pct": price_support_per_pct,
+		"maximum_price_support_pct": maximum_price_support_pct,
+		"old_shares_outstanding": shares_outstanding,
+		"new_shares_outstanding": new_shares_outstanding,
+		"old_free_float_pct": free_float_pct * 100.0,
+		"new_free_float_pct": new_free_float_pct * 100.0,
+		"old_free_float_shares": old_free_float_shares,
+		"new_free_float_shares": new_free_float_shares
 	}
 
 
@@ -1449,6 +1555,10 @@ func _advance_chain(
 				var placement_application: Dictionary = _build_private_placement_application(chain, trade_date, day_number)
 				if not placement_application.is_empty():
 					applications.append(placement_application)
+			if str(chain.get("family", "")) == "stock_buyback":
+				var buyback_application: Dictionary = _build_stock_buyback_application(chain, trade_date, day_number)
+				if not buyback_application.is_empty():
+					applications.append(buyback_application)
 			events.append(_build_public_event(
 				catalog,
 				chain,
@@ -1491,6 +1601,37 @@ func _build_private_placement_application(chain: Dictionary, trade_date: Diction
 		"issuance_pct": float(terms.get("issuance_pct", 0.0)),
 		"discount_pct": float(terms.get("discount_pct", 0.0)),
 		"investor_label": str(terms.get("investor_label", "strategic investor")),
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
+
+
+func _build_stock_buyback_application(chain: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
+	var terms: Dictionary = chain.get("buyback_terms", {}).duplicate(true)
+	if terms.is_empty():
+		return {}
+	var executed_shares: int = int(terms.get("executed_shares", 0))
+	if executed_shares <= 0:
+		return {}
+	return {
+		"application_type": "stock_buyback",
+		"chain_id": str(chain.get("chain_id", "")),
+		"company_id": str(chain.get("company_id", "")),
+		"ticker": str(chain.get("target_ticker", "")),
+		"authorized_shares": int(terms.get("authorized_shares", 0)),
+		"executed_shares": executed_shares,
+		"shares_retired": int(terms.get("shares_retired", executed_shares)),
+		"buyback_price": float(terms.get("buyback_price", 0.0)),
+		"buyback_budget": float(terms.get("buyback_budget", 0.0)),
+		"authorization_pct": float(terms.get("authorization_pct", 0.0)),
+		"execution_ratio": float(terms.get("execution_ratio", 0.0)),
+		"premium_pct": float(terms.get("premium_pct", 0.0)),
+		"price_support_per_pct": float(terms.get("price_support_per_pct", 1.6)),
+		"maximum_price_support_pct": float(terms.get("maximum_price_support_pct", 0.18)),
+		"old_shares_outstanding": float(terms.get("old_shares_outstanding", 0.0)),
+		"new_shares_outstanding": float(terms.get("new_shares_outstanding", 0.0)),
+		"old_free_float_pct": float(terms.get("old_free_float_pct", 0.0)),
+		"new_free_float_pct": float(terms.get("new_free_float_pct", 0.0)),
 		"trade_date": trade_date.duplicate(true),
 		"day_index": day_number
 	}
@@ -3455,6 +3596,15 @@ func _next_step_hint(stage_id: String, chain: Dictionary) -> String:
 
 
 func _meeting_public_summary(chain: Dictionary) -> String:
+	if str(chain.get("family", "")) == "stock_buyback":
+		var terms: Dictionary = chain.get("buyback_terms", {})
+		if not terms.is_empty():
+			return "%s is in the %s stage of a stock buyback mandate, with up to %d shares authorized and %d shares expected to be retired." % [
+				str(chain.get("target_company_name", "")),
+				str(chain.get("stage", "")).replace("_", " "),
+				int(terms.get("authorized_shares", 0)),
+				int(terms.get("executed_shares", 0))
+			]
 	return "%s is now in the %s stage of a %s storyline, with management stance at %s." % [
 		str(chain.get("target_company_name", "")),
 		str(chain.get("stage", "")).replace("_", " "),

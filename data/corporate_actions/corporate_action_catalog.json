@@ -25,6 +25,19 @@
     "maximum_distribution_ratio": 0.18,
     "annual_probability_pct": 16
   },
+  "stock_buyback": {
+    "enabled": true,
+    "minimum_authorization_pct": 0.02,
+    "maximum_authorization_pct": 0.08,
+    "minimum_execution_ratio": 0.55,
+    "maximum_execution_ratio": 0.95,
+    "maximum_float_absorption_pct": 0.35,
+    "maximum_total_absorption_pct": 0.12,
+    "minimum_price_premium_pct": 0.01,
+    "maximum_price_premium_pct": 0.06,
+    "price_support_per_pct": 1.6,
+    "maximum_price_support_pct": 0.18
+  },
   "meeting_defaults": {
     "earnings_call": {
       "delay_min_days": 0,

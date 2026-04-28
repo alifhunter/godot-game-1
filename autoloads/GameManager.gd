@@ -640,6 +640,24 @@ func debug_schedule_next_day_private_placement_rupslb(company_id: String) -> Dic
 	}
 
 
+func debug_force_stock_buyback_execution(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_force_stock_buyback_execution(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not force stock buyback execution for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_force_stock_buyback_execution")
+	return {
+		"success": true,
+		"message": "Forced stock buyback execution for %s." % str(result.get("chain", {}).get("target_ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true)
+	}
+
+
 func debug_schedule_next_day_cash_dividend(company_id: String) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}

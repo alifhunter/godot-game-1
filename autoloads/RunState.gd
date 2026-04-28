@@ -1824,6 +1824,8 @@ func _apply_corporate_action_applications(applications: Array) -> void:
 		match str(application.get("application_type", "")):
 			"private_placement":
 				_apply_private_placement_application(application)
+			"stock_buyback":
+				_apply_stock_buyback_application(application)
 
 
 func _apply_private_placement_application(application: Dictionary) -> void:
@@ -1858,6 +1860,58 @@ func _apply_private_placement_application(application: Dictionary) -> void:
 			"gross_proceeds": gross_proceeds,
 			"discount_pct": float(application.get("discount_pct", 0.0)),
 			"investor_label": str(application.get("investor_label", "")),
+			"day_index": int(application.get("day_index", day_index))
+		}
+	)
+
+
+func _apply_stock_buyback_application(application: Dictionary) -> void:
+	var company_id: String = str(application.get("company_id", ""))
+	if company_id.is_empty() or not companies.has(company_id):
+		return
+	var executed_shares: float = max(float(application.get("executed_shares", application.get("shares_retired", 0.0))), 0.0)
+	if executed_shares <= 0.0:
+		return
+	var definition: Dictionary = get_effective_company_definition(company_id, false, false)
+	var runtime: Dictionary = companies.get(company_id, {}).duplicate(true)
+	var financials: Dictionary = definition.get("financials", {})
+	var old_shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", 0.0))), 1.0)
+	executed_shares = min(executed_shares, max(old_shares_outstanding - 1.0, 0.0))
+	if executed_shares <= 0.0:
+		return
+	var old_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var old_free_float_pct: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, 0.02, 0.95)
+	var old_free_float_shares: float = max(old_shares_outstanding * old_free_float_pct, 1.0)
+	var new_shares_outstanding: float = max(float(application.get("new_shares_outstanding", old_shares_outstanding - executed_shares)), 1.0)
+	var new_free_float_pct: float = float(application.get("new_free_float_pct", 0.0))
+	if new_free_float_pct <= 0.0:
+		var new_free_float_shares: float = max(old_free_float_shares - executed_shares, 1.0)
+		new_free_float_pct = clamp(new_free_float_shares / new_shares_outstanding, 0.02, 0.95) * 100.0
+	var repurchase_pct: float = clamp(executed_shares / old_shares_outstanding, 0.0, 0.35)
+	var premium_pct: float = max(float(application.get("premium_pct", 0.0)), 0.0)
+	var price_support_per_pct: float = max(float(application.get("price_support_per_pct", 1.6)), 0.0)
+	var maximum_price_support_pct: float = clamp(float(application.get("maximum_price_support_pct", 0.18)), 0.0, 0.5)
+	var price_support_pct: float = min(repurchase_pct * price_support_per_pct + premium_pct * 0.25, maximum_price_support_pct)
+	var new_price: float = _apply_company_price_factor(company_id, 1.0 + price_support_pct, false)
+	_set_company_share_structure(
+		company_id,
+		new_shares_outstanding,
+		new_price * new_shares_outstanding,
+		new_free_float_pct,
+		{
+			"type": "stock_buyback",
+			"chain_id": str(application.get("chain_id", "")),
+			"authorized_shares": int(application.get("authorized_shares", 0)),
+			"executed_shares": int(round(executed_shares)),
+			"shares_retired": int(round(executed_shares)),
+			"buyback_price": float(application.get("buyback_price", old_price)),
+			"buyback_budget": float(application.get("buyback_budget", 0.0)),
+			"premium_pct": premium_pct,
+			"price_support_pct": price_support_pct,
+			"old_shares_outstanding": old_shares_outstanding,
+			"new_shares_outstanding": new_shares_outstanding,
+			"old_free_float_pct": old_free_float_pct * 100.0,
+			"new_free_float_pct": new_free_float_pct,
 			"day_index": int(application.get("day_index", day_index))
 		}
 	)

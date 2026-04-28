@@ -38,12 +38,16 @@ Read this file first in the next session.
     - `fc14108 Build Key Stats card dashboard`
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
-    - latest checkpoint message: `Add shareholder record date registry`
+    - latest checkpoint message: `Add stock buyback execution`
   - after checkpoint commits, `git status --short` should generally be clean except ignored local `logs/` output
-  - current local note: corporate actions now persist a shareholder record-date registry for `RUPS` / `RUPSLB`, cash dividends, and stock dividends
+  - current local note: `stock_buyback` now has deterministic terms, execution payloads, share retirement, free-float updates, and smoke coverage
 
 ## Latest Session Snapshot
-- Most recent work added a persisted shareholder record-date registry for corporate meetings and dividends.
+- Most recent work made `stock_buyback` a real executable corporate-action family instead of only a scored/cataloged storyline.
+- Stock buyback chains now generate deterministic authorization/execution terms, including authorized shares, executed/retired shares, buyback premium, budget, old/new shares outstanding, and old/new free float.
+- Stock buyback execution now emits a `stock_buyback` application payload; `RunState` applies it by retiring shares, reducing free float, applying capped price-support, updating market cap/depth context, and recording a `stock_buyback` corporate-action adjustment.
+- `GameManager.debug_force_stock_buyback_execution(company_id)` exists for deterministic testing and debugging, and quick smoke now verifies the buyback terms -> application -> share-structure adjustment path.
+- The previous pass added a persisted shareholder record-date registry for corporate meetings and dividends.
 - `RUPS` / `RUPSLB` attendance and interactive voting now use shares captured on the meeting record date, so selling after the record date no longer removes eligibility and buying after the record date no longer grants it.
 - Cash and stock dividends now share the same registry concept for record-date share counts, while the dividend snapshot exposes recorded/pending status, eligible shares, current shares, and projected proceeds/bonus shares.
 - The previous pass enabled `private_placement` as an interactive RUPSLB corporate-action family and added `stock_dividend` distributions tied to the dividend calendar.
@@ -1172,6 +1176,7 @@ Read this file first in the next session.
     - `market_overpricing`
     - `funding_pressure`
     - `placement_terms` for `private_placement` chains
+    - `buyback_terms` for `stock_buyback` chains
     - `expected_meeting_type`
     - `active_meeting_id`
     - `agenda_payload`
@@ -1199,7 +1204,7 @@ Read this file first in the next session.
   - enabled v1 families:
     - `rights_issue`
     - `private_placement`
-    - `stock_buyback`
+    - `stock_buyback` with non-interactive execution effects
     - `stock_split`
     - `ceo_change`
   - cataloged but disabled for later:
@@ -1346,6 +1351,10 @@ Read this file first in the next session.
   - `GameManager.close_corporate_meeting_session(meeting_id)`
   - `GameManager.debug_force_rights_issue_rupslb(company_id)`
   - `GameManager.debug_schedule_next_day_rights_issue_rupslb(company_id)`
+  - `GameManager.debug_schedule_next_day_private_placement_rupslb(company_id)`
+  - `GameManager.debug_force_stock_buyback_execution(company_id)`
+  - `GameManager.debug_schedule_next_day_cash_dividend(company_id)`
+  - `GameManager.debug_schedule_next_day_stock_dividend(company_id)`
 - Current v1 omissions by design:
   - interactive voting currently covers `rights_issue` and `private_placement` `rupslb` only
   - `annual_rups` and `earnings_call` still use the simpler shared modal and have no staged interactive flow yet
@@ -1904,6 +1913,13 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - Stock buyback execution pass on `2026-04-28`:
+    - `git diff --check` passed
+    - Godot project-load check passed with `--log-file logs\stock-buyback-load.log --quit`
+    - quick Godot headless smoke with `--log-file logs\smoke-stock-buyback.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
+    - smoke now asserts deterministic buyback forcing, snapshot terms exposure, execution application payloads, shares-outstanding retirement, free-float non-increase, and share-structure adjustment records
+    - committed as `Add stock buyback execution`
+    - non-blocking Windows/Godot note: this smoke run printed `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; treat it as trailing platform noise unless it appears before test success or affects network/API work
   - Shareholder record-date registry pass on `2026-04-28`:
     - `git diff --check` passed
     - Godot project-load check passed with `--log-file logs\project-load-shareholder-registry-2.log --quit`
@@ -2136,7 +2152,7 @@ Read this file first in the next session.
 - Trade list now has basic All Stock search, but no sort tools yet
 - `Load Run` now uses a loading screen, but the smoke flow still does not explicitly click through the saved-run path
 - The broader corporate-action layer now exists, but it is still v1:
-  - `rights_issue`, `private_placement`, `stock_buyback`, `stock_split`, and `ceo_change` are currently enabled
+  - `rights_issue`, `private_placement`, `stock_buyback`, `stock_split`, and `ceo_change` are currently enabled; `stock_buyback` now has non-interactive execution effects while `stock_split` and `ceo_change` are still mostly storyline scaffolds
   - `restructuring`, `strategic_merger_acquisition`, and `backdoor_listing` exist in catalog form only and are not active yet
   - only `rights_issue` and `private_placement` `rupslb` currently have interactive staged voting
   - `annual_rups` and `earnings_call` still use the simpler shared meeting modal
@@ -2242,7 +2258,7 @@ Read this file first in the next session.
   - consider housing/cars/status upgrades after the monthly cash-flow loop is working and readable
 - Network and corporate-action planning:
   - deepen the shared corporate-action chain object that `News`, `Twooter`, `Network`, market reaction, `earnings_call`, `annual_rups`, and `rupslb` already read/write
-  - tune annual cash-dividend eligibility, stock-dividend distribution ratios, private-placement issuance discounts, and market reaction once longer playtests show whether income/dilution are too rare or too generous
+  - tune annual cash-dividend eligibility, stock-dividend distribution ratios, private-placement issuance discounts, stock-buyback sizing/price support, and market reaction once longer playtests show whether income/dilution/capital returns are too rare or too generous
   - expand interactive `rupslb` beyond `rights_issue` / `private_placement` with more agenda families, richer result nuance, and better record-date UI copy
   - deepen cross-contact conflict handling with actions like `Ask for evidence`, `Push back`, and `Compare source`
   - evolve Journal rows into searchable/filterable clues and tasks when source-check gameplay becomes a major loop
