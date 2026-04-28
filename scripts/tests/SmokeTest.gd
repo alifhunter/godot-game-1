@@ -4156,6 +4156,57 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 	if str(persisted_life_state.get("player_life", {}).get("lifestyle_id", "")) != target_lifestyle_id:
 		return "Smoke test expected flushed Life saves to persist player_life to disk."
 
+	var dividend_company_id: String = str(RunState.company_order[0])
+	var dividend_buy_result: Dictionary = GameManager.buy_lots(dividend_company_id, 1)
+	if not bool(dividend_buy_result.get("success", false)):
+		return "Smoke test expected buying one lot for dividend coverage to succeed."
+	var cash_after_dividend_buy: float = float(GameManager.get_portfolio_snapshot().get("cash", 0.0))
+	var dividend_schedule_result: Dictionary = GameManager.debug_schedule_next_day_cash_dividend(dividend_company_id)
+	var scheduled_dividend: Dictionary = dividend_schedule_result.get("dividend", {})
+	if (
+		not bool(dividend_schedule_result.get("success", false)) or
+		scheduled_dividend.is_empty() or
+		float(scheduled_dividend.get("amount_per_share", 0.0)) <= 0.0
+	):
+		return "Smoke test expected debug dividend scheduling to create a cash dividend action with DPS."
+	var dividend_id: String = str(scheduled_dividend.get("id", ""))
+	var dividend_snapshot: Dictionary = GameManager.get_corporate_dividend_snapshot(dividend_company_id)
+	if dividend_snapshot.get("upcoming_rows", []).is_empty():
+		return "Smoke test expected scheduled dividends to appear in the corporate dividend snapshot."
+
+	GameManager.advance_day()
+	await get_tree().process_frame
+	var life_after_dividend_approval: Dictionary = GameManager.get_life_snapshot()
+	if (
+		float(life_after_dividend_approval.get("declared_dividend_total_12m", 0.0)) <= 0.0 or
+		life_after_dividend_approval.get("dividend_rows", []).is_empty()
+	):
+		return "Smoke test expected Life to use declared dividend corporate actions instead of synthetic dividend estimates."
+
+	for _dividend_day_index in range(3):
+		GameManager.advance_day()
+		await get_tree().process_frame
+	dividend_snapshot = GameManager.get_corporate_dividend_snapshot(dividend_company_id)
+	var paid_dividend_found: bool = false
+	for paid_row_value in dividend_snapshot.get("paid_rows", []):
+		if typeof(paid_row_value) != TYPE_DICTIONARY:
+			continue
+		var paid_row: Dictionary = paid_row_value
+		if str(paid_row.get("id", "")) == dividend_id and float(paid_row.get("paid_amount", 0.0)) > 0.0:
+			paid_dividend_found = true
+			break
+	if not paid_dividend_found:
+		return "Smoke test expected cash dividends to move from declared to paid state with a positive paid amount."
+	if float(GameManager.get_portfolio_snapshot().get("cash", 0.0)) <= cash_after_dividend_buy:
+		return "Smoke test expected paid cash dividends to credit player cash."
+	var dividend_trade_found: bool = false
+	for trade_value in GameManager.get_trade_history():
+		if typeof(trade_value) == TYPE_DICTIONARY and str(trade_value.get("side", "")).to_lower() == "dividend":
+			dividend_trade_found = true
+			break
+	if not dividend_trade_found:
+		return "Smoke test expected paid dividends to appear in portfolio history."
+
 	game_root.close_desktop_app("life")
 	await get_tree().process_frame
 	if not desktop_layer.visible or game_root.is_desktop_app_open("life"):

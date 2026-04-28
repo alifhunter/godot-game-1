@@ -617,6 +617,25 @@ func debug_schedule_next_day_rights_issue_rupslb(company_id: String) -> Dictiona
 	}
 
 
+func debug_schedule_next_day_cash_dividend(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_schedule_next_day_cash_dividend(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not schedule a next-day cash dividend for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_schedule_next_day_cash_dividend")
+	var dividend: Dictionary = result.get("dividend", {}).duplicate(true)
+	return {
+		"success": true,
+		"message": "Scheduled next-day cash dividend for %s." % str(dividend.get("ticker", company_id.to_upper())),
+		"dividend": dividend
+	}
+
+
 func get_unlocked_news_intel_level() -> int:
 	return _content_level_for_upgrade("news_content")
 
@@ -906,6 +925,13 @@ func get_company_corporate_action_snapshot(company_id: String) -> Dictionary:
 		return {}
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	return corporate_action_system.get_company_snapshot(RunState, company_id)
+
+
+func get_corporate_dividend_snapshot(company_id: String = "") -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	return corporate_action_system.get_dividend_snapshot(RunState, company_id)
 
 
 func attend_corporate_meeting(meeting_id: String) -> Dictionary:
@@ -1273,12 +1299,12 @@ func get_life_snapshot() -> Dictionary:
 	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, str(life_state.get("housing_id", "")))
 	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, str(life_state.get("lifestyle_id", "")))
 	var portfolio: Dictionary = get_portfolio_snapshot()
-	var dividend_estimate: Dictionary = _estimate_life_monthly_dividends(portfolio)
+	var dividend_projection: Dictionary = _build_life_dividend_projection()
 	var monthly_extra: float = max(float(life_state.get("monthly_extra", 0.0)), 0.0)
 	var housing_cost: float = float(housing.get("monthly_cost", 0.0))
 	var lifestyle_cost: float = float(lifestyle.get("monthly_cost", 0.0))
 	var monthly_outflow: float = housing_cost + LIFE_BASIC_EXPENSES_MONTHLY + lifestyle_cost + monthly_extra
-	var estimated_monthly_dividends: float = float(dividend_estimate.get("estimated_monthly_dividends", 0.0))
+	var estimated_monthly_dividends: float = float(dividend_projection.get("estimated_monthly_dividends", 0.0))
 	var net_monthly: float = estimated_monthly_dividends - monthly_outflow
 	var cash: float = float(portfolio.get("cash", 0.0))
 	var runway_months: float = 999.0
@@ -1307,11 +1333,12 @@ func get_life_snapshot() -> Dictionary:
 		"monthly_outflow": monthly_outflow,
 		"estimated_monthly_dividends": estimated_monthly_dividends,
 		"estimated_annual_dividends": estimated_monthly_dividends * 12.0,
+		"declared_dividend_total_12m": float(dividend_projection.get("declared_dividend_total_12m", 0.0)),
 		"net_monthly": net_monthly,
 		"runway_months": runway_months,
 		"status_label": status_label,
-		"dividend_rows": dividend_estimate.get("rows", []).duplicate(true),
-		"note": "Planning view only. This does not deduct cash at month end yet."
+		"dividend_rows": dividend_projection.get("rows", []).duplicate(true),
+		"note": "Planning view only. Monthly costs do not deduct cash yet; dividends only count after corporate actions are declared."
 	}
 
 
@@ -1347,47 +1374,41 @@ func _life_option_by_id(options: Array, option_id: String) -> Dictionary:
 	return options[0].duplicate(true)
 
 
-func _estimate_life_monthly_dividends(portfolio: Dictionary) -> Dictionary:
+func _build_life_dividend_projection() -> Dictionary:
 	var rows: Array = []
-	var estimated_monthly_dividends: float = 0.0
-	for holding_value in portfolio.get("holdings", []):
-		if typeof(holding_value) != TYPE_DICTIONARY:
+	var declared_total: float = 0.0
+	var dividend_snapshot: Dictionary = get_corporate_dividend_snapshot()
+	var current_day_number: int = RunState.day_index + 1
+	var cutoff_day_number: int = current_day_number + 252
+	for row_value in dividend_snapshot.get("declared_rows", []):
+		if typeof(row_value) != TYPE_DICTIONARY:
 			continue
-		var holding: Dictionary = holding_value
-		var company_id: String = str(holding.get("company_id", ""))
-		if company_id.is_empty():
+		var row: Dictionary = row_value
+		var payment_day_number: int = int(row.get("payment_day_number", 0))
+		if payment_day_number < current_day_number or payment_day_number > cutoff_day_number:
 			continue
-		var company: Dictionary = get_company_snapshot(company_id, false, false, false)
-		var financials: Dictionary = company.get("financials", {})
-		var market_value: float = max(float(holding.get("market_value", 0.0)), 0.0)
-		var annual_yield: float = _estimate_life_dividend_yield(company, financials)
-		var monthly_income: float = market_value * annual_yield / 12.0
-		estimated_monthly_dividends += monthly_income
+		var projected_amount: float = max(float(row.get("projected_amount", 0.0)), 0.0)
+		if projected_amount <= 0.0:
+			continue
+		declared_total += projected_amount
 		rows.append({
-			"company_id": company_id,
-			"ticker": str(holding.get("ticker", company.get("ticker", company_id.to_upper()))),
-			"market_value": market_value,
-			"annual_yield": annual_yield,
-			"monthly_income": monthly_income
+			"company_id": str(row.get("company_id", "")),
+			"ticker": str(row.get("ticker", "")),
+			"eligible_shares": int(row.get("eligible_shares", 0)),
+			"amount_per_share": float(row.get("amount_per_share", 0.0)),
+			"payment_day_number": payment_day_number,
+			"projected_amount": projected_amount,
+			"monthly_income": projected_amount / 12.0,
+			"status": str(row.get("status", ""))
 		})
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return float(a.get("monthly_income", 0.0)) > float(b.get("monthly_income", 0.0))
 	)
 	return {
-		"estimated_monthly_dividends": estimated_monthly_dividends,
+		"estimated_monthly_dividends": declared_total / 12.0,
+		"declared_dividend_total_12m": declared_total,
 		"rows": rows
 	}
-
-
-func _estimate_life_dividend_yield(company: Dictionary, financials: Dictionary) -> float:
-	var net_margin: float = clamp(float(financials.get("net_profit_margin", 0.0)), -20.0, 30.0)
-	var roe: float = clamp(float(financials.get("roe", 0.0)), -20.0, 35.0)
-	var revenue_growth: float = clamp(float(financials.get("revenue_growth_yoy", 0.0)), -25.0, 40.0)
-	var quality_adjustment: float = (float(company.get("quality_score", 50)) - 50.0) * 0.00012
-	var risk_drag: float = max(float(company.get("risk_score", 50)) - 55.0, 0.0) * 0.00018
-	var growth_drag: float = max(revenue_growth - 18.0, 0.0) * 0.00008
-	var annual_yield: float = 0.012 + max(net_margin, 0.0) * 0.0014 + max(roe, 0.0) * 0.00055 + quality_adjustment - risk_drag - growth_drag
-	return clamp(annual_yield, 0.0, 0.065)
 
 
 func get_sector_rows() -> Array:

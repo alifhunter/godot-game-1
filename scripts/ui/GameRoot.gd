@@ -8361,8 +8361,10 @@ func _build_trade_history_row(trade: Dictionary) -> Control:
 	row_wrap.add_child(row)
 
 	var side: String = str(trade.get("side", "")).to_upper()
-	var action_color: Color = COLOR_POSITIVE if side == "BUY" else COLOR_NEGATIVE
+	var action_color: Color = COLOR_POSITIVE if side == "BUY" or side == "DIVIDEND" else COLOR_NEGATIVE
 	var qty_text: String = "%d lot(s)" % int(trade.get("lots", 0))
+	if side == "DIVIDEND":
+		qty_text = "%d share(s)" % int(trade.get("shares", 0))
 	var price_text: String = "-" if side.is_empty() else _format_currency(float(trade.get("price_per_share", 0.0)))
 
 	row.add_child(_build_table_cell(

@@ -105,6 +105,7 @@ var active_special_events = []
 var active_corporate_action_chains = {}
 var corporate_meeting_calendar = {}
 var corporate_action_intel = {}
+var corporate_dividend_calendar = {}
 var attended_meetings = {}
 var corporate_meeting_sessions = {}
 var news_archive_index = {}
@@ -165,6 +166,7 @@ func reset() -> void:
 	active_corporate_action_chains = {}
 	corporate_meeting_calendar = {}
 	corporate_action_intel = {}
+	corporate_dividend_calendar = {}
 	attended_meetings = {}
 	corporate_meeting_sessions = {}
 	news_archive_index = {}
@@ -371,6 +373,7 @@ func load_from_dict(data: Dictionary) -> void:
 	active_corporate_action_chains = data.get("active_corporate_action_chains", {}).duplicate(true)
 	corporate_meeting_calendar = data.get("corporate_meeting_calendar", {}).duplicate(true)
 	corporate_action_intel = data.get("corporate_action_intel", {}).duplicate(true)
+	corporate_dividend_calendar = data.get("corporate_dividend_calendar", {}).duplicate(true)
 	attended_meetings = data.get("attended_meetings", {}).duplicate(true)
 	corporate_meeting_sessions = data.get("corporate_meeting_sessions", {}).duplicate(true)
 	news_archive_index = data.get("news_archive_index", {}).duplicate(true)
@@ -450,6 +453,7 @@ func to_save_dict() -> Dictionary:
 		"active_corporate_action_chains": active_corporate_action_chains.duplicate(true),
 		"corporate_meeting_calendar": corporate_meeting_calendar.duplicate(true),
 		"corporate_action_intel": corporate_action_intel.duplicate(true),
+		"corporate_dividend_calendar": corporate_dividend_calendar.duplicate(true),
 		"attended_meetings": attended_meetings.duplicate(true),
 		"corporate_meeting_sessions": corporate_meeting_sessions.duplicate(true),
 		"news_archive_index": news_archive_index.duplicate(true),
@@ -592,6 +596,7 @@ func _build_last_day_results_save_payload(source_results: Variant) -> Dictionary
 		"started_company_arcs": source.get("started_company_arcs", []).duplicate(true),
 		"company_arc_phase_events": source.get("company_arc_phase_events", []).duplicate(true),
 		"corporate_action_events": source.get("corporate_action_events", []).duplicate(true),
+		"dividend_payments": source.get("dividend_payments", []).duplicate(true),
 		"started_special_events": source.get("started_special_events", []).duplicate(true)
 	}
 	return save_results
@@ -939,8 +944,10 @@ func apply_day_result(day_result: Dictionary) -> void:
 	active_corporate_action_chains = day_result.get("active_corporate_action_chains", {}).duplicate(true)
 	corporate_meeting_calendar = day_result.get("corporate_meeting_calendar", {}).duplicate(true)
 	corporate_action_intel = day_result.get("corporate_action_intel", {}).duplicate(true)
+	corporate_dividend_calendar = day_result.get("corporate_dividend_calendar", corporate_dividend_calendar).duplicate(true)
 	attended_meetings = day_result.get("attended_meetings", {}).duplicate(true)
 	corporate_meeting_sessions = day_result.get("corporate_meeting_sessions", {}).duplicate(true)
+	_apply_dividend_payments(day_result.get("dividend_payments", []))
 	_log_apply_day_perf_elapsed(log_apply_perf, "active_state_payloads", phase_started_at_usec)
 
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -1231,6 +1238,14 @@ func get_corporate_action_intel() -> Dictionary:
 
 func set_corporate_action_intel(next_intel: Dictionary) -> void:
 	corporate_action_intel = next_intel.duplicate(true)
+
+
+func get_corporate_dividend_calendar() -> Dictionary:
+	return corporate_dividend_calendar.duplicate(true)
+
+
+func set_corporate_dividend_calendar(next_calendar: Dictionary) -> void:
+	corporate_dividend_calendar = next_calendar.duplicate(true)
 
 
 func get_attended_meetings() -> Dictionary:
@@ -1748,6 +1763,38 @@ func _record_trade(
 	trade_history.append(entry)
 	if trade_history.size() > MAX_TRADE_HISTORY:
 		trade_history = trade_history.slice(trade_history.size() - MAX_TRADE_HISTORY, trade_history.size())
+
+
+func _apply_dividend_payments(payments: Array) -> void:
+	if payments.is_empty():
+		return
+	for payment_value in payments:
+		if typeof(payment_value) != TYPE_DICTIONARY:
+			continue
+		var payment: Dictionary = payment_value
+		var amount: float = float(payment.get("amount", 0.0))
+		if amount <= 0.0:
+			continue
+		var cash_before: float = float(player_portfolio.get("cash", 0.0))
+		var cash_after: float = cash_before + amount
+		player_portfolio["cash"] = cash_after
+		var shares: int = int(payment.get("shares", 0))
+		var amount_per_share: float = float(payment.get("amount_per_share", 0.0))
+		_record_trade(
+			str(payment.get("company_id", "")),
+			"dividend",
+			{
+				"lots": int(floor(float(shares) / float(LOT_SIZE))),
+				"shares": shares,
+				"price_per_share": amount_per_share,
+				"gross_value": amount,
+				"fee_rate": 0.0,
+				"fee": 0.0
+			},
+			0.0,
+			amount,
+			cash_after
+		)
 
 
 func _record_player_market_flow(company_id: String, side: String, estimate: Dictionary) -> void:

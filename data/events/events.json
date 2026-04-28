@@ -287,6 +287,17 @@
 	"description": "A geopolitical flare-up raises uncertainty across the market."
   },
   {
+	"id": "cash_dividend",
+	"scope": "company",
+	"event_family": "corporate_action",
+	"category": "corporate_action_execution",
+	"tone": "mixed",
+	"duration_days": 1,
+	"sentiment_shift": 0.0,
+	"broker_bias": "institution",
+	"description": "A listed company moves through a cash dividend timetable."
+  },
+  {
 	"id": "commodity_price_shock",
 	"scope": "market",
 	"event_family": "special",

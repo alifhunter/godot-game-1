@@ -61,7 +61,7 @@ func refresh() -> void:
 	net_monthly_label.text = _format_currency(net_monthly)
 	net_monthly_label.add_theme_color_override("font_color", COLOR_POSITIVE if net_monthly >= 0.0 else COLOR_NEGATIVE)
 	runway_label.text = _format_runway(float(snapshot.get("runway_months", 0.0)))
-	summary_label.text = "Monthly outflow %s | Dividend estimate %s | Net %s" % [
+	summary_label.text = "Monthly outflow %s | Declared dividend avg %s | Net %s" % [
 		_format_currency(float(snapshot.get("monthly_outflow", 0.0))),
 		_format_currency(float(snapshot.get("estimated_monthly_dividends", 0.0))),
 		_format_currency(net_monthly)
@@ -119,7 +119,7 @@ func _build_ui() -> void:
 	equity_label = _add_stat_card(stat_grid, "Equity", "LifeEquityLabel")
 	runway_label = _add_stat_card(stat_grid, "Runway", "LifeRunwayLabel")
 	outflow_label = _add_stat_card(stat_grid, "Monthly outflow", "LifeMonthlyOutflowLabel")
-	dividend_label = _add_stat_card(stat_grid, "Est dividends", "LifeDividendLabel")
+	dividend_label = _add_stat_card(stat_grid, "Declared div avg", "LifeDividendLabel")
 	net_monthly_label = _add_stat_card(stat_grid, "Net monthly", "LifeNetMonthlyLabel")
 
 	var split := HBoxContainer.new()
@@ -230,7 +230,7 @@ func _refresh_budget_rows() -> void:
 	_add_budget_row("Lifestyle", str(lifestyle.get("label", "")), float(lifestyle.get("monthly_cost", 0.0)), false)
 	if float(snapshot.get("monthly_extra", 0.0)) > 0.0:
 		_add_budget_row("Extra", "Manual buffer", float(snapshot.get("monthly_extra", 0.0)), false)
-	_add_budget_row("Dividends", "Estimated portfolio income", float(snapshot.get("estimated_monthly_dividends", 0.0)), true)
+	_add_budget_row("Dividends", "Declared average from corporate actions", float(snapshot.get("estimated_monthly_dividends", 0.0)), true)
 	_add_budget_row("Net", "Monthly gap after dividends", float(snapshot.get("net_monthly", 0.0)), true)
 
 
@@ -239,7 +239,7 @@ func _refresh_dividend_rows() -> void:
 	var rows: Array = snapshot.get("dividend_rows", [])
 	if rows.is_empty():
 		var empty_label := _make_body_label("LifeDividendEmptyLabel")
-		empty_label.text = "No holdings yet. Dividend estimate is zero until the portfolio owns shares."
+		empty_label.text = "No declared dividends for current holdings yet."
 		dividend_rows.add_child(empty_label)
 		return
 	var shown_count: int = 0
@@ -249,8 +249,9 @@ func _refresh_dividend_rows() -> void:
 		var row: Dictionary = row_value
 		_add_dividend_row(
 			str(row.get("ticker", "")),
-			float(row.get("market_value", 0.0)),
-			float(row.get("annual_yield", 0.0)),
+			int(row.get("eligible_shares", 0)),
+			float(row.get("amount_per_share", 0.0)),
+			float(row.get("projected_amount", 0.0)),
 			float(row.get("monthly_income", 0.0))
 		)
 		shown_count += 1
@@ -289,7 +290,7 @@ func _add_budget_row(label_text: String, detail_text: String, value: float, inco
 	row.add_child(value_label)
 
 
-func _add_dividend_row(ticker: String, market_value: float, annual_yield: float, monthly_income: float) -> void:
+func _add_dividend_row(ticker: String, eligible_shares: int, amount_per_share: float, projected_amount: float, monthly_income: float) -> void:
 	var row := HBoxContainer.new()
 	row.name = "LifeDividendRow%s" % ticker
 	row.add_theme_constant_override("separation", 8)
@@ -300,7 +301,7 @@ func _add_dividend_row(ticker: String, market_value: float, annual_yield: float,
 	_style_label(ticker_label, COLOR_TEXT, 12)
 	row.add_child(ticker_label)
 	var detail_label := Label.new()
-	detail_label.text = "%s at %s annual yield" % [_format_currency(market_value), _format_percent(annual_yield)]
+	detail_label.text = "%d shares x %s DPS = %s declared" % [eligible_shares, _format_currency(amount_per_share), _format_currency(projected_amount)]
 	detail_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_label(detail_label, COLOR_MUTED, 12)
 	row.add_child(detail_label)

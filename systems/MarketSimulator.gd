@@ -249,6 +249,8 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		"active_corporate_action_chains": corporate_action_resolution.get("active_corporate_action_chains", {}).duplicate(true),
 		"corporate_meeting_calendar": corporate_action_resolution.get("corporate_meeting_calendar", {}).duplicate(true),
 		"corporate_action_intel": corporate_action_resolution.get("corporate_action_intel", {}).duplicate(true),
+		"corporate_dividend_calendar": corporate_action_resolution.get("corporate_dividend_calendar", {}).duplicate(true),
+		"dividend_payments": corporate_action_resolution.get("dividend_payments", []).duplicate(true),
 		"attended_meetings": corporate_action_resolution.get("attended_meetings", {}).duplicate(true),
 		"corporate_meeting_sessions": corporate_action_resolution.get("corporate_meeting_sessions", {}).duplicate(true),
 		"macro_state": macro_state.duplicate(true),

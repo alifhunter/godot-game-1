@@ -6,6 +6,15 @@
     "start_month": 3,
     "end_month": 6
   },
+  "cash_dividend": {
+    "enabled": true,
+    "ex_delay_min_days": 2,
+    "ex_delay_max_days": 4,
+    "payment_delay_min_days": 8,
+    "payment_delay_max_days": 16,
+    "minimum_payout_ratio": 0.08,
+    "maximum_payout_ratio": 0.42
+  },
   "meeting_defaults": {
     "earnings_call": {
       "delay_min_days": 0,

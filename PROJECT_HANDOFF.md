@@ -38,12 +38,12 @@ Read this file first in the next session.
     - `fc14108 Build Key Stats card dashboard`
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
-    - latest checkpoint message: `Add Life cash-flow planner`
+    - latest checkpoint message: `Add cash dividend corporate actions`
   - after checkpoint commits, `git status --short` should generally be clean except ignored local `logs/` output
-  - current local note: the `Life` desktop app now has a conservative V1 planning loop for housing, lifestyle, monthly outflow, estimated dividends, net monthly cash flow, runway, compact persistence, and smoke coverage
+  - current local note: cash dividends are now real corporate actions; `Life` reads declared dividend rows from the corporate-action calendar instead of inventing synthetic income
 
 ## Latest Session Snapshot
-- Most recent work added `Life` as a first playable desktop planning app after the Thesis tuning pass.
+- Most recent work added a first-pass cash dividend corporate-action system and connected `Life` to declared dividend income.
 - The previous major pass turned `Thesis Board` into a stronger learning loop: a two-column evidence builder, staged white-paper report overlay, evidence-discipline guidance, player-led chart pattern claims from STOCKBOT charts, and compact thesis evidence persistence.
 - Daily loop status:
   - `Advance Day` is guarded against double-presses, shows short processing phases on the desktop button, and now has a snappy press/phase pulse that resets to neutral after processing.
@@ -131,18 +131,18 @@ Read this file first in the next session.
   - `Life` is now a first playable desktop app registered as app id `life`.
   - Desktop shortcut/nav SVGs live in `assets/ui/desktop/life_shortcut.svg` and `assets/ui/desktop/life_nav.svg`.
   - Runtime UI is built by `scripts/ui/widgets/LifeWidget.gd` and opens as a warm cash-flow planning window with:
-    - cash, equity, monthly outflow, estimated dividends, net monthly, and runway summary cards
+    - cash, equity, monthly outflow, declared dividend average, net monthly, and runway summary cards
     - housing choices: `Family support`, `Kost room`, and `Apartment`
     - lifestyle choices: `Frugal`, `Balanced`, and `Status`
-    - budget rows for housing, basics, lifestyle, estimated dividends, and monthly gap
-    - a portfolio-income section that estimates monthly dividend contribution from current holdings
+    - budget rows for housing, basics, lifestyle, declared dividend average, and monthly gap
+    - a portfolio-income section that projects only declared dividends from the corporate-action calendar
   - `RunState.player_life` persists only compact player choices:
     - housing id
     - lifestyle id
     - optional monthly extra/buffer
     - last updated day/date
   - Life V1 is deliberately a planning view only; it does not deduct month-end cash yet.
-  - Dividend income is an in-game estimate derived from current holdings and generated company financial characteristics, not an external data feed.
+  - Dividend income now comes from in-game `cash_dividend` corporate actions after declaration; there is no external dividend data feed.
 - STOCKBOT status:
   - `Key Stats` is now a dark STOCKBOT-style card dashboard rather than a simple text block.
   - Current dashboard sections are `Current Valuation`, `Per Share`, a center metric table, `Profitability`, `Income Statement`, `Balance Sheet`, and `Cash Flow Statement`.
@@ -270,7 +270,7 @@ Read this file first in the next session.
 - A first-pass smaller mobile-style social-feed UX now also exists in `Twooter`
 - A first playable `Academy` desktop app now exists
 - A first playable `Thesis Board` desktop app now exists for manual research capture, deterministic report generation, and after-action thesis review
-- A first playable `Life` desktop app now exists for monthly cash-flow planning, housing/lifestyle choices, estimated dividends, and runway
+- A first playable `Life` desktop app now exists for monthly cash-flow planning, housing/lifestyle choices, declared dividend income, and runway
 - A first playable contact/recognition UX now exists in `Network`
 - A first playable `Upgrades` shop app now exists on the desktop
 - A first playable corporate-action / meeting-chain layer now exists behind `News`, `Twooter`, `Network`, and daily market behavior
@@ -1130,6 +1130,7 @@ Read this file first in the next session.
 - The core runtime/save buckets now exist in `RunState`:
   - `RunState.active_corporate_action_chains`
   - `RunState.corporate_meeting_calendar`
+  - `RunState.corporate_dividend_calendar`
   - `RunState.corporate_action_intel`
   - `RunState.attended_meetings`
   - `RunState.corporate_meeting_sessions`
@@ -1213,6 +1214,16 @@ Read this file first in the next session.
     - extraordinary venue
     - scheduled dynamically once a chain reaches filing/agenda stage
     - current default delay is `4-9` trading days after scheduling
+- Current dividend model:
+  - `cash_dividend` is enabled in `data/corporate_actions/corporate_action_catalog.json`
+  - eligible companies with positive earnings, adequate margin/ROE, and tolerable leverage can generate annual dividend records tied to their `annual_rups` meeting
+  - generated Annual RUPS rows receive a `Cash dividend approval` agenda item when a dividend exists for that year
+  - dividend records progress through `scheduled`, `approved`, `ex_date`, `recorded`, and `paid`
+  - ex-date and payment timing use deterministic trading-day delays from the catalog; record date is one trading day after ex-date
+  - record-date eligibility uses the player's held shares on record day, and payment credits cash on payment day through `RunState.apply_day_result()`
+  - paid dividends are added to portfolio history with side `dividend` so the Portfolio history can show share count and received cash
+  - `GameManager.get_corporate_dividend_snapshot(company_id := "")` exposes upcoming/declared/paid rows for UI and tests
+  - `GameManager.debug_schedule_next_day_cash_dividend(company_id)` exists for deterministic smoke coverage and debugging
 - Current venue/calendar behavior:
   - `corporate_meeting_calendar` is keyed by date and stores meeting rows with linked company/family/chain metadata
   - meeting statuses are refreshed during day advancement
@@ -1875,6 +1886,12 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - Cash dividend corporate-action pass on `2026-04-28`:
+    - `git diff --check` passed
+    - Godot project-load check passed with `--log-file logs\project-load-dividends.log --quit`
+    - quick Godot headless smoke with `--log-file logs\smoke-dividends-v1-rerun.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` passed and printed `SMOKE_QUICK_OK`
+    - smoke now buys a holding, schedules a deterministic next-day cash dividend, advances through declaration/ex/record/payment, confirms `Life` uses declared dividends instead of synthetic estimates, confirms player cash is credited, and confirms portfolio history records the dividend
+    - non-blocking Windows/Godot note: this smoke run can print `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK`; treat it as trailing platform noise unless it appears before test success or affects network/API work
   - Thesis Focus Gap removal on `2026-04-28`:
     - `git diff --check` passed
     - Godot project-load check passed with `--log-file logs\godot-project-load-remove-focus-gap.log --quit`
@@ -2183,10 +2200,12 @@ Read this file first in the next session.
   - playtest whether the current housing/lifestyle costs create useful pressure on `Normal` and `Grind` without feeling punitive
   - decide when monthly obligations should become real cash deductions; V1 is planning-only and deliberately avoids surprise penalties
   - add an explicit cash-flow history only after deductions or recurring income become actual gameplay
+  - tune the declared-dividend display after a few longer runs; right now it averages announced payments over a simple 12-month planning window
   - connect the system to Academy's money-management/mindset themes so urgency comes from financial planning, not artificial pressure
   - consider housing/cars/status upgrades after the monthly cash-flow loop is working and readable
 - Network and corporate-action planning:
   - deepen the shared corporate-action chain object that `News`, `Twooter`, `Network`, market reaction, `earnings_call`, `annual_rups`, and `rupslb` already read/write
+  - tune annual cash-dividend eligibility, payout ratios, and market reaction once longer playtests show whether income is too rare or too generous
   - expand interactive `rupslb` beyond `rights_issue` with more agenda families, record-date/shareholder-registry rules, and richer result nuance
   - deepen cross-contact conflict handling with actions like `Ask for evidence`, `Push back`, and `Compare source`
   - evolve Journal rows into searchable/filterable clues and tasks when source-check gameplay becomes a major loop
