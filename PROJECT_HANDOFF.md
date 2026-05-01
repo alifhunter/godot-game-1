@@ -85,6 +85,7 @@ Read this file first in the next session.
 - Added `systems/StableRng.gd` and migrated high-value deterministic economy paths away from Godot `hash()`: company roster/generation/narrative, macro, market simulation, broker flow, company/person/special events, report ordering/events, dashboard cache keys, and corporate-action deterministic terms.
 - Company snapshots now expose an `impactability` tape/depth summary (`Thin float`, `Impactable`, `Normal depth`, `Deep tape`) based on free float, ADV, visible bid/ask depth, and player cash.
 - STOCKBOT chart meta and the order ticket now show the tape label; order estimates warn with `Visible flow` or `Large vs depth` when the order is large relative to visible side depth/ADV/free-float value.
+- Trade sidebar refresh now lazy-rebuilds hidden `All Stock` and `Portfolio` side-list rows. Broad `_refresh_markets()` calls keep the visible tab fresh and mark hidden heavy lists dirty; those lists rebuild when their tab is opened or searched.
 - Most recent work made `rights_issue` execution real after the interactive `RUPSLB` approval flow.
 - Rights issue chains now generate deterministic terms: ratio denominator, entitlement ratio, exercise price, discount, gross proceeds, old/new shares outstanding, and theoretical ex-rights price.
 - Approved rights issues now emit a `rights_issue` application payload at execution; `RunState` applies the company-level dilution, updates market cap/free float, applies a capped TERP-style price adjustment, and records a `rights_issue` share-structure adjustment.
@@ -1977,6 +1978,11 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - Lazy stock sidebars performance pass on `2026-05-01`:
+    - `git diff --check -- scripts/ui/GameRoot.gd PROJECT_HANDOFF.md` passed
+    - Godot project-load check passed with `--log-file logs\godot-project-load-lazy-stock-sidebars.log --quit`; only the known Windows root-certificate warning appeared
+    - quick Godot headless smoke passed with `--log-file logs\smoke-lazy-stock-sidebars.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` and printed `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`
+    - smoke log shows common deferred stock refreshes around `_refresh_markets 8-11ms` when hidden side lists stay dirty instead of rebuilding immediately
   - STOCKBOT Contact Intel polish pass on `2026-05-01`:
     - `git diff --check -- PROJECT_HANDOFF.md autoloads/GameManager.gd scripts/ui/GameRoot.gd scripts/tests/SmokeTest.gd systems/CorporateActionSystem.gd` passed
     - Godot project-load check passed with `--log-file logs\godot-project-load-contact-intel-polish.log --quit`; only the known Windows root-certificate warning appeared
@@ -2382,7 +2388,7 @@ Read this file first in the next session.
   - evolve Journal rows into searchable/filterable clues and tasks when source-check gameplay becomes a major loop
   - add favor cooldowns, report-back outcomes, relationship burn tuning, and perk hooks once Network pacing settles
 - Trading and chart planning:
-  - continue narrower visible-stock refresh work if click latency remains noticeable after save-path tuning
+  - continue narrower visible-stock refresh work if click latency remains noticeable after the lazy hidden-list pass; the next likely target is avoiding full trade-workspace rebuilds when only order/holding fields change
   - add All Stock sort/filter presets and richer watchlist management
   - decide whether manual chart drawings should persist through save/load via `RunState`
   - add drag/edit handles, richer indicator panes, event markers, hover pinning, pan interaction, and a volume-interpretation Academy lesson

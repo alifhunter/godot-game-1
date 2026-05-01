@@ -206,6 +206,8 @@ var current_trade_snapshot: Dictionary = {}
 var cached_company_rows: Array = []
 var cached_company_row_lookup: Dictionary = {}
 var has_cached_company_rows: bool = false
+var all_stock_rows_dirty: bool = true
+var portfolio_stock_rows_dirty: bool = true
 var current_news_snapshot: Dictionary = {}
 var current_social_snapshot: Dictionary = {}
 var current_network_snapshot: Dictionary = {}
@@ -2275,7 +2277,10 @@ func _on_watchlist_changed() -> void:
 	var company_rows: Array = _get_company_rows_cached()
 	var watchlist_lookup: Dictionary = _build_watchlist_lookup()
 	_refresh_watchlist_rows(company_rows, watchlist_lookup)
-	_refresh_all_stock_watchlist_button_states(watchlist_lookup)
+	if _should_refresh_all_stock_rows():
+		_refresh_all_stock_watchlist_button_states(watchlist_lookup)
+	else:
+		all_stock_rows_dirty = true
 	_refresh_company_selection_state()
 	if selected_company_id != previous_selected_company_id:
 		_refresh_trade_workspace()
@@ -2324,6 +2329,8 @@ func _invalidate_company_rows_cache() -> void:
 	cached_company_rows = []
 	cached_company_row_lookup = {}
 	has_cached_company_rows = false
+	all_stock_rows_dirty = true
+	portfolio_stock_rows_dirty = true
 
 
 func _get_company_rows_cached() -> Array:
@@ -8023,9 +8030,25 @@ func _refresh_company_list(
 	var watchlist_lookup: Dictionary = _build_watchlist_lookup()
 	_refresh_watchlist_rows(company_rows, watchlist_lookup)
 	if refresh_all_stock_rows:
-		_refresh_all_stock_rows(company_rows, watchlist_lookup)
+		if _should_refresh_all_stock_rows():
+			_refresh_all_stock_rows(company_rows, watchlist_lookup)
+			all_stock_rows_dirty = false
+		else:
+			all_stock_rows_dirty = true
 	if refresh_portfolio_sidebar:
-		_refresh_portfolio_stock_rows(GameManager.get_portfolio_snapshot().get("holdings", []), company_row_lookup)
+		if _should_refresh_portfolio_stock_rows():
+			_refresh_portfolio_stock_rows(GameManager.get_portfolio_snapshot().get("holdings", []), company_row_lookup)
+			portfolio_stock_rows_dirty = false
+		else:
+			portfolio_stock_rows_dirty = true
+
+
+func _should_refresh_all_stock_rows() -> bool:
+	return stock_list_tabs.current_tab == STOCK_LIST_TAB_ALL_STOCKS
+
+
+func _should_refresh_portfolio_stock_rows() -> bool:
+	return stock_list_tabs.current_tab == STOCK_LIST_TAB_PORTFOLIO
 
 
 func _refresh_watchlist_rows(company_rows: Array, watchlist_lookup: Dictionary) -> void:
@@ -9273,6 +9296,12 @@ func _on_stock_list_tab_changed(_tab_index: int) -> void:
 	var started_at_usec: int = Time.get_ticks_usec()
 	var previous_selected_company_id: String = selected_company_id
 	_sync_selected_company_with_active_stock_list()
+	if stock_list_tabs.current_tab == STOCK_LIST_TAB_ALL_STOCKS and all_stock_rows_dirty:
+		_refresh_all_stock_rows(_get_company_rows_cached(), _build_watchlist_lookup())
+		all_stock_rows_dirty = false
+	elif stock_list_tabs.current_tab == STOCK_LIST_TAB_PORTFOLIO and portfolio_stock_rows_dirty:
+		_refresh_portfolio_stock_rows(GameManager.get_portfolio_snapshot().get("holdings", []), _get_company_row_lookup_cached())
+		portfolio_stock_rows_dirty = false
 	_refresh_company_selection_state()
 	if selected_company_id != previous_selected_company_id:
 		_refresh_trade_workspace()
@@ -9359,6 +9388,7 @@ func _on_add_to_watchlist_pressed(company_id: String) -> void:
 
 func _on_all_stock_search_text_changed(_new_text: String) -> void:
 	_refresh_company_list(_get_company_rows_cached(), _get_company_row_lookup_cached(), true, false)
+	all_stock_rows_dirty = false
 
 
 func _on_taskbar_home_pressed() -> void:
