@@ -25,6 +25,415 @@
       "sections": []
     },
     {
+      "id": "corporate_action",
+      "label": "Corporate Action",
+      "status": "playable",
+      "summary": "Learn how company meetings, dividends, capital actions, control deals, and leadership resets change a stock.",
+      "quiz_passing_score": 0.8,
+      "quiz_required_section_ids": [
+        "corporate_action_overview",
+        "dividends",
+        "capital_structure_actions",
+        "control_turnaround_actions"
+      ],
+      "badge": {
+        "id": "corporate_action_basics",
+        "label": "Corporate Action Basics",
+        "description": "Passed the Corporate Action Academy foundation quiz."
+      },
+      "sections": [
+        {
+          "id": "corporate_action_overview",
+          "order": 0,
+          "label": "01 Overview",
+          "title": "01 Reading Corporate Actions",
+          "kind": "lesson",
+          "completion_signal": "You can identify whether an event is a meeting, information session, cash/share distribution, financing action, control deal, or governance reset.",
+          "pages": [
+            {
+              "heading": "What is a corporate action?",
+              "body": "A corporate action is a company-originated event that changes investor rights, cash flows, share count, ownership, listing status, or leadership expectations. In the game these events come from companies, boards, controllers, offerors, or creditors. A normal player can react to them, research them, attend eligible meetings, vote with record-date shares, or ask contacts for a read."
+            },
+            {
+              "heading": "Meetings and calls",
+              "body": "Annual RUPS is the routine yearly shareholder meeting. RUPSLB is an extraordinary shareholder meeting for a specific agenda such as financing, buybacks, control changes, restructuring, or leadership. Earnings calls are information sessions tied to reported results and do not give the player agenda control."
+            },
+            {
+              "heading": "Player agency",
+              "body": "The key rule is ownership. Buying shares can give attendance, voting, dividend, tender, or rights eligibility depending on the record date. It does not let the player directly steer company strategy unless a future system gives the player majority or control ownership."
+            }
+          ],
+          "checks": [
+            {
+              "id": "corporate_action_origin",
+              "question": "Who normally initiates corporate-action direction in this game?",
+              "options": [
+                {
+                  "id": "company_side",
+                  "label": "Company, board, controller, offeror, or creditor",
+                  "correct": true,
+                  "feedback": "Correct. The player reads and reacts unless ownership control gives stronger influence later."
+                },
+                {
+                  "id": "any_player",
+                  "label": "Any player from the order ticket",
+                  "correct": false,
+                  "feedback": "No. Normal players cannot directly schedule company-direction meetings."
+                },
+                {
+                  "id": "price_chart",
+                  "label": "The price chart by itself",
+                  "correct": false,
+                  "feedback": "Charts can reveal reaction, but the action itself comes from the company-side event chain."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "key_insights",
+              "title": "Implemented event venues",
+              "bullets": [
+                "Annual RUPS: routine shareholder meeting, often used for dividend and governance agenda items.",
+                "RUPSLB: extraordinary shareholder meeting for specific corporate-action proposals.",
+                "Earnings call: management explains reported results and outlook without giving voting control."
+              ]
+            },
+            {
+              "type": "text",
+              "heading": "Record date discipline",
+              "body": "Eligibility depends on the snapshot date attached to the action. Selling after the record date does not erase captured rights, while buying after the record date does not create them."
+            }
+          ]
+        },
+        {
+          "id": "dividends",
+          "order": 1,
+          "label": "02 Dividends",
+          "title": "02 Cash and Stock Dividends",
+          "kind": "lesson",
+          "completion_signal": "You can explain how cash dividends and stock dividends affect cash, share count, reference price, and record-date eligibility.",
+          "pages": [
+            {
+              "heading": "Cash dividend",
+              "body": "A cash dividend pays money to eligible shareholders. In the game it moves through approval, ex-date, record, and payment timing. The stock can adjust when it goes ex-dividend because the cash claim has separated from the share."
+            },
+            {
+              "heading": "Stock dividend",
+              "body": "A stock dividend grants bonus shares instead of cash. The player's eligible share count receives additional shares on payment, while company share count and historical reference prices adjust to keep the economics consistent."
+            },
+            {
+              "heading": "How to read the setup",
+              "body": "Check payout size, yield, timetable, and whether you held shares on the record date. A high dividend is not automatically bullish if the business is weak or the payout is unsustainable."
+            }
+          ],
+          "checks": [
+            {
+              "id": "dividend_record_date",
+              "question": "What matters most for dividend eligibility?",
+              "options": [
+                {
+                  "id": "record_date_holding",
+                  "label": "Shares captured on the record date",
+                  "correct": true,
+                  "feedback": "Correct. Eligibility follows the record-date registry."
+                },
+                {
+                  "id": "today_buy",
+                  "label": "Buying any time before payment",
+                  "correct": false,
+                  "feedback": "Payment comes later, but eligibility is already captured by the record date."
+                },
+                {
+                  "id": "highest_price",
+                  "label": "The highest price paid",
+                  "correct": false,
+                  "feedback": "Your cost basis does not decide eligibility."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "key_insights",
+              "title": "Implemented dividend actions",
+              "bullets": [
+                "Cash dividend: eligible holders receive cash on the payment date.",
+                "Stock dividend: eligible holders receive bonus shares and the reference price/share count adjusts."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "capital_structure_actions",
+          "order": 2,
+          "label": "03 Capital Structure",
+          "title": "03 Financing, Buybacks, and Splits",
+          "kind": "lesson",
+          "completion_signal": "You can separate dilution, float absorption, and cosmetic share-count changes.",
+          "pages": [
+            {
+              "heading": "Rights issue",
+              "body": "A rights issue offers new shares to existing holders, usually at a discount. Eligible holders receive an entitlement. If they exercise, they add shares and spend cash; if they cannot or do not exercise, their ownership can be diluted."
+            },
+            {
+              "heading": "Private placement",
+              "body": "A private placement sells new shares to a targeted investor. It can raise cash faster than a rights issue, but it can dilute existing holders and may reduce free float if the new investor is locked or strategic."
+            },
+            {
+              "heading": "Stock buyback",
+              "body": "A stock buyback authorizes the company to buy and retire shares. Execution can reduce free float and support price, but it also spends corporate cash and can be questioned if the business needs funding."
+            },
+            {
+              "heading": "Stock split",
+              "body": "A stock split changes the number of shares and reference price. A normal split can improve trading accessibility; a reverse split can reset a very low nominal price. By itself, a split does not create business value."
+            }
+          ],
+          "checks": [
+            {
+              "id": "capital_structure_dilution",
+              "question": "Which action most directly creates new shares for financing?",
+              "options": [
+                {
+                  "id": "rights_or_placement",
+                  "label": "Rights issue or private placement",
+                  "correct": true,
+                  "feedback": "Correct. Both are new-share financing paths."
+                },
+                {
+                  "id": "buyback",
+                  "label": "Stock buyback",
+                  "correct": false,
+                  "feedback": "A buyback usually retires or absorbs shares rather than issuing new ones."
+                },
+                {
+                  "id": "earnings_call",
+                  "label": "Earnings call",
+                  "correct": false,
+                  "feedback": "An earnings call explains results; it does not issue shares."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "key_insights",
+              "title": "Implemented capital-structure actions",
+              "bullets": [
+                "Rights issue: shareholder entitlement, exercise price, dilution, and TERP-style adjustment.",
+                "Private placement: targeted investor issuance, dilution, proceeds, and free-float effect.",
+                "Stock buyback: authorization, execution ratio, retired shares, float reduction, and price support.",
+                "Stock split: split or reverse-split ratio, holding adjustment, share-count adjustment, and reference-price reset."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "control_turnaround_actions",
+          "order": 3,
+          "label": "04 Control and Turnaround",
+          "title": "04 Control Deals, Rescues, and Leadership",
+          "kind": "lesson",
+          "completion_signal": "You can read whether a corporate action is changing control, rescuing the balance sheet, transforming the listing, or resetting leadership.",
+          "pages": [
+            {
+              "heading": "Tender offer",
+              "body": "A tender offer lets holders choose whether to sell into an offer. In interactive meetings the player can tender, hold, or observe if eligible. A successful offer can shrink float, create public-float warnings, or eventually cash out remaining holders in a go-private branch."
+            },
+            {
+              "heading": "Strategic merger or acquisition",
+              "body": "A strategic M&A deal can cash out the target at an acquisition price, disable public trading for the acquired listing, and turn the question into premium versus closing risk."
+            },
+            {
+              "heading": "Backdoor listing",
+              "body": "A backdoor listing changes control and injects a new business into an existing listed shell. It can rewrite company identity, dilute old holders, create sponsor lock-up risk, and spawn follow-on financing or milestone events."
+            },
+            {
+              "heading": "Restructuring and CEO change",
+              "body": "Restructuring is a rescue package around debt relief, asset sales, debt conversion, and liquidity penalties. CEO change is a leadership reset that can shift execution traits and market confidence while preserving the listing."
+            }
+          ],
+          "checks": [
+            {
+              "id": "control_action_read",
+              "question": "What is the best first read on a backdoor listing?",
+              "options": [
+                {
+                  "id": "control_and_asset",
+                  "label": "Control change plus injected asset quality",
+                  "correct": true,
+                  "feedback": "Correct. The sponsor, asset quality, dilution, and post-deal milestones matter together."
+                },
+                {
+                  "id": "only_ticker",
+                  "label": "Only whether the ticker survives",
+                  "correct": false,
+                  "feedback": "Ticker survival matters, but the economic change comes from control, dilution, and the injected asset."
+                },
+                {
+                  "id": "only_vote_button",
+                  "label": "Only the meeting vote button",
+                  "correct": false,
+                  "feedback": "The vote matters, but the terms and aftermath determine the trade read."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "key_insights",
+              "title": "Implemented control and turnaround actions",
+              "bullets": [
+                "Tender offer: shareholder election, offer premium, float absorption, public-float warning, and go-private branch.",
+                "Strategic merger / acquisition: cash-out premium, target acquisition, delisting/trading block, and final holder treatment.",
+                "Backdoor listing: control change, asset injection, identity rewrite, dilution, sponsor lock-up, follow-on rights, and milestones.",
+                "Restructuring: debt relief, asset sale, debt-to-equity conversion, liquidity penalty, dilution, and stress overhang.",
+                "CEO change: leadership slate, CEO replacement, execution/story trait nudge, and market reaction."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "quiz",
+          "order": 4,
+          "label": "05 Quiz",
+          "title": "Corporate Action Basics Quiz",
+          "kind": "quiz",
+          "completion_signal": "Score 80 percent or better to earn Corporate Action Basics."
+        },
+        {
+          "id": "glossary",
+          "order": 5,
+          "label": "06 Glossary",
+          "title": "Glossary",
+          "kind": "glossary",
+          "completion_signal": "Use this any time you need a quick definition."
+        }
+      ],
+      "quiz_questions": [
+        {
+          "id": "ca_q1_origin",
+          "prompt": "Why should a normal player use Contact Intel instead of directly requesting RUPSLB direction?",
+          "options": [
+            {
+              "id": "info_not_control",
+              "label": "Contacts provide information; company direction comes from company-side control.",
+              "correct": true
+            },
+            {
+              "id": "skip_record_date",
+              "label": "Contacts erase record-date rules.",
+              "correct": false
+            },
+            {
+              "id": "force_vote",
+              "label": "Contacts force all shareholders to vote with the player.",
+              "correct": false
+            }
+          ],
+          "correct_answer_id": "info_not_control",
+          "feedback_correct": "Right. Contacts improve reads; they do not hand the player corporate control.",
+          "feedback_wrong": "Review the overview. The player can research and react, but normal corporate direction is not an order-ticket command."
+        },
+        {
+          "id": "ca_q2_record_date",
+          "prompt": "A dividend or meeting says eligibility is based on record-date shares. What does that mean?",
+          "options": [
+            {
+              "id": "snapshot",
+              "label": "The game uses the shares captured on that snapshot date.",
+              "correct": true
+            },
+            {
+              "id": "payment_day",
+              "label": "Only payment-day shares count.",
+              "correct": false
+            },
+            {
+              "id": "watchlist",
+              "label": "A watchlist entry is enough.",
+              "correct": false
+            }
+          ],
+          "correct_answer_id": "snapshot",
+          "feedback_correct": "Correct. Record-date snapshots drive eligibility.",
+          "feedback_wrong": "Record date is the eligibility snapshot, separate from later payment or meeting timing."
+        },
+        {
+          "id": "ca_q3_dilution",
+          "prompt": "Which pair should make you think about dilution first?",
+          "options": [
+            {
+              "id": "rights_private",
+              "label": "Rights issue and private placement",
+              "correct": true
+            },
+            {
+              "id": "buyback_split",
+              "label": "Stock buyback and stock split",
+              "correct": false
+            },
+            {
+              "id": "earnings_rups",
+              "label": "Earnings call and Annual RUPS",
+              "correct": false
+            }
+          ],
+          "correct_answer_id": "rights_private",
+          "feedback_correct": "Correct. Both create new shares for financing.",
+          "feedback_wrong": "Look for new-share issuance when you are checking dilution risk."
+        },
+        {
+          "id": "ca_q4_control",
+          "prompt": "Which action can rewrite the listed company's identity while keeping the ticker alive?",
+          "options": [
+            {
+              "id": "backdoor_listing",
+              "label": "Backdoor listing",
+              "correct": true
+            },
+            {
+              "id": "cash_dividend",
+              "label": "Cash dividend",
+              "correct": false
+            },
+            {
+              "id": "earnings_call",
+              "label": "Earnings call",
+              "correct": false
+            }
+          ],
+          "correct_answer_id": "backdoor_listing",
+          "feedback_correct": "Right. Backdoor listings model control change, asset injection, and identity rewrite.",
+          "feedback_wrong": "Review the control and turnaround lesson. Identity rewrite belongs to backdoor listings."
+        },
+        {
+          "id": "ca_q5_tender",
+          "prompt": "What is the player's main decision in an eligible tender-offer meeting?",
+          "options": [
+            {
+              "id": "tender_hold_observe",
+              "label": "Tender shares, hold shares, or observe",
+              "correct": true
+            },
+            {
+              "id": "set_company_name",
+              "label": "Set the company's new name",
+              "correct": false
+            },
+            {
+              "id": "create_dividend",
+              "label": "Create a dividend timetable",
+              "correct": false
+            }
+          ],
+          "correct_answer_id": "tender_hold_observe",
+          "feedback_correct": "Correct. Tender offers are shareholder elections around an offer.",
+          "feedback_wrong": "Tender offers ask holders whether to sell into the offer, hold, or observe."
+        }
+      ]
+    },
+    {
       "id": "technical",
       "label": "Technical",
       "status": "playable",
@@ -1090,6 +1499,62 @@
     }
   ],
   "glossary": [
+    {
+      "term": "Annual RUPS",
+      "definition": "The routine annual shareholder meeting, often used for reports, dividend approval, governance items, and normal shareholder resolutions."
+    },
+    {
+      "term": "Backdoor Listing",
+      "definition": "A control-change and asset-injection action where a new business enters a listed shell, potentially rewriting identity while keeping the ticker alive."
+    },
+    {
+      "term": "Cash Dividend",
+      "definition": "A cash payment to eligible shareholders captured on the dividend record date."
+    },
+    {
+      "term": "CEO Change",
+      "definition": "A leadership reset where the board or shareholders approve a new CEO or leadership slate, changing execution expectations."
+    },
+    {
+      "term": "Earnings Call",
+      "definition": "A management information session tied to reported results and outlook. It explains performance but is not a shareholder control vote."
+    },
+    {
+      "term": "Private Placement",
+      "definition": "A targeted new-share issuance to selected investors, usually faster than a rights issue but potentially dilutive."
+    },
+    {
+      "term": "Restructuring",
+      "definition": "A rescue or turnaround package involving debt relief, asset sales, debt conversion, liquidity pressure, and possible dilution."
+    },
+    {
+      "term": "Rights Issue",
+      "definition": "A new-share financing action offered to eligible existing holders through rights entitlement and an exercise price."
+    },
+    {
+      "term": "RUPSLB",
+      "definition": "An extraordinary shareholder meeting for a specific agenda such as financing, buybacks, control deals, restructuring, or leadership changes."
+    },
+    {
+      "term": "Stock Buyback",
+      "definition": "A company action to buy and potentially retire shares, reducing float and sometimes supporting price."
+    },
+    {
+      "term": "Stock Dividend",
+      "definition": "A dividend paid as bonus shares to eligible holders instead of cash, with share count and reference price adjusted."
+    },
+    {
+      "term": "Stock Split",
+      "definition": "A share-structure action that changes share count and reference price without creating business value by itself."
+    },
+    {
+      "term": "Strategic M&A",
+      "definition": "A merger or acquisition action where a strategic buyer may cash out the target and remove it from public trading."
+    },
+    {
+      "term": "Tender Offer",
+      "definition": "An offer for shareholders to sell shares into a bid, usually with a premium and possible float or go-private consequences."
+    },
     {
       "term": "Accumulation",
       "definition": "A phase where stronger hands appear to absorb supply before a possible markup."

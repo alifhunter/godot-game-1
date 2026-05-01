@@ -116,6 +116,7 @@ Read this file first in the next session.
   - Runtime Academy has the newspaper-module layout with top category tabs, left `CORE MODULES` rail, one main scroll area, reserved banner frame, fixed action row, card-style lesson blocks, nested infoboxes, inline images, and blue `key_insights` blocks.
   - The dev-only local web editor in `tools/academy_editor/` is the source-authoring path for Academy content and exports directly to `data/academy/academy_catalog.json`.
   - Editor/runtime support image uploads into `assets/academy/lessons/`; missing image paths fall back to placeholders rather than breaking runtime UI.
+  - Corporate Action is now a playable Academy category covering Annual RUPS, RUPSLB, earnings calls, cash dividends, stock dividends, rights issues, private placements, stock buybacks, stock splits, tender offers, strategic M&A, backdoor listings, restructuring, and CEO changes, with matching quiz and glossary entries.
 - Thesis Board status:
   - `Thesis Board` is now a first playable desktop app registered as app id `thesis`.
   - Desktop shortcut/nav SVGs live in `assets/ui/desktop/thesis_shortcut.svg` and `assets/ui/desktop/thesis_nav.svg`.
