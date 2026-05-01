@@ -51,21 +51,34 @@ func save_run(run_state: Dictionary) -> bool:
 		push_error("Unable to open save file for writing.")
 		return false
 
-	save_file.store_string(JSON.stringify(run_state, "\t"))
+	var serialize_started_at_usec: int = Time.get_ticks_usec()
+	var save_text: String = JSON.stringify(run_state)
+	_log_elapsed("save_run:serialize", serialize_started_at_usec)
+	var write_started_at_usec: int = Time.get_ticks_usec()
+	save_file.store_string(save_text)
+	_log_elapsed("save_run:write", write_started_at_usec)
 	_log_elapsed("save_run", started_at_usec)
 	return true
 
 
 func load_run() -> Dictionary:
+	var started_at_usec: int = Time.get_ticks_usec()
 	if not has_save():
+		_log_elapsed("load_run:no_save", started_at_usec)
 		return {}
 
-	var raw_text = FileAccess.get_file_as_string(_save_path())
+	var read_started_at_usec: int = Time.get_ticks_usec()
+	var raw_text: String = FileAccess.get_file_as_string(_save_path())
+	_log_elapsed("load_run:read_file", read_started_at_usec)
+	var parse_started_at_usec: int = Time.get_ticks_usec()
 	var parsed = JSON.parse_string(raw_text)
+	_log_elapsed("load_run:parse_json", parse_started_at_usec)
 	if typeof(parsed) != TYPE_DICTIONARY:
 		push_error("Save file is malformed.")
+		_log_elapsed("load_run", started_at_usec)
 		return {}
 
+	_log_elapsed("load_run", started_at_usec)
 	return parsed.duplicate(true)
 
 

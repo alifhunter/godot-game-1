@@ -939,7 +939,21 @@ func _run_scenario(
 		if (
 			not GameManager.has_method("debug_force_rights_issue_rupslb") or
 			not GameManager.has_method("debug_schedule_next_day_rights_issue_rupslb") or
+			not GameManager.has_method("debug_schedule_next_day_stock_buyback_rupslb") or
+			not GameManager.has_method("debug_schedule_next_day_stock_split_rupslb") or
+			not GameManager.has_method("debug_schedule_next_day_tender_offer_rupslb") or
+			not GameManager.has_method("debug_schedule_next_day_strategic_mna_rupslb") or
+			not GameManager.has_method("debug_schedule_next_day_backdoor_listing_rupslb") or
+			not GameManager.has_method("debug_schedule_next_day_ceo_change_rupslb") or
+			not GameManager.has_method("get_stock_contact_tip_options") or
+			not GameManager.has_method("ask_stock_contact_tip") or
 			not GameManager.has_method("debug_force_stock_buyback_execution") or
+			not GameManager.has_method("debug_force_stock_split_execution") or
+			not GameManager.has_method("debug_force_tender_offer_execution") or
+			not GameManager.has_method("debug_force_strategic_mna_execution") or
+			not GameManager.has_method("debug_force_backdoor_listing_execution") or
+			not GameManager.has_method("debug_force_restructuring_execution") or
+			not GameManager.has_method("debug_force_ceo_change_execution") or
 			not GameManager.has_method("start_corporate_meeting_session") or
 			not GameManager.has_method("get_corporate_meeting_session_snapshot") or
 			not GameManager.has_method("set_corporate_meeting_session_stage") or
@@ -975,6 +989,95 @@ func _run_scenario(
 
 		var blocked_company_id: String = str(rupslb_candidate_ids[0])
 		var eligible_company_id: String = str(rupslb_candidate_ids[1])
+
+		var contact_intel_option: OptionButton = game_root.find_child("ContactIntelOption", true, false) as OptionButton
+		var contact_intel_button: Button = game_root.find_child("ContactIntelButton", true, false) as Button
+		var contact_intel_status_label: Label = game_root.find_child("ContactIntelStatusLabel", true, false) as Label
+		if contact_intel_option == null or contact_intel_button == null or contact_intel_status_label == null:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected STOCKBOT to expose player-facing Contact Intel controls."
+			}
+		game_root.selected_company_id = blocked_company_id
+		game_root._refresh_trade_workspace()
+		await get_tree().process_frame
+		GameManager.discover_network_contacts_for_company(blocked_company_id)
+		var contact_intel_contact_id: String = ""
+		var network_snapshot_for_intel: Dictionary = GameManager.get_network_snapshot()
+		for discovery_value in network_snapshot_for_intel.get("discoveries", []):
+			if typeof(discovery_value) != TYPE_DICTIONARY:
+				continue
+			var discovery: Dictionary = discovery_value
+			var discovery_targets: Array = discovery.get("target_company_ids", [])
+			if not discovery_targets.has(blocked_company_id) and str(discovery.get("target_company_id", "")) != blocked_company_id:
+				continue
+			if not bool(discovery.get("can_meet", false)):
+				continue
+			contact_intel_contact_id = str(discovery.get("id", ""))
+			break
+		if contact_intel_contact_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected company Profile discovery to find a meetable contact for Contact Intel."
+			}
+		var contact_intel_meet_result: Dictionary = GameManager.meet_contact(contact_intel_contact_id, {"source_type": "profile", "source_id": blocked_company_id})
+		if not bool(contact_intel_meet_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to meet a discovered contact before asking for STOCKBOT Contact Intel."
+			}
+		game_root._refresh_trade_workspace()
+		await get_tree().process_frame
+		var contact_tip_options: Dictionary = GameManager.get_stock_contact_tip_options(blocked_company_id)
+		if not bool(contact_tip_options.get("enabled", false)) or contact_intel_button.disabled:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected a met relevant contact to enable STOCKBOT Contact Intel."
+			}
+		var contact_intel_option_index: int = -1
+		for option_index in range(contact_intel_option.get_item_count()):
+			if str(contact_intel_option.get_item_metadata(option_index)) == contact_intel_contact_id:
+				contact_intel_option_index = option_index
+				break
+		if contact_intel_option_index < 0:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected STOCKBOT Contact Intel to list the met relevant contact."
+			}
+		contact_intel_option.select(contact_intel_option_index)
+		var journal_size_before_contact_intel: int = RunState.get_network_tip_journal().size()
+		var daily_actions_before_contact_intel: int = int(GameManager.get_daily_action_snapshot().get("used", 0))
+		contact_intel_button.emit_signal("pressed")
+		await get_tree().process_frame
+		if RunState.get_network_tip_journal().size() <= journal_size_before_contact_intel:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected pressing STOCKBOT Ask Contact to create a Network tip journal row."
+			}
+		var expected_tip_cost: int = GameManager.get_network_action_cost("tip")
+		var daily_actions_after_contact_intel: int = int(GameManager.get_daily_action_snapshot().get("used", 0))
+		if daily_actions_after_contact_intel < daily_actions_before_contact_intel + expected_tip_cost:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected STOCKBOT Ask Contact to spend the normal Network tip AP cost."
+			}
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
 
 		var forced_blocked_result: Dictionary = GameManager.debug_force_rights_issue_rupslb(blocked_company_id)
 		if not bool(forced_blocked_result.get("success", false)):
@@ -1679,6 +1782,122 @@ func _run_scenario(
 		game_root._refresh_all()
 		await get_tree().process_frame
 
+		var interactive_buyback_company_id: String = ""
+		for company_index in range(RunState.company_order.size()):
+			var interactive_buyback_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(interactive_buyback_candidate_company_id).get("has_live_chain", false)):
+				continue
+			var interactive_buyback_candidate_definition: Dictionary = RunState.get_effective_company_definition(interactive_buyback_candidate_company_id, false, false)
+			var interactive_buyback_candidate_financials: Dictionary = interactive_buyback_candidate_definition.get("financials", {})
+			if not interactive_buyback_candidate_financials.has("free_float_pct"):
+				continue
+			if float(interactive_buyback_candidate_financials.get("shares_outstanding", interactive_buyback_candidate_definition.get("shares_outstanding", 0.0))) <= 1000.0:
+				continue
+			interactive_buyback_company_id = interactive_buyback_candidate_company_id
+			break
+		if interactive_buyback_company_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find a chain-free company for interactive stock buyback RUPSLB coverage."
+			}
+		var interactive_buyback_buy_result: Dictionary = GameManager.buy_lots(interactive_buyback_company_id, 1)
+		if not bool(interactive_buyback_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before the stock buyback RUPSLB flow."
+			}
+		var interactive_buyback_schedule_result: Dictionary = GameManager.debug_schedule_next_day_stock_buyback_rupslb(interactive_buyback_company_id)
+		var interactive_buyback_chain: Dictionary = interactive_buyback_schedule_result.get("chain", {})
+		var interactive_buyback_meeting: Dictionary = interactive_buyback_schedule_result.get("meeting", {})
+		var interactive_buyback_chain_id: String = str(interactive_buyback_chain.get("chain_id", ""))
+		var interactive_buyback_meeting_id: String = str(interactive_buyback_meeting.get("id", ""))
+		if (
+			not bool(interactive_buyback_schedule_result.get("success", false)) or
+			interactive_buyback_chain_id.is_empty() or
+			interactive_buyback_meeting_id.is_empty() or
+			str(interactive_buyback_chain.get("family", "")) != "stock_buyback" or
+			str(interactive_buyback_chain.get("expected_meeting_type", "")) != "rupslb" or
+			interactive_buyback_chain.get("buyback_terms", {}).is_empty()
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected stock buyback debug scheduling to create an interactive RUPSLB chain with buyback terms."
+			}
+
+		var interactive_buyback_chain_store: Dictionary = RunState.get_active_corporate_action_chains()
+		var interactive_buyback_live_chain: Dictionary = interactive_buyback_chain_store.get(interactive_buyback_chain_id, {}).duplicate(true)
+		interactive_buyback_live_chain["approval_odds"] = 0.99
+		interactive_buyback_live_chain["funding_pressure"] = 0.95
+		interactive_buyback_live_chain["frontrunner_strength"] = 0.95
+		interactive_buyback_live_chain["market_overpricing"] = 0.0
+		interactive_buyback_live_chain["management_stance"] = "confirm"
+		interactive_buyback_chain_store[interactive_buyback_chain_id] = interactive_buyback_live_chain
+		RunState.set_active_corporate_action_chains(interactive_buyback_chain_store)
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_buyback_meeting_visible: bool = false
+		for interactive_buyback_row_value in GameManager.get_corporate_meeting_snapshot().get("upcoming_rows", []):
+			if typeof(interactive_buyback_row_value) != TYPE_DICTIONARY:
+				continue
+			var interactive_buyback_row: Dictionary = interactive_buyback_row_value
+			if (
+				str(interactive_buyback_row.get("id", "")) == interactive_buyback_meeting_id and
+				str(interactive_buyback_row.get("chain_family", "")) == "stock_buyback" and
+				bool(interactive_buyback_row.get("interactive_v1", false))
+			):
+				interactive_buyback_meeting_visible = true
+				break
+		if not interactive_buyback_meeting_visible:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the stock buyback RUPSLB to appear as an interactive upcoming meeting after one Advance Day."
+			}
+
+		var interactive_buyback_start_result: Dictionary = GameManager.start_corporate_meeting_session(interactive_buyback_meeting_id)
+		if not bool(interactive_buyback_start_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected stock buyback RUPSLB sessions to open for shareholders."
+			}
+		var interactive_buyback_vote_result: Dictionary = GameManager.submit_corporate_meeting_vote(interactive_buyback_meeting_id, "", "agree")
+		var interactive_buyback_vote_summary: Dictionary = interactive_buyback_vote_result.get("session", {}).get("result_summary", {})
+		if not bool(interactive_buyback_vote_result.get("success", false)) or not bool(interactive_buyback_vote_summary.get("approved", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the stock buyback RUPSLB agree vote to approve the agenda."
+			}
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_buyback_after_vote_chain: Dictionary = RunState.get_active_corporate_action_chains().get(interactive_buyback_chain_id, {})
+		if (
+			str(interactive_buyback_after_vote_chain.get("stage", "")) != "execution" or
+			not bool(RunState.get_corporate_meeting_sessions().get(interactive_buyback_meeting_id, {}).get("consumed", false))
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected approved stock buyback votes to move the chain into execution on the next simulated day."
+			}
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
+
 		var stock_buyback_company_id: String = ""
 		for company_index in range(RunState.company_order.size()):
 			var buyback_candidate_company_id: String = str(RunState.company_order[company_index])
@@ -1769,6 +1988,1749 @@ func _run_scenario(
 			return {
 				"success": false,
 				"message": "Smoke test expected stock buyback execution to record a company share-structure adjustment."
+			}
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
+
+		var interactive_split_company_id: String = ""
+		var interactive_split_best_price: float = 0.0
+		for company_index in range(RunState.company_order.size()):
+			var interactive_split_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(interactive_split_candidate_company_id).get("has_live_chain", false)):
+				continue
+			var interactive_split_candidate_definition: Dictionary = RunState.get_effective_company_definition(interactive_split_candidate_company_id, false, false)
+			var interactive_split_candidate_financials: Dictionary = interactive_split_candidate_definition.get("financials", {})
+			var interactive_split_candidate_runtime: Dictionary = RunState.get_company(interactive_split_candidate_company_id)
+			var interactive_split_candidate_price: float = float(interactive_split_candidate_runtime.get("current_price", interactive_split_candidate_definition.get("base_price", 0.0)))
+			if float(interactive_split_candidate_financials.get("shares_outstanding", interactive_split_candidate_definition.get("shares_outstanding", 0.0))) <= 1000.0:
+				continue
+			if interactive_split_candidate_price > interactive_split_best_price:
+				interactive_split_best_price = interactive_split_candidate_price
+				interactive_split_company_id = interactive_split_candidate_company_id
+		if interactive_split_company_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find a chain-free company for interactive stock split RUPSLB coverage."
+			}
+		var interactive_split_buy_result: Dictionary = GameManager.buy_lots(interactive_split_company_id, 1)
+		if not bool(interactive_split_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before the stock split RUPSLB flow."
+			}
+		var interactive_split_schedule_result: Dictionary = GameManager.debug_schedule_next_day_stock_split_rupslb(interactive_split_company_id)
+		var interactive_split_chain: Dictionary = interactive_split_schedule_result.get("chain", {})
+		var interactive_split_meeting: Dictionary = interactive_split_schedule_result.get("meeting", {})
+		var interactive_split_chain_id: String = str(interactive_split_chain.get("chain_id", ""))
+		var interactive_split_meeting_id: String = str(interactive_split_meeting.get("id", ""))
+		if (
+			not bool(interactive_split_schedule_result.get("success", false)) or
+			interactive_split_chain_id.is_empty() or
+			interactive_split_meeting_id.is_empty() or
+			str(interactive_split_chain.get("family", "")) != "stock_split" or
+			str(interactive_split_chain.get("expected_meeting_type", "")) != "rupslb" or
+			interactive_split_chain.get("split_terms", {}).is_empty()
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected stock split debug scheduling to create an interactive RUPSLB chain with split terms."
+			}
+
+		var interactive_split_chain_store: Dictionary = RunState.get_active_corporate_action_chains()
+		var interactive_split_live_chain: Dictionary = interactive_split_chain_store.get(interactive_split_chain_id, {}).duplicate(true)
+		interactive_split_live_chain["approval_odds"] = 0.99
+		interactive_split_live_chain["funding_pressure"] = 0.95
+		interactive_split_live_chain["frontrunner_strength"] = 0.95
+		interactive_split_live_chain["market_overpricing"] = 0.0
+		interactive_split_live_chain["management_stance"] = "confirm"
+		interactive_split_chain_store[interactive_split_chain_id] = interactive_split_live_chain
+		RunState.set_active_corporate_action_chains(interactive_split_chain_store)
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_split_meeting_visible: bool = false
+		for interactive_split_row_value in GameManager.get_corporate_meeting_snapshot().get("upcoming_rows", []):
+			if typeof(interactive_split_row_value) != TYPE_DICTIONARY:
+				continue
+			var interactive_split_row: Dictionary = interactive_split_row_value
+			if (
+				str(interactive_split_row.get("id", "")) == interactive_split_meeting_id and
+				str(interactive_split_row.get("chain_family", "")) == "stock_split" and
+				bool(interactive_split_row.get("interactive_v1", false))
+			):
+				interactive_split_meeting_visible = true
+				break
+		if not interactive_split_meeting_visible:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the stock split RUPSLB to appear as an interactive upcoming meeting after one Advance Day."
+			}
+
+		var interactive_split_start_result: Dictionary = GameManager.start_corporate_meeting_session(interactive_split_meeting_id)
+		if not bool(interactive_split_start_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected stock split RUPSLB sessions to open for shareholders."
+			}
+		var interactive_split_vote_result: Dictionary = GameManager.submit_corporate_meeting_vote(interactive_split_meeting_id, "", "agree")
+		var interactive_split_vote_summary: Dictionary = interactive_split_vote_result.get("session", {}).get("result_summary", {})
+		if not bool(interactive_split_vote_result.get("success", false)) or not bool(interactive_split_vote_summary.get("approved", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the stock split RUPSLB agree vote to approve the agenda."
+			}
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_split_after_vote_chain: Dictionary = RunState.get_active_corporate_action_chains().get(interactive_split_chain_id, {})
+		if (
+			str(interactive_split_after_vote_chain.get("stage", "")) != "execution" or
+			not bool(RunState.get_corporate_meeting_sessions().get(interactive_split_meeting_id, {}).get("consumed", false))
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected approved stock split votes to move the chain into execution on the next simulated day."
+			}
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
+
+		var stock_split_company_id: String = ""
+		var stock_split_best_price: float = 0.0
+		for company_index in range(RunState.company_order.size()):
+			var split_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(split_candidate_company_id).get("has_live_chain", false)):
+				continue
+			var split_candidate_definition: Dictionary = RunState.get_effective_company_definition(split_candidate_company_id, false, false)
+			var split_candidate_financials: Dictionary = split_candidate_definition.get("financials", {})
+			var split_candidate_runtime: Dictionary = RunState.get_company(split_candidate_company_id)
+			var split_candidate_price: float = float(split_candidate_runtime.get("current_price", split_candidate_definition.get("base_price", 0.0)))
+			if float(split_candidate_financials.get("shares_outstanding", split_candidate_definition.get("shares_outstanding", 0.0))) <= 1000.0:
+				continue
+			if split_candidate_price > stock_split_best_price:
+				stock_split_best_price = split_candidate_price
+				stock_split_company_id = split_candidate_company_id
+		if stock_split_company_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find a chain-free company for stock split execution coverage."
+			}
+		var split_before_definition: Dictionary = RunState.get_effective_company_definition(stock_split_company_id, false, false)
+		var split_before_financials: Dictionary = split_before_definition.get("financials", {})
+		var split_shares_before: float = float(split_before_financials.get("shares_outstanding", split_before_definition.get("shares_outstanding", 0.0)))
+		var split_buy_result: Dictionary = GameManager.buy_lots(stock_split_company_id, 1)
+		if not bool(split_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before stock split execution coverage."
+			}
+		var split_holding_before: int = int(RunState.get_holding(stock_split_company_id).get("shares", 0))
+		var split_force_result: Dictionary = GameManager.debug_force_stock_split_execution(stock_split_company_id)
+		var split_chain: Dictionary = split_force_result.get("chain", {})
+		var split_chain_id: String = str(split_chain.get("chain_id", ""))
+		var split_terms: Dictionary = split_chain.get("split_terms", {})
+		var split_multiplier: float = float(split_terms.get("share_multiplier", 0.0))
+		if (
+			not bool(split_force_result.get("success", false)) or
+			split_chain_id.is_empty() or
+			str(split_chain.get("family", "")) != "stock_split" or
+			split_terms.is_empty() or
+			split_multiplier <= 0.0
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected stock split debug forcing to create an executable split chain with terms."
+			}
+		var split_snapshot: Dictionary = GameManager.get_company_corporate_action_snapshot(stock_split_company_id)
+		var split_snapshot_terms: Dictionary = split_snapshot.get("primary_chain", {}).get("split_terms", {})
+		if split_snapshot_terms.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the corporate-action snapshot to expose stock split terms."
+			}
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var split_application: Dictionary = {}
+		for split_application_value in RunState.last_day_results.get("corporate_action_applications", []):
+			if typeof(split_application_value) != TYPE_DICTIONARY:
+				continue
+			var split_candidate_application: Dictionary = split_application_value
+			if str(split_candidate_application.get("chain_id", "")) == split_chain_id and str(split_candidate_application.get("application_type", "")) == "stock_split":
+				split_application = split_candidate_application.duplicate(true)
+				break
+		if split_application.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected stock split execution to emit an application payload."
+			}
+		var split_after_definition: Dictionary = RunState.get_effective_company_definition(stock_split_company_id, false, false)
+		var split_after_financials: Dictionary = split_after_definition.get("financials", {})
+		var split_shares_after: float = float(split_after_financials.get("shares_outstanding", split_after_definition.get("shares_outstanding", 0.0)))
+		var split_expected_shares: float = float(split_application.get("new_shares_outstanding", split_shares_before * split_multiplier))
+		if absf(split_shares_after - split_expected_shares) > max(1.0, split_expected_shares * 0.001):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected stock split execution to update shares outstanding by the split multiplier."
+			}
+		var split_holding_after: int = int(RunState.get_holding(stock_split_company_id).get("shares", 0))
+		var split_expected_holding: int = int(floor(float(split_holding_before) * split_multiplier + 0.0001))
+		if str(split_application.get("split_type", "split")) == "split":
+			split_expected_holding = max(int(round(float(split_holding_before) * split_multiplier)), split_holding_before)
+		if split_holding_after != split_expected_holding:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected stock split execution to adjust player holdings by the split multiplier."
+			}
+		var split_adjustment_found: bool = false
+		for split_adjustment_value in RunState.get_company(stock_split_company_id).get("company_profile", {}).get("corporate_action_adjustments", []):
+			if typeof(split_adjustment_value) == TYPE_DICTIONARY and str(split_adjustment_value.get("type", "")) == "stock_split":
+				split_adjustment_found = true
+				break
+		if not split_adjustment_found:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected stock split execution to record a company share-structure adjustment."
+			}
+		var split_trade_found: bool = false
+		for split_trade_index in range(RunState.trade_history.size() - 1, -1, -1):
+			var split_trade: Dictionary = RunState.trade_history[split_trade_index]
+			if str(split_trade.get("company_id", "")) == stock_split_company_id and str(split_trade.get("side", "")) in ["stock_split", "reverse_stock_split"]:
+				split_trade_found = true
+				break
+		if not split_trade_found:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected stock split execution to record a portfolio history row."
+			}
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
+
+		var interactive_tender_company_id: String = ""
+		var interactive_tender_lot_cash: float = float(RunState.player_portfolio.get("cash", 0.0))
+		for company_index in range(RunState.company_order.size()):
+			var interactive_tender_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(interactive_tender_candidate_company_id).get("has_live_chain", false)):
+				continue
+			var interactive_tender_candidate_definition: Dictionary = RunState.get_effective_company_definition(interactive_tender_candidate_company_id, false, false)
+			var interactive_tender_candidate_financials: Dictionary = interactive_tender_candidate_definition.get("financials", {})
+			var interactive_tender_candidate_runtime: Dictionary = RunState.get_company(interactive_tender_candidate_company_id)
+			var interactive_tender_candidate_price: float = float(interactive_tender_candidate_runtime.get("current_price", interactive_tender_candidate_definition.get("base_price", 0.0)))
+			if not interactive_tender_candidate_financials.has("free_float_pct"):
+				continue
+			if float(interactive_tender_candidate_financials.get("free_float_pct", 0.0)) <= 25.0:
+				continue
+			if float(interactive_tender_candidate_financials.get("shares_outstanding", interactive_tender_candidate_definition.get("shares_outstanding", 0.0))) <= 1000.0:
+				continue
+			if interactive_tender_candidate_price * float(GameManager.get_lot_size()) > interactive_tender_lot_cash:
+				continue
+			interactive_tender_company_id = interactive_tender_candidate_company_id
+			break
+		if interactive_tender_company_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find a chain-free company for interactive tender offer coverage."
+			}
+		var interactive_tender_buy_result: Dictionary = GameManager.buy_lots(interactive_tender_company_id, 1)
+		if not bool(interactive_tender_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before the tender offer election flow."
+			}
+		var interactive_tender_holding_before: int = int(RunState.get_holding(interactive_tender_company_id).get("shares", 0))
+		var interactive_tender_cash_before: float = float(RunState.player_portfolio.get("cash", 0.0))
+		var interactive_tender_schedule_result: Dictionary = GameManager.debug_schedule_next_day_tender_offer_rupslb(interactive_tender_company_id)
+		var interactive_tender_chain: Dictionary = interactive_tender_schedule_result.get("chain", {})
+		var interactive_tender_meeting: Dictionary = interactive_tender_schedule_result.get("meeting", {})
+		var interactive_tender_chain_id: String = str(interactive_tender_chain.get("chain_id", ""))
+		var interactive_tender_meeting_id: String = str(interactive_tender_meeting.get("id", ""))
+		if (
+			not bool(interactive_tender_schedule_result.get("success", false)) or
+			interactive_tender_chain_id.is_empty() or
+			interactive_tender_meeting_id.is_empty() or
+			str(interactive_tender_chain.get("family", "")) != "tender_offer" or
+			str(interactive_tender_chain.get("expected_meeting_type", "")) != "rupslb" or
+			interactive_tender_chain.get("tender_terms", {}).is_empty()
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected tender offer debug scheduling to create an interactive RUPSLB chain with tender terms."
+			}
+		var interactive_tender_chain_store: Dictionary = RunState.get_active_corporate_action_chains()
+		var interactive_tender_live_chain: Dictionary = interactive_tender_chain_store.get(interactive_tender_chain_id, {}).duplicate(true)
+		var interactive_tender_terms: Dictionary = interactive_tender_live_chain.get("tender_terms", {}).duplicate(true)
+		interactive_tender_terms["aftermath_state"] = "none"
+		interactive_tender_terms["new_free_float_pct"] = max(float(interactive_tender_terms.get("new_free_float_pct", 35.0)), 18.0)
+		interactive_tender_live_chain["tender_terms"] = interactive_tender_terms
+		interactive_tender_live_chain["approval_odds"] = 0.99
+		interactive_tender_live_chain["funding_pressure"] = 0.95
+		interactive_tender_live_chain["frontrunner_strength"] = 0.95
+		interactive_tender_live_chain["market_overpricing"] = 0.0
+		interactive_tender_live_chain["management_stance"] = "confirm"
+		interactive_tender_chain_store[interactive_tender_chain_id] = interactive_tender_live_chain
+		RunState.set_active_corporate_action_chains(interactive_tender_chain_store)
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_tender_meeting_visible: bool = false
+		for interactive_tender_row_value in GameManager.get_corporate_meeting_snapshot().get("upcoming_rows", []):
+			if typeof(interactive_tender_row_value) != TYPE_DICTIONARY:
+				continue
+			var interactive_tender_row: Dictionary = interactive_tender_row_value
+			if (
+				str(interactive_tender_row.get("id", "")) == interactive_tender_meeting_id and
+				str(interactive_tender_row.get("chain_family", "")) == "tender_offer" and
+				bool(interactive_tender_row.get("interactive_v1", false))
+			):
+				interactive_tender_meeting_visible = true
+				break
+		if not interactive_tender_meeting_visible:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the tender offer RUPSLB to appear as an interactive upcoming meeting after one Advance Day."
+			}
+		var interactive_tender_start_result: Dictionary = GameManager.start_corporate_meeting_session(interactive_tender_meeting_id)
+		var interactive_tender_session_snapshot: Dictionary = GameManager.get_corporate_meeting_session_snapshot(interactive_tender_meeting_id)
+		if (
+			not bool(interactive_tender_start_result.get("success", false)) or
+			str(interactive_tender_session_snapshot.get("presentation", {}).get("agree_button_label", "")) != "Tender Shares" or
+			str(interactive_tender_session_snapshot.get("presentation", {}).get("disagree_button_label", "")) != "Hold Shares"
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected tender offer RUPSLB sessions to expose tender-specific election labels."
+			}
+		var interactive_tender_vote_result: Dictionary = GameManager.submit_corporate_meeting_vote(interactive_tender_meeting_id, "", "agree")
+		var interactive_tender_vote_summary: Dictionary = interactive_tender_vote_result.get("session", {}).get("result_summary", {})
+		if (
+			not bool(interactive_tender_vote_result.get("success", false)) or
+			str(interactive_tender_vote_summary.get("result_category", "")) != "tender_election" or
+			str(interactive_tender_vote_summary.get("player_tender_choice", "")) != "tender"
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected tender offer Agree to record a player tender election."
+			}
+		GameManager.advance_day()
+		await get_tree().process_frame
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_tender_application: Dictionary = {}
+		for interactive_tender_application_value in RunState.last_day_results.get("corporate_action_applications", []):
+			if typeof(interactive_tender_application_value) != TYPE_DICTIONARY:
+				continue
+			var interactive_tender_candidate_application: Dictionary = interactive_tender_application_value
+			if str(interactive_tender_candidate_application.get("chain_id", "")) == interactive_tender_chain_id and str(interactive_tender_candidate_application.get("application_type", "")) == "tender_offer":
+				interactive_tender_application = interactive_tender_candidate_application.duplicate(true)
+				break
+		var interactive_tender_holding_after: int = int(RunState.get_holding(interactive_tender_company_id).get("shares", 0))
+		var interactive_tender_cash_after: float = float(RunState.player_portfolio.get("cash", 0.0))
+		if (
+			interactive_tender_application.is_empty() or
+			str(interactive_tender_application.get("player_tender_choice", "")) != "tender" or
+			interactive_tender_holding_after >= interactive_tender_holding_before or
+			interactive_tender_cash_after <= interactive_tender_cash_before
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected tender election execution to reduce held shares and pay cash."
+			}
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
+
+		var hold_tender_company_id: String = ""
+		var hold_tender_lot_cash: float = float(RunState.player_portfolio.get("cash", 0.0))
+		for company_index in range(RunState.company_order.size()):
+			var hold_tender_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(hold_tender_candidate_company_id).get("has_live_chain", false)):
+				continue
+			var hold_tender_candidate_definition: Dictionary = RunState.get_effective_company_definition(hold_tender_candidate_company_id, false, false)
+			var hold_tender_candidate_financials: Dictionary = hold_tender_candidate_definition.get("financials", {})
+			var hold_tender_candidate_runtime: Dictionary = RunState.get_company(hold_tender_candidate_company_id)
+			var hold_tender_candidate_price: float = float(hold_tender_candidate_runtime.get("current_price", hold_tender_candidate_definition.get("base_price", 0.0)))
+			if not hold_tender_candidate_financials.has("free_float_pct"):
+				continue
+			if float(hold_tender_candidate_financials.get("free_float_pct", 0.0)) <= 25.0:
+				continue
+			if float(hold_tender_candidate_financials.get("shares_outstanding", hold_tender_candidate_definition.get("shares_outstanding", 0.0))) <= 1000.0:
+				continue
+			if hold_tender_candidate_price * float(GameManager.get_lot_size()) > hold_tender_lot_cash:
+				continue
+			hold_tender_company_id = hold_tender_candidate_company_id
+			break
+		if hold_tender_company_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find a chain-free company for hold-side tender offer coverage."
+			}
+		var hold_tender_buy_result: Dictionary = GameManager.buy_lots(hold_tender_company_id, 1)
+		if not bool(hold_tender_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before the tender offer hold flow."
+			}
+		var hold_tender_holding_before: int = int(RunState.get_holding(hold_tender_company_id).get("shares", 0))
+		var hold_tender_cash_before: float = float(RunState.player_portfolio.get("cash", 0.0))
+		var hold_tender_schedule_result: Dictionary = GameManager.debug_schedule_next_day_tender_offer_rupslb(hold_tender_company_id)
+		var hold_tender_chain: Dictionary = hold_tender_schedule_result.get("chain", {})
+		var hold_tender_chain_id: String = str(hold_tender_chain.get("chain_id", ""))
+		var hold_tender_meeting_id: String = str(hold_tender_schedule_result.get("meeting", {}).get("id", ""))
+		if not bool(hold_tender_schedule_result.get("success", false)) or hold_tender_chain_id.is_empty() or hold_tender_meeting_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected hold-side tender scheduling to create a meeting and chain."
+			}
+		var hold_tender_chain_store: Dictionary = RunState.get_active_corporate_action_chains()
+		var hold_tender_live_chain: Dictionary = hold_tender_chain_store.get(hold_tender_chain_id, {}).duplicate(true)
+		var hold_tender_terms: Dictionary = hold_tender_live_chain.get("tender_terms", {}).duplicate(true)
+		hold_tender_terms["aftermath_state"] = "none"
+		hold_tender_terms["new_free_float_pct"] = max(float(hold_tender_terms.get("new_free_float_pct", 35.0)), 18.0)
+		hold_tender_live_chain["tender_terms"] = hold_tender_terms
+		hold_tender_live_chain["approval_odds"] = 0.99
+		hold_tender_live_chain["funding_pressure"] = 0.95
+		hold_tender_live_chain["frontrunner_strength"] = 0.95
+		hold_tender_live_chain["market_overpricing"] = 0.0
+		hold_tender_live_chain["management_stance"] = "confirm"
+		hold_tender_chain_store[hold_tender_chain_id] = hold_tender_live_chain
+		RunState.set_active_corporate_action_chains(hold_tender_chain_store)
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var hold_tender_start_result: Dictionary = GameManager.start_corporate_meeting_session(hold_tender_meeting_id)
+		var hold_tender_vote_result: Dictionary = GameManager.submit_corporate_meeting_vote(hold_tender_meeting_id, "", "disagree")
+		var hold_tender_vote_summary: Dictionary = hold_tender_vote_result.get("session", {}).get("result_summary", {})
+		if (
+			not bool(hold_tender_start_result.get("success", false)) or
+			not bool(hold_tender_vote_result.get("success", false)) or
+			str(hold_tender_vote_summary.get("player_tender_choice", "")) != "hold"
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected tender offer Disagree to record a player hold election."
+			}
+		GameManager.advance_day()
+		await get_tree().process_frame
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var hold_tender_application: Dictionary = {}
+		for hold_tender_application_value in RunState.last_day_results.get("corporate_action_applications", []):
+			if typeof(hold_tender_application_value) != TYPE_DICTIONARY:
+				continue
+			var hold_tender_candidate_application: Dictionary = hold_tender_application_value
+			if str(hold_tender_candidate_application.get("chain_id", "")) == hold_tender_chain_id and str(hold_tender_candidate_application.get("application_type", "")) == "tender_offer":
+				hold_tender_application = hold_tender_candidate_application.duplicate(true)
+				break
+		var hold_tender_holding_after: int = int(RunState.get_holding(hold_tender_company_id).get("shares", 0))
+		var hold_tender_cash_after: float = float(RunState.player_portfolio.get("cash", 0.0))
+		if (
+			hold_tender_application.is_empty() or
+			str(hold_tender_application.get("player_tender_choice", "")) != "hold" or
+			hold_tender_holding_after != hold_tender_holding_before or
+			absf(hold_tender_cash_after - hold_tender_cash_before) > 0.01
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected hold election execution to keep player shares and cash unchanged while the offer resolves."
+			}
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
+
+		var tender_offer_company_id: String = ""
+		var tender_lot_cash: float = float(RunState.player_portfolio.get("cash", 0.0))
+		for company_index in range(RunState.company_order.size()):
+			var tender_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(tender_candidate_company_id).get("has_live_chain", false)):
+				continue
+			var tender_candidate_definition: Dictionary = RunState.get_effective_company_definition(tender_candidate_company_id, false, false)
+			var tender_candidate_financials: Dictionary = tender_candidate_definition.get("financials", {})
+			var tender_candidate_runtime: Dictionary = RunState.get_company(tender_candidate_company_id)
+			var tender_candidate_price: float = float(tender_candidate_runtime.get("current_price", tender_candidate_definition.get("base_price", 0.0)))
+			if not tender_candidate_financials.has("free_float_pct"):
+				continue
+			if float(tender_candidate_financials.get("shares_outstanding", tender_candidate_definition.get("shares_outstanding", 0.0))) <= 1000.0:
+				continue
+			if tender_candidate_price * float(GameManager.get_lot_size()) > tender_lot_cash:
+				continue
+			tender_offer_company_id = tender_candidate_company_id
+			break
+		if tender_offer_company_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find a chain-free company for tender offer execution coverage."
+			}
+		var tender_before_definition: Dictionary = RunState.get_effective_company_definition(tender_offer_company_id, false, false)
+		var tender_before_financials: Dictionary = tender_before_definition.get("financials", {})
+		var tender_shares_before: float = float(tender_before_financials.get("shares_outstanding", tender_before_definition.get("shares_outstanding", 0.0)))
+		var tender_free_float_before: float = float(tender_before_financials.get("free_float_pct", 0.0))
+		var tender_buy_result: Dictionary = GameManager.buy_lots(tender_offer_company_id, 1)
+		if not bool(tender_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before tender offer execution coverage."
+			}
+		var tender_holding_before: int = int(RunState.get_holding(tender_offer_company_id).get("shares", 0))
+		var tender_cash_before: float = float(RunState.player_portfolio.get("cash", 0.0))
+		var tender_force_result: Dictionary = GameManager.debug_force_tender_offer_execution(tender_offer_company_id, true)
+		var tender_chain: Dictionary = tender_force_result.get("chain", {})
+		var tender_chain_id: String = str(tender_chain.get("chain_id", ""))
+		var tender_terms: Dictionary = tender_chain.get("tender_terms", {})
+		if (
+			not bool(tender_force_result.get("success", false)) or
+			tender_chain_id.is_empty() or
+			str(tender_chain.get("family", "")) != "tender_offer" or
+			tender_terms.is_empty() or
+			int(tender_terms.get("expected_accepted_shares", 0)) <= 0
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected tender offer debug forcing to create an executable go-private tender chain with terms."
+			}
+		if str(tender_terms.get("aftermath_state", "")) != "go_private_cashout":
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected forced tender offer terms to carry a go-private aftermath state."
+			}
+		var tender_snapshot: Dictionary = GameManager.get_company_corporate_action_snapshot(tender_offer_company_id)
+		var tender_snapshot_terms: Dictionary = tender_snapshot.get("primary_chain", {}).get("tender_terms", {})
+		if tender_snapshot_terms.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the corporate-action snapshot to expose tender offer terms."
+			}
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var tender_application: Dictionary = {}
+		for tender_application_value in RunState.last_day_results.get("corporate_action_applications", []):
+			if typeof(tender_application_value) != TYPE_DICTIONARY:
+				continue
+			var tender_candidate_application: Dictionary = tender_application_value
+			if str(tender_candidate_application.get("chain_id", "")) == tender_chain_id and str(tender_candidate_application.get("application_type", "")) == "tender_offer":
+				tender_application = tender_candidate_application.duplicate(true)
+				break
+		if tender_application.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected tender offer execution to emit an application payload."
+			}
+		var tender_after_definition: Dictionary = RunState.get_effective_company_definition(tender_offer_company_id, false, false)
+		var tender_after_financials: Dictionary = tender_after_definition.get("financials", {})
+		var tender_shares_after: float = float(tender_after_financials.get("shares_outstanding", tender_after_definition.get("shares_outstanding", 0.0)))
+		var tender_free_float_after: float = float(tender_after_financials.get("free_float_pct", 0.0))
+		if absf(tender_shares_after - tender_shares_before) > max(1.0, tender_shares_before * 0.001) or tender_free_float_after > tender_free_float_before:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected tender offer execution to keep shares outstanding stable and not increase free float."
+			}
+		var tender_adjustment: Dictionary = {}
+		for tender_adjustment_value in RunState.get_company(tender_offer_company_id).get("company_profile", {}).get("corporate_action_adjustments", []):
+			if typeof(tender_adjustment_value) == TYPE_DICTIONARY and str(tender_adjustment_value.get("type", "")) == "tender_offer":
+				tender_adjustment = tender_adjustment_value.duplicate(true)
+				break
+		if tender_adjustment.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected tender offer execution to record a company share-structure adjustment."
+			}
+		var tender_holding_after: int = int(RunState.get_holding(tender_offer_company_id).get("shares", 0))
+		var tender_cash_after: float = float(RunState.player_portfolio.get("cash", 0.0))
+		if (
+			tender_holding_after != 0 or
+			tender_cash_after <= tender_cash_before or
+			int(tender_adjustment.get("player_tendered_shares", 0)) <= 0 or
+			str(tender_adjustment.get("player_tender_status", "")) != "accepted" or
+			str(tender_adjustment.get("aftermath_state", "")) != "go_private_cashout" or
+			int(tender_adjustment.get("player_final_cashout_shares", 0)) <= 0 or
+			str(tender_adjustment.get("player_final_cashout_status", "")) != "cashed_out"
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected go-private tender offer treatment to tender accepted shares and cash out the remaining position."
+			}
+		var tender_trade_found: bool = false
+		var go_private_trade_found: bool = false
+		for tender_trade_index in range(RunState.trade_history.size() - 1, -1, -1):
+			var tender_trade: Dictionary = RunState.trade_history[tender_trade_index]
+			if str(tender_trade.get("company_id", "")) == tender_offer_company_id and str(tender_trade.get("side", "")) == "tender_offer":
+				tender_trade_found = true
+			if str(tender_trade.get("company_id", "")) == tender_offer_company_id and str(tender_trade.get("side", "")) == "go_private_cashout":
+				go_private_trade_found = true
+			if tender_trade_found and go_private_trade_found:
+				break
+		if not tender_trade_found or not go_private_trade_found:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected tender offer execution to record tender and go-private cash-out portfolio history rows."
+			}
+		var tender_after_snapshot: Dictionary = GameManager.get_company_snapshot(tender_offer_company_id, false, false, false)
+		if (
+			str(tender_after_snapshot.get("listing_status", "")) != "go_private_cashout" or
+			not bool(tender_after_snapshot.get("trade_disabled", false)) or
+			str(tender_after_snapshot.get("impactability", {}).get("label", "")) != "Go-private"
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected go-private tender aftermath to mark the company as trade-disabled with a go-private tape label."
+			}
+		var blocked_tender_rebuy: Dictionary = GameManager.estimate_buy_lots(tender_offer_company_id, 1)
+		if bool(blocked_tender_rebuy.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected completed go-private names to reject new buy estimates."
+			}
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
+
+		var interactive_mna_company_id: String = ""
+		var interactive_mna_lot_cash: float = float(RunState.player_portfolio.get("cash", 0.0))
+		for company_index in range(RunState.company_order.size()):
+			var interactive_mna_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(interactive_mna_candidate_company_id).get("has_live_chain", false)):
+				continue
+			if int(RunState.get_holding(interactive_mna_candidate_company_id).get("shares", 0)) > 0:
+				continue
+			var interactive_mna_candidate_runtime: Dictionary = RunState.get_company(interactive_mna_candidate_company_id)
+			var interactive_mna_candidate_profile: Dictionary = interactive_mna_candidate_runtime.get("company_profile", {})
+			if bool(interactive_mna_candidate_profile.get("trade_disabled", false)):
+				continue
+			var interactive_mna_candidate_definition: Dictionary = RunState.get_effective_company_definition(interactive_mna_candidate_company_id, false, false)
+			var interactive_mna_candidate_financials: Dictionary = interactive_mna_candidate_definition.get("financials", {})
+			var interactive_mna_candidate_price: float = float(interactive_mna_candidate_runtime.get("current_price", interactive_mna_candidate_definition.get("base_price", 0.0)))
+			if float(interactive_mna_candidate_financials.get("shares_outstanding", interactive_mna_candidate_definition.get("shares_outstanding", 0.0))) <= 1000.0:
+				continue
+			if interactive_mna_candidate_price * float(GameManager.get_lot_size()) > interactive_mna_lot_cash:
+				continue
+			interactive_mna_company_id = interactive_mna_candidate_company_id
+			break
+		if interactive_mna_company_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find a chain-free company for interactive strategic M&A coverage."
+			}
+		var interactive_mna_buy_result: Dictionary = GameManager.buy_lots(interactive_mna_company_id, 1)
+		if not bool(interactive_mna_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before the strategic M&A RUPSLB flow."
+			}
+		var interactive_mna_holding_before: int = int(RunState.get_holding(interactive_mna_company_id).get("shares", 0))
+		var interactive_mna_cash_before: float = float(RunState.player_portfolio.get("cash", 0.0))
+		var interactive_mna_schedule_result: Dictionary = GameManager.debug_schedule_next_day_strategic_mna_rupslb(interactive_mna_company_id)
+		var interactive_mna_chain: Dictionary = interactive_mna_schedule_result.get("chain", {})
+		var interactive_mna_meeting: Dictionary = interactive_mna_schedule_result.get("meeting", {})
+		var interactive_mna_chain_id: String = str(interactive_mna_chain.get("chain_id", ""))
+		var interactive_mna_meeting_id: String = str(interactive_mna_meeting.get("id", ""))
+		var interactive_mna_terms: Dictionary = interactive_mna_chain.get("mna_terms", {})
+		if (
+			not bool(interactive_mna_schedule_result.get("success", false)) or
+			interactive_mna_chain_id.is_empty() or
+			interactive_mna_meeting_id.is_empty() or
+			str(interactive_mna_chain.get("family", "")) != "strategic_merger_acquisition" or
+			str(interactive_mna_chain.get("expected_meeting_type", "")) != "rupslb" or
+			interactive_mna_terms.is_empty() or
+			float(interactive_mna_terms.get("cashout_price", 0.0)) <= 0.0
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected strategic M&A debug scheduling to create an interactive RUPSLB chain with cash acquisition terms."
+			}
+		var interactive_mna_chain_store: Dictionary = RunState.get_active_corporate_action_chains()
+		var interactive_mna_live_chain: Dictionary = interactive_mna_chain_store.get(interactive_mna_chain_id, {}).duplicate(true)
+		interactive_mna_live_chain["approval_odds"] = 0.99
+		interactive_mna_live_chain["funding_pressure"] = 0.95
+		interactive_mna_live_chain["frontrunner_strength"] = 0.95
+		interactive_mna_live_chain["market_overpricing"] = 0.0
+		interactive_mna_live_chain["management_stance"] = "confirm"
+		interactive_mna_chain_store[interactive_mna_chain_id] = interactive_mna_live_chain
+		RunState.set_active_corporate_action_chains(interactive_mna_chain_store)
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_mna_meeting_visible: bool = false
+		for interactive_mna_row_value in GameManager.get_corporate_meeting_snapshot().get("upcoming_rows", []):
+			if typeof(interactive_mna_row_value) != TYPE_DICTIONARY:
+				continue
+			var interactive_mna_row: Dictionary = interactive_mna_row_value
+			if (
+				str(interactive_mna_row.get("id", "")) == interactive_mna_meeting_id and
+				str(interactive_mna_row.get("chain_family", "")) == "strategic_merger_acquisition" and
+				bool(interactive_mna_row.get("interactive_v1", false))
+			):
+				interactive_mna_meeting_visible = true
+				break
+		if not interactive_mna_meeting_visible:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the strategic M&A RUPSLB to appear as an interactive upcoming meeting after one Advance Day."
+			}
+		var interactive_mna_start_result: Dictionary = GameManager.start_corporate_meeting_session(interactive_mna_meeting_id)
+		var interactive_mna_session_snapshot: Dictionary = GameManager.get_corporate_meeting_session_snapshot(interactive_mna_meeting_id)
+		if (
+			not bool(interactive_mna_start_result.get("success", false)) or
+			str(interactive_mna_session_snapshot.get("current_stage_id", "")) != "arrival" or
+			str(interactive_mna_session_snapshot.get("presentation", {}).get("stage_labels", {}).get("agenda_reveal", "")) != "Deal Terms"
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected strategic M&A RUPSLB sessions to open with deal-term presentation copy."
+			}
+		var interactive_mna_vote_result: Dictionary = GameManager.submit_corporate_meeting_vote(interactive_mna_meeting_id, "", "agree")
+		var interactive_mna_vote_summary: Dictionary = interactive_mna_vote_result.get("session", {}).get("result_summary", {})
+		if not bool(interactive_mna_vote_result.get("success", false)) or not bool(interactive_mna_vote_summary.get("approved", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the strategic M&A RUPSLB agree vote to approve the deal."
+			}
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_mna_after_vote_chain: Dictionary = RunState.get_active_corporate_action_chains().get(interactive_mna_chain_id, {})
+		if (
+			str(interactive_mna_after_vote_chain.get("stage", "")) != "execution" or
+			not bool(RunState.get_corporate_meeting_sessions().get(interactive_mna_meeting_id, {}).get("consumed", false))
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected approved strategic M&A votes to move the chain into execution on the next simulated day."
+			}
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_mna_application: Dictionary = {}
+		for interactive_mna_application_value in RunState.last_day_results.get("corporate_action_applications", []):
+			if typeof(interactive_mna_application_value) != TYPE_DICTIONARY:
+				continue
+			var interactive_mna_candidate_application: Dictionary = interactive_mna_application_value
+			if str(interactive_mna_candidate_application.get("chain_id", "")) == interactive_mna_chain_id and str(interactive_mna_candidate_application.get("application_type", "")) == "strategic_merger_acquisition":
+				interactive_mna_application = interactive_mna_candidate_application.duplicate(true)
+				break
+		var interactive_mna_holding_after: int = int(RunState.get_holding(interactive_mna_company_id).get("shares", 0))
+		var interactive_mna_cash_after: float = float(RunState.player_portfolio.get("cash", 0.0))
+		var interactive_mna_after_snapshot: Dictionary = GameManager.get_company_snapshot(interactive_mna_company_id, false, false, false)
+		if (
+			interactive_mna_application.is_empty() or
+			interactive_mna_holding_after != 0 or
+			interactive_mna_cash_after <= interactive_mna_cash_before or
+			str(interactive_mna_after_snapshot.get("listing_status", "")) != "acquired_cashout" or
+			not bool(interactive_mna_after_snapshot.get("trade_disabled", false))
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected approved interactive strategic M&A execution to cash out the player and disable trading."
+			}
+		var interactive_mna_trade_found: bool = false
+		for interactive_mna_trade_index in range(RunState.trade_history.size() - 1, -1, -1):
+			var interactive_mna_trade: Dictionary = RunState.trade_history[interactive_mna_trade_index]
+			if str(interactive_mna_trade.get("company_id", "")) == interactive_mna_company_id and str(interactive_mna_trade.get("side", "")) == "mna_cashout":
+				interactive_mna_trade_found = true
+				break
+		if not interactive_mna_trade_found or interactive_mna_holding_before <= 0:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected interactive strategic M&A execution to record an M&A cash-out history row."
+			}
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
+
+		var mna_company_id: String = ""
+		var mna_lot_cash: float = float(RunState.player_portfolio.get("cash", 0.0))
+		for company_index in range(RunState.company_order.size()):
+			var mna_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(mna_candidate_company_id).get("has_live_chain", false)):
+				continue
+			if int(RunState.get_holding(mna_candidate_company_id).get("shares", 0)) > 0:
+				continue
+			var mna_candidate_runtime: Dictionary = RunState.get_company(mna_candidate_company_id)
+			var mna_candidate_profile: Dictionary = mna_candidate_runtime.get("company_profile", {})
+			if bool(mna_candidate_profile.get("trade_disabled", false)):
+				continue
+			var mna_candidate_definition: Dictionary = RunState.get_effective_company_definition(mna_candidate_company_id, false, false)
+			var mna_candidate_financials: Dictionary = mna_candidate_definition.get("financials", {})
+			var mna_candidate_price: float = float(mna_candidate_runtime.get("current_price", mna_candidate_definition.get("base_price", 0.0)))
+			if float(mna_candidate_financials.get("shares_outstanding", mna_candidate_definition.get("shares_outstanding", 0.0))) <= 1000.0:
+				continue
+			if mna_candidate_price * float(GameManager.get_lot_size()) > mna_lot_cash:
+				continue
+			mna_company_id = mna_candidate_company_id
+			break
+		if mna_company_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find a chain-free company for strategic M&A execution coverage."
+			}
+		var mna_before_definition: Dictionary = RunState.get_effective_company_definition(mna_company_id, false, false)
+		var mna_before_financials: Dictionary = mna_before_definition.get("financials", {})
+		var mna_shares_before: float = float(mna_before_financials.get("shares_outstanding", mna_before_definition.get("shares_outstanding", 0.0)))
+		var mna_free_float_before: float = float(mna_before_financials.get("free_float_pct", 0.0))
+		var mna_buy_result: Dictionary = GameManager.buy_lots(mna_company_id, 1)
+		if not bool(mna_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before strategic M&A execution coverage."
+			}
+		var mna_holding_before: int = int(RunState.get_holding(mna_company_id).get("shares", 0))
+		var mna_cash_before: float = float(RunState.player_portfolio.get("cash", 0.0))
+		var mna_force_result: Dictionary = GameManager.debug_force_strategic_mna_execution(mna_company_id)
+		var mna_chain: Dictionary = mna_force_result.get("chain", {})
+		var mna_chain_id: String = str(mna_chain.get("chain_id", ""))
+		var mna_terms: Dictionary = mna_chain.get("mna_terms", {})
+		if (
+			not bool(mna_force_result.get("success", false)) or
+			mna_chain_id.is_empty() or
+			str(mna_chain.get("family", "")) != "strategic_merger_acquisition" or
+			mna_terms.is_empty() or
+			float(mna_terms.get("cashout_price", 0.0)) <= 0.0 or
+			str(mna_terms.get("consideration_type", "")) != "cash"
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected strategic M&A debug forcing to create an executable cash acquisition chain with terms."
+			}
+		var mna_snapshot: Dictionary = GameManager.get_company_corporate_action_snapshot(mna_company_id)
+		var mna_snapshot_terms: Dictionary = mna_snapshot.get("primary_chain", {}).get("mna_terms", {})
+		if mna_snapshot_terms.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the corporate-action snapshot to expose strategic M&A terms."
+			}
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var mna_application: Dictionary = {}
+		for mna_application_value in RunState.last_day_results.get("corporate_action_applications", []):
+			if typeof(mna_application_value) != TYPE_DICTIONARY:
+				continue
+			var mna_candidate_application: Dictionary = mna_application_value
+			if str(mna_candidate_application.get("chain_id", "")) == mna_chain_id and str(mna_candidate_application.get("application_type", "")) == "strategic_merger_acquisition":
+				mna_application = mna_candidate_application.duplicate(true)
+				break
+		if mna_application.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected strategic M&A execution to emit an application payload."
+			}
+		var mna_after_definition: Dictionary = RunState.get_effective_company_definition(mna_company_id, false, false)
+		var mna_after_financials: Dictionary = mna_after_definition.get("financials", {})
+		var mna_shares_after: float = float(mna_after_financials.get("shares_outstanding", mna_after_definition.get("shares_outstanding", 0.0)))
+		var mna_free_float_after: float = float(mna_after_financials.get("free_float_pct", 0.0))
+		if absf(mna_shares_after - mna_shares_before) > max(1.0, mna_shares_before * 0.001) or absf(mna_free_float_after - mna_free_float_before) > 0.01:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected strategic M&A cash acquisition to leave share count and free float structurally unchanged before delisting."
+			}
+		var mna_adjustment: Dictionary = {}
+		for mna_adjustment_value in RunState.get_company(mna_company_id).get("company_profile", {}).get("corporate_action_adjustments", []):
+			if typeof(mna_adjustment_value) == TYPE_DICTIONARY and str(mna_adjustment_value.get("type", "")) == "strategic_merger_acquisition":
+				mna_adjustment = mna_adjustment_value.duplicate(true)
+				break
+		if mna_adjustment.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected strategic M&A execution to record a company share-structure adjustment."
+			}
+		var mna_holding_after: int = int(RunState.get_holding(mna_company_id).get("shares", 0))
+		var mna_cash_after: float = float(RunState.player_portfolio.get("cash", 0.0))
+		if (
+			mna_holding_after != 0 or
+			mna_cash_after <= mna_cash_before or
+			int(mna_adjustment.get("player_old_shares", 0)) != mna_holding_before or
+			str(mna_adjustment.get("player_cashout_status", "")) != "cashed_out" or
+			float(mna_adjustment.get("player_cash_received", 0.0)) <= 0.0
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected strategic M&A player treatment to fully cash out the held position."
+			}
+		var mna_trade_found: bool = false
+		for mna_trade_index in range(RunState.trade_history.size() - 1, -1, -1):
+			var mna_trade: Dictionary = RunState.trade_history[mna_trade_index]
+			if str(mna_trade.get("company_id", "")) == mna_company_id and str(mna_trade.get("side", "")) == "mna_cashout":
+				mna_trade_found = true
+				break
+		if not mna_trade_found:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected strategic M&A execution to record an M&A cash-out portfolio history row."
+			}
+		var mna_after_snapshot: Dictionary = GameManager.get_company_snapshot(mna_company_id, false, false, false)
+		if (
+			str(mna_after_snapshot.get("listing_status", "")) != "acquired_cashout" or
+			not bool(mna_after_snapshot.get("trade_disabled", false)) or
+			str(mna_after_snapshot.get("impactability", {}).get("label", "")) != "Acquired" or
+			mna_after_snapshot.get("acquisition_result", {}).is_empty()
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected completed strategic M&A to mark the company as acquired and trade-disabled."
+			}
+		var blocked_mna_rebuy: Dictionary = GameManager.estimate_buy_lots(mna_company_id, 1)
+		if bool(blocked_mna_rebuy.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected acquired names to reject new buy estimates."
+			}
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
+
+		var interactive_backdoor_company_id: String = ""
+		var interactive_backdoor_lot_cash: float = float(RunState.player_portfolio.get("cash", 0.0))
+		for company_index in range(RunState.company_order.size()):
+			var interactive_backdoor_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(interactive_backdoor_candidate_company_id).get("has_live_chain", false)):
+				continue
+			if int(RunState.get_holding(interactive_backdoor_candidate_company_id).get("shares", 0)) > 0:
+				continue
+			var interactive_backdoor_candidate_runtime: Dictionary = RunState.get_company(interactive_backdoor_candidate_company_id)
+			var interactive_backdoor_candidate_profile: Dictionary = interactive_backdoor_candidate_runtime.get("company_profile", {})
+			if bool(interactive_backdoor_candidate_profile.get("trade_disabled", false)):
+				continue
+			var interactive_backdoor_candidate_definition: Dictionary = RunState.get_effective_company_definition(interactive_backdoor_candidate_company_id, false, false)
+			var interactive_backdoor_candidate_financials: Dictionary = interactive_backdoor_candidate_definition.get("financials", {})
+			var interactive_backdoor_candidate_price: float = float(interactive_backdoor_candidate_runtime.get("current_price", interactive_backdoor_candidate_definition.get("base_price", 0.0)))
+			if float(interactive_backdoor_candidate_financials.get("shares_outstanding", interactive_backdoor_candidate_definition.get("shares_outstanding", 0.0))) <= 1000.0:
+				continue
+			if interactive_backdoor_candidate_price * float(GameManager.get_lot_size()) > interactive_backdoor_lot_cash:
+				continue
+			interactive_backdoor_company_id = interactive_backdoor_candidate_company_id
+			break
+		if interactive_backdoor_company_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find a chain-free company for interactive backdoor listing coverage."
+			}
+		var interactive_backdoor_before_definition: Dictionary = RunState.get_effective_company_definition(interactive_backdoor_company_id, false, false)
+		var interactive_backdoor_before_financials: Dictionary = interactive_backdoor_before_definition.get("financials", {})
+		var interactive_backdoor_shares_before: float = float(interactive_backdoor_before_financials.get("shares_outstanding", interactive_backdoor_before_definition.get("shares_outstanding", 0.0)))
+		var interactive_backdoor_free_float_before: float = float(interactive_backdoor_before_financials.get("free_float_pct", 0.0))
+		var interactive_backdoor_buy_result: Dictionary = GameManager.buy_lots(interactive_backdoor_company_id, 1)
+		if not bool(interactive_backdoor_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before the backdoor listing RUPSLB flow."
+			}
+		var interactive_backdoor_holding_before: int = int(RunState.get_holding(interactive_backdoor_company_id).get("shares", 0))
+		var interactive_backdoor_cash_before: float = float(RunState.player_portfolio.get("cash", 0.0))
+		var interactive_backdoor_schedule_result: Dictionary = GameManager.debug_schedule_next_day_backdoor_listing_rupslb(interactive_backdoor_company_id)
+		var interactive_backdoor_chain: Dictionary = interactive_backdoor_schedule_result.get("chain", {})
+		var interactive_backdoor_meeting: Dictionary = interactive_backdoor_schedule_result.get("meeting", {})
+		var interactive_backdoor_chain_id: String = str(interactive_backdoor_chain.get("chain_id", ""))
+		var interactive_backdoor_meeting_id: String = str(interactive_backdoor_meeting.get("id", ""))
+		var interactive_backdoor_terms: Dictionary = interactive_backdoor_chain.get("backdoor_terms", {})
+		if (
+			not bool(interactive_backdoor_schedule_result.get("success", false)) or
+			interactive_backdoor_chain_id.is_empty() or
+			interactive_backdoor_meeting_id.is_empty() or
+			str(interactive_backdoor_chain.get("family", "")) != "backdoor_listing" or
+			str(interactive_backdoor_chain.get("expected_meeting_type", "")) != "rupslb" or
+			interactive_backdoor_terms.is_empty() or
+			int(interactive_backdoor_terms.get("new_shares", 0)) <= 0 or
+			str(interactive_backdoor_terms.get("post_deal_name", "")).is_empty()
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected backdoor listing debug scheduling to create an interactive RUPSLB chain with asset-injection terms."
+			}
+		var interactive_backdoor_chain_store: Dictionary = RunState.get_active_corporate_action_chains()
+		var interactive_backdoor_live_chain: Dictionary = interactive_backdoor_chain_store.get(interactive_backdoor_chain_id, {}).duplicate(true)
+		var interactive_backdoor_live_terms: Dictionary = interactive_backdoor_live_chain.get("backdoor_terms", {}).duplicate(true)
+		interactive_backdoor_live_terms["follow_on_rights_hint"] = true
+		interactive_backdoor_live_terms["follow_on_rights_probability"] = 1.0
+		interactive_backdoor_live_chain["backdoor_terms"] = interactive_backdoor_live_terms
+		interactive_backdoor_live_chain["approval_odds"] = 0.99
+		interactive_backdoor_live_chain["funding_pressure"] = 0.95
+		interactive_backdoor_live_chain["frontrunner_strength"] = 0.95
+		interactive_backdoor_live_chain["market_overpricing"] = 0.0
+		interactive_backdoor_live_chain["management_stance"] = "confirm"
+		interactive_backdoor_chain_store[interactive_backdoor_chain_id] = interactive_backdoor_live_chain
+		RunState.set_active_corporate_action_chains(interactive_backdoor_chain_store)
+		interactive_backdoor_terms = interactive_backdoor_live_terms.duplicate(true)
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_backdoor_meeting_visible: bool = false
+		for interactive_backdoor_row_value in GameManager.get_corporate_meeting_snapshot().get("upcoming_rows", []):
+			if typeof(interactive_backdoor_row_value) != TYPE_DICTIONARY:
+				continue
+			var interactive_backdoor_row: Dictionary = interactive_backdoor_row_value
+			if (
+				str(interactive_backdoor_row.get("id", "")) == interactive_backdoor_meeting_id and
+				str(interactive_backdoor_row.get("chain_family", "")) == "backdoor_listing" and
+				bool(interactive_backdoor_row.get("interactive_v1", false))
+			):
+				interactive_backdoor_meeting_visible = true
+				break
+		if not interactive_backdoor_meeting_visible:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the backdoor listing RUPSLB to appear as an interactive upcoming meeting after one Advance Day."
+			}
+		var interactive_backdoor_start_result: Dictionary = GameManager.start_corporate_meeting_session(interactive_backdoor_meeting_id)
+		var interactive_backdoor_session_snapshot: Dictionary = GameManager.get_corporate_meeting_session_snapshot(interactive_backdoor_meeting_id)
+		if (
+			not bool(interactive_backdoor_start_result.get("success", false)) or
+			str(interactive_backdoor_session_snapshot.get("current_stage_id", "")) != "arrival" or
+			str(interactive_backdoor_session_snapshot.get("presentation", {}).get("stage_labels", {}).get("agenda_reveal", "")) != "Asset Injection"
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected backdoor listing RUPSLB sessions to open with asset-injection presentation copy."
+			}
+		var interactive_backdoor_vote_result: Dictionary = GameManager.submit_corporate_meeting_vote(interactive_backdoor_meeting_id, "", "agree")
+		var interactive_backdoor_vote_summary: Dictionary = interactive_backdoor_vote_result.get("session", {}).get("result_summary", {})
+		if not bool(interactive_backdoor_vote_result.get("success", false)) or not bool(interactive_backdoor_vote_summary.get("approved", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the backdoor listing RUPSLB agree vote to approve the asset injection."
+			}
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_backdoor_after_vote_chain: Dictionary = RunState.get_active_corporate_action_chains().get(interactive_backdoor_chain_id, {})
+		if (
+			str(interactive_backdoor_after_vote_chain.get("stage", "")) != "execution" or
+			not bool(RunState.get_corporate_meeting_sessions().get(interactive_backdoor_meeting_id, {}).get("consumed", false))
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected approved backdoor listing votes to move the chain into execution on the next simulated day."
+			}
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_backdoor_application: Dictionary = {}
+		for interactive_backdoor_application_value in RunState.last_day_results.get("corporate_action_applications", []):
+			if typeof(interactive_backdoor_application_value) != TYPE_DICTIONARY:
+				continue
+			var interactive_backdoor_candidate_application: Dictionary = interactive_backdoor_application_value
+			if str(interactive_backdoor_candidate_application.get("chain_id", "")) == interactive_backdoor_chain_id and str(interactive_backdoor_candidate_application.get("application_type", "")) == "backdoor_listing":
+				interactive_backdoor_application = interactive_backdoor_candidate_application.duplicate(true)
+				break
+		var interactive_backdoor_after_definition: Dictionary = RunState.get_effective_company_definition(interactive_backdoor_company_id, false, false)
+		var interactive_backdoor_after_financials: Dictionary = interactive_backdoor_after_definition.get("financials", {})
+		var interactive_backdoor_shares_after: float = float(interactive_backdoor_after_financials.get("shares_outstanding", interactive_backdoor_after_definition.get("shares_outstanding", 0.0)))
+		var interactive_backdoor_free_float_after: float = float(interactive_backdoor_after_financials.get("free_float_pct", 0.0))
+		var interactive_backdoor_holding_after: int = int(RunState.get_holding(interactive_backdoor_company_id).get("shares", 0))
+		var interactive_backdoor_cash_after: float = float(RunState.player_portfolio.get("cash", 0.0))
+		var interactive_backdoor_after_snapshot: Dictionary = GameManager.get_company_snapshot(interactive_backdoor_company_id, false, false, false)
+		if (
+			interactive_backdoor_application.is_empty() or
+			str(interactive_backdoor_application.get("post_deal_name", "")) != str(interactive_backdoor_terms.get("post_deal_name", "")) or
+			interactive_backdoor_application.get("post_deal_identity", {}).is_empty() or
+			str(interactive_backdoor_application.get("follow_on_rights_chain_id", "")).is_empty() or
+			interactive_backdoor_shares_after <= interactive_backdoor_shares_before or
+			interactive_backdoor_free_float_after >= interactive_backdoor_free_float_before or
+			interactive_backdoor_holding_after != interactive_backdoor_holding_before or
+			absf(interactive_backdoor_cash_after - interactive_backdoor_cash_before) > 0.01 or
+			str(interactive_backdoor_after_snapshot.get("listing_status", "listed")) != "listed" or
+			bool(interactive_backdoor_after_snapshot.get("trade_disabled", false)) or
+			str(interactive_backdoor_after_snapshot.get("name", "")) != str(interactive_backdoor_terms.get("post_deal_name", "")) or
+			interactive_backdoor_after_snapshot.get("backdoor_listing_result", {}).is_empty()
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected approved interactive backdoor listing execution to rewrite identity, dilute structure, preserve player shares/cash, and keep the listing tradable."
+			}
+		var interactive_backdoor_trade_found: bool = false
+		for interactive_backdoor_trade_index in range(RunState.trade_history.size() - 1, -1, -1):
+			var interactive_backdoor_trade: Dictionary = RunState.trade_history[interactive_backdoor_trade_index]
+			if str(interactive_backdoor_trade.get("company_id", "")) == interactive_backdoor_company_id and str(interactive_backdoor_trade.get("side", "")) == "backdoor_listing":
+				interactive_backdoor_trade_found = true
+				break
+		if not interactive_backdoor_trade_found:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected interactive backdoor listing execution to record a held-share history row."
+			}
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
+
+		var interactive_ceo_company_id: String = ""
+		var interactive_ceo_lot_cash: float = float(RunState.player_portfolio.get("cash", 0.0))
+		for company_index in range(RunState.company_order.size()):
+			var interactive_ceo_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(interactive_ceo_candidate_company_id).get("has_live_chain", false)):
+				continue
+			if int(RunState.get_holding(interactive_ceo_candidate_company_id).get("shares", 0)) > 0:
+				continue
+			var interactive_ceo_candidate_runtime: Dictionary = RunState.get_company(interactive_ceo_candidate_company_id)
+			var interactive_ceo_candidate_profile: Dictionary = interactive_ceo_candidate_runtime.get("company_profile", {})
+			if bool(interactive_ceo_candidate_profile.get("trade_disabled", false)):
+				continue
+			var interactive_ceo_candidate_definition: Dictionary = RunState.get_effective_company_definition(interactive_ceo_candidate_company_id, false, false)
+			var interactive_ceo_candidate_price: float = float(interactive_ceo_candidate_runtime.get("current_price", interactive_ceo_candidate_definition.get("base_price", 0.0)))
+			if interactive_ceo_candidate_price * float(GameManager.get_lot_size()) > interactive_ceo_lot_cash:
+				continue
+			interactive_ceo_company_id = interactive_ceo_candidate_company_id
+			break
+		if interactive_ceo_company_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find a chain-free company for interactive CEO-change coverage."
+			}
+		var interactive_ceo_before_snapshot: Dictionary = GameManager.get_company_snapshot(interactive_ceo_company_id, false, false, false)
+		var interactive_ceo_before_name: String = _ceo_name_from_roster(interactive_ceo_before_snapshot.get("management_roster", []))
+		var interactive_ceo_buy_result: Dictionary = GameManager.buy_lots(interactive_ceo_company_id, 1)
+		if not bool(interactive_ceo_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before the CEO-change RUPSLB flow."
+			}
+		var interactive_ceo_holding_before: int = int(RunState.get_holding(interactive_ceo_company_id).get("shares", 0))
+		var interactive_ceo_cash_before: float = float(RunState.player_portfolio.get("cash", 0.0))
+		var interactive_ceo_schedule_result: Dictionary = GameManager.debug_schedule_next_day_ceo_change_rupslb(interactive_ceo_company_id)
+		var interactive_ceo_chain: Dictionary = interactive_ceo_schedule_result.get("chain", {})
+		var interactive_ceo_meeting: Dictionary = interactive_ceo_schedule_result.get("meeting", {})
+		var interactive_ceo_chain_id: String = str(interactive_ceo_chain.get("chain_id", ""))
+		var interactive_ceo_meeting_id: String = str(interactive_ceo_meeting.get("id", ""))
+		var interactive_ceo_terms: Dictionary = interactive_ceo_chain.get("ceo_terms", {})
+		if (
+			not bool(interactive_ceo_schedule_result.get("success", false)) or
+			interactive_ceo_chain_id.is_empty() or
+			interactive_ceo_meeting_id.is_empty() or
+			str(interactive_ceo_chain.get("family", "")) != "ceo_change" or
+			str(interactive_ceo_chain.get("expected_meeting_type", "")) != "rupslb" or
+			interactive_ceo_terms.is_empty() or
+			str(interactive_ceo_terms.get("new_ceo_name", "")).is_empty() or
+			str(interactive_ceo_terms.get("new_ceo_name", "")) == interactive_ceo_before_name
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected CEO-change debug scheduling to create an interactive RUPSLB chain with replacement CEO terms."
+			}
+		var interactive_ceo_chain_store: Dictionary = RunState.get_active_corporate_action_chains()
+		var interactive_ceo_live_chain: Dictionary = interactive_ceo_chain_store.get(interactive_ceo_chain_id, {}).duplicate(true)
+		interactive_ceo_live_chain["approval_odds"] = 0.99
+		interactive_ceo_live_chain["funding_pressure"] = 0.95
+		interactive_ceo_live_chain["frontrunner_strength"] = 0.95
+		interactive_ceo_live_chain["market_overpricing"] = 0.0
+		interactive_ceo_live_chain["management_stance"] = "confirm"
+		interactive_ceo_chain_store[interactive_ceo_chain_id] = interactive_ceo_live_chain
+		RunState.set_active_corporate_action_chains(interactive_ceo_chain_store)
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_ceo_meeting_visible: bool = false
+		for interactive_ceo_row_value in GameManager.get_corporate_meeting_snapshot().get("upcoming_rows", []):
+			if typeof(interactive_ceo_row_value) != TYPE_DICTIONARY:
+				continue
+			var interactive_ceo_row: Dictionary = interactive_ceo_row_value
+			if (
+				str(interactive_ceo_row.get("id", "")) == interactive_ceo_meeting_id and
+				str(interactive_ceo_row.get("chain_family", "")) == "ceo_change" and
+				bool(interactive_ceo_row.get("interactive_v1", false))
+			):
+				interactive_ceo_meeting_visible = true
+				break
+		if not interactive_ceo_meeting_visible:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the CEO-change RUPSLB to appear as an interactive upcoming meeting after one Advance Day."
+			}
+		var interactive_ceo_start_result: Dictionary = GameManager.start_corporate_meeting_session(interactive_ceo_meeting_id)
+		var interactive_ceo_session_snapshot: Dictionary = GameManager.get_corporate_meeting_session_snapshot(interactive_ceo_meeting_id)
+		if (
+			not bool(interactive_ceo_start_result.get("success", false)) or
+			str(interactive_ceo_session_snapshot.get("current_stage_id", "")) != "arrival" or
+			str(interactive_ceo_session_snapshot.get("presentation", {}).get("stage_labels", {}).get("agenda_reveal", "")) != "Leadership Slate"
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected CEO-change RUPSLB sessions to open with leadership-slate presentation copy."
+			}
+		var interactive_ceo_vote_result: Dictionary = GameManager.submit_corporate_meeting_vote(interactive_ceo_meeting_id, "", "agree")
+		var interactive_ceo_vote_summary: Dictionary = interactive_ceo_vote_result.get("session", {}).get("result_summary", {})
+		if not bool(interactive_ceo_vote_result.get("success", false)) or not bool(interactive_ceo_vote_summary.get("approved", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the CEO-change RUPSLB agree vote to approve the leadership slate."
+			}
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_ceo_after_vote_chain: Dictionary = RunState.get_active_corporate_action_chains().get(interactive_ceo_chain_id, {})
+		if (
+			str(interactive_ceo_after_vote_chain.get("stage", "")) != "execution" or
+			not bool(RunState.get_corporate_meeting_sessions().get(interactive_ceo_meeting_id, {}).get("consumed", false))
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected approved CEO-change votes to move the chain into execution on the next simulated day."
+			}
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var interactive_ceo_application: Dictionary = {}
+		for interactive_ceo_application_value in RunState.last_day_results.get("corporate_action_applications", []):
+			if typeof(interactive_ceo_application_value) != TYPE_DICTIONARY:
+				continue
+			var interactive_ceo_candidate_application: Dictionary = interactive_ceo_application_value
+			if str(interactive_ceo_candidate_application.get("chain_id", "")) == interactive_ceo_chain_id and str(interactive_ceo_candidate_application.get("application_type", "")) == "ceo_change":
+				interactive_ceo_application = interactive_ceo_candidate_application.duplicate(true)
+				break
+		var interactive_ceo_after_snapshot: Dictionary = GameManager.get_company_snapshot(interactive_ceo_company_id, false, false, false)
+		var interactive_ceo_after_name: String = _ceo_name_from_roster(interactive_ceo_after_snapshot.get("management_roster", []))
+		var interactive_ceo_holding_after: int = int(RunState.get_holding(interactive_ceo_company_id).get("shares", 0))
+		var interactive_ceo_cash_after: float = float(RunState.player_portfolio.get("cash", 0.0))
+		if (
+			interactive_ceo_application.is_empty() or
+			interactive_ceo_after_name != str(interactive_ceo_terms.get("new_ceo_name", "")) or
+			interactive_ceo_after_name == interactive_ceo_before_name or
+			interactive_ceo_after_snapshot.get("ceo_change_result", {}).is_empty() or
+			interactive_ceo_holding_after != interactive_ceo_holding_before or
+			absf(interactive_ceo_cash_after - interactive_ceo_cash_before) > 0.01 or
+			bool(interactive_ceo_after_snapshot.get("trade_disabled", false))
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected approved interactive CEO-change execution to replace the CEO, preserve player shares/cash, and keep the listing tradable."
+			}
+		var interactive_ceo_trade_found: bool = false
+		for interactive_ceo_trade_index in range(RunState.trade_history.size() - 1, -1, -1):
+			var interactive_ceo_trade: Dictionary = RunState.trade_history[interactive_ceo_trade_index]
+			if str(interactive_ceo_trade.get("company_id", "")) == interactive_ceo_company_id and str(interactive_ceo_trade.get("side", "")) == "ceo_change":
+				interactive_ceo_trade_found = true
+				break
+		if not interactive_ceo_trade_found:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected interactive CEO-change execution to record a held-share history row."
+			}
+
+		RunState.load_from_dict(interactive_test_base_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
+
+		var backdoor_company_id: String = ""
+		var backdoor_lot_cash: float = float(RunState.player_portfolio.get("cash", 0.0))
+		for company_index in range(RunState.company_order.size()):
+			var backdoor_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(backdoor_candidate_company_id).get("has_live_chain", false)):
+				continue
+			if int(RunState.get_holding(backdoor_candidate_company_id).get("shares", 0)) > 0:
+				continue
+			var backdoor_candidate_runtime: Dictionary = RunState.get_company(backdoor_candidate_company_id)
+			var backdoor_candidate_profile: Dictionary = backdoor_candidate_runtime.get("company_profile", {})
+			if bool(backdoor_candidate_profile.get("trade_disabled", false)):
+				continue
+			var backdoor_candidate_definition: Dictionary = RunState.get_effective_company_definition(backdoor_candidate_company_id, false, false)
+			var backdoor_candidate_financials: Dictionary = backdoor_candidate_definition.get("financials", {})
+			var backdoor_candidate_price: float = float(backdoor_candidate_runtime.get("current_price", backdoor_candidate_definition.get("base_price", 0.0)))
+			if float(backdoor_candidate_financials.get("shares_outstanding", backdoor_candidate_definition.get("shares_outstanding", 0.0))) <= 1000.0:
+				continue
+			if backdoor_candidate_price * float(GameManager.get_lot_size()) > backdoor_lot_cash:
+				continue
+			backdoor_company_id = backdoor_candidate_company_id
+			break
+		if backdoor_company_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find a chain-free company for backdoor listing execution coverage."
+			}
+		var backdoor_before_definition: Dictionary = RunState.get_effective_company_definition(backdoor_company_id, false, false)
+		var backdoor_before_financials: Dictionary = backdoor_before_definition.get("financials", {})
+		var backdoor_shares_before: float = float(backdoor_before_financials.get("shares_outstanding", backdoor_before_definition.get("shares_outstanding", 0.0)))
+		var backdoor_free_float_before: float = float(backdoor_before_financials.get("free_float_pct", 0.0))
+		var backdoor_buy_result: Dictionary = GameManager.buy_lots(backdoor_company_id, 1)
+		if not bool(backdoor_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before backdoor listing execution coverage."
+			}
+		var backdoor_holding_before: int = int(RunState.get_holding(backdoor_company_id).get("shares", 0))
+		var backdoor_cash_before: float = float(RunState.player_portfolio.get("cash", 0.0))
+		var backdoor_force_result: Dictionary = GameManager.debug_force_backdoor_listing_execution(backdoor_company_id)
+		var backdoor_chain: Dictionary = backdoor_force_result.get("chain", {})
+		var backdoor_chain_id: String = str(backdoor_chain.get("chain_id", ""))
+		var backdoor_terms: Dictionary = backdoor_chain.get("backdoor_terms", {})
+		if (
+			not bool(backdoor_force_result.get("success", false)) or
+			backdoor_chain_id.is_empty() or
+			str(backdoor_chain.get("family", "")) != "backdoor_listing" or
+			backdoor_terms.is_empty() or
+			int(backdoor_terms.get("new_shares", 0)) <= 0 or
+			float(backdoor_terms.get("new_shares_outstanding", 0.0)) <= backdoor_shares_before or
+			str(backdoor_terms.get("post_deal_name", "")).is_empty() or
+			str(backdoor_terms.get("post_deal_sector_id", "")).is_empty() or
+			float(backdoor_terms.get("silent_accumulation_pct", 0.0)) <= 0.0 or
+			not bool(backdoor_terms.get("follow_on_rights_hint", false)) or
+			int(backdoor_terms.get("sponsor_lockup_days", 0)) < 30 or
+			int(backdoor_terms.get("sponsor_lockup_days", 0)) > 45 or
+			int(backdoor_terms.get("sponsor_locked_shares", 0)) != int(backdoor_terms.get("new_shares", 0)) or
+			int(backdoor_terms.get("post_deal_milestone_count", 0)) < 3 or
+			backdoor_terms.get("post_deal_milestone_plan", []).is_empty()
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected backdoor listing debug forcing to create executable identity, accumulation, and dilution terms."
+			}
+		var backdoor_snapshot: Dictionary = GameManager.get_company_corporate_action_snapshot(backdoor_company_id)
+		var backdoor_snapshot_terms: Dictionary = backdoor_snapshot.get("primary_chain", {}).get("backdoor_terms", {})
+		if backdoor_snapshot_terms.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the corporate-action snapshot to expose backdoor listing terms."
+			}
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var backdoor_application: Dictionary = {}
+		for backdoor_application_value in RunState.last_day_results.get("corporate_action_applications", []):
+			if typeof(backdoor_application_value) != TYPE_DICTIONARY:
+				continue
+			var backdoor_candidate_application: Dictionary = backdoor_application_value
+			if str(backdoor_candidate_application.get("chain_id", "")) == backdoor_chain_id and str(backdoor_candidate_application.get("application_type", "")) == "backdoor_listing":
+				backdoor_application = backdoor_candidate_application.duplicate(true)
+				break
+		if backdoor_application.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected backdoor listing execution to emit an application payload."
+			}
+		if (
+			str(backdoor_application.get("post_deal_name", "")) != str(backdoor_terms.get("post_deal_name", "")) or
+			str(backdoor_application.get("post_deal_sector_id", "")) != str(backdoor_terms.get("post_deal_sector_id", "")) or
+			backdoor_application.get("post_deal_identity", {}).is_empty() or
+			float(backdoor_application.get("silent_accumulation_pct", 0.0)) <= 0.0 or
+			str(backdoor_application.get("follow_on_rights_chain_id", "")).is_empty() or
+			int(backdoor_application.get("sponsor_lockup_days", 0)) < 30 or
+			int(backdoor_application.get("sponsor_lockup_days", 0)) > 45 or
+			int(backdoor_application.get("sponsor_unlock_day_number", 0)) <= int(backdoor_application.get("day_index", 0)) or
+			int(backdoor_application.get("post_deal_first_milestone_delay_days", 0)) <= 0 or
+			backdoor_application.get("post_deal_milestone_plan", []).is_empty()
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected backdoor listing application payload to carry identity rewrite and silent accumulation data."
+			}
+		var backdoor_after_definition: Dictionary = RunState.get_effective_company_definition(backdoor_company_id, false, false)
+		var backdoor_after_financials: Dictionary = backdoor_after_definition.get("financials", {})
+		var backdoor_shares_after: float = float(backdoor_after_financials.get("shares_outstanding", backdoor_after_definition.get("shares_outstanding", 0.0)))
+		var backdoor_free_float_after: float = float(backdoor_after_financials.get("free_float_pct", 0.0))
+		if backdoor_shares_after <= backdoor_shares_before or backdoor_free_float_after >= backdoor_free_float_before:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected backdoor listing execution to increase shares outstanding and dilute public free float."
+			}
+		var backdoor_adjustment: Dictionary = {}
+		for backdoor_adjustment_value in RunState.get_company(backdoor_company_id).get("company_profile", {}).get("corporate_action_adjustments", []):
+			if typeof(backdoor_adjustment_value) == TYPE_DICTIONARY and str(backdoor_adjustment_value.get("type", "")) == "backdoor_listing":
+				backdoor_adjustment = backdoor_adjustment_value.duplicate(true)
+				break
+		if backdoor_adjustment.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected backdoor listing execution to record a company share-structure adjustment."
+			}
+		var backdoor_holding_after: int = int(RunState.get_holding(backdoor_company_id).get("shares", 0))
+		var backdoor_cash_after: float = float(RunState.player_portfolio.get("cash", 0.0))
+		if (
+			backdoor_holding_after != backdoor_holding_before or
+			absf(backdoor_cash_after - backdoor_cash_before) > 0.01 or
+			int(backdoor_adjustment.get("player_shares", 0)) != backdoor_holding_before or
+			str(backdoor_adjustment.get("player_treatment", "")) != "held_diluted" or
+			float(backdoor_adjustment.get("player_ownership_after_pct", 0.0)) >= float(backdoor_adjustment.get("player_ownership_before_pct", 0.0))
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected backdoor listing player treatment to preserve shares and cash while diluting ownership."
+			}
+		var backdoor_trade_found: bool = false
+		for backdoor_trade_index in range(RunState.trade_history.size() - 1, -1, -1):
+			var backdoor_trade: Dictionary = RunState.trade_history[backdoor_trade_index]
+			if str(backdoor_trade.get("company_id", "")) == backdoor_company_id and str(backdoor_trade.get("side", "")) == "backdoor_listing":
+				backdoor_trade_found = true
+				break
+		if not backdoor_trade_found:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected backdoor listing execution to record a portfolio history note for held shares."
+			}
+		var backdoor_after_snapshot: Dictionary = GameManager.get_company_snapshot(backdoor_company_id, false, false, false)
+		if (
+			str(backdoor_after_snapshot.get("listing_status", "listed")) != "listed" or
+			bool(backdoor_after_snapshot.get("trade_disabled", false)) or
+			backdoor_after_snapshot.get("backdoor_listing_result", {}).is_empty()
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected completed backdoor listing to keep the shell listed and tradable with a profile result."
+			}
+		var backdoor_result_snapshot: Dictionary = backdoor_after_snapshot.get("backdoor_listing_result", {})
+		var backdoor_lockup_snapshot: Dictionary = backdoor_after_snapshot.get("backdoor_sponsor_lockup", {})
+		var backdoor_milestone_snapshot: Dictionary = backdoor_after_snapshot.get("backdoor_milestone_state", {})
+		if (
+			str(backdoor_after_snapshot.get("name", "")) != str(backdoor_terms.get("post_deal_name", "")) or
+			str(backdoor_after_snapshot.get("sector_id", "")) != str(backdoor_terms.get("post_deal_sector_id", "")) or
+			str(backdoor_after_snapshot.get("archetype_label", "")).is_empty() or
+			backdoor_result_snapshot.get("post_deal_identity", {}).is_empty() or
+			str(backdoor_result_snapshot.get("follow_on_rights_chain_id", "")).is_empty() or
+			backdoor_result_snapshot.get("sponsor_lockup", {}).is_empty() or
+			backdoor_lockup_snapshot.is_empty() or
+			str(backdoor_lockup_snapshot.get("state", "")) != "locked" or
+			int(backdoor_lockup_snapshot.get("lockup_days", 0)) < 30 or
+			int(backdoor_lockup_snapshot.get("lockup_days", 0)) > 45 or
+			backdoor_milestone_snapshot.is_empty() or
+			str(backdoor_milestone_snapshot.get("state", "")) != "active" or
+			backdoor_milestone_snapshot.get("milestone_plan", []).is_empty() or
+			int(backdoor_milestone_snapshot.get("next_milestone_day_number", 0)) <= int(backdoor_application.get("day_index", 0)) or
+			float(backdoor_after_snapshot.get("market_depth_context", {}).get("silent_accumulation_pct", 0.0)) <= 0.0
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected completed backdoor listing to rewrite identity, start a 30-45 day sponsor lock-up, and schedule post-deal milestones."
+			}
+		var backdoor_follow_on_chain_id: String = str(backdoor_result_snapshot.get("follow_on_rights_chain_id", ""))
+		var linked_rights_chain: Dictionary = RunState.get_active_corporate_action_chains().get(backdoor_follow_on_chain_id, {})
+		var linked_rights_terms: Dictionary = linked_rights_chain.get("rights_terms", {})
+		if (
+			linked_rights_chain.is_empty() or
+			str(linked_rights_chain.get("family", "")) != "rights_issue" or
+			not bool(linked_rights_terms.get("linked_backdoor_listing", false)) or
+			str(linked_rights_terms.get("source_backdoor_chain_id", "")) != backdoor_chain_id or
+			str(linked_rights_terms.get("funding_purpose", "")).is_empty() or
+			float(linked_rights_terms.get("strategic_funding_unlock_pct", 0.0)) == 0.0 or
+			float(linked_rights_terms.get("dilution_overhang_pct", 0.0)) <= 0.0
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected completed backdoor listing to spawn a linked follow-on rights issue chain."
+			}
+		var allowed_backdoor_rebuy: Dictionary = GameManager.estimate_buy_lots(backdoor_company_id, 1)
+		if not bool(allowed_backdoor_rebuy.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected backdoor-listed names to remain buyable after execution."
+			}
+
+		var restructuring_company_id: String = ""
+		var restructuring_lot_cash: float = float(RunState.player_portfolio.get("cash", 0.0))
+		for company_index in range(RunState.company_order.size() - 1, -1, -1):
+			var restructuring_candidate_company_id: String = str(RunState.company_order[company_index])
+			if bool(GameManager.get_company_corporate_action_snapshot(restructuring_candidate_company_id).get("has_live_chain", false)):
+				continue
+			if int(RunState.get_holding(restructuring_candidate_company_id).get("shares", 0)) > 0:
+				continue
+			var restructuring_candidate_runtime: Dictionary = RunState.get_company(restructuring_candidate_company_id)
+			var restructuring_candidate_profile: Dictionary = restructuring_candidate_runtime.get("company_profile", {})
+			if bool(restructuring_candidate_profile.get("trade_disabled", false)):
+				continue
+			var restructuring_candidate_definition: Dictionary = RunState.get_effective_company_definition(restructuring_candidate_company_id, false, false)
+			var restructuring_candidate_financials: Dictionary = restructuring_candidate_definition.get("financials", {})
+			var restructuring_candidate_price: float = float(restructuring_candidate_runtime.get("current_price", restructuring_candidate_definition.get("base_price", 0.0)))
+			if float(restructuring_candidate_financials.get("shares_outstanding", restructuring_candidate_definition.get("shares_outstanding", 0.0))) <= 1000.0:
+				continue
+			if restructuring_candidate_price * float(GameManager.get_lot_size()) > restructuring_lot_cash:
+				continue
+			restructuring_company_id = restructuring_candidate_company_id
+			break
+		if restructuring_company_id.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to find a chain-free company for restructuring execution coverage."
+			}
+		var restructuring_before_definition: Dictionary = RunState.get_effective_company_definition(restructuring_company_id, false, false)
+		var restructuring_before_financials: Dictionary = restructuring_before_definition.get("financials", {})
+		var restructuring_shares_before: float = float(restructuring_before_financials.get("shares_outstanding", restructuring_before_definition.get("shares_outstanding", 0.0)))
+		var restructuring_free_float_before: float = float(restructuring_before_financials.get("free_float_pct", 0.0))
+		var restructuring_buy_result: Dictionary = GameManager.buy_lots(restructuring_company_id, 1)
+		if not bool(restructuring_buy_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected to buy one lot before restructuring execution coverage."
+			}
+		var restructuring_holding_before: int = int(RunState.get_holding(restructuring_company_id).get("shares", 0))
+		var restructuring_cash_before: float = float(RunState.player_portfolio.get("cash", 0.0))
+		var restructuring_force_result: Dictionary = GameManager.debug_force_restructuring_execution(restructuring_company_id)
+		var restructuring_chain: Dictionary = restructuring_force_result.get("chain", {})
+		var restructuring_chain_id: String = str(restructuring_chain.get("chain_id", ""))
+		var restructuring_terms: Dictionary = restructuring_chain.get("restructuring_terms", {})
+		if (
+			not bool(restructuring_force_result.get("success", false)) or
+			restructuring_chain_id.is_empty() or
+			str(restructuring_chain.get("family", "")) != "restructuring" or
+			restructuring_terms.is_empty() or
+			float(restructuring_terms.get("debt_reduction_pct", 0.0)) <= 0.0 or
+			float(restructuring_terms.get("debt_conversion_pct", 0.0)) <= 0.0 or
+			int(restructuring_terms.get("new_shares", 0)) <= 0
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected restructuring debug forcing to create executable debt relief and conversion terms."
+			}
+		var restructuring_snapshot: Dictionary = GameManager.get_company_corporate_action_snapshot(restructuring_company_id)
+		if restructuring_snapshot.get("primary_chain", {}).get("restructuring_terms", {}).is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the corporate-action snapshot to expose restructuring terms."
+			}
+
+		GameManager.advance_day()
+		await get_tree().process_frame
+		var restructuring_application: Dictionary = {}
+		for restructuring_application_value in RunState.last_day_results.get("corporate_action_applications", []):
+			if typeof(restructuring_application_value) != TYPE_DICTIONARY:
+				continue
+			var restructuring_candidate_application: Dictionary = restructuring_application_value
+			if str(restructuring_candidate_application.get("chain_id", "")) == restructuring_chain_id and str(restructuring_candidate_application.get("application_type", "")) == "restructuring":
+				restructuring_application = restructuring_candidate_application.duplicate(true)
+				break
+		if restructuring_application.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected restructuring execution to emit an application payload."
+			}
+		var restructuring_after_definition: Dictionary = RunState.get_effective_company_definition(restructuring_company_id, false, false)
+		var restructuring_after_financials: Dictionary = restructuring_after_definition.get("financials", {})
+		var restructuring_shares_after: float = float(restructuring_after_financials.get("shares_outstanding", restructuring_after_definition.get("shares_outstanding", 0.0)))
+		var restructuring_free_float_after: float = float(restructuring_after_financials.get("free_float_pct", 0.0))
+		if restructuring_shares_after <= restructuring_shares_before or restructuring_free_float_after >= restructuring_free_float_before:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected restructuring execution to issue creditor shares and dilute public free float."
+			}
+		var restructuring_adjustment: Dictionary = {}
+		for restructuring_adjustment_value in RunState.get_company(restructuring_company_id).get("company_profile", {}).get("corporate_action_adjustments", []):
+			if typeof(restructuring_adjustment_value) == TYPE_DICTIONARY and str(restructuring_adjustment_value.get("type", "")) == "restructuring":
+				restructuring_adjustment = restructuring_adjustment_value.duplicate(true)
+				break
+		if restructuring_adjustment.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected restructuring execution to record a company adjustment."
+			}
+		var restructuring_holding_after: int = int(RunState.get_holding(restructuring_company_id).get("shares", 0))
+		var restructuring_cash_after: float = float(RunState.player_portfolio.get("cash", 0.0))
+		if (
+			restructuring_holding_after != restructuring_holding_before or
+			absf(restructuring_cash_after - restructuring_cash_before) > 0.01 or
+			str(restructuring_adjustment.get("player_treatment", "")) != "held_diluted" or
+			float(restructuring_adjustment.get("player_ownership_after_pct", 0.0)) >= float(restructuring_adjustment.get("player_ownership_before_pct", 0.0))
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected restructuring player treatment to preserve shares and cash while diluting ownership."
+			}
+		var restructuring_after_snapshot: Dictionary = GameManager.get_company_snapshot(restructuring_company_id, false, false, false)
+		if (
+			restructuring_after_snapshot.get("restructuring_result", {}).is_empty() or
+			bool(restructuring_after_snapshot.get("trade_disabled", false)) or
+			str(restructuring_after_snapshot.get("market_depth_context", {}).get("restructuring_state", "")) != "watch"
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected completed restructuring to persist a watch state while keeping the stock tradable."
 			}
 
 		RunState.load_from_dict(interactive_test_base_state)
@@ -5774,6 +7736,16 @@ func _has_management_roles(management_roster: Array) -> bool:
 		var management: Dictionary = management_value
 		roles[str(management.get("affiliation_role", ""))] = true
 	return roles.has("ceo") and roles.has("cfo") and roles.has("commissioner")
+
+
+func _ceo_name_from_roster(management_roster: Array) -> String:
+	for management_value in management_roster:
+		if typeof(management_value) != TYPE_DICTIONARY:
+			continue
+		var management: Dictionary = management_value
+		if str(management.get("affiliation_role", "")) == "ceo":
+			return str(management.get("display_name", ""))
+	return ""
 
 
 func _validate_generated_roster() -> String:

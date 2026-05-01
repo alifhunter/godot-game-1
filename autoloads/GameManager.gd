@@ -23,6 +23,7 @@ signal company_detail_ready(company_id)
 const MAIN_MENU_SCENE := "res://scenes/main_menu/MainMenu.tscn"
 const GAME_SCENE := "res://scenes/game/GameRoot.tscn"
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
+const STABLE_RNG = preload("res://systems/StableRng.gd")
 const DEFAULT_DIFFICULTY_ID := "normal"
 const STARTING_CASH := 100000000.0
 const CONSOLE_CASH_GRANT_AMOUNT := 999999999999.0
@@ -34,11 +35,12 @@ const DEBUG_COMPANY_ARC_EVENT_IDS := {
 	"integration_overhang": true
 }
 const DIFFICULTY_ORDER := ["chill", "normal", "grind"]
-const NEW_RUN_FINAL_STEP_HOLD_SECONDS := 0.28
+const NEW_RUN_FINAL_STEP_HOLD_SECONDS := 0.08
 const NEW_RUN_LOADING_STEPS := [
 	{"id": "seed", "label": "Preparing market seed"},
 	{"id": "companies", "label": "Creating companies"},
 	{"id": "financials", "label": "Creating financials"},
+	{"id": "corporate_actions", "label": "Preparing corporate calendar"},
 	{"id": "opening_day", "label": "Simulating opening session"},
 	{"id": "save", "label": "Saving run"},
 	{"id": "launch", "label": "Opening trading desk"}
@@ -95,6 +97,7 @@ const LIFE_LIFESTYLE_OPTIONS := [
 const LOAD_RUN_LOADING_STEPS := [
 	{"id": "load_save", "label": "Reading save file"},
 	{"id": "restore_state", "label": "Restoring run state"},
+	{"id": "corporate_actions", "label": "Refreshing corporate calendar"},
 	{"id": "load_launch", "label": "Opening trading desk"}
 ]
 const STARTUP_PERF_LOG_PREFIX := "[perf][startup]"
@@ -249,23 +252,32 @@ func start_new_run_with_loading(
 	_log_startup_perf_elapsed("new_run_financials_total", financials_started_at_usec, " companies=%d" % company_definitions.size())
 	_invalidate_dashboard_event_snapshot_cache()
 	_invalidate_daily_activity_snapshot_cache()
-	corporate_action_system.ensure_initialized(RunState, DataRepository)
-	await get_tree().process_frame
-
 	_emit_run_loading_step(3)
-	simulate_opening_session(false)
+	var corporate_started_at_usec: int = Time.get_ticks_usec()
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	_log_startup_perf_elapsed("new_run_corporate_actions", corporate_started_at_usec)
 	await get_tree().process_frame
 
 	_emit_run_loading_step(4)
+	var opening_started_at_usec: int = Time.get_ticks_usec()
+	simulate_opening_session(false)
+	_log_startup_perf_elapsed("new_run_opening_session", opening_started_at_usec)
+	await get_tree().process_frame
+
+	_emit_run_loading_step(5)
+	var save_started_at_usec: int = Time.get_ticks_usec()
 	_save_active_run_now("start_new_run_with_loading")
+	_log_startup_perf_elapsed("new_run_save", save_started_at_usec)
 	run_started.emit()
 	await _hold_loading_stage(NEW_RUN_FINAL_STEP_HOLD_SECONDS)
 
-	_emit_run_loading_step(5)
+	_emit_run_loading_step(6)
 	await _hold_loading_stage(NEW_RUN_FINAL_STEP_HOLD_SECONDS)
 	_emit_run_loading_detail("", [])
 	run_loading_finished.emit()
+	var launch_started_at_usec: int = Time.get_ticks_usec()
 	_enter_game_scene()
+	_log_startup_perf_elapsed("new_run_enter_game_scene", launch_started_at_usec)
 
 
 func load_run_from_save() -> bool:
@@ -287,24 +299,33 @@ func load_run_from_save_with_loading() -> bool:
 	_emit_load_run_loading_step(0)
 	await get_tree().process_frame
 
+	var load_started_at_usec: int = Time.get_ticks_usec()
 	var saved_run: Dictionary = SaveManager.load_run()
+	_log_startup_perf_elapsed("load_run_read_parse", load_started_at_usec)
 	if saved_run.is_empty():
 		run_loading_finished.emit()
 		return false
 
 	_emit_load_run_loading_step(1)
+	var restore_started_at_usec: int = Time.get_ticks_usec()
 	RunState.load_from_dict(saved_run)
+	_log_startup_perf_elapsed("load_run_restore_state", restore_started_at_usec)
 	background_company_detail_hydration_running = false
 	_invalidate_dashboard_event_snapshot_cache()
 	_invalidate_daily_activity_snapshot_cache()
+	_emit_load_run_loading_step(2)
+	var corporate_started_at_usec: int = Time.get_ticks_usec()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	_log_startup_perf_elapsed("load_run_corporate_actions", corporate_started_at_usec)
 	run_loaded.emit()
 	await get_tree().process_frame
 
-	_emit_load_run_loading_step(2)
+	_emit_load_run_loading_step(3)
 	await get_tree().process_frame
 	run_loading_finished.emit()
+	var launch_started_at_usec: int = Time.get_ticks_usec()
 	_enter_game_scene()
+	_log_startup_perf_elapsed("load_run_enter_game_scene", launch_started_at_usec)
 	return true
 
 
@@ -640,6 +661,301 @@ func debug_schedule_next_day_private_placement_rupslb(company_id: String) -> Dic
 	}
 
 
+func debug_schedule_next_day_stock_buyback_rupslb(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	var holding: Dictionary = RunState.get_holding(company_id)
+	if int(holding.get("shares", 0)) < get_lot_size():
+		return {"success": false, "message": "Own at least 1 lot first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_schedule_next_day_stock_buyback_rupslb(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not schedule a next-day stock buyback RUPSLB for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_schedule_next_day_stock_buyback_rupslb")
+	var meeting: Dictionary = result.get("meeting", {}).duplicate(true)
+	return {
+		"success": true,
+		"message": "Scheduled next-day stock buyback RUPSLB for %s." % str(meeting.get("ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true),
+		"meeting": meeting
+	}
+
+
+func debug_schedule_next_day_stock_split_rupslb(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	var holding: Dictionary = RunState.get_holding(company_id)
+	if int(holding.get("shares", 0)) < get_lot_size():
+		return {"success": false, "message": "Own at least 1 lot first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_schedule_next_day_stock_split_rupslb(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not schedule a next-day stock split RUPSLB for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_schedule_next_day_stock_split_rupslb")
+	var meeting: Dictionary = result.get("meeting", {}).duplicate(true)
+	return {
+		"success": true,
+		"message": "Scheduled next-day stock split RUPSLB for %s." % str(meeting.get("ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true),
+		"meeting": meeting
+	}
+
+
+func debug_schedule_next_day_tender_offer_rupslb(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	var holding: Dictionary = RunState.get_holding(company_id)
+	if int(holding.get("shares", 0)) < get_lot_size():
+		return {"success": false, "message": "Own at least 1 lot first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_schedule_next_day_tender_offer_rupslb(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not schedule a next-day tender offer RUPSLB for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_schedule_next_day_tender_offer_rupslb")
+	var meeting: Dictionary = result.get("meeting", {}).duplicate(true)
+	return {
+		"success": true,
+		"message": "Scheduled next-day tender offer RUPSLB for %s." % str(meeting.get("ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true),
+		"meeting": meeting
+	}
+
+
+func debug_schedule_next_day_strategic_mna_rupslb(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	var holding: Dictionary = RunState.get_holding(company_id)
+	if int(holding.get("shares", 0)) < get_lot_size():
+		return {"success": false, "message": "Own at least 1 lot first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_schedule_next_day_strategic_mna_rupslb(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not schedule a next-day strategic M&A RUPSLB for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_schedule_next_day_strategic_mna_rupslb")
+	var meeting: Dictionary = result.get("meeting", {}).duplicate(true)
+	return {
+		"success": true,
+		"message": "Scheduled next-day strategic M&A RUPSLB for %s." % str(meeting.get("ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true),
+		"meeting": meeting
+	}
+
+
+func debug_schedule_next_day_backdoor_listing_rupslb(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	var holding: Dictionary = RunState.get_holding(company_id)
+	if int(holding.get("shares", 0)) < get_lot_size():
+		return {"success": false, "message": "Own at least 1 lot first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_schedule_next_day_backdoor_listing_rupslb(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not schedule a next-day backdoor listing RUPSLB for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_schedule_next_day_backdoor_listing_rupslb")
+	var meeting: Dictionary = result.get("meeting", {}).duplicate(true)
+	return {
+		"success": true,
+		"message": "Scheduled next-day backdoor listing RUPSLB for %s." % str(meeting.get("ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true),
+		"meeting": meeting
+	}
+
+
+func debug_schedule_next_day_ceo_change_rupslb(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	var holding: Dictionary = RunState.get_holding(company_id)
+	if int(holding.get("shares", 0)) < get_lot_size():
+		return {"success": false, "message": "Own at least 1 lot first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_schedule_next_day_ceo_change_rupslb(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not schedule a next-day CEO-change RUPSLB for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_schedule_next_day_ceo_change_rupslb")
+	var meeting: Dictionary = result.get("meeting", {}).duplicate(true)
+	return {
+		"success": true,
+		"message": "Scheduled next-day CEO-change RUPSLB for %s." % str(meeting.get("ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true),
+		"meeting": meeting
+	}
+
+
+func get_stock_contact_tip_options(company_id: String) -> Dictionary:
+	var rows: Array = []
+	if not RunState.has_active_run():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"rows": rows,
+			"status_text": "Start or load a run first.",
+			"tooltip_text": "Start or load a run first."
+		}
+	if company_id.is_empty():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"rows": rows,
+			"status_text": "Pick a stock first.",
+			"tooltip_text": "Select a stock in STOCKBOT first."
+		}
+	var definition: Dictionary = RunState.get_effective_company_definition(company_id, false, false)
+	if definition.is_empty():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"rows": rows,
+			"status_text": "Pick a valid stock first.",
+			"tooltip_text": "Select a valid stock in STOCKBOT first."
+		}
+	var ticker: String = str(definition.get("ticker", company_id.to_upper()))
+	var sector_id: String = str(definition.get("sector_id", ""))
+	var network_snapshot: Dictionary = get_network_snapshot()
+	var met_count: int = 0
+	var already_asked_count: int = 0
+	for contact_value in network_snapshot.get("contacts", []):
+		if typeof(contact_value) != TYPE_DICTIONARY:
+			continue
+		var contact: Dictionary = contact_value
+		if not bool(contact.get("met", false)):
+			continue
+		met_count += 1
+		if int(contact.get("last_tip_request_day_index", -9999)) == RunState.day_index:
+			already_asked_count += 1
+			continue
+		var relevance: Dictionary = _stock_contact_tip_relevance(contact, company_id, sector_id)
+		if int(relevance.get("group", 99)) >= 90:
+			continue
+		var role_text: String = str(contact.get("role", contact.get("affiliation_role", "Contact")))
+		var relevance_label: String = str(relevance.get("label", "Market read"))
+		rows.append({
+			"id": str(contact.get("id", "")),
+			"label": "%s - %s" % [str(contact.get("display_name", "Contact")), relevance_label],
+			"display_name": str(contact.get("display_name", "Contact")),
+			"role": role_text,
+			"relationship": int(contact.get("relationship", 0)),
+			"relevance_group": int(relevance.get("group", 99)),
+			"relevance_score": int(relevance.get("score", 0)),
+			"relevance_label": relevance_label
+		})
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a.get("relevance_group", 99)) != int(b.get("relevance_group", 99)):
+			return int(a.get("relevance_group", 99)) < int(b.get("relevance_group", 99))
+		if int(a.get("relationship", 0)) != int(b.get("relationship", 0)):
+			return int(a.get("relationship", 0)) > int(b.get("relationship", 0))
+		if int(a.get("relevance_score", 0)) != int(b.get("relevance_score", 0)):
+			return int(a.get("relevance_score", 0)) > int(b.get("relevance_score", 0))
+		return str(a.get("label", "")) < str(b.get("label", ""))
+	)
+	var tip_cost: int = get_network_action_cost("tip")
+	if rows.is_empty():
+		var status_text: String = "Meet a relevant Network contact before asking about %s." % ticker
+		var tooltip_text: String = "Discover and meet contacts from News, Profile, or referrals first."
+		if met_count > 0 and already_asked_count >= met_count:
+			status_text = "You already asked every relevant contact today."
+			tooltip_text = "Wait until tomorrow before asking these contacts for another read."
+		elif met_count > 0:
+			status_text = "No met contact has a clean read on %s yet." % ticker
+			tooltip_text = "Open the company Profile, read linked News, or ask for referrals to discover better contacts."
+		return {
+			"enabled": false,
+			"company_id": company_id,
+			"rows": rows,
+			"status_text": status_text,
+			"tooltip_text": tooltip_text
+		}
+	if not _can_spend_network_action("tip"):
+		return {
+			"enabled": false,
+			"company_id": company_id,
+			"rows": rows,
+			"status_text": "Need %d AP to ask a contact about %s." % [tip_cost, ticker],
+			"tooltip_text": _network_action_no_ap_message("tip")
+		}
+	return {
+		"enabled": true,
+		"company_id": company_id,
+		"rows": rows,
+		"status_text": "Ask a contact for a read on %s (%d AP)." % [ticker, tip_cost],
+		"tooltip_text": "Ask a met Network contact for corporate-action or tape context."
+	}
+
+
+func ask_stock_contact_tip(company_id: String, contact_id: String = "") -> Dictionary:
+	var option_state: Dictionary = get_stock_contact_tip_options(company_id)
+	if not bool(option_state.get("enabled", false)):
+		return {"success": false, "message": str(option_state.get("status_text", "Could not ask a contact."))}
+	var selected_contact_id: String = str(contact_id)
+	if selected_contact_id.is_empty():
+		var rows: Array = option_state.get("rows", [])
+		if not rows.is_empty() and typeof(rows[0]) == TYPE_DICTIONARY:
+			selected_contact_id = str(rows[0].get("id", ""))
+	if selected_contact_id.is_empty():
+		return {"success": false, "message": "Pick a Network contact first."}
+	return request_contact_tip(selected_contact_id, company_id)
+
+
+func _stock_contact_tip_relevance(contact: Dictionary, company_id: String, sector_id: String) -> Dictionary:
+	var score: int = int(contact.get("relationship", 0))
+	var group: int = 90
+	var label: String = "Market read"
+	var affiliation_type: String = str(contact.get("affiliation_type", "floater"))
+	var target_company_ids: Array = contact.get("target_company_ids", [])
+	var company_linked: bool = false
+	if target_company_ids.has(company_id):
+		score += 80
+		company_linked = true
+	if str(contact.get("target_company_id", "")) == company_id:
+		score += 60
+		company_linked = true
+	if str(contact.get("affiliated_company_id", "")) == company_id or str(contact.get("company_id", "")) == company_id:
+		score += 100
+		company_linked = true
+	if company_linked and affiliation_type != "floater":
+		group = 0
+		label = "Company insider"
+	elif company_linked:
+		group = 1
+		label = "Company lead"
+	var sector_linked: bool = false
+	if not sector_id.is_empty():
+		if str(contact.get("target_sector_id", "")) == sector_id:
+			score += 30
+			sector_linked = true
+		var sector_ids: Array = contact.get("sector_ids", [])
+		if sector_ids.has(sector_id):
+			score += 20
+			sector_linked = true
+	if not company_linked and sector_linked:
+		group = 2
+		label = "Sector read"
+	if str(contact.get("affiliation_type", "floater")) == "floater":
+		score += 10
+	return {
+		"group": group,
+		"score": score,
+		"label": label
+	}
+
+
 func debug_force_stock_buyback_execution(company_id: String) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
@@ -654,6 +970,114 @@ func debug_force_stock_buyback_execution(company_id: String) -> Dictionary:
 	return {
 		"success": true,
 		"message": "Forced stock buyback execution for %s." % str(result.get("chain", {}).get("target_ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true)
+	}
+
+
+func debug_force_stock_split_execution(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_force_stock_split_execution(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not force stock split execution for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_force_stock_split_execution")
+	return {
+		"success": true,
+		"message": "Forced stock split execution for %s." % str(result.get("chain", {}).get("target_ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true)
+	}
+
+
+func debug_force_tender_offer_execution(company_id: String, force_go_private: bool = false) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_force_tender_offer_execution(RunState, DataRepository, company_id, force_go_private)
+	if result.is_empty():
+		return {"success": false, "message": "Could not force tender offer execution for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_force_tender_offer_execution")
+	return {
+		"success": true,
+		"message": "Forced tender offer execution for %s." % str(result.get("chain", {}).get("target_ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true)
+	}
+
+
+func debug_force_strategic_mna_execution(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_force_strategic_mna_execution(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not force strategic M&A execution for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_force_strategic_mna_execution")
+	return {
+		"success": true,
+		"message": "Forced strategic M&A execution for %s." % str(result.get("chain", {}).get("target_ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true)
+	}
+
+
+func debug_force_backdoor_listing_execution(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_force_backdoor_listing_execution(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not force backdoor listing execution for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_force_backdoor_listing_execution")
+	return {
+		"success": true,
+		"message": "Forced backdoor listing execution for %s." % str(result.get("chain", {}).get("target_ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true)
+	}
+
+
+func debug_force_restructuring_execution(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_force_restructuring_execution(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not force restructuring execution for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_force_restructuring_execution")
+	return {
+		"success": true,
+		"message": "Forced restructuring execution for %s." % str(result.get("chain", {}).get("target_ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true)
+	}
+
+
+func debug_force_ceo_change_execution(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_force_ceo_change_execution(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not force CEO-change execution for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_force_ceo_change_execution")
+	return {
+		"success": true,
+		"message": "Forced CEO-change execution for %s." % str(result.get("chain", {}).get("target_ticker", company_id.to_upper())),
 		"chain": result.get("chain", {}).duplicate(true)
 	}
 
@@ -967,9 +1391,9 @@ func _dashboard_event_snapshot_cache_key() -> String:
 	return "%d|%s|%s|%s|%s" % [
 		RunState.day_index,
 		trading_calendar.to_key(trade_date),
-		str(hash("|".join(holding_parts))),
-		str(hash("|".join(attended_parts))),
-		str(hash("|".join(meeting_parts)))
+		str(STABLE_RNG.seed_from_parts(["dashboard_holdings", "|".join(holding_parts)])),
+		str(STABLE_RNG.seed_from_parts(["dashboard_attended", "|".join(attended_parts)])),
+		str(STABLE_RNG.seed_from_parts(["dashboard_meetings", "|".join(meeting_parts)]))
 	]
 
 
@@ -1174,8 +1598,17 @@ func get_company_snapshot(
 		include_price_history or include_financial_history or include_statement_history
 	)
 	var market_depth_context: Dictionary = runtime.get("market_depth_context", {}).duplicate(true)
+	var impactability_snapshot: Dictionary = _build_impactability_snapshot(definition, runtime, market_depth_context)
 	var player_market_impact: Dictionary = runtime.get("player_market_impact", {}).duplicate(true)
 	var shareholder_rows: Array = ownership_snapshot.get("shareholder_rows", [])
+	var company_profile: Dictionary = runtime.get("company_profile", {})
+	var delisting_watch: Dictionary = company_profile.get("delisting_watch", {}).duplicate(true) if typeof(company_profile) == TYPE_DICTIONARY else {}
+	var acquisition_result: Dictionary = company_profile.get("acquisition_result", {}).duplicate(true) if typeof(company_profile) == TYPE_DICTIONARY else {}
+	var backdoor_listing_result: Dictionary = company_profile.get("backdoor_listing_result", {}).duplicate(true) if typeof(company_profile) == TYPE_DICTIONARY else {}
+	var backdoor_sponsor_lockup: Dictionary = company_profile.get("backdoor_sponsor_lockup", {}).duplicate(true) if typeof(company_profile) == TYPE_DICTIONARY else {}
+	var backdoor_milestone_state: Dictionary = company_profile.get("backdoor_milestone_state", {}).duplicate(true) if typeof(company_profile) == TYPE_DICTIONARY else {}
+	var restructuring_result: Dictionary = company_profile.get("restructuring_result", {}).duplicate(true) if typeof(company_profile) == TYPE_DICTIONARY else {}
+	var ceo_change_result: Dictionary = company_profile.get("ceo_change_result", {}).duplicate(true) if typeof(company_profile) == TYPE_DICTIONARY else {}
 	var snapshot: Dictionary = {
 		"id": company_id,
 		"detail_status": str(definition.get("detail_status", "ready")),
@@ -1216,9 +1649,20 @@ func get_company_snapshot(
 		"ytd_change_pct": ytd_change_pct,
 		"broker_flow": broker_flow_view,
 		"market_depth_context": market_depth_context,
+		"impactability": impactability_snapshot,
 		"player_market_impact": player_market_impact,
 		"player_market_impact_summary": str(player_market_impact.get("impact_summary", "")),
 		"hidden_story_flags": runtime.get("hidden_story_flags", []).duplicate(),
+		"listing_status": str(company_profile.get("listing_status", "listed")) if typeof(company_profile) == TYPE_DICTIONARY else "listed",
+		"listing_status_label": str(company_profile.get("listing_status_label", "Listed")) if typeof(company_profile) == TYPE_DICTIONARY else "Listed",
+		"trade_disabled": bool(company_profile.get("trade_disabled", false)) if typeof(company_profile) == TYPE_DICTIONARY else false,
+		"delisting_watch": delisting_watch,
+		"acquisition_result": acquisition_result,
+		"backdoor_listing_result": backdoor_listing_result,
+		"backdoor_sponsor_lockup": backdoor_sponsor_lockup,
+		"backdoor_milestone_state": backdoor_milestone_state,
+		"restructuring_result": restructuring_result,
+		"ceo_change_result": ceo_change_result,
 		"listing_board": listing_board,
 		"shares_owned": shares_owned,
 		"lots_owned": int(floor(float(shares_owned) / float(lot_size))),
@@ -1244,6 +1688,88 @@ func get_company_snapshot(
 	return snapshot
 
 
+func _build_impactability_snapshot(definition: Dictionary, runtime: Dictionary, market_depth_context: Dictionary) -> Dictionary:
+	var financials: Dictionary = definition.get("financials", {})
+	var company_profile: Dictionary = runtime.get("company_profile", {})
+	var delisting_watch: Dictionary = company_profile.get("delisting_watch", {}) if typeof(company_profile) == TYPE_DICTIONARY else {}
+	var acquisition_result: Dictionary = company_profile.get("acquisition_result", {}) if typeof(company_profile) == TYPE_DICTIONARY else {}
+	var listing_status: String = str(company_profile.get("listing_status", "listed")) if typeof(company_profile) == TYPE_DICTIONARY else "listed"
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var market_cap: float = max(float(financials.get("market_cap", current_price * 1000000000.0)), current_price * 1000000.0)
+	var free_float_floor: float = 0.02 if not delisting_watch.is_empty() else 0.07
+	var free_float_ratio: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, free_float_floor, 0.85)
+	var avg_daily_value: float = max(float(financials.get("avg_daily_value", current_price * 250000.0)), current_price * 1000.0)
+	var synthetic_daily_value: float = max(float(market_depth_context.get("synthetic_daily_value", 0.0)), avg_daily_value)
+	var ask_depth_value: float = max(float(market_depth_context.get("ask_depth_value", 0.0)), 0.0)
+	var bid_depth_value: float = max(float(market_depth_context.get("bid_depth_value", 0.0)), 0.0)
+	var visible_depth_value: float = _min_positive_float([
+		ask_depth_value,
+		bid_depth_value,
+		synthetic_daily_value * 0.5,
+		avg_daily_value
+	], avg_daily_value)
+	var player_cash: float = max(float(RunState.player_portfolio.get("cash", 0.0)), 0.0)
+	var cash_to_adv_ratio: float = player_cash / max(avg_daily_value, 1.0)
+	var cash_to_depth_ratio: float = player_cash / max(visible_depth_value, 1.0)
+	var free_float_value: float = max(market_cap * free_float_ratio, current_price * float(get_lot_size()))
+	var cash_to_float_ratio: float = player_cash / max(free_float_value, 1.0)
+	var one_lot_cost: float = current_price * float(get_lot_size())
+
+	var label: String = "Normal depth"
+	var tone: String = "muted"
+	if free_float_ratio <= 0.22 or cash_to_depth_ratio >= 1.20 or cash_to_float_ratio >= 0.012:
+		label = "Thin float"
+		tone = "warning"
+	elif cash_to_depth_ratio >= 0.42 or cash_to_adv_ratio >= 0.24:
+		label = "Impactable"
+		tone = "warning"
+	elif free_float_ratio >= 0.42 and cash_to_depth_ratio <= 0.10 and visible_depth_value >= avg_daily_value * 1.18:
+		label = "Deep tape"
+		tone = "positive"
+	if not delisting_watch.is_empty():
+		var watch_state: String = str(delisting_watch.get("state", "public_float_warning"))
+		label = "Go-private" if watch_state == "go_private_cashout" else "Delisting watch"
+		tone = "negative" if watch_state == "go_private_cashout" else "warning"
+	if listing_status == "acquired_cashout":
+		label = "Acquired"
+		tone = "negative"
+
+	return {
+		"label": label,
+		"tone": tone,
+		"detail": "%sCash %.2fx ADV / %.2fx visible depth; float %.0f%%." % [
+			"%s. " % str(acquisition_result.get("label", "Acquired / cashed out")) if listing_status == "acquired_cashout" else ("%s. " % str(delisting_watch.get("label", "")) if not delisting_watch.is_empty() else ""),
+			cash_to_adv_ratio,
+			cash_to_depth_ratio,
+			free_float_ratio * 100.0
+		],
+		"one_lot_cost": one_lot_cost,
+		"cash_to_adv_ratio": cash_to_adv_ratio,
+		"cash_to_depth_ratio": cash_to_depth_ratio,
+		"cash_to_float_ratio": cash_to_float_ratio,
+		"free_float_ratio": free_float_ratio,
+		"free_float_value": free_float_value,
+		"avg_daily_value": avg_daily_value,
+		"synthetic_daily_value": synthetic_daily_value,
+		"ask_depth_value": ask_depth_value,
+		"bid_depth_value": bid_depth_value,
+		"visible_depth_value": visible_depth_value
+	}
+
+
+func _min_positive_float(values: Array, fallback_value: float) -> float:
+	var best_value: float = 0.0
+	for value_variant in values:
+		var value: float = float(value_variant)
+		if value <= 0.0:
+			continue
+		if best_value <= 0.0 or value < best_value:
+			best_value = value
+	if best_value <= 0.0:
+		return max(fallback_value, 1.0)
+	return best_value
+
+
 func get_company_market_depth_snapshot(company_id: String) -> Dictionary:
 	var runtime: Dictionary = RunState.get_company(company_id)
 	if runtime.is_empty():
@@ -1256,7 +1782,10 @@ func get_company_market_depth_snapshot(company_id: String) -> Dictionary:
 		var financials: Dictionary = definition.get("financials", {})
 		var market_cap: float = max(float(financials.get("market_cap", current_price * 1000000000.0)), current_price * 1000000.0)
 		var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", market_cap / current_price))), 1.0)
-		var free_float_ratio: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, 0.07, 0.85)
+		var profile: Dictionary = runtime.get("company_profile", {})
+		var delisting_watch: Dictionary = profile.get("delisting_watch", {}) if typeof(profile) == TYPE_DICTIONARY else {}
+		var free_float_floor: float = 0.02 if not delisting_watch.is_empty() else 0.07
+		var free_float_ratio: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, free_float_floor, 0.85)
 		depth_context = {
 			"current_price": current_price,
 			"market_cap": market_cap,

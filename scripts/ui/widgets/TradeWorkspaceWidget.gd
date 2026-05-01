@@ -721,6 +721,10 @@ func _build_chart_meta_text(chart_snapshot: Dictionary) -> String:
 	var end_date_text: String = GameManager.format_trade_date(chart_snapshot.get("end_date", {}))
 	var enabled_indicator_count: int = int(chart_snapshot.get("enabled_indicator_ids", []).size())
 	var indicator_text: String = "Indicators %d" % enabled_indicator_count if enabled_indicator_count > 0 else "Indicators locked"
+	var impactability: Dictionary = _company_snapshot.get("impactability", {})
+	var impactability_label: String = str(impactability.get("label", ""))
+	if not impactability_label.is_empty():
+		indicator_text += " | Tape %s" % impactability_label
 	return "%s | %d bars | %s -> %s | Low %s | High %s | Start %s | Last %s | Move %s | Since start %s | YTD %s | %s" % [
 		str(chart_snapshot.get("range_label", GameManager.get_chart_range_label(_selected_range_id))),
 		int(chart_snapshot.get("visible_bar_count", 0)),

@@ -1,6 +1,7 @@
 extends RefCounted
 
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
+const STABLE_RNG = preload("res://systems/StableRng.gd")
 
 var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
 var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
@@ -80,6 +81,15 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		if definition.is_empty():
 			continue
 		var runtime: Dictionary = run_state.get_company(company_id).duplicate(true)
+		var company_profile: Dictionary = runtime.get("company_profile", {})
+		if bool(company_profile.get("trade_disabled", false)):
+			var disabled_price: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("current_price", definition.get("base_price", 0.0))))
+			runtime["previous_close"] = disabled_price
+			runtime["current_price"] = disabled_price
+			runtime["daily_change_pct"] = 0.0
+			runtime["sentiment"] = 0.0
+			companies_result[company_id] = runtime
+			continue
 		var sector_definition: Dictionary = data_repository.get_sector_definition(str(definition.get("sector_id", "")))
 		var listing_board: String = str(definition.get("listing_board", "main"))
 		var recent_momentum: float = _recent_momentum(runtime.get("price_history", []))
@@ -436,13 +446,13 @@ func _price_for_sideways_script(
 	special_event: Dictionary,
 	shock_profile: Dictionary
 ) -> float:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|sideways|%s|%s|%s" % [
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([
 		run_seed,
+		"sideways",
 		str(special_event.get("event_id", "")),
 		company_id,
 		day_number
-	]))
+	])
 	var band_ratio: float = clamp(float(shock_profile.get("sideways_band_ratio", 0.1)), 0.02, 0.2)
 	var upper_distance: float = max(float(ar_limits.get("upper_price", previous_close)) - previous_close, 0.0) * band_ratio
 	var lower_distance: float = max(previous_close - float(ar_limits.get("lower_price", previous_close)), 0.0) * band_ratio
@@ -456,8 +466,7 @@ func _price_for_sideways_script(
 
 
 func _sample_market_sentiment(run_seed: int, day_number: int, swing_range: float) -> float:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|market|%s" % [run_seed, day_number]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "market", day_number])
 	return rng.randf_range(-swing_range, swing_range)
 
 
@@ -473,8 +482,7 @@ func _build_sector_sentiments(
 
 	for sector in sectors:
 		var sector_id: String = str(sector.get("id", ""))
-		var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-		rng.seed = int(hash("%s|sector|%s|%s" % [run_seed, day_number, sector_id]))
+		var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "sector", day_number, sector_id])
 		var trend_bias: float = float(sector.get("trend_bias", 0.0))
 		var macro_bias: float = float(macro_sector_biases.get(sector_id, 0.0))
 		var volatility_bias: float = float(sector.get("volatility_bias", 0.0)) * volatility_multiplier
@@ -501,8 +509,7 @@ func _build_daily_event_plan(
 	macro_state: Dictionary = {}
 ) -> Dictionary:
 	var event_interval_days: float = max(float(difficulty_config.get("event_interval_days", 30.0)), 1.0)
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|daily_event|%s" % [run_state.run_seed, day_number]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_state.run_seed, "daily_event", day_number])
 
 	if rng.randf() >= (1.0 / event_interval_days):
 		return {}
@@ -724,15 +731,27 @@ func _build_market_depth_context(
 	day_number: int,
 	company_id: String
 ) -> Dictionary:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|depth|%s|%s" % [run_seed, day_number, company_id]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "depth", day_number, company_id])
 
 	var financials: Dictionary = definition.get("financials", {})
 	var traits: Dictionary = definition.get("generation_traits", {})
+	var profile: Dictionary = runtime.get("company_profile", {})
+	var delisting_watch: Dictionary = profile.get("delisting_watch", {}) if typeof(profile) == TYPE_DICTIONARY else {}
+	var sponsor_lockup: Dictionary = profile.get("backdoor_sponsor_lockup", {}) if typeof(profile) == TYPE_DICTIONARY else {}
+	var backdoor_milestone_state: Dictionary = profile.get("backdoor_milestone_state", {}) if typeof(profile) == TYPE_DICTIONARY else {}
+	var restructuring_result: Dictionary = profile.get("restructuring_result", {}) if typeof(profile) == TYPE_DICTIONARY else {}
+	var has_delisting_watch: bool = not delisting_watch.is_empty()
+	var liquidity_penalty: float = clamp(float(delisting_watch.get("liquidity_penalty_multiplier", profile.get("liquidity_penalty_multiplier", 1.0) if typeof(profile) == TYPE_DICTIONARY else 1.0)), 0.05, 1.0)
+	if not restructuring_result.is_empty():
+		liquidity_penalty = min(liquidity_penalty, clamp(float(restructuring_result.get("liquidity_penalty_multiplier", 1.0)), 0.05, 1.0))
+	var volatility_event_multiplier: float = clamp(float(delisting_watch.get("volatility_event_multiplier", profile.get("volatility_event_multiplier", 1.0) if typeof(profile) == TYPE_DICTIONARY else 1.0)), 1.0, 3.0)
+	if not restructuring_result.is_empty():
+		volatility_event_multiplier = max(volatility_event_multiplier, clamp(float(restructuring_result.get("volatility_event_multiplier", 1.0)), 1.0, 3.0))
 	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
 	var market_cap: float = max(float(financials.get("market_cap", current_price * 1000000000.0)), current_price * 1000000.0)
 	var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", market_cap / current_price))), 1.0)
-	var free_float_ratio: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, 0.07, 0.85)
+	var free_float_floor: float = 0.02 if has_delisting_watch else 0.07
+	var free_float_ratio: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, free_float_floor, 0.85)
 	var free_float_shares: float = max(shares_outstanding * free_float_ratio, 1.0)
 	var free_float_value: float = max(free_float_shares * current_price, current_price * 1000.0)
 	var avg_daily_value: float = max(float(financials.get("avg_daily_value", current_price * 250000.0)), current_price * 1000.0)
@@ -740,6 +759,26 @@ func _build_market_depth_context(
 	var story_heat: float = clamp(float(traits.get("story_heat", 0.5)), 0.0, 1.0)
 	var base_volatility: float = max(float(definition.get("base_volatility", 0.025)), 0.004)
 	var event_intensity: float = min(absf(float(event_context.get("event_bias", 0.0))) * 7.0, 1.35)
+	if has_delisting_watch or volatility_event_multiplier > 1.0:
+		event_intensity = max(event_intensity, min((volatility_event_multiplier - 1.0) * 1.4, 1.35))
+	var sponsor_overhang_pressure: float = 0.0
+	var sponsor_lockup_state: String = ""
+	if not sponsor_lockup.is_empty():
+		sponsor_lockup_state = str(sponsor_lockup.get("state", ""))
+		if sponsor_lockup_state in ["warning", "extended"] or sponsor_lockup_state.begins_with("unlocked_"):
+			sponsor_overhang_pressure = clamp(float(sponsor_lockup.get("active_overhang_pressure_pct", sponsor_lockup.get("overhang_pressure_pct", 0.0))), 0.0, 1.0)
+			event_intensity = max(event_intensity, min(sponsor_overhang_pressure * 2.2, 1.35))
+	var milestone_pressure: float = 0.0
+	var milestone_state: String = ""
+	if not backdoor_milestone_state.is_empty():
+		milestone_state = str(backdoor_milestone_state.get("state", ""))
+		if str(backdoor_milestone_state.get("last_result_state", "")) in ["delayed", "setback"]:
+			milestone_pressure = clamp(absf(float(backdoor_milestone_state.get("last_price_adjustment_pct", 0.0))) * 4.0, 0.0, 0.65)
+			event_intensity = max(event_intensity, min(milestone_pressure * 2.0, 1.35))
+	var restructuring_pressure: float = 0.0
+	if not restructuring_result.is_empty():
+		restructuring_pressure = clamp(float(restructuring_result.get("stress_overhang_pct", 0.0)), 0.0, 1.0)
+		event_intensity = max(event_intensity, min(restructuring_pressure * 1.8, 1.35))
 	var volatility_multiplier: float = clamp(float(difficulty_config.get("volatility_multiplier", 1.0)), 0.55, 1.85)
 	var float_tightness: float = clamp((0.48 - free_float_ratio) / 0.40, 0.0, 1.0)
 	var sentiment_bias: float = clamp(
@@ -771,12 +810,25 @@ func _build_market_depth_context(
 		0.55,
 		2.85
 	)
+	synthetic_daily_value = max(synthetic_daily_value * liquidity_penalty, current_price * 1000.0)
 
-	var depth_quality: float = lerp(0.72, 1.72, liquidity_profile) * lerp(0.78, 1.18, free_float_ratio)
+	var depth_quality: float = lerp(0.72, 1.72, liquidity_profile) * lerp(0.78, 1.18, free_float_ratio) * liquidity_penalty
 	var ask_sentiment_modifier: float = clamp(1.0 - max(sentiment_bias, 0.0) * 0.28 + max(-sentiment_bias, 0.0) * 0.16, 0.62, 1.35)
 	var bid_sentiment_modifier: float = clamp(1.0 + max(sentiment_bias, 0.0) * 0.16 - max(-sentiment_bias, 0.0) * 0.30, 0.62, 1.35)
 	var ask_depth_value: float = max(synthetic_daily_value * depth_quality * ask_sentiment_modifier, current_price * 1000.0)
 	var bid_depth_value: float = max(synthetic_daily_value * depth_quality * bid_sentiment_modifier, current_price * 1000.0)
+	if sponsor_overhang_pressure > 0.0:
+		synthetic_daily_value = max(synthetic_daily_value * (1.0 + sponsor_overhang_pressure * 0.55), current_price * 1000.0)
+		ask_depth_value = max(ask_depth_value * (1.0 + sponsor_overhang_pressure * 1.45), current_price * 1000.0)
+		bid_depth_value = max(bid_depth_value * clamp(1.0 - sponsor_overhang_pressure * 0.30, 0.58, 1.0), current_price * 1000.0)
+	if restructuring_pressure > 0.0:
+		synthetic_daily_value = max(synthetic_daily_value * (1.0 + restructuring_pressure * 0.34), current_price * 1000.0)
+		ask_depth_value = max(ask_depth_value * (1.0 + restructuring_pressure * 1.05), current_price * 1000.0)
+		bid_depth_value = max(bid_depth_value * clamp(1.0 - restructuring_pressure * 0.22, 0.60, 1.0), current_price * 1000.0)
+	if milestone_pressure > 0.0:
+		synthetic_daily_value = max(synthetic_daily_value * (1.0 + milestone_pressure * 0.42), current_price * 1000.0)
+		ask_depth_value = max(ask_depth_value * (1.0 + milestone_pressure * 1.18), current_price * 1000.0)
+		bid_depth_value = max(bid_depth_value * clamp(1.0 - milestone_pressure * 0.26, 0.58, 1.0), current_price * 1000.0)
 	var lock_depth_multiplier: float = lerp(2.6, 6.8, liquidity_profile) * lerp(0.78, 1.28, free_float_ratio)
 	var free_float_lock_threshold: float = clamp(lerp(0.045, 0.145, liquidity_profile) + free_float_ratio * 0.04, 0.045, 0.18)
 
@@ -801,7 +853,16 @@ func _build_market_depth_context(
 		"story_heat": story_heat,
 		"float_tightness": float_tightness,
 		"sentiment_bias": sentiment_bias,
-		"event_intensity": event_intensity
+		"event_intensity": event_intensity,
+		"delisting_watch_state": str(delisting_watch.get("state", "")),
+		"restructuring_state": str(restructuring_result.get("state", "")),
+		"restructuring_stress_overhang_pct": restructuring_pressure,
+		"backdoor_milestone_state": milestone_state,
+		"backdoor_milestone_pressure_pct": milestone_pressure,
+		"sponsor_lockup_state": sponsor_lockup_state,
+		"sponsor_overhang_pressure_pct": sponsor_overhang_pressure,
+		"liquidity_penalty_multiplier": liquidity_penalty,
+		"volatility_event_multiplier": volatility_event_multiplier
 	}
 
 
@@ -947,8 +1008,7 @@ func _calculate_daily_change(
 	difficulty_config: Dictionary,
 	event_volatility_multiplier: float = 1.0
 ) -> float:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|price|%s|%s" % [run_seed, day_number, company_id]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "price", day_number, company_id])
 
 	var quality: float = float(definition.get("quality_score", 50.0))
 	var growth: float = float(definition.get("growth_score", 50.0))
@@ -1004,8 +1064,7 @@ func _build_volume_activity_context(
 	day_number: int,
 	company_id: String
 ) -> Dictionary:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|volume_activity|%s|%s" % [run_seed, day_number, company_id]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "volume_activity", day_number, company_id])
 
 	var financials: Dictionary = definition.get("financials", {})
 	var traits: Dictionary = definition.get("generation_traits", {})
@@ -1285,7 +1344,7 @@ func _build_daily_price_bar(
 	market_sentiment: float,
 	sector_sentiment: float,
 	event_bias: float,
-	_broker_flow: Dictionary,
+	broker_flow: Dictionary,
 	volume_context: Dictionary,
 	run_seed: int,
 	day_number: int,
@@ -1296,8 +1355,7 @@ func _build_daily_price_bar(
 	player_flow_context: Dictionary = {},
 	market_depth_context: Dictionary = {}
 ) -> Dictionary:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|bar|%s|%s" % [run_seed, day_number, company_id]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "bar", day_number, company_id])
 
 	var limit_lock: String = str(close_context.get("limit_lock", ""))
 	var limit_source: String = str(close_context.get("limit_source", ""))
@@ -1317,13 +1375,49 @@ func _build_daily_price_bar(
 		float(ar_limits.get("upper_price", previous_close))
 	)
 
+	var candle_profile: Dictionary = _build_candle_profile(
+		rng,
+		daily_change_pct,
+		market_sentiment,
+		sector_sentiment,
+		event_bias,
+		broker_flow,
+		volume_context,
+		player_flow_context,
+		market_depth_context
+	)
+	var open_close_blend: float = float(candle_profile.get("open_close_blend", 0.0))
+	if open_close_blend > 0.0:
+		open_price = clamp(
+			IDX_PRICE_RULES.snap_price_for_day(lerp(open_price, current_price, open_close_blend), previous_close),
+			float(ar_limits.get("lower_price", 1.0)),
+			float(ar_limits.get("upper_price", previous_close))
+		)
+
+	var activity_span_boost: float = clamp(
+		(max(float(volume_context.get("expected_activity_ratio", 1.0)) - 1.0, 0.0) * 0.11) +
+		(max(float(volume_context.get("volume_multiplier", 1.0)) - 1.0, 0.0) * 0.035) +
+		(absf(float(player_flow_context.get("depth_impact_ratio", 0.0))) * 0.045),
+		0.0,
+		0.85
+	)
 	var intraday_span_pct: float = max(
 		absf(daily_change_pct) * 0.65,
 		float(definition.get("base_volatility", 0.02)) * 0.42,
 		0.004
+	) * float(candle_profile.get("span_multiplier", 1.0)) * (1.0 + activity_span_boost)
+	var upper_probe: float = max(open_price, current_price) * (
+		1.0 + rng.randf_range(
+			float(candle_profile.get("upper_min", 0.12)),
+			float(candle_profile.get("upper_max", 0.75))
+		) * intraday_span_pct
 	)
-	var upper_probe: float = max(open_price, current_price) * (1.0 + rng.randf_range(0.12, 0.75) * intraday_span_pct)
-	var lower_probe: float = min(open_price, current_price) * (1.0 - rng.randf_range(0.12, 0.75) * intraday_span_pct)
+	var lower_probe: float = min(open_price, current_price) * (
+		1.0 - rng.randf_range(
+			float(candle_profile.get("lower_min", 0.12)),
+			float(candle_profile.get("lower_max", 0.75))
+		) * intraday_span_pct
+	)
 	var high_price: float = clamp(
 		IDX_PRICE_RULES.normalize_last_price(max(upper_probe, open_price, current_price)),
 		float(ar_limits.get("lower_price", 1.0)),
@@ -1339,11 +1433,13 @@ func _build_daily_price_bar(
 		low_price = min(previous_close, current_price)
 		high_price = float(ar_limits.get("upper_price", current_price))
 		current_price = high_price
+		candle_profile["id"] = "limit_ara"
 	elif limit_lock == "arb":
 		open_price = previous_close
 		high_price = max(previous_close, current_price)
 		low_price = float(ar_limits.get("lower_price", current_price))
 		current_price = low_price
+		candle_profile["id"] = "limit_arb"
 
 	var base_daily_value: float = max(float(volume_context.get("base_daily_value", current_price * 250000.0)), current_price * 1000.0)
 	var volume_multiplier: float = max(float(volume_context.get("volume_multiplier", 1.0)), 0.10)
@@ -1360,6 +1456,7 @@ func _build_daily_price_bar(
 		"high": high_price,
 		"low": low_price,
 		"close": current_price,
+		"candle_archetype": str(candle_profile.get("id", "neutral")),
 		"volume_shares": volume_shares,
 		"value": bar_value
 	}
@@ -1377,6 +1474,82 @@ func _build_daily_price_bar(
 		bar["ask_depth_value"] = float(market_depth_context.get("ask_depth_value", 0.0))
 		bar["bid_depth_value"] = float(market_depth_context.get("bid_depth_value", 0.0))
 	return bar
+
+
+func _build_candle_profile(
+	rng: RandomNumberGenerator,
+	daily_change_pct: float,
+	market_sentiment: float,
+	sector_sentiment: float,
+	event_bias: float,
+	broker_flow: Dictionary,
+	volume_context: Dictionary,
+	player_flow_context: Dictionary,
+	market_depth_context: Dictionary
+) -> Dictionary:
+	var broker_pressure: float = clamp(float(broker_flow.get("net_pressure", 0.0)), -1.0, 1.0)
+	var smart_money_pressure: float = clamp(float(broker_flow.get("smart_money_pressure", 0.0)), -1.0, 1.0)
+	var accumulation_signal: float = clamp(float(volume_context.get("accumulation_signal", 0.0)), 0.0, 1.0)
+	var distribution_signal: float = clamp(float(volume_context.get("distribution_signal", 0.0)), 0.0, 1.0)
+	var exhaustion_score: float = clamp(float(volume_context.get("buying_exhaustion_score", 0.0)), 0.0, 1.0)
+	var expected_activity_ratio: float = max(float(volume_context.get("expected_activity_ratio", 1.0)), 0.0)
+	var volume_multiplier: float = max(float(volume_context.get("volume_multiplier", 1.0)), 0.0)
+	var player_depth_pressure: float = clamp(float(player_flow_context.get("depth_impact_ratio", 0.0)), -3.0, 3.0)
+	var float_tightness: float = clamp(float(market_depth_context.get("float_tightness", 0.0)), 0.0, 1.0)
+	var pressure_score: float = clamp(
+		(daily_change_pct * 7.0) +
+		(event_bias * 5.0) +
+		(market_sentiment * 2.0) +
+		(sector_sentiment * 2.0) +
+		(broker_pressure * 0.55) +
+		(smart_money_pressure * 0.25) +
+		(accumulation_signal * 0.50) -
+		(distribution_signal * 0.58) +
+		(player_depth_pressure * 0.22),
+		-2.4,
+		2.4
+	)
+	var abs_change: float = absf(daily_change_pct)
+	var active_tape: bool = expected_activity_ratio >= 1.55 or volume_multiplier >= 1.85
+	var quiet_tape: bool = expected_activity_ratio <= 1.12 and volume_multiplier <= 1.18
+
+	if exhaustion_score >= 0.58 and pressure_score > -0.55:
+		return _candle_profile("upper_rejection", 0.95, 2.35, 0.04, 0.38, 1.15 + float_tightness * 0.16)
+	if distribution_signal >= 0.56 and daily_change_pct <= 0.012:
+		return _candle_profile("distribution_selloff", 0.08, 0.48, 0.58, 1.50, 1.08 + distribution_signal * 0.22)
+	if accumulation_signal >= 0.56 and daily_change_pct >= -0.010:
+		return _candle_profile("accumulation_bid", 0.18, 0.72, 0.05, 0.35, 1.02 + accumulation_signal * 0.16)
+	if daily_change_pct <= -0.016 and distribution_signal < 0.40 and (accumulation_signal >= 0.24 or rng.randf() < 0.42):
+		return _candle_profile("lower_absorption", 0.05, 0.40, 0.90, 2.30, 1.12 + float_tightness * 0.16)
+	if abs_change <= 0.0065 and quiet_tape and rng.randf() < 0.64:
+		return _candle_profile("compressed_doji", 0.08, 0.34, 0.08, 0.34, 0.62, rng.randf_range(0.38, 0.66))
+	if active_tape and abs_change <= 0.020 and rng.randf() < 0.34:
+		return _candle_profile("wide_range_chop", 0.55, 1.55, 0.55, 1.55, 1.24)
+	if pressure_score >= 0.35:
+		return _candle_profile("trend_up", 0.14, 0.68, 0.06, 0.36, 1.00)
+	if pressure_score <= -0.35:
+		return _candle_profile("trend_down", 0.06, 0.38, 0.16, 0.78, 1.00)
+	return _candle_profile("neutral", 0.18, 0.86, 0.18, 0.86, 0.95)
+
+
+func _candle_profile(
+	profile_id: String,
+	upper_min: float,
+	upper_max: float,
+	lower_min: float,
+	lower_max: float,
+	span_multiplier: float = 1.0,
+	open_close_blend: float = 0.0
+) -> Dictionary:
+	return {
+		"id": profile_id,
+		"upper_min": upper_min,
+		"upper_max": max(upper_max, upper_min),
+		"lower_min": lower_min,
+		"lower_max": max(lower_max, lower_min),
+		"span_multiplier": max(span_multiplier, 0.25),
+		"open_close_blend": clamp(open_close_blend, 0.0, 0.85)
+	}
 
 
 func _pick_weighted_candidate(rng: RandomNumberGenerator, candidates: Array) -> Dictionary:

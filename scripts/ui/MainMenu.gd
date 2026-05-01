@@ -254,6 +254,8 @@ func _loading_body_for_stage(stage_id: String) -> String:
 			return "Reading the saved market state from disk so the roster, prices, and event history can be restored."
 		"restore_state":
 			return "Restoring the portfolio, watchlist, calendar day, and generated company data from the save file."
+		"corporate_actions":
+			return "Preparing RUPS schedules, dividend dates, shareholder record dates, and corporate-action agendas."
 		"load_launch":
 			return "Opening the trading desk and handing control back to the saved run."
 		"seed":
@@ -276,6 +278,8 @@ func _loading_note_for_stage(stage_id: String) -> String:
 	match stage_id:
 		"financials":
 			return "Preparing core market data first so the desktop can open sooner."
+		"corporate_actions":
+			return "Only the near-term corporate calendar is prepared now; later years fill in as the run advances."
 		"save":
 			return "Writing the new run to disk before control returns to the desktop."
 		"launch", "load_launch":

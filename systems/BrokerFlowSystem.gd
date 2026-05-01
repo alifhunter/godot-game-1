@@ -8,6 +8,7 @@ const BROKER_KEYS := [
 	"zombie_net"
 ]
 const TOP_BROKER_ROW_COUNT := 10
+const STABLE_RNG = preload("res://systems/StableRng.gd")
 
 
 func generate_day_flow(definition: Dictionary, runtime: Dictionary, context: Dictionary, _data_repository = null) -> Dictionary:
@@ -556,8 +557,7 @@ func _derive_broker_side_weights(
 	if "narrative_hot" in narrative_tags and ("follow_the_wave" in tags or "speculative" in tags):
 		buy_weight += 1.8
 
-	var noise_rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	noise_rng.seed = int(hash("%s|broker-weight|%s" % [context.get("company_id", ""), broker.get("code", "")]))
+	var noise_rng: RandomNumberGenerator = STABLE_RNG.rng(["broker-weight", context.get("company_id", ""), broker.get("code", "")])
 	buy_weight *= noise_rng.randf_range(0.92, 1.08)
 	sell_weight *= noise_rng.randf_range(0.92, 1.08)
 	buy_weight *= float(interest_profile.get("buy_multiplier", 1.0))
@@ -765,24 +765,24 @@ func _broker_coverage_score(broker_type: String, tags: Array) -> float:
 
 
 func _sample_static_broker_value(context: Dictionary, broker_code: Variant, key: String) -> float:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|%s|%s|%s" % [
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([
 		context.get("run_seed", 0),
+		"broker-static",
 		context.get("company_id", ""),
 		broker_code,
 		key
-	]))
+	])
 	return rng.randf()
 
 
 func _sample_broker_day_noise(context: Dictionary, broker_code: Variant, minimum: float, maximum: float) -> float:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|%s|%s|%s|day-noise" % [
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([
 		context.get("run_seed", 0),
+		"broker-day-noise",
 		context.get("day_index", 0),
 		context.get("company_id", ""),
 		broker_code
-	]))
+	])
 	return rng.randf_range(minimum, maximum)
 
 
@@ -810,12 +810,12 @@ func _derive_broker_average_price(
 	elif flow_tag == "distribution" and side == "sell":
 		bias += 0.0008
 
-	var noise_rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	noise_rng.seed = int(hash("%s|broker-price|%s|%s" % [
+	var noise_rng: RandomNumberGenerator = STABLE_RNG.rng([
+		"broker-price",
 		context.get("company_id", ""),
 		broker_row.get("code", ""),
 		side
-	]))
+	])
 	var noise: float = noise_rng.randf_range(-0.0016, 0.0016)
 	var raw_price: float = current_price * (1.0 + bias + noise)
 	var low_bound: float = min(day_low, day_high)
@@ -1006,11 +1006,11 @@ func _sort_broker_net_rows(a: Dictionary, b: Dictionary) -> bool:
 
 
 func _sample_noise(context: Dictionary, broker_name: String, minimum: float, maximum: float) -> float:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|%s|%s|%s" % [
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([
 		context.get("run_seed", 0),
+		"broker-noise",
 		context.get("day_index", 0),
 		context.get("company_id", ""),
 		broker_name
-	]))
+	])
 	return rng.randf_range(minimum, maximum)

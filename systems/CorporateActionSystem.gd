@@ -1,6 +1,7 @@
 extends RefCounted
 
 const TRADING_CALENDAR = preload("res://systems/TradingCalendar.gd")
+const STABLE_RNG = preload("res://systems/StableRng.gd")
 
 const DIFFICULTY_CHAIN_CAP := {
 	"chill": 2,
@@ -11,15 +12,27 @@ const V1_FAMILY_IDS := {
 	"rights_issue": true,
 	"stock_buyback": true,
 	"stock_split": true,
+	"tender_offer": true,
+	"strategic_merger_acquisition": true,
+	"backdoor_listing": true,
 	"ceo_change": true,
-	"private_placement": true
+	"private_placement": true,
+	"restructuring": true
 }
 const INTEL_LADDER := ["weak", "medium", "strong", "very_strong"]
 const SESSION_STAGE_ORDER := ["arrival", "seating", "host_intro", "agenda_reveal", "vote", "result"]
 const INTERACTIVE_RUPSLB_FAMILY_IDS := {
 	"rights_issue": true,
-	"private_placement": true
+	"private_placement": true,
+	"stock_buyback": true,
+	"stock_split": true,
+	"tender_offer": true,
+	"strategic_merger_acquisition": true,
+	"backdoor_listing": true,
+	"ceo_change": true,
+	"restructuring": true
 }
+const CORPORATE_ACTION_YEAR_LOOKAHEAD := 2
 
 var trading_calendar = TRADING_CALENDAR.new()
 
@@ -31,9 +44,13 @@ func ensure_initialized(run_state, data_repository) -> void:
 	var calendar: Dictionary = run_state.get_corporate_meeting_calendar()
 	var dividend_calendar: Dictionary = run_state.get_corporate_dividend_calendar()
 	var shareholder_registry: Dictionary = run_state.get_shareholder_registry()
-	var changed_meetings: bool = _ensure_annual_rups_meetings(run_state, catalog, calendar)
-	var changed_dividends: bool = _ensure_cash_dividend_actions(run_state, catalog, calendar, dividend_calendar)
-	changed_dividends = _ensure_stock_dividend_actions(run_state, catalog, calendar, dividend_calendar) or changed_dividends
+	var year_window: Dictionary = _corporate_action_year_window(run_state, catalog)
+	var meeting_lookup: Dictionary = _build_meeting_id_lookup(calendar)
+	var changed_meetings: bool = _ensure_annual_rups_meetings(run_state, catalog, calendar, meeting_lookup, year_window)
+	if changed_meetings:
+		meeting_lookup = _build_meeting_id_lookup(calendar)
+	var changed_dividends: bool = _ensure_cash_dividend_actions(run_state, catalog, calendar, dividend_calendar, meeting_lookup, year_window)
+	changed_dividends = _ensure_stock_dividend_actions(run_state, catalog, calendar, dividend_calendar, meeting_lookup, year_window) or changed_dividends
 	var current_day_number: int = max(int(run_state.day_index) + 1, 1)
 	changed_meetings = _capture_due_meeting_shareholder_records(
 		run_state,
@@ -48,6 +65,39 @@ func ensure_initialized(run_state, data_repository) -> void:
 		run_state.set_corporate_dividend_calendar(dividend_calendar)
 	if changed_meetings:
 		run_state.set_shareholder_registry(shareholder_registry)
+
+
+func _corporate_action_year_window(run_state, catalog: Dictionary) -> Dictionary:
+	var annual_config: Dictionary = catalog.get("annual_rups", {})
+	var configured_start_year: int = int(annual_config.get("start_year", 2020))
+	var configured_end_year: int = int(annual_config.get("end_year", 2030))
+	var current_year: int = int(run_state.get_current_trade_date().get("year", configured_start_year))
+	var start_year: int = clamp(current_year, configured_start_year, configured_end_year)
+	var end_year: int = min(configured_end_year, current_year + CORPORATE_ACTION_YEAR_LOOKAHEAD)
+	return {
+		"start_year": start_year,
+		"end_year": max(end_year, start_year)
+	}
+
+
+func _build_meeting_id_lookup(calendar: Dictionary) -> Dictionary:
+	var lookup: Dictionary = {}
+	for date_key_value in calendar.keys():
+		var date_key: String = str(date_key_value)
+		var meetings: Array = calendar.get(date_key, [])
+		for meeting_index in range(meetings.size()):
+			if typeof(meetings[meeting_index]) != TYPE_DICTIONARY:
+				continue
+			var meeting: Dictionary = meetings[meeting_index]
+			var meeting_id: String = str(meeting.get("id", ""))
+			if meeting_id.is_empty():
+				continue
+			lookup[meeting_id] = {
+				"date_key": date_key,
+				"index": meeting_index,
+				"meeting": meeting.duplicate(true)
+			}
+	return lookup
 
 
 func resolve_day(
@@ -87,10 +137,15 @@ func resolve_day(
 	var stock_dividend_distributions: Array = []
 	var corporate_action_applications: Array = []
 	var dividend_active_arcs: Array = []
+	var lockup_active_arcs: Array = []
+	var milestone_active_arcs: Array = []
 
-	_ensure_annual_rups_meetings(run_state, catalog, calendar)
-	_ensure_cash_dividend_actions(run_state, catalog, calendar, dividend_calendar)
-	_ensure_stock_dividend_actions(run_state, catalog, calendar, dividend_calendar)
+	var year_window: Dictionary = _corporate_action_year_window(run_state, catalog)
+	var meeting_lookup: Dictionary = _build_meeting_id_lookup(calendar)
+	if _ensure_annual_rups_meetings(run_state, catalog, calendar, meeting_lookup, year_window):
+		meeting_lookup = _build_meeting_id_lookup(calendar)
+	_ensure_cash_dividend_actions(run_state, catalog, calendar, dividend_calendar, meeting_lookup, year_window)
+	_ensure_stock_dividend_actions(run_state, catalog, calendar, dividend_calendar, meeting_lookup, year_window)
 	_schedule_earnings_calls_for_reports(run_state, catalog, calendar, report_events, day_number)
 	_capture_due_meeting_shareholder_records(run_state, calendar, shareholder_registry, trade_date, day_number)
 	_refresh_meeting_statuses(calendar, attended_meetings, day_number)
@@ -116,6 +171,24 @@ func resolve_day(
 	corporate_action_events.append_array(stock_dividend_resolution.get("events", []))
 	stock_dividend_distributions.append_array(stock_dividend_resolution.get("distributions", []))
 	dividend_active_arcs.append_array(stock_dividend_resolution.get("active_arcs", []))
+	var backdoor_lockup_resolution: Dictionary = _advance_backdoor_sponsor_lockups(
+		run_state,
+		catalog,
+		trade_date,
+		day_number
+	)
+	corporate_action_events.append_array(backdoor_lockup_resolution.get("events", []))
+	corporate_action_applications.append_array(backdoor_lockup_resolution.get("applications", []))
+	lockup_active_arcs.append_array(backdoor_lockup_resolution.get("active_arcs", []))
+	var backdoor_milestone_resolution: Dictionary = _advance_backdoor_milestones(
+		run_state,
+		catalog,
+		trade_date,
+		day_number
+	)
+	corporate_action_events.append_array(backdoor_milestone_resolution.get("events", []))
+	corporate_action_applications.append_array(backdoor_milestone_resolution.get("applications", []))
+	milestone_active_arcs.append_array(backdoor_milestone_resolution.get("active_arcs", []))
 
 	if _should_run_family_review(catalog, day_number):
 		var spawn_result: Dictionary = _maybe_spawn_chain(
@@ -153,6 +226,14 @@ func resolve_day(
 		var advanced_chain: Dictionary = advance_result.get("chain", {}).duplicate(true)
 		corporate_action_events.append_array(advance_result.get("events", []))
 		corporate_action_applications.append_array(advance_result.get("applications", []))
+		for spawned_chain_value in advance_result.get("spawned_chains", []):
+			if typeof(spawned_chain_value) != TYPE_DICTIONARY:
+				continue
+			var spawned_chain: Dictionary = spawned_chain_value.duplicate(true)
+			var spawned_chain_id: String = str(spawned_chain.get("chain_id", ""))
+			if spawned_chain_id.is_empty():
+				continue
+			next_chains[spawned_chain_id] = spawned_chain
 		if advanced_chain.is_empty():
 			continue
 		if str(advanced_chain.get("status", "active")) == "completed" and str(advanced_chain.get("stage", "")) != "aftermath":
@@ -168,6 +249,8 @@ func resolve_day(
 		if not arc.is_empty():
 			active_company_arcs.append(arc)
 	active_company_arcs.append_array(dividend_active_arcs)
+	active_company_arcs.append_array(lockup_active_arcs)
+	active_company_arcs.append_array(milestone_active_arcs)
 	meeting_sessions = run_state.get_corporate_meeting_sessions()
 	var persisted_shareholder_registry: Dictionary = run_state.get_shareholder_registry()
 	for registry_key_value in persisted_shareholder_registry.keys():
@@ -368,6 +451,16 @@ func get_company_snapshot(run_state, company_id: String) -> Dictionary:
 			chain_row["rights_terms"] = chain.get("rights_terms", {}).duplicate(true)
 		if chain.has("buyback_terms"):
 			chain_row["buyback_terms"] = chain.get("buyback_terms", {}).duplicate(true)
+		if chain.has("split_terms"):
+			chain_row["split_terms"] = chain.get("split_terms", {}).duplicate(true)
+		if chain.has("tender_terms"):
+			chain_row["tender_terms"] = chain.get("tender_terms", {}).duplicate(true)
+		if chain.has("mna_terms"):
+			chain_row["mna_terms"] = chain.get("mna_terms", {}).duplicate(true)
+		if chain.has("backdoor_terms"):
+			chain_row["backdoor_terms"] = chain.get("backdoor_terms", {}).duplicate(true)
+		if chain.has("restructuring_terms"):
+			chain_row["restructuring_terms"] = chain.get("restructuring_terms", {}).duplicate(true)
 		chain_rows.append(chain_row)
 	var upcoming_meetings: Array = []
 	for meeting_value in _company_meetings(calendar, company_id):
@@ -554,7 +647,7 @@ func get_meeting_session_snapshot(run_state, data_repository, meeting_id: String
 	var host_intro_lines: Array = presentation.get("host_intro_lines", []).duplicate(true)
 	var host_intro_text: String = ""
 	if not host_intro_lines.is_empty():
-		var intro_index: int = abs(hash("%s|host_intro" % [meeting_id])) % host_intro_lines.size()
+		var intro_index: int = STABLE_RNG.seed_from_parts([meeting_id, "host_intro"]) % host_intro_lines.size()
 		host_intro_text = str(host_intro_lines[intro_index])
 	var result_copy: String = ""
 	if not result_summary.is_empty():
@@ -842,6 +935,30 @@ func debug_schedule_next_day_private_placement_rupslb(run_state, data_repository
 	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "private_placement")
 
 
+func debug_schedule_next_day_stock_buyback_rupslb(run_state, data_repository, company_id: String) -> Dictionary:
+	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "stock_buyback")
+
+
+func debug_schedule_next_day_stock_split_rupslb(run_state, data_repository, company_id: String) -> Dictionary:
+	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "stock_split")
+
+
+func debug_schedule_next_day_tender_offer_rupslb(run_state, data_repository, company_id: String) -> Dictionary:
+	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "tender_offer")
+
+
+func debug_schedule_next_day_strategic_mna_rupslb(run_state, data_repository, company_id: String) -> Dictionary:
+	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "strategic_merger_acquisition")
+
+
+func debug_schedule_next_day_backdoor_listing_rupslb(run_state, data_repository, company_id: String) -> Dictionary:
+	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "backdoor_listing")
+
+
+func debug_schedule_next_day_ceo_change_rupslb(run_state, data_repository, company_id: String) -> Dictionary:
+	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "ceo_change")
+
+
 func debug_force_stock_buyback_execution(run_state, data_repository, company_id: String) -> Dictionary:
 	var catalog: Dictionary = data_repository.get_corporate_action_catalog()
 	if catalog.is_empty() or company_id.is_empty():
@@ -877,7 +994,222 @@ func debug_force_stock_buyback_execution(run_state, data_repository, company_id:
 	return {"chain": chain}
 
 
-func _debug_schedule_next_day_rupslb(run_state, data_repository, company_id: String, family_id: String) -> Dictionary:
+func debug_force_stock_split_execution(run_state, data_repository, company_id: String) -> Dictionary:
+	var catalog: Dictionary = data_repository.get_corporate_action_catalog()
+	if catalog.is_empty() or company_id.is_empty():
+		return {}
+	var chains: Dictionary = run_state.get_active_corporate_action_chains()
+	if _company_has_live_chain(chains, company_id):
+		return {}
+	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+	if definition.is_empty():
+		return {}
+	var current_day_number: int = max(int(run_state.day_index), 1)
+	var next_day_number: int = max(int(run_state.day_index) + 1, 1)
+	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, "stock_split", current_day_number)
+	var split_terms: Dictionary = chain.get("split_terms", {})
+	if chain.is_empty() or split_terms.is_empty():
+		return {}
+	if float(split_terms.get("share_multiplier", 0.0)) <= 0.0:
+		return {}
+	chain["stage"] = "execution"
+	chain["current_timeline_state"] = "approved"
+	chain["outcome_state"] = "approved"
+	chain["management_stance"] = "confirm"
+	chain["smart_money_phase"] = "accumulating" if str(split_terms.get("split_type", "split")) == "split" else "distributing"
+	chain["public_heat"] = max(float(chain.get("public_heat", 0.0)), 0.36)
+	chain["retail_positioning"] = max(float(chain.get("retail_positioning", 0.0)), 0.22)
+	chain["approval_odds"] = 0.99
+	chain["completion_odds"] = 0.99
+	chain["last_advanced_day_index"] = current_day_number
+	chain["next_review_day_index"] = next_day_number
+	chain["next_expected_step"] = "The split ratio is moving into execution."
+	chains[str(chain.get("chain_id", ""))] = chain
+	run_state.set_active_corporate_action_chains(chains)
+	return {"chain": chain}
+
+
+func debug_force_tender_offer_execution(run_state, data_repository, company_id: String, force_go_private: bool = false) -> Dictionary:
+	var catalog: Dictionary = data_repository.get_corporate_action_catalog()
+	if catalog.is_empty() or company_id.is_empty():
+		return {}
+	var chains: Dictionary = run_state.get_active_corporate_action_chains()
+	if _company_has_live_chain(chains, company_id):
+		return {}
+	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+	if definition.is_empty():
+		return {}
+	var current_day_number: int = max(int(run_state.day_index), 1)
+	var next_day_number: int = max(int(run_state.day_index) + 1, 1)
+	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, "tender_offer", current_day_number)
+	if force_go_private and not chain.is_empty():
+		chain["tender_terms"] = _force_tender_terms_go_private(catalog, chain.get("tender_terms", {}))
+	var tender_terms: Dictionary = chain.get("tender_terms", {})
+	if chain.is_empty() or tender_terms.is_empty():
+		return {}
+	if int(tender_terms.get("expected_accepted_shares", 0)) <= 0:
+		return {}
+	chain["stage"] = "execution"
+	chain["current_timeline_state"] = "approved"
+	chain["outcome_state"] = "approved"
+	chain["management_stance"] = "confirm"
+	chain["smart_money_phase"] = "accumulating"
+	chain["public_heat"] = max(float(chain.get("public_heat", 0.0)), 0.44)
+	chain["retail_positioning"] = max(float(chain.get("retail_positioning", 0.0)), 0.2)
+	chain["approval_odds"] = 0.99
+	chain["completion_odds"] = 0.99
+	chain["last_advanced_day_index"] = current_day_number
+	chain["next_review_day_index"] = next_day_number
+	chain["next_expected_step"] = "The tender offer is moving into execution."
+	chains[str(chain.get("chain_id", ""))] = chain
+	run_state.set_active_corporate_action_chains(chains)
+	return {"chain": chain}
+
+
+func debug_force_strategic_mna_execution(run_state, data_repository, company_id: String) -> Dictionary:
+	var catalog: Dictionary = data_repository.get_corporate_action_catalog()
+	if catalog.is_empty() or company_id.is_empty():
+		return {}
+	var chains: Dictionary = run_state.get_active_corporate_action_chains()
+	if _company_has_live_chain(chains, company_id):
+		return {}
+	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+	if definition.is_empty():
+		return {}
+	var current_day_number: int = max(int(run_state.day_index), 1)
+	var next_day_number: int = max(int(run_state.day_index) + 1, 1)
+	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, "strategic_merger_acquisition", current_day_number)
+	var mna_terms: Dictionary = chain.get("mna_terms", {})
+	if chain.is_empty() or mna_terms.is_empty():
+		return {}
+	if float(mna_terms.get("cashout_price", 0.0)) <= 0.0:
+		return {}
+	chain["stage"] = "execution"
+	chain["current_timeline_state"] = "approved"
+	chain["outcome_state"] = "approved"
+	chain["management_stance"] = "confirm"
+	chain["smart_money_phase"] = "accumulating"
+	chain["public_heat"] = max(float(chain.get("public_heat", 0.0)), 0.52)
+	chain["retail_positioning"] = max(float(chain.get("retail_positioning", 0.0)), 0.26)
+	chain["approval_odds"] = 0.99
+	chain["completion_odds"] = 0.99
+	chain["last_advanced_day_index"] = current_day_number
+	chain["next_review_day_index"] = next_day_number
+	chain["next_expected_step"] = "The acquisition is moving into completion and cash-out."
+	chains[str(chain.get("chain_id", ""))] = chain
+	run_state.set_active_corporate_action_chains(chains)
+	return {"chain": chain}
+
+
+func debug_force_backdoor_listing_execution(run_state, data_repository, company_id: String) -> Dictionary:
+	var catalog: Dictionary = data_repository.get_corporate_action_catalog()
+	if catalog.is_empty() or company_id.is_empty():
+		return {}
+	var chains: Dictionary = run_state.get_active_corporate_action_chains()
+	if _company_has_live_chain(chains, company_id):
+		return {}
+	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+	if definition.is_empty():
+		return {}
+	var current_day_number: int = max(int(run_state.day_index), 1)
+	var next_day_number: int = max(int(run_state.day_index) + 1, 1)
+	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, "backdoor_listing", current_day_number)
+	var backdoor_terms: Dictionary = chain.get("backdoor_terms", {})
+	if chain.is_empty() or backdoor_terms.is_empty():
+		return {}
+	if int(backdoor_terms.get("new_shares", 0)) <= 0:
+		return {}
+	backdoor_terms["follow_on_rights_hint"] = true
+	backdoor_terms["follow_on_rights_probability"] = 1.0
+	chain["backdoor_terms"] = backdoor_terms
+	chain["stage"] = "execution"
+	chain["current_timeline_state"] = "approved"
+	chain["outcome_state"] = "approved"
+	chain["management_stance"] = "confirm"
+	chain["smart_money_phase"] = "accumulating"
+	chain["public_heat"] = max(float(chain.get("public_heat", 0.0)), 0.48)
+	chain["retail_positioning"] = max(float(chain.get("retail_positioning", 0.0)), 0.34)
+	chain["approval_odds"] = 0.99
+	chain["completion_odds"] = 0.99
+	chain["last_advanced_day_index"] = current_day_number
+	chain["next_review_day_index"] = next_day_number
+	chain["next_expected_step"] = "The control change and asset injection are moving into execution."
+	chains[str(chain.get("chain_id", ""))] = chain
+	run_state.set_active_corporate_action_chains(chains)
+	return {"chain": chain}
+
+
+func debug_force_restructuring_execution(run_state, data_repository, company_id: String) -> Dictionary:
+	var catalog: Dictionary = data_repository.get_corporate_action_catalog()
+	if catalog.is_empty() or company_id.is_empty():
+		return {}
+	var chains: Dictionary = run_state.get_active_corporate_action_chains()
+	if _company_has_live_chain(chains, company_id):
+		return {}
+	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+	if definition.is_empty():
+		return {}
+	var current_day_number: int = max(int(run_state.day_index), 1)
+	var next_day_number: int = max(int(run_state.day_index) + 1, 1)
+	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, "restructuring", current_day_number)
+	var restructuring_terms: Dictionary = chain.get("restructuring_terms", {})
+	if chain.is_empty() or restructuring_terms.is_empty():
+		return {}
+	if int(restructuring_terms.get("new_shares", 0)) <= 0 and float(restructuring_terms.get("asset_sale_value", 0.0)) <= 0.0:
+		return {}
+	chain["stage"] = "execution"
+	chain["current_timeline_state"] = "approved"
+	chain["outcome_state"] = "approved"
+	chain["management_stance"] = "confirm"
+	chain["smart_money_phase"] = "restructuring_watch"
+	chain["public_heat"] = max(float(chain.get("public_heat", 0.0)), 0.46)
+	chain["retail_positioning"] = max(float(chain.get("retail_positioning", 0.0)), 0.18)
+	chain["approval_odds"] = 0.99
+	chain["completion_odds"] = 0.99
+	chain["last_advanced_day_index"] = current_day_number
+	chain["next_review_day_index"] = next_day_number
+	chain["next_expected_step"] = "The restructuring package is moving into execution."
+	chains[str(chain.get("chain_id", ""))] = chain
+	run_state.set_active_corporate_action_chains(chains)
+	return {"chain": chain}
+
+
+func debug_force_ceo_change_execution(run_state, data_repository, company_id: String) -> Dictionary:
+	var catalog: Dictionary = data_repository.get_corporate_action_catalog()
+	if catalog.is_empty() or company_id.is_empty():
+		return {}
+	var chains: Dictionary = run_state.get_active_corporate_action_chains()
+	if _company_has_live_chain(chains, company_id):
+		return {}
+	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+	if definition.is_empty():
+		return {}
+	var current_day_number: int = max(int(run_state.day_index), 1)
+	var next_day_number: int = max(int(run_state.day_index) + 1, 1)
+	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, "ceo_change", current_day_number)
+	var ceo_terms: Dictionary = chain.get("ceo_terms", {})
+	if chain.is_empty() or ceo_terms.is_empty():
+		return {}
+	if str(ceo_terms.get("new_ceo_name", "")).is_empty():
+		return {}
+	chain["stage"] = "execution"
+	chain["current_timeline_state"] = "approved"
+	chain["outcome_state"] = "approved"
+	chain["management_stance"] = "confirm"
+	chain["smart_money_phase"] = "governance_watch"
+	chain["public_heat"] = max(float(chain.get("public_heat", 0.0)), 0.34)
+	chain["retail_positioning"] = max(float(chain.get("retail_positioning", 0.0)), 0.16)
+	chain["approval_odds"] = 0.99
+	chain["completion_odds"] = 0.99
+	chain["last_advanced_day_index"] = current_day_number
+	chain["next_review_day_index"] = next_day_number
+	chain["next_expected_step"] = "The leadership slate is moving into effect."
+	chains[str(chain.get("chain_id", ""))] = chain
+	run_state.set_active_corporate_action_chains(chains)
+	return {"chain": chain}
+
+
+func _debug_schedule_next_day_rupslb(run_state, data_repository, company_id: String, family_id: String, source_tag: String = "debug_next") -> Dictionary:
 	var catalog: Dictionary = data_repository.get_corporate_action_catalog()
 	if catalog.is_empty() or company_id.is_empty():
 		return {}
@@ -894,8 +1226,12 @@ func _debug_schedule_next_day_rupslb(run_state, data_repository, company_id: Str
 	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, family_id, current_day_number)
 	if chain.is_empty():
 		return {}
-	var meeting_id: String = "rupslb|%s|%s|debug_next" % [company_id, str(chain.get("chain_id", ""))]
+	var safe_source_tag: String = source_tag.strip_edges()
+	if safe_source_tag.is_empty():
+		safe_source_tag = "debug_next"
+	var meeting_id: String = "rupslb|%s|%s|%s" % [company_id, str(chain.get("chain_id", "")), safe_source_tag]
 	chain["stage"] = "meeting_or_call"
+	chain["expected_meeting_type"] = "rupslb"
 	chain["current_timeline_state"] = "active"
 	chain["management_stance"] = "confirm"
 	chain["public_heat"] = max(float(chain.get("public_heat", 0.0)), 0.42)
@@ -904,6 +1240,7 @@ func _debug_schedule_next_day_rupslb(run_state, data_repository, company_id: Str
 	chain["last_advanced_day_index"] = current_day_number
 	chain["next_review_day_index"] = meeting_day_number
 	chain["next_expected_step"] = "The room is waiting on the vote."
+	chain["request_source"] = safe_source_tag
 	var meeting: Dictionary = {
 		"id": meeting_id,
 		"meeting_type": "rupslb",
@@ -922,7 +1259,8 @@ func _debug_schedule_next_day_rupslb(run_state, data_repository, company_id: Str
 		"management_stance": "confirm",
 		"agenda_payload": chain.get("agenda_payload", []).duplicate(true),
 		"public_summary": _meeting_public_summary(chain),
-		"attended": false
+		"attended": false,
+		"request_source": safe_source_tag
 	}
 	meeting = _with_meeting_record_date(meeting, current_day_number)
 	var shareholder_registry: Dictionary = run_state.get_shareholder_registry()
@@ -1149,6 +1487,44 @@ func _score_family_for_company(run_state, definition: Dictionary, runtime: Dicti
 				liquidity_profile * 0.16 +
 				max(risk_appetite - 0.45, 0.0) * 0.18
 			)
+		"tender_offer":
+			score = (
+				controller_support * 0.38 +
+				max(0.48 - free_float_pct, 0.0) * 0.35 +
+				max(-since_start_pct, 0.0) * 0.40 +
+				max(margin, 0.0) * 0.006 +
+				max(roe, 0.0) * 0.008 +
+				balance_sheet_strength * 0.22 +
+				story_heat * 0.22 +
+				max(risk_appetite - 0.40, 0.0) * 0.12
+			)
+		"strategic_merger_acquisition":
+			score = (
+				story_heat * 0.34 +
+				liquidity_profile * 0.10 +
+				max(margin, 0.0) * 0.006 +
+				max(roe, 0.0) * 0.007 +
+				max(growth, 0.0) * 0.004 +
+				max(earnings_growth, 0.0) * 0.004 +
+				balance_sheet_strength * 0.16 +
+				max(-since_start_pct, 0.0) * 0.22 +
+				max(risk_appetite - 0.38, 0.0) * 0.18 +
+				max(0.62 - controller_support, 0.0) * 0.14
+			)
+		"backdoor_listing":
+			var shell_price_score: float = clamp((360.0 - current_price) / 320.0, 0.0, 1.0)
+			score = (
+				shell_price_score * 0.42 +
+				max(-since_start_pct, 0.0) * 0.32 +
+				max(0.58 - balance_sheet_strength, 0.0) * 0.44 +
+				max(0.0 - margin, 0.0) * 0.012 +
+				max(0.0 - growth, 0.0) * 0.006 +
+				max(0.0 - earnings_growth, 0.0) * 0.008 +
+				max(0.48 - liquidity_profile, 0.0) * 0.18 +
+				controller_support * 0.16 +
+				story_heat * 0.16 +
+				max(risk_appetite - 0.42, 0.0) * 0.15
+			)
 		"ceo_change":
 			score = (
 				max(0.58 - execution_consistency, 0.0) * 0.95 +
@@ -1169,6 +1545,18 @@ func _score_family_for_company(run_state, definition: Dictionary, runtime: Dicti
 				story_heat * 0.18 +
 				max(0.55 - free_float_pct, 0.0) * 0.22 +
 				max(0.55 - risk_appetite, 0.0) * 0.08
+			)
+		"restructuring":
+			score = (
+				max(debt_to_equity - 0.95, 0.0) * 0.34 +
+				max(0.0 - margin, 0.0) * 0.018 +
+				max(0.0 - earnings_growth, 0.0) * 0.010 +
+				max(0.50 - balance_sheet_strength, 0.0) * 0.86 +
+				max(0.46 - execution_consistency, 0.0) * 0.38 +
+				max(-since_start_pct, 0.0) * 0.42 +
+				capital_intensity * 0.18 +
+				controller_support * 0.16 +
+				max(0.50 - risk_appetite, 0.0) * 0.12
 			)
 		_:
 			score = 0.0
@@ -1272,7 +1660,142 @@ func _build_new_chain(run_state, catalog: Dictionary, company_id: String, family
 		chain["placement_terms"] = _build_private_placement_terms(definition, runtime, day_number)
 	if family_id == "stock_buyback":
 		chain["buyback_terms"] = _build_stock_buyback_terms(catalog, definition, runtime, day_number)
+	if family_id == "stock_split":
+		chain["split_terms"] = _build_stock_split_terms(catalog, definition, runtime, day_number)
+	if family_id == "tender_offer":
+		chain["tender_terms"] = _build_tender_offer_terms(catalog, definition, runtime, day_number)
+	if family_id == "strategic_merger_acquisition":
+		chain["mna_terms"] = _build_strategic_mna_terms(catalog, run_state, definition, runtime, day_number)
+		chain["counterparty_company_id"] = str(chain.get("mna_terms", {}).get("acquirer_company_id", ""))
+	if family_id == "backdoor_listing":
+		chain["backdoor_terms"] = _build_backdoor_listing_terms(catalog, definition, runtime, day_number)
+		var backdoor_terms: Dictionary = chain.get("backdoor_terms", {})
+		if not backdoor_terms.is_empty():
+			chain["smart_money_phase"] = "silent_accumulation"
+			chain["public_heat"] = clamp(min(float(chain.get("public_heat", 0.0)), 0.16) + float(backdoor_terms.get("accumulation_price_support_pct", 0.0)) * 0.25, 0.03, 0.24)
+			chain["retail_positioning"] = clamp(float(chain.get("retail_positioning", 0.0)) * 0.45, 0.01, 0.14)
+			chain["frontrunner_strength"] = clamp(max(float(chain.get("frontrunner_strength", 0.0)), 0.54 + float(backdoor_terms.get("silent_accumulation_pct", 0.0)) * 1.7), 0.25, 0.96)
+			chain["next_expected_step"] = "Watch whether the quiet bid turns into a control-change filing."
+	if family_id == "ceo_change":
+		chain["ceo_terms"] = _build_ceo_change_terms(catalog, definition, runtime, day_number)
+		var ceo_terms: Dictionary = chain.get("ceo_terms", {})
+		if not ceo_terms.is_empty():
+			chain["smart_money_phase"] = "governance_watch"
+			chain["public_heat"] = clamp(float(chain.get("public_heat", 0.0)) + absf(float(ceo_terms.get("price_reaction_pct", 0.0))) * 1.6 + 0.08, 0.08, 0.48)
+			chain["retail_positioning"] = clamp(float(chain.get("retail_positioning", 0.0)) + float(ceo_terms.get("turnaround_score", 0.0)) * 0.12, 0.04, 0.32)
+			chain["approval_odds"] = clamp(float(chain.get("approval_odds", 0.5)) + float(ceo_terms.get("governance_confidence_delta", 0.0)) * 0.50, 0.18, 0.94)
+			chain["completion_odds"] = 0.98
+			chain["next_expected_step"] = "Watch whether shareholders accept the leadership slate."
+	if family_id == "restructuring":
+		chain["restructuring_terms"] = _build_restructuring_terms(catalog, definition, runtime, day_number)
+		var restructuring_terms: Dictionary = chain.get("restructuring_terms", {})
+		if not restructuring_terms.is_empty():
+			chain["smart_money_phase"] = "distressed_accumulation" if float(restructuring_terms.get("credibility_score", 0.0)) >= 0.55 else "distressed_distribution"
+			chain["public_heat"] = clamp(float(chain.get("public_heat", 0.0)) + float(restructuring_terms.get("stress_overhang_pct", 0.0)) * 0.32, 0.08, 0.58)
+			chain["retail_positioning"] = clamp(float(chain.get("retail_positioning", 0.0)) + float(restructuring_terms.get("debt_conversion_pct", 0.0)) * 0.65, 0.04, 0.44)
+			chain["approval_odds"] = clamp(float(chain.get("approval_odds", 0.5)) + float(restructuring_terms.get("creditor_support_score", 0.5)) * 0.18 - float(restructuring_terms.get("stress_overhang_pct", 0.0)) * 0.24, 0.18, 0.92)
+			chain["completion_odds"] = clamp(float(chain.get("completion_odds", 0.5)) + float(restructuring_terms.get("credibility_score", 0.5)) * 0.18 - float(restructuring_terms.get("suspension_risk_pct", 0.0)) * 0.30, 0.16, 0.88)
+			chain["funding_pressure"] = max(float(chain.get("funding_pressure", 0.0)), clamp(0.42 + float(restructuring_terms.get("stress_overhang_pct", 0.0)), 0.0, 0.96))
+			chain["next_expected_step"] = "Watch whether creditors and shareholders accept the restructuring package."
 	return chain
+
+
+func _build_ceo_change_terms(catalog: Dictionary, definition: Dictionary, runtime: Dictionary, day_number: int) -> Dictionary:
+	var company_id: String = str(definition.get("id", runtime.get("company_id", "")))
+	if company_id.is_empty():
+		return {}
+	var config: Dictionary = catalog.get("ceo_change", {})
+	if not bool(config.get("enabled", true)):
+		return {}
+	var profile: Dictionary = runtime.get("company_profile", {})
+	var traits: Dictionary = profile.get("generation_traits", definition.get("generation_traits", {}))
+	var execution_consistency: float = clamp(float(traits.get("execution_consistency", 0.5)), 0.0, 1.0)
+	var balance_sheet_strength: float = clamp(float(traits.get("balance_sheet_strength", 0.5)), 0.0, 1.0)
+	var story_heat: float = clamp(float(traits.get("story_heat", 0.5)), 0.0, 1.0)
+	var financials: Dictionary = definition.get("financials", {})
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var debt_to_equity: float = max(float(financials.get("debt_to_equity", 0.0)), 0.0)
+	var margin: float = float(financials.get("net_profit_margin", 0.0))
+	var management_roster: Array = definition.get("management_roster", []).duplicate(true)
+	var current_ceo_name: String = ""
+	for management_value in management_roster:
+		if typeof(management_value) != TYPE_DICTIONARY:
+			continue
+		var management: Dictionary = management_value
+		if str(management.get("affiliation_role", "")) == "ceo":
+			current_ceo_name = str(management.get("display_name", ""))
+			break
+	var candidate_names: Array = [
+		"Rizal Pranata",
+		"Maya Santoso",
+		"Aditya Wirawan",
+		"Dewi Kartika",
+		"Fajar Nugroho",
+		"Nadia Kusuma",
+		"Bima Wardhana",
+		"Ratih Mahendra"
+	]
+	var name_index: int = _stable_range("%s|ceo_change_name|%d" % [company_id, day_number], 0, candidate_names.size() - 1)
+	var new_ceo_name: String = str(candidate_names[name_index])
+	if new_ceo_name == current_ceo_name:
+		new_ceo_name = str(candidate_names[(name_index + 1) % candidate_names.size()])
+	var archetypes: Array = [
+		{
+			"id": "turnaround_operator",
+			"label": "Turnaround Operator",
+			"mandate": "margin repair, asset discipline, and cleaner operating cadence",
+			"execution_delta": 0.12,
+			"growth_delta": 0.02,
+			"risk_delta": -0.06
+		},
+		{
+			"id": "capital_allocator",
+			"label": "Capital Allocator",
+			"mandate": "balance-sheet discipline, portfolio pruning, and funding clarity",
+			"execution_delta": 0.08,
+			"growth_delta": 0.01,
+			"risk_delta": -0.08
+		},
+		{
+			"id": "digital_growth",
+			"label": "Digital Growth Lead",
+			"mandate": "product renewal, digital channels, and higher-growth execution",
+			"execution_delta": 0.05,
+			"growth_delta": 0.08,
+			"risk_delta": 0.02
+		},
+		{
+			"id": "controller_steward",
+			"label": "Controller Steward",
+			"mandate": "governance reset, stakeholder repair, and steadier disclosure",
+			"execution_delta": 0.06,
+			"growth_delta": 0.00,
+			"risk_delta": -0.04
+		}
+	]
+	var archetype: Dictionary = archetypes[_stable_range("%s|ceo_change_archetype|%d" % [company_id, day_number], 0, archetypes.size() - 1)]
+	var stress_score: float = clamp((1.0 - execution_consistency) * 0.42 + max(debt_to_equity - 0.65, 0.0) * 0.12 + max(0.0 - margin, 0.0) * 0.012, 0.0, 1.0)
+	var turnaround_score: float = clamp(stress_score * 0.55 + (1.0 - balance_sheet_strength) * 0.20 + story_heat * 0.12, 0.0, 1.0)
+	var governance_confidence_delta: float = clamp(float(archetype.get("execution_delta", 0.0)) + turnaround_score * 0.08 - stress_score * 0.03, -0.12, 0.22)
+	var min_reaction_pct: float = clamp(float(config.get("minimum_price_reaction_pct", -0.08)), -0.5, 0.5)
+	var max_reaction_pct: float = clamp(float(config.get("maximum_price_reaction_pct", 0.14)), min_reaction_pct, 0.5)
+	var raw_reaction_pct: float = governance_confidence_delta * 0.55 + float(archetype.get("growth_delta", 0.0)) * 0.40 - max(stress_score - 0.72, 0.0) * 0.10
+	var price_reaction_pct: float = clamp(raw_reaction_pct, min_reaction_pct, max_reaction_pct)
+	return {
+		"current_ceo_name": current_ceo_name,
+		"new_ceo_name": new_ceo_name,
+		"incoming_profile_id": str(archetype.get("id", "turnaround_operator")),
+		"incoming_profile_label": str(archetype.get("label", "Turnaround Operator")),
+		"mandate": str(archetype.get("mandate", "execution reset")),
+		"turnaround_score": turnaround_score,
+		"governance_confidence_delta": governance_confidence_delta,
+		"execution_consistency_delta": float(archetype.get("execution_delta", 0.0)),
+		"growth_score_delta": float(archetype.get("growth_delta", 0.0)),
+		"risk_score_delta": float(archetype.get("risk_delta", 0.0)),
+		"price_reaction_pct": price_reaction_pct,
+		"reference_price": current_price,
+		"volatility_event_multiplier": float(config.get("volatility_event_multiplier", 1.18))
+	}
 
 
 func _build_rights_issue_terms(catalog: Dictionary, definition: Dictionary, runtime: Dictionary, day_number: int) -> Dictionary:
@@ -1347,6 +1870,128 @@ func _build_private_placement_terms(definition: Dictionary, runtime: Dictionary,
 	}
 
 
+func _build_restructuring_terms(catalog: Dictionary, definition: Dictionary, runtime: Dictionary, day_number: int) -> Dictionary:
+	var company_id: String = str(definition.get("id", runtime.get("company_id", "")))
+	if company_id.is_empty():
+		return {}
+	var config: Dictionary = catalog.get("restructuring", {})
+	if not bool(config.get("enabled", true)):
+		return {}
+	var financials: Dictionary = definition.get("financials", {})
+	var profile: Dictionary = runtime.get("company_profile", {})
+	var traits: Dictionary = profile.get("generation_traits", {})
+	var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", 0.0))), 1.0)
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var market_cap: float = max(float(financials.get("market_cap", current_price * shares_outstanding)), current_price * shares_outstanding)
+	var old_free_float_pct: float = clamp(float(financials.get("free_float_pct", 35.0)), 0.0, 100.0)
+	var debt_to_equity: float = max(float(financials.get("debt_to_equity", 0.0)), 0.0)
+	var margin: float = float(financials.get("net_profit_margin", 0.0))
+	var earnings_growth: float = float(financials.get("earnings_growth_yoy", 0.0))
+	var balance_sheet_strength: float = clamp(float(traits.get("balance_sheet_strength", 0.5)), 0.0, 1.0)
+	var execution_consistency: float = clamp(float(traits.get("execution_consistency", 0.5)), 0.0, 1.0)
+	var min_debt_reduction_pct: float = clamp(float(config.get("minimum_debt_reduction_pct", 0.12)), 0.0, 0.9)
+	var max_debt_reduction_pct: float = clamp(float(config.get("maximum_debt_reduction_pct", 0.36)), min_debt_reduction_pct, 0.95)
+	var min_debt_conversion_pct: float = clamp(float(config.get("minimum_debt_conversion_pct", 0.04)), 0.0, 0.75)
+	var max_debt_conversion_pct: float = clamp(float(config.get("maximum_debt_conversion_pct", 0.18)), min_debt_conversion_pct, 0.95)
+	var min_asset_sale_pct: float = clamp(float(config.get("minimum_asset_sale_pct_of_market_cap", 0.04)), 0.0, 1.0)
+	var max_asset_sale_pct: float = clamp(float(config.get("maximum_asset_sale_pct_of_market_cap", 0.16)), min_asset_sale_pct, 1.5)
+	var debt_reduction_pct: float = float(_stable_range(
+		"%s|restructuring_debt_reduction|%d" % [company_id, day_number],
+		int(round(min_debt_reduction_pct * 10000.0)),
+		int(round(max_debt_reduction_pct * 10000.0))
+	)) / 10000.0
+	var debt_conversion_pct: float = float(_stable_range(
+		"%s|restructuring_debt_conversion|%d" % [company_id, day_number],
+		int(round(min_debt_conversion_pct * 10000.0)),
+		int(round(max_debt_conversion_pct * 10000.0))
+	)) / 10000.0
+	var asset_sale_pct: float = float(_stable_range(
+		"%s|restructuring_asset_sale|%d" % [company_id, day_number],
+		int(round(min_asset_sale_pct * 10000.0)),
+		int(round(max_asset_sale_pct * 10000.0))
+	)) / 10000.0
+	var new_shares: int = int(round(shares_outstanding * debt_conversion_pct / 1000.0)) * 1000
+	new_shares = max(new_shares, 1000)
+	var new_shares_outstanding: float = shares_outstanding + float(new_shares)
+	var old_free_float_shares: float = max(shares_outstanding * old_free_float_pct / 100.0, 1.0)
+	var new_free_float_pct: float = clamp(old_free_float_shares / new_shares_outstanding, 0.02, 0.95) * 100.0
+	var asset_sale_value: float = _round_currency(market_cap * asset_sale_pct)
+	var creditor_support_score: float = clamp(0.32 + debt_reduction_pct * 1.05 + balance_sheet_strength * 0.16 + execution_consistency * 0.12, 0.0, 1.0)
+	var distress_score: float = clamp(
+		max(debt_to_equity - 0.8, 0.0) * 0.20 +
+		max(0.0 - margin, 0.0) * 0.010 +
+		max(0.0 - earnings_growth, 0.0) * 0.006 +
+		(1.0 - balance_sheet_strength) * 0.36,
+		0.0,
+		1.0
+	)
+	var credibility_score: float = clamp(
+		execution_consistency * 0.34 +
+		balance_sheet_strength * 0.22 +
+		creditor_support_score * 0.28 +
+		(1.0 - distress_score) * 0.16,
+		0.0,
+		1.0
+	)
+	var stress_overhang_pct: float = clamp(debt_conversion_pct * 0.82 + distress_score * 0.24 + (1.0 - credibility_score) * 0.16, 0.0, 0.72)
+	var maximum_relief_pct: float = clamp(float(config.get("maximum_price_relief_pct", 0.20)), 0.0, 0.8)
+	var maximum_pressure_pct: float = clamp(float(config.get("maximum_price_pressure_pct", 0.18)), 0.0, 0.8)
+	var raw_price_relief_pct: float = debt_reduction_pct * 0.38 + creditor_support_score * 0.10 - debt_conversion_pct * 0.36 - distress_score * 0.08
+	var price_adjustment_pct: float = clamp(raw_price_relief_pct, -maximum_pressure_pct, maximum_relief_pct)
+	var new_reference_price: float = _round_currency(current_price * (1.0 + price_adjustment_pct))
+	var min_liquidity_penalty: float = clamp(float(config.get("minimum_liquidity_penalty_multiplier", 0.55)), 0.05, 1.0)
+	var max_liquidity_penalty: float = clamp(float(config.get("maximum_liquidity_penalty_multiplier", 0.90)), min_liquidity_penalty, 1.0)
+	var liquidity_penalty_multiplier: float = clamp(max_liquidity_penalty - stress_overhang_pct * 0.36 - distress_score * 0.12, min_liquidity_penalty, max_liquidity_penalty)
+	var suspension_risk_pct: float = clamp(0.04 + distress_score * 0.28 + (1.0 - creditor_support_score) * 0.16, 0.02, 0.48)
+	var plan_rows: Array = [
+		{
+			"id": "debt_workout",
+			"label": "Debt workout",
+			"description": "creditor standstill, maturity extension, and reduced near-term cash burden"
+		},
+		{
+			"id": "asset_sale",
+			"label": "Asset sale package",
+			"description": "non-core asset sales to raise cash and satisfy creditors"
+		},
+		{
+			"id": "debt_to_equity",
+			"label": "Debt-to-equity conversion",
+			"description": "creditors convert part of the obligation into new locked shares"
+		},
+		{
+			"id": "turnaround_package",
+			"label": "Turnaround package",
+			"description": "cost cuts, asset cleanup, and a narrower operating focus"
+		}
+	]
+	var plan: Dictionary = plan_rows[_stable_range("%s|restructuring_plan|%d" % [company_id, day_number], 0, plan_rows.size() - 1)].duplicate(true)
+	return {
+		"plan_type": str(plan.get("id", "debt_workout")),
+		"plan_label": str(plan.get("label", "Debt workout")),
+		"plan_description": str(plan.get("description", "creditor and shareholder restructuring package")),
+		"debt_reduction_pct": debt_reduction_pct,
+		"debt_conversion_pct": debt_conversion_pct,
+		"asset_sale_pct_of_market_cap": asset_sale_pct,
+		"asset_sale_value": asset_sale_value,
+		"creditor_support_score": creditor_support_score,
+		"credibility_score": credibility_score,
+		"distress_score": distress_score,
+		"stress_overhang_pct": stress_overhang_pct,
+		"suspension_risk_pct": suspension_risk_pct,
+		"liquidity_penalty_multiplier": liquidity_penalty_multiplier,
+		"volatility_event_multiplier": clamp(float(config.get("volatility_event_multiplier", 1.45)), 1.0, 3.0),
+		"price_adjustment_pct": price_adjustment_pct,
+		"old_price": current_price,
+		"new_reference_price": new_reference_price,
+		"new_shares": new_shares,
+		"old_shares_outstanding": shares_outstanding,
+		"new_shares_outstanding": new_shares_outstanding,
+		"old_free_float_pct": old_free_float_pct,
+		"new_free_float_pct": new_free_float_pct
+	}
+
+
 func _build_stock_buyback_terms(catalog: Dictionary, definition: Dictionary, runtime: Dictionary, day_number: int) -> Dictionary:
 	var company_id: String = str(definition.get("id", runtime.get("company_id", "")))
 	var financials: Dictionary = definition.get("financials", {})
@@ -1411,6 +2056,788 @@ func _build_stock_buyback_terms(catalog: Dictionary, definition: Dictionary, run
 	}
 
 
+func _build_stock_split_terms(catalog: Dictionary, definition: Dictionary, runtime: Dictionary, day_number: int) -> Dictionary:
+	var company_id: String = str(definition.get("id", runtime.get("company_id", "")))
+	var financials: Dictionary = definition.get("financials", {})
+	var config: Dictionary = catalog.get("stock_split", {})
+	var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", 0.0))), 1.0)
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var free_float_pct: float = clamp(float(financials.get("free_float_pct", 35.0)), 0.0, 100.0)
+	var reverse_threshold: float = max(float(config.get("reverse_split_price_threshold", 120.0)), 1.0)
+	var split_type: String = "reverse_split" if current_price <= reverse_threshold else "split"
+	var ratio_options: Array = config.get("reverse_split_ratios", [2, 5]).duplicate() if split_type == "reverse_split" else config.get("split_ratios", [2, 4, 5]).duplicate()
+	if ratio_options.is_empty():
+		ratio_options = [2]
+	var ratio_index: int = _stable_range("%s|stock_split_ratio|%d" % [company_id, day_number], 0, ratio_options.size() - 1)
+	var ratio_denominator: int = max(int(ratio_options[ratio_index]), 1)
+	var ratio_numerator: int = 1 if split_type == "reverse_split" else ratio_denominator
+	if split_type == "reverse_split":
+		ratio_denominator = max(ratio_denominator, 2)
+	var share_multiplier: float = float(ratio_numerator) / float(max(ratio_denominator, 1))
+	var new_shares_outstanding: float = max(round(shares_outstanding * share_multiplier), 1.0)
+	var theoretical_ex_split_price: float = _round_currency(current_price / max(share_multiplier, 0.0001))
+	var boost_min: float = float(config.get("liquidity_boost_min_pct", 0.01))
+	var boost_max: float = max(float(config.get("liquidity_boost_max_pct", 0.06)), boost_min)
+	var reverse_min: float = float(config.get("reverse_split_pressure_min_pct", -0.08))
+	var reverse_max: float = max(float(config.get("reverse_split_pressure_max_pct", -0.02)), reverse_min)
+	var sentiment_pct: float = 0.0
+	if split_type == "reverse_split":
+		sentiment_pct = float(_stable_range(
+			"%s|reverse_split_pressure|%d" % [company_id, day_number],
+			int(round(reverse_min * 10000.0)),
+			int(round(reverse_max * 10000.0))
+		)) / 10000.0
+	else:
+		sentiment_pct = float(_stable_range(
+			"%s|stock_split_boost|%d" % [company_id, day_number],
+			int(round(boost_min * 10000.0)),
+			int(round(boost_max * 10000.0))
+		)) / 10000.0
+	return {
+		"split_type": split_type,
+		"ratio_numerator": ratio_numerator,
+		"ratio_denominator": ratio_denominator,
+		"share_multiplier": share_multiplier,
+		"price_factor": 1.0 / max(share_multiplier, 0.0001),
+		"old_shares_outstanding": shares_outstanding,
+		"new_shares_outstanding": new_shares_outstanding,
+		"old_price": current_price,
+		"theoretical_ex_split_price": theoretical_ex_split_price,
+		"old_free_float_pct": free_float_pct,
+		"new_free_float_pct": free_float_pct,
+		"sentiment_price_adjustment_pct": sentiment_pct
+	}
+
+
+func _build_tender_offer_terms(catalog: Dictionary, definition: Dictionary, runtime: Dictionary, day_number: int) -> Dictionary:
+	var company_id: String = str(definition.get("id", runtime.get("company_id", "")))
+	var financials: Dictionary = definition.get("financials", {})
+	var config: Dictionary = catalog.get("tender_offer", {})
+	var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", 0.0))), 1.0)
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var free_float_pct: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, 0.02, 0.95)
+	var controller_support: float = clamp(1.0 - free_float_pct, 0.0, 1.0)
+	var min_offer_pct: float = clamp(float(config.get("minimum_offer_pct_of_free_float", 0.12)), 0.01, 0.95)
+	var max_offer_pct: float = clamp(float(config.get("maximum_offer_pct_of_free_float", 0.35)), min_offer_pct, 0.98)
+	var min_acceptance_ratio: float = clamp(float(config.get("minimum_acceptance_ratio", 0.45)), 0.01, 1.0)
+	var max_acceptance_ratio: float = clamp(float(config.get("maximum_acceptance_ratio", 0.85)), min_acceptance_ratio, 1.0)
+	var min_premium_pct: float = clamp(float(config.get("minimum_premium_pct", 0.12)), 0.0, 1.0)
+	var max_premium_pct: float = clamp(float(config.get("maximum_premium_pct", 0.35)), min_premium_pct, 1.5)
+	var price_support_per_pct: float = max(float(config.get("price_support_per_pct", 1.2)), 0.0)
+	var maximum_price_support_pct: float = clamp(float(config.get("maximum_price_support_pct", 0.22)), 0.0, 0.6)
+	var public_float_warning_pct: float = clamp(float(config.get("public_float_warning_pct", 12.0)), 0.1, 95.0)
+	var go_private_trigger_pct: float = clamp(float(config.get("go_private_trigger_pct", 5.0)), 0.1, public_float_warning_pct)
+	var liquidity_penalty_multiplier: float = clamp(float(config.get("liquidity_penalty_multiplier", 0.35)), 0.05, 1.0)
+	var volatility_event_multiplier: float = clamp(float(config.get("volatility_event_multiplier", 1.35)), 1.0, 3.0)
+	var final_cashout_premium_pct: float = clamp(float(config.get("final_cashout_premium_pct", 0.04)), 0.0, 0.50)
+	var offer_pct: float = float(_stable_range(
+		"%s|tender_offer_pct|%d" % [company_id, day_number],
+		int(round(min_offer_pct * 10000.0)),
+		int(round(max_offer_pct * 10000.0))
+	)) / 10000.0
+	var acceptance_ratio: float = float(_stable_range(
+		"%s|tender_acceptance|%d" % [company_id, day_number],
+		int(round(min_acceptance_ratio * 10000.0)),
+		int(round(max_acceptance_ratio * 10000.0))
+	)) / 10000.0
+	var premium_pct: float = float(_stable_range(
+		"%s|tender_premium|%d" % [company_id, day_number],
+		int(round(min_premium_pct * 10000.0)),
+		int(round(max_premium_pct * 10000.0))
+	)) / 10000.0
+	var old_free_float_shares: float = max(shares_outstanding * free_float_pct, 1.0)
+	var float_absorption_cap: float = old_free_float_shares * clamp(float(config.get("maximum_float_absorption_pct", 0.50)), 0.02, 1.0)
+	var raw_offer_shares: float = min(old_free_float_shares * offer_pct, float_absorption_cap)
+	var offer_shares: int = int(floor(raw_offer_shares / 1000.0)) * 1000
+	if offer_shares <= 0 and raw_offer_shares >= 1000.0:
+		offer_shares = 1000
+	offer_shares = int(clamp(float(offer_shares), 0.0, max(old_free_float_shares - 1.0, 0.0)))
+	var raw_accepted_shares: float = float(offer_shares) * acceptance_ratio
+	var accepted_shares: int = int(floor(raw_accepted_shares / 1000.0)) * 1000
+	if accepted_shares <= 0 and raw_accepted_shares >= 1000.0:
+		accepted_shares = 1000
+	accepted_shares = int(clamp(float(accepted_shares), 0.0, float(offer_shares)))
+	var offer_price: float = _round_currency(current_price * (1.0 + premium_pct))
+	var new_free_float_shares: float = max(old_free_float_shares - float(accepted_shares), 1.0)
+	var new_free_float_pct: float = clamp(new_free_float_shares / shares_outstanding, 0.02, 0.95)
+	var absorption_pct: float = clamp(float(accepted_shares) / shares_outstanding, 0.0, 0.95)
+	var price_support_pct: float = min(premium_pct * 0.35 + absorption_pct * price_support_per_pct, maximum_price_support_pct)
+	var offeror_rows: Array = [
+		"controller affiliate",
+		"strategic acquirer",
+		"anchor investor",
+		"holding company"
+	]
+	var offeror_label: String = str(offeror_rows[_stable_range("%s|tender_offeror|%d" % [company_id, day_number], 0, offeror_rows.size() - 1)])
+	var offer_type: String = "mandatory_tender_offer" if controller_support >= 0.72 else "voluntary_tender_offer"
+	var aftermath_state: String = _tender_offer_aftermath_state(new_free_float_pct * 100.0, public_float_warning_pct, go_private_trigger_pct)
+	var final_cashout_price: float = _round_currency(offer_price * (1.0 + final_cashout_premium_pct))
+	return {
+		"offer_type": offer_type,
+		"offeror_label": offeror_label,
+		"offer_shares": offer_shares,
+		"expected_accepted_shares": accepted_shares,
+		"offer_price": offer_price,
+		"premium_pct": premium_pct,
+		"offer_pct_of_free_float": offer_pct,
+		"acceptance_ratio": acceptance_ratio,
+		"tender_budget": _round_currency(float(accepted_shares) * offer_price),
+		"price_support_per_pct": price_support_per_pct,
+		"maximum_price_support_pct": maximum_price_support_pct,
+		"price_support_pct": price_support_pct,
+		"aftermath_state": aftermath_state,
+		"public_float_warning_pct": public_float_warning_pct,
+		"go_private_trigger_pct": go_private_trigger_pct,
+		"liquidity_penalty_multiplier": liquidity_penalty_multiplier,
+		"volatility_event_multiplier": volatility_event_multiplier,
+		"final_cashout_premium_pct": final_cashout_premium_pct,
+		"final_cashout_price": final_cashout_price,
+		"old_shares_outstanding": shares_outstanding,
+		"new_shares_outstanding": shares_outstanding,
+		"old_free_float_pct": free_float_pct * 100.0,
+		"new_free_float_pct": new_free_float_pct * 100.0,
+		"old_free_float_shares": old_free_float_shares,
+		"new_free_float_shares": new_free_float_shares
+	}
+
+
+func _build_strategic_mna_terms(catalog: Dictionary, run_state, definition: Dictionary, runtime: Dictionary, day_number: int) -> Dictionary:
+	var company_id: String = str(definition.get("id", runtime.get("company_id", "")))
+	if company_id.is_empty():
+		return {}
+	var financials: Dictionary = definition.get("financials", {})
+	var config: Dictionary = catalog.get("strategic_merger_acquisition", {})
+	if not bool(config.get("enabled", true)):
+		return {}
+	var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", 0.0))), 1.0)
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var free_float_pct: float = clamp(float(financials.get("free_float_pct", 35.0)), 0.0, 100.0)
+	var min_offer_premium_pct: float = clamp(float(config.get("minimum_offer_premium_pct", 0.18)), 0.0, 1.5)
+	var max_offer_premium_pct: float = clamp(float(config.get("maximum_offer_premium_pct", 0.55)), min_offer_premium_pct, 2.0)
+	var min_completion_premium_pct: float = clamp(float(config.get("minimum_completion_cashout_premium_pct", 0.0)), 0.0, 0.5)
+	var max_completion_premium_pct: float = clamp(float(config.get("maximum_completion_cashout_premium_pct", 0.06)), min_completion_premium_pct, 0.6)
+	var min_synergy_score: float = clamp(float(config.get("minimum_synergy_score", 0.35)), 0.0, 1.0)
+	var max_synergy_score: float = clamp(float(config.get("maximum_synergy_score", 0.95)), min_synergy_score, 1.0)
+	var offer_premium_pct: float = float(_stable_range(
+		"%s|strategic_mna_offer_premium|%d" % [company_id, day_number],
+		int(round(min_offer_premium_pct * 10000.0)),
+		int(round(max_offer_premium_pct * 10000.0))
+	)) / 10000.0
+	var completion_cashout_premium_pct: float = float(_stable_range(
+		"%s|strategic_mna_completion_premium|%d" % [company_id, day_number],
+		int(round(min_completion_premium_pct * 10000.0)),
+		int(round(max_completion_premium_pct * 10000.0))
+	)) / 10000.0
+	var synergy_score: float = float(_stable_range(
+		"%s|strategic_mna_synergy|%d" % [company_id, day_number],
+		int(round(min_synergy_score * 10000.0)),
+		int(round(max_synergy_score * 10000.0))
+	)) / 10000.0
+	var total_premium_pct: float = offer_premium_pct + completion_cashout_premium_pct
+	var cashout_price: float = _round_currency(current_price * (1.0 + total_premium_pct))
+	var equity_value: float = _round_currency(cashout_price * shares_outstanding)
+	var maximum_price_support_pct: float = clamp(float(config.get("maximum_price_support_pct", 0.30)), 0.0, 0.8)
+	var price_support_per_premium_pct: float = clamp(float(config.get("price_support_per_premium_pct", 0.55)), 0.0, 2.0)
+	var price_support_pct: float = min(total_premium_pct * price_support_per_premium_pct, maximum_price_support_pct)
+	var acquirer: Dictionary = _pick_strategic_mna_acquirer(run_state, definition, runtime, day_number)
+	return {
+		"deal_type": "cash_acquisition",
+		"consideration_type": "cash",
+		"acquirer_company_id": str(acquirer.get("acquirer_company_id", "")),
+		"acquirer_ticker": str(acquirer.get("acquirer_ticker", "")),
+		"acquirer_name": str(acquirer.get("acquirer_name", "")),
+		"acquirer_label": str(acquirer.get("acquirer_label", "strategic acquirer")),
+		"offer_premium_pct": offer_premium_pct,
+		"completion_cashout_premium_pct": completion_cashout_premium_pct,
+		"total_premium_pct": total_premium_pct,
+		"cashout_price": cashout_price,
+		"reference_price": current_price,
+		"equity_value": equity_value,
+		"synergy_score": synergy_score,
+		"price_support_per_premium_pct": price_support_per_premium_pct,
+		"maximum_price_support_pct": maximum_price_support_pct,
+		"price_support_pct": price_support_pct,
+		"listing_status_after": "acquired_cashout",
+		"old_shares_outstanding": shares_outstanding,
+		"new_shares_outstanding": shares_outstanding,
+		"old_free_float_pct": free_float_pct,
+		"new_free_float_pct": free_float_pct
+	}
+
+
+func _pick_strategic_mna_acquirer(run_state, target_definition: Dictionary, _target_runtime: Dictionary, day_number: int) -> Dictionary:
+	var target_id: String = str(target_definition.get("id", ""))
+	var target_sector_id: String = str(target_definition.get("sector_id", ""))
+	var same_sector_rows: Array = []
+	var other_rows: Array = []
+	for candidate_id_value in run_state.company_order:
+		var candidate_id: String = str(candidate_id_value)
+		if candidate_id.is_empty() or candidate_id == target_id:
+			continue
+		var candidate_runtime: Dictionary = run_state.get_company(candidate_id)
+		if candidate_runtime.is_empty():
+			continue
+		var candidate_profile: Dictionary = candidate_runtime.get("company_profile", {})
+		if bool(candidate_profile.get("trade_disabled", false)):
+			continue
+		var candidate_definition: Dictionary = run_state.get_effective_company_definition(candidate_id, false, false)
+		if candidate_definition.is_empty():
+			continue
+		var candidate_financials: Dictionary = candidate_definition.get("financials", {})
+		var candidate_ticker: String = str(candidate_definition.get("ticker", candidate_id.to_upper()))
+		var candidate_name: String = str(candidate_definition.get("name", candidate_ticker))
+		var candidate_price: float = max(float(candidate_runtime.get("current_price", candidate_definition.get("base_price", 1.0))), 1.0)
+		var candidate_market_cap: float = max(
+			float(candidate_financials.get("market_cap", 0.0)),
+			candidate_price * max(float(candidate_financials.get("shares_outstanding", candidate_definition.get("shares_outstanding", 1000000.0))), 1.0)
+		)
+		var row: Dictionary = {
+			"acquirer_company_id": candidate_id,
+			"acquirer_ticker": candidate_ticker,
+			"acquirer_name": candidate_name,
+			"acquirer_label": "%s strategic group" % candidate_ticker,
+			"market_cap": candidate_market_cap
+		}
+		if str(candidate_definition.get("sector_id", "")) == target_sector_id:
+			same_sector_rows.append(row)
+		else:
+			other_rows.append(row)
+	var rows: Array = same_sector_rows if not same_sector_rows.is_empty() else other_rows
+	if not rows.is_empty():
+		rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return float(a.get("market_cap", 0.0)) > float(b.get("market_cap", 0.0))
+		)
+		var pick_window: int = min(rows.size(), 5)
+		var pick_index: int = _stable_range("%s|strategic_mna_acquirer|%d" % [target_id, day_number], 0, pick_window - 1)
+		return rows[pick_index].duplicate(true)
+	var external_labels: Array = [
+		"regional strategic buyer",
+		"controlling family vehicle",
+		"foreign industry group",
+		"state-linked holding company"
+	]
+	var external_label: String = str(external_labels[_stable_range("%s|strategic_mna_external|%d" % [target_id, day_number], 0, external_labels.size() - 1)])
+	return {
+		"acquirer_company_id": "",
+		"acquirer_ticker": "",
+		"acquirer_name": external_label.capitalize(),
+		"acquirer_label": external_label
+	}
+
+
+func _build_backdoor_listing_terms(catalog: Dictionary, definition: Dictionary, runtime: Dictionary, day_number: int) -> Dictionary:
+	var company_id: String = str(definition.get("id", runtime.get("company_id", "")))
+	if company_id.is_empty():
+		return {}
+	var config: Dictionary = catalog.get("backdoor_listing", {})
+	if not bool(config.get("enabled", true)):
+		return {}
+	var financials: Dictionary = definition.get("financials", {})
+	var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", 0.0))), 1.0)
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var old_market_cap: float = max(float(financials.get("market_cap", 0.0)), current_price * shares_outstanding)
+	var old_free_float_pct: float = clamp(float(financials.get("free_float_pct", 35.0)), 0.0, 100.0)
+	var min_control_pct: float = clamp(float(config.get("minimum_incoming_control_pct", 0.52)), 0.05, 0.95)
+	var max_control_pct: float = clamp(float(config.get("maximum_incoming_control_pct", 0.76)), min_control_pct, 0.97)
+	var min_issue_premium_pct: float = clamp(float(config.get("minimum_issue_premium_pct", -0.12)), -0.80, 2.0)
+	var max_issue_premium_pct: float = clamp(float(config.get("maximum_issue_premium_pct", 0.28)), min_issue_premium_pct, 3.0)
+	var min_asset_quality_score: float = clamp(float(config.get("minimum_asset_quality_score", 0.35)), 0.0, 1.0)
+	var max_asset_quality_score: float = clamp(float(config.get("maximum_asset_quality_score", 0.90)), min_asset_quality_score, 1.0)
+	var min_recognition_pct: float = clamp(float(config.get("minimum_valuation_recognition_pct", 0.72)), 0.1, 3.0)
+	var max_recognition_pct: float = clamp(float(config.get("maximum_valuation_recognition_pct", 1.22)), min_recognition_pct, 4.0)
+	var min_reprice_pct: float = clamp(float(config.get("minimum_price_reprice_pct", -0.16)), -0.8, 2.0)
+	var max_reprice_pct: float = clamp(float(config.get("maximum_price_reprice_pct", 0.55)), min_reprice_pct, 3.0)
+	var min_silent_accumulation_pct: float = clamp(float(config.get("minimum_silent_accumulation_pct", 0.08)), 0.0, 0.6)
+	var max_silent_accumulation_pct: float = clamp(float(config.get("maximum_silent_accumulation_pct", 0.22)), min_silent_accumulation_pct, 0.75)
+	var min_silent_days: int = max(int(config.get("minimum_silent_accumulation_days", 6)), 1)
+	var max_silent_days: int = max(int(config.get("maximum_silent_accumulation_days", 18)), min_silent_days)
+	var min_support_pct: float = clamp(float(config.get("minimum_accumulation_price_support_pct", 0.04)), 0.0, 0.8)
+	var max_support_pct: float = clamp(float(config.get("maximum_accumulation_price_support_pct", 0.18)), min_support_pct, 1.2)
+	var min_lockup_days: int = max(int(config.get("sponsor_lockup_minimum_days", 30)), 1)
+	var max_lockup_days: int = max(int(config.get("sponsor_lockup_maximum_days", 45)), min_lockup_days)
+	var unlock_warning_lead_days: int = clamp(int(config.get("sponsor_unlock_warning_lead_days", 5)), 1, max_lockup_days)
+	var min_overhang_pressure_pct: float = clamp(float(config.get("sponsor_unlock_minimum_overhang_pressure_pct", 0.10)), 0.0, 1.0)
+	var max_overhang_pressure_pct: float = clamp(float(config.get("sponsor_unlock_maximum_overhang_pressure_pct", 0.34)), min_overhang_pressure_pct, 1.0)
+	var min_milestone_count: int = max(int(config.get("post_deal_milestone_minimum_count", 3)), 1)
+	var max_milestone_count: int = max(int(config.get("post_deal_milestone_maximum_count", 4)), min_milestone_count)
+	var min_first_milestone_days: int = max(int(config.get("post_deal_first_milestone_minimum_days", 6)), 1)
+	var max_first_milestone_days: int = max(int(config.get("post_deal_first_milestone_maximum_days", 10)), min_first_milestone_days)
+	var min_milestone_gap_days: int = max(int(config.get("post_deal_milestone_minimum_gap_days", 7)), 1)
+	var max_milestone_gap_days: int = max(int(config.get("post_deal_milestone_maximum_gap_days", 12)), min_milestone_gap_days)
+	var target_control_pct: float = float(_stable_range(
+		"%s|backdoor_control|%d" % [company_id, day_number],
+		int(round(min_control_pct * 10000.0)),
+		int(round(max_control_pct * 10000.0))
+	)) / 10000.0
+	var issue_premium_pct: float = float(_stable_range(
+		"%s|backdoor_issue_premium|%d" % [company_id, day_number],
+		int(round(min_issue_premium_pct * 10000.0)),
+		int(round(max_issue_premium_pct * 10000.0))
+	)) / 10000.0
+	var asset_quality_score: float = float(_stable_range(
+		"%s|backdoor_asset_quality|%d" % [company_id, day_number],
+		int(round(min_asset_quality_score * 10000.0)),
+		int(round(max_asset_quality_score * 10000.0))
+	)) / 10000.0
+	var valuation_recognition_pct: float = float(_stable_range(
+		"%s|backdoor_valuation_recognition|%d" % [company_id, day_number],
+		int(round(min_recognition_pct * 10000.0)),
+		int(round(max_recognition_pct * 10000.0))
+	)) / 10000.0
+	var issue_price: float = _round_currency(max(current_price * (1.0 + issue_premium_pct), 1.0))
+	var raw_new_shares: float = shares_outstanding * target_control_pct / max(1.0 - target_control_pct, 0.0001)
+	var new_shares: int = int(round(raw_new_shares / 1000.0)) * 1000
+	new_shares = max(new_shares, 1000)
+	var new_shares_outstanding: float = shares_outstanding + float(new_shares)
+	var incoming_control_pct: float = clamp(float(new_shares) / new_shares_outstanding, 0.0, 0.99)
+	var old_free_float_shares: float = shares_outstanding * clamp(old_free_float_pct / 100.0, 0.0, 1.0)
+	var new_free_float_pct: float = clamp(old_free_float_shares / new_shares_outstanding, 0.02, 0.95) * 100.0
+	var injected_asset_value: float = _round_currency(float(new_shares) * issue_price)
+	var recognized_asset_value: float = _round_currency(injected_asset_value * valuation_recognition_pct)
+	var theoretical_post_market_cap: float = max(old_market_cap + recognized_asset_value, 1.0)
+	var theoretical_post_price: float = _round_currency(theoretical_post_market_cap / new_shares_outstanding)
+	var raw_reprice_pct: float = (theoretical_post_price - current_price) / current_price
+	var silent_accumulation_pct: float = float(_stable_range(
+		"%s|backdoor_silent_accumulation|%d" % [company_id, day_number],
+		int(round(min_silent_accumulation_pct * 10000.0)),
+		int(round(max_silent_accumulation_pct * 10000.0))
+	)) / 10000.0
+	var silent_accumulation_days: int = _stable_range(
+		"%s|backdoor_silent_days|%d" % [company_id, day_number],
+		min_silent_days,
+		max_silent_days
+	)
+	var accumulation_price_support_pct: float = float(_stable_range(
+		"%s|backdoor_accumulation_support|%d" % [company_id, day_number],
+		int(round(min_support_pct * 10000.0)),
+		int(round(max_support_pct * 10000.0))
+	)) / 10000.0
+	var theme_rows: Array = [
+		{
+			"id": "ai_infrastructure",
+			"incoming_asset_label": "AI infrastructure platform",
+			"name_suffix": "AI Infrastruktur",
+			"sector_id": "tech",
+			"sector_name": "Technology",
+			"archetype_label": "AI Infrastructure Platform",
+			"description": "After the control change, the company is repositioned around AI infrastructure, model-serving capacity, and enterprise automation demand.",
+			"tags": ["AI", "data infrastructure", "high capex"],
+			"rights_purpose": "GPU cluster, model-serving capacity, and working capital",
+			"capital_intensity": 0.88,
+			"liquidity_profile": 0.68,
+			"story_heat": 0.92,
+			"reprice_bonus": 0.024
+		},
+		{
+			"id": "data_center",
+			"incoming_asset_label": "data-center operator",
+			"name_suffix": "Data Center",
+			"sector_id": "infra",
+			"sector_name": "Infrastructure",
+			"archetype_label": "Data Center Operator",
+			"description": "After the control change, the company is repositioned around colocation, cloud demand, fiber access, and power-capacity expansion.",
+			"tags": ["data center", "cloud demand", "power capacity"],
+			"rights_purpose": "land, power capacity, and server-hall expansion",
+			"capital_intensity": 0.9,
+			"liquidity_profile": 0.7,
+			"story_heat": 0.9,
+			"reprice_bonus": 0.02
+		},
+		{
+			"id": "battery_materials",
+			"incoming_asset_label": "battery-materials mining asset",
+			"name_suffix": "Battery Materials",
+			"sector_id": "basicindustry",
+			"sector_name": "Basic-Industry",
+			"archetype_label": "Battery Materials Miner",
+			"description": "After the control change, the company is repositioned around nickel-linked battery materials, downstream processing, and resource optionality.",
+			"tags": ["mining", "battery materials", "downstreaming"],
+			"rights_purpose": "mine development, processing equipment, and permits",
+			"capital_intensity": 0.86,
+			"liquidity_profile": 0.62,
+			"story_heat": 0.86,
+			"reprice_bonus": 0.014
+		},
+		{
+			"id": "new_energy",
+			"incoming_asset_label": "new-energy development portfolio",
+			"name_suffix": "Energi Baru",
+			"sector_id": "energy",
+			"sector_name": "Energy",
+			"archetype_label": "New Energy Developer",
+			"description": "After the control change, the company is repositioned around transition-energy assets, grid projects, and long-cycle project development.",
+			"tags": ["new energy", "transition assets", "project pipeline"],
+			"rights_purpose": "project equity, grid connection, and EPC deposits",
+			"capital_intensity": 0.84,
+			"liquidity_profile": 0.64,
+			"story_heat": 0.84,
+			"reprice_bonus": 0.012
+		},
+		{
+			"id": "green_energy",
+			"incoming_asset_label": "green-energy infrastructure platform",
+			"name_suffix": "Green Energy",
+			"sector_id": "energy",
+			"sector_name": "Energy",
+			"archetype_label": "Green Infrastructure Platform",
+			"description": "After the control change, the company is repositioned around renewable infrastructure, carbon-light generation, and green-contract optionality.",
+			"tags": ["green energy", "renewables", "infrastructure"],
+			"rights_purpose": "renewable project equity and construction deposits",
+			"capital_intensity": 0.82,
+			"liquidity_profile": 0.66,
+			"story_heat": 0.84,
+			"reprice_bonus": 0.012
+		},
+		{
+			"id": "plantation_downstream",
+			"incoming_asset_label": "plantation downstreaming business",
+			"name_suffix": "Agro Downstream",
+			"sector_id": "noncyclical",
+			"sector_name": "Non-Cyclical",
+			"archetype_label": "Plantation Downstreamer",
+			"description": "After the control change, the company is repositioned around plantation supply, downstream processing, and export-oriented consumer inputs.",
+			"tags": ["plantation", "downstreaming", "export inputs"],
+			"rights_purpose": "mill upgrades, inventory, and export logistics",
+			"capital_intensity": 0.7,
+			"liquidity_profile": 0.58,
+			"story_heat": 0.74,
+			"reprice_bonus": 0.006
+		},
+		{
+			"id": "deep_tech",
+			"incoming_asset_label": "deep-tech manufacturing platform",
+			"name_suffix": "Deep Tech",
+			"sector_id": "industrial",
+			"sector_name": "Industrial",
+			"archetype_label": "Deep Tech Manufacturer",
+			"description": "After the control change, the company is repositioned around specialist manufacturing, automation hardware, and long-cycle industrial technology demand.",
+			"tags": ["deep tech", "automation", "specialist manufacturing"],
+			"rights_purpose": "factory tooling, R&D, and working capital",
+			"capital_intensity": 0.8,
+			"liquidity_profile": 0.62,
+			"story_heat": 0.82,
+			"reprice_bonus": 0.01
+		},
+		{
+			"id": "ev_components",
+			"incoming_asset_label": "EV-component supplier",
+			"name_suffix": "EV Components",
+			"sector_id": "industrial",
+			"sector_name": "Industrial",
+			"archetype_label": "EV Components Supplier",
+			"description": "After the control change, the company is repositioned around electric-vehicle components, supply-chain localization, and export customer wins.",
+			"tags": ["EV components", "localization", "manufacturing"],
+			"rights_purpose": "production lines, molds, and customer tooling",
+			"capital_intensity": 0.78,
+			"liquidity_profile": 0.64,
+			"story_heat": 0.82,
+			"reprice_bonus": 0.01
+		},
+		{
+			"id": "cloud_security",
+			"incoming_asset_label": "cloud-security software business",
+			"name_suffix": "Cloud Security",
+			"sector_id": "tech",
+			"sector_name": "Technology",
+			"archetype_label": "Cloud Security Platform",
+			"description": "After the control change, the company is repositioned around cloud security, managed services, and enterprise cyber-risk spending.",
+			"tags": ["cloud security", "managed services", "enterprise software"],
+			"rights_purpose": "product development, sales capacity, and acquisitions",
+			"capital_intensity": 0.56,
+			"liquidity_profile": 0.68,
+			"story_heat": 0.86,
+			"reprice_bonus": 0.016
+		},
+		{
+			"id": "waste_energy",
+			"incoming_asset_label": "waste-to-energy project company",
+			"name_suffix": "Waste Energy",
+			"sector_id": "energy",
+			"sector_name": "Energy",
+			"archetype_label": "Waste-to-Energy Developer",
+			"description": "After the control change, the company is repositioned around waste-to-energy projects, municipal concessions, and long-duration infrastructure contracts.",
+			"tags": ["waste-to-energy", "concession assets", "green infrastructure"],
+			"rights_purpose": "project equity, feedstock contracts, and construction deposits",
+			"capital_intensity": 0.86,
+			"liquidity_profile": 0.6,
+			"story_heat": 0.8,
+			"reprice_bonus": 0.008
+		}
+	]
+	var theme: Dictionary = theme_rows[_stable_range("%s|backdoor_theme|%d" % [company_id, day_number], 0, theme_rows.size() - 1)].duplicate(true)
+	var thematic_reprice_bonus: float = (
+		(asset_quality_score - 0.5) * 0.18 +
+		silent_accumulation_pct * 0.32 +
+		accumulation_price_support_pct * 0.18 +
+		float(theme.get("reprice_bonus", 0.0))
+	)
+	var price_reprice_pct: float = clamp(raw_reprice_pct + thematic_reprice_bonus, min_reprice_pct, max_reprice_pct)
+	var post_deal_price: float = _round_currency(current_price * (1.0 + price_reprice_pct))
+	var post_deal_market_cap: float = _round_currency(post_deal_price * new_shares_outstanding)
+	var sponsor_rows: Array = [
+		"founder vehicle",
+		"private operating company",
+		"regional sponsor",
+		"asset owner group",
+		"strategic consortium"
+	]
+	var incoming_asset_label: String = str(theme.get("incoming_asset_label", "private operating business"))
+	var sponsor_label: String = str(sponsor_rows[_stable_range("%s|backdoor_sponsor|%d" % [company_id, day_number], 0, sponsor_rows.size() - 1)])
+	var ticker: String = str(definition.get("ticker", company_id.to_upper()))
+	if ticker.is_empty():
+		ticker = company_id.to_upper()
+	var old_name: String = str(definition.get("name", ticker))
+	var old_sector_id: String = str(definition.get("sector_id", ""))
+	var old_sector_name: String = _sector_label_for_id(old_sector_id)
+	var post_deal_name: String = "%s %s Tbk" % [ticker, str(theme.get("name_suffix", "Strategic Platform"))]
+	var post_deal_sector_id: String = str(theme.get("sector_id", old_sector_id))
+	var post_deal_sector_name: String = str(theme.get("sector_name", _sector_label_for_id(post_deal_sector_id)))
+	var post_deal_tags: Array = theme.get("tags", []).duplicate()
+	var old_free_float_shares_rounded: float = max(old_free_float_shares, 1.0)
+	var silent_accumulation_shares: int = int(round(old_free_float_shares_rounded * silent_accumulation_pct / 1000.0)) * 1000
+	silent_accumulation_shares = int(max(silent_accumulation_shares, 0))
+	var silent_accumulation_value: float = _round_currency(float(silent_accumulation_shares) * current_price)
+	var follow_on_probability: float = clamp(
+		float(config.get("base_follow_on_rights_probability", 0.42)) +
+		float(theme.get("capital_intensity", 0.75)) * 0.22 +
+		max(asset_quality_score - 0.48, 0.0) * 0.24,
+		0.28,
+		0.88
+	)
+	var follow_on_rights_hint: bool = STABLE_RNG.unit_float([company_id, "backdoor_follow_on_rights", day_number]) <= follow_on_probability
+	var sponsor_lockup_days: int = _stable_range(
+		"%s|backdoor_sponsor_lockup_days|%d" % [company_id, day_number],
+		min_lockup_days,
+		max_lockup_days
+	)
+	var sponsor_overhang_pressure_pct: float = float(_stable_range(
+		"%s|backdoor_sponsor_overhang|%d" % [company_id, day_number],
+		int(round(min_overhang_pressure_pct * 10000.0)),
+		int(round(max_overhang_pressure_pct * 10000.0))
+	)) / 10000.0
+	var sponsor_behavior_roll: float = STABLE_RNG.unit_float([company_id, "backdoor_sponsor_behavior", day_number])
+	var sponsor_behavior: String = "gradual_distribution"
+	if sponsor_behavior_roll <= clamp(0.12 + asset_quality_score * 0.22, 0.08, 0.34):
+		sponsor_behavior = "lockup_extension"
+	elif sponsor_behavior_roll >= clamp(0.78 - asset_quality_score * 0.18, 0.52, 0.84):
+		sponsor_behavior = "aggressive_exit"
+	var sponsor_locked_shares: int = new_shares
+	var post_deal_identity: Dictionary = {
+		"old_name": old_name,
+		"old_sector_id": old_sector_id,
+		"old_sector_name": old_sector_name,
+		"post_deal_name": post_deal_name,
+		"post_deal_sector_id": post_deal_sector_id,
+		"post_deal_sector_name": post_deal_sector_name,
+		"post_deal_archetype_label": str(theme.get("archetype_label", "Strategic Platform")),
+		"post_deal_description": str(theme.get("description", "")),
+		"post_deal_tags": post_deal_tags.duplicate(),
+		"theme_id": str(theme.get("id", "")),
+		"ticker_unchanged": true
+	}
+	var milestone_count: int = _stable_range(
+		"%s|backdoor_milestone_count|%d" % [company_id, day_number],
+		min_milestone_count,
+		max_milestone_count
+	)
+	var first_milestone_delay_days: int = _stable_range(
+		"%s|backdoor_first_milestone|%d" % [company_id, day_number],
+		min_first_milestone_days,
+		max_first_milestone_days
+	)
+	var milestone_gap_days: int = _stable_range(
+		"%s|backdoor_milestone_gap|%d" % [company_id, day_number],
+		min_milestone_gap_days,
+		max_milestone_gap_days
+	)
+	var milestone_plan: Array = _build_backdoor_milestone_plan(
+		str(theme.get("id", "")),
+		incoming_asset_label,
+		str(theme.get("rights_purpose", "growth capex")),
+		milestone_count
+	)
+	return {
+		"deal_type": "reverse_takeover",
+		"consideration_type": "share_issue",
+		"incoming_asset_label": incoming_asset_label,
+		"sponsor_label": sponsor_label,
+		"post_deal_name": post_deal_name,
+		"post_deal_sector_id": post_deal_sector_id,
+		"post_deal_sector_name": post_deal_sector_name,
+		"post_deal_archetype_label": str(theme.get("archetype_label", "Strategic Platform")),
+		"post_deal_description": str(theme.get("description", "")),
+		"post_deal_tags": post_deal_tags.duplicate(),
+		"post_deal_identity": post_deal_identity,
+		"post_deal_capital_intensity": float(theme.get("capital_intensity", 0.75)),
+		"post_deal_liquidity_profile": float(theme.get("liquidity_profile", 0.62)),
+		"post_deal_story_heat": float(theme.get("story_heat", 0.8)),
+		"target_control_pct": target_control_pct,
+		"incoming_control_pct": incoming_control_pct,
+		"issue_premium_pct": issue_premium_pct,
+		"asset_quality_score": asset_quality_score,
+		"valuation_recognition_pct": valuation_recognition_pct,
+		"new_shares": new_shares,
+		"issue_price": issue_price,
+		"injected_asset_value": injected_asset_value,
+		"recognized_asset_value": recognized_asset_value,
+		"old_market_cap": old_market_cap,
+		"theoretical_post_market_cap": theoretical_post_market_cap,
+		"post_deal_market_cap": post_deal_market_cap,
+		"old_price": current_price,
+		"theoretical_post_price": theoretical_post_price,
+		"post_deal_price": post_deal_price,
+		"price_reprice_pct": price_reprice_pct,
+		"silent_accumulation_pct": silent_accumulation_pct,
+		"silent_accumulation_days": silent_accumulation_days,
+		"silent_accumulation_shares": silent_accumulation_shares,
+		"silent_accumulation_value": silent_accumulation_value,
+		"accumulation_price_support_pct": accumulation_price_support_pct,
+		"follow_on_rights_hint": follow_on_rights_hint,
+		"follow_on_rights_probability": follow_on_probability,
+		"follow_on_rights_purpose": str(theme.get("rights_purpose", "growth-capex and working capital")),
+		"sponsor_lockup_days": sponsor_lockup_days,
+		"sponsor_unlock_warning_lead_days": unlock_warning_lead_days,
+		"sponsor_locked_shares": sponsor_locked_shares,
+		"sponsor_behavior": sponsor_behavior,
+		"sponsor_overhang_pressure_pct": sponsor_overhang_pressure_pct,
+		"post_deal_milestone_count": milestone_count,
+		"post_deal_first_milestone_delay_days": first_milestone_delay_days,
+		"post_deal_milestone_gap_days": milestone_gap_days,
+		"post_deal_milestone_plan": milestone_plan,
+		"old_shares_outstanding": shares_outstanding,
+		"new_shares_outstanding": new_shares_outstanding,
+		"dilution_pct": float(new_shares) / shares_outstanding,
+		"old_free_float_pct": old_free_float_pct,
+		"new_free_float_pct": new_free_float_pct,
+		"volatility_event_multiplier": clamp(float(config.get("volatility_event_multiplier", 1.45)), 1.0, 3.0)
+	}
+
+
+func _build_backdoor_milestone_plan(theme_id: String, incoming_asset_label: String, funding_purpose: String, milestone_count: int) -> Array:
+	var generic_rows: Array = [
+		{
+			"id": "permit",
+			"label": "Permit and regulatory progress",
+			"description": "management needs to show permits, licenses, or regulatory progress for the injected business"
+		},
+		{
+			"id": "capex",
+			"label": "Capex funding update",
+			"description": "the market wants proof that funding for %s is actually lining up" % funding_purpose
+		},
+		{
+			"id": "partner",
+			"label": "Commercial partner update",
+			"description": "traders are watching for a customer, offtake, or strategic partner tied to %s" % incoming_asset_label
+		},
+		{
+			"id": "delivery",
+			"label": "Execution delivery",
+			"description": "the new business line needs a concrete delivery update instead of only post-deal storytelling"
+		}
+	]
+	var theme_overrides: Dictionary = {
+		"ai_infrastructure": [
+			{"id": "gpu_order", "label": "GPU capacity order", "description": "management needs to show credible GPU or server procurement"},
+			{"id": "data_partner", "label": "Enterprise AI customer", "description": "the market wants proof of enterprise demand for the AI platform"}
+		],
+		"data_center": [
+			{"id": "site_power", "label": "Power and site readiness", "description": "traders are watching PLN power, land, and data-center site progress"},
+			{"id": "anchor_tenant", "label": "Anchor tenant update", "description": "the data-center story needs a tenant or pre-commitment signal"}
+		],
+		"battery_mining": [
+			{"id": "reserve_update", "label": "Resource and permit update", "description": "the mining story needs resource, permit, and concession follow-through"},
+			{"id": "offtake", "label": "Offtake discussion", "description": "the market wants battery-materials offtake or buyer visibility"}
+		],
+		"green_energy": [
+			{"id": "ppa", "label": "Power-purchase progress", "description": "the green-energy reset needs a credible PPA or grid-connection update"},
+			{"id": "project_finance", "label": "Project-finance update", "description": "funding and lender support decide whether the project can move"}
+		],
+		"plantation_downstream": [
+			{"id": "mill_upgrade", "label": "Downstreaming capex update", "description": "the plantation story needs refinery or mill-upgrade progress"},
+			{"id": "export_contract", "label": "Export contract update", "description": "traders are watching for downstream buyer commitments"}
+		],
+		"deep_tech": [
+			{"id": "prototype", "label": "Prototype progress", "description": "the deep-tech story needs a visible prototype or pilot milestone"},
+			{"id": "institutional_partner", "label": "Research partner update", "description": "the market wants a credible institutional or enterprise partner"}
+		],
+		"ev_components": [
+			{"id": "tooling", "label": "Production tooling update", "description": "EV-component credibility depends on tooling, molds, and production readiness"},
+			{"id": "customer_nomination", "label": "Customer nomination", "description": "the market wants a named customer or nomination signal"}
+		],
+		"cloud_security": [
+			{"id": "product_release", "label": "Product-release progress", "description": "software credibility improves if management ships a real product update"},
+			{"id": "managed_service_client", "label": "Managed-service client", "description": "the market wants enterprise customer evidence for the security platform"}
+		],
+		"waste_energy": [
+			{"id": "municipal_concession", "label": "Municipal concession update", "description": "waste-to-energy credibility hinges on local concession and feedstock progress"},
+			{"id": "epc_partner", "label": "EPC partner update", "description": "the project needs construction partner or EPC visibility"}
+		]
+	}
+	var rows: Array = []
+	if theme_overrides.has(theme_id):
+		rows.append_array(theme_overrides.get(theme_id, []))
+	rows.append_array(generic_rows)
+	var plan: Array = []
+	var target_count: int = max(milestone_count, 1)
+	for row_index in range(min(target_count, rows.size())):
+		var row: Dictionary = rows[row_index].duplicate(true)
+		row["sequence"] = row_index + 1
+		plan.append(row)
+	return plan
+
+
+func _force_tender_terms_go_private(catalog: Dictionary, source_terms: Dictionary) -> Dictionary:
+	var terms: Dictionary = source_terms.duplicate(true)
+	if terms.is_empty():
+		return {}
+	var config: Dictionary = catalog.get("tender_offer", {})
+	var shares_outstanding: float = max(float(terms.get("old_shares_outstanding", 0.0)), 1.0)
+	var old_free_float_shares: float = max(float(terms.get("old_free_float_shares", 0.0)), 1.0)
+	var public_float_warning_pct: float = clamp(float(config.get("public_float_warning_pct", terms.get("public_float_warning_pct", 12.0))), 0.1, 95.0)
+	var go_private_trigger_pct: float = clamp(float(config.get("go_private_trigger_pct", terms.get("go_private_trigger_pct", 5.0))), 0.1, public_float_warning_pct)
+	var target_free_float_pct: float = max(go_private_trigger_pct - 1.0, 0.2)
+	var target_free_float_shares: float = max(shares_outstanding * target_free_float_pct / 100.0, 1.0)
+	var raw_accepted_shares: float = max(old_free_float_shares - target_free_float_shares, 1000.0)
+	var accepted_shares: int = int(floor(raw_accepted_shares / 1000.0)) * 1000
+	accepted_shares = int(clamp(float(accepted_shares), 1000.0, max(old_free_float_shares - 1.0, 1000.0)))
+	var acceptance_ratio: float = 0.65
+	var offer_shares: int = max(int(terms.get("offer_shares", 0)), int(ceil(float(accepted_shares) / acceptance_ratio / 1000.0)) * 1000)
+	var new_free_float_shares: float = max(old_free_float_shares - float(accepted_shares), 1.0)
+	var new_free_float_pct: float = clamp(new_free_float_shares / shares_outstanding, 0.02, 0.95) * 100.0
+	var premium_pct: float = max(float(terms.get("premium_pct", 0.0)), 0.0)
+	var price_support_per_pct: float = max(float(terms.get("price_support_per_pct", 1.2)), 0.0)
+	var maximum_price_support_pct: float = clamp(float(terms.get("maximum_price_support_pct", config.get("maximum_price_support_pct", 0.22))), 0.0, 0.6)
+	var price_support_pct: float = min(premium_pct * 0.35 + (float(accepted_shares) / shares_outstanding) * price_support_per_pct, maximum_price_support_pct)
+	var offer_price: float = float(terms.get("offer_price", 0.0))
+	var final_cashout_premium_pct: float = clamp(float(config.get("final_cashout_premium_pct", terms.get("final_cashout_premium_pct", 0.04))), 0.0, 0.50)
+	terms["offer_shares"] = offer_shares
+	terms["expected_accepted_shares"] = accepted_shares
+	terms["acceptance_ratio"] = acceptance_ratio
+	terms["offer_pct_of_free_float"] = float(offer_shares) / old_free_float_shares
+	terms["tender_budget"] = _round_currency(float(accepted_shares) * offer_price)
+	terms["new_free_float_shares"] = new_free_float_shares
+	terms["new_free_float_pct"] = new_free_float_pct
+	terms["price_support_pct"] = price_support_pct
+	terms["aftermath_state"] = "go_private_cashout"
+	terms["public_float_warning_pct"] = public_float_warning_pct
+	terms["go_private_trigger_pct"] = go_private_trigger_pct
+	terms["liquidity_penalty_multiplier"] = clamp(float(config.get("liquidity_penalty_multiplier", terms.get("liquidity_penalty_multiplier", 0.35))), 0.05, 1.0)
+	terms["volatility_event_multiplier"] = clamp(float(config.get("volatility_event_multiplier", terms.get("volatility_event_multiplier", 1.35))), 1.0, 3.0)
+	terms["final_cashout_premium_pct"] = final_cashout_premium_pct
+	terms["final_cashout_price"] = _round_currency(offer_price * (1.0 + final_cashout_premium_pct))
+	terms["debug_forced_go_private"] = true
+	return terms
+
+
+func _tender_offer_aftermath_state(new_free_float_pct: float, public_float_warning_pct: float, go_private_trigger_pct: float) -> String:
+	if new_free_float_pct <= go_private_trigger_pct:
+		return "go_private_cashout"
+	if new_free_float_pct <= public_float_warning_pct:
+		return "public_float_warning"
+	return "none"
+
+
 func _advance_chain(
 	run_state,
 	catalog: Dictionary,
@@ -1427,44 +2854,87 @@ func _advance_chain(
 	var next_stage_id: String = stage_id
 	var events: Array = []
 	var applications: Array = []
+	var spawned_chains: Array = []
 	match stage_id:
 		"hidden_positioning":
 			next_stage_id = "unusual_activity"
 			chain["smart_money_phase"] = "accumulating"
 			chain["current_timeline_state"] = "forming"
+			if str(chain.get("family", "")) == "backdoor_listing":
+				chain["smart_money_phase"] = "silent_accumulation"
+				chain["current_timeline_state"] = "quiet_accumulation"
+				chain["public_heat"] = clamp(float(chain.get("public_heat", 0.0)) + 0.015, 0.0, 0.28)
+				chain["retail_positioning"] = clamp(float(chain.get("retail_positioning", 0.0)) + 0.005, 0.0, 0.18)
 		"unusual_activity":
 			next_stage_id = "rumor_leak"
-			chain["public_heat"] = clamp(float(chain.get("public_heat", 0.0)) + 0.08, 0.0, 1.0)
-			chain["retail_positioning"] = clamp(float(chain.get("retail_positioning", 0.0)) + 0.04, 0.0, 1.0)
-			events.append(_build_public_event(
-				catalog,
-				chain,
-				trade_date,
-				day_number,
-				"corporate_action_rumor",
-				"%s sparks fresh rumor flow" % str(chain.get("target_ticker", "")),
-				"Talk around %s is picking up as traders chase a possible %s angle." % [
-					str(chain.get("target_company_name", "")),
-					_family_label(str(chain.get("family", ""))).to_lower()
-				]
-			))
+			if str(chain.get("family", "")) == "backdoor_listing":
+				var unusual_terms: Dictionary = chain.get("backdoor_terms", {})
+				chain["smart_money_phase"] = "silent_accumulation"
+				chain["public_heat"] = clamp(float(chain.get("public_heat", 0.0)) + 0.05, 0.0, 1.0)
+				chain["retail_positioning"] = clamp(float(chain.get("retail_positioning", 0.0)) + 0.02, 0.0, 1.0)
+				events.append(_build_public_event(
+					catalog,
+					chain,
+					trade_date,
+					day_number,
+					"corporate_action_rumor",
+					"%s shows quiet accumulation on the tape" % str(chain.get("target_ticker", "")),
+					"The bid in %s keeps absorbing supply without a formal filing, pointing traders toward a possible control-change buyer after roughly %d quiet sessions." % [
+						str(chain.get("target_company_name", "")),
+						int(unusual_terms.get("silent_accumulation_days", 0))
+					]
+				))
+			else:
+				chain["public_heat"] = clamp(float(chain.get("public_heat", 0.0)) + 0.08, 0.0, 1.0)
+				chain["retail_positioning"] = clamp(float(chain.get("retail_positioning", 0.0)) + 0.04, 0.0, 1.0)
+				events.append(_build_public_event(
+					catalog,
+					chain,
+					trade_date,
+					day_number,
+					"corporate_action_rumor",
+					"%s sparks fresh rumor flow" % str(chain.get("target_ticker", "")),
+					"Talk around %s is picking up as traders chase a possible %s angle." % [
+						str(chain.get("target_company_name", "")),
+						_family_label(str(chain.get("family", ""))).to_lower()
+					]
+				))
 		"rumor_leak":
 			next_stage_id = "public_speculation"
-			chain["public_heat"] = clamp(float(chain.get("public_heat", 0.0)) + 0.12, 0.0, 1.0)
-			chain["retail_positioning"] = clamp(float(chain.get("retail_positioning", 0.0)) + 0.1, 0.0, 1.0)
-			chain["smart_money_phase"] = "waiting"
-			events.append(_build_public_event(
-				catalog,
-				chain,
-				trade_date,
-				day_number,
-				"corporate_action_speculation",
-				"%s speculation grows louder" % str(chain.get("target_ticker", "")),
-				"Speculation around %s is broadening as more traders focus on a possible %s setup." % [
-					str(chain.get("target_company_name", "")),
-					_family_label(str(chain.get("family", ""))).to_lower()
-				]
-			))
+			if str(chain.get("family", "")) == "backdoor_listing":
+				var leak_terms: Dictionary = chain.get("backdoor_terms", {})
+				chain["public_heat"] = clamp(float(chain.get("public_heat", 0.0)) + 0.14, 0.0, 1.0)
+				chain["retail_positioning"] = clamp(float(chain.get("retail_positioning", 0.0)) + 0.11, 0.0, 1.0)
+				chain["smart_money_phase"] = "waiting_for_reveal"
+				events.append(_build_public_event(
+					catalog,
+					chain,
+					trade_date,
+					day_number,
+					"corporate_action_speculation",
+					"%s linked to new-business asset talk" % str(chain.get("target_ticker", "")),
+					"Chatter around %s now points to %s and a possible %s injection, turning the earlier quiet accumulation into a visible story." % [
+						str(chain.get("target_company_name", "")),
+						str(leak_terms.get("sponsor_label", "private operating company")),
+						str(leak_terms.get("incoming_asset_label", "private operating business"))
+					]
+				))
+			else:
+				chain["public_heat"] = clamp(float(chain.get("public_heat", 0.0)) + 0.12, 0.0, 1.0)
+				chain["retail_positioning"] = clamp(float(chain.get("retail_positioning", 0.0)) + 0.1, 0.0, 1.0)
+				chain["smart_money_phase"] = "waiting"
+				events.append(_build_public_event(
+					catalog,
+					chain,
+					trade_date,
+					day_number,
+					"corporate_action_speculation",
+					"%s speculation grows louder" % str(chain.get("target_ticker", "")),
+					"Speculation around %s is broadening as more traders focus on a possible %s setup." % [
+						str(chain.get("target_company_name", "")),
+						_family_label(str(chain.get("family", ""))).to_lower()
+					]
+				))
 		"public_speculation":
 			next_stage_id = "management_response"
 			chain["management_stance"] = "deny" if bool(_family_definition(catalog, str(chain.get("family", ""))).get("prefers_denial_response", false)) else "clarify"
@@ -1516,22 +2986,59 @@ func _advance_chain(
 				chain["last_advanced_day_index"] = day_number
 				chain["next_review_day_index"] = meeting_day_number
 				chain["next_expected_step"] = "The market is now waiting for %s." % _meeting_type_label(str(chain.get("expected_meeting_type", ""))).to_lower()
-				events.append(_build_public_event(
-					catalog,
-					chain,
-					trade_date,
-					day_number,
-					"corporate_action_filing",
-					"%s formally schedules %s" % [
-						str(chain.get("target_ticker", "")),
-						_meeting_type_label(str(chain.get("expected_meeting_type", "")))
-					],
-					"%s now has a formal %s on the calendar tied to its %s storyline." % [
-						str(chain.get("target_company_name", "")),
-						_meeting_type_label(str(chain.get("expected_meeting_type", ""))).to_lower(),
-						_family_label(str(chain.get("family", ""))).to_lower()
-					]
-				))
+				if str(chain.get("family", "")) == "backdoor_listing":
+					var filing_terms: Dictionary = chain.get("backdoor_terms", {})
+					var rights_sentence: String = "Management also leaves room for a follow-on rights issue to fund %s." % str(filing_terms.get("follow_on_rights_purpose", "growth capex")) if bool(filing_terms.get("follow_on_rights_hint", false)) else "The first filing focuses on control change and asset injection before any funding round."
+					events.append(_build_public_event(
+						catalog,
+						chain,
+						trade_date,
+						day_number,
+						"corporate_action_filing",
+						"%s files control-change and asset-injection agenda" % str(chain.get("target_ticker", "")),
+						"%s schedules %s for a %s injection by %s, with the proposed business profile shifting toward %s. %s" % [
+							str(chain.get("target_company_name", "")),
+							_meeting_type_label(str(chain.get("expected_meeting_type", ""))),
+							str(filing_terms.get("incoming_asset_label", "private operating business")),
+							str(filing_terms.get("sponsor_label", "private operating company")),
+							str(filing_terms.get("post_deal_sector_name", "a new sector")),
+							rights_sentence
+						]
+					))
+				elif str(chain.get("family", "")) == "rights_issue" and bool(chain.get("rights_terms", {}).get("linked_backdoor_listing", false)):
+					var linked_terms: Dictionary = chain.get("rights_terms", {})
+					events.append(_build_public_event(
+						catalog,
+						chain,
+						trade_date,
+						day_number,
+						"corporate_action_filing",
+						"%s files follow-on rights issue agenda" % str(chain.get("target_ticker", "")),
+						"%s now has a formal %s for a follow-on rights issue to fund %s after the %s injection. Traders are weighing %s against fresh dilution." % [
+							str(chain.get("target_company_name", "")),
+							_meeting_type_label(str(chain.get("expected_meeting_type", ""))),
+							str(linked_terms.get("funding_purpose", "growth capex")),
+							str(linked_terms.get("incoming_asset_label", "asset")),
+							"project unlock" if str(linked_terms.get("funding_status", "")) == "unlock_value" else "funding pressure"
+						]
+					))
+				else:
+					events.append(_build_public_event(
+						catalog,
+						chain,
+						trade_date,
+						day_number,
+						"corporate_action_filing",
+						"%s formally schedules %s" % [
+							str(chain.get("target_ticker", "")),
+							_meeting_type_label(str(chain.get("expected_meeting_type", "")))
+						],
+						"%s now has a formal %s on the calendar tied to its %s storyline." % [
+							str(chain.get("target_company_name", "")),
+							_meeting_type_label(str(chain.get("expected_meeting_type", ""))).to_lower(),
+							_family_label(str(chain.get("family", ""))).to_lower()
+						]
+					))
 				return {"chain": chain, "events": events}
 			next_stage_id = "meeting_or_call"
 		"meeting_or_call":
@@ -1559,18 +3066,34 @@ func _advance_chain(
 				chain["smart_money_phase"] = "accumulating"
 				chain["next_expected_step"] = "Watch for execution."
 				next_stage_id = "execution"
-				events.append(_build_public_event(
-					catalog,
-					chain,
-					trade_date,
-					day_number,
-					"corporate_action_resolution",
-					"%s approves key %s agenda" % [
-						str(chain.get("target_ticker", "")),
-						_family_label(str(chain.get("family", ""))).to_lower()
-					],
-					"%s clears a major approval hurdle and traders are now looking for execution follow-through." % str(chain.get("target_company_name", ""))
-				))
+				if str(chain.get("family", "")) == "backdoor_listing":
+					var resolution_terms: Dictionary = chain.get("backdoor_terms", {})
+					events.append(_build_public_event(
+						catalog,
+						chain,
+						trade_date,
+						day_number,
+						"corporate_action_resolution",
+						"%s approves asset-injection reset" % str(chain.get("target_ticker", "")),
+						"%s clears the control-change vote, putting the %s injection and proposed %s identity into execution watch." % [
+							str(chain.get("target_company_name", "")),
+							str(resolution_terms.get("incoming_asset_label", "private operating business")),
+							str(resolution_terms.get("post_deal_name", chain.get("target_company_name", "")))
+						]
+					))
+				else:
+					events.append(_build_public_event(
+						catalog,
+						chain,
+						trade_date,
+						day_number,
+						"corporate_action_resolution",
+						"%s approves key %s agenda" % [
+							str(chain.get("target_ticker", "")),
+							_family_label(str(chain.get("family", ""))).to_lower()
+						],
+						"%s clears a major approval hurdle and traders are now looking for execution follow-through." % str(chain.get("target_company_name", ""))
+					))
 			else:
 				chain["outcome_state"] = "cancelled"
 				chain["current_timeline_state"] = "cancelled"
@@ -1605,19 +3128,70 @@ func _advance_chain(
 				var placement_application: Dictionary = _build_private_placement_application(chain, trade_date, day_number)
 				if not placement_application.is_empty():
 					applications.append(placement_application)
+			if str(chain.get("family", "")) == "restructuring":
+				var restructuring_application: Dictionary = _build_restructuring_application(chain, trade_date, day_number)
+				if not restructuring_application.is_empty():
+					applications.append(restructuring_application)
+					events.append(_build_restructuring_completion_event(catalog, chain, restructuring_application, trade_date, day_number))
 			if str(chain.get("family", "")) == "stock_buyback":
 				var buyback_application: Dictionary = _build_stock_buyback_application(chain, trade_date, day_number)
 				if not buyback_application.is_empty():
 					applications.append(buyback_application)
-			events.append(_build_public_event(
-				catalog,
-				chain,
-				trade_date,
-				day_number,
-				"corporate_action_execution",
-				"%s enters execution phase" % str(chain.get("target_ticker", "")),
-				"%s is moving from approval into execution, with price action now deciding whether the move can extend." % str(chain.get("target_company_name", ""))
-			))
+			if str(chain.get("family", "")) == "stock_split":
+				var split_application: Dictionary = _build_stock_split_application(chain, trade_date, day_number)
+				if not split_application.is_empty():
+					applications.append(split_application)
+			if str(chain.get("family", "")) == "tender_offer":
+				var tender_application: Dictionary = _build_tender_offer_application(chain, trade_date, day_number)
+				if not tender_application.is_empty():
+					applications.append(tender_application)
+					var tender_aftermath_event: Dictionary = _build_tender_offer_aftermath_event(catalog, chain, tender_application, trade_date, day_number)
+					if not tender_aftermath_event.is_empty():
+						events.append(tender_aftermath_event)
+			if str(chain.get("family", "")) == "strategic_merger_acquisition":
+				var mna_application: Dictionary = _build_strategic_mna_application(chain, trade_date, day_number)
+				if not mna_application.is_empty():
+					applications.append(mna_application)
+					events.append(_build_strategic_mna_completion_event(catalog, chain, mna_application, trade_date, day_number))
+			if str(chain.get("family", "")) == "backdoor_listing":
+				var backdoor_application: Dictionary = _build_backdoor_listing_application(chain, trade_date, day_number)
+				if not backdoor_application.is_empty():
+					applications.append(backdoor_application)
+					events.append(_build_backdoor_listing_completion_event(catalog, chain, backdoor_application, trade_date, day_number))
+					if bool(backdoor_application.get("follow_on_rights_hint", false)):
+						var follow_on_chain: Dictionary = _build_backdoor_follow_on_rights_chain(catalog, chain, backdoor_application, day_number)
+						if not follow_on_chain.is_empty():
+							spawned_chains.append(follow_on_chain)
+							events.append(_build_backdoor_follow_on_rights_spawn_event(catalog, follow_on_chain, backdoor_application, trade_date, day_number))
+			if str(chain.get("family", "")) == "ceo_change":
+				var ceo_application: Dictionary = _build_ceo_change_application(chain, trade_date, day_number)
+				if not ceo_application.is_empty():
+					applications.append(ceo_application)
+					events.append(_build_ceo_change_completion_event(catalog, chain, ceo_application, trade_date, day_number))
+			if str(chain.get("family", "")) == "backdoor_listing":
+				var execution_terms: Dictionary = chain.get("backdoor_terms", {})
+				events.append(_build_public_event(
+					catalog,
+					chain,
+					trade_date,
+					day_number,
+					"corporate_action_execution",
+					"%s begins post-deal identity reset" % str(chain.get("target_ticker", "")),
+					"The shell remains listed while the market reprices the new %s profile, tighter float, and %.0f%% incoming control." % [
+						str(execution_terms.get("post_deal_sector_name", "operating business")),
+						float(execution_terms.get("incoming_control_pct", 0.0)) * 100.0
+					]
+				))
+			else:
+				events.append(_build_public_event(
+					catalog,
+					chain,
+					trade_date,
+					day_number,
+					"corporate_action_execution",
+					"%s enters execution phase" % str(chain.get("target_ticker", "")),
+					"%s is moving from approval into execution, with price action now deciding whether the move can extend." % str(chain.get("target_company_name", ""))
+				))
 		"aftermath":
 			return {"chain": {}, "events": events}
 		_:
@@ -1633,7 +3207,7 @@ func _advance_chain(
 		chain["current_timeline_state"] = "approved"
 	elif next_stage_id == "aftermath" and str(chain.get("outcome_state", "")) == "approved":
 		chain["current_timeline_state"] = "completed"
-	return {"chain": chain, "events": events, "applications": applications}
+	return {"chain": chain, "events": events, "applications": applications, "spawned_chains": spawned_chains}
 
 
 func _build_rights_issue_application(
@@ -1683,6 +3257,19 @@ func _build_rights_issue_application(
 		"theoretical_ex_rights_price": float(terms.get("theoretical_ex_rights_price", 0.0)),
 		"maximum_price_adjustment_down_pct": float(terms.get("maximum_price_adjustment_down_pct", 0.35)),
 		"maximum_price_adjustment_up_pct": float(terms.get("maximum_price_adjustment_up_pct", 0.08)),
+		"linked_backdoor_listing": bool(terms.get("linked_backdoor_listing", false)),
+		"source_backdoor_chain_id": str(terms.get("source_backdoor_chain_id", "")),
+		"source_backdoor_application_day": int(terms.get("source_backdoor_application_day", 0)),
+		"incoming_asset_label": str(terms.get("incoming_asset_label", "")),
+		"sponsor_label": str(terms.get("sponsor_label", "")),
+		"post_deal_name": str(terms.get("post_deal_name", "")),
+		"post_deal_sector_id": str(terms.get("post_deal_sector_id", "")),
+		"post_deal_sector_name": str(terms.get("post_deal_sector_name", "")),
+		"funding_purpose": str(terms.get("funding_purpose", "")),
+		"funding_unlock_score": float(terms.get("funding_unlock_score", 0.0)),
+		"strategic_funding_unlock_pct": float(terms.get("strategic_funding_unlock_pct", 0.0)),
+		"dilution_overhang_pct": float(terms.get("dilution_overhang_pct", 0.0)),
+		"funding_status": str(terms.get("funding_status", "")),
 		"trade_date": trade_date.duplicate(true),
 		"day_index": day_number
 	}
@@ -1703,6 +3290,42 @@ func _build_private_placement_application(chain: Dictionary, trade_date: Diction
 		"issuance_pct": float(terms.get("issuance_pct", 0.0)),
 		"discount_pct": float(terms.get("discount_pct", 0.0)),
 		"investor_label": str(terms.get("investor_label", "strategic investor")),
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
+
+
+func _build_restructuring_application(chain: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
+	var terms: Dictionary = chain.get("restructuring_terms", {}).duplicate(true)
+	if terms.is_empty():
+		return {}
+	return {
+		"application_type": "restructuring",
+		"chain_id": str(chain.get("chain_id", "")),
+		"company_id": str(chain.get("company_id", "")),
+		"ticker": str(chain.get("target_ticker", "")),
+		"plan_type": str(terms.get("plan_type", "debt_workout")),
+		"plan_label": str(terms.get("plan_label", "Debt workout")),
+		"plan_description": str(terms.get("plan_description", "")),
+		"debt_reduction_pct": float(terms.get("debt_reduction_pct", 0.0)),
+		"debt_conversion_pct": float(terms.get("debt_conversion_pct", 0.0)),
+		"asset_sale_pct_of_market_cap": float(terms.get("asset_sale_pct_of_market_cap", 0.0)),
+		"asset_sale_value": float(terms.get("asset_sale_value", 0.0)),
+		"creditor_support_score": float(terms.get("creditor_support_score", 0.0)),
+		"credibility_score": float(terms.get("credibility_score", 0.0)),
+		"distress_score": float(terms.get("distress_score", 0.0)),
+		"stress_overhang_pct": float(terms.get("stress_overhang_pct", 0.0)),
+		"suspension_risk_pct": float(terms.get("suspension_risk_pct", 0.0)),
+		"liquidity_penalty_multiplier": float(terms.get("liquidity_penalty_multiplier", 1.0)),
+		"volatility_event_multiplier": float(terms.get("volatility_event_multiplier", 1.45)),
+		"price_adjustment_pct": float(terms.get("price_adjustment_pct", 0.0)),
+		"old_price": float(terms.get("old_price", 0.0)),
+		"new_reference_price": float(terms.get("new_reference_price", 0.0)),
+		"new_shares": int(terms.get("new_shares", 0)),
+		"old_shares_outstanding": float(terms.get("old_shares_outstanding", 0.0)),
+		"new_shares_outstanding": float(terms.get("new_shares_outstanding", terms.get("old_shares_outstanding", 0.0))),
+		"old_free_float_pct": float(terms.get("old_free_float_pct", 0.0)),
+		"new_free_float_pct": float(terms.get("new_free_float_pct", terms.get("old_free_float_pct", 0.0))),
 		"trade_date": trade_date.duplicate(true),
 		"day_index": day_number
 	}
@@ -1739,6 +3362,1036 @@ func _build_stock_buyback_application(chain: Dictionary, trade_date: Dictionary,
 	}
 
 
+func _build_stock_split_application(chain: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
+	var terms: Dictionary = chain.get("split_terms", {}).duplicate(true)
+	if terms.is_empty():
+		return {}
+	var share_multiplier: float = max(float(terms.get("share_multiplier", 0.0)), 0.0001)
+	return {
+		"application_type": "stock_split",
+		"chain_id": str(chain.get("chain_id", "")),
+		"company_id": str(chain.get("company_id", "")),
+		"ticker": str(chain.get("target_ticker", "")),
+		"split_type": str(terms.get("split_type", "split")),
+		"ratio_numerator": int(terms.get("ratio_numerator", 1)),
+		"ratio_denominator": int(terms.get("ratio_denominator", 1)),
+		"share_multiplier": share_multiplier,
+		"price_factor": float(terms.get("price_factor", 1.0 / share_multiplier)),
+		"old_shares_outstanding": float(terms.get("old_shares_outstanding", 0.0)),
+		"new_shares_outstanding": float(terms.get("new_shares_outstanding", 0.0)),
+		"old_price": float(terms.get("old_price", 0.0)),
+		"theoretical_ex_split_price": float(terms.get("theoretical_ex_split_price", 0.0)),
+		"old_free_float_pct": float(terms.get("old_free_float_pct", 0.0)),
+		"new_free_float_pct": float(terms.get("new_free_float_pct", terms.get("old_free_float_pct", 0.0))),
+		"sentiment_price_adjustment_pct": float(terms.get("sentiment_price_adjustment_pct", 0.0)),
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
+
+
+func _build_tender_offer_application(chain: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
+	var terms: Dictionary = chain.get("tender_terms", {}).duplicate(true)
+	if terms.is_empty():
+		return {}
+	var accepted_shares: int = int(terms.get("expected_accepted_shares", 0))
+	if accepted_shares <= 0:
+		return {}
+	var meeting_result_summary: Dictionary = chain.get("meeting_result_summary", {}).duplicate(true)
+	return {
+		"application_type": "tender_offer",
+		"chain_id": str(chain.get("chain_id", "")),
+		"company_id": str(chain.get("company_id", "")),
+		"ticker": str(chain.get("target_ticker", "")),
+		"meeting_id": str(chain.get("active_meeting_id", "")),
+		"player_tender_choice": str(meeting_result_summary.get("player_tender_choice", "auto_prorata")),
+		"offer_type": str(terms.get("offer_type", "voluntary_tender_offer")),
+		"offeror_label": str(terms.get("offeror_label", "strategic acquirer")),
+		"offer_shares": int(terms.get("offer_shares", accepted_shares)),
+		"accepted_shares": accepted_shares,
+		"offer_price": float(terms.get("offer_price", 0.0)),
+		"premium_pct": float(terms.get("premium_pct", 0.0)),
+		"offer_pct_of_free_float": float(terms.get("offer_pct_of_free_float", 0.0)),
+		"acceptance_ratio": float(terms.get("acceptance_ratio", 0.0)),
+		"tender_budget": float(terms.get("tender_budget", 0.0)),
+		"price_support_per_pct": float(terms.get("price_support_per_pct", 1.2)),
+		"maximum_price_support_pct": float(terms.get("maximum_price_support_pct", 0.22)),
+		"price_support_pct": float(terms.get("price_support_pct", 0.0)),
+		"aftermath_state": str(terms.get("aftermath_state", "none")),
+		"public_float_warning_pct": float(terms.get("public_float_warning_pct", 12.0)),
+		"go_private_trigger_pct": float(terms.get("go_private_trigger_pct", 5.0)),
+		"liquidity_penalty_multiplier": float(terms.get("liquidity_penalty_multiplier", 0.35)),
+		"volatility_event_multiplier": float(terms.get("volatility_event_multiplier", 1.35)),
+		"final_cashout_premium_pct": float(terms.get("final_cashout_premium_pct", 0.04)),
+		"final_cashout_price": float(terms.get("final_cashout_price", terms.get("offer_price", 0.0))),
+		"old_shares_outstanding": float(terms.get("old_shares_outstanding", 0.0)),
+		"new_shares_outstanding": float(terms.get("new_shares_outstanding", terms.get("old_shares_outstanding", 0.0))),
+		"old_free_float_pct": float(terms.get("old_free_float_pct", 0.0)),
+		"new_free_float_pct": float(terms.get("new_free_float_pct", 0.0)),
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
+
+
+func _build_strategic_mna_application(chain: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
+	var terms: Dictionary = chain.get("mna_terms", {}).duplicate(true)
+	if terms.is_empty():
+		return {}
+	var cashout_price: float = float(terms.get("cashout_price", 0.0))
+	if cashout_price <= 0.0:
+		return {}
+	return {
+		"application_type": "strategic_merger_acquisition",
+		"chain_id": str(chain.get("chain_id", "")),
+		"company_id": str(chain.get("company_id", "")),
+		"ticker": str(chain.get("target_ticker", "")),
+		"deal_type": str(terms.get("deal_type", "cash_acquisition")),
+		"consideration_type": str(terms.get("consideration_type", "cash")),
+		"acquirer_company_id": str(terms.get("acquirer_company_id", "")),
+		"acquirer_ticker": str(terms.get("acquirer_ticker", "")),
+		"acquirer_name": str(terms.get("acquirer_name", "")),
+		"acquirer_label": str(terms.get("acquirer_label", "strategic acquirer")),
+		"offer_premium_pct": float(terms.get("offer_premium_pct", 0.0)),
+		"completion_cashout_premium_pct": float(terms.get("completion_cashout_premium_pct", 0.0)),
+		"total_premium_pct": float(terms.get("total_premium_pct", 0.0)),
+		"cashout_price": cashout_price,
+		"reference_price": float(terms.get("reference_price", 0.0)),
+		"equity_value": float(terms.get("equity_value", 0.0)),
+		"synergy_score": float(terms.get("synergy_score", 0.0)),
+		"price_support_per_premium_pct": float(terms.get("price_support_per_premium_pct", 0.55)),
+		"maximum_price_support_pct": float(terms.get("maximum_price_support_pct", 0.30)),
+		"price_support_pct": float(terms.get("price_support_pct", 0.0)),
+		"old_shares_outstanding": float(terms.get("old_shares_outstanding", 0.0)),
+		"new_shares_outstanding": float(terms.get("new_shares_outstanding", terms.get("old_shares_outstanding", 0.0))),
+		"old_free_float_pct": float(terms.get("old_free_float_pct", 0.0)),
+		"new_free_float_pct": float(terms.get("new_free_float_pct", terms.get("old_free_float_pct", 0.0))),
+		"listing_status_after": str(terms.get("listing_status_after", "acquired_cashout")),
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
+
+
+func _build_backdoor_listing_application(chain: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
+	var terms: Dictionary = chain.get("backdoor_terms", {}).duplicate(true)
+	if terms.is_empty():
+		return {}
+	var new_shares: int = int(terms.get("new_shares", 0))
+	if new_shares <= 0:
+		return {}
+	var identity_value = terms.get("post_deal_identity", {})
+	var post_deal_identity: Dictionary = identity_value.duplicate(true) if typeof(identity_value) == TYPE_DICTIONARY else {}
+	var post_deal_tags: Array = terms.get("post_deal_tags", []).duplicate()
+	var post_deal_milestone_plan: Array = terms.get("post_deal_milestone_plan", []).duplicate(true)
+	return {
+		"application_type": "backdoor_listing",
+		"chain_id": str(chain.get("chain_id", "")),
+		"company_id": str(chain.get("company_id", "")),
+		"ticker": str(chain.get("target_ticker", "")),
+		"deal_type": str(terms.get("deal_type", "reverse_takeover")),
+		"consideration_type": str(terms.get("consideration_type", "share_issue")),
+		"incoming_asset_label": str(terms.get("incoming_asset_label", "private operating business")),
+		"sponsor_label": str(terms.get("sponsor_label", "private operating company")),
+		"post_deal_name": str(terms.get("post_deal_name", "")),
+		"post_deal_sector_id": str(terms.get("post_deal_sector_id", "")),
+		"post_deal_sector_name": str(terms.get("post_deal_sector_name", "")),
+		"post_deal_archetype_label": str(terms.get("post_deal_archetype_label", "")),
+		"post_deal_description": str(terms.get("post_deal_description", "")),
+		"post_deal_tags": post_deal_tags,
+		"post_deal_identity": post_deal_identity,
+		"post_deal_capital_intensity": float(terms.get("post_deal_capital_intensity", 0.75)),
+		"post_deal_liquidity_profile": float(terms.get("post_deal_liquidity_profile", 0.62)),
+		"post_deal_story_heat": float(terms.get("post_deal_story_heat", 0.8)),
+		"target_control_pct": float(terms.get("target_control_pct", 0.0)),
+		"incoming_control_pct": float(terms.get("incoming_control_pct", 0.0)),
+		"issue_premium_pct": float(terms.get("issue_premium_pct", 0.0)),
+		"asset_quality_score": float(terms.get("asset_quality_score", 0.0)),
+		"valuation_recognition_pct": float(terms.get("valuation_recognition_pct", 1.0)),
+		"new_shares": new_shares,
+		"issue_price": float(terms.get("issue_price", 0.0)),
+		"injected_asset_value": float(terms.get("injected_asset_value", 0.0)),
+		"recognized_asset_value": float(terms.get("recognized_asset_value", 0.0)),
+		"old_market_cap": float(terms.get("old_market_cap", 0.0)),
+		"theoretical_post_market_cap": float(terms.get("theoretical_post_market_cap", 0.0)),
+		"post_deal_market_cap": float(terms.get("post_deal_market_cap", 0.0)),
+		"old_price": float(terms.get("old_price", 0.0)),
+		"theoretical_post_price": float(terms.get("theoretical_post_price", 0.0)),
+		"post_deal_price": float(terms.get("post_deal_price", 0.0)),
+		"price_reprice_pct": float(terms.get("price_reprice_pct", 0.0)),
+		"silent_accumulation_pct": float(terms.get("silent_accumulation_pct", 0.0)),
+		"silent_accumulation_days": int(terms.get("silent_accumulation_days", 0)),
+		"silent_accumulation_shares": int(terms.get("silent_accumulation_shares", 0)),
+		"silent_accumulation_value": float(terms.get("silent_accumulation_value", 0.0)),
+		"accumulation_price_support_pct": float(terms.get("accumulation_price_support_pct", 0.0)),
+		"follow_on_rights_hint": bool(terms.get("follow_on_rights_hint", false)),
+		"follow_on_rights_chain_id": _backdoor_follow_on_rights_chain_id(str(chain.get("company_id", "")), day_number) if bool(terms.get("follow_on_rights_hint", false)) else "",
+		"follow_on_rights_probability": float(terms.get("follow_on_rights_probability", 0.0)),
+		"follow_on_rights_purpose": str(terms.get("follow_on_rights_purpose", "")),
+		"sponsor_lockup_days": int(terms.get("sponsor_lockup_days", 30)),
+		"sponsor_unlock_warning_lead_days": int(terms.get("sponsor_unlock_warning_lead_days", 5)),
+		"sponsor_locked_shares": int(terms.get("sponsor_locked_shares", new_shares)),
+		"sponsor_lockup_start_day_number": day_number,
+		"sponsor_unlock_day_number": day_number + int(terms.get("sponsor_lockup_days", 30)),
+		"sponsor_unlock_warning_day_number": max(day_number + int(terms.get("sponsor_lockup_days", 30)) - int(terms.get("sponsor_unlock_warning_lead_days", 5)), day_number + 1),
+		"sponsor_behavior": str(terms.get("sponsor_behavior", "gradual_distribution")),
+		"sponsor_overhang_pressure_pct": float(terms.get("sponsor_overhang_pressure_pct", 0.18)),
+		"post_deal_milestone_count": int(terms.get("post_deal_milestone_count", post_deal_milestone_plan.size())),
+		"post_deal_first_milestone_delay_days": int(terms.get("post_deal_first_milestone_delay_days", 6)),
+		"post_deal_milestone_gap_days": int(terms.get("post_deal_milestone_gap_days", 9)),
+		"post_deal_milestone_plan": post_deal_milestone_plan,
+		"old_shares_outstanding": float(terms.get("old_shares_outstanding", 0.0)),
+		"new_shares_outstanding": float(terms.get("new_shares_outstanding", terms.get("old_shares_outstanding", 0.0))),
+		"dilution_pct": float(terms.get("dilution_pct", 0.0)),
+		"old_free_float_pct": float(terms.get("old_free_float_pct", 0.0)),
+		"new_free_float_pct": float(terms.get("new_free_float_pct", 0.0)),
+		"volatility_event_multiplier": float(terms.get("volatility_event_multiplier", 1.45)),
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
+
+
+func _build_ceo_change_application(chain: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
+	var terms: Dictionary = chain.get("ceo_terms", {}).duplicate(true)
+	if terms.is_empty():
+		return {}
+	var new_ceo_name: String = str(terms.get("new_ceo_name", ""))
+	if new_ceo_name.is_empty():
+		return {}
+	return {
+		"application_type": "ceo_change",
+		"chain_id": str(chain.get("chain_id", "")),
+		"meeting_id": str(chain.get("active_meeting_id", "")),
+		"company_id": str(chain.get("company_id", "")),
+		"ticker": str(chain.get("target_ticker", "")),
+		"current_ceo_name": str(terms.get("current_ceo_name", "")),
+		"new_ceo_name": new_ceo_name,
+		"incoming_profile_id": str(terms.get("incoming_profile_id", "turnaround_operator")),
+		"incoming_profile_label": str(terms.get("incoming_profile_label", "Turnaround Operator")),
+		"mandate": str(terms.get("mandate", "execution reset")),
+		"turnaround_score": float(terms.get("turnaround_score", 0.0)),
+		"governance_confidence_delta": float(terms.get("governance_confidence_delta", 0.0)),
+		"execution_consistency_delta": float(terms.get("execution_consistency_delta", 0.0)),
+		"growth_score_delta": float(terms.get("growth_score_delta", 0.0)),
+		"risk_score_delta": float(terms.get("risk_score_delta", 0.0)),
+		"price_reaction_pct": float(terms.get("price_reaction_pct", 0.0)),
+		"reference_price": float(terms.get("reference_price", 0.0)),
+		"volatility_event_multiplier": float(terms.get("volatility_event_multiplier", 1.18)),
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
+
+
+func _backdoor_follow_on_rights_chain_id(company_id: String, day_number: int) -> String:
+	return "ca|rights_issue|%s|%d|backdoor_follow_on" % [company_id, day_number]
+
+
+func _build_backdoor_follow_on_rights_chain(
+	catalog: Dictionary,
+	source_chain: Dictionary,
+	backdoor_application: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var company_id: String = str(backdoor_application.get("company_id", source_chain.get("company_id", "")))
+	if company_id.is_empty():
+		return {}
+	var family: Dictionary = _family_definition(catalog, "rights_issue")
+	if family.is_empty():
+		return {}
+	var terms: Dictionary = _build_backdoor_follow_on_rights_terms(catalog, source_chain, backdoor_application, day_number)
+	if terms.is_empty():
+		return {}
+	var config: Dictionary = catalog.get("backdoor_listing", {})
+	var min_delay_days: int = max(int(config.get("follow_on_minimum_delay_days", 3)), 1)
+	var max_delay_days: int = max(int(config.get("follow_on_maximum_delay_days", 8)), min_delay_days)
+	var delay_days: int = _stable_range("%s|follow_on_rights_delay|%d" % [company_id, day_number], min_delay_days, max_delay_days)
+	var chain_id: String = _backdoor_follow_on_rights_chain_id(company_id, day_number)
+	var funding_unlock_score: float = clamp(float(terms.get("funding_unlock_score", 0.5)), 0.0, 1.0)
+	var public_heat: float = clamp(0.34 + funding_unlock_score * 0.28 + float(backdoor_application.get("silent_accumulation_pct", 0.0)) * 0.58, 0.24, 0.82)
+	var retail_positioning: float = clamp(0.20 + funding_unlock_score * 0.18 + float(backdoor_application.get("price_reprice_pct", 0.0)) * 0.22, 0.12, 0.62)
+	return {
+		"chain_id": chain_id,
+		"family": "rights_issue",
+		"company_id": company_id,
+		"counterparty_company_id": "",
+		"status": "active",
+		"stage": "public_speculation",
+		"started_day_index": day_number,
+		"last_advanced_day_index": day_number,
+		"next_review_day_index": day_number + delay_days,
+		"truth_level": "real",
+		"current_timeline_state": "forming",
+		"management_stance": "silent",
+		"public_heat": public_heat,
+		"retail_positioning": retail_positioning,
+		"smart_money_phase": "pricing_funding",
+		"frontrunner_strength": clamp(0.46 + funding_unlock_score * 0.22, 0.2, 0.88),
+		"approval_odds": clamp(0.62 + funding_unlock_score * 0.22 + float(backdoor_application.get("incoming_control_pct", 0.0)) * 0.12, 0.35, 0.96),
+		"completion_odds": clamp(0.58 + funding_unlock_score * 0.26, 0.32, 0.94),
+		"delay_risk": clamp(0.16 + (1.0 - funding_unlock_score) * 0.24, 0.08, 0.58),
+		"cancellation_risk": clamp(0.05 + (1.0 - funding_unlock_score) * 0.16, 0.04, 0.36),
+		"funding_pressure": clamp(0.46 + float(terms.get("entitlement_ratio", 0.0)) * 0.9, 0.12, 0.96),
+		"market_overpricing": clamp(max(float(backdoor_application.get("price_reprice_pct", 0.0)), 0.0) * 0.85, 0.0, 0.68),
+		"expected_meeting_type": str(family.get("default_venue_type", "rupslb")),
+		"active_meeting_id": "",
+		"agenda_payload": _backdoor_follow_on_rights_agenda_payload(terms),
+		"player_known_fields": ["funding_purpose", "source_backdoor_chain_id"],
+		"network_visibility": "visible",
+		"outcome_state": "",
+		"delay_cycles_used": 0,
+		"next_expected_step": "Watch for a follow-on rights issue filing tied to %s." % str(terms.get("funding_purpose", "growth capex")),
+		"target_ticker": str(backdoor_application.get("ticker", source_chain.get("target_ticker", company_id.to_upper()))),
+		"target_company_name": str(backdoor_application.get("post_deal_name", source_chain.get("target_company_name", company_id.to_upper()))),
+		"target_sector_id": str(backdoor_application.get("post_deal_sector_id", source_chain.get("target_sector_id", ""))),
+		"family_label": _family_label("rights_issue"),
+		"source_backdoor_chain_id": str(backdoor_application.get("chain_id", source_chain.get("chain_id", ""))),
+		"linked_backdoor_listing": true,
+		"funding_purpose": str(terms.get("funding_purpose", "")),
+		"rights_terms": terms
+	}
+
+
+func _build_backdoor_follow_on_rights_terms(
+	catalog: Dictionary,
+	source_chain: Dictionary,
+	backdoor_application: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var company_id: String = str(backdoor_application.get("company_id", source_chain.get("company_id", "")))
+	if company_id.is_empty():
+		return {}
+	var config: Dictionary = catalog.get("backdoor_listing", {})
+	var rights_config: Dictionary = catalog.get("rights_issue", {})
+	var shares_outstanding: float = max(float(backdoor_application.get("new_shares_outstanding", backdoor_application.get("old_shares_outstanding", 0.0))), 1.0)
+	var current_price: float = max(float(backdoor_application.get("post_deal_price", backdoor_application.get("old_price", 1.0))), 1.0)
+	var min_denominator: int = max(int(config.get("follow_on_minimum_ratio_denominator", 2)), 1)
+	var max_denominator: int = max(int(config.get("follow_on_maximum_ratio_denominator", 5)), min_denominator)
+	var ratio_denominator: int = _stable_range("%s|backdoor_follow_on_ratio|%d" % [company_id, day_number], min_denominator, max_denominator)
+	var ratio_numerator: int = 1
+	var entitlement_ratio: float = float(ratio_numerator) / float(max(ratio_denominator, 1))
+	var min_discount_pct: float = clamp(float(config.get("follow_on_minimum_discount_pct", rights_config.get("minimum_discount_pct", 0.08))), 0.0, 0.8)
+	var max_discount_pct: float = clamp(float(config.get("follow_on_maximum_discount_pct", rights_config.get("maximum_discount_pct", 0.24))), min_discount_pct, 0.9)
+	var discount_pct: float = float(_stable_range(
+		"%s|backdoor_follow_on_discount|%d" % [company_id, day_number],
+		int(round(min_discount_pct * 10000.0)),
+		int(round(max_discount_pct * 10000.0))
+	)) / 10000.0
+	var new_shares: int = int(round(shares_outstanding * entitlement_ratio / 1000.0)) * 1000
+	new_shares = max(new_shares, max(int(rights_config.get("minimum_new_shares", 1000)), 1000))
+	var exercise_price: float = _round_currency(max(current_price * (1.0 - discount_pct), 1.0))
+	var gross_proceeds: float = _round_currency(float(new_shares) * exercise_price)
+	var new_shares_outstanding: float = shares_outstanding + float(new_shares)
+	var theoretical_ex_rights_price: float = _round_currency((current_price * shares_outstanding + gross_proceeds) / new_shares_outstanding)
+	var asset_quality_score: float = clamp(float(backdoor_application.get("asset_quality_score", 0.5)), 0.0, 1.0)
+	var capital_intensity: float = clamp(float(backdoor_application.get("post_deal_capital_intensity", 0.75)), 0.0, 1.0)
+	var story_heat: float = clamp(float(backdoor_application.get("post_deal_story_heat", 0.75)), 0.0, 1.0)
+	var funding_unlock_score: float = clamp(asset_quality_score * 0.46 + capital_intensity * 0.30 + story_heat * 0.24, 0.0, 1.0)
+	var dilution_overhang_pct: float = clamp(entitlement_ratio * lerp(0.28, 0.64, 1.0 - asset_quality_score), 0.0, 0.42)
+	var strategic_funding_unlock_pct: float = clamp(0.02 + funding_unlock_score * 0.16 - entitlement_ratio * 0.035, -0.08, 0.22)
+	var funding_balance: float = strategic_funding_unlock_pct - dilution_overhang_pct * 0.28
+	var funding_status: String = "unlock_value" if funding_balance >= 0.015 else "dilution_overhang"
+	return {
+		"ratio_numerator": ratio_numerator,
+		"ratio_denominator": ratio_denominator,
+		"entitlement_ratio": entitlement_ratio,
+		"issuance_pct": entitlement_ratio,
+		"discount_pct": discount_pct,
+		"new_shares": new_shares,
+		"exercise_price": exercise_price,
+		"gross_proceeds": gross_proceeds,
+		"old_shares_outstanding": shares_outstanding,
+		"new_shares_outstanding": new_shares_outstanding,
+		"theoretical_ex_rights_price": theoretical_ex_rights_price,
+		"maximum_price_adjustment_down_pct": clamp(float(config.get("follow_on_maximum_price_adjustment_down_pct", rights_config.get("maximum_price_adjustment_down_pct", 0.30))), 0.0, 0.9),
+		"maximum_price_adjustment_up_pct": clamp(float(config.get("follow_on_maximum_price_adjustment_up_pct", rights_config.get("maximum_price_adjustment_up_pct", 0.16))), 0.0, 0.5),
+		"linked_backdoor_listing": true,
+		"source_backdoor_chain_id": str(backdoor_application.get("chain_id", source_chain.get("chain_id", ""))),
+		"source_backdoor_application_day": int(backdoor_application.get("day_index", day_number)),
+		"incoming_asset_label": str(backdoor_application.get("incoming_asset_label", "private operating business")),
+		"sponsor_label": str(backdoor_application.get("sponsor_label", "private operating company")),
+		"post_deal_name": str(backdoor_application.get("post_deal_name", source_chain.get("target_company_name", ""))),
+		"post_deal_sector_id": str(backdoor_application.get("post_deal_sector_id", source_chain.get("target_sector_id", ""))),
+		"post_deal_sector_name": str(backdoor_application.get("post_deal_sector_name", "")),
+		"funding_purpose": str(backdoor_application.get("follow_on_rights_purpose", "growth capex and working capital")),
+		"funding_unlock_score": funding_unlock_score,
+		"strategic_funding_unlock_pct": strategic_funding_unlock_pct,
+		"dilution_overhang_pct": dilution_overhang_pct,
+		"funding_status": funding_status
+	}
+
+
+func _backdoor_follow_on_rights_agenda_payload(terms: Dictionary) -> Array:
+	return [{
+		"id": "follow_on_rights_issue_approval",
+		"label": "Approve follow-on rights issue",
+		"description": "Shareholders review a follow-on rights issue to fund %s after the asset injection." % str(terms.get("funding_purpose", "growth capex"))
+	}]
+
+
+func _build_backdoor_follow_on_rights_spawn_event(
+	catalog: Dictionary,
+	follow_on_chain: Dictionary,
+	backdoor_application: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var terms: Dictionary = follow_on_chain.get("rights_terms", {})
+	var status_label: String = "unlock value" if str(terms.get("funding_status", "")) == "unlock_value" else "test dilution appetite"
+	return _build_public_event(
+		catalog,
+		follow_on_chain,
+		trade_date,
+		day_number,
+		"corporate_action_speculation",
+		"%s market starts pricing follow-on funding" % str(follow_on_chain.get("target_ticker", "")),
+		"After the %s injection, traders are now watching whether %s will raise capital for %s through a follow-on rights issue that could %s." % [
+			str(backdoor_application.get("incoming_asset_label", "asset")),
+			str(follow_on_chain.get("target_company_name", "")),
+			str(terms.get("funding_purpose", "growth capex")),
+			status_label
+		]
+	)
+
+
+func _build_restructuring_completion_event(
+	catalog: Dictionary,
+	chain: Dictionary,
+	application: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var ticker: String = str(chain.get("target_ticker", ""))
+	var company_name: String = str(chain.get("target_company_name", ticker))
+	var plan_label: String = str(application.get("plan_label", "restructuring plan"))
+	var credibility_score: float = clamp(float(application.get("credibility_score", 0.0)), 0.0, 1.0)
+	var relief_phrase: String = "credible debt relief"
+	if credibility_score < 0.45:
+		relief_phrase = "a fragile survival package"
+	elif credibility_score < 0.62:
+		relief_phrase = "mixed debt relief"
+	return _build_public_event(
+		catalog,
+		chain,
+		trade_date,
+		day_number,
+		"corporate_action_execution",
+		"%s executes restructuring package" % ticker,
+		"%s starts executing its %s, giving the tape %s but also %.1f%% potential creditor-share dilution." % [
+			company_name,
+			plan_label.to_lower(),
+			relief_phrase,
+			float(application.get("debt_conversion_pct", 0.0)) * 100.0
+		]
+	)
+
+
+func _advance_backdoor_sponsor_lockups(
+	run_state,
+	catalog: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var events: Array = []
+	var applications: Array = []
+	var active_arcs: Array = []
+	for company_id_value in run_state.company_order:
+		var company_id: String = str(company_id_value)
+		var runtime: Dictionary = run_state.get_company(company_id)
+		if runtime.is_empty():
+			continue
+		var profile: Dictionary = runtime.get("company_profile", {})
+		if profile.is_empty():
+			continue
+		var lockup_value = profile.get("backdoor_sponsor_lockup", {})
+		if typeof(lockup_value) != TYPE_DICTIONARY:
+			continue
+		var lockup: Dictionary = lockup_value
+		if lockup.is_empty() or bool(lockup.get("unlock_processed", false)):
+			continue
+		var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+		if definition.is_empty():
+			continue
+		var unlock_day_number: int = int(lockup.get("unlock_day_number", 0))
+		var warning_day_number: int = int(lockup.get("warning_day_number", max(unlock_day_number - 5, 1)))
+		var state: String = str(lockup.get("state", "locked"))
+		if day_number >= unlock_day_number and unlock_day_number > 0:
+			var unlock_application: Dictionary = _build_backdoor_lockup_update_application(
+				catalog,
+				definition,
+				lockup,
+				"unlock",
+				trade_date,
+				day_number
+			)
+			if not unlock_application.is_empty():
+				applications.append(unlock_application)
+				events.append(_build_backdoor_lockup_event(catalog, definition, lockup, unlock_application, trade_date, day_number))
+				active_arcs.append(_build_backdoor_lockup_arc(definition, lockup, unlock_application, trade_date, day_number))
+			continue
+		if day_number >= warning_day_number and not bool(lockup.get("warning_announced", false)):
+			var warning_application: Dictionary = _build_backdoor_lockup_update_application(
+				catalog,
+				definition,
+				lockup,
+				"warning",
+				trade_date,
+				day_number
+			)
+			if not warning_application.is_empty():
+				applications.append(warning_application)
+				events.append(_build_backdoor_lockup_event(catalog, definition, lockup, warning_application, trade_date, day_number))
+				active_arcs.append(_build_backdoor_lockup_arc(definition, lockup, warning_application, trade_date, day_number))
+			continue
+		if day_number >= warning_day_number and state in ["warning", "locked"]:
+			var overhang_application: Dictionary = _build_backdoor_lockup_update_application(
+				catalog,
+				definition,
+				lockup,
+				"overhang",
+				trade_date,
+				day_number
+			)
+			if not overhang_application.is_empty():
+				active_arcs.append(_build_backdoor_lockup_arc(definition, lockup, overhang_application, trade_date, day_number))
+	return {
+		"events": events,
+		"applications": applications,
+		"active_arcs": active_arcs
+	}
+
+
+func _build_backdoor_lockup_update_application(
+	catalog: Dictionary,
+	definition: Dictionary,
+	lockup: Dictionary,
+	action_type: String,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var company_id: String = str(definition.get("id", ""))
+	if company_id.is_empty():
+		return {}
+	var config: Dictionary = catalog.get("backdoor_listing", {})
+	var sponsor_behavior: String = str(lockup.get("sponsor_behavior", "gradual_distribution"))
+	var resolved_action_type: String = action_type
+	var extension_days: int = 0
+	var unlock_day_number: int = int(lockup.get("unlock_day_number", day_number))
+	if action_type == "unlock" and sponsor_behavior == "lockup_extension" and not bool(lockup.get("extension_used", false)):
+		var min_extension_days: int = max(int(config.get("sponsor_lockup_extension_minimum_days", 10)), 1)
+		var max_extension_days: int = max(int(config.get("sponsor_lockup_extension_maximum_days", 15)), min_extension_days)
+		extension_days = _stable_range("%s|backdoor_lockup_extension|%d" % [company_id, day_number], min_extension_days, max_extension_days)
+		unlock_day_number = day_number + extension_days
+		resolved_action_type = "extension"
+	var overhang_pressure_pct: float = clamp(float(lockup.get("overhang_pressure_pct", 0.18)), 0.0, 1.0)
+	var locked_shares: int = int(lockup.get("locked_shares", 0))
+	var shares_outstanding: float = max(float(definition.get("financials", {}).get("shares_outstanding", definition.get("shares_outstanding", 1.0))), 1.0)
+	var locked_shares_pct: float = clamp(float(locked_shares) / shares_outstanding, 0.0, 1.0)
+	var sell_pressure_pct: float = overhang_pressure_pct
+	if resolved_action_type == "extension":
+		sell_pressure_pct = max(overhang_pressure_pct * 0.22, 0.01)
+	elif sponsor_behavior == "aggressive_exit":
+		sell_pressure_pct = min(overhang_pressure_pct * 1.45, 0.72)
+	elif sponsor_behavior == "gradual_distribution":
+		sell_pressure_pct = min(overhang_pressure_pct * 0.72, 0.42)
+	return {
+		"application_type": "backdoor_lockup_update",
+		"action_type": resolved_action_type,
+		"company_id": company_id,
+		"ticker": str(definition.get("ticker", company_id.to_upper())),
+		"company_name": str(definition.get("name", company_id.to_upper())),
+		"sector_id": str(definition.get("sector_id", "")),
+		"sponsor_label": str(lockup.get("sponsor_label", "private operating company")),
+		"sponsor_behavior": sponsor_behavior,
+		"locked_shares": locked_shares,
+		"locked_shares_pct": locked_shares_pct,
+		"lockup_start_day_number": int(lockup.get("lockup_start_day_number", 0)),
+		"lockup_days": int(lockup.get("lockup_days", 0)),
+		"warning_day_number": int(lockup.get("warning_day_number", 0)),
+		"unlock_day_number": unlock_day_number,
+		"extension_days": extension_days,
+		"extension_used": bool(lockup.get("extension_used", false)) or resolved_action_type == "extension",
+		"overhang_pressure_pct": overhang_pressure_pct,
+		"sell_pressure_pct": sell_pressure_pct,
+		"impact_until_day_number": day_number + (8 if resolved_action_type == "unlock" else 2),
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
+
+
+func _build_backdoor_lockup_event(
+	catalog: Dictionary,
+	definition: Dictionary,
+	lockup: Dictionary,
+	application: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var action_type: String = str(application.get("action_type", "warning"))
+	var ticker: String = str(definition.get("ticker", definition.get("id", ""))).to_upper()
+	var company_name: String = str(definition.get("name", ticker))
+	var sponsor_label: String = str(application.get("sponsor_label", lockup.get("sponsor_label", "private operating company")))
+	var headline: String = "%s sponsor lock-up enters focus" % ticker
+	var summary: String = "%s holders are watching %s's locked sponsor block as the unlock date approaches, with potential supply now part of the tape." % [company_name, sponsor_label]
+	var category: String = "corporate_action_speculation"
+	var tone: String = "mixed"
+	if action_type == "extension":
+		headline = "%s sponsor extends lock-up window" % ticker
+		summary = "%s gets a cleaner signal as %s extends the lock-up by %d trading days instead of immediately adding supply to the market." % [
+			company_name,
+			sponsor_label,
+			int(application.get("extension_days", 0))
+		]
+		category = "corporate_action_clarification"
+	elif action_type == "unlock":
+		var behavior: String = str(application.get("sponsor_behavior", "gradual_distribution"))
+		if behavior == "aggressive_exit":
+			headline = "%s sponsor block unlocks into exit-risk chatter" % ticker
+			summary = "%s's sponsor lock-up has expired, and traders are bracing for a larger block to be sold into post-backdoor liquidity." % company_name
+			tone = "negative"
+		else:
+			headline = "%s sponsor block unlocks gradually" % ticker
+			summary = "%s's sponsor lock-up has expired, but the market is pricing a more gradual distribution of the newly unlocked block." % company_name
+		category = "corporate_action_execution"
+	return {
+		"event_id": "backdoor_listing",
+		"scope": "company",
+		"event_family": "corporate_action",
+		"category": category,
+		"tone": tone,
+		"target_company_id": str(definition.get("id", "")),
+		"target_ticker": ticker,
+		"target_company_name": company_name,
+		"target_sector_id": str(definition.get("sector_id", "")),
+		"headline": headline,
+		"summary": summary,
+		"description": summary,
+		"sentiment_shift": float(_build_backdoor_lockup_arc(definition, lockup, application, trade_date, day_number).get("phase_sentiment_shift", 0.0)),
+		"source_chain_id": str(lockup.get("source_backdoor_chain_id", "")),
+		"chain_family": "backdoor_listing",
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
+
+
+func _build_backdoor_lockup_arc(
+	definition: Dictionary,
+	lockup: Dictionary,
+	application: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var action_type: String = str(application.get("action_type", "warning"))
+	var sell_pressure_pct: float = clamp(float(application.get("sell_pressure_pct", lockup.get("overhang_pressure_pct", 0.18))), 0.0, 1.0)
+	var sentiment_shift: float = -0.04 - sell_pressure_pct * 0.28
+	var volatility_multiplier: float = 1.18 + sell_pressure_pct * 1.6
+	var tone: String = "mixed"
+	var category: String = "corporate_action_speculation"
+	var phase_label: String = "Sponsor unlock overhang"
+	if action_type == "extension":
+		sentiment_shift = 0.06
+		volatility_multiplier = 1.14
+		tone = "positive"
+		category = "corporate_action_clarification"
+		phase_label = "Sponsor lock-up extension"
+	elif action_type == "unlock":
+		category = "corporate_action_execution"
+		phase_label = "Sponsor block unlock"
+		if str(application.get("sponsor_behavior", "")) == "aggressive_exit":
+			tone = "negative"
+			sentiment_shift = -0.12 - sell_pressure_pct * 0.36
+			volatility_multiplier = 1.42 + sell_pressure_pct * 1.9
+	return {
+		"arc_id": "backdoor_lockup|%s|%s|%d" % [str(definition.get("id", "")), action_type, day_number],
+		"event_id": "backdoor_listing",
+		"event_family": "company_arc",
+		"scope": "company",
+		"category": category,
+		"tone": tone,
+		"target_company_id": str(definition.get("id", "")),
+		"target_ticker": str(definition.get("ticker", definition.get("id", ""))).to_upper(),
+		"target_company_name": str(definition.get("name", definition.get("id", ""))),
+		"target_sector_id": str(definition.get("sector_id", "")),
+		"description": "%s sponsor lock-up state is %s, with %.1f%% of shares equivalent to the sponsor block and %.1f%% sell-pressure risk." % [
+			str(definition.get("name", definition.get("id", ""))),
+			action_type,
+			float(application.get("locked_shares_pct", 0.0)) * 100.0,
+			sell_pressure_pct * 100.0
+		],
+		"source_system": "corporate_action",
+		"source_chain_id": str(lockup.get("source_backdoor_chain_id", "")),
+		"chain_family": "backdoor_listing",
+		"current_phase_id": "sponsor_lockup_%s" % action_type,
+		"current_phase_label": phase_label,
+		"phase_sentiment_shift": clamp(sentiment_shift, -0.42, 0.16),
+		"phase_volatility_multiplier": clamp(volatility_multiplier, 1.0, 2.5),
+		"phase_visibility": "visible",
+		"phase_hidden_flag": "corporate_action_backdoor_lockup",
+		"day_index": day_number,
+		"trade_date": trade_date.duplicate(true)
+	}
+
+
+func _advance_backdoor_milestones(
+	run_state,
+	catalog: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var events: Array = []
+	var applications: Array = []
+	var active_arcs: Array = []
+	for company_id_value in run_state.company_order:
+		var company_id: String = str(company_id_value)
+		var runtime: Dictionary = run_state.get_company(company_id)
+		if runtime.is_empty():
+			continue
+		var profile: Dictionary = runtime.get("company_profile", {})
+		if profile.is_empty():
+			continue
+		var milestone_value = profile.get("backdoor_milestone_state", {})
+		if typeof(milestone_value) != TYPE_DICTIONARY:
+			continue
+		var milestone_state: Dictionary = milestone_value
+		if milestone_state.is_empty():
+			continue
+		if str(milestone_state.get("state", "active")) in ["completed", "abandoned"]:
+			continue
+		var next_milestone_day_number: int = int(milestone_state.get("next_milestone_day_number", 0))
+		if next_milestone_day_number <= 0 or day_number < next_milestone_day_number:
+			continue
+		var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+		if definition.is_empty():
+			continue
+		var application: Dictionary = _build_backdoor_milestone_update_application(
+			catalog,
+			definition,
+			milestone_state,
+			trade_date,
+			day_number
+		)
+		if application.is_empty():
+			continue
+		applications.append(application)
+		events.append(_build_backdoor_milestone_event(definition, milestone_state, application, trade_date, day_number))
+		active_arcs.append(_build_backdoor_milestone_arc(definition, milestone_state, application, trade_date, day_number))
+	return {
+		"events": events,
+		"applications": applications,
+		"active_arcs": active_arcs
+	}
+
+
+func _build_backdoor_milestone_update_application(
+	catalog: Dictionary,
+	definition: Dictionary,
+	milestone_state: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var company_id: String = str(definition.get("id", milestone_state.get("company_id", "")))
+	if company_id.is_empty():
+		return {}
+	var plan: Array = milestone_state.get("milestone_plan", []).duplicate(true)
+	if plan.is_empty():
+		return {}
+	var current_index: int = clamp(int(milestone_state.get("current_milestone_index", 0)), 0, plan.size() - 1)
+	var phase: Dictionary = plan[current_index].duplicate(true)
+	var asset_quality_score: float = clamp(float(milestone_state.get("asset_quality_score", 0.5)), 0.0, 1.0)
+	var capital_intensity: float = clamp(float(milestone_state.get("capital_intensity", 0.75)), 0.0, 1.0)
+	var story_heat: float = clamp(float(milestone_state.get("story_heat", 0.75)), 0.0, 1.0)
+	var delay_count: int = max(int(milestone_state.get("delay_count", 0)), 0)
+	var setback_count: int = max(int(milestone_state.get("setback_count", 0)), 0)
+	var config: Dictionary = catalog.get("backdoor_listing", {})
+	var base_success_probability: float = clamp(float(config.get("post_deal_milestone_base_success_probability", 0.42)), 0.05, 0.95)
+	var base_delay_probability: float = clamp(float(config.get("post_deal_milestone_base_delay_probability", 0.24)), 0.0, 0.8)
+	var success_threshold: float = clamp(
+		base_success_probability +
+		asset_quality_score * 0.30 +
+		story_heat * 0.08 -
+		capital_intensity * 0.15 -
+		float(delay_count) * 0.06 -
+		float(setback_count) * 0.08,
+		0.14,
+		0.88
+	)
+	var delay_threshold: float = clamp(
+		success_threshold + base_delay_probability + capital_intensity * 0.10 - asset_quality_score * 0.07,
+		success_threshold,
+		0.96
+	)
+	var result_roll: float = STABLE_RNG.unit_float([company_id, "backdoor_milestone_result", str(phase.get("id", "")), day_number])
+	var result_state: String = "setback"
+	if result_roll <= success_threshold:
+		result_state = "delivered"
+	elif result_roll <= delay_threshold:
+		result_state = "delayed"
+	var min_gap_days: int = max(int(config.get("post_deal_milestone_minimum_gap_days", 7)), 1)
+	var max_gap_days: int = max(int(config.get("post_deal_milestone_maximum_gap_days", 12)), min_gap_days)
+	var min_delay_days: int = max(int(config.get("post_deal_milestone_delay_minimum_days", 4)), 1)
+	var max_delay_days: int = max(int(config.get("post_deal_milestone_delay_maximum_days", 8)), min_delay_days)
+	var gap_days: int = _stable_range("%s|backdoor_milestone_next_gap|%s|%d" % [company_id, str(phase.get("id", "")), day_number], min_gap_days, max_gap_days)
+	var delay_days: int = _stable_range("%s|backdoor_milestone_delay|%s|%d" % [company_id, str(phase.get("id", "")), day_number], min_delay_days, max_delay_days)
+	var next_index: int = current_index
+	var next_day_number: int = day_number + delay_days
+	var completed_after: int = int(milestone_state.get("completed_milestones", 0))
+	var setback_after: int = setback_count
+	if result_state == "delivered":
+		completed_after += 1
+		next_index += 1
+		next_day_number = day_number + gap_days
+	elif result_state == "setback":
+		setback_after += 1
+		next_index += 1
+		next_day_number = day_number + gap_days
+	var plan_complete: bool = next_index >= plan.size()
+	var price_adjustment_pct: float = 0.0
+	var volatility_multiplier: float = 1.18
+	if result_state == "delivered":
+		price_adjustment_pct = clamp(0.018 + asset_quality_score * 0.060 + story_heat * 0.025, 0.012, 0.105)
+		volatility_multiplier = 1.20 + story_heat * 0.28
+	elif result_state == "delayed":
+		price_adjustment_pct = -clamp(0.012 + capital_intensity * 0.032 + float(delay_count) * 0.010, 0.008, 0.075)
+		volatility_multiplier = 1.24 + capital_intensity * 0.32
+	else:
+		price_adjustment_pct = -clamp(0.026 + (1.0 - asset_quality_score) * 0.070 + capital_intensity * 0.030, 0.018, 0.140)
+		volatility_multiplier = 1.34 + capital_intensity * 0.38
+	return {
+		"application_type": "backdoor_milestone_update",
+		"company_id": company_id,
+		"ticker": str(definition.get("ticker", company_id.to_upper())),
+		"chain_id": str(milestone_state.get("source_backdoor_chain_id", "")),
+		"sponsor_label": str(milestone_state.get("sponsor_label", "private operating company")),
+		"incoming_asset_label": str(milestone_state.get("incoming_asset_label", "private operating business")),
+		"post_deal_name": str(milestone_state.get("post_deal_name", definition.get("name", ""))),
+		"phase_id": str(phase.get("id", "")),
+		"phase_label": str(phase.get("label", "Post-deal milestone")),
+		"phase_description": str(phase.get("description", "")),
+		"phase_sequence": int(phase.get("sequence", current_index + 1)),
+		"current_milestone_index": current_index,
+		"next_milestone_index": next_index,
+		"result_state": result_state,
+		"success_threshold": success_threshold,
+		"delay_threshold": delay_threshold,
+		"result_roll": result_roll,
+		"completed_milestones": completed_after,
+		"setback_count": setback_after,
+		"delay_count": delay_count + (1 if result_state == "delayed" else 0),
+		"plan_complete": plan_complete,
+		"next_milestone_day_number": 0 if plan_complete else next_day_number,
+		"impact_until_day_number": day_number + (3 if result_state == "delivered" else 4),
+		"price_adjustment_pct": price_adjustment_pct,
+		"volatility_event_multiplier": clamp(volatility_multiplier, 1.0, 2.4),
+		"asset_quality_score": asset_quality_score,
+		"capital_intensity": capital_intensity,
+		"story_heat": story_heat,
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
+
+
+func _build_backdoor_milestone_event(
+	definition: Dictionary,
+	_milestone_state: Dictionary,
+	application: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var ticker: String = str(definition.get("ticker", application.get("ticker", "")))
+	var company_name: String = str(application.get("post_deal_name", definition.get("name", ticker)))
+	var phase_label: String = str(application.get("phase_label", "Post-deal milestone"))
+	var result_state: String = str(application.get("result_state", "delayed"))
+	var tone: String = "mixed"
+	var headline: String = "%s post-deal milestone slips" % ticker
+	var summary: String = "%s delays its %s milestone, keeping traders focused on execution risk after the backdoor reset." % [
+		company_name,
+		phase_label.to_lower()
+	]
+	if result_state == "delivered":
+		tone = "positive"
+		headline = "%s delivers post-deal milestone" % ticker
+		summary = "%s delivers its %s milestone, giving the new %s story a concrete follow-through signal." % [
+			company_name,
+			phase_label.to_lower(),
+			str(application.get("incoming_asset_label", "asset"))
+		]
+	elif result_state == "setback":
+		tone = "negative"
+		headline = "%s post-deal milestone disappoints" % ticker
+		summary = "%s misses its %s milestone, raising doubts about whether the injected %s story can convert hype into execution." % [
+			company_name,
+			phase_label.to_lower(),
+			str(application.get("incoming_asset_label", "asset"))
+		]
+	return {
+		"event_id": "backdoor_listing",
+		"scope": "company",
+		"event_family": "corporate_action",
+		"category": "corporate_action_milestone",
+		"tone": tone,
+		"target_company_id": str(application.get("company_id", "")),
+		"target_ticker": ticker,
+		"target_company_name": company_name,
+		"target_sector_id": str(definition.get("sector_id", "")),
+		"headline": headline,
+		"summary": summary,
+		"description": str(application.get("phase_description", "")),
+		"sentiment_shift": float(application.get("price_adjustment_pct", 0.0)),
+		"source_chain_id": str(application.get("chain_id", "")),
+		"chain_family": "backdoor_listing",
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
+
+
+func _build_backdoor_milestone_arc(
+	definition: Dictionary,
+	_milestone_state: Dictionary,
+	application: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var result_state: String = str(application.get("result_state", "delayed"))
+	var tone: String = "mixed"
+	if result_state == "delivered":
+		tone = "positive"
+	elif result_state == "setback":
+		tone = "negative"
+	var phase_label: String = "Post-deal milestone %s" % result_state.replace("_", " ")
+	return {
+		"arc_id": "backdoor_milestone|%s|%s|%d" % [str(definition.get("id", "")), str(application.get("phase_id", "")), day_number],
+		"event_id": "backdoor_listing",
+		"event_family": "company_arc",
+		"scope": "company",
+		"category": "corporate_action_milestone",
+		"tone": tone,
+		"target_company_id": str(application.get("company_id", "")),
+		"target_ticker": str(definition.get("ticker", application.get("ticker", ""))),
+		"target_company_name": str(application.get("post_deal_name", definition.get("name", ""))),
+		"target_sector_id": str(definition.get("sector_id", "")),
+		"description": "%s result for %s; price bias %.2f%% and volatility multiplier %.2f." % [
+			phase_label,
+			str(application.get("phase_label", "post-deal milestone")),
+			float(application.get("price_adjustment_pct", 0.0)) * 100.0,
+			float(application.get("volatility_event_multiplier", 1.0))
+		],
+		"source_system": "corporate_action",
+		"source_chain_id": str(application.get("chain_id", "")),
+		"chain_family": "backdoor_listing",
+		"current_phase_id": "post_deal_milestone_%s" % result_state,
+		"current_phase_label": phase_label,
+		"phase_sentiment_shift": float(application.get("price_adjustment_pct", 0.0)),
+		"phase_volatility_multiplier": float(application.get("volatility_event_multiplier", 1.0)),
+		"phase_visibility": "visible",
+		"phase_hidden_flag": "corporate_action_backdoor_milestone",
+		"day_index": day_number,
+		"trade_date": trade_date.duplicate(true)
+	}
+
+
+func _build_tender_offer_aftermath_event(
+	catalog: Dictionary,
+	chain: Dictionary,
+	application: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var aftermath_state: String = str(application.get("aftermath_state", "none"))
+	if aftermath_state == "none":
+		return {}
+	var target_name: String = str(chain.get("target_company_name", ""))
+	var ticker: String = str(chain.get("target_ticker", ""))
+	if aftermath_state == "go_private_cashout":
+		return _build_public_event(
+			catalog,
+			chain,
+			trade_date,
+			day_number,
+			"corporate_action_execution",
+			"%s moves toward go-private cash-out" % ticker,
+			"%s's tender offer has pulled the public float below the go-private trigger, with remaining holders set for a final cash-out near Rp%s." % [
+				target_name,
+				String.num(float(application.get("final_cashout_price", 0.0)), 2)
+			]
+		)
+	return _build_public_event(
+		catalog,
+		chain,
+		trade_date,
+		day_number,
+		"corporate_action_clarification",
+		"%s enters public-float warning" % ticker,
+		"%s's tender offer leaves the public float thin enough for exchange-watch chatter and a much tighter tape." % target_name
+	)
+
+
+func _build_strategic_mna_completion_event(
+	catalog: Dictionary,
+	chain: Dictionary,
+	application: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	return _build_public_event(
+		catalog,
+		chain,
+		trade_date,
+		day_number,
+		"corporate_action_execution",
+		"%s acquisition moves to cash-out" % str(chain.get("target_ticker", "")),
+		"%s's strategic acquisition by %s is moving into final cash-out near Rp%s per share." % [
+			str(chain.get("target_company_name", "")),
+			str(application.get("acquirer_label", "strategic acquirer")),
+			String.num(float(application.get("cashout_price", 0.0)), 2)
+		]
+	)
+
+
+func _build_backdoor_listing_completion_event(
+	catalog: Dictionary,
+	chain: Dictionary,
+	application: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var rights_sentence: String = "The market is also watching for a follow-on rights issue tied to %s." % str(application.get("follow_on_rights_purpose", "growth capex")) if bool(application.get("follow_on_rights_hint", false)) else "No immediate funding round is confirmed after the asset injection."
+	return _build_public_event(
+		catalog,
+		chain,
+		trade_date,
+		day_number,
+		"corporate_action_execution",
+		"%s completes control-change transaction" % str(chain.get("target_ticker", "")),
+		"%s is executing the control-change package as %s injects a %s, takes %.0f%% post-deal control, and resets the listed profile toward %s. %s" % [
+			str(chain.get("target_company_name", "")),
+			str(application.get("sponsor_label", "private operating company")),
+			str(application.get("incoming_asset_label", "private operating business")),
+			float(application.get("incoming_control_pct", 0.0)) * 100.0,
+			str(application.get("post_deal_name", chain.get("target_company_name", ""))),
+			rights_sentence
+		]
+	)
+
+
+func _build_ceo_change_completion_event(
+	catalog: Dictionary,
+	chain: Dictionary,
+	application: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	return _build_public_event(
+		catalog,
+		chain,
+		trade_date,
+		day_number,
+		"corporate_action_execution",
+		"%s confirms new CEO mandate" % str(chain.get("target_ticker", "")),
+		"%s appoints %s as CEO with a %s mandate focused on %s." % [
+			str(chain.get("target_company_name", "")),
+			str(application.get("new_ceo_name", "the incoming CEO")),
+			str(application.get("incoming_profile_label", "turnaround")),
+			str(application.get("mandate", "execution reset"))
+		]
+	)
+
+
 func _build_chain_arc(catalog: Dictionary, chain: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
 	var stage_template: Dictionary = _stage_template(catalog, str(chain.get("stage", "")))
 	if stage_template.is_empty():
@@ -1762,6 +4415,50 @@ func _build_chain_arc(catalog: Dictionary, chain: Dictionary, trade_date: Dictio
 		tone = "positive"
 		sentiment_shift = 0.22
 		volatility_multiplier = 1.18
+	if str(chain.get("family", "")) == "stock_split" and str(chain.get("split_terms", {}).get("split_type", "split")) == "reverse_split":
+		tone = "negative" if str(chain.get("outcome_state", "")) != "cancelled" else tone
+		sentiment_shift = -abs(sentiment_shift) if sentiment_shift != 0.0 else -0.12
+		volatility_multiplier = max(volatility_multiplier, 1.16)
+	if str(chain.get("family", "")) == "rights_issue" and bool(chain.get("rights_terms", {}).get("linked_backdoor_listing", false)):
+		var rights_terms: Dictionary = chain.get("rights_terms", {})
+		var unlock_pct: float = clamp(float(rights_terms.get("strategic_funding_unlock_pct", 0.0)), -0.3, 0.3)
+		var overhang_pct: float = clamp(float(rights_terms.get("dilution_overhang_pct", 0.0)), 0.0, 1.0)
+		var net_funding_bias: float = unlock_pct - overhang_pct * 0.22
+		tone = "positive" if net_funding_bias >= 0.02 else "mixed"
+		sentiment_shift = clamp(max(sentiment_shift, 0.06) + net_funding_bias * 0.6, -0.16, 0.24)
+		volatility_multiplier = max(volatility_multiplier, 1.18 + overhang_pct * 0.9)
+	if str(chain.get("family", "")) == "backdoor_listing":
+		var backdoor_terms: Dictionary = chain.get("backdoor_terms", {})
+		var quality_score: float = clamp(float(backdoor_terms.get("asset_quality_score", 0.5)), 0.0, 1.0)
+		var accumulation_support: float = clamp(float(backdoor_terms.get("accumulation_price_support_pct", 0.0)), 0.0, 1.0)
+		var event_volatility: float = clamp(float(backdoor_terms.get("volatility_event_multiplier", 1.45)), 1.0, 3.0)
+		volatility_multiplier = max(volatility_multiplier, clamp(1.10 + (event_volatility - 1.0) * 0.72 + accumulation_support * 0.65, 1.12, 2.1))
+		match str(chain.get("stage", "")):
+			"hidden_positioning", "unusual_activity":
+				tone = "mixed"
+				sentiment_shift = max(sentiment_shift, 0.06 + accumulation_support * 0.34)
+				volatility_multiplier = max(volatility_multiplier, 1.25)
+			"rumor_leak", "public_speculation":
+				tone = "positive"
+				sentiment_shift = max(sentiment_shift, 0.12 + quality_score * 0.10)
+				volatility_multiplier = max(volatility_multiplier, 1.34)
+			"formal_agenda_or_filing", "resolution", "execution":
+				tone = "positive"
+				sentiment_shift = max(sentiment_shift, 0.16 + quality_score * 0.12)
+				volatility_multiplier = max(volatility_multiplier, 1.42)
+	if str(chain.get("family", "")) == "restructuring":
+		var restructuring_terms: Dictionary = chain.get("restructuring_terms", {})
+		var credibility_score: float = clamp(float(restructuring_terms.get("credibility_score", 0.5)), 0.0, 1.0)
+		var stress_overhang_pct: float = clamp(float(restructuring_terms.get("stress_overhang_pct", 0.0)), 0.0, 1.0)
+		var price_adjustment_pct: float = clamp(float(restructuring_terms.get("price_adjustment_pct", 0.0)), -0.5, 0.5)
+		tone = "mixed"
+		volatility_multiplier = max(volatility_multiplier, clamp(1.16 + stress_overhang_pct * 1.3, 1.12, 2.1))
+		if str(chain.get("stage", "")) in ["resolution", "execution"] and price_adjustment_pct > 0.02:
+			tone = "positive"
+		elif credibility_score < 0.42 or price_adjustment_pct < -0.02:
+			tone = "negative"
+		if str(chain.get("stage", "")) in ["formal_agenda_or_filing", "resolution", "execution"]:
+			sentiment_shift = clamp(price_adjustment_pct, -0.22, 0.18)
 	return {
 		"arc_id": str(chain.get("chain_id", "")),
 		"event_id": str(chain.get("family", "")),
@@ -1804,6 +4501,23 @@ func _build_public_event(
 		tone = "negative"
 	elif category in ["corporate_action_clarification", "corporate_meeting"]:
 		tone = "mixed"
+	if str(chain.get("family", "")) == "stock_split" and str(chain.get("split_terms", {}).get("split_type", "split")) == "reverse_split" and category != "corporate_action_cancellation":
+		tone = "negative" if category == "corporate_action_execution" else "mixed"
+	if str(chain.get("family", "")) == "rights_issue" and bool(chain.get("rights_terms", {}).get("linked_backdoor_listing", false)) and not ["corporate_action_denial", "corporate_action_cancellation"].has(category):
+		var rights_terms: Dictionary = chain.get("rights_terms", {})
+		tone = "positive" if str(rights_terms.get("funding_status", "")) == "unlock_value" and category in ["corporate_action_filing", "corporate_action_resolution"] else "mixed"
+	if str(chain.get("family", "")) == "backdoor_listing" and not ["corporate_action_denial", "corporate_action_cancellation"].has(category):
+		if category in ["corporate_action_rumor", "corporate_action_speculation", "corporate_action_clarification", "corporate_meeting"]:
+			tone = "mixed"
+		else:
+			tone = "positive"
+	if str(chain.get("family", "")) == "restructuring" and not ["corporate_action_denial", "corporate_action_cancellation"].has(category):
+		var restructuring_terms: Dictionary = chain.get("restructuring_terms", {})
+		var price_adjustment_pct: float = float(restructuring_terms.get("price_adjustment_pct", 0.0))
+		var credibility_score: float = float(restructuring_terms.get("credibility_score", 0.5))
+		tone = "positive" if category in ["corporate_action_resolution", "corporate_action_execution"] and price_adjustment_pct > 0.02 else "mixed"
+		if credibility_score < 0.42 or price_adjustment_pct < -0.02:
+			tone = "negative"
 	return {
 		"event_id": str(chain.get("family", "")),
 		"scope": "company",
@@ -1858,13 +4572,20 @@ func _build_meeting_event(chain: Dictionary, trade_date: Dictionary, day_number:
 	}
 
 
-func _ensure_cash_dividend_actions(run_state, catalog: Dictionary, calendar: Dictionary, dividend_calendar: Dictionary) -> bool:
+func _ensure_cash_dividend_actions(
+	run_state,
+	catalog: Dictionary,
+	calendar: Dictionary,
+	dividend_calendar: Dictionary,
+	meeting_lookup: Dictionary = {},
+	year_window: Dictionary = {}
+) -> bool:
 	var dividend_config: Dictionary = catalog.get("cash_dividend", {})
 	if not bool(dividend_config.get("enabled", true)):
 		return false
 	var annual_config: Dictionary = catalog.get("annual_rups", {})
-	var start_year: int = int(annual_config.get("start_year", 2020))
-	var end_year: int = int(annual_config.get("end_year", 2030))
+	var start_year: int = int(year_window.get("start_year", annual_config.get("start_year", 2020)))
+	var end_year: int = int(year_window.get("end_year", annual_config.get("end_year", 2030)))
 	var changed: bool = false
 	for company_id_value in run_state.company_order:
 		var company_id: String = str(company_id_value)
@@ -1876,7 +4597,7 @@ func _ensure_cash_dividend_actions(run_state, catalog: Dictionary, calendar: Dic
 			if dividend_calendar.has(dividend_id):
 				continue
 			var meeting_id: String = "annual_rups|%s|%d" % [company_id, year_value]
-			var meeting: Dictionary = _meeting_by_id(calendar, meeting_id)
+			var meeting: Dictionary = _meeting_by_id(calendar, meeting_id, meeting_lookup)
 			if meeting.is_empty():
 				continue
 			var record: Dictionary = _build_cash_dividend_record(
@@ -1892,7 +4613,7 @@ func _ensure_cash_dividend_actions(run_state, catalog: Dictionary, calendar: Dic
 			if record.is_empty():
 				continue
 			dividend_calendar[dividend_id] = record
-			_attach_cash_dividend_to_annual_meeting(calendar, record)
+			_attach_cash_dividend_to_annual_meeting(calendar, record, meeting_lookup)
 			changed = true
 	return changed
 
@@ -2008,13 +4729,20 @@ func _cash_dividend_payout_ratio(catalog: Dictionary, definition: Dictionary, ru
 	return clamp(ratio, minimum_ratio, maximum_ratio)
 
 
-func _ensure_stock_dividend_actions(run_state, catalog: Dictionary, calendar: Dictionary, dividend_calendar: Dictionary) -> bool:
+func _ensure_stock_dividend_actions(
+	run_state,
+	catalog: Dictionary,
+	calendar: Dictionary,
+	dividend_calendar: Dictionary,
+	meeting_lookup: Dictionary = {},
+	year_window: Dictionary = {}
+) -> bool:
 	var dividend_config: Dictionary = catalog.get("stock_dividend", {})
 	if not bool(dividend_config.get("enabled", true)):
 		return false
 	var annual_config: Dictionary = catalog.get("annual_rups", {})
-	var start_year: int = int(annual_config.get("start_year", 2020))
-	var end_year: int = int(annual_config.get("end_year", 2030))
+	var start_year: int = int(year_window.get("start_year", annual_config.get("start_year", 2020)))
+	var end_year: int = int(year_window.get("end_year", annual_config.get("end_year", 2030)))
 	var changed: bool = false
 	for company_id_value in run_state.company_order:
 		var company_id: String = str(company_id_value)
@@ -2026,7 +4754,7 @@ func _ensure_stock_dividend_actions(run_state, catalog: Dictionary, calendar: Di
 			if dividend_calendar.has(dividend_id):
 				continue
 			var meeting_id: String = "annual_rups|%s|%d" % [company_id, year_value]
-			var meeting: Dictionary = _meeting_by_id(calendar, meeting_id)
+			var meeting: Dictionary = _meeting_by_id(calendar, meeting_id, meeting_lookup)
 			if meeting.is_empty():
 				continue
 			var record: Dictionary = _build_stock_dividend_record(
@@ -2042,7 +4770,7 @@ func _ensure_stock_dividend_actions(run_state, catalog: Dictionary, calendar: Di
 			if record.is_empty():
 				continue
 			dividend_calendar[dividend_id] = record
-			_attach_stock_dividend_to_annual_meeting(calendar, record)
+			_attach_stock_dividend_to_annual_meeting(calendar, record, meeting_lookup)
 			changed = true
 	return changed
 
@@ -2468,68 +5196,80 @@ func _build_stock_dividend_arc(record: Dictionary, trade_date: Dictionary, day_n
 	}
 
 
-func _attach_cash_dividend_to_annual_meeting(calendar: Dictionary, record: Dictionary) -> bool:
+func _attach_cash_dividend_to_annual_meeting(calendar: Dictionary, record: Dictionary, meeting_lookup: Dictionary = {}) -> bool:
 	var meeting_id: String = str(record.get("source_meeting_id", ""))
 	if meeting_id.is_empty():
 		return false
-	for date_key_value in calendar.keys():
-		var date_key: String = str(date_key_value)
-		var meetings: Array = calendar.get(date_key, []).duplicate(true)
-		for meeting_index in range(meetings.size()):
-			if str(meetings[meeting_index].get("id", "")) != meeting_id:
-				continue
-			var meeting: Dictionary = meetings[meeting_index].duplicate(true)
-			var agenda_payload: Array = meeting.get("agenda_payload", []).duplicate(true)
-			var agenda_id: String = "cash_dividend_approval"
-			var has_dividend_agenda: bool = false
-			for agenda_value in agenda_payload:
-				if typeof(agenda_value) == TYPE_DICTIONARY and str(agenda_value.get("id", "")) == agenda_id:
-					has_dividend_agenda = true
-					break
-			if not has_dividend_agenda:
-				agenda_payload.append({
-					"id": agenda_id,
-					"label": "Approve cash dividend",
-					"description": "Shareholders review the proposed Rp%s per share cash dividend and payment timetable." % String.num(float(record.get("amount_per_share", 0.0)), 2)
-				})
-				meeting["agenda_payload"] = agenda_payload
-				meeting["public_summary"] = "%s is holding its annual RUPS, including a proposed cash dividend agenda." % str(meeting.get("company_name", ""))
-				meetings[meeting_index] = meeting
-				calendar[date_key] = meetings
-				return true
-	return false
+	var meeting_location: Dictionary = _meeting_location_by_id(calendar, meeting_id, meeting_lookup)
+	if meeting_location.is_empty():
+		return false
+	var date_key: String = str(meeting_location.get("date_key", ""))
+	var meeting_index: int = int(meeting_location.get("index", -1))
+	if date_key.is_empty() or meeting_index < 0:
+		return false
+	var meetings: Array = calendar.get(date_key, []).duplicate(true)
+	if meeting_index >= meetings.size():
+		return false
+	var meeting: Dictionary = meetings[meeting_index].duplicate(true)
+	var agenda_payload: Array = meeting.get("agenda_payload", []).duplicate(true)
+	var agenda_id: String = "cash_dividend_approval"
+	for agenda_value in agenda_payload:
+		if typeof(agenda_value) == TYPE_DICTIONARY and str(agenda_value.get("id", "")) == agenda_id:
+			return false
+	agenda_payload.append({
+		"id": agenda_id,
+		"label": "Approve cash dividend",
+		"description": "Shareholders review the proposed Rp%s per share cash dividend and payment timetable." % String.num(float(record.get("amount_per_share", 0.0)), 2)
+	})
+	meeting["agenda_payload"] = agenda_payload
+	meeting["public_summary"] = "%s is holding its annual RUPS, including a proposed cash dividend agenda." % str(meeting.get("company_name", ""))
+	meetings[meeting_index] = meeting
+	calendar[date_key] = meetings
+	if meeting_lookup.has(meeting_id):
+		meeting_lookup[meeting_id] = {
+			"date_key": date_key,
+			"index": meeting_index,
+			"meeting": meeting.duplicate(true)
+		}
+	return true
 
 
-func _attach_stock_dividend_to_annual_meeting(calendar: Dictionary, record: Dictionary) -> bool:
+func _attach_stock_dividend_to_annual_meeting(calendar: Dictionary, record: Dictionary, meeting_lookup: Dictionary = {}) -> bool:
 	var meeting_id: String = str(record.get("source_meeting_id", ""))
 	if meeting_id.is_empty():
 		return false
-	for date_key_value in calendar.keys():
-		var date_key: String = str(date_key_value)
-		var meetings: Array = calendar.get(date_key, []).duplicate(true)
-		for meeting_index in range(meetings.size()):
-			if str(meetings[meeting_index].get("id", "")) != meeting_id:
-				continue
-			var meeting: Dictionary = meetings[meeting_index].duplicate(true)
-			var agenda_payload: Array = meeting.get("agenda_payload", []).duplicate(true)
-			var agenda_id: String = "stock_dividend_approval"
-			var has_dividend_agenda: bool = false
-			for agenda_value in agenda_payload:
-				if typeof(agenda_value) == TYPE_DICTIONARY and str(agenda_value.get("id", "")) == agenda_id:
-					has_dividend_agenda = true
-					break
-			if not has_dividend_agenda:
-				agenda_payload.append({
-					"id": agenda_id,
-					"label": "Approve stock dividend",
-					"description": "Shareholders review the proposed %s stock dividend distribution and timetable." % _format_distribution_percent(float(record.get("stock_dividend_ratio", 0.0)))
-				})
-				meeting["agenda_payload"] = agenda_payload
-				meeting["public_summary"] = "%s is holding its annual RUPS, including a proposed stock dividend agenda." % str(meeting.get("company_name", ""))
-				meetings[meeting_index] = meeting
-				calendar[date_key] = meetings
-				return true
-	return false
+	var meeting_location: Dictionary = _meeting_location_by_id(calendar, meeting_id, meeting_lookup)
+	if meeting_location.is_empty():
+		return false
+	var date_key: String = str(meeting_location.get("date_key", ""))
+	var meeting_index: int = int(meeting_location.get("index", -1))
+	if date_key.is_empty() or meeting_index < 0:
+		return false
+	var meetings: Array = calendar.get(date_key, []).duplicate(true)
+	if meeting_index >= meetings.size():
+		return false
+	var meeting: Dictionary = meetings[meeting_index].duplicate(true)
+	var agenda_payload: Array = meeting.get("agenda_payload", []).duplicate(true)
+	var agenda_id: String = "stock_dividend_approval"
+	for agenda_value in agenda_payload:
+		if typeof(agenda_value) == TYPE_DICTIONARY and str(agenda_value.get("id", "")) == agenda_id:
+			return false
+	agenda_payload.append({
+		"id": agenda_id,
+		"label": "Approve stock dividend",
+		"description": "Shareholders review the proposed %s stock dividend distribution and timetable." % _format_distribution_percent(float(record.get("stock_dividend_ratio", 0.0)))
+	})
+	meeting["agenda_payload"] = agenda_payload
+	meeting["public_summary"] = "%s is holding its annual RUPS, including a proposed stock dividend agenda." % str(meeting.get("company_name", ""))
+	meetings[meeting_index] = meeting
+	calendar[date_key] = meetings
+	if meeting_lookup.has(meeting_id):
+		meeting_lookup[meeting_id] = {
+			"date_key": date_key,
+			"index": meeting_index,
+			"meeting": meeting.duplicate(true)
+		}
+	return true
 
 
 func _dividend_row(run_state, record: Dictionary) -> Dictionary:
@@ -2559,9 +5299,7 @@ func _dividend_row(run_state, record: Dictionary) -> Dictionary:
 
 
 func _stable_range(seed_key: String, min_value: int, max_value: int) -> int:
-	if max_value <= min_value:
-		return min_value
-	return min_value + int(abs(hash(seed_key))) % (max_value - min_value + 1)
+	return STABLE_RNG.int_between([seed_key], min_value, max_value)
 
 
 func _round_currency(value: float) -> float:
@@ -2572,21 +5310,19 @@ func _format_distribution_percent(value: float) -> String:
 	return "%.2f%%" % [value * 100.0]
 
 
-func _ensure_annual_rups_meetings(run_state, catalog: Dictionary, calendar: Dictionary) -> bool:
+func _ensure_annual_rups_meetings(
+	run_state,
+	catalog: Dictionary,
+	calendar: Dictionary,
+	meeting_lookup: Dictionary = {},
+	year_window: Dictionary = {}
+) -> bool:
 	var annual_config: Dictionary = catalog.get("annual_rups", {})
-	var start_year: int = int(annual_config.get("start_year", 2020))
-	var end_year: int = int(annual_config.get("end_year", 2030))
-	var existing_meeting_ids: Dictionary = {}
-	for meetings_value in calendar.values():
-		if typeof(meetings_value) != TYPE_ARRAY:
-			continue
-		var meetings: Array = meetings_value
-		for meeting_value in meetings:
-			if typeof(meeting_value) != TYPE_DICTIONARY:
-				continue
-			var meeting_id_value: String = str(meeting_value.get("id", ""))
-			if not meeting_id_value.is_empty():
-				existing_meeting_ids[meeting_id_value] = true
+	var start_year: int = int(year_window.get("start_year", annual_config.get("start_year", 2020)))
+	var end_year: int = int(year_window.get("end_year", annual_config.get("end_year", 2030)))
+	var existing_meeting_ids: Dictionary = meeting_lookup
+	if existing_meeting_ids.is_empty() and not calendar.is_empty():
+		existing_meeting_ids = _build_meeting_id_lookup(calendar)
 	var changed: bool = false
 	for company_id_value in run_state.company_order:
 		var company_id: String = str(company_id_value)
@@ -2601,7 +5337,11 @@ func _ensure_annual_rups_meetings(run_state, catalog: Dictionary, calendar: Dict
 			if meeting.is_empty():
 				continue
 			_add_meeting(calendar, meeting)
-			existing_meeting_ids[meeting_id] = true
+			existing_meeting_ids[meeting_id] = {
+				"date_key": str(meeting.get("date_key", "")),
+				"index": -1,
+				"meeting": meeting.duplicate(true)
+			}
 			changed = true
 	return changed
 
@@ -2611,8 +5351,8 @@ func _build_annual_rups_meeting(catalog: Dictionary, definition: Dictionary, com
 	var start_month: int = int(annual_config.get("start_month", 3))
 	var end_month: int = int(annual_config.get("end_month", 6))
 	var month_span: int = max(end_month - start_month, 0)
-	var picked_month: int = start_month + int(abs(hash("%s|annual_month|%d" % [company_id, year_value]))) % (month_span + 1)
-	var picked_day: int = 5 + int(abs(hash("%s|annual_day|%d" % [company_id, year_value]))) % 18
+	var picked_month: int = start_month + int(STABLE_RNG.seed_from_parts([company_id, "annual_month", year_value]) % (month_span + 1))
+	var picked_day: int = 5 + int(STABLE_RNG.seed_from_parts([company_id, "annual_day", year_value]) % 18)
 	var meeting_date: Dictionary = _trade_date_on_or_after(year_value, picked_month, picked_day)
 	if meeting_date.is_empty():
 		return {}
@@ -3186,6 +5926,8 @@ func _resolve_interactive_meeting_vote(
 	ownership_snapshot: Dictionary,
 	player_vote_choice: String
 ) -> Dictionary:
+	if str(chain.get("family", "")) == "tender_offer":
+		return _resolve_tender_offer_election(meeting_id, chain, ownership_snapshot, player_vote_choice)
 	var controller_pct: float = float(ownership_snapshot.get("controller_pct", 0.0))
 	var player_pct: float = float(ownership_snapshot.get("player_pct", 0.0))
 	var public_pct: float = float(ownership_snapshot.get("public_pct", 0.0))
@@ -3196,7 +5938,7 @@ func _resolve_interactive_meeting_vote(
 	var frontrunner_strength: float = float(chain.get("frontrunner_strength", 0.5))
 	var management_stance: String = str(chain.get("management_stance", "clarify"))
 	var timeline_state: String = str(chain.get("current_timeline_state", "active"))
-	var public_noise: float = float(abs(hash("%s|public_vote" % [meeting_id])) % 1000) / 1000.0
+	var public_noise: float = STABLE_RNG.unit_float([meeting_id, "public_vote"])
 	var controller_yes_bias: float = approval_odds * 0.68 + funding_pressure * 0.26 + frontrunner_strength * 0.12
 	var controller_no_bias: float = (1.0 - approval_odds) * 0.38 + market_overpricing * 0.22 + (0.16 if management_stance == "deny" else 0.0)
 	var controller_vote: String = "agree"
@@ -3280,6 +6022,78 @@ func _resolve_interactive_meeting_vote(
 			}
 		],
 		"result_category": "approved" if approved else "rejected"
+	}
+
+
+func _resolve_tender_offer_election(
+	meeting_id: String,
+	chain: Dictionary,
+	ownership_snapshot: Dictionary,
+	player_vote_choice: String
+) -> Dictionary:
+	var controller_pct: float = float(ownership_snapshot.get("controller_pct", 0.0))
+	var player_pct: float = float(ownership_snapshot.get("player_pct", 0.0))
+	var public_pct: float = float(ownership_snapshot.get("public_pct", 0.0))
+	var terms: Dictionary = chain.get("tender_terms", {})
+	var acceptance_ratio: float = clamp(float(terms.get("acceptance_ratio", 0.0)), 0.0, 1.0)
+	var public_noise: float = STABLE_RNG.unit_float([meeting_id, "tender_public_election"])
+	var public_tender_share: float = clamp(acceptance_ratio + (public_noise - 0.5) * 0.16, 0.05, 0.92)
+	var player_tender_choice: String = "observe"
+	match player_vote_choice:
+		"agree":
+			player_tender_choice = "tender"
+		"disagree":
+			player_tender_choice = "hold"
+		_:
+			player_tender_choice = "observe"
+	var player_tender_pct: float = player_pct if player_tender_choice == "tender" else 0.0
+	var player_hold_pct: float = player_pct if player_tender_choice == "hold" else 0.0
+	var player_observe_pct: float = player_pct if player_tender_choice == "observe" else 0.0
+	var controller_tender_pct: float = controller_pct
+	var public_tender_pct: float = public_pct * public_tender_share
+	var public_hold_pct: float = public_pct * (1.0 - public_tender_share)
+	var tender_pct: float = controller_tender_pct + player_tender_pct + public_tender_pct
+	var hold_pct: float = player_hold_pct + public_hold_pct
+	var observe_pct: float = player_observe_pct
+	return {
+		"approved": true,
+		"yes_pct": tender_pct,
+		"no_pct": hold_pct,
+		"abstain_pct": observe_pct,
+		"player_vote": player_vote_choice,
+		"player_tender_choice": player_tender_choice,
+		"player_weight_pct": player_pct,
+		"tender_acceptance_ratio": acceptance_ratio,
+		"bloc_rows": [
+			{
+				"bloc_id": "controller",
+				"label": "Offeror / Controller",
+				"agree_pct": controller_tender_pct,
+				"disagree_pct": 0.0,
+				"abstain_pct": 0.0,
+				"decision": "tender",
+				"note": "The offeror-side bloc is treated as committed to the tender path."
+			},
+			{
+				"bloc_id": "player",
+				"label": "Player",
+				"agree_pct": player_tender_pct,
+				"disagree_pct": player_hold_pct,
+				"abstain_pct": player_observe_pct,
+				"decision": player_tender_choice,
+				"note": "Your tender election uses shares captured on the shareholder record date."
+			},
+			{
+				"bloc_id": "public",
+				"label": "Public Float",
+				"agree_pct": public_tender_pct,
+				"disagree_pct": public_hold_pct,
+				"abstain_pct": 0.0,
+				"decision": "split",
+				"note": "Float holders split between accepting the bid and staying exposed."
+			}
+		],
+		"result_category": "tender_election"
 	}
 
 
@@ -3530,13 +6344,45 @@ func _meeting_row(meeting: Dictionary, run_state, attended_meetings: Variant = n
 	}
 
 
-func _meeting_by_id(calendar: Dictionary, meeting_id: String) -> Dictionary:
+func _meeting_by_id(calendar: Dictionary, meeting_id: String, meeting_lookup: Dictionary = {}) -> Dictionary:
+	var meeting_location: Dictionary = _meeting_location_by_id(calendar, meeting_id, meeting_lookup)
+	if not meeting_location.is_empty():
+		var meeting: Dictionary = meeting_location.get("meeting", {})
+		return meeting.duplicate(true)
+	return {}
+
+
+func _meeting_location_by_id(calendar: Dictionary, meeting_id: String, meeting_lookup: Dictionary = {}) -> Dictionary:
+	if meeting_id.is_empty():
+		return {}
+	if meeting_lookup.has(meeting_id):
+		var lookup_row: Dictionary = meeting_lookup.get(meeting_id, {})
+		var lookup_date_key: String = str(lookup_row.get("date_key", ""))
+		var lookup_index: int = int(lookup_row.get("index", -1))
+		if not lookup_date_key.is_empty() and lookup_index >= 0:
+			var lookup_meetings: Array = calendar.get(lookup_date_key, [])
+			if lookup_index < lookup_meetings.size() and typeof(lookup_meetings[lookup_index]) == TYPE_DICTIONARY:
+				var lookup_meeting: Dictionary = lookup_meetings[lookup_index]
+				if str(lookup_meeting.get("id", "")) == meeting_id:
+					return {
+						"date_key": lookup_date_key,
+						"index": lookup_index,
+						"meeting": lookup_meeting.duplicate(true)
+					}
 	for date_key_value in calendar.keys():
-		var meetings: Array = calendar.get(str(date_key_value), [])
-		for meeting_value in meetings:
+		var date_key: String = str(date_key_value)
+		var meetings: Array = calendar.get(date_key, [])
+		for meeting_index in range(meetings.size()):
+			if typeof(meetings[meeting_index]) != TYPE_DICTIONARY:
+				continue
+			var meeting_value = meetings[meeting_index]
 			var meeting: Dictionary = meeting_value
 			if str(meeting.get("id", "")) == meeting_id:
-				return meeting.duplicate(true)
+				return {
+					"date_key": date_key,
+					"index": meeting_index,
+					"meeting": meeting.duplicate(true)
+				}
 	return {}
 
 
@@ -3634,6 +6480,8 @@ func _family_label(family_id: String) -> String:
 			return "Stock Buyback"
 		"stock_split":
 			return "Stock Split"
+		"tender_offer":
+			return "Tender Offer"
 		"ceo_change":
 			return "CEO Change"
 		"private_placement":
@@ -3646,6 +6494,34 @@ func _family_label(family_id: String) -> String:
 			return "Backdoor Listing"
 		_:
 			return family_id.replace("_", " ").capitalize()
+
+
+func _sector_label_for_id(sector_id: String) -> String:
+	match sector_id:
+		"consumer":
+			return "Consumer"
+		"industrial":
+			return "Industrial"
+		"energy":
+			return "Energy"
+		"tech":
+			return "Technology"
+		"infra":
+			return "Infrastructure"
+		"transport":
+			return "Transport"
+		"health":
+			return "Health"
+		"finance":
+			return "Finance"
+		"basicindustry":
+			return "Basic-Industry"
+		"property":
+			return "Property"
+		"noncyclical":
+			return "Non-Cyclical"
+		_:
+			return sector_id.replace("_", " ").capitalize()
 
 
 func _management_stance_for_stage(chain: Dictionary, _stage_template: Dictionary) -> String:
@@ -3701,6 +6577,14 @@ func _meeting_public_summary(chain: Dictionary) -> String:
 	if str(chain.get("family", "")) == "rights_issue":
 		var rights_terms: Dictionary = chain.get("rights_terms", {})
 		if not rights_terms.is_empty():
+			if bool(rights_terms.get("linked_backdoor_listing", false)):
+				return "%s is in the %s stage of a backdoor-linked rights issue, with a 1-for-%d entitlement at Rp%s per share to fund %s." % [
+					str(chain.get("target_company_name", "")),
+					str(chain.get("stage", "")).replace("_", " "),
+					int(rights_terms.get("ratio_denominator", 1)),
+					String.num(float(rights_terms.get("exercise_price", 0.0)), 2),
+					str(rights_terms.get("funding_purpose", "growth capex"))
+				]
 			return "%s is in the %s stage of a rights issue mandate, with a 1-for-%d entitlement at Rp%s per share." % [
 				str(chain.get("target_company_name", "")),
 				str(chain.get("stage", "")).replace("_", " "),
@@ -3716,6 +6600,71 @@ func _meeting_public_summary(chain: Dictionary) -> String:
 				int(terms.get("authorized_shares", 0)),
 				int(terms.get("executed_shares", 0))
 			]
+	if str(chain.get("family", "")) == "stock_split":
+		var terms: Dictionary = chain.get("split_terms", {})
+		if not terms.is_empty():
+			var action_label: String = "reverse stock split" if str(terms.get("split_type", "split")) == "reverse_split" else "stock split"
+			return "%s is in the %s stage of a %s mandate, with a %d-for-%d ratio and an ex-split reference price near Rp%s." % [
+				str(chain.get("target_company_name", "")),
+				str(chain.get("stage", "")).replace("_", " "),
+				action_label,
+				int(terms.get("ratio_numerator", 1)),
+				int(terms.get("ratio_denominator", 1)),
+				String.num(float(terms.get("theoretical_ex_split_price", 0.0)), 2)
+			]
+	if str(chain.get("family", "")) == "tender_offer":
+		var terms: Dictionary = chain.get("tender_terms", {})
+		if not terms.is_empty():
+			return "%s is in the %s stage of a tender offer, with %s offering Rp%s for up to %d shares." % [
+				str(chain.get("target_company_name", "")),
+				str(chain.get("stage", "")).replace("_", " "),
+				str(terms.get("offeror_label", "strategic acquirer")),
+				String.num(float(terms.get("offer_price", 0.0)), 2),
+				int(terms.get("offer_shares", 0))
+			]
+	if str(chain.get("family", "")) == "strategic_merger_acquisition":
+		var terms: Dictionary = chain.get("mna_terms", {})
+		if not terms.is_empty():
+			return "%s is in the %s stage of a strategic acquisition, with %s offering Rp%s per share." % [
+				str(chain.get("target_company_name", "")),
+				str(chain.get("stage", "")).replace("_", " "),
+				str(terms.get("acquirer_label", "strategic acquirer")),
+				String.num(float(terms.get("cashout_price", 0.0)), 2)
+			]
+	if str(chain.get("family", "")) == "restructuring":
+		var terms: Dictionary = chain.get("restructuring_terms", {})
+		if not terms.is_empty():
+			return "%s is in the %s stage of a %s, with %.1f%% debt relief, %.1f%% creditor-share conversion, and a %.1f%% price-bias read." % [
+				str(chain.get("target_company_name", "")),
+				str(chain.get("stage", "")).replace("_", " "),
+				str(terms.get("plan_label", "restructuring plan")).to_lower(),
+				float(terms.get("debt_reduction_pct", 0.0)) * 100.0,
+				float(terms.get("debt_conversion_pct", 0.0)) * 100.0,
+				float(terms.get("price_adjustment_pct", 0.0)) * 100.0
+			]
+	if str(chain.get("family", "")) == "backdoor_listing":
+		var terms: Dictionary = chain.get("backdoor_terms", {})
+		if not terms.is_empty():
+			var rights_hint: String = " Follow-on rights issue risk is on the board for %s." % str(terms.get("follow_on_rights_purpose", "growth capex")) if bool(terms.get("follow_on_rights_hint", false)) else ""
+			return "%s is in the %s stage of a control-change and asset-injection proposal, with %s injecting a %s for %.0f%% post-deal control and a proposed reset toward %s.%s" % [
+				str(chain.get("target_company_name", "")),
+				str(chain.get("stage", "")).replace("_", " "),
+				str(terms.get("sponsor_label", "private operating company")),
+				str(terms.get("incoming_asset_label", "private operating business")),
+				float(terms.get("incoming_control_pct", 0.0)) * 100.0,
+				str(terms.get("post_deal_name", chain.get("target_company_name", ""))),
+				rights_hint
+			]
+	if str(chain.get("family", "")) == "ceo_change":
+		var terms: Dictionary = chain.get("ceo_terms", {})
+		if not terms.is_empty():
+			return "%s is in the %s stage of a CEO-change proposal, with %s nominated for a %s mandate focused on %s." % [
+				str(chain.get("target_company_name", "")),
+				str(chain.get("stage", "")).replace("_", " "),
+				str(terms.get("new_ceo_name", "the incoming CEO")),
+				str(terms.get("incoming_profile_label", "turnaround")),
+				str(terms.get("mandate", "execution reset"))
+			]
 	return "%s is now in the %s stage of a %s storyline, with management stance at %s." % [
 		str(chain.get("target_company_name", "")),
 		str(chain.get("stage", "")).replace("_", " "),
@@ -3728,6 +6677,56 @@ func _event_sentiment_shift(catalog: Dictionary, chain: Dictionary, category: St
 	var stage_id: String = str(chain.get("stage", "public_speculation"))
 	var stage_template: Dictionary = _stage_template(catalog, stage_id)
 	var shift: float = float(stage_template.get("sentiment_shift", 0.0))
+	if str(chain.get("family", "")) == "rights_issue" and bool(chain.get("rights_terms", {}).get("linked_backdoor_listing", false)):
+		var linked_terms: Dictionary = chain.get("rights_terms", {})
+		var unlock_pct: float = clamp(float(linked_terms.get("strategic_funding_unlock_pct", 0.0)), -0.3, 0.3)
+		var overhang_pct: float = clamp(float(linked_terms.get("dilution_overhang_pct", 0.0)), 0.0, 1.0)
+		var linked_shift: float = clamp(unlock_pct - overhang_pct * 0.22, -0.20, 0.24)
+		if category in ["corporate_action_denial", "corporate_action_cancellation"]:
+			return -max(absf(shift), 0.12 + overhang_pct * 0.35)
+		if category == "corporate_action_filing":
+			return clamp(0.08 + linked_shift, -0.14, 0.26)
+		if category == "corporate_action_resolution":
+			return clamp(0.10 + linked_shift, -0.12, 0.28)
+		if category == "corporate_action_execution":
+			return clamp(0.07 + linked_shift, -0.18, 0.24)
+		return clamp(max(shift, 0.06) + linked_shift * 0.45, -0.12, 0.20)
+	if str(chain.get("family", "")) == "stock_split" and str(chain.get("split_terms", {}).get("split_type", "split")) == "reverse_split":
+		return -abs(shift) if shift != 0.0 else -0.08
+	if str(chain.get("family", "")) == "backdoor_listing":
+		var terms: Dictionary = chain.get("backdoor_terms", {})
+		var quality_score: float = clamp(float(terms.get("asset_quality_score", 0.5)), 0.0, 1.0)
+		var accumulation_support: float = clamp(float(terms.get("accumulation_price_support_pct", 0.0)), 0.0, 1.0)
+		if category in ["corporate_action_denial", "corporate_action_cancellation"]:
+			return -max(absf(shift), 0.14)
+		if category == "corporate_action_rumor":
+			return clamp(max(shift, 0.06 + accumulation_support * 0.32), -0.3, 0.16)
+		if category == "corporate_action_speculation":
+			return clamp(max(shift, 0.10 + quality_score * 0.10), -0.3, 0.22)
+		if category == "corporate_action_filing":
+			return clamp(0.15 + quality_score * 0.09, -0.3, 0.28)
+		if category == "corporate_action_resolution":
+			return clamp(0.16 + quality_score * 0.10, -0.3, 0.30)
+		if category == "corporate_action_execution":
+			return clamp(0.17 + quality_score * 0.12 + accumulation_support * 0.12, -0.3, 0.34)
+		return shift
+	if str(chain.get("family", "")) == "ceo_change":
+		var ceo_terms: Dictionary = chain.get("ceo_terms", {})
+		var reaction_pct: float = clamp(float(ceo_terms.get("price_reaction_pct", 0.0)), -0.20, 0.24)
+		if category in ["corporate_action_denial", "corporate_action_cancellation"]:
+			return -max(absf(shift), 0.08)
+		if category in ["corporate_action_filing", "corporate_action_resolution", "corporate_action_execution"]:
+			return clamp(0.04 + reaction_pct, -0.12, 0.20)
+		return clamp(max(shift, 0.04) + reaction_pct * 0.35, -0.10, 0.16)
+	if str(chain.get("family", "")) == "restructuring":
+		var restructuring_terms: Dictionary = chain.get("restructuring_terms", {})
+		var price_adjustment_pct: float = clamp(float(restructuring_terms.get("price_adjustment_pct", 0.0)), -0.5, 0.5)
+		var stress_overhang_pct: float = clamp(float(restructuring_terms.get("stress_overhang_pct", 0.0)), 0.0, 1.0)
+		if category in ["corporate_action_denial", "corporate_action_cancellation"]:
+			return -max(absf(shift), 0.12 + stress_overhang_pct * 0.22)
+		if category in ["corporate_action_filing", "corporate_action_resolution", "corporate_action_execution"]:
+			return clamp(price_adjustment_pct, -0.22, 0.20)
+		return clamp(shift - stress_overhang_pct * 0.04, -0.16, 0.12)
 	if category in ["corporate_action_denial", "corporate_action_cancellation"]:
 		return -abs(shift) * 1.35
 	if category == "corporate_action_filing":
@@ -3743,24 +6742,11 @@ func _meeting_delay_days(catalog: Dictionary, meeting_type: String, company_id: 
 	var max_days: int = int(defaults.get("delay_max_days", defaults.get("fallback_delay_max_days", min_days)))
 	if max_days <= min_days:
 		return min_days
-	return min_days + int(abs(hash("%s|meeting_delay|%s|%d" % [company_id, meeting_type, seed_value]))) % (max_days - min_days + 1)
+	return STABLE_RNG.int_between([company_id, "meeting_delay", meeting_type, seed_value], min_days, max_days)
 
 
 func _trade_date_on_or_after(year_value: int, month_value: int, day_value: int) -> Dictionary:
-	var current: Dictionary = trading_calendar.start_date()
-	var safety: int = 0
-	while safety < 5000:
-		var current_year: int = int(current.get("year", 2020))
-		var current_month: int = int(current.get("month", 1))
-		var current_day: int = int(current.get("day", 1))
-		if current_year > year_value:
-			break
-		if current_year == year_value:
-			if current_month > month_value or (current_month == month_value and current_day >= day_value):
-				return current.duplicate(true)
-		current = trading_calendar.next_trade_date(current)
-		safety += 1
-	return {}
+	return trading_calendar.trade_date_on_or_after(year_value, month_value, day_value)
 
 
 func _add_meeting(calendar: Dictionary, meeting: Dictionary) -> void:
@@ -3784,8 +6770,7 @@ func _add_meeting(calendar: Dictionary, meeting: Dictionary) -> void:
 
 func _roll(chain: Dictionary, key: String, day_number: int) -> float:
 	var seed_key: String = "%s|%s|%d" % [str(chain.get("chain_id", "")), key, day_number]
-	var raw_value: int = abs(hash(seed_key)) % 1000
-	return float(raw_value) / 1000.0
+	return STABLE_RNG.unit_float([seed_key])
 
 
 func _max_quality(a: String, b: String) -> String:

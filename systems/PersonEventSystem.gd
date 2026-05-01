@@ -1,5 +1,6 @@
 extends RefCounted
 
+const STABLE_RNG = preload("res://systems/StableRng.gd")
 const SAMPLE_MIN := 6
 const SAMPLE_MAX := 14
 const TOP_CANDIDATE_COUNT := 4
@@ -34,8 +35,7 @@ func build_person_event_candidates(
 	sector_sentiments: Dictionary,
 	market_sentiment: float
 ) -> Array:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|person_event|%s" % [run_state.run_seed, day_number]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_state.run_seed, "person_event", day_number])
 	var sampled_company_ids: Array = _sample_company_ids(run_state.company_order, rng)
 	var candidates: Array = []
 	var risk_appetite: float = float(macro_state.get("risk_appetite", 0.5))
@@ -158,8 +158,7 @@ func build_debug_person_event(
 	market_sentiment: float,
 	event_id: String
 ) -> Dictionary:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|debug_person_event|%s|%s" % [run_state.run_seed, day_number, event_id]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_state.run_seed, "debug_person_event", day_number, event_id])
 	var sampled_company_ids: Array = _sample_company_ids(run_state.company_order, rng)
 	var risk_appetite: float = float(macro_state.get("risk_appetite", 0.5))
 	var inflation_yoy: float = float(macro_state.get("inflation_yoy", 3.0))

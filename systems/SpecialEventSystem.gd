@@ -1,5 +1,6 @@
 extends RefCounted
 
+const STABLE_RNG = preload("res://systems/StableRng.gd")
 const MIN_TRIGGER_DAY := 8
 
 
@@ -56,13 +57,12 @@ func _should_start_event(run_state, day_number: int, active_events: Array) -> bo
 	var difficulty_config: Dictionary = run_state.get_difficulty_config()
 	var event_interval_days: float = max(float(difficulty_config.get("event_interval_days", 30.0)), 1.0)
 	var cadence: int = int(clamp(round(event_interval_days * 1.6), 10, 30))
-	var cadence_offset: int = int(posmod(hash("%s|special_offset" % run_state.run_seed), cadence))
+	var cadence_offset: int = int(STABLE_RNG.seed_from_parts([run_state.run_seed, "special_offset"]) % cadence)
 	var cadence_hit: bool = int(posmod(day_number + cadence_offset, cadence)) == 0
 	if cadence_hit:
 		return true
 
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|special_roll|%s" % [run_state.run_seed, day_number]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_state.run_seed, "special_roll", day_number])
 	var random_threshold: float = 1.0 / max(event_interval_days * 2.8, 14.0)
 	return rng.randf() < random_threshold
 
@@ -79,8 +79,7 @@ func _build_special_event(
 	if candidates.is_empty():
 		return {}
 
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|special_pick|%s" % [run_state.run_seed, day_number]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_state.run_seed, "special_pick", day_number])
 	var picked_candidate: Dictionary = _pick_weighted_candidate(rng, candidates)
 	if picked_candidate.is_empty():
 		return {}
@@ -98,12 +97,12 @@ func _build_special_event_from_definition(
 	var duration_days: int = int(event_definition.get("duration_days", 8))
 	var minimum_duration: int = int(event_definition.get("duration_days_min", duration_days))
 	var maximum_duration: int = int(event_definition.get("duration_days_max", duration_days))
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|special_manual|%s|%s" % [
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([
 		run_state.run_seed,
+		"special_manual",
 		day_number,
 		str(event_definition.get("id", ""))
-	]))
+	])
 	duration_days = rng.randi_range(minimum_duration, max(minimum_duration, maximum_duration))
 
 	return {

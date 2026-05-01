@@ -4,6 +4,7 @@ const HISTORY_START_YEAR := 2010
 const HISTORY_END_YEAR := 2019
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
 const COMPANY_NARRATIVE_GENERATOR = preload("res://systems/CompanyNarrativeGenerator.gd")
+const STABLE_RNG = preload("res://systems/StableRng.gd")
 const DEFAULT_SECTOR_PROFILE := {
 	"scale": 0.50,
 	"growth": 0.50,
@@ -1897,9 +1898,7 @@ func _anchor_ratio(template: Dictionary, anchor_key: String, legacy_key: String,
 
 
 func _rng_for(run_seed: int, company_id: String, salt: String) -> RandomNumberGenerator:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|%s|%s" % [run_seed, company_id, salt]))
-	return rng
+	return STABLE_RNG.rng([run_seed, "company", company_id, salt])
 
 
 func _sample_noise(
@@ -1910,8 +1909,7 @@ func _sample_noise(
 	maximum: float,
 	year: int
 ) -> float:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|%s|%s|%s" % [run_seed, company_id, salt, year]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "company_noise", company_id, salt, year])
 	return rng.randf_range(minimum, maximum)
 
 

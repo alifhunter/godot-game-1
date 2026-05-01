@@ -1,5 +1,6 @@
 extends RefCounted
 
+const STABLE_RNG = preload("res://systems/StableRng.gd")
 const UINT32_RANGE := 4294967296.0
 const MULBERRY32_INCREMENT := 0x6D2B79F5
 
@@ -340,7 +341,7 @@ func _mask32(value: int) -> int:
 
 
 func _seed_from(run_seed: int, company_id: String) -> int:
-	return _mask32(int(hash("%s|company_narrative|%s" % [run_seed, company_id])))
+	return _mask32(STABLE_RNG.seed_from_parts([run_seed, "company_narrative", company_id]))
 
 
 func _round_employee_count(value: int) -> int:

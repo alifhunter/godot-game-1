@@ -12,6 +12,9 @@ const MONTH_NAMES := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "S
 
 var holidays_by_year: Dictionary = {}
 var is_loaded: bool = false
+var trade_dates_by_index: Array = []
+var trade_index_by_key: Dictionary = {}
+var trade_date_on_or_after_cache: Dictionary = {}
 
 
 func start_date() -> Dictionary:
@@ -35,37 +38,52 @@ func previous_trade_date(date_info: Dictionary) -> Dictionary:
 
 
 func trade_date_for_index(trading_day_number: int) -> Dictionary:
-	var safe_index: int = max(trading_day_number, 1)
-	var date_info: Dictionary = start_date()
-	var remaining_days: int = safe_index - 1
-	while remaining_days > 0:
-		date_info = next_trade_date(date_info)
-		remaining_days -= 1
-	return date_info
+	var safe_index: int = clamp(trading_day_number, 1, 5000)
+	_ensure_trade_cache_index(safe_index)
+	return trade_dates_by_index[safe_index - 1].duplicate(true)
 
 
 func trade_index_for_date(date_info: Dictionary) -> int:
 	var target: Dictionary = _sanitize_date(date_info)
 	var target_key: String = to_key(target)
-	var current: Dictionary = start_date()
-	var current_index: int = 1
-	while to_key(current) != target_key:
-		if _compare_dates(current, target) > 0:
-			return -1
-		current = next_trade_date(current)
-		current_index += 1
-		if current_index > 5000:
-			return -1
-	return current_index
+	if trade_index_by_key.has(target_key):
+		return int(trade_index_by_key.get(target_key, -1))
+	_ensure_trade_cache_until_date(target)
+	return int(trade_index_by_key.get(target_key, -1))
 
 
 func advance_trade_days(date_info: Dictionary, offset_days: int) -> Dictionary:
 	var current: Dictionary = _sanitize_date(date_info)
-	var remaining: int = max(offset_days, 0)
+	var safe_offset: int = max(offset_days, 0)
+	if safe_offset <= 0:
+		return current
+	var start_index: int = trade_index_for_date(current)
+	if start_index > 0:
+		return trade_date_for_index(start_index + safe_offset)
+	var remaining: int = safe_offset
 	while remaining > 0:
 		current = next_trade_date(current)
 		remaining -= 1
 	return current
+
+
+func trade_date_on_or_after(year_value: int, month_value: int, day_value: int) -> Dictionary:
+	var target: Dictionary = {
+		"year": year_value,
+		"month": month_value,
+		"day": day_value,
+		"weekday": START_DATE["weekday"]
+	}
+	var target_key: String = to_key(target)
+	if trade_date_on_or_after_cache.has(target_key):
+		return trade_date_on_or_after_cache[target_key].duplicate(true)
+	_ensure_trade_cache_until_year(year_value + 1)
+	for cached_date_value in trade_dates_by_index:
+		var cached_date: Dictionary = cached_date_value
+		if _compare_dates(cached_date, target) >= 0:
+			trade_date_on_or_after_cache[target_key] = cached_date.duplicate(true)
+			return cached_date.duplicate(true)
+	return {}
 
 
 func is_trade_day(date_info: Dictionary) -> bool:
@@ -131,6 +149,43 @@ func _ensure_loaded() -> void:
 		holidays_by_year[year_key] = lookup
 
 	is_loaded = true
+
+
+func _ensure_trade_cache_started() -> void:
+	if not trade_dates_by_index.is_empty():
+		return
+	var first_date: Dictionary = start_date()
+	trade_dates_by_index.append(first_date.duplicate(true))
+	trade_index_by_key[to_key(first_date)] = 1
+
+
+func _ensure_trade_cache_index(target_index: int) -> void:
+	_ensure_trade_cache_started()
+	var safe_target_index: int = clamp(target_index, 1, 5000)
+	while trade_dates_by_index.size() < safe_target_index:
+		var next_date: Dictionary = next_trade_date(trade_dates_by_index[trade_dates_by_index.size() - 1])
+		trade_dates_by_index.append(next_date.duplicate(true))
+		trade_index_by_key[to_key(next_date)] = trade_dates_by_index.size()
+
+
+func _ensure_trade_cache_until_date(target_date: Dictionary) -> void:
+	_ensure_trade_cache_started()
+	var safety: int = 0
+	while _compare_dates(trade_dates_by_index[trade_dates_by_index.size() - 1], target_date) < 0 and trade_dates_by_index.size() < 5000:
+		var next_date: Dictionary = next_trade_date(trade_dates_by_index[trade_dates_by_index.size() - 1])
+		trade_dates_by_index.append(next_date.duplicate(true))
+		trade_index_by_key[to_key(next_date)] = trade_dates_by_index.size()
+		safety += 1
+		if safety > 5000:
+			break
+
+
+func _ensure_trade_cache_until_year(year_value: int) -> void:
+	_ensure_trade_cache_started()
+	while int(trade_dates_by_index[trade_dates_by_index.size() - 1].get("year", START_DATE["year"])) <= year_value and trade_dates_by_index.size() < 5000:
+		var next_date: Dictionary = next_trade_date(trade_dates_by_index[trade_dates_by_index.size() - 1])
+		trade_dates_by_index.append(next_date.duplicate(true))
+		trade_index_by_key[to_key(next_date)] = trade_dates_by_index.size()
 
 
 func _sanitize_date(date_info: Dictionary) -> Dictionary:

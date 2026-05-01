@@ -38,6 +38,97 @@
     "price_support_per_pct": 1.6,
     "maximum_price_support_pct": 0.18
   },
+  "stock_split": {
+    "enabled": true,
+    "minimum_split_price": 900,
+    "reverse_split_price_threshold": 120,
+    "split_ratios": [2, 4, 5],
+    "reverse_split_ratios": [2, 5],
+    "liquidity_boost_min_pct": 0.01,
+    "liquidity_boost_max_pct": 0.06,
+    "reverse_split_pressure_min_pct": -0.08,
+    "reverse_split_pressure_max_pct": -0.02
+  },
+  "tender_offer": {
+    "enabled": true,
+    "minimum_offer_pct_of_free_float": 0.12,
+    "maximum_offer_pct_of_free_float": 0.35,
+    "minimum_acceptance_ratio": 0.45,
+    "maximum_acceptance_ratio": 0.85,
+    "minimum_premium_pct": 0.12,
+    "maximum_premium_pct": 0.35,
+    "maximum_float_absorption_pct": 0.50,
+    "price_support_per_pct": 1.2,
+    "maximum_price_support_pct": 0.22,
+    "public_float_warning_pct": 12.0,
+    "go_private_trigger_pct": 5.0,
+    "liquidity_penalty_multiplier": 0.35,
+    "volatility_event_multiplier": 1.35,
+    "final_cashout_premium_pct": 0.04
+  },
+  "strategic_merger_acquisition": {
+    "enabled": true,
+    "minimum_offer_premium_pct": 0.18,
+    "maximum_offer_premium_pct": 0.55,
+    "minimum_completion_cashout_premium_pct": 0.0,
+    "maximum_completion_cashout_premium_pct": 0.06,
+    "minimum_synergy_score": 0.35,
+    "maximum_synergy_score": 0.95,
+    "price_support_per_premium_pct": 0.55,
+    "maximum_price_support_pct": 0.30
+  },
+  "backdoor_listing": {
+    "enabled": true,
+    "minimum_incoming_control_pct": 0.52,
+    "maximum_incoming_control_pct": 0.76,
+    "minimum_issue_premium_pct": -0.12,
+    "maximum_issue_premium_pct": 0.28,
+    "minimum_asset_quality_score": 0.35,
+    "maximum_asset_quality_score": 0.90,
+    "minimum_valuation_recognition_pct": 0.72,
+    "maximum_valuation_recognition_pct": 1.22,
+    "minimum_price_reprice_pct": -0.16,
+    "maximum_price_reprice_pct": 0.55,
+    "minimum_silent_accumulation_pct": 0.08,
+    "maximum_silent_accumulation_pct": 0.22,
+    "minimum_silent_accumulation_days": 6,
+    "maximum_silent_accumulation_days": 18,
+    "minimum_accumulation_price_support_pct": 0.04,
+    "maximum_accumulation_price_support_pct": 0.18,
+    "base_follow_on_rights_probability": 0.42,
+    "follow_on_minimum_delay_days": 3,
+    "follow_on_maximum_delay_days": 8,
+    "follow_on_minimum_ratio_denominator": 2,
+    "follow_on_maximum_ratio_denominator": 5,
+    "follow_on_minimum_discount_pct": 0.08,
+    "follow_on_maximum_discount_pct": 0.24,
+    "follow_on_maximum_price_adjustment_down_pct": 0.30,
+    "follow_on_maximum_price_adjustment_up_pct": 0.16,
+    "sponsor_lockup_minimum_days": 30,
+    "sponsor_lockup_maximum_days": 45,
+    "sponsor_unlock_warning_lead_days": 5,
+    "sponsor_lockup_extension_minimum_days": 10,
+    "sponsor_lockup_extension_maximum_days": 15,
+    "sponsor_unlock_minimum_overhang_pressure_pct": 0.10,
+    "sponsor_unlock_maximum_overhang_pressure_pct": 0.34,
+    "post_deal_milestone_minimum_count": 3,
+    "post_deal_milestone_maximum_count": 4,
+    "post_deal_first_milestone_minimum_days": 6,
+    "post_deal_first_milestone_maximum_days": 10,
+    "post_deal_milestone_minimum_gap_days": 7,
+    "post_deal_milestone_maximum_gap_days": 12,
+    "post_deal_milestone_delay_minimum_days": 4,
+    "post_deal_milestone_delay_maximum_days": 8,
+    "post_deal_milestone_base_success_probability": 0.42,
+    "post_deal_milestone_base_delay_probability": 0.24,
+    "volatility_event_multiplier": 1.45
+  },
+  "ceo_change": {
+    "enabled": true,
+    "minimum_price_reaction_pct": -0.08,
+    "maximum_price_reaction_pct": 0.14,
+    "volatility_event_multiplier": 1.18
+  },
   "rights_issue": {
     "enabled": true,
     "minimum_ratio_denominator": 3,
@@ -47,6 +138,20 @@
     "minimum_new_shares": 1000,
     "maximum_price_adjustment_down_pct": 0.35,
     "maximum_price_adjustment_up_pct": 0.08
+  },
+  "restructuring": {
+    "enabled": true,
+    "minimum_debt_reduction_pct": 0.12,
+    "maximum_debt_reduction_pct": 0.36,
+    "minimum_debt_conversion_pct": 0.04,
+    "maximum_debt_conversion_pct": 0.18,
+    "minimum_asset_sale_pct_of_market_cap": 0.04,
+    "maximum_asset_sale_pct_of_market_cap": 0.16,
+    "maximum_price_relief_pct": 0.20,
+    "maximum_price_pressure_pct": 0.18,
+    "minimum_liquidity_penalty_multiplier": 0.55,
+    "maximum_liquidity_penalty_multiplier": 0.90,
+    "volatility_event_multiplier": 1.45
   },
   "meeting_defaults": {
     "earnings_call": {
@@ -185,7 +290,10 @@
       "mutually_exclusive_families": [
         "rights_issue",
         "private_placement",
-        "stock_buyback"
+        "stock_buyback",
+        "tender_offer",
+        "strategic_merger_acquisition",
+        "backdoor_listing"
       ],
       "supports_delay": true,
       "prefers_denial_response": true,
@@ -224,7 +332,10 @@
       "mutually_exclusive_families": [
         "rights_issue",
         "private_placement",
-        "stock_buyback"
+        "stock_buyback",
+        "tender_offer",
+        "strategic_merger_acquisition",
+        "backdoor_listing"
       ],
       "supports_delay": false,
       "prefers_denial_response": false,
@@ -235,7 +346,70 @@
           "label": "Approve buyback authorization",
           "description": "Shareholders review a proposed buyback mandate and confidence-support rationale."
         }
-      ]
+      ],
+      "meeting_presentation": {
+        "stage_labels": {
+          "arrival": "Arrival",
+          "seating": "Seating",
+          "host_intro": "Host Intro",
+          "agenda_reveal": "Buyback Mandate",
+          "vote": "Vote",
+          "result": "Result Board"
+        },
+        "host_intro_lines": [
+          "The chair opens the extraordinary meeting and frames the buyback as a capital-return and liquidity-support mandate.",
+          "Management says the proposed authorization gives the company room to absorb float, but shareholders are weighing price support against cash discipline."
+        ],
+        "observer_copy": "You can watch the room, but only shareholders recorded before the meeting can cast a weighted vote.",
+        "vote_prompt": "The host now asks shareholders to vote on the proposed stock buyback authorization.",
+        "approved_result_copy": "The room approves the buyback authorization. The market will digest the mandate and execution size on the next simulation day.",
+        "rejected_result_copy": "The room rejects the buyback authorization. The market will react to the failed capital-return signal on the next simulation day."
+      }
+    },
+    {
+      "id": "tender_offer",
+      "enabled": true,
+      "label": "Tender Offer",
+      "default_venue_type": "annual_rups",
+      "mutually_exclusive_families": [
+        "rights_issue",
+        "private_placement",
+        "stock_buyback",
+        "tender_offer",
+        "strategic_merger_acquisition",
+        "backdoor_listing"
+      ],
+      "supports_delay": false,
+      "prefers_denial_response": false,
+      "story_bias": 0.74,
+      "agendas": [
+        {
+          "id": "tender_offer_notice",
+          "label": "Review tender offer",
+          "description": "Shareholders review a controller or strategic investor tender offer and the implied float impact."
+        }
+      ],
+      "meeting_presentation": {
+        "stage_labels": {
+          "arrival": "Arrival",
+          "seating": "Seating",
+          "host_intro": "Host Intro",
+          "agenda_reveal": "Tender Terms",
+          "vote": "Election",
+          "result": "Election Board"
+        },
+        "host_intro_lines": [
+          "The chair opens the extraordinary meeting and frames the tender offer as a shareholder election rather than a normal approval vote.",
+          "The offeror's terms are on the screen: shareholders can tender into the bid, hold their shares, or simply observe the final acceptance read."
+        ],
+        "observer_copy": "You can watch the room, but only shareholders recorded before the meeting can submit an election.",
+        "vote_prompt": "Choose how you want to respond to the tender offer for your record-date position.",
+        "agree_button_label": "Tender Shares",
+        "disagree_button_label": "Hold Shares",
+        "abstain_button_label": "Observe",
+        "approved_result_copy": "The tender election closes. Your chosen response will feed the next simulation day, while the offeror's public acceptance read still drives float and price effects.",
+        "rejected_result_copy": "The tender election closes with weak support. The market will react to the failed offer on the next simulation day."
+      }
     },
     {
       "id": "stock_split",
@@ -252,7 +426,25 @@
           "label": "Approve stock split",
           "description": "Shareholders review a proposed stock split intended to widen accessibility and liquidity."
         }
-      ]
+      ],
+      "meeting_presentation": {
+        "stage_labels": {
+          "arrival": "Arrival",
+          "seating": "Seating",
+          "host_intro": "Host Intro",
+          "agenda_reveal": "Split Terms",
+          "vote": "Vote",
+          "result": "Result Board"
+        },
+        "host_intro_lines": [
+          "The chair opens the extraordinary meeting and frames the split proposal as a share-structure and trading-accessibility decision.",
+          "Management says the ratio is meant to reset the board lot economics, while shareholders watch whether the market reads it as liquidity support or cosmetic engineering."
+        ],
+        "observer_copy": "You can watch the room, but only shareholders recorded before the meeting can cast a weighted vote.",
+        "vote_prompt": "The host now asks shareholders to vote on the proposed stock split or reverse-split terms.",
+        "approved_result_copy": "The room approves the split terms. The market will digest the adjusted shares and reference price on the next simulation day.",
+        "rejected_result_copy": "The room rejects the split terms. The market will react to the failed share-structure proposal on the next simulation day."
+      }
     },
     {
       "id": "ceo_change",
@@ -269,7 +461,25 @@
           "label": "Approve CEO / board changes",
           "description": "Shareholders review proposed leadership changes and the stated turnaround rationale."
         }
-      ]
+      ],
+      "meeting_presentation": {
+        "stage_labels": {
+          "arrival": "Arrival",
+          "seating": "Seating",
+          "host_intro": "Host Intro",
+          "agenda_reveal": "Leadership Slate",
+          "vote": "Vote",
+          "result": "Result Board"
+        },
+        "host_intro_lines": [
+          "The chair opens the extraordinary meeting and frames the agenda as a governance and execution-reset decision.",
+          "The board presents the incoming CEO mandate, transition rationale, and expected operating priorities."
+        ],
+        "observer_copy": "You can watch the room, but only shareholders recorded before the meeting can cast a weighted vote.",
+        "vote_prompt": "The host now asks shareholders to vote on the proposed CEO and board-change slate.",
+        "approved_result_copy": "The room approves the leadership slate. The market will digest the CEO transition and execution mandate on the next simulation day.",
+        "rejected_result_copy": "The room rejects the leadership slate. The market will react to the failed governance reset on the next simulation day."
+      }
     },
     {
       "id": "private_placement",
@@ -279,7 +489,10 @@
       "mutually_exclusive_families": [
         "rights_issue",
         "private_placement",
-        "stock_buyback"
+        "stock_buyback",
+        "tender_offer",
+        "strategic_merger_acquisition",
+        "backdoor_listing"
       ],
       "supports_delay": true,
       "prefers_denial_response": true,
@@ -312,10 +525,18 @@
     },
     {
       "id": "restructuring",
-      "enabled": false,
+      "enabled": true,
       "label": "Restructuring",
       "default_venue_type": "rupslb",
-      "mutually_exclusive_families": [],
+      "mutually_exclusive_families": [
+        "rights_issue",
+        "private_placement",
+        "stock_buyback",
+        "tender_offer",
+        "strategic_merger_acquisition",
+        "backdoor_listing",
+        "restructuring"
+      ],
       "supports_delay": true,
       "prefers_denial_response": true,
       "story_bias": 0.52,
@@ -325,34 +546,84 @@
           "label": "Approve restructuring plan",
           "description": "Shareholders review a restructuring package, asset actions, and leadership commitments."
         }
-      ]
+      ],
+      "meeting_presentation": {
+        "stage_labels": {
+          "arrival": "Arrival",
+          "seating": "Seating",
+          "host_intro": "Host Intro",
+          "agenda_reveal": "Plan Terms",
+          "vote": "Vote",
+          "result": "Result Board"
+        },
+        "host_intro_lines": [
+          "The chair opens the extraordinary meeting and frames the plan as a balance-sheet survival package.",
+          "Management says creditors, asset buyers, and shareholders must align before the company can regain operating room."
+        ],
+        "observer_copy": "You can watch the room, but only shareholders recorded before the meeting can cast a weighted vote.",
+        "vote_prompt": "The host now asks shareholders to vote on the proposed restructuring plan.",
+        "approved_result_copy": "The room approves the restructuring plan. The market will digest the dilution, debt relief, and asset-sale read on the next simulation day.",
+        "rejected_result_copy": "The room rejects the restructuring plan. The market will react to the failed rescue package on the next simulation day."
+      }
     },
     {
       "id": "strategic_merger_acquisition",
-      "enabled": false,
+      "enabled": true,
       "label": "Strategic Merger / Acquisition",
-      "default_venue_type": "rupslb",
-      "mutually_exclusive_families": [],
+      "default_venue_type": "annual_rups",
+      "mutually_exclusive_families": [
+        "rights_issue",
+        "private_placement",
+        "stock_buyback",
+        "tender_offer",
+        "strategic_merger_acquisition",
+        "backdoor_listing"
+      ],
       "supports_delay": true,
       "prefers_denial_response": true,
-      "story_bias": 1.0,
+      "story_bias": 0.66,
       "agendas": [
         {
           "id": "strategic_mna_approval",
           "label": "Approve strategic M&A",
           "description": "Shareholders review a strategic merger or acquisition proposal and the expected business fit."
         }
-      ]
+      ],
+      "meeting_presentation": {
+        "stage_labels": {
+          "arrival": "Arrival",
+          "seating": "Seating",
+          "host_intro": "Host Intro",
+          "agenda_reveal": "Deal Terms",
+          "vote": "Vote",
+          "result": "Result Board"
+        },
+        "host_intro_lines": [
+          "The chair opens the extraordinary meeting and frames the acquisition as a cash-out decision for minority shareholders.",
+          "Management walks through the strategic buyer, premium, and closing risk while the room weighs certain cash against staying listed."
+        ],
+        "observer_copy": "You can watch the room, but only shareholders recorded before the meeting can cast a weighted vote.",
+        "vote_prompt": "The host now asks shareholders to vote on the proposed strategic acquisition and cash-out terms.",
+        "approved_result_copy": "The room approves the acquisition proposal. The market will digest the cash-out and delisting result on the next simulation day.",
+        "rejected_result_copy": "The room rejects the acquisition proposal. The market will react to the failed strategic deal on the next simulation day."
+      }
     },
     {
       "id": "backdoor_listing",
-      "enabled": false,
+      "enabled": true,
       "label": "Backdoor Listing",
-      "default_venue_type": "rupslb",
-      "mutually_exclusive_families": [],
+      "default_venue_type": "annual_rups",
+      "mutually_exclusive_families": [
+        "rights_issue",
+        "private_placement",
+        "stock_buyback",
+        "tender_offer",
+        "strategic_merger_acquisition",
+        "backdoor_listing"
+      ],
       "supports_delay": true,
       "prefers_denial_response": true,
-      "story_bias": 1.25,
+      "story_bias": 0.62,
       "agendas": [
         {
           "id": "change_of_control",
@@ -364,7 +635,25 @@
           "label": "Approve asset injection",
           "description": "Shareholders review a proposed asset injection and new business-line transformation."
         }
-      ]
+      ],
+      "meeting_presentation": {
+        "stage_labels": {
+          "arrival": "Arrival",
+          "seating": "Seating",
+          "host_intro": "Host Intro",
+          "agenda_reveal": "Asset Injection",
+          "vote": "Vote",
+          "result": "Result Board"
+        },
+        "host_intro_lines": [
+          "The chair opens the extraordinary meeting and frames the agenda as a control-change and asset-injection decision.",
+          "Management walks through the incoming sponsor, injected asset, new share issuance, dilution, and post-deal identity reset."
+        ],
+        "observer_copy": "You can watch the room, but only shareholders recorded before the meeting can cast a weighted vote.",
+        "vote_prompt": "The host now asks shareholders to vote on the proposed control change and asset injection.",
+        "approved_result_copy": "The room approves the backdoor listing proposal. The market will digest the identity reset, dilution, and sponsor lock-up on the next simulation day.",
+        "rejected_result_copy": "The room rejects the backdoor listing proposal. The market will react to the failed asset-injection story on the next simulation day."
+      }
     }
   ]
 }

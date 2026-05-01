@@ -43,6 +43,48 @@ Read this file first in the next session.
   - current local note: formatter locals that previously shadowed Godot's built-in `sign()` are now renamed to `sign_prefix`
 
 ## Latest Session Snapshot
+- Startup/loading performance pass is implemented.
+- `TradingCalendar` now caches trade-date/index lookups and exposes a cached `trade_date_on_or_after`; corporate-action startup/daily ensure now uses a current-year-plus-2 horizon and a meeting-id lookup instead of repeatedly scanning every annual year/meeting.
+- Loading screens now expose an explicit corporate-calendar phase for new/load flows, and the final save/launch holds were shortened from `0.28s` to `0.08s` per stage.
+- `SaveManager` now writes compact runtime JSON and logs serialize/write/read/parse timings; `RunState.load_from_dict` logs restore phases for base state, definitions, order/watchlist, companies, and reports.
+- `GameRoot` now opens with a lightweight dashboard pass, then defers the calendar/movers/sectors/full index sparkline and background company-detail hydration until after the first desktop frame.
+- Verification for this pass: headless project reload passed; quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared.
+- In the quick smoke, corporate-action ensure calls now sit mostly around `28-58ms`, down from the earlier `~118-211ms` startup/advance hot path observed during the review.
+- Stock split execution is now implemented as a real corporate-action application, including deterministic split/reverse-split terms, chain snapshot exposure, execution payloads, adjusted company shares/price history, player holding adjustment, and portfolio history rows.
+- `GameManager.debug_force_stock_split_execution(company_id)` exists for deterministic testing; quick smoke now verifies split terms -> application payload -> share-structure adjustment -> player holding adjustment.
+- Tender offer execution is now implemented as a real corporate-action application, including deterministic offeror/type/premium/acceptance terms, chain snapshot exposure, execution payloads, free-float reduction, capped price support, and portfolio history rows.
+- `GameManager.debug_force_tender_offer_execution(company_id)` exists for deterministic testing; the player treatment auto-tenders a pro-rata accepted slice of held shares for cash while company shares outstanding remain stable.
+- Tender offers now have a first-pass aftermath path: if the post-offer public float falls under the warning threshold the name enters `public_float_warning` with thinner depth; if it falls under the go-private trigger, remaining player shares are cashed out at a final offer price and public trading is disabled for that name.
+- The quick smoke forces the go-private tender branch and verifies tender terms, application payload, free-float reduction, final cash-out, `Go-private` tape labeling, and trade blocking after completion.
+- Strategic M&A is now implemented as a real cash-acquisition corporate-action application, including deterministic acquirer selection, offer/cash-out premium, synergy score, chain snapshot terms, execution payload, and public completion event.
+- `GameManager.debug_force_strategic_mna_execution(company_id)` exists for deterministic testing; execution cashes out all player shares at the acquisition price, marks the target `acquired_cashout`, disables public trading, and shows an `Acquired` tape label.
+- The quick smoke verifies strategic M&A terms, application payload, unchanged share/free-float structure before delisting, player `mna_cashout`, acquisition result snapshot, `Acquired` impactability label, and post-acquisition trade blocking.
+- Backdoor listing is now implemented as a reverse-takeover / shell-injection corporate-action application, including deterministic incoming asset/sponsor terms, control percentage, share issuance, dilution, valuation recognition, and execution payload.
+- `GameManager.debug_force_backdoor_listing_execution(company_id)` exists for deterministic testing; execution leaves the stock listed/tradable, preserves the player's share count and cash, dilutes ownership, records a `backdoor_listing` portfolio history note, and stores `backdoor_listing_result` on the company profile.
+- Per the current design, backdoor listing does not add a special impactability/tape label; News/Twooter/corporate-action summaries carry the storyline instead.
+- Backdoor listing V2 now rewrites company identity at execution while keeping the ticker/listing alive: terms carry post-deal name, sector, archetype, description, tags, and `post_deal_identity`, with themes covering AI infrastructure, data center, battery-materials mining, new/green energy, plantation downstreaming, deep tech, EV components, cloud security, and waste-to-energy.
+- The backdoor story arc now models the common Indonesia-style flow: large but quiet accumulation first, visible tape absorption, rumor/news reveal, formal control-change plus asset-injection agenda, approval, execution, and an optional follow-on rights-issue hint for growth capex.
+- Completed backdoor listings now lift story heat, liquidity profile, capital intensity, volatility, ADV floor, and market-depth context through silent-accumulation data instead of relying only on the one-day price adjustment.
+- Backdoor-linked follow-on financing is now real: if a completed backdoor has `follow_on_rights_hint`, it spawns a delayed `rights_issue` chain tied to the injected asset, with purpose-specific proceeds, 1-for-2 to 1-for-5 terms, funding unlock vs dilution-overhang scoring, themed RUPSLB agenda copy, and price treatment that can reward credible capex instead of treating every rights issue as pure dilution.
+- Backdoor sponsor lock-ups are now modeled at execution. The incoming sponsor block is locked for a deterministic `30-45` in-game trading days, stored on `backdoor_sponsor_lockup`, and later produces warning/unlock/extension events plus active tape arcs. Unlock pressure thickens ask depth, weakens bid support, raises volatility, and varies by sponsor behavior (`lockup_extension`, `gradual_distribution`, or `aggressive_exit`).
+- Post-backdoor milestone delivery is now modeled after execution. Completed backdoors store `backdoor_milestone_state`, schedule 3-4 themed follow-through checks for the injected asset, and later emit delivered/delayed/setback events plus active tape arcs. Delivery supports bid depth and story heat; delays/setbacks raise volatility, ask pressure, and execution-risk chatter.
+- `restructuring` is now enabled as a real RUPSLB corporate-action family with interactive vote support, deterministic debt-relief / asset-sale / debt-to-equity terms, execution payloads, creditor-share dilution, restructuring watch state, liquidity penalty, volatility pressure, and preserved-but-diluted player share treatment.
+- `stock_buyback` now has an interactive next-day debug RUPSLB path in addition to the existing annual-RUPS/execution coverage: `GameManager.debug_schedule_next_day_stock_buyback_rupslb(company_id)` schedules a shareholder-gated buyback vote, exposes tailored meeting presentation copy, and advances approved votes into execution on the next simulated day.
+- `stock_split` now has the same interactive next-day debug RUPSLB path: `GameManager.debug_schedule_next_day_stock_split_rupslb(company_id)` schedules a shareholder-gated split/reverse-split vote, exposes split-specific meeting presentation copy, and advances approved votes into execution on the next simulated day while the existing execution smoke still verifies share/holding adjustment.
+- `tender_offer` now has an interactive next-day debug RUPSLB election path: `GameManager.debug_schedule_next_day_tender_offer_rupslb(company_id)` schedules a shareholder-gated tender offer venue where `Tender Shares`, `Hold Shares`, and `Observe` map into stored player tender choices; execution now respects `tender` vs `hold` / `observe` instead of always auto-tendering the player pro-rata, while the existing go-private branch still cashes out remaining shares.
+- `strategic_merger_acquisition` now has an interactive next-day debug RUPSLB path: `GameManager.debug_schedule_next_day_strategic_mna_rupslb(company_id)` schedules a shareholder-gated cash-acquisition vote with deal-term meeting copy; approved votes move the chain into execution and then cash out the player while disabling the acquired listing.
+- `backdoor_listing` now has an interactive next-day debug RUPSLB path: `GameManager.debug_schedule_next_day_backdoor_listing_rupslb(company_id)` schedules a shareholder-gated control-change / asset-injection vote with dedicated meeting copy; approved votes move the chain into execution, rewrite identity, dilute the structure, preserve held player shares/cash, and keep the listing tradable.
+- `ceo_change` now has real execution and an interactive next-day debug RUPSLB path: `GameManager.debug_schedule_next_day_ceo_change_rupslb(company_id)` schedules a shareholder-gated leadership-slate vote; approved votes replace the CEO row, store `ceo_change_result`, nudge execution/story traits and price reaction, preserve held player shares/cash, and keep the listing tradable.
+- STOCKBOT now has a normal player-facing `Contact Intel` panel in the order ticket. It lets the player ask an already-met Network contact for a read on the selected stock through `GameManager.ask_stock_contact_tip(company_id, contact_id)`.
+- Contact Intel options now prioritize company insiders first, then company-linked leads, then sector-relevant contacts; relationship and relevance score break ties. Disabled copy distinguishes missing contacts, same-day contact cooldowns, and insufficient AP.
+- Normal players cannot directly schedule company-direction `RUPSLB` events from STOCKBOT. Those meetings remain company/controller/system-originated through corporate-action chains; debug helpers still exist for deterministic test coverage.
+- Current pass keeps the slight bearish market drift intentionally; it fits the Indonesian-market tone and was not treated as a balance bug.
+- Chart/candle polish pass added market candle archetypes in `MarketSimulator`: trend-up, trend-down, accumulation bid, distribution selloff, upper rejection, lower absorption, wide-range chop, compressed doji, and ARA/ARB lock candles.
+- Daily OHLC bars now store `candle_archetype`, and wick lengths respond to broker pressure, accumulation/distribution signals, buying exhaustion, activity/volume, player market impact, and float tightness instead of using symmetrical random upper/lower probes.
+- Price chart line/indicator points are now aligned to the same bar centers used by candlesticks, volume bars, hover, and drawing anchors; the close line no longer uses the previous N+1 edge-to-edge point model.
+- Added `systems/StableRng.gd` and migrated high-value deterministic economy paths away from Godot `hash()`: company roster/generation/narrative, macro, market simulation, broker flow, company/person/special events, report ordering/events, dashboard cache keys, and corporate-action deterministic terms.
+- Company snapshots now expose an `impactability` tape/depth summary (`Thin float`, `Impactable`, `Normal depth`, `Deep tape`) based on free float, ADV, visible bid/ask depth, and player cash.
+- STOCKBOT chart meta and the order ticket now show the tape label; order estimates warn with `Visible flow` or `Large vs depth` when the order is large relative to visible side depth/ADV/free-float value.
 - Most recent work made `rights_issue` execution real after the interactive `RUPSLB` approval flow.
 - Rights issue chains now generate deterministic terms: ratio denominator, entitlement ratio, exercise price, discount, gross proceeds, old/new shares outstanding, and theoretical ex-rights price.
 - Approved rights issues now emit a `rights_issue` application payload at execution; `RunState` applies the company-level dilution, updates market cap/free float, applies a capped TERP-style price adjustment, and records a `rights_issue` share-structure adjustment.
@@ -294,10 +336,10 @@ Read this file first in the next session.
 - A first playable corporate-action / meeting-chain layer now exists behind `News`, `Twooter`, `Network`, and daily market behavior
 - Corporate meetings now have two player-facing venue surfaces:
   - a shared meeting modal reachable from `Dashboard`, `News`, and `Network`
-  - a dedicated fullscreen staged `RUPSLB` overlay for interactive `rights_issue` and `private_placement` meetings
+  - a dedicated fullscreen staged `RUPSLB` overlay for currently interactive corporate-action families
 - `annual_rups` and `rupslb` attendance now requires shareholder record-date eligibility for that company:
   - zero-position players can still read simple public meeting notices where applicable, but the attendance action is disabled with shareholder-only reason text
-  - zero-position players cannot open interactive `rights_issue` / `private_placement` `RUPSLB` sessions
+  - zero-position players cannot open interactive `RUPSLB` sessions
   - buying after the record date does not grant eligibility; selling after the record date does not remove already-recorded eligibility
 - Upgrade tiers are bought with player cash and now drive trading fees, News access, Twooter access, chart indicators, and daily Network action points
 - A backtick console-command overlay now exists for cheat/testing commands
@@ -1211,11 +1253,12 @@ Read this file first in the next session.
     - `private_placement`
     - `stock_buyback` with non-interactive execution effects
     - `stock_split`
-    - `ceo_change`
-  - cataloged but disabled for later:
-    - `restructuring`
+    - `tender_offer`
     - `strategic_merger_acquisition`
     - `backdoor_listing`
+    - `ceo_change`
+    - `restructuring`
+  - no currently cataloged corporate-action family is intentionally disabled for v1
 - Current family/scoring rules:
   - family review runs every `5` trading days
   - active chain caps are difficulty-bound:
@@ -1223,7 +1266,7 @@ Read this file first in the next session.
     - `Normal`: `3`
     - `Grind`: `5`
   - v1 keeps one active capital/governance chain per company
-  - `rights_issue`, `private_placement`, and `stock_buyback` are mutually exclusive while one is active
+  - `rights_issue`, `private_placement`, `stock_buyback`, `tender_offer`, `strategic_merger_acquisition`, and `backdoor_listing` are mutually exclusive while one is active
   - `stock_split` and `ceo_change` can coexist more freely
 - Current venue model:
   - `annual_rups`
@@ -1257,9 +1300,9 @@ Read this file first in the next session.
   - normal meeting record dates default to two trading days before the venue date; debug next-day RUPSLB helpers capture the registry immediately on the scheduling day
   - `RunState.shareholder_registry` stores compact records keyed by `meeting|...` or `dividend|...`, including company/ticker, record date, captured date, and recorded player shares
   - there is no AP cost or broader event-slot/time-slot cost yet
-  - debug-only next-day `rights_issue` and `private_placement` `rupslb` meetings can now be inserted in a hidden `queued` state for the next trading day
+  - debug and player-facing next-day `rupslb` meetings can now be inserted in a hidden `queued` state for the next trading day
   - `queued` meetings are intentionally omitted from current player-facing meeting lists and company meeting surfaces until day advancement flips them into the normal visible scheduled flow
-  - interactive meeting sessions currently exist for `rights_issue` and `private_placement` `rupslb`
+  - interactive meeting sessions currently exist for `rights_issue`, `private_placement`, `stock_buyback`, `stock_split`, `tender_offer`, `strategic_merger_acquisition`, `backdoor_listing`, `restructuring`, and `ceo_change` `rupslb`
   - `RunState.corporate_meeting_sessions` stores one session per meeting id, including:
     - current staged-presentation step
     - attended/closed state
@@ -1313,7 +1356,7 @@ Read this file first in the next session.
     - public summary
     - player-known private intel
     - attendance state
-  - `GameRoot.gd` also owns a dedicated fullscreen `RUPSLB` overlay for interactive `rights_issue` meetings:
+  - `GameRoot.gd` also owns a dedicated fullscreen `RUPSLB` overlay for interactive supported families:
     - step order is currently:
       - `arrival`
       - `seating`
@@ -1334,7 +1377,7 @@ Read this file first in the next session.
       - `agree` / `disagree` / `abstain` percentages
       - bloc attribution across `controlling group`, `player`, and `public float`
       - chain outcome summary for the next-day resolution
-- Current voting/outcome behavior for interactive `rights_issue` / `private_placement` `rupslb`:
+- Current voting/outcome behavior for interactive `RUPSLB` families:
   - attendance and voting eligibility are based on the shareholder record-date snapshot
   - player influence is pure ownership-weighted and uses the recorded eligible shares, while controller/public blocs still derive from the current company share structure
   - outcome resolution currently uses three blocs:
@@ -1354,19 +1397,33 @@ Read this file first in the next session.
   - `GameManager.set_corporate_meeting_session_stage(meeting_id, stage_id)`
   - `GameManager.submit_corporate_meeting_vote(meeting_id, agenda_id, vote_choice)`
   - `GameManager.close_corporate_meeting_session(meeting_id)`
+  - `GameManager.get_stock_contact_tip_options(company_id)`
+  - `GameManager.ask_stock_contact_tip(company_id, contact_id := "")`
   - `GameManager.debug_force_rights_issue_rupslb(company_id)`
   - `GameManager.debug_schedule_next_day_rights_issue_rupslb(company_id)`
   - `GameManager.debug_schedule_next_day_private_placement_rupslb(company_id)`
+  - `GameManager.debug_schedule_next_day_stock_buyback_rupslb(company_id)`
+  - `GameManager.debug_schedule_next_day_stock_split_rupslb(company_id)`
+  - `GameManager.debug_schedule_next_day_tender_offer_rupslb(company_id)`
+  - `GameManager.debug_schedule_next_day_strategic_mna_rupslb(company_id)`
+  - `GameManager.debug_schedule_next_day_backdoor_listing_rupslb(company_id)`
+  - `GameManager.debug_schedule_next_day_ceo_change_rupslb(company_id)`
   - `GameManager.debug_force_stock_buyback_execution(company_id)`
+  - `GameManager.debug_force_stock_split_execution(company_id)`
+  - `GameManager.debug_force_tender_offer_execution(company_id, force_go_private := false)`
+  - `GameManager.debug_force_strategic_mna_execution(company_id)`
+  - `GameManager.debug_force_backdoor_listing_execution(company_id)`
+  - `GameManager.debug_force_restructuring_execution(company_id)`
+  - `GameManager.debug_force_ceo_change_execution(company_id)`
   - `GameManager.debug_schedule_next_day_cash_dividend(company_id)`
   - `GameManager.debug_schedule_next_day_stock_dividend(company_id)`
 - Current v1 omissions by design:
-  - interactive voting currently covers `rights_issue` and `private_placement` `rupslb` only
+  - interactive voting/elections currently cover `rights_issue`, `private_placement`, `stock_buyback`, `stock_split`, `tender_offer`, `strategic_merger_acquisition`, `backdoor_listing`, `restructuring`, and `ceo_change` `rupslb`
   - `annual_rups` and `earnings_call` still use the simpler shared modal and have no staged interactive flow yet
   - no dedicated desktop app for meetings; the venue UI is currently shared modal plus fullscreen overlay
   - record-date registry is gameplay-level only; there is no separate KSEI-style investor identity/book-entry UI yet
   - no same-day market recalculation after a meeting vote; the result is applied on the next day-advance
-  - no v2/v3 families active yet, especially `strategic_merger_acquisition` and `backdoor_listing`
+  - no v2/v3-only corporate-action families are active yet beyond the current v1 set
 
 ## Implemented Systems
 - Core autoloads:
@@ -1853,6 +1910,8 @@ Read this file first in the next session.
   - `Ctrl+L` opens the debug overlay
   - the debug overlay exposes a `Start RUPSLB` button in the `Generators` tab
   - the debug `Start RUPSLB` action stays disabled with clear reason text until the selected stock is valid and held at `1+` lot
+  - STOCKBOT exposes a player-facing `Contact Intel` panel with met-contact picker plus `Ask Contact` button for selected stocks
+  - the STOCKBOT contact-intel action spends the normal Network tip AP and never schedules a `RUPSLB` or changes company corporate direction
   - Network recognition snapshot returns a tier label and contact cap
   - upgrade tracks start at tier `4`
   - pressing an upgrade purchase button opens confirmation before spending cash or changing tier
@@ -1918,6 +1977,46 @@ Read this file first in the next session.
     - Indonesian Rupiah formatter
     - optional UI font loader
 - Current verification status:
+  - STOCKBOT Contact Intel polish pass on `2026-05-01`:
+    - `git diff --check -- PROJECT_HANDOFF.md autoloads/GameManager.gd scripts/ui/GameRoot.gd scripts/tests/SmokeTest.gd systems/CorporateActionSystem.gd` passed
+    - Godot project-load check passed with `--log-file logs\godot-project-load-contact-intel-polish.log --quit`; only the known Windows root-certificate warning appeared
+    - quick Godot headless smoke passed with `--log-file logs\smoke-contact-intel-polish.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` and printed `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`
+    - smoke now discovers a company contact from Profile context, meets them, selects them in STOCKBOT Contact Intel, presses the actual `Ask Contact` button, verifies a Network tip journal row is created, and verifies the normal Network tip AP cost is spent
+  - STOCKBOT Contact Intel reframing pass on `2026-05-01`:
+    - `git diff --check -- PROJECT_HANDOFF.md systems/CorporateActionSystem.gd autoloads/GameManager.gd scripts/ui/GameRoot.gd scripts/tests/SmokeTest.gd` passed
+    - Godot project-load check passed with `--log-file logs\godot-project-load-contact-intel.log --quit`; only the known Windows root-certificate warning appeared
+    - quick Godot headless smoke passed with `--log-file logs\smoke-contact-intel.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` and printed `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`
+    - smoke now asserts the new STOCKBOT Contact Intel controls exist and mirror `GameManager.get_stock_contact_tip_options`; the removed player-facing RUPSLB request path is no longer exposed
+  - Interactive CEO-change RUPSLB pass on `2026-05-01`:
+    - `git diff --check -- systems/CorporateActionSystem.gd autoloads/GameManager.gd autoloads/RunState.gd data/corporate_actions/corporate_action_catalog.json scripts/tests/SmokeTest.gd PROJECT_HANDOFF.md` passed
+    - Godot project-load check passed with `--log-file logs\godot-project-load-ceo-change-rupslb.log --quit`; only the known Windows root-certificate warning appeared
+    - quick Godot headless smoke passed with `--log-file logs\smoke-ceo-change-rupslb.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` and printed `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`
+    - smoke now asserts next-day CEO-change RUPSLB scheduling, leadership-slate presentation copy, approve vote result, vote consumption into execution, application payload, CEO roster replacement, stored `ceo_change_result`, preserved player shares/cash, tradable listing state, and `ceo_change` portfolio history
+  - Interactive backdoor listing RUPSLB pass on `2026-05-01`:
+    - `git diff --check -- systems/CorporateActionSystem.gd autoloads/GameManager.gd data/corporate_actions/corporate_action_catalog.json scripts/tests/SmokeTest.gd PROJECT_HANDOFF.md` passed
+    - Godot project-load check passed with `--log-file logs\godot-project-load-backdoor-rupslb.log --quit`; only the known Windows root-certificate warning appeared
+    - quick Godot headless smoke passed with `--log-file logs\smoke-backdoor-rupslb.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` and printed `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`
+    - smoke now asserts next-day backdoor listing RUPSLB scheduling, asset-injection presentation copy, approve vote result, vote consumption into execution, application payload, identity rewrite, share-structure dilution, preserved player shares/cash, tradable listing state, and `backdoor_listing` portfolio history
+  - Interactive strategic M&A RUPSLB pass on `2026-05-01`:
+    - `git diff --check -- systems/CorporateActionSystem.gd autoloads/GameManager.gd data/corporate_actions/corporate_action_catalog.json scripts/tests/SmokeTest.gd PROJECT_HANDOFF.md` passed
+    - Godot project-load check passed with `--log-file logs\godot-project-load-strategic-mna-rupslb.log --quit`; only the known Windows root-certificate warning appeared
+    - quick Godot headless smoke passed with `--log-file logs\smoke-strategic-mna-rupslb.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` and printed `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`
+    - smoke now asserts next-day strategic M&A RUPSLB scheduling, deal-term presentation copy, approve vote result, vote consumption into execution, application payload, player cash-out, trade-disabled acquired listing state, and `mna_cashout` portfolio history
+  - Interactive tender-offer election pass on `2026-05-01`:
+    - `git diff --check -- systems/CorporateActionSystem.gd autoloads/GameManager.gd autoloads/RunState.gd data/corporate_actions/corporate_action_catalog.json scripts/ui/widgets/RupslbMeetingOverlay.gd scripts/tests/SmokeTest.gd PROJECT_HANDOFF.md` passed
+    - Godot project-load check passed with `--log-file logs\godot-project-load-tender-election.log --quit`; only the known Windows root-certificate warning appeared
+    - quick Godot headless smoke passed with `--log-file logs\smoke-tender-election.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` and printed `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`
+    - smoke now asserts next-day tender-offer RUPSLB scheduling, tender-specific election labels, `Tender Shares` choice reducing held shares and paying cash, `Hold Shares` choice preserving player shares/cash while the offer resolves, and the existing forced go-private tender path still cashing out remaining shares
+  - Interactive stock-split RUPSLB pass on `2026-05-01`:
+    - `git diff --check -- systems/CorporateActionSystem.gd autoloads/GameManager.gd data/corporate_actions/corporate_action_catalog.json scripts/tests/SmokeTest.gd PROJECT_HANDOFF.md` passed
+    - Godot project-load check passed with `--log-file logs\godot-project-load-stock-split-rupslb.log --quit`; only the known Windows root-certificate warning appeared
+    - quick Godot headless smoke passed with `--log-file logs\smoke-stock-split-rupslb.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` and printed `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`
+    - smoke now asserts next-day stock-split RUPSLB scheduling, interactive meeting visibility, shareholder session start, approve vote result, and vote consumption into execution; the existing forced split block still asserts execution payloads, company share adjustment, player holding adjustment, and portfolio history
+  - Interactive stock-buyback RUPSLB pass on `2026-05-01`:
+    - `git diff --check -- systems/CorporateActionSystem.gd autoloads/GameManager.gd data/corporate_actions/corporate_action_catalog.json scripts/tests/SmokeTest.gd` passed
+    - Godot project-load check passed with `--log-file logs\godot-project-load-stock-buyback-rupslb.log --quit`; only the known Windows root-certificate warning appeared
+    - quick Godot headless smoke passed with `--log-file logs\smoke-stock-buyback-rupslb.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` and printed `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`
+    - smoke now asserts next-day stock-buyback RUPSLB scheduling, interactive meeting visibility, shareholder session start, approve vote result, and vote consumption into execution
   - Formatter shadow warning fix on `2026-04-28`:
     - `git diff --check` passed
     - Godot project-load check passed with `--log-file logs\fix-shadowed-sign-load.log --quit`
@@ -2141,7 +2240,7 @@ Read this file first in the next session.
   - no richer account pages / follow system / custom finfluencer authoring UI yet
 - `Network` is now a first playable contact system, but still limited:
   - discovery currently only comes from News, company Profile context, and floater referrals
-  - there is now a shared meeting modal for simple venues, an interactive fullscreen `rights_issue` `RUPSLB` overlay, and chain-linked intel, but there is still no dedicated venue desktop app
+  - there is now a shared meeting modal for simple venues, an interactive fullscreen `RUPSLB` overlay for supported corporate-action families, and chain-linked intel, but there is still no dedicated venue desktop app
   - contacts can now reveal first-pass chain truth such as family, stance, timeline state, and next expected step, with compact per-contact read-history and actionable source cross-check panels
   - favor cooldowns are not implemented yet
   - follow-up actions exist for resolved tips, but there is no broader report-back system for other favors or requests yet
@@ -2170,18 +2269,17 @@ Read this file first in the next session.
 - Trade list now has basic All Stock search, but no sort tools yet
 - `Load Run` now uses a loading screen, but the smoke flow still does not explicitly click through the saved-run path
 - The broader corporate-action layer now exists, but it is still v1:
-  - `rights_issue`, `private_placement`, `stock_buyback`, `stock_split`, and `ceo_change` are currently enabled; `rights_issue`, `private_placement`, and `stock_buyback` now have execution effects while `stock_split` and `ceo_change` are still mostly storyline scaffolds
-  - `restructuring`, `strategic_merger_acquisition`, and `backdoor_listing` exist in catalog form only and are not active yet
-  - only `rights_issue` and `private_placement` `rupslb` currently have interactive staged voting
+  - `rights_issue`, `private_placement`, `stock_buyback`, `stock_split`, `tender_offer`, `strategic_merger_acquisition`, `backdoor_listing`, `restructuring`, and `ceo_change` are currently enabled and all now have execution effects
+  - `rights_issue`, `private_placement`, `stock_buyback`, `stock_split`, `tender_offer`, `strategic_merger_acquisition`, `backdoor_listing`, `restructuring`, and `ceo_change` `rupslb` currently have interactive staged voting/election flows
   - `annual_rups` and `earnings_call` still use the simpler shared meeting modal
   - shareholder gating now uses the persisted record-date registry, but there is no richer investor-book UI yet
   - eligible venue attendance remains free and there is still no AP cost or broader event-slot time economy
   - same-day market prices are not recalculated after a vote; results feed the next simulated day instead
-  - next-day queued meeting reveal currently exists only through the debug overlay helper; there is no normal gameplay action that schedules a future `RUPSLB` directly for player testing
-  - staged venue presentation is currently limited to the `rights_issue` / `private_placement` `rupslb` overlay:
+  - next-day queued `RUPSLB` reveal exists through debug helpers for deterministic coverage, while normal player-facing corporate direction remains company/controller/system-originated unless a future majority-shareholder activism layer is built
+  - staged venue presentation is currently limited to the `rights_issue` / `private_placement` / `stock_buyback` / `stock_split` / `tender_offer` / `strategic_merger_acquisition` / `backdoor_listing` / `restructuring` / `ceo_change` `rupslb` overlay:
     - abstract attendee markers rather than full character actors
     - no branching Q&A or agenda-by-agenda voting yet
-    - no interactive voting yet for the other enabled families
+    - all currently enabled `rupslb` corporate-action families now have first-pass interactive voting/election support
   - first-pass delay/deny/rerun behavior exists for supporting families, but the more violent Indonesia-style shakeout / dump-then-rerun patterns still need deeper tuning and more family coverage
 - Portfolio tables are still display-focused:
   - no sorting
@@ -2192,7 +2290,7 @@ Read this file first in the next session.
   - top-right `Movers` is still a compact overview; there are no sort/filter controls or deeper mover detail drawer yet
   - bottom-right `Sector Performance` now replaces the old meeting/report block and supports sector-to-stock-list drilldown, but there is no richer sector detail page yet
   - the calendar popup can inspect report and meeting events for a clicked day and open available meeting venues, but there is no full event browser/search/filter yet
-  - debug-scheduled next-day `RUPSLB` meetings can reveal through normal event surfaces after `Advance Day`, but there is no normal gameplay action that schedules a future `RUPSLB` directly for player testing
+  - debug-scheduled next-day `RUPSLB` meetings can reveal through normal event surfaces after `Advance Day`, but there is no full event/request browser yet
   - there is no deeper click-through from the index recap card yet
 - Trade view still needs deeper polish later:
   - there is still no intraday tape or intraday execution layer
@@ -2277,7 +2375,9 @@ Read this file first in the next session.
 - Network and corporate-action planning:
   - deepen the shared corporate-action chain object that `News`, `Twooter`, `Network`, market reaction, `earnings_call`, `annual_rups`, and `rupslb` already read/write
   - tune annual cash-dividend eligibility, stock-dividend distribution ratios, rights issue ratios/exercise pricing, private-placement issuance discounts, stock-buyback sizing/price support, and market reaction once longer playtests show whether income/dilution/capital returns are too rare or too generous
-  - expand interactive `rupslb` beyond `rights_issue` / `private_placement` with more agenda families, richer result nuance, and better record-date UI copy
+  - playtest the new STOCKBOT `Contact Intel` loop and tune whether it should add freshness/tip-reliability weighting on top of the current insider -> company lead -> sector read priority
+  - if majority-shareholder activism is added later, gate any player-originated `RUPSLB` request behind true control economics rather than 1-lot ownership
+  - deepen interactive `rupslb` outcomes with richer result nuance, branching Q&A, and better record-date / shareholder-rights UI copy
   - deepen cross-contact conflict handling with actions like `Ask for evidence`, `Push back`, and `Compare source`
   - evolve Journal rows into searchable/filterable clues and tasks when source-check gameplay becomes a major loop
   - add favor cooldowns, report-back outcomes, relationship burn tuning, and perk hooks once Network pacing settles

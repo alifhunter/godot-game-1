@@ -1,5 +1,6 @@
 extends RefCounted
 
+const STABLE_RNG = preload("res://systems/StableRng.gd")
 const EARNINGS_MONTHS := [1, 4, 7, 10]
 const SAMPLE_MIN := 4
 const SAMPLE_MAX := 12
@@ -142,8 +143,7 @@ func _build_ranked_company_candidates(
 	macro_state: Dictionary,
 	arc_backed_only: bool
 ) -> Array:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|company_event|%s|%s" % [run_state.run_seed, day_number, arc_backed_only]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_state.run_seed, "company_event", day_number, arc_backed_only])
 	var sampled_company_ids: Array = _sample_company_ids(run_state.company_order, rng)
 	var candidates: Array = []
 
@@ -395,12 +395,11 @@ func _should_start_arc(run_state, day_number: int, active_arcs: Array) -> bool:
 		return false
 
 	var cadence: int = int(clamp(round(event_interval_days * 0.85), 5, 22))
-	var cadence_offset: int = int(posmod(hash("%s|company_arc_offset" % run_state.run_seed), cadence))
+	var cadence_offset: int = int(STABLE_RNG.seed_from_parts([run_state.run_seed, "company_arc_offset"]) % cadence)
 	if int(posmod(day_number + cadence_offset, cadence)) == 0:
 		return true
 
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|company_arc_roll|%s" % [run_state.run_seed, day_number]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_state.run_seed, "company_arc_roll", day_number])
 	var random_threshold: float = clamp(1.0 / max(event_interval_days * 1.9, 9.0), 0.03, 0.16)
 	return rng.randf() < random_threshold
 
@@ -422,8 +421,7 @@ func _build_company_arc(
 	if candidates.is_empty():
 		return {}
 
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|company_arc_pick|%s" % [run_state.run_seed, day_number]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_state.run_seed, "company_arc_pick", day_number])
 	var picked_candidate: Dictionary = _pick_weighted_candidate(rng, candidates)
 	if picked_candidate.is_empty():
 		return {}
@@ -697,8 +695,7 @@ func _build_phase_schedule(
 	company_id: String,
 	day_number: int
 ) -> Array:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|company_arc_schedule|%s|%s|%s" % [run_seed, company_id, event_id, day_number]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "company_arc_schedule", company_id, event_id, day_number])
 	var free_float_ratio: float = clamp(free_float_pct / 100.0, 0.07, 0.60)
 	var scarcity_score: float = clamp((0.60 - free_float_ratio) / 0.53, 0.0, 1.0)
 	var long_rumor_event: bool = event_id in ["strategic_acquisition", "integration_overhang"]

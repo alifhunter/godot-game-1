@@ -406,11 +406,18 @@ func _refresh_text_content() -> void:
 	result_label.text = ""
 	bloc_label.text = ""
 	if current_stage_id == "result" and not result_summary.is_empty():
-		result_label.text = "Result Board\nAgree %s  |  Disagree %s  |  Abstain %s" % [
-			_format_pct(float(result_summary.get("yes_pct", 0.0))),
-			_format_pct(float(result_summary.get("no_pct", 0.0))),
-			_format_pct(float(result_summary.get("abstain_pct", 0.0)))
-		]
+		if str(result_summary.get("result_category", "")) == "tender_election":
+			result_label.text = "Election Board\nTender %s  |  Hold %s  |  Observe %s" % [
+				_format_pct(float(result_summary.get("yes_pct", 0.0))),
+				_format_pct(float(result_summary.get("no_pct", 0.0))),
+				_format_pct(float(result_summary.get("abstain_pct", 0.0)))
+			]
+		else:
+			result_label.text = "Result Board\nAgree %s  |  Disagree %s  |  Abstain %s" % [
+				_format_pct(float(result_summary.get("yes_pct", 0.0))),
+				_format_pct(float(result_summary.get("no_pct", 0.0))),
+				_format_pct(float(result_summary.get("abstain_pct", 0.0)))
+			]
 		var bloc_lines: Array = []
 		for bloc_value in result_summary.get("bloc_rows", []):
 			var bloc: Dictionary = bloc_value
@@ -433,7 +440,11 @@ func _refresh_buttons() -> void:
 	agree_button.visible = current_stage_id == "vote" and not has_result and voting_eligible
 	disagree_button.visible = current_stage_id == "vote" and not has_result and voting_eligible
 	abstain_button.visible = current_stage_id == "vote" and not has_result
-	abstain_button.text = "Observe Result" if current_stage_id == "vote" and not voting_eligible else "Abstain"
+	var presentation: Dictionary = snapshot.get("presentation", {})
+	agree_button.text = str(presentation.get("agree_button_label", "Agree"))
+	disagree_button.text = str(presentation.get("disagree_button_label", "Disagree"))
+	var default_abstain_label: String = "Observe Result" if current_stage_id == "vote" and not voting_eligible else "Abstain"
+	abstain_button.text = str(presentation.get("abstain_button_label", default_abstain_label))
 	close_button.text = "Finish" if current_stage_id == "result" else "Close"
 
 

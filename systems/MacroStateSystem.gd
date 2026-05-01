@@ -1,5 +1,6 @@
 extends RefCounted
 
+const STABLE_RNG = preload("res://systems/StableRng.gd")
 const BASE_YEAR := 2020
 const BASE_POLICY_RATE := 5.0
 
@@ -10,8 +11,7 @@ func build_year_state(
 	sector_definitions: Array,
 	previous_state: Dictionary = {}
 ) -> Dictionary:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|macro|%s" % [run_seed, year]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "macro", year])
 
 	var previous_inflation: float = float(previous_state.get("inflation_yoy", 3.2))
 	var previous_gdp_growth: float = float(previous_state.get("gdp_growth", 5.0))

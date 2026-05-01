@@ -268,7 +268,7 @@ func _draw() -> void:
 	if volume_rect.size.y > 0.0:
 		_draw_volume_bars(visible_bars, volume_rect)
 	if indicator_rect.size.y > 0.0:
-		_draw_indicator_panel(panel_plots, indicator_rect)
+		_draw_indicator_panel(panel_plots, indicator_rect, visible_bars.size())
 
 	if not is_zero_approx(_baseline_value):
 		var baseline_y: float = _value_to_plot_y(_baseline_value, min_value, max_value, price_rect)
@@ -287,7 +287,7 @@ func _draw() -> void:
 		var plot_id: String = str(plot.get("id", ""))
 		if _display_mode == "candle" and plot_id == "close":
 			continue
-		_draw_plot(plot, price_rect, min_value, max_value, _display_mode != "candle" and plot_id == "close")
+		_draw_plot(plot, price_rect, min_value, max_value, _display_mode != "candle" and plot_id == "close", visible_bars.size())
 
 	_draw_chart_drawings(price_rect, visible_bars, min_value, max_value)
 	_draw_hover_overlay(price_rect, visible_bars, min_value, max_value, grid_rect, x_axis_rect)
@@ -487,7 +487,7 @@ func _draw_volume_bars(visible_bars: Array, volume_rect: Rect2) -> void:
 		draw_rect(bar_rect, volume_color, true)
 
 
-func _draw_indicator_panel(panel_plots: Array, panel_rect: Rect2) -> void:
+func _draw_indicator_panel(panel_plots: Array, panel_rect: Rect2, bar_count: int) -> void:
 	if panel_plots.is_empty() or panel_rect.size.y <= 0.0:
 		return
 
@@ -503,7 +503,7 @@ func _draw_indicator_panel(panel_plots: Array, panel_rect: Rect2) -> void:
 		)
 	for plot_value in panel_plots:
 		var plot: Dictionary = plot_value
-		_draw_plot(plot, panel_rect, 0.0, 100.0, false)
+		_draw_plot(plot, panel_rect, 0.0, 100.0, false, bar_count)
 
 
 func _draw_hover_overlay(
@@ -550,14 +550,21 @@ func _draw_hover_overlay(
 	_draw_hover_info_panel(font, hover_state, plot_rect)
 
 
-func _draw_plot(plot: Dictionary, plot_rect: Rect2, min_value: float, max_value: float, draw_last_point: bool) -> void:
+func _draw_plot(
+	plot: Dictionary,
+	plot_rect: Rect2,
+	min_value: float,
+	max_value: float,
+	draw_last_point: bool,
+	bar_count: int = 0
+) -> void:
 	var values: Array = plot.get("values", []).duplicate()
 	if values.is_empty():
 		return
 
 	var line_color: Color = plot.get("color", Color(0.560784, 0.772549, 1, 1))
 	var line_width: float = float(plot.get("line_width", 2.0))
-	var segments: Array = _build_plot_segments(values, plot_rect, min_value, max_value)
+	var segments: Array = _build_plot_segments(values, plot_rect, min_value, max_value, bar_count)
 	for segment_value in segments:
 		var segment: PackedVector2Array = segment_value
 		if segment.size() >= 2:
@@ -571,7 +578,7 @@ func _draw_plot(plot: Dictionary, plot_rect: Rect2, min_value: float, max_value:
 			draw_circle(segment[segment.size() - 1], 4.0, line_color)
 
 
-func _build_plot_segments(values: Array, plot_rect: Rect2, min_value: float, max_value: float) -> Array:
+func _build_plot_segments(values: Array, plot_rect: Rect2, min_value: float, max_value: float, bar_count: int = 0) -> Array:
 	var segments: Array = []
 	var current_segment: PackedVector2Array = PackedVector2Array()
 	var last_index: int = max(values.size() - 1, 1)
@@ -583,7 +590,7 @@ func _build_plot_segments(values: Array, plot_rect: Rect2, min_value: float, max
 			current_segment = PackedVector2Array()
 			continue
 
-		var x_position: float = plot_rect.position.x + (plot_rect.size.x * float(index) / float(last_index))
+		var x_position: float = _bar_center_x(index, bar_count, plot_rect) if bar_count > 0 else plot_rect.position.x + (plot_rect.size.x * float(index) / float(last_index))
 		var y_position: float = _value_to_plot_y(float(value_variant), min_value, max_value, plot_rect)
 		current_segment.append(Vector2(x_position, y_position))
 	if current_segment.size() >= 1:
@@ -1131,7 +1138,7 @@ func _build_visible_context() -> Dictionary:
 	for plot_value in _plots:
 		var plot: Dictionary = plot_value.duplicate(true)
 		var values: Array = plot.get("values", [])
-		var slice_end_index: int = min(start_bar_index + visible_bar_count + 1, values.size())
+		var slice_end_index: int = min(start_bar_index + visible_bar_count, values.size())
 		plot["values"] = values.slice(start_bar_index, slice_end_index)
 		visible_plots.append(plot)
 	return {

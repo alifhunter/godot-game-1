@@ -214,10 +214,16 @@ var current_corporate_meeting_id: String = ""
 var debug_generator_buttons: Dictionary = {}
 var debug_start_rupslb_button: Button = null
 var debug_start_rupslb_status_label: Label = null
+var contact_intel_panel: PanelContainer = null
+var contact_intel_option: OptionButton = null
+var contact_intel_button: Button = null
+var contact_intel_status_label: Label = null
 var cached_app_font: Font = null
 var has_checked_app_font: bool = false
 var cached_dashboard_title_font: Font = null
 var has_checked_dashboard_title_font: bool = false
+var defer_next_dashboard_heavy_refresh: bool = false
+var dashboard_heavy_refresh_pending: bool = false
 var suppress_next_portfolio_refresh: bool = false
 var pending_watchlist_selected_company_id: String = ""
 var pending_watchlist_target_tab: int = -1
@@ -731,13 +737,15 @@ func _ready() -> void:
 	network_tip_button.tooltip_text = "Ask the selected contact for a market read."
 	network_request_button.tooltip_text = "Accept a position request from the selected contact."
 	network_referral_button.tooltip_text = "Ask a trusted floater to introduce a company insider."
+	_build_contact_intel_controls()
 	_build_debug_generator_controls()
 	call_deferred("_update_responsive_layout")
 	_set_active_section(active_section_id)
 	_set_active_app(APP_ID_DESKTOP)
+	defer_next_dashboard_heavy_refresh = true
 	_refresh_all()
 	_apply_global_font_size_overrides()
-	call_deferred("_start_background_company_detail_hydration")
+	call_deferred("_start_background_company_detail_hydration_after_startup")
 	call_deferred("_show_tutorial_if_needed")
 
 
@@ -6522,14 +6530,11 @@ func _refresh_dashboard() -> void:
 		_log_perf_phase(log_phase_details, "_refresh_dashboard:no_active_run", started_at_usec)
 		return
 
-	var index_snapshot: Dictionary = _build_dashboard_index_snapshot()
+	var wants_deferred_heavy_refresh: bool = defer_next_dashboard_heavy_refresh
+	var index_snapshot: Dictionary = _build_dashboard_index_snapshot(not wants_deferred_heavy_refresh)
 	_log_perf_phase(log_phase_details, "_refresh_dashboard:index_snapshot", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
-	var company_rows: Array = _get_company_rows_cached()
-	_log_perf_phase(log_phase_details, "_refresh_dashboard:company_rows", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
 	var trade_date: Dictionary = GameManager.get_current_trade_date()
-	var dashboard_event_snapshot: Dictionary = GameManager.get_dashboard_event_snapshot()
 	var trading_day_number: int = max(RunState.day_index + 1, 1)
 	dashboard_index_date_label.text = "Day %d  |  %s" % [
 		trading_day_number,
@@ -6551,6 +6556,21 @@ func _refresh_dashboard() -> void:
 		DASHBOARD_MONTH_NAMES[clamp(int(trade_date.get("month", 1)) - 1, 0, DASHBOARD_MONTH_NAMES.size() - 1)],
 		int(trade_date.get("year", 2020))
 	]
+	if wants_deferred_heavy_refresh:
+		defer_next_dashboard_heavy_refresh = false
+		if not dashboard_heavy_refresh_pending:
+			dashboard_heavy_refresh_pending = true
+			call_deferred("_refresh_dashboard_heavy_after_startup")
+		_set_label_tone(dashboard_index_points_value_label, _color_for_change(float(index_snapshot.get("day_change_pct", 0.0))))
+		_style_dashboard_section_titles()
+		_log_perf_phase(log_phase_details, "_refresh_dashboard:deferred_heavy", phase_started_at_usec)
+		_log_perf_phase(log_phase_details, "_refresh_dashboard", started_at_usec)
+		return
+
+	var company_rows: Array = _get_company_rows_cached()
+	_log_perf_phase(log_phase_details, "_refresh_dashboard:company_rows", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
+	var dashboard_event_snapshot: Dictionary = GameManager.get_dashboard_event_snapshot()
 	_refresh_dashboard_calendar(
 		trade_date,
 		dashboard_event_snapshot.get("report_calendar_snapshot", {}),
@@ -6568,6 +6588,17 @@ func _refresh_dashboard() -> void:
 	_style_dashboard_section_titles()
 	_log_perf_phase(log_phase_details, "_refresh_dashboard:tone", phase_started_at_usec)
 	_log_perf_phase(log_phase_details, "_refresh_dashboard", started_at_usec)
+
+
+func _refresh_dashboard_heavy_after_startup() -> void:
+	if not is_inside_tree():
+		dashboard_heavy_refresh_pending = false
+		return
+	await get_tree().process_frame
+	dashboard_heavy_refresh_pending = false
+	if not is_inside_tree() or not RunState.has_active_run():
+		return
+	_refresh_dashboard()
 
 
 func _refresh_dashboard_index_recap(index_snapshot: Dictionary) -> void:
@@ -6951,7 +6982,7 @@ func _on_dashboard_sector_back_pressed() -> void:
 	_refresh_dashboard_sector_panel(_get_company_rows_cached())
 
 
-func _build_dashboard_index_snapshot() -> Dictionary:
+func _build_dashboard_index_snapshot(include_sparkline: bool = true) -> Dictionary:
 	var weighted_ratio_sum: float = 0.0
 	var previous_weighted_ratio_sum: float = 0.0
 	var weight_total: float = 0.0
@@ -7013,7 +7044,7 @@ func _build_dashboard_index_snapshot() -> Dictionary:
 		"decliners": decliners,
 		"flat_count": flat_count,
 		"day_change_pct": day_change_pct,
-		"sparkline_points": _build_dashboard_index_sparkline_points()
+		"sparkline_points": _build_dashboard_index_sparkline_points() if include_sparkline else []
 	}
 
 
@@ -7841,6 +7872,112 @@ func _on_debug_start_rupslb_pressed() -> void:
 	_refresh_network()
 
 
+func _build_contact_intel_controls() -> void:
+	if contact_intel_panel != null or order_card_panel == null:
+		return
+	var action_vbox: VBoxContainer = order_card_panel.get_parent() as VBoxContainer
+	if action_vbox == null:
+		return
+
+	contact_intel_panel = PanelContainer.new()
+	contact_intel_panel.name = "ContactIntelPanel"
+	contact_intel_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_panel(contact_intel_panel, COLOR_ORDER_CARD_BG, 0)
+	action_vbox.add_child(contact_intel_panel)
+
+	var panel_margin := MarginContainer.new()
+	panel_margin.name = "ContactIntelMargin"
+	panel_margin.add_theme_constant_override("margin_left", 10)
+	panel_margin.add_theme_constant_override("margin_top", 8)
+	panel_margin.add_theme_constant_override("margin_right", 10)
+	panel_margin.add_theme_constant_override("margin_bottom", 8)
+	contact_intel_panel.add_child(panel_margin)
+
+	var panel_vbox := VBoxContainer.new()
+	panel_vbox.name = "ContactIntelVBox"
+	panel_vbox.add_theme_constant_override("separation", 6)
+	panel_margin.add_child(panel_vbox)
+
+	var title_label := Label.new()
+	title_label.name = "ContactIntelTitleLabel"
+	title_label.text = "Contact Intel"
+	title_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	_set_label_tone(title_label, COLOR_TEXT)
+	panel_vbox.add_child(title_label)
+
+	contact_intel_option = OptionButton.new()
+	contact_intel_option.name = "ContactIntelOption"
+	contact_intel_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contact_intel_option.item_selected.connect(func(_index: int) -> void:
+		_refresh_contact_intel_controls()
+	)
+	panel_vbox.add_child(contact_intel_option)
+
+	contact_intel_button = Button.new()
+	contact_intel_button.name = "ContactIntelButton"
+	contact_intel_button.text = "Ask Contact"
+	contact_intel_button.tooltip_text = "Ask a Network contact for a read on the selected stock."
+	contact_intel_button.pressed.connect(_on_contact_intel_pressed)
+	_style_button(contact_intel_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	panel_vbox.add_child(contact_intel_button)
+
+	contact_intel_status_label = Label.new()
+	contact_intel_status_label.name = "ContactIntelStatusLabel"
+	contact_intel_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	contact_intel_status_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE - 1)
+	_set_label_tone(contact_intel_status_label, COLOR_MUTED)
+	panel_vbox.add_child(contact_intel_status_label)
+	_refresh_contact_intel_controls()
+
+
+func _refresh_contact_intel_controls() -> void:
+	if contact_intel_option == null or contact_intel_button == null or contact_intel_status_label == null:
+		return
+	var previous_contact_id: String = _selected_contact_intel_contact_id()
+	var state: Dictionary = GameManager.get_stock_contact_tip_options(selected_company_id)
+	var rows: Array = state.get("rows", [])
+	contact_intel_option.clear()
+	var selected_index: int = 0
+	for row_index in range(rows.size()):
+		if typeof(rows[row_index]) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = rows[row_index]
+		contact_intel_option.add_item(str(row.get("label", "Contact")))
+		var item_index: int = contact_intel_option.get_item_count() - 1
+		var contact_id: String = str(row.get("id", ""))
+		contact_intel_option.set_item_metadata(item_index, contact_id)
+		if contact_id == previous_contact_id:
+			selected_index = item_index
+	if contact_intel_option.get_item_count() > 0:
+		contact_intel_option.select(clamp(selected_index, 0, contact_intel_option.get_item_count() - 1))
+	var enabled: bool = bool(state.get("enabled", false)) and contact_intel_option.get_item_count() > 0
+	contact_intel_option.disabled = not enabled
+	contact_intel_button.disabled = not enabled
+	contact_intel_button.tooltip_text = str(state.get("tooltip_text", "Ask a Network contact for a market read."))
+	contact_intel_status_label.text = str(state.get("status_text", "Pick a stock first."))
+
+
+func _selected_contact_intel_contact_id() -> String:
+	if contact_intel_option == null or contact_intel_option.get_item_count() <= 0:
+		return ""
+	var selected_index: int = contact_intel_option.selected
+	if selected_index < 0 or selected_index >= contact_intel_option.get_item_count():
+		return ""
+	var metadata = contact_intel_option.get_item_metadata(selected_index)
+	return str(metadata)
+
+
+func _on_contact_intel_pressed() -> void:
+	var contact_id: String = _selected_contact_intel_contact_id()
+	var result: Dictionary = GameManager.ask_stock_contact_tip(selected_company_id, contact_id)
+	_show_toast(str(result.get("message", "Could not ask contact.")), bool(result.get("success", false)))
+	_refresh_contact_intel_controls()
+	if not bool(result.get("success", false)):
+		return
+	_refresh_network()
+	_refresh_trade_workspace()
+
+
 func _sync_selected_company_with_active_stock_list() -> void:
 	var watchlist_ids: Array = GameManager.get_watchlist_company_ids()
 	var holdings_ids: Array = _get_portfolio_company_ids()
@@ -8133,6 +8270,18 @@ func _start_background_company_detail_hydration() -> void:
 	GameManager.start_background_company_detail_hydration(_prioritized_company_detail_ids())
 
 
+func _start_background_company_detail_hydration_after_startup() -> void:
+	if not is_inside_tree():
+		return
+	await get_tree().process_frame
+	if not is_inside_tree():
+		return
+	await get_tree().process_frame
+	if not is_inside_tree():
+		return
+	_start_background_company_detail_hydration()
+
+
 func _request_selected_company_detail(priority: bool = true) -> void:
 	if selected_company_id.is_empty():
 		return
@@ -8231,6 +8380,7 @@ func _apply_trade_workspace_snapshot(snapshot: Dictionary) -> void:
 		_refresh_key_stats_dashboard({})
 		_refresh_broker_table({})
 		_refresh_statement_sections({})
+		_refresh_contact_intel_controls()
 		_set_label_tone(profile_price_label, COLOR_TEXT)
 		return
 
@@ -10857,6 +11007,9 @@ func _refresh_order_controls(snapshot: Dictionary) -> void:
 	var active_estimate: Dictionary = sell_estimate if active_order_side == "sell" else buy_estimate
 	var estimated_total: float = float(active_estimate.get("net_proceeds", 0.0)) if active_order_side == "sell" else float(active_estimate.get("total_cost", 0.0))
 	var can_submit: bool = can_sell if active_order_side == "sell" else can_buy
+	var impactability: Dictionary = snapshot.get("impactability", {})
+	var impactability_label: String = str(impactability.get("label", ""))
+	var order_impact_hint: Dictionary = _build_order_impact_hint(snapshot, active_estimate, active_order_side)
 
 	order_company_name_label.text = str(snapshot.get("name", "No selection")).to_upper()
 	selection_label.text = str(snapshot.get("ticker", "-"))
@@ -10874,10 +11027,16 @@ func _refresh_order_controls(snapshot: Dictionary) -> void:
 	]
 	if odd_lot_remainder > 0:
 		order_position_label.text += "  |  Odd lot %d share(s)" % odd_lot_remainder
+	if not impactability_label.is_empty():
+		order_position_label.text += "  |  Tape %s" % impactability_label
+	order_position_label.tooltip_text = str(impactability.get("detail", ""))
 
 	order_title_label.text = "Sell Order" if active_order_side == "sell" else "Buy Order"
 	order_price_line_edit.text = _format_currency(current_price)
 	estimated_total_value_label.text = _format_currency(estimated_total)
+	if not str(order_impact_hint.get("label", "")).is_empty():
+		estimated_total_value_label.text += "  |  %s" % str(order_impact_hint.get("label", ""))
+	estimated_total_value_label.tooltip_text = str(order_impact_hint.get("detail", impactability.get("detail", "")))
 	submit_order_button.text = "Submit Sell Order" if active_order_side == "sell" else "Submit Buy Order"
 	submit_order_button.disabled = not can_submit
 	buy_button.disabled = false
@@ -10885,7 +11044,53 @@ func _refresh_order_controls(snapshot: Dictionary) -> void:
 	_refresh_submit_order_button_style()
 	_update_order_side_buttons()
 	_set_label_tone(order_price_change_label, _color_for_change(float(snapshot.get("daily_change_pct", 0.0))))
-	_set_label_tone(estimated_total_value_label, COLOR_TEXT if can_submit else COLOR_MUTED)
+	var estimate_tone: Color = COLOR_TEXT if can_submit else COLOR_MUTED
+	if can_submit and str(order_impact_hint.get("tone", "")) == "warning":
+		estimate_tone = COLOR_WARNING
+	_set_label_tone(estimated_total_value_label, estimate_tone)
+	_refresh_contact_intel_controls()
+
+
+func _build_order_impact_hint(snapshot: Dictionary, active_estimate: Dictionary, side: String) -> Dictionary:
+	var impactability: Dictionary = snapshot.get("impactability", {})
+	if impactability.is_empty():
+		return {}
+
+	var order_value: float = float(active_estimate.get("net_proceeds", 0.0)) if side == "sell" else float(active_estimate.get("total_cost", 0.0))
+	if order_value <= 0.0:
+		return {}
+
+	var depth_key: String = "bid_depth_value" if side == "sell" else "ask_depth_value"
+	var side_depth_value: float = max(float(impactability.get(depth_key, 0.0)), 0.0)
+	if side_depth_value <= 0.0:
+		side_depth_value = max(float(impactability.get("visible_depth_value", 0.0)), float(impactability.get("avg_daily_value", 1.0)))
+	var depth_ratio: float = order_value / max(side_depth_value, 1.0)
+	var adv_ratio: float = order_value / max(float(impactability.get("avg_daily_value", 1.0)), 1.0)
+	var float_ratio: float = order_value / max(float(impactability.get("free_float_value", 1.0)), 1.0)
+	var side_text: String = "bid" if side == "sell" else "ask"
+	var detail: String = "Order is %.2fx %s depth, %.2fx ADV, %.2f%% of free-float value." % [
+		depth_ratio,
+		side_text,
+		adv_ratio,
+		float_ratio * 100.0
+	]
+	if depth_ratio >= 1.0 or float_ratio >= 0.006:
+		return {
+			"label": "Large vs depth",
+			"tone": "warning",
+			"detail": detail
+		}
+	if depth_ratio >= 0.35 or adv_ratio >= 0.20:
+		return {
+			"label": "Visible flow",
+			"tone": "warning",
+			"detail": detail
+		}
+	return {
+		"label": "",
+		"tone": str(impactability.get("tone", "")),
+		"detail": detail
+	}
 
 
 func _selected_lots() -> int:
@@ -11567,6 +11772,8 @@ func _apply_visual_theme() -> void:
 		_style_panel(console_panel, Color(0.0588235, 0.0823529, 0.109804, 0.98), 0)
 	_style_panel(action_panel, COLOR_ORDER_PANEL_BG, 0)
 	_style_panel(order_card_panel, COLOR_ORDER_CARD_BG, 0)
+	if contact_intel_panel != null:
+		_style_panel(contact_intel_panel, COLOR_ORDER_CARD_BG, 0)
 	_style_panel(key_stats_panel, COLOR_PANEL_BLUE, 0)
 	_style_panel(financials_panel, COLOR_PANEL_BLUE, 0)
 	_style_panel(broker_panel, COLOR_PANEL_BLUE, 0)
@@ -11617,6 +11824,8 @@ func _apply_visual_theme() -> void:
 	_style_button(sell_button, COLOR_ORDER_SELL, COLOR_ORDER_SELL_BORDER, COLOR_TEXT, 0)
 	_style_button(order_ticket_toggle_button, Color(0.0823529, 0.117647, 0.156863, 0.96), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(submit_order_button, COLOR_ORDER_BUY, COLOR_ORDER_BUY_BORDER, COLOR_TEXT, 0)
+	if contact_intel_button != null:
+		_style_button(contact_intel_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_key_stats_dashboard_ui()
 	_style_button(app_window_minimize_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(app_window_close_button, Color(0.368627, 0.160784, 0.176471, 1), Color(0.709804, 0.34902, 0.372549, 1), COLOR_TEXT, 0)

@@ -107,7 +107,8 @@ func build_chart_snapshot_from_bars(
 		return {}
 
 	var primary_values: Array = _build_primary_values(display_bars)
-	var start_price: float = float(primary_values[0]) if not primary_values.is_empty() else 0.0
+	var first_display_bar: Dictionary = display_bars[0]
+	var start_price: float = float(first_display_bar.get("open", first_display_bar.get("close", 0.0)))
 	var end_price: float = float(primary_values[primary_values.size() - 1]) if not primary_values.is_empty() else 0.0
 	var low_price: float = float(visible_bars[0].get("low", start_price))
 	var high_price: float = float(visible_bars[0].get("high", start_price))
@@ -330,7 +331,7 @@ func _build_primary_values(visible_bars: Array) -> Array:
 	if visible_bars.is_empty():
 		return []
 
-	var values: Array = [float(visible_bars[0].get("open", visible_bars[0].get("close", 0.0)))]
+	var values: Array = []
 	for bar_value in visible_bars:
 		var bar: Dictionary = bar_value
 		values.append(float(bar.get("close", 0.0)))
@@ -376,7 +377,7 @@ func _build_indicator_snapshots(visible_bars: Array, enabled_indicator_ids: Arra
 
 
 func _align_indicator_values(source_values: Array, render_point_count: int) -> Array:
-	var aligned_values: Array = [null]
+	var aligned_values: Array = []
 	for value in source_values:
 		aligned_values.append(value)
 	while aligned_values.size() < render_point_count:

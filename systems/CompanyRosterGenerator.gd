@@ -1,5 +1,6 @@
 extends RefCounted
 
+const STABLE_RNG = preload("res://systems/StableRng.gd")
 const ALPHABET := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const FALLBACK_WORDS := [
 	"Global",
@@ -1032,6 +1033,4 @@ func _shuffle_array(values: Array, rng: RandomNumberGenerator) -> void:
 
 
 func _rng_for(run_seed: int, salt: String) -> RandomNumberGenerator:
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = int(hash("%s|company_roster|%s" % [run_seed, salt]))
-	return rng
+	return STABLE_RNG.rng([run_seed, "company_roster", salt])
