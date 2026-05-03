@@ -136,7 +136,25 @@ func _build_ui() -> void:
 	center_panel.custom_minimum_size = Vector2(380, 0)
 	center_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	root.add_child(center_panel)
-	var center_vbox := _panel_vbox(center_panel, "ThesisBuilderVBox")
+	var center_margin := MarginContainer.new()
+	center_margin.name = "ThesisBuilderMargin"
+	center_margin.add_theme_constant_override("margin_left", 12)
+	center_margin.add_theme_constant_override("margin_top", 12)
+	center_margin.add_theme_constant_override("margin_right", 12)
+	center_margin.add_theme_constant_override("margin_bottom", 12)
+	center_panel.add_child(center_margin)
+	var center_scroll := ScrollContainer.new()
+	center_scroll.name = "ThesisBuilderScroll"
+	center_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	center_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	center_margin.add_child(center_scroll)
+	var center_vbox := VBoxContainer.new()
+	center_vbox.name = "ThesisBuilderVBox"
+	center_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center_vbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	center_vbox.add_theme_constant_override("separation", 8)
+	center_scroll.add_child(center_vbox)
 	center_vbox.add_child(_make_title("Build Thesis"))
 
 	company_option = OptionButton.new()
@@ -240,7 +258,7 @@ func _build_ui() -> void:
 	evidence_actions.add_child(remove_evidence_button)
 	generate_report_button = Button.new()
 	generate_report_button.name = "ThesisGenerateReportButton"
-	generate_report_button.text = "Generate Report"
+	generate_report_button.text = "Generate Report (%d AP)" % GameManager.get_thesis_report_action_cost()
 	generate_report_button.pressed.connect(_on_generate_report_pressed)
 	evidence_actions.add_child(generate_report_button)
 
@@ -394,7 +412,7 @@ func _build_report_overlay() -> void:
 	overlay_actions.add_child(report_refresh_review_button)
 	report_regenerate_button = Button.new()
 	report_regenerate_button.name = "ThesisReportRegenerateButton"
-	report_regenerate_button.text = "Regenerate"
+	report_regenerate_button.text = "Regenerate (%d AP)" % GameManager.get_thesis_report_action_cost()
 	report_regenerate_button.pressed.connect(_on_regenerate_report_pressed)
 	overlay_actions.add_child(report_regenerate_button)
 	report_close_button = Button.new()
@@ -468,17 +486,24 @@ func _refresh_selected_thesis() -> void:
 	var thesis: Dictionary = _selected_thesis()
 	var has_thesis: bool = not thesis.is_empty()
 	var has_report: bool = has_thesis and not thesis.get("report", {}).is_empty()
+	var report_action_cost: int = GameManager.get_thesis_report_action_cost()
+	var remaining_ap: int = int(GameManager.get_daily_action_snapshot().get("remaining", 0))
+	var can_generate_report: bool = has_thesis and not report_generation_running and remaining_ap >= report_action_cost
 	update_button.disabled = not has_thesis or report_generation_running
 	add_evidence_button.disabled = not has_thesis or report_generation_running
 	remove_evidence_button.disabled = not has_thesis or report_generation_running
-	generate_report_button.disabled = not has_thesis or report_generation_running
+	generate_report_button.text = "Generate Report (%d AP)" % report_action_cost
+	generate_report_button.disabled = not can_generate_report
+	generate_report_button.tooltip_text = "Need %d AP to generate a Thesis report." % report_action_cost if remaining_ap < report_action_cost else "Generate a frozen research note."
 	view_paper_button.disabled = not has_report or report_generation_running
 	refresh_review_button.disabled = not has_report or report_generation_running
 	close_thesis_button.disabled = not has_thesis or report_generation_running
 	if report_refresh_review_button != null:
 		report_refresh_review_button.disabled = not has_report or report_generation_running
 	if report_regenerate_button != null:
-		report_regenerate_button.disabled = not has_thesis or report_generation_running
+		report_regenerate_button.text = "Regenerate (%d AP)" % report_action_cost
+		report_regenerate_button.disabled = not can_generate_report
+		report_regenerate_button.tooltip_text = "Need %d AP to regenerate this Thesis report." % report_action_cost if remaining_ap < report_action_cost else "Regenerate the frozen report with current evidence."
 	if report_close_button != null:
 		report_close_button.disabled = report_generation_running
 	if not has_thesis:

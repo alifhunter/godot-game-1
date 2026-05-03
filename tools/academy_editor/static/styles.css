@@ -181,6 +181,25 @@ button.wide { width: 100%; margin-top: 8px; }
 }
 .preview-infobox strong { color: var(--brown); }
 .preview-infobox p { margin: 6px 0 0; }
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #f7eabb;
+  border: 1px solid #9b7939;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.preview-table th,
+.preview-table td {
+  border-bottom: 1px solid #b79752;
+  padding: 8px 10px;
+  vertical-align: top;
+}
+.preview-table th {
+  color: var(--brown);
+  background: #ead9a6;
+}
+.preview-table tr:last-child td { border-bottom: 0; }
 .preview-insights {
   border: 1px solid #2260b1;
   border-left-width: 6px;

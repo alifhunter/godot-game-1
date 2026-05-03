@@ -200,8 +200,9 @@ func submit_quiz(catalog: Dictionary, progress: Dictionary, category_id: String,
 			completed_modules.append(category_key)
 		normalized_progress["completed_modules"] = completed_modules
 
+	var quiz_section_id: String = _section_id_by_kind(category, "quiz", QUIZ_SECTION_ID)
 	normalized_progress["last_category_id"] = category_key
-	normalized_progress["last_section_id"] = QUIZ_SECTION_ID
+	normalized_progress["last_section_id"] = quiz_section_id
 	return {
 		"success": true,
 		"passed": passed,
@@ -214,7 +215,7 @@ func submit_quiz(catalog: Dictionary, progress: Dictionary, category_id: String,
 		"badge_granted": passed and not badge_id.is_empty(),
 		"badge": badge.duplicate(true) if typeof(badge) == TYPE_DICTIONARY else {},
 		"progress": normalized_progress,
-		"snapshot": build_snapshot(catalog, normalized_progress, category_key, QUIZ_SECTION_ID)
+		"snapshot": build_snapshot(catalog, normalized_progress, category_key, quiz_section_id)
 	}
 
 
@@ -342,6 +343,14 @@ func _section_by_id(category: Dictionary, section_id: String) -> Dictionary:
 		if str(section.get("id", "")) == section_id:
 			return section.duplicate(true)
 	return {}
+
+
+func _section_id_by_kind(category: Dictionary, kind: String, fallback: String) -> String:
+	for section_value in category.get("sections", []):
+		var section: Dictionary = section_value
+		if str(section.get("kind", "")) == kind:
+			return str(section.get("id", fallback))
+	return fallback
 
 
 func _check_by_id(section: Dictionary, check_id: String) -> Dictionary:

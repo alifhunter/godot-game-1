@@ -18,33 +18,180 @@ size_flags_vertical = 3
 theme_override_constants/separation = 14
 
 [node name="HeaderVBox" type="VBoxContainer" parent="ActionMargin/ActionVBox"]
-theme_override_constants/separation = 4
+theme_override_constants/separation = 8
 
-[node name="CompanyNameLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox"]
+[node name="MarketHeaderRow" type="HBoxContainer" parent="ActionMargin/ActionVBox/HeaderVBox"]
+theme_override_constants/separation = 8
+
+[node name="CompanyNameLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketHeaderRow"]
+custom_minimum_size = Vector2(48, 22)
 theme_override_font_sizes/font_size = 12
-autowrap_mode = 3
 text = "NO SELECTION"
+vertical_alignment = 1
+
+[node name="CurrentPriceLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketHeaderRow"]
+theme_override_font_sizes/font_size = 12
+text = "0"
+vertical_alignment = 1
+
+[node name="PriceChangeLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketHeaderRow"]
+theme_override_font_sizes/font_size = 12
+text = "+0 (+0.00%)"
+vertical_alignment = 1
+
+[node name="MarketHeaderSpacer" type="Control" parent="ActionMargin/ActionVBox/HeaderVBox/MarketHeaderRow"]
+size_flags_horizontal = 3
+
+[node name="MarketMenuLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketHeaderRow"]
+theme_override_font_sizes/font_size = 14
+text = "..."
+vertical_alignment = 1
 
 [node name="SelectionLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox"]
+visible = false
 theme_override_font_sizes/font_size = 12
 text = "-"
 
-[node name="QuoteRow" type="HBoxContainer" parent="ActionMargin/ActionVBox/HeaderVBox"]
-theme_override_constants/separation = 0
-
-[node name="PriceBlock" type="VBoxContainer" parent="ActionMargin/ActionVBox/HeaderVBox/QuoteRow"]
+[node name="MarketStatGrid" type="GridContainer" parent="ActionMargin/ActionVBox/HeaderVBox"]
 size_flags_horizontal = 3
-theme_override_constants/separation = 2
+columns = 6
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 4
 
-[node name="CurrentPriceLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/QuoteRow/PriceBlock"]
+[node name="OpenLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(42, 0)
 theme_override_font_sizes/font_size = 12
-text = "Rp0,00"
+text = "Open"
 
-[node name="PriceChangeLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/QuoteRow/PriceBlock"]
+[node name="OpenValueLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(54, 0)
 theme_override_font_sizes/font_size = 12
-text = "+Rp0,00  |  +0.00%"
+horizontal_alignment = 2
+text = "-"
+
+[node name="PrevLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(42, 0)
+theme_override_font_sizes/font_size = 12
+text = "Prev"
+
+[node name="PrevValueLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(54, 0)
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 2
+text = "-"
+
+[node name="LotLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(42, 0)
+theme_override_font_sizes/font_size = 12
+text = "Lot"
+
+[node name="LotValueLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(64, 0)
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 2
+text = "-"
+
+[node name="HighLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(42, 0)
+theme_override_font_sizes/font_size = 12
+text = "High"
+
+[node name="HighValueLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(54, 0)
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 2
+text = "-"
+
+[node name="ARALabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(42, 0)
+theme_override_font_sizes/font_size = 12
+text = "ARA"
+
+[node name="ARAValueLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(54, 0)
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 2
+text = "-"
+
+[node name="ValLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(42, 0)
+theme_override_font_sizes/font_size = 12
+text = "Val"
+
+[node name="ValValueLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(64, 0)
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 2
+text = "-"
+
+[node name="LowLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(42, 0)
+theme_override_font_sizes/font_size = 12
+text = "Low"
+
+[node name="LowValueLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(54, 0)
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 2
+text = "-"
+
+[node name="ARBLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(42, 0)
+theme_override_font_sizes/font_size = 12
+text = "ARB"
+
+[node name="ARBValueLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(54, 0)
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 2
+text = "-"
+
+[node name="AvgLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(42, 0)
+theme_override_font_sizes/font_size = 12
+text = "Avg"
+
+[node name="AvgValueLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(64, 0)
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 2
+text = "-"
+
+[node name="FBuyLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(42, 0)
+theme_override_font_sizes/font_size = 12
+text = "F Buy"
+
+[node name="FBuyValueLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(54, 0)
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 2
+text = "-"
+
+[node name="FSellLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(42, 0)
+theme_override_font_sizes/font_size = 12
+text = "F Sell"
+
+[node name="FSellValueLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(54, 0)
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 2
+text = "-"
+
+[node name="DepthLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(42, 0)
+theme_override_font_sizes/font_size = 12
+text = "Depth"
+
+[node name="DepthValueLabel" type="Label" parent="ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid"]
+custom_minimum_size = Vector2(64, 0)
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 2
+text = "-"
 
 [node name="PositionLabel" type="Label" parent="ActionMargin/ActionVBox"]
+visible = false
 theme_override_font_sizes/font_size = 12
 autowrap_mode = 3
 text = "Held 0 lot(s) / 0 share(s)"

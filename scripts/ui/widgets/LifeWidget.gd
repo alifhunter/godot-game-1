@@ -21,6 +21,7 @@ var outflow_label: Label = null
 var dividend_label: Label = null
 var net_monthly_label: Label = null
 var runway_label: Label = null
+var next_payment_label: Label = null
 var housing_option: OptionButton = null
 var lifestyle_option: OptionButton = null
 var housing_detail_label: Label = null
@@ -66,6 +67,17 @@ func refresh() -> void:
 		_format_currency(float(snapshot.get("estimated_monthly_dividends", 0.0))),
 		_format_currency(net_monthly)
 	]
+	var next_payment: Dictionary = snapshot.get("next_life_payment", {})
+	if next_payment.is_empty():
+		next_payment_label.text = "Next Life payment: not scheduled yet."
+	else:
+		next_payment_label.text = "Next Life payment: %s due %s (%d trading day%s)." % [
+			_format_currency(float(next_payment.get("amount", snapshot.get("monthly_outflow", 0.0)))),
+			str(next_payment.get("date_text", "")),
+			int(next_payment.get("due_in_trading_days", 0)),
+			"" if int(next_payment.get("due_in_trading_days", 0)) == 1 else "s"
+		]
+		next_payment_label.add_theme_color_override("font_color", COLOR_NEGATIVE if bool(next_payment.get("warning", false)) else COLOR_MUTED)
 	note_label.text = str(snapshot.get("note", ""))
 	_refresh_option_details()
 	_refresh_budget_rows()
@@ -108,6 +120,11 @@ func _build_ui() -> void:
 	summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_style_label(summary_label, COLOR_MUTED, 12)
 	header_vbox.add_child(summary_label)
+	next_payment_label = Label.new()
+	next_payment_label.name = "LifeNextPaymentLabel"
+	next_payment_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_style_label(next_payment_label, COLOR_MUTED, 12)
+	header_vbox.add_child(next_payment_label)
 
 	var stat_grid := GridContainer.new()
 	stat_grid.name = "LifeStatGrid"
@@ -187,6 +204,8 @@ func _set_empty_state() -> void:
 	for value_label in [cash_label, equity_label, outflow_label, dividend_label, net_monthly_label, runway_label]:
 		if value_label != null:
 			value_label.text = "-"
+	if next_payment_label != null:
+		next_payment_label.text = "-"
 	_clear_rows(budget_rows)
 	_clear_rows(dividend_rows)
 

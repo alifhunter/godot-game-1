@@ -28,6 +28,250 @@ const DEFAULT_DIFFICULTY_ID := "normal"
 const STARTING_CASH := 100000000.0
 const CONSOLE_CASH_GRANT_AMOUNT := 999999999999.0
 const PLAYER_MAJOR_SHAREHOLDER_THRESHOLD := 0.05
+const PLAYER_CONTROL_SHAREHOLDER_THRESHOLD := 0.50
+const THESIS_REPORT_ACTION_COST := 7
+const GOVERNANCE_CONTROL_ACTIONS := [
+	{
+		"id": "rights_issue",
+		"label": "Rights Issue",
+		"detail": "Raise capital through record-date shareholder entitlements."
+	},
+	{
+		"id": "private_placement",
+		"label": "Private Placement",
+		"detail": "Place new shares with a targeted strategic investor."
+	},
+	{
+		"id": "stock_buyback",
+		"label": "Stock Buyback",
+		"detail": "Ask shareholders to approve a buyback mandate."
+	},
+	{
+		"id": "stock_split",
+		"label": "Stock Split",
+		"detail": "Reset share count and reference price through split terms."
+	},
+	{
+		"id": "strategic_merger_acquisition",
+		"label": "Strategic M&A",
+		"detail": "Put a strategic acquisition or cash-out proposal to shareholders."
+	},
+	{
+		"id": "backdoor_listing",
+		"label": "Backdoor Listing",
+		"detail": "Propose a control-change and asset-injection agenda."
+	},
+	{
+		"id": "restructuring",
+		"label": "Restructuring",
+		"detail": "Put a balance-sheet rescue package to shareholders."
+	},
+	{
+		"id": "ceo_change",
+		"label": "CEO Change",
+		"detail": "Propose a leadership slate and execution reset."
+	}
+]
+const DEBUG_CORPORATE_ACTION_GENERATOR_GROUPS := [
+	{
+		"id": "rupslb",
+		"label": "Selected Stock RUPSLB",
+		"generators": [
+			{
+				"id": "rights_issue_rupslb",
+				"label": "Start RUPSLB",
+				"full_label": "Rights Issue RUPSLB",
+				"method": "debug_schedule_next_day_rights_issue_rupslb",
+				"mode": "rupslb",
+				"requires_holding": true,
+				"requires_no_live_chain": true,
+				"description": "Schedule a next-day rights issue RUPSLB for the selected held stock."
+			},
+			{
+				"id": "private_placement_rupslb",
+				"label": "Private Placement",
+				"full_label": "Private Placement RUPSLB",
+				"method": "debug_schedule_next_day_private_placement_rupslb",
+				"mode": "rupslb",
+				"requires_holding": true,
+				"requires_no_live_chain": true,
+				"description": "Schedule a next-day private placement RUPSLB for the selected held stock."
+			},
+			{
+				"id": "stock_buyback_rupslb",
+				"label": "Buyback",
+				"full_label": "Stock Buyback RUPSLB",
+				"method": "debug_schedule_next_day_stock_buyback_rupslb",
+				"mode": "rupslb",
+				"requires_holding": true,
+				"requires_no_live_chain": true,
+				"description": "Schedule a next-day stock buyback RUPSLB for the selected held stock."
+			},
+			{
+				"id": "stock_split_rupslb",
+				"label": "Split",
+				"full_label": "Stock Split RUPSLB",
+				"method": "debug_schedule_next_day_stock_split_rupslb",
+				"mode": "rupslb",
+				"requires_holding": true,
+				"requires_no_live_chain": true,
+				"description": "Schedule a next-day stock split RUPSLB for the selected held stock."
+			},
+			{
+				"id": "tender_offer_rupslb",
+				"label": "Tender Offer",
+				"full_label": "Tender Offer RUPSLB",
+				"method": "debug_schedule_next_day_tender_offer_rupslb",
+				"mode": "rupslb",
+				"requires_holding": true,
+				"requires_no_live_chain": true,
+				"description": "Schedule a next-day tender offer RUPSLB for the selected held stock."
+			},
+			{
+				"id": "strategic_mna_rupslb",
+				"label": "Strategic M&A",
+				"full_label": "Strategic M&A RUPSLB",
+				"method": "debug_schedule_next_day_strategic_mna_rupslb",
+				"mode": "rupslb",
+				"requires_holding": true,
+				"requires_no_live_chain": true,
+				"description": "Schedule a next-day strategic M&A RUPSLB for the selected held stock."
+			},
+			{
+				"id": "backdoor_listing_rupslb",
+				"label": "Backdoor Listing",
+				"full_label": "Backdoor Listing RUPSLB",
+				"method": "debug_schedule_next_day_backdoor_listing_rupslb",
+				"mode": "rupslb",
+				"requires_holding": true,
+				"requires_no_live_chain": true,
+				"description": "Schedule a next-day backdoor listing RUPSLB for the selected held stock."
+			},
+			{
+				"id": "restructuring_rupslb",
+				"label": "Restructuring",
+				"full_label": "Restructuring RUPSLB",
+				"method": "debug_schedule_next_day_restructuring_rupslb",
+				"mode": "rupslb",
+				"requires_holding": true,
+				"requires_no_live_chain": true,
+				"description": "Schedule a next-day restructuring RUPSLB for the selected held stock."
+			},
+			{
+				"id": "ceo_change_rupslb",
+				"label": "CEO Change",
+				"full_label": "CEO Change RUPSLB",
+				"method": "debug_schedule_next_day_ceo_change_rupslb",
+				"mode": "rupslb",
+				"requires_holding": true,
+				"requires_no_live_chain": true,
+				"description": "Schedule a next-day CEO-change RUPSLB for the selected held stock."
+			}
+		]
+	},
+	{
+		"id": "dividend",
+		"label": "Selected Stock Dividends",
+		"generators": [
+			{
+				"id": "cash_dividend",
+				"label": "Cash Dividend",
+				"full_label": "Cash Dividend",
+				"method": "debug_schedule_next_day_cash_dividend",
+				"mode": "dividend",
+				"requires_holding": false,
+				"requires_no_live_chain": false,
+				"description": "Schedule a debug cash dividend for the selected stock."
+			},
+			{
+				"id": "stock_dividend",
+				"label": "Stock Dividend",
+				"full_label": "Stock Dividend",
+				"method": "debug_schedule_next_day_stock_dividend",
+				"mode": "dividend",
+				"requires_holding": false,
+				"requires_no_live_chain": false,
+				"description": "Schedule a debug stock dividend for the selected stock."
+			}
+		]
+	},
+	{
+		"id": "execution",
+		"label": "Selected Stock Force Execution",
+		"generators": [
+			{
+				"id": "stock_buyback_execution",
+				"label": "Execute Buyback",
+				"full_label": "Stock Buyback Execution",
+				"method": "debug_force_stock_buyback_execution",
+				"mode": "execution",
+				"requires_holding": false,
+				"requires_no_live_chain": true,
+				"description": "Force a stock buyback chain directly into execution for the selected stock."
+			},
+			{
+				"id": "stock_split_execution",
+				"label": "Execute Split",
+				"full_label": "Stock Split Execution",
+				"method": "debug_force_stock_split_execution",
+				"mode": "execution",
+				"requires_holding": false,
+				"requires_no_live_chain": true,
+				"description": "Force a stock split chain directly into execution for the selected stock."
+			},
+			{
+				"id": "tender_offer_execution",
+				"label": "Execute Tender",
+				"full_label": "Tender Offer Execution",
+				"method": "debug_force_tender_offer_execution",
+				"mode": "execution",
+				"requires_holding": false,
+				"requires_no_live_chain": true,
+				"description": "Force a tender offer chain directly into execution for the selected stock."
+			},
+			{
+				"id": "strategic_mna_execution",
+				"label": "Execute M&A",
+				"full_label": "Strategic M&A Execution",
+				"method": "debug_force_strategic_mna_execution",
+				"mode": "execution",
+				"requires_holding": false,
+				"requires_no_live_chain": true,
+				"description": "Force a strategic M&A chain directly into execution for the selected stock."
+			},
+			{
+				"id": "backdoor_listing_execution",
+				"label": "Execute Backdoor",
+				"full_label": "Backdoor Listing Execution",
+				"method": "debug_force_backdoor_listing_execution",
+				"mode": "execution",
+				"requires_holding": false,
+				"requires_no_live_chain": true,
+				"description": "Force a backdoor listing chain directly into execution for the selected stock."
+			},
+			{
+				"id": "restructuring_execution",
+				"label": "Execute Restructure",
+				"full_label": "Restructuring Execution",
+				"method": "debug_force_restructuring_execution",
+				"mode": "execution",
+				"requires_holding": false,
+				"requires_no_live_chain": true,
+				"description": "Force a restructuring chain directly into execution for the selected stock."
+			},
+			{
+				"id": "ceo_change_execution",
+				"label": "Execute CEO",
+				"full_label": "CEO Change Execution",
+				"method": "debug_force_ceo_change_execution",
+				"mode": "execution",
+				"requires_holding": false,
+				"requires_no_live_chain": true,
+				"description": "Force a CEO-change chain directly into execution for the selected stock."
+			}
+		]
+	}
+]
 const DEBUG_COMPANY_ARC_EVENT_IDS := {
 	"earnings_beat": true,
 	"earnings_miss": true,
@@ -103,6 +347,10 @@ const LOAD_RUN_LOADING_STEPS := [
 const STARTUP_PERF_LOG_PREFIX := "[perf][startup]"
 const ADVANCE_PERF_LOG_PREFIX := "[perf][advance]"
 const DASHBOARD_REPORT_ROW_CACHE_LIMIT := 8
+const FIRST_MONTH_WINDOW_DAYS := 30
+const FIRST_MONTH_LIFE_WARNING_DAYS := 3
+const FIRST_MONTH_DASHBOARD_LOOKAHEAD_DAYS := 5
+const FIRST_MONTH_SAME_DAY_MEETING_CTA_LIMIT := 2
 const DIFFICULTY_PRESETS := {
 	"chill": {
 		"id": "chill",
@@ -186,8 +434,7 @@ func _request_autosave(reason: String) -> void:
 func _save_active_run_now(reason: String) -> bool:
 	if not RunState.has_active_run():
 		return false
-	SaveManager.request_save(reason, 0.0)
-	return SaveManager.flush_pending_save()
+	return SaveManager.save_current_run_now(reason)
 
 
 func _flush_pending_save_if_needed() -> bool:
@@ -200,10 +447,15 @@ func flush_pending_save_if_needed() -> bool:
 	return _flush_pending_save_if_needed()
 
 
+func save_active_run_now(reason: String = "manual_save") -> bool:
+	return _save_active_run_now(reason)
+
+
 func start_new_run(run_seed: int = 0, difficulty_id: String = DEFAULT_DIFFICULTY_ID, tutorial_enabled: bool = false) -> void:
 	if run_seed == 0:
 		run_seed = int(Time.get_unix_time_from_system())
 
+	SaveManager.prepare_slot_for_new_run()
 	var difficulty_config: Dictionary = get_difficulty_config(difficulty_id)
 	var company_definitions: Array = build_company_roster(run_seed, difficulty_config)
 	RunState.setup_new_run(run_seed, company_definitions, difficulty_config, tutorial_enabled)
@@ -225,6 +477,7 @@ func start_new_run_with_loading(
 	if run_seed == 0:
 		run_seed = int(Time.get_unix_time_from_system())
 
+	SaveManager.prepare_slot_for_new_run()
 	var difficulty_config: Dictionary = get_difficulty_config(difficulty_id)
 	background_company_detail_hydration_running = false
 	loading_detail_log_lines.clear()
@@ -280,8 +533,8 @@ func start_new_run_with_loading(
 	_log_startup_perf_elapsed("new_run_enter_game_scene", launch_started_at_usec)
 
 
-func load_run_from_save() -> bool:
-	var saved_run: Dictionary = SaveManager.load_run()
+func load_run_from_save(slot_id: String = "") -> bool:
+	var saved_run: Dictionary = SaveManager.load_run(slot_id)
 	if saved_run.is_empty():
 		return false
 
@@ -295,12 +548,12 @@ func load_run_from_save() -> bool:
 	return true
 
 
-func load_run_from_save_with_loading() -> bool:
+func load_run_from_save_with_loading(slot_id: String = "") -> bool:
 	_emit_load_run_loading_step(0)
 	await get_tree().process_frame
 
 	var load_started_at_usec: int = Time.get_ticks_usec()
-	var saved_run: Dictionary = SaveManager.load_run()
+	var saved_run: Dictionary = SaveManager.load_run(slot_id)
 	_log_startup_perf_elapsed("load_run_read_parse", load_started_at_usec)
 	if saved_run.is_empty():
 		run_loading_finished.emit()
@@ -368,14 +621,22 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	var day_result: Dictionary = market_simulator.simulate_day(RunState, DataRepository, broker_flow_system, corporate_action_system)
 	_log_advance_perf_elapsed(log_advance_perf, "simulate_day", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
+	var previous_trade_date: Dictionary = RunState.current_trade_date.duplicate(true)
 	RunState.apply_day_result(day_result)
 	_log_advance_perf_elapsed(log_advance_perf, "apply_day_result", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
+	var life_obligation_result: Dictionary = _apply_life_monthly_obligation_if_due(previous_trade_date, RunState.current_trade_date)
+	_log_advance_perf_elapsed(log_advance_perf, "apply_life_obligation", phase_started_at_usec, " amount=%.2f" % float(life_obligation_result.get("amount", 0.0)))
 	phase_started_at_usec = Time.get_ticks_usec()
 	var network_results: Array = contact_network_system.process_due_requests(RunState, DataRepository)
 	_log_advance_perf_elapsed(log_advance_perf, "process_due_requests", phase_started_at_usec, " count=%d" % network_results.size())
 	phase_started_at_usec = Time.get_ticks_usec()
 	var network_tip_results: Array = contact_network_system.process_due_tip_memories(RunState, DataRepository)
 	_log_advance_perf_elapsed(log_advance_perf, "process_due_tip_memories", phase_started_at_usec, " count=%d" % network_tip_results.size())
+	if not network_results.is_empty():
+		RunState.last_day_results["network_request_results"] = network_results.duplicate(true)
+	if not network_tip_results.is_empty():
+		RunState.last_day_results["network_tip_results"] = network_tip_results.duplicate(true)
 	phase_started_at_usec = Time.get_ticks_usec()
 	_rebuild_dashboard_event_snapshot_cache("", log_advance_perf)
 	_log_advance_perf_elapsed(log_advance_perf, "build_dashboard_event_cache", phase_started_at_usec)
@@ -393,6 +654,10 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 		phase_started_at_usec = Time.get_ticks_usec()
 		daily_actions_changed.emit()
 		_log_advance_perf_elapsed(log_advance_perf, "emit_daily_actions_changed", phase_started_at_usec)
+		if not life_obligation_result.is_empty():
+			phase_started_at_usec = Time.get_ticks_usec()
+			life_changed.emit()
+			_log_advance_perf_elapsed(log_advance_perf, "emit_life_changed", phase_started_at_usec)
 
 	phase_started_at_usec = Time.get_ticks_usec()
 	var summary: Dictionary = summary_system.build_daily_summary(RunState, DataRepository, log_advance_perf)
@@ -596,6 +861,34 @@ func execute_console_command(command_text: String) -> Dictionary:
 	}
 
 
+func get_debug_corporate_action_generator_catalog() -> Array:
+	var groups: Array = []
+	for group_value in DEBUG_CORPORATE_ACTION_GENERATOR_GROUPS:
+		if typeof(group_value) == TYPE_DICTIONARY:
+			groups.append(group_value.duplicate(true))
+	return groups
+
+
+func debug_generate_corporate_action(generator_id: String, company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var generator: Dictionary = _debug_corporate_action_generator_by_id(generator_id)
+	if generator.is_empty():
+		return {"success": false, "message": "Unknown corporate-action generator."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	var method_name: String = str(generator.get("method", ""))
+	if method_name.is_empty() or not has_method(method_name):
+		return {"success": false, "message": "Corporate-action generator is not wired yet."}
+	var generated_value = call(method_name, company_id)
+	if typeof(generated_value) != TYPE_DICTIONARY:
+		return {"success": false, "message": "Corporate-action generator did not return a result."}
+	var result: Dictionary = generated_value
+	result["generator_id"] = str(generator.get("id", generator_id))
+	result["generator_label"] = str(generator.get("full_label", generator.get("label", "Corporate Action")))
+	return result
+
+
 func debug_force_rights_issue_rupslb(company_id: String) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
@@ -776,6 +1069,29 @@ func debug_schedule_next_day_backdoor_listing_rupslb(company_id: String) -> Dict
 	}
 
 
+func debug_schedule_next_day_restructuring_rupslb(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	var holding: Dictionary = RunState.get_holding(company_id)
+	if int(holding.get("shares", 0)) < get_lot_size():
+		return {"success": false, "message": "Own at least 1 lot first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.debug_schedule_next_day_restructuring_rupslb(RunState, DataRepository, company_id)
+	if result.is_empty():
+		return {"success": false, "message": "Could not schedule a next-day restructuring RUPSLB for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("debug_schedule_next_day_restructuring_rupslb")
+	var meeting: Dictionary = result.get("meeting", {}).duplicate(true)
+	return {
+		"success": true,
+		"message": "Scheduled next-day restructuring RUPSLB for %s." % str(meeting.get("ticker", company_id.to_upper())),
+		"chain": result.get("chain", {}).duplicate(true),
+		"meeting": meeting
+	}
+
+
 func debug_schedule_next_day_ceo_change_rupslb(company_id: String) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
@@ -868,13 +1184,13 @@ func get_stock_contact_tip_options(company_id: String) -> Dictionary:
 	var tip_cost: int = get_network_action_cost("tip")
 	if rows.is_empty():
 		var status_text: String = "Meet a relevant Network contact before asking about %s." % ticker
-		var tooltip_text: String = "Discover and meet contacts from News, Profile, or referrals first."
+		var tooltip_text: String = "Discover and meet contacts from News or referrals first."
 		if met_count > 0 and already_asked_count >= met_count:
 			status_text = "You already asked every relevant contact today."
 			tooltip_text = "Wait until tomorrow before asking these contacts for another read."
 		elif met_count > 0:
 			status_text = "No met contact has a clean read on %s yet." % ticker
-			tooltip_text = "Open the company Profile, read linked News, or ask for referrals to discover better contacts."
+			tooltip_text = "Read linked News or ask for referrals to discover better contacts."
 		return {
 			"enabled": false,
 			"company_id": company_id,
@@ -911,6 +1227,199 @@ func ask_stock_contact_tip(company_id: String, contact_id: String = "") -> Dicti
 	if selected_contact_id.is_empty():
 		return {"success": false, "message": "Pick a Network contact first."}
 	return request_contact_tip(selected_contact_id, company_id)
+
+
+func get_governance_control_options(company_id: String) -> Dictionary:
+	var rows: Array = _governance_control_action_rows()
+	if not RunState.has_active_run():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"rows": rows,
+			"status_text": "Start or load a run first.",
+			"tooltip_text": "Start or load a run first."
+		}
+	if company_id.is_empty():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"rows": rows,
+			"status_text": "Pick a stock first.",
+			"tooltip_text": "Select a controlled company first."
+		}
+	var definition: Dictionary = RunState.get_effective_company_definition(company_id, false, false)
+	if definition.is_empty():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"rows": rows,
+			"status_text": "Pick a valid stock first.",
+			"tooltip_text": "Select a valid controlled company first."
+		}
+	var ticker: String = str(definition.get("ticker", company_id.to_upper()))
+	var ownership: Dictionary = get_company_ownership_snapshot(company_id)
+	var ownership_pct: float = float(ownership.get("ownership_pct", 0.0))
+	if not bool(ownership.get("is_control_shareholder", false)):
+		var needed_shares: int = int(ownership.get("control_shares_needed", 0))
+		return {
+			"enabled": false,
+			"company_id": company_id,
+			"rows": rows,
+			"ownership": ownership,
+			"status_text": "Governance locked: own %.2f%% of %s. Need >50%% control%s." % [
+				ownership_pct * 100.0,
+				ticker,
+				" (%d more share(s))" % needed_shares if needed_shares > 0 else ""
+			],
+			"tooltip_text": "Normal shareholders can attend and vote, but agenda-setting unlocks only after majority ownership."
+		}
+	var corporate_snapshot: Dictionary = get_company_corporate_action_snapshot(company_id)
+	if bool(corporate_snapshot.get("has_live_chain", false)):
+		return {
+			"enabled": false,
+			"company_id": company_id,
+			"rows": rows,
+			"ownership": ownership,
+			"status_text": "%s already has a live corporate action." % ticker,
+			"tooltip_text": "Resolve the current corporate-action chain before setting another agenda."
+		}
+	return {
+		"enabled": true,
+		"company_id": company_id,
+		"rows": rows,
+		"ownership": ownership,
+		"status_text": "Majority control unlocked for %s. Pick an agenda for the next RUPSLB." % ticker,
+		"tooltip_text": "Use majority ownership to schedule a company-direction RUPSLB agenda."
+	}
+
+
+func get_company_management_snapshot(selected_company_id: String = "") -> Dictionary:
+	var controlled_rows: Array = []
+	var candidate_rows: Array = []
+	if not RunState.has_active_run():
+		return {
+			"unlocked": false,
+			"controlled_rows": controlled_rows,
+			"candidate_rows": candidate_rows,
+			"selected_company_id": "",
+			"selected_options": get_governance_control_options(""),
+			"status_text": "Start or load a run first."
+		}
+	var holdings: Dictionary = RunState.player_portfolio.get("holdings", {})
+	for company_id_value in holdings.keys():
+		var company_id: String = str(company_id_value)
+		var holding: Dictionary = holdings.get(company_id, {})
+		if int(holding.get("shares", 0)) <= 0:
+			continue
+		var definition: Dictionary = RunState.get_effective_company_definition(company_id, false, false)
+		if definition.is_empty():
+			continue
+		var ownership: Dictionary = get_company_ownership_snapshot(company_id)
+		var row: Dictionary = {
+			"company_id": company_id,
+			"ticker": str(definition.get("ticker", company_id.to_upper())),
+			"name": str(definition.get("name", company_id.to_upper())),
+			"shares_owned": int(ownership.get("shares_owned", 0)),
+			"shares_outstanding": float(ownership.get("shares_outstanding", 0.0)),
+			"ownership_pct": float(ownership.get("ownership_pct", 0.0)),
+			"is_control_shareholder": bool(ownership.get("is_control_shareholder", false)),
+			"control_shares_needed": int(ownership.get("control_shares_needed", 0)),
+			"control_required_shares": int(ownership.get("control_required_shares", 0))
+		}
+		if bool(row.get("is_control_shareholder", false)):
+			controlled_rows.append(row)
+		else:
+			candidate_rows.append(row)
+	controlled_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("ownership_pct", 0.0)) > float(b.get("ownership_pct", 0.0))
+	)
+	candidate_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("ownership_pct", 0.0)) > float(b.get("ownership_pct", 0.0))
+	)
+	var resolved_company_id: String = selected_company_id
+	var controlled_ids: Array = []
+	for row_value in controlled_rows:
+		if typeof(row_value) == TYPE_DICTIONARY:
+			controlled_ids.append(str(row_value.get("company_id", "")))
+	if resolved_company_id.is_empty() or not controlled_ids.has(resolved_company_id):
+		resolved_company_id = str(controlled_rows[0].get("company_id", "")) if not controlled_rows.is_empty() else ""
+	var selected_options: Dictionary = get_governance_control_options(resolved_company_id)
+	var status_text: String = "Company app locked. Own majority control in a listed company to manage corporate direction."
+	if not controlled_rows.is_empty():
+		status_text = "Manage company direction for %d controlled holding(s)." % controlled_rows.size()
+	elif not candidate_rows.is_empty():
+		var lead: Dictionary = candidate_rows[0]
+		status_text = "Closest holding: %s at %.2f%%. Need %d more share(s) for control." % [
+			str(lead.get("ticker", "")),
+			float(lead.get("ownership_pct", 0.0)) * 100.0,
+			int(lead.get("control_shares_needed", 0))
+		]
+	return {
+		"unlocked": not controlled_rows.is_empty(),
+		"controlled_rows": controlled_rows,
+		"candidate_rows": candidate_rows,
+		"selected_company_id": resolved_company_id,
+		"selected_options": selected_options,
+		"status_text": status_text
+	}
+
+
+func request_governance_control_action(company_id: String, action_id: String) -> Dictionary:
+	var option_state: Dictionary = get_governance_control_options(company_id)
+	if not bool(option_state.get("enabled", false)):
+		return {"success": false, "message": str(option_state.get("status_text", "Governance control is locked."))}
+	var action: Dictionary = _governance_control_action_by_id(action_id)
+	if action.is_empty():
+		return {"success": false, "message": "Pick a governance agenda first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.schedule_player_control_rupslb(RunState, DataRepository, company_id, str(action.get("id", "")))
+	if result.is_empty():
+		return {"success": false, "message": "Could not schedule a controlled RUPSLB for that company."}
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("governance_control_request")
+	network_changed.emit()
+	var meeting: Dictionary = result.get("meeting", {}).duplicate(true)
+	return {
+		"success": true,
+		"message": "Majority control used: scheduled %s RUPSLB for %s on %s." % [
+			str(action.get("label", "Corporate Action")),
+			str(meeting.get("ticker", company_id.to_upper())),
+			format_trade_date(meeting.get("trade_date", {}))
+		],
+		"action_id": str(action.get("id", "")),
+		"chain": result.get("chain", {}).duplicate(true),
+		"meeting": meeting
+	}
+
+
+func _governance_control_action_rows() -> Array:
+	var rows: Array = []
+	for action_value in GOVERNANCE_CONTROL_ACTIONS:
+		var action: Dictionary = action_value
+		rows.append(action.duplicate(true))
+	return rows
+
+
+func _governance_control_action_by_id(action_id: String) -> Dictionary:
+	for action_value in GOVERNANCE_CONTROL_ACTIONS:
+		var action: Dictionary = action_value
+		if str(action.get("id", "")) == action_id:
+			return action.duplicate(true)
+	return {}
+
+
+func _debug_corporate_action_generator_by_id(generator_id: String) -> Dictionary:
+	for group_value in DEBUG_CORPORATE_ACTION_GENERATOR_GROUPS:
+		if typeof(group_value) != TYPE_DICTIONARY:
+			continue
+		var group: Dictionary = group_value
+		for generator_value in group.get("generators", []):
+			if typeof(generator_value) != TYPE_DICTIONARY:
+				continue
+			var generator: Dictionary = generator_value
+			if str(generator.get("id", "")) == generator_id:
+				return generator.duplicate(true)
+	return {}
 
 
 func _stock_contact_tip_relevance(contact: Dictionary, company_id: String, sector_id: String) -> Dictionary:
@@ -1138,6 +1647,10 @@ func get_daily_action_snapshot() -> Dictionary:
 	return RunState.get_daily_action_snapshot()
 
 
+func get_thesis_report_action_cost() -> int:
+	return THESIS_REPORT_ACTION_COST
+
+
 func try_spend_daily_action(action_id: String, metadata: Dictionary = {}) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
@@ -1313,6 +1826,10 @@ func _rebuild_dashboard_event_snapshot_cache(cache_key: String = "", log_phase_d
 	_log_advance_perf_elapsed(log_phase_details, "build_dashboard_event_cache:report_calendar", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	var meeting_snapshot: Dictionary = corporate_action_system.get_dashboard_meeting_snapshot(RunState, -1, 12)
+	var prioritized_today_rows: Array = _prioritized_dashboard_meeting_rows(meeting_snapshot.get("today_rows", []), true)
+	var prioritized_upcoming_rows: Array = _prioritized_dashboard_meeting_rows(meeting_snapshot.get("upcoming_rows", []), false)
+	meeting_snapshot["today_rows"] = prioritized_today_rows.duplicate(true)
+	meeting_snapshot["upcoming_rows"] = prioritized_upcoming_rows.duplicate(true)
 	_log_advance_perf_elapsed(log_phase_details, "build_dashboard_event_cache:meeting_snapshot", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	var upcoming_report_rows: Array = RunState.get_upcoming_quarterly_reports(DASHBOARD_REPORT_ROW_CACHE_LIMIT)
@@ -1325,7 +1842,7 @@ func _rebuild_dashboard_event_snapshot_cache(cache_key: String = "", log_phase_d
 		"report_calendar_snapshot": report_calendar_snapshot,
 		"upcoming_report_rows": upcoming_report_rows,
 		"corporate_meeting_snapshot": meeting_snapshot,
-		"upcoming_meeting_rows": meeting_snapshot.get("upcoming_rows", []).duplicate(true)
+		"upcoming_meeting_rows": prioritized_upcoming_rows.duplicate(true)
 	}
 	return dashboard_event_snapshot_cache
 
@@ -1350,6 +1867,48 @@ func _empty_dashboard_event_snapshot() -> Dictionary:
 		},
 		"upcoming_meeting_rows": []
 	}
+
+
+func _prioritized_dashboard_meeting_rows(rows: Array, only_same_day: bool = false) -> Array:
+	var current_trading_day_number: int = max(RunState.day_index + 1, 1)
+	var same_day_rows: Array = []
+	var other_rows: Array = []
+	for row_value in rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value.duplicate(true)
+		if int(row.get("trading_day_number", 0)) == current_trading_day_number:
+			same_day_rows.append(row)
+		elif not only_same_day:
+			other_rows.append(row)
+	same_day_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var left_priority: int = _dashboard_meeting_priority(a)
+		var right_priority: int = _dashboard_meeting_priority(b)
+		if left_priority == right_priority:
+			return str(a.get("ticker", "")) < str(b.get("ticker", ""))
+		return left_priority > right_priority
+	)
+	if same_day_rows.size() > FIRST_MONTH_SAME_DAY_MEETING_CTA_LIMIT:
+		same_day_rows = same_day_rows.slice(0, FIRST_MONTH_SAME_DAY_MEETING_CTA_LIMIT)
+	if only_same_day:
+		return same_day_rows
+	var result: Array = same_day_rows
+	for row_value in other_rows:
+		result.append(row_value)
+	return result
+
+
+func _dashboard_meeting_priority(row: Dictionary) -> int:
+	var company_id: String = str(row.get("company_id", ""))
+	var priority: int = 0
+	var holding: Dictionary = RunState.player_portfolio.get("holdings", {}).get(company_id, {})
+	if int(holding.get("shares", 0)) > 0:
+		priority += 100
+	if RunState.is_in_watchlist(company_id):
+		priority += 50
+	if bool(row.get("interactive_v1", false)):
+		priority += 10
+	return priority
 
 
 func _is_current_report_calendar_month(year_value: int, month_value: int) -> bool:
@@ -1436,6 +1995,7 @@ func start_corporate_meeting_session(meeting_id: String) -> Dictionary:
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	var result: Dictionary = corporate_action_system.start_meeting_session(RunState, DataRepository, meeting_id)
 	if bool(result.get("success", false)):
+		result["session"] = _decorate_corporate_meeting_session_snapshot(result.get("session", {}))
 		_invalidate_dashboard_event_snapshot_cache()
 		_request_autosave("corporate_meeting_session_start")
 		network_changed.emit()
@@ -1446,7 +2006,21 @@ func get_corporate_meeting_session_snapshot(meeting_id: String) -> Dictionary:
 	if not RunState.has_active_run():
 		return {}
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
-	return corporate_action_system.get_meeting_session_snapshot(RunState, DataRepository, meeting_id)
+	return _decorate_corporate_meeting_session_snapshot(
+		corporate_action_system.get_meeting_session_snapshot(RunState, DataRepository, meeting_id)
+	)
+
+
+func _decorate_corporate_meeting_session_snapshot(session_snapshot: Dictionary) -> Dictionary:
+	if session_snapshot.is_empty():
+		return {}
+	return contact_network_system.decorate_meeting_session_snapshot(
+		RunState,
+		DataRepository,
+		session_snapshot,
+		_can_spend_network_action("meet"),
+		get_network_action_cost("meet")
+	)
 
 
 func set_corporate_meeting_session_stage(meeting_id: String, stage_id: String) -> Dictionary:
@@ -1455,6 +2029,7 @@ func set_corporate_meeting_session_stage(meeting_id: String, stage_id: String) -
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	var result: Dictionary = corporate_action_system.set_meeting_session_stage(RunState, DataRepository, meeting_id, stage_id)
 	if bool(result.get("success", false)):
+		result["session"] = _decorate_corporate_meeting_session_snapshot(result.get("session", {}))
 		_request_autosave("corporate_meeting_session_stage")
 	return result
 
@@ -1478,8 +2053,34 @@ func submit_corporate_meeting_vote(meeting_id: String, agenda_id: String, vote_c
 		ownership_snapshot
 	)
 	if bool(result.get("success", false)):
+		result["session"] = _decorate_corporate_meeting_session_snapshot(result.get("session", {}))
 		_invalidate_dashboard_event_snapshot_cache()
 		_request_autosave("corporate_meeting_vote")
+		network_changed.emit()
+	return result
+
+
+func approach_corporate_meeting_lead(meeting_id: String, lead_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if not _can_spend_network_action("meet"):
+		return {"success": false, "message": _network_action_no_ap_message("meet")}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var session_snapshot: Dictionary = get_corporate_meeting_session_snapshot(meeting_id)
+	var result: Dictionary = contact_network_system.approach_meeting_lead(
+		RunState,
+		DataRepository,
+		session_snapshot,
+		lead_id,
+		true,
+		get_network_action_cost("meet")
+	)
+	if bool(result.get("success", false)):
+		_spend_network_action("meet")
+		result["action_cost"] = get_network_action_cost("meet")
+		_invalidate_daily_activity_snapshot_cache()
+		_request_autosave("meeting_lead_approach")
+		daily_actions_changed.emit()
 		network_changed.emit()
 	return result
 
@@ -1506,6 +2107,9 @@ func get_company_ownership_snapshot(company_id: String) -> Dictionary:
 		0.0
 	)
 	var shares_owned: int = int(holding.get("shares", 0))
+	var control_required_shares: int = 0
+	if shares_outstanding > 0.0:
+		control_required_shares = int(floor(shares_outstanding * PLAYER_CONTROL_SHAREHOLDER_THRESHOLD)) + 1
 	var ownership_pct: float = 0.0
 	if shares_outstanding > 0.0:
 		ownership_pct = clamp(float(shares_owned) / shares_outstanding, 0.0, 1.0)
@@ -1527,7 +2131,7 @@ func get_company_ownership_snapshot(company_id: String) -> Dictionary:
 		shareholder_rows.append({
 			"name": "Player",
 			"ownership_pct": ownership_pct,
-			"role": "Major shareholder"
+			"role": "Controlling shareholder" if control_required_shares > 0 and shares_owned >= control_required_shares else "Major shareholder"
 		})
 	if public_float_pct > 0.0:
 		shareholder_rows.append({
@@ -1548,6 +2152,10 @@ func get_company_ownership_snapshot(company_id: String) -> Dictionary:
 		"public_pct": public_float_pct,
 		"is_major_shareholder": ownership_pct >= PLAYER_MAJOR_SHAREHOLDER_THRESHOLD,
 		"major_shareholder_threshold": PLAYER_MAJOR_SHAREHOLDER_THRESHOLD,
+		"is_control_shareholder": control_required_shares > 0 and shares_owned >= control_required_shares,
+		"control_shareholder_threshold": PLAYER_CONTROL_SHAREHOLDER_THRESHOLD,
+		"control_required_shares": control_required_shares,
+		"control_shares_needed": max(control_required_shares - shares_owned, 0),
 		"shareholder_rows": shareholder_rows
 	}
 
@@ -1882,6 +2490,66 @@ func get_portfolio_snapshot() -> Dictionary:
 	}
 
 
+func get_first_month_balance_snapshot() -> Dictionary:
+	if not RunState.has_active_run():
+		return {
+			"day_index": 0,
+			"trading_day_number": 1,
+			"cash": STARTING_CASH,
+			"equity": STARTING_CASH,
+			"monthly_outflow": 8500000.0,
+			"runway_months": STARTING_CASH / 8500000.0,
+			"next_life_payment": {},
+			"daily_action": {"used": 0, "remaining": 10, "limit": 10},
+			"active_corporate_chains": [],
+			"upcoming_meetings": [],
+			"next_five_trading_days": [],
+			"warning_rows": []
+		}
+
+	var portfolio: Dictionary = get_portfolio_snapshot()
+	var life: Dictionary = get_life_snapshot()
+	var daily_action: Dictionary = get_daily_action_snapshot()
+	var monthly_outflow: float = max(float(life.get("monthly_outflow", 8500000.0)), 0.0)
+	var cash: float = float(portfolio.get("cash", 0.0))
+	var runway_months: float = 999.0
+	if monthly_outflow > 0.0:
+		runway_months = cash / monthly_outflow
+	var active_chain_rows: Array = _first_month_active_corporate_chain_rows()
+	var dashboard_events: Dictionary = get_dashboard_event_snapshot()
+	var upcoming_meeting_rows: Array = dashboard_events.get("upcoming_meeting_rows", []).duplicate(true)
+	var next_life_payment: Dictionary = life.get("next_life_payment", {}).duplicate(true)
+	var next_five_rows: Array = _build_first_month_next_five_rows(life, dashboard_events, active_chain_rows)
+	var warning_rows: Array = _build_first_month_warning_rows(
+		cash,
+		monthly_outflow,
+		runway_months,
+		next_life_payment,
+		daily_action,
+		active_chain_rows
+	)
+	return {
+		"day_index": RunState.day_index,
+		"trading_day_number": max(RunState.day_index + 1, 1),
+		"trade_date": get_current_trade_date(),
+		"cash": cash,
+		"equity": float(portfolio.get("equity", 0.0)),
+		"monthly_outflow": monthly_outflow,
+		"runway_months": runway_months,
+		"next_life_payment": next_life_payment,
+		"daily_action": daily_action,
+		"ap_used": int(daily_action.get("used", 0)),
+		"ap_remaining": int(daily_action.get("remaining", 0)),
+		"ap_limit": int(daily_action.get("limit", 0)),
+		"active_corporate_chains": active_chain_rows,
+		"active_corporate_chain_count": active_chain_rows.size(),
+		"upcoming_meetings": upcoming_meeting_rows,
+		"upcoming_meeting_count": upcoming_meeting_rows.size(),
+		"next_five_trading_days": next_five_rows,
+		"warning_rows": warning_rows
+	}
+
+
 func get_life_snapshot() -> Dictionary:
 	if not RunState.has_active_run():
 		return {}
@@ -1901,6 +2569,7 @@ func get_life_snapshot() -> Dictionary:
 	var runway_months: float = 999.0
 	if monthly_outflow > 0.0:
 		runway_months = cash / monthly_outflow
+	var next_life_payment: Dictionary = _build_next_life_payment_snapshot(monthly_outflow)
 	var status_label: String = "Comfortable runway"
 	if runway_months < 6.0:
 		status_label = "Cash pressure"
@@ -1922,6 +2591,7 @@ func get_life_snapshot() -> Dictionary:
 		"basic_expenses_monthly": LIFE_BASIC_EXPENSES_MONTHLY,
 		"monthly_extra": monthly_extra,
 		"monthly_outflow": monthly_outflow,
+		"next_life_payment": next_life_payment,
 		"estimated_monthly_dividends": estimated_monthly_dividends,
 		"estimated_annual_dividends": estimated_monthly_dividends * 12.0,
 		"declared_dividend_total_12m": float(dividend_projection.get("declared_dividend_total_12m", 0.0)),
@@ -1929,8 +2599,239 @@ func get_life_snapshot() -> Dictionary:
 		"runway_months": runway_months,
 		"status_label": status_label,
 		"dividend_rows": dividend_projection.get("rows", []).duplicate(true),
-		"note": "Planning view only. Monthly costs do not deduct cash yet; dividends only count after corporate actions are declared."
+		"note": "Monthly costs deduct cash on the first trading day of each new month. Dividends only count after corporate actions are declared."
 	}
+
+
+func _build_next_life_payment_snapshot(monthly_outflow: float = -1.0) -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+	var resolved_outflow: float = monthly_outflow
+	if resolved_outflow < 0.0:
+		var obligation: Dictionary = _build_life_monthly_obligation()
+		resolved_outflow = float(obligation.get("amount", 8500000.0))
+	resolved_outflow = max(resolved_outflow, 0.0)
+	var current_trade_date: Dictionary = get_current_trade_date()
+	var current_year: int = int(current_trade_date.get("year", 2020))
+	var current_month: int = int(current_trade_date.get("month", 1))
+	for offset in range(1, 34):
+		var candidate_date: Dictionary = trading_calendar.advance_trade_days(current_trade_date, offset)
+		if (
+			int(candidate_date.get("year", current_year)) != current_year or
+			int(candidate_date.get("month", current_month)) != current_month
+		):
+			var trading_day_number: int = trading_calendar.trade_index_for_date(candidate_date)
+			return {
+				"trade_date": candidate_date,
+				"date_key": trading_calendar.to_key(candidate_date),
+				"date_text": format_trade_date(candidate_date),
+				"amount": resolved_outflow,
+				"due_in_trading_days": offset,
+				"trading_day_number": trading_day_number,
+				"warning": offset <= FIRST_MONTH_LIFE_WARNING_DAYS
+			}
+	return {}
+
+
+func _first_month_active_corporate_chain_rows() -> Array:
+	var rows: Array = []
+	var chains: Dictionary = RunState.get_active_corporate_action_chains()
+	var chain_ids: Array = chains.keys()
+	chain_ids.sort()
+	for chain_id_value in chain_ids:
+		var chain_id: String = str(chain_id_value)
+		var chain: Dictionary = chains.get(chain_id, {})
+		if chain.is_empty():
+			continue
+		var request_source: String = str(chain.get("request_source", "organic"))
+		var company_id: String = str(chain.get("company_id", ""))
+		var ticker: String = str(chain.get("target_ticker", ""))
+		if ticker.is_empty() and not company_id.is_empty():
+			ticker = str(RunState.get_effective_company_definition(company_id).get("ticker", company_id.to_upper()))
+		rows.append({
+			"chain_id": chain_id,
+			"company_id": company_id,
+			"ticker": ticker,
+			"family": str(chain.get("family", "")),
+			"family_label": str(chain.get("family_label", chain.get("family", "Corporate action"))),
+			"stage": str(chain.get("stage", "")),
+			"status": str(chain.get("status", "active")),
+			"next_review_day_number": int(chain.get("next_review_day_index", chain.get("last_advanced_day_index", RunState.day_index + 1))),
+			"request_source": request_source,
+			"organic": _is_organic_corporate_chain_source(request_source)
+		})
+	return rows
+
+
+func _is_organic_corporate_chain_source(request_source: String) -> bool:
+	var normalized_source: String = request_source.strip_edges()
+	if normalized_source.is_empty() or normalized_source == "organic":
+		return true
+	if normalized_source == "guided_first_hour":
+		return false
+	return not normalized_source.begins_with("debug")
+
+
+func _build_first_month_next_five_rows(life: Dictionary, dashboard_events: Dictionary, active_chain_rows: Array) -> Array:
+	var lookahead: Dictionary = {}
+	var current_trade_date: Dictionary = get_current_trade_date()
+	for offset in range(FIRST_MONTH_DASHBOARD_LOOKAHEAD_DAYS):
+		var candidate_date: Dictionary = trading_calendar.advance_trade_days(current_trade_date, offset)
+		lookahead[trading_calendar.to_key(candidate_date)] = {
+			"trade_date": candidate_date,
+			"due_in_trading_days": offset
+		}
+
+	var rows: Array = []
+	var next_life_payment: Dictionary = life.get("next_life_payment", {})
+	var life_key: String = str(next_life_payment.get("date_key", ""))
+	if lookahead.has(life_key):
+		var life_day: Dictionary = lookahead.get(life_key, {})
+		rows.append({
+			"type": "life",
+			"priority": 100,
+			"sort_key": "%s|0|life" % life_key,
+			"trade_date": next_life_payment.get("trade_date", {}),
+			"date_text": str(next_life_payment.get("date_text", "")),
+			"due_in_trading_days": int(life_day.get("due_in_trading_days", next_life_payment.get("due_in_trading_days", 0))),
+			"label": "Life payment",
+			"detail": "Due %s for %s." % [
+				str(next_life_payment.get("date_text", "")),
+				_format_currency_compact(float(next_life_payment.get("amount", 0.0)))
+			]
+		})
+
+	for meeting_value in dashboard_events.get("upcoming_meeting_rows", []):
+		if typeof(meeting_value) != TYPE_DICTIONARY:
+			continue
+		var meeting: Dictionary = meeting_value
+		var meeting_date: Dictionary = meeting.get("trade_date", {})
+		var meeting_key: String = trading_calendar.to_key(meeting_date)
+		if not lookahead.has(meeting_key):
+			continue
+		var priority: int = 70
+		if bool(meeting.get("interactive_v1", false)):
+			priority += 10
+		rows.append({
+			"type": "meeting",
+			"priority": priority,
+			"sort_key": "%s|1|%s" % [meeting_key, str(meeting.get("ticker", ""))],
+			"trade_date": meeting_date,
+			"date_text": format_trade_date(meeting_date),
+			"due_in_trading_days": int(lookahead.get(meeting_key, {}).get("due_in_trading_days", 0)),
+			"company_id": str(meeting.get("company_id", "")),
+			"ticker": str(meeting.get("ticker", "")),
+			"label": "%s %s" % [str(meeting.get("ticker", "")), str(meeting.get("meeting_label", "Meeting"))],
+			"detail": str(meeting.get("public_summary", "Upcoming meeting."))
+		})
+
+	for report_value in dashboard_events.get("upcoming_report_rows", []):
+		if typeof(report_value) != TYPE_DICTIONARY:
+			continue
+		var report: Dictionary = report_value
+		var report_date: Dictionary = report.get("report_date", {})
+		var report_key: String = str(report.get("date_key", trading_calendar.to_key(report_date)))
+		if not lookahead.has(report_key):
+			continue
+		rows.append({
+			"type": "report",
+			"priority": 50,
+			"sort_key": "%s|2|%s" % [report_key, str(report.get("ticker", ""))],
+			"trade_date": report_date,
+			"date_text": format_trade_date(report_date),
+			"due_in_trading_days": int(lookahead.get(report_key, {}).get("due_in_trading_days", 0)),
+			"company_id": str(report.get("company_id", "")),
+			"ticker": str(report.get("ticker", "")),
+			"label": "%s report" % str(report.get("ticker", "")),
+			"detail": str(report.get("period_label", "Quarterly filing"))
+		})
+
+	for chain_value in active_chain_rows:
+		if typeof(chain_value) != TYPE_DICTIONARY:
+			continue
+		var chain: Dictionary = chain_value
+		var next_review_day_number: int = int(chain.get("next_review_day_number", 0))
+		if next_review_day_number <= 0:
+			continue
+		var chain_date: Dictionary = trading_calendar.trade_date_for_index(next_review_day_number)
+		var chain_key: String = trading_calendar.to_key(chain_date)
+		if not lookahead.has(chain_key):
+			continue
+		rows.append({
+			"type": "corporate",
+			"priority": 45,
+			"sort_key": "%s|3|%s" % [chain_key, str(chain.get("ticker", ""))],
+			"trade_date": chain_date,
+			"date_text": format_trade_date(chain_date),
+			"due_in_trading_days": int(lookahead.get(chain_key, {}).get("due_in_trading_days", 0)),
+			"company_id": str(chain.get("company_id", "")),
+			"ticker": str(chain.get("ticker", "")),
+			"label": "%s corporate action" % str(chain.get("ticker", "")),
+			"detail": "%s is in %s." % [
+				str(chain.get("family_label", "Corporate action")),
+				str(chain.get("stage", "review")).replace("_", " ")
+			]
+		})
+
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if str(a.get("sort_key", "")) == str(b.get("sort_key", "")):
+			return int(a.get("priority", 0)) > int(b.get("priority", 0))
+		return str(a.get("sort_key", "")) < str(b.get("sort_key", ""))
+	)
+	if rows.size() > 8:
+		rows = rows.slice(0, 8)
+	return rows
+
+
+func _build_first_month_warning_rows(
+	cash: float,
+	monthly_outflow: float,
+	runway_months: float,
+	next_life_payment: Dictionary,
+	daily_action: Dictionary,
+	active_chain_rows: Array
+) -> Array:
+	var rows: Array = []
+	if not next_life_payment.is_empty() and bool(next_life_payment.get("warning", false)):
+		rows.append({
+			"id": "life_due",
+			"severity": "warning",
+			"text": "Next Life payment: %s due %s." % [
+				_format_currency_compact(float(next_life_payment.get("amount", monthly_outflow))),
+				str(next_life_payment.get("date_text", "soon"))
+			]
+		})
+	var remaining_ap: int = int(daily_action.get("remaining", 0))
+	var limit_ap: int = int(daily_action.get("limit", 0))
+	if limit_ap > 0 and remaining_ap <= 2:
+		rows.append({
+			"id": "low_ap",
+			"severity": "note",
+			"text": "AP pressure: %d AP left. Basic trading, chart reading, Portfolio, and Dashboard review still work." % remaining_ap
+		})
+	if monthly_outflow > 0.0 and cash < monthly_outflow:
+		rows.append({
+			"id": "cash_below_month",
+			"severity": "warning",
+			"text": "Cash is below one month of Life costs; raise cash before the next due date."
+		})
+	elif monthly_outflow > 0.0 and runway_months < 3.0:
+		rows.append({
+			"id": "thin_runway",
+			"severity": "note",
+			"text": "Runway is %.1f months. Keep new positions small until cash recovers." % runway_months
+		})
+	var organic_count: int = 0
+	for chain_value in active_chain_rows:
+		if typeof(chain_value) == TYPE_DICTIONARY and bool(chain_value.get("organic", true)):
+			organic_count += 1
+	if RunState.day_index + 1 <= FIRST_MONTH_WINDOW_DAYS and organic_count >= 2:
+		rows.append({
+			"id": "busy_corporate_tape",
+			"severity": "note",
+			"text": "Corporate tape is busy: %d organic chains are live. Prioritize held or watched names." % organic_count
+		})
+	return rows
 
 
 func set_life_plan(housing_id: String, lifestyle_id: String) -> Dictionary:
@@ -1950,6 +2851,66 @@ func set_life_plan(housing_id: String, lifestyle_id: String) -> Dictionary:
 		"success": true,
 		"message": "Life plan updated.",
 		"snapshot": get_life_snapshot()
+	}
+
+
+func _apply_life_monthly_obligation_if_due(previous_trade_date: Dictionary, current_trade_date: Dictionary) -> Dictionary:
+	if previous_trade_date.is_empty() or current_trade_date.is_empty():
+		return {}
+	var previous_year: int = int(previous_trade_date.get("year", 0))
+	var previous_month: int = int(previous_trade_date.get("month", 0))
+	var current_year: int = int(current_trade_date.get("year", 0))
+	var current_month: int = int(current_trade_date.get("month", 0))
+	if previous_year == current_year and previous_month == current_month:
+		return {}
+	if current_year <= 0 or current_month <= 0:
+		return {}
+
+	var obligation: Dictionary = _build_life_monthly_obligation()
+	var amount: float = float(obligation.get("amount", 0.0))
+	if amount <= 0.0:
+		return {}
+
+	var period_id: String = "%04d-%02d" % [current_year, current_month]
+	var life_state: Dictionary = RunState.get_player_life()
+	if str(life_state.get("last_obligation_period", "")) == period_id:
+		return {}
+
+	obligation["period_id"] = period_id
+	obligation["trade_date"] = current_trade_date.duplicate(true)
+	var result: Dictionary = RunState.apply_cash_obligation("life_obligation", amount, obligation)
+	if not bool(result.get("success", false)):
+		return {}
+
+	life_state["last_obligation_period"] = period_id
+	life_state["last_obligation_day_index"] = RunState.day_index
+	life_state["last_obligation_amount"] = amount
+	life_state["last_obligation_trade_date"] = current_trade_date.duplicate(true)
+	RunState.set_player_life(life_state)
+	RunState.last_day_results["life_obligation"] = result.duplicate(true)
+	return result
+
+
+func _build_life_monthly_obligation() -> Dictionary:
+	var life_state: Dictionary = RunState.get_player_life()
+	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, str(life_state.get("housing_id", "")))
+	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, str(life_state.get("lifestyle_id", "")))
+	var housing_cost: float = max(float(housing.get("monthly_cost", 0.0)), 0.0)
+	var lifestyle_cost: float = max(float(lifestyle.get("monthly_cost", 0.0)), 0.0)
+	var monthly_extra: float = max(float(life_state.get("monthly_extra", 0.0)), 0.0)
+	var amount: float = housing_cost + LIFE_BASIC_EXPENSES_MONTHLY + lifestyle_cost + monthly_extra
+	return {
+		"company_id": "life",
+		"side": "life_obligation",
+		"amount": amount,
+		"housing_id": str(housing.get("id", "")),
+		"housing_label": str(housing.get("label", "")),
+		"housing_cost": housing_cost,
+		"basic_expenses": LIFE_BASIC_EXPENSES_MONTHLY,
+		"lifestyle_id": str(lifestyle.get("id", "")),
+		"lifestyle_label": str(lifestyle.get("label", "")),
+		"lifestyle_cost": lifestyle_cost,
+		"monthly_extra": monthly_extra
 	}
 
 
@@ -2091,13 +3052,17 @@ func get_daily_recap_snapshot() -> Dictionary:
 	var dashboard_event_snapshot: Dictionary = get_dashboard_event_snapshot()
 	var daily_activity_snapshot: Dictionary = get_daily_activity_snapshot()
 	var activity_counts: Dictionary = daily_activity_snapshot.get("activity_counts", {}).duplicate(true)
+	var first_month_balance_snapshot: Dictionary = get_first_month_balance_snapshot()
 	return {
 		"day_index": RunState.day_index,
 		"trade_date": get_current_trade_date(),
 		"summary": summary,
 		"market_sentiment": RunState.market_sentiment,
 		"portfolio": get_portfolio_snapshot(),
+		"life": get_life_snapshot(),
+		"last_day_results": RunState.last_day_results.duplicate(true),
 		"dashboard_events": dashboard_event_snapshot,
+		"first_month_balance": first_month_balance_snapshot,
 		"activity_counts": activity_counts,
 		"badges": get_desktop_app_badge_snapshot(activity_counts),
 		"daily_action": get_daily_action_snapshot()
@@ -2931,20 +3896,45 @@ func remove_thesis_evidence(thesis_id: String, evidence_id: String) -> Dictionar
 
 
 func generate_thesis_report(thesis_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run.", "action_cost": THESIS_REPORT_ACTION_COST}
+	if not RunState.can_spend_daily_action(THESIS_REPORT_ACTION_COST):
+		return {
+			"success": false,
+			"message": "Need %d AP to generate a Thesis report." % THESIS_REPORT_ACTION_COST,
+			"action_cost": THESIS_REPORT_ACTION_COST,
+			"snapshot": RunState.get_daily_action_snapshot()
+		}
 	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
 	if thesis.is_empty():
-		return {"success": false, "message": "Unknown thesis."}
+		return {"success": false, "message": "Unknown thesis.", "action_cost": THESIS_REPORT_ACTION_COST}
 	var context: Dictionary = _thesis_report_context(str(thesis.get("company_id", "")))
 	var report: Dictionary = thesis_report_system.build_report(thesis, context)
 	if report.is_empty():
-		return {"success": false, "message": "Could not generate report for this thesis."}
+		return {"success": false, "message": "Could not generate report for this thesis.", "action_cost": THESIS_REPORT_ACTION_COST}
+	var spend_result: Dictionary = RunState.spend_daily_action(THESIS_REPORT_ACTION_COST)
+	if not bool(spend_result.get("success", false)):
+		return {
+			"success": false,
+			"message": "Need %d AP to generate a Thesis report." % THESIS_REPORT_ACTION_COST,
+			"action_cost": THESIS_REPORT_ACTION_COST,
+			"snapshot": RunState.get_daily_action_snapshot()
+		}
 	thesis["report"] = report
 	thesis["review"] = thesis_report_system.build_review(thesis, context)
 	thesis["updated_day_index"] = RunState.day_index
 	RunState.set_player_thesis(thesis)
 	_request_autosave("thesis_generate_report")
+	daily_actions_changed.emit()
 	thesis_changed.emit()
-	return {"success": true, "message": "Research note generated.", "thesis": thesis, "report": report}
+	return {
+		"success": true,
+		"message": "Research note generated. Spent %d AP." % THESIS_REPORT_ACTION_COST,
+		"thesis": thesis,
+		"report": report,
+		"action_cost": THESIS_REPORT_ACTION_COST,
+		"snapshot": spend_result.get("snapshot", RunState.get_daily_action_snapshot())
+	}
 
 
 func refresh_thesis_review(thesis_id: String) -> Dictionary:
@@ -3563,6 +4553,18 @@ func format_trade_date(date_info: Dictionary) -> String:
 	return trading_calendar.format_date(date_info)
 
 
+func _format_currency_compact(value: float) -> String:
+	var absolute_value: float = absf(value)
+	var sign: String = "-" if value < 0.0 else ""
+	if absolute_value >= 1000000000000.0:
+		return "%sRp%sT" % [sign, String.num(absolute_value / 1000000000000.0, 2)]
+	if absolute_value >= 1000000000.0:
+		return "%sRp%sB" % [sign, String.num(absolute_value / 1000000000.0, 2)]
+	if absolute_value >= 1000000.0:
+		return "%sRp%sM" % [sign, String.num(absolute_value / 1000000.0, 2)]
+	return "%sRp%s" % [sign, String.num(absolute_value, 2)]
+
+
 func should_show_tutorial() -> bool:
 	return RunState.should_show_tutorial()
 
@@ -3570,6 +4572,149 @@ func should_show_tutorial() -> bool:
 func mark_tutorial_shown() -> void:
 	RunState.mark_tutorial_shown()
 	_request_autosave("tutorial_shown")
+
+
+func get_ftue_snapshot() -> Dictionary:
+	return RunState.get_ftue_snapshot()
+
+
+func advance_ftue_step(step_id: String = "") -> bool:
+	var advanced: bool = RunState.advance_ftue_step(step_id)
+	if advanced:
+		_request_autosave("ftue_advance")
+	return advanced
+
+
+func skip_ftue() -> bool:
+	var skipped: bool = RunState.skip_ftue()
+	if skipped:
+		_request_autosave("ftue_skip")
+	return skipped
+
+
+func mark_ftue_completed() -> bool:
+	var completed: bool = RunState.mark_ftue_completed()
+	if completed:
+		_request_autosave("ftue_completed")
+	return completed
+
+
+func should_show_first_hour_guide() -> bool:
+	return RunState.should_show_first_hour_guide()
+
+
+func get_first_hour_guide_snapshot() -> Dictionary:
+	var snapshot: Dictionary = RunState.get_first_hour_guide_snapshot()
+	var anchor_company_id: String = str(snapshot.get("anchor_company_id", ""))
+	if not anchor_company_id.is_empty():
+		var definition: Dictionary = RunState.get_effective_company_definition(anchor_company_id, false, false)
+		snapshot["anchor_ticker"] = str(definition.get("ticker", anchor_company_id.to_upper()))
+		snapshot["anchor_company_name"] = str(definition.get("name", anchor_company_id.to_upper()))
+	else:
+		snapshot["anchor_ticker"] = ""
+		snapshot["anchor_company_name"] = ""
+	if not str(snapshot.get("seeded_meeting_id", "")).is_empty():
+		var detail: Dictionary = get_corporate_meeting_detail(str(snapshot.get("seeded_meeting_id", "")))
+		snapshot["seeded_meeting"] = detail
+	return snapshot
+
+
+func advance_first_hour_guide_step(step_id: String = "") -> bool:
+	var advanced: bool = RunState.advance_first_hour_guide_step(step_id)
+	if advanced:
+		_request_autosave("first_hour_guide_advance")
+	return advanced
+
+
+func skip_first_hour_guide() -> bool:
+	var skipped: bool = RunState.skip_first_hour_guide()
+	if skipped:
+		_request_autosave("first_hour_guide_skip")
+	return skipped
+
+
+func mark_first_hour_guide_completed() -> bool:
+	var completed: bool = RunState.mark_first_hour_guide_completed()
+	if completed:
+		_request_autosave("first_hour_guide_completed")
+	return completed
+
+
+func ensure_first_hour_guide_hook() -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	if not RunState.should_show_first_hour_guide():
+		return {"success": false, "message": "Guided First Week is not active."}
+	var snapshot: Dictionary = RunState.get_first_hour_guide_snapshot()
+	if str(snapshot.get("current_step_id", "")) != "seeded_rupslb":
+		return {"success": false, "message": "The guided RUPSLB hook is not due yet."}
+
+	var existing_meeting_id: String = str(snapshot.get("seeded_meeting_id", "")).strip_edges()
+	var existing_chain_id: String = str(snapshot.get("seeded_chain_id", "")).strip_edges()
+	if not existing_meeting_id.is_empty() and not get_corporate_meeting_detail(existing_meeting_id).is_empty():
+		return {
+			"success": true,
+			"message": "Guided RUPSLB already scheduled.",
+			"meeting": get_corporate_meeting_detail(existing_meeting_id),
+			"chain": RunState.get_active_corporate_action_chains().get(existing_chain_id, {}).duplicate(true)
+		}
+
+	var company_id: String = _eligible_first_hour_guide_company_id(str(snapshot.get("anchor_company_id", "")))
+	if company_id.is_empty():
+		return {
+			"success": false,
+			"blocked": true,
+			"message": "Buy or hold one stock to unlock the first event."
+		}
+	if RunState.set_first_hour_guide_anchor_company_id(company_id):
+		_request_autosave("first_hour_guide_anchor")
+
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = corporate_action_system.schedule_guided_first_hour_stock_split_rupslb(
+		RunState,
+		DataRepository,
+		company_id
+	)
+	if result.is_empty():
+		return {
+			"success": false,
+			"blocked": true,
+			"message": "A live corporate action is already using that stock. Hold another stock to unlock the first event."
+		}
+
+	var chain: Dictionary = result.get("chain", {}).duplicate(true)
+	var meeting: Dictionary = result.get("meeting", {}).duplicate(true)
+	RunState.set_first_hour_guide_seeded_hook(str(chain.get("chain_id", "")), str(meeting.get("id", "")))
+	_invalidate_dashboard_event_snapshot_cache()
+	_request_autosave("first_hour_guide_seeded_rupslb")
+	return {
+		"success": true,
+		"message": "Guided stock-split RUPSLB scheduled for %s." % str(meeting.get("ticker", company_id.to_upper())),
+		"chain": chain,
+		"meeting": meeting
+	}
+
+
+func _eligible_first_hour_guide_company_id(preferred_company_id: String = "") -> String:
+	var preferred_id: String = preferred_company_id.strip_edges()
+	if _is_first_hour_guide_company_eligible(preferred_id):
+		return preferred_id
+	var holdings: Dictionary = RunState.player_portfolio.get("holdings", {})
+	var candidates: Array = []
+	for company_id_value in holdings.keys():
+		var company_id: String = str(company_id_value)
+		if _is_first_hour_guide_company_eligible(company_id):
+			candidates.append(company_id)
+	candidates.sort()
+	return str(candidates[0]) if not candidates.is_empty() else ""
+
+
+func _is_first_hour_guide_company_eligible(company_id: String) -> bool:
+	if company_id.is_empty() or RunState.get_company(company_id).is_empty():
+		return false
+	if int(RunState.get_holding(company_id).get("shares", 0)) < get_lot_size():
+		return false
+	return not bool(get_company_corporate_action_snapshot(company_id).get("has_live_chain", false))
 
 
 func get_lot_size() -> int:

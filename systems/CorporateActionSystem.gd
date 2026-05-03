@@ -8,6 +8,9 @@ const DIFFICULTY_CHAIN_CAP := {
 	"normal": 3,
 	"grind": 5
 }
+const NORMAL_ORGANIC_START_DAY := 8
+const NORMAL_ORGANIC_CAP_DAY_15 := 1
+const NORMAL_ORGANIC_CAP_DAY_25 := 2
 const V1_FAMILY_IDS := {
 	"rights_issue": true,
 	"stock_buyback": true,
@@ -441,6 +444,7 @@ func get_company_snapshot(run_state, company_id: String) -> Dictionary:
 			"current_timeline_state": str(chain.get("current_timeline_state", "")),
 			"management_stance": str(chain.get("management_stance", "")),
 			"meeting_id": visible_meeting_id,
+			"request_source": str(chain.get("request_source", "")),
 			"public_summary": _meeting_public_summary(chain),
 			"intel_summary": _intel_summary(intel_bucket),
 			"intel_confidence": str(intel_bucket.get("confidence", ""))
@@ -943,6 +947,16 @@ func debug_schedule_next_day_stock_split_rupslb(run_state, data_repository, comp
 	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "stock_split")
 
 
+func schedule_guided_first_hour_stock_split_rupslb(run_state, data_repository, company_id: String) -> Dictionary:
+	if company_id.is_empty():
+		return {}
+	if int(run_state.get_holding(company_id).get("shares", 0)) < int(run_state.LOT_SIZE):
+		return {}
+	if _company_has_live_chain(run_state.get_active_corporate_action_chains(), company_id):
+		return {}
+	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "stock_split", "guided_first_hour")
+
+
 func debug_schedule_next_day_tender_offer_rupslb(run_state, data_repository, company_id: String) -> Dictionary:
 	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "tender_offer")
 
@@ -955,8 +969,16 @@ func debug_schedule_next_day_backdoor_listing_rupslb(run_state, data_repository,
 	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "backdoor_listing")
 
 
+func debug_schedule_next_day_restructuring_rupslb(run_state, data_repository, company_id: String) -> Dictionary:
+	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "restructuring")
+
+
 func debug_schedule_next_day_ceo_change_rupslb(run_state, data_repository, company_id: String) -> Dictionary:
 	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, "ceo_change")
+
+
+func schedule_player_control_rupslb(run_state, data_repository, company_id: String, family_id: String) -> Dictionary:
+	return _debug_schedule_next_day_rupslb(run_state, data_repository, company_id, family_id, "player_control")
 
 
 func debug_force_stock_buyback_execution(run_state, data_repository, company_id: String) -> Dictionary:
@@ -1369,8 +1391,10 @@ func _maybe_spawn_chain(
 	calendar: Dictionary
 ) -> Dictionary:
 	var difficulty_id: String = str(run_state.get_difficulty_config().get("id", "normal"))
-	var active_cap: int = int(DIFFICULTY_CHAIN_CAP.get(difficulty_id, DIFFICULTY_CHAIN_CAP["normal"]))
-	if chains.size() >= active_cap:
+	var active_cap: int = _organic_chain_cap_for_day(difficulty_id, day_number)
+	if active_cap <= 0:
+		return {}
+	if _organic_chain_count(chains) >= active_cap:
 		return {}
 	var candidates: Array = _build_spawn_candidates(run_state, catalog, macro_state, chains)
 	if candidates.is_empty():
@@ -1402,6 +1426,39 @@ func _maybe_spawn_chain(
 		"chain": chain,
 		"events": [spawned_event] if not spawned_event.is_empty() else []
 	}
+
+
+func _organic_chain_cap_for_day(difficulty_id: String, day_number: int) -> int:
+	var base_cap: int = int(DIFFICULTY_CHAIN_CAP.get(difficulty_id, DIFFICULTY_CHAIN_CAP["normal"]))
+	if difficulty_id != "normal":
+		return base_cap
+	if day_number < NORMAL_ORGANIC_START_DAY:
+		return 0
+	if day_number <= 15:
+		return min(base_cap, NORMAL_ORGANIC_CAP_DAY_15)
+	if day_number <= 25:
+		return min(base_cap, NORMAL_ORGANIC_CAP_DAY_25)
+	return base_cap
+
+
+func _organic_chain_count(chains: Dictionary) -> int:
+	var count: int = 0
+	for chain_value in chains.values():
+		if typeof(chain_value) != TYPE_DICTIONARY:
+			continue
+		var chain: Dictionary = chain_value
+		if _is_organic_chain_source(str(chain.get("request_source", "organic"))):
+			count += 1
+	return count
+
+
+func _is_organic_chain_source(source_tag: String) -> bool:
+	var normalized_source: String = source_tag.strip_edges()
+	if normalized_source.is_empty() or normalized_source == "organic":
+		return true
+	if normalized_source == "guided_first_hour":
+		return false
+	return not normalized_source.begins_with("debug")
 
 
 func _build_spawn_candidates(run_state, catalog: Dictionary, macro_state: Dictionary, chains: Dictionary) -> Array:

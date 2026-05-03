@@ -7,6 +7,8 @@ const SAMPLE_MAX := 12
 const TOP_CANDIDATE_COUNT := 5
 const MAX_ARC_CANDIDATE_COUNT := 6
 const ARC_MIN_TRIGGER_DAY := 5
+const NORMAL_FIRST_MONTH_ARC_CAP_UNTIL_DAY := 20
+const NORMAL_FIRST_MONTH_ARC_CAP := 2
 const ARC_ELIGIBLE_EVENT_IDS := {
 	"earnings_beat": true,
 	"earnings_miss": true,
@@ -391,6 +393,7 @@ func _should_start_arc(run_state, day_number: int, active_arcs: Array) -> bool:
 	var event_interval_days: float = max(float(difficulty_config.get("event_interval_days", 30.0)), 1.0)
 	var company_count: int = max(int(difficulty_config.get("company_count", run_state.company_order.size())), 1)
 	var max_active_arcs: int = clamp(int(round(sqrt(float(company_count)) * 0.45)), 1, 6)
+	max_active_arcs = _first_month_arc_cap(str(difficulty_config.get("id", "normal")), day_number, max_active_arcs)
 	if active_arcs.size() >= max_active_arcs:
 		return false
 
@@ -402,6 +405,12 @@ func _should_start_arc(run_state, day_number: int, active_arcs: Array) -> bool:
 	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_state.run_seed, "company_arc_roll", day_number])
 	var random_threshold: float = clamp(1.0 / max(event_interval_days * 1.9, 9.0), 0.03, 0.16)
 	return rng.randf() < random_threshold
+
+
+func _first_month_arc_cap(difficulty_id: String, day_number: int, base_cap: int) -> int:
+	if difficulty_id == "normal" and day_number < NORMAL_FIRST_MONTH_ARC_CAP_UNTIL_DAY:
+		return min(base_cap, NORMAL_FIRST_MONTH_ARC_CAP)
+	return base_cap
 
 
 func _build_company_arc(

@@ -586,7 +586,7 @@ function renderPreview() {
       });
       html += "</div>";
     } else {
-      html += `<div class="preview-block"><h3>${escapeHtml(block.heading || "Lesson")}</h3><p>${escapeHtml(block.body || "").replace(/\n/g, "<br>")}</p>`;
+      html += `<div class="preview-block"><h3>${escapeHtml(block.heading || "Lesson")}</h3>${renderMarkdownBody(block.body || "")}`;
       const images = Array.isArray(block.images) ? block.images : [];
       images.forEach(image => {
         const path = image.asset_path || "";
@@ -603,6 +603,97 @@ function renderPreview() {
     }
   });
   previewPane.innerHTML = html;
+}
+
+function renderMarkdownBody(body) {
+  const segments = splitMarkdownTables(String(body || ""));
+  return segments.map(segment => {
+    if (segment.type === "table") return renderPreviewTable(segment);
+    const text = String(segment.text || "").trim();
+    if (!text) return "";
+    return `<p>${escapeHtml(text).replace(/\n/g, "<br>")}</p>`;
+  }).join("");
+}
+
+function splitMarkdownTables(body) {
+  const lines = body.split("\n");
+  const segments = [];
+  let textLines = [];
+  let index = 0;
+  const flushText = () => {
+    const text = textLines.join("\n").trim();
+    if (text) segments.push({ type: "text", text });
+    textLines = [];
+  };
+  while (index < lines.length) {
+    const line = lines[index] || "";
+    const nextLine = lines[index + 1] || "";
+    if (isMarkdownTableRow(line) && isMarkdownTableSeparator(nextLine)) {
+      flushText();
+      const headers = parseMarkdownTableRow(line);
+      const alignments = parseMarkdownTableAlignments(nextLine);
+      const rows = [];
+      index += 2;
+      while (index < lines.length && isMarkdownTableRow(lines[index] || "")) {
+        rows.push(parseMarkdownTableRow(lines[index] || ""));
+        index += 1;
+      }
+      segments.push({ type: "table", headers, alignments, rows });
+      continue;
+    }
+    textLines.push(line);
+    index += 1;
+  }
+  flushText();
+  return segments;
+}
+
+function isMarkdownTableRow(line) {
+  const trimmed = String(line || "").trim();
+  return trimmed.startsWith("|") && trimmed.endsWith("|") && (trimmed.match(/\|/g) || []).length >= 3;
+}
+
+function isMarkdownTableSeparator(line) {
+  if (!isMarkdownTableRow(line)) return false;
+  const cells = parseMarkdownTableRow(line);
+  return cells.length > 0 && cells.every(cell => {
+    const value = String(cell || "").trim();
+    return value.includes("-") && /^[:\-\s]+$/.test(value);
+  });
+}
+
+function parseMarkdownTableRow(line) {
+  let trimmed = String(line || "").trim();
+  if (trimmed.startsWith("|")) trimmed = trimmed.slice(1);
+  if (trimmed.endsWith("|")) trimmed = trimmed.slice(0, -1);
+  return trimmed.split("|").map(cell => cell.trim());
+}
+
+function parseMarkdownTableAlignments(line) {
+  return parseMarkdownTableRow(line).map(cell => {
+    const value = String(cell || "").trim();
+    if (value.startsWith(":") && value.endsWith(":")) return "center";
+    if (value.endsWith(":")) return "right";
+    return "left";
+  });
+}
+
+function renderPreviewTable(segment) {
+  const alignments = Array.isArray(segment.alignments) ? segment.alignments : [];
+  const cell = (value, index, tag) => {
+    const align = alignments[index] || "left";
+    return `<${tag} style="text-align:${align}">${escapeHtml(value || "")}</${tag}>`;
+  };
+  let html = "<table class=\"preview-table\"><thead><tr>";
+  (segment.headers || []).forEach((header, index) => html += cell(header, index, "th"));
+  html += "</tr></thead><tbody>";
+  (segment.rows || []).forEach(row => {
+    html += "<tr>";
+    row.forEach((value, index) => html += cell(value, index, "td"));
+    html += "</tr>";
+  });
+  html += "</tbody></table>";
+  return html;
 }
 
 function renderValidation(result) {

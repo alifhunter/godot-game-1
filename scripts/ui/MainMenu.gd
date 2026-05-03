@@ -36,6 +36,10 @@ var has_checked_app_font: bool = false
 var difficulty_button_group := ButtonGroup.new()
 var difficulty_card_buttons: Dictionary = {}
 var selected_difficulty_id := ""
+var selected_load_slot_id := ""
+var load_slots_dialog: ConfirmationDialog = null
+var load_slots_list: ItemList = null
+var load_slots_hint_label: Label = null
 
 
 func _ready() -> void:
@@ -49,6 +53,7 @@ func _ready() -> void:
 	GameManager.run_loading_detail_updated.connect(_on_run_loading_detail_updated)
 	GameManager.run_loading_finished.connect(_on_run_loading_finished)
 	get_viewport().size_changed.connect(_update_difficulty_selector_size)
+	_ensure_load_slots_dialog()
 	_populate_difficulty_cards()
 	tutorial_checkbox.button_pressed = true
 	_refresh_load_state()
@@ -59,11 +64,14 @@ func _ready() -> void:
 
 
 func _refresh_load_state() -> void:
-	load_button.disabled = not SaveManager.has_save()
-	if SaveManager.has_save():
-		status_label.text = "A previous run is available. Load it now or start a fresh market from the difficulty selector."
+	var save_info: Dictionary = _first_visible_save_info()
+	load_button.disabled = not SaveManager.has_any_loadable_save()
+	if bool(save_info.get("loadable", false)):
+		status_label.text = _build_save_available_text(save_info)
+	elif bool(save_info.get("exists", false)) or bool(save_info.get("backup_exists", false)):
+		status_label.text = _build_save_unreadable_text(save_info)
 	else:
-		status_label.text = "No saved run yet. Start a new game to choose a market difficulty and build the first watchlist."
+		status_label.text = "No saved run yet. Start a new game to choose a market difficulty and build the first watchlist.\nFirst save slot: %s" % str(save_info.get("write_absolute_path", save_info.get("absolute_path", "")))
 
 
 func _on_new_game_pressed() -> void:
@@ -72,20 +80,12 @@ func _on_new_game_pressed() -> void:
 
 
 func _on_load_pressed() -> void:
-	if not SaveManager.has_save():
-		status_label.text = "No save file was found, so a fresh run is safer."
+	if not SaveManager.has_any_loadable_save():
+		status_label.text = "No readable save file was found, so a fresh run is safer."
 		_refresh_load_state()
 		return
 
-	_prepare_load_screen()
-	_set_screen(SCREEN_LOADING)
-	var load_succeeded: bool = await GameManager.load_run_from_save_with_loading()
-	if not is_inside_tree():
-		return
-	if not load_succeeded:
-		_set_screen(SCREEN_HOME)
-		status_label.text = "No save file was found, so a fresh run is safer."
-		_refresh_load_state()
+	_show_load_slots_dialog()
 
 
 func _on_quit_pressed() -> void:
@@ -192,14 +192,168 @@ func _prepare_loading_screen(difficulty_id: String) -> void:
 	loading_note_label.text = "Desktop entry comes first. Full company detail can finish in the background after the market opens."
 
 
-func _prepare_load_screen() -> void:
+func _prepare_load_screen(slot_id: String = "") -> void:
+	var save_info: Dictionary = SaveManager.get_save_file_info(slot_id)
 	loading_title_label.text = "Loading saved run"
 	loading_stage_label.text = "Reading save file"
-	loading_body_label.text = "Restoring the saved market state, portfolio, watchlist, and current trading day."
+	loading_body_label.text = "Restoring Day %d (%s), portfolio, watchlist, and current trading day." % [
+		int(save_info.get("trading_day", 1)),
+		str(save_info.get("trade_date_text", "Unknown date"))
+	]
 	loading_step_label.text = "Step 1/%d" % max(GameManager.LOAD_RUN_LOADING_STEPS.size(), 1)
 	loading_progress_bar.value = 0.0
 	loading_subprogress_label.text = ""
-	loading_note_label.text = "Loading the saved market state and reopening the trading desk."
+	loading_note_label.text = "%s: %s" % [
+		str(save_info.get("storage_label", "Save file")),
+		str(save_info.get("absolute_path", ""))
+	]
+
+
+func _ensure_load_slots_dialog() -> void:
+	if load_slots_dialog != null:
+		return
+	load_slots_dialog = ConfirmationDialog.new()
+	load_slots_dialog.name = "LoadSlotsDialog"
+	load_slots_dialog.title = "Load Run"
+	load_slots_dialog.confirmed.connect(_on_load_slots_confirmed)
+	add_child(load_slots_dialog)
+	load_slots_dialog.get_ok_button().text = "Load"
+	load_slots_dialog.get_cancel_button().text = "Cancel"
+
+	var dialog_margin := MarginContainer.new()
+	dialog_margin.add_theme_constant_override("margin_left", 16)
+	dialog_margin.add_theme_constant_override("margin_top", 16)
+	dialog_margin.add_theme_constant_override("margin_right", 16)
+	dialog_margin.add_theme_constant_override("margin_bottom", 16)
+	load_slots_dialog.add_child(dialog_margin)
+
+	var dialog_vbox := VBoxContainer.new()
+	dialog_vbox.custom_minimum_size = Vector2(720, 360)
+	dialog_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dialog_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dialog_vbox.add_theme_constant_override("separation", 10)
+	dialog_margin.add_child(dialog_vbox)
+
+	load_slots_hint_label = Label.new()
+	load_slots_hint_label.name = "LoadSlotsHintLabel"
+	load_slots_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	load_slots_hint_label.text = "Choose a save slot to restore."
+	dialog_vbox.add_child(load_slots_hint_label)
+
+	load_slots_list = ItemList.new()
+	load_slots_list.name = "LoadSlotsList"
+	load_slots_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	load_slots_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	load_slots_list.item_selected.connect(_on_load_slot_selected)
+	load_slots_list.item_activated.connect(_on_load_slot_activated)
+	dialog_vbox.add_child(load_slots_list)
+
+
+func _show_load_slots_dialog() -> void:
+	_populate_load_slots_list()
+	load_slots_dialog.popup_centered()
+
+
+func _populate_load_slots_list() -> void:
+	selected_load_slot_id = ""
+	load_slots_list.clear()
+	var first_selectable_index: int = -1
+	for slot_value in SaveManager.get_save_slots():
+		var slot: Dictionary = slot_value
+		var loadable: bool = bool(slot.get("loadable", false))
+		var item_index: int = load_slots_list.add_item(_format_save_slot_list_item(slot))
+		load_slots_list.set_item_metadata(item_index, str(slot.get("slot_id", "")))
+		load_slots_list.set_item_disabled(item_index, not loadable)
+		if loadable and first_selectable_index < 0:
+			first_selectable_index = item_index
+	if first_selectable_index >= 0:
+		load_slots_list.select(first_selectable_index)
+		selected_load_slot_id = str(load_slots_list.get_item_metadata(first_selectable_index))
+	load_slots_dialog.get_ok_button().disabled = selected_load_slot_id.is_empty()
+
+
+func _format_save_slot_list_item(slot: Dictionary) -> String:
+	if not bool(slot.get("loadable", false)):
+		return "%s | Empty" % str(slot.get("slot_label", "Slot"))
+	return "%s%s | Day %d | %s | %s | Equity %s" % [
+		str(slot.get("slot_label", "Slot")),
+		" (current)" if bool(slot.get("active", false)) else "",
+		int(slot.get("trading_day", 1)),
+		str(slot.get("trade_date_text", "Unknown date")),
+		str(slot.get("difficulty_label", "Normal")),
+		str(slot.get("equity_text", "Rp0,00"))
+	]
+
+
+func _on_load_slot_selected(index: int) -> void:
+	if index < 0 or load_slots_list.is_item_disabled(index):
+		selected_load_slot_id = ""
+	else:
+		selected_load_slot_id = str(load_slots_list.get_item_metadata(index))
+	load_slots_dialog.get_ok_button().disabled = selected_load_slot_id.is_empty()
+
+
+func _on_load_slot_activated(index: int) -> void:
+	_on_load_slot_selected(index)
+	if selected_load_slot_id.is_empty():
+		return
+	load_slots_dialog.hide()
+	await _load_selected_slot()
+
+
+func _on_load_slots_confirmed() -> void:
+	await _load_selected_slot()
+
+
+func _load_selected_slot() -> void:
+	if selected_load_slot_id.is_empty():
+		return
+	SaveManager.set_active_slot_id(selected_load_slot_id)
+	_prepare_load_screen(selected_load_slot_id)
+	_set_screen(SCREEN_LOADING)
+	var load_succeeded: bool = await GameManager.load_run_from_save_with_loading(selected_load_slot_id)
+	if not is_inside_tree():
+		return
+	if not load_succeeded:
+		_set_screen(SCREEN_HOME)
+		status_label.text = "The selected save slot could not be loaded. Start a new run or inspect the save path shown below."
+		_refresh_load_state()
+
+
+func _first_visible_save_info() -> Dictionary:
+	var active_info: Dictionary = SaveManager.get_save_file_info()
+	if bool(active_info.get("loadable", false)):
+		return active_info
+	for slot_value in SaveManager.get_save_slots():
+		var slot: Dictionary = slot_value
+		if bool(slot.get("loadable", false)):
+			return slot
+	return active_info
+
+
+func _build_save_available_text(save_info: Dictionary) -> String:
+	var recovery_note: String = "Recovered backup available. " if bool(save_info.get("recovered_from_backup", false)) else ""
+	var schema_text: String = "Legacy save" if int(save_info.get("schema_version", 0)) <= 0 else "Save v%d" % int(save_info.get("schema_version", 0))
+	return "%sSaved run found (%s).\nDay %d | %s | %s | %d companies\nEquity %s | Cash %s | Last saved %s\nFile: %s" % [
+		recovery_note,
+		schema_text,
+		int(save_info.get("trading_day", 1)),
+		str(save_info.get("trade_date_text", "Unknown date")),
+		str(save_info.get("difficulty_label", "Normal")),
+		int(save_info.get("company_count", 0)),
+		str(save_info.get("equity_text", "Rp0,00")),
+		str(save_info.get("cash_text", "Rp0,00")),
+		str(save_info.get("saved_at_text", "Unknown")),
+		str(save_info.get("absolute_path", ""))
+	]
+
+
+func _build_save_unreadable_text(save_info: Dictionary) -> String:
+	return "A save file exists, but it is not readable yet.\n%s\nPrimary: %s\nBackup: %s" % [
+		str(save_info.get("load_error", "Save JSON could not be parsed.")),
+		str(save_info.get("absolute_path", "")),
+		str(save_info.get("backup_absolute_path", ""))
+	]
 
 
 func _on_run_loading_started(difficulty_id: String) -> void:

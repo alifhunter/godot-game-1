@@ -112,7 +112,7 @@ func _wait_for_background_hydration() -> void:
 func _project_local_save_size() -> int:
 	if not OS.get_cmdline_user_args().has(SMOKE_LOCAL_IO_ARG):
 		return -1
-	var absolute_path: String = ProjectSettings.globalize_path("res://logs/daytrader_smoke_save.json")
+	var absolute_path: String = str(SaveManager.get_save_file_info().get("absolute_path", ProjectSettings.globalize_path("res://logs/saves/slot_1.json")))
 	if not FileAccess.file_exists(absolute_path):
 		return 0
 	var file = FileAccess.open(absolute_path, FileAccess.READ)

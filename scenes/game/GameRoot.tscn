@@ -172,7 +172,7 @@ text = ""
 
 [node name="ExitAppLabel" type="Label" parent="DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow/ExitAppTile"]
 horizontal_alignment = 1
-text = "Exit"
+text = "Settings"
 
 [node name="DesktopFooterSpacer" type="Control" parent="DesktopLayer/DesktopMargin/DesktopVBox"]
 size_flags_vertical = 3
@@ -180,7 +180,7 @@ size_flags_vertical = 3
 [node name="DesktopHintLabel" type="Label" parent="DesktopLayer/DesktopMargin/DesktopVBox"]
 visible = false
 autowrap_mode = 3
-text = "Prototype desktop: STOCKBOT opens the trading platform, News opens the intel desk, Twooter opens the social feed, Network opens contacts, and Exit returns to the main menu."
+text = "Prototype desktop: STOCKBOT opens the trading platform, News opens the intel desk, Twooter opens the social feed, Network opens contacts, and Settings handles save/load."
 
 [node name="AppWindowBackdrop" type="Control" parent="."]
 visible = false
@@ -315,7 +315,7 @@ theme_override_constants/margin_top = 0
 theme_override_constants/margin_bottom = 0
 
 [node name="SidebarPanel" type="PanelContainer" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin"]
-custom_minimum_size = Vector2(220, 0)
+custom_minimum_size = Vector2(160, 0)
 
 [node name="SidebarMargin" type="MarginContainer" parent="Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel"]
 theme_override_constants/margin_left = 0
@@ -692,7 +692,7 @@ text = ""
 [node name="NetworkContactBodyLabel" type="Label" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox"]
 size_flags_vertical = 3
 autowrap_mode = 3
-text = "Explore the world more. Read News, open company Profile pages, and follow referrals to discover people before they appear here."
+text = "Explore the world more. Read News, follow referrals, and approach RUPSLB room leads to discover people before they appear here."
 
 [node name="NetworkActionRow" type="HBoxContainer" parent="NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkContentSplit/NetworkDetailPanel/NetworkDetailMargin/NetworkDetailVBox"]
 theme_override_constants/separation = 8
@@ -1028,7 +1028,7 @@ theme_override_constants/separation = 8
 
 [node name="GeneratorsHintLabel" type="Label" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generators/GeneratorsMargin/GeneratorsVBox"]
 autowrap_mode = 3
-text = "Use these buttons to inject event definitions directly into the current run for debugging."
+text = "Use these buttons to inject event definitions or selected-stock corporate actions directly into the current run for debugging."
 
 [node name="GeneratorsScroll" type="ScrollContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generators/GeneratorsMargin/GeneratorsVBox"]
 size_flags_horizontal = 3

@@ -1,6 +1,8 @@
 extends Node
 
 const STABLE_RNG = preload("res://systems/StableRng.gd")
+const SAVE_SCHEMA_VERSION := 2
+const SAVE_FORMAT_ID := "daytrader_single_run"
 const LOT_SIZE := 100
 const PLAYER_BROKER_CODE := "XL"
 const PLAYER_BROKER_NAME := "PT. Sobat Loser"
@@ -88,6 +90,29 @@ const DEFAULT_DIFFICULTY_CONFIG := {
 	"volatility_label": "Normal",
 	"event_label": "Every 10 Days"
 }
+const FTUE_STEP_IDS := [
+	"welcome_desktop",
+	"pick_stock",
+	"inspect_setup",
+	"buy_one_lot",
+	"advance_day",
+	"read_recap",
+	"next_steps"
+]
+const FTUE_FIRST_STEP_ID := "welcome_desktop"
+const FTUE_FINAL_STEP_ID := "next_steps"
+const FIRST_HOUR_GUIDE_STEP_IDS := [
+	"portfolio_check",
+	"create_thesis",
+	"add_watchlist",
+	"read_market_context",
+	"seeded_rupslb",
+	"attend_rupslb",
+	"approach_lead",
+	"handoff"
+]
+const FIRST_HOUR_GUIDE_FIRST_STEP_ID := "portfolio_check"
+const FIRST_HOUR_GUIDE_FINAL_STEP_ID := "handoff"
 
 var run_seed = 0
 var day_index = 0
@@ -136,6 +161,21 @@ var difficulty_id = "normal"
 var difficulty_config = DEFAULT_DIFFICULTY_CONFIG.duplicate(true)
 var tutorial_enabled = false
 var tutorial_shown = false
+var ftue_enabled = false
+var ftue_completed = false
+var ftue_skipped = false
+var ftue_current_step_id = ""
+var ftue_completed_step_ids = []
+var ftue_start_day_index = 0
+var first_hour_guide_enabled = false
+var first_hour_guide_completed = false
+var first_hour_guide_skipped = false
+var first_hour_guide_current_step_id = ""
+var first_hour_guide_completed_step_ids = []
+var first_hour_guide_start_day_index = 0
+var first_hour_guide_anchor_company_id = ""
+var first_hour_guide_seeded_meeting_id = ""
+var first_hour_guide_seeded_chain_id = ""
 var current_trade_date = {}
 var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 var company_generator = preload("res://systems/CompanyGenerator.gd").new()
@@ -198,6 +238,21 @@ func reset() -> void:
 	difficulty_config = DEFAULT_DIFFICULTY_CONFIG.duplicate(true)
 	tutorial_enabled = false
 	tutorial_shown = false
+	ftue_enabled = false
+	ftue_completed = false
+	ftue_skipped = false
+	ftue_current_step_id = ""
+	ftue_completed_step_ids = []
+	ftue_start_day_index = 0
+	first_hour_guide_enabled = false
+	first_hour_guide_completed = false
+	first_hour_guide_skipped = false
+	first_hour_guide_current_step_id = ""
+	first_hour_guide_completed_step_ids = []
+	first_hour_guide_start_day_index = 0
+	first_hour_guide_anchor_company_id = ""
+	first_hour_guide_seeded_meeting_id = ""
+	first_hour_guide_seeded_chain_id = ""
 	current_trade_date = trading_calendar.start_date()
 
 
@@ -280,6 +335,21 @@ func _initialize_new_run_state(
 	difficulty_id = str(difficulty_config.get("id", "normal"))
 	tutorial_enabled = wants_tutorial
 	tutorial_shown = false
+	ftue_enabled = wants_tutorial
+	ftue_completed = false
+	ftue_skipped = false
+	ftue_current_step_id = FTUE_FIRST_STEP_ID if wants_tutorial else ""
+	ftue_completed_step_ids = []
+	ftue_start_day_index = day_index
+	first_hour_guide_enabled = wants_tutorial
+	first_hour_guide_completed = false
+	first_hour_guide_skipped = false
+	first_hour_guide_current_step_id = ""
+	first_hour_guide_completed_step_ids = []
+	first_hour_guide_start_day_index = day_index
+	first_hour_guide_anchor_company_id = ""
+	first_hour_guide_seeded_meeting_id = ""
+	first_hour_guide_seeded_chain_id = ""
 	current_trade_date = trading_calendar.start_date()
 	player_portfolio["cash"] = float(difficulty_config.get("starting_cash", DEFAULT_DIFFICULTY_CONFIG.get("starting_cash", 0.0)))
 	_ensure_macro_state_for_year(int(current_trade_date.get("year", 2020)))
@@ -411,6 +481,8 @@ func load_from_dict(data: Dictionary) -> void:
 	difficulty_id = str(difficulty_config.get("id", difficulty_id))
 	tutorial_enabled = bool(data.get("tutorial_enabled", false))
 	tutorial_shown = bool(data.get("tutorial_shown", false))
+	_load_ftue_state(data)
+	_load_first_hour_guide_state(data)
 	current_trade_date = data.get("current_trade_date", {}).duplicate(true)
 	if current_trade_date.is_empty():
 		current_trade_date = trading_calendar.trade_date_for_index(day_index + 1)
@@ -452,6 +524,11 @@ func load_from_dict(data: Dictionary) -> void:
 
 func to_save_dict() -> Dictionary:
 	return {
+		"save_schema_version": SAVE_SCHEMA_VERSION,
+		"save_format_id": SAVE_FORMAT_ID,
+		"saved_at_unix": int(Time.get_unix_time_from_system()),
+		"saved_at_text": Time.get_datetime_string_from_system(false, true),
+		"save_engine_version": str(Engine.get_version_info().get("string", "")),
 		"seed": run_seed,
 		"day_index": day_index,
 		"market_sentiment": market_sentiment,
@@ -496,6 +573,21 @@ func to_save_dict() -> Dictionary:
 		"difficulty_config": difficulty_config.duplicate(true),
 		"tutorial_enabled": tutorial_enabled,
 		"tutorial_shown": tutorial_shown,
+		"ftue_enabled": ftue_enabled,
+		"ftue_completed": ftue_completed,
+		"ftue_skipped": ftue_skipped,
+		"ftue_current_step_id": ftue_current_step_id,
+		"ftue_completed_step_ids": ftue_completed_step_ids.duplicate(),
+		"ftue_start_day_index": ftue_start_day_index,
+		"first_hour_guide_enabled": first_hour_guide_enabled,
+		"first_hour_guide_completed": first_hour_guide_completed,
+		"first_hour_guide_skipped": first_hour_guide_skipped,
+		"first_hour_guide_current_step_id": first_hour_guide_current_step_id,
+		"first_hour_guide_completed_step_ids": first_hour_guide_completed_step_ids.duplicate(),
+		"first_hour_guide_start_day_index": first_hour_guide_start_day_index,
+		"first_hour_guide_anchor_company_id": first_hour_guide_anchor_company_id,
+		"first_hour_guide_seeded_meeting_id": first_hour_guide_seeded_meeting_id,
+		"first_hour_guide_seeded_chain_id": first_hour_guide_seeded_chain_id,
 		"current_trade_date": current_trade_date.duplicate(true)
 	}
 
@@ -619,7 +711,10 @@ func _build_last_day_results_save_payload(source_results: Variant) -> Dictionary
 		"dividend_payments": source.get("dividend_payments", []).duplicate(true),
 		"stock_dividend_distributions": source.get("stock_dividend_distributions", []).duplicate(true),
 		"corporate_action_applications": source.get("corporate_action_applications", []).duplicate(true),
-		"started_special_events": source.get("started_special_events", []).duplicate(true)
+		"started_special_events": source.get("started_special_events", []).duplicate(true),
+		"life_obligation": source.get("life_obligation", {}).duplicate(true),
+		"network_request_results": source.get("network_request_results", []).duplicate(true),
+		"network_tip_results": source.get("network_tip_results", []).duplicate(true)
 	}
 	return save_results
 
@@ -820,7 +915,14 @@ func buy_company(company_id: String, shares: int) -> Dictionary:
 	var cash_available = float(player_portfolio.get("cash", 0.0))
 
 	if total_cost > cash_available + 0.0001:
-		return {"success": false, "message": "Not enough cash for that order."}
+		return {
+			"success": false,
+			"message": "Not enough cash. Order costs %s, cash is %s. Shortfall: %s. Lower quantity or free up cash first." % [
+				_format_currency(total_cost),
+				_format_currency(cash_available),
+				_format_currency(total_cost - cash_available)
+			]
+		}
 
 	var holdings: Dictionary = player_portfolio.get("holdings", {})
 	var holding: Dictionary = holdings.get(company_id, {
@@ -874,12 +976,18 @@ func sell_company(company_id: String, shares: int) -> Dictionary:
 
 	var holdings: Dictionary = player_portfolio.get("holdings", {})
 	if not holdings.has(company_id):
-		return {"success": false, "message": "You do not own that position yet."}
+		return {"success": false, "message": "You do not own that position yet. Switch to Buy, or select a holding you already have."}
 
 	var holding: Dictionary = holdings[company_id]
 	var current_shares = int(holding.get("shares", 0))
 	if shares > current_shares:
-		return {"success": false, "message": "Not enough shares to sell."}
+		return {
+			"success": false,
+			"message": "Not enough shares to sell. You tried to sell %d share(s), but only own %d." % [
+				shares,
+				current_shares
+			]
+		}
 
 	var estimate: Dictionary = estimate_sell_order(company_id, shares)
 	if not bool(estimate.get("success", false)):
@@ -1167,6 +1275,44 @@ func get_upcoming_quarterly_reports(limit: int = 8) -> Array:
 
 func get_trade_history() -> Array:
 	return trade_history.duplicate(true)
+
+
+func apply_cash_obligation(obligation_id: String, amount: float, detail: Dictionary = {}) -> Dictionary:
+	var normalized_amount: float = max(amount, 0.0)
+	if normalized_amount <= 0.0:
+		return {"success": false, "message": "No cash obligation to apply."}
+
+	var cash_before: float = float(player_portfolio.get("cash", 0.0))
+	var cash_after: float = cash_before - normalized_amount
+	player_portfolio["cash"] = cash_after
+	var company_id: String = str(detail.get("company_id", "life"))
+	var side: String = str(detail.get("side", obligation_id))
+	_record_trade(
+		company_id,
+		side,
+		{
+			"lots": 0,
+			"shares": 0,
+			"price_per_share": 0.0,
+			"gross_value": normalized_amount,
+			"fee_rate": 0.0,
+			"fee": 0.0
+		},
+		0.0,
+		-normalized_amount,
+		cash_after
+	)
+
+	return {
+		"success": true,
+		"obligation_id": obligation_id,
+		"amount": normalized_amount,
+		"cash_before": cash_before,
+		"cash_after": cash_after,
+		"day_index": day_index,
+		"trade_date": current_trade_date.duplicate(true),
+		"detail": detail.duplicate(true)
+	}
 
 
 func get_player_market_flow_context(company_id: String, target_day_index: int) -> Dictionary:
@@ -1545,11 +1691,280 @@ func estimate_sell_order(company_id: String, shares: int) -> Dictionary:
 
 
 func should_show_tutorial() -> bool:
-	return tutorial_enabled and not tutorial_shown
+	return should_show_ftue()
 
 
 func mark_tutorial_shown() -> void:
 	tutorial_shown = true
+	if ftue_enabled and not ftue_completed and not ftue_skipped:
+		mark_ftue_completed()
+
+
+func should_show_ftue() -> bool:
+	return ftue_enabled and not ftue_completed and not ftue_skipped and not ftue_current_step_id.is_empty()
+
+
+func get_ftue_snapshot() -> Dictionary:
+	var step_index: int = FTUE_STEP_IDS.find(ftue_current_step_id)
+	return {
+		"enabled": ftue_enabled,
+		"completed": ftue_completed,
+		"skipped": ftue_skipped,
+		"current_step_id": ftue_current_step_id,
+		"completed_step_ids": ftue_completed_step_ids.duplicate(),
+		"start_day_index": ftue_start_day_index,
+		"step_index": step_index,
+		"step_count": FTUE_STEP_IDS.size()
+	}
+
+
+func advance_ftue_step(step_id: String = "") -> bool:
+	if not should_show_ftue():
+		return false
+	var current_step_id: String = ftue_current_step_id
+	if not step_id.is_empty() and step_id != current_step_id:
+		return false
+	if not ftue_completed_step_ids.has(current_step_id):
+		ftue_completed_step_ids.append(current_step_id)
+	if current_step_id == FTUE_FINAL_STEP_ID:
+		mark_ftue_completed()
+		return true
+	var current_index: int = FTUE_STEP_IDS.find(current_step_id)
+	if current_index < 0 or current_index >= FTUE_STEP_IDS.size() - 1:
+		mark_ftue_completed()
+		return true
+	ftue_current_step_id = str(FTUE_STEP_IDS[current_index + 1])
+	return true
+
+
+func skip_ftue() -> bool:
+	if not ftue_enabled or ftue_completed or ftue_skipped:
+		return false
+	ftue_skipped = true
+	ftue_current_step_id = ""
+	tutorial_shown = true
+	if first_hour_guide_enabled and not first_hour_guide_completed:
+		first_hour_guide_skipped = true
+		first_hour_guide_current_step_id = ""
+	return true
+
+
+func mark_ftue_completed() -> bool:
+	if not ftue_enabled or ftue_completed:
+		return false
+	ftue_completed = true
+	ftue_current_step_id = ""
+	tutorial_shown = true
+	_start_first_hour_guide_if_needed()
+	return true
+
+
+func should_show_first_hour_guide() -> bool:
+	return (
+		first_hour_guide_enabled and
+		not first_hour_guide_completed and
+		not first_hour_guide_skipped and
+		not first_hour_guide_current_step_id.is_empty()
+	)
+
+
+func get_first_hour_guide_snapshot() -> Dictionary:
+	var step_index: int = FIRST_HOUR_GUIDE_STEP_IDS.find(first_hour_guide_current_step_id)
+	return {
+		"enabled": first_hour_guide_enabled,
+		"completed": first_hour_guide_completed,
+		"skipped": first_hour_guide_skipped,
+		"current_step_id": first_hour_guide_current_step_id,
+		"completed_step_ids": first_hour_guide_completed_step_ids.duplicate(),
+		"start_day_index": first_hour_guide_start_day_index,
+		"step_index": step_index,
+		"step_count": FIRST_HOUR_GUIDE_STEP_IDS.size(),
+		"anchor_company_id": first_hour_guide_anchor_company_id,
+		"seeded_meeting_id": first_hour_guide_seeded_meeting_id,
+		"seeded_chain_id": first_hour_guide_seeded_chain_id
+	}
+
+
+func advance_first_hour_guide_step(step_id: String = "") -> bool:
+	if not should_show_first_hour_guide():
+		return false
+	var current_step_id: String = first_hour_guide_current_step_id
+	if not step_id.is_empty() and step_id != current_step_id:
+		return false
+	if not first_hour_guide_completed_step_ids.has(current_step_id):
+		first_hour_guide_completed_step_ids.append(current_step_id)
+	if current_step_id == FIRST_HOUR_GUIDE_FINAL_STEP_ID:
+		mark_first_hour_guide_completed()
+		return true
+	var current_index: int = FIRST_HOUR_GUIDE_STEP_IDS.find(current_step_id)
+	if current_index < 0 or current_index >= FIRST_HOUR_GUIDE_STEP_IDS.size() - 1:
+		mark_first_hour_guide_completed()
+		return true
+	first_hour_guide_current_step_id = str(FIRST_HOUR_GUIDE_STEP_IDS[current_index + 1])
+	return true
+
+
+func skip_first_hour_guide() -> bool:
+	if not first_hour_guide_enabled or first_hour_guide_completed or first_hour_guide_skipped:
+		return false
+	first_hour_guide_skipped = true
+	first_hour_guide_current_step_id = ""
+	return true
+
+
+func mark_first_hour_guide_completed() -> bool:
+	if not first_hour_guide_enabled or first_hour_guide_completed:
+		return false
+	first_hour_guide_completed = true
+	first_hour_guide_current_step_id = ""
+	return true
+
+
+func set_first_hour_guide_anchor_company_id(company_id: String) -> bool:
+	var normalized_company_id: String = company_id.strip_edges()
+	if normalized_company_id == first_hour_guide_anchor_company_id:
+		return false
+	first_hour_guide_anchor_company_id = normalized_company_id
+	return true
+
+
+func set_first_hour_guide_seeded_hook(chain_id: String, meeting_id: String) -> bool:
+	var normalized_chain_id: String = chain_id.strip_edges()
+	var normalized_meeting_id: String = meeting_id.strip_edges()
+	if normalized_chain_id == first_hour_guide_seeded_chain_id and normalized_meeting_id == first_hour_guide_seeded_meeting_id:
+		return false
+	first_hour_guide_seeded_chain_id = normalized_chain_id
+	first_hour_guide_seeded_meeting_id = normalized_meeting_id
+	return true
+
+
+func _load_ftue_state(data: Dictionary) -> void:
+	if data.has("ftue_enabled"):
+		ftue_enabled = bool(data.get("ftue_enabled", false))
+		ftue_completed = bool(data.get("ftue_completed", false))
+		ftue_skipped = bool(data.get("ftue_skipped", false))
+		ftue_current_step_id = str(data.get("ftue_current_step_id", ""))
+		ftue_completed_step_ids = _normalize_ftue_completed_step_ids(data.get("ftue_completed_step_ids", []))
+		ftue_start_day_index = max(int(data.get("ftue_start_day_index", day_index)), 0)
+	else:
+		ftue_enabled = tutorial_enabled
+		ftue_completed = tutorial_shown
+		ftue_skipped = false
+		ftue_current_step_id = "" if tutorial_shown or not tutorial_enabled else FTUE_FIRST_STEP_ID
+		ftue_completed_step_ids = []
+		ftue_start_day_index = day_index
+
+	if not ftue_enabled:
+		ftue_completed = false
+		ftue_skipped = false
+		ftue_current_step_id = ""
+		ftue_completed_step_ids = []
+		return
+	if ftue_completed or ftue_skipped:
+		ftue_current_step_id = ""
+		tutorial_shown = true
+		return
+	if not FTUE_STEP_IDS.has(ftue_current_step_id):
+		ftue_current_step_id = FTUE_FIRST_STEP_ID
+
+
+func _load_first_hour_guide_state(data: Dictionary) -> void:
+	if not data.has("first_hour_guide_enabled"):
+		first_hour_guide_enabled = false
+		first_hour_guide_completed = false
+		first_hour_guide_skipped = false
+		first_hour_guide_current_step_id = ""
+		first_hour_guide_completed_step_ids = []
+		first_hour_guide_start_day_index = day_index
+		first_hour_guide_anchor_company_id = ""
+		first_hour_guide_seeded_meeting_id = ""
+		first_hour_guide_seeded_chain_id = ""
+		return
+
+	first_hour_guide_enabled = bool(data.get("first_hour_guide_enabled", false))
+	first_hour_guide_completed = bool(data.get("first_hour_guide_completed", false))
+	first_hour_guide_skipped = bool(data.get("first_hour_guide_skipped", false))
+	first_hour_guide_current_step_id = str(data.get("first_hour_guide_current_step_id", ""))
+	first_hour_guide_completed_step_ids = _normalize_first_hour_guide_completed_step_ids(data.get("first_hour_guide_completed_step_ids", []))
+	first_hour_guide_start_day_index = max(int(data.get("first_hour_guide_start_day_index", day_index)), 0)
+	first_hour_guide_anchor_company_id = str(data.get("first_hour_guide_anchor_company_id", "")).strip_edges()
+	first_hour_guide_seeded_meeting_id = str(data.get("first_hour_guide_seeded_meeting_id", "")).strip_edges()
+	first_hour_guide_seeded_chain_id = str(data.get("first_hour_guide_seeded_chain_id", "")).strip_edges()
+
+	if not first_hour_guide_enabled:
+		first_hour_guide_completed = false
+		first_hour_guide_skipped = false
+		first_hour_guide_current_step_id = ""
+		first_hour_guide_completed_step_ids = []
+		first_hour_guide_anchor_company_id = ""
+		first_hour_guide_seeded_meeting_id = ""
+		first_hour_guide_seeded_chain_id = ""
+		return
+	if first_hour_guide_completed or first_hour_guide_skipped:
+		first_hour_guide_current_step_id = ""
+		return
+	if first_hour_guide_current_step_id.is_empty():
+		return
+	if not FIRST_HOUR_GUIDE_STEP_IDS.has(first_hour_guide_current_step_id):
+		first_hour_guide_current_step_id = FIRST_HOUR_GUIDE_FIRST_STEP_ID
+
+
+func _normalize_ftue_completed_step_ids(source_ids: Variant) -> Array:
+	var normalized: Array = []
+	if typeof(source_ids) != TYPE_ARRAY:
+		return normalized
+	for step_id_value in source_ids:
+		var step_id: String = str(step_id_value)
+		if step_id.is_empty() or not FTUE_STEP_IDS.has(step_id) or normalized.has(step_id):
+			continue
+		normalized.append(step_id)
+	return normalized
+
+
+func _normalize_first_hour_guide_completed_step_ids(source_ids: Variant) -> Array:
+	var normalized: Array = []
+	if typeof(source_ids) != TYPE_ARRAY:
+		return normalized
+	for step_id_value in source_ids:
+		var step_id: String = str(step_id_value)
+		if step_id.is_empty() or not FIRST_HOUR_GUIDE_STEP_IDS.has(step_id) or normalized.has(step_id):
+			continue
+		normalized.append(step_id)
+	return normalized
+
+
+func _start_first_hour_guide_if_needed() -> void:
+	if (
+		not first_hour_guide_enabled or
+		first_hour_guide_completed or
+		first_hour_guide_skipped or
+		not first_hour_guide_current_step_id.is_empty()
+	):
+		return
+	first_hour_guide_current_step_id = FIRST_HOUR_GUIDE_FIRST_STEP_ID
+	first_hour_guide_start_day_index = day_index
+	first_hour_guide_anchor_company_id = _choose_first_hour_guide_anchor_company_id()
+
+
+func _choose_first_hour_guide_anchor_company_id() -> String:
+	for trade_value in trade_history:
+		if typeof(trade_value) != TYPE_DICTIONARY:
+			continue
+		var trade: Dictionary = trade_value
+		var company_id: String = str(trade.get("company_id", "")).strip_edges()
+		if (
+			str(trade.get("side", "")) == "buy" and
+			not company_id.is_empty() and
+			companies.has(company_id) and
+			int(get_holding(company_id).get("shares", 0)) >= LOT_SIZE
+		):
+			return company_id
+	var holdings: Dictionary = player_portfolio.get("holdings", {})
+	for company_id_value in holdings.keys():
+		var company_id: String = str(company_id_value).strip_edges()
+		if not company_id.is_empty() and companies.has(company_id) and int(get_holding(company_id).get("shares", 0)) >= LOT_SIZE:
+			return company_id
+	return ""
 
 
 func _seed_hidden_story_flags(definition: Dictionary) -> Array:
@@ -1622,7 +2037,10 @@ func _default_life_state() -> Dictionary:
 		"housing_id": "kost_room",
 		"lifestyle_id": "balanced",
 		"monthly_extra": 0.0,
-		"updated_day_index": day_index
+		"updated_day_index": day_index,
+		"last_obligation_period": "",
+		"last_obligation_day_index": -1,
+		"last_obligation_amount": 0.0
 	}
 
 
@@ -1642,8 +2060,13 @@ func _normalize_life_state(source_life: Variant) -> Dictionary:
 	normalized["lifestyle_id"] = lifestyle_id
 	normalized["monthly_extra"] = max(float(source.get("monthly_extra", 0.0)), 0.0)
 	normalized["updated_day_index"] = max(int(source.get("updated_day_index", day_index)), 0)
+	normalized["last_obligation_period"] = str(source.get("last_obligation_period", ""))
+	normalized["last_obligation_day_index"] = int(source.get("last_obligation_day_index", -1))
+	normalized["last_obligation_amount"] = max(float(source.get("last_obligation_amount", 0.0)), 0.0)
 	if source.has("updated_trade_date") and typeof(source.get("updated_trade_date")) == TYPE_DICTIONARY:
 		normalized["updated_trade_date"] = source.get("updated_trade_date", {}).duplicate(true)
+	if source.has("last_obligation_trade_date") and typeof(source.get("last_obligation_trade_date")) == TYPE_DICTIONARY:
+		normalized["last_obligation_trade_date"] = source.get("last_obligation_trade_date", {}).duplicate(true)
 	return normalized
 
 
@@ -1769,6 +2192,7 @@ func _empty_broker_flow() -> Dictionary:
 		"action_meter_label": "Neutral",
 		"buy_brokers": [],
 		"sell_brokers": [],
+		"broker_type_totals": {},
 		"net_buy_brokers": [],
 		"net_sell_brokers": []
 	}

@@ -8,9 +8,21 @@ const TIP_RELATIONSHIP_COST := 2
 const REQUEST_RELATIONSHIP_SUCCESS := 10
 const REQUEST_RELATIONSHIP_FAILURE := -4
 const MAX_COMPANY_LEADS_PER_FLOATER := 2
+const MAX_MEETING_LEADS := 4
+const MEETING_LEAD_RELATIONSHIP_BONUS := 2
+const MEETING_LEAD_SOURCE_TYPE := "meeting_lead"
 const TIP_MEMORY_RESOLVE_DAYS := 3
 const MAX_TIP_MEMORY_ROWS := 96
 const MAX_NETWORK_JOURNAL_ROWS := 18
+const MEETING_LEAD_TIER_ORDER := {
+	"open": 0,
+	"low": 1,
+	"mid": 2,
+	"high": 3
+}
+
+var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
+const STABLE_RNG = preload("res://systems/StableRng.gd")
 
 
 func build_snapshot(run_state, data_repository) -> Dictionary:
@@ -114,6 +126,8 @@ func count_current_day_activity(run_state) -> int:
 		var discovery: Dictionary = discovery_value
 		if str(discovery.get("source_type", "")) == "referral" and int(discovery.get("day_index", 0)) == target_day_index:
 			count += 1
+		if str(discovery.get("source_type", "")) == MEETING_LEAD_SOURCE_TYPE and int(discovery.get("day_index", 0)) == target_day_index:
+			count += 1
 	return count
 
 
@@ -194,6 +208,150 @@ func discover_for_company(run_state, data_repository, company_id: String) -> Arr
 		company_id,
 		false
 	)
+
+
+func decorate_meeting_session_snapshot(
+	run_state,
+	data_repository,
+	session_snapshot: Dictionary,
+	can_spend_meet_action: bool,
+	meet_action_cost: int
+) -> Dictionary:
+	if session_snapshot.is_empty():
+		return {}
+	var decorated_snapshot: Dictionary = session_snapshot.duplicate(true)
+	var meeting_id: String = str(decorated_snapshot.get("meeting_id", ""))
+	if meeting_id.is_empty():
+		return decorated_snapshot
+	var leads: Array = _ensure_meeting_leads(run_state, data_repository, decorated_snapshot)
+	var sessions: Dictionary = run_state.get_corporate_meeting_sessions()
+	var session: Dictionary = sessions.get(meeting_id, decorated_snapshot.get("session", {})).duplicate(true)
+	decorated_snapshot["session"] = session
+	var lead_rows: Array = []
+	for lead_value in leads:
+		if typeof(lead_value) != TYPE_DICTIONARY:
+			continue
+		lead_rows.append(_meeting_lead_public_row(
+			run_state,
+			data_repository,
+			decorated_snapshot,
+			lead_value,
+			can_spend_meet_action,
+			meet_action_cost
+		))
+	decorated_snapshot["meeting_leads"] = lead_rows
+	return decorated_snapshot
+
+
+func approach_meeting_lead(
+	run_state,
+	data_repository,
+	session_snapshot: Dictionary,
+	lead_id: String,
+	can_spend_meet_action: bool,
+	meet_action_cost: int
+) -> Dictionary:
+	if session_snapshot.is_empty():
+		return {"success": false, "message": "Meeting session not available."}
+	var meeting_id: String = str(session_snapshot.get("meeting_id", ""))
+	if meeting_id.is_empty():
+		return {"success": false, "message": "Meeting session not available."}
+	var decorated_snapshot: Dictionary = decorate_meeting_session_snapshot(
+		run_state,
+		data_repository,
+		session_snapshot,
+		can_spend_meet_action,
+		meet_action_cost
+	)
+	var selected_lead: Dictionary = {}
+	for lead_value in decorated_snapshot.get("meeting_leads", []):
+		if typeof(lead_value) != TYPE_DICTIONARY:
+			continue
+		var lead: Dictionary = lead_value
+		if str(lead.get("lead_id", "")) == lead_id:
+			selected_lead = lead
+			break
+	if selected_lead.is_empty():
+		return {"success": false, "message": "That meeting lead is no longer available."}
+	if bool(selected_lead.get("approached", false)):
+		return {
+			"success": false,
+			"message": "You already approached this attendee.",
+			"lead": selected_lead
+		}
+	if not bool(selected_lead.get("approachable", false)):
+		return {
+			"success": false,
+			"message": str(selected_lead.get("locked_reason", "This attendee is not approachable right now.")),
+			"lead": selected_lead
+		}
+
+	var contact_id: String = str(selected_lead.get("contact_id", ""))
+	var contact: Dictionary = _contact_definition(run_state, data_repository, contact_id)
+	if contact.is_empty():
+		return {"success": false, "message": "Unknown meeting contact."}
+	var meeting: Dictionary = decorated_snapshot.get("meeting", {})
+	var session: Dictionary = decorated_snapshot.get("session", {}).duplicate(true)
+	var company_id: String = str(selected_lead.get("company_id", meeting.get("company_id", "")))
+	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+	var contact_was_met: bool = _is_met(run_state, contact_id)
+	_record_meeting_lead_discovery(run_state, contact, selected_lead, meeting_id, company_id, definition)
+	if contact_was_met:
+		_adjust_relationship(run_state, contact_id, MEETING_LEAD_RELATIONSHIP_BONUS)
+	else:
+		_mark_meeting_contact_met(run_state, data_repository, contact, selected_lead)
+	var response_text: String = _meeting_lead_response_text(
+		selected_lead,
+		contact,
+		meeting,
+		definition,
+		meeting_id
+	)
+	_mark_contact_meeting_note(run_state, contact_id, response_text)
+
+	var approached_ids: Array = session.get("approached_lead_ids", []).duplicate(true)
+	if not approached_ids.has(lead_id):
+		approached_ids.append(lead_id)
+	var results: Dictionary = session.get("meeting_lead_results", {}).duplicate(true)
+	results[lead_id] = {
+		"lead_id": lead_id,
+		"contact_id": contact_id,
+		"contact_name": str(contact.get("display_name", "Contact")),
+		"response_text": response_text,
+		"relationship_delta": MEETING_LEAD_RELATIONSHIP_BONUS if contact_was_met else 0,
+		"met_contact": not contact_was_met,
+		"day_index": run_state.day_index
+	}
+	session["approached_lead_ids"] = approached_ids
+	session["meeting_lead_results"] = results
+	session["last_updated_day_index"] = run_state.day_index
+	var sessions: Dictionary = run_state.get_corporate_meeting_sessions()
+	sessions[meeting_id] = session
+	run_state.set_corporate_meeting_sessions(sessions)
+
+	var refreshed_snapshot: Dictionary = decorate_meeting_session_snapshot(
+		run_state,
+		data_repository,
+		session_snapshot,
+		can_spend_meet_action,
+		meet_action_cost
+	)
+	var refreshed_lead: Dictionary = selected_lead
+	for lead_value in refreshed_snapshot.get("meeting_leads", []):
+		if typeof(lead_value) == TYPE_DICTIONARY and str(lead_value.get("lead_id", "")) == lead_id:
+			refreshed_lead = lead_value
+			break
+	var result_message: String = "%s is now in your Network." % str(contact.get("display_name", "Contact"))
+	if contact_was_met:
+		result_message = "%s shared a quick meeting read." % str(contact.get("display_name", "Contact"))
+	return {
+		"success": true,
+		"message": result_message,
+		"lead": refreshed_lead,
+		"contact_id": contact_id,
+		"response_text": response_text,
+		"met_contact": not contact_was_met
+	}
 
 
 func meet_contact(run_state, data_repository, contact_id: String, source_context: Dictionary = {}) -> Dictionary:
@@ -284,7 +442,7 @@ func accept_request(run_state, data_repository, contact_id: String, company_id: 
 		return {"success": false, "message": "%s already has a pending position request on that stock." % str(contact.get("display_name", "Contact"))}
 	var request_id: String = "%s|%s|%d" % [contact_id, resolved_company_id, run_state.day_index]
 	var requests: Dictionary = run_state.get_network_requests()
-	requests[request_id] = {
+	var request: Dictionary = {
 		"id": request_id,
 		"contact_id": contact_id,
 		"target_company_id": resolved_company_id,
@@ -294,11 +452,13 @@ func accept_request(run_state, data_repository, contact_id: String, company_id: 
 		"relationship_delta_success": REQUEST_RELATIONSHIP_SUCCESS,
 		"relationship_delta_failure": REQUEST_RELATIONSHIP_FAILURE
 	}
+	requests[request_id] = request
 	run_state.set_network_requests(requests)
 	return {
 		"success": true,
-		"message": "%s gave you a position request. Hold at least 1 lot within 3 days for +%d relationship, or miss it for %d." % [
+		"message": "%s gave you a position request. Hold at least 1 lot by %s for +%d relationship, or miss it for %d." % [
 			str(contact.get("display_name", "Contact")),
+			_request_due_date_text(request),
 			REQUEST_RELATIONSHIP_SUCCESS,
 			REQUEST_RELATIONSHIP_FAILURE
 		],
@@ -1754,6 +1914,378 @@ func _public_family_label(family_id: String) -> String:
 			return family_id.replace("_", " ")
 
 
+func _ensure_meeting_leads(run_state, data_repository, session_snapshot: Dictionary) -> Array:
+	var meeting_id: String = str(session_snapshot.get("meeting_id", ""))
+	if meeting_id.is_empty():
+		return []
+	var sessions: Dictionary = run_state.get_corporate_meeting_sessions()
+	var session: Dictionary = sessions.get(meeting_id, session_snapshot.get("session", {})).duplicate(true)
+	var existing_leads: Array = session.get("meeting_leads", []).duplicate(true)
+	if not existing_leads.is_empty():
+		var profile_lookup: Dictionary = {}
+		for profile_value in data_repository.get_contact_network_data().get("meeting_lead_profiles", []):
+			if typeof(profile_value) != TYPE_DICTIONARY:
+				continue
+			var profile: Dictionary = profile_value
+			profile_lookup[str(profile.get("id", ""))] = profile
+		var changed_existing_leads: bool = false
+		for lead_index in range(existing_leads.size()):
+			if typeof(existing_leads[lead_index]) != TYPE_DICTIONARY:
+				continue
+			var lead: Dictionary = existing_leads[lead_index].duplicate(true)
+			var stage_speech_bubbles_value = lead.get("stage_speech_bubbles", {})
+			if typeof(stage_speech_bubbles_value) == TYPE_DICTIONARY and not stage_speech_bubbles_value.is_empty():
+				continue
+			var profile_id: String = str(lead.get("profile_id", ""))
+			var profile: Dictionary = profile_lookup.get(profile_id, {})
+			if typeof(profile.get("stage_speech_bubbles", {})) != TYPE_DICTIONARY:
+				continue
+			lead["stage_speech_bubbles"] = profile.get("stage_speech_bubbles", {}).duplicate(true)
+			existing_leads[lead_index] = lead
+			changed_existing_leads = true
+		if changed_existing_leads:
+			session["meeting_leads"] = existing_leads
+			sessions[meeting_id] = session
+			run_state.set_corporate_meeting_sessions(sessions)
+		return existing_leads
+	var meeting: Dictionary = session_snapshot.get("meeting", {})
+	var leads: Array = _build_meeting_leads(run_state, data_repository, meeting_id, meeting)
+	session["meeting_leads"] = leads
+	if not session.has("approached_lead_ids"):
+		session["approached_lead_ids"] = []
+	if not session.has("meeting_lead_results"):
+		session["meeting_lead_results"] = {}
+	sessions[meeting_id] = session
+	run_state.set_corporate_meeting_sessions(sessions)
+	return leads
+
+
+func _build_meeting_leads(run_state, data_repository, meeting_id: String, meeting: Dictionary) -> Array:
+	var network_data: Dictionary = data_repository.get_contact_network_data()
+	var profiles: Array = network_data.get("meeting_lead_profiles", []).duplicate(true)
+	profiles.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_rank: int = _meeting_lead_tier_rank(str(a.get("tier", "open")))
+		var b_rank: int = _meeting_lead_tier_rank(str(b.get("tier", "open")))
+		if a_rank != b_rank:
+			return a_rank < b_rank
+		return str(a.get("id", "")) < str(b.get("id", ""))
+	)
+	var company_id: String = str(meeting.get("company_id", ""))
+	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+	var sector_id: String = str(definition.get("sector_id", meeting.get("target_sector_id", "")))
+	var used_contact_ids := {}
+	var leads: Array = []
+	for profile_value in profiles:
+		if typeof(profile_value) != TYPE_DICTIONARY:
+			continue
+		var profile: Dictionary = profile_value
+		var contact: Dictionary = _best_meeting_lead_contact(
+			run_state,
+			data_repository,
+			profile,
+			company_id,
+			sector_id,
+			used_contact_ids
+		)
+		if contact.is_empty():
+			continue
+		var contact_id: String = str(contact.get("id", ""))
+		used_contact_ids[contact_id] = true
+		var profile_id: String = str(profile.get("id", "lead"))
+		var lead_id: String = "%s|lead|%s" % [meeting_id, profile_id]
+		var speech_bubble: String = _pick_meeting_text(profile.get("speech_bubbles", []), [meeting_id, profile_id, contact_id, "bubble"], "There is something useful in the hallway chatter.")
+		var stage_speech_bubbles: Dictionary = {}
+		if typeof(profile.get("stage_speech_bubbles", {})) == TYPE_DICTIONARY:
+			stage_speech_bubbles = profile.get("stage_speech_bubbles", {}).duplicate(true)
+		leads.append({
+			"lead_id": lead_id,
+			"contact_id": contact_id,
+			"profile_id": profile_id,
+			"tier": str(profile.get("tier", "open")),
+			"company_id": company_id,
+			"target_sector_id": sector_id,
+			"role_label": str(profile.get("role_label", contact.get("role", "Meeting Attendee"))),
+			"recognition_required": max(int(profile.get("recognition_required", 0)), int(contact.get("recognition_required", 0))),
+			"speech_bubble": speech_bubble,
+			"stage_speech_bubbles": stage_speech_bubbles,
+			"approach_prompt": str(profile.get("approach_prompt", "Approach this attendee.")),
+			"success_responses": profile.get("success_responses", []).duplicate(true),
+			"locked_copy": str(profile.get("locked_copy", "This attendee is not ready to talk yet."))
+		})
+		if leads.size() >= MAX_MEETING_LEADS:
+			break
+	return leads
+
+
+func _best_meeting_lead_contact(
+	run_state,
+	data_repository,
+	profile: Dictionary,
+	company_id: String,
+	sector_id: String,
+	used_contact_ids: Dictionary
+) -> Dictionary:
+	var candidates: Array = []
+	for contact_value in data_repository.get_contact_network_data().get("contacts", []):
+		if typeof(contact_value) != TYPE_DICTIONARY:
+			continue
+		var contact: Dictionary = contact_value
+		var contact_id: String = str(contact.get("id", ""))
+		if contact_id.is_empty() or used_contact_ids.has(contact_id):
+			continue
+		if str(contact.get("affiliation_type", "floater")) != "floater":
+			continue
+		if not _meeting_profile_matches_contact(profile, contact, sector_id):
+			continue
+		candidates.append({
+			"contact": contact,
+			"score": _meeting_lead_contact_score(run_state, contact, profile, company_id, sector_id)
+		})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_score: float = float(a.get("score", 0.0))
+		var b_score: float = float(b.get("score", 0.0))
+		if not is_equal_approx(a_score, b_score):
+			return a_score > b_score
+		return str(a.get("contact", {}).get("display_name", "")) < str(b.get("contact", {}).get("display_name", ""))
+	)
+	if candidates.is_empty():
+		return {}
+	return candidates[0].get("contact", {}).duplicate(true)
+
+
+func _meeting_profile_matches_contact(profile: Dictionary, contact: Dictionary, sector_id: String) -> bool:
+	var contact_categories: Array = contact.get("categories", [])
+	var profile_categories: Array = profile.get("category_ids", [])
+	var has_category_match: bool = profile_categories.is_empty()
+	for category_value in profile_categories:
+		if str(category_value) in contact_categories:
+			has_category_match = true
+			break
+	var sector_match: bool = (not sector_id.is_empty()) and (sector_id in contact.get("sector_ids", []))
+	if bool(profile.get("sector_match_required", false)) and not sector_match:
+		return false
+	return has_category_match or sector_match
+
+
+func _meeting_lead_contact_score(run_state, contact: Dictionary, profile: Dictionary, company_id: String, sector_id: String) -> float:
+	var score: float = 0.0
+	if not sector_id.is_empty() and sector_id in contact.get("sector_ids", []):
+		score += 60.0
+	for category_value in profile.get("category_ids", []):
+		if str(category_value) in contact.get("categories", []):
+			score += 18.0
+	score += clamp(float(contact.get("reliability", 0.55)), 0.0, 1.0) * 12.0
+	score += max(0.0, 55.0 - float(contact.get("recognition_required", 0))) * 0.08
+	if _is_met(run_state, str(contact.get("id", ""))):
+		score -= 18.0
+	score += float(STABLE_RNG.seed_from_parts([company_id, str(profile.get("id", "")), str(contact.get("id", "")), "meeting_lead"]) % 1000) / 1000.0
+	return score
+
+
+func _meeting_lead_public_row(
+	run_state,
+	data_repository,
+	session_snapshot: Dictionary,
+	lead: Dictionary,
+	can_spend_meet_action: bool,
+	meet_action_cost: int
+) -> Dictionary:
+	var meeting: Dictionary = session_snapshot.get("meeting", {})
+	var session: Dictionary = session_snapshot.get("session", {})
+	var current_stage_id: String = str(session_snapshot.get("current_stage_id", session.get("presentation_stage", "arrival")))
+	var contact_id: String = str(lead.get("contact_id", ""))
+	var contact: Dictionary = _contact_definition(run_state, data_repository, contact_id)
+	var definition: Dictionary = run_state.get_effective_company_definition(str(lead.get("company_id", meeting.get("company_id", ""))), false, false)
+	var recognition: Dictionary = build_recognition_snapshot(run_state)
+	var recognition_score: int = int(recognition.get("score", 0))
+	var contact_met: bool = _is_met(run_state, contact_id)
+	var approached: bool = _meeting_lead_is_approached(session, str(lead.get("lead_id", "")))
+	var result: Dictionary = _meeting_lead_result(session, str(lead.get("lead_id", "")))
+	var required_recognition: int = max(int(lead.get("recognition_required", 0)), int(contact.get("recognition_required", 0)))
+	if _is_guided_first_hour_meeting(meeting) and str(lead.get("tier", "open")) == "open":
+		required_recognition = 0
+	var locked_copy: String = _format_meeting_lead_template(str(lead.get("locked_copy", "")).strip_edges(), lead, contact, meeting, definition)
+	var locked_reason: String = ""
+	if not approached:
+		if current_stage_id == "result":
+			locked_reason = "The meeting has ended. Approach attendees before the result board."
+		elif recognition_score < required_recognition:
+			locked_reason = "Need recognition %d to approach this attendee." % required_recognition
+			if not locked_copy.is_empty():
+				locked_reason = "%s Need recognition %d." % [locked_copy, required_recognition]
+		elif not contact_met and _met_contact_count(run_state) >= int(recognition.get("contact_cap", 2)):
+			locked_reason = "Your Network is full for this recognition tier."
+		elif not can_spend_meet_action:
+			locked_reason = "Need %d AP to approach this attendee." % meet_action_cost
+	var revealed_name: String = str(contact.get("display_name", "Contact")) if contact_met or approached else ""
+	var display_label: String = revealed_name if not revealed_name.is_empty() else str(lead.get("role_label", "Meeting Attendee"))
+	return {
+		"lead_id": str(lead.get("lead_id", "")),
+		"contact_id": contact_id,
+		"profile_id": str(lead.get("profile_id", "")),
+		"tier": str(lead.get("tier", "open")),
+		"company_id": str(lead.get("company_id", meeting.get("company_id", ""))),
+		"role_label": str(lead.get("role_label", "Meeting Attendee")),
+		"display_label": display_label,
+		"revealed_name": revealed_name,
+		"speech_bubble": _meeting_lead_stage_speech_bubble(lead, current_stage_id, contact_id, contact, meeting, definition),
+		"speech_bubble_stage_id": current_stage_id,
+		"approach_prompt": _format_meeting_lead_template(str(lead.get("approach_prompt", "Approach this attendee.")), lead, contact, meeting, definition),
+		"recognition_required": required_recognition,
+		"approachable": locked_reason.is_empty() and not approached,
+		"locked_reason": str(result.get("response_text", "")) if approached else locked_reason,
+		"locked_copy": locked_copy,
+		"approached": approached,
+		"response_text": str(result.get("response_text", "")),
+		"ap_cost": meet_action_cost,
+		"relationship": int(run_state.get_network_contacts().get(contact_id, {}).get("relationship", 0)),
+		"met": contact_met
+	}
+
+
+func _meeting_lead_stage_speech_bubble(
+	lead: Dictionary,
+	current_stage_id: String,
+	contact_id: String,
+	contact: Dictionary,
+	meeting: Dictionary,
+	definition: Dictionary
+) -> String:
+	var fallback: String = _format_meeting_lead_template(str(lead.get("speech_bubble", "")), lead, contact, meeting, definition)
+	var stage_rows: Array = []
+	var stage_speech_bubbles_value = lead.get("stage_speech_bubbles", {})
+	if typeof(stage_speech_bubbles_value) == TYPE_DICTIONARY:
+		var stage_speech_bubbles: Dictionary = stage_speech_bubbles_value
+		var raw_rows = stage_speech_bubbles.get(current_stage_id, [])
+		if typeof(raw_rows) == TYPE_ARRAY:
+			stage_rows = raw_rows
+		elif typeof(raw_rows) == TYPE_STRING and not str(raw_rows).strip_edges().is_empty():
+			stage_rows = [str(raw_rows)]
+	if stage_rows.is_empty():
+		return fallback
+	var template: String = _pick_meeting_text(
+		stage_rows,
+		[str(lead.get("lead_id", "")), contact_id, current_stage_id, "stage_bubble"],
+		fallback
+	)
+	return _format_meeting_lead_template(template, lead, contact, meeting, definition)
+
+
+func _is_guided_first_hour_meeting(meeting: Dictionary) -> bool:
+	return str(meeting.get("request_source", "")).strip_edges() == "guided_first_hour"
+
+
+func _record_meeting_lead_discovery(
+	run_state,
+	contact: Dictionary,
+	lead: Dictionary,
+	meeting_id: String,
+	company_id: String,
+	definition: Dictionary
+) -> void:
+	var contact_id: String = str(contact.get("id", ""))
+	if contact_id.is_empty():
+		return
+	var discoveries: Dictionary = run_state.get_network_discoveries()
+	var discovery: Dictionary = discoveries.get(contact_id, {}).duplicate(true)
+	var target_company_ids: Array = _contact_company_targets(discovery)
+	if not company_id.is_empty() and not target_company_ids.has(company_id):
+		target_company_ids.append(company_id)
+	discovery["contact_id"] = contact_id
+	discovery["discovered"] = true
+	discovery["source_type"] = MEETING_LEAD_SOURCE_TYPE
+	discovery["source_id"] = meeting_id
+	discovery["meeting_id"] = meeting_id
+	discovery["meeting_lead_id"] = str(lead.get("lead_id", ""))
+	discovery["target_company_id"] = company_id if not company_id.is_empty() else str(discovery.get("target_company_id", ""))
+	discovery["target_company_ids"] = target_company_ids
+	discovery["target_sector_id"] = str(definition.get("sector_id", lead.get("target_sector_id", "")))
+	discovery["lead_score"] = max(int(discovery.get("lead_score", 0)), 88)
+	discovery["day_index"] = run_state.day_index
+	discoveries[contact_id] = discovery
+	run_state.set_network_discoveries(discoveries)
+
+
+func _mark_meeting_contact_met(run_state, data_repository, contact: Dictionary, lead: Dictionary) -> void:
+	var contact_id: String = str(contact.get("id", ""))
+	if contact_id.is_empty():
+		return
+	var contacts: Dictionary = run_state.get_network_contacts()
+	var runtime: Dictionary = contacts.get(contact_id, {}).duplicate(true)
+	runtime["contact_id"] = contact_id
+	runtime["met"] = true
+	runtime["relationship"] = int(contact.get("base_relationship", data_repository.get_contact_network_data().get("relationship_default", 25)))
+	runtime["met_day_index"] = run_state.day_index
+	runtime["last_source_type"] = MEETING_LEAD_SOURCE_TYPE
+	runtime["last_meeting_lead_id"] = str(lead.get("lead_id", ""))
+	contacts[contact_id] = runtime
+	run_state.set_network_contacts(contacts)
+
+
+func _mark_contact_meeting_note(run_state, contact_id: String, response_text: String) -> void:
+	if contact_id.is_empty():
+		return
+	var contacts: Dictionary = run_state.get_network_contacts()
+	var runtime: Dictionary = contacts.get(contact_id, {}).duplicate(true)
+	runtime["last_meeting_lead_note"] = response_text
+	runtime["last_meeting_lead_day_index"] = run_state.day_index
+	contacts[contact_id] = runtime
+	run_state.set_network_contacts(contacts)
+
+
+func _meeting_lead_response_text(lead: Dictionary, contact: Dictionary, meeting: Dictionary, definition: Dictionary, meeting_id: String) -> String:
+	var template: String = _pick_meeting_text(
+		lead.get("success_responses", []),
+		[meeting_id, str(lead.get("lead_id", "")), str(contact.get("id", "")), "response"],
+		"{contact} gives you a quick read on {ticker}. Treat it as context, not certainty."
+	)
+	return _format_meeting_lead_template(template, lead, contact, meeting, definition)
+
+
+func _format_meeting_lead_template(template: String, lead: Dictionary, contact: Dictionary, meeting: Dictionary, definition: Dictionary) -> String:
+	var company_id: String = str(lead.get("company_id", meeting.get("company_id", "")))
+	var ticker: String = str(definition.get("ticker", company_id.to_upper()))
+	var company_name: String = str(definition.get("name", meeting.get("company_name", ticker)))
+	var agenda_label: String = "the agenda"
+	var agenda_payload: Array = meeting.get("agenda_payload", [])
+	if not agenda_payload.is_empty() and typeof(agenda_payload[0]) == TYPE_DICTIONARY:
+		agenda_label = str(agenda_payload[0].get("label", agenda_label))
+	var formatted_text: String = template
+	formatted_text = formatted_text.replace("{contact}", str(contact.get("display_name", "The contact")))
+	formatted_text = formatted_text.replace("{role}", str(lead.get("role_label", "attendee")))
+	formatted_text = formatted_text.replace("{ticker}", ticker)
+	formatted_text = formatted_text.replace("{company}", company_name)
+	formatted_text = formatted_text.replace("{agenda}", agenda_label)
+	return formatted_text
+
+
+func _pick_meeting_text(text_rows: Array, seed_parts: Array, fallback: String) -> String:
+	if text_rows.is_empty():
+		return fallback
+	var index: int = STABLE_RNG.seed_from_parts(seed_parts) % text_rows.size()
+	return str(text_rows[index])
+
+
+func _meeting_lead_tier_rank(tier_id: String) -> int:
+	return int(MEETING_LEAD_TIER_ORDER.get(tier_id, 99))
+
+
+func _meeting_lead_is_approached(session: Dictionary, lead_id: String) -> bool:
+	return lead_id in session.get("approached_lead_ids", [])
+
+
+func _meeting_lead_result(session: Dictionary, lead_id: String) -> Dictionary:
+	return session.get("meeting_lead_results", {}).get(lead_id, {}).duplicate(true)
+
+
+func _met_contact_count(run_state) -> int:
+	var met_count: int = 0
+	for runtime_value in run_state.get_network_contacts().values():
+		if typeof(runtime_value) == TYPE_DICTIONARY and bool(runtime_value.get("met", false)):
+			met_count += 1
+	return met_count
+
+
 func _all_contact_definitions(run_state, data_repository) -> Array:
 	var definitions: Array = []
 	for contact_value in data_repository.get_contact_network_data().get("contacts", []):
@@ -1953,6 +2485,8 @@ func _network_journal_rows(run_state, data_repository, requests: Dictionary, dis
 		var discovery: Dictionary = discovery_value
 		if str(discovery.get("source_type", "")) == "referral":
 			rows.append(_network_referral_journal_row(run_state, data_repository, discovery))
+		if str(discovery.get("source_type", "")) == MEETING_LEAD_SOURCE_TYPE:
+			rows.append(_network_meeting_lead_journal_row(run_state, data_repository, discovery))
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var a_sort: int = int(a.get("sort_index", int(a.get("day_index", 0)) * 10))
 		var b_sort: int = int(b.get("sort_index", int(b.get("day_index", 0)) * 10))
@@ -2058,7 +2592,10 @@ func _network_request_journal_row(run_state, data_repository, request: Dictionar
 	var day_index: int = int(request.get("completed_day_index", request.get("created_day_index", 0))) if status != "pending" else int(request.get("created_day_index", 0))
 	var contact_name: String = _contact_display_name(run_state, data_repository, contact_id)
 	var ticker: String = _company_ticker(run_state, company_id)
-	var detail: String = "Due day %d." % int(request.get("due_day_index", 0))
+	var due_date_text: String = _request_due_date_text(request)
+	var detail: String = "Due date unknown."
+	if due_date_text != "the due date":
+		detail = "Due %s." % due_date_text
 	if status == "completed":
 		detail = "Completed after you held at least 1 lot."
 	elif status == "missed":
@@ -2076,6 +2613,20 @@ func _network_request_journal_row(run_state, data_repository, request: Dictionar
 		"title": "Request | %s | %s" % [ticker, status.capitalize()],
 		"detail": "%s | %s" % [contact_name, detail]
 	}
+
+
+func _request_due_date_text(request: Dictionary) -> String:
+	var due_day_index: int = int(request.get("due_day_index", 0))
+	if due_day_index <= 0:
+		return "the due date"
+	var date_info: Dictionary = trading_calendar.trade_date_for_index(max(due_day_index, 1))
+	var month_names := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+	var month_index: int = clamp(int(date_info.get("month", 1)) - 1, 0, month_names.size() - 1)
+	return "%s %d, %d" % [
+		month_names[month_index],
+		int(date_info.get("day", 1)),
+		int(date_info.get("year", 2020))
+	]
 
 
 func _network_referral_journal_row(run_state, data_repository, discovery: Dictionary) -> Dictionary:
@@ -2097,6 +2648,27 @@ func _network_referral_journal_row(run_state, data_repository, discovery: Dictio
 		"status": "discovered",
 		"title": "Referral | %s" % referred_name,
 		"detail": "%s introduced this lead." % source_name
+	}
+
+
+func _network_meeting_lead_journal_row(run_state, data_repository, discovery: Dictionary) -> Dictionary:
+	var contact_id: String = str(discovery.get("contact_id", ""))
+	var company_id: String = str(discovery.get("target_company_id", ""))
+	var day_index: int = int(discovery.get("day_index", 0))
+	var contact_name: String = _contact_display_name(run_state, data_repository, contact_id)
+	var ticker: String = _company_ticker(run_state, company_id)
+	return {
+		"id": "%s:meeting_lead:%s" % [contact_id, str(discovery.get("meeting_id", ""))],
+		"type": "meeting_lead",
+		"day_index": day_index,
+		"sort_index": day_index * 10 + 5,
+		"contact_id": contact_id,
+		"contact_name": contact_name,
+		"target_company_id": company_id,
+		"target_ticker": ticker,
+		"status": "met",
+		"title": "RUPSLB Lead | %s" % contact_name,
+		"detail": "Met during the %s meeting room." % ticker
 	}
 
 

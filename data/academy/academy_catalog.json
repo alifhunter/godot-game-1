@@ -3,26 +3,3068 @@
     {
       "id": "mindset",
       "label": "Mindset",
-      "status": "coming_soon",
+      "status": "playable",
       "summary": "Train the decision habits that keep trading from turning into guessing.",
-      "coming_soon_copy": "Coming soon. This academy track will cover patience, journaling, bias checks, and risk discipline.",
-      "sections": []
-    },
-    {
-      "id": "money_management",
-      "label": "Money Management",
-      "status": "coming_soon",
-      "summary": "Learn how to size positions, protect cash, and survive losing streaks.",
-      "coming_soon_copy": "Coming soon. This academy track will cover position sizing, cash discipline, drawdown limits, and trade review.",
-      "sections": []
+      "quiz_passing_score": 0.8,
+      "quiz_required_section_ids": [
+        "survival_mindset",
+        "money_readiness",
+        "investing_goals",
+        "business_ownership",
+        "price_drivers",
+        "participant_identity",
+        "analysis_toolkit",
+        "anti_fomo_framework",
+        "risk_reader",
+        "price_vs_value",
+        "thesis_before_buy",
+        "portfolio_discipline"
+      ],
+      "badge": {
+        "id": "mindset_basics",
+        "label": "Mindset Basics",
+        "description": "Passed the Mindset Academy final challenge."
+      },
+      "sections": [
+        {
+          "id": "survival_mindset",
+          "order": 0,
+          "label": "01 Survival",
+          "title": "01 Your First Goal Is Survival",
+          "kind": "lesson",
+          "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+          "pages": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand that the first goal in the market is not maximum profit, but survival. Without survival, players cannot learn, compound, or recover from mistakes."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "The market rewards players who stay in the game long enough to improve their process."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Before thinking about profit, protect your ability to keep playing. A player who loses all capital because of one emotional decision does not get to benefit from future opportunities."
+            }
+          ],
+          "checks": [
+            {
+              "id": "survival_mindset_scenario",
+              "title": "Scenario Check",
+              "scenario": "The player receives starting capital. A trending stock is rising fast, but the player has not yet built a safety buffer.",
+              "question": "What is the best decision before taking this fast-moving trade?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Do not go all-in; keep enough cash or safety buffer and only risk money that can handle volatility.",
+                  "correct": true,
+                  "feedback": "Correct. Survival creates more decision cycles."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Go all-in because the trend is already moving.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Ignore the safety buffer and decide after the trade.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Trade every day until the account doubles.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand that the first goal in the market is not maximum profit, but survival. Without survival, players cannot learn, compound, or recover from mistakes."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "The market rewards players who stay in the game long enough to improve their process."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Before thinking about profit, protect your ability to keep playing. A player who loses all capital because of one emotional decision does not get to benefit from future opportunities."
+            },
+            {
+              "type": "key_insights",
+              "title": "Mindset Summary",
+              "bullets": [
+                "Survival creates more decision cycles.",
+                "All-in decisions magnify financial and emotional risk.",
+                "The Risk Meter should rise when hidden danger increases."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Risk Meter",
+            "internal_badge": "Survivor Mindset",
+            "steam_achievement_id": "ACH_MINDSET_01_SURVIVAL",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "money_readiness",
+          "order": 1,
+          "label": "02 Cold Money",
+          "title": "02 Money Readiness: Is This Money Ready for the Market?",
+          "kind": "lesson",
+          "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+          "pages": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand that not all money is investable. Money for daily needs, debt, rent, or emergencies should not be treated the same as cold money."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Investing becomes emotionally dangerous when the money has a near-term survival purpose."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Before investing, the player should have basic income, covered living needs, and an emergency buffer. Money with urgent real-life purpose often leads to panic decisions when prices fall."
+            }
+          ],
+          "checks": [
+            {
+              "id": "money_readiness_scenario",
+              "title": "Scenario Check",
+              "scenario": "The player has Rp10,000,000. Monthly expenses are Rp4,000,000. Emergency buffer is zero. A stock is trending.",
+              "question": "What should the player prioritize before taking large market risk?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Build or protect the emergency buffer first, then invest only the portion that can tolerate temporary loss.",
+                  "correct": true,
+                  "feedback": "Correct. Cold money can tolerate volatility."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Use the whole Rp10,000,000 because the stock is trending.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Borrow more money to avoid missing the move.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Treat the emergency buffer as spare trading cash.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand that not all money is investable. Money for daily needs, debt, rent, or emergencies should not be treated the same as cold money."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Investing becomes emotionally dangerous when the money has a near-term survival purpose."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Before investing, the player should have basic income, covered living needs, and an emergency buffer. Money with urgent real-life purpose often leads to panic decisions when prices fall."
+            },
+            {
+              "type": "key_insights",
+              "title": "Mindset Summary",
+              "bullets": [
+                "Cold money can tolerate volatility.",
+                "Emergency funds should stay outside risky trades.",
+                "Using bill-payment money should increase risk pressure."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Emergency Buffer",
+            "internal_badge": "Cold Money Ready",
+            "steam_achievement_id": "ACH_MINDSET_02_COLD_MONEY",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "investing_goals",
+          "order": 2,
+          "label": "03 Goals",
+          "title": "03 Why Invest: Future Self, Inflation, and Compounding",
+          "kind": "lesson",
+          "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+          "pages": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand the purpose of investing: growing wealth, preparing for the future, earning passive income, and protecting purchasing power."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Investing is not only about short-term profit. It is a tool to serve future goals."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "A good player connects market decisions to a long-term goal: education, home, retirement, passive income, inflation protection, or wealth growth."
+            }
+          ],
+          "checks": [
+            {
+              "id": "investing_goals_scenario",
+              "title": "Scenario Check",
+              "scenario": "The player chooses a goal before starting: short-term challenge, future house, retirement, passive income, or skill-building.",
+              "question": "What is the best first step before choosing market risk?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Pick a goal, because goal clarity affects time horizon and risk tolerance.",
+                  "correct": true,
+                  "feedback": "Correct. Goals turn random buying into filtered decisions."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Skip the goal and follow the highest daily mover.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Choose the riskiest stock because compounding needs speed.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Change the goal every time the portfolio turns red.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand the purpose of investing: growing wealth, preparing for the future, earning passive income, and protecting purchasing power."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Investing is not only about short-term profit. It is a tool to serve future goals."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "A good player connects market decisions to a long-term goal: education, home, retirement, passive income, inflation protection, or wealth growth."
+            },
+            {
+              "type": "key_insights",
+              "title": "Mindset Summary",
+              "bullets": [
+                "Goals turn random buying into filtered decisions.",
+                "Time horizon shapes how much volatility the player can tolerate.",
+                "Compounding works best when destructive drawdowns are avoided."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Goal Tracker",
+            "internal_badge": "Goal-Based Player",
+            "steam_achievement_id": "ACH_MINDSET_03_GOALS",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "business_ownership",
+          "order": 3,
+          "label": "04 Ownership",
+          "title": "04 Stock Is Business Ownership",
+          "kind": "lesson",
+          "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+          "pages": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand that buying a stock means owning a piece of a business, not just buying a moving ticker."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "A stock price is easier to understand when the player asks: What business am I buying?"
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Behind every stock is a company with assets, products, management, cash flow, debt, and future profit potential. Price movement matters, but business quality matters too."
+            }
+          ],
+          "checks": [
+            {
+              "id": "business_ownership_scenario",
+              "title": "Scenario Check",
+              "scenario": "The player sees three stocks:\n\n| Stock | Price Action | Business Read | Driver |\n|---|---|---|---|\n| Stock A | Up fast | Weakening | Excitement |\n| Stock B | Flat | Improving | Business progress |\n| Stock C | Up | Unknown | Rumor only |",
+              "question": "Which stock deserves deeper investigation first?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Investigate Stock B first, because business quality can matter more than short-term excitement.",
+                  "correct": true,
+                  "feedback": "Correct. A ticker is a door; behind it is a business."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Buy Stock A immediately because price is already up.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Buy Stock C because rumor can move faster than facts.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Ignore business quality and choose the greenest candle.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand that buying a stock means owning a piece of a business, not just buying a moving ticker."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "A stock price is easier to understand when the player asks: What business am I buying?"
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Behind every stock is a company with assets, products, management, cash flow, debt, and future profit potential. Price movement matters, but business quality matters too."
+            },
+            {
+              "type": "key_insights",
+              "title": "Mindset Summary",
+              "bullets": [
+                "A ticker is a door; behind it is a business.",
+                "Price can move daily while business quality takes longer to prove.",
+                "Business-owner mindset asks what the company does before asking what the candle did."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Business Snapshot",
+            "internal_badge": "Business Owner Mindset",
+            "steam_achievement_id": "ACH_MINDSET_04_OWNERSHIP",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "price_drivers",
+          "order": 4,
+          "label": "05 Price Drivers",
+          "title": "05 How Stock Prices Move: Business Growth vs Sentiment",
+          "kind": "lesson",
+          "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+          "pages": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand that stock prices can move because of real business growth or because of sentiment, hype, rumors, macro changes, or corporate actions."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Not every price increase means the business improved."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "A stock can rise because profits improve, assets grow, the sector becomes attractive, or management executes well. It can also rise because of hype, rumor, or temporary sentiment. The player must learn to separate signal from noise."
+            }
+          ],
+          "checks": [
+            {
+              "id": "price_drivers_scenario",
+              "title": "Scenario Check",
+              "scenario": "A company reports strong revenue growth, but net profit falls. Meanwhile, the market is hyping the stock. The player must decide whether the move is supported by fundamentals.",
+              "question": "What should the player do when price action and business data disagree?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Do not rely on price movement alone; compare business data, sentiment, and risk before deciding.",
+                  "correct": true,
+                  "feedback": "Correct. Business growth can be durable but still needs verification."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Buy automatically because revenue growth is strong.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Sell automatically because net profit fell.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Ignore the business data because the crowd is excited.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand that stock prices can move because of real business growth or because of sentiment, hype, rumors, macro changes, or corporate actions."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Not every price increase means the business improved."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "A stock can rise because profits improve, assets grow, the sector becomes attractive, or management executes well. It can also rise because of hype, rumor, or temporary sentiment. The player must learn to separate signal from noise."
+            },
+            {
+              "type": "key_insights",
+              "title": "Mindset Summary",
+              "bullets": [
+                "Business growth can be durable but still needs verification.",
+                "Sentiment can move price quickly and reverse quickly.",
+                "When price and business data disagree, investigate before deciding."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Price Driver Tag",
+            "internal_badge": "Signal Hunter",
+            "steam_achievement_id": "ACH_MINDSET_05_PRICE_DRIVERS",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "participant_identity",
+          "order": 5,
+          "label": "06 Identity",
+          "title": "06 Investor, Trader, or Speculator?",
+          "kind": "lesson",
+          "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+          "pages": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players can distinguish investor, trader, and speculator behavior."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Different playstyles are valid, but mixing them without awareness creates confusion and risk."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Investors focus on business quality and long-term value. Traders focus on shorter-term price movement and technical setups. Speculators chase rumor or hype without enough analysis."
+            }
+          ],
+          "checks": [
+            {
+              "id": "participant_identity_scenario",
+              "title": "Scenario Check",
+              "scenario": "A stock rises 20% after a rumor. The player must choose how to respond based on their selected playstyle.",
+              "question": "What is the strongest response to the rumor-driven move?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Pick one logic path: investor checks business and valuation, trader checks setup and exit, speculator recognizes high risk and sizes very small or avoids.",
+                  "correct": true,
+                  "feedback": "Correct. Investor logic checks business and value."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Enter as a trader, then become an investor if the trade fails.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Buy first and choose the playstyle later.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Treat rumor, business quality, and technical setup as identical signals.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players can distinguish investor, trader, and speculator behavior."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Different playstyles are valid, but mixing them without awareness creates confusion and risk."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Investors focus on business quality and long-term value. Traders focus on shorter-term price movement and technical setups. Speculators chase rumor or hype without enough analysis."
+            },
+            {
+              "type": "key_insights",
+              "title": "Mindset Summary",
+              "bullets": [
+                "Investor logic checks business and value.",
+                "Trader logic checks setup, trend, volume, and exit plan.",
+                "Speculation should be recognized as high risk and sized very small or avoided."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Playstyle Profile",
+            "internal_badge": "Know Your Role",
+            "steam_achievement_id": "ACH_MINDSET_06_IDENTITY",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "analysis_toolkit",
+          "order": 6,
+          "label": "07 Toolkit",
+          "title": "07 Analysis Toolkit: Fundamental, Technical, Money Flow, and Value",
+          "kind": "lesson",
+          "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+          "pages": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand the main analysis approaches and when each is useful."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Different tools answer different questions."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Fundamental analysis asks whether the business is healthy. Technical analysis studies historical price and volume patterns. Money flow analysis looks at large fund movement. Value investing compares current price to estimated business value."
+            }
+          ],
+          "checks": [
+            {
+              "id": "analysis_toolkit_scenario",
+              "title": "Scenario Check",
+              "scenario": "The player receives four tasks:\n\n| Task | Needed Read |\n|---|---|\n| Check business health | Company quality |\n| Find a possible entry zone | Price and chart setup |\n| Detect unusual volume | Flow behavior |\n| Judge whether price is below value | Price versus worth |",
+              "question": "What should the player do with these four tasks?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Match each task to the right tool: fundamental, technical, money flow, and value analysis.",
+                  "correct": true,
+                  "feedback": "Correct. Fundamental analysis checks business health."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Use only rumors for every task.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Use technical analysis to judge all business quality.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Use one tool blindly because it worked once.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand the main analysis approaches and when each is useful."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Different tools answer different questions."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Fundamental analysis asks whether the business is healthy. Technical analysis studies historical price and volume patterns. Money flow analysis looks at large fund movement. Value investing compares current price to estimated business value."
+            },
+            {
+              "type": "key_insights",
+              "title": "Mindset Summary",
+              "bullets": [
+                "Fundamental analysis checks business health.",
+                "Technical analysis studies price patterns and indicators.",
+                "Money flow looks for large fund movement.",
+                "Value investing compares price with estimated business value."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Analysis Menu",
+            "internal_badge": "Tool Selector",
+            "steam_achievement_id": "ACH_MINDSET_07_TOOLKIT",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "anti_fomo_framework",
+          "order": 7,
+          "label": "08 Anti-FOMO",
+          "title": "08 Framework: The Anti-FOMO Checklist",
+          "kind": "lesson",
+          "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+          "pages": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand why they need a decision framework to avoid FOMO, overtrading, inconsistency, and impatience."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "A framework acts like a compass when the market is noisy."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Without a framework, players can buy because of hype, trade too often, switch strategies randomly, or sell too early because of fear. A good framework slows down impulsive decisions."
+            }
+          ],
+          "checks": [
+            {
+              "id": "anti_fomo_framework_scenario",
+              "title": "Scenario Check",
+              "scenario": "A stock is up 35% in a week. Social feed says: Last chance! The player must pass a checklist before buying.",
+              "question": "What is the best first question before buying this fast-rising stock?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Why is it moving, and is the reason strong enough for the risk?",
+                  "correct": true,
+                  "feedback": "Correct. FOMO asks: Will I miss it?"
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Will I miss it if I wait?",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Who is shouting the loudest?",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Can I use all my cash before the price moves again?",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand why they need a decision framework to avoid FOMO, overtrading, inconsistency, and impatience."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "A framework acts like a compass when the market is noisy."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Without a framework, players can buy because of hype, trade too often, switch strategies randomly, or sell too early because of fear. A good framework slows down impulsive decisions."
+            },
+            {
+              "type": "text",
+              "heading": "Recommended checklist",
+              "body": "Before buying, ask:\n1. Why is the stock moving?\n2. Is the reason fundamental, technical, sentiment, or rumor?\n3. What is the risk?\n4. What would make the thesis wrong?\n5. How much capital is appropriate?\n6. What is the exit plan?"
+            },
+            {
+              "type": "key_insights",
+              "title": "Mindset Summary",
+              "bullets": [
+                "FOMO asks: Will I miss it?",
+                "Framework asks: Is the reason strong enough for the risk?",
+                "Overtrading is often FOMO in disguise."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Pre-Buy Checklist",
+            "internal_badge": "Framework User",
+            "steam_achievement_id": "ACH_MINDSET_08_ANTI_FOMO",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "risk_reader",
+          "order": 8,
+          "label": "09 Risk",
+          "title": "09 Risk Is Part of the Game",
+          "kind": "lesson",
+          "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+          "pages": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand different types of risk and how to respond to them."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Risk cannot be eliminated. It must be recognized, sized, and managed."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Risks include price volatility, company risk, low liquidity, macroeconomic risk, geopolitical risk, regulation, and rumor. A good player does not panic at every red candle; they ask whether the original reason for owning is still valid."
+            }
+          ],
+          "checks": [
+            {
+              "id": "risk_reader_scenario",
+              "title": "Scenario Check",
+              "scenario": "The player owns a stock that falls 18%. News appears:\n\n| New Evidence | Read |\n|---|---|\n| Profit margin decreased | Business pressure |\n| Management says expansion is delayed | Execution delay |\n| Sector is still strong | External support |",
+              "question": "What is the best first response to the 18% drop?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Review the thesis, catalyst, risk, and sizing to decide whether the thesis is intact, delayed, or broken.",
+                  "correct": true,
+                  "feedback": "Correct. A red candle is information, not an instruction."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Panic sell automatically because red means danger.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Buy more blindly because the sector is still strong.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Ignore the news and blame the market.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand different types of risk and how to respond to them."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Risk cannot be eliminated. It must be recognized, sized, and managed."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Risks include price volatility, company risk, low liquidity, macroeconomic risk, geopolitical risk, regulation, and rumor. A good player does not panic at every red candle; they ask whether the original reason for owning is still valid."
+            },
+            {
+              "type": "key_insights",
+              "title": "Mindset Summary",
+              "bullets": [
+                "A red candle is information, not an instruction.",
+                "Risk is not the enemy; unmanaged risk is.",
+                "Thesis review should decide whether the idea is on track, delayed, or broken."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Thesis Status: On Track / Delayed / Broken",
+            "internal_badge": "Risk Reader",
+            "steam_achievement_id": "ACH_MINDSET_09_RISK",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "price_vs_value",
+          "order": 9,
+          "label": "10 Value",
+          "title": "10 Price vs Value and Margin of Safety",
+          "kind": "lesson",
+          "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+          "pages": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand that cheap price is not always good value, and high price is not automatically bad value."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Value is what the player gets. Price is what the player pays. Margin of safety gives room for error."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "A stock can look cheap but be a bad business. Another stock can look expensive but still be valuable if growth, quality, and future cash flow justify it. The player should buy with a margin of safety, not blind optimism."
+            }
+          ],
+          "checks": [
+            {
+              "id": "price_vs_value_scenario",
+              "title": "Scenario Check",
+              "scenario": "Two stocks appear:\n\n| Stock | Price Impression | Business Read |\n|---|---|---|\n| Stock A | Low price | Declining business |\n| Stock B | Higher price | Stronger growth and clearer future |",
+              "question": "Which stock deserves further analysis first?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Study Stock B first, while still checking valuation and margin of safety before any buy decision.",
+                  "correct": true,
+                  "feedback": "Correct. Price is what you pay; value is what you get."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Choose Stock A automatically because low price means cheap value.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Buy Stock B immediately without a value range.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Avoid analysis because price and value are always identical.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand that cheap price is not always good value, and high price is not automatically bad value."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Value is what the player gets. Price is what the player pays. Margin of safety gives room for error."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "A stock can look cheap but be a bad business. Another stock can look expensive but still be valuable if growth, quality, and future cash flow justify it. The player should buy with a margin of safety, not blind optimism."
+            },
+            {
+              "type": "key_insights",
+              "title": "Mindset Summary",
+              "bullets": [
+                "Price is what you pay; value is what you get.",
+                "Low price can be a value trap when the business is weak.",
+                "A value range is better than false precision."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Value Range: Discount / Fair / Expensive",
+            "internal_badge": "Value Thinker",
+            "steam_achievement_id": "ACH_MINDSET_10_VALUE",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "thesis_before_buy",
+          "order": 10,
+          "label": "11 Thesis",
+          "title": "11 Build a Thesis Before You Buy",
+          "kind": "lesson",
+          "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+          "pages": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players learn to write a simple investment or trade thesis before taking a position."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Without a thesis, the player is borrowing someone else's conviction."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "A thesis explains why the player owns a stock, what must happen for the idea to work, what could go wrong, how long they plan to hold, and what would make them exit."
+            }
+          ],
+          "checks": [
+            {
+              "id": "thesis_before_buy_scenario",
+              "title": "Scenario Check",
+              "scenario": "Before buying a stock, the player opens the thesis template and must decide whether the idea is ready for a position.",
+              "question": "What should the player do before entering the position?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Write a thesis that covers the company, catalyst, risks, invalidation, time horizon, and reasonable position size.",
+                  "correct": true,
+                  "feedback": "Correct. Conviction is built from understanding, not volume."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Buy first and invent the thesis after price moves.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Copy only a target price from chat.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Use a green chart screenshot as the whole thesis.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players learn to write a simple investment or trade thesis before taking a position."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "Without a thesis, the player is borrowing someone else's conviction."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "A thesis explains why the player owns a stock, what must happen for the idea to work, what could go wrong, how long they plan to hold, and what would make them exit."
+            },
+            {
+              "type": "text",
+              "heading": "In-game thesis template",
+              "body": "Before buying, ask:\n1. What does the company do?\n2. Why might the price or business improve?\n3. What is the catalyst?\n4. What are the biggest risks?\n5. What would prove me wrong?\n6. What is my time horizon?\n7. What position size is reasonable?"
+            },
+            {
+              "type": "key_insights",
+              "title": "Mindset Summary",
+              "bullets": [
+                "Conviction is built from understanding, not volume.",
+                "A thesis should explain both upside and failure points.",
+                "When facts change, review the thesis."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Thesis Journal",
+            "internal_badge": "Thesis Builder",
+            "steam_achievement_id": "ACH_MINDSET_11_THESIS",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "portfolio_discipline",
+          "order": 11,
+          "label": "12 Portfolio",
+          "title": "12 Portfolio Management: Sizing, Diversification, and Avoiding All-In",
+          "kind": "lesson",
+          "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+          "pages": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand that portfolio success depends not only on choosing stocks, but also on sizing and risk distribution."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "A good idea can become a bad portfolio decision if position size is reckless."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Portfolio management protects the player from being destroyed by one wrong idea. Diversification spreads risk. Position sizing controls emotional pressure. Avoiding all-in keeps the player flexible."
+            }
+          ],
+          "checks": [
+            {
+              "id": "portfolio_discipline_scenario",
+              "title": "Scenario Check",
+              "scenario": "The player finds a strong idea and can allocate 5%, 20%, 50%, or 100% of capital. A surprise bad event appears. The player sees how different sizing changes the outcome.",
+              "question": "What is the healthiest portfolio decision?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Choose a survivable position size, keep diversification, and avoid putting the whole portfolio into one idea.",
+                  "correct": true,
+                  "feedback": "Correct. Do not let one stock decide the whole journey."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Allocate 100% because the idea looks strong.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Ignore sizing because good ideas cannot fail.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Chase every trending stock so no opportunity is missed.",
+                  "correct": false,
+                  "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Learning Objective",
+              "body": "Players understand that portfolio success depends not only on choosing stocks, but also on sizing and risk distribution."
+            },
+            {
+              "type": "text",
+              "heading": "Key Concept",
+              "body": "A good idea can become a bad portfolio decision if position size is reckless."
+            },
+            {
+              "type": "text",
+              "heading": "Knowledge Card",
+              "body": "Portfolio management protects the player from being destroyed by one wrong idea. Diversification spreads risk. Position sizing controls emotional pressure. Avoiding all-in keeps the player flexible."
+            },
+            {
+              "type": "key_insights",
+              "title": "Mindset Summary",
+              "bullets": [
+                "Do not let one stock decide the whole journey.",
+                "Position sizing is emotional risk management.",
+                "Diversification reduces dependence on one outcome."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Concentration Warning",
+            "internal_badge": "Portfolio Manager",
+            "steam_achievement_id": "ACH_MINDSET_12_PORTFOLIO",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "mindset_quiz",
+          "order": 12,
+          "label": "13 Challenge",
+          "title": "13 Final Challenge: The Viral Stock",
+          "kind": "quiz",
+          "completion_signal": "Score at least 80 percent to earn the Mindset Basics badge.",
+          "pages": [
+            {
+              "heading": "Final Challenge",
+              "body": "Apply the full mindset framework under hype, volatility, and uncertainty."
+            }
+          ],
+          "checks": [],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Scenario",
+              "body": "A small-cap stock is going viral. The simulation shows:\n\n- Price up 80% in two weeks.\n- Influencers are talking about it.\n- Rumor of acquisition.\n- Low liquidity.\n- No confirmed disclosure yet.\n- Friend says: Trust me, this is the one."
+            },
+            {
+              "type": "text",
+              "heading": "Player Tasks",
+              "body": "1. Identify the price driver.\n2. Separate confirmed facts from rumor.\n3. Choose playstyle: investor, trader, or speculator.\n4. Write a short thesis.\n5. Decide position size.\n6. Define exit condition.\n7. Respond to a sudden 25% drop."
+            },
+            {
+              "type": "text",
+              "heading": "Recommended Scoring",
+              "body": "| Player Behavior | Score Impact |\n|---|---:|\n| Checks source of price movement | +15 Framework |\n| Separates rumor from confirmed fact | +20 Framework |\n| Uses appropriate position sizing | +20 Risk Control |\n| Defines exit condition | +15 Discipline |\n| Avoids using emergency buffer | +25 Survival |\n| Buys only because of hype | +30 Noise |\n| Goes all-in | +40 Risk |\n| Changes strategy after losing | +20 Inconsistency |"
+            }
+          ]
+        },
+        {
+          "id": "mindset_glossary",
+          "order": 13,
+          "label": "14 Glossary",
+          "title": "14 Mindset Glossary",
+          "kind": "glossary",
+          "completion_signal": "You can look up core Mindset terms while reviewing trades.",
+          "pages": [
+            {
+              "heading": "Mindset terms",
+              "body": "Use glossary search for readiness, FOMO, risk, thesis, value, and portfolio terms."
+            }
+          ],
+          "checks": [],
+          "content_blocks": [
+            {
+              "type": "key_insights",
+              "title": "Useful searches",
+              "bullets": [
+                "cold money",
+                "Risk Meter",
+                "FOMO",
+                "thesis",
+                "margin of safety",
+                "position sizing"
+              ]
+            }
+          ]
+        }
+      ],
+      "quiz_questions": [
+        {
+          "id": "mindset_final_q1",
+          "category": "Final Challenge",
+          "prompt": "What is the first thing to check in a viral stock?",
+          "options": [
+            {
+              "id": "a",
+              "label": "Whether everyone is excited"
+            },
+            {
+              "id": "b",
+              "label": "Why the price is moving and whether the reason is confirmed"
+            },
+            {
+              "id": "c",
+              "label": "How fast you can all-in"
+            },
+            {
+              "id": "d",
+              "label": "The comment with the most likes"
+            }
+          ],
+          "correct_answer_id": "b",
+          "feedback_correct": "Correct. Viral movement needs evidence-checking before action.",
+          "feedback_wrong": "Start with the driver and confirmation status, not crowd excitement."
+        },
+        {
+          "id": "mindset_final_q2",
+          "category": "Final Challenge",
+          "prompt": "A rumor is not confirmed. What should happen to position size?",
+          "options": [
+            {
+              "id": "a",
+              "label": "It should be controlled or avoided"
+            },
+            {
+              "id": "b",
+              "label": "It should always be 100%"
+            },
+            {
+              "id": "c",
+              "label": "It should ignore liquidity"
+            },
+            {
+              "id": "d",
+              "label": "It should use emergency cash"
+            }
+          ],
+          "correct_answer_id": "a",
+          "feedback_correct": "Correct. Unconfirmed catalysts carry high uncertainty.",
+          "feedback_wrong": "Rumor requires smaller sizing or avoidance, especially when liquidity is weak."
+        },
+        {
+          "id": "mindset_final_q3",
+          "category": "Final Challenge",
+          "prompt": "The stock drops 25% after entry. What is the best first response?",
+          "options": [
+            {
+              "id": "a",
+              "label": "Panic sell instantly"
+            },
+            {
+              "id": "b",
+              "label": "Review thesis, catalyst, risk, and exit plan"
+            },
+            {
+              "id": "c",
+              "label": "Buy more blindly"
+            },
+            {
+              "id": "d",
+              "label": "Pretend it did not happen"
+            }
+          ],
+          "correct_answer_id": "b",
+          "feedback_correct": "Correct. Review whether the thesis is intact, delayed, or broken.",
+          "feedback_wrong": "A sharp drop is information. Review the thesis and exit plan before acting."
+        },
+        {
+          "id": "mindset_final_q4",
+          "category": "Final Challenge",
+          "prompt": "Which behavior indicates speculation?",
+          "options": [
+            {
+              "id": "a",
+              "label": "Buying based only on rumor and hope"
+            },
+            {
+              "id": "b",
+              "label": "Checking business quality"
+            },
+            {
+              "id": "c",
+              "label": "Setting an exit plan"
+            },
+            {
+              "id": "d",
+              "label": "Controlling position size"
+            }
+          ],
+          "correct_answer_id": "a",
+          "feedback_correct": "Correct. Speculation often lacks analysis and relies on hope.",
+          "feedback_wrong": "Speculation is driven by rumor or hope without enough analysis."
+        },
+        {
+          "id": "mindset_final_q5",
+          "category": "Final Challenge",
+          "prompt": "What is the best sign of a strong decision process?",
+          "options": [
+            {
+              "id": "a",
+              "label": "Always being right"
+            },
+            {
+              "id": "b",
+              "label": "Having a repeatable framework even when outcomes vary"
+            },
+            {
+              "id": "c",
+              "label": "Never losing money"
+            },
+            {
+              "id": "d",
+              "label": "Following the loudest opinion"
+            }
+          ],
+          "correct_answer_id": "b",
+          "feedback_correct": "Correct. Process quality matters because outcomes are uncertain.",
+          "feedback_wrong": "Strong process is repeatable under uncertainty; it is not the same as always being right."
+        }
+      ],
+      "steam_achievement_namespace": "academy_mindset",
+      "source_document": "mindset_module_lesson_curriculum_and_quiz_bank.pdf",
+      "source_extraction": "pdf_tounicode_streams"
     },
     {
       "id": "fundamental",
       "label": "Fundamental",
-      "status": "coming_soon",
-      "summary": "Learn how to read business quality, financial statements, and valuation clues.",
-      "coming_soon_copy": "Coming soon. This academy track will cover revenue, margin, balance sheet strength, growth, and valuation context.",
-      "sections": []
+      "status": "playable",
+      "summary": "Learn how to read business quality, financial statements, cash reality, and hidden risks.",
+      "quiz_passing_score": 0.8,
+      "quiz_required_section_ids": [
+        "why_financial_statements_matter",
+        "three_financial_statement_pillars",
+        "income_statement_from_revenue_to_net_profit",
+        "revenue_growth_real_or_one_time",
+        "gross_profit_margin",
+        "operating_profit_margin_and_net_profit_margin",
+        "non_recurring_items_and_interest_coverage",
+        "roe_roa_eps_and_profit_allocation",
+        "balance_sheet_basics",
+        "leverage_der_gearing_and_capital_structure",
+        "liquidity_current_ratio_and_cash_ratio",
+        "working_capital_and_cash_conversion_cycle",
+        "balance_sheet_red_flags",
+        "cash_flow_statement_ocf_icf_and_fcf",
+        "net_profit_vs_operating_cash_flow",
+        "notes_to_financial_statements",
+        "backlog_and_operating_segments",
+        "integrated_fundamental_analysis_and_action_plan"
+      ],
+      "badge": {
+        "id": "fundamental_analyst",
+        "label": "Fundamental Analyst",
+        "description": "Passed the Fundamental Academy financial statement exam."
+      },
+      "sections": [
+        {
+          "id": "why_financial_statements_matter",
+          "order": 0,
+          "label": "01 Statements",
+          "title": "01 Why Financial Statements Matter",
+          "kind": "lesson",
+          "completion_signal": "You can use why financial statements matter in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "why_financial_statements_matter_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "The player sees three companies:\n\n| Company | Net Profit | Cash Flow | Debt | Price Movement |\n|---|---:|---:|---:|---:|\n| Company A | High | Negative | High | +30% |\n| Company B | Moderate | Positive | Low | -5% |\n| Company C | Low | Positive | Moderate | +3% |",
+              "question": "Which company deserves deeper investigation first?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Company B or C, because cash flow and debt quality deserve deeper review before chasing Company A.",
+                  "correct": true,
+                  "feedback": "Correct. Company A may be risky because profit is not supported by cash and debt is high; B or C deserves a cleaner business-quality read first."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Company A, because the price already jumped 30%.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Company A, because high net profit is enough on its own.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Skip all three because only price movement matters.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "Financial statements are the map and compass of a business. Price can move because of market emotion, but financial statements help players see whether a company is genuinely healthy, fragile, growing, or only cosmetically attractive."
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "By the end of this lesson, players should be able to:\n\n- Explain why investors should read financial statements before buying stocks.\n- Understand the difference between auditor perspective and investor perspective.\n- Identify the three main financial statements and what each one answers."
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "Auditors focus on whether the report follows accounting standards and is fairly presented. Investors use the audited report as raw material to judge future prospects, risk, growth, and business quality.\n\nThe three main statements answer different questions:\n\n| Statement | Main Question |\n|---|---|\n| Income Statement | Is the company making money? |\n| Balance Sheet | What does the company own, owe, and keep for shareholders? |\n| Cash Flow Statement | Is real cash coming in or going out? |"
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "Financial statements are the map and compass of a business. Price can move because of market emotion, but financial statements help players see whether a company is genuinely healthy, fragile, growing, or only cosmetically attractive.",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Financial Statement Dashboard",
+            "internal_badge": "Business Detective",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_01_STATEMENTS",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "three_financial_statement_pillars",
+          "order": 1,
+          "label": "02 Three Pillars",
+          "title": "02 The Three Financial Statement Pillars",
+          "kind": "lesson",
+          "completion_signal": "You can use the three financial statement pillars in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "three_financial_statement_pillars_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "A company reports:\n\n- Revenue up 40%\n- Net profit up 20%\n- Operating cash flow negative\n- Receivables up 80%",
+              "question": "What is the main concern in this report?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Sales may not be turning into cash, so receivables and cash collection need investigation.",
+                  "correct": true,
+                  "feedback": "Correct. Profit and revenue can look strong while cash reality weakens; all three statements must be read together."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "The company is automatically healthy because revenue rose 40%.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "The balance sheet is irrelevant because net profit increased.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "The player should ignore cash flow until price falls.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "The three financial statements must be read together. Alone, each one can mislead. Together, they form a more complete picture."
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Identify the function of Income Statement, Balance Sheet, and Cash Flow Statement.\n- Understand why profit, assets, and cash are different.\n- Recognize that \"profitable\" does not always mean \"financially healthy.\""
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "| Pillar | What It Shows | Investor Question |\n|---|---|---|\n| Income Statement | Business performance | Is the business profitable? |\n| Balance Sheet | Financial position | Is the company financially strong? |\n| Cash Flow Statement | Real cash movement | Does the business generate cash? |\n\nA company can report profit but have weak cash flow. A company can own many assets but fund them with too much debt. A company can have high revenue but poor margins. That is why players must connect the puzzle pieces."
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "The three financial statements must be read together. Alone, each one can mislead. Together, they form a more complete picture.",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Three-Statement Check",
+            "internal_badge": "Puzzle Builder",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_02_THREE_PILLARS",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "income_statement_from_revenue_to_net_profit",
+          "order": 2,
+          "label": "03 Income Ladder",
+          "title": "03 Income Statement: From Revenue to Net Profit",
+          "kind": "lesson",
+          "completion_signal": "You can use income statement: from revenue to net profit in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "income_statement_from_revenue_to_net_profit_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "A coffee business sells drinks for Rp20,000 each. Direct production cost is Rp10,000, and operating cost per drink is Rp5,000.",
+              "question": "What are the gross profit and operating profit per drink?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Gross profit is Rp10,000 and operating profit is Rp5,000.",
+                  "correct": true,
+                  "feedback": "Correct. Revenue minus direct production cost gives gross profit; subtract operating cost to reach operating profit."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Gross profit is Rp20,000 and operating profit is Rp10,000.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Gross profit is Rp5,000 and operating profit is Rp10,000.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Gross profit is Rp10,000 and operating profit is Rp15,000.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "The Income Statement tells the story of how money enters the business and how much remains after each layer of cost."
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Read the basic structure of an Income Statement.\n- Understand revenue, COGS, gross profit, OPEX, operating profit, interest expense, tax, and net profit.\n- Explain why the journey from revenue to net profit matters."
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "Basic Income Statement flow:\n\nRevenue\n- Cost of Goods Sold\n= Gross Profit\n- Operating Expenses\n+/- Other Income/Expenses\n= Operating Profit\n- Interest Expense\n+ Income/Loss from Associates or JV\n= Earnings Before Tax\n- Taxes\n= Net Profit\n\nEach line tells a different part of the business story:\n\n| Line Item | Meaning |\n|---|---|\n| Revenue | Money earned from selling products/services |\n| COGS | Direct cost to produce goods/services |\n| Gross Profit | Profit after direct production costs |\n| OPEX | Cost to run the business daily |\n| Operating Profit | Profit from core operations |\n| Interest Expense | Cost of debt |\n| Net Profit | Final profit after costs, interest, and tax |"
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "The Income Statement tells the story of how money enters the business and how much remains after each layer of cost.",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Income Statement Ladder",
+            "internal_badge": "Profit Tracker",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_03_INCOME_LADDER",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "revenue_growth_real_or_one_time",
+          "order": 3,
+          "label": "04 Revenue Growth",
+          "title": "04 Revenue Growth: Real Growth or One-Time Spike?",
+          "kind": "lesson",
+          "completion_signal": "You can use revenue growth: real growth or one-time spike? in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "revenue_growth_real_or_one_time_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "Two companies show 50% revenue growth.\n\n| Company | Cause of Growth | Risk |\n|---|---|---|\n| Company A | New stores, higher sales volume | Potentially sustainable |\n| Company B | One-time commodity price spike | May reverse next year |",
+              "question": "Which company deserves the higher revenue sustainability score?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Company A, unless Company B has evidence of long-term structural demand.",
+                  "correct": true,
+                  "feedback": "Correct. Sustainable growth needs recurring drivers; a one-time price spike can reverse."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Company B, because any 50% growth is automatically better.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Both companies deserve the same score because the growth rate is equal.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Neither company should be reviewed because revenue growth is never useful.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "Revenue growth is not automatically good. Players must ask whether growth is consistent, sustainable, organic, and profitable."
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Calculate revenue growth.\n- Distinguish sustainable growth from one-time growth.\n- Understand that historical growth does not guarantee future growth.\n- Identify whether growth comes from volume, price, new market, acquisition, or commodity cycle."
+            },
+            {
+              "type": "text",
+              "heading": "Formula",
+              "body": "Revenue Growth = Ending Revenue / Beginning Revenue - 1"
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "Revenue can grow because:\n\n- More units are sold\n- Selling prices increase\n- Company enters a new market\n- Company launches a new product\n- Company acquires another business\n- Commodity price temporarily rises\n\nPlayers should ask:\n\n| Question | Why It Matters |\n|---|---|\n| Is growth consistent? | Shows demand stability |\n| Is growth organic or from acquisition? | Organic growth may be more repeatable |\n| Is growth caused by commodity price? | Commodity growth can reverse quickly |\n| Does growth create profit and cash? | Revenue without profit/cash is weak quality |"
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "Revenue growth is not automatically good. Players must ask whether growth is consistent, sustainable, organic, and profitable.",
+                "Revenue Growth = Ending Revenue / Beginning Revenue - 1",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Growth Quality Meter",
+            "internal_badge": "Growth Detective",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_04_REVENUE_GROWTH",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "gross_profit_margin",
+          "order": 4,
+          "label": "05 Gross Margin",
+          "title": "05 Gross Profit Margin: Pricing Power and Production Efficiency",
+          "kind": "lesson",
+          "completion_signal": "You can use gross profit margin: pricing power and production efficiency in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "gross_profit_margin_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "A drink business sells at Rp20,000.\n\n| Case | Cost to Make | Gross Profit | Gross Margin |\n|---|---:|---:|---:|\n| Case A | Rp10,000 | Rp10,000 | 50% |\n| Case B | Rp15,000 | Rp5,000 | 25% |",
+              "question": "Which case has better gross economics?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Case A, because it keeps more gross profit from the same selling price.",
+                  "correct": true,
+                  "feedback": "Correct. Higher gross margin usually signals better pricing power or production efficiency before operating costs."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Case B, because higher production cost means higher quality automatically.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Both cases are equal because selling price is the same.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Case B, because lower gross margin is always safer.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "Gross Profit Margin shows how much profit remains after paying direct production costs. It helps players understand pricing power, supplier pressure, and production efficiency."
+            },
+            {
+              "type": "text",
+              "heading": "Formula",
+              "body": "Gross Profit Margin = Gross Profit / Revenue"
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Calculate gross profit margin.\n- Understand why margin differs by industry.\n- Recognize when rising revenue hides weakening production economics."
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "Gross margin is affected by:\n\n- Selling price\n- Raw material cost\n- Production efficiency\n- Supplier bargaining power\n- Customer bargaining power\n- Competition\n- Brand strength\n- Commodity exposure\n\nHigh margin can mean strong brand, pricing power, efficient production, or low competition. Low margin is not always bad, but it usually means the company must rely on high volume, efficiency, or scale."
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "Gross Profit Margin shows how much profit remains after paying direct production costs. It helps players understand pricing power, supplier pressure, and production efficiency.",
+                "Gross Profit Margin = Gross Profit / Revenue",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Margin Lens",
+            "internal_badge": "Margin Reader",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_05_GROSS_MARGIN",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "operating_profit_margin_and_net_profit_margin",
+          "order": 5,
+          "label": "06 Profit Margins",
+          "title": "06 Operating Profit Margin and Net Profit Margin",
+          "kind": "lesson",
+          "completion_signal": "You can use operating profit margin and net profit margin in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "operating_profit_margin_and_net_profit_margin_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "| Company | Gross Margin | Operating Margin | Net Margin | Interpretation |\n|---|---:|---:|---:|---|\n| A | 50% | 40% | 35% | Efficient and profitable |\n| B | 50% | 10% | 3% | OPEX or below-operating costs may be heavy |\n| C | 20% | 15% | 12% | Low gross margin but efficient operations |",
+              "question": "Which company needs investigation into OPEX or below-operating costs?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Company B.",
+                  "correct": true,
+                  "feedback": "Correct. Company B starts with strong gross margin but loses most of it before net profit, pointing to OPEX or below-operating pressure."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Company A.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Company C.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "All three have the same issue.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "Gross profit is not the final story. A business can have good gross margin but still weak operating or net margin if operating expenses, interest, tax, or other costs are too high."
+            },
+            {
+              "type": "text",
+              "heading": "Formulas",
+              "body": "Operating Profit Margin = Operating Profit / Revenue\nNet Profit Margin = Net Profit / Revenue"
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Distinguish gross profit, operating profit, and net profit.\n- Understand how OPEX, interest, and tax affect final profit.\n- Identify whether profit is scalable or cost-heavy."
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "Operating margin answers:\n\n\"After running the business day-to-day, how much profit remains?\"\n\nNet margin answers:\n\n\"After all costs, interest, and taxes, how much of revenue becomes final profit?\"\n\nA company with high gross margin but low operating margin may have heavy rent, salary, marketing, logistics, or admin costs. A company with high operating margin but low net margin may have large interest expenses or tax burden."
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "Gross profit is not the final story. A business can have good gross margin but still weak operating or net margin if operating expenses, interest, tax, or other costs are too high.",
+                "Operating Profit Margin = Operating Profit / Revenue",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Profit Waterfall",
+            "internal_badge": "Cost Controller",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_06_PROFIT_MARGINS",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "non_recurring_items_and_interest_coverage",
+          "order": 6,
+          "label": "07 Profit Quality",
+          "title": "07 Non-Recurring Items and Interest Coverage",
+          "kind": "lesson",
+          "completion_signal": "You can use non-recurring items and interest coverage in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "non_recurring_items_and_interest_coverage_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "A company reports net profit up 300%. Footnotes show most profit came from selling land. Operating profit was flat.",
+              "question": "What should the player do with the 300% net profit jump?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Mark it as a non-recurring gain and investigate core profit.",
+                  "correct": true,
+                  "feedback": "Correct. A land sale may boost reported profit once, but it does not prove repeatable business quality."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Upgrade business quality score immediately.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Assume future profit will also triple.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Buy all-in because the headline is strong.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "Not all profit is created equal. One-time gains can make a company look better than it really is. Interest coverage shows whether operating profit can cover debt interest."
+            },
+            {
+              "type": "text",
+              "heading": "Formulas",
+              "body": "Interest Coverage Ratio = EBIT / Interest Expense\n\nGeneral guide:\n\n| ICR | Interpretation |\n|---:|---|\n| < 1x | Danger zone |\n| 1x-2x | Caution zone |\n| Around 3x or higher | More comfortable, depending on industry |"
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Identify non-recurring income/loss.\n- Separate core profit from one-time profit.\n- Evaluate whether debt interest is manageable."
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "Non-recurring items include:\n\n- Gain from selling assets or subsidiaries\n- Unrealized gain from investment revaluation\n- Forex gain/loss\n- Debt restructuring gain\n- One-time M&A gain\n- Impairment loss\n\nA large one-time gain can make net profit jump, but it may not happen again. Players should normalize earnings by focusing on recurring operating performance."
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "Not all profit is created equal. One-time gains can make a company look better than it really is. Interest coverage shows whether operating profit can cover debt interest.",
+                "Interest Coverage Ratio = EBIT / Interest Expense",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Profit Quality Filter",
+            "internal_badge": "Anti-Cosmetic Profit",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_07_PROFIT_QUALITY",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "roe_roa_eps_and_profit_allocation",
+          "order": 7,
+          "label": "08 Returns",
+          "title": "08 ROE, ROA, EPS, and Profit Allocation",
+          "kind": "lesson",
+          "completion_signal": "You can use roe, roa, eps, and profit allocation in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "roe_roa_eps_and_profit_allocation_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "Company A has ROE 20%, pays low dividends, and reinvests profit into expansion that keeps revenue and profit growing. Company B has ROE 8%, retains all earnings, but profit does not grow.",
+              "question": "Which company uses retained earnings better?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Company A.",
+                  "correct": true,
+                  "feedback": "Correct. Retained earnings are more useful when reinvestment produces attractive returns and growth."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Company B, because keeping all earnings is always better.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Both companies use capital equally well.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Neither can be judged using ROE or growth evidence.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "Profit is not enough. Players must know how efficiently the company uses capital, how much profit belongs to each share, and how management uses profit."
+            },
+            {
+              "type": "text",
+              "heading": "Formulas",
+              "body": "ROE = Net Profit / Equity\nROA = Net Profit / Total Assets\nEPS = Net Profit Attributable to Parent / Number of Shares\nDividend Payout Ratio = DPS / EPS"
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Understand ROE as return on shareholder capital.\n- Understand ROA as return on all assets.\n- Understand EPS as profit per share.\n- Evaluate whether retained earnings are used productively.\n- Understand trade-offs between dividends, reinvestment, debt repayment, and buyback."
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "ROE helps players compare business returns against safer instruments. If a business earns lower returns than low-risk alternatives, players should question why they should take equity risk.\n\nHowever, ROE can be distorted by high debt, low equity, one-time profit, or accounting effects. Always connect ROE to balance sheet and cash flow.\n\nProfit can be used for:\n\n- Dividend\n- Reinvestment / expansion\n- Debt repayment\n- Buyback\n- Cash reserve\n\nThe ideal use depends on company opportunities and capital discipline."
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "Profit is not enough. Players must know how efficiently the company uses capital, how much profit belongs to each share, and how management uses profit.",
+                "ROE = Net Profit / Equity",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Capital Allocation Screen",
+            "internal_badge": "Owner Mindset",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_08_RETURNS",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "balance_sheet_basics",
+          "order": 8,
+          "label": "09 Balance Sheet",
+          "title": "09 Balance Sheet Basics: Assets, Liabilities, Equity",
+          "kind": "lesson",
+          "completion_signal": "You can use balance sheet basics: assets, liabilities, equity in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "balance_sheet_basics_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "A company has:\n\n- Assets: Rp10T\n- Liabilities: Rp3T\n- Equity: ?",
+              "question": "What is the company equity?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Rp7T.",
+                  "correct": true,
+                  "feedback": "Correct. Assets = Liabilities + Equity, so Equity = Rp10T - Rp3T = Rp7T."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Rp3T.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Rp10T.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Rp13T.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "The Balance Sheet shows what the company owns, owes, and what belongs to shareholders."
+            },
+            {
+              "type": "text",
+              "heading": "Core Equation",
+              "body": "Assets = Liabilities + Equity"
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Identify assets, liabilities, and equity.\n- Distinguish current and non-current assets/liabilities.\n- Understand equity as net worth of the company.\n- Recognize retained earnings as accumulated profit kept in the business."
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "| Category | Meaning | Examples |\n|---|---|---|\n| Current Assets | Assets expected to become cash/useful within one year | Cash, receivables, inventory |\n| Non-Current Assets | Long-term assets | Fixed assets, investments, mining assets, property |\n| Current Liabilities | Obligations due within one year | Trade payables, short-term bank debt, taxes payable |\n| Non-Current Liabilities | Obligations due after one year | Bonds, long-term bank loans |\n| Equity | Owner's residual claim | Paid-in capital, retained earnings |"
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "The Balance Sheet shows what the company owns, owes, and what belongs to shareholders.",
+                "Assets = Liabilities + Equity",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Balance Sheet Map",
+            "internal_badge": "Net Worth Reader",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_09_BALANCE_SHEET",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "leverage_der_gearing_and_capital_structure",
+          "order": 9,
+          "label": "10 Leverage",
+          "title": "10 Leverage, DER, Gearing, and Capital Structure",
+          "kind": "lesson",
+          "completion_signal": "You can use leverage, der, gearing, and capital structure in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "leverage_der_gearing_and_capital_structure_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "| Company | DER | OCF | Revenue Stability | Interpretation |\n|---|---:|---:|---|---|\n| A | 0.3x | Positive | Stable | Low leverage |\n| B | 3.0x | Positive | Long-term contracts | High leverage but may be acceptable |\n| C | 5.0x | Negative | Declining | High danger |",
+              "question": "Which company has the highest leverage danger?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Company C.",
+                  "correct": true,
+                  "feedback": "Correct. High DER becomes more dangerous when operating cash flow is negative and revenue is declining."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Company A.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Company B.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "All three have equal leverage danger.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "Debt can help companies grow, but too much debt can make them fragile. Players must understand whether a company looks rich because of real equity growth or because it borrows aggressively."
+            },
+            {
+              "type": "text",
+              "heading": "Formulas",
+              "body": "Debt to Equity Ratio = Total Liabilities / Equity\nGearing Ratio = Interest-Bearing Debt / Shareholder Equity"
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Calculate DER and gearing ratio.\n- Understand difference between total liabilities and interest-bearing debt.\n- Interpret leverage based on industry context.\n- Compare equity growth versus liability growth."
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "Debt is not always bad. Some industries use more leverage because they have long-term contracts, predictable cash flow, or asset-heavy expansion. But excessive leverage becomes dangerous when:\n\n- Revenue falls\n- Operating profit weakens\n- Interest expense rises\n- Cash flow turns negative\n- Debt matures when business is weak"
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "Debt can help companies grow, but too much debt can make them fragile. Players must understand whether a company looks rich because of real equity growth or because it borrows aggressively.",
+                "Debt to Equity Ratio = Total Liabilities / Equity",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Leverage Alarm",
+            "internal_badge": "Debt Watcher",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_10_LEVERAGE",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "liquidity_current_ratio_and_cash_ratio",
+          "order": 10,
+          "label": "11 Liquidity",
+          "title": "11 Liquidity: Current Ratio and Cash Ratio",
+          "kind": "lesson",
+          "completion_signal": "You can use liquidity: current ratio and cash ratio in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "liquidity_current_ratio_and_cash_ratio_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "Company has:\n\n- Current liabilities: Rp5B\n- Cash: Rp2B\n- Receivables: Rp3B\n- Land: Rp100B",
+              "question": "Does the land help pay tomorrow's bills?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Not immediately. Land is valuable but not liquid.",
+                  "correct": true,
+                  "feedback": "Correct. Liquidity focuses on assets that can pay near-term obligations; land may be valuable but slow to convert into cash."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Yes. Land should be treated the same as cash.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Yes. Current liabilities disappear because total assets are high.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "No analysis is needed because land value is large.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "Liquidity measures whether a company can pay near-term obligations. A profitable company can still be in trouble if it cannot pay bills when due."
+            },
+            {
+              "type": "text",
+              "heading": "Formulas",
+              "body": "Current Ratio = Current Assets / Current Liabilities\nCash Ratio = Cash and Cash Equivalents / Current Liabilities"
+            },
+            {
+              "type": "text",
+              "heading": "General Guide",
+              "body": "| Ratio | Interpretation |\n|---:|---|\n| Current Ratio < 1 | Potential liquidity problem |\n| Current Ratio > 1 | Generally safer |\n| Current Ratio > 3 | May indicate idle assets, depending on business |\n| Cash Ratio very low | Needs receivables/inventory conversion or refinancing |\n| Cash Ratio very high | Safe, but may be inefficient if cash is idle |"
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Calculate current ratio and cash ratio.\n- Understand the difference between liquid and illiquid assets.\n- Recognize short-term debt risk.\n- Understand why large assets do not always mean easy payment ability."
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "Liquidity measures whether a company can pay near-term obligations. A profitable company can still be in trouble if it cannot pay bills when due.",
+                "Current Ratio = Current Assets / Current Liabilities",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Liquidity Shield",
+            "internal_badge": "Bill-Payer",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_11_LIQUIDITY",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "working_capital_and_cash_conversion_cycle",
+          "order": 11,
+          "label": "12 Working Capital",
+          "title": "12 Working Capital: Receivables, Inventory, Payables, and CCC",
+          "kind": "lesson",
+          "completion_signal": "You can use working capital: receivables, inventory, payables, and ccc in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "working_capital_and_cash_conversion_cycle_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "A retailer reports:\n\n- Revenue up 5%\n- Inventory up 60%\n- Gross margin down",
+              "question": "What is the working-capital concern?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Inventory may be piling up, demand may be weakening, and discounts may pressure margin.",
+                  "correct": true,
+                  "feedback": "Correct. Inventory rising much faster than revenue while margin falls can signal buildup, discounting, or weaker demand."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "The company has no risk because revenue still grew.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Inventory growth always means demand is stronger.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Gross margin no longer matters once inventory rises.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "Working capital tells players whether money gets stuck in customers, inventory, or suppliers. A company can show revenue growth but fail to collect cash."
+            },
+            {
+              "type": "text",
+              "heading": "Key Metrics",
+              "body": "| Metric | Meaning |\n|---|---|\n| DSO | How long customers take to pay |\n| DIO | How long inventory stays before sold |\n| DPO | How long company takes to pay suppliers |\n| Cash Conversion Cycle | Time from cash going out to cash coming back |"
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Understand DSO, DIO, DPO, and cash conversion cycle conceptually.\n- Detect receivables growing faster than revenue.\n- Detect inventory piling up.\n- Understand supplier payment flexibility and risk."
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "Red flags include:\n\n- Receivables growing much faster than revenue\n- Large receivables from related parties\n- Receivables with unclear aging or weak collectability\n- Inventory growing while sales slow down\n- Payables stretched too far, damaging supplier relationships"
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "Working capital tells players whether money gets stuck in customers, inventory, or suppliers. A company can show revenue growth but fail to collect cash.",
+                "| Metric | Meaning |",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Working Capital Radar",
+            "internal_badge": "Cash Cycle Analyst",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_12_WORKING_CAPITAL",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "balance_sheet_red_flags",
+          "order": 12,
+          "label": "13 Red Flags",
+          "title": "13 Balance Sheet Red Flags: Goodwill, Receivables, Inventory, Related Parties",
+          "kind": "lesson",
+          "completion_signal": "You can use balance sheet red flags: goodwill, receivables, inventory, related parties in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "balance_sheet_red_flags_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "A company has:\n\n- Goodwill: 50% of equity\n- Net profit down\n- Acquisition target underperforming",
+              "question": "What is the key balance-sheet risk?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Potential goodwill impairment.",
+                  "correct": true,
+                  "feedback": "Correct. Large goodwill tied to an underperforming acquisition may need impairment and can weaken equity quality."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Guaranteed dividend growth.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "No risk because goodwill is always cash.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Inventory is definitely the only problem.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "Some Balance Sheet items require extra skepticism. Big numbers are not always strong assets. They can hide risk."
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Understand why large goodwill can be risky.\n- Identify inventory and receivables red flags.\n- Understand related-party transaction risk.\n- Learn when to check footnotes."
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "| Red Flag | Why It Matters |\n|---|---|\n| Large goodwill | Acquisition may fail and cause impairment loss |\n| Inventory rising faster than sales | Products may not sell or may need discounting |\n| Receivables rising faster than sales | Company may not collect cash |\n| Related-party receivables | Money may be stuck within group entities |\n| Unclear footnotes | Harder to judge asset quality |\n\nGoodwill appears when a company buys another company above its net asset value. If expected synergy fails, goodwill may be impaired, reducing profit and equity."
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "Some Balance Sheet items require extra skepticism. Big numbers are not always strong assets. They can hide risk.",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Red Flag Scanner",
+            "internal_badge": "Skeptical Investor",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_13_RED_FLAGS",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "cash_flow_statement_ocf_icf_and_fcf",
+          "order": 13,
+          "label": "14 Cash Flow",
+          "title": "14 Cash Flow Statement: OCF, ICF, and FCF",
+          "kind": "lesson",
+          "completion_signal": "You can use cash flow statement: ocf, icf, and fcf in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "cash_flow_statement_ocf_icf_and_fcf_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "| Company | OCF | ICF | Financing CF | Interpretation |\n|---|---:|---:|---:|---|\n| A | +100 | -40 | -20 | Self-funded expansion and repayment/dividends |\n| B | -20 | -100 | +130 | Growth funded by debt/equity, riskier |\n| C | +50 | +70 | -30 | Selling assets, not necessarily growing |",
+              "question": "Which company has the healthier cash pattern?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Company A.",
+                  "correct": true,
+                  "feedback": "Correct. Positive OCF funding investment and shareholder/lender payments is healthier than growth dependent on external financing."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Company B.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Company C.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "All three are equally healthy.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "Cash flow reveals whether the business generates real money. Accounting profit can look good, but cash flow shows whether money actually comes in."
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Understand operating, investing, and financing cash flow.\n- Recognize why operating cash flow is critical.\n- Understand when investing cash flow is healthy or dangerous.\n- Interpret financing cash flow as money from/to lenders and shareholders."
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "| Cash Flow Section | Meaning | Investor Question |\n|---|---|---|\n| Operating Cash Flow | Cash from core business | Does the business generate real cash? |\n| Investing Cash Flow | Cash used for or received from long-term assets | Is the company expanding productively or selling assets? |\n| Financing Cash Flow | Cash from debt/equity or paid to lenders/shareholders | Is growth self-funded or dependent on external money? |\n\nIdeal early pattern for a healthy growing company:\n\nOCF positive\nICF negative due to expansion\nFinancing depends on funding needs\n\nBut the source of expansion matters. If OCF is weak and ICF is huge, the company may depend on debt or equity issuance."
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "Cash flow reveals whether the business generates real money. Accounting profit can look good, but cash flow shows whether money actually comes in.",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Cash Flow Compass",
+            "internal_badge": "Cash Reality Checker",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_14_CASH_FLOW",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "net_profit_vs_operating_cash_flow",
+          "order": 14,
+          "label": "15 Profit vs Cash",
+          "title": "15 Net Profit vs Operating Cash Flow",
+          "kind": "lesson",
+          "completion_signal": "You can use net profit vs operating cash flow in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "net_profit_vs_operating_cash_flow_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "Company reports:\n\n- Net profit: Rp1T\n- OCF: -Rp500B\n- Receivables: +80%",
+              "question": "What action should the player take?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Do not rely on the net profit headline; investigate receivables and cash collection.",
+                  "correct": true,
+                  "feedback": "Correct. High profit with negative OCF and rising receivables may mean earnings are not converting into cash."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Buy immediately because net profit is Rp1T.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Ignore operating cash flow because it is not part of profit.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Assume receivables growth is always good.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "Profit is accounting. Cash is survival. Players must compare net profit with OCF to judge quality."
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Compare net profit and OCF.\n- Detect red flags when profit is high but cash is low.\n- Understand cases where net profit is low but OCF is still healthy."
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "| Situation | Interpretation |\n|---|---|\n| Net profit high, OCF low/negative | Possible receivables, inventory, non-cash gain, or weak collection risk |\n| Net profit low/negative, OCF positive | May be due to non-cash expense like depreciation; investigate further |\n| Net profit and OCF both positive | Stronger profit quality |\n| Net profit negative and OCF negative | High-risk unless early-stage turnaround or special context |"
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "Profit is accounting. Cash is survival. Players must compare net profit with OCF to judge quality.",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Profit-to-Cash Bridge",
+            "internal_badge": "Cash Before Hype",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_15_PROFIT_VS_CASH",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "notes_to_financial_statements",
+          "order": 15,
+          "label": "16 Footnotes",
+          "title": "16 Notes to Financial Statements: The Business Kitchen",
+          "kind": "lesson",
+          "completion_signal": "You can use notes to financial statements: the business kitchen in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "notes_to_financial_statements_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "A company says revenue is diversified. Footnotes show 80% revenue comes from one customer.",
+              "question": "Is the diversification claim valid?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "No. Customer concentration risk is high.",
+                  "correct": true,
+                  "feedback": "Correct. Footnotes can reveal concentration risk hidden behind broad management language."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Yes. Management said diversified, so footnotes do not matter.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Yes. One customer is always safer than many customers.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "It cannot be checked from notes or footnotes.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "The main statements show big numbers. The Notes to Financial Statements explain what is inside those numbers."
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Understand why footnotes/CALK matter.\n- Identify key information inside notes: revenue breakdown, COGS, OPEX, receivables aging, segments, backlog, related parties, commitments.\n- Use footnotes to validate or challenge the headline numbers."
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "Key items to check:\n\n| Footnote Area | Why It Matters |\n|---|---|\n| Revenue breakdown | Shows product, customer, or geographic source of sales |\n| COGS breakdown | Shows biggest cost drivers |\n| OPEX breakdown | Shows whether expenses are controlled |\n| Receivables aging | Shows collectability risk |\n| Related parties | Shows governance and cash-stuck risk |\n| Operating segments | Shows which business line creates profit |\n| Backlog | Shows future revenue visibility |\n| Commitments | Shows future obligations |"
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "The main statements show big numbers. The Notes to Financial Statements explain what is inside those numbers.",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Footnote Explorer",
+            "internal_badge": "Report Diver",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_16_FOOTNOTES",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "backlog_and_operating_segments",
+          "order": 16,
+          "label": "17 Backlog",
+          "title": "17 Backlog and Operating Segments",
+          "kind": "lesson",
+          "completion_signal": "You can use backlog and operating segments in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "backlog_and_operating_segments_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "A company has two segments:\n\n| Segment | Revenue Contribution | Operating Margin | Growth |\n|---|---:|---:|---:|\n| Coal | 80% | 35% | Declining |\n| Renewable Energy | 20% | 10% | Growing 50% |",
+              "question": "What is the key thesis question?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Can the sunrise segment grow enough to offset decline in the dominant segment?",
+                  "correct": true,
+                  "feedback": "Correct. Segment analysis asks whether the growing business can become large and profitable enough to change the company thesis."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Only the renewable segment matters because it grows faster.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "Only the coal segment matters because it is currently larger.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Segment mix is irrelevant once total revenue is known.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "Backlog and segment information help players understand future revenue visibility and which parts of the business actually create value."
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Define backlog.\n- Understand why backlog matters in project-based businesses.\n- Identify dominant segments, segment margins, sunrise segments, and sunset segments.\n- Understand concentration risk by segment, project, or customer."
+            },
+            {
+              "type": "text",
+              "heading": "Key Explanation",
+              "body": "Backlog is work or contracts already obtained but not yet recognized as revenue. It is especially useful in sectors like construction, manufacturing, services, technology, or project-based businesses.\n\nBacklog checklist:\n\n- Backlog compared with annual revenue\n- New order book trend\n- Contract duration\n- Recurring vs one-off contracts\n- Client quality\n- Client concentration\n- Segment breakdown\n\nOperating segments reveal:\n\n- Which segment generates revenue\n- Which segment generates profit\n- Which segment is growing fastest\n- Which segment is dragging performance\n- Whether company risk is diversified or concentrated"
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "Backlog and segment information help players understand future revenue visibility and which parts of the business actually create value.",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Segment Map",
+            "internal_badge": "Future Revenue Reader",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_17_BACKLOG",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "integrated_fundamental_analysis_and_action_plan",
+          "order": 17,
+          "label": "18 Action Plan",
+          "title": "18 Integrated Fundamental Analysis and Action Plan",
+          "kind": "lesson",
+          "completion_signal": "You can use integrated fundamental analysis and action plan in a basic business-quality read.",
+          "pages": [],
+          "checks": [
+            {
+              "id": "integrated_fundamental_analysis_and_action_plan_scenario_check",
+              "title": "Scenario Check",
+              "scenario": "A company appears on the leaderboard because net profit rose 250%.\n\nFacts:\n\n- Revenue only grew 3%\n- Gross margin fell from 30% to 22%\n- OCF is negative\n- Receivables rose 70%\n- Net profit jump came from selling a subsidiary\n- DER is 2.5x\n- Interest coverage is 1.3x\n- Footnotes show related-party receivables",
+              "question": "What is the best action plan?",
+              "options": [
+                {
+                  "id": "correct",
+                  "label": "Watchlist and investigate cash collection, non-recurring gain, debt, and related-party exposure.",
+                  "correct": true,
+                  "feedback": "Correct. The integrated read flags weak growth quality, falling margin, negative OCF, leverage, low interest coverage, and related-party risk."
+                },
+                {
+                  "id": "wrong_1",
+                  "label": "Buy because net profit rose 250%.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_2",
+                  "label": "All-in because the headline looks good.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                },
+                {
+                  "id": "wrong_3",
+                  "label": "Ignore all reports and follow price momentum.",
+                  "correct": false,
+                  "feedback": "Not quite. Use the scenario facts, not the headline, to make the fundamental decision."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Core Concept",
+              "body": "No company is perfect. Fundamental analysis is about judging whether the strengths are enough to compensate for the weaknesses at the right price."
+            },
+            {
+              "type": "text",
+              "heading": "Learning Objectives",
+              "body": "Players should be able to:\n\n- Combine Income Statement, Balance Sheet, Cash Flow Statement, and Footnotes.\n- Identify green flags and red flags.\n- Build an action plan: Buy, Watchlist, Avoid, or Investigate Further.\n- Understand tolerance: not every weakness is fatal, but every weakness must be priced and understood."
+            },
+            {
+              "type": "text",
+              "heading": "Integrated Framework",
+              "body": "| Area | Green Flag | Red Flag |\n|---|---|---|\n| Revenue | Stable or sustainable growth | One-time spike, declining trend |\n| Gross Margin | Stable/improving, pricing power | Margin squeezed, COGS rising faster |\n| Operating Margin | Efficient OPEX | OPEX grows faster than revenue |\n| Net Profit | Recurring and supported by OCF | Boosted by one-time gain |\n| ROE/ROA | Strong and consistent | High due to leverage or one-time profit |\n| Debt | Manageable, covered by profit/cash | High DER + weak ICR + weak OCF |\n| Liquidity | Current ratio healthy, cash adequate | Current ratio <1, cash ratio weak |\n| Working Capital | Receivables/inventory controlled | Receivables/inventory ballooning |\n| Cash Flow | OCF positive and consistent | CFO negative repeatedly |\n| Footnotes | Transparent segment/backlog/customer info | Related-party risks, unclear details |"
+            },
+            {
+              "type": "text",
+              "heading": "Action Plan Rules",
+              "body": "| Result | Suggested Game Action |\n|---|---|\n| Strong fundamentals + reasonable price | Candidate for buy/research deeper |\n| Strong business but expensive | Watchlist |\n| Mixed fundamentals + clear catalyst | Small position or deeper investigation |\n| Weak fundamentals + high hype | Avoid or speculative-only with strict sizing |\n| Red flags unresolved | Avoid until clarified |"
+            },
+            {
+              "type": "key_insights",
+              "title": "Lesson recap",
+              "bullets": [
+                "No company is perfect. Fundamental analysis is about judging whether the strengths are enough to compensate for the weaknesses at the right price.",
+                "| Area | Green Flag | Red Flag |",
+                "Use the scenario to turn financial statement evidence into an action plan."
+              ]
+            }
+          ],
+          "system_unlocks": {
+            "feature": "Fundamental Scorecard",
+            "internal_badge": "Fundamental Analyst",
+            "steam_achievement_id": "ACH_FUNDAMENTAL_18_ACTION_PLAN",
+            "steam_status": "reserved"
+          }
+        },
+        {
+          "id": "fundamental_quiz",
+          "order": 18,
+          "label": "19 Exam",
+          "title": "19 Fundamental Analyst Exam",
+          "kind": "quiz",
+          "completion_signal": "Score 80 percent or better to earn the Fundamental Analyst badge.",
+          "pages": [],
+          "checks": [],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "Case Data",
+              "body": "Player receives this simplified financial data:\n\n| Item | Year 1 | Year 2 |\n|---|---:|---:|\n| Revenue | Rp10T | Rp12T |\n| COGS | Rp6T | Rp8.4T |\n| Gross Profit | Rp4T | Rp3.6T |\n| OPEX | Rp1.5T | Rp2T |\n| Operating Profit | Rp2.5T | Rp1.6T |\n| Interest Expense | Rp0.4T | Rp0.8T |\n| Net Profit | Rp1.6T | Rp3T |\n| Operating Cash Flow | Rp1.8T | -Rp0.5T |\n| Receivables | Rp1T | Rp2.5T |\n| Inventory | Rp1.5T | Rp2.8T |\n| Total Liabilities | Rp4T | Rp8T |\n| Equity | Rp6T | Rp6.5T |\n| One-Time Gain | Rp0 | Rp2.5T |"
+            },
+            {
+              "type": "key_insights",
+              "title": "Before answering",
+              "bullets": [
+                "Compare growth with margin quality.",
+                "Check whether net profit is supported by operating cash flow.",
+                "Read working capital and leverage before making an action plan."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "fundamental_glossary",
+          "order": 19,
+          "label": "20 Glossary",
+          "title": "20 Fundamental Glossary",
+          "kind": "glossary",
+          "completion_signal": "Use glossary search to review financial statement terms.",
+          "pages": [
+            {
+              "heading": "Fundamental vocabulary",
+              "body": "Search for key financial statement terms such as Revenue, Gross Profit, OCF, DER, Current Ratio, Backlog, and Related Party."
+            }
+          ],
+          "checks": [],
+          "content_blocks": [
+            {
+              "type": "text",
+              "heading": "How to use this glossary",
+              "body": "Use glossary search whenever a financial term blocks your analysis. The goal is to connect each word to an investor question, not to memorize accounting jargon."
+            }
+          ]
+        }
+      ],
+      "quiz_questions": [
+        {
+          "id": "fundamental_exam_q1",
+          "category": "Fundamental Analyst Exam",
+          "prompt": "Revenue growth from Year 1 to Year 2 is:",
+          "options": [
+            {
+              "id": "a",
+              "label": "10%"
+            },
+            {
+              "id": "b",
+              "label": "20%"
+            },
+            {
+              "id": "c",
+              "label": "30%"
+            },
+            {
+              "id": "d",
+              "label": "50%"
+            }
+          ],
+          "correct_answer_id": "b",
+          "feedback_correct": "Correct. Revenue rose from Rp10T to Rp12T, a 20 percent increase.",
+          "feedback_wrong": "Check the revenue line: (12 - 10) / 10 = 20 percent."
+        },
+        {
+          "id": "fundamental_exam_q2",
+          "category": "Fundamental Analyst Exam",
+          "prompt": "Gross margin in Year 1 is:",
+          "options": [
+            {
+              "id": "a",
+              "label": "20%"
+            },
+            {
+              "id": "b",
+              "label": "30%"
+            },
+            {
+              "id": "c",
+              "label": "40%"
+            },
+            {
+              "id": "d",
+              "label": "50%"
+            }
+          ],
+          "correct_answer_id": "c",
+          "feedback_correct": "Correct. Year 1 gross margin is Rp4T / Rp10T = 40 percent.",
+          "feedback_wrong": "Use gross profit divided by revenue for Year 1."
+        },
+        {
+          "id": "fundamental_exam_q3",
+          "category": "Fundamental Analyst Exam",
+          "prompt": "Gross margin in Year 2 is:",
+          "options": [
+            {
+              "id": "a",
+              "label": "20%"
+            },
+            {
+              "id": "b",
+              "label": "30%"
+            },
+            {
+              "id": "c",
+              "label": "40%"
+            },
+            {
+              "id": "d",
+              "label": "50%"
+            }
+          ],
+          "correct_answer_id": "b",
+          "feedback_correct": "Correct. Year 2 gross margin is Rp3.6T / Rp12T = 30 percent.",
+          "feedback_wrong": "Use gross profit divided by revenue for Year 2."
+        },
+        {
+          "id": "fundamental_exam_q4",
+          "category": "Fundamental Analyst Exam",
+          "prompt": "What happened to gross margin?",
+          "options": [
+            {
+              "id": "a",
+              "label": "Improved"
+            },
+            {
+              "id": "b",
+              "label": "Stayed the same"
+            },
+            {
+              "id": "c",
+              "label": "Declined"
+            },
+            {
+              "id": "d",
+              "label": "Cannot be calculated"
+            }
+          ],
+          "correct_answer_id": "c",
+          "feedback_correct": "Correct. Gross margin declined from 40 percent to 30 percent.",
+          "feedback_wrong": "Compare Year 1 margin with Year 2 margin before judging growth quality."
+        },
+        {
+          "id": "fundamental_exam_q5",
+          "category": "Fundamental Analyst Exam",
+          "prompt": "Interest coverage in Year 2 is approximately:",
+          "options": [
+            {
+              "id": "a",
+              "label": "0.5x"
+            },
+            {
+              "id": "b",
+              "label": "1.0x"
+            },
+            {
+              "id": "c",
+              "label": "2.0x"
+            },
+            {
+              "id": "d",
+              "label": "5.0x"
+            }
+          ],
+          "correct_answer_id": "c",
+          "feedback_correct": "Correct. Operating profit Rp1.6T divided by interest expense Rp0.8T is about 2.0x.",
+          "feedback_wrong": "Interest coverage compares operating profit with interest expense."
+        },
+        {
+          "id": "fundamental_exam_q6",
+          "category": "Fundamental Analyst Exam",
+          "prompt": "DER in Year 2 is approximately:",
+          "options": [
+            {
+              "id": "a",
+              "label": "0.5x"
+            },
+            {
+              "id": "b",
+              "label": "1.2x"
+            },
+            {
+              "id": "c",
+              "label": "2.0x"
+            },
+            {
+              "id": "d",
+              "label": "4.0x"
+            }
+          ],
+          "correct_answer_id": "b",
+          "feedback_correct": "Correct. Liabilities of Rp8T divided by equity of Rp6.5T is about 1.2x.",
+          "feedback_wrong": "DER compares liabilities with equity."
+        },
+        {
+          "id": "fundamental_exam_q7",
+          "category": "Fundamental Analyst Exam",
+          "prompt": "What is the biggest concern with Year 2 net profit?",
+          "options": [
+            {
+              "id": "a",
+              "label": "It is supported by OCF"
+            },
+            {
+              "id": "b",
+              "label": "It is boosted by one-time gain"
+            },
+            {
+              "id": "c",
+              "label": "It has no tax"
+            },
+            {
+              "id": "d",
+              "label": "It has no revenue"
+            }
+          ],
+          "correct_answer_id": "b",
+          "feedback_correct": "Correct. Year 2 profit is heavily boosted by a one-time gain.",
+          "feedback_wrong": "Look below the headline net profit and check whether it repeats."
+        },
+        {
+          "id": "fundamental_exam_q8",
+          "category": "Fundamental Analyst Exam",
+          "prompt": "Receivables rising from Rp1T to Rp2.5T while OCF turns negative may indicate:",
+          "options": [
+            {
+              "id": "a",
+              "label": "Strong cash collection"
+            },
+            {
+              "id": "b",
+              "label": "Collection risk or aggressive credit sales"
+            },
+            {
+              "id": "c",
+              "label": "No working capital issue"
+            },
+            {
+              "id": "d",
+              "label": "Guaranteed dividend growth"
+            }
+          ],
+          "correct_answer_id": "b",
+          "feedback_correct": "Correct. Receivables rising while OCF turns negative can signal collection risk.",
+          "feedback_wrong": "Receivables are promises; operating cash flow is the cash reality check."
+        },
+        {
+          "id": "fundamental_exam_q9",
+          "category": "Fundamental Analyst Exam",
+          "prompt": "Inventory rising from Rp1.5T to Rp2.8T while gross margin declines may indicate:",
+          "options": [
+            {
+              "id": "a",
+              "label": "Possible inventory buildup or weakening demand"
+            },
+            {
+              "id": "b",
+              "label": "No risk"
+            },
+            {
+              "id": "c",
+              "label": "Better pricing power"
+            },
+            {
+              "id": "d",
+              "label": "Perfect operating efficiency"
+            }
+          ],
+          "correct_answer_id": "a",
+          "feedback_correct": "Correct. Rising inventory plus weaker margin can point to buildup or weaker demand.",
+          "feedback_wrong": "Inventory risk grows when stock piles up while pricing power weakens."
+        },
+        {
+          "id": "fundamental_exam_q10",
+          "category": "Fundamental Analyst Exam",
+          "prompt": "Best action plan:",
+          "options": [
+            {
+              "id": "a",
+              "label": "Buy immediately because net profit rose"
+            },
+            {
+              "id": "b",
+              "label": "Avoid analysis and follow hype"
+            },
+            {
+              "id": "c",
+              "label": "Investigate deeper; profit quality, working capital, leverage, and cash flow are concerning"
+            },
+            {
+              "id": "d",
+              "label": "All-in because revenue grew 20%"
+            }
+          ],
+          "correct_answer_id": "c",
+          "feedback_correct": "Correct. The case needs deeper investigation before any buy decision.",
+          "feedback_wrong": "Headline net profit is not enough when cash flow, working capital, leverage, and one-time gains are flashing yellow or red."
+        }
+      ],
+      "steam_achievement_namespace": "academy_fundamental",
+      "source_document": "fundamental_module_lesson_curriculum_and_quiz_bank.pdf",
+      "source_extraction": "pdf_tounicode_streams"
     },
     {
       "id": "corporate_action",
@@ -313,7 +3355,7 @@
       "quiz_questions": [
         {
           "id": "ca_q1_origin",
-          "prompt": "Why should a normal player use Contact Intel instead of directly requesting RUPSLB direction?",
+            "prompt": "Why can a normal player ask Network contacts for information, but not directly request RUPSLB direction?",
           "options": [
             {
               "id": "info_not_control",
@@ -1500,40 +4542,386 @@
   ],
   "glossary": [
     {
+      "term": "Accumulation",
+      "definition": "A phase where stronger hands appear to absorb supply before a possible markup."
+    },
+    {
       "term": "Annual RUPS",
       "definition": "The routine annual shareholder meeting, often used for reports, dividend approval, governance items, and normal shareholder resolutions."
+    },
+    {
+      "term": "Area",
+      "definition": "A price zone used for support or resistance instead of a single exact line."
+    },
+    {
+      "term": "Assets",
+      "definition": "Resources owned/controlled by company",
+      "category": "Fundamental"
     },
     {
       "term": "Backdoor Listing",
       "definition": "A control-change and asset-injection action where a new business enters a listed shell, potentially rewriting identity while keeping the ticker alive."
     },
     {
+      "term": "Backlog",
+      "definition": "Contracted work not yet recognized as revenue",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Base",
+      "definition": "A consolidation structure where price pauses and prepares for a possible next move."
+    },
+    {
+      "term": "Bearish",
+      "definition": "A condition or view that favors lower prices."
+    },
+    {
+      "term": "Body",
+      "definition": "The candle area between open and close."
+    },
+    {
+      "term": "Breakdown",
+      "definition": "A move below a support area that may signal weakness."
+    },
+    {
+      "term": "Breakout",
+      "definition": "A move above a resistance area that may signal fresh demand."
+    },
+    {
+      "term": "Broken Thesis",
+      "definition": "A state where new facts invalidate the original reason for owning or trading a stock.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Bullish",
+      "definition": "A condition or view that favors higher prices."
+    },
+    {
+      "term": "Business Ownership",
+      "definition": "The mindset that buying stock means owning part of a company, not only buying a moving ticker.",
+      "category": "Mindset"
+    },
+    {
       "term": "Cash Dividend",
       "definition": "A cash payment to eligible shareholders captured on the dividend record date."
+    },
+    {
+      "term": "Cash Ratio",
+      "definition": "Cash divided by current liabilities",
+      "category": "Fundamental"
     },
     {
       "term": "CEO Change",
       "definition": "A leadership reset where the board or shareholders approve a new CEO or leadership slate, changing execution expectations."
     },
     {
+      "term": "COGS",
+      "definition": "Direct cost of producing goods/services sold",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Cold Money",
+      "definition": "Capital that can tolerate market volatility because basic needs, bills, and emergency buffers are protected.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Compounding",
+      "definition": "The process where gains can generate future gains over time, especially when large drawdowns are avoided.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Concentration Warning",
+      "definition": "A portfolio warning that one position is large enough to dominate the whole outcome.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Conviction",
+      "definition": "Confidence built from understanding and evidence, not from hype or borrowed opinions.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Cup and Handle",
+      "definition": "A rounded recovery followed by a smaller consolidation before a possible breakout."
+    },
+    {
+      "term": "Current Ratio",
+      "definition": "Current assets divided by current liabilities",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Days Inventory Outstanding (DIO)",
+      "definition": "Days inventory stays before sold",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Days Payable Outstanding (DPO)",
+      "definition": "Days company takes to pay suppliers",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Days Sales Outstanding (DSO)",
+      "definition": "Days to collect receivables",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Death Cross",
+      "definition": "A bearish context signal when a shorter moving average crosses below a longer one."
+    },
+    {
+      "term": "Debt-to-Equity Ratio (DER)",
+      "definition": "Debt/liabilities compared with equity",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Distribution",
+      "definition": "A phase where supply appears to be sold into strength."
+    },
+    {
+      "term": "Divergence",
+      "definition": "A disagreement between price movement and an indicator such as MACD."
+    },
+    {
+      "term": "Diversification",
+      "definition": "Spreading exposure across different ideas so one wrong thesis does not decide the whole portfolio.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Doji",
+      "definition": "A candle where open and close are close together, often signaling indecision."
+    },
+    {
+      "term": "Downtrend",
+      "definition": "A structure that often forms lower highs and lower lows."
+    },
+    {
       "term": "Earnings Call",
       "definition": "A management information session tied to reported results and outlook. It explains performance but is not a shareholder control vote."
+    },
+    {
+      "term": "EMA",
+      "definition": "Exponential moving average, a moving average that reacts more to recent prices."
+    },
+    {
+      "term": "Emergency Buffer",
+      "definition": "Cash reserved for basic needs and unexpected events, kept outside risky trades.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Equity",
+      "definition": "Assets minus liabilities; owner claim",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Financing Cash Flow",
+      "definition": "Cash from debt/equity/dividend/buyback activities",
+      "category": "Fundamental"
+    },
+    {
+      "term": "FOMO",
+      "definition": "Fear of missing out; buying because price is moving or others are excited, not because risk is understood.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Framework Score",
+      "definition": "A mindset stat that rises when the player uses checklist-based decision-making.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Gearing",
+      "definition": "Interest-bearing debt compared with equity",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Golden Cross",
+      "definition": "A bullish context signal when a shorter moving average crosses above a longer one."
+    },
+    {
+      "term": "Goodwill",
+      "definition": "Premium paid above net asset value in acquisition",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Gross Profit",
+      "definition": "Revenue minus COGS",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Hammer",
+      "definition": "A candle with a long lower wick that can show rejection of lower prices near support."
+    },
+    {
+      "term": "Harami",
+      "definition": "A two-candle pattern where the second body sits inside the prior body."
+    },
+    {
+      "term": "Head and Shoulders",
+      "definition": "A reversal structure with a head, two shoulders, and a neckline."
+    },
+    {
+      "term": "Impairment",
+      "definition": "Write-down when asset value is no longer supported",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Interest Coverage Ratio (ICR)",
+      "definition": "EBIT compared with interest expense",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Invalidation",
+      "definition": "The price condition that tells you your trade idea is wrong."
+    },
+    {
+      "term": "Investing Cash Flow (ICF)",
+      "definition": "Cash from investing activities",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Investor",
+      "definition": "A market participant focused on business quality, value, and longer-term ownership logic.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Liabilities",
+      "definition": "Obligations owed by company",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Liquidity Risk",
+      "definition": "The risk that a position cannot be sold quickly at a fair price because market depth is thin.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Lower High/Lower Low",
+      "definition": "Bearish swing behavior where each high and low forms below the previous one."
+    },
+    {
+      "term": "MA 200",
+      "definition": "A 200-period moving average often used for long-term trend context."
+    },
+    {
+      "term": "MACD",
+      "definition": "A momentum indicator often used for crossover, histogram, and divergence confirmation."
+    },
+    {
+      "term": "Margin of Safety",
+      "definition": "Room for error between the price paid and estimated value, used because analysis is uncertain.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Moving Average",
+      "definition": "A smoothed price line calculated from past prices."
+    },
+    {
+      "term": "Neckline",
+      "definition": "A key confirmation area in patterns such as head and shoulders or double bottom."
+    },
+    {
+      "term": "Net Profit",
+      "definition": "Final profit after all expenses, interest, tax",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Noise",
+      "definition": "Market chatter, rumor, or short-term excitement that can distract from the decision framework.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Noise Meter",
+      "definition": "A mindset stat that rises when the player follows rumor, hype, or social pressure.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Operating Cash Flow (OCF)",
+      "definition": "Cash from operations",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Operating Profit",
+      "definition": "Profit after COGS and operating expenses",
+      "category": "Fundamental"
+    },
+    {
+      "term": "OPEX",
+      "definition": "Operating expenses to run the business",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Overtrading",
+      "definition": "Taking too many trades without strong reason, often because doing nothing feels uncomfortable.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Position Sizing",
+      "definition": "Choosing how much capital to put into an idea so losses remain survivable.",
+      "category": "Mindset"
     },
     {
       "term": "Private Placement",
       "definition": "A targeted new-share issuance to selected investors, usually faster than a rights issue but potentially dilutive."
     },
     {
+      "term": "Related Party",
+      "definition": "Entity/person connected to company owner/group",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Resistance",
+      "definition": "A price area where supply may slow or reject upward movement."
+    },
+    {
       "term": "Restructuring",
       "definition": "A rescue or turnaround package involving debt relief, asset sales, debt conversion, liquidity pressure, and possible dilution."
+    },
+    {
+      "term": "Retained Earnings",
+      "definition": "Accumulated profit kept in the company",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Revenue",
+      "definition": "Sales before costs",
+      "category": "Fundamental"
     },
     {
       "term": "Rights Issue",
       "definition": "A new-share financing action offered to eligible existing holders through rights entitlement and an exercise price."
     },
     {
+      "term": "Risk Meter",
+      "definition": "A mindset stat that rises when exposure, concentration, leverage, low liquidity, or weak reasoning creates danger.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Risk-Reward",
+      "definition": "The comparison between planned downside risk and possible upside reward."
+    },
+    {
       "term": "RUPSLB",
       "definition": "An extraordinary shareholder meeting for a specific agenda such as financing, buybacks, control deals, restructuring, or leadership changes."
+    },
+    {
+      "term": "Segment",
+      "definition": "Business line or geography reported separately",
+      "category": "Fundamental"
+    },
+    {
+      "term": "Sentiment",
+      "definition": "Market mood around a stock, sector, or index; it can move prices even before business facts change.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Sideways",
+      "definition": "A range-bound structure without a clear uptrend or downtrend."
+    },
+    {
+      "term": "SMA",
+      "definition": "Simple moving average, a moving average that weights each period equally."
+    },
+    {
+      "term": "Speculator",
+      "definition": "A participant who acts on uncertain catalysts, rumor, or hope with less evidence than an investor or trader would require.",
+      "category": "Mindset"
     },
     {
       "term": "Stock Buyback",
@@ -1552,136 +4940,37 @@
       "definition": "A merger or acquisition action where a strategic buyer may cash out the target and remove it from public trading."
     },
     {
-      "term": "Tender Offer",
-      "definition": "An offer for shareholders to sell shares into a bid, usually with a premium and possible float or go-private consequences."
-    },
-    {
-      "term": "Accumulation",
-      "definition": "A phase where stronger hands appear to absorb supply before a possible markup."
-    },
-    {
-      "term": "Area",
-      "definition": "A price zone used for support or resistance instead of a single exact line."
-    },
-    {
-      "term": "Base",
-      "definition": "A consolidation structure where price pauses and prepares for a possible next move."
-    },
-    {
-      "term": "Bearish",
-      "definition": "A condition or view that favors lower prices."
-    },
-    {
-      "term": "Breakdown",
-      "definition": "A move below a support area that may signal weakness."
-    },
-    {
-      "term": "Breakout",
-      "definition": "A move above a resistance area that may signal fresh demand."
-    },
-    {
-      "term": "Bullish",
-      "definition": "A condition or view that favors higher prices."
-    },
-    {
-      "term": "Body",
-      "definition": "The candle area between open and close."
-    },
-    {
-      "term": "Cup and Handle",
-      "definition": "A rounded recovery followed by a smaller consolidation before a possible breakout."
-    },
-    {
-      "term": "Death Cross",
-      "definition": "A bearish context signal when a shorter moving average crosses below a longer one."
-    },
-    {
-      "term": "Distribution",
-      "definition": "A phase where supply appears to be sold into strength."
-    },
-    {
-      "term": "Divergence",
-      "definition": "A disagreement between price movement and an indicator such as MACD."
-    },
-    {
-      "term": "Doji",
-      "definition": "A candle where open and close are close together, often signaling indecision."
-    },
-    {
-      "term": "Downtrend",
-      "definition": "A structure that often forms lower highs and lower lows."
-    },
-    {
-      "term": "EMA",
-      "definition": "Exponential moving average, a moving average that reacts more to recent prices."
-    },
-    {
-      "term": "Golden Cross",
-      "definition": "A bullish context signal when a shorter moving average crosses above a longer one."
-    },
-    {
-      "term": "Hammer",
-      "definition": "A candle with a long lower wick that can show rejection of lower prices near support."
-    },
-    {
-      "term": "Harami",
-      "definition": "A two-candle pattern where the second body sits inside the prior body."
-    },
-    {
-      "term": "Head and Shoulders",
-      "definition": "A reversal structure with a head, two shoulders, and a neckline."
-    },
-    {
-      "term": "Invalidation",
-      "definition": "The price condition that tells you your trade idea is wrong."
-    },
-    {
-      "term": "Lower High/Lower Low",
-      "definition": "Bearish swing behavior where each high and low forms below the previous one."
-    },
-    {
-      "term": "MACD",
-      "definition": "A momentum indicator often used for crossover, histogram, and divergence confirmation."
-    },
-    {
-      "term": "MA 200",
-      "definition": "A 200-period moving average often used for long-term trend context."
-    },
-    {
-      "term": "Moving Average",
-      "definition": "A smoothed price line calculated from past prices."
-    },
-    {
-      "term": "Neckline",
-      "definition": "A key confirmation area in patterns such as head and shoulders or double bottom."
-    },
-    {
-      "term": "Noise",
-      "definition": "Short-term movement that does not change the bigger structure."
-    },
-    {
-      "term": "Resistance",
-      "definition": "A price area where supply may slow or reject upward movement."
-    },
-    {
-      "term": "Risk-Reward",
-      "definition": "The comparison between planned downside risk and possible upside reward."
-    },
-    {
-      "term": "Wick",
-      "definition": "The candle line that shows prices traded beyond the body and then rejected or left behind."
-    },
-    {
-      "term": "Sideways",
-      "definition": "A range-bound structure without a clear uptrend or downtrend."
-    },
-    {
-      "term": "SMA",
-      "definition": "Simple moving average, a moving average that weights each period equally."
+      "term": "Strategy Inconsistency",
+      "definition": "Switching style after the fact, such as entering as a trader and claiming to be an investor after the setup fails.",
+      "category": "Mindset"
     },
     {
       "term": "Support",
       "definition": "A price area where demand may slow or reject downward movement."
+    },
+    {
+      "term": "Survival Mindset",
+      "definition": "A decision habit that prioritizes staying in the game, learning, and avoiding ruin before chasing maximum profit.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Tender Offer",
+      "definition": "An offer for shareholders to sell shares into a bid, usually with a premium and possible float or go-private consequences."
+    },
+    {
+      "term": "Thesis",
+      "definition": "The reasoned case for owning or trading a stock, including catalyst, risks, horizon, sizing, and invalidation.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Thesis Status",
+      "definition": "A review label such as on track, delayed, or broken after new evidence appears.",
+      "category": "Mindset"
+    },
+    {
+      "term": "Trader",
+      "definition": "A market participant focused on shorter-term price movement, setup, timing, and planned exits.",
+      "category": "Mindset"
     },
     {
       "term": "Trendline",
@@ -1692,12 +4981,26 @@
       "definition": "A structure that often forms higher highs and higher lows."
     },
     {
+      "term": "Value Range",
+      "definition": "A rough valuation band such as discount, fair, or expensive, used instead of one false-precision number.",
+      "category": "Mindset"
+    },
+    {
       "term": "VCP",
       "definition": "Volatility Contraction Pattern, where swings tighten as supply dries up."
     },
     {
+      "term": "Volatility Risk",
+      "definition": "The risk that price can move sharply over a short period, creating emotional and portfolio pressure.",
+      "category": "Mindset"
+    },
+    {
       "term": "Volume",
       "definition": "The number of shares traded, used to judge participation."
+    },
+    {
+      "term": "Wick",
+      "definition": "The candle line that shows prices traded beyond the body and then rejected or left behind."
     },
     {
       "term": "WMA",

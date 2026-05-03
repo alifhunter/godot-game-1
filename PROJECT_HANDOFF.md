@@ -43,6 +43,85 @@ Read this file first in the next session.
   - current local note: formatter locals that previously shadowed Godot's built-in `sign()` are now renamed to `sign_prefix`
 
 ## Latest Session Snapshot
+- UI click audio is implemented. `autoloads/UiAudio.gd` is registered as a singleton and automatically connects to every `BaseButton`, `ItemList`, and `OptionButton` as it appears, playing the MP3 at `assets/sound/ElevenLabs_Button_press_sound_of_a_gaming_mouse,_high_precision.mp3` through a small four-player pool so rapid clicks do not cut each other off.
+- The click sound loader reads the MP3 bytes into `AudioStreamMP3` instead of preloading the raw file, because Godot headless rejected raw `.mp3` preload before import. Verification for this pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- Network/RUPSLB content polish follow-up is implemented. Meeting lead speech bubbles, approach prompts, and recognition-lock flavor copy now support live `{ticker}`, `{company}`, and `{agenda}` placeholders, so room chatter can refer to the actual stock and agenda instead of generic "this agenda" copy.
+- `contact_network_data.json` meeting lead profiles were tuned with ticker/company/agenda-aware stage bubbles for retail holders, supplier reps, minority-fund analysts, and broker liaisons. Locked broker copy now also names the ticker when the player lacks enough recognition.
+- Smoke coverage now asserts RUPSLB meeting lead public text does not leak unresolved template placeholders in seating or host-intro stages. Verification for this pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- First-Hour Guide bug sweep plus release-facing fail states are implemented. Blocked order messages now explain the actual cash shortfall or owned-share limit instead of generic "not enough" copy, so players get an immediate correction path.
+- Advance Day now preserves day-end Network request/tip outcomes in `RunState.last_day_results`, and Daily Recap includes a compact `Risk Check` section for monthly Life cash deductions, negative-cash stress, missed Network requests, bad read trust hits, and thin runway.
+- `GameManager.get_daily_recap_snapshot()` now includes the current Life snapshot and trimmed `last_day_results`, while save normalization keeps the new small fail-state payloads without reintroducing heavy company/meeting data.
+- Smoke coverage now checks the first-hour stale-guide regressions plus the new release-facing fail states: blocked buy/sell explanations and Daily Recap `Risk Check` text for cash stress, missed requests, bad reads, and runway. Verification for this pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- Save/load QA plus Settings/Exit polish pass is implemented. `SaveManager` now tracks unsaved changes separately from pending autosaves, including the autosave-disabled case where no timer is queued; re-enabling autosave with dirty state queues a save again.
+- Settings now shows a clear `Current slot` label, `Last saved` label, `CURRENT - Slot N` marker in the slot list, and unsaved-change status text. `Load` and `Exit to Menu` now open an in-overlay confirmation card instead of immediately replacing the run or leaving the game scene.
+- Load/Exit confirmation copy distinguishes pending autosave from autosave-off unsaved changes: pending saves are flushed before continuing, while autosave-off unsaved changes warn that they will be discarded unless the player saves first.
+- Smoke coverage now validates distinct payloads across two save slots, autosave off/on dirty-state behavior, Settings manual save refresh, Load confirmation, Exit confirmation, current-slot/last-saved labels, and compact visible Settings controls. Verification for this pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- Settings overlay follow-up is implemented. The desktop `SETTINGS` shortcut now opens an in-game full-screen overlay with a compact `SettingsPanel` instead of a `ConfirmationDialog`, so it no longer behaves like an oversized app/window.
+- The overlay now has a dim scrim, styled title bar, close button/Escape/backdrop dismiss, fixed-height five-slot list, concise slot status text, and always-visible `Save`, `Load`, and `Exit to Menu` controls. The full save path moved to the status tooltip to avoid wrapping the buttons offscreen.
+- Smoke coverage now treats `SettingsDialog` as a `Control` overlay and asserts the panel stays compact with visible action buttons. Verification for this pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- Multi-save / Settings pass is implemented. `SaveManager` now exposes five fixed save slots, stores saves under `user://saves/slot_N.json` (or `res://logs/saves/slot_N.json` for smoke local IO), keeps per-slot backups, preserves legacy single-save fallback for Slot 1, and persists active slot plus autosave preference in a small config file.
+- New runs now auto-select the first empty save slot before the opening save; manual saves write to the selected/current slot. `GameManager.load_run_from_save(_with_loading)` accepts a slot id, and `save_active_run_now()` forces a manual save even when autosave is disabled.
+- Main Menu `Load` now opens a save-slot chooser instead of immediately loading the single save. The home summary shows the first readable/current save slot, including day/date/difficulty/equity/cash/path.
+- The desktop `Exit` shortcut is now player-facing `SETTINGS` with a gear icon. It opens a Settings popup with an Auto save checkbox, five-slot list, `Save`, `Load`, and `Exit to Menu`; the taskbar save status now includes slot and autosave-off state.
+- Smoke coverage now validates the load-slot dialog, five save slots, active-slot metadata, autosave disabled behavior, and the in-game Settings popup controls. Verification for this pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- Save/export confidence pass is implemented. `RunState.to_save_dict()` now tags saves with schema/version metadata, save timestamp, and engine version; old saves remain load-compatible because load ignores missing metadata.
+- `SaveManager` now writes through a temp file, preserves a `daytrader_save.backup.json` recovery copy, exposes save-file summaries/path/status for UI and smoke tests, and can recover from a malformed primary save by loading the backup.
+- Main Menu load state now distinguishes no save, readable save, and unreadable save; readable saves show day/date/difficulty/company count/equity/cash/last-saved time plus the actual file path.
+- `GameRoot` taskbar status now appends autosave trust text (`Autosave pending` / `Saved`) using `SaveManager.save_status_changed`.
+- Smoke coverage now verifies schema metadata, project-local smoke save routing, backup creation, backup recovery from a deliberately malformed primary smoke save, and restored primary save writes. Verification for this pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- First-hour QA pass is implemented. Loop Guide highlights now record their resolved target name for smoke/debugging, clear stale highlight metadata when no actionable target is visible, and refuse to highlight disabled controls.
+- The guided RUPSLB due-day check is now exact: the guide highlights `Advance Day` until the seeded meeting's actual trading day, then points players toward the meeting entry surfaces. If the seeded meeting is already concluded or has passed, the guide advances out of stale `Attend` / `Room Lead` steps instead of leaving an obsolete `Loop 7/8` objective onscreen.
+- Loop Guide copy now adds short status hints for steps whose actionable control is inside another app/window, such as opening STOCKBOT before Portfolio or opening Thesis before pressing Create.
+- Smoke coverage now verifies first-hour highlight targets, stale-highlight clearing after Portfolio -> Thesis and Thesis -> Watchlist, Advance Day highlighting before the seeded meeting is due, and the regression where concluding a guided RUPSLB without approaching a lead must clear the `Room Lead` step. Verification for this pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- Loop Guide follow-up fix is implemented. First-week highlights now only target controls that are actually actionable in the current active app/window; desktop shortcut highlights no longer draw over hidden shortcuts behind open windows, and Thesis now targets the in-window `Create` button when the Thesis app is active.
+- The guided RUPSLB `Room Lead` step now hands off if the seeded meeting has reached result/closed state, so `Loop 7/8` no longer remains onscreen after the player concludes the meeting without approaching a lead. Verification for this fix: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- Guided First Week is implemented as the post-FTUE soft checklist. Tutorial-enabled runs now finish the first-loop FTUE, then show a compact `Loop Guide` panel for Portfolio review, thesis creation, watchlist, News/Network context, a seeded stock-split RUPSLB, approaching one room lead, and final longer-term goals.
+- `RunState` persists `first_hour_guide_*` fields, `GameManager` exposes the guide facade plus `ensure_first_hour_guide_hook()`, and `CorporateActionSystem.schedule_guided_first_hour_stock_split_rupslb()` creates a one-time next-day `guided_first_hour` stock-split RUPSLB for a held company without a live chain.
+- `GameRoot` now renders the non-blocking Loop Guide panel/highlight, adds a Daily Recap `Next useful step` line while the guide is active, and advances guide steps from real app actions, thesis/watchlist state, market-context viewing, RUPSLB overlay entry, room-lead approach, skip, and completion.
+- Guided RUPSLB rooms keep the normal lead system but make the `open` attendee truly approachable for the first-week seeded meeting, so a fresh player can complete the lead step while higher-recognition room leads remain locked.
+- Smoke coverage now validates tutorial-enabled FTUE -> Guided First Week handoff, tutorial-disabled suppression, legacy save compatibility, guide step progression, one-time seeded stock-split RUPSLB scheduling, Daily Recap hint, interactive RUPSLB lead approach, and guide skip/completion persistence. Verification for this pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- RUPSLB stage-specific lead bubbles are implemented. `contact_network_data.json` meeting lead profiles now include `stage_speech_bubbles` for `seating`, `host_intro`, `agenda_reveal`, and `vote`, so attendee bubbles change as the meeting advances instead of repeating one line.
+- `ContactNetworkSystem` now stores `stage_speech_bubbles` into generated `meeting_leads`, backfills existing saved/generated leads from their `profile_id`, and resolves the public `speech_bubble` from the current `speech_bubble_stage_id` with a safe fallback to the legacy single bubble.
+- Smoke coverage now validates stage bubble data on every meeting lead profile and verifies that a RUPSLB lead bubble changes when the session advances from Seating to Host Intro. Verification for this pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- RUPSLB podium-spacing follow-up is implemented. The fallback center ambient attendee was moved upward from `top_y + 100` to `top_y + 62`, clearing the visible contact with the `HOST / PODIUM` panel while preserving the room-fill layout.
+- Verification for this one-line podium-gap pass: `git diff --check` passed and Godot headless project load passed; only the known Windows root-certificate warning appeared after success.
+- RUPSLB bubble/attendee z-order follow-up is implemented. `RupslbBubbleLayer` and individual speech bubbles now draw at `z_index = 40`, lead markers draw at `z_index = 12`, and ambient attendees draw at `z_index = 0`, preventing inactive attendees from rendering on top of bubble text while keeping lead markers visually clear and clickable.
+- Verification for this z-order pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- RUPSLB ambient attendee polish is implemented after the screenshot showing broken gray inactive attendees. Non-lead room attendees now resize to smaller `22x26` muted silhouettes, use an explicit disabled marker style instead of Godot's default disabled button skin, and are repositioned away from the podium/lead bubble lanes.
+- Verification for this ambient-attendee pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- RUPSLB room bubble polish follow-up is implemented. Clickable lead attendees are now larger `38x42` high-contrast buttons with `!` for approachable leads and `?` for locked leads, so they read as interactable instead of tiny muted squares.
+- Speech bubbles now anchor into left/right lanes around their attendee marker instead of centering toward the room middle. Top bubbles prefer the space above their people; bottom bubbles prefer below, then fall back above if there is not enough room, so clamping should no longer push a bubble through the clickable person.
+- Seating now plays in phases: attendees slide into the room first, then lead bubbles reveal one by one with a pop and typewriter text. Bubble reveal starts after `0.72s`, staggers by `0.42s`, and types at `0.065s` per character clamped between `1.1s` and `3.4s`.
+- Verification for this phased bubble pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- RUPSLB room lead bubbles were reworked after the in-game overlap/clipping report. Lead attendees now occupy four spaced corner-style seats in the room, while attendee entrance animation stages the first five people as two sliding in from the left and three from the right.
+- Speech bubbles now live in a full-screen `RupslbBubbleLayer` above the RUPSLB window instead of inside the attendee stage, so they render on top of the meeting UI and no longer get trapped behind/inside the room panel. Bubbles pop in at Seating with a typewriter-style text reveal and remain mouse-transparent so clickable attendees still work.
+- Smoke coverage now verifies that RUPSLB lead bubbles are parented to the top bubble layer at Seating. Verification for this pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- Ctrl+L debug menu now has a selected-stock `Corporate Action Generator` section. It keeps the legacy `DebugStartRupslbButton` as the rights-issue RUPSLB path, then adds buttons for private placement, buyback, split, tender offer, strategic M&A, backdoor listing, restructuring, CEO change, cash/stock dividends, and force-execution variants where backend helpers exist.
+- `GameManager.get_debug_corporate_action_generator_catalog()` and `debug_generate_corporate_action(generator_id, company_id)` now provide the UI-facing catalog/dispatcher. `CorporateActionSystem` also exposes `debug_schedule_next_day_restructuring_rupslb()` so restructuring is covered by the same next-day RUPSLB generator flow.
+- Debug generator validation keeps RUPSLB paths gated by selected stock, 1 held lot, and no live chain, while dividend generators only need a selected valid stock. Smoke now verifies the new selected-stock buttons exist and that cash dividend can generate without a held lot.
+- Verification for the selected-stock corporate-action generator pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- Interactive RUPSLB room leads are implemented. RUPSLB sessions now decorate their meeting snapshot with deterministic `meeting_leads` from existing `contact_network_data.json` contacts, excluding insider/inner-circle roles and persisting `meeting_leads`, `approached_lead_ids`, and `meeting_lead_results` in `corporate_meeting_sessions`.
+- `contact_network_data.json` now has reusable `meeting_lead_profiles` for role labels, recognition gates, speech bubbles, approach prompts, success responses, and locked copy. The v1 room can show up to four leads across open/low/mid/high tiers; locked higher-recognition leads stay clickable but explain why the approach is unavailable.
+- `GameManager` exposes decorated corporate meeting snapshots and `approach_corporate_meeting_lead()`. Successful approaches spend the existing Network meet AP cost, create a `meeting_lead` discovery, meet the contact or add a relationship/note if already met, and avoid duplicate AP spend on repeat attempts.
+- `RupslbMeetingOverlay` now shows clickable attendee markers with compact speech bubbles during seating through vote stages, plus a lead card with role, requirement, AP cost, approach button, lock reason, and stored result text. New approaches are disabled in the result stage while previous results remain visible.
+- Network/help copy now points players toward News, referrals, and RUPSLB room interactions as contact discovery sources.
+- Verification for the RUPSLB room lead pass: contact-data validation is covered by smoke, `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- STOCKBOT trade workspace proportions were tightened to give the central chart more room: desktop sidebar default/min width is now `160`, watchlist uses a lower `0.72` stretch ratio with `220/260` responsive min widths, the chart/work area uses `2.42`, and the All Stock `Add` column is `64px`.
+- Watchlist internal padding was reduced from `16px` to `12px` so the narrower list still keeps ticker, price/change, tabs, and actions readable.
+- Verification for the STOCKBOT width pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- STOCKBOT order ticket header now uses a compact quote-board layout in the top-right order section: ticker badge, current price/change, Open/High/Low, Prev/ARA/ARB, Lot/Val/Avg, foreign buy/sell flow, and visible market depth. The old held-lots/cash/current-order summary line is hidden from the header.
+- Follow-up polish made the quote-board metric labels use a dedicated high-contrast STOCKBOT label color plus minimum widths, so labels like `Open`, `Prev`, `Lot`, and `Depth` remain readable beside the values.
+- F Buy / F Sell now read from generated `broker_type_totals.foreign` values instead of only the visible top broker rows. `BrokerFlowSystem` builds full buy/sell/value/lot/share totals by broker archetype after player-flow injection, and the order header falls back to row-level data only for older saves.
+- The quote-board values are sourced only from existing runtime snapshots (`price_bars`, broker flow, ARA/ARB, volume/value, and impactability depth); there is no fake `Freq` field yet, so the layout uses `Depth` until the simulation exposes real trade-frequency data.
+- STOCKBOT Profile tab now uses stockbot-styled company-background cards instead of raw stacked labels. The player sees inferred business prose, tags, a simplified `Shareholders` table (`Name`, `Total Shares`, `Percentage` only), and a management table; raw `quality/growth/risk` scores and the `Price now` line are hidden from the profile.
+- Verification for this order-ticket pass: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- Network/Profile UX cleanup is implemented. Network position requests now show explicit due dates (`Due Jan 9, 2020` style) instead of `due day N`; the order ticket no longer constructs the STOCKBOT `Contact Intel` panel; and company Profile pages no longer discover or display meet-lead controls.
+- Contact-tip backend methods remain available for future Network redesign work, but player-facing discovery is currently News/referral-driven rather than Profile-driven.
+- Verification for this cleanup: `git diff --check` passed, Godot headless project load passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared after success.
+- FTUE / coachmark pass is implemented. New tutorial-enabled runs now use a skippable guided first-loop overlay instead of the old one-shot `Quick Tutorial` dialog.
+- FTUE progress is persisted on `RunState` (`ftue_enabled`, completion/skip/current-step fields, completed step ids, and start day), exposed through `GameManager.get_ftue_snapshot()`, `advance_ftue_step()`, `skip_ftue()`, and `mark_ftue_completed()`, and backward-compatible with old `tutorial_enabled/tutorial_shown` saves.
+- The guided loop covers: open STOCKBOT, auto-handle empty first-run Watchlist by switching to All Stock, confirm a stock, inspect a research tab, buy one small starter position, advance day, read Daily Recap, then finish on next-step suggestions for Portfolio, Thesis, Academy, Life, and Network.
+- Verification for the FTUE pass: Academy validate/export dry-run passed, `git diff --check` passed, Godot project-load check passed, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94007461.68 days=3`; only the known Windows root-certificate warning appeared.
 - Startup/loading performance pass is implemented.
 - `TradingCalendar` now caches trade-date/index lookups and exposes a cached `trade_date_on_or_after`; corporate-action startup/daily ensure now uses a current-year-plus-2 horizon and a meeting-id lookup instead of repeatedly scanning every annual year/meeting.
 - Loading screens now expose an explicit corporate-calendar phase for new/load flows, and the final save/launch holds were shortened from `0.28s` to `0.08s` per stage.
@@ -75,9 +154,10 @@ Read this file first in the next session.
 - `strategic_merger_acquisition` now has an interactive next-day debug RUPSLB path: `GameManager.debug_schedule_next_day_strategic_mna_rupslb(company_id)` schedules a shareholder-gated cash-acquisition vote with deal-term meeting copy; approved votes move the chain into execution and then cash out the player while disabling the acquired listing.
 - `backdoor_listing` now has an interactive next-day debug RUPSLB path: `GameManager.debug_schedule_next_day_backdoor_listing_rupslb(company_id)` schedules a shareholder-gated control-change / asset-injection vote with dedicated meeting copy; approved votes move the chain into execution, rewrite identity, dilute the structure, preserve held player shares/cash, and keep the listing tradable.
 - `ceo_change` now has real execution and an interactive next-day debug RUPSLB path: `GameManager.debug_schedule_next_day_ceo_change_rupslb(company_id)` schedules a shareholder-gated leadership-slate vote; approved votes replace the CEO row, store `ceo_change_result`, nudge execution/story traits and price reaction, preserve held player shares/cash, and keep the listing tradable.
-- STOCKBOT now has a normal player-facing `Contact Intel` panel in the order ticket. It lets the player ask an already-met Network contact for a read on the selected stock through `GameManager.ask_stock_contact_tip(company_id, contact_id)`.
-- Contact Intel options now prioritize company insiders first, then company-linked leads, then sector-relevant contacts; relationship and relevance score break ties. Disabled copy distinguishes missing contacts, same-day contact cooldowns, and insufficient AP.
+- STOCKBOT order ticket Contact Intel is currently hidden while lead approach is being rethought; `GameManager.ask_stock_contact_tip(company_id, contact_id)` and option scoring remain available as backend/future-design pieces.
+- Company Profile pages currently show public management/shareholder context only; they do not create meet-leads or expose a Profile meet-contact button.
 - Normal players cannot directly schedule company-direction `RUPSLB` events from STOCKBOT. Those meetings remain company/controller/system-originated through corporate-action chains; debug helpers still exist for deterministic test coverage.
+- Company direction moved out of STOCKBOT into a dedicated `Company` desktop app. The app icon stays locked until the player owns majority control (>50% / 50% plus one share) in at least one listed company, then opens management controls for player-control RUPSLB agenda requests covering rights issues, private placements, buybacks, splits, strategic M&A, backdoor listings, restructuring, and CEO changes.
 - Current pass keeps the slight bearish market drift intentionally; it fits the Indonesian-market tone and was not treated as a balance bug.
 - Chart/candle polish pass added market candle archetypes in `MarketSimulator`: trend-up, trend-down, accumulation bid, distribution selloff, upper rejection, lower absorption, wide-range chop, compressed doji, and ARA/ARB lock candles.
 - Daily OHLC bars now store `candle_archetype`, and wick lengths respond to broker pressure, accumulation/distribution signals, buying exhaustion, activity/volume, player market impact, and float tightness instead of using symmetrical random upper/lower probes.
@@ -116,7 +196,14 @@ Read this file first in the next session.
   - Runtime Academy has the newspaper-module layout with top category tabs, left `CORE MODULES` rail, one main scroll area, reserved banner frame, fixed action row, card-style lesson blocks, nested infoboxes, inline images, and blue `key_insights` blocks.
   - The dev-only local web editor in `tools/academy_editor/` is the source-authoring path for Academy content and exports directly to `data/academy/academy_catalog.json`.
   - Editor/runtime support image uploads into `assets/academy/lessons/`; missing image paths fall back to placeholders rather than breaking runtime UI.
+  - Mindset is now a playable Academy category rebuilt from `mindset_module_lesson_curriculum_and_quiz_bank.pdf`, with the full 12-lesson foundation path, `Learning Objective`, `Key Concept`, `Knowledge Card`, one spoiler-free `Scenario Check` per lesson, a locked 5-question viral-stock final challenge, `Mindset Basics` badge, and glossary terms for decision discipline, FOMO, risk, thesis, and portfolio habits.
+  - Mindset curriculum unlock data is hidden from player-facing lesson cards and stored as reserved `system_unlocks` metadata with Steam achievement ids for later integration.
+  - Fundamental is now a playable Academy category rebuilt from `fundamental_module_lesson_curriculum_and_quiz_bank.pdf`, with the full 18-lesson financial-statement path, `Core Concept`, `Learning Objectives`, `Key Explanation` / formula cards, one spoiler-free `Scenario Check` per lesson, and a locked 10-question `Fundamental Analyst Exam`.
+  - Fundamental `Player Unlock` curriculum data is hidden from player-facing lesson cards and stored as reserved `system_unlocks` metadata with Steam achievement ids for later integration.
+  - Academy text cards now parse markdown-style tables (`|---|`) into actual table controls in runtime and the local editor preview, so Fundamental statement/scenario data no longer appears as raw pipe text to players.
+  - Academy quiz dropdowns and submit buttons now get quiz-specific readable styling after the global Academy text-theme pass, including light dropdown/popup surfaces and high-contrast submit text.
   - Corporate Action is now a playable Academy category covering Annual RUPS, RUPSLB, earnings calls, cash dividends, stock dividends, rights issues, private placements, stock buybacks, stock splits, tender offers, strategic M&A, backdoor listings, restructuring, and CEO changes, with matching quiz and glossary entries.
+  - Quick smoke now verifies Mindset, Fundamental, and Corporate Action are playable, unlock after required lessons, grant their badges, and return key glossary terms.
 - Thesis Board status:
   - `Thesis Board` is now a first playable desktop app registered as app id `thesis`.
   - Desktop shortcut/nav SVGs live in `assets/ui/desktop/thesis_shortcut.svg` and `assets/ui/desktop/thesis_nav.svg`.
@@ -130,6 +217,8 @@ Read this file first in the next session.
     - `View Paper` reopens the frozen report without regenerating
     - `Regenerate` reruns the staged flow and replaces the frozen report snapshot
     - the overlay blocks underlying Thesis Board input while visible, and `Esc` / `Close` only hide the final paper or error state
+  - The Thesis builder column is now vertically scrollable inside the desktop window, so Evidence/Report controls are reachable at smaller window heights.
+  - `Generate Report` / `Regenerate` now costs `7 AP` through `GameManager.generate_thesis_report()`, and the UI disables those actions when the player lacks enough daily AP.
   - `RunState.player_theses` persists compact thesis artifacts only:
     - thesis metadata
     - selected evidence summaries
@@ -200,7 +289,9 @@ Read this file first in the next session.
     - lifestyle id
     - optional monthly extra/buffer
     - last updated day/date
-  - Life V1 is deliberately a planning view only; it does not deduct month-end cash yet.
+    - last paid monthly obligation period/day/amount for duplicate protection
+  - Monthly Life obligations now deduct real player cash on the first trading day of each new month, using housing + basic expenses + lifestyle + optional extra.
+  - Monthly obligation deductions are recorded as `life_obligation` portfolio-history rows so the cash change is auditable.
   - Dividend income now comes from in-game `cash_dividend` corporate actions after declaration; there is no external dividend data feed.
   - `stock_dividend` actions affect held shares, company share count, and price basis, but they do not count as monthly cash income in `Life`.
 - STOCKBOT status:
@@ -712,7 +803,7 @@ Read this file first in the next session.
 - Player ownership:
   - current ownership is derived from `player shares / shares_outstanding`
   - the displayed label is simply `% ownership`
-  - when the player reaches at least `5%` ownership, `Player` appears in the selected company's `Major Shareholders` list in the Profile tab
+  - when the player reaches at least `5%` ownership, `Player` appears in the selected company's `Shareholders` list in the Profile tab
   - shareholder rows are built by `GameManager.get_company_ownership_snapshot(company_id)` and included in `GameManager.get_company_snapshot()`
   - the ownership breakdown now subtracts player stake from public float first and then from the controlling block if needed, so visible shareholder totals stay coherent even when the player accumulates beyond free float
   - this is still not a voting/control simulation, but large player trades now feed the market-impact layer through order size, free-float pressure, and synthetic liquidity
@@ -867,13 +958,13 @@ Read this file first in the next session.
 - It still lives in `GameRoot.tscn` and is reparented into the runtime desktop window manager; there is still no separate scene for it
 - Current category tabs are:
   - `Mindset`
-  - `Money Management`
   - `Fundamental`
+  - `Corporate Action`
   - `Technical`
   - `Transactional`
 - Current module status:
-  - `Technical` is the only fully playable module
-  - the other four categories are visible but still `Coming soon`
+  - `Mindset`, `Fundamental`, `Corporate Action`, and `Technical` are fully playable modules
+  - `Transactional` is visible but still `Coming soon`
 - Current Academy layout:
   - desktop wrapper/title bar is unchanged, but the content area was rebuilt into a course-dashboard shell
   - top category tabs use dark-brown active state and warm bordered inactive tabs
@@ -905,13 +996,49 @@ Read this file first in the next session.
   - `06 Thinking Framework`
   - `07 Quiz`
   - `08 Glossary`
+- Mindset module currently includes:
+  - `01 Survival`
+  - `02 Cold Money`
+  - `03 Goals`
+  - `04 Ownership`
+  - `05 Price Drivers`
+  - `06 Identity`
+  - `07 Toolkit`
+  - `08 Anti-FOMO`
+  - `09 Risk Reader`
+  - `10 Value`
+  - `11 Thesis`
+  - `12 Portfolio`
+  - `13 Challenge`
+  - `14 Glossary`
+- Fundamental module currently includes:
+  - `01 Statements`
+  - `02 Three Pillars`
+  - `03 Income Ladder`
+  - `04 Revenue Growth`
+  - `05 Gross Margin`
+  - `06 Profit Margins`
+  - `07 Profit Quality`
+  - `08 Returns`
+  - `09 Balance Sheet`
+  - `10 Leverage`
+  - `11 Liquidity`
+  - `12 Working Capital`
+  - `13 Red Flags`
+  - `14 Cash Flow`
+  - `15 Profit vs Cash`
+  - `16 Footnotes`
+  - `17 Backlog`
+  - `18 Action Plan`
+  - `19 Exam`
+  - `20 Glossary`
 - Current Technical behavior:
   - sections `01-06` and `08 Glossary` are open-access
   - `07 Quiz` stays locked until every section listed in `quiz_required_section_ids` is marked read; current source requires `01 Intro` through `06 Thinking Framework`
   - section progress persists in save data through `RunState.academy_progress`
   - glossary search is implemented
   - quiz passing score is `80%`
-  - passing grants a non-gameplay `Technical Basics` badge
+  - passing grants each module's non-gameplay badge, such as `Technical Basics`, `Mindset Basics`, or `Fundamental Analyst`
 - Current implementation:
   - content data: `data/academy/academy_catalog.json`
   - editable dev source/tooling: `tools/academy_editor/`
@@ -1833,6 +1960,7 @@ Read this file first in the next session.
   - `[perf][ui]` logs `_refresh_all()`, `_refresh_markets()`, `_refresh_network()`, `_refresh_upgrades()`, `_on_stock_list_tab_changed()`, and key buy/watchlist/upgrade/network handlers
 - Smoke coverage now includes:
   - main menu `New Game` -> difficulty selector flow
+  - FTUE first-loop progression, skip persistence, completion persistence, and tutorial-disabled suppression
   - difficulty selector card stays within `90%` of the viewport width
   - difficulty presets use the current company counts, event frequency, and volatility labels
   - loading screen progress existence
@@ -1879,7 +2007,7 @@ Read this file first in the next session.
   - `News` opens the event-driven desk with outlet buttons and populated stories
   - `Twooter` opens the simplified mobile-style social feed with populated post cards
   - `Academy` desktop icon opens the Academy window
-  - Academy shows the catalog category tabs, including `Money Management`, and the Technical module rail still exposes eight sections
+  - Academy shows the catalog category tabs, including `Mindset`, `Fundamental`, `Corporate Action`, `Technical`, and `Transactional`; Technical exposes eight sections, Mindset exposes fourteen, and Fundamental exposes twenty
   - Academy exposes the reserved lesson banner frame and keeps the selected module/action row inside the visible Academy window
   - Academy quiz starts locked and unlocks after the required reading sections are marked read
   - `Thesis Board` desktop icon opens/focuses/closes the Thesis window and settles animation state
@@ -1912,8 +2040,8 @@ Read this file first in the next session.
   - `Ctrl+L` opens the debug overlay
   - the debug overlay exposes a `Start RUPSLB` button in the `Generators` tab
   - the debug `Start RUPSLB` action stays disabled with clear reason text until the selected stock is valid and held at `1+` lot
-  - STOCKBOT exposes a player-facing `Contact Intel` panel with met-contact picker plus `Ask Contact` button for selected stocks
-  - the STOCKBOT contact-intel action spends the normal Network tip AP and never schedules a `RUPSLB` or changes company corporate direction
+  - STOCKBOT no longer exposes the player-facing `Contact Intel` panel; selected-stock contact reads should be reintroduced through a redesigned Network/lead flow later
+  - the hidden STOCKBOT contact-intel backend spends the normal Network tip AP if called directly and never schedules a `RUPSLB` or changes company corporate direction
   - Network recognition snapshot returns a tier label and contact cap
   - upgrade tracks start at tier `4`
   - pressing an upgrade purchase button opens confirmation before spending cash or changing tier
@@ -1949,8 +2077,8 @@ Read this file first in the next session.
   - Network request rows now carry metadata and can be clicked to show request detail context in the same detail panel
   - Network AP pacing is now explicit: meet/request/follow-up/source-check cost `1 AP`, tip/referral cost `2 AP`
   - Network same-day soft cooldowns now block repeatedly asking the same contact for tips or referrals; request outcomes now use clearer tuned relationship deltas of `+10` on completion and `-4` on miss
-  - accepted Network requests complete when the player owns at least `1` lot by the due day
-  - accepted Network requests miss when the player does not own the requested target by the due day
+  - accepted Network requests complete when the player owns at least `1` lot by the explicit due date shown in the request
+  - accepted Network requests miss when the player does not own the requested target by that due date
   - connected-floater referral requires relationship, spends `10` relationship on success, creates a referred insider lead, and the referred insider can be met/persisted
   - insider tips default to the insider's affiliated company
   - corporate-meeting snapshot returns seeded upcoming venue rows
@@ -2282,7 +2410,7 @@ Read this file first in the next session.
   - shareholder gating now uses the persisted record-date registry, but there is no richer investor-book UI yet
   - eligible venue attendance remains free and there is still no AP cost or broader event-slot time economy
   - same-day market prices are not recalculated after a vote; results feed the next simulated day instead
-  - next-day queued `RUPSLB` reveal exists through debug helpers for deterministic coverage, while normal player-facing corporate direction remains company/controller/system-originated unless a future majority-shareholder activism layer is built
+  - next-day queued `RUPSLB` reveal exists through debug helpers for deterministic coverage; normal shareholders still cannot set corporate direction, while the `Company` app unlocks player-originated agenda setting only after true majority control
   - staged venue presentation is currently limited to the `rights_issue` / `private_placement` / `stock_buyback` / `stock_split` / `tender_offer` / `strategic_merger_acquisition` / `backdoor_listing` / `restructuring` / `ceo_change` `rupslb` overlay:
     - abstract attendee markers rather than full character actors
     - no branching Q&A or agenda-by-agenda voting yet
@@ -2357,7 +2485,7 @@ Read this file first in the next session.
 - Academy content pipeline:
   - keep `tools/academy_editor/academy_source.json` as the authoring source and export to `data/academy/academy_catalog.json`
   - use `content_blocks` for new lessons; keep legacy `pages` as export compatibility only
-  - build out `Money Management` or `Mindset` next if the goal is more teaching content
+  - build out `Transactional` next if the goal is more teaching content
   - add real lesson images under `assets/academy/lessons/` only when the layout/content is stable
   - consider a small source/runtime sync check so future edits do not accidentally bypass the editor source
 - Daily loop and desktop UX:
@@ -2374,16 +2502,16 @@ Read this file first in the next session.
   - keep thesis review out of the Advance Day recap-critical path unless future UX explicitly needs automatic daily thesis alerts
 - Life app planning:
   - playtest whether the current housing/lifestyle costs create useful pressure on `Normal` and `Grind` without feeling punitive
-  - decide when monthly obligations should become real cash deductions; V1 is planning-only and deliberately avoids surprise penalties
-  - add an explicit cash-flow history only after deductions or recurring income become actual gameplay
+  - monthly obligations are now real cash deductions at new-month boundaries; next pass should tune warning/recap copy if the deduction feels too quiet
+  - consider a richer Life cash-flow history later; for now monthly obligations appear in portfolio history as `life_obligation`
   - tune the declared-dividend display after a few longer runs; right now it averages announced payments over a simple 12-month planning window
   - connect the system to Academy's money-management/mindset themes so urgency comes from financial planning, not artificial pressure
   - consider housing/cars/status upgrades after the monthly cash-flow loop is working and readable
 - Network and corporate-action planning:
   - deepen the shared corporate-action chain object that `News`, `Twooter`, `Network`, market reaction, `earnings_call`, `annual_rups`, and `rupslb` already read/write
   - tune annual cash-dividend eligibility, stock-dividend distribution ratios, rights issue ratios/exercise pricing, private-placement issuance discounts, stock-buyback sizing/price support, and market reaction once longer playtests show whether income/dilution/capital returns are too rare or too generous
-  - playtest the new STOCKBOT `Contact Intel` loop and tune whether it should add freshness/tip-reliability weighting on top of the current insider -> company lead -> sector read priority
-  - if majority-shareholder activism is added later, gate any player-originated `RUPSLB` request behind true control economics rather than 1-lot ownership
+  - redesign how players approach leads before reintroducing selected-stock contact reads; the old STOCKBOT `Contact Intel` order-ticket loop is hidden for now
+  - playtest the new majority-control `Company` app and tune whether player-originated `RUPSLB` agendas need cooldowns, board pushback, or reputation consequences
   - deepen interactive `rupslb` outcomes with richer result nuance, branching Q&A, and better record-date / shareholder-rights UI copy
   - deepen cross-contact conflict handling with actions like `Ask for evidence`, `Push back`, and `Compare source`
   - evolve Journal rows into searchable/filterable clues and tasks when source-check gameplay becomes a major loop

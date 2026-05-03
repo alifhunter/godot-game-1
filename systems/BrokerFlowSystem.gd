@@ -200,6 +200,7 @@ func generate_day_flow(definition: Dictionary, runtime: Dictionary, context: Dic
 		"limit_source": str(player_flow.get("limit_source", "")),
 		"buy_brokers": [],
 		"sell_brokers": [],
+		"broker_type_totals": {},
 		"net_buy_brokers": [],
 		"net_sell_brokers": []
 	}
@@ -331,6 +332,7 @@ func _build_broker_tape(
 		row["sell_shares"] = max((sell_value / max(sell_avg_price, 1.0)), 0.0)
 
 	_inject_player_flow_into_broker_rows(broker_rows, context.get("player_flow", {}), current_price)
+	var broker_type_totals: Dictionary = _build_broker_type_totals(broker_rows)
 
 	var buy_ranked: Array = broker_rows.duplicate(true)
 	var sell_ranked: Array = broker_rows.duplicate(true)
@@ -388,6 +390,7 @@ func _build_broker_tape(
 		"dominant_sell_broker_type": str(dominant_sell.get("broker_type", "")),
 		"action_meter_score": action_meter_score,
 		"action_meter_label": action_meter_label,
+		"broker_type_totals": broker_type_totals,
 		"net_buy_brokers": top_net_buy_brokers,
 		"net_sell_brokers": top_net_sell_brokers
 	}
@@ -446,6 +449,36 @@ func _inject_player_flow_into_broker_rows(broker_rows: Array, player_flow: Dicti
 		target_row["sell_shares"] = float(target_row.get("sell_shares", 0.0)) + max(float(player_flow.get("sell_shares", 0.0)), player_sell_value / max(current_price, 1.0))
 		target_row["sell_lots"] = float(target_row.get("sell_shares", 0.0)) / 100.0
 	target_row["player_flow"] = true
+
+
+func _build_broker_type_totals(broker_rows: Array) -> Dictionary:
+	var totals: Dictionary = {}
+	for broker_row_value in broker_rows:
+		var broker_row: Dictionary = broker_row_value
+		var broker_type: String = str(broker_row.get("broker_type", "retail"))
+		if broker_type.is_empty():
+			broker_type = "retail"
+		if not totals.has(broker_type):
+			totals[broker_type] = {
+				"buy_value": 0.0,
+				"sell_value": 0.0,
+				"buy_lots": 0.0,
+				"sell_lots": 0.0,
+				"buy_shares": 0.0,
+				"sell_shares": 0.0,
+				"net_value": 0.0,
+				"net_lots": 0.0
+			}
+		var type_total: Dictionary = totals[broker_type]
+		type_total["buy_value"] = float(type_total.get("buy_value", 0.0)) + max(float(broker_row.get("buy_value", 0.0)), 0.0)
+		type_total["sell_value"] = float(type_total.get("sell_value", 0.0)) + max(float(broker_row.get("sell_value", 0.0)), 0.0)
+		type_total["buy_lots"] = float(type_total.get("buy_lots", 0.0)) + max(float(broker_row.get("buy_lots", 0.0)), 0.0)
+		type_total["sell_lots"] = float(type_total.get("sell_lots", 0.0)) + max(float(broker_row.get("sell_lots", 0.0)), 0.0)
+		type_total["buy_shares"] = float(type_total.get("buy_shares", 0.0)) + max(float(broker_row.get("buy_shares", 0.0)), 0.0)
+		type_total["sell_shares"] = float(type_total.get("sell_shares", 0.0)) + max(float(broker_row.get("sell_shares", 0.0)), 0.0)
+		type_total["net_value"] = float(type_total.get("buy_value", 0.0)) - float(type_total.get("sell_value", 0.0))
+		type_total["net_lots"] = float(type_total.get("buy_lots", 0.0)) - float(type_total.get("sell_lots", 0.0))
+	return totals
 
 
 func _derive_broker_side_weights(

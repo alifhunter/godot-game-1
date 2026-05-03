@@ -51,6 +51,7 @@ func build_daily_summary(run_state, _data_repository, log_phase_details: bool = 
 	var current_equity: float = run_state.get_total_equity()
 	var starting_equity: float = float(run_state.last_day_results.get("starting_equity", run_state.last_equity_value))
 	var portfolio_delta: float = current_equity - starting_equity
+	var portfolio_attribution: Array = _build_portfolio_attribution(run_state)
 	_log_perf_elapsed(log_phase_details, "build_daily_summary:portfolio", phase_started_at_usec)
 
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -67,6 +68,7 @@ func build_daily_summary(run_state, _data_repository, log_phase_details: bool = 
 		"day_index": run_state.day_index,
 		"portfolio_value": current_equity,
 		"portfolio_delta": portfolio_delta,
+		"portfolio_attribution": portfolio_attribution,
 		"cash": float(run_state.player_portfolio.get("cash", 0.0)),
 		"biggest_winner": biggest_winner,
 		"biggest_loser": biggest_loser,
@@ -99,6 +101,45 @@ func _find_extreme_by_pressure(rows: Array, highest: bool) -> Dictionary:
 			selected = row
 
 	return selected
+
+
+func _build_portfolio_attribution(run_state) -> Array:
+	var rows: Array = []
+	var holdings: Dictionary = run_state.player_portfolio.get("holdings", {})
+	for company_id_value in holdings.keys():
+		var company_id: String = str(company_id_value)
+		var holding: Dictionary = holdings.get(company_id, {})
+		var shares: int = int(holding.get("shares", 0))
+		if shares <= 0:
+			continue
+		var definition: Dictionary = run_state.get_effective_company_definition(company_id)
+		var runtime: Dictionary = run_state.get_company(company_id)
+		if definition.is_empty() or runtime.is_empty():
+			continue
+		var current_price: float = max(float(runtime.get("current_price", 0.0)), 0.0)
+		var previous_close: float = max(float(runtime.get("previous_close", current_price)), 0.0)
+		var price_delta: float = current_price - previous_close
+		var market_value_delta: float = price_delta * float(shares)
+		if is_zero_approx(market_value_delta):
+			continue
+		rows.append({
+			"company_id": company_id,
+			"ticker": str(definition.get("ticker", company_id.to_upper())),
+			"name": str(definition.get("name", "")),
+			"shares": shares,
+			"previous_close": previous_close,
+			"current_price": current_price,
+			"price_delta": price_delta,
+			"price_change_pct": float(runtime.get("daily_change_pct", 0.0)),
+			"market_value_delta": market_value_delta,
+			"event_tags": runtime.get("active_event_tags", []).duplicate()
+		})
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return absf(float(a.get("market_value_delta", 0.0))) > absf(float(b.get("market_value_delta", 0.0)))
+	)
+	if rows.size() > 3:
+		rows = rows.slice(0, 3)
+	return rows
 
 
 func _build_explanation(

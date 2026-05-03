@@ -87,6 +87,178 @@
                                                    "Wicaksono"
                                                ]
                           },
+    "meeting_lead_profiles":  [
+                                  {
+                                      "id":  "retail_holder",
+                                      "tier":  "open",
+                                      "role_label":  "Retail Holder",
+                                      "recognition_required":  0,
+                                      "sector_match_required":  false,
+                                      "category_ids":  [
+                                                           "rumor",
+                                                           "company",
+                                                           "corporate_meeting",
+                                                           "corporate_action"
+                                                       ],
+                                      "speech_bubbles":  [
+                                                             "Retail holders are still arguing about who benefits from {agenda}.",
+                                                             "Everyone keeps saying dilution on {ticker}, but nobody explains the trade-off.",
+                                                             "The room sounds more tense than the {company} filing did."
+                                                         ],
+                                      "stage_speech_bubbles":  {
+                                                                   "seating":  [
+                                                                                   "Retail holders are still arguing about who benefits from {agenda}.",
+                                                                                   "Everyone keeps saying dilution on {ticker}, but nobody explains the trade-off."
+                                                                               ],
+                                                                   "host_intro":  [
+                                                                                      "Management sounds calm about {ticker}, but the room is still doing the math.",
+                                                                                      "That intro avoided the part minority holders care about most."
+                                                                                  ],
+                                                                   "agenda_reveal":  [
+                                                                                         "Now people are checking whether {agenda} matches the rumor.",
+                                                                                         "The headline is clear; the minority impact is still the hard part."
+                                                                                     ],
+                                                                   "vote":  [
+                                                                                "The vote may pass, but retail holders want to know what {agenda} means after today.",
+                                                                                "People are voting with tiny stakes, but big emotions."
+                                                                            ]
+                                                               },
+                                      "approach_prompt":  "Ask what the retail crowd is worried about on {ticker}.",
+                                      "success_responses":  [
+                                                                "{contact} says the useful read is not the vote count yet, but how nervous minority holders sound around {ticker}.",
+                                                                "{contact} says the crowd is trying to work out whether {company} is raising capital for growth or for damage control."
+                                                            ],
+                                      "locked_copy":  "This attendee will talk to almost anyone in the room."
+                                  },
+                                  {
+                                      "id":  "supplier_rep",
+                                      "tier":  "low",
+                                      "role_label":  "Supplier Rep",
+                                      "recognition_required":  0,
+                                      "sector_match_required":  true,
+                                      "category_ids":  [
+                                                           "company",
+                                                           "earnings",
+                                                           "product",
+                                                           "corporate_meeting"
+                                                       ],
+                                      "speech_bubbles":  [
+                                                             "Payment timing around {company} is becoming a theme here.",
+                                                             "The {ticker} operational story sounds cleaner on slides than it does in the hallway.",
+                                                             "Suppliers are watching the cash plan more than {agenda}."
+                                                         ],
+                                      "stage_speech_bubbles":  {
+                                                                   "seating":  [
+                                                                                   "Payment timing around {company} is becoming a theme here.",
+                                                                                   "Suppliers are watching the cash plan more than {agenda}."
+                                                                               ],
+                                                                   "host_intro":  [
+                                                                                      "The {ticker} slide deck is smoother than the actual payment cycle.",
+                                                                                      "Management keeps saying stabilization; vendors hear cash discipline."
+                                                                                  ],
+                                                                   "agenda_reveal":  [
+                                                                                         "If {agenda} changes funding, suppliers will feel it before analysts do.",
+                                                                                         "{agenda} only matters if working capital actually loosens."
+                                                                                     ],
+                                                                   "vote":  [
+                                                                                "A yes vote still has to turn into paid invoices.",
+                                                                                "The cleanest answer is whether {ticker} cash moves faster after today."
+                                                                            ]
+                                                               },
+                                      "approach_prompt":  "Ask for an operational read on {ticker} from the hallway.",
+                                      "success_responses":  [
+                                                                "{contact} gives you a grounded read: the proposal matters, but working-capital pressure around {ticker} is what vendors are watching.",
+                                                                "{contact} says suppliers around {company} care less about the speech and more about whether cash collection improves after this meeting."
+                                                            ],
+                                      "locked_copy":  "This contact only opens up when your name is not completely cold."
+                                  },
+                                  {
+                                      "id":  "minority_fund_analyst",
+                                      "tier":  "mid",
+                                      "role_label":  "Minority Fund Analyst",
+                                      "recognition_required":  20,
+                                      "sector_match_required":  true,
+                                      "category_ids":  [
+                                                           "corporate_action",
+                                                           "corporate_meeting",
+                                                           "company",
+                                                           "earnings",
+                                                           "sector_rotation"
+                                                       ],
+                                      "speech_bubbles":  [
+                                                             "The {agenda} vote is obvious; the valuation consequence is less obvious.",
+                                                             "This only works if the post-agenda {ticker} capital structure makes sense.",
+                                                             "Minority holders need more than a confident {company} board deck."
+                                                         ],
+                                      "stage_speech_bubbles":  {
+                                                                   "seating":  [
+                                                                                   "Minority holders need more than a confident {company} board deck.",
+                                                                                   "This only works if the post-agenda {ticker} capital structure makes sense."
+                                                                               ],
+                                                                   "host_intro":  [
+                                                                                      "That confidence is not the same thing as minority protection.",
+                                                                                      "The board is selling certainty; the valuation still needs proof."
+                                                                                  ],
+                                                                   "agenda_reveal":  [
+                                                                                         "Now the real question is dilution, control, and {ticker} returns.",
+                                                                                         "{agenda} is investable only if the new structure improves ROE."
+                                                                                     ],
+                                                                   "vote":  [
+                                                                                "The {agenda} vote is obvious; the valuation consequence is less obvious.",
+                                                                                "Passing the item is easy. Pricing the new {company} is harder."
+                                                                            ]
+                                                               },
+                                      "approach_prompt":  "Ask how a minority holder should frame {agenda}.",
+                                      "success_responses":  [
+                                                                "{contact} frames {ticker} like a thesis problem: the agenda is investable only if the new structure improves returns, not just headlines.",
+                                                                "{contact} says the clean read on {company} is whether the proposal protects minority holders after the vote."
+                                                            ],
+                                      "locked_copy":  "This analyst wants to see some market recognition before sharing a real read."
+                                  },
+                                  {
+                                      "id":  "broker_liaison",
+                                      "tier":  "high",
+                                      "role_label":  "Broker Liaison",
+                                      "recognition_required":  40,
+                                      "sector_match_required":  false,
+                                      "category_ids":  [
+                                                           "broker_flow",
+                                                           "corporate_action",
+                                                           "corporate_meeting",
+                                                           "rumor",
+                                                           "market_wrap"
+                                                       ],
+                                      "speech_bubbles":  [
+                                                             "The loudest {ticker} flow is not always the real sponsor.",
+                                                             "Some desks came here to listen to {agenda}, not vote.",
+                                                             "The room and the {ticker} tape are telling slightly different stories."
+                                                         ],
+                                      "stage_speech_bubbles":  {
+                                                                   "seating":  [
+                                                                                  "Some desks came here to listen, not vote.",
+                                                                                   "The room and the {ticker} tape are telling slightly different stories."
+                                                                               ],
+                                                                   "host_intro":  [
+                                                                                      "The speech matters less than who keeps bidding {ticker} after it.",
+                                                                                      "Listen to the room, then check whether the tape agrees."
+                                                                                  ],
+                                                                   "agenda_reveal":  [
+                                                                                         "This is where {ticker} sponsor flow either confirms the story or disappears.",
+                                                                                         "{agenda} gives the excuse; broker flow gives the signal."
+                                                                                     ],
+                                                                   "vote":  [
+                                                                                "The loudest {ticker} flow is not always the real sponsor.",
+                                                                                "If foreign desks stay active after this, the room was not just theater."
+                                                                            ]
+                                                               },
+                                      "approach_prompt":  "Ask which desk behavior matters after the {ticker} meeting.",
+                                      "success_responses":  [
+                                                                "{contact} says the better read is whether broker flow confirms the room after {ticker} reopens.",
+                                                                "{contact} says the tape around {company} will matter more than the speeches if foreign desks stay active."
+                                                            ],
+                                      "locked_copy":  "This person will not talk about {ticker} unless you already have a recognizable market footprint."
+                                  }
+                              ],
     "contacts":  [
                      {
                          "id":  "journalist_ayu_larasati",
@@ -5123,7 +5295,7 @@
                                     ]
                       },
     "request_templates":  {
-                              "positive":  "{contact} wants you to hold at least 1 lot of {ticker} before the due day.",
+                              "positive":  "{contact} wants you to hold at least 1 lot of {ticker} before the due date.",
                               "negative":  "{contact} wants you to prove you can act on the warning around {ticker}.",
                               "mixed":  "{contact} wants you to take a small position in {ticker} before the story is obvious."
                           }

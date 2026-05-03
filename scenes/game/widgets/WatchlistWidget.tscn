@@ -7,10 +7,10 @@ size_flags_vertical = 3
 [node name="WatchlistMargin" type="MarginContainer" parent="."]
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 16
-theme_override_constants/margin_bottom = 16
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
 
 [node name="WatchlistVBox" type="VBoxContainer" parent="WatchlistMargin"]
 size_flags_horizontal = 3
