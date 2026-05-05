@@ -25,6 +25,10 @@ const SMOKE_QUICK_ARG := "--smoke-quick"
 const SMOKE_LOCAL_IO_ARG := "--smoke-local-io"
 const NEWS_FEED_SYSTEM_SCRIPT = preload("res://systems/NewsFeedSystem.gd")
 const TWOOTER_FEED_SYSTEM_SCRIPT = preload("res://systems/TwooterFeedSystem.gd")
+const COMPANY_GENERATOR_SCRIPT = preload("res://systems/CompanyGenerator.gd")
+const CHART_SYSTEM_SCRIPT = preload("res://systems/ChartSystem.gd")
+const CHART_PATTERN_SYSTEM_SCRIPT = preload("res://systems/ChartPatternSystem.gd")
+const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
 
 var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 var batched_setup_progress_calls := 0
@@ -35,6 +39,18 @@ var batched_setup_progress_total := 0
 func _ready() -> void:
 	var smoke_mode: String = _get_smoke_mode()
 	DataRepository.reload_all()
+	var release_readiness_validation: String = _validate_release_readiness_assets()
+	if not release_readiness_validation.is_empty():
+		push_error(release_readiness_validation)
+		get_tree().quit(1)
+		return
+
+	var design_system_validation: String = _validate_design_system_assets()
+	if not design_system_validation.is_empty():
+		push_error(design_system_validation)
+		get_tree().quit(1)
+		return
+
 	var network_data_validation: String = _validate_contact_network_data()
 	if not network_data_validation.is_empty():
 		push_error(network_data_validation)
@@ -56,6 +72,18 @@ func _ready() -> void:
 	var enriched_social_validation: String = _validate_enriched_social_generation()
 	if not enriched_social_validation.is_empty():
 		push_error(enriched_social_validation)
+		get_tree().quit(1)
+		return
+
+	var structured_chart_validation: String = _validate_structured_chart_generation()
+	if not structured_chart_validation.is_empty():
+		push_error(structured_chart_validation)
+		get_tree().quit(1)
+		return
+
+	var corporate_action_price_validation: String = _validate_corporate_action_price_factor_limits()
+	if not corporate_action_price_validation.is_empty():
+		push_error(corporate_action_price_validation)
 		get_tree().quit(1)
 		return
 
@@ -398,6 +426,72 @@ func _validate_enriched_news_generation() -> String:
 			var article_id: String = str(article.get("id", ""))
 			if first_body_by_id.has(article_id) and str(article.get("body", "")) != str(first_body_by_id.get(article_id, "")):
 				return "Smoke test expected enriched News article copy to be deterministic for article %s." % article_id
+	var level_one_snapshot: Dictionary = news_system.build_news_snapshot(
+		null,
+		feed_data,
+		company_rows,
+		market_history,
+		event_history,
+		[],
+		[],
+		trade_date,
+		1
+	)
+	var level_one_feed: Dictionary = level_one_snapshot.get("feeds", {}).get("gorengan_daily", {})
+	var level_one_articles: Array = level_one_feed.get("articles", [])
+	var has_current_day_article: bool = false
+	var has_current_day_non_market_wrap: bool = false
+	for article_value in level_one_articles:
+		var article: Dictionary = article_value
+		if int(article.get("day_index", -1)) != int(trade_date.get("day_index", -2)):
+			continue
+		has_current_day_article = true
+		if str(article.get("category", "")) != "market_wrap":
+			has_current_day_non_market_wrap = true
+	if not has_current_day_article or not has_current_day_non_market_wrap:
+		return "Smoke test expected level 1 Gorengan Daily to include current-day public briefs beyond the market wrap."
+	var tape_regex := RegEx.new()
+	tape_regex.compile("\\btape\\b")
+	for feed_value in first_snapshot.get("feeds", {}).values():
+		var feed: Dictionary = feed_value
+		for article_value in feed.get("articles", []):
+			var article: Dictionary = article_value
+			var visible_text: String = "%s\n%s\n%s\n%s\n%s" % [
+				str(article.get("headline", "")),
+				str(article.get("deck", "")),
+				str(article.get("body", "")),
+				str(article.get("public_story_angle", "")),
+				str(article.get("public_confidence_label", ""))
+			]
+			if tape_regex.search(visible_text.to_lower()) != null:
+				return "Smoke test expected generated News copy to avoid the word tape in player-visible text."
+	var level_one_authors: Dictionary = {}
+	for day_offset in range(4):
+		var day_trade_date: Dictionary = trade_date.duplicate(true)
+		day_trade_date["day_index"] = int(trade_date.get("day_index", 0)) + day_offset
+		day_trade_date["day"] = int(trade_date.get("day", 1)) + day_offset
+		var day_market_entry: Dictionary = market_history[0].duplicate(true)
+		day_market_entry["day_index"] = int(day_trade_date.get("day_index", 0))
+		day_market_entry["trade_date"] = day_trade_date.duplicate(true)
+		var day_snapshot: Dictionary = news_system.build_news_snapshot(
+			null,
+			feed_data,
+			company_rows,
+			[day_market_entry],
+			[],
+			[],
+			[],
+			day_trade_date,
+			1
+		)
+		var day_feed: Dictionary = day_snapshot.get("feeds", {}).get("gorengan_daily", {})
+		for article_value in day_feed.get("articles", []):
+			var article: Dictionary = article_value
+			var author_name: String = str(article.get("author_name", ""))
+			if not author_name.is_empty():
+				level_one_authors[author_name] = true
+	if level_one_authors.size() < 2:
+		return "Smoke test expected level 1 News public briefs to rotate across at least two authors over several days."
 	return ""
 
 
@@ -477,6 +571,17 @@ func _validate_enriched_social_generation() -> String:
 		trade_date,
 		4
 	)
+	var level_one_snapshot: Dictionary = social_system.build_social_snapshot(
+		null,
+		feed_data,
+		company_rows,
+		market_history,
+		event_history,
+		[],
+		[],
+		trade_date,
+		1
+	)
 	var second_snapshot: Dictionary = social_system.build_social_snapshot(
 		null,
 		feed_data,
@@ -492,6 +597,70 @@ func _validate_enriched_social_generation() -> String:
 	var has_thread_post: bool = false
 	var has_continuity_post: bool = false
 	var has_new_fictional_account_post: bool = false
+	var level_one_posts: Array = level_one_snapshot.get("posts", [])
+	var level_one_count: int = social_system.count_social_posts(
+		feed_data,
+		market_history,
+		event_history,
+		[],
+		[],
+		trade_date,
+		1,
+		company_rows
+	)
+	if level_one_count != level_one_posts.size():
+		return "Smoke test expected Twooter count_social_posts to match rendered level 1 post count."
+	var has_level_one_current_day_ambient: bool = false
+	for post_value in level_one_posts:
+		var post: Dictionary = post_value
+		if str(post.get("post_text", "")).strip_edges().is_empty():
+			return "Smoke test expected level 1 Twooter to reject blank post text."
+		if (
+			int(post.get("day_index", -1)) == int(trade_date.get("day_index", -2)) and
+			str(post.get("event_family", "")) == "ambient" and
+			str(post.get("category", "")) != "market_wrap"
+		):
+			has_level_one_current_day_ambient = true
+	if not has_level_one_current_day_ambient:
+		return "Smoke test expected level 1 Twooter to include current-day ambient chatter beyond market wrap."
+	var fallback_feed_data: Dictionary = feed_data.duplicate(true)
+	fallback_feed_data["accounts"] = [{
+		"id": "blank_template_voice",
+		"display_name": "Blank Template Voice",
+		"handle": "@blanktemplate",
+		"tier": 1,
+		"verified": false,
+		"voice": "blank_template_voice"
+	}]
+	fallback_feed_data["voice_templates"] = {"blank_template_voice": {}}
+	var fallback_snapshot: Dictionary = social_system.build_social_snapshot(
+		null,
+		fallback_feed_data,
+		company_rows,
+		market_history,
+		[],
+		[],
+		[],
+		trade_date,
+		1
+	)
+	var fallback_posts: Array = fallback_snapshot.get("posts", [])
+	if fallback_posts.is_empty() or str(fallback_posts[0].get("post_text", "")).strip_edges().is_empty():
+		return "Smoke test expected Twooter fallback templates to prevent blank posts when an account voice lacks a matching template."
+	var fallback_second_snapshot: Dictionary = social_system.build_social_snapshot(
+		null,
+		fallback_feed_data,
+		company_rows,
+		market_history,
+		[],
+		[],
+		[],
+		trade_date,
+		1
+	)
+	var fallback_second_posts: Array = fallback_second_snapshot.get("posts", [])
+	if fallback_second_posts.is_empty() or str(fallback_second_posts[0].get("post_text", "")) != str(fallback_posts[0].get("post_text", "")):
+		return "Smoke test expected Twooter fallback template output to be deterministic."
 	var forbidden_terms: Array = [
 		"source_chain_id",
 		"chain_family",
@@ -512,6 +681,8 @@ func _validate_enriched_social_generation() -> String:
 	}
 	for post_value in posts:
 		var post: Dictionary = post_value
+		if str(post.get("post_text", "")).strip_edges().is_empty():
+			return "Smoke test expected enriched Twooter generation to reject blank post text."
 		if new_account_ids.has(str(post.get("account_id", ""))):
 			has_new_fictional_account_post = true
 		if not post.get("thread_lines", []).is_empty():
@@ -525,6 +696,8 @@ func _validate_enriched_social_generation() -> String:
 			str(post.get("public_topic_label", ""))
 		]
 		var searchable_text: String = visible_text.to_lower()
+		if searchable_text.find("{") != -1 or searchable_text.find("}") != -1:
+			return "Smoke test expected enriched Twooter copy to avoid unresolved placeholders."
 		for forbidden_term_value in forbidden_terms:
 			var forbidden_term: String = str(forbidden_term_value)
 			if searchable_text.find(forbidden_term) != -1:
@@ -553,9 +726,434 @@ func _validate_enriched_social_generation() -> String:
 			str(first_post.get("text", "")) != str(post.get("post_text", "")) or
 			str(first_post.get("account_id", "")) != str(post.get("account_id", "")) or
 			first_post.get("thread", []) != post.get("thread_lines", [])
-		):
+			):
 			return "Smoke test expected enriched Twooter copy to be deterministic for post %s." % post_id
 	return ""
+
+
+func _validate_structured_chart_generation() -> String:
+	var generator = COMPANY_GENERATOR_SCRIPT.new()
+	var chart_system = CHART_SYSTEM_SCRIPT.new()
+	var pattern_system = CHART_PATTERN_SYSTEM_SCRIPT.new()
+	var run_seed: int = 135791
+	var roster: Array = GameManager.build_company_roster(
+		run_seed,
+		GameManager.get_difficulty_config(GameManager.DEFAULT_DIFFICULTY_ID)
+	)
+	var trade_dates: Array = _build_smoke_historical_trade_dates(1260)
+	if trade_dates.size() != 1260:
+		return "Smoke test expected structured chart history to build 1260 trade dates."
+	if roster.size() < 12:
+		return "Smoke test expected the generated roster to include enough companies for chart-profile diversity."
+
+	var required_indicator_ids := ["sma_3", "sma_5", "sma_10", "sma_20", "sma_60", "sma_100", "sma_200"]
+	var indicator_catalog: Array = chart_system.get_indicator_catalog()
+	for indicator_id_value in required_indicator_ids:
+		var indicator_id: String = str(indicator_id_value)
+		if not _chart_catalog_has_id(indicator_catalog, indicator_id):
+			return "Smoke test expected chart indicator catalog to include %s." % indicator_id
+
+	var upgrade_validation: String = _validate_structured_chart_upgrade_tiers()
+	if not upgrade_validation.is_empty():
+		return upgrade_validation
+
+	var range_catalog: Array = chart_system.get_available_ranges()
+	if not _chart_smoke_range_order_matches(range_catalog, ["1d", "1w", "1m", "3m", "6m", "1y", "5y", "ytd"]):
+		return "Smoke test expected chart ranges to include 3M/6M in the planned order."
+
+	var required_pattern_ids := [
+		"double_bottom",
+		"double_top",
+		"cup_handle",
+		"head_shoulders",
+		"inverse_head_shoulders",
+		"ascending_triangle",
+		"descending_triangle",
+		"bull_flag",
+		"sma_support_bounce",
+		"sma_resistance_rejection",
+		"breakout_retest",
+		"breakdown"
+	]
+	var pattern_catalog: Array = pattern_system.get_pattern_catalog()
+	for pattern_id_value in required_pattern_ids:
+		var pattern_id: String = str(pattern_id_value)
+		if not _chart_catalog_has_id(pattern_catalog, pattern_id):
+			return "Smoke test expected chart pattern catalog to include %s." % pattern_id
+
+	var archetypes := {}
+	var biases := {}
+	var chart_intents := {}
+	var pattern_variants := {}
+	var saw_bullish_history: bool = false
+	var saw_bearish_history: bool = false
+	var saw_sideways_history: bool = false
+	var saw_support_sma: bool = false
+	var saw_resistance_sma: bool = false
+	var saw_gap_up: bool = false
+	var saw_gap_down: bool = false
+	var deterministic_reference: Dictionary = {}
+	var tested_count: int = 0
+
+	for definition_value in roster:
+		if typeof(definition_value) != TYPE_DICTIONARY:
+			continue
+		var definition: Dictionary = definition_value
+		var company_id: String = str(definition.get("id", ""))
+		var sector: Dictionary = DataRepository.get_sector_definition(str(definition.get("sector_id", "")))
+		var profile: Dictionary = generator.generate_company_profile(definition, sector, run_seed)
+		var traits: Dictionary = profile.get("generation_traits", {})
+		var chart_profile: Dictionary = traits.get("chart_profile", {})
+		if chart_profile.is_empty():
+			return "Smoke test expected %s to receive hidden chart_profile metadata." % company_id
+		if str(chart_profile.get("primary_pattern", "")).is_empty():
+			return "Smoke test expected %s chart_profile to include a primary pattern." % company_id
+		if str(chart_profile.get("pattern_variant", "")).strip_edges().is_empty():
+			return "Smoke test expected %s chart_profile to include a hidden pattern variant." % company_id
+		var chart_intent: String = str(chart_profile.get("chart_intent", ""))
+		var pattern_timeframe: String = str(chart_profile.get("pattern_timeframe", ""))
+		var gap_style: String = str(chart_profile.get("gap_style", ""))
+		var gap_bias: String = str(chart_profile.get("gap_bias", ""))
+		var gap_frequency: String = str(chart_profile.get("gap_frequency", ""))
+		var gap_followthrough: String = str(chart_profile.get("gap_followthrough", ""))
+		if not ["investing", "swing_trading", "short_term_trading", "speculative"].has(chart_intent):
+			return "Smoke test expected %s chart_profile to include a valid chart_intent." % company_id
+		if not ["5y", "1y", "6m", "3m", "1m"].has(pattern_timeframe):
+			return "Smoke test expected %s chart_profile to include a valid pattern_timeframe." % company_id
+		if not ["none", "news_gap", "breakout_gap", "exhaustion_gap", "rug_gap", "mixed"].has(gap_style):
+			return "Smoke test expected %s chart_profile to include a valid gap_style." % company_id
+		if not ["up", "down", "mixed"].has(gap_bias):
+			return "Smoke test expected %s chart_profile to include a valid gap_bias." % company_id
+		if not ["rare", "moderate", "active"].has(gap_frequency):
+			return "Smoke test expected %s chart_profile to include a valid gap_frequency." % company_id
+		if not ["hold", "fade", "fill", "continue"].has(gap_followthrough):
+			return "Smoke test expected %s chart_profile to include a valid gap_followthrough." % company_id
+		if chart_intent == "investing" and not ["5y", "1y"].has(pattern_timeframe):
+			return "Smoke test expected investing chart profile %s to focus pattern structure on 1Y/5Y." % company_id
+		if chart_intent in ["short_term_trading", "speculative"] and not ["1m", "3m", "6m"].has(pattern_timeframe):
+			return "Smoke test expected trading chart profile %s to focus pattern structure on 1M/3M/6M." % company_id
+		archetypes[str(chart_profile.get("archetype", ""))] = true
+		biases[str(chart_profile.get("bias", ""))] = true
+		chart_intents[chart_intent] = true
+		pattern_variants["%s:%s" % [
+			str(chart_profile.get("primary_pattern", "")),
+			str(chart_profile.get("pattern_variant", ""))
+		]] = true
+
+		var base_price: float = float(profile.get("base_price", 0.0))
+		var bars: Array = generator.build_historical_chart_bars(profile, trade_dates, base_price, run_seed, company_id)
+		if bars.size() != 1260:
+			return "Smoke test expected %s structured chart history to contain 1260 bars, got %d." % [company_id, bars.size()]
+		if not _chart_smoke_bars_are_valid(bars):
+			return "Smoke test expected %s structured chart bars to keep valid OHLCV values." % company_id
+		var end_close: float = _chart_smoke_close_at(bars, bars.size() - 1)
+		var tick_tolerance: float = max(GameManager.get_tick_size_for_price(base_price), 1.0)
+		if absf(end_close - base_price) > tick_tolerance:
+			return "Smoke test expected %s structured chart history to end near base price %.2f, got %.2f." % [
+				company_id,
+				base_price,
+				end_close
+			]
+
+		if deterministic_reference.is_empty():
+			var repeat_bars: Array = generator.build_historical_chart_bars(profile, trade_dates, base_price, run_seed, company_id)
+			if not _chart_smoke_histories_match(bars, repeat_bars):
+				return "Smoke test expected structured chart generation to be deterministic for %s." % company_id
+			var stripped_profile: Dictionary = profile.duplicate(true)
+			var stripped_traits: Dictionary = traits.duplicate(true)
+			stripped_traits.erase("chart_profile")
+			stripped_profile["generation_traits"] = stripped_traits
+			var derived_bars: Array = generator.build_historical_chart_bars(stripped_profile, trade_dates, base_price, run_seed, company_id)
+			if derived_bars.size() != 1260 or not _chart_smoke_histories_match(derived_bars, generator.build_historical_chart_bars(stripped_profile, trade_dates, base_price, run_seed, company_id)):
+				return "Smoke test expected missing chart_profile metadata to derive deterministic history for old saves."
+			var snapshot: Dictionary = chart_system.build_chart_snapshot_from_bars(bars, "5y", required_indicator_ids)
+			if snapshot.get("indicator_snapshots", []).size() != required_indicator_ids.size():
+				return "Smoke test expected 5Y chart snapshots to render all upgraded SMA indicators."
+			var snapshot_3m: Dictionary = chart_system.build_chart_snapshot_from_bars(bars, "3m", [])
+			if int(snapshot_3m.get("visible_bar_count", 0)) != 63 or int(snapshot_3m.get("display_bar_count", 0)) != 63:
+				return "Smoke test expected 3M chart snapshots to render 63 unaggregated daily bars."
+			var snapshot_6m: Dictionary = chart_system.build_chart_snapshot_from_bars(bars, "6m", [])
+			if int(snapshot_6m.get("visible_bar_count", 0)) != 126 or int(snapshot_6m.get("display_bar_count", 0)) != 126:
+				return "Smoke test expected 6M chart snapshots to render 126 unaggregated daily bars."
+			var snapshot_3m_sma: Dictionary = chart_system.build_chart_snapshot_from_bars(bars, "3m", ["sma_20"])
+			var sma_20_values: Array = _chart_smoke_indicator_values(snapshot_3m_sma, "sma_20")
+			if sma_20_values.is_empty() or sma_20_values[0] == null:
+				return "Smoke test expected SMA 20 to use warmup history and render from the left edge of 3M charts."
+			deterministic_reference = {"company_id": company_id}
+
+		var bias: String = str(chart_profile.get("bias", ""))
+		var primary_pattern: String = str(chart_profile.get("primary_pattern", ""))
+		if bias == "bullish" and not saw_bullish_history:
+			if _chart_smoke_close_at(bars, bars.size() - 1) <= _chart_smoke_close_at(bars, 0) * 1.08:
+				return "Smoke test expected bullish chart profile %s to show a rising 5Y history." % company_id
+			if not _chart_smoke_has_directional_volume_confirmation(bars, true):
+				return "Smoke test expected bullish chart profile %s to show volume confirmation on upside moves." % company_id
+			if not _chart_smoke_bullish_patterns().has(primary_pattern):
+				return "Smoke test expected bullish chart profile %s to use a recognizable bullish pattern." % company_id
+			saw_bullish_history = true
+		elif bias == "bearish" and not saw_bearish_history:
+			if _chart_smoke_close_at(bars, bars.size() - 1) >= _chart_smoke_close_at(bars, 0) * 0.92:
+				return "Smoke test expected bearish chart profile %s to show a falling 5Y history." % company_id
+			if not _chart_smoke_has_directional_volume_confirmation(bars, false):
+				return "Smoke test expected bearish chart profile %s to show selling-volume confirmation." % company_id
+			if not _chart_smoke_bearish_patterns().has(primary_pattern):
+				return "Smoke test expected bearish chart profile %s to use a recognizable bearish pattern." % company_id
+			saw_bearish_history = true
+		elif bias == "sideways":
+			saw_sideways_history = true
+
+		var sma_behavior: String = str(chart_profile.get("sma_behavior", ""))
+		var sma_period: int = int(chart_profile.get("preferred_sma_period", 20))
+		if sma_behavior == "support" and not saw_support_sma:
+			if not _chart_smoke_has_sma_behavior(bars, sma_period, "support"):
+				return "Smoke test expected %s to show support behavior near SMA %d." % [company_id, sma_period]
+			saw_support_sma = true
+		elif sma_behavior == "resistance" and not saw_resistance_sma:
+			if not _chart_smoke_has_sma_behavior(bars, sma_period, "resistance"):
+				return "Smoke test expected %s to show resistance behavior near SMA %d." % [company_id, sma_period]
+			saw_resistance_sma = true
+
+		if _chart_smoke_has_gap(bars, true):
+			saw_gap_up = true
+		if _chart_smoke_has_gap(bars, false):
+			saw_gap_down = true
+		tested_count += 1
+
+	if tested_count < 12:
+		return "Smoke test expected to validate at least 12 structured chart profiles."
+	if archetypes.size() < 3:
+		return "Smoke test expected roster chart profiles to span at least three archetypes."
+	if pattern_variants.size() < 6:
+		return "Smoke test expected roster chart profiles to use multiple hidden pattern variants."
+	if chart_intents.size() < 2:
+		return "Smoke test expected roster chart profiles to include multiple hidden chart intents."
+	if not biases.has("bullish") or not biases.has("bearish") or not biases.has("sideways"):
+		return "Smoke test expected roster chart profiles to include bullish, bearish, and sideways histories."
+	if not saw_bullish_history or not saw_bearish_history or not saw_sideways_history:
+		return "Smoke test expected structured chart histories to cover bullish, bearish, and sideways examples."
+	if not saw_support_sma or not saw_resistance_sma:
+		return "Smoke test expected structured chart histories to include measurable SMA support and resistance examples."
+	if not saw_gap_up or not saw_gap_down:
+		return "Smoke test expected structured chart histories to include both gap-up and gap-down examples."
+	return ""
+
+
+func _build_smoke_historical_trade_dates(count: int) -> Array:
+	var dates: Array = []
+	var cursor: Dictionary = trading_calendar.previous_trade_date(trading_calendar.start_date())
+	for _index in range(max(count, 0)):
+		dates.append(cursor.duplicate(true))
+		cursor = trading_calendar.previous_trade_date(cursor)
+	dates.reverse()
+	return dates
+
+
+func _validate_structured_chart_upgrade_tiers() -> String:
+	var chart_track: Dictionary = {}
+	for track_value in DataRepository.get_upgrade_catalog().get("tracks", []):
+		if typeof(track_value) != TYPE_DICTIONARY:
+			continue
+		var track: Dictionary = track_value
+		if str(track.get("id", "")) == "chart_indicators":
+			chart_track = track
+			break
+	if chart_track.is_empty():
+		return "Smoke test expected upgrade catalog to include Chart Indicators track."
+	var tiers: Dictionary = chart_track.get("tiers", {})
+	if not _chart_smoke_indicator_set_matches(tiers.get("4", {}).get("indicator_ids", []), []):
+		return "Smoke test expected Chart Indicators tier 4 to unlock no indicators."
+	if not _chart_smoke_indicator_set_matches(tiers.get("3", {}).get("indicator_ids", []), ["sma_20"]):
+		return "Smoke test expected Chart Indicators tier 3 to unlock only SMA 20."
+	if not _chart_smoke_indicator_set_matches(tiers.get("2", {}).get("indicator_ids", []), ["sma_3", "sma_5", "sma_10", "sma_20", "sma_60"]):
+		return "Smoke test expected Chart Indicators tier 2 to unlock SMA 3/5/10/20/60."
+	if not _chart_smoke_indicator_set_matches(tiers.get("1", {}).get("indicator_ids", []), ["sma_3", "sma_5", "sma_10", "sma_20", "sma_60", "sma_100", "sma_200", "ema_20", "rsi_14"]):
+		return "Smoke test expected Chart Indicators tier 1 to unlock all planned advanced indicators."
+	return ""
+
+
+func _chart_catalog_has_id(catalog: Array, target_id: String) -> bool:
+	for row_value in catalog:
+		if typeof(row_value) == TYPE_DICTIONARY and str(row_value.get("id", "")) == target_id:
+			return true
+	return false
+
+
+func _chart_smoke_indicator_values(snapshot: Dictionary, target_id: String) -> Array:
+	for indicator_value in snapshot.get("indicator_snapshots", []):
+		if typeof(indicator_value) != TYPE_DICTIONARY:
+			continue
+		var indicator: Dictionary = indicator_value
+		if str(indicator.get("id", "")) == target_id:
+			var values: Array = indicator.get("values", [])
+			return values.duplicate()
+	return []
+
+
+func _chart_smoke_range_order_matches(catalog: Array, expected_ids: Array) -> bool:
+	if catalog.size() != expected_ids.size():
+		return false
+	for index in range(expected_ids.size()):
+		if typeof(catalog[index]) != TYPE_DICTIONARY:
+			return false
+		var range_row: Dictionary = catalog[index]
+		if str(range_row.get("id", "")) != str(expected_ids[index]):
+			return false
+	return true
+
+
+func _chart_smoke_indicator_set_matches(actual: Array, expected: Array) -> bool:
+	if actual.size() != expected.size():
+		return false
+	for expected_value in expected:
+		if not actual.has(str(expected_value)):
+			return false
+	return true
+
+
+func _chart_smoke_bars_are_valid(bars: Array) -> bool:
+	for bar_value in bars:
+		if typeof(bar_value) != TYPE_DICTIONARY:
+			return false
+		var bar: Dictionary = bar_value
+		var open_price: float = float(bar.get("open", 0.0))
+		var high_price: float = float(bar.get("high", 0.0))
+		var low_price: float = float(bar.get("low", 0.0))
+		var close_price: float = float(bar.get("close", 0.0))
+		if open_price <= 0.0 or high_price <= 0.0 or low_price <= 0.0 or close_price <= 0.0:
+			return false
+		if high_price < max(open_price, close_price) or low_price > min(open_price, close_price):
+			return false
+		if int(bar.get("volume_shares", 0)) <= 0 or float(bar.get("value", 0.0)) <= 0.0:
+			return false
+	return true
+
+
+func _chart_smoke_histories_match(left_bars: Array, right_bars: Array) -> bool:
+	if left_bars.size() != right_bars.size() or left_bars.is_empty():
+		return false
+	var check_indexes: Array = [0, int(left_bars.size() / 2), left_bars.size() - 1]
+	for index_value in check_indexes:
+		var index: int = int(index_value)
+		var left_bar: Dictionary = left_bars[index]
+		var right_bar: Dictionary = right_bars[index]
+		if not is_equal_approx(float(left_bar.get("close", 0.0)), float(right_bar.get("close", 0.0))):
+			return false
+		if int(left_bar.get("volume_shares", 0)) != int(right_bar.get("volume_shares", 0)):
+			return false
+	return true
+
+
+func _chart_smoke_close_at(bars: Array, index: int) -> float:
+	if bars.is_empty():
+		return 0.0
+	var safe_index: int = clamp(index, 0, bars.size() - 1)
+	var bar: Dictionary = bars[safe_index]
+	return float(bar.get("close", bar.get("open", 0.0)))
+
+
+func _chart_smoke_has_gap(bars: Array, gap_up: bool) -> bool:
+	if bars.size() < 2:
+		return false
+	for index in range(1, bars.size()):
+		var previous_close: float = _chart_smoke_close_at(bars, index - 1)
+		if previous_close <= 0.0:
+			continue
+		var bar: Dictionary = bars[index]
+		var open_price: float = float(bar.get("open", previous_close))
+		var gap_ratio: float = (open_price - previous_close) / previous_close
+		if gap_up and gap_ratio >= 0.024:
+			return true
+		if not gap_up and gap_ratio <= -0.024:
+			return true
+	return false
+
+
+func _chart_smoke_has_directional_volume_confirmation(bars: Array, bullish: bool) -> bool:
+	if bars.size() < 50:
+		return false
+	for index in range(35, bars.size()):
+		var previous_close: float = _chart_smoke_close_at(bars, index - 1)
+		var current_close: float = _chart_smoke_close_at(bars, index)
+		if previous_close <= 0.0:
+			continue
+		var daily_return: float = (current_close - previous_close) / previous_close
+		if bullish and daily_return < 0.010:
+			continue
+		if not bullish and daily_return > -0.010:
+			continue
+		var previous_value: float = _chart_smoke_average_value(bars, index - 35, index)
+		var current_value: float = float(bars[index].get("value", 0.0))
+		if previous_value > 0.0 and current_value >= previous_value * 1.18:
+			return true
+	return false
+
+
+func _chart_smoke_average_value(bars: Array, start_index: int, end_index: int) -> float:
+	var safe_start: int = clamp(start_index, 0, bars.size())
+	var safe_end: int = clamp(end_index, safe_start, bars.size())
+	var total: float = 0.0
+	var count: int = 0
+	for index in range(safe_start, safe_end):
+		total += float(bars[index].get("value", 0.0))
+		count += 1
+	return total / float(count) if count > 0 else 0.0
+
+
+func _chart_smoke_has_sma_behavior(bars: Array, period: int, behavior: String) -> bool:
+	if period <= 0 or bars.size() <= period + 2:
+		return false
+	var touch_count: int = 0
+	for index in range(period, bars.size()):
+		var sma_value: float = _chart_smoke_sma_at(bars, index, period)
+		if sma_value <= 0.0:
+			continue
+		var bar: Dictionary = bars[index]
+		var close_price: float = float(bar.get("close", 0.0))
+		if behavior == "support":
+			var low_price: float = float(bar.get("low", close_price))
+			if low_price <= sma_value * 1.06 and low_price >= sma_value * 0.88 and close_price >= sma_value * 0.96:
+				touch_count += 1
+		elif behavior == "resistance":
+			var high_price: float = float(bar.get("high", close_price))
+			if high_price >= sma_value * 0.94 and high_price <= sma_value * 1.14 and close_price <= sma_value * 1.04:
+				touch_count += 1
+		if touch_count >= 4:
+			return true
+	return false
+
+
+func _chart_smoke_sma_at(bars: Array, index: int, period: int) -> float:
+	if index < period or period <= 0:
+		return 0.0
+	var total: float = 0.0
+	for sample_index in range(index - period, index):
+		total += _chart_smoke_close_at(bars, sample_index)
+	return total / float(period)
+
+
+func _chart_smoke_bullish_patterns() -> Dictionary:
+	return {
+		"double_bottom": true,
+		"inverse_head_shoulders": true,
+		"cup_handle": true,
+		"ascending_triangle": true,
+		"rounded_base": true,
+		"bull_flag": true,
+		"breakout_retest": true,
+		"higher_low_accumulation": true
+	}
+
+
+func _chart_smoke_bearish_patterns() -> Dictionary:
+	return {
+		"double_top": true,
+		"head_shoulders": true,
+		"descending_triangle": true,
+		"lower_high_distribution": true,
+		"failed_breakout": true,
+		"breakdown_retest": true,
+		"sma_resistance_rejection": true
+	}
 
 
 func _get_smoke_mode() -> String:
@@ -591,12 +1189,55 @@ func _validate_main_menu_flow() -> Dictionary:
 	await get_tree().process_frame
 
 	var new_game_button: Button = main_menu.find_child("NewGameButton", true, false) as Button
+	var menu_logo_texture: TextureRect = main_menu.find_child("LogoTexture", true, false) as TextureRect
+	var menu_title_label: Label = main_menu.find_child("StartTitle", true, false) as Label
+	var menu_build_label: Label = main_menu.find_child("MainMenuBuildLabel", true, false) as Label
 	if new_game_button == null:
 		main_menu.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
 			"message": "Smoke test could not find the New Game button in the main menu."
+		}
+	if menu_logo_texture == null or menu_logo_texture.texture == null:
+		main_menu.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the main menu to show the Gorengan logo."
+		}
+	if menu_title_label == null or menu_title_label.visible:
+		main_menu.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the old main menu text title to stay hidden behind the logo-led layout."
+		}
+	if menu_build_label == null or menu_build_label.text.find(BuildInfo.get_build_number()) == -1:
+		main_menu.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the main menu to show the current build number."
+		}
+	var action_card: PanelContainer = main_menu.find_child("ActionCard", true, false) as PanelContainer
+	var action_card_style: StyleBoxFlat = null
+	if action_card != null:
+		action_card_style = action_card.get_theme_stylebox("panel") as StyleBoxFlat
+	var new_button_style: StyleBoxFlat = new_game_button.get_theme_stylebox("normal") as StyleBoxFlat
+	if action_card_style == null or action_card_style.border_width_top != 26 or not _color_close(action_card_style.border_color, UiTheme.color("desktop.brown")):
+		main_menu.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the main menu action card to use the UiTheme desktop window style."
+		}
+	if new_button_style == null or not _color_close(new_button_style.bg_color, UiTheme.color("desktop.gold")):
+		main_menu.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the main menu New Run button to use the UiTheme desktop primary style."
 		}
 
 	new_game_button.emit_signal("pressed")
@@ -654,14 +1295,46 @@ func _validate_main_menu_flow() -> Dictionary:
 				"message": "Smoke test could not find expected difficulty card %s." % expected_button_name
 			}
 
-	var selector_card: PanelContainer = main_menu.find_child("SelectorCard", true, false) as PanelContainer
-	var maximum_selector_width: float = get_viewport().get_visible_rect().size.x * 0.9 + 1.0
-	if selector_card == null or selector_card.custom_minimum_size.x > maximum_selector_width or selector_card.get_global_rect().size.x > maximum_selector_width:
+	var chill_card_button: Button = main_menu.find_child("ChillCardButton", true, false) as Button
+	var chill_card_banner: PanelContainer = null
+	var chill_card_title: Label = null
+	if chill_card_button != null:
+		chill_card_banner = chill_card_button.find_child("DifficultyCardBanner", true, false) as PanelContainer
+		chill_card_title = chill_card_button.find_child("DifficultyCardTitle", true, false) as Label
+	var chill_banner_style: StyleBoxFlat = null
+	if chill_card_banner != null:
+		chill_banner_style = chill_card_banner.get_theme_stylebox("panel") as StyleBoxFlat
+	if (
+		chill_card_button == null or
+		chill_card_button.custom_minimum_size.x > 360.0 or
+		difficulty_card_grid.custom_minimum_size.x > 1080.0 or
+		chill_card_banner == null or
+		chill_banner_style == null or
+		chill_card_title == null or
+		chill_card_title.horizontal_alignment != HORIZONTAL_ALIGNMENT_CENTER or
+		chill_card_title.get_theme_font_size("font_size") <= UiTheme.font_size("title")
+	):
 		main_menu.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the difficulty selector card to fit within 90 percent of the screen width."
+			"message": "Smoke test expected difficulty choices to render as compact plan cards with centered title banners."
+		}
+
+	var selector_card: PanelContainer = main_menu.find_child("SelectorCard", true, false) as PanelContainer
+	var maximum_selector_width: float = get_viewport().get_visible_rect().size.x * 0.9 + 1.0
+	var compact_selector_width: float = 1042.0
+	if (
+		selector_card == null or
+		selector_card.custom_minimum_size.x > maximum_selector_width or
+		selector_card.get_global_rect().size.x > maximum_selector_width or
+		selector_card.custom_minimum_size.x > compact_selector_width
+	):
+		main_menu.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the difficulty selector card to fit within 90 percent of the screen width and hug the plan-card grid."
 		}
 
 	var continue_button: Button = main_menu.find_child("ContinueButton", true, false) as Button
@@ -691,18 +1364,45 @@ func _validate_main_menu_flow() -> Dictionary:
 			"success": false,
 			"message": "Smoke test expected Continue to unlock after selecting a difficulty card."
 		}
+	var normal_card_banner: PanelContainer = normal_card_button.find_child("DifficultyCardBanner", true, false) as PanelContainer
+	var normal_banner_style: StyleBoxFlat = null
+	if normal_card_banner != null:
+		normal_banner_style = normal_card_banner.get_theme_stylebox("panel") as StyleBoxFlat
+	var normal_title_label: Label = normal_card_button.find_child("DifficultyCardTitle", true, false) as Label
+	if (
+		normal_banner_style == null or
+		not _color_close(normal_banner_style.bg_color, UiTheme.color("desktop.brown")) or
+		normal_title_label == null or
+		not _color_close(normal_title_label.get_theme_color("font_color"), UiTheme.color("desktop.cream"))
+	):
+		main_menu.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the selected difficulty plan card banner to use readable desktop selected styling."
+		}
 
 	var loading_progress_bar: ProgressBar = main_menu.find_child("LoadingProgressBar", true, false) as ProgressBar
 	var loading_subprogress_label: Label = main_menu.find_child("LoadingSubprogressLabel", true, false) as Label
 	var loading_note_label: Label = main_menu.find_child("LoadingNoteLabel", true, false) as Label
 	var load_slots_dialog: ConfirmationDialog = main_menu.find_child("LoadSlotsDialog", true, false) as ConfirmationDialog
 	var load_slots_list: ItemList = main_menu.find_child("LoadSlotsList", true, false) as ItemList
-	if loading_progress_bar == null or loading_subprogress_label == null or loading_note_label == null or load_slots_dialog == null or load_slots_list == null:
+	var load_slots_delete_button: Button = main_menu.find_child("LoadSlotsDeleteButton", true, false) as Button
+	var load_slot_delete_dialog: ConfirmationDialog = main_menu.find_child("LoadSlotDeleteDialog", true, false) as ConfirmationDialog
+	if (
+		loading_progress_bar == null or
+		loading_subprogress_label == null or
+		loading_note_label == null or
+		load_slots_dialog == null or
+		load_slots_list == null or
+		load_slots_delete_button == null or
+		load_slot_delete_dialog == null
+	):
 		main_menu.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the loading screen and save-slot load dialog to expose their required nodes."
+			"message": "Smoke test expected the loading screen and save-slot load/delete dialogs to expose their required nodes."
 		}
 
 	main_menu.queue_free()
@@ -912,6 +1612,11 @@ func _validate_save_metadata_and_recovery() -> Dictionary:
 			"success": false,
 			"message": "Smoke test expected saves to include schema version 2 and the runtime format id."
 		}
+	if str(save_info.get("game_build", "")) != BuildInfo.get_build_number():
+		return {
+			"success": false,
+			"message": "Smoke test expected saves to include the current game build number."
+		}
 	if str(save_info.get("absolute_path", "")).is_empty() or str(save_info.get("storage_label", "")).is_empty():
 		return {
 			"success": false,
@@ -976,6 +1681,13 @@ func _validate_save_metadata_and_recovery() -> Dictionary:
 		return {
 			"success": false,
 			"message": "Smoke test expected save slots to preserve distinct run payloads while switching active slots."
+		}
+	SaveManager.delete_save(secondary_slot_id)
+	var deleted_secondary_slot: Dictionary = SaveManager.get_save_file_info(secondary_slot_id)
+	if bool(deleted_secondary_slot.get("loadable", false)) or bool(deleted_secondary_slot.get("exists", false)) or bool(deleted_secondary_slot.get("backup_exists", false)):
+		return {
+			"success": false,
+			"message": "Smoke test expected deleting a save slot to remove its primary and backup files."
 		}
 
 	SaveManager.set_autosave_enabled(false)
@@ -1078,13 +1790,16 @@ func _validate_ftue_flow() -> Dictionary:
 	var settings_save_slots_list: ItemList = game_root.find_child("SettingsSaveSlotsList", true, false) as ItemList
 	var settings_save_button: Button = game_root.find_child("SettingsSaveButton", true, false) as Button
 	var settings_load_button: Button = game_root.find_child("SettingsLoadButton", true, false) as Button
+	var settings_delete_button: Button = game_root.find_child("SettingsDeleteButton", true, false) as Button
 	var settings_exit_button: Button = game_root.find_child("SettingsExitButton", true, false) as Button
 	var settings_panel: PanelContainer = game_root.find_child("SettingsPanel", true, false) as PanelContainer
 	var settings_current_slot_label: Label = game_root.find_child("SettingsCurrentSlotLabel", true, false) as Label
 	var settings_last_saved_label: Label = game_root.find_child("SettingsLastSavedLabel", true, false) as Label
+	var settings_build_label: Label = game_root.find_child("SettingsBuildLabel", true, false) as Label
 	var settings_confirm_overlay: Control = game_root.find_child("SettingsConfirmOverlay", true, false) as Control
 	var settings_confirm_title_label: Label = game_root.find_child("SettingsConfirmTitleLabel", true, false) as Label
 	var settings_confirm_cancel_button: Button = game_root.find_child("SettingsConfirmCancelButton", true, false) as Button
+	var taskbar_build_label: Label = game_root.find_child("TaskbarBuildLabel", true, false) as Label
 	var work_tabs: TabContainer = game_root.find_child("WorkTabs", true, false) as TabContainer
 	var buy_button: Button = game_root.find_child("BuyButton", true, false) as Button
 	var lot_spin_box: SpinBox = game_root.find_child("LotSpinBox", true, false) as SpinBox
@@ -1106,19 +1821,29 @@ func _validate_ftue_flow() -> Dictionary:
 		settings_save_slots_list == null or
 		settings_save_button == null or
 		settings_load_button == null or
+		settings_delete_button == null or
 		settings_exit_button == null or
 		settings_panel == null or
 		settings_current_slot_label == null or
 		settings_last_saved_label == null or
+		settings_build_label == null or
 		settings_confirm_overlay == null or
 		settings_confirm_title_label == null or
-		settings_confirm_cancel_button == null
+		settings_confirm_cancel_button == null or
+		taskbar_build_label == null
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
 			"message": "Smoke test expected the Settings shortcut and save/load popup controls to exist."
+		}
+	if taskbar_build_label.text.find(BuildInfo.get_build_number()) == -1:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the in-game taskbar to show the current build number."
 		}
 	settings_app_button.emit_signal("pressed")
 	await get_tree().process_frame
@@ -1129,12 +1854,18 @@ func _validate_ftue_flow() -> Dictionary:
 			"success": false,
 			"message": "Smoke test expected Settings to open a five-slot save/load overlay."
 		}
-	if settings_panel.custom_minimum_size.y > 430.0 or not settings_save_button.visible or not settings_load_button.visible or not settings_exit_button.visible:
+	if (
+		settings_panel.custom_minimum_size.y > 430.0 or
+		not settings_save_button.visible or
+		not settings_load_button.visible or
+		not settings_delete_button.visible or
+		not settings_exit_button.visible
+	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the Settings overlay to stay compact with visible Save/Load/Exit controls."
+			"message": "Smoke test expected the Settings overlay to stay compact with visible Save/Load/Delete/Exit controls."
 		}
 	if not settings_current_slot_label.text.contains("Current slot") or not settings_last_saved_label.text.contains("Last saved"):
 		game_root.queue_free()
@@ -1142,6 +1873,13 @@ func _validate_ftue_flow() -> Dictionary:
 		return {
 			"success": false,
 			"message": "Smoke test expected Settings to show current-slot and last-saved labels."
+		}
+	if settings_build_label.text.find(BuildInfo.get_build_number()) == -1:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Settings to show the current build number for bug reports."
 		}
 	settings_save_button.emit_signal("pressed")
 	await get_tree().process_frame
@@ -1160,6 +1898,17 @@ func _validate_ftue_flow() -> Dictionary:
 		return {
 			"success": false,
 			"message": "Smoke test expected Settings Load to require confirmation."
+		}
+	settings_confirm_cancel_button.emit_signal("pressed")
+	await get_tree().process_frame
+	settings_delete_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if not settings_confirm_overlay.visible or settings_confirm_title_label.text != "Delete Save?":
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Settings Delete to require confirmation."
 		}
 	settings_confirm_cancel_button.emit_signal("pressed")
 	await get_tree().process_frame
@@ -1856,6 +2605,70 @@ func _validate_ftue_flow() -> Dictionary:
 	return {"success": true}
 
 
+func _validate_corporate_action_price_factor_limits() -> String:
+	var difficulty_config: Dictionary = GameManager.get_difficulty_config(GameManager.DEFAULT_DIFFICULTY_ID)
+	var company_definitions: Array = GameManager.build_company_roster(509917, difficulty_config)
+	if company_definitions.is_empty():
+		return "Smoke test expected a generated roster for corporate-action price factor limit coverage."
+	RunState.setup_new_run(509917, company_definitions, difficulty_config, false)
+	var company_id: String = str(RunState.company_order[0])
+	var definition: Dictionary = RunState.get_effective_company_definition(company_id, false, false)
+	var previous_close: float = 3547.0
+	var current_price: float = 3467.0
+	var ar_limits: Dictionary = IDX_PRICE_RULES.auto_rejection_limits(previous_close, str(definition.get("listing_board", "main")))
+	var runtime: Dictionary = RunState.get_company(company_id).duplicate(true)
+	runtime["previous_close"] = previous_close
+	runtime["current_price"] = current_price
+	runtime["daily_change_pct"] = (current_price - previous_close) / previous_close
+	runtime["sentiment"] = runtime["daily_change_pct"]
+	runtime["ar_limits"] = ar_limits.duplicate(true)
+	runtime["price_history"] = [previous_close, current_price]
+	runtime["price_bars"] = [{
+		"open": 3490.0,
+		"high": 3560.0,
+		"low": 3400.0,
+		"close": current_price,
+		"volume_shares": 100000,
+		"value": current_price * 100000.0
+	}]
+	RunState.companies[company_id] = runtime
+
+	var clamped_down_price: float = float(RunState.call("_apply_company_price_factor", company_id, 0.65, false))
+	var after_down: Dictionary = RunState.get_company(company_id)
+	var down_limits: Dictionary = after_down.get("ar_limits", {})
+	var lower_price: float = float(down_limits.get("lower_price", 0.0))
+	if not is_equal_approx(clamped_down_price, lower_price) or float(after_down.get("current_price", 0.0)) < lower_price - 0.0001:
+		return "Smoke test expected post-close corporate action markdowns to clamp at ARB, found %s below %s." % [clamped_down_price, lower_price]
+	var down_bars: Array = after_down.get("price_bars", [])
+	var down_bar: Dictionary = down_bars[down_bars.size() - 1]
+	if (
+		float(down_bar.get("open", 0.0)) < lower_price - 0.0001 or
+		float(down_bar.get("high", 0.0)) < lower_price - 0.0001 or
+		float(down_bar.get("low", 0.0)) < lower_price - 0.0001 or
+		float(down_bar.get("close", 0.0)) < lower_price - 0.0001 or
+		str(down_bar.get("limit_lock", "")) != "arb"
+	):
+		return "Smoke test expected the corporate-action adjusted daily bar to stay inside ARB with an ARB lock."
+
+	var clamped_up_price: float = float(RunState.call("_apply_company_price_factor", company_id, 1.50, false))
+	var after_up: Dictionary = RunState.get_company(company_id)
+	var up_limits: Dictionary = after_up.get("ar_limits", {})
+	var upper_price: float = float(up_limits.get("upper_price", 0.0))
+	if not is_equal_approx(clamped_up_price, upper_price) or float(after_up.get("current_price", 0.0)) > upper_price + 0.0001:
+		return "Smoke test expected post-close corporate action markups to clamp at ARA, found %s above %s." % [clamped_up_price, upper_price]
+	var up_bars: Array = after_up.get("price_bars", [])
+	var up_bar: Dictionary = up_bars[up_bars.size() - 1]
+	if (
+		float(up_bar.get("open", 0.0)) > upper_price + 0.0001 or
+		float(up_bar.get("high", 0.0)) > upper_price + 0.0001 or
+		float(up_bar.get("low", 0.0)) > upper_price + 0.0001 or
+		float(up_bar.get("close", 0.0)) > upper_price + 0.0001 or
+		str(up_bar.get("limit_lock", "")) != "ara"
+	):
+		return "Smoke test expected the corporate-action adjusted daily bar to stay inside ARA with an ARA lock."
+	return ""
+
+
 func _run_scenario(
 	run_seed: int,
 	difficulty_id: String,
@@ -2145,6 +2958,21 @@ func _run_scenario(
 				"success": false,
 				"message": "Smoke test expected the Company app to stay locked below majority ownership."
 			}
+		var locked_company_icon_style: StyleBoxFlat = company_app_button.get_theme_stylebox("disabled") as StyleBoxFlat
+		var locked_company_icon_color: Color = company_app_button.get_theme_color("icon_disabled_color")
+		if (
+			locked_company_icon_style == null or
+			locked_company_icon_style.bg_color.r < 0.82 or
+			locked_company_icon_style.bg_color.b > 0.76 or
+			locked_company_icon_color.a > 0.6 or
+			not _color_close(Color(locked_company_icon_color.r, locked_company_icon_color.g, locked_company_icon_color.b, 1), UiTheme.color("desktop.brown"))
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the locked Company desktop shortcut to use muted warm desktop disabled colors."
+			}
 		if game_root.find_child("GovernanceControlButton", true, false) != null:
 			game_root.queue_free()
 			await get_tree().process_frame
@@ -2193,6 +3021,7 @@ func _run_scenario(
 			not company_window.visible or
 			not game_root.is_desktop_app_open("company") or
 			game_root.get_desktop_app_window_title("company") != "Company" or
+			not _desktop_window_has_settings_brown_chrome(game_root, "CompanyDesktopWindow") or
 			company_controlled_option.get_item_count() <= 0 or
 			company_request_button.disabled
 		):
@@ -2200,7 +3029,7 @@ func _run_scenario(
 			await get_tree().process_frame
 			return {
 				"success": false,
-				"message": "Smoke test expected the unlocked Company app to open with controllable company agenda controls."
+				"message": "Smoke test expected the unlocked Company app to open with a brown frame and controllable company agenda controls."
 			}
 
 		var governance_action_index: int = -1
@@ -5149,6 +5978,7 @@ func _run_scenario(
 		not game_root.is_desktop_app_open("academy") or
 		game_root.get_active_desktop_app_id() != "academy" or
 		game_root.get_desktop_app_window_title("academy") != "Academy" or
+		not _desktop_window_has_settings_brown_chrome(game_root, "AcademyDesktopWindow") or
 		academy_category_tabs == null or
 		academy_category_tabs.get_child_count() != academy_category_count or
 		academy_section_list == null or
@@ -5162,7 +5992,7 @@ func _run_scenario(
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the Academy icon to open a lesson window with catalog categories, eight Technical sections, a banner frame, and an action row."
+			"message": "Smoke test expected the Academy icon to open a brown-framed lesson window with catalog categories, eight Technical sections, a banner frame, and an action row."
 		}
 
 	var academy_content_host: Control = academy_window.get_parent() as Control
@@ -5738,6 +6568,7 @@ func _run_scenario(
 		not game_root.is_desktop_app_open("upgrades") or
 		game_root.get_active_desktop_app_id() != "upgrades" or
 		game_root.get_desktop_app_window_title("upgrades") != "Upgrades" or
+		not _desktop_window_has_settings_brown_chrome(game_root, "UpgradesDesktopWindow") or
 		upgrade_cards_vbox == null or
 		upgrade_cards_vbox.get_child_count() < RunState.UPGRADE_TRACK_IDS.size()
 	):
@@ -5745,7 +6576,7 @@ func _run_scenario(
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the Upgrades icon to open a populated shop window."
+			"message": "Smoke test expected the Upgrades icon to open a populated brown-framed shop window."
 	}
 
 	var console_saved_state: Dictionary = RunState.to_save_dict()
@@ -5825,6 +6656,46 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected pressing an upgrade button to ask for confirmation before spending cash."
+		}
+
+	var upgrade_purchase_body_label: Label = game_root.find_child("UpgradePurchaseBodyLabel", true, false) as Label
+	var upgrade_purchase_content_panel: PanelContainer = game_root.find_child("UpgradePurchaseContentPanel", true, false) as PanelContainer
+	var upgrade_purchase_panel_style: StyleBoxFlat = null
+	if upgrade_purchase_content_panel != null:
+		upgrade_purchase_panel_style = upgrade_purchase_content_panel.get_theme_stylebox("panel") as StyleBoxFlat
+	var upgrade_purchase_text_color: Color = upgrade_purchase_body_label.get_theme_color("font_color") if upgrade_purchase_body_label != null else Color.WHITE
+	var upgrade_purchase_text_luma: float = (upgrade_purchase_text_color.r + upgrade_purchase_text_color.g + upgrade_purchase_text_color.b) / 3.0
+	var upgrade_purchase_bg_luma: float = -1.0
+	if upgrade_purchase_panel_style != null:
+		upgrade_purchase_bg_luma = (upgrade_purchase_panel_style.bg_color.r + upgrade_purchase_panel_style.bg_color.g + upgrade_purchase_panel_style.bg_color.b) / 3.0
+	var upgrade_purchase_ok_button: Button = upgrade_purchase_dialog.get_ok_button()
+	var upgrade_purchase_cancel_button: Button = upgrade_purchase_dialog.get_cancel_button()
+	var upgrade_purchase_ok_style: StyleBoxFlat = upgrade_purchase_ok_button.get_theme_stylebox("normal") as StyleBoxFlat if upgrade_purchase_ok_button != null else null
+	var upgrade_purchase_cancel_style: StyleBoxFlat = upgrade_purchase_cancel_button.get_theme_stylebox("normal") as StyleBoxFlat if upgrade_purchase_cancel_button != null else null
+	var upgrade_purchase_ok_font_color: Color = upgrade_purchase_ok_button.get_theme_color("font_color") if upgrade_purchase_ok_button != null else Color.BLACK
+	var upgrade_purchase_cancel_font_color: Color = upgrade_purchase_cancel_button.get_theme_color("font_color") if upgrade_purchase_cancel_button != null else Color.WHITE
+	var upgrade_purchase_ok_font_luma: float = (upgrade_purchase_ok_font_color.r + upgrade_purchase_ok_font_color.g + upgrade_purchase_ok_font_color.b) / 3.0
+	var upgrade_purchase_cancel_font_luma: float = (upgrade_purchase_cancel_font_color.r + upgrade_purchase_cancel_font_color.g + upgrade_purchase_cancel_font_color.b) / 3.0
+	var upgrade_purchase_ok_bg_luma: float = (upgrade_purchase_ok_style.bg_color.r + upgrade_purchase_ok_style.bg_color.g + upgrade_purchase_ok_style.bg_color.b) / 3.0 if upgrade_purchase_ok_style != null else 1.0
+	var upgrade_purchase_cancel_bg_luma: float = (upgrade_purchase_cancel_style.bg_color.r + upgrade_purchase_cancel_style.bg_color.g + upgrade_purchase_cancel_style.bg_color.b) / 3.0 if upgrade_purchase_cancel_style != null else 0.0
+	if (
+		upgrade_purchase_body_label == null or
+		upgrade_purchase_content_panel == null or
+		upgrade_purchase_panel_style == null or
+		upgrade_purchase_bg_luma < 0.78 or
+		upgrade_purchase_text_luma > 0.45 or
+		upgrade_purchase_ok_style == null or
+		upgrade_purchase_ok_bg_luma > 0.45 or
+		upgrade_purchase_ok_font_luma < 0.75 or
+		upgrade_purchase_cancel_style == null or
+		upgrade_purchase_cancel_bg_luma < 0.65 or
+		upgrade_purchase_cancel_font_luma > 0.45
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the upgrade confirmation popup to use readable desktop contrast."
 		}
 
 	upgrade_purchase_dialog.emit_signal("confirmed")
@@ -5966,6 +6837,7 @@ func _run_scenario(
 		not game_root.is_desktop_app_open("news") or
 		game_root.get_active_desktop_app_id() != "news" or
 		game_root.get_desktop_app_window_title("news") != "News Browser" or
+		not _desktop_window_has_settings_brown_chrome(game_root, "NewsBrowserDesktopWindow") or
 		news_article_list == null or
 		news_outlet_buttons == null or
 		news_article_cards == null or
@@ -5980,7 +6852,7 @@ func _run_scenario(
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the News icon to open the newspaper-style News app with outlet buttons, story cards, byline, and image frame."
+			"message": "Smoke test expected the News icon to open the brown-framed newspaper-style News app with outlet buttons, story cards, byline, and image frame."
 		}
 
 	var news_article_summary: Dictionary = news_article_list.get_item_metadata(0)
@@ -6304,6 +7176,7 @@ func _run_scenario(
 		not game_root.is_desktop_app_open("social") or
 		game_root.get_active_desktop_app_id() != "social" or
 		game_root.get_desktop_app_window_title("social") != "Twooter" or
+		_desktop_window_has_settings_brown_chrome(game_root, "TwooterDesktopWindow") or
 		social_feed_cards == null or
 		social_feed_cards.get_child_count() <= 0
 	):
@@ -6311,7 +7184,71 @@ func _run_scenario(
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the Twooter icon to open the simplified mobile-style social feed with populated post cards."
+			"message": "Smoke test expected the Twooter icon to keep its non-brown mobile-style social frame with populated post cards."
+		}
+
+	var social_context_hint_label: Label = game_root.find_child("SocialContextHintLabel", true, false) as Label
+	if social_context_hint_label != null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Twooter cards to hide generated context summary lines."
+		}
+	var social_avatar_label: Label = game_root.find_child("SocialAvatarLabel", true, false) as Label
+	if social_avatar_label == null or social_avatar_label.text.strip_edges().is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Twooter cards to render account initial avatars."
+		}
+	var social_account_button: Button = game_root.find_child("SocialAccountNameButton", true, false) as Button
+	if social_account_button == null or str(social_account_button.get_meta("social_account_id", "")).is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Twooter account names to be clickable filters."
+		}
+	var filtered_account_id: String = str(social_account_button.get_meta("social_account_id", ""))
+	social_account_button.emit_signal("pressed")
+	await get_tree().process_frame
+	var social_clear_button: Button = game_root.find_child("SocialAccountClearButton", true, false) as Button
+	if social_clear_button == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected clicking a Twooter account name to show a clearable account filter."
+		}
+	var filtered_post_count: int = 0
+	for social_child in social_feed_cards.get_children():
+		if str(social_child.name) != "SocialPostCard":
+			continue
+		filtered_post_count += 1
+		if str(social_child.get_meta("social_account_id", "")) != filtered_account_id:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected a Twooter account filter to show only that account's posts."
+			}
+	if filtered_post_count <= 0:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected a Twooter account filter to keep visible posts."
+		}
+	social_clear_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if game_root.find_child("SocialAccountClearButton", true, false) != null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected clearing a Twooter account filter to return to the full feed."
 		}
 
 	var social_thread_button: Button = game_root.find_child("SocialThreadToggleButton", true, false) as Button
@@ -6372,6 +7309,7 @@ func _run_scenario(
 		not game_root.is_desktop_app_open("network") or
 		game_root.get_active_desktop_app_id() != "network" or
 		game_root.get_desktop_app_window_title("network") != "Network" or
+		not _desktop_window_has_settings_brown_chrome(game_root, "NetworkDesktopWindow") or
 		network_contacts_list == null or
 		str(network_snapshot.get("recognition", {}).get("label", "")).is_empty() or
 		int(network_snapshot.get("contact_cap", 0)) <= 0
@@ -6380,7 +7318,7 @@ func _run_scenario(
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the Network icon to open a contact window with recognition data."
+			"message": "Smoke test expected the Network icon to open a brown-framed contact window with recognition data."
 		}
 
 	var network_content_host: Control = network_window.get_parent() as Control
@@ -6418,13 +7356,14 @@ func _run_scenario(
 		not _desktop_window_animation_settled(game_root, "STOCKBOTDesktopWindow") or
 		not game_root.is_desktop_app_open("stock") or
 		game_root.get_active_desktop_app_id() != "stock" or
-		game_root.get_desktop_app_window_title("stock") != "STOCKBOT"
+		game_root.get_desktop_app_window_title("stock") != "STOCKBOT" or
+		_desktop_window_has_settings_brown_chrome(game_root, "STOCKBOTDesktopWindow")
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the STOCKBOT icon to open the trading platform inside the runtime desktop window manager."
+			"message": "Smoke test expected the STOCKBOT icon to keep its non-brown trading-platform frame inside the runtime desktop window manager."
 		}
 	if difficulty_id == GameManager.DEFAULT_DIFFICULTY_ID:
 		var sma_toggle: CheckButton = game_root.find_child("IndicatorToggle_sma_20", true, false) as CheckButton
@@ -7459,6 +8398,8 @@ func _run_scenario(
 		}
 
 	var range_1d_button: Button = game_root.find_child("Range1DButton", true, false) as Button
+	var range_3m_button: Button = game_root.find_child("Range3MButton", true, false) as Button
+	var range_6m_button: Button = game_root.find_child("Range6MButton", true, false) as Button
 	var range_5y_button: Button = game_root.find_child("Range5YButton", true, false) as Button
 	var range_ytd_button: Button = game_root.find_child("RangeYTDButton", true, false) as Button
 	var display_line_button: Button = game_root.find_child("DisplayLineButton", true, false) as Button
@@ -7466,7 +8407,7 @@ func _run_scenario(
 	var zoom_out_button: Button = game_root.find_child("ZoomOutButton", true, false) as Button
 	var zoom_in_button: Button = game_root.find_child("ZoomInButton", true, false) as Button
 	var chart_meta_label: Label = game_root.find_child("ChartMetaLabel", true, false) as Label
-	if range_1d_button == null or range_5y_button == null or range_ytd_button == null or display_line_button == null or display_candle_button == null or zoom_out_button == null or zoom_in_button == null or chart_meta_label == null:
+	if range_1d_button == null or range_3m_button == null or range_6m_button == null or range_5y_button == null or range_ytd_button == null or display_line_button == null or display_candle_button == null or zoom_out_button == null or zoom_in_button == null or chart_meta_label == null:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
@@ -7496,6 +8437,26 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected the 1D chart to stay in line mode."
+		}
+
+	range_3m_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if not chart_meta_label.text.contains("3M |"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Trade chart meta row to switch to the 3M range."
+		}
+
+	range_6m_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if not chart_meta_label.text.contains("6M |"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Trade chart meta row to switch to the 6M range."
 		}
 
 	range_5y_button.emit_signal("pressed")
@@ -8231,6 +9192,7 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 		game_root.get_active_desktop_app_id() != "life" or
 		game_root.get_desktop_app_window_title("life") != "Life" or
 		not _desktop_window_animation_settled(game_root, "LifeDesktopWindow") or
+		not _desktop_window_has_settings_brown_chrome(game_root, "LifeDesktopWindow") or
 		life_summary_label == null or
 		life_summary_label.text.find("Monthly outflow") == -1 or
 		life_housing_option == null or
@@ -8248,7 +9210,7 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 		not life_snapshot.has("housing_options") or
 		not life_snapshot.has("lifestyle_options")
 	):
-		return "Smoke test expected the Life icon to open a settled cash-flow planning window with populated selectors, budget rows, and runway summary."
+		return "Smoke test expected the Life icon to open a settled brown-framed cash-flow planning window with populated selectors, budget rows, and runway summary."
 
 	var starting_lifestyle_id: String = str(RunState.get_player_life().get("lifestyle_id", ""))
 	var target_lifestyle_index: int = -1
@@ -8504,6 +9466,7 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 		game_root.get_active_desktop_app_id() != "thesis" or
 		game_root.get_desktop_app_window_title("thesis") != "Thesis Board" or
 		not _desktop_window_animation_settled(game_root, "ThesisBoardDesktopWindow") or
+		not _desktop_window_has_settings_brown_chrome(game_root, "ThesisBoardDesktopWindow") or
 		thesis_list == null or
 		thesis_company_option == null or
 		thesis_evidence_category_option == null or
@@ -8524,7 +9487,7 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 		thesis_report_regenerate_button == null or
 		thesis_use_selected_button == null
 	):
-		return "Smoke test expected the Thesis Board icon to open a settled two-column window with a hidden report overlay."
+		return "Smoke test expected the Thesis Board icon to open a settled brown-framed two-column window with a hidden report overlay."
 
 	thesis_use_selected_button.emit_signal("pressed")
 	await get_tree().process_frame
@@ -8881,6 +9844,202 @@ func _validate_chart_pattern_fixture_states() -> String:
 			]),
 			"start": 3,
 			"end": 5
+		},
+		{
+			"pattern_id": "double_bottom",
+			"expected": "Good read",
+			"bars": _chart_pattern_fixture_bars([
+				{"open": 100.0, "high": 101.0, "low": 96.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 96.0, "low": 88.0, "close": 90.0, "volume": 1200},
+				{"open": 90.0, "high": 104.0, "low": 90.0, "close": 103.0, "volume": 1500},
+				{"open": 103.0, "high": 102.0, "low": 92.0, "close": 96.0, "volume": 900},
+				{"open": 96.0, "high": 96.0, "low": 89.0, "close": 91.0, "volume": 1100},
+				{"open": 91.0, "high": 105.0, "low": 91.0, "close": 104.0, "volume": 1800},
+				{"open": 104.0, "high": 108.0, "low": 103.0, "close": 106.0, "volume": 1900},
+				{"open": 106.0, "high": 110.0, "low": 106.0, "close": 108.0, "volume": 2100}
+			]),
+			"start": 0,
+			"end": 7
+		},
+		{
+			"pattern_id": "double_top",
+			"expected": "Good read",
+			"bars": _chart_pattern_fixture_bars([
+				{"open": 100.0, "high": 103.0, "low": 98.0, "close": 101.0, "volume": 1000},
+				{"open": 101.0, "high": 113.0, "low": 100.0, "close": 112.0, "volume": 1400},
+				{"open": 112.0, "high": 112.0, "low": 96.0, "close": 98.0, "volume": 1500},
+				{"open": 98.0, "high": 108.0, "low": 97.0, "close": 106.0, "volume": 1000},
+				{"open": 106.0, "high": 112.0, "low": 105.0, "close": 111.0, "volume": 1300},
+				{"open": 111.0, "high": 111.0, "low": 97.0, "close": 98.0, "volume": 1800},
+				{"open": 98.0, "high": 99.0, "low": 94.0, "close": 95.0, "volume": 2000},
+				{"open": 95.0, "high": 96.0, "low": 93.0, "close": 94.0, "volume": 2200}
+			]),
+			"start": 0,
+			"end": 7
+		},
+		{
+			"pattern_id": "cup_handle",
+			"expected": "Good read",
+			"bars": _chart_pattern_fixture_bars([
+				{"open": 110.0, "high": 112.0, "low": 108.0, "close": 110.0, "volume": 1600},
+				{"open": 110.0, "high": 111.0, "low": 100.0, "close": 102.0, "volume": 1200},
+				{"open": 102.0, "high": 103.0, "low": 92.0, "close": 94.0, "volume": 950},
+				{"open": 94.0, "high": 96.0, "low": 84.0, "close": 86.0, "volume": 850},
+				{"open": 86.0, "high": 93.0, "low": 85.0, "close": 90.0, "volume": 800},
+				{"open": 90.0, "high": 100.0, "low": 89.0, "close": 98.0, "volume": 1000},
+				{"open": 98.0, "high": 108.0, "low": 97.0, "close": 106.0, "volume": 1250},
+				{"open": 106.0, "high": 112.0, "low": 105.0, "close": 111.0, "volume": 1500},
+				{"open": 111.0, "high": 111.0, "low": 101.0, "close": 104.0, "volume": 900},
+				{"open": 104.0, "high": 114.0, "low": 103.0, "close": 112.0, "volume": 1900}
+			]),
+			"start": 0,
+			"end": 9
+		},
+		{
+			"pattern_id": "head_shoulders",
+			"expected": "Good read",
+			"bars": _chart_pattern_fixture_bars([
+				{"open": 100.0, "high": 101.0, "low": 98.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 112.0, "low": 99.0, "close": 110.0, "volume": 1300},
+				{"open": 110.0, "high": 111.0, "low": 96.0, "close": 98.0, "volume": 1200},
+				{"open": 98.0, "high": 106.0, "low": 97.0, "close": 104.0, "volume": 1000},
+				{"open": 104.0, "high": 105.0, "low": 96.0, "close": 99.0, "volume": 1100},
+				{"open": 99.0, "high": 126.0, "low": 98.0, "close": 124.0, "volume": 1700},
+				{"open": 98.0, "high": 100.0, "low": 96.0, "close": 98.0, "volume": 1600},
+				{"open": 98.0, "high": 112.0, "low": 97.0, "close": 110.0, "volume": 1200},
+				{"open": 110.0, "high": 113.0, "low": 98.0, "close": 111.0, "volume": 1200},
+				{"open": 111.0, "high": 112.0, "low": 93.0, "close": 94.0, "volume": 1900},
+				{"open": 94.0, "high": 95.0, "low": 91.0, "close": 92.0, "volume": 2200},
+				{"open": 92.0, "high": 93.0, "low": 90.0, "close": 91.0, "volume": 2300}
+			]),
+			"start": 0,
+			"end": 11
+		},
+		{
+			"pattern_id": "inverse_head_shoulders",
+			"expected": "Good read",
+			"bars": _chart_pattern_fixture_bars([
+				{"open": 100.0, "high": 102.0, "low": 98.0, "close": 100.0, "volume": 1200},
+				{"open": 100.0, "high": 101.0, "low": 90.0, "close": 92.0, "volume": 1300},
+				{"open": 92.0, "high": 103.0, "low": 91.0, "close": 103.0, "volume": 1100},
+				{"open": 103.0, "high": 104.0, "low": 94.0, "close": 96.0, "volume": 1000},
+				{"open": 96.0, "high": 101.0, "low": 95.0, "close": 98.0, "volume": 1000},
+				{"open": 98.0, "high": 99.0, "low": 78.0, "close": 82.0, "volume": 1600},
+				{"open": 103.0, "high": 104.0, "low": 100.0, "close": 103.0, "volume": 1500},
+				{"open": 103.0, "high": 104.0, "low": 91.0, "close": 92.0, "volume": 1000},
+				{"open": 92.0, "high": 105.0, "low": 91.0, "close": 104.0, "volume": 1500},
+				{"open": 104.0, "high": 107.0, "low": 103.0, "close": 106.0, "volume": 1700},
+				{"open": 106.0, "high": 109.0, "low": 105.0, "close": 108.0, "volume": 1900},
+				{"open": 108.0, "high": 110.0, "low": 107.0, "close": 109.0, "volume": 2000}
+			]),
+			"start": 0,
+			"end": 11
+		},
+		{
+			"pattern_id": "ascending_triangle",
+			"expected": "Good read",
+			"bars": _chart_pattern_fixture_bars([
+				{"open": 100.0, "high": 111.0, "low": 95.0, "close": 108.0, "volume": 1000},
+				{"open": 108.0, "high": 110.0, "low": 97.0, "close": 102.0, "volume": 900},
+				{"open": 102.0, "high": 112.0, "low": 100.0, "close": 109.0, "volume": 1100},
+				{"open": 109.0, "high": 111.0, "low": 103.0, "close": 105.0, "volume": 1000},
+				{"open": 105.0, "high": 112.0, "low": 106.0, "close": 110.0, "volume": 1300},
+				{"open": 110.0, "high": 113.0, "low": 107.0, "close": 109.0, "volume": 1200}
+			]),
+			"start": 0,
+			"end": 5
+		},
+		{
+			"pattern_id": "descending_triangle",
+			"expected": "Good read",
+			"bars": _chart_pattern_fixture_bars([
+				{"open": 110.0, "high": 112.0, "low": 94.0, "close": 97.0, "volume": 1000},
+				{"open": 97.0, "high": 110.0, "low": 93.0, "close": 106.0, "volume": 900},
+				{"open": 106.0, "high": 108.0, "low": 94.0, "close": 96.0, "volume": 1100},
+				{"open": 96.0, "high": 105.0, "low": 93.0, "close": 101.0, "volume": 1000},
+				{"open": 101.0, "high": 103.0, "low": 94.0, "close": 95.0, "volume": 1300},
+				{"open": 95.0, "high": 101.0, "low": 92.0, "close": 98.0, "volume": 1400},
+				{"open": 98.0, "high": 99.0, "low": 91.0, "close": 94.0, "volume": 1700}
+			]),
+			"start": 0,
+			"end": 6
+		},
+		{
+			"pattern_id": "bull_flag",
+			"expected": "Good read",
+			"bars": _chart_pattern_fixture_bars([
+				{"open": 100.0, "high": 102.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 106.0, "low": 100.0, "close": 105.0, "volume": 1400},
+				{"open": 105.0, "high": 111.0, "low": 104.0, "close": 110.0, "volume": 1800},
+				{"open": 110.0, "high": 116.0, "low": 109.0, "close": 114.0, "volume": 2100},
+				{"open": 114.0, "high": 115.0, "low": 110.0, "close": 111.0, "volume": 1100},
+				{"open": 111.0, "high": 112.0, "low": 108.0, "close": 109.0, "volume": 950},
+				{"open": 109.0, "high": 111.0, "low": 106.0, "close": 108.0, "volume": 900},
+				{"open": 108.0, "high": 113.0, "low": 107.0, "close": 110.0, "volume": 1000},
+				{"open": 110.0, "high": 115.0, "low": 109.0, "close": 112.0, "volume": 1500}
+			]),
+			"start": 4,
+			"end": 8
+		},
+		{
+			"pattern_id": "sma_support_bounce",
+			"expected": "Good read",
+			"bars": _chart_pattern_fixture_bars([
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 98.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 97.0, "close": 99.0, "volume": 1100},
+				{"open": 99.0, "high": 103.0, "low": 98.0, "close": 102.0, "volume": 1400},
+				{"open": 102.0, "high": 104.0, "low": 101.0, "close": 103.0, "volume": 1500},
+				{"open": 103.0, "high": 104.0, "low": 102.0, "close": 103.0, "volume": 1400},
+				{"open": 103.0, "high": 105.0, "low": 102.0, "close": 104.0, "volume": 1500},
+				{"open": 104.0, "high": 106.0, "low": 103.0, "close": 105.0, "volume": 1600},
+				{"open": 105.0, "high": 106.0, "low": 103.0, "close": 104.0, "volume": 1300},
+				{"open": 104.0, "high": 106.0, "low": 103.0, "close": 104.0, "volume": 1300}
+			]),
+			"start": 12,
+			"end": 21
+		},
+		{
+			"pattern_id": "sma_resistance_rejection",
+			"expected": "Good read",
+			"bars": _chart_pattern_fixture_bars([
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 102.0, "low": 99.0, "close": 100.0, "volume": 1000},
+				{"open": 100.0, "high": 103.0, "low": 99.0, "close": 101.0, "volume": 1100},
+				{"open": 101.0, "high": 104.0, "low": 99.0, "close": 100.0, "volume": 1200},
+				{"open": 100.0, "high": 103.0, "low": 96.0, "close": 98.0, "volume": 1500},
+				{"open": 98.0, "high": 99.0, "low": 95.0, "close": 97.0, "volume": 1600},
+				{"open": 97.0, "high": 98.0, "low": 95.0, "close": 97.0, "volume": 1300},
+				{"open": 97.0, "high": 99.0, "low": 95.0, "close": 98.0, "volume": 1200},
+				{"open": 98.0, "high": 99.0, "low": 96.0, "close": 98.0, "volume": 1100},
+				{"open": 98.0, "high": 99.0, "low": 96.0, "close": 97.0, "volume": 1200},
+				{"open": 97.0, "high": 98.0, "low": 95.0, "close": 97.0, "volume": 1200}
+			]),
+			"start": 12,
+			"end": 21
 		}
 	]
 
@@ -9030,6 +10189,318 @@ func _color_close(actual: Color, expected: Color, tolerance: float = 0.01) -> bo
 func _desktop_window_animation_settled(game_root: Node, window_name: String) -> bool:
 	var window: Control = game_root.find_child(window_name, true, false) as Control
 	return _control_animation_settled(window)
+
+
+func _desktop_window_has_settings_brown_chrome(game_root: Node, window_name: String) -> bool:
+	var window: Control = game_root.find_child(window_name, true, false) as Control
+	if window == null:
+		return false
+	var frame: PanelContainer = window.get_node_or_null("Frame") as PanelContainer
+	var title_bar: PanelContainer = window.get_node_or_null("TitleBar") as PanelContainer
+	var content_host: Control = window.get_node_or_null("ContentHost") as Control
+	if frame == null or title_bar == null or content_host == null:
+		return false
+	var brown := Color(0.509804, 0.231373, 0.0941176, 1)
+	var cream := Color(1.0, 0.976471, 0.929412, 1)
+	var frame_style: StyleBoxFlat = frame.get_theme_stylebox("panel") as StyleBoxFlat
+	var title_style: StyleBoxFlat = title_bar.get_theme_stylebox("panel") as StyleBoxFlat
+	var title_label: Label = title_bar.find_child("TitleLabel", true, false) as Label
+	return (
+		frame_style != null and
+		title_style != null and
+		title_label != null and
+		_color_close(frame_style.border_color, brown) and
+		frame_style.border_width_left == 2 and
+		frame_style.border_width_top == 2 and
+		frame_style.border_width_right == 2 and
+		frame_style.border_width_bottom == 2 and
+		_color_close(title_style.bg_color, brown) and
+		title_style.border_width_left == 0 and
+		title_style.border_width_top == 0 and
+		title_style.border_width_right == 0 and
+		title_style.border_width_bottom == 0 and
+		_color_close(title_label.get_theme_color("font_color"), cream) and
+		is_equal_approx(content_host.offset_left, 2.0) and
+		is_equal_approx(content_host.offset_right, -2.0) and
+		is_equal_approx(content_host.offset_bottom, -2.0)
+	)
+
+
+func _validate_design_system_assets() -> String:
+	var ui_theme: Node = get_node_or_null("/root/UiTheme")
+	if ui_theme == null:
+		return "Smoke test expected UiTheme to be registered as a global autoload."
+	var required_methods := [
+		"color",
+		"font",
+		"font_size",
+		"set_ui_scale",
+		"get_ui_scale",
+		"apply_tree_font",
+		"make_stylebox",
+		"style_label",
+		"style_button",
+		"style_tab_button",
+		"style_panel",
+		"style_progress_bar",
+		"style_checkbox",
+		"style_item_list",
+		"style_option_button"
+	]
+	for method_name_value in required_methods:
+		var method_name: String = str(method_name_value)
+		if not ui_theme.has_method(method_name):
+			return "Smoke test expected UiTheme to expose %s." % method_name
+
+	if UiTheme.get_ui_scale() != "normal":
+		return "Smoke test expected UiTheme default scale to be normal."
+	for scale_id in ["compact", "normal", "large", "accessibility"]:
+		if UiTheme.font_size("body", scale_id) <= 0:
+			return "Smoke test expected UiTheme body size to resolve for %s scale." % scale_id
+	if UiTheme.font_size("caption", "normal") != 11 or UiTheme.font_size("metric", "normal") != 18:
+		return "Smoke test expected UiTheme normal typography sizes to match the design system."
+	if UiTheme.font("regular") == null or UiTheme.font("semibold") == null or UiTheme.font("bold") == null:
+		return "Smoke test expected UiTheme to load Open Sans regular, semibold, and bold fonts."
+	if not _color_close(UiTheme.color("desktop.brown"), Color(0.509804, 0.231373, 0.0941176, 1)):
+		return "Smoke test expected UiTheme desktop.brown to match the official desktop token."
+	if not _color_close(UiTheme.color("terminal.accent"), Color(0.560784, 0.772549, 1, 1)):
+		return "Smoke test expected UiTheme terminal.accent to match the official terminal token."
+
+	var primary_button := Button.new()
+	UiTheme.style_button(primary_button, "desktop_primary")
+	var primary_normal: StyleBoxFlat = primary_button.get_theme_stylebox("normal") as StyleBoxFlat
+	if primary_normal == null or not _color_close(primary_normal.bg_color, UiTheme.color("desktop.gold")) or primary_normal.border_width_left != 2:
+		return "Smoke test expected desktop_primary buttons to use gold fill and two-pixel desktop borders."
+	if not _color_close(primary_button.get_theme_color("font_color"), UiTheme.color("desktop.text")):
+		return "Smoke test expected desktop_primary buttons to use desktop text color."
+
+	var danger_button := Button.new()
+	UiTheme.style_button(danger_button, "desktop_danger")
+	var danger_normal: StyleBoxFlat = danger_button.get_theme_stylebox("normal") as StyleBoxFlat
+	if danger_normal == null or not _color_close(danger_button.get_theme_color("font_color"), UiTheme.color("desktop.cream")):
+		return "Smoke test expected desktop_danger buttons to keep readable cream text."
+
+	var shortcut_button := Button.new()
+	UiTheme.style_button(shortcut_button, "desktop_shortcut")
+	var shortcut_style: StyleBoxFlat = shortcut_button.get_theme_stylebox("normal") as StyleBoxFlat
+	if shortcut_style == null or shortcut_style.border_width_left != 4 or not _color_close(shortcut_button.get_theme_color("icon_normal_color"), UiTheme.color("desktop.brown")):
+		return "Smoke test expected desktop shortcut controls to keep the shared desktop tile treatment."
+	var shortcut_disabled_style: StyleBoxFlat = shortcut_button.get_theme_stylebox("disabled") as StyleBoxFlat
+	var shortcut_disabled_icon_color: Color = shortcut_button.get_theme_color("icon_disabled_color")
+	if (
+		shortcut_disabled_style == null or
+		shortcut_disabled_style.bg_color.b > 0.76 or
+		shortcut_disabled_style.bg_color.r < 0.82 or
+		shortcut_disabled_icon_color.a > 0.6 or
+		not _color_close(Color(shortcut_disabled_icon_color.r, shortcut_disabled_icon_color.g, shortcut_disabled_icon_color.b, 1), UiTheme.color("desktop.brown"))
+	):
+		return "Smoke test expected disabled desktop shortcuts to use muted warm desktop colors, not the dark terminal disabled fallback."
+
+	var taskbar_button := Button.new()
+	UiTheme.style_button(taskbar_button, "taskbar_launch")
+	var taskbar_pressed_style: StyleBoxFlat = taskbar_button.get_theme_stylebox("pressed") as StyleBoxFlat
+	if taskbar_pressed_style == null or not _color_close(taskbar_pressed_style.border_color, UiTheme.color("terminal.nav_active_border")):
+		return "Smoke test expected taskbar launch controls to keep the active terminal border treatment."
+
+	var desktop_tab_selected := Button.new()
+	var desktop_tab_unselected := Button.new()
+	UiTheme.style_tab_button(desktop_tab_selected, "desktop_tab", true)
+	UiTheme.style_tab_button(desktop_tab_unselected, "desktop_tab", false)
+	var selected_tab_style: StyleBoxFlat = desktop_tab_selected.get_theme_stylebox("normal") as StyleBoxFlat
+	var unselected_tab_style: StyleBoxFlat = desktop_tab_unselected.get_theme_stylebox("normal") as StyleBoxFlat
+	if selected_tab_style == null or unselected_tab_style == null or _color_close(selected_tab_style.bg_color, unselected_tab_style.bg_color):
+		return "Smoke test expected desktop_tab selected and unselected styles to be visually distinct."
+
+	var terminal_tab_selected := Button.new()
+	var terminal_tab_unselected := Button.new()
+	UiTheme.style_tab_button(terminal_tab_selected, "terminal_tab", true)
+	UiTheme.style_tab_button(terminal_tab_unselected, "terminal_tab", false)
+	var terminal_selected_style: StyleBoxFlat = terminal_tab_selected.get_theme_stylebox("normal") as StyleBoxFlat
+	var terminal_unselected_style: StyleBoxFlat = terminal_tab_unselected.get_theme_stylebox("normal") as StyleBoxFlat
+	if terminal_selected_style == null or terminal_unselected_style == null or _color_close(terminal_selected_style.bg_color, terminal_unselected_style.bg_color):
+		return "Smoke test expected terminal_tab selected and unselected styles to be visually distinct."
+
+	var desktop_window := PanelContainer.new()
+	UiTheme.style_panel(desktop_window, "desktop_window")
+	var desktop_window_style: StyleBoxFlat = desktop_window.get_theme_stylebox("panel") as StyleBoxFlat
+	if desktop_window_style == null or desktop_window_style.border_width_top != 26 or not _color_close(desktop_window_style.border_color, UiTheme.color("desktop.brown")):
+		return "Smoke test expected desktop_window panels to keep the brown title-border treatment."
+
+	var progress_bar := ProgressBar.new()
+	UiTheme.style_progress_bar(progress_bar, "desktop")
+	var progress_background: StyleBoxFlat = progress_bar.get_theme_stylebox("background") as StyleBoxFlat
+	var progress_fill: StyleBoxFlat = progress_bar.get_theme_stylebox("fill") as StyleBoxFlat
+	if progress_background == null or progress_fill == null or not _color_close(progress_fill.bg_color, UiTheme.color("desktop.olive")):
+		return "Smoke test expected desktop progress bars to use UiTheme progress styles."
+
+	var checkbox := CheckBox.new()
+	UiTheme.style_checkbox(checkbox, "desktop")
+	if not _color_close(checkbox.get_theme_color("font_color"), UiTheme.color("desktop.text")):
+		return "Smoke test expected desktop checkboxes to use readable desktop text."
+
+	var item_list := ItemList.new()
+	UiTheme.style_item_list(item_list, "desktop")
+	var item_selected_style: StyleBoxFlat = item_list.get_theme_stylebox("selected") as StyleBoxFlat
+	if item_selected_style == null or not _color_close(item_list.get_theme_color("font_selected_color"), UiTheme.color("desktop.text")):
+		return "Smoke test expected desktop item lists to expose selected styles and readable text."
+
+	var option_button := OptionButton.new()
+	UiTheme.style_option_button(option_button, "desktop")
+	var option_normal: StyleBoxFlat = option_button.get_theme_stylebox("normal") as StyleBoxFlat
+	if option_normal == null or not _color_close(option_button.get_theme_color("font_color"), UiTheme.color("desktop.text")):
+		return "Smoke test expected desktop option buttons to use UiTheme styling."
+
+	var design_doc_text: String = _read_text_file("res://docs/DESIGN_SYSTEM.md")
+	var readme_text: String = _read_text_file("res://README.md")
+	if design_doc_text.is_empty() or design_doc_text.find("desktop_tab") == -1 or design_doc_text.find("viewport-width font scaling") == -1:
+		return "Smoke test expected docs/DESIGN_SYSTEM.md to document tabs and UI scale rules."
+	if readme_text.find("docs/DESIGN_SYSTEM.md") == -1 or readme_text.find("UiTheme") == -1:
+		return "Smoke test expected README.md to link the design system docs and mention UiTheme."
+
+	return ""
+
+
+func _validate_release_readiness_assets() -> String:
+	if BuildInfo.get_product_name() != "Gorengan: Stock Trading Simulator":
+		return "Smoke test expected the player-facing product name to be Gorengan: Stock Trading Simulator."
+	if str(ProjectSettings.get_setting("application/config/name", "")) != "Gorengan Stock Trading Simulator":
+		return "Smoke test expected project.godot application name to use the Windows-safe Gorengan name."
+
+	var build_number: String = BuildInfo.get_build_number()
+	if build_number.is_empty() or BuildInfo.get_short_display_string().find(build_number) == -1:
+		return "Smoke test expected BuildInfo to expose a non-empty build number and display string."
+
+	var steam_manager: Node = get_node_or_null("/root/SteamManager")
+	if steam_manager == null:
+		return "Smoke test expected SteamManager to be registered as a global autoload."
+	if not steam_manager.has_method("get_runtime_info") or not steam_manager.has_method("refresh_runtime_info"):
+		return "Smoke test expected SteamManager to expose Steam runtime info helpers."
+	var steam_runtime_info: Variant = steam_manager.call("get_runtime_info")
+	if typeof(steam_runtime_info) != TYPE_DICTIONARY:
+		return "Smoke test expected SteamManager runtime info to be a dictionary."
+	var steam_info: Dictionary = steam_runtime_info
+	var required_steam_keys: Array = [
+		"available",
+		"initialized",
+		"init_result",
+		"app_id",
+		"app_installed_depots",
+		"app_languages",
+		"app_owner",
+		"steam_app_build_id",
+		"game_language",
+		"install_dir",
+		"is_on_steam_deck",
+		"is_on_vr",
+		"is_online",
+		"is_owned",
+		"launch_command_line",
+		"steam_id",
+		"steam_username",
+		"ui_language",
+		"godotsteam_version",
+		"status_summary"
+	]
+	for key_value in required_steam_keys:
+		var steam_key: String = str(key_value)
+		if not steam_info.has(steam_key):
+			return "Smoke test expected SteamManager runtime info to include %s." % steam_key
+	var expected_steam_app_id: int = int(ProjectSettings.get_setting("steam/initialization/app_id", 480))
+	if int(steam_info.get("app_id", 0)) != expected_steam_app_id:
+		return "Smoke test expected SteamManager to read the configured Steam app id."
+
+	var known_issues_text: String = _read_text_file("res://docs/KNOWN_ISSUES.md")
+	if (
+		known_issues_text.is_empty() or
+		known_issues_text.find(build_number) == -1 or
+		known_issues_text.find("KI-001") == -1 or
+		known_issues_text.find("Reporting Priority") == -1
+	):
+		return "Smoke test expected docs/KNOWN_ISSUES.md to include the current build number, issue ids, and reporting priorities."
+
+	var bug_template_text: String = _read_text_file("res://docs/BUG_REPORT_TEMPLATE.md")
+	if (
+		bug_template_text.is_empty() or
+		bug_template_text.find(build_number) == -1 or
+		bug_template_text.find("Steps To Reproduce") == -1 or
+		bug_template_text.find("Expected Result") == -1 or
+		bug_template_text.find("Actual Result") == -1
+	):
+		return "Smoke test expected docs/BUG_REPORT_TEMPLATE.md to include build, reproduction, expected-result, and actual-result fields."
+
+	var achievement_doc_text: String = _read_text_file("res://docs/STEAM_ACHIEVEMENT_IDS.md")
+	if (
+		achievement_doc_text.is_empty() or
+		achievement_doc_text.find("ACH_FIRST_TRADE") == -1 or
+		achievement_doc_text.find("STAT_TRADES_PLACED") == -1 or
+		achievement_doc_text.find("Steamworks") == -1
+	):
+		return "Smoke test expected docs/STEAM_ACHIEVEMENT_IDS.md to include Steam achievement and stat API prep."
+
+	var cloud_doc_text: String = _read_text_file("res://docs/STEAM_CLOUD_SAVE_PATHS.md")
+	if (
+		cloud_doc_text.is_empty() or
+		cloud_doc_text.find("user://saves/slot_1.json") == -1 or
+		cloud_doc_text.find("daytrader_save_config.json") == -1 or
+		cloud_doc_text.find("WinAppDataRoaming") == -1
+	):
+		return "Smoke test expected docs/STEAM_CLOUD_SAVE_PATHS.md to document Steam Auto-Cloud save paths."
+
+	var achievement_catalog_text: String = _read_text_file("res://data/steam/achievement_catalog.json")
+	if achievement_catalog_text.is_empty():
+		return "Smoke test expected data/steam/achievement_catalog.json to exist."
+	var achievement_json := JSON.new()
+	var achievement_parse_error: int = achievement_json.parse(achievement_catalog_text)
+	if achievement_parse_error != OK:
+		return "Smoke test expected data/steam/achievement_catalog.json to parse as JSON."
+	if typeof(achievement_json.data) != TYPE_DICTIONARY:
+		return "Smoke test expected Steam achievement catalog root to be a dictionary."
+	var achievement_catalog: Dictionary = achievement_json.data
+	var achievement_rows: Array = achievement_catalog.get("achievements", [])
+	var stat_rows: Array = achievement_catalog.get("stats", [])
+	if achievement_rows.size() < 10 or stat_rows.size() < 5:
+		return "Smoke test expected Steam achievement catalog to include a useful Early Access achievement/stat set."
+	var seen_achievement_api_names := {}
+	var has_first_trade: bool = false
+	for achievement_value in achievement_rows:
+		if typeof(achievement_value) != TYPE_DICTIONARY:
+			return "Smoke test expected every Steam achievement catalog row to be a dictionary."
+		var achievement: Dictionary = achievement_value
+		var api_name: String = str(achievement.get("api_name", "")).strip_edges()
+		if not api_name.begins_with("ACH_"):
+			return "Smoke test expected Steam achievement API names to begin with ACH_, found %s." % api_name
+		if seen_achievement_api_names.has(api_name):
+			return "Smoke test expected Steam achievement API names to be unique, found duplicate %s." % api_name
+		seen_achievement_api_names[api_name] = true
+		if api_name == "ACH_FIRST_TRADE":
+			has_first_trade = true
+			if str(achievement.get("progress_stat", "")) != "STAT_TRADES_PLACED":
+				return "Smoke test expected ACH_FIRST_TRADE to use STAT_TRADES_PLACED."
+	if not has_first_trade:
+		return "Smoke test expected Steam achievement catalog to include ACH_FIRST_TRADE."
+	var seen_stat_api_names := {}
+	for stat_value in stat_rows:
+		if typeof(stat_value) != TYPE_DICTIONARY:
+			return "Smoke test expected every Steam stat catalog row to be a dictionary."
+		var stat: Dictionary = stat_value
+		var stat_api_name: String = str(stat.get("api_name", "")).strip_edges()
+		if not stat_api_name.begins_with("STAT_"):
+			return "Smoke test expected Steam stat API names to begin with STAT_, found %s." % stat_api_name
+		if seen_stat_api_names.has(stat_api_name):
+			return "Smoke test expected Steam stat API names to be unique, found duplicate %s." % stat_api_name
+		seen_stat_api_names[stat_api_name] = true
+	return ""
+
+
+func _read_text_file(path: String) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return ""
+	var text: String = file.get_as_text()
+	file = null
+	return text
 
 
 func _validate_contact_network_data() -> String:

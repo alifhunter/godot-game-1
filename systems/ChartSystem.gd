@@ -4,12 +4,44 @@ const RANGE_DEFINITIONS := {
 	"1d": {"id": "1d", "label": "1D", "trading_days": 1},
 	"1w": {"id": "1w", "label": "1W", "trading_days": 5},
 	"1m": {"id": "1m", "label": "1M", "trading_days": 21},
+	"3m": {"id": "3m", "label": "3M", "trading_days": 63},
+	"6m": {"id": "6m", "label": "6M", "trading_days": 126},
 	"1y": {"id": "1y", "label": "1Y", "trading_days": 252},
 	"5y": {"id": "5y", "label": "5Y", "trading_days": 1260},
 	"ytd": {"id": "ytd", "label": "YTD", "mode": "ytd"}
 }
 
 const INDICATOR_CATALOG := {
+	"sma_3": {
+		"id": "sma_3",
+		"label": "SMA 3",
+		"plot_kind": "overlay",
+		"calculation": "sma",
+		"lookback": 3,
+		"track_id": "technical_basics",
+		"perk_id": "indicator_sma_3",
+		"sort_order": 3
+	},
+	"sma_5": {
+		"id": "sma_5",
+		"label": "SMA 5",
+		"plot_kind": "overlay",
+		"calculation": "sma",
+		"lookback": 5,
+		"track_id": "technical_basics",
+		"perk_id": "indicator_sma_5",
+		"sort_order": 5
+	},
+	"sma_10": {
+		"id": "sma_10",
+		"label": "SMA 10",
+		"plot_kind": "overlay",
+		"calculation": "sma",
+		"lookback": 10,
+		"track_id": "technical_basics",
+		"perk_id": "indicator_sma_10",
+		"sort_order": 10
+	},
 	"sma_20": {
 		"id": "sma_20",
 		"label": "SMA 20",
@@ -20,6 +52,36 @@ const INDICATOR_CATALOG := {
 		"perk_id": "indicator_sma_20",
 		"sort_order": 20
 	},
+	"sma_60": {
+		"id": "sma_60",
+		"label": "SMA 60",
+		"plot_kind": "overlay",
+		"calculation": "sma",
+		"lookback": 60,
+		"track_id": "trend_structure",
+		"perk_id": "indicator_sma_60",
+		"sort_order": 60
+	},
+	"sma_100": {
+		"id": "sma_100",
+		"label": "SMA 100",
+		"plot_kind": "overlay",
+		"calculation": "sma",
+		"lookback": 100,
+		"track_id": "trend_structure",
+		"perk_id": "indicator_sma_100",
+		"sort_order": 100
+	},
+	"sma_200": {
+		"id": "sma_200",
+		"label": "SMA 200",
+		"plot_kind": "overlay",
+		"calculation": "sma",
+		"lookback": 200,
+		"track_id": "trend_structure",
+		"perk_id": "indicator_sma_200",
+		"sort_order": 200
+	},
 	"ema_20": {
 		"id": "ema_20",
 		"label": "EMA 20",
@@ -28,7 +90,7 @@ const INDICATOR_CATALOG := {
 		"lookback": 20,
 		"track_id": "momentum_read",
 		"perk_id": "indicator_ema_20",
-		"sort_order": 30
+		"sort_order": 210
 	},
 	"sma_50": {
 		"id": "sma_50",
@@ -38,7 +100,7 @@ const INDICATOR_CATALOG := {
 		"lookback": 50,
 		"track_id": "trend_structure",
 		"perk_id": "indicator_sma_50",
-		"sort_order": 40
+		"sort_order": 50
 	},
 	"rsi_14": {
 		"id": "rsi_14",
@@ -48,7 +110,7 @@ const INDICATOR_CATALOG := {
 		"lookback": 14,
 		"track_id": "momentum_read",
 		"perk_id": "indicator_rsi_14",
-		"sort_order": 50
+		"sort_order": 220
 	}
 }
 
@@ -121,7 +183,8 @@ func build_chart_snapshot_from_bars(
 	if not is_zero_approx(start_price):
 		change_pct = (end_price - start_price) / start_price
 
-	var indicator_snapshots: Array = _build_indicator_snapshots(display_bars, enabled_indicator_ids, primary_values.size())
+	var indicator_source_bars: Array = _build_display_bars(full_bars, normalized_range_id)
+	var indicator_snapshots: Array = _build_indicator_snapshots(indicator_source_bars, enabled_indicator_ids, primary_values.size())
 	var latest_bar: Dictionary = display_bars[display_bars.size() - 1]
 	var plots: Array = [{
 		"id": "close",
@@ -182,7 +245,7 @@ func _normalize_range_id(range_id: String) -> String:
 
 
 func _range_sort_index(range_id: String) -> int:
-	var order: Array = ["1d", "1w", "1m", "1y", "5y", "ytd"]
+	var order: Array = ["1d", "1w", "1m", "3m", "6m", "1y", "5y", "ytd"]
 	return order.find(str(range_id).to_lower())
 
 

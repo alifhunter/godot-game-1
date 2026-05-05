@@ -114,6 +114,16 @@ func _build_outlet_feed(
 		story_memory
 	):
 		_append_unique_article(articles, seen_ids, article_value)
+	for article_value in _build_public_daily_brief_articles(
+		outlet,
+		feed_data,
+		company_row_lookup,
+		latest_market_entry,
+		event_history,
+		current_trade_date,
+		story_memory
+	):
+		_append_unique_article(articles, seen_ids, article_value)
 
 	var market_wrap: Dictionary = _build_market_wrap_article(
 		outlet,
@@ -320,6 +330,250 @@ func _build_recent_event_articles(
 		source_counts[source_key] = int(source_counts.get(source_key, 0)) + 1
 
 	return articles
+
+
+func _build_public_daily_brief_articles(
+	outlet: Dictionary,
+	feed_data: Dictionary,
+	company_row_lookup: Dictionary,
+	latest_market_entry: Dictionary,
+	event_history: Array,
+	current_trade_date: Dictionary,
+	story_memory: Dictionary
+) -> Array:
+	if int(outlet.get("intel_level", 1)) != 1:
+		return []
+
+	var articles: Array = []
+	var current_day_index: int = int(current_trade_date.get("day_index", current_trade_date.get("day", 0)))
+	var company_rows: Array = []
+	for row_value in company_row_lookup.values():
+		var row: Dictionary = row_value
+		if not str(row.get("ticker", "")).is_empty():
+			company_rows.append(row.duplicate(true))
+
+	company_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("daily_change_pct", 0.0)) > float(b.get("daily_change_pct", 0.0))
+	)
+
+	if not company_rows.is_empty():
+		var winner_row: Dictionary = company_rows[0]
+		articles.append(_build_public_company_brief_article(
+			outlet,
+			feed_data,
+			winner_row,
+			latest_market_entry,
+			current_trade_date,
+			story_memory,
+			"top_mover",
+			2.85
+		))
+		var loser_row: Dictionary = company_rows[company_rows.size() - 1]
+		if str(loser_row.get("id", "")) != str(winner_row.get("id", "")):
+			articles.append(_build_public_company_brief_article(
+				outlet,
+				feed_data,
+				loser_row,
+				latest_market_entry,
+				current_trade_date,
+				story_memory,
+				"weak_mover",
+				2.75
+			))
+
+	var sector_source: Dictionary = _build_public_sector_brief_source(company_rows, current_trade_date)
+	if not sector_source.is_empty():
+		articles.append(_build_public_source_brief_article(
+			outlet,
+			feed_data,
+			sector_source,
+			{},
+			latest_market_entry,
+			current_trade_date,
+			story_memory,
+			"sector_watch",
+			2.65
+		))
+
+	var calendar_articles_added: int = 0
+	for event_value in event_history:
+		if calendar_articles_added >= 2 or typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event_data: Dictionary = event_value
+		if int(event_data.get("day_index", -9999)) != current_day_index:
+			continue
+		if not _is_public_calendar_event(event_data):
+			continue
+		var company_id: String = str(event_data.get("target_company_id", ""))
+		var company_row: Dictionary = company_row_lookup.get(company_id, {})
+		articles.append(_build_public_source_brief_article(
+			outlet,
+			feed_data,
+			_build_public_calendar_source(event_data),
+			company_row,
+			latest_market_entry,
+			current_trade_date,
+			story_memory,
+			"calendar_%d" % calendar_articles_added,
+			2.95 - (float(calendar_articles_added) * 0.05)
+		))
+		calendar_articles_added += 1
+
+	return articles
+
+
+func _build_public_company_brief_article(
+	outlet: Dictionary,
+	feed_data: Dictionary,
+	company_row: Dictionary,
+	latest_market_entry: Dictionary,
+	current_trade_date: Dictionary,
+	story_memory: Dictionary,
+	brief_key: String,
+	priority: float
+) -> Dictionary:
+	var source_data: Dictionary = company_row.duplicate(true)
+	var ticker: String = str(company_row.get("ticker", ""))
+	var change_pct: float = float(company_row.get("daily_change_pct", 0.0))
+	source_data["scope"] = "company"
+	source_data["category"] = "public_mover"
+	source_data["event_family"] = "public_brief"
+	source_data["tone"] = _tone_from_change(change_pct)
+	source_data["target_company_id"] = str(company_row.get("id", ""))
+	source_data["target_ticker"] = ticker
+	source_data["target_company_name"] = str(company_row.get("name", ticker))
+	source_data["target_sector_id"] = str(company_row.get("sector_id", ""))
+	source_data["sector_name"] = str(company_row.get("sector_name", ""))
+	source_data["headline"] = "%s stays on public watch after moving %s" % [ticker, _format_percent(change_pct)]
+	source_data["summary"] = "%s moved %s today. Public traders are watching whether the next session confirms the move or fades it." % [
+		ticker,
+		_format_percent(change_pct)
+	]
+	source_data["day_index"] = int(current_trade_date.get("day_index", -1))
+	source_data["trade_date"] = current_trade_date.duplicate(true)
+	return _build_public_source_brief_article(
+		outlet,
+		feed_data,
+		source_data,
+		company_row,
+		latest_market_entry,
+		current_trade_date,
+		story_memory,
+		brief_key,
+		priority
+	)
+
+
+func _build_public_source_brief_article(
+	outlet: Dictionary,
+	feed_data: Dictionary,
+	source_data: Dictionary,
+	company_row: Dictionary,
+	latest_market_entry: Dictionary,
+	current_trade_date: Dictionary,
+	story_memory: Dictionary,
+	brief_key: String,
+	priority: float
+) -> Dictionary:
+	var day_index: int = int(source_data.get("day_index", current_trade_date.get("day_index", -1)))
+	var source_key: String = str(source_data.get("target_company_id", ""))
+	if source_key.is_empty():
+		source_key = str(source_data.get("target_sector_id", ""))
+	if source_key.is_empty():
+		source_key = str(source_data.get("event_id", "market"))
+	var article_id: String = "public_brief|%s|%s|%s" % [
+		brief_key,
+		source_key,
+		day_index
+	]
+	var context: Dictionary = _build_story_context(
+		feed_data,
+		source_data,
+		company_row,
+		latest_market_entry,
+		source_data.get("trade_date", current_trade_date).duplicate(true),
+		"public_brief",
+		article_id,
+		story_memory
+	)
+	return _build_article_record(
+		outlet,
+		feed_data,
+		source_data,
+		context,
+		"public_brief",
+		"developing",
+		source_data.get("trade_date", current_trade_date).duplicate(true),
+		day_index,
+		article_id,
+		priority
+	)
+
+
+func _build_public_sector_brief_source(company_rows: Array, current_trade_date: Dictionary) -> Dictionary:
+	var sector_totals: Dictionary = {}
+	for row_value in company_rows:
+		var row: Dictionary = row_value
+		var sector_id: String = str(row.get("sector_id", ""))
+		if sector_id.is_empty():
+			continue
+		var sector_row: Dictionary = sector_totals.get(sector_id, {
+			"sector_id": sector_id,
+			"sector_name": str(row.get("sector_name", sector_id)),
+			"total_change": 0.0,
+			"count": 0
+		})
+		sector_row["total_change"] = float(sector_row.get("total_change", 0.0)) + float(row.get("daily_change_pct", 0.0))
+		sector_row["count"] = int(sector_row.get("count", 0)) + 1
+		sector_totals[sector_id] = sector_row
+
+	var best_sector: Dictionary = {}
+	var best_abs_change: float = 0.0
+	for sector_value in sector_totals.values():
+		var sector_row: Dictionary = sector_value
+		var average_change: float = float(sector_row.get("total_change", 0.0)) / float(max(int(sector_row.get("count", 1)), 1))
+		if absf(average_change) > best_abs_change:
+			best_abs_change = absf(average_change)
+			best_sector = sector_row.duplicate(true)
+			best_sector["average_change_pct"] = average_change
+	if best_sector.is_empty():
+		return {}
+
+	var sector_name: String = str(best_sector.get("sector_name", "the sector"))
+	var change_pct: float = float(best_sector.get("average_change_pct", 0.0))
+	return {
+		"event_id": "public_sector_brief",
+		"scope": "sector",
+		"category": "sector_rotation",
+		"event_family": "public_brief",
+		"tone": _tone_from_change(change_pct),
+		"target_sector_id": str(best_sector.get("sector_id", "")),
+		"sector_name": sector_name,
+		"headline": "%s draws attention after moving %s on average" % [sector_name, _format_percent(change_pct)],
+		"summary": "%s was one of the clearer sector moves today. The next clue is whether more names in the group join the move." % sector_name,
+		"day_index": int(current_trade_date.get("day_index", -1)),
+		"trade_date": current_trade_date.duplicate(true)
+	}
+
+
+func _is_public_calendar_event(event_data: Dictionary) -> bool:
+	var category: String = str(event_data.get("category", ""))
+	if category == "corporate_meeting" or not str(event_data.get("meeting_id", "")).is_empty():
+		return true
+	if category in ["corporate_action_filing", "corporate_action_resolution", "corporate_action_execution", "corporate_action_cancellation"]:
+		return true
+	return false
+
+
+func _build_public_calendar_source(event_data: Dictionary) -> Dictionary:
+	var source_data: Dictionary = event_data.duplicate(true)
+	var ticker: String = str(source_data.get("target_ticker", ""))
+	var focus_label: String = ticker if not ticker.is_empty() else str(source_data.get("target_company_name", "The company"))
+	source_data["scope"] = "company"
+	source_data["event_family"] = str(source_data.get("event_family", "corporate_action"))
+	source_data["headline"] = "%s has a public corporate update on the calendar" % focus_label
+	source_data["summary"] = "%s now has a public update to follow. Traders can use the calendar and the next market reaction to judge whether the event still matters." % focus_label
+	return source_data
 
 
 func _build_market_wrap_article(
@@ -763,7 +1017,7 @@ func _public_detail_hint(source_data: Dictionary, phase_phrase: String) -> Strin
 		return description
 
 	if category == "corporate_action_rumor":
-		return "early corporate-action talk is starting to show up in the tape"
+		return "early corporate-action talk is starting to show up in public trading activity"
 	if category == "corporate_action_speculation":
 		return "public speculation is turning a quiet setup into a louder market story"
 	if category == "corporate_action_denial":

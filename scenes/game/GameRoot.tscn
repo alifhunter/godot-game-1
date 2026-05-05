@@ -843,6 +843,11 @@ size_flags_horizontal = 3
 size_flags_horizontal = 3
 text = "Desktop ready."
 
+[node name="TaskbarBuildLabel" type="Label" parent="TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow"]
+custom_minimum_size = Vector2(148, 0)
+horizontal_alignment = 2
+text = "Build 2026.05.03.1"
+
 [node name="TaskbarClockLabel" type="Label" parent="TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow"]
 horizontal_alignment = 2
 text = "DAY 1"

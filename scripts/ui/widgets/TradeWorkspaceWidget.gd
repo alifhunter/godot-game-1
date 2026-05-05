@@ -44,6 +44,8 @@ var _pattern_thesis_rows: Array = []
 @onready var range_1d_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow/Range1DButton
 @onready var range_1w_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow/Range1WButton
 @onready var range_1m_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow/Range1MButton
+@onready var range_3m_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow/Range3MButton
+@onready var range_6m_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow/Range6MButton
 @onready var range_1y_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow/Range1YButton
 @onready var range_5y_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow/Range5YButton
 @onready var range_ytd_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow/RangeYTDButton
@@ -51,7 +53,7 @@ var _pattern_thesis_rows: Array = []
 @onready var display_candle_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow/DisplayCandleButton
 @onready var zoom_out_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow/ZoomOutButton
 @onready var zoom_in_button: Button = $WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow/ZoomInButton
-var indicator_row: HBoxContainer = null
+var indicator_row: HFlowContainer = null
 
 
 func _ready() -> void:
@@ -65,6 +67,8 @@ func _ready() -> void:
 	_bind_chart_range_button(range_1d_button, "1d")
 	_bind_chart_range_button(range_1w_button, "1w")
 	_bind_chart_range_button(range_1m_button, "1m")
+	_bind_chart_range_button(range_3m_button, "3m")
+	_bind_chart_range_button(range_6m_button, "6m")
 	_bind_chart_range_button(range_1y_button, "1y")
 	_bind_chart_range_button(range_5y_button, "5y")
 	_bind_chart_range_button(range_ytd_button, "ytd")
@@ -308,6 +312,8 @@ func _chart_range_button_map() -> Dictionary:
 		"1d": range_1d_button,
 		"1w": range_1w_button,
 		"1m": range_1m_button,
+		"3m": range_3m_button,
+		"6m": range_6m_button,
 		"1y": range_1y_button,
 		"5y": range_5y_button,
 		"ytd": range_ytd_button
@@ -599,7 +605,13 @@ func _decorate_chart_snapshot(chart_snapshot: Dictionary) -> Dictionary:
 
 	var plot_palette := {
 		"close": primary_color,
+		"sma_3": Color(0.886275, 0.654902, 0.407843, 1),
+		"sma_5": Color(0.980392, 0.792157, 0.392157, 1),
+		"sma_10": Color(0.729412, 0.858824, 0.415686, 1),
 		"sma_20": Color(0.980392, 0.792157, 0.392157, 1),
+		"sma_60": Color(0.556863, 0.85098, 0.980392, 1),
+		"sma_100": Color(0.470588, 0.65098, 1, 1),
+		"sma_200": Color(0.854902, 0.576471, 0.964706, 1),
 		"ema_20": Color(0.854902, 0.576471, 0.964706, 1),
 		"sma_50": Color(0.556863, 0.85098, 0.980392, 1),
 		"rsi_14": Color(0.513726, 0.886275, 0.662745, 1)
@@ -619,10 +631,11 @@ func _ensure_indicator_row() -> void:
 		return
 	var chart_tab: Control = work_tabs.get_node("Chart")
 	var range_row: Control = chart_tab.get_node("ChartRangeRow")
-	indicator_row = HBoxContainer.new()
+	indicator_row = HFlowContainer.new()
 	indicator_row.name = "ChartIndicatorRow"
 	indicator_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	indicator_row.add_theme_constant_override("separation", 8)
+	indicator_row.add_theme_constant_override("h_separation", 8)
+	indicator_row.add_theme_constant_override("v_separation", 4)
 	chart_tab.add_child(indicator_row)
 	chart_tab.move_child(indicator_row, range_row.get_index() + 1)
 

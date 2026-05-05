@@ -1494,7 +1494,7 @@ func _build_spawn_candidates(run_state, catalog: Dictionary, macro_state: Dictio
 	return candidates
 
 
-func _score_family_for_company(run_state, definition: Dictionary, runtime: Dictionary, macro_state: Dictionary, family: Dictionary) -> float:
+func _score_family_for_company(_run_state, definition: Dictionary, runtime: Dictionary, macro_state: Dictionary, family: Dictionary) -> float:
 	var family_id: String = str(family.get("id", ""))
 	var financials: Dictionary = definition.get("financials", {})
 	var profile: Dictionary = runtime.get("company_profile", {})
@@ -3973,7 +3973,7 @@ func _build_backdoor_lockup_update_application(
 
 
 func _build_backdoor_lockup_event(
-	catalog: Dictionary,
+	_catalog: Dictionary,
 	definition: Dictionary,
 	lockup: Dictionary,
 	application: Dictionary,
@@ -4943,7 +4943,7 @@ func _stock_dividend_distribution_ratio(
 
 func _advance_cash_dividends(
 	run_state,
-	catalog: Dictionary,
+	_catalog: Dictionary,
 	dividend_calendar: Dictionary,
 	shareholder_registry: Dictionary,
 	trade_date: Dictionary,
@@ -5018,7 +5018,7 @@ func _advance_cash_dividends(
 
 func _advance_stock_dividends(
 	run_state,
-	catalog: Dictionary,
+	_catalog: Dictionary,
 	dividend_calendar: Dictionary,
 	shareholder_registry: Dictionary,
 	trade_date: Dictionary,
@@ -5976,7 +5976,7 @@ func _ownership_snapshot_for_shares(run_state, company_id: String, shares_owned:
 
 
 func _resolve_interactive_meeting_vote(
-	catalog: Dictionary,
+	_catalog: Dictionary,
 	meeting_id: String,
 	chain: Dictionary,
 	_meeting: Dictionary,
@@ -6581,7 +6581,7 @@ func _sector_label_for_id(sector_id: String) -> String:
 			return sector_id.replace("_", " ").capitalize()
 
 
-func _management_stance_for_stage(chain: Dictionary, _stage_template: Dictionary) -> String:
+func _management_stance_for_stage(chain: Dictionary, _stage_template_data: Dictionary) -> String:
 	var stage_id: String = str(chain.get("stage", ""))
 	match stage_id:
 		"management_response":

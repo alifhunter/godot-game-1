@@ -302,6 +302,7 @@ var selected_academy_category_id: String = "technical"
 var selected_academy_section_id: String = "intro"
 var academy_quiz_option_buttons: Dictionary = {}
 var expanded_social_thread_ids: Dictionary = {}
+var selected_social_account_id: String = ""
 var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 
 @onready var desktop_layer: Control = $DesktopLayer
@@ -360,6 +361,7 @@ var settings_dialog: Control = null
 var settings_panel: PanelContainer = null
 var settings_title_bar: PanelContainer = null
 var settings_title_label: Label = null
+var settings_build_label: Label = null
 var settings_close_button: Button = null
 var settings_current_slot_label: Label = null
 var settings_last_saved_label: Label = null
@@ -368,6 +370,7 @@ var settings_save_slots_list: ItemList = null
 var settings_status_label: Label = null
 var settings_save_button: Button = null
 var settings_load_button: Button = null
+var settings_delete_button: Button = null
 var settings_exit_button: Button = null
 var settings_confirm_overlay: Control = null
 var settings_confirm_title_label: Label = null
@@ -488,6 +491,7 @@ var academy_glossary_list: ItemList = null
 @onready var taskbar_stock_button: Button = $TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow/TaskbarStockButton
 @onready var taskbar_news_button: Button = $TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow/TaskbarNewsButton
 @onready var taskbar_status_label: Label = $TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow/TaskbarStatusLabel
+@onready var taskbar_build_label: Label = $TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow/TaskbarBuildLabel
 @onready var taskbar_clock_label: Label = $TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow/TaskbarClockLabel
 @onready var top_bar_outer_margin: MarginContainer = $Margin/RootVBox/TopBarOuterMargin
 @onready var sidebar_panel: PanelContainer = $Margin/RootVBox/ShellHBox/SidebarOuterMargin/SidebarPanel
@@ -2585,11 +2589,12 @@ func _refresh_header() -> void:
 func _refresh_desktop() -> void:
 	_sync_desktop_app_state()
 	if not RunState.has_active_run():
-		desktop_title_label.text = "Daytrader OS"
+		desktop_title_label.text = "Gorengan OS"
 		desktop_date_label.text = "No active run"
 		desktop_subtitle_label.text = "Boot a run from the main menu to bring the terminal online."
 		desktop_hint_label.text = "Desktop icons launch apps. STOCKBOT trades, News reads the event tape, Twooter surfaces chatter, Network manages contacts, Academy teaches chart reading, and Settings handles save/load."
 		taskbar_status_label.text = "No active run loaded."
+		_refresh_build_number_labels()
 		taskbar_clock_label.text = "MENU"
 		_refresh_company_app_availability()
 		_refresh_figma_desktop_status()
@@ -2598,7 +2603,7 @@ func _refresh_desktop() -> void:
 
 	var current_trade_date: Dictionary = GameManager.get_current_trade_date()
 	var focus_snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id)
-	desktop_title_label.text = "Daytrader OS"
+	desktop_title_label.text = "Gorengan OS"
 	desktop_date_label.text = "DAY %d  |  %s" % [
 		max(RunState.day_index + 1, 1),
 		GameManager.format_trade_date(current_trade_date)
@@ -2609,6 +2614,7 @@ func _refresh_desktop() -> void:
 	]
 	desktop_hint_label.text = "STOCKBOT is live. News renders event-driven intel feeds, Twooter shows tiered social chatter, Network tracks contacts, Academy teaches routines, Company unlocks with majority control, and Settings handles save/load."
 	taskbar_status_label.text = _append_save_status(_build_taskbar_status_text(focus_snapshot))
+	_refresh_build_number_labels()
 	taskbar_clock_label.text = "DAY %d  |  %s" % [
 		max(RunState.day_index + 1, 1),
 		GameManager.format_trade_date(current_trade_date)
@@ -2616,6 +2622,17 @@ func _refresh_desktop() -> void:
 	_refresh_company_app_availability()
 	_refresh_figma_desktop_status()
 	_refresh_desktop_notification_badges()
+
+
+func _refresh_build_number_labels() -> void:
+	var short_build_text: String = BuildInfo.get_short_display_string()
+	var full_build_text: String = BuildInfo.get_bug_report_context()
+	if taskbar_build_label != null:
+		taskbar_build_label.text = short_build_text
+		taskbar_build_label.tooltip_text = full_build_text
+	if settings_build_label != null:
+		settings_build_label.text = short_build_text
+		settings_build_label.tooltip_text = full_build_text
 
 
 func _append_save_status(base_text: String) -> String:
@@ -2788,6 +2805,7 @@ func _refresh_social() -> void:
 	current_social_snapshot = {}
 	social_title_label.text = "Twooter"
 	if not RunState.has_active_run():
+		selected_social_account_id = ""
 		social_access_status_label.text = "No run loaded"
 		social_feed_summary_label.text = "Start a run to populate the mobile-style social feed."
 		_rebuild_social_feed_cards([])
@@ -2795,9 +2813,17 @@ func _refresh_social() -> void:
 		return
 
 	current_social_snapshot = GameManager.get_twooter_snapshot()
-	var posts: Array = current_social_snapshot.get("posts", [])
+	var all_posts: Array = current_social_snapshot.get("posts", [])
+	var selected_account_name: String = _selected_social_account_name(all_posts)
+	if not selected_social_account_id.is_empty() and selected_account_name.is_empty():
+		selected_social_account_id = ""
+	var posts: Array = _filtered_social_posts(all_posts)
 	social_access_status_label.text = "%s access active" % str(current_social_snapshot.get("tier_label", "Tier 1"))
-	social_feed_summary_label.text = "%d post(s)  |  Mobile feed view\nHigher access tiers unlock more credible or more market-moving accounts." % posts.size()
+	if selected_social_account_id.is_empty():
+		social_feed_summary_label.text = "%d post(s)  |  Mobile feed view\nHigher access tiers unlock more credible or more market-moving accounts." % posts.size()
+	else:
+		social_title_label.text = "Twooter / %s" % selected_account_name
+		social_feed_summary_label.text = "%d post(s) by %s" % [posts.size(), selected_account_name]
 	_rebuild_social_feed_cards(posts)
 	_apply_font_overrides_to_subtree(social_feed_cards)
 
@@ -3495,36 +3521,13 @@ func _style_figma_desktop_ui() -> void:
 func _style_desktop_cash_panel(panel: PanelContainer) -> void:
 	if panel == null:
 		return
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.956863, 0.913725, 0.780392, 1)
-	style.border_color = Color(COLOR_DESKTOP_BROWN.r, COLOR_DESKTOP_BROWN.g, COLOR_DESKTOP_BROWN.b, 0.12)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(0)
-	panel.add_theme_stylebox_override("panel", style)
+	UiTheme.style_panel(panel, "desktop_cash")
 
 
 func _style_desktop_shortcut_button(button: Button) -> void:
 	if button == null:
 		return
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = COLOR_DESKTOP_PANEL
-	normal.border_color = Color(0.870588, 0.788235, 0.647059, 1)
-	normal.set_border_width_all(4)
-	normal.set_corner_radius_all(0)
-	normal.shadow_color = Color(0.24, 0.22, 0.15, 0.18)
-	normal.shadow_size = 0
-	normal.shadow_offset = Vector2(5, 5)
-	button.add_theme_stylebox_override("normal", normal)
-	var hover := normal.duplicate()
-	hover.bg_color = Color(0.992157, 0.941176, 0.760784, 1)
-	button.add_theme_stylebox_override("hover", hover)
-	var pressed := normal.duplicate()
-	pressed.bg_color = Color(0.882353, 0.831373, 0.65098, 1)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", pressed)
-	button.add_theme_color_override("icon_normal_color", COLOR_DESKTOP_BROWN)
-	button.add_theme_color_override("icon_hover_color", COLOR_DESKTOP_BROWN)
-	button.add_theme_color_override("icon_pressed_color", COLOR_DESKTOP_BROWN)
+	UiTheme.style_button(button, "desktop_shortcut")
 
 
 func _style_desktop_label_plaque(label: Label) -> void:
@@ -3545,59 +3548,15 @@ func _style_desktop_label_plaque(label: Label) -> void:
 
 
 func _style_desktop_advance_button(button: Button) -> void:
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = COLOR_DESKTOP_GOLD
-	normal.border_color = COLOR_DESKTOP_GOLD
-	normal.set_border_width_all(0)
-	normal.set_corner_radius_all(0)
-	normal.content_margin_left = 24
-	normal.content_margin_right = 22
-	normal.content_margin_top = 8
-	normal.content_margin_bottom = 8
-	button.add_theme_stylebox_override("normal", normal)
-	var hover := normal.duplicate()
-	hover.bg_color = Color(1.0, 0.792157, 0.168627, 1)
-	button.add_theme_stylebox_override("hover", hover)
-	var pressed := normal.duplicate()
-	pressed.bg_color = Color(0.862745, 0.580392, 0.0392157, 1)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", hover)
-	var disabled := normal.duplicate()
-	disabled.bg_color = Color(0.937255, 0.752941, 0.211765, 1)
-	disabled.border_color = Color(0.937255, 0.752941, 0.211765, 1)
-	button.add_theme_stylebox_override("disabled", disabled)
-	button.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
-	button.add_theme_color_override("font_hover_color", COLOR_DESKTOP_TEXT)
-	button.add_theme_color_override("font_pressed_color", COLOR_DESKTOP_TEXT)
-	button.add_theme_color_override("font_disabled_color", COLOR_DESKTOP_TEXT)
-	button.add_theme_color_override("font_focus_color", COLOR_DESKTOP_TEXT)
-	button.add_theme_color_override("icon_normal_color", COLOR_DESKTOP_TEXT)
-	button.add_theme_color_override("icon_hover_color", COLOR_DESKTOP_TEXT)
-	button.add_theme_color_override("icon_pressed_color", COLOR_DESKTOP_TEXT)
-	button.add_theme_color_override("icon_disabled_color", COLOR_DESKTOP_TEXT)
-	button.add_theme_color_override("icon_focus_color", COLOR_DESKTOP_TEXT)
-	button.add_theme_font_size_override("font_size", 18)
+	if button == null:
+		return
+	UiTheme.style_button(button, "desktop_advance")
 
 
 func _style_desktop_bottom_nav_button(button: Button, active: bool) -> void:
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.984314, 0.94902, 0.835294, 1) if active else COLOR_DESKTOP_PANEL
-	normal.border_color = COLOR_DESKTOP_BROWN if active else Color(COLOR_DESKTOP_BROWN.r, COLOR_DESKTOP_BROWN.g, COLOR_DESKTOP_BROWN.b, 0.28)
-	normal.set_border_width_all(2)
-	normal.set_corner_radius_all(6)
-	button.add_theme_stylebox_override("normal", normal)
-	var hover := normal.duplicate()
-	hover.bg_color = Color(0.992157, 0.941176, 0.760784, 1)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", hover)
-	button.add_theme_stylebox_override("focus", hover)
-	button.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
-	button.add_theme_color_override("font_hover_color", COLOR_DESKTOP_BROWN)
-	button.add_theme_color_override("font_pressed_color", COLOR_DESKTOP_BROWN)
-	button.add_theme_color_override("icon_normal_color", COLOR_DESKTOP_BROWN)
-	button.add_theme_color_override("icon_hover_color", COLOR_DESKTOP_BROWN)
-	button.add_theme_color_override("icon_pressed_color", COLOR_DESKTOP_BROWN)
-	button.add_theme_font_size_override("font_size", 12)
+	if button == null:
+		return
+	UiTheme.style_button(button, "desktop_nav", {"selected": active})
 
 
 func _ensure_desktop_window_layer() -> void:
@@ -3655,9 +3614,10 @@ func _register_desktop_app_window(app_id: String, title: String, content_nodes: 
 	title_bar.name = "TitleBar"
 	title_bar.anchor_left = 0.0
 	title_bar.anchor_right = 1.0
-	title_bar.offset_left = 0
-	title_bar.offset_top = 0
-	title_bar.offset_right = 0
+	var chrome_inset: int = _desktop_window_frame_inset_for_app(app_id)
+	title_bar.offset_left = chrome_inset
+	title_bar.offset_top = chrome_inset
+	title_bar.offset_right = -chrome_inset
 	title_bar.offset_bottom = DESKTOP_WINDOW_TITLE_BAR_HEIGHT
 	title_bar.mouse_filter = Control.MOUSE_FILTER_PASS
 	window.add_child(title_bar)
@@ -3710,7 +3670,10 @@ func _register_desktop_app_window(app_id: String, title: String, content_nodes: 
 	var content_host := Control.new()
 	content_host.name = "ContentHost"
 	content_host.set_anchors_preset(Control.PRESET_FULL_RECT)
+	content_host.offset_left = chrome_inset
 	content_host.offset_top = DESKTOP_WINDOW_TITLE_BAR_HEIGHT
+	content_host.offset_right = -chrome_inset
+	content_host.offset_bottom = -chrome_inset
 	content_host.clip_contents = true
 	content_host.mouse_filter = Control.MOUSE_FILTER_PASS
 	window.add_child(content_host)
@@ -4130,7 +4093,17 @@ func _window_fill_color_for_app(app_id: String) -> Color:
 
 
 func _window_text_color_for_app(app_id: String) -> Color:
-	return COLOR_TEXT if app_id == APP_ID_STOCK or _uses_academy_window_chrome(app_id) else COLOR_WINDOW_TEXT
+	if _uses_desktop_brown_window_frame(app_id):
+		return COLOR_DESKTOP_CREAM
+	return COLOR_TEXT if app_id == APP_ID_STOCK else COLOR_WINDOW_TEXT
+
+
+func _desktop_window_frame_inset_for_app(app_id: String) -> int:
+	return 2 if _uses_desktop_brown_window_frame(app_id) else 0
+
+
+func _uses_desktop_brown_window_frame(app_id: String) -> bool:
+	return _uses_academy_window_chrome(app_id)
 
 
 func _uses_academy_window_chrome(app_id: String) -> bool:
@@ -4161,17 +4134,20 @@ func _refresh_desktop_window_themes() -> void:
 		var fill_color: Color = _window_fill_color_for_app(app_id)
 		var text_color: Color = _window_text_color_for_app(app_id)
 		var is_active: bool = active_app_id == app_id
+		var use_brown_frame: bool = _uses_desktop_brown_window_frame(app_id)
 		var frame_style := StyleBoxFlat.new()
 		frame_style.bg_color = fill_color
-		frame_style.border_color = COLOR_ACCENT if is_active else COLOR_BORDER
-		frame_style.set_border_width_all(2 if is_active else 1)
+		frame_style.border_color = COLOR_DESKTOP_BROWN if use_brown_frame else (COLOR_ACCENT if is_active else COLOR_BORDER)
+		frame_style.set_border_width_all(2 if use_brown_frame or is_active else 1)
 		frame_style.corner_radius_top_left = 8
 		frame_style.corner_radius_top_right = 8
 		frame_style.corner_radius_bottom_left = 8
 		frame_style.corner_radius_bottom_right = 8
 		frame.add_theme_stylebox_override("panel", frame_style)
-		var title_fill: Color = fill_color.lightened(0.04) if text_color == COLOR_WINDOW_TEXT else fill_color
-		_style_window_title_bar(title_bar, title_fill)
+		var title_fill: Color = COLOR_DESKTOP_BROWN if use_brown_frame else (fill_color.lightened(0.04) if text_color == COLOR_WINDOW_TEXT else fill_color)
+		var title_border: Color = COLOR_DESKTOP_BROWN if use_brown_frame else COLOR_BORDER
+		var title_border_width: int = 0 if use_brown_frame else 1
+		_style_window_title_bar(title_bar, title_fill, title_border, title_border_width)
 		title_label.add_theme_color_override("font_color", text_color)
 		title_label.add_theme_font_size_override("font_size", STOCK_APP_FONT_SIZE if app_id == APP_ID_STOCK else DEFAULT_APP_FONT_SIZE)
 		_style_button(minimize_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
@@ -4416,7 +4392,7 @@ func _ensure_company_ui() -> void:
 	body.name = "CompanyWindowBody"
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_style_panel(body, COLOR_ACADEMY_CREAM, 0)
+	_style_panel(body, COLOR_ACADEMY_CREAM, 0, 0, 0, 0, 0)
 	company_window.add_child(body)
 
 	var margin := MarginContainer.new()
@@ -5169,7 +5145,7 @@ func _style_academy_quiz_submit_button(button: Button) -> void:
 
 func _restyle_academy_controls() -> void:
 	if academy_window_body != null:
-		_style_panel(academy_window_body, COLOR_ACADEMY_CREAM, 0)
+		_style_panel(academy_window_body, COLOR_ACADEMY_CREAM, 0, 0, 0, 0, 0)
 	if academy_section_list != null:
 		_style_light_item_list(academy_section_list)
 	if academy_glossary_list != null:
@@ -6847,10 +6823,43 @@ func _contact_for_context(source_type: String, source_id: String, company_id: St
 	return {}
 
 
+func _filtered_social_posts(posts: Array) -> Array:
+	if selected_social_account_id.is_empty():
+		return posts
+	var filtered_posts: Array = []
+	for post_value in posts:
+		if typeof(post_value) != TYPE_DICTIONARY:
+			continue
+		var post: Dictionary = post_value
+		if str(post.get("account_id", "")) == selected_social_account_id:
+			filtered_posts.append(post)
+	return filtered_posts
+
+
+func _selected_social_account_name(posts: Array) -> String:
+	if selected_social_account_id.is_empty():
+		return ""
+	for post_value in posts:
+		if typeof(post_value) != TYPE_DICTIONARY:
+			continue
+		var post: Dictionary = post_value
+		if str(post.get("account_id", "")) != selected_social_account_id:
+			continue
+		var account_name: String = str(post.get("account_name", "")).strip_edges()
+		if account_name.is_empty():
+			account_name = str(post.get("account_handle", "")).strip_edges()
+		return account_name
+	return ""
+
+
 func _rebuild_social_feed_cards(posts: Array) -> void:
 	for child in social_feed_cards.get_children():
 		social_feed_cards.remove_child(child)
 		child.queue_free()
+
+	if not selected_social_account_id.is_empty():
+		var all_posts: Array = current_social_snapshot.get("posts", [])
+		social_feed_cards.add_child(_build_social_account_filter_card(_selected_social_account_name(all_posts)))
 
 	if posts.is_empty():
 		social_feed_cards.add_child(_build_social_empty_card())
@@ -6862,6 +6871,43 @@ func _rebuild_social_feed_cards(posts: Array) -> void:
 
 	if social_feed_scroll.get_v_scroll_bar() != null:
 		social_feed_scroll.get_v_scroll_bar().value = 0.0
+
+
+func _build_social_account_filter_card(account_name: String) -> PanelContainer:
+	var card: PanelContainer = PanelContainer.new()
+	card.name = "SocialAccountFilterCard"
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_social_post_card(card, "mixed")
+
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_bottom", 8)
+	card.add_child(margin)
+
+	var row: HBoxContainer = HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 8)
+	margin.add_child(row)
+
+	var label: Label = Label.new()
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.text = "Showing %s" % account_name
+	label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	label.add_theme_color_override("font_color", Color(0.121569, 0.160784, 0.258824, 1))
+	row.add_child(label)
+
+	var clear_button: Button = Button.new()
+	clear_button.name = "SocialAccountClearButton"
+	clear_button.text = "All accounts"
+	clear_button.tooltip_text = "Return to the full Twooter feed."
+	clear_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_style_social_filter_button(clear_button, false, true)
+	row.add_child(clear_button)
+	clear_button.pressed.connect(_on_social_account_filter_cleared)
+	return card
 
 
 func _build_social_empty_card() -> PanelContainer:
@@ -6887,6 +6933,8 @@ func _build_social_empty_card() -> PanelContainer:
 
 func _build_social_post_card(post: Dictionary) -> PanelContainer:
 	var card: PanelContainer = PanelContainer.new()
+	card.name = "SocialPostCard"
+	card.set_meta("social_account_id", str(post.get("account_id", "")))
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.custom_minimum_size = Vector2(0, 128)
 	_style_social_post_card(card, str(post.get("tone", "mixed")))
@@ -6898,25 +6946,39 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 	margin.add_theme_constant_override("margin_bottom", 12)
 	card.add_child(margin)
 
+	var card_row: HBoxContainer = HBoxContainer.new()
+	card_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card_row.add_theme_constant_override("separation", 10)
+	margin.add_child(card_row)
+
+	card_row.add_child(_build_social_avatar(post))
+
 	var content: VBoxContainer = VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 6)
-	margin.add_child(content)
+	card_row.add_child(content)
 
 	var header_row: HBoxContainer = HBoxContainer.new()
 	header_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header_row.add_theme_constant_override("separation", 8)
 	content.add_child(header_row)
 
-	var account_label: Label = Label.new()
-	account_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	account_label.text = "%s%s" % [
+	var account_button: Button = Button.new()
+	account_button.name = "SocialAccountNameButton"
+	account_button.set_meta("social_account_id", str(post.get("account_id", "")))
+	account_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	account_button.text = "%s%s" % [
 		str(post.get("account_name", "")),
 		" [verified]" if bool(post.get("account_verified", false)) else ""
 	]
-	account_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-	account_label.add_theme_color_override("font_color", Color(0.0862745, 0.129412, 0.196078, 1))
-	header_row.add_child(account_label)
+	account_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	account_button.tooltip_text = "Show posts from this account."
+	account_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_style_social_account_button(account_button, str(post.get("account_id", "")) == selected_social_account_id)
+	header_row.add_child(account_button)
+	account_button.pressed.connect(func() -> void:
+		_on_social_account_pressed(str(post.get("account_id", "")))
+	)
 
 	var meta_badge_label: Label = Label.new()
 	meta_badge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -6946,16 +7008,6 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 		meta_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 		meta_label.add_theme_color_override("font_color", Color(0.254902, 0.34902, 0.454902, 1))
 		content.add_child(meta_label)
-
-	var context_hint: String = str(post.get("context_hint", ""))
-	if not context_hint.is_empty():
-		var context_label: Label = Label.new()
-		context_label.name = "SocialContextHintLabel"
-		context_label.text = context_hint
-		context_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		context_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-		context_label.add_theme_color_override("font_color", Color(0.345098, 0.384314, 0.458824, 1))
-		content.add_child(context_label)
 
 	var thread_lines: Array = post.get("thread_lines", [])
 	if not thread_lines.is_empty():
@@ -6998,6 +7050,69 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 	return card
 
 
+func _build_social_avatar(post: Dictionary) -> PanelContainer:
+	var avatar: PanelContainer = PanelContainer.new()
+	avatar.name = "SocialAvatar"
+	avatar.custom_minimum_size = Vector2(36, 36)
+	avatar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	avatar.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = _social_avatar_color(str(post.get("account_id", post.get("account_handle", ""))))
+	style.border_color = Color(1, 1, 1, 0.74)
+	style.set_border_width_all(1)
+	style.corner_radius_top_left = 18
+	style.corner_radius_top_right = 18
+	style.corner_radius_bottom_right = 18
+	style.corner_radius_bottom_left = 18
+	style.content_margin_left = 0
+	style.content_margin_top = 0
+	style.content_margin_right = 0
+	style.content_margin_bottom = 0
+	avatar.add_theme_stylebox_override("panel", style)
+
+	var initial_label: Label = Label.new()
+	initial_label.name = "SocialAvatarLabel"
+	initial_label.custom_minimum_size = Vector2(36, 36)
+	initial_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	initial_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	initial_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	initial_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	initial_label.text = _social_avatar_initial(post)
+	initial_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 2)
+	initial_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	avatar.add_child(initial_label)
+	return avatar
+
+
+func _social_avatar_initial(post: Dictionary) -> String:
+	var account_name: String = str(post.get("account_name", "")).strip_edges()
+	if account_name.is_empty():
+		account_name = str(post.get("account_handle", "")).strip_edges()
+		if account_name.begins_with("@"):
+			account_name = account_name.substr(1)
+	if account_name.is_empty():
+		return "?"
+	return account_name.substr(0, 1).to_upper()
+
+
+func _social_avatar_color(seed_value: String) -> Color:
+	var palette: Array = [
+		Color(0.784314, 0.278431, 0.278431, 1),
+		Color(0.207843, 0.521569, 0.792157, 1),
+		Color(0.172549, 0.572549, 0.431373, 1),
+		Color(0.678431, 0.439216, 0.168627, 1),
+		Color(0.439216, 0.356863, 0.741176, 1),
+		Color(0.776471, 0.313725, 0.533333, 1),
+		Color(0.196078, 0.478431, 0.486275, 1),
+		Color(0.533333, 0.427451, 0.219608, 1)
+	]
+	var seed: int = 0
+	for index in range(seed_value.length()):
+		seed = posmod(seed * 33 + seed_value.unicode_at(index), 2147483647)
+	return palette[posmod(seed, palette.size())]
+
+
 func _build_social_card_meta_line(post: Dictionary) -> String:
 	var meta_parts: Array = []
 	var trade_date: Dictionary = post.get("trade_date", {})
@@ -7016,6 +7131,20 @@ func _build_social_card_meta_line(post: Dictionary) -> String:
 	elif not str(post.get("sector_name", "")).is_empty():
 		meta_parts.append(str(post.get("sector_name", "")))
 	return "  |  ".join(meta_parts)
+
+
+func _on_social_account_pressed(account_id: String) -> void:
+	if account_id.is_empty() or account_id == selected_social_account_id:
+		return
+	selected_social_account_id = account_id
+	_refresh_social()
+
+
+func _on_social_account_filter_cleared() -> void:
+	if selected_social_account_id.is_empty():
+		return
+	selected_social_account_id = ""
+	_refresh_social()
 
 
 func _on_social_thread_toggled(post_id: String, thread_container: VBoxContainer, thread_button: Button) -> void:
@@ -10170,6 +10299,7 @@ func _on_upgrade_purchase_pressed(track_id: String) -> void:
 		_format_currency(cost),
 		_format_currency(cash - cost)
 	]
+	_style_upgrade_purchase_dialog()
 	upgrade_purchase_dialog.popup_centered(Vector2i(560, 260))
 
 
@@ -10715,6 +10845,7 @@ func _refresh_settings_dialog(status_text: String = "") -> void:
 			settings_save_slots_list.select(item_index)
 	settings_save_button.disabled = not RunState.has_active_run() or selected_settings_slot_id.is_empty()
 	settings_load_button.disabled = not bool(SaveManager.get_save_file_info(selected_settings_slot_id).get("loadable", false))
+	settings_delete_button.disabled = not _settings_slot_has_file(selected_settings_slot_id)
 	settings_status_label.text = status_text if not status_text.is_empty() else _settings_slot_status_text(selected_settings_slot_id)
 	settings_status_label.tooltip_text = _settings_slot_path_text(selected_settings_slot_id)
 	_refresh_settings_summary_labels()
@@ -10724,6 +10855,8 @@ func _format_settings_slot_item(slot: Dictionary) -> String:
 	var label: String = str(slot.get("slot_label", "Slot"))
 	var marker: String = "CURRENT - " if bool(slot.get("active", false)) else ""
 	if not bool(slot.get("loadable", false)):
+		if bool(slot.get("exists", false)) or bool(slot.get("backup_exists", false)):
+			return "%s%s | Unreadable" % [marker, label]
 		return "%s%s | Empty" % [marker, label]
 	return "%s%s | Day %d | %s | %s | Equity %s" % [
 		marker,
@@ -10745,6 +10878,11 @@ func _settings_slot_status_text(slot_id: String) -> String:
 			str(slot.get("slot_label", "Slot")),
 			str(slot.get("saved_at_text", "Unknown"))
 		]
+	if bool(slot.get("exists", false)) or bool(slot.get("backup_exists", false)):
+		return "%s%s selected. Save data is unreadable; delete it or overwrite by saving." % [
+			prefix,
+			str(slot.get("slot_label", "Slot"))
+		]
 	return "%s%s selected. Saving will create this slot." % [
 		prefix,
 		str(slot.get("slot_label", "Slot"))
@@ -10755,7 +10893,18 @@ func _settings_slot_path_text(slot_id: String) -> String:
 	var slot: Dictionary = SaveManager.get_save_file_info(slot_id)
 	if bool(slot.get("loadable", false)):
 		return str(slot.get("absolute_path", ""))
+	if bool(slot.get("exists", false)):
+		return str(slot.get("absolute_path", ""))
+	if bool(slot.get("backup_exists", false)):
+		return str(slot.get("backup_absolute_path", ""))
 	return str(slot.get("write_absolute_path", ""))
+
+
+func _settings_slot_has_file(slot_id: String) -> bool:
+	if slot_id.is_empty():
+		return false
+	var slot: Dictionary = SaveManager.get_save_file_info(slot_id)
+	return bool(slot.get("exists", false)) or bool(slot.get("backup_exists", false))
 
 
 func _on_settings_autosave_toggled(enabled: bool) -> void:
@@ -10769,6 +10918,7 @@ func _on_settings_slot_selected(index: int) -> void:
 	selected_settings_slot_id = str(settings_save_slots_list.get_item_metadata(index))
 	settings_save_button.disabled = not RunState.has_active_run() or selected_settings_slot_id.is_empty()
 	settings_load_button.disabled = not bool(SaveManager.get_save_file_info(selected_settings_slot_id).get("loadable", false))
+	settings_delete_button.disabled = not _settings_slot_has_file(selected_settings_slot_id)
 	settings_status_label.text = _settings_slot_status_text(selected_settings_slot_id)
 	settings_status_label.tooltip_text = _settings_slot_path_text(selected_settings_slot_id)
 	_refresh_settings_summary_labels()
@@ -10794,6 +10944,13 @@ func _on_settings_load_pressed() -> void:
 		_refresh_settings_dialog("Choose a readable save slot first.")
 		return
 	_show_settings_confirmation("load", selected_settings_slot_id)
+
+
+func _on_settings_delete_pressed() -> void:
+	if selected_settings_slot_id.is_empty() or not _settings_slot_has_file(selected_settings_slot_id):
+		_refresh_settings_dialog("Choose a save slot with data first.")
+		return
+	_show_settings_confirmation("delete", selected_settings_slot_id)
 
 
 func _on_settings_exit_pressed() -> void:
@@ -10822,6 +10979,7 @@ func _show_settings_confirmation(action_id: String, slot_id: String = "") -> voi
 	var unsaved: Dictionary = SaveManager.get_unsaved_change_summary()
 	var has_unsaved: bool = bool(unsaved.get("unsaved", false))
 	var body_lines: Array[String] = []
+	var append_current_save_state := true
 	if action_id == "load":
 		var slot: Dictionary = SaveManager.get_save_file_info(slot_id)
 		settings_confirm_title_label.text = "Load Save?"
@@ -10832,16 +10990,33 @@ func _show_settings_confirmation(action_id: String, slot_id: String = "") -> voi
 			str(slot.get("trade_date_text", "Unknown date")),
 			str(slot.get("difficulty_label", "Normal"))
 		])
+	elif action_id == "delete":
+		var slot: Dictionary = SaveManager.get_save_file_info(slot_id)
+		settings_confirm_title_label.text = "Delete Save?"
+		settings_confirm_confirm_button.text = "Delete"
+		body_lines.append("Delete %s?" % str(slot.get("slot_label", "this slot")))
+		if bool(slot.get("loadable", false)):
+			body_lines.append("Saved run: Day %d | %s | %s" % [
+				int(slot.get("trading_day", 1)),
+				str(slot.get("trade_date_text", "Unknown date")),
+				str(slot.get("difficulty_label", "Normal"))
+			])
+		else:
+			body_lines.append("This slot has an unreadable save or backup.")
+		if slot_id == SaveManager.get_active_slot_id() and RunState.has_active_run():
+			body_lines.append("The current run stays open in memory. Save again to recreate this slot.")
+		body_lines.append("This removes the primary, backup, and temp files. This cannot be undone.")
+		append_current_save_state = false
 	else:
 		settings_confirm_title_label.text = "Exit To Menu?"
 		settings_confirm_confirm_button.text = "Exit"
 		body_lines.append("Return to the main menu now?")
-	if has_unsaved:
+	if append_current_save_state and has_unsaved:
 		if bool(unsaved.get("pending", false)):
 			body_lines.append("Pending autosave will be flushed first.")
 		else:
 			body_lines.append("Unsaved changes will be discarded unless you save first.")
-	else:
+	elif append_current_save_state:
 		body_lines.append("The current slot is saved.")
 	settings_confirm_body_label.text = "\n".join(body_lines)
 	settings_confirm_overlay.visible = true
@@ -10870,6 +11045,16 @@ func _on_settings_confirm_confirm_pressed() -> void:
 			GameManager.flush_pending_save_if_needed()
 		_hide_settings_dialog()
 		GameManager.load_run_from_save(slot_id)
+	elif action_id == "delete":
+		if slot_id.is_empty():
+			return
+		var slot_label: String = str(SaveManager.get_save_file_info(slot_id).get("slot_label", "Slot"))
+		var deleting_active_slot: bool = slot_id == SaveManager.get_active_slot_id()
+		SaveManager.delete_save(slot_id)
+		var status_text := "Deleted %s." % slot_label
+		if deleting_active_slot and RunState.has_active_run():
+			status_text += " Current run is still open; save again to recreate the slot."
+		_refresh_settings_dialog(status_text)
 	elif action_id == "exit":
 		if SaveManager.has_pending_save():
 			GameManager.flush_pending_save_if_needed()
@@ -12323,22 +12508,66 @@ func _ensure_upgrade_purchase_dialog() -> void:
 	upgrade_purchase_dialog.get_ok_button().text = "Buy Upgrade"
 	upgrade_purchase_dialog.get_cancel_button().text = "Cancel"
 
+	var content_panel: PanelContainer = PanelContainer.new()
+	content_panel.name = "UpgradePurchaseContentPanel"
+	content_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	upgrade_purchase_dialog.add_child(content_panel)
+
 	var dialog_margin: MarginContainer = MarginContainer.new()
+	dialog_margin.name = "UpgradePurchaseContentMargin"
 	dialog_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dialog_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	dialog_margin.add_theme_constant_override("margin_left", 18)
 	dialog_margin.add_theme_constant_override("margin_top", 18)
 	dialog_margin.add_theme_constant_override("margin_right", 18)
 	dialog_margin.add_theme_constant_override("margin_bottom", 18)
-	upgrade_purchase_dialog.add_child(dialog_margin)
+	content_panel.add_child(dialog_margin)
 
 	upgrade_purchase_body_label = Label.new()
 	upgrade_purchase_body_label.name = "UpgradePurchaseBodyLabel"
 	upgrade_purchase_body_label.custom_minimum_size = Vector2(500, 150)
 	upgrade_purchase_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	upgrade_purchase_body_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	upgrade_purchase_body_label.text = ""
-	upgrade_purchase_body_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
 	dialog_margin.add_child(upgrade_purchase_body_label)
+	_style_upgrade_purchase_dialog()
+
+
+func _style_upgrade_purchase_dialog() -> void:
+	if upgrade_purchase_dialog == null:
+		return
+
+	UiTheme.style_panel(upgrade_purchase_dialog, "dialog")
+	var dialog_style: StyleBoxFlat = upgrade_purchase_dialog.get_theme_stylebox("panel") as StyleBoxFlat
+	if dialog_style == null:
+		dialog_style = UiTheme.make_stylebox(UiTheme.color("desktop.cream"), UiTheme.color("desktop.brown"), 2, 6)
+	upgrade_purchase_dialog.add_theme_stylebox_override("panel", dialog_style)
+	upgrade_purchase_dialog.add_theme_stylebox_override("embedded_border", dialog_style)
+	upgrade_purchase_dialog.add_theme_stylebox_override("embedded_unfocused_border", dialog_style)
+	upgrade_purchase_dialog.add_theme_color_override("font_color", UiTheme.color("desktop.text"))
+	upgrade_purchase_dialog.add_theme_color_override("title_color", UiTheme.color("desktop.brown"))
+	upgrade_purchase_dialog.add_theme_font_size_override("font_size", UiTheme.font_size("body"))
+
+	var content_panel: PanelContainer = upgrade_purchase_dialog.find_child("UpgradePurchaseContentPanel", true, false) as PanelContainer
+	if content_panel != null:
+		var content_style := StyleBoxFlat.new()
+		content_style.bg_color = Color(0.992157, 0.964706, 0.870588, 1)
+		content_style.border_color = Color(0.52549, 0.396078, 0.160784, 0.85)
+		content_style.set_border_width_all(1)
+		content_style.set_corner_radius_all(0)
+		content_panel.add_theme_stylebox_override("panel", content_style)
+
+	if upgrade_purchase_body_label != null:
+		UiTheme.style_label(upgrade_purchase_body_label, "desktop_body")
+		upgrade_purchase_body_label.add_theme_constant_override("line_spacing", 5)
+
+	var ok_button: Button = upgrade_purchase_dialog.get_ok_button()
+	if ok_button != null:
+		_style_button(ok_button, COLOR_DESKTOP_BROWN, COLOR_DESKTOP_BROWN.darkened(0.12), COLOR_DESKTOP_CREAM, 5)
+	var cancel_button: Button = upgrade_purchase_dialog.get_cancel_button()
+	if cancel_button != null:
+		_style_button(cancel_button, COLOR_DESKTOP_PANEL, COLOR_DESKTOP_FRAME, COLOR_DESKTOP_TEXT, 5)
 
 
 func _ensure_settings_dialog() -> void:
@@ -12409,6 +12638,14 @@ func _ensure_settings_dialog() -> void:
 	settings_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_row.add_child(settings_title_label)
 
+	settings_build_label = Label.new()
+	settings_build_label.name = "SettingsBuildLabel"
+	settings_build_label.text = BuildInfo.get_short_display_string()
+	settings_build_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	settings_build_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	settings_build_label.custom_minimum_size = Vector2(148, 0)
+	title_row.add_child(settings_build_label)
+
 	settings_close_button = Button.new()
 	settings_close_button.name = "SettingsCloseButton"
 	settings_close_button.text = "X"
@@ -12459,7 +12696,7 @@ func _ensure_settings_dialog() -> void:
 	var hint_label := Label.new()
 	hint_label.name = "SettingsHintLabel"
 	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint_label.text = "Choose a slot, then save or load. Loading a slot replaces the current run immediately."
+	hint_label.text = "Choose a slot, then save, load, or delete. Loading a slot replaces the current run immediately."
 	dialog_vbox.add_child(hint_label)
 
 	settings_save_slots_list = ItemList.new()
@@ -12503,6 +12740,13 @@ func _ensure_settings_dialog() -> void:
 	settings_load_button.pressed.connect(_on_settings_load_pressed)
 	button_row.add_child(settings_load_button)
 
+	settings_delete_button = Button.new()
+	settings_delete_button.name = "SettingsDeleteButton"
+	settings_delete_button.text = "Delete"
+	settings_delete_button.custom_minimum_size = Vector2(94, 34)
+	settings_delete_button.pressed.connect(_on_settings_delete_pressed)
+	button_row.add_child(settings_delete_button)
+
 	settings_exit_button = Button.new()
 	settings_exit_button.name = "SettingsExitButton"
 	settings_exit_button.text = "Exit to Menu"
@@ -12513,6 +12757,7 @@ func _ensure_settings_dialog() -> void:
 	_build_settings_confirmation_overlay()
 
 	_style_settings_overlay()
+	_refresh_build_number_labels()
 
 
 func _build_settings_confirmation_overlay() -> void:
@@ -12591,84 +12836,55 @@ func _build_settings_confirmation_overlay() -> void:
 
 func _style_settings_overlay() -> void:
 	if settings_panel != null:
-		var panel_style := StyleBoxFlat.new()
-		panel_style.bg_color = COLOR_DESKTOP_CREAM
-		panel_style.border_color = COLOR_DESKTOP_BROWN
-		panel_style.set_border_width_all(2)
-		panel_style.set_corner_radius_all(8)
-		settings_panel.add_theme_stylebox_override("panel", panel_style)
+		UiTheme.style_panel(settings_panel, "dialog")
 	if settings_title_bar != null:
-		var title_style := StyleBoxFlat.new()
-		title_style.bg_color = COLOR_DESKTOP_BROWN
-		title_style.border_color = COLOR_DESKTOP_BROWN
-		title_style.set_border_width_all(0)
+		var title_style := UiTheme.make_stylebox(UiTheme.color("desktop.brown"), UiTheme.color("desktop.brown"), 0, 6)
 		title_style.corner_radius_top_left = 6
 		title_style.corner_radius_top_right = 6
 		settings_title_bar.add_theme_stylebox_override("panel", title_style)
 	if settings_title_label != null:
-		settings_title_label.add_theme_color_override("font_color", COLOR_DESKTOP_CREAM)
-		settings_title_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 2)
+		settings_title_label.add_theme_color_override("font_color", UiTheme.color("desktop.cream"))
+		settings_title_label.add_theme_font_override("font", UiTheme.font("semibold"))
+		settings_title_label.add_theme_font_size_override("font_size", UiTheme.font_size("section"))
+	if settings_build_label != null:
+		settings_build_label.add_theme_color_override("font_color", UiTheme.color("desktop.cream"))
+		settings_build_label.add_theme_font_size_override("font_size", UiTheme.font_size("body"))
 	if settings_close_button != null:
-		_style_button(settings_close_button, Color(0.368627, 0.160784, 0.176471, 1), Color(0.709804, 0.34902, 0.372549, 1), COLOR_DESKTOP_CREAM, 4)
+		UiTheme.style_button(settings_close_button, "desktop_danger")
 	if settings_autosave_checkbox != null:
-		settings_autosave_checkbox.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
-		settings_autosave_checkbox.add_theme_color_override("font_hover_color", COLOR_DESKTOP_TEXT)
-		settings_autosave_checkbox.add_theme_color_override("font_pressed_color", COLOR_DESKTOP_TEXT)
-		settings_autosave_checkbox.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+		UiTheme.style_checkbox(settings_autosave_checkbox, "desktop")
 	if settings_current_slot_label != null:
-		settings_current_slot_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
-		settings_current_slot_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+		UiTheme.style_label(settings_current_slot_label, "desktop_title")
+		settings_current_slot_label.add_theme_font_size_override("font_size", UiTheme.font_size("body"))
 	if settings_last_saved_label != null:
-		settings_last_saved_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
-		settings_last_saved_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+		UiTheme.style_label(settings_last_saved_label, "desktop_title")
+		settings_last_saved_label.add_theme_font_size_override("font_size", UiTheme.font_size("body"))
 	var hint_label: Label = null
 	if settings_dialog != null:
 		hint_label = settings_dialog.find_child("SettingsHintLabel", true, false) as Label
 	if hint_label != null:
-		hint_label.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
-		hint_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+		UiTheme.style_label(hint_label, "desktop_body")
 	if settings_save_slots_list != null:
-		var list_panel := StyleBoxFlat.new()
-		list_panel.bg_color = Color(0.984314, 0.94902, 0.835294, 1)
-		list_panel.border_color = Color(COLOR_DESKTOP_BROWN.r, COLOR_DESKTOP_BROWN.g, COLOR_DESKTOP_BROWN.b, 0.32)
-		list_panel.set_border_width_all(1)
-		list_panel.set_corner_radius_all(4)
-		settings_save_slots_list.add_theme_stylebox_override("panel", list_panel)
-		settings_save_slots_list.add_theme_stylebox_override("focus", list_panel)
-		var selected_style := StyleBoxFlat.new()
-		selected_style.bg_color = Color(COLOR_DESKTOP_GOLD.r, COLOR_DESKTOP_GOLD.g, COLOR_DESKTOP_GOLD.b, 0.42)
-		selected_style.border_color = COLOR_DESKTOP_BROWN
-		selected_style.set_border_width_all(1)
-		selected_style.set_corner_radius_all(3)
-		settings_save_slots_list.add_theme_stylebox_override("selected", selected_style)
-		settings_save_slots_list.add_theme_stylebox_override("selected_focus", selected_style)
-		settings_save_slots_list.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
-		settings_save_slots_list.add_theme_color_override("font_selected_color", COLOR_DESKTOP_TEXT)
-		settings_save_slots_list.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+		UiTheme.style_item_list(settings_save_slots_list, "desktop")
 	if settings_status_label != null:
 		settings_status_label.add_theme_color_override("font_color", Color(0.423529, 0.337255, 0.188235, 1))
-		settings_status_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE - 1)
+		settings_status_label.add_theme_font_size_override("font_size", UiTheme.font_size("caption"))
 	if settings_save_button != null:
 		_style_button(settings_save_button, COLOR_DESKTOP_BROWN, COLOR_DESKTOP_BROWN.darkened(0.12), COLOR_DESKTOP_CREAM, 5)
 	if settings_load_button != null:
 		_style_button(settings_load_button, COLOR_DESKTOP_PANEL, COLOR_DESKTOP_FRAME, COLOR_DESKTOP_TEXT, 5)
+	if settings_delete_button != null:
+		_style_button(settings_delete_button, Color(0.368627, 0.160784, 0.176471, 1), Color(0.709804, 0.34902, 0.372549, 1), COLOR_DESKTOP_CREAM, 5)
 	if settings_exit_button != null:
 		_style_button(settings_exit_button, Color(0.368627, 0.160784, 0.176471, 1), Color(0.709804, 0.34902, 0.372549, 1), COLOR_DESKTOP_CREAM, 5)
 	if settings_confirm_overlay != null:
 		var confirm_panel: PanelContainer = settings_confirm_overlay.find_child("SettingsConfirmPanel", true, false) as PanelContainer
 		if confirm_panel != null:
-			var confirm_style := StyleBoxFlat.new()
-			confirm_style.bg_color = COLOR_DESKTOP_CREAM
-			confirm_style.border_color = COLOR_DESKTOP_BROWN
-			confirm_style.set_border_width_all(2)
-			confirm_style.set_corner_radius_all(8)
-			confirm_panel.add_theme_stylebox_override("panel", confirm_style)
+			UiTheme.style_panel(confirm_panel, "dialog")
 	if settings_confirm_title_label != null:
-		settings_confirm_title_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
-		settings_confirm_title_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 2)
+		UiTheme.style_label(settings_confirm_title_label, "desktop_title")
 	if settings_confirm_body_label != null:
-		settings_confirm_body_label.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
-		settings_confirm_body_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+		UiTheme.style_label(settings_confirm_body_label, "desktop_body")
 	if settings_confirm_cancel_button != null:
 		_style_button(settings_confirm_cancel_button, COLOR_DESKTOP_PANEL, COLOR_DESKTOP_FRAME, COLOR_DESKTOP_TEXT, 5)
 	if settings_confirm_confirm_button != null:
@@ -14626,7 +14842,7 @@ func _apply_visual_theme() -> void:
 	_style_panel(dashboard_placeholder_bottom_panel, COLOR_PANEL_BLUE_ALT, 0)
 	_style_dashboard_calendar_event_popup()
 	_style_dashboard_sector_ui()
-	_style_panel(news_window_body, COLOR_WINDOW_BG, 0)
+	_style_panel(news_window_body, COLOR_WINDOW_BG, 0, 0, 0, 0, 0)
 	_style_panel(news_feed_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
 	_style_panel(news_detail_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
 	if news_masthead_logo_frame != null:
@@ -14634,13 +14850,13 @@ func _apply_visual_theme() -> void:
 	if news_detail_hero_frame != null:
 		_style_news_asset_frame(news_detail_hero_frame)
 	_style_panel(social_window_body, Color(0.94902, 0.956863, 0.976471, 1), 0)
-	_style_panel(network_window_body, COLOR_WINDOW_BG, 0)
+	_style_panel(network_window_body, COLOR_WINDOW_BG, 0, 0, 0, 0, 0)
 	_style_panel(network_list_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
 	_style_panel(network_detail_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
 	if academy_window_body != null:
 		_restyle_academy_controls()
 		_apply_academy_text_theme()
-	_style_panel(upgrade_window_body, COLOR_WINDOW_BG, 0)
+	_style_panel(upgrade_window_body, COLOR_WINDOW_BG, 0, 0, 0, 0, 0)
 	if console_panel != null:
 		_style_panel(console_panel, Color(0.0588235, 0.0823529, 0.109804, 0.98), 0)
 	_style_ftue_overlay()
@@ -14814,7 +15030,8 @@ func _apply_visual_theme() -> void:
 	_set_label_tone(upgrade_cash_label, Color(0.454902, 0.337255, 0.141176, 1))
 	_set_label_tone(upgrade_summary_label, COLOR_WINDOW_TEXT)
 	if upgrade_purchase_body_label != null:
-		_set_label_tone(upgrade_purchase_body_label, COLOR_WINDOW_TEXT)
+		_set_label_tone(upgrade_purchase_body_label, COLOR_DESKTOP_TEXT)
+	_style_upgrade_purchase_dialog()
 	if daily_recap_body_label != null:
 		_set_label_tone(daily_recap_body_label, COLOR_WINDOW_TEXT)
 	_style_daily_recap_dialog()
@@ -14825,6 +15042,8 @@ func _apply_visual_theme() -> void:
 	if console_status_label != null:
 		_set_label_tone(console_status_label, COLOR_WARNING)
 	_set_label_tone(taskbar_status_label, COLOR_MUTED)
+	if taskbar_build_label != null:
+		_set_label_tone(taskbar_build_label, COLOR_WARNING)
 	_set_label_tone(taskbar_clock_label, COLOR_WARNING)
 	_set_label_tone(sidebar_intro_label, COLOR_MUTED)
 	_set_label_tone(sidebar_focus_label, COLOR_ACCENT)
@@ -14897,65 +15116,27 @@ func _apply_visual_theme() -> void:
 
 
 func _style_desktop_icon_button(button: Button) -> void:
-	var normal: StyleBoxFlat = StyleBoxFlat.new()
-	normal.bg_color = Color(0.0156863, 0.0156863, 0.0196078, 1)
-	normal.border_color = COLOR_BORDER
-	normal.set_border_width_all(1)
-	normal.corner_radius_top_left = 0
-	normal.corner_radius_top_right = 0
-	normal.corner_radius_bottom_right = 0
-	normal.corner_radius_bottom_left = 0
-
-	var hover: StyleBoxFlat = normal.duplicate()
-	hover.bg_color = Color(0.0784314, 0.0941176, 0.117647, 1)
-
-	var pressed: StyleBoxFlat = normal.duplicate()
-	pressed.bg_color = Color(0.164706, 0.215686, 0.278431, 1)
-	pressed.border_color = COLOR_ACCENT
-	pressed.set_border_width_all(2)
-
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", pressed)
-	button.add_theme_color_override("font_color", Color(0, 0, 0, 0))
-	button.add_theme_color_override("font_hover_color", Color(0, 0, 0, 0))
-	button.add_theme_color_override("font_pressed_color", Color(0, 0, 0, 0))
+	if button == null:
+		return
+	UiTheme.style_button(button, "desktop_icon")
 
 
 func _style_taskbar_launch_button(button: Button) -> void:
-	var normal: StyleBoxFlat = StyleBoxFlat.new()
-	normal.bg_color = Color(0.101961, 0.141176, 0.180392, 1)
-	normal.border_color = COLOR_BORDER
-	normal.set_border_width_all(1)
-	normal.corner_radius_top_left = 6
-	normal.corner_radius_top_right = 6
-	normal.corner_radius_bottom_right = 6
-	normal.corner_radius_bottom_left = 6
-
-	var hover: StyleBoxFlat = normal.duplicate()
-	hover.bg_color = Color(0.14902, 0.211765, 0.27451, 1)
-
-	var pressed: StyleBoxFlat = normal.duplicate()
-	pressed.bg_color = COLOR_NAV_ACTIVE_FILL
-	pressed.border_color = COLOR_NAV_ACTIVE_BORDER
-	pressed.set_border_width_all(2)
-
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", pressed)
-	button.add_theme_color_override("font_color", COLOR_TEXT)
-	button.add_theme_color_override("font_hover_color", COLOR_TEXT)
-	button.add_theme_color_override("font_pressed_color", COLOR_TEXT)
-	button.add_theme_color_override("font_focus_color", COLOR_TEXT)
+	if button == null:
+		return
+	UiTheme.style_button(button, "taskbar_launch")
 
 
-func _style_window_title_bar(panel: PanelContainer, fill_color: Color) -> void:
+func _style_window_title_bar(
+	panel: PanelContainer,
+	fill_color: Color,
+	border_color: Color = COLOR_BORDER,
+	border_width: int = 1
+) -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = fill_color
-	style.border_color = COLOR_BORDER
-	style.set_border_width_all(1)
+	style.border_color = border_color
+	style.set_border_width_all(border_width)
 	style.corner_radius_top_left = 8
 	style.corner_radius_top_right = 8
 	style.corner_radius_bottom_right = 0
@@ -15026,66 +15207,13 @@ func _apply_toast_theme(is_success: bool) -> void:
 
 
 func _style_navigation_button(button: Button) -> void:
-	var normal: StyleBoxFlat = StyleBoxFlat.new()
-	normal.bg_color = COLOR_NAV_FILL
-	normal.border_color = COLOR_BORDER
-	normal.set_border_width_all(1)
-	normal.corner_radius_top_left = 0
-	normal.corner_radius_top_right = 0
-	normal.corner_radius_bottom_right = 0
-	normal.corner_radius_bottom_left = 0
-
-	var hover: StyleBoxFlat = normal.duplicate()
-	hover.bg_color = COLOR_NAV_FILL.lightened(0.08)
-
-	var pressed: StyleBoxFlat = normal.duplicate()
-	pressed.bg_color = COLOR_NAV_ACTIVE_FILL
-	pressed.border_color = COLOR_NAV_ACTIVE_BORDER
-	pressed.set_border_width_all(2)
-
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", pressed)
-	button.add_theme_color_override("font_color", COLOR_TEXT)
-	button.add_theme_color_override("font_hover_color", COLOR_TEXT)
-	button.add_theme_color_override("font_pressed_color", Color(0.972549, 0.988235, 1, 1))
-	button.add_theme_color_override("font_focus_color", Color(0.972549, 0.988235, 1, 1))
+	if button == null:
+		return
+	UiTheme.style_tab_button(button, "terminal_tab", false, {"radius": 0})
 
 
 func _style_tab_container(tab_container: TabContainer, corner_radius: int = 6) -> void:
-	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.0588235, 0.0823529, 0.109804, 0.35)
-	panel_style.set_border_width_all(0)
-
-	var tab_normal: StyleBoxFlat = StyleBoxFlat.new()
-	tab_normal.bg_color = Color(0.0823529, 0.117647, 0.156863, 0.9)
-	tab_normal.border_color = COLOR_BORDER
-	tab_normal.set_border_width_all(1)
-	tab_normal.corner_radius_top_left = corner_radius
-	tab_normal.corner_radius_top_right = corner_radius
-	tab_normal.corner_radius_bottom_left = corner_radius
-	tab_normal.corner_radius_bottom_right = corner_radius
-	tab_normal.content_margin_left = 12
-	tab_normal.content_margin_right = 12
-	tab_normal.content_margin_top = 6
-	tab_normal.content_margin_bottom = 6
-
-	var tab_selected: StyleBoxFlat = tab_normal.duplicate()
-	tab_selected.bg_color = Color(0.184314, 0.247059, 0.309804, 0.98)
-	tab_selected.border_color = COLOR_ACCENT
-	tab_selected.set_border_width_all(2)
-
-	var tab_hover: StyleBoxFlat = tab_normal.duplicate()
-	tab_hover.bg_color = Color(0.117647, 0.168627, 0.223529, 1)
-
-	tab_container.add_theme_stylebox_override("panel", panel_style)
-	tab_container.add_theme_stylebox_override("tab_unselected", tab_normal)
-	tab_container.add_theme_stylebox_override("tab_selected", tab_selected)
-	tab_container.add_theme_stylebox_override("tab_hovered", tab_hover)
-	tab_container.add_theme_color_override("font_selected_color", COLOR_TEXT)
-	tab_container.add_theme_color_override("font_unselected_color", COLOR_MUTED)
-	tab_container.add_theme_color_override("font_hovered_color", COLOR_TEXT)
+	UiTheme.style_tab_container(tab_container, "terminal", corner_radius)
 
 
 func _style_button(
@@ -15095,51 +15223,22 @@ func _style_button(
 	font_color: Color,
 	corner_radius: int = 8
 ) -> void:
-	var normal: StyleBoxFlat = StyleBoxFlat.new()
-	normal.bg_color = fill_color
-	normal.border_color = border_color
-	normal.set_border_width_all(1)
-	normal.corner_radius_top_left = corner_radius
-	normal.corner_radius_top_right = corner_radius
-	normal.corner_radius_bottom_right = corner_radius
-	normal.corner_radius_bottom_left = corner_radius
-
-	var hover: StyleBoxFlat = normal.duplicate()
-	hover.bg_color = fill_color.lightened(0.1)
-
-	var pressed: StyleBoxFlat = normal.duplicate()
-	pressed.bg_color = fill_color.darkened(0.08)
-
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", pressed)
-	button.add_theme_color_override("font_color", font_color)
-	button.add_theme_color_override("font_hover_color", font_color)
-	button.add_theme_color_override("font_pressed_color", font_color)
-	_apply_font_override_to_control(button, DEFAULT_APP_FONT_SIZE, _get_app_font())
+	if button == null:
+		return
+	UiTheme.style_button(
+		button,
+		"custom",
+		{
+			"fill": fill_color,
+			"border": border_color,
+			"font": font_color,
+			"radius": corner_radius
+		}
+	)
 
 
 func _style_light_option_button(option_button: OptionButton) -> void:
-	_style_button(
-		option_button,
-		Color(0.909804, 0.87451, 0.737255, 1),
-		Color(0.52549, 0.396078, 0.160784, 1),
-		COLOR_WINDOW_TEXT,
-		0
-	)
-	var popup: PopupMenu = option_button.get_popup()
-	if popup == null:
-		return
-
-	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.980392, 0.976471, 0.921569, 1)
-	panel_style.border_color = Color(0.572549, 0.482353, 0.309804, 0.9)
-	panel_style.set_border_width_all(1)
-	popup.add_theme_stylebox_override("panel", panel_style)
-	popup.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	popup.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
-	popup.add_theme_color_override("font_disabled_color", Color(0.541176, 0.494118, 0.396078, 1))
+	UiTheme.style_option_button(option_button, "desktop")
 
 
 func _style_news_asset_frame(panel: PanelContainer) -> void:
@@ -15186,6 +15285,39 @@ func _style_social_filter_button(button: Button, is_selected: bool, is_unlocked:
 		border_color = Color(0.254902, 0.4, 0.639216, 1)
 		font_color = Color(0.0470588, 0.0745098, 0.117647, 1)
 	_style_button(button, fill_color, border_color, font_color, 0)
+
+
+func _style_social_account_button(button: Button, is_selected: bool) -> void:
+	var normal: StyleBoxFlat = StyleBoxFlat.new()
+	normal.bg_color = Color(0, 0, 0, 0)
+	normal.border_color = Color(0, 0, 0, 0)
+	normal.set_border_width_all(0)
+	normal.content_margin_left = 0
+	normal.content_margin_right = 0
+	normal.content_margin_top = 0
+	normal.content_margin_bottom = 0
+
+	var hover: StyleBoxFlat = normal.duplicate()
+	hover.bg_color = Color(0.745098, 0.827451, 0.956863, 0.28)
+
+	var pressed: StyleBoxFlat = normal.duplicate()
+	pressed.bg_color = Color(0.572549, 0.713726, 0.929412, 0.42)
+
+	var focus: StyleBoxFlat = pressed.duplicate()
+	if is_selected:
+		normal.bg_color = Color(0.572549, 0.713726, 0.929412, 0.18)
+
+	var font_color: Color = Color(0.0862745, 0.129412, 0.196078, 1)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("focus", focus)
+	button.add_theme_stylebox_override("disabled", normal)
+	button.add_theme_color_override("font_color", font_color)
+	button.add_theme_color_override("font_hover_color", Color(0.047059, 0.168627, 0.388235, 1))
+	button.add_theme_color_override("font_pressed_color", font_color)
+	button.add_theme_color_override("font_focus_color", font_color)
+	_apply_font_override_to_control(button, DEFAULT_APP_FONT_SIZE, _get_app_font())
 
 
 func _style_line_input(line_edit: LineEdit) -> void:
@@ -15243,33 +15375,7 @@ func _style_network_journal_filter_button(button: Button, is_selected: bool) -> 
 
 
 func _style_light_item_list(item_list: ItemList) -> void:
-	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.980392, 0.976471, 0.921569, 1)
-	panel_style.border_color = Color(0.572549, 0.482353, 0.309804, 0.8)
-	panel_style.set_border_width_all(1)
-	panel_style.corner_radius_top_left = 0
-	panel_style.corner_radius_top_right = 0
-	panel_style.corner_radius_bottom_right = 0
-	panel_style.corner_radius_bottom_left = 0
-
-	var cursor_style: StyleBoxFlat = StyleBoxFlat.new()
-	cursor_style.bg_color = Color(0.835294, 0.764706, 0.529412, 0.52)
-	cursor_style.border_color = Color(0.52549, 0.396078, 0.160784, 1)
-	cursor_style.set_border_width_all(1)
-	cursor_style.corner_radius_top_left = 0
-	cursor_style.corner_radius_top_right = 0
-	cursor_style.corner_radius_bottom_right = 0
-	cursor_style.corner_radius_bottom_left = 0
-
-	item_list.add_theme_stylebox_override("panel", panel_style)
-	item_list.add_theme_stylebox_override("panel_focus", panel_style)
-	item_list.add_theme_stylebox_override("cursor", cursor_style)
-	item_list.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	item_list.add_theme_color_override("font_hovered_color", COLOR_WINDOW_TEXT)
-	item_list.add_theme_color_override("font_selected_color", COLOR_WINDOW_TEXT)
-	item_list.add_theme_color_override("font_hovered_selected_color", COLOR_WINDOW_TEXT)
-	item_list.add_theme_color_override("font_disabled_color", Color(0.352941, 0.309804, 0.203922, 0.82))
-	item_list.add_theme_color_override("guide_color", Color(0, 0, 0, 0))
+	UiTheme.style_item_list(item_list, "light")
 
 
 func _style_item_list(item_list: ItemList, panel_radius: int = 8, cursor_radius: int = 6) -> void:

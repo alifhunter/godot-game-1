@@ -529,6 +529,9 @@ func to_save_dict() -> Dictionary:
 		"saved_at_unix": int(Time.get_unix_time_from_system()),
 		"saved_at_text": Time.get_datetime_string_from_system(false, true),
 		"save_engine_version": str(Engine.get_version_info().get("string", "")),
+		"game_version": BuildInfo.get_version_string(),
+		"game_build": BuildInfo.get_build_number(),
+		"game_build_channel": BuildInfo.get_build_channel(),
 		"seed": run_seed,
 		"day_index": day_index,
 		"market_sentiment": market_sentiment,
@@ -3835,8 +3838,29 @@ func _apply_company_price_factor(company_id: String, price_factor: float, adjust
 	var runtime: Dictionary = companies[company_id].duplicate(true)
 	var safe_factor: float = clamp(price_factor, 0.05, 20.0)
 	var current_price: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("current_price", 0.0)) * safe_factor)
+	var current_day_bounds: Dictionary = {}
+	var limit_lock: String = ""
+	if not adjust_history:
+		current_day_bounds = _current_day_price_bounds(company_id, runtime, current_price)
+		current_price = float(current_day_bounds.get("price", current_price))
+		limit_lock = str(current_day_bounds.get("limit_lock", ""))
 	runtime["current_price"] = current_price
-	runtime["previous_close"] = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("previous_close", current_price)) * safe_factor) if adjust_history else float(runtime.get("previous_close", current_price))
+	if adjust_history:
+		runtime["previous_close"] = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("previous_close", current_price)) * safe_factor)
+	else:
+		runtime["previous_close"] = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("previous_close", current_price)))
+	var previous_close: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("previous_close", current_price)))
+	var ar_limits: Dictionary = {}
+	if adjust_history:
+		ar_limits = _current_day_ar_limits(company_id, previous_close)
+	else:
+		ar_limits = current_day_bounds.get("ar_limits", _current_day_ar_limits(company_id, previous_close))
+	runtime["ar_limits"] = ar_limits.duplicate(true)
+	var daily_change_pct: float = 0.0
+	if not is_zero_approx(previous_close):
+		daily_change_pct = (current_price - previous_close) / previous_close
+	runtime["daily_change_pct"] = daily_change_pct
+	runtime["sentiment"] = daily_change_pct
 	var price_history: Array = runtime.get("price_history", []).duplicate()
 	if adjust_history:
 		for price_index in range(price_history.size()):
@@ -3849,10 +3873,102 @@ func _apply_company_price_factor(company_id: String, price_factor: float, adjust
 		for bar_index in range(price_bars.size()):
 			price_bars[bar_index] = _scale_price_bar(price_bars[bar_index], safe_factor)
 	elif not price_bars.is_empty():
-		price_bars[price_bars.size() - 1] = _scale_price_bar(price_bars[price_bars.size() - 1], safe_factor)
+		price_bars[price_bars.size() - 1] = _rewrite_current_day_price_bar(
+			price_bars[price_bars.size() - 1],
+			current_price,
+			previous_close,
+			ar_limits,
+			limit_lock
+		)
 	runtime["price_bars"] = price_bars
 	companies[company_id] = runtime
 	return current_price
+
+
+func _current_day_price_bounds(company_id: String, runtime: Dictionary, candidate_price: float) -> Dictionary:
+	var previous_close: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("previous_close", runtime.get("current_price", candidate_price))))
+	var ar_limits: Dictionary = _current_day_ar_limits(company_id, previous_close)
+	var lower_price: float = float(ar_limits.get("lower_price", candidate_price))
+	var upper_price: float = float(ar_limits.get("upper_price", candidate_price))
+	var snapped_price: float = IDX_PRICE_RULES.snap_price_for_day(candidate_price, previous_close)
+	var bounded_price: float = clamp(snapped_price, lower_price, upper_price)
+	return {
+		"price": bounded_price,
+		"ar_limits": ar_limits.duplicate(true),
+		"limit_lock": _current_day_limit_lock_for_price(bounded_price, ar_limits)
+	}
+
+
+func _current_day_ar_limits(company_id: String, previous_close: float) -> Dictionary:
+	var definition: Dictionary = get_effective_company_definition(company_id, false, false)
+	var listing_board: String = str(definition.get("listing_board", "main"))
+	return IDX_PRICE_RULES.auto_rejection_limits(previous_close, listing_board)
+
+
+func _current_day_limit_lock_for_price(price: float, ar_limits: Dictionary) -> String:
+	var upper_price: float = float(ar_limits.get("upper_price", price))
+	var lower_price: float = float(ar_limits.get("lower_price", price))
+	if price >= upper_price - 0.0001:
+		return "ara"
+	if price <= lower_price + 0.0001:
+		return "arb"
+	return ""
+
+
+func _rewrite_current_day_price_bar(
+	bar_value: Variant,
+	current_price: float,
+	previous_close: float,
+	ar_limits: Dictionary,
+	limit_lock: String
+) -> Variant:
+	if typeof(bar_value) != TYPE_DICTIONARY:
+		return bar_value
+	var bar: Dictionary = bar_value.duplicate(true)
+	var lower_price: float = float(ar_limits.get("lower_price", current_price))
+	var upper_price: float = float(ar_limits.get("upper_price", current_price))
+	var open_price: float = _snap_and_clamp_current_day_bar_price(
+		float(bar.get("open", previous_close)),
+		previous_close,
+		lower_price,
+		upper_price
+	)
+	var close_price: float = _snap_and_clamp_current_day_bar_price(
+		current_price,
+		previous_close,
+		lower_price,
+		upper_price
+	)
+	var high_source: float = max(max(float(bar.get("high", max(open_price, close_price))), open_price), close_price)
+	var low_source: float = min(min(float(bar.get("low", min(open_price, close_price))), open_price), close_price)
+	var high_price: float = _snap_and_clamp_current_day_bar_price(high_source, previous_close, lower_price, upper_price)
+	var low_price: float = _snap_and_clamp_current_day_bar_price(low_source, previous_close, lower_price, upper_price)
+	high_price = min(max(max(high_price, open_price), close_price), upper_price)
+	low_price = max(min(min(low_price, open_price), close_price), lower_price)
+	if low_price > high_price:
+		low_price = close_price
+		high_price = close_price
+	bar["open"] = open_price
+	bar["high"] = high_price
+	bar["low"] = low_price
+	bar["close"] = close_price
+	if bar.has("volume_shares"):
+		bar["value"] = close_price * float(bar.get("volume_shares", 0.0))
+	if not limit_lock.is_empty():
+		bar["limit_lock"] = limit_lock
+		bar["limit_source"] = "corporate_action_adjustment"
+		bar["locked_through_day"] = true
+		bar["impact_side"] = "buy" if limit_lock == "ara" else "sell"
+	else:
+		bar.erase("limit_lock")
+		bar.erase("limit_source")
+		bar.erase("locked_through_day")
+		bar.erase("impact_side")
+	return bar
+
+
+func _snap_and_clamp_current_day_bar_price(raw_price: float, previous_close: float, lower_price: float, upper_price: float) -> float:
+	return clamp(IDX_PRICE_RULES.snap_price_for_day(raw_price, previous_close), lower_price, upper_price)
 
 
 func _scale_price_bar(bar_value: Variant, price_factor: float) -> Variant:

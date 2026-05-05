@@ -1,0 +1,269 @@
+{
+  "schema_version": 1,
+  "catalog_status": "steamworks_prep",
+  "notes": "Create these API names in Steamworks after the real App ID exists. Keep API names stable once published.",
+  "stats": [
+    {
+      "api_name": "STAT_TRADES_PLACED",
+      "type": "INT",
+      "display_name": "Trades Placed",
+      "description": "Total completed buy or sell orders."
+    },
+    {
+      "api_name": "STAT_PROFITABLE_SELLS",
+      "type": "INT",
+      "display_name": "Profitable Sells",
+      "description": "Sell orders closed above the position average cost."
+    },
+    {
+      "api_name": "STAT_DAYS_SURVIVED",
+      "type": "INT",
+      "display_name": "Trading Days Survived",
+      "description": "Total in-game trading days completed."
+    },
+    {
+      "api_name": "STAT_GREEN_MONTHS",
+      "type": "INT",
+      "display_name": "Green Months",
+      "description": "Months ended with positive portfolio performance."
+    },
+    {
+      "api_name": "STAT_ACADEMY_LESSONS_COMPLETED",
+      "type": "INT",
+      "display_name": "Academy Lessons Completed",
+      "description": "Completed Academy lessons across all categories."
+    },
+    {
+      "api_name": "STAT_NETWORK_CONTACTS_MET",
+      "type": "INT",
+      "display_name": "Network Contacts Met",
+      "description": "Contacts met through the Network app."
+    },
+    {
+      "api_name": "STAT_RUPSLB_ATTENDED",
+      "type": "INT",
+      "display_name": "RUPSLB Meetings Attended",
+      "description": "Interactive RUPSLB meetings attended."
+    },
+    {
+      "api_name": "STAT_THESES_CREATED",
+      "type": "INT",
+      "display_name": "Theses Created",
+      "description": "Investment or trading theses created."
+    },
+    {
+      "api_name": "STAT_UPGRADES_PURCHASED",
+      "type": "INT",
+      "display_name": "Upgrades Purchased",
+      "description": "Cash-bought progression upgrades purchased."
+    },
+    {
+      "api_name": "STAT_CHART_PATTERNS_CLAIMED",
+      "type": "INT",
+      "display_name": "Chart Patterns Claimed",
+      "description": "Player-marked chart pattern claims."
+    }
+  ],
+  "achievements": [
+    {
+      "api_name": "ACH_FIRST_TRADE",
+      "display_name": "First Ticket",
+      "description": "Place your first buy or sell order.",
+      "category": "trading",
+      "hidden": false,
+      "progress_stat": "STAT_TRADES_PLACED",
+      "unlock_value": 1,
+      "trigger_note": "Unlock after any successful GameManager buy_lots or sell_lots result."
+    },
+    {
+      "api_name": "ACH_FIRST_PROFIT",
+      "display_name": "Green Exit",
+      "description": "Close a position for a profit.",
+      "category": "trading",
+      "hidden": false,
+      "progress_stat": "STAT_PROFITABLE_SELLS",
+      "unlock_value": 1,
+      "trigger_note": "Unlock when a sell order realizes profit above average cost."
+    },
+    {
+      "api_name": "ACH_FIRST_WATCHLIST",
+      "display_name": "On The Radar",
+      "description": "Add your first stock to the watchlist.",
+      "category": "research",
+      "hidden": false,
+      "progress_stat": "",
+      "unlock_value": 0,
+      "trigger_note": "Unlock when a watchlist add succeeds."
+    },
+    {
+      "api_name": "ACH_READ_FIRST_NEWS",
+      "display_name": "Read The Room",
+      "description": "Open your first News article.",
+      "category": "research",
+      "hidden": false,
+      "progress_stat": "",
+      "unlock_value": 0,
+      "trigger_note": "Unlock when the player opens a News article detail."
+    },
+    {
+      "api_name": "ACH_CHECK_KEY_STATS",
+      "display_name": "Helicopter View",
+      "description": "Inspect a company's Key Stats.",
+      "category": "fundamentals",
+      "hidden": false,
+      "progress_stat": "",
+      "unlock_value": 0,
+      "trigger_note": "Unlock when the player opens the Key Stats tab for any stock."
+    },
+    {
+      "api_name": "ACH_FIRST_CHART_PATTERN",
+      "display_name": "Pattern Claim",
+      "description": "Mark your first chart pattern.",
+      "category": "technical",
+      "hidden": false,
+      "progress_stat": "STAT_CHART_PATTERNS_CLAIMED",
+      "unlock_value": 1,
+      "trigger_note": "Unlock when ChartPatternSystem accepts a player pattern claim."
+    },
+    {
+      "api_name": "ACH_FIRST_THESIS",
+      "display_name": "Write The Case",
+      "description": "Create your first thesis.",
+      "category": "research",
+      "hidden": false,
+      "progress_stat": "STAT_THESES_CREATED",
+      "unlock_value": 1,
+      "trigger_note": "Unlock when a thesis record is created."
+    },
+    {
+      "api_name": "ACH_FIRST_UPGRADE",
+      "display_name": "Tool Upgrade",
+      "description": "Buy your first upgrade.",
+      "category": "progression",
+      "hidden": false,
+      "progress_stat": "STAT_UPGRADES_PURCHASED",
+      "unlock_value": 1,
+      "trigger_note": "Unlock when an upgrade purchase succeeds."
+    },
+    {
+      "api_name": "ACH_MEET_FIRST_CONTACT",
+      "display_name": "First Handshake",
+      "description": "Meet your first Network contact.",
+      "category": "network",
+      "hidden": false,
+      "progress_stat": "STAT_NETWORK_CONTACTS_MET",
+      "unlock_value": 1,
+      "trigger_note": "Unlock when Network contact meet action succeeds."
+    },
+    {
+      "api_name": "ACH_FIRST_TIP",
+      "display_name": "Market Whisper",
+      "description": "Receive your first Network tip.",
+      "category": "network",
+      "hidden": false,
+      "progress_stat": "",
+      "unlock_value": 0,
+      "trigger_note": "Unlock when a Network tip is created for the player."
+    },
+    {
+      "api_name": "ACH_ATTEND_RUPSLB",
+      "display_name": "Minority Holder",
+      "description": "Attend an interactive RUPSLB meeting.",
+      "category": "corporate_actions",
+      "hidden": false,
+      "progress_stat": "STAT_RUPSLB_ATTENDED",
+      "unlock_value": 1,
+      "trigger_note": "Unlock when an interactive RUPSLB overlay reaches attendance state."
+    },
+    {
+      "api_name": "ACH_SURVIVE_FIRST_MONTH",
+      "display_name": "First Month Survived",
+      "description": "Reach the end of your first trading month.",
+      "category": "survival",
+      "hidden": false,
+      "progress_stat": "STAT_DAYS_SURVIVED",
+      "unlock_value": 20,
+      "trigger_note": "Unlock after the first monthly life-payment cycle or day 20+."
+    },
+    {
+      "api_name": "ACH_FIRST_GREEN_MONTH",
+      "display_name": "Close Green",
+      "description": "Finish a month with positive portfolio performance.",
+      "category": "performance",
+      "hidden": false,
+      "progress_stat": "STAT_GREEN_MONTHS",
+      "unlock_value": 1,
+      "trigger_note": "Unlock when a month-end portfolio snapshot is above its month-start value."
+    },
+    {
+      "api_name": "ACH_RECOVER_DRAWDOWN",
+      "display_name": "Back From Red",
+      "description": "Recover your portfolio after a meaningful drawdown.",
+      "category": "performance",
+      "hidden": false,
+      "progress_stat": "",
+      "unlock_value": 0,
+      "trigger_note": "Unlock after equity recovers above prior high following a 10% drawdown."
+    },
+    {
+      "api_name": "ACH_COMPLETE_FIRST_ACADEMY_LESSON",
+      "display_name": "Study Session",
+      "description": "Complete your first Academy lesson.",
+      "category": "academy",
+      "hidden": false,
+      "progress_stat": "STAT_ACADEMY_LESSONS_COMPLETED",
+      "unlock_value": 1,
+      "trigger_note": "Unlock when the first Academy lesson completion is recorded."
+    },
+    {
+      "api_name": "ACH_COMPLETE_TECHNICAL_PATH",
+      "display_name": "Chart Student",
+      "description": "Complete the first technical-analysis lesson path.",
+      "category": "academy",
+      "hidden": false,
+      "progress_stat": "",
+      "unlock_value": 0,
+      "trigger_note": "Unlock when the technical Academy category completion flag is set."
+    },
+    {
+      "api_name": "ACH_NORMAL_MONTH",
+      "display_name": "Normal Pressure",
+      "description": "Survive one month on Normal difficulty.",
+      "category": "difficulty",
+      "hidden": false,
+      "progress_stat": "",
+      "unlock_value": 0,
+      "trigger_note": "Unlock at day 20+ when current difficulty id is normal."
+    },
+    {
+      "api_name": "ACH_GRIND_MONTH",
+      "display_name": "Grind Mode Survivor",
+      "description": "Survive one month on Grind difficulty.",
+      "category": "difficulty",
+      "hidden": false,
+      "progress_stat": "",
+      "unlock_value": 0,
+      "trigger_note": "Unlock at day 20+ when current difficulty id is grind."
+    },
+    {
+      "api_name": "ACH_OPERATOR_SCARS",
+      "display_name": "Operator Scars",
+      "description": "Live through a sharp speculative move and stay solvent.",
+      "category": "hidden",
+      "hidden": true,
+      "progress_stat": "",
+      "unlock_value": 0,
+      "trigger_note": "Optional hidden unlock when a held gorengan/speculative stock hits a major down move and portfolio cash stays non-negative."
+    },
+    {
+      "api_name": "ACH_CONTROL_ROOM",
+      "display_name": "Control Room",
+      "description": "Gain majority control of a company.",
+      "category": "hidden",
+      "hidden": true,
+      "progress_stat": "",
+      "unlock_value": 0,
+      "trigger_note": "Optional hidden unlock when player ownership crosses the majority-control threshold."
+    }
+  ]
+}

@@ -4,8 +4,23 @@ const SCREEN_HOME := "home"
 const SCREEN_DIFFICULTY := "difficulty"
 const SCREEN_LOADING := "loading"
 const UI_FONT_SIZE := 12
-const DIFFICULTY_SELECTOR_WIDTH_RATIO := 0.9
-const DIFFICULTY_SELECTOR_COMPACT_WIDTH := 720.0
+const DIFFICULTY_SELECTOR_WIDTH_RATIO := 0.78
+const DIFFICULTY_SELECTOR_MAX_WIDTH := 1040.0
+const DIFFICULTY_SELECTOR_COMPACT_WIDTH := 1040.0
+const DIFFICULTY_PLAN_GRID_MAX_WIDTH := 992.0
+const DIFFICULTY_PLAN_CARD_WIDTH := 320.0
+const DIFFICULTY_PLAN_CARD_HEIGHT := 230.0
+const COLOR_DESKTOP_BG := Color(0.909804, 0.909804, 0.803922, 1)
+const COLOR_DESKTOP_PANEL := Color(0.945098, 0.909804, 0.803922, 1)
+const COLOR_DESKTOP_CREAM := Color(1.0, 0.976471, 0.929412, 1)
+const COLOR_DESKTOP_BROWN := Color(0.509804, 0.231373, 0.0941176, 1)
+const COLOR_DESKTOP_TEXT := Color(0.184314, 0.172549, 0.109804, 1)
+const COLOR_DESKTOP_MUTED := Color(0.352941, 0.337255, 0.239216, 1)
+const COLOR_DESKTOP_FRAME := Color(0.729412, 0.694118, 0.603922, 1)
+const COLOR_DESKTOP_GOLD := Color(0.972549, 0.713726, 0.0627451, 1)
+const COLOR_DESKTOP_OLIVE := Color(0.247059, 0.278431, 0.117647, 1)
+const COLOR_DESKTOP_GREEN := Color(0.176471, 0.439216, 0.231373, 1)
+const COLOR_WINDOW_SHADOW := Color(0.251, 0.188, 0.102, 0.18)
 const APP_FONT_CANDIDATE_PATHS := [
 	"res://assets/fonts/app_font.ttf",
 	"res://assets/fonts/app_font.otf",
@@ -18,13 +33,26 @@ var has_checked_app_font: bool = false
 @onready var home_screen: Control = $Margin/ScreenRoot/HomeScreen
 @onready var difficulty_screen: Control = $Margin/ScreenRoot/DifficultyScreen
 @onready var loading_screen: Control = $Margin/ScreenRoot/LoadingScreen
+@onready var background_rect: ColorRect = $Background
+@onready var action_card: PanelContainer = $Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard
+@onready var home_logo_texture: TextureRect = $Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/LogoTexture
+@onready var action_title_label: Label = $Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/StartTitle
+@onready var main_menu_build_label: Label = $Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/MainMenuBuildLabel
 @onready var status_label: Label = $Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/StatusLabel
+@onready var flow_title_label: Label = $Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/FlowTitle
+@onready var flow_label: Label = $Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/FlowLabel
+@onready var new_game_button: Button = $Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/ButtonColumn/NewGameButton
 @onready var load_button: Button = $Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/ButtonColumn/LoadButton
+@onready var quit_button: Button = $Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/ButtonColumn/QuitButton
 @onready var difficulty_selector_card: PanelContainer = $Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard
+@onready var difficulty_eyebrow_label: Label = $Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox/EyebrowLabel
+@onready var difficulty_title_label: Label = $Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox/TitleLabel
+@onready var difficulty_body_label: Label = $Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox/BodyLabel
 @onready var difficulty_card_grid: GridContainer = $Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox/DifficultyCardGrid
 @onready var selection_detail_label: Label = $Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox/SelectionDetailLabel
 @onready var tutorial_checkbox: CheckBox = $Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox/TutorialCheckBox
 @onready var continue_button: Button = $Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox/FooterRow/ContinueButton
+@onready var loading_eyebrow_label: Label = $Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox/EyebrowLabel
 @onready var loading_title_label: Label = $Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox/LoadingTitleLabel
 @onready var loading_stage_label: Label = $Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox/LoadingStageLabel
 @onready var loading_body_label: Label = $Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox/LoadingBodyLabel
@@ -37,15 +65,19 @@ var difficulty_button_group := ButtonGroup.new()
 var difficulty_card_buttons: Dictionary = {}
 var selected_difficulty_id := ""
 var selected_load_slot_id := ""
+var delete_load_slot_id := ""
 var load_slots_dialog: ConfirmationDialog = null
 var load_slots_list: ItemList = null
 var load_slots_hint_label: Label = null
+var load_slots_delete_button: Button = null
+var load_slot_delete_dialog: ConfirmationDialog = null
+var load_slot_delete_body_label: Label = null
 
 
 func _ready() -> void:
-	$Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/ButtonColumn/NewGameButton.pressed.connect(_on_new_game_pressed)
+	new_game_button.pressed.connect(_on_new_game_pressed)
 	load_button.pressed.connect(_on_load_pressed)
-	$Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/ButtonColumn/QuitButton.pressed.connect(_on_quit_pressed)
+	quit_button.pressed.connect(_on_quit_pressed)
 	$Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox/FooterRow/BackButton.pressed.connect(_on_back_pressed)
 	continue_button.pressed.connect(_on_continue_pressed)
 	GameManager.run_loading_started.connect(_on_run_loading_started)
@@ -60,18 +92,19 @@ func _ready() -> void:
 	_set_screen(SCREEN_HOME)
 	_clear_selected_difficulty()
 	_apply_global_font_size_overrides()
+	_apply_desktop_startup_style()
 	_update_difficulty_selector_size()
 
 
 func _refresh_load_state() -> void:
 	var save_info: Dictionary = _first_visible_save_info()
-	load_button.disabled = not SaveManager.has_any_loadable_save()
+	load_button.disabled = not SaveManager.has_any_save()
 	if bool(save_info.get("loadable", false)):
 		status_label.text = _build_save_available_text(save_info)
 	elif bool(save_info.get("exists", false)) or bool(save_info.get("backup_exists", false)):
 		status_label.text = _build_save_unreadable_text(save_info)
 	else:
-		status_label.text = "No saved run yet. Start a new game to choose a market difficulty and build the first watchlist.\nFirst save slot: %s" % str(save_info.get("write_absolute_path", save_info.get("absolute_path", "")))
+		status_label.text = "No saved run yet.\nReady for a fresh market session."
 
 
 func _on_new_game_pressed() -> void:
@@ -80,8 +113,8 @@ func _on_new_game_pressed() -> void:
 
 
 func _on_load_pressed() -> void:
-	if not SaveManager.has_any_loadable_save():
-		status_label.text = "No readable save file was found, so a fresh run is safer."
+	if not SaveManager.has_any_save():
+		status_label.text = "No save slot was found.\nStart a new run from the desktop."
 		_refresh_load_state()
 		return
 
@@ -111,19 +144,21 @@ func _populate_difficulty_cards() -> void:
 	for child in difficulty_card_grid.get_children():
 		child.queue_free()
 
+	difficulty_card_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	for difficulty_config_value in GameManager.get_difficulty_options():
 		var difficulty_config: Dictionary = difficulty_config_value
 		var difficulty_id: String = str(difficulty_config.get("id", GameManager.DEFAULT_DIFFICULTY_ID))
 		var card_button := Button.new()
 		card_button.name = "%sCardButton" % difficulty_id.capitalize()
-		card_button.custom_minimum_size = Vector2(0, 176)
-		card_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card_button.custom_minimum_size = Vector2(DIFFICULTY_PLAN_CARD_WIDTH, DIFFICULTY_PLAN_CARD_HEIGHT)
+		card_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		card_button.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		card_button.toggle_mode = true
 		card_button.button_group = difficulty_button_group
-		card_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		card_button.clip_text = true
-		card_button.text = _build_difficulty_card_text(difficulty_config)
+		card_button.text = ""
+		_build_difficulty_plan_card_content(card_button, difficulty_config)
+		_style_difficulty_card_button(card_button)
 		card_button.pressed.connect(_on_difficulty_card_pressed.bind(difficulty_id))
 		difficulty_card_grid.add_child(card_button)
 		difficulty_card_buttons[difficulty_id] = card_button
@@ -134,11 +169,17 @@ func _update_difficulty_selector_size() -> void:
 		return
 	var viewport_width: float = get_viewport_rect().size.x
 	var available_width: float = difficulty_screen.size.x if difficulty_screen != null and difficulty_screen.size.x > 0.0 else viewport_width
-	var target_width: float = floor(min(viewport_width * DIFFICULTY_SELECTOR_WIDTH_RATIO, available_width))
+	var target_width: float = floor(min(viewport_width * DIFFICULTY_SELECTOR_WIDTH_RATIO, available_width, DIFFICULTY_SELECTOR_MAX_WIDTH))
 	difficulty_selector_card.custom_minimum_size.x = target_width
 	difficulty_selector_card.size.x = target_width
 	if difficulty_card_grid != null:
-		difficulty_card_grid.columns = 1 if target_width < DIFFICULTY_SELECTOR_COMPACT_WIDTH else 3
+		var use_single_column: bool = target_width < DIFFICULTY_SELECTOR_COMPACT_WIDTH
+		difficulty_card_grid.columns = 1 if use_single_column else 3
+		var grid_width: float = min(target_width - 48.0, DIFFICULTY_PLAN_CARD_WIDTH if use_single_column else DIFFICULTY_PLAN_GRID_MAX_WIDTH)
+		difficulty_card_grid.custom_minimum_size.x = max(grid_width, DIFFICULTY_PLAN_CARD_WIDTH)
+		for card_button_value in difficulty_card_buttons.values():
+			var card_button: Button = card_button_value
+			card_button.custom_minimum_size.x = min(DIFFICULTY_PLAN_CARD_WIDTH, grid_width)
 
 
 func _build_difficulty_card_text(difficulty_config: Dictionary) -> String:
@@ -151,8 +192,91 @@ func _build_difficulty_card_text(difficulty_config: Dictionary) -> String:
 	]
 
 
+func _build_difficulty_plan_card_content(card_button: Button, difficulty_config: Dictionary) -> void:
+	var root_margin := MarginContainer.new()
+	root_margin.name = "DifficultyCardContent"
+	root_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root_margin.offset_left = 10
+	root_margin.offset_top = 10
+	root_margin.offset_right = -10
+	root_margin.offset_bottom = -10
+	root_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card_button.add_child(root_margin)
+
+	var content_vbox := VBoxContainer.new()
+	content_vbox.name = "DifficultyCardVBox"
+	content_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content_vbox.add_theme_constant_override("separation", 12)
+	content_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root_margin.add_child(content_vbox)
+
+	var banner := PanelContainer.new()
+	banner.name = "DifficultyCardBanner"
+	banner.custom_minimum_size = Vector2(0, 48)
+	banner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content_vbox.add_child(banner)
+
+	var banner_margin := MarginContainer.new()
+	banner_margin.name = "DifficultyCardBannerMargin"
+	banner_margin.add_theme_constant_override("margin_left", 8)
+	banner_margin.add_theme_constant_override("margin_top", 6)
+	banner_margin.add_theme_constant_override("margin_right", 8)
+	banner_margin.add_theme_constant_override("margin_bottom", 6)
+	banner_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner.add_child(banner_margin)
+
+	var title_label := Label.new()
+	title_label.name = "DifficultyCardTitle"
+	title_label.text = str(difficulty_config.get("label", "Normal"))
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner_margin.add_child(title_label)
+
+	var metrics_vbox := VBoxContainer.new()
+	metrics_vbox.name = "DifficultyCardMetrics"
+	metrics_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	metrics_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	metrics_vbox.add_theme_constant_override("separation", 8)
+	metrics_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content_vbox.add_child(metrics_vbox)
+
+	_add_difficulty_metric_row(metrics_vbox, "Cash", _format_currency(float(difficulty_config.get("starting_cash", 0.0))))
+	_add_difficulty_metric_row(metrics_vbox, "Companies", str(int(difficulty_config.get("company_count", 0))))
+	_add_difficulty_metric_row(metrics_vbox, "Volatility", str(difficulty_config.get("volatility_label", "Normal")))
+	_add_difficulty_metric_row(metrics_vbox, "Events", "Every %d day(s)" % int(difficulty_config.get("event_interval_days", 30.0)))
+
+
+func _add_difficulty_metric_row(parent: VBoxContainer, label_text: String, value_text: String) -> void:
+	var row := HBoxContainer.new()
+	row.name = "%sMetricRow" % label_text.replace(" ", "")
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(row)
+
+	var metric_label := Label.new()
+	metric_label.name = "MetricLabel"
+	metric_label.text = label_text
+	metric_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	metric_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(metric_label)
+
+	var value_label := Label.new()
+	value_label.name = "MetricValue"
+	value_label.text = value_text
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	value_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(value_label)
+
+
 func _on_difficulty_card_pressed(difficulty_id: String) -> void:
 	selected_difficulty_id = difficulty_id
+	_refresh_difficulty_card_selection()
 	_update_selection_detail()
 
 
@@ -178,7 +302,16 @@ func _clear_selected_difficulty() -> void:
 	for card_button_value in difficulty_card_buttons.values():
 		var card_button: Button = card_button_value
 		card_button.set_pressed_no_signal(false)
+	_refresh_difficulty_card_selection()
 	_update_selection_detail()
+
+
+func _refresh_difficulty_card_selection() -> void:
+	for difficulty_id_value in difficulty_card_buttons.keys():
+		var difficulty_id := str(difficulty_id_value)
+		var card_button: Button = difficulty_card_buttons[difficulty_id]
+		card_button.set_pressed_no_signal(difficulty_id == selected_difficulty_id)
+		_style_difficulty_card_button(card_button)
 
 
 func _prepare_loading_screen(difficulty_id: String) -> void:
@@ -203,10 +336,7 @@ func _prepare_load_screen(slot_id: String = "") -> void:
 	loading_step_label.text = "Step 1/%d" % max(GameManager.LOAD_RUN_LOADING_STEPS.size(), 1)
 	loading_progress_bar.value = 0.0
 	loading_subprogress_label.text = ""
-	loading_note_label.text = "%s: %s" % [
-		str(save_info.get("storage_label", "Save file")),
-		str(save_info.get("absolute_path", ""))
-	]
+	loading_note_label.text = "Restoring the selected save slot."
 
 
 func _ensure_load_slots_dialog() -> void:
@@ -237,7 +367,7 @@ func _ensure_load_slots_dialog() -> void:
 	load_slots_hint_label = Label.new()
 	load_slots_hint_label.name = "LoadSlotsHintLabel"
 	load_slots_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	load_slots_hint_label.text = "Choose a save slot to restore."
+	load_slots_hint_label.text = "Choose a save slot to restore or delete."
 	dialog_vbox.add_child(load_slots_hint_label)
 
 	load_slots_list = ItemList.new()
@@ -247,6 +377,46 @@ func _ensure_load_slots_dialog() -> void:
 	load_slots_list.item_selected.connect(_on_load_slot_selected)
 	load_slots_list.item_activated.connect(_on_load_slot_activated)
 	dialog_vbox.add_child(load_slots_list)
+
+	var dialog_button_row := HBoxContainer.new()
+	dialog_button_row.name = "LoadSlotsActionRow"
+	dialog_button_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dialog_button_row.add_theme_constant_override("separation", 10)
+	dialog_vbox.add_child(dialog_button_row)
+
+	var dialog_button_spacer := Control.new()
+	dialog_button_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dialog_button_row.add_child(dialog_button_spacer)
+
+	load_slots_delete_button = Button.new()
+	load_slots_delete_button.name = "LoadSlotsDeleteButton"
+	load_slots_delete_button.text = "Delete"
+	load_slots_delete_button.custom_minimum_size = Vector2(96, 34)
+	load_slots_delete_button.pressed.connect(_on_load_slot_delete_pressed)
+	dialog_button_row.add_child(load_slots_delete_button)
+
+	load_slot_delete_dialog = ConfirmationDialog.new()
+	load_slot_delete_dialog.name = "LoadSlotDeleteDialog"
+	load_slot_delete_dialog.title = "Delete Save?"
+	load_slot_delete_dialog.confirmed.connect(_on_load_slot_delete_confirmed)
+	add_child(load_slot_delete_dialog)
+	load_slot_delete_dialog.get_ok_button().text = "Delete"
+	load_slot_delete_dialog.get_cancel_button().text = "Cancel"
+
+	var delete_margin := MarginContainer.new()
+	delete_margin.add_theme_constant_override("margin_left", 16)
+	delete_margin.add_theme_constant_override("margin_top", 14)
+	delete_margin.add_theme_constant_override("margin_right", 16)
+	delete_margin.add_theme_constant_override("margin_bottom", 14)
+	load_slot_delete_dialog.add_child(delete_margin)
+
+	load_slot_delete_body_label = Label.new()
+	load_slot_delete_body_label.name = "LoadSlotDeleteBodyLabel"
+	load_slot_delete_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	load_slot_delete_body_label.custom_minimum_size = Vector2(460, 96)
+	delete_margin.add_child(load_slot_delete_body_label)
+
+	_style_load_slot_dialogs()
 
 
 func _show_load_slots_dialog() -> void:
@@ -261,19 +431,29 @@ func _populate_load_slots_list() -> void:
 	for slot_value in SaveManager.get_save_slots():
 		var slot: Dictionary = slot_value
 		var loadable: bool = bool(slot.get("loadable", false))
+		var has_file: bool = bool(slot.get("exists", false)) or bool(slot.get("backup_exists", false))
+		var selectable: bool = loadable or has_file
 		var item_index: int = load_slots_list.add_item(_format_save_slot_list_item(slot))
 		load_slots_list.set_item_metadata(item_index, str(slot.get("slot_id", "")))
-		load_slots_list.set_item_disabled(item_index, not loadable)
-		if loadable and first_selectable_index < 0:
+		load_slots_list.set_item_disabled(item_index, not selectable)
+		if selectable and first_selectable_index < 0:
 			first_selectable_index = item_index
 	if first_selectable_index >= 0:
 		load_slots_list.select(first_selectable_index)
 		selected_load_slot_id = str(load_slots_list.get_item_metadata(first_selectable_index))
-	load_slots_dialog.get_ok_button().disabled = selected_load_slot_id.is_empty()
+	_refresh_load_slots_dialog_buttons()
 
 
 func _format_save_slot_list_item(slot: Dictionary) -> String:
 	if not bool(slot.get("loadable", false)):
+		if bool(slot.get("exists", false)) or bool(slot.get("backup_exists", false)):
+			var load_error: String = str(slot.get("load_error", "")).strip_edges()
+			if load_error.is_empty():
+				load_error = "save data is unreadable"
+			return "%s | Unreadable - %s" % [
+				str(slot.get("slot_label", "Slot")),
+				load_error
+			]
 		return "%s | Empty" % str(slot.get("slot_label", "Slot"))
 	return "%s%s | Day %d | %s | %s | Equity %s" % [
 		str(slot.get("slot_label", "Slot")),
@@ -290,12 +470,12 @@ func _on_load_slot_selected(index: int) -> void:
 		selected_load_slot_id = ""
 	else:
 		selected_load_slot_id = str(load_slots_list.get_item_metadata(index))
-	load_slots_dialog.get_ok_button().disabled = selected_load_slot_id.is_empty()
+	_refresh_load_slots_dialog_buttons()
 
 
 func _on_load_slot_activated(index: int) -> void:
 	_on_load_slot_selected(index)
-	if selected_load_slot_id.is_empty():
+	if selected_load_slot_id.is_empty() or not SaveManager.has_loadable_save(selected_load_slot_id):
 		return
 	load_slots_dialog.hide()
 	await _load_selected_slot()
@@ -306,7 +486,7 @@ func _on_load_slots_confirmed() -> void:
 
 
 func _load_selected_slot() -> void:
-	if selected_load_slot_id.is_empty():
+	if selected_load_slot_id.is_empty() or not SaveManager.has_loadable_save(selected_load_slot_id):
 		return
 	SaveManager.set_active_slot_id(selected_load_slot_id)
 	_prepare_load_screen(selected_load_slot_id)
@@ -316,8 +496,60 @@ func _load_selected_slot() -> void:
 		return
 	if not load_succeeded:
 		_set_screen(SCREEN_HOME)
-		status_label.text = "The selected save slot could not be loaded. Start a new run or inspect the save path shown below."
+		status_label.text = "The selected save slot could not be loaded.\nStart a new run or choose a different slot."
 		_refresh_load_state()
+
+
+func _refresh_load_slots_dialog_buttons() -> void:
+	if load_slots_dialog == null:
+		return
+	var slot: Dictionary = SaveManager.get_save_file_info(selected_load_slot_id)
+	var loadable: bool = not selected_load_slot_id.is_empty() and bool(slot.get("loadable", false))
+	var has_file: bool = not selected_load_slot_id.is_empty() and (bool(slot.get("exists", false)) or bool(slot.get("backup_exists", false)))
+	load_slots_dialog.get_ok_button().disabled = not loadable
+	if load_slots_delete_button != null:
+		load_slots_delete_button.disabled = not has_file
+
+
+func _on_load_slot_delete_pressed() -> void:
+	if selected_load_slot_id.is_empty():
+		return
+	var slot: Dictionary = SaveManager.get_save_file_info(selected_load_slot_id)
+	if not bool(slot.get("exists", false)) and not bool(slot.get("backup_exists", false)):
+		_refresh_load_slots_dialog_buttons()
+		return
+	delete_load_slot_id = selected_load_slot_id
+	if load_slot_delete_body_label != null:
+		load_slot_delete_body_label.text = _build_load_slot_delete_text(slot)
+	load_slot_delete_dialog.popup_centered()
+
+
+func _on_load_slot_delete_confirmed() -> void:
+	if delete_load_slot_id.is_empty():
+		return
+	var slot_label: String = str(SaveManager.get_save_file_info(delete_load_slot_id).get("slot_label", "Slot"))
+	SaveManager.delete_save(delete_load_slot_id)
+	delete_load_slot_id = ""
+	_populate_load_slots_list()
+	_refresh_load_state()
+	status_label.text = "Deleted %s.\nStart a new run or choose another save slot." % slot_label
+	if load_slots_dialog != null and not SaveManager.has_any_save():
+		load_slots_dialog.hide()
+
+
+func _build_load_slot_delete_text(slot: Dictionary) -> String:
+	var body_lines: Array[String] = []
+	body_lines.append("Delete %s?" % str(slot.get("slot_label", "this slot")))
+	if bool(slot.get("loadable", false)):
+		body_lines.append("Saved run: Day %d | %s | %s" % [
+			int(slot.get("trading_day", 1)),
+			str(slot.get("trade_date_text", "Unknown date")),
+			str(slot.get("difficulty_label", "Normal"))
+		])
+	else:
+		body_lines.append("This slot has an unreadable save or backup.")
+	body_lines.append("This removes the primary, backup, and temp files for the slot. This cannot be undone.")
+	return "\n".join(body_lines)
 
 
 func _first_visible_save_info() -> Dictionary:
@@ -328,32 +560,29 @@ func _first_visible_save_info() -> Dictionary:
 		var slot: Dictionary = slot_value
 		if bool(slot.get("loadable", false)):
 			return slot
+	for slot_value in SaveManager.get_save_slots():
+		var slot: Dictionary = slot_value
+		if bool(slot.get("exists", false)) or bool(slot.get("backup_exists", false)):
+			return slot
 	return active_info
 
 
 func _build_save_available_text(save_info: Dictionary) -> String:
 	var recovery_note: String = "Recovered backup available. " if bool(save_info.get("recovered_from_backup", false)) else ""
-	var schema_text: String = "Legacy save" if int(save_info.get("schema_version", 0)) <= 0 else "Save v%d" % int(save_info.get("schema_version", 0))
-	return "%sSaved run found (%s).\nDay %d | %s | %s | %d companies\nEquity %s | Cash %s | Last saved %s\nFile: %s" % [
+	return "%sSaved run found.\nDay %d | %s | %s | %d companies\nEquity %s | Cash %s | Last saved %s" % [
 		recovery_note,
-		schema_text,
 		int(save_info.get("trading_day", 1)),
 		str(save_info.get("trade_date_text", "Unknown date")),
 		str(save_info.get("difficulty_label", "Normal")),
 		int(save_info.get("company_count", 0)),
 		str(save_info.get("equity_text", "Rp0,00")),
 		str(save_info.get("cash_text", "Rp0,00")),
-		str(save_info.get("saved_at_text", "Unknown")),
-		str(save_info.get("absolute_path", ""))
+		str(save_info.get("saved_at_text", "Unknown"))
 	]
 
 
-func _build_save_unreadable_text(save_info: Dictionary) -> String:
-	return "A save file exists, but it is not readable yet.\n%s\nPrimary: %s\nBackup: %s" % [
-		str(save_info.get("load_error", "Save JSON could not be parsed.")),
-		str(save_info.get("absolute_path", "")),
-		str(save_info.get("backup_absolute_path", ""))
-	]
+func _build_save_unreadable_text(_save_info: Dictionary) -> String:
+	return "A save slot exists, but it is not readable.\nChoose another slot or start a new run."
 
 
 func _on_run_loading_started(difficulty_id: String) -> void:
@@ -397,7 +626,7 @@ func _on_run_loading_detail_updated(subprogress_text: String, log_lines: Array) 
 		normalized_lines.append(line)
 	if subprogress_text.is_empty() and normalized_lines.is_empty():
 		return
-	loading_note_label.text = "\n".join(normalized_lines) if not normalized_lines.is_empty() else _loading_note_for_stage("financials")
+	loading_note_label.text = _loading_note_for_stage("financials")
 
 
 func _loading_body_for_stage(stage_id: String) -> String:
@@ -455,8 +684,158 @@ func _set_screen(screen_id: String) -> void:
 	loading_screen.visible = screen_id == SCREEN_LOADING
 
 
+func _apply_desktop_startup_style() -> void:
+	if background_rect != null:
+		background_rect.color = UiTheme.color("desktop.bg")
+	if home_logo_texture != null:
+		home_logo_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		home_logo_texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		home_logo_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	action_title_label.text = "GORENGAN: STOCK TRADING SIMULATOR"
+	action_title_label.visible = false
+	main_menu_build_label.text = BuildInfo.get_short_display_string()
+	main_menu_build_label.tooltip_text = BuildInfo.get_bug_report_context()
+	flow_title_label.text = "SESSION"
+	flow_title_label.visible = false
+	flow_label.text = "STOCKBOT  |  NEWS  |  NETWORK  |  ACADEMY  |  LIFE"
+	flow_label.visible = false
+	status_label.visible = false
+	new_game_button.text = "NEW RUN"
+	load_button.text = "LOAD SLOT"
+	quit_button.text = "POWER OFF"
+
+	_style_desktop_window(action_card)
+	_style_desktop_window(difficulty_selector_card)
+	var loading_card: PanelContainer = loading_screen.find_child("LoadingCard", true, false) as PanelContainer
+	if loading_card != null:
+		_style_desktop_window(loading_card)
+
+	for label_value: Label in [action_title_label, flow_title_label, difficulty_eyebrow_label, difficulty_title_label, loading_eyebrow_label, loading_title_label]:
+		_style_title_label(label_value)
+	for label_value: Label in [status_label, flow_label, difficulty_body_label, selection_detail_label, loading_body_label, loading_step_label, loading_subprogress_label, loading_note_label]:
+		_style_body_label(label_value)
+	if main_menu_build_label != null:
+		UiTheme.style_label(main_menu_build_label, "desktop_muted")
+	for label_value: Label in [loading_stage_label]:
+		_style_body_label(label_value)
+
+	_style_button(new_game_button, true)
+	_style_button(load_button, false)
+	_style_button(quit_button, false)
+	_style_button(continue_button, true)
+	_style_load_slot_dialogs()
+	var back_button: Button = difficulty_selector_card.find_child("BackButton", true, false) as Button
+	if back_button != null:
+		_style_button(back_button, false)
+	for card_button_value in difficulty_card_buttons.values():
+		var card_button: Button = card_button_value
+		_style_difficulty_card_button(card_button)
+	_refresh_difficulty_card_selection()
+	_style_progress_bar(loading_progress_bar)
+	_style_checkbox(tutorial_checkbox)
+
+
+func _style_desktop_window(panel: PanelContainer) -> void:
+	if panel == null:
+		return
+	UiTheme.style_panel(panel, "desktop_window")
+
+
+func _style_button(button: Button, primary: bool) -> void:
+	if button == null:
+		return
+	UiTheme.style_button(button, "desktop_primary" if primary else "desktop_secondary")
+
+
+func _style_danger_button(button: Button) -> void:
+	if button == null:
+		return
+	UiTheme.style_button(button, "desktop_danger")
+
+
+func _style_load_slot_dialogs() -> void:
+	for dialog_value in [load_slots_dialog, load_slot_delete_dialog]:
+		var dialog: ConfirmationDialog = dialog_value as ConfirmationDialog
+		if dialog == null:
+			continue
+		UiTheme.style_panel(dialog, "dialog")
+
+	if load_slots_hint_label != null:
+		_style_body_label(load_slots_hint_label)
+	if load_slot_delete_body_label != null:
+		_style_body_label(load_slot_delete_body_label)
+	if load_slots_list != null:
+		UiTheme.style_item_list(load_slots_list, "desktop")
+
+	if load_slots_delete_button != null:
+		_style_danger_button(load_slots_delete_button)
+	if load_slots_dialog != null:
+		_style_button(load_slots_dialog.get_ok_button(), true)
+		_style_button(load_slots_dialog.get_cancel_button(), false)
+	if load_slot_delete_dialog != null:
+		_style_danger_button(load_slot_delete_dialog.get_ok_button())
+		_style_button(load_slot_delete_dialog.get_cancel_button(), false)
+
+
+func _style_difficulty_card_button(button: Button) -> void:
+	if button == null:
+		return
+	UiTheme.style_button(button, "desktop_card_selectable", {"selected": button.button_pressed})
+	var selected: bool = button.button_pressed
+	var banner: PanelContainer = button.find_child("DifficultyCardBanner", true, false) as PanelContainer
+	if banner != null:
+		UiTheme.style_panel(banner, "desktop_card_banner", {"selected": selected})
+	var title_label: Label = button.find_child("DifficultyCardTitle", true, false) as Label
+	if title_label != null:
+		title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		title_label.add_theme_font_override("font", UiTheme.font("bold"))
+		title_label.add_theme_font_size_override("font_size", UiTheme.font_size("title") + 2)
+		title_label.add_theme_color_override("font_color", UiTheme.color("desktop.cream") if selected else UiTheme.color("desktop.brown"))
+	var metrics_vbox: VBoxContainer = button.find_child("DifficultyCardMetrics", true, false) as VBoxContainer
+	if metrics_vbox == null:
+		return
+	for row_node: Node in metrics_vbox.get_children():
+		if not row_node is HBoxContainer:
+			continue
+		var row: HBoxContainer = row_node
+		var metric_label: Label = row.find_child("MetricLabel", false, false) as Label
+		var metric_value: Label = row.find_child("MetricValue", false, false) as Label
+		if metric_label != null:
+			metric_label.add_theme_font_override("font", UiTheme.font("semibold"))
+			metric_label.add_theme_font_size_override("font_size", UiTheme.font_size("body"))
+			metric_label.add_theme_color_override("font_color", UiTheme.color("desktop.cream") if selected else UiTheme.color("desktop.muted"))
+		if metric_value != null:
+			metric_value.add_theme_font_override("font", UiTheme.font("semibold"))
+			metric_value.add_theme_font_size_override("font_size", UiTheme.font_size("body"))
+			metric_value.add_theme_color_override("font_color", UiTheme.color("desktop.cream") if selected else UiTheme.color("desktop.text"))
+
+
+func _style_title_label(label: Label) -> void:
+	if label == null:
+		return
+	UiTheme.style_label(label, "desktop_title")
+
+
+func _style_body_label(label: Label) -> void:
+	if label == null:
+		return
+	UiTheme.style_label(label, "desktop_body")
+
+
+func _style_progress_bar(progress_bar: ProgressBar) -> void:
+	if progress_bar == null:
+		return
+	UiTheme.style_progress_bar(progress_bar, "desktop")
+
+
+func _style_checkbox(checkbox: CheckBox) -> void:
+	if checkbox == null:
+		return
+	UiTheme.style_checkbox(checkbox, "desktop")
+
+
 func _apply_global_font_size_overrides() -> void:
-	_apply_font_size_override_to_tree(self, UI_FONT_SIZE, _get_app_font())
+	UiTheme.apply_tree_font(self, "body")
 
 
 func _apply_font_size_override_to_tree(node: Node, font_size: int, app_font: Font = null) -> void:

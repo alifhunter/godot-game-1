@@ -1,6 +1,6 @@
-# The Daytrader Game
+# Gorengan: Stock Trading Simulator
 
-`The Daytrader Game` is a Godot `4.6.1` prototype about reading a procedurally generated market, trading stocks, and learning from event-driven moves.
+`Gorengan: Stock Trading Simulator` is a Godot `4.6.1` prototype about reading a procedurally generated market, trading stocks, and learning from event-driven moves.
 
 The project is currently in a `first playable prototype` state. A new run lands on a desktop-style shell where the player opens:
 
@@ -66,6 +66,8 @@ The project is intentionally trying to feel more like a world than a flat menu s
 
 The current financial statement layer is intentionally simplified. It is designed to be coherent and useful for learning, not to fully reproduce real-world accounting rules.
 
+Shared UI styling is documented in [`docs/DESIGN_SYSTEM.md`](./docs/DESIGN_SYSTEM.md). New screens should extend `UiTheme` first, then consume the shared tokens/components from feature scripts.
+
 ## Tech Notes
 
 - Engine: `Godot 4.6.1`
@@ -87,6 +89,13 @@ The current financial statement layer is intentionally simplified. It is designe
 3. Run the main project scene from the Godot editor.
 
 If you want to inspect the latest implementation status first, read [`PROJECT_HANDOFF.md`](./PROJECT_HANDOFF.md).
+
+For Steam Early Access testing prep:
+
+- [`docs/KNOWN_ISSUES.md`](./docs/KNOWN_ISSUES.md) tracks current player-facing issues and workarounds.
+- [`docs/BUG_REPORT_TEMPLATE.md`](./docs/BUG_REPORT_TEMPLATE.md) is the tester bug-report format.
+- [`docs/STEAM_ACHIEVEMENT_IDS.md`](./docs/STEAM_ACHIEVEMENT_IDS.md) lists planned Steam achievement/stat API names.
+- [`docs/STEAM_CLOUD_SAVE_PATHS.md`](./docs/STEAM_CLOUD_SAVE_PATHS.md) maps the current save files to Steam Auto-Cloud setup.
 
 ## Project Structure
 
@@ -119,7 +128,7 @@ scripts/     UI scripts and smoke-test logic
 
 - No intraday simulation yet
 - Financial statements are simplified and educational, not filing-accurate
-- `Twooter` currently favors a simple mobile-feed presentation over richer account pages or filtering
+- `Twooter` has account filtering, but richer account pages are still future work
 - Chart indicators are a first pass and still need deeper presentation polish
 
 ## Next Directions

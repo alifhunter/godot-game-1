@@ -59,8 +59,8 @@
       "tiers": {
         "4": {"effect_label": "No indicators", "indicator_ids": []},
         "3": {"cost": 1000000, "effect_label": "SMA 20", "indicator_ids": ["sma_20"]},
-        "2": {"cost": 3000000, "effect_label": "SMA 20, EMA 20, SMA 50", "indicator_ids": ["sma_20", "ema_20", "sma_50"]},
-        "1": {"cost": 9000000, "effect_label": "SMA 20, EMA 20, SMA 50, RSI 14", "indicator_ids": ["sma_20", "ema_20", "sma_50", "rsi_14"]}
+        "2": {"cost": 3000000, "effect_label": "SMA 3/5/10/20/60", "indicator_ids": ["sma_3", "sma_5", "sma_10", "sma_20", "sma_60"]},
+        "1": {"cost": 9000000, "effect_label": "SMA 3/5/10/20/60/100/200, EMA 20, RSI 14", "indicator_ids": ["sma_3", "sma_5", "sma_10", "sma_20", "sma_60", "sma_100", "sma_200", "ema_20", "rsi_14"]}
       }
     },
     {

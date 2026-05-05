@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/MainMenu.gd" id="1_menu"]
+[ext_resource type="Texture2D" path="res://assets/logo/logorengan.png" id="2_logo"]
 
 [node name="MainMenu" type="Control"]
 anchors_preset = 15
@@ -17,7 +18,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.054902, 0.0784314, 0.0980392, 1)
+color = Color(0.909804, 0.909804, 0.803922, 1)
 
 [node name="Margin" type="MarginContainer" parent="."]
 anchors_preset = 15
@@ -25,10 +26,10 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 40
-theme_override_constants/margin_top = 40
-theme_override_constants/margin_right = 40
-theme_override_constants/margin_bottom = 40
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 28
 
 [node name="ScreenRoot" type="Control" parent="Margin"]
 size_flags_horizontal = 3
@@ -48,11 +49,15 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="MainRow" type="HBoxContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent"]
-theme_override_constants/separation = 20
+[node name="MainRow" type="VBoxContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent"]
+theme_override_constants/separation = 16
+
+[node name="LogoTexture" type="TextureRect" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow"]
+custom_minimum_size = Vector2(520, 300)
+texture = ExtResource("2_logo")
 
 [node name="ActionCard" type="PanelContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow"]
-custom_minimum_size = Vector2(380, 0)
+custom_minimum_size = Vector2(560, 270)
 
 [node name="ActionMargin" type="MarginContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard"]
 theme_override_constants/margin_left = 24
@@ -61,36 +66,49 @@ theme_override_constants/margin_right = 24
 theme_override_constants/margin_bottom = 24
 
 [node name="ActionVBox" type="VBoxContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin"]
-theme_override_constants/separation = 16
+size_flags_vertical = 3
+theme_override_constants/separation = 14
 
 [node name="StartTitle" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox"]
-text = "START HERE"
+visible = false
+text = "GORENGAN: STOCK TRADING SIMULATOR"
 
 [node name="StatusLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox"]
+visible = false
 autowrap_mode = 3
-text = "No saved run yet. Start a new game to choose a market difficulty and build the first watchlist."
+text = "No saved run yet.
+Ready for a fresh market session."
 
 [node name="FlowTitle" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox"]
-text = "WHAT HAPPENS NEXT"
+visible = false
+text = "SESSION"
 
 [node name="FlowLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox"]
+visible = false
 autowrap_mode = 3
-text = "New Game -> pick a difficulty card -> press Continue -> wait through setup -> enter the market"
+text = "STOCKBOT  |  NEWS  |  NETWORK  |  ACADEMY  |  LIFE"
 
 [node name="ButtonColumn" type="VBoxContainer" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox"]
 theme_override_constants/separation = 10
 
 [node name="NewGameButton" type="Button" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/ButtonColumn"]
 custom_minimum_size = Vector2(0, 54)
-text = "New Game"
+text = "NEW RUN"
 
 [node name="LoadButton" type="Button" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/ButtonColumn"]
 custom_minimum_size = Vector2(0, 54)
-text = "Load Run"
+text = "LOAD SLOT"
 
 [node name="QuitButton" type="Button" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox/ButtonColumn"]
 custom_minimum_size = Vector2(0, 54)
-text = "Quit"
+text = "POWER OFF"
+
+[node name="BuildSpacer" type="Control" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox"]
+size_flags_vertical = 3
+
+[node name="MainMenuBuildLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox"]
+horizontal_alignment = 1
+text = "Build 2026.05.03.1"
 
 [node name="DifficultyScreen" type="Control" parent="Margin/ScreenRoot"]
 visible = false
@@ -120,14 +138,14 @@ theme_override_constants/margin_bottom = 24
 theme_override_constants/separation = 18
 
 [node name="EyebrowLabel" type="Label" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
-text = "NEW GAME"
+text = "NEW RUN"
 
 [node name="TitleLabel" type="Label" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
 text = "Choose Difficulty"
 
 [node name="BodyLabel" type="Label" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
 autowrap_mode = 3
-text = "Pick one market profile. Each difficulty changes starting cash, roster size, volatility, and how often events hit the tape."
+text = "Pick one market profile. Each difficulty changes starting cash, roster size, volatility, and how often events hit the market."
 
 [node name="DifficultyCardGrid" type="GridContainer" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
 columns = 3
@@ -139,7 +157,7 @@ autowrap_mode = 3
 text = "Pick one difficulty card to preview bankroll size, company count, and market intensity before you continue."
 
 [node name="TutorialCheckBox" type="CheckBox" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
-text = "Show Quick Tutorial Popup"
+text = "Show tutorial"
 
 [node name="FooterRow" type="HBoxContainer" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
 alignment = 2
@@ -170,7 +188,7 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="LoadingCard" type="PanelContainer" parent="Margin/ScreenRoot/LoadingScreen/CenterContent"]
-custom_minimum_size = Vector2(640, 0)
+custom_minimum_size = Vector2(680, 0)
 
 [node name="LoadingMargin" type="MarginContainer" parent="Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard"]
 theme_override_constants/margin_left = 24

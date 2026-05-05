@@ -159,14 +159,14 @@
         "{target_ticker} meeting watch. RUPSLB day can make brave people look smart or very stuck."
       ],
       "market_wrap": [
-        "Tape today {market_change}. {biggest_winner} got the spotlight, {biggest_loser} gave people pain.",
+        "Market today {market_change}. {biggest_winner} got the spotlight, {biggest_loser} gave people pain.",
         "IHSG mood: {market_change}. Still a picker market, not everything deserves a chase."
       ]
     },
     "rumor_feed": {
       "company_positive": [
         "Somebody is whispering about {target_ticker}. Not clear yet, but the flow moved first.",
-        "{target_ticker} is on the rumor table. I do not know the full story, but the tape is not normal."
+        "{target_ticker} is on the rumor table. I do not know the full story, but the price action is not normal."
       ],
       "company_negative": [
         "Bad talk around {target_ticker}. No clean confirmation, but people are already throwing shares away."
@@ -194,12 +194,12 @@
         "Gold up, stocks firm, oil softer. Macro mood is not terrible, but the details still matter."
       ],
       "market_negative": [
-        "Market diary: IHSG discount continues. In this tape, cash is a position too.",
+        "Market diary: IHSG discount continues. In this market, cash is a position too.",
         "If the index keeps sliding, even good charts need patience. No need to force every bounce."
       ],
       "market_wrap": [
         "Diary note: {advancers} up versus {decliners} down. That is the real story behind the {market_change} close.",
-        "Hundreds of charts later: today's tape still says be selective."
+        "Hundreds of charts later: today's market still says be selective."
       ],
       "sector_positive": [
         "Diary note: {sector_name} is getting the better flow. I want confirmation, but the first read is constructive."
@@ -229,10 +229,10 @@
         "{target_ticker} denial caused a shakeout, but watch whether the buyer returns after weak hands leave."
       ],
       "corporate_action_filing": [
-        "{target_ticker} filing gives the tape a cleaner anchor. Now watch whether volume confirms."
+        "{target_ticker} filing gives the move a cleaner anchor. Now watch whether volume confirms."
       ],
       "market_wrap": [
-        "Breadth today {advancers} versus {decliners}. Tape still selective, not broad risk-on."
+        "Breadth today {advancers} versus {decliners}. Still selective, not broad risk-on."
       ]
     },
     "macro_watch": {
@@ -261,7 +261,7 @@
     "oil_psych": {
       "sector_positive": [
         "{sector_name} is fighting the IHSG discount better than most groups. When the market is ugly, relative strength matters.",
-        "In this kind of tape, energy-linked names can become the place people hide and speculate at the same time."
+        "In this kind of market, energy-linked names can become the place people hide and speculate at the same time."
       ],
       "sector_negative": [
         "{sector_name} below key averages is painful because nobody knows where the real floor is."
@@ -281,11 +281,11 @@
     },
     "stock_mapper": {
       "company_positive": [
-        "{target_ticker} has the combo people like: narrative, decent tape, and visible progress. That is why discarded shares can become valuable.",
+        "{target_ticker} has the combo people like: narrative, decent price action, and visible progress. That is why discarded shares can become valuable.",
         "Before calling {target_ticker}, ask the boring question first: why should this emiten deserve attention beyond one candle?"
       ],
       "company_negative": [
-        "{target_ticker} breaks the framework for now. If narrative and tape disagree, I would rather wait."
+        "{target_ticker} breaks the framework for now. If narrative and price action disagree, I would rather wait."
       ],
       "sector_positive": [
         "{sector_name} has a usable setup: story first, confirmation second, risk plan always."
@@ -297,7 +297,7 @@
         "{target_ticker} RUPSLB is not just a headline. It is a process with dates, eligibility, and market expectation."
       ],
       "market_wrap": [
-        "Rule I keep breaking: buying too early before the tape proves itself. Today's breadth {advancers}/{decliners} says stay disciplined."
+        "Rule I keep breaking: buying too early before the setup proves itself. Today's breadth {advancers}/{decliners} says stay disciplined."
       ]
     },
     "desk_analyst": {
@@ -317,13 +317,13 @@
         "There is positioning in {target_ticker} that is not widely discussed yet. Not obvious, but enough to enter the early radar."
       ],
       "corporate_action_denial": [
-        "{target_ticker} denial is a useful stress test. The question is whether the tape collapses or quietly re-accumulates."
+        "{target_ticker} denial is a useful stress test. The question is whether price action collapses or quietly re-accumulates."
       ]
     },
     "funda_thread": {
       "company_positive": [
         "If you want to understand {target_ticker}, read the story behind the numbers. This is not just a one-day squeeze.",
-        "{target_ticker} looks investable only if the business quality backs the tape. Price alone is not enough."
+        "{target_ticker} looks investable only if the business quality backs the move. Price alone is not enough."
       ],
       "company_negative": [
         "{target_ticker}'s problem is not only a red candle. The fundamental narrative is losing support."
@@ -385,7 +385,7 @@
         "Simple macro: when rates fall and inflation rises, the market starts asking which sectors can protect pricing power."
       ],
       "market_negative": [
-        "Strategy in this tape: hold more cash, reduce forced trades, wait until the setup gives you odds again."
+        "Strategy in this market: hold more cash, reduce forced trades, wait until the setup gives you odds again."
       ],
       "sector_positive": [
         "{sector_name} is a case study in sector impact. First ask what variable improved, then ask which emiten benefits directly."
@@ -441,7 +441,7 @@
     "stock_mapper": {
       "company_positive": [
         "1. Narrative gets people to open the chart.",
-        "2. Tape tells whether the story already has real buyers.",
+        "2. Price action tells whether the story already has real buyers.",
         "3. Risk plan decides whether you are trading the emiten or just your own excitement."
       ],
       "corporate_action_filing": [
@@ -452,12 +452,12 @@
       "corporate_meeting": [
         "1. RUPSLB means the story now has a room and a vote.",
         "2. Price can move before the result because expectation moves first.",
-        "3. After the room speaks, the tape decides if the setup was already priced."
+        "3. After the room speaks, price action decides if the setup was already priced."
       ],
       "market_wrap": [
         "1. Do not buy just because the index is green.",
         "2. Check breadth: {advancers} up versus {decliners} down.",
-        "3. If leadership is narrow, size smaller and let the tape prove itself."
+        "3. If leadership is narrow, size smaller and let the move prove itself."
       ]
     },
     "funda_thread": {
@@ -469,7 +469,7 @@
       "earnings": [
         "1. Read revenue first, then margin, then cash quality.",
         "2. A one-quarter beat is useful, but repeatability matters more.",
-        "3. The best post-earnings tape is when price action confirms the business read."
+        "3. The best post-earnings setup is when price action confirms the business read."
       ],
       "corporate_action_filing": [
         "1. Corporate action is capital allocation in public.",
@@ -510,7 +510,7 @@
       "market_negative": [
         "1. In a weak IHSG, the first job is not to be heroic.",
         "2. Hold cash when setups are low quality.",
-        "3. When the tape improves, cash becomes ammunition instead of regret."
+        "3. When the market improves, cash becomes ammunition instead of regret."
       ],
       "sector_positive": [
         "1. Sector impact starts with the driver.",
@@ -532,7 +532,7 @@
   "continuity_templates": {
     "corporate_action_denial": [
       "Yesterday's denial did not fully kill the setup. It changed the risk.",
-      "The company response shook out weak hands, but the story still has to be watched through the tape."
+      "The company response shook out weak hands, but the story still has to be watched through price action."
     ],
     "corporate_action_filing": [
       "The formal notice makes the rumor easier to track now.",
@@ -540,7 +540,7 @@
     ],
     "corporate_meeting": [
       "With RUPSLB on the calendar, the trade becomes about expectation versus room outcome.",
-      "Meeting day gives the story a clock. That is why the tape can get jumpy."
+      "Meeting day gives the story a clock. That is why price action can get jumpy."
     ],
     "corporate_action_resolution": [
       "The vote result turns speculation into a cleaner follow-through test.",
@@ -551,14 +551,66 @@
       "When the calendar breaks, fast money usually leaves first."
     ],
     "fallback": [
-      "This follows an earlier related post, so the current tape has a reference point.",
+      "This follows an earlier related post, so today's move has a reference point.",
       "The story is no longer starting from zero."
+    ]
+  },
+  "fallback_templates": {
+    "ambient_company": [
+      "{target_ticker} is on more screens after today's move. I want to see whether volume follows tomorrow.",
+      "{target_ticker} moved enough to deserve a note. Not a signal by itself, but worth watching."
+    ],
+    "ambient_sector": [
+      "{sector_name} was one of the clearer groups today. The next clue is whether more names join the move.",
+      "{sector_name} has attention now. Sector moves get better when leadership spreads."
+    ],
+    "ambient_market": [
+      "Market mood: {market_change}, breadth {advancers}/{decliners}. Still a stock-picker day.",
+      "Index move {market_change}. I care more about breadth: {advancers} up, {decliners} down."
+    ],
+    "ambient_watch": [
+      "Quiet day, but quiet days still build the next watchlist.",
+      "Nothing to force. Tomorrow's leadership will matter more than today's boredom."
+    ],
+    "market_positive": [
+      "Market is firmer today, but I still want breadth to stay healthy tomorrow."
+    ],
+    "market_negative": [
+      "Market is softer today. Cash and patience are both positions."
+    ],
+    "market_mixed": [
+      "Mixed close. I would rather wait for cleaner leadership than chase random green candles."
+    ],
+    "company_positive": [
+      "{target_ticker} moved well today. The next test is whether buyers return tomorrow."
+    ],
+    "company_negative": [
+      "{target_ticker} looked weak today. I want to see whether support shows up or the bid stays thin."
+    ],
+    "company_mixed": [
+      "{target_ticker} is moving sideways enough to be annoying. Waiting is also a trade."
+    ],
+    "company": [
+      "{target_ticker} is worth a note, but the setup still needs confirmation."
+    ],
+    "sector_positive": [
+      "{sector_name} has better flow today. The group needs more than one leader to keep attention."
+    ],
+    "sector_negative": [
+      "{sector_name} is under pressure. The weak names are telling people not to rush."
+    ],
+    "corporate_action": [
+      "{target_ticker} has a corporate-action angle now. Calendar, volume, and price reaction all matter."
+    ],
+    "all": [
+      "Watching the board, not forcing a trade. Clean setups usually show themselves.",
+      "The market gave enough clues for a watchlist, not enough for blind confidence."
     ]
   },
   "fallback_posts": {
     "all": [
-      "Tape still setting up. Watching where leadership forms next.",
-      "No need to force a trade. IHSG will give another setup when the tape gets cleaner."
+      "Market still setting up. Watching where leadership forms next.",
+      "No need to force a trade. IHSG will give another setup when the market gets cleaner."
     ]
   }
 }

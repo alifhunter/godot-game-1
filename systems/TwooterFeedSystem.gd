@@ -46,6 +46,8 @@ func build_social_snapshot(
 		_append_unique_post(posts, seen_ids, post_value)
 	for post_value in _build_recent_event_posts(feed_data, unlocked_accounts, company_row_lookup, event_history, current_trade_date, story_memory):
 		_append_unique_post(posts, seen_ids, post_value)
+	for post_value in _build_ambient_posts(feed_data, unlocked_accounts, company_rows, market_history, current_trade_date):
+		_append_unique_post(posts, seen_ids, post_value)
 
 	var market_wrap_post: Dictionary = _build_market_wrap_post(feed_data, unlocked_accounts, market_history, current_trade_date, story_memory)
 	if not market_wrap_post.is_empty():
@@ -82,92 +84,21 @@ func count_social_posts(
 	active_special_events: Array,
 	active_company_arcs: Array,
 	current_trade_date: Dictionary,
-	unlocked_access_tier: int = -1
+	unlocked_access_tier: int = -1,
+	company_rows: Array = []
 ) -> int:
-	var accounts: Array = feed_data.get("accounts", [])
-	var resolved_access_tier: int = unlocked_access_tier
-	if resolved_access_tier < 1:
-		resolved_access_tier = int(feed_data.get("prototype_default_access_tier", 4))
-	resolved_access_tier = clamp(resolved_access_tier, 1, 4)
-
-	var unlocked_accounts: Array = []
-	for account_value in accounts:
-		if typeof(account_value) != TYPE_DICTIONARY:
-			continue
-		var account: Dictionary = account_value
-		if int(account.get("tier", 1)) <= resolved_access_tier:
-			unlocked_accounts.append(account)
-
-	var current_day_index: int = int(current_trade_date.get("day_index", current_trade_date.get("day", 0)))
-	var post_ids: Array = []
-	var seen_ids: Dictionary = {}
-	for arc_value in active_company_arcs:
-		if typeof(arc_value) != TYPE_DICTIONARY:
-			continue
-		var arc: Dictionary = arc_value
-		if str(arc.get("phase_visibility", "visible")) != "hidden":
-			continue
-		if _pick_generic_account(unlocked_accounts, 3, "hidden|%s" % str(arc.get("arc_id", ""))).is_empty():
-			continue
-		_append_unique_post_id(post_ids, seen_ids, "hidden_arc|%s" % str(arc.get("arc_id", "")))
-
-	for event_value in active_special_events:
-		if typeof(event_value) != TYPE_DICTIONARY:
-			continue
-		var event_data: Dictionary = event_value
-		var start_day_index: int = int(event_data.get("start_day_index", current_day_index))
-		var duration_days: int = max(int(event_data.get("duration_days", 1)), 1)
-		var elapsed_days: int = max(current_day_index - start_day_index + 1, 1)
-		var progress_ratio: float = clamp(float(elapsed_days) / float(duration_days), 0.0, 1.0)
-		var minimum_tier: int = _required_tier_for_progress(progress_ratio)
-		if _pick_generic_account(unlocked_accounts, minimum_tier, "special|%s|%s" % [str(event_data.get("event_id", "")), start_day_index]).is_empty():
-			continue
-		_append_unique_post_id(post_ids, seen_ids, "active_special|%s|%s" % [str(event_data.get("event_id", "")), start_day_index])
-
-	var recent_history: Array = event_history.duplicate(true)
-	recent_history.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return int(a.get("day_index", -1)) > int(b.get("day_index", -1))
+	var snapshot: Dictionary = build_social_snapshot(
+		null,
+		feed_data,
+		company_rows,
+		market_history,
+		event_history,
+		active_special_events,
+		active_company_arcs,
+		current_trade_date,
+		unlocked_access_tier
 	)
-	if recent_history.size() > MAX_EVENT_LOOKBACK:
-		recent_history = recent_history.slice(0, MAX_EVENT_LOOKBACK)
-	var source_counts: Dictionary = {}
-	for event_value in recent_history:
-		if typeof(event_value) != TYPE_DICTIONARY:
-			continue
-		var event_data: Dictionary = event_value
-		var source_key: String = str(event_data.get("event_id", "")) + "|" + str(event_data.get("target_company_id", ""))
-		source_counts[source_key] = int(source_counts.get(source_key, 0))
-		if int(source_counts.get(source_key, 0)) >= MAX_RECENT_POSTS_PER_SOURCE:
-			continue
-		var post_id: String = ""
-		if str(event_data.get("event_family", "")) == "person":
-			var person_id: String = str(event_data.get("person_id", ""))
-			for account_value in unlocked_accounts:
-				var account: Dictionary = account_value
-				if str(account.get("person_id", "")) == person_id:
-					post_id = "persona|%s|%s|%s" % [person_id, str(event_data.get("event_id", "")), int(event_data.get("day_index", -1))]
-					break
-		if post_id.is_empty():
-			var age_days: int = max(current_day_index - int(event_data.get("day_index", current_day_index)), 0)
-			var minimum_tier: int = _required_tier_for_event_age(age_days)
-			var company_id: String = str(event_data.get("target_company_id", ""))
-			if _pick_generic_account(unlocked_accounts, minimum_tier, "event|%s|%s" % [str(event_data.get("event_id", "")), company_id]).is_empty():
-				continue
-			post_id = "event|%s|%s|%s" % [str(event_data.get("event_id", "")), int(event_data.get("day_index", -1)), company_id]
-		source_counts[source_key] = int(source_counts.get(source_key, 0)) + 1
-		_append_unique_post_id(post_ids, seen_ids, post_id)
-
-	if not market_history.is_empty() and not _pick_generic_account(unlocked_accounts, 1, "market_wrap").is_empty():
-		var latest_entry: Dictionary = market_history[market_history.size() - 1]
-		_append_unique_post_id(post_ids, seen_ids, "market_wrap|%s" % int(latest_entry.get("day_index", -1)))
-
-	if post_ids.is_empty() and not _pick_generic_account(unlocked_accounts, 1, "fallback").is_empty():
-		_append_unique_post_id(post_ids, seen_ids, "fallback|%s" % current_day_index)
-
-	var post_limit: int = int(feed_data.get("post_limit", 18))
-	if post_limit > 0 and post_ids.size() > post_limit:
-		return post_limit
-	return post_ids.size()
+	return int(snapshot.get("posts", []).size())
 
 
 func _build_hidden_arc_posts(
@@ -359,12 +290,235 @@ func _build_persona_post(
 	return {}
 
 
+func _build_ambient_posts(
+	feed_data: Dictionary,
+	unlocked_accounts: Array,
+	company_rows: Array,
+	market_history: Array,
+	current_trade_date: Dictionary
+) -> Array:
+	var posts: Array = []
+	var current_day_index: int = int(current_trade_date.get("day_index", current_trade_date.get("day", 0)))
+	var sorted_rows: Array = []
+	for row_value in company_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		if not str(row.get("ticker", "")).is_empty():
+			sorted_rows.append(row.duplicate(true))
+	sorted_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("daily_change_pct", 0.0)) > float(b.get("daily_change_pct", 0.0))
+	)
+
+	if not sorted_rows.is_empty():
+		var winner_row: Dictionary = sorted_rows[0]
+		posts.append(_build_ambient_company_post(
+			feed_data,
+			unlocked_accounts,
+			winner_row,
+			current_trade_date,
+			"top_mover",
+			1.55
+		))
+		var loser_row: Dictionary = sorted_rows[sorted_rows.size() - 1]
+		if str(loser_row.get("id", "")) != str(winner_row.get("id", "")):
+			posts.append(_build_ambient_company_post(
+				feed_data,
+				unlocked_accounts,
+				loser_row,
+				current_trade_date,
+				"weak_mover",
+				1.45
+			))
+
+	var sector_source: Dictionary = _build_ambient_sector_source(sorted_rows, current_trade_date)
+	if not sector_source.is_empty():
+		posts.append(_build_ambient_source_post(
+			feed_data,
+			unlocked_accounts,
+			sector_source,
+			{},
+			current_trade_date,
+			"sector_watch",
+			1.35
+		))
+
+	if not market_history.is_empty():
+		var latest_entry: Dictionary = market_history[market_history.size() - 1]
+		var market_source: Dictionary = latest_entry.duplicate(true)
+		market_source["scope"] = "market"
+		market_source["category"] = "ambient_market"
+		market_source["event_family"] = "ambient"
+		market_source["tone"] = _tone_from_change(float(latest_entry.get("average_change_pct", 0.0)))
+		market_source["day_index"] = current_day_index
+		market_source["trade_date"] = current_trade_date.duplicate(true)
+		posts.append(_build_ambient_source_post(
+			feed_data,
+			unlocked_accounts,
+			market_source,
+			{},
+			current_trade_date,
+			"market_mood",
+			1.25
+		))
+
+	if posts.is_empty():
+		var fallback_source: Dictionary = {
+			"scope": "market",
+			"category": "ambient_watch",
+			"event_family": "ambient",
+			"tone": "mixed",
+			"day_index": current_day_index,
+			"trade_date": current_trade_date.duplicate(true)
+		}
+		posts.append(_build_ambient_source_post(
+			feed_data,
+			unlocked_accounts,
+			fallback_source,
+			{},
+			current_trade_date,
+			"watching_tomorrow",
+			1.0
+		))
+
+	return posts
+
+
+func _build_ambient_company_post(
+	feed_data: Dictionary,
+	unlocked_accounts: Array,
+	company_row: Dictionary,
+	current_trade_date: Dictionary,
+	ambient_key: String,
+	priority: float
+) -> Dictionary:
+	var source_data: Dictionary = company_row.duplicate(true)
+	source_data["scope"] = "company"
+	source_data["category"] = "ambient_company"
+	source_data["event_family"] = "ambient"
+	source_data["tone"] = _tone_from_change(float(company_row.get("daily_change_pct", 0.0)))
+	source_data["target_company_id"] = str(company_row.get("id", ""))
+	source_data["target_ticker"] = str(company_row.get("ticker", ""))
+	source_data["target_company_name"] = str(company_row.get("name", ""))
+	source_data["target_sector_id"] = str(company_row.get("sector_id", ""))
+	source_data["sector_name"] = str(company_row.get("sector_name", ""))
+	source_data["summary"] = "%s moved %s today." % [
+		str(company_row.get("ticker", "This name")),
+		_format_percent(float(company_row.get("daily_change_pct", 0.0)))
+	]
+	source_data["day_index"] = int(current_trade_date.get("day_index", -1))
+	source_data["trade_date"] = current_trade_date.duplicate(true)
+	return _build_ambient_source_post(
+		feed_data,
+		unlocked_accounts,
+		source_data,
+		company_row,
+		current_trade_date,
+		ambient_key,
+		priority
+	)
+
+
+func _build_ambient_source_post(
+	feed_data: Dictionary,
+	unlocked_accounts: Array,
+	source_data: Dictionary,
+	company_row: Dictionary,
+	current_trade_date: Dictionary,
+	ambient_key: String,
+	priority: float
+) -> Dictionary:
+	var source_key: String = str(source_data.get("target_company_id", ""))
+	if source_key.is_empty():
+		source_key = str(source_data.get("target_sector_id", ""))
+	if source_key.is_empty():
+		source_key = "market"
+	var post_id: String = "ambient|%s|%s|%s" % [
+		ambient_key,
+		source_key,
+		int(current_trade_date.get("day_index", 0))
+	]
+	var account: Dictionary = _pick_generic_account(unlocked_accounts, 1, post_id)
+	if account.is_empty():
+		return {}
+	var context: Dictionary = _build_context(feed_data, source_data, company_row, current_trade_date, {})
+	if str(source_data.get("scope", "")) == "market":
+		context["market_change"] = _format_percent(float(source_data.get("average_change_pct", 0.0)))
+		context["advancers"] = str(int(source_data.get("advancers", 0)))
+		context["decliners"] = str(int(source_data.get("decliners", 0)))
+		var biggest_winner: Dictionary = source_data.get("biggest_winner", {})
+		var biggest_loser: Dictionary = source_data.get("biggest_loser", {})
+		context["biggest_winner"] = str(biggest_winner.get("ticker", "leader"))
+		context["biggest_loser"] = str(biggest_loser.get("ticker", "laggard"))
+	var text_key: String = _voice_key_for_event(source_data)
+	var post_text: String = _pick_voice_text(
+		feed_data,
+		str(account.get("voice", "")),
+		text_key,
+		post_id,
+		context
+	)
+	return _build_post(
+		feed_data,
+		account,
+		post_id,
+		post_text,
+		source_data,
+		current_trade_date,
+		context,
+		"Today",
+		priority
+	)
+
+
+func _build_ambient_sector_source(company_rows: Array, current_trade_date: Dictionary) -> Dictionary:
+	var sector_totals: Dictionary = {}
+	for row_value in company_rows:
+		var row: Dictionary = row_value
+		var sector_id: String = str(row.get("sector_id", ""))
+		if sector_id.is_empty():
+			continue
+		var sector_row: Dictionary = sector_totals.get(sector_id, {
+			"sector_id": sector_id,
+			"sector_name": str(row.get("sector_name", sector_id)),
+			"total_change": 0.0,
+			"count": 0
+		})
+		sector_row["total_change"] = float(sector_row.get("total_change", 0.0)) + float(row.get("daily_change_pct", 0.0))
+		sector_row["count"] = int(sector_row.get("count", 0)) + 1
+		sector_totals[sector_id] = sector_row
+
+	var best_sector: Dictionary = {}
+	var best_abs_change: float = 0.0
+	for sector_value in sector_totals.values():
+		var sector_row: Dictionary = sector_value
+		var average_change: float = float(sector_row.get("total_change", 0.0)) / float(max(int(sector_row.get("count", 1)), 1))
+		if absf(average_change) > best_abs_change:
+			best_abs_change = absf(average_change)
+			best_sector = sector_row.duplicate(true)
+			best_sector["average_change_pct"] = average_change
+	if best_sector.is_empty():
+		return {}
+	var sector_name: String = str(best_sector.get("sector_name", "the sector"))
+	return {
+		"scope": "sector",
+		"category": "ambient_sector",
+		"event_family": "ambient",
+		"tone": _tone_from_change(float(best_sector.get("average_change_pct", 0.0))),
+		"target_sector_id": str(best_sector.get("sector_id", "")),
+		"sector_name": sector_name,
+		"summary": "%s was one of today's clearer sector moves." % sector_name,
+		"day_index": int(current_trade_date.get("day_index", -1)),
+		"trade_date": current_trade_date.duplicate(true)
+	}
+
+
 func _build_market_wrap_post(
 	feed_data: Dictionary,
 	unlocked_accounts: Array,
 	market_history: Array,
 	current_trade_date: Dictionary,
-	story_memory: Dictionary
+	_story_memory: Dictionary
 ) -> Dictionary:
 	if market_history.is_empty():
 		return {}
@@ -393,7 +547,7 @@ func _build_market_wrap_post(
 	}
 	context["tone"] = _tone_from_change(float(latest_entry.get("average_change_pct", 0.0)))
 	context["public_topic_label"] = "Market breadth"
-	context["public_confidence_label"] = "Closing tape"
+	context["public_confidence_label"] = "Closing read"
 	context["public_continuity_phrase"] = ""
 	context["public_context_hint"] = ""
 	var post_text: String = _pick_voice_text(
@@ -411,7 +565,7 @@ func _build_market_wrap_post(
 		market_wrap_source,
 		current_trade_date,
 		context,
-		"Closing tape",
+		"Market close",
 		1.2
 	)
 
@@ -445,6 +599,9 @@ func _build_post(
 	visibility_label: String,
 	priority: float
 ) -> Dictionary:
+	post_text = post_text.strip_edges()
+	if post_text.is_empty():
+		return {}
 	var reactions: Dictionary = _build_reactions(post_id, int(account.get("tier", 1)))
 	var thread_lines: Array = _build_thread_lines(feed_data, account, source_data, context, post_id)
 	return {
@@ -494,6 +651,7 @@ func _build_context(feed_data: Dictionary, source_data: Dictionary, company_row:
 		"target_company_name": str(source_data.get("target_company_name", company_row.get("name", ""))),
 		"sector_name": str(source_data.get("sector_name", company_row.get("sector_name", sector_definition.get("name", "the sector")))),
 		"person_name": str(source_data.get("person_name", "")),
+		"scope": str(source_data.get("scope", "")),
 		"description": str(source_data.get("description", "")),
 		"tone": tone,
 		"category": category,
@@ -505,7 +663,7 @@ func _build_context(feed_data: Dictionary, source_data: Dictionary, company_row:
 	}
 
 
-func _build_thread_lines(feed_data: Dictionary, account: Dictionary, source_data: Dictionary, context: Dictionary, post_id: String) -> Array:
+func _build_thread_lines(feed_data: Dictionary, account: Dictionary, source_data: Dictionary, context: Dictionary, _post_id: String) -> Array:
 	if not bool(account.get("thread_preference", false)):
 		return []
 	var thread_templates: Dictionary = feed_data.get("thread_templates", {})
@@ -660,7 +818,7 @@ func _public_topic_label(source_data: Dictionary) -> String:
 	if category.contains("commodity"):
 		return "Commodity"
 	if str(source_data.get("scope", "")) == "market" or category == "market_wrap":
-		return "IHSG tape"
+		return "IHSG close"
 	if str(source_data.get("scope", "")) == "sector":
 		return "Sector watch"
 	return "Emiten watch"
@@ -739,6 +897,8 @@ func _pick_generic_account(unlocked_accounts: Array, minimum_tier: int, seed_key
 func _preferred_voice_for_seed(seed_key: String) -> String:
 	if seed_key == "market_wrap" or seed_key.begins_with("fallback"):
 		return "market_diary"
+	if seed_key.contains("market_mood") or seed_key.contains("watching_tomorrow"):
+		return "market_diary"
 	if seed_key.contains("rights_issue") or seed_key.contains("corporate_action"):
 		return "funda_thread"
 	if seed_key.contains("earnings"):
@@ -789,6 +949,20 @@ func _pick_voice_text(feed_data: Dictionary, voice_id: String, text_key: String,
 			voice_pool = voice_templates.get(voice_id, {}).get(tone_key, [])
 			if voice_pool.is_empty():
 				voice_pool = voice_templates.get(voice_id, {}).get("company_positive", [])
+	if voice_pool.is_empty():
+		var fallback_templates: Dictionary = feed_data.get("fallback_templates", {})
+		var fallback_keys: Array = [
+			text_key,
+			_category_family_key({"category": str(context.get("category", text_key)), "scope": str(context.get("scope", ""))}),
+			"company_%s" % str(context.get("tone", "mixed")),
+			"company",
+			"all"
+		]
+		for fallback_key_value in fallback_keys:
+			var fallback_key: String = str(fallback_key_value)
+			voice_pool = fallback_templates.get(fallback_key, [])
+			if not voice_pool.is_empty():
+				break
 		if voice_pool.is_empty():
 			return ""
 	return _render_template(_pick_from_pool(voice_pool, seed_key), context)

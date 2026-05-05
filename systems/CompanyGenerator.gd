@@ -14,6 +14,39 @@ const DEFAULT_SECTOR_PROFILE := {
 	"liquidity": 0.45,
 	"growth_drift": 0.005
 }
+const CHART_SMA_PERIODS := [3, 5, 10, 20, 60, 100, 200]
+const CHART_INTENTS := ["investing", "swing_trading", "short_term_trading", "speculative"]
+const CHART_PATTERN_TIMEFRAMES := ["5y", "1y", "6m", "3m", "1m"]
+const CHART_GAP_STYLES := ["none", "news_gap", "breakout_gap", "exhaustion_gap", "rug_gap", "mixed"]
+const CHART_GAP_BIASES := ["up", "down", "mixed"]
+const CHART_GAP_FREQUENCIES := ["rare", "moderate", "active"]
+const CHART_GAP_FOLLOWTHROUGH := ["hold", "fade", "fill", "continue"]
+const BULLISH_CHART_PATTERNS := [
+	"double_bottom",
+	"inverse_head_shoulders",
+	"cup_handle",
+	"ascending_triangle",
+	"rounded_base",
+	"bull_flag",
+	"breakout_retest",
+	"higher_low_accumulation"
+]
+const BEARISH_CHART_PATTERNS := [
+	"double_top",
+	"head_shoulders",
+	"descending_triangle",
+	"lower_high_distribution",
+	"failed_breakout",
+	"breakdown_retest",
+	"sma_resistance_rejection"
+]
+const GORENGAN_CHART_PATTERNS := [
+	"pump_dump",
+	"false_breakout",
+	"sharp_squeeze",
+	"rug_pull_volume",
+	"messy_range"
+]
 
 var company_narrative_generator = COMPANY_NARRATIVE_GENERATOR.new()
 const SECTOR_ALIASES := {
@@ -367,7 +400,13 @@ func build_historical_chart_bars(
 			previous_quarter_end_price = float(quarter_end_prices[quarter - 1])
 		previous_year_end_price = year_end_price
 
-	return bars
+	return _apply_chart_profile_to_historical_bars(
+		bars,
+		_chart_profile_from_traits(traits, run_seed, company_id),
+		run_seed,
+		company_id,
+		end_price
+	)
 
 
 func _build_traits(
@@ -512,7 +551,7 @@ func _build_traits(
 	if "capex_cycle" in narrative_tags:
 		capital_intensity = clamp(capital_intensity + 0.10, 0.10, 0.95)
 
-	return {
+	var traits: Dictionary = {
 		"scale": scale,
 		"growth_engine": growth_engine,
 		"margin_strength": margin_strength,
@@ -524,6 +563,660 @@ func _build_traits(
 		"story_heat": story_heat,
 		"execution_consistency": execution_consistency
 	}
+	traits["chart_profile"] = _build_chart_profile(
+		template,
+		sector_profile,
+		traits,
+		run_seed,
+		company_id
+	)
+	return traits
+
+
+func _build_chart_profile(
+	template: Dictionary,
+	sector_profile: Dictionary,
+	traits: Dictionary,
+	run_seed: int,
+	company_id: String
+) -> Dictionary:
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "chart_profile", company_id])
+	var narrative_tags: Array = template.get("narrative_tags", [])
+	var story_heat: float = clamp(float(traits.get("story_heat", 0.5)), 0.0, 1.0)
+	var float_tightness: float = clamp(float(traits.get("float_tightness", 0.5)), 0.0, 1.0)
+	var liquidity_profile: float = clamp(float(traits.get("liquidity_profile", 0.5)), 0.0, 1.0)
+	var quality_core: float = clamp(float(traits.get("balance_sheet_strength", 0.5)), 0.0, 1.0)
+	var growth_engine: float = clamp(float(traits.get("growth_engine", 0.5)), 0.0, 1.0)
+	var cyclicality: float = clamp(float(traits.get("cyclicality", sector_profile.get("cyclicality", 0.5))), 0.0, 1.0)
+	var execution_consistency: float = clamp(float(traits.get("execution_consistency", 0.5)), 0.0, 1.0)
+
+	var archetype: String = "range_bound"
+	if story_heat >= 0.66 and float_tightness >= 0.54 and liquidity_profile <= 0.58:
+		archetype = "gorengan"
+	elif quality_core >= 0.62 and growth_engine >= 0.58 and execution_consistency >= 0.54:
+		archetype = "funda" if quality_core >= growth_engine else "organic"
+	elif quality_core <= 0.34 or (cyclicality >= 0.68 and execution_consistency <= 0.42):
+		archetype = "distressed"
+	elif cyclicality >= 0.66:
+		archetype = "cyclical"
+	elif float_tightness >= 0.58 and story_heat >= 0.44:
+		archetype = "accumulation"
+	elif rng.randf() < 0.28:
+		archetype = "distribution"
+	elif rng.randf() < 0.54:
+		archetype = "organic"
+
+	if "retail_favorite" in narrative_tags or "narrative_hot" in narrative_tags:
+		if rng.randf() < 0.58:
+			archetype = "gorengan"
+	if "institution_quality" in narrative_tags or "supportive_balance_sheet" in narrative_tags:
+		if rng.randf() < 0.62:
+			archetype = "funda"
+	if "commodity_beta" in narrative_tags or "policy_beta" in narrative_tags:
+		if rng.randf() < 0.54:
+			archetype = "cyclical"
+
+	var bias: String = "sideways"
+	match archetype:
+		"organic", "funda", "accumulation":
+			bias = "bullish" if rng.randf() < 0.72 else "transition"
+		"distressed", "distribution":
+			bias = "bearish" if rng.randf() < 0.76 else "transition"
+		"gorengan":
+			bias = ["bullish", "bearish", "sideways", "transition"][rng.randi_range(0, 3)]
+		"cyclical":
+			bias = ["bullish", "bearish", "transition"][rng.randi_range(0, 2)]
+		_:
+			bias = ["sideways", "bullish", "bearish"][rng.randi_range(0, 2)]
+
+	var sma_behavior: String = "ignored"
+	if archetype in ["organic", "funda", "accumulation"] and bias != "bearish":
+		sma_behavior = "support"
+	elif archetype in ["distressed", "distribution"] or bias == "bearish":
+		sma_behavior = "resistance"
+	elif archetype == "range_bound" or bias == "sideways":
+		sma_behavior = "magnet"
+	elif archetype == "gorengan":
+		sma_behavior = "ignored" if rng.randf() < 0.64 else "magnet"
+
+	var preferred_periods: Array = [20, 60]
+	match archetype:
+		"gorengan":
+			preferred_periods = [3, 5, 10, 20]
+		"organic", "accumulation":
+			preferred_periods = [10, 20, 60]
+		"funda":
+			preferred_periods = [20, 60, 100, 200]
+		"distressed", "distribution":
+			preferred_periods = [20, 60, 100]
+		"cyclical":
+			preferred_periods = [20, 60, 100]
+		"range_bound":
+			preferred_periods = [10, 20, 60]
+	var preferred_sma_period: int = int(preferred_periods[rng.randi_range(0, preferred_periods.size() - 1)])
+
+	var pattern_pool: Array = _chart_pattern_pool_for(archetype, bias)
+	var primary_pattern: String = str(pattern_pool[rng.randi_range(0, pattern_pool.size() - 1)])
+	var pattern_variant: String = _chart_pattern_variant_for(primary_pattern, archetype, bias, rng)
+	var supporting_patterns: Array = []
+	for pattern_value in pattern_pool:
+		var pattern_id: String = str(pattern_value)
+		if pattern_id == primary_pattern:
+			continue
+		if supporting_patterns.size() >= 2:
+			break
+		if rng.randf() < 0.58:
+			supporting_patterns.append(pattern_id)
+	if supporting_patterns.is_empty() and pattern_pool.size() > 1:
+		supporting_patterns.append(str(pattern_pool[(pattern_pool.find(primary_pattern) + 1) % pattern_pool.size()]))
+
+	var volatility_style: String = _chart_volatility_style(archetype, cyclicality, story_heat, rng)
+	var chart_intent: String = _chart_intent_for(
+		archetype,
+		bias,
+		quality_core,
+		growth_engine,
+		story_heat,
+		float_tightness,
+		cyclicality,
+		rng
+	)
+	var pattern_timeframe: String = _chart_pattern_timeframe_for(chart_intent, archetype, bias, rng)
+	var gap_profile: Dictionary = _chart_gap_profile_for(
+		chart_intent,
+		archetype,
+		bias,
+		volatility_style,
+		story_heat,
+		float_tightness,
+		quality_core,
+		rng
+	)
+
+	return {
+		"archetype": archetype,
+		"bias": bias,
+		"chart_intent": chart_intent,
+		"pattern_timeframe": pattern_timeframe,
+		"sma_behavior": sma_behavior,
+		"preferred_sma_period": preferred_sma_period,
+		"primary_pattern": primary_pattern,
+		"pattern_variant": pattern_variant,
+		"supporting_patterns": supporting_patterns,
+		"clarity": rng.randf_range(0.58, 0.84),
+		"volatility_style": volatility_style,
+		"volume_behavior": _chart_volume_behavior(archetype, bias),
+		"gap_style": str(gap_profile.get("gap_style", "none")),
+		"gap_bias": str(gap_profile.get("gap_bias", "mixed")),
+		"gap_frequency": str(gap_profile.get("gap_frequency", "rare")),
+		"gap_followthrough": str(gap_profile.get("gap_followthrough", "fill"))
+	}
+
+
+func _chart_profile_from_traits(traits: Dictionary, run_seed: int, company_id: String) -> Dictionary:
+	var profile_value = traits.get("chart_profile", {})
+	if typeof(profile_value) == TYPE_DICTIONARY and not profile_value.is_empty():
+		return _normalize_chart_profile(profile_value, traits, run_seed, company_id)
+	return _build_chart_profile({}, DEFAULT_SECTOR_PROFILE, traits, run_seed, company_id)
+
+
+func _normalize_chart_profile(profile: Dictionary, traits: Dictionary, run_seed: int, company_id: String) -> Dictionary:
+	var fallback: Dictionary = _build_chart_profile({}, DEFAULT_SECTOR_PROFILE, traits, run_seed, company_id)
+	var normalized: Dictionary = profile.duplicate(true)
+	for key_value in fallback.keys():
+		var key: String = str(key_value)
+		if not normalized.has(key) or (typeof(normalized.get(key)) == TYPE_STRING and str(normalized.get(key)).is_empty()):
+			normalized[key] = fallback[key]
+	var preferred_period: int = int(normalized.get("preferred_sma_period", fallback.get("preferred_sma_period", 20)))
+	if not CHART_SMA_PERIODS.has(preferred_period):
+		preferred_period = int(fallback.get("preferred_sma_period", 20))
+	normalized["preferred_sma_period"] = preferred_period
+	var pattern_id: String = str(normalized.get("primary_pattern", fallback.get("primary_pattern", "messy_range")))
+	var archetype: String = str(normalized.get("archetype", fallback.get("archetype", "range_bound")))
+	var bias: String = str(normalized.get("bias", fallback.get("bias", "sideways")))
+	var pattern_variant: String = str(normalized.get("pattern_variant", "")).strip_edges()
+	if not _chart_pattern_variant_ids(pattern_id, archetype, bias).has(pattern_variant):
+		var variant_rng: RandomNumberGenerator = STABLE_RNG.rng([
+			run_seed,
+			"chart_profile_variant",
+			company_id,
+			pattern_id,
+			archetype,
+			bias
+		])
+		normalized["pattern_variant"] = _chart_pattern_variant_for(pattern_id, archetype, bias, variant_rng)
+	normalized["chart_intent"] = _chart_safe_choice(
+		str(normalized.get("chart_intent", "")),
+		CHART_INTENTS,
+		str(fallback.get("chart_intent", "swing_trading"))
+	)
+	normalized["pattern_timeframe"] = _chart_safe_choice(
+		str(normalized.get("pattern_timeframe", "")),
+		CHART_PATTERN_TIMEFRAMES,
+		str(fallback.get("pattern_timeframe", "1y"))
+	)
+	normalized["gap_style"] = _chart_safe_choice(
+		str(normalized.get("gap_style", "")),
+		CHART_GAP_STYLES,
+		str(fallback.get("gap_style", "none"))
+	)
+	normalized["gap_bias"] = _chart_safe_choice(
+		str(normalized.get("gap_bias", "")),
+		CHART_GAP_BIASES,
+		str(fallback.get("gap_bias", "mixed"))
+	)
+	normalized["gap_frequency"] = _chart_safe_choice(
+		str(normalized.get("gap_frequency", "")),
+		CHART_GAP_FREQUENCIES,
+		str(fallback.get("gap_frequency", "rare"))
+	)
+	normalized["gap_followthrough"] = _chart_safe_choice(
+		str(normalized.get("gap_followthrough", "")),
+		CHART_GAP_FOLLOWTHROUGH,
+		str(fallback.get("gap_followthrough", "fill"))
+	)
+	return normalized
+
+
+func _chart_pattern_pool_for(archetype: String, bias: String) -> Array:
+	if archetype == "gorengan":
+		return GORENGAN_CHART_PATTERNS.duplicate()
+	if bias == "bullish":
+		return BULLISH_CHART_PATTERNS.duplicate()
+	if bias == "bearish":
+		return BEARISH_CHART_PATTERNS.duplicate()
+	if archetype == "accumulation":
+		return ["higher_low_accumulation", "rounded_base", "ascending_triangle", "breakout_retest"]
+	if archetype == "distribution":
+		return ["lower_high_distribution", "double_top", "failed_breakout", "descending_triangle"]
+	if bias == "transition":
+		return ["rounded_base", "double_bottom", "failed_breakout", "breakout_retest", "double_top"]
+	return ["messy_range", "false_breakout", "ascending_triangle", "descending_triangle"]
+
+
+func _chart_pattern_variant_for(
+	pattern_id: String,
+	archetype: String,
+	bias: String,
+	rng: RandomNumberGenerator
+) -> String:
+	var options: Array = _chart_pattern_variant_options(pattern_id, archetype, bias)
+	if options.is_empty():
+		return "standard"
+	var total_weight: float = 0.0
+	for option_value in options:
+		var option: Dictionary = option_value
+		total_weight += max(float(option.get("weight", 1.0)), 0.0)
+	if total_weight <= 0.0:
+		var fallback_option: Dictionary = options[0]
+		return str(fallback_option.get("id", "standard"))
+	var roll: float = rng.randf_range(0.0, total_weight)
+	var cursor: float = 0.0
+	for option_value in options:
+		var option: Dictionary = option_value
+		cursor += max(float(option.get("weight", 1.0)), 0.0)
+		if roll <= cursor:
+			return str(option.get("id", "standard"))
+	var last_option: Dictionary = options[options.size() - 1]
+	return str(last_option.get("id", "standard"))
+
+
+func _chart_pattern_variant_ids(pattern_id: String, archetype: String, bias: String) -> Array:
+	var ids: Array = []
+	for option_value in _chart_pattern_variant_options(pattern_id, archetype, bias):
+		var option: Dictionary = option_value
+		ids.append(str(option.get("id", "standard")))
+	return ids
+
+
+func _chart_pattern_variant_options(pattern_id: String, archetype: String, bias: String) -> Array:
+	var bullish_weight: float = 1.0 if bias == "bullish" else 0.0
+	var bearish_weight: float = 1.0 if bias == "bearish" else 0.0
+	var transition_weight: float = 1.0 if bias == "transition" else 0.0
+	var sideways_weight: float = 1.0 if bias == "sideways" else 0.0
+	var gorengan_weight: float = 1.0 if archetype == "gorengan" else 0.0
+	match pattern_id:
+		"double_bottom":
+			return [
+				{"id": "breakout_retest_continue", "weight": 5.0 + (bullish_weight * 5.0)},
+				{"id": "measured_breakout", "weight": 2.4 + (bullish_weight * 2.8)},
+				{"id": "undercut_spring", "weight": 2.2 + (transition_weight * 1.6)},
+				{"id": "base_no_breakout", "weight": 1.4 + (sideways_weight * 3.2)},
+				{"id": "failed_breakout", "weight": 0.8 + (transition_weight * 2.0) + (sideways_weight * 1.4)}
+			]
+		"inverse_head_shoulders":
+			return [
+				{"id": "neckline_break_retest", "weight": 4.8 + (bullish_weight * 4.2)},
+				{"id": "right_shoulder_shakeout", "weight": 2.4 + (transition_weight * 1.4)},
+				{"id": "slow_neckline_grind", "weight": 2.2},
+				{"id": "failed_neckline", "weight": 0.8 + (sideways_weight * 2.4) + (transition_weight * 1.2)}
+			]
+		"cup_handle":
+			return [
+				{"id": "clean_handle_breakout", "weight": 4.8 + (bullish_weight * 4.0)},
+				{"id": "deep_cup_shallow_handle", "weight": 2.4},
+				{"id": "long_handle_grind", "weight": 2.0 + (sideways_weight * 1.2)},
+				{"id": "failed_handle", "weight": 0.8 + (transition_weight * 2.0)}
+			]
+		"ascending_triangle":
+			return [
+				{"id": "flat_top_breakout", "weight": 4.4 + (bullish_weight * 3.8)},
+				{"id": "tight_coil", "weight": 2.4 + (sideways_weight * 1.8)},
+				{"id": "throwback_retest", "weight": 2.2 + (bullish_weight * 1.0)},
+				{"id": "fake_breakout", "weight": 1.0 + (transition_weight * 2.2) + (gorengan_weight * 2.0)}
+			]
+		"rounded_base":
+			return [
+				{"id": "quiet_saucer_breakout", "weight": 4.4 + (bullish_weight * 3.0)},
+				{"id": "long_accumulation_base", "weight": 3.0},
+				{"id": "sleepy_base", "weight": 1.8 + (sideways_weight * 2.4)},
+				{"id": "base_failure", "weight": 0.8 + (transition_weight * 1.8)}
+			]
+		"bull_flag":
+			return [
+				{"id": "shallow_flag_continue", "weight": 4.8 + (bullish_weight * 4.0)},
+				{"id": "high_tight_flag", "weight": 2.2 + (gorengan_weight * 1.4)},
+				{"id": "deep_flag_recovery", "weight": 1.8},
+				{"id": "failed_flag", "weight": 0.8 + (transition_weight * 2.0)}
+			]
+		"breakout_retest":
+			return [
+				{"id": "clean_retest_continue", "weight": 5.0 + (bullish_weight * 3.6)},
+				{"id": "deep_retest_hold", "weight": 2.4},
+				{"id": "stair_step_retest", "weight": 2.0},
+				{"id": "failed_retest", "weight": 0.8 + (transition_weight * 2.2) + (sideways_weight * 1.2)}
+			]
+		"higher_low_accumulation":
+			return [
+				{"id": "orderly_stair_step", "weight": 4.4 + (bullish_weight * 2.6)},
+				{"id": "shakeout_then_markup", "weight": 2.6},
+				{"id": "quiet_absorption", "weight": 2.2 + (sideways_weight * 1.2)},
+				{"id": "failed_accumulation", "weight": 0.8 + (transition_weight * 2.0)}
+			]
+		"double_top":
+			return [
+				{"id": "neckline_break_continue", "weight": 4.8 + (bearish_weight * 4.0)},
+				{"id": "second_top_lower", "weight": 2.4},
+				{"id": "range_top_chop", "weight": 1.8 + (sideways_weight * 2.2)},
+				{"id": "failed_breakdown", "weight": 0.8 + (transition_weight * 2.2)}
+			]
+		"head_shoulders":
+			return [
+				{"id": "clean_neckline_break", "weight": 4.8 + (bearish_weight * 4.0)},
+				{"id": "right_shoulder_chop", "weight": 2.2},
+				{"id": "slanted_neckline", "weight": 2.0},
+				{"id": "failed_breakdown", "weight": 0.8 + (transition_weight * 2.0)}
+			]
+		"descending_triangle":
+			return [
+				{"id": "flat_floor_breakdown", "weight": 4.6 + (bearish_weight * 3.8)},
+				{"id": "tight_floor_pressure", "weight": 2.4 + (sideways_weight * 1.6)},
+				{"id": "breakdown_retest", "weight": 2.2},
+				{"id": "bear_trap_reclaim", "weight": 0.8 + (transition_weight * 2.0)}
+			]
+		"lower_high_distribution":
+			return [
+				{"id": "orderly_distribution", "weight": 4.2 + (bearish_weight * 2.8)},
+				{"id": "fast_distribution", "weight": 2.4},
+				{"id": "range_distribution", "weight": 2.0 + (sideways_weight * 1.6)},
+				{"id": "failed_distribution", "weight": 0.8 + (transition_weight * 2.0)}
+			]
+		"failed_breakout":
+			return [
+				{"id": "classic_bull_trap", "weight": 4.0 + (bearish_weight * 2.4)},
+				{"id": "double_fakeout", "weight": 2.6 + (gorengan_weight * 1.6)},
+				{"id": "late_failed_breakout", "weight": 2.0},
+				{"id": "failed_then_recovery", "weight": 0.8 + (transition_weight * 2.0)}
+			]
+		"breakdown_retest":
+			return [
+				{"id": "breakdown_reject_continue", "weight": 4.6 + (bearish_weight * 3.4)},
+				{"id": "deep_retest_reject", "weight": 2.4},
+				{"id": "grind_lower", "weight": 2.0},
+				{"id": "failed_breakdown_reclaim", "weight": 0.8 + (transition_weight * 2.2)}
+			]
+		"sma_resistance_rejection":
+			return [
+				{"id": "single_clean_rejection", "weight": 3.8 + (bearish_weight * 2.8)},
+				{"id": "repeated_rejections", "weight": 3.0},
+				{"id": "rolling_lower_sma", "weight": 2.0},
+				{"id": "sma_reclaim", "weight": 0.8 + (transition_weight * 2.0)}
+			]
+		"pump_dump":
+			return [
+				{"id": "early_pump_dump", "weight": 2.6},
+				{"id": "late_pump_dump", "weight": 2.6},
+				{"id": "stair_pump_dump", "weight": 2.0},
+				{"id": "multi_spike_dump", "weight": 1.8}
+			]
+		"false_breakout":
+			return [
+				{"id": "single_false_breakout", "weight": 2.8},
+				{"id": "double_false_breakout", "weight": 2.4},
+				{"id": "range_whipsaw", "weight": 2.2},
+				{"id": "spring_reclaim", "weight": 1.4}
+			]
+		"sharp_squeeze":
+			return [
+				{"id": "squeeze_hold", "weight": 2.8},
+				{"id": "squeeze_fade", "weight": 2.6},
+				{"id": "late_squeeze", "weight": 2.2},
+				{"id": "two_leg_squeeze", "weight": 1.6}
+			]
+		"rug_pull_volume":
+			return [
+				{"id": "classic_rug_pull", "weight": 2.8},
+				{"id": "delayed_rug_pull", "weight": 2.4},
+				{"id": "stair_step_rug", "weight": 2.0},
+				{"id": "rebound_after_rug", "weight": 1.4}
+			]
+		"messy_range":
+			return [
+				{"id": "wide_range", "weight": 2.6},
+				{"id": "tightening_range", "weight": 2.4},
+				{"id": "shakeout_range", "weight": 2.2},
+				{"id": "range_break_fake", "weight": 1.8}
+			]
+	return [{"id": "standard", "weight": 1.0}]
+
+
+func _chart_intent_for(
+	archetype: String,
+	bias: String,
+	quality_core: float,
+	growth_engine: float,
+	story_heat: float,
+	float_tightness: float,
+	cyclicality: float,
+	rng: RandomNumberGenerator
+) -> String:
+	var candidates: Array = []
+	match archetype:
+		"funda":
+			candidates = [
+				{"id": "investing", "weight": 5.2 + quality_core},
+				{"id": "swing_trading", "weight": 1.2 + growth_engine * 0.4},
+				{"id": "short_term_trading", "weight": story_heat * 0.25},
+				{"id": "speculative", "weight": 0.05}
+			]
+		"organic":
+			candidates = [
+				{"id": "investing", "weight": 2.5 + quality_core * 1.5},
+				{"id": "swing_trading", "weight": 2.1 + growth_engine + story_heat * 0.4},
+				{"id": "short_term_trading", "weight": story_heat * 0.55},
+				{"id": "speculative", "weight": 0.08}
+			]
+		"accumulation":
+			candidates = [
+				{"id": "swing_trading", "weight": 4.0 + growth_engine * 0.8},
+				{"id": "investing", "weight": 1.2 + quality_core},
+				{"id": "short_term_trading", "weight": 1.1 + story_heat * 0.8},
+				{"id": "speculative", "weight": max(story_heat + float_tightness - 1.16, 0.0) * 0.55}
+			]
+		"cyclical":
+			candidates = [
+				{"id": "swing_trading", "weight": 4.2 + cyclicality},
+				{"id": "investing", "weight": 0.8 + quality_core * 0.7},
+				{"id": "short_term_trading", "weight": 1.1 + story_heat * 0.5},
+				{"id": "speculative", "weight": 0.08 + max(cyclicality - 0.78, 0.0) * 0.45}
+			]
+		"gorengan":
+			candidates = [
+				{"id": "short_term_trading", "weight": 4.2 + story_heat * 0.7},
+				{"id": "speculative", "weight": 1.6 + max(story_heat + float_tightness - 1.12, 0.0) * 2.0},
+				{"id": "swing_trading", "weight": 0.9},
+				{"id": "investing", "weight": 0.08}
+			]
+		"distressed", "distribution":
+			candidates = [
+				{"id": "short_term_trading", "weight": 2.8 + story_heat * 0.5},
+				{"id": "swing_trading", "weight": 2.4 + cyclicality * 0.6},
+				{"id": "speculative", "weight": 0.35 + (0.25 if bias == "bearish" else 0.0)},
+				{"id": "investing", "weight": 0.20 + quality_core * 0.3}
+			]
+		_:
+			candidates = [
+				{"id": "swing_trading", "weight": 1.8},
+				{"id": "investing", "weight": 1.0 + quality_core * 0.6},
+				{"id": "short_term_trading", "weight": 1.0 + story_heat * 0.4},
+				{"id": "speculative", "weight": 0.06 + float_tightness * 0.10}
+			]
+	return _chart_weighted_pick(candidates, rng, "swing_trading")
+
+
+func _chart_pattern_timeframe_for(
+	chart_intent: String,
+	archetype: String,
+	bias: String,
+	rng: RandomNumberGenerator
+) -> String:
+	var candidates: Array = []
+	match chart_intent:
+		"investing":
+			candidates = [
+				{"id": "5y", "weight": 2.9 if archetype == "funda" else 1.7},
+				{"id": "1y", "weight": 2.2}
+			]
+		"swing_trading":
+			candidates = [
+				{"id": "6m", "weight": 2.7},
+				{"id": "1y", "weight": 2.0},
+				{"id": "3m", "weight": 0.55},
+				{"id": "5y", "weight": 0.25}
+			]
+		"short_term_trading":
+			candidates = [
+				{"id": "3m", "weight": 2.6},
+				{"id": "1m", "weight": 1.6},
+				{"id": "6m", "weight": 1.1}
+			]
+		"speculative":
+			candidates = [
+				{"id": "1m", "weight": 2.5},
+				{"id": "3m", "weight": 2.2},
+				{"id": "6m", "weight": 0.45}
+			]
+		_:
+			candidates = [{"id": "1y", "weight": 1.0}, {"id": "6m", "weight": 1.0}]
+	if archetype == "gorengan":
+		candidates.append({"id": "1m", "weight": 1.0})
+	if bias == "sideways":
+		candidates.append({"id": "6m", "weight": 0.6})
+	return _chart_weighted_pick(candidates, rng, "1y")
+
+
+func _chart_gap_profile_for(
+	chart_intent: String,
+	archetype: String,
+	bias: String,
+	volatility_style: String,
+	story_heat: float,
+	float_tightness: float,
+	quality_core: float,
+	rng: RandomNumberGenerator
+) -> Dictionary:
+	var style_candidates: Array = [{"id": "none", "weight": 1.0}]
+	var frequency_candidates: Array = [{"id": "rare", "weight": 1.0}]
+	var follow_candidates: Array = [{"id": "fill", "weight": 1.0}]
+	var gap_bias: String = "mixed"
+	if chart_intent == "investing" or archetype == "funda":
+		style_candidates = [
+			{"id": "news_gap", "weight": 2.2 + quality_core},
+			{"id": "breakout_gap", "weight": 0.7 if bias == "bullish" else 0.2},
+			{"id": "none", "weight": 1.8}
+		]
+		frequency_candidates = [{"id": "rare", "weight": 4.0}, {"id": "moderate", "weight": 0.7}]
+		follow_candidates = [{"id": "hold", "weight": 2.0}, {"id": "continue", "weight": 1.0}, {"id": "fill", "weight": 1.0}]
+		gap_bias = "up" if bias == "bullish" else "mixed"
+	elif archetype == "gorengan" or chart_intent == "speculative":
+		style_candidates = [
+			{"id": "mixed", "weight": 2.4},
+			{"id": "rug_gap", "weight": 1.6},
+			{"id": "breakout_gap", "weight": 1.3},
+			{"id": "exhaustion_gap", "weight": 0.9}
+		]
+		frequency_candidates = [
+			{"id": "moderate", "weight": 2.6},
+			{"id": "active", "weight": 0.45 + max(story_heat + float_tightness - 1.35, 0.0) * 3.0},
+			{"id": "rare", "weight": 0.35}
+		]
+		follow_candidates = [{"id": "fade", "weight": 2.4}, {"id": "fill", "weight": 1.8}, {"id": "continue", "weight": 0.9}]
+		gap_bias = "mixed"
+	elif volatility_style == "spiky":
+		style_candidates = [
+			{"id": "mixed", "weight": 1.4},
+			{"id": "breakout_gap", "weight": 0.8 if bias == "bullish" else 0.35},
+			{"id": "exhaustion_gap", "weight": 0.75 if bias == "bearish" else 0.35},
+			{"id": "none", "weight": 0.7}
+		]
+		frequency_candidates = [{"id": "moderate", "weight": 1.9}, {"id": "rare", "weight": 1.2}, {"id": "active", "weight": 0.20}]
+		follow_candidates = [{"id": "fill", "weight": 1.6}, {"id": "fade", "weight": 1.2}, {"id": "hold", "weight": 0.8}]
+		gap_bias = "mixed"
+	elif bias == "bullish" or archetype == "accumulation":
+		style_candidates = [
+			{"id": "breakout_gap", "weight": 2.5 + story_heat},
+			{"id": "news_gap", "weight": 1.0},
+			{"id": "mixed", "weight": 0.4},
+			{"id": "none", "weight": 0.5}
+		]
+		frequency_candidates = [{"id": "moderate", "weight": 2.5}, {"id": "rare", "weight": 1.2}]
+		follow_candidates = [{"id": "hold", "weight": 2.2}, {"id": "continue", "weight": 1.6}, {"id": "fill", "weight": 0.8}]
+		gap_bias = "up"
+	elif bias == "bearish" or archetype in ["distressed", "distribution"]:
+		style_candidates = [
+			{"id": "exhaustion_gap", "weight": 1.8},
+			{"id": "rug_gap", "weight": 1.6 + float_tightness * 0.6},
+			{"id": "mixed", "weight": 0.8},
+			{"id": "none", "weight": 0.35}
+		]
+		frequency_candidates = [{"id": "moderate", "weight": 2.1}, {"id": "active", "weight": 0.25}, {"id": "rare", "weight": 1.0}]
+		follow_candidates = [{"id": "fade", "weight": 1.8}, {"id": "fill", "weight": 1.6}, {"id": "continue", "weight": 1.0}]
+		gap_bias = "down"
+	else:
+		style_candidates = [
+			{"id": "mixed", "weight": 1.2 + story_heat * 0.5},
+			{"id": "news_gap", "weight": 0.9},
+			{"id": "none", "weight": 1.0}
+		]
+		frequency_candidates = [{"id": "rare", "weight": 1.8}, {"id": "moderate", "weight": 1.0}]
+		follow_candidates = [{"id": "fill", "weight": 1.8}, {"id": "fade", "weight": 0.8}, {"id": "hold", "weight": 0.6}]
+		gap_bias = "mixed"
+	return {
+		"gap_style": _chart_weighted_pick(style_candidates, rng, "none"),
+		"gap_bias": gap_bias,
+		"gap_frequency": _chart_weighted_pick(frequency_candidates, rng, "rare"),
+		"gap_followthrough": _chart_weighted_pick(follow_candidates, rng, "fill")
+	}
+
+
+func _chart_weighted_pick(candidates: Array, rng: RandomNumberGenerator, fallback: String) -> String:
+	var total_weight: float = 0.0
+	for candidate_value in candidates:
+		if typeof(candidate_value) != TYPE_DICTIONARY:
+			continue
+		var candidate: Dictionary = candidate_value
+		total_weight += max(float(candidate.get("weight", 1.0)), 0.0)
+	if total_weight <= 0.0:
+		return fallback
+	var roll: float = rng.randf_range(0.0, total_weight)
+	var cursor: float = 0.0
+	for candidate_value in candidates:
+		if typeof(candidate_value) != TYPE_DICTIONARY:
+			continue
+		var candidate: Dictionary = candidate_value
+		cursor += max(float(candidate.get("weight", 1.0)), 0.0)
+		if roll <= cursor:
+			return str(candidate.get("id", fallback))
+	return fallback
+
+
+func _chart_safe_choice(value: String, valid_values: Array, fallback: String) -> String:
+	var normalized: String = str(value).strip_edges().to_lower()
+	if valid_values.has(normalized):
+		return normalized
+	return fallback
+
+
+func _chart_volatility_style(archetype: String, cyclicality: float, story_heat: float, rng: RandomNumberGenerator) -> String:
+	if archetype == "gorengan" or story_heat >= 0.72:
+		return "spiky"
+	if archetype == "cyclical" or cyclicality >= 0.68:
+		return "swingy"
+	if archetype in ["organic", "funda", "accumulation"]:
+		return "smooth" if rng.randf() < 0.62 else "normal"
+	if archetype in ["distressed", "distribution"]:
+		return "heavy"
+	return "normal"
+
+
+func _chart_volume_behavior(archetype: String, bias: String) -> String:
+	if archetype == "gorengan":
+		return "spike"
+	if bias == "bullish" or archetype == "accumulation":
+		return "accumulation"
+	if bias == "bearish" or archetype == "distribution" or archetype == "distressed":
+		return "distribution"
+	return "neutral"
 
 
 func _build_financial_history(
@@ -1500,6 +2193,720 @@ func _build_historical_quarter_bars(
 		})
 		previous_close = close_price
 	return bars
+
+
+func _apply_chart_profile_to_historical_bars(
+	source_bars: Array,
+	chart_profile: Dictionary,
+	run_seed: int,
+	company_id: String,
+	end_price: float
+) -> Array:
+	if source_bars.size() < 12:
+		return source_bars
+
+	var normalized_end_price: float = IDX_PRICE_RULES.normalize_last_price(max(end_price, 1.0))
+	var start_price: float = _chart_history_start_price(chart_profile, normalized_end_price, run_seed, company_id)
+	var anchors: Array = _chart_shape_anchors(chart_profile)
+	var pattern_window: Dictionary = _chart_pattern_timeframe_window(chart_profile, source_bars.size())
+	var closes: Array = []
+	var reshaped_bars: Array = []
+	var previous_close: float = start_price
+	var volatility_style: String = str(chart_profile.get("volatility_style", "normal"))
+	var clarity: float = clamp(float(chart_profile.get("clarity", 0.68)), 0.35, 0.92)
+	var noise_scale: float = _chart_noise_scale(volatility_style) * lerp(1.20, 0.58, clarity)
+	var trend_log_start: float = log(max(start_price, 1.0))
+	var trend_log_end: float = log(max(normalized_end_price, 1.0))
+
+	for bar_index in range(source_bars.size()):
+		var source_bar: Dictionary = source_bars[bar_index]
+		var progress: float = float(bar_index) / float(max(source_bars.size() - 1, 1))
+		var trend_price: float = exp(lerp(trend_log_start, trend_log_end, progress))
+		var shape_multiplier: float = _chart_profile_shape_multiplier(
+			chart_profile,
+			anchors,
+			progress,
+			bar_index,
+			source_bars.size(),
+			pattern_window
+		)
+		var wave_component: float = _chart_wave_component(chart_profile, progress, run_seed, company_id)
+		var noise_component: float = _sample_noise(
+			run_seed,
+			company_id,
+			"chart_profile_noise",
+			-noise_scale,
+			noise_scale,
+			bar_index + 1
+		)
+		var close_price: float = trend_price * shape_multiplier * (1.0 + wave_component + noise_component)
+		close_price = _apply_chart_sma_behavior(close_price, closes, chart_profile, progress)
+		if bar_index == 0:
+			close_price = start_price
+		if bar_index == source_bars.size() - 1:
+			close_price = normalized_end_price
+		close_price = IDX_PRICE_RULES.normalize_last_price(max(close_price, 1.0))
+
+		var gap_ratio: float = _chart_historical_gap_ratio(
+			chart_profile,
+			bar_index,
+			source_bars.size(),
+			pattern_window,
+			run_seed,
+			company_id
+		)
+		if not is_zero_approx(gap_ratio):
+			close_price = _chart_apply_gap_followthrough(close_price, previous_close, gap_ratio, chart_profile)
+			if bar_index == source_bars.size() - 1:
+				close_price = normalized_end_price
+			close_price = IDX_PRICE_RULES.normalize_last_price(max(close_price, 1.0))
+
+		var open_price: float = previous_close
+		if not is_zero_approx(gap_ratio):
+			open_price = IDX_PRICE_RULES.normalize_last_price(max(previous_close * (1.0 + gap_ratio), 1.0))
+		var day_move_ratio: float = absf(close_price - open_price) / max(open_price, 1.0)
+		var range_ratio: float = _chart_intraday_range_ratio(chart_profile, day_move_ratio, run_seed, company_id, bar_index)
+		var high_price: float = IDX_PRICE_RULES.normalize_last_price(max(
+			max(open_price, close_price) * (1.0 + range_ratio * 0.62),
+			max(open_price, close_price)
+		))
+		var low_price: float = IDX_PRICE_RULES.normalize_last_price(min(
+			min(open_price, close_price) * max(1.0 - range_ratio * 0.74, 0.35),
+			min(open_price, close_price)
+		))
+		high_price = max(high_price, open_price, close_price)
+		low_price = min(low_price, open_price, close_price)
+
+		var baseline_value: float = max(float(source_bar.get("value", 0.0)), close_price * 1000.0)
+		var volume_multiplier: float = _chart_volume_multiplier(
+			chart_profile,
+			progress,
+			(close_price - open_price) / max(open_price, 1.0),
+			run_seed,
+			company_id,
+			bar_index
+		)
+		if absf(gap_ratio) >= 0.018:
+			volume_multiplier *= _chart_gap_volume_multiplier(chart_profile, gap_ratio)
+		var traded_value: float = max(baseline_value * volume_multiplier, close_price * 1000.0)
+		var volume_shares: int = int(max(round(traded_value / max(close_price, 1.0) / 100.0), 1.0) * 100.0)
+		var bar_value: float = close_price * float(volume_shares)
+		reshaped_bars.append({
+			"trade_date": source_bar.get("trade_date", {}).duplicate(true),
+			"open": open_price,
+			"high": high_price,
+			"low": low_price,
+			"close": close_price,
+			"volume_shares": volume_shares,
+			"value": bar_value
+		})
+		closes.append(close_price)
+		previous_close = close_price
+
+	return reshaped_bars
+
+
+func _chart_pattern_timeframe_window(chart_profile: Dictionary, total_bars: int) -> Dictionary:
+	var timeframe: String = str(chart_profile.get("pattern_timeframe", "5y")).to_lower()
+	var target_count: int = _chart_timeframe_bar_count(timeframe, total_bars)
+	target_count = clamp(target_count, 12, max(total_bars, 12))
+	var end_index: int = max(total_bars - 1, 0)
+	var start_index: int = max(end_index - target_count + 1, 0)
+	return {
+		"start": start_index,
+		"end": end_index,
+		"count": end_index - start_index + 1,
+		"timeframe": timeframe
+	}
+
+
+func _chart_timeframe_bar_count(timeframe: String, total_bars: int) -> int:
+	match str(timeframe).to_lower():
+		"1m":
+			return min(21, total_bars)
+		"3m":
+			return min(63, total_bars)
+		"6m":
+			return min(126, total_bars)
+		"1y":
+			return min(252, total_bars)
+	return total_bars
+
+
+func _chart_profile_shape_multiplier(
+	chart_profile: Dictionary,
+	anchors: Array,
+	progress: float,
+	bar_index: int,
+	total_bars: int,
+	pattern_window: Dictionary
+) -> float:
+	var full_shape: float = _interpolate_chart_shape(anchors, progress)
+	var timeframe: String = str(chart_profile.get("pattern_timeframe", "5y")).to_lower()
+	if timeframe == "5y" or total_bars <= 0:
+		return full_shape
+
+	var chart_intent: String = str(chart_profile.get("chart_intent", "swing_trading"))
+	var base_shape_weight: float = 0.34
+	var window_shape_weight: float = 0.88
+	if chart_intent == "short_term_trading":
+		base_shape_weight = 0.28
+		window_shape_weight = 0.88
+	elif chart_intent == "speculative":
+		base_shape_weight = 0.22
+		window_shape_weight = 0.94
+	elif chart_intent == "investing":
+		base_shape_weight = 0.46
+		window_shape_weight = 0.82
+
+	var shape_multiplier: float = lerp(1.0, full_shape, base_shape_weight)
+	var start_index: int = int(pattern_window.get("start", 0))
+	var end_index: int = int(pattern_window.get("end", total_bars - 1))
+	if bar_index < start_index or bar_index > end_index:
+		return shape_multiplier
+
+	var span: int = max(end_index - start_index, 1)
+	var local_progress: float = clamp(float(bar_index - start_index) / float(span), 0.0, 1.0)
+	var local_shape: float = _interpolate_chart_shape(anchors, local_progress)
+	var edge_distance: float = float(min(bar_index - start_index, end_index - bar_index))
+	var edge_width: float = max(float(span) * 0.16, 1.0)
+	var edge_fade: float = clamp(edge_distance / edge_width, 0.28, 1.0)
+	return shape_multiplier * lerp(1.0, local_shape, clamp(window_shape_weight * edge_fade, 0.0, 1.02))
+
+
+func _chart_historical_gap_ratio(
+	chart_profile: Dictionary,
+	bar_index: int,
+	total_bars: int,
+	pattern_window: Dictionary,
+	run_seed: int,
+	company_id: String
+) -> float:
+	if bar_index <= 0 or bar_index >= total_bars - 1:
+		return 0.0
+	var gap_style: String = str(chart_profile.get("gap_style", "none"))
+	if gap_style == "none":
+		return 0.0
+
+	var start_index: int = int(pattern_window.get("start", 0))
+	var end_index: int = int(pattern_window.get("end", total_bars - 1))
+	var span: int = max(end_index - start_index, 1)
+	var local_progress: float = float(bar_index - start_index) / float(span)
+	var target_progresses: Array = _chart_gap_target_progresses(chart_profile)
+	var matched_target: bool = false
+	for target_value in target_progresses:
+		var target_progress: float = clamp(float(target_value), 0.0, 1.0)
+		var target_index: int = clamp(start_index + int(round(target_progress * float(span))), 1, total_bars - 2)
+		var tolerance: int = max(1, int(round(float(span) * 0.012)))
+		if abs(bar_index - target_index) <= tolerance:
+			matched_target = true
+			break
+
+	var frequency: String = str(chart_profile.get("gap_frequency", "rare"))
+	var random_chance: float = 0.0
+	if frequency == "moderate":
+		random_chance = 0.0015
+	elif frequency == "active":
+		random_chance = 0.0055
+	var random_gap: bool = false
+	if local_progress >= -0.20 and local_progress <= 1.06 and random_chance > 0.0:
+		var random_roll: float = _sample_noise(run_seed, company_id, "chart_profile_random_gap", 0.0, 1.0, bar_index + 1)
+		random_gap = random_roll < random_chance
+	if not matched_target and not random_gap:
+		return 0.0
+
+	var direction: int = _chart_gap_direction(chart_profile, bar_index, run_seed, company_id)
+	if direction == 0:
+		return 0.0
+	var magnitude: float = _chart_gap_magnitude(chart_profile, bar_index, run_seed, company_id)
+	return clamp(float(direction) * magnitude, -0.12, 0.12)
+
+
+func _chart_gap_target_progresses(chart_profile: Dictionary) -> Array:
+	var frequency: String = str(chart_profile.get("gap_frequency", "rare"))
+	var style: String = str(chart_profile.get("gap_style", "none"))
+	var pattern_id: String = str(chart_profile.get("primary_pattern", ""))
+	var targets: Array = []
+	if style == "breakout_gap" or pattern_id in ["ascending_triangle", "breakout_retest", "bull_flag", "cup_handle"]:
+		targets = [0.62]
+	elif style == "rug_gap" or pattern_id in ["rug_pull_volume", "pump_dump"]:
+		targets = [0.58]
+	elif style == "exhaustion_gap" or pattern_id in ["descending_triangle", "breakdown_retest", "double_top", "head_shoulders"]:
+		targets = [0.68]
+	else:
+		targets = [0.54]
+	if frequency == "moderate":
+		if str(chart_profile.get("archetype", "")) == "gorengan":
+			targets.append(0.78 if style != "rug_gap" else 0.72)
+	elif frequency == "active":
+		targets.append(0.78 if style != "rug_gap" else 0.72)
+	return targets
+
+
+func _chart_gap_direction(chart_profile: Dictionary, bar_index: int, run_seed: int, company_id: String) -> int:
+	var gap_bias: String = str(chart_profile.get("gap_bias", "mixed"))
+	var gap_style: String = str(chart_profile.get("gap_style", "none"))
+	var chart_bias: String = str(chart_profile.get("bias", "sideways"))
+	var primary_pattern: String = str(chart_profile.get("primary_pattern", ""))
+	if gap_bias == "up":
+		return 1
+	if gap_bias == "down":
+		return -1
+	if gap_style == "breakout_gap":
+		return 1
+	if gap_style == "rug_gap" or gap_style == "exhaustion_gap":
+		return -1
+	if primary_pattern in ["breakout_retest", "ascending_triangle", "bull_flag", "cup_handle", "double_bottom", "inverse_head_shoulders"]:
+		return 1
+	if primary_pattern in ["breakdown_retest", "descending_triangle", "rug_pull_volume", "double_top", "head_shoulders"]:
+		return -1
+	if chart_bias == "bullish":
+		return 1
+	if chart_bias == "bearish":
+		return -1
+	var direction_roll: float = _sample_noise(run_seed, company_id, "chart_profile_gap_direction", 0.0, 1.0, bar_index + 1)
+	return 1 if direction_roll >= 0.5 else -1
+
+
+func _chart_gap_magnitude(chart_profile: Dictionary, bar_index: int, run_seed: int, company_id: String) -> float:
+	var style: String = str(chart_profile.get("gap_style", "none"))
+	var frequency: String = str(chart_profile.get("gap_frequency", "rare"))
+	var archetype: String = str(chart_profile.get("archetype", "range_bound"))
+	var low: float = 0.024
+	var high: float = 0.040
+	if frequency == "moderate":
+		low = 0.026
+		high = 0.055
+	elif frequency == "active":
+		low = 0.032
+		high = 0.078
+	if style == "breakout_gap":
+		low += 0.004
+		high += 0.012
+	elif style == "rug_gap":
+		low += 0.014
+		high += 0.026
+	elif style == "exhaustion_gap":
+		low += 0.008
+		high += 0.018
+	elif style == "news_gap":
+		high -= 0.006
+	elif style == "mixed":
+		high += 0.006
+	if archetype == "gorengan":
+		low *= 1.08
+		high *= 1.12
+	return _sample_noise(run_seed, company_id, "chart_profile_gap_magnitude", low, max(high, low), bar_index + 1)
+
+
+func _chart_apply_gap_followthrough(
+	close_price: float,
+	previous_close: float,
+	gap_ratio: float,
+	chart_profile: Dictionary
+) -> float:
+	var followthrough: String = str(chart_profile.get("gap_followthrough", "fill"))
+	var magnitude: float = absf(gap_ratio)
+	if magnitude <= 0.0:
+		return close_price
+	if gap_ratio > 0.0:
+		match followthrough:
+			"continue":
+				return max(close_price, previous_close * (1.0 + magnitude * 1.20))
+			"hold":
+				return max(close_price, previous_close * (1.0 + magnitude * 0.58))
+			"fade":
+				return lerp(close_price, previous_close * (1.0 - magnitude * 0.18), 0.42)
+			_:
+				return lerp(close_price, previous_close * (1.0 + magnitude * 0.16), 0.46)
+	match followthrough:
+		"continue":
+			return min(close_price, previous_close * (1.0 - magnitude * 1.16))
+		"hold":
+			return min(close_price, previous_close * (1.0 - magnitude * 0.58))
+		"fade":
+			return lerp(close_price, previous_close * (1.0 + magnitude * 0.16), 0.42)
+		_:
+			return lerp(close_price, previous_close * (1.0 - magnitude * 0.16), 0.46)
+
+
+func _chart_gap_volume_multiplier(chart_profile: Dictionary, gap_ratio: float) -> float:
+	var style: String = str(chart_profile.get("gap_style", "none"))
+	var multiplier: float = 1.14 + absf(gap_ratio) * 6.8
+	if style in ["rug_gap", "breakout_gap", "mixed"]:
+		multiplier += 0.18
+	if str(chart_profile.get("archetype", "")) == "gorengan":
+		multiplier += 0.24
+	return clamp(multiplier, 1.12, 2.65)
+
+
+func _chart_history_start_price(chart_profile: Dictionary, end_price: float, run_seed: int, company_id: String) -> float:
+	var bias: String = str(chart_profile.get("bias", "sideways"))
+	var archetype: String = str(chart_profile.get("archetype", "range_bound"))
+	var low_ratio: float = 0.82
+	var high_ratio: float = 1.18
+	if bias == "bullish":
+		low_ratio = 0.42
+		high_ratio = 0.76
+	elif bias == "bearish":
+		low_ratio = 1.28
+		high_ratio = 2.12
+	elif bias == "transition":
+		low_ratio = 0.78
+		high_ratio = 1.36
+	if archetype == "gorengan":
+		low_ratio *= 0.82
+		high_ratio *= 1.18
+	var ratio: float = _sample_noise(run_seed, company_id, "chart_profile_start_ratio", low_ratio, high_ratio, 1)
+	return IDX_PRICE_RULES.normalize_last_price(max(end_price * ratio, 1.0))
+
+
+func _chart_shape_anchors(chart_profile: Dictionary) -> Array:
+	var pattern_id: String = str(chart_profile.get("primary_pattern", "messy_range"))
+	var variant: String = str(chart_profile.get("pattern_variant", "standard"))
+	match pattern_id:
+		"double_bottom":
+			match variant:
+				"measured_breakout":
+					return _chart_anchor_rows([[0.00, 1.03], [0.14, 0.82], [0.27, 1.00], [0.41, 0.84], [0.56, 1.12], [0.70, 1.05], [0.86, 1.20], [1.00, 1.00]])
+				"undercut_spring":
+					return _chart_anchor_rows([[0.00, 1.04], [0.15, 0.88], [0.29, 1.00], [0.43, 0.80], [0.55, 1.08], [0.68, 1.00], [0.84, 1.16], [1.00, 1.00]])
+				"base_no_breakout":
+					return _chart_anchor_rows([[0.00, 1.02], [0.16, 0.86], [0.30, 0.99], [0.45, 0.87], [0.62, 1.04], [0.78, 0.96], [0.92, 1.05], [1.00, 1.00]])
+				"failed_breakout":
+					return _chart_anchor_rows([[0.00, 1.05], [0.16, 0.84], [0.30, 1.02], [0.44, 0.86], [0.58, 1.11], [0.70, 0.96], [0.86, 0.90], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 1.03], [0.15, 0.83], [0.28, 1.00], [0.42, 0.85], [0.56, 1.12], [0.68, 1.04], [0.84, 1.18], [1.00, 1.00]])
+		"inverse_head_shoulders":
+			match variant:
+				"right_shoulder_shakeout":
+					return _chart_anchor_rows([[0.00, 1.03], [0.12, 0.90], [0.26, 1.01], [0.42, 0.77], [0.56, 1.03], [0.69, 0.87], [0.82, 1.15], [1.00, 1.00]])
+				"slow_neckline_grind":
+					return _chart_anchor_rows([[0.00, 1.00], [0.16, 0.89], [0.30, 0.99], [0.45, 0.80], [0.58, 1.01], [0.72, 0.93], [0.90, 1.10], [1.00, 1.00]])
+				"failed_neckline":
+					return _chart_anchor_rows([[0.00, 1.02], [0.14, 0.88], [0.28, 1.01], [0.43, 0.78], [0.56, 1.02], [0.70, 0.90], [0.84, 1.07], [0.94, 0.95], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 1.02], [0.14, 0.88], [0.28, 1.00], [0.42, 0.78], [0.55, 1.02], [0.68, 0.91], [0.84, 1.15], [1.00, 1.00]])
+		"cup_handle":
+			match variant:
+				"deep_cup_shallow_handle":
+					return _chart_anchor_rows([[0.00, 1.10], [0.16, 0.96], [0.36, 0.76], [0.56, 0.94], [0.72, 1.10], [0.82, 1.05], [0.92, 1.16], [1.00, 1.00]])
+				"long_handle_grind":
+					return _chart_anchor_rows([[0.00, 1.08], [0.18, 0.97], [0.38, 0.84], [0.58, 0.96], [0.70, 1.08], [0.84, 1.00], [0.94, 1.11], [1.00, 1.00]])
+				"failed_handle":
+					return _chart_anchor_rows([[0.00, 1.08], [0.16, 0.96], [0.36, 0.84], [0.58, 0.96], [0.72, 1.10], [0.84, 1.00], [0.92, 0.94], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 1.08], [0.16, 0.96], [0.36, 0.84], [0.58, 0.97], [0.72, 1.10], [0.82, 1.03], [0.92, 1.16], [1.00, 1.00]])
+		"ascending_triangle":
+			match variant:
+				"tight_coil":
+					return _chart_anchor_rows([[0.00, 0.96], [0.14, 1.07], [0.30, 0.98], [0.44, 1.08], [0.58, 1.01], [0.72, 1.09], [0.88, 1.12], [1.00, 1.00]])
+				"throwback_retest":
+					return _chart_anchor_rows([[0.00, 0.98], [0.14, 1.08], [0.28, 0.95], [0.42, 1.08], [0.56, 0.99], [0.70, 1.14], [0.80, 1.06], [0.92, 1.17], [1.00, 1.00]])
+				"fake_breakout":
+					return _chart_anchor_rows([[0.00, 0.98], [0.14, 1.08], [0.28, 0.95], [0.42, 1.08], [0.56, 0.99], [0.70, 1.13], [0.82, 0.95], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 0.98], [0.14, 1.08], [0.28, 0.94], [0.42, 1.08], [0.56, 0.98], [0.70, 1.10], [0.84, 1.17], [1.00, 1.00]])
+		"rounded_base":
+			match variant:
+				"long_accumulation_base":
+					return _chart_anchor_rows([[0.00, 1.04], [0.18, 0.95], [0.40, 0.86], [0.60, 0.91], [0.76, 1.02], [0.90, 1.10], [1.00, 1.00]])
+				"sleepy_base":
+					return _chart_anchor_rows([[0.00, 1.02], [0.20, 0.96], [0.42, 0.91], [0.62, 0.94], [0.80, 1.02], [0.92, 1.05], [1.00, 1.00]])
+				"base_failure":
+					return _chart_anchor_rows([[0.00, 1.06], [0.18, 0.95], [0.40, 0.86], [0.60, 0.92], [0.74, 1.04], [0.88, 0.92], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 1.05], [0.18, 0.94], [0.38, 0.86], [0.56, 0.92], [0.74, 1.06], [0.90, 1.13], [1.00, 1.00]])
+		"bull_flag":
+			match variant:
+				"high_tight_flag":
+					return _chart_anchor_rows([[0.00, 0.94], [0.16, 1.10], [0.32, 1.26], [0.46, 1.22], [0.60, 1.18], [0.78, 1.28], [1.00, 1.00]])
+				"deep_flag_recovery":
+					return _chart_anchor_rows([[0.00, 0.96], [0.18, 1.10], [0.34, 1.24], [0.52, 1.08], [0.66, 1.04], [0.84, 1.19], [1.00, 1.00]])
+				"failed_flag":
+					return _chart_anchor_rows([[0.00, 0.96], [0.18, 1.08], [0.35, 1.22], [0.52, 1.12], [0.66, 1.04], [0.82, 0.96], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 0.96], [0.18, 1.08], [0.35, 1.22], [0.52, 1.15], [0.66, 1.10], [0.82, 1.22], [1.00, 1.00]])
+		"breakout_retest":
+			match variant:
+				"deep_retest_hold":
+					return _chart_anchor_rows([[0.00, 0.98], [0.18, 1.02], [0.36, 1.00], [0.54, 1.15], [0.70, 1.01], [0.86, 1.17], [1.00, 1.00]])
+				"stair_step_retest":
+					return _chart_anchor_rows([[0.00, 0.96], [0.18, 1.02], [0.34, 1.00], [0.50, 1.10], [0.62, 1.04], [0.76, 1.16], [0.90, 1.23], [1.00, 1.00]])
+				"failed_retest":
+					return _chart_anchor_rows([[0.00, 0.98], [0.18, 1.02], [0.36, 1.00], [0.54, 1.15], [0.68, 1.05], [0.82, 0.94], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 0.98], [0.18, 1.02], [0.36, 1.00], [0.54, 1.15], [0.68, 1.06], [0.84, 1.20], [1.00, 1.00]])
+		"higher_low_accumulation":
+			match variant:
+				"shakeout_then_markup":
+					return _chart_anchor_rows([[0.00, 0.98], [0.14, 0.88], [0.28, 1.00], [0.42, 0.84], [0.56, 1.05], [0.72, 0.99], [0.88, 1.16], [1.00, 1.00]])
+				"quiet_absorption":
+					return _chart_anchor_rows([[0.00, 0.98], [0.18, 0.93], [0.34, 1.00], [0.50, 0.96], [0.66, 1.06], [0.80, 1.02], [0.92, 1.10], [1.00, 1.00]])
+				"failed_accumulation":
+					return _chart_anchor_rows([[0.00, 0.98], [0.16, 0.88], [0.30, 1.00], [0.44, 0.92], [0.58, 1.06], [0.74, 0.94], [0.90, 0.90], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 0.98], [0.16, 0.88], [0.30, 1.00], [0.44, 0.92], [0.58, 1.06], [0.72, 0.98], [0.88, 1.13], [1.00, 1.00]])
+		"double_top":
+			match variant:
+				"second_top_lower":
+					return _chart_anchor_rows([[0.00, 0.96], [0.18, 1.16], [0.34, 0.98], [0.50, 1.11], [0.66, 0.92], [0.84, 0.85], [1.00, 1.00]])
+				"range_top_chop":
+					return _chart_anchor_rows([[0.00, 0.98], [0.18, 1.14], [0.34, 0.99], [0.50, 1.13], [0.66, 0.97], [0.82, 1.04], [1.00, 1.00]])
+				"failed_breakdown":
+					return _chart_anchor_rows([[0.00, 0.96], [0.18, 1.16], [0.34, 0.98], [0.50, 1.15], [0.66, 0.92], [0.80, 0.98], [0.92, 1.08], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 0.96], [0.18, 1.16], [0.34, 0.98], [0.50, 1.15], [0.66, 0.92], [0.84, 0.86], [1.00, 1.00]])
+		"head_shoulders":
+			match variant:
+				"right_shoulder_chop":
+					return _chart_anchor_rows([[0.00, 0.96], [0.16, 1.12], [0.30, 0.98], [0.44, 1.24], [0.58, 0.98], [0.72, 1.10], [0.84, 0.95], [0.94, 0.88], [1.00, 1.00]])
+				"slanted_neckline":
+					return _chart_anchor_rows([[0.00, 0.98], [0.16, 1.12], [0.30, 1.00], [0.44, 1.24], [0.58, 0.96], [0.72, 1.09], [0.88, 0.86], [1.00, 1.00]])
+				"failed_breakdown":
+					return _chart_anchor_rows([[0.00, 0.96], [0.16, 1.12], [0.30, 0.98], [0.44, 1.24], [0.58, 0.98], [0.72, 1.10], [0.86, 0.94], [0.94, 1.06], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 0.96], [0.16, 1.12], [0.30, 0.98], [0.44, 1.24], [0.58, 0.98], [0.72, 1.10], [0.88, 0.88], [1.00, 1.00]])
+		"descending_triangle":
+			match variant:
+				"tight_floor_pressure":
+					return _chart_anchor_rows([[0.00, 1.08], [0.16, 0.96], [0.30, 1.03], [0.44, 0.96], [0.58, 1.00], [0.72, 0.95], [0.86, 0.92], [1.00, 1.00]])
+				"breakdown_retest":
+					return _chart_anchor_rows([[0.00, 1.08], [0.16, 0.96], [0.30, 1.04], [0.44, 0.96], [0.58, 1.00], [0.72, 0.86], [0.84, 0.94], [1.00, 1.00]])
+				"bear_trap_reclaim":
+					return _chart_anchor_rows([[0.00, 1.08], [0.16, 0.96], [0.30, 1.04], [0.44, 0.96], [0.58, 1.00], [0.72, 0.88], [0.86, 1.04], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 1.08], [0.16, 0.96], [0.30, 1.04], [0.44, 0.96], [0.58, 1.00], [0.72, 0.95], [0.88, 0.84], [1.00, 1.00]])
+		"lower_high_distribution":
+			match variant:
+				"fast_distribution":
+					return _chart_anchor_rows([[0.00, 1.10], [0.14, 1.20], [0.28, 1.00], [0.42, 1.08], [0.56, 0.92], [0.72, 0.96], [0.88, 0.82], [1.00, 1.00]])
+				"range_distribution":
+					return _chart_anchor_rows([[0.00, 1.06], [0.16, 1.16], [0.30, 0.99], [0.44, 1.10], [0.58, 0.96], [0.72, 1.04], [0.88, 0.94], [1.00, 1.00]])
+				"failed_distribution":
+					return _chart_anchor_rows([[0.00, 1.08], [0.16, 1.18], [0.30, 0.98], [0.44, 1.10], [0.58, 0.94], [0.72, 1.02], [0.88, 1.10], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 1.08], [0.16, 1.18], [0.30, 0.98], [0.44, 1.10], [0.58, 0.94], [0.72, 1.02], [0.88, 0.86], [1.00, 1.00]])
+		"failed_breakout":
+			match variant:
+				"double_fakeout":
+					return _chart_anchor_rows([[0.00, 0.98], [0.16, 1.06], [0.32, 1.00], [0.48, 1.16], [0.60, 1.02], [0.72, 1.14], [0.84, 0.90], [1.00, 1.00]])
+				"late_failed_breakout":
+					return _chart_anchor_rows([[0.00, 0.98], [0.20, 1.04], [0.40, 1.00], [0.62, 1.08], [0.78, 1.20], [0.88, 0.92], [1.00, 1.00]])
+				"failed_then_recovery":
+					return _chart_anchor_rows([[0.00, 0.98], [0.18, 1.06], [0.36, 1.02], [0.54, 1.18], [0.66, 0.92], [0.84, 1.06], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 0.98], [0.18, 1.06], [0.36, 1.02], [0.54, 1.18], [0.64, 1.05], [0.78, 0.92], [1.00, 1.00]])
+		"breakdown_retest":
+			match variant:
+				"deep_retest_reject":
+					return _chart_anchor_rows([[0.00, 1.06], [0.22, 0.98], [0.44, 1.02], [0.62, 0.84], [0.76, 0.98], [0.90, 0.82], [1.00, 1.00]])
+				"grind_lower":
+					return _chart_anchor_rows([[0.00, 1.08], [0.18, 1.00], [0.34, 1.02], [0.50, 0.92], [0.66, 0.96], [0.82, 0.88], [1.00, 1.00]])
+				"failed_breakdown_reclaim":
+					return _chart_anchor_rows([[0.00, 1.06], [0.22, 0.98], [0.44, 1.02], [0.62, 0.86], [0.76, 0.96], [0.90, 1.08], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 1.06], [0.22, 0.98], [0.44, 1.02], [0.62, 0.86], [0.76, 0.94], [0.90, 0.84], [1.00, 1.00]])
+		"sma_resistance_rejection":
+			match variant:
+				"repeated_rejections":
+					return _chart_anchor_rows([[0.00, 1.08], [0.16, 0.98], [0.30, 1.04], [0.44, 0.94], [0.58, 1.01], [0.72, 0.92], [0.86, 0.98], [1.00, 1.00]])
+				"rolling_lower_sma":
+					return _chart_anchor_rows([[0.00, 1.10], [0.18, 1.00], [0.34, 1.04], [0.50, 0.96], [0.66, 0.99], [0.82, 0.90], [1.00, 1.00]])
+				"sma_reclaim":
+					return _chart_anchor_rows([[0.00, 1.08], [0.18, 0.98], [0.34, 1.04], [0.50, 0.94], [0.66, 1.00], [0.82, 1.08], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 1.08], [0.18, 0.98], [0.34, 1.04], [0.50, 0.94], [0.66, 1.00], [0.82, 0.88], [1.00, 1.00]])
+		"pump_dump":
+			match variant:
+				"late_pump_dump":
+					return _chart_anchor_rows([[0.00, 0.96], [0.20, 1.02], [0.40, 0.98], [0.58, 1.18], [0.72, 1.48], [0.82, 0.78], [1.00, 1.00]])
+				"stair_pump_dump":
+					return _chart_anchor_rows([[0.00, 0.94], [0.16, 1.04], [0.30, 1.16], [0.44, 1.34], [0.56, 1.18], [0.68, 0.78], [0.84, 0.94], [1.00, 1.00]])
+				"multi_spike_dump":
+					return _chart_anchor_rows([[0.00, 0.94], [0.14, 1.08], [0.28, 1.34], [0.42, 1.02], [0.54, 1.44], [0.64, 0.76], [0.82, 0.96], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 0.94], [0.16, 1.05], [0.34, 1.42], [0.48, 1.18], [0.60, 0.76], [0.76, 0.94], [1.00, 1.00]])
+		"false_breakout":
+			match variant:
+				"double_false_breakout":
+					return _chart_anchor_rows([[0.00, 0.98], [0.16, 1.05], [0.30, 0.98], [0.44, 1.24], [0.56, 0.96], [0.70, 1.18], [0.84, 0.90], [1.00, 1.00]])
+				"range_whipsaw":
+					return _chart_anchor_rows([[0.00, 1.00], [0.16, 1.10], [0.32, 0.90], [0.48, 1.16], [0.64, 0.88], [0.82, 1.06], [1.00, 1.00]])
+				"spring_reclaim":
+					return _chart_anchor_rows([[0.00, 1.02], [0.20, 0.96], [0.38, 0.88], [0.54, 1.10], [0.68, 0.98], [0.84, 1.12], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 0.98], [0.20, 1.04], [0.38, 0.98], [0.54, 1.28], [0.64, 0.96], [0.82, 0.90], [1.00, 1.00]])
+		"sharp_squeeze":
+			match variant:
+				"squeeze_fade":
+					return _chart_anchor_rows([[0.00, 0.92], [0.18, 0.88], [0.36, 0.96], [0.52, 1.36], [0.66, 1.14], [0.82, 0.94], [1.00, 1.00]])
+				"late_squeeze":
+					return _chart_anchor_rows([[0.00, 0.94], [0.22, 0.90], [0.44, 0.96], [0.66, 1.04], [0.82, 1.38], [0.92, 1.18], [1.00, 1.00]])
+				"two_leg_squeeze":
+					return _chart_anchor_rows([[0.00, 0.92], [0.18, 0.88], [0.34, 1.08], [0.48, 0.98], [0.62, 1.34], [0.78, 1.18], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 0.92], [0.18, 0.88], [0.36, 0.96], [0.52, 1.34], [0.66, 1.18], [0.82, 1.04], [1.00, 1.00]])
+		"rug_pull_volume":
+			match variant:
+				"delayed_rug_pull":
+					return _chart_anchor_rows([[0.00, 0.96], [0.20, 1.04], [0.40, 1.12], [0.58, 1.34], [0.70, 0.78], [0.84, 0.88], [1.00, 1.00]])
+				"stair_step_rug":
+					return _chart_anchor_rows([[0.00, 0.96], [0.16, 1.06], [0.32, 1.20], [0.48, 1.30], [0.60, 1.04], [0.72, 0.78], [1.00, 1.00]])
+				"rebound_after_rug":
+					return _chart_anchor_rows([[0.00, 0.96], [0.18, 1.10], [0.36, 1.30], [0.50, 1.22], [0.58, 0.78], [0.76, 1.02], [1.00, 1.00]])
+				_:
+					return _chart_anchor_rows([[0.00, 0.96], [0.18, 1.10], [0.36, 1.30], [0.50, 1.22], [0.58, 0.78], [0.76, 0.88], [1.00, 1.00]])
+	match variant:
+		"tightening_range":
+			return _chart_anchor_rows([[0.00, 1.00], [0.16, 1.10], [0.32, 0.92], [0.48, 1.06], [0.64, 0.96], [0.82, 1.04], [1.00, 1.00]])
+		"shakeout_range":
+			return _chart_anchor_rows([[0.00, 1.00], [0.16, 0.90], [0.32, 1.08], [0.48, 0.94], [0.64, 1.10], [0.82, 0.92], [1.00, 1.00]])
+		"range_break_fake":
+			return _chart_anchor_rows([[0.00, 1.00], [0.18, 1.08], [0.34, 0.94], [0.52, 1.16], [0.66, 0.96], [0.86, 1.04], [1.00, 1.00]])
+		_:
+			return _chart_anchor_rows([[0.00, 1.00], [0.18, 1.08], [0.34, 0.94], [0.52, 1.07], [0.70, 0.95], [0.86, 1.05], [1.00, 1.00]])
+
+
+func _chart_anchor_rows(rows: Array) -> Array:
+	var anchors: Array = []
+	for row_value in rows:
+		var row: Array = row_value
+		anchors.append({"t": float(row[0]), "m": float(row[1])})
+	return anchors
+
+
+func _interpolate_chart_shape(anchors: Array, progress: float) -> float:
+	if anchors.is_empty():
+		return 1.0
+	var previous_anchor: Dictionary = anchors[0]
+	for anchor_index in range(1, anchors.size()):
+		var next_anchor: Dictionary = anchors[anchor_index]
+		var left_t: float = float(previous_anchor.get("t", 0.0))
+		var right_t: float = float(next_anchor.get("t", 1.0))
+		if progress <= right_t:
+			var local_t: float = clamp((progress - left_t) / max(right_t - left_t, 0.0001), 0.0, 1.0)
+			local_t = local_t * local_t * (3.0 - (2.0 * local_t))
+			return lerp(float(previous_anchor.get("m", 1.0)), float(next_anchor.get("m", 1.0)), local_t)
+		previous_anchor = next_anchor
+	return float(anchors[anchors.size() - 1].get("m", 1.0))
+
+
+func _chart_wave_component(chart_profile: Dictionary, progress: float, run_seed: int, company_id: String) -> float:
+	var archetype: String = str(chart_profile.get("archetype", "range_bound"))
+	var volatility_style: String = str(chart_profile.get("volatility_style", "normal"))
+	var amplitude: float = 0.018
+	var cycles: float = 7.0
+	if volatility_style == "smooth":
+		amplitude = 0.010
+		cycles = 4.0
+	elif volatility_style == "swingy":
+		amplitude = 0.026
+		cycles = 6.0
+	elif volatility_style == "spiky" or archetype == "gorengan":
+		amplitude = 0.036 if archetype == "gorengan" else 0.032
+		cycles = 8.4 if archetype == "gorengan" else 7.6
+	elif volatility_style == "heavy":
+		amplitude = 0.024
+		cycles = 5.0
+	var phase: float = _sample_noise(run_seed, company_id, "chart_profile_wave_phase", 0.0, TAU, 1)
+	return sin((progress * TAU * cycles) + phase) * amplitude * sin(progress * PI)
+
+
+func _chart_noise_scale(volatility_style: String) -> float:
+	match volatility_style:
+		"smooth":
+			return 0.006
+		"swingy":
+			return 0.014
+		"spiky":
+			return 0.018
+		"heavy":
+			return 0.012
+	return 0.010
+
+
+func _apply_chart_sma_behavior(close_price: float, closes: Array, chart_profile: Dictionary, progress: float) -> float:
+	var behavior: String = str(chart_profile.get("sma_behavior", "ignored"))
+	if behavior == "ignored" or progress < 0.18:
+		return close_price
+	var period: int = int(chart_profile.get("preferred_sma_period", 20))
+	var sma_value: float = _chart_sma_value(closes, period)
+	if sma_value <= 0.0:
+		return close_price
+	var distance: float = (close_price - sma_value) / max(sma_value, 1.0)
+	if behavior == "support" and distance >= -0.070 and distance <= 0.030:
+		return lerp(close_price, sma_value * 1.012, 0.42)
+	if behavior == "resistance" and distance >= -0.030 and distance <= 0.075:
+		return lerp(close_price, sma_value * 0.988, 0.40)
+	if behavior == "magnet" and absf(distance) <= 0.12:
+		return lerp(close_price, sma_value, 0.18)
+	return close_price
+
+
+func _chart_sma_value(closes: Array, period: int) -> float:
+	if period <= 0 or closes.size() < period:
+		return 0.0
+	var total: float = 0.0
+	for index in range(closes.size() - period, closes.size()):
+		total += float(closes[index])
+	return total / float(period)
+
+
+func _chart_intraday_range_ratio(
+	chart_profile: Dictionary,
+	day_move_ratio: float,
+	run_seed: int,
+	company_id: String,
+	bar_index: int
+) -> float:
+	var volatility_style: String = str(chart_profile.get("volatility_style", "normal"))
+	var base_range: float = 0.010
+	if volatility_style == "smooth":
+		base_range = 0.006
+	elif volatility_style == "swingy":
+		base_range = 0.014
+	elif volatility_style == "spiky":
+		base_range = 0.024
+	elif volatility_style == "heavy":
+		base_range = 0.016
+	var noise: float = _sample_noise(run_seed, company_id, "chart_profile_intraday", 0.65, 1.45, bar_index + 1)
+	return clamp(max(day_move_ratio * 0.85, base_range * noise), 0.003, 0.090)
+
+
+func _chart_volume_multiplier(
+	chart_profile: Dictionary,
+	progress: float,
+	daily_return: float,
+	run_seed: int,
+	company_id: String,
+	bar_index: int
+) -> float:
+	var behavior: String = str(chart_profile.get("volume_behavior", "neutral"))
+	var archetype: String = str(chart_profile.get("archetype", "range_bound"))
+	var multiplier: float = 0.92
+	if behavior == "accumulation":
+		multiplier = 0.72 if progress < 0.52 else 1.05
+		if progress >= 0.58 and daily_return > 0.006:
+			multiplier += 0.72
+		if progress >= 0.74 and daily_return > 0.012:
+			multiplier += 0.46
+	elif behavior == "distribution":
+		multiplier = 1.05
+		if progress >= 0.42 and daily_return < -0.006:
+			multiplier += 0.82
+		if progress >= 0.62 and daily_return < -0.012:
+			multiplier += 0.56
+	elif behavior == "spike" or archetype == "gorengan":
+		multiplier = 1.10 + absf(daily_return) * 12.0
+		var spike_roll: float = _sample_noise(run_seed, company_id, "chart_profile_volume_spike", 0.0, 1.0, bar_index + 1)
+		if spike_roll > 0.935 or (progress > 0.42 and progress < 0.64 and absf(daily_return) > 0.018):
+			multiplier += 2.2
+	else:
+		if absf(daily_return) > 0.010:
+			multiplier += 0.28
+	var noise: float = _sample_noise(run_seed, company_id, "chart_profile_volume_noise", 0.82, 1.22, bar_index + 1)
+	return clamp(multiplier * noise, 0.32, 5.8)
 
 
 func _statement_value(statement_lines: Array, line_id: String) -> float:

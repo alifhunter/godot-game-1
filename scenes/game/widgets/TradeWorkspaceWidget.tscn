@@ -60,6 +60,16 @@ button_pressed = true
 toggle_mode = true
 text = "1M"
 
+[node name="Range3MButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow"]
+size_flags_horizontal = 3
+toggle_mode = true
+text = "3M"
+
+[node name="Range6MButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow"]
+size_flags_horizontal = 3
+toggle_mode = true
+text = "6M"
+
 [node name="Range1YButton" type="Button" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/Chart/ChartRangeRow"]
 size_flags_horizontal = 3
 toggle_mode = true

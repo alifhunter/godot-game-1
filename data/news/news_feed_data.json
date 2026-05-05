@@ -90,6 +90,28 @@
       "contact_id": "andika_brokerage_sales",
       "portrait_asset": "",
       "lead_frequency": 0.2
+    },
+    {
+      "id": "nabila_safitri",
+      "display_name": "Nabila Safitri",
+      "role": "Daily Brief Writer",
+      "outlet_ids": ["gorengan_daily"],
+      "specialties": ["public_mover", "public_brief", "market_wrap", "sector_rotation"],
+      "sector_ids": ["finance", "consumer", "industrial", "tech", "health", "transport"],
+      "contact_id": "",
+      "portrait_asset": "",
+      "lead_frequency": 0.0
+    },
+    {
+      "id": "dimas_prasetyo",
+      "display_name": "Dimas Prasetyo",
+      "role": "Retail Desk Reporter",
+      "outlet_ids": ["gorengan_daily"],
+      "specialties": ["public_mover", "public_brief", "company", "sector_rotation", "corporate_meeting"],
+      "sector_ids": ["finance", "property", "basicindustry", "energy", "infra", "noncyclical"],
+      "contact_id": "",
+      "portrait_asset": "",
+      "lead_frequency": 0.0
     }
   ],
   "progress_labels": {
@@ -294,11 +316,11 @@
   "body_slots": {
     "market_reaction_templates": {
       "market_wrap": [
-        "On the tape, {breadth_summary}. That breadth matters because {market_jargon}, so the close was not just about the index print.",
+        "By the close, {breadth_summary}. That breadth matters because {market_jargon}, so the session was not only about the index print.",
         "The session left a mixed trail: {breadth_summary}. Ritel money had names to chase, but the board did not look equally strong everywhere."
       ],
       "corporate_action": [
-        "The tape around {focus_label} is doing what corporate-action stories often do: it is pulling in faster money before the full paperwork is easy to read.",
+        "Trading around {focus_label} is doing what corporate-action stories often do: it is pulling in faster money before the full paperwork is easy to read.",
         "For traders, the important part is not only the headline. It is whether bandar-style accumulation keeps showing up after the first noisy move."
       ],
       "corporate_meeting": [
@@ -310,7 +332,7 @@
         "For earnings, the first reaction is only part of the story. The better clue is whether buyers defend the name after the headline has cooled."
       ],
       "rumor": [
-        "Rumor-driven tape is fragile. If ritel chases too fast while volume thins, the story can reverse before anyone gets a clean explanation.",
+        "Rumor-driven moves are fragile. If ritel chases too fast while volume thins, the story can reverse before anyone gets a clean explanation.",
         "The early move is useful, but not clean. Traders are watching whether the bid is real or just a noisy rotation through hot names."
       ],
       "sector_rotation": [
@@ -319,19 +341,19 @@
       ],
       "management": [
         "Management headlines usually need a second read. The market first trades the surprise, then decides whether the change actually improves execution.",
-        "The tape is treating the people angle as important, but the next proof will come from whether operations or guidance start to look cleaner."
+        "The market reaction is treating the people angle as important, but the next proof will come from whether operations or guidance start to look cleaner."
       ],
       "special": [
         "Macro-style stories rarely hit every stock the same way. The first filter is who has exposure, and the second is who already had weak holders.",
         "The wider market is reacting first and asking questions later, which makes breadth and sector leadership more important than the index move alone."
       ],
       "company": [
-        "The company-specific tape is still the useful clue. {focus_label} is {price_action_label}, and {flow_label}.",
+        "The company-specific price action is still the useful clue. {focus_label} is {price_action_label}, and {flow_label}.",
         "For a single-name story, traders are less interested in perfect wording and more interested in whether the bid survives the first reaction."
       ],
       "fallback": [
         "Across the market, {breadth_summary}. That keeps the read practical: price action has to confirm the story before conviction improves.",
-        "The headline gives traders a reason to look, but the tape still has to prove whether the move deserves more attention."
+        "The headline gives traders a reason to look, but price action still has to prove whether the move deserves more attention."
       ]
     },
     "source_color_templates": {
@@ -341,7 +363,7 @@
       ],
       "corporate_action": [
         "People close to the flow are still careful with wording. The useful clue is timing: when formal steps appear, old whispers become much easier to trade.",
-        "One market source framed it simply: if the corporate route is real, the next public step should leave a cleaner trail than today's tape."
+        "One market source framed it simply: if the corporate route is real, the next public step should leave a cleaner trail than today's trading activity."
       ],
       "corporate_meeting": [
         "Meeting-linked stories are usually about who has prepared before the notice becomes obvious. That is why the calendar matters as much as the headline.",
@@ -349,7 +371,7 @@
       ],
       "earnings": [
         "Analysts are likely to focus on whether the result changes the next few quarters, while shorter-term traders focus on whether volume confirms the move.",
-        "The cleanest earnings reactions usually happen when the numbers and the tape point in the same direction. This one still needs that second confirmation."
+        "The cleanest earnings reactions usually happen when the numbers and price action point in the same direction. This one still needs that second confirmation."
       ],
       "rumor": [
         "A broker-side source would still call this early. The story is tradable, but not yet the kind of clean signal that lets everyone relax.",
@@ -369,11 +391,11 @@
       ],
       "company": [
         "The name now has a reason to stay on watchlists, but conviction still depends on whether volume and price action agree.",
-        "For now, the story is useful because it gives traders a focus. It becomes more serious only if the tape keeps confirming it."
+        "For now, the story is useful because it gives traders a focus. It becomes more serious only if trading activity keeps confirming it."
       ],
       "fallback": [
         "The desk read is still practical: watch price, volume, and whether the next session respects today's direction.",
-        "The story has enough shape to matter, but not enough certainty to ignore the tape."
+        "The story has enough shape to matter, but not enough certainty to ignore price action."
       ]
     },
     "continuity_templates": {
@@ -385,7 +407,7 @@
       "without_prior": [
         "There is not much public history around this item yet, so the first clean read still has to come from follow-through.",
         "For now this is a fresh read, which means the next session will carry more information than the first headline.",
-        "Because the public trail is still thin, traders are treating the tape as the first real filter."
+        "Because the public trail is still thin, traders are treating price action as the first real filter."
       ]
     },
     "closing_templates": {
@@ -395,7 +417,7 @@
       ],
       "corporate_action": [
         "The next useful clue is whether a formal notice, filing, or meeting path appears. Until then, the story remains tradable but not fully settled.",
-        "Players watching this name should separate loud tape from confirmed steps. The better edge usually comes when both start pointing the same way."
+        "Market watchers should separate loud price action from confirmed steps. The better edge usually comes when both start pointing the same way."
       ],
       "corporate_meeting": [
         "The meeting path gives the story a date to orbit. Now the market has to decide whether the agenda is already priced or still has room to surprise.",
@@ -419,15 +441,15 @@
       ],
       "special": [
         "The wider story is still moving, so the next session should be read through sector leadership rather than only the index.",
-        "For players, the useful clue is who keeps moving after the first shock has faded."
+        "For market watchers, the useful clue is who keeps moving after the first shock has faded."
       ],
       "company": [
-        "The next session should show whether this becomes a real setup or just another headline that briefly moved the tape.",
+        "The next session should show whether this becomes a real setup or just another headline that briefly moved the price.",
         "The story has earned attention. Keeping that attention will depend on cleaner follow-through."
       ],
       "fallback": [
         "{watch_phrase}",
-        "For now, the best read is to keep the headline in context and let the next tape confirm or reject it."
+        "For now, the best read is to keep the headline in context and let the next session confirm or reject it."
       ]
     }
   },
@@ -452,6 +474,10 @@
           "{focus_label} has moved and now the market wants more proof",
           "{focus_label} is no longer just a story and now has to hold up"
         ],
+        "public_brief": [
+          "{focus_label} draws public attention after today's move",
+          "{focus_label} gives traders something fresh to watch"
+        ],
         "recap": [
           "{focus_label} is still being talked about after the earlier move",
           "The {focus_label} story is not over just yet"
@@ -473,6 +499,10 @@
         "analysis": [
           "{analysis_phrase}, {subject_reference} is now {price_action_label} while people ask whether the move can keep going.",
           "{detail_blend}. After the first jump, attention shifts to whether the story still feels strong."
+        ],
+        "public_brief": [
+          "{detail_blend}",
+          "{subject_reference} stood out today, and traders now want to see whether the next session confirms the move."
         ],
         "recap": [
           "{subject_reference} is still being watched because the earlier news has not fully faded away.",
@@ -496,6 +526,10 @@
           "After the first move, the market starts asking whether the story is actually strong enough to last.",
           "{focus_label} has already pulled attention. The next test is whether it can keep that attention."
         ],
+        "public_brief": [
+          "{focus_label} was visible on public screens today, so the next session matters for confirmation.",
+          "Today's move put {focus_label} on more watchlists, but one session is not enough to settle the read."
+        ],
         "recap": [
           "An older {focus_label} story can still matter when people have not fully moved on.",
           "The headline may be older, but {focus_label} is still feeling the after-effect."
@@ -511,7 +545,7 @@
         "{formal_phrase}, {detail_blend}. That is why people are {reaction_phrase}."
       ],
       "impact_templates": [
-        "For regular players, the key question is simple: does {focus_label} stay strong after the first burst of attention? {watch_phrase}",
+        "For regular traders, the key question is simple: does {focus_label} stay strong after the first burst of attention? {watch_phrase}",
         "The real test is whether people stay interested in {focus_label} once the headline is no longer brand new. {watch_phrase}",
         "If interest fades too fast, this can quickly turn into just another short-lived story. {watch_phrase}"
       ]
@@ -679,7 +713,7 @@
         "{formal_phrase}, {detail_blend}. In response, people are {reaction_phrase}."
       ],
       "impact_templates": [
-        "For more patient players, the main question is whether this story lasts for several sessions or fades quickly. {watch_phrase}",
+        "For more patient investors, the main question is whether this story lasts for several sessions or fades quickly. {watch_phrase}",
         "What happens next depends on whether the market still cares once attention moves elsewhere. {watch_phrase}",
         "If the next few sessions do not support the story, the early excitement may fade fast. {watch_phrase}"
       ]

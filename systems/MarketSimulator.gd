@@ -2,6 +2,10 @@ extends RefCounted
 
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
 const STABLE_RNG = preload("res://systems/StableRng.gd")
+const CHART_GAP_STYLES := ["none", "news_gap", "breakout_gap", "exhaustion_gap", "rug_gap", "mixed"]
+const CHART_GAP_BIASES := ["up", "down", "mixed"]
+const CHART_GAP_FREQUENCIES := ["rare", "moderate", "active"]
+const CHART_GAP_FOLLOWTHROUGH := ["hold", "fade", "fill", "continue"]
 
 var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
 var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
@@ -1032,6 +1036,7 @@ func _calculate_daily_change(
 	daily_change += event_bias * 0.8
 	daily_change += broker_pressure * 0.03 * broker_impact_multiplier
 	daily_change += float(volume_context.get("lead_price_bias", 0.0)) * broker_impact_multiplier
+	daily_change += float(volume_context.get("technical_price_bias", 0.0))
 	daily_change += float(volume_context.get("buying_exhaustion_drag", 0.0))
 	daily_change += float(volume_context.get("distribution_drag", 0.0))
 	daily_change += momentum_component
@@ -1193,6 +1198,17 @@ func _build_volume_activity_context(
 	distribution_drag += clamp(min(player_impact_ratio, 0.0) * lerp(0.004, 0.018, float_tightness), -0.045, 0.0)
 	if recent_drawdown > 0.06 and distribution_signal < 0.35:
 		distribution_drag *= 0.45
+	var technical_context: Dictionary = _build_technical_structure_context(
+		definition,
+		runtime,
+		event_bias,
+		net_pressure,
+		smart_money_pressure,
+		player_abs_ratio,
+		run_seed,
+		day_number,
+		company_id
+	)
 
 	var event_multiplier: float = 1.0 + min(absf(event_bias) * 6.0, 1.55) + max(event_volatility_multiplier - 1.0, 0.0) * 0.70
 	var broker_multiplier: float = 1.0 + absf(net_pressure) * 0.50 + absf(smart_money_pressure) * 0.35
@@ -1214,6 +1230,7 @@ func _build_volume_activity_context(
 		story_multiplier *
 		memory_multiplier *
 		exhaustion_multiplier *
+		float(technical_context.get("volume_multiplier", 1.0)) *
 		player_volume_multiplier *
 		lumpy_noise,
 		0.30,
@@ -1234,6 +1251,10 @@ func _build_volume_activity_context(
 		"buying_exhaustion_score": exhaustion_score,
 		"buying_exhaustion_drag": exhaustion_drag,
 		"distribution_drag": distribution_drag,
+		"technical_price_bias": float(technical_context.get("price_bias", 0.0)),
+		"technical_volume_multiplier": float(technical_context.get("volume_multiplier", 1.0)),
+		"technical_sma_period": int(technical_context.get("sma_period", 0)),
+		"technical_sma_behavior": str(technical_context.get("sma_behavior", "")),
 		"player_impact_ratio": player_impact_ratio,
 		"player_abs_ratio": player_abs_ratio,
 		"player_price_bias": player_price_bias,
@@ -1243,6 +1264,369 @@ func _build_volume_activity_context(
 		"player_sell_liquidity_consumed": float(player_flow.get("sell_liquidity_consumed", 0.0)),
 		"player_gross_free_float_pct": float(player_flow.get("gross_free_float_pct", 0.0))
 	}
+
+
+func _build_technical_structure_context(
+	definition: Dictionary,
+	runtime: Dictionary,
+	event_bias: float,
+	net_pressure: float,
+	smart_money_pressure: float,
+	player_abs_ratio: float,
+	run_seed: int,
+	day_number: int,
+	company_id: String
+) -> Dictionary:
+	var chart_profile: Dictionary = _chart_profile_from_definition(definition, run_seed, company_id)
+	var behavior: String = str(chart_profile.get("sma_behavior", "ignored"))
+	var archetype: String = str(chart_profile.get("archetype", "range_bound"))
+	var bias: String = str(chart_profile.get("bias", "sideways"))
+	var period: int = int(chart_profile.get("preferred_sma_period", 20))
+	var price_bars: Array = runtime.get("price_bars", [])
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
+	var sma_value: float = _technical_average_close(price_bars, period)
+	var price_bias: float = 0.0
+	var volume_multiplier: float = 1.0
+
+	if sma_value > 0.0 and behavior != "ignored":
+		var distance: float = (current_price - sma_value) / max(sma_value, 1.0)
+		if behavior == "support":
+			if distance >= -0.055 and distance <= 0.028:
+				price_bias = lerp(0.0012, 0.0060, clamp((0.028 - distance) / 0.083, 0.0, 1.0))
+				volume_multiplier += 0.12
+			elif distance < -0.085:
+				price_bias = -0.0022
+		elif behavior == "resistance":
+			if distance >= -0.028 and distance <= 0.070:
+				price_bias = -lerp(0.0012, 0.0060, clamp((distance + 0.028) / 0.098, 0.0, 1.0))
+				volume_multiplier += 0.16
+			elif distance > 0.105:
+				price_bias = 0.0018
+		elif behavior == "magnet" and absf(distance) <= 0.12:
+			price_bias = clamp(-distance * 0.035, -0.0038, 0.0038)
+	else:
+		if bias == "bullish":
+			price_bias = 0.0012
+		elif bias == "bearish":
+			price_bias = -0.0012
+
+	if archetype == "gorengan":
+		var fakeout_noise: float = _sim_noise(run_seed, company_id, "gorengan_technical_fakeout", -0.0052, 0.0052, day_number)
+		price_bias += fakeout_noise
+		volume_multiplier += 0.22 + absf(fakeout_noise) * 34.0
+		var spike_roll: float = _sim_noise(run_seed, company_id, "gorengan_technical_spike", 0.0, 1.0, day_number)
+		if spike_roll > 0.90:
+			volume_multiplier += 1.65
+	elif archetype == "accumulation" and price_bias > 0.0:
+		volume_multiplier += 0.12
+	elif archetype in ["distribution", "distressed"] and price_bias < 0.0:
+		volume_multiplier += 0.18
+
+	var override_drag: float = (
+		absf(event_bias) * 9.0 +
+		absf(net_pressure) * 0.34 +
+		absf(smart_money_pressure) * 0.30 +
+		player_abs_ratio * 0.12
+	)
+	var override_factor: float = clamp(1.0 - override_drag, 0.22, 1.0)
+	price_bias = clamp(price_bias * override_factor, -0.0065, 0.0065)
+	return {
+		"price_bias": price_bias,
+		"volume_multiplier": clamp(volume_multiplier, 0.82, 3.2),
+		"sma_period": period,
+		"sma_behavior": behavior,
+		"sma_value": sma_value
+	}
+
+
+func _chart_profile_from_definition(definition: Dictionary, run_seed: int, company_id: String) -> Dictionary:
+	var traits: Dictionary = definition.get("generation_traits", {})
+	var profile_value = traits.get("chart_profile", {})
+	if typeof(profile_value) == TYPE_DICTIONARY and not profile_value.is_empty():
+		var profile: Dictionary = profile_value.duplicate(true)
+		if not profile.has("preferred_sma_period"):
+			profile["preferred_sma_period"] = _derived_sma_period_for_chart_profile(traits, run_seed, company_id)
+		if not profile.has("sma_behavior"):
+			profile["sma_behavior"] = "support" if str(profile.get("bias", "sideways")) == "bullish" else "resistance"
+		if not profile.has("archetype"):
+			profile["archetype"] = "range_bound"
+		if not profile.has("bias"):
+			profile["bias"] = "sideways"
+		return _chart_profile_with_gap_defaults(profile, traits, run_seed, company_id)
+	return _derive_chart_profile_for_simulation(traits, run_seed, company_id)
+
+
+func _derive_chart_profile_for_simulation(traits: Dictionary, run_seed: int, company_id: String) -> Dictionary:
+	var story_heat: float = float(traits.get("story_heat", 0.5))
+	var float_tightness: float = float(traits.get("float_tightness", 0.5))
+	var liquidity_profile: float = float(traits.get("liquidity_profile", 0.5))
+	var balance_sheet_strength: float = float(traits.get("balance_sheet_strength", 0.5))
+	var growth_engine: float = float(traits.get("growth_engine", 0.5))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "chart_profile_sim_fallback", company_id])
+	var archetype: String = "range_bound"
+	if story_heat >= 0.66 and float_tightness >= 0.54 and liquidity_profile <= 0.58:
+		archetype = "gorengan"
+	elif balance_sheet_strength >= 0.62 and growth_engine >= 0.58:
+		archetype = "organic"
+	elif balance_sheet_strength <= 0.34:
+		archetype = "distressed"
+	elif rng.randf() < 0.34:
+		archetype = "accumulation"
+	var bias: String = "sideways"
+	if archetype in ["organic", "accumulation"]:
+		bias = "bullish"
+	elif archetype == "distressed":
+		bias = "bearish"
+	elif archetype == "gorengan":
+		bias = ["bullish", "bearish", "sideways"][rng.randi_range(0, 2)]
+	var behavior: String = "ignored"
+	if bias == "bullish":
+		behavior = "support"
+	elif bias == "bearish":
+		behavior = "resistance"
+	elif archetype == "range_bound":
+		behavior = "magnet"
+	var profile: Dictionary = {
+		"archetype": archetype,
+		"bias": bias,
+		"sma_behavior": behavior,
+		"preferred_sma_period": _derived_sma_period_for_chart_profile(traits, run_seed, company_id)
+	}
+	return _chart_profile_with_gap_defaults(profile, traits, run_seed, company_id)
+
+
+func _chart_profile_with_gap_defaults(
+	profile: Dictionary,
+	traits: Dictionary,
+	run_seed: int,
+	company_id: String
+) -> Dictionary:
+	var normalized: Dictionary = profile.duplicate(true)
+	var archetype: String = str(normalized.get("archetype", "range_bound"))
+	var bias: String = str(normalized.get("bias", "sideways"))
+	var story_heat: float = clamp(float(traits.get("story_heat", 0.5)), 0.0, 1.0)
+	var float_tightness: float = clamp(float(traits.get("float_tightness", 0.5)), 0.0, 1.0)
+	var quality_core: float = clamp(float(traits.get("balance_sheet_strength", 0.5)), 0.0, 1.0)
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "chart_profile_gap_sim_defaults", company_id])
+	if not normalized.has("chart_intent") or str(normalized.get("chart_intent", "")).is_empty():
+		normalized["chart_intent"] = _sim_chart_intent_for(archetype, bias, story_heat, quality_core, rng)
+	if not normalized.has("pattern_timeframe") or str(normalized.get("pattern_timeframe", "")).is_empty():
+		normalized["pattern_timeframe"] = _sim_chart_pattern_timeframe_for(str(normalized.get("chart_intent", "")), archetype, story_heat, rng)
+	if not normalized.has("gap_style") or not CHART_GAP_STYLES.has(str(normalized.get("gap_style", ""))):
+		normalized["gap_style"] = _sim_chart_gap_style_for(str(normalized.get("chart_intent", "")), archetype, bias, story_heat, rng)
+	if not normalized.has("gap_bias") or not CHART_GAP_BIASES.has(str(normalized.get("gap_bias", ""))):
+		normalized["gap_bias"] = _sim_chart_gap_bias_for(archetype, bias, str(normalized.get("gap_style", "")))
+	if not normalized.has("gap_frequency") or not CHART_GAP_FREQUENCIES.has(str(normalized.get("gap_frequency", ""))):
+		normalized["gap_frequency"] = _sim_chart_gap_frequency_for(str(normalized.get("chart_intent", "")), archetype, story_heat, float_tightness)
+	if not normalized.has("gap_followthrough") or not CHART_GAP_FOLLOWTHROUGH.has(str(normalized.get("gap_followthrough", ""))):
+		normalized["gap_followthrough"] = _sim_chart_gap_followthrough_for(str(normalized.get("gap_style", "")), bias, rng)
+	return normalized
+
+
+func _sim_chart_intent_for(
+	archetype: String,
+	bias: String,
+	story_heat: float,
+	quality_core: float,
+	rng: RandomNumberGenerator
+) -> String:
+	if archetype == "funda" or (quality_core >= 0.68 and story_heat < 0.62):
+		return "investing"
+	if archetype in ["accumulation", "cyclical"]:
+		return "swing_trading"
+	if archetype == "gorengan":
+		return "speculative" if rng.randf() < 0.52 + story_heat * 0.22 else "short_term_trading"
+	if archetype in ["distressed", "distribution"]:
+		return "short_term_trading" if bias == "bearish" else "swing_trading"
+	return "swing_trading" if rng.randf() < 0.58 else "short_term_trading"
+
+
+func _sim_chart_pattern_timeframe_for(
+	chart_intent: String,
+	archetype: String,
+	story_heat: float,
+	rng: RandomNumberGenerator
+) -> String:
+	match chart_intent:
+		"investing":
+			return "5y" if rng.randf() < 0.48 else "1y"
+		"swing_trading":
+			return "6m" if rng.randf() < 0.58 else "1y"
+		"short_term_trading":
+			return "1m" if story_heat > 0.68 and rng.randf() < 0.45 else "3m"
+		"speculative":
+			return "1m" if archetype == "gorengan" and rng.randf() < 0.58 else "3m"
+	return "1y"
+
+
+func _sim_chart_gap_style_for(
+	chart_intent: String,
+	archetype: String,
+	bias: String,
+	story_heat: float,
+	rng: RandomNumberGenerator
+) -> String:
+	if chart_intent == "investing" or archetype == "funda":
+		return "news_gap" if rng.randf() < 0.62 else "none"
+	if archetype == "gorengan" or chart_intent == "speculative":
+		return ["mixed", "rug_gap", "breakout_gap"][rng.randi_range(0, 2)]
+	if bias == "bullish" or archetype == "accumulation":
+		return "breakout_gap" if rng.randf() < 0.72 + story_heat * 0.12 else "news_gap"
+	if bias == "bearish" or archetype in ["distressed", "distribution"]:
+		return "rug_gap" if rng.randf() < 0.46 + story_heat * 0.15 else "exhaustion_gap"
+	return "mixed" if rng.randf() < 0.56 else "news_gap"
+
+
+func _sim_chart_gap_bias_for(archetype: String, bias: String, gap_style: String) -> String:
+	if gap_style == "breakout_gap":
+		return "up"
+	if gap_style in ["rug_gap", "exhaustion_gap"]:
+		return "down"
+	if archetype == "gorengan":
+		return "mixed"
+	if bias == "bullish":
+		return "up"
+	if bias == "bearish":
+		return "down"
+	return "mixed"
+
+
+func _sim_chart_gap_frequency_for(
+	chart_intent: String,
+	archetype: String,
+	story_heat: float,
+	float_tightness: float
+) -> String:
+	if chart_intent == "investing":
+		return "rare"
+	if (archetype == "gorengan" or chart_intent == "speculative") and story_heat + float_tightness >= 1.42:
+		return "active"
+	if story_heat + float_tightness >= 1.48:
+		return "active"
+	if chart_intent in ["swing_trading", "short_term_trading"]:
+		return "moderate"
+	return "rare"
+
+
+func _sim_chart_gap_followthrough_for(gap_style: String, bias: String, rng: RandomNumberGenerator) -> String:
+	if gap_style == "breakout_gap":
+		return "continue" if rng.randf() < 0.48 or bias == "bullish" else "hold"
+	if gap_style in ["rug_gap", "exhaustion_gap"]:
+		return "continue" if bias == "bearish" and rng.randf() < 0.42 else "fade"
+	if gap_style == "mixed":
+		return "fade" if rng.randf() < 0.54 else "fill"
+	return "hold" if rng.randf() < 0.45 else "fill"
+
+
+func _live_chart_gap_bias(
+	chart_profile: Dictionary,
+	daily_change_pct: float,
+	event_bias: float,
+	broker_flow: Dictionary,
+	volume_context: Dictionary,
+	run_seed: int,
+	day_number: int,
+	company_id: String
+) -> float:
+	var gap_style: String = str(chart_profile.get("gap_style", "none"))
+	if gap_style == "none":
+		return 0.0
+	var frequency: String = str(chart_profile.get("gap_frequency", "rare"))
+	var trigger_threshold: float = 0.982
+	if frequency == "moderate":
+		trigger_threshold = 0.925
+	elif frequency == "active":
+		trigger_threshold = 0.845
+	var event_intensity: float = absf(event_bias)
+	var activity_ratio: float = max(float(volume_context.get("expected_activity_ratio", 1.0)), 0.0)
+	trigger_threshold -= clamp(event_intensity * 1.2 + max(activity_ratio - 1.45, 0.0) * 0.020, 0.0, 0.10)
+	var trigger_roll: float = _sim_noise(run_seed, company_id, "live_chart_gap_trigger", 0.0, 1.0, day_number)
+	if trigger_roll < trigger_threshold:
+		return 0.0
+
+	var direction: int = _live_chart_gap_direction(chart_profile, daily_change_pct, event_bias, broker_flow, run_seed, day_number, company_id)
+	if direction == 0:
+		return 0.0
+	var magnitude_low: float = 0.006
+	var magnitude_high: float = 0.020
+	if frequency == "moderate":
+		magnitude_low = 0.008
+		magnitude_high = 0.025
+	elif frequency == "active":
+		magnitude_low = 0.012
+		magnitude_high = 0.036
+	if gap_style == "rug_gap":
+		magnitude_high += 0.014
+	elif gap_style == "breakout_gap":
+		magnitude_high += 0.008
+	elif gap_style == "mixed":
+		magnitude_high += 0.005
+	var magnitude: float = _sim_noise(
+		run_seed,
+		company_id,
+		"live_chart_gap_magnitude",
+		magnitude_low,
+		magnitude_high,
+		day_number
+	)
+	magnitude *= 1.0 + clamp(event_intensity * 4.5 + max(activity_ratio - 1.4, 0.0) * 0.10, 0.0, 0.62)
+	return clamp(float(direction) * magnitude, -0.055, 0.055)
+
+
+func _live_chart_gap_direction(
+	chart_profile: Dictionary,
+	daily_change_pct: float,
+	event_bias: float,
+	broker_flow: Dictionary,
+	run_seed: int,
+	day_number: int,
+	company_id: String
+) -> int:
+	var net_pressure: float = clamp(float(broker_flow.get("net_pressure", 0.0)), -1.0, 1.0)
+	if absf(event_bias) >= 0.024:
+		return 1 if event_bias > 0.0 else -1
+	if absf(net_pressure) >= 0.58:
+		return 1 if net_pressure > 0.0 else -1
+	if absf(daily_change_pct) >= 0.045:
+		return 1 if daily_change_pct > 0.0 else -1
+	var gap_bias: String = str(chart_profile.get("gap_bias", "mixed"))
+	if gap_bias == "up":
+		return 1
+	if gap_bias == "down":
+		return -1
+	var gap_style: String = str(chart_profile.get("gap_style", "none"))
+	if gap_style == "breakout_gap":
+		return 1
+	if gap_style in ["rug_gap", "exhaustion_gap"]:
+		return -1
+	var direction_roll: float = _sim_noise(run_seed, company_id, "live_chart_gap_direction", 0.0, 1.0, day_number)
+	return 1 if direction_roll >= 0.5 else -1
+
+
+func _derived_sma_period_for_chart_profile(traits: Dictionary, run_seed: int, company_id: String) -> int:
+	var periods: Array = [3, 5, 10, 20, 60, 100, 200]
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "chart_profile_sma_fallback", company_id])
+	var balance_sheet_strength: float = float(traits.get("balance_sheet_strength", 0.5))
+	if balance_sheet_strength >= 0.62:
+		periods = [20, 60, 100, 200]
+	elif float(traits.get("story_heat", 0.5)) >= 0.66:
+		periods = [3, 5, 10, 20]
+	return int(periods[rng.randi_range(0, periods.size() - 1)])
+
+
+func _technical_average_close(price_bars: Array, period: int) -> float:
+	if period <= 0 or price_bars.size() < period:
+		return 0.0
+	var total: float = 0.0
+	for bar_index in range(price_bars.size() - period, price_bars.size()):
+		var bar: Dictionary = price_bars[bar_index]
+		total += float(bar.get("close", 0.0))
+	return total / float(period)
+
+
+func _sim_noise(run_seed: int, company_id: String, key: String, min_value: float, max_value: float, salt: int) -> float:
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, key, company_id, salt])
+	return rng.randf_range(min_value, max_value)
 
 
 func _average_recent_bar_value(price_bars: Array, lookback: int, fallback_value: float) -> float:
@@ -1359,13 +1743,25 @@ func _build_daily_price_bar(
 
 	var limit_lock: String = str(close_context.get("limit_lock", ""))
 	var limit_source: String = str(close_context.get("limit_source", ""))
+	var chart_profile: Dictionary = _chart_profile_from_definition(definition, run_seed, company_id)
+	var technical_gap_bias: float = _live_chart_gap_bias(
+		chart_profile,
+		daily_change_pct,
+		event_bias,
+		broker_flow,
+		volume_context,
+		run_seed,
+		day_number,
+		company_id
+	)
 	var gap_bias: float = clamp(
 		(daily_change_pct * 0.32) +
 		(event_bias * 0.18) +
 		(market_sentiment * 0.08) +
-		(sector_sentiment * 0.1),
-		-0.08,
-		0.08
+		(sector_sentiment * 0.1) +
+		technical_gap_bias,
+		-0.10,
+		0.10
 	)
 	var gap_noise: float = rng.randf_range(-0.012, 0.012)
 	var open_raw: float = previous_close * (1.0 + gap_bias + gap_noise)

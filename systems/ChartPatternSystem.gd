@@ -8,10 +8,22 @@ const STATE_CONTRADICTED := "Contradicted"
 const PATTERNS := [
 	{"id": "range", "label": "Range / Consolidation"},
 	{"id": "breakout", "label": "Breakout"},
+	{"id": "breakout_retest", "label": "Breakout Retest"},
+	{"id": "breakdown", "label": "Breakdown"},
 	{"id": "failed_breakout", "label": "Failed Breakout"},
 	{"id": "pullback_support", "label": "Pullback to Support"},
 	{"id": "higher_lows", "label": "Higher Lows"},
 	{"id": "lower_highs", "label": "Lower Highs"},
+	{"id": "double_bottom", "label": "Double Bottom"},
+	{"id": "double_top", "label": "Double Top"},
+	{"id": "cup_handle", "label": "Cup and Handle"},
+	{"id": "head_shoulders", "label": "Head and Shoulders"},
+	{"id": "inverse_head_shoulders", "label": "Inverse Head and Shoulders"},
+	{"id": "ascending_triangle", "label": "Ascending Triangle"},
+	{"id": "descending_triangle", "label": "Descending Triangle"},
+	{"id": "bull_flag", "label": "Bull Flag"},
+	{"id": "sma_support_bounce", "label": "SMA Support Bounce"},
+	{"id": "sma_resistance_rejection", "label": "SMA Resistance Rejection"},
 	{"id": "volume_confirmation", "label": "Volume Confirmation"}
 ]
 
@@ -100,6 +112,10 @@ func _feedback_for_pattern(pattern_id: String, metrics: Dictionary) -> Dictionar
 			return _feedback_range(metrics)
 		"breakout":
 			return _feedback_breakout(metrics)
+		"breakout_retest":
+			return _feedback_breakout_retest(metrics)
+		"breakdown":
+			return _feedback_breakdown(metrics)
 		"failed_breakout":
 			return _feedback_failed_breakout(metrics)
 		"pullback_support":
@@ -108,6 +124,26 @@ func _feedback_for_pattern(pattern_id: String, metrics: Dictionary) -> Dictionar
 			return _feedback_higher_lows(metrics)
 		"lower_highs":
 			return _feedback_lower_highs(metrics)
+		"double_bottom":
+			return _feedback_double_bottom(metrics)
+		"double_top":
+			return _feedback_double_top(metrics)
+		"cup_handle":
+			return _feedback_cup_handle(metrics)
+		"head_shoulders":
+			return _feedback_head_shoulders(metrics)
+		"inverse_head_shoulders":
+			return _feedback_inverse_head_shoulders(metrics)
+		"ascending_triangle":
+			return _feedback_ascending_triangle(metrics)
+		"descending_triangle":
+			return _feedback_descending_triangle(metrics)
+		"bull_flag":
+			return _feedback_bull_flag(metrics)
+		"sma_support_bounce":
+			return _feedback_sma_support_bounce(metrics)
+		"sma_resistance_rejection":
+			return _feedback_sma_resistance_rejection(metrics)
 		"volume_confirmation":
 			return _feedback_volume_confirmation(metrics)
 	return _state(STATE_WEAK, "Unknown pattern type.", "Choose a pattern type that matches the marked region.", "mixed")
@@ -200,6 +236,199 @@ func _feedback_lower_highs(metrics: Dictionary) -> Dictionary:
 	return _state(STATE_WEAK, "the selected region does not yet show enough falling highs.", "Mark at least two swing highs that step downward.", "mixed")
 
 
+func _feedback_breakout_retest(metrics: Dictionary) -> Dictionary:
+	var prior_high: float = float(metrics.get("prior_high", 0.0))
+	var selected_low: float = float(metrics.get("selected_low", 0.0))
+	var last_close: float = float(metrics.get("last_close", 0.0))
+	var volume_ratio: float = float(metrics.get("volume_ratio", 0.0))
+	if prior_high > 0.0 and selected_low <= prior_high * 1.035 and selected_low >= prior_high * 0.965 and last_close >= prior_high * 1.01:
+		if volume_ratio >= 1.12:
+			return _state(STATE_GOOD, "price retested the breakout area and reclaimed it with better activity.", "A close back below the retest low weakens the breakout retest.", "positive")
+		return _state(STATE_PLAUSIBLE, "price retested the breakout area, but volume support is still modest.", "A close back below the retest low weakens the breakout retest.", "positive")
+	if prior_high > 0.0 and last_close < prior_high * 0.985:
+		return _state(STATE_CONTRADICTED, "price lost the breakout area instead of holding the retest.", "Only revisit this if price reclaims the breakout level.", "negative")
+	return _state(STATE_WEAK, "the marked region does not clearly retest a prior breakout level.", "Mark the pullback into old resistance and the rebound from that area.", "mixed")
+
+
+func _feedback_breakdown(metrics: Dictionary) -> Dictionary:
+	var prior_low: float = float(metrics.get("prior_low", 0.0))
+	var selected_low: float = float(metrics.get("selected_low", 0.0))
+	var last_close: float = float(metrics.get("last_close", 0.0))
+	var move_pct: float = float(metrics.get("move_pct", 0.0))
+	var volume_ratio: float = float(metrics.get("volume_ratio", 0.0))
+	if prior_low > 0.0 and last_close <= prior_low * 0.985 and selected_low < prior_low:
+		if volume_ratio >= 1.2:
+			return _state(STATE_GOOD, "price closed below prior support and volume expanded on the move.", "A strong reclaim above broken support cancels the breakdown read.", "negative")
+		return _state(STATE_PLAUSIBLE, "price broke support, but volume confirmation is still only moderate.", "A reclaim above broken support cancels the breakdown read.", "negative")
+	if move_pct < -0.02:
+		return _state(STATE_WEAK, "price is falling, but the marked region does not clearly break prior support.", "Mark the support area and the close below it.", "mixed")
+	return _state(STATE_CONTRADICTED, "the selected region does not move like a support breakdown.", "Do not call breakdown until price closes below support.", "positive")
+
+
+func _feedback_double_bottom(metrics: Dictionary) -> Dictionary:
+	var bars: Array = metrics.get("selected_bars", [])
+	if bars.size() < 6:
+		return _state(STATE_WEAK, "a double bottom needs more bars to show two tests and a neckline.", "Mark both lows plus the neckline recovery.", "mixed")
+	var left: Array = _bar_slice_fraction(bars, 0.0, 0.45)
+	var right: Array = _bar_slice_fraction(bars, 0.45, 1.0)
+	var left_low: float = _lowest_low(left)
+	var right_low: float = _lowest_low(right)
+	var last_close: float = _last_close(bars)
+	var neckline: float = _highest_high(_bar_slice_fraction(bars, 0.20, 0.72))
+	var lows_match: bool = _near_ratio(left_low, right_low, 0.065)
+	if lows_match and last_close >= neckline * 1.01:
+		return _state(STATE_GOOD, "both lows held near the same area and price reclaimed the neckline.", "A close below the second low breaks the double-bottom read.", "positive")
+	if lows_match and last_close >= max(left_low, right_low) * 1.05:
+		return _state(STATE_PLAUSIBLE, "two similar lows are visible, but the neckline reclaim still needs confirmation.", "A close below the second low breaks the setup.", "positive")
+	if last_close < min(left_low, right_low) * 0.985:
+		return _state(STATE_CONTRADICTED, "price undercut the base instead of holding the second low.", "Wait for price to rebuild above the failed low.", "negative")
+	return _state(STATE_WEAK, "the marked lows are not similar enough for a clean double bottom.", "Mark two lows at a similar level with a rebound between them.", "mixed")
+
+
+func _feedback_double_top(metrics: Dictionary) -> Dictionary:
+	var bars: Array = metrics.get("selected_bars", [])
+	if bars.size() < 6:
+		return _state(STATE_WEAK, "a double top needs more bars to show two peaks and a neckline.", "Mark both highs plus the support break.", "mixed")
+	var left: Array = _bar_slice_fraction(bars, 0.0, 0.45)
+	var right: Array = _bar_slice_fraction(bars, 0.45, 1.0)
+	var left_high: float = _highest_high(left)
+	var right_high: float = _highest_high(right)
+	var neckline: float = _lowest_low(_bar_slice_fraction(bars, 0.20, 0.72))
+	var last_close: float = _last_close(bars)
+	var highs_match: bool = _near_ratio(left_high, right_high, 0.060)
+	if highs_match and last_close <= neckline * 0.99:
+		return _state(STATE_GOOD, "both highs failed near the same area and price lost the neckline.", "A close above the second top cancels the double-top warning.", "negative")
+	if highs_match and last_close < min(left_high, right_high) * 0.95:
+		return _state(STATE_PLAUSIBLE, "two similar highs are visible, but the support break is not decisive yet.", "A close above the second top cancels the warning.", "negative")
+	if last_close > max(left_high, right_high) * 1.01:
+		return _state(STATE_CONTRADICTED, "price broke above the top instead of rejecting it.", "Only revisit this if the breakout fails.", "positive")
+	return _state(STATE_WEAK, "the marked highs are not similar enough for a clean double top.", "Mark two highs at a similar level with a pullback between them.", "mixed")
+
+
+func _feedback_cup_handle(metrics: Dictionary) -> Dictionary:
+	var bars: Array = metrics.get("selected_bars", [])
+	if bars.size() < 8:
+		return _state(STATE_WEAK, "a cup and handle needs enough bars for the rounded base and handle.", "Mark the cup, handle, and breakout attempt together.", "mixed")
+	var first_close: float = _first_close(bars)
+	var middle_low: float = _lowest_low(_bar_slice_fraction(bars, 0.18, 0.62))
+	var right_high: float = _highest_high(_bar_slice_fraction(bars, 0.58, 0.86))
+	var handle_low: float = _lowest_low(_bar_slice_fraction(bars, 0.72, 0.94))
+	var last_close: float = _last_close(bars)
+	var cup_depth: float = (first_close - middle_low) / max(first_close, 1.0)
+	var handle_depth: float = (right_high - handle_low) / max(right_high, 1.0)
+	if cup_depth >= 0.08 and cup_depth <= 0.38 and handle_depth <= 0.16 and last_close >= right_high * 0.995:
+		return _state(STATE_GOOD, "price formed a rounded recovery, built a smaller handle, and returned to the rim.", "A close below the handle low weakens the cup-and-handle read.", "positive")
+	if cup_depth >= 0.06 and handle_depth <= 0.22 and last_close >= first_close * 0.96:
+		return _state(STATE_PLAUSIBLE, "the rounded recovery is visible, but the handle or breakout still needs confirmation.", "A close below the handle low weakens the setup.", "positive")
+	if last_close < middle_low * 1.04:
+		return _state(STATE_CONTRADICTED, "price is still near the bottom of the cup instead of recovering.", "Wait for the right side and handle to form.", "negative")
+	return _state(STATE_WEAK, "the marked region does not show a clear cup and handle.", "Look for rounded recovery followed by a smaller pullback.", "mixed")
+
+
+func _feedback_head_shoulders(metrics: Dictionary) -> Dictionary:
+	var bars: Array = metrics.get("selected_bars", [])
+	if bars.size() < 7:
+		return _state(STATE_WEAK, "head and shoulders needs enough bars for left shoulder, head, right shoulder, and neckline.", "Mark the full topping structure.", "mixed")
+	var left_high: float = _highest_high(_bar_slice_fraction(bars, 0.00, 0.34))
+	var head_high: float = _highest_high(_bar_slice_fraction(bars, 0.28, 0.62))
+	var right_high: float = _highest_high(_bar_slice_fraction(bars, 0.56, 0.86))
+	var neckline: float = _lowest_low(_bar_slice_fraction(bars, 0.24, 0.78))
+	var last_close: float = _last_close(bars)
+	if head_high > left_high * 1.035 and head_high > right_high * 1.035 and _near_ratio(left_high, right_high, 0.12) and last_close < neckline * 0.995:
+		return _state(STATE_GOOD, "the head stands above both shoulders and price broke the neckline.", "A reclaim above the right shoulder weakens the topping read.", "negative")
+	if head_high > left_high and head_high > right_high and last_close < right_high:
+		return _state(STATE_PLAUSIBLE, "the topping shape is visible, but the neckline break needs more proof.", "A reclaim above the right shoulder weakens the read.", "negative")
+	return _state(STATE_WEAK, "the marked region does not show a clear head above two shoulders.", "Mark the left shoulder, head, right shoulder, and neckline.", "mixed")
+
+
+func _feedback_inverse_head_shoulders(metrics: Dictionary) -> Dictionary:
+	var bars: Array = metrics.get("selected_bars", [])
+	if bars.size() < 7:
+		return _state(STATE_WEAK, "inverse head and shoulders needs enough bars for both shoulders, head, and neckline.", "Mark the full bottoming structure.", "mixed")
+	var left_low: float = _lowest_low(_bar_slice_fraction(bars, 0.00, 0.34))
+	var head_low: float = _lowest_low(_bar_slice_fraction(bars, 0.28, 0.62))
+	var right_low: float = _lowest_low(_bar_slice_fraction(bars, 0.56, 0.86))
+	var neckline: float = _highest_high(_bar_slice_fraction(bars, 0.24, 0.78))
+	var last_close: float = _last_close(bars)
+	if head_low < left_low * 0.965 and head_low < right_low * 0.965 and _near_ratio(left_low, right_low, 0.12) and last_close > neckline * 1.005:
+		return _state(STATE_GOOD, "the head undercut both shoulders and price reclaimed the neckline.", "A close below the right shoulder low weakens the bottoming read.", "positive")
+	if head_low < left_low and head_low < right_low and last_close > right_low:
+		return _state(STATE_PLAUSIBLE, "the bottoming shape is visible, but the neckline reclaim needs more proof.", "A close below the right shoulder low weakens the read.", "positive")
+	return _state(STATE_WEAK, "the marked region does not show a clear inverse head and shoulders.", "Mark the left shoulder, deeper head, right shoulder, and neckline.", "mixed")
+
+
+func _feedback_ascending_triangle(metrics: Dictionary) -> Dictionary:
+	var bars: Array = metrics.get("selected_bars", [])
+	var higher_low_count: int = int(metrics.get("higher_low_count", 0))
+	var top_range: float = _highest_high(bars) - _highest_high(_bar_slice_fraction(bars, 0.0, 0.5))
+	var top_reference: float = max(_highest_high(bars), 1.0)
+	var last_close: float = _last_close(bars)
+	if higher_low_count >= 2 and absf(top_range) / top_reference <= 0.055 and last_close >= _highest_high(bars) * 0.96:
+		return _state(STATE_GOOD, "lows are rising while sellers defend a similar resistance area.", "A close below the latest higher low breaks the triangle read.", "positive")
+	if higher_low_count >= 1:
+		return _state(STATE_PLAUSIBLE, "the lows are starting to rise, but the resistance line still needs cleaner tests.", "A close below the latest higher low weakens the setup.", "positive")
+	return _state(STATE_WEAK, "the marked region does not show enough rising lows for an ascending triangle.", "Mark a flat resistance area with higher lows underneath.", "mixed")
+
+
+func _feedback_descending_triangle(metrics: Dictionary) -> Dictionary:
+	var bars: Array = metrics.get("selected_bars", [])
+	var lower_high_count: int = int(metrics.get("lower_high_count", 0))
+	var bottom_range: float = _lowest_low(bars) - _lowest_low(_bar_slice_fraction(bars, 0.0, 0.5))
+	var bottom_reference: float = max(_lowest_low(bars), 1.0)
+	var last_close: float = _last_close(bars)
+	if lower_high_count >= 2 and absf(bottom_range) / bottom_reference <= 0.055 and last_close <= _lowest_low(bars) * 1.06:
+		return _state(STATE_GOOD, "highs are falling while buyers defend a similar support area.", "A close above the latest lower high breaks the bearish triangle read.", "negative")
+	if lower_high_count >= 1:
+		return _state(STATE_PLAUSIBLE, "the highs are starting to fall, but the support line still needs cleaner tests.", "A close above the latest lower high weakens the warning.", "negative")
+	return _state(STATE_WEAK, "the marked region does not show enough falling highs for a descending triangle.", "Mark a flat support area with lower highs pressing into it.", "mixed")
+
+
+func _feedback_bull_flag(metrics: Dictionary) -> Dictionary:
+	var previous_bars: Array = metrics.get("previous_bars", [])
+	var selected_bars: Array = metrics.get("selected_bars", [])
+	var prior_move: float = _move_pct(previous_bars)
+	var flag_move: float = float(metrics.get("move_pct", 0.0))
+	var range_width: float = float(metrics.get("range_width_pct", 1.0))
+	var last_close: float = float(metrics.get("last_close", 0.0))
+	if prior_move >= 0.045 and flag_move >= -0.055 and flag_move <= 0.025 and range_width <= 0.16:
+		if last_close >= _highest_high(selected_bars) * 0.96:
+			return _state(STATE_GOOD, "a strong prior move cooled into a controlled flag near the highs.", "A close below the flag low breaks the continuation read.", "positive")
+		return _state(STATE_PLAUSIBLE, "the prior move and controlled pullback fit a flag, but breakout is not confirmed.", "A close below the flag low breaks the setup.", "positive")
+	if flag_move < -0.09:
+		return _state(STATE_CONTRADICTED, "the pullback is too deep for a healthy bull flag.", "Wait for price to rebuild a tighter flag.", "negative")
+	return _state(STATE_WEAK, "the marked region lacks a strong pole or controlled flag.", "Mark the pause after a sharp advance.", "mixed")
+
+
+func _feedback_sma_support_bounce(metrics: Dictionary) -> Dictionary:
+	var bars: Array = metrics.get("selected_bars", [])
+	var all_bars: Array = metrics.get("previous_bars", []) + bars
+	var sma_value: float = _sma_from_bars(all_bars, 20)
+	var selected_low: float = float(metrics.get("selected_low", 0.0))
+	var last_close: float = float(metrics.get("last_close", 0.0))
+	if sma_value > 0.0 and selected_low <= sma_value * 1.035 and selected_low >= sma_value * 0.94 and last_close >= sma_value * 1.01:
+		return _state(STATE_GOOD, "price tested the SMA area and bounced back above it.", "A close below the marked SMA-test low breaks the support read.", "positive")
+	if sma_value > 0.0 and last_close >= sma_value:
+		return _state(STATE_PLAUSIBLE, "price is holding around the SMA, but the bounce still needs stronger follow-through.", "A close below the SMA-test low weakens the read.", "positive")
+	if sma_value > 0.0 and last_close < sma_value * 0.97:
+		return _state(STATE_CONTRADICTED, "price lost the SMA instead of bouncing from it.", "Do not use the SMA as support until price reclaims it.", "negative")
+	return _state(STATE_WEAK, "there is not enough SMA context for a support-bounce claim.", "Use a longer region or turn on an SMA that price has been respecting.", "mixed")
+
+
+func _feedback_sma_resistance_rejection(metrics: Dictionary) -> Dictionary:
+	var bars: Array = metrics.get("selected_bars", [])
+	var all_bars: Array = metrics.get("previous_bars", []) + bars
+	var sma_value: float = _sma_from_bars(all_bars, 20)
+	var selected_high: float = float(metrics.get("selected_high", 0.0))
+	var last_close: float = float(metrics.get("last_close", 0.0))
+	if sma_value > 0.0 and selected_high >= sma_value * 0.965 and selected_high <= sma_value * 1.07 and last_close <= sma_value * 0.99:
+		return _state(STATE_GOOD, "price rallied into the SMA area and rejected below it.", "A close above the marked rejection high cancels the resistance read.", "negative")
+	if sma_value > 0.0 and last_close <= sma_value:
+		return _state(STATE_PLAUSIBLE, "price is still below the SMA, but the rejection needs cleaner follow-through.", "A close above the rejection high weakens the warning.", "negative")
+	if sma_value > 0.0 and last_close > sma_value * 1.03:
+		return _state(STATE_CONTRADICTED, "price reclaimed the SMA instead of rejecting from it.", "Only revisit this if price loses the SMA again.", "positive")
+	return _state(STATE_WEAK, "there is not enough SMA context for a resistance-rejection claim.", "Use a longer region or turn on an SMA that price has been respecting.", "mixed")
+
+
 func _feedback_volume_confirmation(metrics: Dictionary) -> Dictionary:
 	var volume_ratio: float = float(metrics.get("volume_ratio", 0.0))
 	var move_pct: float = float(metrics.get("move_pct", 0.0))
@@ -214,6 +443,74 @@ func _feedback_volume_confirmation(metrics: Dictionary) -> Dictionary:
 	if absf(move_pct) >= 0.03 and volume_ratio < 0.8:
 		return _state(STATE_CONTRADICTED, "price moved without matching volume support.", "Wait for volume to expand before calling it confirmation.", "mixed")
 	return _state(STATE_WEAK, "volume is near normal, so it does not add much evidence yet.", "Look for volume at least 20% above recent average.", "mixed")
+
+
+func _bar_slice_fraction(bars: Array, start_fraction: float, end_fraction: float) -> Array:
+	if bars.is_empty():
+		return []
+	var start_index: int = clamp(int(floor(float(bars.size()) * start_fraction)), 0, bars.size() - 1)
+	var end_index: int = clamp(int(ceil(float(bars.size()) * end_fraction)), start_index + 1, bars.size())
+	return bars.slice(start_index, end_index)
+
+
+func _first_close(bars: Array) -> float:
+	if bars.is_empty():
+		return 0.0
+	var bar: Dictionary = bars[0]
+	return float(bar.get("close", bar.get("open", 0.0)))
+
+
+func _last_close(bars: Array) -> float:
+	if bars.is_empty():
+		return 0.0
+	var bar: Dictionary = bars[bars.size() - 1]
+	return float(bar.get("close", bar.get("open", 0.0)))
+
+
+func _lowest_low(bars: Array) -> float:
+	if bars.is_empty():
+		return 0.0
+	var first_bar: Dictionary = bars[0]
+	var value: float = float(first_bar.get("low", first_bar.get("close", 0.0)))
+	for bar_value in bars:
+		var bar: Dictionary = bar_value
+		value = min(value, float(bar.get("low", bar.get("close", value))))
+	return value
+
+
+func _highest_high(bars: Array) -> float:
+	if bars.is_empty():
+		return 0.0
+	var first_bar: Dictionary = bars[0]
+	var value: float = float(first_bar.get("high", first_bar.get("close", 0.0)))
+	for bar_value in bars:
+		var bar: Dictionary = bar_value
+		value = max(value, float(bar.get("high", bar.get("close", value))))
+	return value
+
+
+func _near_ratio(left_value: float, right_value: float, tolerance: float) -> bool:
+	var ratio_reference: float = max(min(absf(left_value), absf(right_value)), 1.0)
+	return absf(left_value - right_value) / ratio_reference <= tolerance
+
+
+func _move_pct(bars: Array) -> float:
+	if bars.size() < 2:
+		return 0.0
+	var first_value: float = _first_close(bars)
+	if is_zero_approx(first_value):
+		return 0.0
+	return (_last_close(bars) - first_value) / first_value
+
+
+func _sma_from_bars(bars: Array, period: int) -> float:
+	if period <= 0 or bars.size() < period:
+		return 0.0
+	var total: float = 0.0
+	for bar_index in range(bars.size() - period, bars.size()):
+		var bar: Dictionary = bars[bar_index]
+		total += float(bar.get("close", bar.get("open", 0.0)))
+	return total / float(period)
 
 
 func _build_metrics(selected_bars: Array, previous_bars: Array) -> Dictionary:
@@ -259,7 +556,9 @@ func _build_metrics(selected_bars: Array, previous_bars: Array) -> Dictionary:
 		"higher_low_count": _higher_low_count(selected_bars),
 		"lower_high_count": _lower_high_count(selected_bars),
 		"lower_low_break": _has_lower_low_break(selected_bars),
-		"higher_high_break": _has_higher_high_break(selected_bars)
+		"higher_high_break": _has_higher_high_break(selected_bars),
+		"selected_bars": selected_bars.duplicate(true),
+		"previous_bars": previous_bars.duplicate(true)
 	}
 
 

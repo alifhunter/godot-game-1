@@ -3225,6 +3225,11 @@ func _count_twooter_current_day_activity(feed_context: Dictionary = {}) -> int:
 		active_company_arcs = feed_context.get("active_company_arcs", [])
 	else:
 		active_company_arcs = get_active_company_arcs()
+	var company_rows: Array = []
+	if feed_context.has("company_rows"):
+		company_rows = feed_context.get("company_rows", [])
+	else:
+		company_rows = get_company_rows()
 	return twooter_feed_system.count_social_posts(
 		DataRepository.get_twooter_feed_data(),
 		market_history,
@@ -3232,7 +3237,8 @@ func _count_twooter_current_day_activity(feed_context: Dictionary = {}) -> int:
 		active_special_events,
 		active_company_arcs,
 		social_trade_date,
-		get_unlocked_twooter_access_tier()
+		get_unlocked_twooter_access_tier(),
+		company_rows
 	)
 
 
@@ -4555,14 +4561,14 @@ func format_trade_date(date_info: Dictionary) -> String:
 
 func _format_currency_compact(value: float) -> String:
 	var absolute_value: float = absf(value)
-	var sign: String = "-" if value < 0.0 else ""
+	var sign_prefix: String = "-" if value < 0.0 else ""
 	if absolute_value >= 1000000000000.0:
-		return "%sRp%sT" % [sign, String.num(absolute_value / 1000000000000.0, 2)]
+		return "%sRp%sT" % [sign_prefix, String.num(absolute_value / 1000000000000.0, 2)]
 	if absolute_value >= 1000000000.0:
-		return "%sRp%sB" % [sign, String.num(absolute_value / 1000000000.0, 2)]
+		return "%sRp%sB" % [sign_prefix, String.num(absolute_value / 1000000000.0, 2)]
 	if absolute_value >= 1000000.0:
-		return "%sRp%sM" % [sign, String.num(absolute_value / 1000000.0, 2)]
-	return "%sRp%s" % [sign, String.num(absolute_value, 2)]
+		return "%sRp%sM" % [sign_prefix, String.num(absolute_value / 1000000.0, 2)]
+	return "%sRp%s" % [sign_prefix, String.num(absolute_value, 2)]
 
 
 func should_show_tutorial() -> bool:

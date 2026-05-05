@@ -38,6 +38,14 @@ func has_save(slot_id: String = "") -> bool:
 	return FileAccess.file_exists(_read_save_path(slot_id)) or FileAccess.file_exists(_read_backup_path(slot_id))
 
 
+func has_any_save() -> bool:
+	for slot_value in get_save_slots():
+		var slot: Dictionary = slot_value
+		if bool(slot.get("exists", false)) or bool(slot.get("backup_exists", false)):
+			return true
+	return false
+
+
 func has_loadable_save(slot_id: String = "") -> bool:
 	if slot_id.is_empty():
 		return has_any_loadable_save()
@@ -339,12 +347,11 @@ func load_run(slot_id: String = "") -> Dictionary:
 
 
 func delete_save(slot_id: String = "") -> void:
+	var resolved_slot_id: String = _normalize_slot_id(slot_id)
+	var deleting_active_slot: bool = resolved_slot_id == _active_slot_id
 	if _save_timer != null:
 		_save_timer.stop()
 	_pending_reason = ""
-	if _normalize_slot_id(slot_id) == _active_slot_id:
-		_clear_unsaved_state()
-	var resolved_slot_id: String = _normalize_slot_id(slot_id)
 	for path in [
 		_write_save_path(resolved_slot_id),
 		_write_backup_path(resolved_slot_id),
@@ -356,6 +363,11 @@ func delete_save(slot_id: String = "") -> void:
 		for legacy_path in [SAVE_PATH, SAVE_BACKUP_PATH, SMOKE_SAVE_PATH, SMOKE_BACKUP_PATH]:
 			if FileAccess.file_exists(str(legacy_path)):
 				DirAccess.remove_absolute(ProjectSettings.globalize_path(str(legacy_path)))
+	if deleting_active_slot:
+		if RunState.has_active_run():
+			_mark_unsaved("delete_save")
+		else:
+			_clear_unsaved_state()
 	save_status_changed.emit()
 
 
@@ -569,6 +581,9 @@ func _build_save_summary(data: Dictionary) -> Dictionary:
 		"save_slot_label": str(data.get("save_slot_label", "")),
 		"saved_at_unix": int(data.get("saved_at_unix", 0)),
 		"saved_at_text": str(data.get("saved_at_text", "Unknown")),
+		"game_version": str(data.get("game_version", "")),
+		"game_build": str(data.get("game_build", "")),
+		"game_build_channel": str(data.get("game_build_channel", "")),
 		"seed": int(data.get("seed", 0)),
 		"day_index": day_index,
 		"trading_day": max(day_index + 1, 1),
