@@ -166,124 +166,164 @@
   },
   "driver_phrases": {
     "company_arc_positive": [
-      "buyers still think there may be more good news ahead"
+      "buyers still think there may be more good news ahead",
+      "the follow-through still gives buyers a reason to stay involved"
     ],
     "company_arc_negative": [
-      "the market is getting more nervous about what comes next"
+      "the market is getting more nervous about what comes next",
+      "traders are starting to price in a rougher follow-up"
     ],
     "company_positive": [
-      "the story still sounds strong enough to keep attention"
+      "the story still sounds strong enough to keep attention",
+      "buyers still see enough in the story to keep it on screen"
     ],
     "company_negative": [
-      "the story is losing some of its shine"
+      "the story is losing some of its shine",
+      "confidence in the name is starting to fade"
     ],
     "coverage_positive": [
-      "recent headlines have helped the mood around the name"
+      "recent headlines have helped the mood around the name",
+      "fresh coverage is making the stock easier to notice"
     ],
     "rumor_positive": [
-      "early talk is making traders more interested"
+      "early talk is making traders more interested",
+      "the whisper is pulling more traders toward the name"
     ],
     "rumor_negative": [
-      "early talk is making traders more careful"
+      "early talk is making traders more careful",
+      "the whisper is making desks reduce risk first"
     ],
     "corporate_action_rumor_positive": [
-      "quiet accumulation is making the story harder to ignore"
+      "quiet accumulation is making the story harder to ignore",
+      "early corporate-action talk is keeping buyers curious"
     ],
     "corporate_action_speculation_positive": [
-      "public speculation is bringing in faster money"
+      "public speculation is bringing in faster money",
+      "the public angle is pulling momentum traders into the trade"
     ],
     "corporate_action_denial_negative": [
-      "management pushback is shaking out weaker hands"
+      "management pushback is shaking out weaker hands",
+      "the denial is forcing rumor buyers to rethink their positions"
     ],
     "corporate_action_clarification_mixed": [
-      "the story is still alive, but the timing looks less certain"
+      "the story is still alive, but the timing looks less certain",
+      "the clarification helps, but the market still wants dates"
     ],
     "corporate_action_filing_positive": [
-      "a formal filing is giving the market something concrete to trade"
+      "a formal filing is giving the market something concrete to trade",
+      "paperwork gives traders a clearer anchor than market talk"
     ],
     "corporate_meeting_mixed": [
-      "the room outcome matters more now than the rumor itself"
+      "the room outcome matters more now than the rumor itself",
+      "investors are waiting to see whether the meeting confirms the setup"
     ],
     "corporate_action_resolution_positive": [
-      "approval keeps the chain alive and shifts attention to execution"
+      "approval keeps the chain alive and shifts attention to execution",
+      "the approval gives the story another step to trade"
     ],
     "corporate_action_execution_positive": [
-      "execution is now deciding whether the rerating can hold"
+      "execution is now deciding whether the rerating can hold",
+      "the market is watching whether execution can support the price"
     ],
     "corporate_action_cancellation_negative": [
-      "the failed setup is forcing the market to reset expectations fast"
+      "the failed setup is forcing the market to reset expectations fast",
+      "the cancellation removes the catalyst that traders were leaning on"
     ],
     "earnings_positive": [
-      "good numbers are helping the company look stronger"
+      "good numbers are helping the company look stronger",
+      "the result gives buyers a cleaner fundamental reason to stay"
     ],
     "earnings_negative": [
-      "the numbers are raising more questions than confidence"
+      "the numbers are raising more questions than confidence",
+      "the report is making investors question the quality of the move"
     ],
     "mna_positive": [
-      "the deal story is centered on growth and a more stable business"
+      "the deal story is centered on growth and a more stable business",
+      "the transaction is being read as a possible upgrade to the business"
     ],
     "mna_negative": [
-      "the deal story is raising worries about price and execution"
+      "the deal story is raising worries about price and execution",
+      "deal risk is making traders question how much to pay"
     ],
     "management_positive": [
-      "leadership changes are being read as a chance to improve execution"
+      "leadership changes are being read as a chance to improve execution",
+      "the new leadership angle is improving the execution read"
     ],
     "management_negative": [
-      "leadership changes are raising worries about direction"
+      "leadership changes are raising worries about direction",
+      "the leadership story is making investors question execution"
     ],
     "sector_rotation_positive": [
-      "money is moving into the stronger names in the sector"
+      "money is moving into the stronger names in the sector",
+      "capital is rotating toward the sector leaders"
     ],
     "sector_rotation_negative": [
-      "money is leaving the weaker names in the sector"
+      "money is leaving the weaker names in the sector",
+      "traders are cutting exposure to the weaker sector names"
     ],
     "macro_shock_negative": [
-      "the wider market mood is turning cautious"
+      "the wider market mood is turning cautious",
+      "macro pressure is pushing investors toward safer positioning"
     ],
     "commodity_mixed": [
-      "the main story is still the commodity price and who feels it first"
+      "the main story is still the commodity price and who feels it first",
+      "traders are separating direct commodity winners from passengers"
     ],
     "commodity_negative": [
-      "the drop in the main commodity price is hurting confidence"
+      "the drop in the main commodity price is hurting confidence",
+      "weaker commodity prices are making the group harder to defend"
     ],
     "geopolitics_negative": [
-      "global events are pushing the market into a more defensive mood"
+      "global events are pushing the market into a more defensive mood",
+      "external risk is making investors protect cash first"
     ],
     "pandemic_negative": [
-      "the market is worrying again about disruption and weaker demand"
+      "the market is worrying again about disruption and weaker demand",
+      "disruption risk is pushing traders back into caution"
     ],
     "policy_post_negative": [
-      "policy headlines are making the market more careful"
+      "policy headlines are making the market more careful",
+      "policy uncertainty is making investors wait for cleaner rules"
     ],
     "deal_post_positive": [
-      "policy optimism is lifting interest in the more aggressive names"
+      "policy optimism is lifting interest in the more aggressive names",
+      "the policy angle is giving speculative names a fresh reason to move"
     ],
     "social_post_positive": [
-      "online attention is bringing fresh interest"
+      "online attention is bringing fresh interest",
+      "social-media attention is putting the name back on watchlists"
     ],
     "social_post_negative": [
-      "online attention is turning against the story"
+      "online attention is turning against the story",
+      "online chatter is turning into pressure instead of support"
     ],
     "controversy_negative": [
-      "bad headlines are making people step back"
+      "bad headlines are making people step back",
+      "the negative headline is making buyers demand a discount"
     ],
     "person_positive": [
-      "a well-known name is drawing attention quickly"
+      "a well-known name is drawing attention quickly",
+      "a high-profile mention is pulling attention into the trade"
     ],
     "person_negative": [
-      "a well-known name is shifting attention toward risk"
+      "a well-known name is shifting attention toward risk",
+      "a high-profile comment is making traders focus on downside"
     ],
     "special_mixed": [
-      "the market is still sorting out who benefits and who gets hurt"
+      "the market is still sorting out who benefits and who gets hurt",
+      "traders are still separating the winners from the losers"
     ],
     "special_negative": [
-      "the wider story is making traders think about safety first"
+      "the wider story is making traders think about safety first",
+      "the broader theme is making caution the easier stance"
     ],
     "market_wrap": [
-      "by the close, the main question is whether today's move was broad or only carried by a few names"
+      "by the close, the main question is whether today's move was broad or only carried by a few names",
+      "the close leaves traders asking whether leadership can broaden tomorrow"
     ],
     "fallback": [
-      "the market is still deciding how much this story matters"
+      "the market is still deciding how much this story matters",
+      "traders are still testing whether this headline has real follow-through"
     ]
   },
   "watch_phrases": {
