@@ -70,6 +70,11 @@ Read this file first in the next session.
 - Stockbot has a dark trading-dashboard redesign based on the attached reference while preserving the existing three-zone app structure. The shell, stock list, chart workspace, order ticket, chart grid/candles, toolbar buttons, search/tabs, and submit controls now use dark panels with blue trading accents. New SVG icons from `res://assets/icons/` are used by the toolbar/order/list controls; icon strokes were changed to light colors so they remain readable on dark buttons. Inner padding was reduced, watchlist row icons were removed, and watchlist selected-row styling now matches the `All Stock` selected state.
 - Main Menu `Load Run` now uses a custom compact `Control` overlay rather than a tall native `ConfirmationDialog`. The window hugs the save-slot content, keeps `Delete`, `Cancel`, and `Load` visible, uses readable cream/brown styling, and still supports deleting unreadable/current slots through the separate delete confirmation dialog. Smoke now treats `LoadSlotsDialog` as a `Control`.
 - Latest UI-batch validation before this handoff update: `git diff --check` passed; Godot headless project load passed; quick smoke passed with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.` Usual post-success Godot RID/resource cleanup warnings remain non-blocking.
+- Negative cash, emergency loan, and bankruptcy v1 is implemented. Save schema is now `v4`; old saves normalize `RunState.player_life.finance` with empty cash-stress, loan, bankruptcy, and finance-history fields. Cash stress starts when non-order obligations push cash below `0`, gives the player a `3` trading-day grace window, blocks new buys/upgrades/life-cost increases, keeps selling and Life downgrades available, and clears once cash returns to non-negative.
+- `Life > Finance` is the recovery center. `LifeWidget.gd` now has top tabs (`Overview`, `Finance`) and smoke-testable nodes `LifeTabs`, `LifeOverviewTab`, `LifeFinanceTab`, `LifeFinanceStatusLabel`, `LifeEmergencyLoanButton`, `LifeActiveLoanPanel`, and `LifeBankruptcyStatusPanel`. One active emergency loan can be taken when cash is negative or runway is under `0.5` months; v1 terms are six monthly payments with flat total repayment of `principal * 1.24`, due on the first trading day of each new month.
+- Bankruptcy is now a final recovery-gate state, not an instant punishment. On `Advance Day`, expired negative-cash grace blocks the day and points the player to selling or Life Finance if holdings or loan recovery still exist; only if neither path is available does the run mark bankrupt. Bankruptcy disables trading, Advance Day, upgrades, and new loans, and `GameRoot.gd` shows a simple final-state overlay with Back to Menu / Restart Run actions; Restart Run starts a fresh run on the same difficulty.
+- Finance state is now surfaced through `GameManager.get_life_snapshot()`, `get_finance_status_snapshot()`, `take_emergency_loan()`, and `get_cash_stress_block_reason(action_id)`. Top-bar cash and Daily Recap risk checks show stronger warnings for negative cash, risky loan reserves, loan payments, and bankruptcy. Portfolio history records `life_emergency_loan`, `life_loan_payment`, and existing `life_obligation` rows.
+- Latest finance validation: `git diff --check` passed; `godot --headless --path . --log-file /private/tmp/gorengan-project-load-finance-restart.log --quit` passed; `godot --headless --path . --log-file /private/tmp/gorengan-smoke-finance-final.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` passed with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.` Smoke now covers old-save finance normalization, forced negative cash/grace, buy block vs sell allowance, Life Finance eligibility, emergency loan save/load persistence, monthly loan payment, expired-grace recovery blocks, bankruptcy trigger, and default first-month non-negative cash behavior. Usual Steam/macOS certificate/RID cleanup warnings remain non-blocking after success.
 - Difficulty selector width is tightened. The New Run difficulty window now caps at the actual three-card plan grid width plus margins (`1040px` max selector width, `992px` grid width), so wide desktop viewports no longer show large unused cream space around the cards. The three-column layout is only used when that compact width is available; smaller widths fall back to the single-column plan-card layout. Smoke now asserts the selector both fits within viewport bounds and hugs the plan-card grid. Verification for this pass: `git diff --check` passed, Godot headless project load passed outside the sandbox, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3`; the usual trailing RID/resource warnings appeared after smoke success.
 - Disabled desktop shortcut styling is fixed. `UiTheme.style_button(..., "desktop_shortcut")` now gives disabled shortcuts a warm desktop disabled fill and muted brown icon/text instead of inheriting the dark terminal fallback, which was making the locked Company app tile look broken. `docs/DESIGN_SYSTEM.md` documents the rule, and smoke now validates both the generic disabled desktop shortcut style and the locked `CompanyAppButton` disabled icon/background state. Verification for this pass: `git diff --check` passed, Godot headless project load passed outside the sandbox, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3`; the usual trailing RID/resource warnings appeared after smoke success.
 - Main Menu difficulty card redesign is implemented. Difficulty choices now render as compact hosting-plan-style cards instead of stretched multiline buttons: the selector/card width is capped, the plan grid is centered, each card has a dedicated title banner, centered larger plan title, compact cash/company/volatility/event rows, and selected cards restyle the banner/text with the desktop selected contrast. The difficulty intro copy now says events hit the `market` instead of `tape`. Smoke now validates compact plan-card width, banner/title structure, centered larger titles, and selected-card banner contrast. Verification for this pass: `git diff --check` passed, Godot headless project load passed outside the sandbox, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3`; the usual trailing RID/resource warnings appeared after smoke success.
@@ -346,19 +351,25 @@ Read this file first in the next session.
   - `Life` is now a first playable desktop app registered as app id `life`.
   - Desktop shortcut/nav SVGs live in `assets/ui/desktop/life_shortcut.svg` and `assets/ui/desktop/life_nav.svg`.
   - Runtime UI is built by `scripts/ui/widgets/LifeWidget.gd` and opens as a warm cash-flow planning window with:
+    - top tabs for `Overview` and `Finance`
     - cash, equity, monthly outflow, declared dividend average, net monthly, and runway summary cards
     - housing choices: `Family support`, `Kost room`, and `Apartment`
     - lifestyle choices: `Frugal`, `Balanced`, and `Status`
     - budget rows for housing, basics, lifestyle, declared dividend average, and monthly gap
     - a portfolio-income section that projects only declared dividends from the corporate-action calendar
-  - `RunState.player_life` persists only compact player choices:
+    - Finance recovery status, active emergency loan, next payment, bankruptcy risk, and recovery guidance
+  - `RunState.player_life` persists compact player choices and finance state:
     - housing id
     - lifestyle id
     - optional monthly extra/buffer
     - last updated day/date
     - last paid monthly obligation period/day/amount for duplicate protection
+    - `finance` cash-stress state, active emergency loan, bankruptcy marker, and compact finance history
   - Monthly Life obligations now deduct real player cash on the first trading day of each new month, using housing + basic expenses + lifestyle + optional extra.
   - Monthly obligation deductions are recorded as `life_obligation` portfolio-history rows so the cash change is auditable.
+  - If Life obligations or loan payments push cash below zero, cash stress starts a 3-trading-day grace period. Buys, upgrades, and higher-cost Life plan changes are blocked while selling and Life downgrades remain available.
+  - `Life > Finance` can offer one active emergency loan when cash is negative or runway is under half a month. Loan proceeds are immediate, monthly payments are due on the first trading day of a new month, and payment rows are recorded in portfolio history.
+  - Expired cash stress gates `Advance Day`: holdings or loan recovery options block the day with guidance; if no recovery path remains, the run is marked bankrupt and the bankruptcy overlay becomes final.
   - Dividend income now comes from in-game `cash_dividend` corporate actions after declaration; there is no external dividend data feed.
   - `stock_dividend` actions affect held shares, company share count, and price basis, but they do not count as monthly cash income in `Life`.
 - STOCKBOT status:
@@ -490,7 +501,7 @@ Read this file first in the next session.
 - A first-pass smaller mobile-style social-feed UX now also exists in `Twooter`
 - A first playable `Academy` desktop app now exists
 - A first playable `Thesis Board` desktop app now exists for manual research capture, deterministic report generation, and after-action thesis review
-- A first playable `Life` desktop app now exists for monthly cash-flow planning, housing/lifestyle choices, declared dividend income, and runway
+- A first playable `Life` desktop app now exists for monthly cash-flow planning, housing/lifestyle choices, declared dividend income, runway, emergency loans, and bankruptcy-risk recovery
 - A first playable contact/recognition UX now exists in `Network`
 - A first playable `Upgrades` shop app now exists on the desktop
 - A first playable corporate-action / meeting-chain layer now exists behind `News`, `Twooter`, `Network`, and daily market behavior
@@ -572,7 +583,7 @@ Read this file first in the next session.
   - `Twooter` opens a smaller light social-feed window
   - `Academy` opens a warm newspaper-module learning window
   - `Thesis Board` opens a warm research-note builder window
-  - `Life` opens a warm monthly cash-flow planning window
+  - `Life` opens a warm monthly cash-flow planning window with an `Overview` tab and a `Finance` tab for cash stress, emergency loans, repayment status, and bankruptcy risk
   - `Network` opens a beige contact/recognition window for discovered market contacts
   - `Shop` opens the existing beige `Upgrades` cash shop window
   - `Exit` returns to the main menu
@@ -2548,10 +2559,11 @@ Read this file first in the next session.
 - Keep the checkpoint clean:
   - run `git status --short` before starting a new pass and preserve ignored local `logs/` output as disposable test data
   - treat a trailing `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` as non-blocking Windows/Godot noise
-- Negative cash / bankruptcy design for later:
-  - decide what should happen if player cash goes below zero after Life obligations, fees, or other future cash drains
-  - open design questions: allow temporary negative cash with stress warnings, apply interest/penalties, block new buys, force liquidation, trigger creditor/broker calls, offer emergency funding, or end the run through a bankruptcy flow
-  - do not implement this until the intended game feel is chosen; current note is a backlog marker so the next session can return to it deliberately
+- Negative cash / Finance follow-up:
+  - playtest whether the `3` trading-day grace period feels fair after Life obligations and loan payments
+  - tune emergency loan caps, monthly payment size, and warning copy after a few near-bankruptcy runs
+  - decide later whether bankruptcy should unlock a softer recovery route, Steam achievement, post-mortem report, or restart-with-lessons flow
+  - keep no-auto-liquidation for now unless playtesting shows players consistently miss the sell/recover path
 - Continue performance work from the trimmed save payload:
   - use the `[perf][advance]`, `[perf][apply]`, `[perf][ui]`, and `[perf][save]` logs to choose the next target from `simulate_day`, Summary row collection, News company-row/feed rendering, post-recap save flush, and deferred per-app redraw
   - keep tracking both `*_recap_ready` and settled `advance_*` timings; visible responsiveness should be judged from recap-ready, while settled timing captures save flush plus app catch-up
@@ -2584,8 +2596,8 @@ Read this file first in the next session.
   - consider a richer report export/view mode only if players want to read thesis notes as standalone analyst-style documents
   - keep thesis review out of the Advance Day recap-critical path unless future UX explicitly needs automatic daily thesis alerts
 - Life app planning:
-  - playtest whether the current housing/lifestyle costs create useful pressure on `Normal` and `Grind` without feeling punitive
-  - monthly obligations are now real cash deductions at new-month boundaries; next pass should tune warning/recap copy if the deduction feels too quiet
+  - playtest whether the current housing/lifestyle costs and emergency-loan terms create useful pressure on `Normal` and `Grind` without feeling punitive
+  - monthly obligations and loan payments are real cash deductions at new-month boundaries; next pass should tune warning/recap copy if the deduction feels too quiet
   - consider a richer Life cash-flow history later; for now monthly obligations appear in portfolio history as `life_obligation`
   - tune the declared-dividend display after a few longer runs; right now it averages announced payments over a simple 12-month planning window
   - connect the system to Academy's money-management/mindset themes so urgency comes from financial planning, not artificial pressure

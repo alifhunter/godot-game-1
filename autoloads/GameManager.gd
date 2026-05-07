@@ -298,6 +298,11 @@ const NETWORK_ACTION_COSTS := {
 	"source_check": 1
 }
 const LIFE_BASIC_EXPENSES_MONTHLY := 2250000.0
+const LIFE_EMERGENCY_LOAN_MINIMUM := 1000000.0
+const LIFE_EMERGENCY_LOAN_EQUITY_CAP_PCT := 0.35
+const LIFE_EMERGENCY_LOAN_MONTHLY_OUTFLOW_CAP := 4.0
+const LIFE_EMERGENCY_LOAN_PAYMENT_COUNT := 6
+const LIFE_EMERGENCY_LOAN_REPAYMENT_MULTIPLIER := 1.24
 const LIFE_HOUSING_OPTIONS := [
 	{
 		"id": "family_home",
@@ -597,12 +602,12 @@ func quit_game() -> void:
 	get_tree().quit()
 
 
-func advance_day() -> void:
-	_advance_day_internal(true, true)
+func advance_day() -> Dictionary:
+	return _advance_day_internal(true, true)
 
 
-func advance_day_deferred_save() -> void:
-	_advance_day_internal(true, true, false)
+func advance_day_deferred_save() -> Dictionary:
+	return _advance_day_internal(true, true, false)
 
 
 func simulate_opening_session(save_after: bool = false) -> Dictionary:
@@ -612,6 +617,9 @@ func simulate_opening_session(save_after: bool = false) -> Dictionary:
 func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool = true, flush_save_immediately: bool = true) -> Dictionary:
 	if not RunState.has_active_run():
 		return {}
+	var finance_gate: Dictionary = resolve_advance_day_finance_gate()
+	if not bool(finance_gate.get("success", false)):
+		return finance_gate
 	var log_advance_perf: bool = _should_log_advance_perf(save_after, emit_runtime_signals)
 	var total_started_at_usec: int = Time.get_ticks_usec()
 	var phase_started_at_usec: int = total_started_at_usec
@@ -633,6 +641,9 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	phase_started_at_usec = Time.get_ticks_usec()
 	var life_obligation_result: Dictionary = _apply_life_monthly_obligation_if_due(previous_trade_date, RunState.current_trade_date)
 	_log_advance_perf_elapsed(log_advance_perf, "apply_life_obligation", phase_started_at_usec, " amount=%.2f" % float(life_obligation_result.get("amount", 0.0)))
+	phase_started_at_usec = Time.get_ticks_usec()
+	var life_loan_payment_result: Dictionary = _apply_life_loan_payment_if_due(previous_trade_date, RunState.current_trade_date)
+	_log_advance_perf_elapsed(log_advance_perf, "apply_life_loan_payment", phase_started_at_usec, " amount=%.2f" % float(life_loan_payment_result.get("amount", 0.0)))
 	phase_started_at_usec = Time.get_ticks_usec()
 	var network_results: Array = contact_network_system.process_due_requests(RunState, DataRepository)
 	_log_advance_perf_elapsed(log_advance_perf, "process_due_requests", phase_started_at_usec, " count=%d" % network_results.size())
@@ -660,7 +671,7 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 		phase_started_at_usec = Time.get_ticks_usec()
 		daily_actions_changed.emit()
 		_log_advance_perf_elapsed(log_advance_perf, "emit_daily_actions_changed", phase_started_at_usec)
-		if not life_obligation_result.is_empty():
+		if not life_obligation_result.is_empty() or not life_loan_payment_result.is_empty():
 			phase_started_at_usec = Time.get_ticks_usec()
 			life_changed.emit()
 			_log_advance_perf_elapsed(log_advance_perf, "emit_life_changed", phase_started_at_usec)
@@ -704,6 +715,9 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 
 
 func buy_company(company_id: String, shares: int = 1) -> Dictionary:
+	var block_reason: String = get_cash_stress_block_reason("buy")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
 	var result: Dictionary = RunState.buy_company(company_id, shares)
 	if result.get("success", false):
 		_invalidate_dashboard_event_snapshot_cache()
@@ -755,6 +769,7 @@ func remove_company_from_watchlist(company_id: String) -> Dictionary:
 
 func get_upgrade_shop_snapshot() -> Dictionary:
 	var cash_available: float = float(RunState.player_portfolio.get("cash", 0.0))
+	var upgrade_block_reason: String = get_cash_stress_block_reason("upgrade")
 	var tracks: Array = []
 	for track_value in DataRepository.get_upgrade_catalog().get("tracks", []):
 		if typeof(track_value) != TYPE_DICTIONARY:
@@ -778,8 +793,9 @@ func get_upgrade_shop_snapshot() -> Dictionary:
 			"next_effect_label": str(next_data.get("effect_label", "")),
 			"next_cost": next_cost,
 			"maxed": current_tier <= 1,
-			"affordable": cash_available + 0.0001 >= next_cost and next_cost > 0.0,
-			"can_purchase": current_tier > 1 and cash_available + 0.0001 >= next_cost and next_cost > 0.0
+			"affordable": upgrade_block_reason.is_empty() and cash_available + 0.0001 >= next_cost and next_cost > 0.0,
+			"can_purchase": upgrade_block_reason.is_empty() and current_tier > 1 and cash_available + 0.0001 >= next_cost and next_cost > 0.0,
+			"block_reason": upgrade_block_reason
 		})
 
 	return {
@@ -792,6 +808,9 @@ func get_upgrade_shop_snapshot() -> Dictionary:
 func purchase_upgrade(track_id: String) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
+	var block_reason: String = get_cash_stress_block_reason("upgrade")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
 
 	var track: Dictionary = _upgrade_track(track_id)
 	if track.is_empty():
@@ -813,6 +832,7 @@ func purchase_upgrade(track_id: String) -> Dictionary:
 		return {"success": false, "message": "Not enough cash for that upgrade."}
 
 	RunState.player_portfolio["cash"] = cash_available - cost
+	RunState.refresh_cash_stress_state()
 	RunState.set_upgrade_tier(normalized_track_id, next_tier)
 	_invalidate_daily_activity_snapshot_cache()
 	_request_autosave("purchase_upgrade")
@@ -838,6 +858,7 @@ func execute_console_command(command_text: String) -> Dictionary:
 		"cuankus":
 			var cash_before: float = float(RunState.player_portfolio.get("cash", 0.0))
 			RunState.player_portfolio["cash"] = cash_before + CONSOLE_CASH_GRANT_AMOUNT
+			RunState.refresh_cash_stress_state()
 			_request_autosave("console_cuankus")
 			portfolio_changed.emit()
 			return {
@@ -2666,6 +2687,154 @@ func get_first_month_balance_snapshot() -> Dictionary:
 	}
 
 
+func get_finance_status_snapshot() -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+
+	var finance: Dictionary = RunState.refresh_cash_stress_state()
+	var portfolio: Dictionary = get_portfolio_snapshot()
+	var cash: float = float(portfolio.get("cash", 0.0))
+	var equity: float = float(portfolio.get("equity", 0.0))
+	var monthly_outflow: float = _life_monthly_outflow_for_state(RunState.get_player_life())
+	var runway_months: float = 999.0
+	if monthly_outflow > 0.0:
+		runway_months = cash / monthly_outflow
+	var active_loan: Dictionary = finance.get("active_loan", {})
+	var cash_deficit: float = max(-cash, 0.0)
+	var loan_cap: float = min(
+		max(equity * LIFE_EMERGENCY_LOAN_EQUITY_CAP_PCT, 0.0),
+		max(monthly_outflow * LIFE_EMERGENCY_LOAN_MONTHLY_OUTFLOW_CAP, 0.0)
+	)
+	var proposed_loan_amount: float = max(cash_deficit + monthly_outflow, LIFE_EMERGENCY_LOAN_MINIMUM)
+	if loan_cap > 0.0:
+		proposed_loan_amount = min(proposed_loan_amount, loan_cap)
+	var loan_eligible: bool = (
+		not bool(finance.get("bankrupt", false)) and
+		active_loan.is_empty() and
+		(cash < 0.0 or runway_months < 0.5) and
+		loan_cap + 0.0001 >= LIFE_EMERGENCY_LOAN_MINIMUM
+	)
+	var loan_reason: String = "Emergency loan available."
+	if bool(finance.get("bankrupt", false)):
+		loan_reason = "Bankruptcy has disabled new loans."
+	elif not active_loan.is_empty():
+		loan_reason = "An emergency loan is already active."
+	elif cash >= 0.0 and runway_months >= 0.5:
+		loan_reason = "Emergency loan unlocks when cash is negative or runway is under half a month."
+	elif loan_cap + 0.0001 < LIFE_EMERGENCY_LOAN_MINIMUM:
+		loan_reason = "Current equity does not support a new emergency loan."
+
+	var stress_days_remaining: int = -1
+	if bool(finance.get("cash_stress_active", false)):
+		stress_days_remaining = max(int(finance.get("cash_stress_deadline_day_index", RunState.day_index)) - RunState.day_index, 0)
+	var next_payment: Dictionary = {}
+	if not active_loan.is_empty():
+		next_payment = {
+			"amount": float(active_loan.get("monthly_payment", 0.0)),
+			"payments_remaining": int(active_loan.get("payments_remaining", 0)),
+			"covered": cash + 0.0001 >= float(active_loan.get("monthly_payment", 0.0))
+		}
+	return {
+		"cash": cash,
+		"equity": equity,
+		"monthly_outflow": monthly_outflow,
+		"runway_months": runway_months,
+		"finance": finance,
+		"cash_stress_active": bool(finance.get("cash_stress_active", false)),
+		"cash_stress_days_remaining": stress_days_remaining,
+		"cash_deficit": cash_deficit,
+		"bankrupt": bool(finance.get("bankrupt", false)),
+		"bankruptcy": finance.get("bankruptcy", {}).duplicate(true),
+		"active_loan": active_loan.duplicate(true),
+		"loan_next_payment": next_payment,
+		"loan_payment_risky": not active_loan.is_empty() and cash < float(active_loan.get("monthly_payment", 0.0)) - 0.0001,
+		"loan_eligible": loan_eligible,
+		"loan_eligibility_reason": loan_reason,
+		"proposed_loan_amount": proposed_loan_amount if loan_eligible else 0.0,
+		"loan_cap": loan_cap,
+		"loan_payment_count": LIFE_EMERGENCY_LOAN_PAYMENT_COUNT,
+		"loan_repayment_multiplier": LIFE_EMERGENCY_LOAN_REPAYMENT_MULTIPLIER,
+		"sellable_holdings_value": _estimate_sellable_holdings_value()
+	}
+
+
+func get_cash_stress_block_reason(action_id: String) -> String:
+	if not RunState.has_active_run():
+		return "No active run."
+	var finance_status: Dictionary = get_finance_status_snapshot()
+	if bool(finance_status.get("bankrupt", false)):
+		return "Bankruptcy has disabled this action."
+	var normalized_action: String = action_id.to_lower()
+	var cash: float = float(finance_status.get("cash", 0.0))
+	var active_loan: Dictionary = finance_status.get("active_loan", {})
+	if normalized_action in ["buy", "upgrade"]:
+		if cash < 0.0:
+			return "Cash is negative. Sell holdings, lower Life costs, or use Life > Finance before spending."
+		if not active_loan.is_empty() and bool(finance_status.get("loan_payment_risky", false)):
+			return "Emergency loan payment reserve is not covered. Keep cash above %s before spending." % _format_currency(float(active_loan.get("monthly_payment", 0.0)))
+	if normalized_action == "advance_day":
+		if cash >= 0.0:
+			return ""
+		var finance: Dictionary = finance_status.get("finance", {})
+		if not bool(finance.get("cash_stress_active", false)):
+			return ""
+		if RunState.day_index < int(finance.get("cash_stress_deadline_day_index", -1)):
+			return ""
+		var deficit: float = absf(cash)
+		if float(finance_status.get("sellable_holdings_value", 0.0)) >= deficit + 0.0001:
+			return "Cash stress grace expired. Sell holdings or use Life > Finance before advancing."
+		if bool(finance_status.get("loan_eligible", false)):
+			return "Cash stress grace expired. Use Life > Finance before advancing."
+		return "BANKRUPTCY_REQUIRED"
+	return ""
+
+
+func resolve_advance_day_finance_gate() -> Dictionary:
+	var block_reason: String = get_cash_stress_block_reason("advance_day")
+	if block_reason.is_empty():
+		return {"success": true}
+	if block_reason == "BANKRUPTCY_REQUIRED":
+		var bankruptcy: Dictionary = RunState.mark_bankruptcy("cash_stress_unrecoverable")
+		RunState.last_day_results["bankruptcy"] = bankruptcy.duplicate(true)
+		_request_autosave("bankruptcy")
+		life_changed.emit()
+		portfolio_changed.emit()
+		return {
+			"success": false,
+			"bankrupt": true,
+			"message": "Bankruptcy triggered. Cash stayed negative after the grace period with no recovery path.",
+			"bankruptcy": bankruptcy
+		}
+	return {
+		"success": false,
+		"blocked": true,
+		"message": block_reason
+	}
+
+
+func take_emergency_loan() -> Dictionary:
+	var finance_status: Dictionary = get_finance_status_snapshot()
+	if not bool(finance_status.get("loan_eligible", false)):
+		return {
+			"success": false,
+			"message": str(finance_status.get("loan_eligibility_reason", "Emergency loan is not available."))
+		}
+	var principal: float = float(finance_status.get("proposed_loan_amount", 0.0))
+	var total_repayment: float = principal * LIFE_EMERGENCY_LOAN_REPAYMENT_MULTIPLIER
+	var monthly_payment: float = total_repayment / float(LIFE_EMERGENCY_LOAN_PAYMENT_COUNT)
+	var result: Dictionary = RunState.apply_emergency_loan_proceeds(principal, {
+		"payment_count": LIFE_EMERGENCY_LOAN_PAYMENT_COUNT,
+		"repayment_multiplier": LIFE_EMERGENCY_LOAN_REPAYMENT_MULTIPLIER,
+		"total_repayment": total_repayment,
+		"monthly_payment": monthly_payment
+	})
+	if bool(result.get("success", false)):
+		_request_autosave("life_emergency_loan")
+		life_changed.emit()
+		portfolio_changed.emit()
+	return result
+
+
 func get_life_snapshot() -> Dictionary:
 	if not RunState.has_active_run():
 		return {}
@@ -2675,10 +2844,10 @@ func get_life_snapshot() -> Dictionary:
 	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, str(life_state.get("lifestyle_id", "")))
 	var portfolio: Dictionary = get_portfolio_snapshot()
 	var dividend_projection: Dictionary = _build_life_dividend_projection()
-	var monthly_extra: float = max(float(life_state.get("monthly_extra", 0.0)), 0.0)
 	var housing_cost: float = float(housing.get("monthly_cost", 0.0))
 	var lifestyle_cost: float = float(lifestyle.get("monthly_cost", 0.0))
-	var monthly_outflow: float = housing_cost + LIFE_BASIC_EXPENSES_MONTHLY + lifestyle_cost + monthly_extra
+	var monthly_extra: float = max(float(life_state.get("monthly_extra", 0.0)), 0.0)
+	var monthly_outflow: float = _life_monthly_outflow_for_state(life_state)
 	var estimated_monthly_dividends: float = float(dividend_projection.get("estimated_monthly_dividends", 0.0))
 	var net_monthly: float = estimated_monthly_dividends - monthly_outflow
 	var cash: float = float(portfolio.get("cash", 0.0))
@@ -2687,7 +2856,12 @@ func get_life_snapshot() -> Dictionary:
 		runway_months = cash / monthly_outflow
 	var next_life_payment: Dictionary = _build_next_life_payment_snapshot(monthly_outflow)
 	var status_label: String = "Comfortable runway"
-	if runway_months < 6.0:
+	var finance_status: Dictionary = get_finance_status_snapshot()
+	if bool(finance_status.get("bankrupt", false)):
+		status_label = "Bankrupt"
+	elif bool(finance_status.get("cash_stress_active", false)):
+		status_label = "Cash stress"
+	elif runway_months < 6.0:
 		status_label = "Cash pressure"
 	elif runway_months < 12.0:
 		status_label = "Thin runway"
@@ -2713,9 +2887,10 @@ func get_life_snapshot() -> Dictionary:
 		"declared_dividend_total_12m": float(dividend_projection.get("declared_dividend_total_12m", 0.0)),
 		"net_monthly": net_monthly,
 		"runway_months": runway_months,
+		"finance": finance_status,
 		"status_label": status_label,
 		"dividend_rows": dividend_projection.get("rows", []).duplicate(true),
-		"note": "Monthly costs deduct cash on the first trading day of each new month. Dividends only count after corporate actions are declared."
+		"note": "Monthly costs and loan payments deduct cash on the first trading day of each new month. Dividends only count after corporate actions are declared."
 	}
 
 
@@ -2956,6 +3131,17 @@ func set_life_plan(housing_id: String, lifestyle_id: String) -> Dictionary:
 	var life_state: Dictionary = RunState.get_player_life()
 	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, housing_id)
 	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, lifestyle_id)
+	var current_outflow: float = _life_monthly_outflow_for_state(life_state)
+	var next_outflow: float = _life_monthly_outflow_for_options(
+		str(housing.get("id", "kost_room")),
+		str(lifestyle.get("id", "balanced")),
+		max(float(life_state.get("monthly_extra", 0.0)), 0.0)
+	)
+	var finance_status: Dictionary = get_finance_status_snapshot()
+	if bool(finance_status.get("bankrupt", false)):
+		return {"success": false, "message": "Bankruptcy has disabled Life plan changes."}
+	if bool(finance_status.get("cash_stress_active", false)) and next_outflow > current_outflow + 0.0001:
+		return {"success": false, "message": "Cash stress is active. Lower or maintain Life costs before increasing monthly outflow."}
 	life_state["housing_id"] = str(housing.get("id", "kost_room"))
 	life_state["lifestyle_id"] = str(lifestyle.get("id", "balanced"))
 	life_state["updated_day_index"] = RunState.day_index
@@ -2998,12 +3184,45 @@ func _apply_life_monthly_obligation_if_due(previous_trade_date: Dictionary, curr
 	if not bool(result.get("success", false)):
 		return {}
 
+	life_state = RunState.get_player_life()
 	life_state["last_obligation_period"] = period_id
 	life_state["last_obligation_day_index"] = RunState.day_index
 	life_state["last_obligation_amount"] = amount
 	life_state["last_obligation_trade_date"] = current_trade_date.duplicate(true)
 	RunState.set_player_life(life_state)
 	RunState.last_day_results["life_obligation"] = result.duplicate(true)
+	return result
+
+
+func _apply_life_loan_payment_if_due(previous_trade_date: Dictionary, current_trade_date: Dictionary) -> Dictionary:
+	if previous_trade_date.is_empty() or current_trade_date.is_empty():
+		return {}
+	var previous_year: int = int(previous_trade_date.get("year", 0))
+	var previous_month: int = int(previous_trade_date.get("month", 0))
+	var current_year: int = int(current_trade_date.get("year", 0))
+	var current_month: int = int(current_trade_date.get("month", 0))
+	if previous_year == current_year and previous_month == current_month:
+		return {}
+	if current_year <= 0 or current_month <= 0:
+		return {}
+
+	var finance: Dictionary = RunState.get_life_finance()
+	var active_loan: Dictionary = finance.get("active_loan", {})
+	if active_loan.is_empty():
+		return {}
+	var period_id: String = "%04d-%02d" % [current_year, current_month]
+	if str(active_loan.get("last_payment_period", "")) == period_id:
+		return {}
+	var amount: float = max(float(active_loan.get("monthly_payment", 0.0)), 0.0)
+	if amount <= 0.0:
+		return {}
+	var result: Dictionary = RunState.apply_life_loan_payment(amount, {
+		"period_id": period_id,
+		"trade_date": current_trade_date.duplicate(true)
+	})
+	if not bool(result.get("success", false)):
+		return {}
+	RunState.last_day_results["life_loan_payment"] = result.duplicate(true)
 	return result
 
 
@@ -3028,6 +3247,41 @@ func _build_life_monthly_obligation() -> Dictionary:
 		"lifestyle_cost": lifestyle_cost,
 		"monthly_extra": monthly_extra
 	}
+
+
+func _life_monthly_outflow_for_state(life_state: Dictionary) -> float:
+	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, str(life_state.get("housing_id", "")))
+	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, str(life_state.get("lifestyle_id", "")))
+	return (
+		max(float(housing.get("monthly_cost", 0.0)), 0.0) +
+		LIFE_BASIC_EXPENSES_MONTHLY +
+		max(float(lifestyle.get("monthly_cost", 0.0)), 0.0) +
+		max(float(life_state.get("monthly_extra", 0.0)), 0.0)
+	)
+
+
+func _life_monthly_outflow_for_options(housing_id: String, lifestyle_id: String, monthly_extra: float = 0.0) -> float:
+	var life_state: Dictionary = {
+		"housing_id": housing_id,
+		"lifestyle_id": lifestyle_id,
+		"monthly_extra": monthly_extra
+	}
+	return _life_monthly_outflow_for_state(life_state)
+
+
+func _estimate_sellable_holdings_value() -> float:
+	var total: float = 0.0
+	var holdings: Dictionary = RunState.player_portfolio.get("holdings", {})
+	for company_id_value in holdings.keys():
+		var company_id: String = str(company_id_value)
+		var holding: Dictionary = holdings.get(company_id_value, {})
+		var shares: int = int(holding.get("shares", 0))
+		if shares <= 0:
+			continue
+		var estimate: Dictionary = RunState.estimate_sell_order(company_id, shares)
+		if bool(estimate.get("success", false)):
+			total += max(float(estimate.get("net_proceeds", 0.0)), 0.0)
+	return total
 
 
 func _life_option_by_id(options: Array, option_id: String) -> Dictionary:
@@ -4673,6 +4927,39 @@ func get_next_trade_date() -> Dictionary:
 
 func format_trade_date(date_info: Dictionary) -> String:
 	return trading_calendar.format_date(date_info)
+
+
+func _format_currency(value: float) -> String:
+	return "%sRp%s" % [
+		"-" if value < 0.0 else "",
+		_format_decimal(absf(value), 2, true)
+	]
+
+
+func _format_decimal(value: float, decimal_places: int = 2, use_grouping: bool = true) -> String:
+	var safe_places: int = max(decimal_places, 0)
+	var decimal_scale: int = 1
+	for _index in range(safe_places):
+		decimal_scale *= 10
+	var scaled_value: int = int(round(absf(value) * float(decimal_scale)))
+	var whole_value: int = int(floor(float(scaled_value) / float(decimal_scale)))
+	var decimal_value: int = scaled_value % decimal_scale
+	var whole_text: String = _format_grouped_integer(whole_value) if use_grouping else str(whole_value)
+	if safe_places <= 0:
+		return whole_text
+	var decimals := str(decimal_value).pad_zeros(safe_places)
+	return "%s,%s" % [whole_text, decimals]
+
+
+func _format_grouped_integer(value: int) -> String:
+	var text: String = str(abs(value))
+	var parts: Array[String] = []
+	while text.length() > 3:
+		parts.push_front(text.substr(text.length() - 3, 3))
+		text = text.substr(0, text.length() - 3)
+	parts.push_front(text)
+	var prefix: String = "-" if value < 0 else ""
+	return prefix + ".".join(parts)
 
 
 func _format_currency_compact(value: float) -> String:

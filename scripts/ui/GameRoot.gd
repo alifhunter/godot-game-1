@@ -475,6 +475,10 @@ var settings_confirm_cancel_button: Button = null
 var pending_settings_confirm_action: String = ""
 var pending_settings_confirm_slot_id: String = ""
 var selected_settings_slot_id: String = ""
+var bankruptcy_overlay: Control = null
+var bankruptcy_body_label: Label = null
+var bankruptcy_menu_button: Button = null
+var bankruptcy_restart_button: Button = null
 @onready var app_window_backdrop: Control = $AppWindowBackdrop
 @onready var app_window_margin: MarginContainer = $AppWindowBackdrop/AppWindowMargin
 @onready var app_window_panel: PanelContainer = $AppWindowBackdrop/AppWindowMargin/AppWindowPanel
@@ -830,6 +834,7 @@ func _ready() -> void:
 	_ensure_watchlist_picker_dialog()
 	_ensure_upgrade_purchase_dialog()
 	_ensure_settings_dialog()
+	_ensure_bankruptcy_overlay()
 	_ensure_daily_recap_dialog()
 	_ensure_dashboard_calendar_event_popup()
 	_ensure_dashboard_index_recap_ui()
@@ -925,6 +930,7 @@ func _ready() -> void:
 	GameManager.network_changed.connect(_on_network_changed)
 	GameManager.thesis_changed.connect(_on_thesis_changed)
 	GameManager.upgrades_changed.connect(_on_upgrades_changed)
+	GameManager.life_changed.connect(_on_life_changed)
 	GameManager.daily_actions_changed.connect(_refresh_daily_action_displays)
 	GameManager.academy_changed.connect(_refresh_academy)
 	GameManager.price_formed.connect(_on_day_progressed)
@@ -2519,6 +2525,17 @@ func _on_portfolio_changed() -> void:
 	_refresh_first_hour_guide_progress()
 
 
+func _on_life_changed() -> void:
+	_refresh_header()
+	_refresh_desktop()
+	if _is_desktop_app_window_open(APP_ID_LIFE):
+		_refresh_life()
+	if active_section_id == "dashboard":
+		_refresh_dashboard()
+	if debug_overlay.visible:
+		_refresh_debug_overlay()
+
+
 func _on_watchlist_changed() -> void:
 	var started_at_usec: int = Time.get_ticks_usec()
 	var previous_selected_company_id: String = selected_company_id
@@ -2707,15 +2724,37 @@ func _refresh_header() -> void:
 	top_day_label.text = "DAY %d  |  %s" % [trading_day_number, GameManager.format_trade_date(current_trade_date)]
 	top_market_label.text = "MARKET %s" % _format_change(RunState.market_sentiment)
 	top_equity_label.text = "EQUITY %s" % _format_currency(RunState.get_total_equity())
-	top_cash_label.text = "CASH AVAILABLE %s" % _format_currency(float(portfolio.get("cash", 0.0)))
+	var cash_value: float = float(portfolio.get("cash", 0.0))
+	top_cash_label.text = "CASH AVAILABLE %s" % _format_currency(cash_value)
 	objective_label.text = ""
+	var finance_status: Dictionary = GameManager.get_finance_status_snapshot() if RunState.has_active_run() else {}
+	var cash_chip_fill: Color = COLOR_STOCKBOT_SURFACE_ALT
+	var cash_chip_edge: Color = COLOR_STOCKBOT_EDGE_STRONG
+	var cash_chip_text: Color = COLOR_STOCKBOT_BLUE
+	top_cash_label.tooltip_text = "Cash available for new orders."
+	if bool(finance_status.get("bankrupt", false)):
+		top_cash_label.text = "BANKRUPT | CASH %s" % _format_currency(cash_value)
+		top_cash_label.tooltip_text = "Bankruptcy has disabled trading, loans, upgrades, and Advance Day."
+		cash_chip_fill = COLOR_STOCKBOT_BEAR_TINT
+		cash_chip_edge = COLOR_STOCKBOT_BEAR_EDGE
+		cash_chip_text = COLOR_STOCKBOT_BEAR
+	elif cash_value < 0.0:
+		top_cash_label.tooltip_text = "Cash stress active. Sell holdings, lower Life costs, or use Life > Finance."
+		cash_chip_fill = COLOR_STOCKBOT_BEAR_TINT
+		cash_chip_edge = COLOR_STOCKBOT_BEAR_EDGE
+		cash_chip_text = COLOR_STOCKBOT_BEAR
+	elif bool(finance_status.get("loan_payment_risky", false)):
+		top_cash_label.tooltip_text = "Emergency loan payment reserve is not covered."
+		cash_chip_fill = Color(COLOR_STOCKBOT_AMBER.r, COLOR_STOCKBOT_AMBER.g, COLOR_STOCKBOT_AMBER.b, 0.12)
+		cash_chip_edge = COLOR_STOCKBOT_AMBER
+		cash_chip_text = COLOR_STOCKBOT_AMBER
 	_set_label_tone(top_market_label, _color_for_change(RunState.market_sentiment))
-	_set_label_tone(top_cash_label, COLOR_ACCENT)
+	_set_label_tone(top_cash_label, cash_chip_text)
 	_set_label_tone(top_section_label, COLOR_WARNING)
 	_set_label_tone(top_day_label, COLOR_WARNING)
 	_style_stockbot_label_chip(top_market_label, COLOR_STOCKBOT_BLUE_TINT, COLOR_STOCKBOT_BLUE_EDGE, _color_for_change(RunState.market_sentiment))
 	_style_stockbot_label_chip(top_equity_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_TEXT)
-	_style_stockbot_label_chip(top_cash_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_BLUE)
+	_style_stockbot_label_chip(top_cash_label, cash_chip_fill, cash_chip_edge, cash_chip_text)
 	_style_stockbot_label_chip(top_section_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_AMBER)
 
 
@@ -3641,19 +3680,48 @@ func _refresh_figma_desktop_status() -> void:
 	if not RunState.has_active_run():
 		desktop_figma_date_label.text = "NO RUN"
 		desktop_figma_cash_label.text = "RP 0"
+		desktop_figma_cash_label.tooltip_text = ""
+		desktop_figma_cash_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+		if desktop_figma_cash_panel != null:
+			_style_desktop_cash_panel(desktop_figma_cash_panel)
 		if desktop_advance_day_button != null:
 			desktop_advance_day_button.disabled = true
 			if not advance_day_processing:
 				desktop_advance_day_button.text = "ADVANCE DAY"
+				desktop_advance_day_button.tooltip_text = "Start or load a run before advancing."
 		return
 	var current_trade_date: Dictionary = GameManager.get_current_trade_date()
 	var portfolio: Dictionary = GameManager.get_portfolio_snapshot()
+	var finance_status: Dictionary = GameManager.get_finance_status_snapshot()
+	var cash_value: float = float(portfolio.get("cash", 0.0))
 	desktop_figma_date_label.text = _format_desktop_figma_date(current_trade_date).to_upper()
-	desktop_figma_cash_label.text = _format_desktop_figma_cash(float(portfolio.get("cash", 0.0)))
+	desktop_figma_cash_label.text = _format_desktop_figma_cash(cash_value)
+	desktop_figma_cash_label.tooltip_text = "Cash available for new orders."
+	desktop_figma_cash_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	if desktop_figma_cash_panel != null:
+		_style_desktop_cash_panel(desktop_figma_cash_panel)
+	if bool(finance_status.get("bankrupt", false)):
+		desktop_figma_cash_label.text = "BANKRUPT  |  %s" % _format_desktop_figma_cash(cash_value)
+		desktop_figma_cash_label.tooltip_text = "Bankruptcy has disabled trading, loans, upgrades, and Advance Day."
+		desktop_figma_cash_label.add_theme_color_override("font_color", Color(0.521569, 0.160784, 0.141176, 1))
+	elif cash_value < 0.0:
+		desktop_figma_cash_label.tooltip_text = "Cash stress active. Sell holdings, lower Life costs, or use Life > Finance."
+		desktop_figma_cash_label.add_theme_color_override("font_color", Color(0.521569, 0.160784, 0.141176, 1))
+	elif bool(finance_status.get("loan_payment_risky", false)):
+		desktop_figma_cash_label.tooltip_text = "Emergency loan payment reserve is not covered."
+		desktop_figma_cash_label.add_theme_color_override("font_color", COLOR_DESKTOP_GOLD)
 	if desktop_advance_day_button != null:
-		desktop_advance_day_button.disabled = advance_day_processing
+		var bankrupt: bool = bool(finance_status.get("bankrupt", false))
+		desktop_advance_day_button.disabled = advance_day_processing or bankrupt
 		if not advance_day_processing:
-			desktop_advance_day_button.text = "ADVANCE DAY"
+			desktop_advance_day_button.text = "BANKRUPT" if bankrupt else "ADVANCE DAY"
+			var advance_block_reason: String = GameManager.get_cash_stress_block_reason("advance_day")
+			if bankrupt:
+				desktop_advance_day_button.tooltip_text = "Run ended. Use the bankruptcy overlay or Settings."
+			elif not advance_block_reason.is_empty() and advance_block_reason != "BANKRUPTCY_REQUIRED":
+				desktop_advance_day_button.tooltip_text = advance_block_reason
+			else:
+				desktop_advance_day_button.tooltip_text = "Advance to the next trading day."
 
 
 func _format_desktop_figma_date(date_info: Dictionary) -> String:
@@ -6256,11 +6324,20 @@ func _refresh_upgrades() -> void:
 
 	var snapshot: Dictionary = GameManager.get_upgrade_shop_snapshot()
 	var action_snapshot: Dictionary = snapshot.get("daily_action", {})
+	var upgrade_block_reason: String = ""
+	for track_value in snapshot.get("tracks", []):
+		if typeof(track_value) == TYPE_DICTIONARY:
+			upgrade_block_reason = str(track_value.get("block_reason", ""))
+			if not upgrade_block_reason.is_empty():
+				break
 	upgrade_cash_label.text = "Cash %s" % _format_currency(float(snapshot.get("cash", 0.0)))
-	upgrade_summary_label.text = "Network AP %d/%d today. Upgrades are paid from available cash." % [
-		int(action_snapshot.get("remaining", 0)),
-		int(action_snapshot.get("limit", 10))
-	]
+	if not upgrade_block_reason.is_empty():
+		upgrade_summary_label.text = upgrade_block_reason
+	else:
+		upgrade_summary_label.text = "Network AP %d/%d today. Upgrades are paid from available cash." % [
+			int(action_snapshot.get("remaining", 0)),
+			int(action_snapshot.get("limit", 10))
+		]
 
 	for track_value in snapshot.get("tracks", []):
 		var track: Dictionary = track_value
@@ -6318,7 +6395,8 @@ func _build_upgrade_card(track: Dictionary) -> PanelContainer:
 			_format_currency(float(track.get("next_cost", 0.0)))
 		]
 		purchase_button.disabled = not bool(track.get("can_purchase", false))
-		purchase_button.tooltip_text = "Next: %s" % str(track.get("next_effect_label", ""))
+		var block_reason: String = str(track.get("block_reason", ""))
+		purchase_button.tooltip_text = block_reason if not block_reason.is_empty() else "Next: %s" % str(track.get("next_effect_label", ""))
 		purchase_button.pressed.connect(_on_upgrade_purchase_pressed.bind(str(track.get("id", ""))))
 	row.add_child(purchase_button)
 	_style_button(purchase_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
@@ -12091,6 +12169,37 @@ func _on_settings_confirm_confirm_pressed() -> void:
 		GameManager.return_to_menu()
 
 
+func _show_bankruptcy_overlay(bankruptcy: Dictionary = {}) -> void:
+	if bankruptcy_overlay == null:
+		return
+	var resolved_bankruptcy: Dictionary = bankruptcy
+	if resolved_bankruptcy.is_empty():
+		var finance_status: Dictionary = GameManager.get_finance_status_snapshot()
+		resolved_bankruptcy = finance_status.get("bankruptcy", {})
+	var trade_date: Dictionary = resolved_bankruptcy.get("trade_date", GameManager.get_current_trade_date())
+	var days_survived: int = max(int(resolved_bankruptcy.get("day_index", RunState.day_index)), 0)
+	bankruptcy_body_label.text = "The run has ended because cash stayed negative after the grace period and no recovery path was available.\n\nFinal day: %s\nDays survived: %d\nCash: %s\nEquity: %s\nMarket value: %s\nReason: %s" % [
+		GameManager.format_trade_date(trade_date),
+		days_survived,
+		_format_currency(float(resolved_bankruptcy.get("cash", RunState.player_portfolio.get("cash", 0.0)))),
+		_format_currency(float(resolved_bankruptcy.get("equity", RunState.get_total_equity()))),
+		_format_currency(float(resolved_bankruptcy.get("market_value", RunState.get_portfolio_market_value()))),
+		str(resolved_bankruptcy.get("reason", "cash stress"))
+	]
+	bankruptcy_overlay.visible = true
+	bankruptcy_overlay.move_to_front()
+
+
+func _on_bankruptcy_menu_pressed() -> void:
+	GameManager.return_to_menu()
+
+
+func _on_bankruptcy_restart_pressed() -> void:
+	var difficulty_config: Dictionary = GameManager.get_current_difficulty_config()
+	var difficulty_id: String = str(difficulty_config.get("id", GameManager.DEFAULT_DIFFICULTY_ID))
+	GameManager.start_new_run(0, difficulty_id, false)
+
+
 func _on_app_window_minimize_pressed() -> void:
 	_set_active_app(APP_ID_DESKTOP)
 
@@ -12185,6 +12294,15 @@ func _on_next_day_pressed() -> void:
 		return
 	if not RunState.has_active_run():
 		return
+	var finance_gate: Dictionary = GameManager.resolve_advance_day_finance_gate()
+	if not bool(finance_gate.get("success", false)):
+		var gate_message: String = str(finance_gate.get("message", "Advance Day is blocked."))
+		status_message = gate_message
+		_show_toast(gate_message, false)
+		if bool(finance_gate.get("bankrupt", false)):
+			_show_bankruptcy_overlay(finance_gate.get("bankruptcy", {}))
+		_refresh_all(false)
+		return
 	var started_at_usec: int = Time.get_ticks_usec()
 	advance_day_processing = true
 	pending_daily_recap_snapshot = {}
@@ -12198,7 +12316,17 @@ func _on_next_day_pressed() -> void:
 	await get_tree().process_frame
 	_set_advance_day_phase("Saving Run")
 	await get_tree().process_frame
-	GameManager.advance_day_deferred_save()
+	var advance_result: Dictionary = GameManager.advance_day_deferred_save()
+	if not bool(advance_result.get("success", true)):
+		var block_message: String = str(advance_result.get("message", "Advance Day is blocked."))
+		status_message = block_message
+		_show_toast(block_message, false)
+		if bool(advance_result.get("bankrupt", false)):
+			_show_bankruptcy_overlay(advance_result.get("bankruptcy", {}))
+		_finish_advance_day_processing()
+		_refresh_all(false)
+		_log_perf_elapsed("_on_next_day_pressed", started_at_usec)
+		return
 	if advance_day_processing:
 		_finish_advance_day_processing()
 		_schedule_advance_day_post_recap_save_flush()
@@ -12474,6 +12602,12 @@ func _build_daily_recap_cash_ap_lines(snapshot: Dictionary) -> Array[String]:
 			_format_currency(float(life_obligation.get("amount", 0.0))),
 			_format_currency(float(life_obligation.get("cash_after", first_month.get("cash", 0.0))))
 		])
+	var life_loan_payment: Dictionary = last_day_results.get("life_loan_payment", {})
+	if not life_loan_payment.is_empty():
+		lines.append("Emergency loan paid %s; cash now %s." % [
+			_format_currency(float(life_loan_payment.get("amount", 0.0))),
+			_format_currency(float(life_loan_payment.get("cash_after", first_month.get("cash", 0.0))))
+		])
 	var next_life: Dictionary = first_month.get("next_life_payment", snapshot.get("life", {}).get("next_life_payment", {}))
 	if not next_life.is_empty() and bool(next_life.get("warning", false)):
 		lines.append("Next Life payment: %s due %s." % [
@@ -12492,6 +12626,7 @@ func _build_daily_recap_fail_state_lines(snapshot: Dictionary) -> Array[String]:
 	var lines: Array[String] = []
 	var last_day_results: Dictionary = snapshot.get("last_day_results", {})
 	var life_obligation: Dictionary = last_day_results.get("life_obligation", {})
+	var life_loan_payment: Dictionary = last_day_results.get("life_loan_payment", {})
 	if not life_obligation.is_empty():
 		var amount: float = float(life_obligation.get("amount", 0.0))
 		var cash_after: float = float(life_obligation.get("cash_after", 0.0))
@@ -12502,6 +12637,15 @@ func _build_daily_recap_fail_state_lines(snapshot: Dictionary) -> Array[String]:
 			])
 			if cash_after < 0.0:
 				lines.append("Cash stress: obligations pushed cash below zero. Sell holdings, lower Life costs, or keep more cash before next month.")
+	if not life_loan_payment.is_empty():
+		var payment_amount: float = float(life_loan_payment.get("amount", 0.0))
+		var payment_cash_after: float = float(life_loan_payment.get("cash_after", 0.0))
+		lines.append("Loan: paid %s emergency loan installment. Cash now %s." % [
+			_format_currency(payment_amount),
+			_format_currency(payment_cash_after)
+		])
+		if payment_cash_after < 0.0:
+			lines.append("Cash stress: loan payment pushed cash below zero. Use Life > Finance or sell holdings before the grace expires.")
 
 	var missed_requests: int = 0
 	for request_result_value in last_day_results.get("network_request_results", []):
@@ -12526,9 +12670,20 @@ func _build_daily_recap_fail_state_lines(snapshot: Dictionary) -> Array[String]:
 		lines.append("Network: %d read%s hurt trust. Review the journal before acting on similar tips." % [poor_tip_reads, tip_suffix])
 
 	var life: Dictionary = snapshot.get("life", {})
+	var finance_status: Dictionary = life.get("finance", {})
 	var cash: float = float(life.get("cash", 0.0))
 	var monthly_outflow: float = float(life.get("monthly_outflow", 0.0))
 	var runway_months: float = float(life.get("runway_months", 999.0))
+	if bool(finance_status.get("bankrupt", false)):
+		lines.append("Bankruptcy: the run has ended because cash stayed negative with no recovery path.")
+	elif bool(finance_status.get("cash_stress_active", false)):
+		lines.append("Cash stress: %d trading day%s of grace remain. Life > Finance shows recovery options." % [
+			int(finance_status.get("cash_stress_days_remaining", 0)),
+			"" if int(finance_status.get("cash_stress_days_remaining", 0)) == 1 else "s"
+		])
+	if bool(finance_status.get("loan_payment_risky", false)):
+		var active_loan: Dictionary = finance_status.get("active_loan", {})
+		lines.append("Loan reserve: keep cash above %s before new spending." % _format_currency(float(active_loan.get("monthly_payment", 0.0))))
 	if monthly_outflow > 0.0 and cash >= 0.0 and runway_months < 3.0:
 		lines.append("Runway: cash covers %.1f month(s). Keep the next trade small or raise cash." % runway_months)
 	elif monthly_outflow > 0.0 and cash < monthly_outflow:
@@ -13597,6 +13752,85 @@ func _style_upgrade_purchase_dialog() -> void:
 	var cancel_button: Button = upgrade_purchase_dialog.get_cancel_button()
 	if cancel_button != null:
 		_style_button(cancel_button, COLOR_DESKTOP_PANEL, COLOR_DESKTOP_FRAME, COLOR_DESKTOP_TEXT, 5)
+
+
+func _ensure_bankruptcy_overlay() -> void:
+	if bankruptcy_overlay != null:
+		return
+	bankruptcy_overlay = Control.new()
+	bankruptcy_overlay.name = "BankruptcyOverlay"
+	bankruptcy_overlay.visible = false
+	bankruptcy_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	bankruptcy_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(bankruptcy_overlay)
+
+	var scrim := ColorRect.new()
+	scrim.name = "BankruptcyScrim"
+	scrim.color = Color(0.0, 0.0, 0.0, 0.42)
+	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bankruptcy_overlay.add_child(scrim)
+
+	var center := CenterContainer.new()
+	center.name = "BankruptcyCenter"
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bankruptcy_overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.name = "BankruptcyPanel"
+	panel.custom_minimum_size = Vector2(620, 0)
+	center.add_child(panel)
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = COLOR_DESKTOP_CREAM
+	panel_style.border_color = Color(0.368627, 0.160784, 0.176471, 1)
+	panel_style.set_border_width_all(3)
+	panel_style.set_corner_radius_all(6)
+	panel.add_theme_stylebox_override("panel", panel_style)
+
+	var margin := MarginContainer.new()
+	margin.name = "BankruptcyMargin"
+	margin.add_theme_constant_override("margin_left", 24)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_right", 24)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.name = "BankruptcyVBox"
+	vbox.add_theme_constant_override("separation", 14)
+	margin.add_child(vbox)
+	var title := Label.new()
+	title.name = "BankruptcyTitleLabel"
+	title.text = "Bankruptcy"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", Color(0.368627, 0.160784, 0.176471, 1))
+	vbox.add_child(title)
+
+	bankruptcy_body_label = Label.new()
+	bankruptcy_body_label.name = "BankruptcyBodyLabel"
+	bankruptcy_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	bankruptcy_body_label.add_theme_font_size_override("font_size", 14)
+	bankruptcy_body_label.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
+	vbox.add_child(bankruptcy_body_label)
+
+	var button_row := HBoxContainer.new()
+	button_row.name = "BankruptcyButtonRow"
+	button_row.alignment = BoxContainer.ALIGNMENT_END
+	button_row.add_theme_constant_override("separation", 10)
+	vbox.add_child(button_row)
+	bankruptcy_menu_button = Button.new()
+	bankruptcy_menu_button.name = "BankruptcyMenuButton"
+	bankruptcy_menu_button.text = "Back to Menu"
+	bankruptcy_menu_button.pressed.connect(_on_bankruptcy_menu_pressed)
+	button_row.add_child(bankruptcy_menu_button)
+	bankruptcy_restart_button = Button.new()
+	bankruptcy_restart_button.name = "BankruptcyRestartButton"
+	bankruptcy_restart_button.text = "Restart Run"
+	bankruptcy_restart_button.pressed.connect(_on_bankruptcy_restart_pressed)
+	button_row.add_child(bankruptcy_restart_button)
+	_style_button(bankruptcy_menu_button, COLOR_DESKTOP_PANEL, COLOR_DESKTOP_FRAME, COLOR_DESKTOP_TEXT, 5)
+	_style_button(bankruptcy_restart_button, Color(0.368627, 0.160784, 0.176471, 1), Color(0.709804, 0.34902, 0.372549, 1), COLOR_DESKTOP_CREAM, 5)
 
 
 func _ensure_settings_dialog() -> void:
@@ -15406,14 +15640,21 @@ func _refresh_order_controls(snapshot: Dictionary) -> void:
 	var available_cash: float = float(portfolio.get("cash", 0.0))
 	var max_sellable_lots: int = int(floor(float(shares_owned) / float(lot_size)))
 	var buy_total_cost: float = float(buy_estimate.get("total_cost", 0.0))
+	var buy_block_reason: String = GameManager.get_cash_stress_block_reason("buy") if RunState.has_active_run() else ""
+	var sell_block_reason: String = GameManager.get_cash_stress_block_reason("sell") if RunState.has_active_run() else ""
 	var can_buy: bool = bool(buy_estimate.get("success", false)) and buy_total_cost <= available_cash + 0.0001
 	var can_sell: bool = bool(sell_estimate.get("success", false)) and max_sellable_lots >= current_lots
+	if not buy_block_reason.is_empty():
+		can_buy = false
+	if not sell_block_reason.is_empty():
+		can_sell = false
 	var current_price: float = float(snapshot.get("current_price", 0.0))
 	var previous_close: float = float(snapshot.get("previous_close", current_price))
 	var price_change_value: float = current_price - previous_close
 	var active_estimate: Dictionary = sell_estimate if active_order_side == "sell" else buy_estimate
 	var estimated_total: float = float(active_estimate.get("net_proceeds", 0.0)) if active_order_side == "sell" else float(active_estimate.get("total_cost", 0.0))
 	var can_submit: bool = can_sell if active_order_side == "sell" else can_buy
+	var active_block_reason: String = sell_block_reason if active_order_side == "sell" else buy_block_reason
 	var impactability: Dictionary = snapshot.get("impactability", {})
 	var order_impact_hint: Dictionary = _build_order_impact_hint(snapshot, active_estimate, active_order_side)
 
@@ -15435,11 +15676,14 @@ func _refresh_order_controls(snapshot: Dictionary) -> void:
 	estimated_total_value_label.text = _format_currency(estimated_total)
 	if not str(order_impact_hint.get("label", "")).is_empty():
 		estimated_total_value_label.text += "  |  %s" % str(order_impact_hint.get("label", ""))
-	estimated_total_value_label.tooltip_text = str(order_impact_hint.get("detail", impactability.get("detail", "")))
+	if not active_block_reason.is_empty():
+		estimated_total_value_label.text += "  |  Blocked"
+	estimated_total_value_label.tooltip_text = active_block_reason if not active_block_reason.is_empty() else str(order_impact_hint.get("detail", impactability.get("detail", "")))
 	submit_order_button.text = "Submit Sell Order" if active_order_side == "sell" else "Submit Buy Order"
 	submit_order_button.disabled = not can_submit
-	buy_button.disabled = false
-	sell_button.disabled = false
+	buy_button.disabled = not sell_block_reason.is_empty() and not buy_block_reason.is_empty()
+	sell_button.disabled = buy_button.disabled
+	submit_order_button.tooltip_text = active_block_reason if not active_block_reason.is_empty() else "Submit the active order."
 	_refresh_submit_order_button_style()
 	_update_order_side_buttons()
 	_set_label_tone(order_price_change_label, _color_for_change(float(snapshot.get("daily_change_pct", 0.0))))

@@ -9,10 +9,13 @@ const COLOR_MUTED := Color(0.403922, 0.380392, 0.301961, 1)
 const COLOR_BORDER := Color(0.52549, 0.396078, 0.160784, 1)
 const COLOR_POSITIVE := Color(0.168627, 0.423529, 0.27451, 1)
 const COLOR_NEGATIVE := Color(0.607843, 0.160784, 0.145098, 1)
+const COLOR_WARNING_BG := Color(0.988235, 0.858824, 0.482353, 1)
+const COLOR_DANGER_BG := Color(0.521569, 0.160784, 0.141176, 1)
 
 var snapshot: Dictionary = {}
 var suppress_option_refresh: bool = false
 
+var life_tabs: TabContainer = null
 var status_label: Label = null
 var summary_label: Label = null
 var cash_label: Label = null
@@ -30,6 +33,14 @@ var update_plan_button: Button = null
 var budget_rows: VBoxContainer = null
 var dividend_rows: VBoxContainer = null
 var note_label: Label = null
+var finance_status_label: Label = null
+var finance_guidance_label: Label = null
+var emergency_loan_button: Button = null
+var emergency_loan_terms_label: Label = null
+var active_loan_panel: PanelContainer = null
+var active_loan_label: Label = null
+var bankruptcy_status_panel: PanelContainer = null
+var bankruptcy_status_label: Label = null
 
 
 func _ready() -> void:
@@ -82,6 +93,7 @@ func refresh() -> void:
 	_refresh_option_details()
 	_refresh_budget_rows()
 	_refresh_dividend_rows()
+	_refresh_finance_tab()
 
 
 func _build_ui() -> void:
@@ -126,12 +138,34 @@ func _build_ui() -> void:
 	_style_label(next_payment_label, COLOR_MUTED, 12)
 	header_vbox.add_child(next_payment_label)
 
+	life_tabs = TabContainer.new()
+	life_tabs.name = "LifeTabs"
+	life_tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	life_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(life_tabs)
+
+	var overview_tab := VBoxContainer.new()
+	overview_tab.name = "LifeOverviewTab"
+	overview_tab.add_theme_constant_override("separation", 10)
+	overview_tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	overview_tab.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	life_tabs.add_child(overview_tab)
+	life_tabs.set_tab_title(life_tabs.get_tab_count() - 1, "Overview")
+
+	var finance_tab := VBoxContainer.new()
+	finance_tab.name = "LifeFinanceTab"
+	finance_tab.add_theme_constant_override("separation", 10)
+	finance_tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	finance_tab.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	life_tabs.add_child(finance_tab)
+	life_tabs.set_tab_title(life_tabs.get_tab_count() - 1, "Finance")
+
 	var stat_grid := GridContainer.new()
 	stat_grid.name = "LifeStatGrid"
 	stat_grid.columns = 3
 	stat_grid.add_theme_constant_override("h_separation", 8)
 	stat_grid.add_theme_constant_override("v_separation", 8)
-	root.add_child(stat_grid)
+	overview_tab.add_child(stat_grid)
 	cash_label = _add_stat_card(stat_grid, "Cash", "LifeCashLabel")
 	equity_label = _add_stat_card(stat_grid, "Equity", "LifeEquityLabel")
 	runway_label = _add_stat_card(stat_grid, "Runway", "LifeRunwayLabel")
@@ -144,7 +178,7 @@ func _build_ui() -> void:
 	split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	split.add_theme_constant_override("separation", 10)
-	root.add_child(split)
+	overview_tab.add_child(split)
 
 	var plan_panel := _make_panel("LifePlanPanel")
 	plan_panel.custom_minimum_size = Vector2(280, 0)
@@ -195,6 +229,7 @@ func _build_ui() -> void:
 	dividend_rows.add_theme_constant_override("separation", 6)
 	dividend_scroll.add_child(dividend_rows)
 
+	_build_finance_tab(finance_tab)
 	_style_buttons(self)
 
 
@@ -206,8 +241,142 @@ func _set_empty_state() -> void:
 			value_label.text = "-"
 	if next_payment_label != null:
 		next_payment_label.text = "-"
+	if finance_status_label != null:
+		finance_status_label.text = "Start or load a run to use Finance."
+	if emergency_loan_button != null:
+		emergency_loan_button.disabled = true
 	_clear_rows(budget_rows)
 	_clear_rows(dividend_rows)
+
+
+func _build_finance_tab(finance_tab: VBoxContainer) -> void:
+	var status_panel := _make_panel("LifeFinanceStatusPanel")
+	status_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	finance_tab.add_child(status_panel)
+	var status_vbox := _panel_vbox(status_panel, "LifeFinanceStatusVBox")
+	status_vbox.add_child(_make_title("Finance"))
+	finance_status_label = _make_body_label("LifeFinanceStatusLabel")
+	status_vbox.add_child(finance_status_label)
+	finance_guidance_label = _make_body_label("LifeFinanceGuidanceLabel")
+	status_vbox.add_child(finance_guidance_label)
+
+	var loan_offer_panel := _make_panel("LifeEmergencyLoanPanel")
+	loan_offer_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	finance_tab.add_child(loan_offer_panel)
+	var loan_offer_vbox := _panel_vbox(loan_offer_panel, "LifeEmergencyLoanVBox")
+	loan_offer_vbox.add_child(_make_title("Emergency Loan"))
+	emergency_loan_terms_label = _make_body_label("LifeEmergencyLoanTermsLabel")
+	loan_offer_vbox.add_child(emergency_loan_terms_label)
+	emergency_loan_button = Button.new()
+	emergency_loan_button.name = "LifeEmergencyLoanButton"
+	emergency_loan_button.text = "Take Emergency Loan"
+	emergency_loan_button.pressed.connect(_on_emergency_loan_pressed)
+	loan_offer_vbox.add_child(emergency_loan_button)
+
+	active_loan_panel = _make_panel("LifeActiveLoanPanel")
+	active_loan_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	finance_tab.add_child(active_loan_panel)
+	var active_loan_vbox := _panel_vbox(active_loan_panel, "LifeActiveLoanVBox")
+	active_loan_vbox.add_child(_make_title("Active Loan"))
+	active_loan_label = _make_body_label("LifeActiveLoanLabel")
+	active_loan_vbox.add_child(active_loan_label)
+
+	bankruptcy_status_panel = _make_panel("LifeBankruptcyStatusPanel")
+	bankruptcy_status_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	finance_tab.add_child(bankruptcy_status_panel)
+	var bankruptcy_vbox := _panel_vbox(bankruptcy_status_panel, "LifeBankruptcyStatusVBox")
+	bankruptcy_vbox.add_child(_make_title("Bankruptcy Risk"))
+	bankruptcy_status_label = _make_body_label("LifeBankruptcyStatusLabel")
+	bankruptcy_vbox.add_child(bankruptcy_status_label)
+
+
+func _refresh_finance_tab() -> void:
+	if finance_status_label == null:
+		return
+	var finance_status: Dictionary = snapshot.get("finance", {})
+	var finance: Dictionary = finance_status.get("finance", {})
+	var cash: float = float(finance_status.get("cash", snapshot.get("cash", 0.0)))
+	var monthly_outflow: float = float(finance_status.get("monthly_outflow", snapshot.get("monthly_outflow", 0.0)))
+	var runway_months: float = float(finance_status.get("runway_months", snapshot.get("runway_months", 999.0)))
+	var active_loan: Dictionary = finance_status.get("active_loan", {})
+	var bankrupt: bool = bool(finance_status.get("bankrupt", false))
+	var stress_active: bool = bool(finance_status.get("cash_stress_active", false))
+	var status_text: String = "Cash is stable. Runway: %s." % _format_runway(runway_months)
+	var status_color: Color = COLOR_MUTED
+	if bankrupt:
+		status_text = "Bankrupt. Trading, new loans, upgrades, and Advance Day are disabled."
+		status_color = COLOR_NEGATIVE
+	elif stress_active:
+		status_text = "Cash stress active: cash is %s. Grace: %d trading day%s remaining." % [
+			_format_currency(cash),
+			int(finance_status.get("cash_stress_days_remaining", 0)),
+			"" if int(finance_status.get("cash_stress_days_remaining", 0)) == 1 else "s"
+		]
+		status_color = COLOR_NEGATIVE
+	elif runway_months < 0.5:
+		status_text = "Runway is under half a month. Emergency credit is available."
+		status_color = COLOR_NEGATIVE
+	elif runway_months < 3.0:
+		status_text = "Runway is thin. Keep position size small."
+		status_color = COLOR_BROWN
+	finance_status_label.text = status_text
+	_style_label(finance_status_label, status_color, 12)
+	if finance_guidance_label != null:
+		finance_guidance_label.text = "Recovery order: sell holdings, lower Life costs, use declared dividends, then use emergency credit only when needed."
+
+	var loan_eligible: bool = bool(finance_status.get("loan_eligible", false))
+	var proposed_amount: float = float(finance_status.get("proposed_loan_amount", 0.0))
+	var payment_count: int = int(finance_status.get("loan_payment_count", 6))
+	var repayment_multiplier: float = float(finance_status.get("loan_repayment_multiplier", 1.24))
+	if emergency_loan_terms_label != null:
+		if loan_eligible:
+			emergency_loan_terms_label.text = "Offer: %s now. Repay %s across %d monthly payments." % [
+				_format_currency(proposed_amount),
+				_format_currency(proposed_amount * repayment_multiplier),
+				payment_count
+			]
+		else:
+			emergency_loan_terms_label.text = str(finance_status.get("loan_eligibility_reason", "Emergency loan is not available."))
+	if emergency_loan_button != null:
+		emergency_loan_button.disabled = not loan_eligible
+		if loan_eligible:
+			emergency_loan_button.text = "Take %s Loan" % _format_currency(proposed_amount)
+		else:
+			emergency_loan_button.text = "Emergency Loan Locked"
+
+	if active_loan_panel != null:
+		active_loan_panel.visible = not active_loan.is_empty()
+	if active_loan_label != null:
+		if active_loan.is_empty():
+			active_loan_label.text = "No active emergency loan."
+			_style_label(active_loan_label, COLOR_MUTED, 12)
+		else:
+			active_loan_label.text = "Principal %s | Payment %s | %d/%d payments left%s" % [
+				_format_currency(float(active_loan.get("principal", 0.0))),
+				_format_currency(float(active_loan.get("monthly_payment", 0.0))),
+				int(active_loan.get("payments_remaining", 0)),
+				int(active_loan.get("payment_count", 0)),
+				" | reserve not covered" if bool(finance_status.get("loan_payment_risky", false)) else ""
+			]
+			_style_label(active_loan_label, COLOR_NEGATIVE if bool(finance_status.get("loan_payment_risky", false)) else COLOR_MUTED, 12)
+
+	if bankruptcy_status_panel != null:
+		bankruptcy_status_panel.visible = bankrupt or stress_active or cash < monthly_outflow
+	if bankruptcy_status_label != null:
+		if bankrupt:
+			var bankruptcy: Dictionary = finance_status.get("bankruptcy", finance.get("bankruptcy", {}))
+			bankruptcy_status_label.text = "Final cash %s | Equity %s | Reason: %s" % [
+				_format_currency(float(bankruptcy.get("cash", cash))),
+				_format_currency(float(bankruptcy.get("equity", snapshot.get("equity", 0.0)))),
+				str(bankruptcy.get("reason", "cash stress"))
+			]
+			_style_label(bankruptcy_status_label, COLOR_NEGATIVE, 12)
+		elif stress_active:
+			bankruptcy_status_label.text = "If grace expires, Advance Day will require selling, using Finance, or bankruptcy if no recovery path exists."
+			_style_label(bankruptcy_status_label, COLOR_NEGATIVE, 12)
+		else:
+			bankruptcy_status_label.text = "No bankruptcy risk yet. Cash below one month of costs still deserves attention."
+			_style_label(bankruptcy_status_label, COLOR_MUTED, 12)
 
 
 func _populate_option(option: OptionButton, rows: Array, selected_id: String) -> void:
@@ -344,6 +513,12 @@ func _on_update_plan_pressed() -> void:
 	status_label.text = str(result.get("message", "Life plan updated."))
 	if bool(result.get("success", false)):
 		refresh()
+
+
+func _on_emergency_loan_pressed() -> void:
+	var result: Dictionary = GameManager.take_emergency_loan()
+	status_label.text = str(result.get("message", "Finance updated."))
+	refresh()
 
 
 func _on_life_changed() -> void:

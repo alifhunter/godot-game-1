@@ -9471,6 +9471,20 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 	var backfilled_life: Dictionary = RunState.get_player_life()
 	if str(backfilled_life.get("housing_id", "")).is_empty() or str(backfilled_life.get("lifestyle_id", "")).is_empty():
 		return "Smoke test expected old saves without player_life to backfill a default Life plan."
+	var legacy_finance_state: Dictionary = baseline_state.duplicate(true)
+	legacy_finance_state["save_schema_version"] = 3
+	var legacy_life_state: Dictionary = legacy_finance_state.get("player_life", {}).duplicate(true)
+	legacy_life_state.erase("finance")
+	legacy_finance_state["player_life"] = legacy_life_state
+	RunState.load_from_dict(legacy_finance_state)
+	var backfilled_finance: Dictionary = RunState.get_life_finance()
+	if (
+		not backfilled_finance.has("active_loan") or
+		not backfilled_finance.has("cash_stress_active") or
+		not backfilled_finance.has("bankrupt") or
+		bool(backfilled_finance.get("bankrupt", false))
+	):
+		return "Smoke test expected v3 saves without Life finance to backfill empty loan, cash stress, and bankruptcy state."
 
 	RunState.load_from_dict(baseline_state)
 	game_root._refresh_all()
@@ -9489,6 +9503,13 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 	var life_budget_rows: VBoxContainer = game_root.find_child("LifeBudgetRows", true, false) as VBoxContainer
 	var life_runway_label: Label = game_root.find_child("LifeRunwayLabel", true, false) as Label
 	var life_dividend_rows: VBoxContainer = game_root.find_child("LifeDividendRows", true, false) as VBoxContainer
+	var life_tabs: TabContainer = game_root.find_child("LifeTabs", true, false) as TabContainer
+	var life_overview_tab: Control = game_root.find_child("LifeOverviewTab", true, false) as Control
+	var life_finance_tab: Control = game_root.find_child("LifeFinanceTab", true, false) as Control
+	var life_finance_status_label: Label = game_root.find_child("LifeFinanceStatusLabel", true, false) as Label
+	var life_emergency_loan_button: Button = game_root.find_child("LifeEmergencyLoanButton", true, false) as Button
+	var life_active_loan_panel: PanelContainer = game_root.find_child("LifeActiveLoanPanel", true, false) as PanelContainer
+	var life_bankruptcy_status_panel: PanelContainer = game_root.find_child("LifeBankruptcyStatusPanel", true, false) as PanelContainer
 	var life_snapshot: Dictionary = GameManager.get_life_snapshot()
 	if (
 		life_window == null or
@@ -9510,7 +9531,15 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 		life_runway_label == null or
 		life_runway_label.text.is_empty() or
 		life_dividend_rows == null or
+		life_tabs == null or
+		life_overview_tab == null or
+		life_finance_tab == null or
+		life_finance_status_label == null or
+		life_emergency_loan_button == null or
+		life_active_loan_panel == null or
+		life_bankruptcy_status_panel == null or
 		life_snapshot.is_empty() or
+		not life_snapshot.has("finance") or
 		float(life_snapshot.get("monthly_outflow", 0.0)) <= 0.0 or
 		not life_snapshot.has("housing_options") or
 		not life_snapshot.has("lifestyle_options")
@@ -9568,6 +9597,139 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 	if not monthly_obligation_trade_found:
 		return "Smoke test expected monthly Life obligations to appear in portfolio history."
 	RunState.load_from_dict(life_before_monthly_obligation_state)
+	game_root._refresh_all()
+	await get_tree().process_frame
+
+	var finance_test_base_state: Dictionary = RunState.to_save_dict()
+	var finance_company_id: String = str(RunState.company_order[0])
+	var finance_buy_result: Dictionary = GameManager.buy_lots(finance_company_id, 1)
+	if not bool(finance_buy_result.get("success", false)):
+		return "Smoke test expected buying one lot for Life Finance recovery coverage to succeed."
+	var finance_company_price: float = max(float(RunState.get_company(finance_company_id).get("current_price", 0.0)), 1.0)
+	var recovery_lots: int = max(int(ceil(4000000.0 / max(finance_company_price * float(GameManager.get_lot_size()), 1.0))), 1)
+	var recovery_holding: Dictionary = RunState.get_holding(finance_company_id).duplicate(true)
+	recovery_holding["company_id"] = finance_company_id
+	recovery_holding["shares"] = max(int(recovery_holding.get("shares", 0)), GameManager.lots_to_shares(recovery_lots))
+	recovery_holding["average_price"] = finance_company_price
+	var recovery_holdings: Dictionary = RunState.player_portfolio.get("holdings", {}).duplicate(true)
+	recovery_holdings[finance_company_id] = recovery_holding
+	RunState.player_portfolio["holdings"] = recovery_holdings
+	var finance_monthly_snapshot: Dictionary = GameManager.get_life_snapshot()
+	var finance_monthly_due: float = float(finance_monthly_snapshot.get("monthly_outflow", 0.0))
+	if finance_monthly_due <= 0.0:
+		return "Smoke test expected a positive Life outflow for cash-stress coverage."
+	RunState.current_trade_date = trading_calendar.trade_date_on_or_after(2020, 1, 31)
+	RunState.player_portfolio["cash"] = finance_monthly_due - 100000.0
+	RunState.refresh_cash_stress_state()
+	GameManager.advance_day()
+	await get_tree().process_frame
+	var negative_finance_status: Dictionary = GameManager.get_finance_status_snapshot()
+	if (
+		float(negative_finance_status.get("cash", 0.0)) >= 0.0 or
+		not bool(negative_finance_status.get("cash_stress_active", false)) or
+		int(negative_finance_status.get("cash_stress_days_remaining", -1)) != 3
+	):
+		return "Smoke test expected forced Life obligation to push cash negative and start a three-trading-day grace window."
+	var negative_cash_state: Dictionary = RunState.to_save_dict()
+	var negative_buy_result: Dictionary = GameManager.buy_lots(finance_company_id, 1)
+	var stress_sell_result: Dictionary = GameManager.sell_lots(finance_company_id, 1)
+	if (
+		bool(negative_buy_result.get("success", false)) or
+		not str(negative_buy_result.get("message", "")).contains("Cash is negative") or
+		not bool(stress_sell_result.get("success", false))
+	):
+		return "Smoke test expected negative cash to block buys while still allowing sell recovery."
+
+	RunState.load_from_dict(negative_cash_state)
+	game_root._refresh_all()
+	await get_tree().process_frame
+	life_tabs = game_root.find_child("LifeTabs", true, false) as TabContainer
+	if life_tabs == null:
+		return "Smoke test expected the Life tabs to remain available during cash stress."
+	life_tabs.current_tab = 1
+	await get_tree().process_frame
+	life_finance_status_label = game_root.find_child("LifeFinanceStatusLabel", true, false) as Label
+	life_emergency_loan_button = game_root.find_child("LifeEmergencyLoanButton", true, false) as Button
+	if (
+		life_finance_status_label == null or
+		not life_finance_status_label.text.contains("Cash stress") or
+		life_emergency_loan_button == null or
+		life_emergency_loan_button.disabled
+	):
+		return "Smoke test expected Life > Finance to show cash stress and an eligible emergency loan."
+	var emergency_loan_result: Dictionary = GameManager.take_emergency_loan()
+	if not bool(emergency_loan_result.get("success", false)):
+		return "Smoke test expected taking an eligible emergency loan to succeed."
+	var loan_finance_status: Dictionary = GameManager.get_finance_status_snapshot()
+	var active_loan: Dictionary = loan_finance_status.get("active_loan", {})
+	if active_loan.is_empty() or float(loan_finance_status.get("cash", 0.0)) <= 0.0:
+		return "Smoke test expected emergency loan proceeds to restore positive cash and create an active loan."
+	var loan_save_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(loan_save_state)
+	var reloaded_active_loan: Dictionary = RunState.get_life_finance().get("active_loan", {})
+	if reloaded_active_loan.is_empty():
+		return "Smoke test expected the active emergency loan to survive save/load normalization."
+
+	var loan_monthly_payment: float = float(active_loan.get("monthly_payment", 0.0))
+	RunState.load_from_dict(loan_save_state)
+	RunState.player_portfolio["cash"] = loan_monthly_payment - 1.0
+	RunState.refresh_cash_stress_state()
+	var reserve_block_result: Dictionary = GameManager.buy_lots(finance_company_id, 1)
+	if (
+		bool(reserve_block_result.get("success", false)) or
+		not str(reserve_block_result.get("message", "")).contains("loan payment reserve")
+	):
+		return "Smoke test expected an active loan to block exploit buying when payment reserve cash is not covered."
+
+	RunState.load_from_dict(loan_save_state)
+	RunState.current_trade_date = trading_calendar.trade_date_on_or_after(2020, 2, 28)
+	GameManager.advance_day()
+	await get_tree().process_frame
+	var loan_payment_result: Dictionary = RunState.last_day_results.get("life_loan_payment", {})
+	if loan_payment_result.is_empty() or float(loan_payment_result.get("amount", 0.0)) <= 0.0:
+		return "Smoke test expected monthly loan payment to apply on the next month boundary."
+
+	RunState.load_from_dict(negative_cash_state)
+	var expired_recovery_finance: Dictionary = RunState.get_life_finance()
+	expired_recovery_finance["cash_stress_deadline_day_index"] = RunState.day_index
+	RunState.set_life_finance(expired_recovery_finance)
+	var recovery_gate: Dictionary = GameManager.resolve_advance_day_finance_gate()
+	if (
+		bool(recovery_gate.get("success", false)) or
+		bool(recovery_gate.get("bankrupt", false)) or
+		not str(recovery_gate.get("message", "")).contains("Sell holdings")
+	):
+		return "Smoke test expected expired grace to block Advance Day when holdings can still cover the deficit."
+
+	RunState.load_from_dict(negative_cash_state)
+	RunState.player_portfolio["holdings"] = {}
+	RunState.player_portfolio["cash"] = -2000000.0
+	RunState.refresh_cash_stress_state()
+	var bankruptcy_finance: Dictionary = RunState.get_life_finance()
+	bankruptcy_finance["active_loan"] = {}
+	bankruptcy_finance["cash_stress_deadline_day_index"] = RunState.day_index
+	RunState.set_life_finance(bankruptcy_finance)
+	var bankruptcy_gate: Dictionary = GameManager.resolve_advance_day_finance_gate()
+	if not bool(bankruptcy_gate.get("bankrupt", false)) or not RunState.is_bankrupt():
+		return "Smoke test expected bankruptcy to trigger only after expired grace with no holdings or loan recovery path."
+	var bankrupt_buy_result: Dictionary = GameManager.buy_lots(finance_company_id, 1)
+	var bankrupt_loan_result: Dictionary = GameManager.take_emergency_loan()
+	if (
+		bool(bankrupt_buy_result.get("success", false)) or
+		not str(bankrupt_buy_result.get("message", "")).contains("Bankruptcy") or
+		bool(bankrupt_loan_result.get("success", false))
+	):
+		return "Smoke test expected bankruptcy to disable trading and new emergency loans."
+	game_root.call("_show_bankruptcy_overlay", bankruptcy_gate.get("bankruptcy", {}))
+	await get_tree().process_frame
+	var bankruptcy_overlay: Control = game_root.find_child("BankruptcyOverlay", true, false) as Control
+	var bankruptcy_menu_button: Button = game_root.find_child("BankruptcyMenuButton", true, false) as Button
+	var bankruptcy_restart_button: Button = game_root.find_child("BankruptcyRestartButton", true, false) as Button
+	if bankruptcy_overlay == null or not bankruptcy_overlay.visible or bankruptcy_menu_button == null or bankruptcy_restart_button == null:
+		return "Smoke test expected bankruptcy to show the final-state overlay with menu and restart buttons."
+	bankruptcy_overlay.visible = false
+
+	RunState.load_from_dict(finance_test_base_state)
 	game_root._refresh_all()
 	await get_tree().process_frame
 

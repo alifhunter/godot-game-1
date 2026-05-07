@@ -1,7 +1,7 @@
 extends Node
 
 const STABLE_RNG = preload("res://systems/StableRng.gd")
-const SAVE_SCHEMA_VERSION := 3
+const SAVE_SCHEMA_VERSION := 4
 const SAVE_FORMAT_ID := "daytrader_single_run"
 const LOT_SIZE := 100
 const PLAYER_BROKER_CODE := "XL"
@@ -113,6 +113,10 @@ const FIRST_HOUR_GUIDE_STEP_IDS := [
 ]
 const FIRST_HOUR_GUIDE_FIRST_STEP_ID := "portfolio_check"
 const FIRST_HOUR_GUIDE_FINAL_STEP_ID := "handoff"
+const CASH_STRESS_GRACE_TRADING_DAYS := 3
+const EMERGENCY_LOAN_PAYMENT_COUNT := 6
+const EMERGENCY_LOAN_REPAYMENT_MULTIPLIER := 1.24
+const MAX_LIFE_FINANCE_HISTORY := 24
 
 var run_seed = 0
 var day_index = 0
@@ -721,6 +725,8 @@ func _build_last_day_results_save_payload(source_results: Variant) -> Dictionary
 		"corporate_action_applications": source.get("corporate_action_applications", []).duplicate(true),
 		"started_special_events": source.get("started_special_events", []).duplicate(true),
 		"life_obligation": source.get("life_obligation", {}).duplicate(true),
+		"life_loan_payment": source.get("life_loan_payment", {}).duplicate(true),
+		"bankruptcy": source.get("bankruptcy", {}).duplicate(true),
 		"network_request_results": source.get("network_request_results", []).duplicate(true),
 		"network_tip_results": source.get("network_tip_results", []).duplicate(true)
 	}
@@ -908,6 +914,8 @@ func remove_from_watchlist(company_id: String) -> Dictionary:
 func buy_company(company_id: String, shares: int) -> Dictionary:
 	if not companies.has(company_id):
 		return {"success": false, "message": "Unknown company selection."}
+	if is_bankrupt():
+		return {"success": false, "message": "The run is bankrupt. Trading is disabled."}
 	if shares <= 0:
 		return {"success": false, "message": "Share count must be positive."}
 	var trade_block_message: String = _company_trade_block_message(company_id)
@@ -921,6 +929,18 @@ func buy_company(company_id: String, shares: int) -> Dictionary:
 	var total_cost = float(estimate.get("total_cost", 0.0))
 	var fee = float(estimate.get("fee", 0.0))
 	var cash_available = float(player_portfolio.get("cash", 0.0))
+	if cash_available < 0.0:
+		return {
+			"success": false,
+			"message": "Cash is negative. Sell holdings, lower Life costs, or use Life > Finance before buying."
+		}
+	var finance: Dictionary = get_life_finance()
+	var active_loan: Dictionary = finance.get("active_loan", {})
+	if not active_loan.is_empty() and cash_available < float(active_loan.get("monthly_payment", 0.0)) - 0.0001:
+		return {
+			"success": false,
+			"message": "Emergency loan payment reserve is not covered. Keep cash above %s before new buys." % _format_currency(float(active_loan.get("monthly_payment", 0.0)))
+		}
 
 	if total_cost > cash_available + 0.0001:
 		return {
@@ -960,6 +980,7 @@ func buy_company(company_id: String, shares: int) -> Dictionary:
 		float(player_portfolio.get("cash", 0.0))
 	)
 	_record_player_market_flow(company_id, "buy", estimate)
+	refresh_cash_stress_state()
 
 	return {
 		"success": true,
@@ -976,6 +997,8 @@ func buy_company(company_id: String, shares: int) -> Dictionary:
 func sell_company(company_id: String, shares: int) -> Dictionary:
 	if not companies.has(company_id):
 		return {"success": false, "message": "Unknown company selection."}
+	if is_bankrupt():
+		return {"success": false, "message": "The run is bankrupt. Trading is disabled."}
 	if shares <= 0:
 		return {"success": false, "message": "Share count must be positive."}
 	var trade_block_message: String = _company_trade_block_message(company_id)
@@ -1025,6 +1048,7 @@ func sell_company(company_id: String, shares: int) -> Dictionary:
 		float(player_portfolio.get("cash", 0.0))
 	)
 	_record_player_market_flow(company_id, "sell", estimate)
+	refresh_cash_stress_state()
 
 	return {
 		"success": true,
@@ -1313,6 +1337,7 @@ func apply_cash_obligation(obligation_id: String, amount: float, detail: Diction
 		-normalized_amount,
 		cash_after
 	)
+	var finance: Dictionary = refresh_cash_stress_state()
 
 	return {
 		"success": true,
@@ -1320,6 +1345,7 @@ func apply_cash_obligation(obligation_id: String, amount: float, detail: Diction
 		"amount": normalized_amount,
 		"cash_before": cash_before,
 		"cash_after": cash_after,
+		"finance": finance,
 		"day_index": day_index,
 		"trade_date": current_trade_date.duplicate(true),
 		"detail": detail.duplicate(true)
@@ -1532,6 +1558,215 @@ func get_player_life() -> Dictionary:
 
 func set_player_life(next_life: Dictionary) -> void:
 	player_life = _normalize_life_state(next_life)
+
+
+func get_life_finance() -> Dictionary:
+	player_life = _normalize_life_state(player_life)
+	return player_life.get("finance", {}).duplicate(true)
+
+
+func set_life_finance(next_finance: Dictionary) -> void:
+	player_life = _normalize_life_state(player_life)
+	player_life["finance"] = _normalize_life_finance_state(next_finance)
+
+
+func is_bankrupt() -> bool:
+	return bool(get_life_finance().get("bankrupt", false))
+
+
+func refresh_cash_stress_state() -> Dictionary:
+	player_life = _normalize_life_state(player_life)
+	var finance: Dictionary = player_life.get("finance", {}).duplicate(true)
+	if bool(finance.get("bankrupt", false)):
+		player_life["finance"] = _normalize_life_finance_state(finance)
+		return player_life.get("finance", {}).duplicate(true)
+
+	var cash: float = float(player_portfolio.get("cash", 0.0))
+	if cash < 0.0:
+		if not bool(finance.get("cash_stress_active", false)):
+			finance["cash_stress_active"] = true
+			finance["cash_stress_started_day_index"] = day_index
+			finance["cash_stress_deadline_day_index"] = day_index + CASH_STRESS_GRACE_TRADING_DAYS
+			finance["cash_stress_started_cash"] = cash
+			finance["cash_stress_started_trade_date"] = current_trade_date.duplicate(true)
+		finance["current_cash_deficit"] = absf(cash)
+	else:
+		if bool(finance.get("cash_stress_active", false)):
+			finance["last_cash_stress_resolved_day_index"] = day_index
+			finance["last_cash_stress_resolved_trade_date"] = current_trade_date.duplicate(true)
+		finance["cash_stress_active"] = false
+		finance["cash_stress_started_day_index"] = -1
+		finance["cash_stress_deadline_day_index"] = -1
+		finance["cash_stress_started_cash"] = 0.0
+		finance["cash_stress_started_trade_date"] = {}
+		finance["current_cash_deficit"] = 0.0
+
+	player_life["finance"] = _normalize_life_finance_state(finance)
+	return player_life.get("finance", {}).duplicate(true)
+
+
+func apply_emergency_loan_proceeds(principal: float, detail: Dictionary = {}) -> Dictionary:
+	if is_bankrupt():
+		return {"success": false, "message": "The run is bankrupt. New loans are disabled."}
+	var normalized_principal: float = max(principal, 0.0)
+	if normalized_principal <= 0.0:
+		return {"success": false, "message": "Loan amount must be positive."}
+	var finance: Dictionary = get_life_finance()
+	var current_loan: Dictionary = finance.get("active_loan", {})
+	if not current_loan.is_empty():
+		return {"success": false, "message": "An emergency loan is already active."}
+
+	var payment_count: int = max(int(detail.get("payment_count", EMERGENCY_LOAN_PAYMENT_COUNT)), 1)
+	var repayment_multiplier: float = max(float(detail.get("repayment_multiplier", EMERGENCY_LOAN_REPAYMENT_MULTIPLIER)), 1.0)
+	var total_repayment: float = max(float(detail.get("total_repayment", normalized_principal * repayment_multiplier)), normalized_principal)
+	var monthly_payment: float = max(float(detail.get("monthly_payment", total_repayment / float(payment_count))), 0.0)
+	var loan_id: String = "life_loan_%d_%d" % [day_index, int(round(normalized_principal))]
+	var cash_before: float = float(player_portfolio.get("cash", 0.0))
+	var cash_after: float = cash_before + normalized_principal
+	player_portfolio["cash"] = cash_after
+	var loan: Dictionary = {
+		"id": loan_id,
+		"state": "active",
+		"principal": normalized_principal,
+		"total_repayment": total_repayment,
+		"monthly_payment": monthly_payment,
+		"payment_count": payment_count,
+		"payments_remaining": payment_count,
+		"amount_paid": 0.0,
+		"repayment_multiplier": repayment_multiplier,
+		"started_day_index": day_index,
+		"started_trade_date": current_trade_date.duplicate(true),
+		"last_payment_period": ""
+	}
+	finance["active_loan"] = loan
+	_append_life_finance_history(finance, {
+		"type": "loan_started",
+		"loan_id": loan_id,
+		"amount": normalized_principal,
+		"day_index": day_index,
+		"trade_date": current_trade_date.duplicate(true)
+	})
+	player_life["finance"] = _normalize_life_finance_state(finance)
+	_record_trade(
+		"life",
+		"life_emergency_loan",
+		{
+			"lots": 0,
+			"shares": 0,
+			"price_per_share": 0.0,
+			"gross_value": normalized_principal,
+			"fee_rate": 0.0,
+			"fee": 0.0
+		},
+		0.0,
+		normalized_principal,
+		cash_after
+	)
+	var refreshed_finance: Dictionary = refresh_cash_stress_state()
+	return {
+		"success": true,
+		"message": "Emergency loan approved.",
+		"loan": refreshed_finance.get("active_loan", {}).duplicate(true),
+		"cash_before": cash_before,
+		"cash_after": cash_after,
+		"finance": refreshed_finance
+	}
+
+
+func apply_life_loan_payment(amount: float, detail: Dictionary = {}) -> Dictionary:
+	var finance: Dictionary = get_life_finance()
+	var loan: Dictionary = finance.get("active_loan", {}).duplicate(true)
+	if loan.is_empty():
+		return {"success": false, "message": "No active emergency loan."}
+	var normalized_amount: float = max(amount, 0.0)
+	if normalized_amount <= 0.0:
+		return {"success": false, "message": "No loan payment to apply."}
+	var cash_before: float = float(player_portfolio.get("cash", 0.0))
+	var cash_after: float = cash_before - normalized_amount
+	player_portfolio["cash"] = cash_after
+	var amount_paid: float = float(loan.get("amount_paid", 0.0)) + normalized_amount
+	var payments_remaining: int = max(int(loan.get("payments_remaining", 1)) - 1, 0)
+	loan["amount_paid"] = amount_paid
+	loan["payments_remaining"] = payments_remaining
+	loan["last_payment_period"] = str(detail.get("period_id", ""))
+	loan["last_payment_day_index"] = day_index
+	loan["last_payment_trade_date"] = current_trade_date.duplicate(true)
+	_record_trade(
+		"life",
+		"life_loan_payment",
+		{
+			"lots": 0,
+			"shares": 0,
+			"price_per_share": 0.0,
+			"gross_value": normalized_amount,
+			"fee_rate": 0.0,
+			"fee": 0.0
+		},
+		0.0,
+		-normalized_amount,
+		cash_after
+	)
+	var loan_completed: bool = payments_remaining <= 0 or amount_paid + 0.0001 >= float(loan.get("total_repayment", 0.0))
+	if loan_completed:
+		loan["state"] = "paid"
+		loan["completed_day_index"] = day_index
+		loan["completed_trade_date"] = current_trade_date.duplicate(true)
+		finance["active_loan"] = {}
+		_append_life_finance_history(finance, {
+			"type": "loan_paid",
+			"loan_id": str(loan.get("id", "")),
+			"amount": normalized_amount,
+			"day_index": day_index,
+			"trade_date": current_trade_date.duplicate(true)
+		})
+	else:
+		finance["active_loan"] = loan
+		_append_life_finance_history(finance, {
+			"type": "loan_payment",
+			"loan_id": str(loan.get("id", "")),
+			"amount": normalized_amount,
+			"day_index": day_index,
+			"trade_date": current_trade_date.duplicate(true)
+		})
+	player_life["finance"] = _normalize_life_finance_state(finance)
+	var refreshed_finance: Dictionary = refresh_cash_stress_state()
+	return {
+		"success": true,
+		"message": "Emergency loan payment applied.",
+		"amount": normalized_amount,
+		"cash_before": cash_before,
+		"cash_after": cash_after,
+		"loan": loan.duplicate(true),
+		"loan_completed": loan_completed,
+		"finance": refreshed_finance,
+		"detail": detail.duplicate(true)
+	}
+
+
+func mark_bankruptcy(reason: String = "cash_stress_unrecoverable") -> Dictionary:
+	player_life = _normalize_life_state(player_life)
+	var finance: Dictionary = player_life.get("finance", {}).duplicate(true)
+	if bool(finance.get("bankrupt", false)):
+		return finance.get("bankruptcy", {}).duplicate(true)
+	var bankruptcy: Dictionary = {
+		"reason": reason,
+		"day_index": day_index,
+		"trade_date": current_trade_date.duplicate(true),
+		"cash": float(player_portfolio.get("cash", 0.0)),
+		"equity": get_total_equity(),
+		"market_value": get_portfolio_market_value()
+	}
+	finance["bankrupt"] = true
+	finance["bankruptcy"] = bankruptcy
+	finance["cash_stress_active"] = false
+	_append_life_finance_history(finance, {
+		"type": "bankruptcy",
+		"reason": reason,
+		"day_index": day_index,
+		"trade_date": current_trade_date.duplicate(true)
+	})
+	player_life["finance"] = _normalize_life_finance_state(finance)
+	return bankruptcy
 
 
 func get_academy_progress() -> Dictionary:
@@ -2103,7 +2338,25 @@ func _default_life_state() -> Dictionary:
 		"updated_day_index": day_index,
 		"last_obligation_period": "",
 		"last_obligation_day_index": -1,
-		"last_obligation_amount": 0.0
+		"last_obligation_amount": 0.0,
+		"finance": _default_life_finance_state()
+	}
+
+
+func _default_life_finance_state() -> Dictionary:
+	return {
+		"cash_stress_active": false,
+		"cash_stress_started_day_index": -1,
+		"cash_stress_deadline_day_index": -1,
+		"cash_stress_started_cash": 0.0,
+		"cash_stress_started_trade_date": {},
+		"current_cash_deficit": 0.0,
+		"last_cash_stress_resolved_day_index": -1,
+		"last_cash_stress_resolved_trade_date": {},
+		"active_loan": {},
+		"finance_history": [],
+		"bankrupt": false,
+		"bankruptcy": {}
 	}
 
 
@@ -2130,7 +2383,93 @@ func _normalize_life_state(source_life: Variant) -> Dictionary:
 		normalized["updated_trade_date"] = source.get("updated_trade_date", {}).duplicate(true)
 	if source.has("last_obligation_trade_date") and typeof(source.get("last_obligation_trade_date")) == TYPE_DICTIONARY:
 		normalized["last_obligation_trade_date"] = source.get("last_obligation_trade_date", {}).duplicate(true)
+	normalized["finance"] = _normalize_life_finance_state(source.get("finance", {}))
 	return normalized
+
+
+func _normalize_life_finance_state(source_finance: Variant) -> Dictionary:
+	var normalized: Dictionary = _default_life_finance_state()
+	if typeof(source_finance) != TYPE_DICTIONARY:
+		return normalized
+
+	var source: Dictionary = source_finance
+	normalized["cash_stress_active"] = bool(source.get("cash_stress_active", false))
+	normalized["cash_stress_started_day_index"] = int(source.get("cash_stress_started_day_index", -1))
+	normalized["cash_stress_deadline_day_index"] = int(source.get("cash_stress_deadline_day_index", -1))
+	normalized["cash_stress_started_cash"] = float(source.get("cash_stress_started_cash", 0.0))
+	normalized["current_cash_deficit"] = max(float(source.get("current_cash_deficit", 0.0)), 0.0)
+	normalized["last_cash_stress_resolved_day_index"] = int(source.get("last_cash_stress_resolved_day_index", -1))
+	normalized["bankrupt"] = bool(source.get("bankrupt", false))
+	if typeof(source.get("cash_stress_started_trade_date", {})) == TYPE_DICTIONARY:
+		normalized["cash_stress_started_trade_date"] = source.get("cash_stress_started_trade_date", {}).duplicate(true)
+	if typeof(source.get("last_cash_stress_resolved_trade_date", {})) == TYPE_DICTIONARY:
+		normalized["last_cash_stress_resolved_trade_date"] = source.get("last_cash_stress_resolved_trade_date", {}).duplicate(true)
+	if typeof(source.get("active_loan", {})) == TYPE_DICTIONARY:
+		normalized["active_loan"] = _normalize_life_loan(source.get("active_loan", {}))
+	if typeof(source.get("bankruptcy", {})) == TYPE_DICTIONARY:
+		normalized["bankruptcy"] = source.get("bankruptcy", {}).duplicate(true)
+	var history: Array = []
+	if typeof(source.get("finance_history", [])) == TYPE_ARRAY:
+		for history_value in source.get("finance_history", []):
+			if typeof(history_value) == TYPE_DICTIONARY:
+				history.append(history_value.duplicate(true))
+	if history.size() > MAX_LIFE_FINANCE_HISTORY:
+		history = history.slice(history.size() - MAX_LIFE_FINANCE_HISTORY, history.size())
+	normalized["finance_history"] = history
+	if not bool(normalized.get("cash_stress_active", false)):
+		normalized["cash_stress_started_day_index"] = -1
+		normalized["cash_stress_deadline_day_index"] = -1
+		normalized["cash_stress_started_cash"] = 0.0
+		normalized["cash_stress_started_trade_date"] = {}
+	return normalized
+
+
+func _normalize_life_loan(source_loan: Variant) -> Dictionary:
+	if typeof(source_loan) != TYPE_DICTIONARY:
+		return {}
+	var source: Dictionary = source_loan
+	if source.is_empty():
+		return {}
+	var principal: float = max(float(source.get("principal", 0.0)), 0.0)
+	var payment_count: int = max(int(source.get("payment_count", EMERGENCY_LOAN_PAYMENT_COUNT)), 1)
+	var total_repayment: float = max(float(source.get("total_repayment", principal * EMERGENCY_LOAN_REPAYMENT_MULTIPLIER)), principal)
+	var monthly_payment: float = max(float(source.get("monthly_payment", total_repayment / float(payment_count))), 0.0)
+	var loan: Dictionary = {
+		"id": str(source.get("id", "")),
+		"state": str(source.get("state", "active")),
+		"principal": principal,
+		"total_repayment": total_repayment,
+		"monthly_payment": monthly_payment,
+		"payment_count": payment_count,
+		"payments_remaining": clampi(int(source.get("payments_remaining", payment_count)), 0, payment_count),
+		"amount_paid": max(float(source.get("amount_paid", 0.0)), 0.0),
+		"repayment_multiplier": max(float(source.get("repayment_multiplier", EMERGENCY_LOAN_REPAYMENT_MULTIPLIER)), 1.0),
+		"started_day_index": int(source.get("started_day_index", day_index)),
+		"last_payment_period": str(source.get("last_payment_period", ""))
+	}
+	if typeof(source.get("started_trade_date", {})) == TYPE_DICTIONARY:
+		loan["started_trade_date"] = source.get("started_trade_date", {}).duplicate(true)
+	if source.has("last_payment_day_index"):
+		loan["last_payment_day_index"] = int(source.get("last_payment_day_index", -1))
+	if typeof(source.get("last_payment_trade_date", {})) == TYPE_DICTIONARY:
+		loan["last_payment_trade_date"] = source.get("last_payment_trade_date", {}).duplicate(true)
+	if source.has("completed_day_index"):
+		loan["completed_day_index"] = int(source.get("completed_day_index", -1))
+	if typeof(source.get("completed_trade_date", {})) == TYPE_DICTIONARY:
+		loan["completed_trade_date"] = source.get("completed_trade_date", {}).duplicate(true)
+	if principal <= 0.0 or int(loan.get("payments_remaining", 0)) <= 0:
+		return {}
+	return loan
+
+
+func _append_life_finance_history(finance: Dictionary, row: Dictionary) -> void:
+	var history: Array = finance.get("finance_history", [])
+	if typeof(history) != TYPE_ARRAY:
+		history = []
+	history.append(row.duplicate(true))
+	if history.size() > MAX_LIFE_FINANCE_HISTORY:
+		history = history.slice(history.size() - MAX_LIFE_FINANCE_HISTORY, history.size())
+	finance["finance_history"] = history
 
 
 func _normalize_player_theses(source_theses: Variant) -> Dictionary:
@@ -2321,6 +2660,7 @@ func _apply_dividend_payments(payments: Array) -> void:
 			amount,
 			cash_after
 		)
+	refresh_cash_stress_state()
 
 
 func _apply_corporate_action_applications(applications: Array) -> void:
