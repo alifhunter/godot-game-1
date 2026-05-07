@@ -115,6 +115,23 @@ const COLOR_ORDER_SELL_BORDER := Color(0.690196, 0.34902, 0.372549, 1)
 const COLOR_ORDER_METRIC_LABEL := Color(0.792157, 0.866667, 0.929412, 1)
 const COLOR_WINDOW_BG := Color(0.909804, 0.909804, 0.803922, 1)
 const COLOR_WINDOW_TEXT := Color(0.184314, 0.172549, 0.109804, 1)
+const COLOR_MARKET_PAPER_PAGE := Color(0.988235, 0.960784, 0.854902, 1)
+const COLOR_MARKET_PAPER_CARD := Color(1.0, 0.976471, 0.929412, 1)
+const COLOR_MARKET_PAPER_RAIL := Color(0.917647, 0.878431, 0.721569, 1)
+const COLOR_MARKET_PAPER_BORDER := Color(0.52549, 0.396078, 0.160784, 1)
+const COLOR_MARKET_PAPER_MUTED := Color(0.352941, 0.309804, 0.203922, 1)
+const COLOR_MARKET_PAPER_RED := Color(0.545098, 0.101961, 0.101961, 1)
+const MARKET_PAPER_GRUNGE_TEXTURES := {
+	"coffee": "res://assets/market_papers/grunge/coffee_stain.png",
+	"fold_horizontal": "res://assets/market_papers/grunge/fold_horizontal.png",
+	"fold_vertical": "res://assets/market_papers/grunge/fold_vertical.png",
+	"smudge_01": "res://assets/market_papers/grunge/smudge_01.png",
+	"smudge_02": "res://assets/market_papers/grunge/smudge_02.png",
+	"smudge_03": "res://assets/market_papers/grunge/smudge_03.png",
+	"smudge_04": "res://assets/market_papers/grunge/smudge_04.png",
+	"stamp_open": "res://assets/market_papers/grunge/stamp_open.png",
+	"stamp_trader": "res://assets/market_papers/grunge/stamp_trader_edition.png"
+}
 const COLOR_ACADEMY_CREAM := Color(0.988235, 0.960784, 0.854902, 1)
 const COLOR_ACADEMY_PANEL := Color(0.972549, 0.94902, 0.847059, 1)
 const COLOR_ACADEMY_RAIL := Color(0.917647, 0.878431, 0.721569, 1)
@@ -187,6 +204,31 @@ const DESKTOP_WINDOW_MIN_HEIGHT := 260.0
 const SOCIAL_WINDOW_MAX_WIDTH := 460.0
 const SOCIAL_WINDOW_MAX_HEIGHT := 780.0
 const SOCIAL_WINDOW_MIN_HEIGHT := 520.0
+const SOCIAL_FEED_FILTER_ALL := "all"
+const SOCIAL_FEED_FILTER_COMPANIES := "companies"
+const SOCIAL_FEED_FILTER_SECTORS := "sectors"
+const SOCIAL_FEED_FILTER_TRENDING := "trending"
+const SOCIAL_FEED_FILTERS := [
+	{"id": SOCIAL_FEED_FILTER_ALL, "label": "All"},
+	{"id": SOCIAL_FEED_FILTER_COMPANIES, "label": "Companies"},
+	{"id": SOCIAL_FEED_FILTER_SECTORS, "label": "Sectors"},
+	{"id": SOCIAL_FEED_FILTER_TRENDING, "label": "Trending"}
+]
+const SOCIAL_TICKER_TAPE_LIMIT := 6
+const COLOR_TWOOTER_PAGE := Color(0.968627, 0.964706, 0.898039, 1)
+const COLOR_TWOOTER_SURFACE := Color(0.952941, 0.94902, 0.87451, 1)
+const COLOR_TWOOTER_CARD := Color(0.988235, 0.980392, 0.92549, 1)
+const COLOR_TWOOTER_BLUE := Color(0.113725, 0.431373, 0.709804, 1)
+const COLOR_TWOOTER_BLUE_DARK := Color(0.066667, 0.25098, 0.431373, 1)
+const COLOR_TWOOTER_BLUE_TINT := Color(0.878431, 0.933333, 0.956863, 1)
+const COLOR_TWOOTER_BLUE_EDGE := Color(0.513725, 0.698039, 0.792157, 1)
+const COLOR_TWOOTER_TEXT := Color(0.156863, 0.129412, 0.082353, 1)
+const COLOR_TWOOTER_MUTED := Color(0.423529, 0.356863, 0.235294, 1)
+const COLOR_TWOOTER_FAINT := Color(0.619608, 0.552941, 0.392157, 1)
+const COLOR_TWOOTER_BORDER := Color(0.686275, 0.584314, 0.352941, 1)
+const COLOR_TWOOTER_BULL := Color(0.117647, 0.470588, 0.290196, 1)
+const COLOR_TWOOTER_BEAR := Color(0.635294, 0.098039, 0.164706, 1)
+const COLOR_TWOOTER_BEAR_TINT := Color(0.972549, 0.890196, 0.839216, 1)
 const DASHBOARD_MOVER_LIMIT := 15
 const DASHBOARD_WEEKDAY_NAMES := ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 const DASHBOARD_MONTH_NAMES := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -314,6 +356,7 @@ var selected_academy_section_id: String = "intro"
 var academy_quiz_option_buttons: Dictionary = {}
 var expanded_social_thread_ids: Dictionary = {}
 var selected_social_account_id: String = ""
+var selected_social_feed_filter_id: String = SOCIAL_FEED_FILTER_ALL
 var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 
 @onready var desktop_layer: Control = $DesktopLayer
@@ -416,15 +459,26 @@ var selected_settings_slot_id: String = ""
 @onready var news_detail_body: RichTextLabel = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailBody
 @onready var news_detail_hint_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailHintLabel
 @onready var news_meet_contact_button: Button = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsMeetContactButton
-var news_masthead_logo_frame: PanelContainer = null
+var news_masthead_panel: PanelContainer = null
+var news_masthead_issue_box: PanelContainer = null
+var news_masthead_issue_label: Label = null
+var news_masthead_issue_number_label: Label = null
+var news_masthead_title_label: Label = null
+var news_masthead_tagline_label: Label = null
+var news_masthead_date_block_label: Label = null
 var news_masthead_date_label: Label = null
+var news_masthead_price_label: Label = null
+var news_masthead_rule_container: VBoxContainer = null
+var news_source_tab_rule: ColorRect = null
 var news_article_cards_scroll: ScrollContainer = null
 var news_article_cards: VBoxContainer = null
 var news_detail_hero_frame: PanelContainer = null
+var news_detail_photo_caption_label: Label = null
 var news_detail_byline_label: Label = null
 var news_detail_chips_label: Label = null
 var news_detail_action_row: HBoxContainer = null
 var news_open_meeting_button: Button = null
+var news_grunge_overlay: Control = null
 @onready var social_window: MarginContainer = $SocialWindow
 @onready var social_window_body: PanelContainer = $SocialWindow/SocialWindowBody
 @onready var social_title_label: Label = $SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialHeaderRow/SocialTitleLabel
@@ -432,6 +486,14 @@ var news_open_meeting_button: Button = null
 @onready var social_feed_summary_label: Label = $SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialFeedSummaryLabel
 @onready var social_feed_scroll: ScrollContainer = $SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialFeedScroll
 @onready var social_feed_cards: VBoxContainer = $SocialWindow/SocialWindowBody/SocialWindowMargin/SocialWindowVBox/SocialFeedScroll/SocialFeedCards
+var social_live_dot: PanelContainer = null
+var social_live_label: Label = null
+var social_tier_indicator: HBoxContainer = null
+var social_filter_scroll: ScrollContainer = null
+var social_filter_chips: HBoxContainer = null
+var social_ticker_tape_panel: PanelContainer = null
+var social_ticker_tape_scroll: ScrollContainer = null
+var social_ticker_tape: HBoxContainer = null
 @onready var network_window: MarginContainer = $NetworkWindow
 @onready var network_window_body: PanelContainer = $NetworkWindow/NetworkWindowBody
 @onready var network_title_label: Label = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkHeaderRow/NetworkTitleLabel
@@ -738,6 +800,7 @@ func _ready() -> void:
 	_ensure_company_ui()
 	_ensure_corporate_action_ui()
 	_ensure_news_newspaper_ui()
+	_ensure_social_feed_ui()
 	_ensure_figma_desktop_ui()
 	_cache_order_market_summary_labels()
 	_ensure_profile_company_layout()
@@ -2458,6 +2521,8 @@ func _apply_global_font_size_overrides() -> void:
 	_style_figma_desktop_ui()
 	_style_dashboard_index_recap_ui()
 	_style_dashboard_section_titles()
+	_style_news_newspaper_ui()
+	_style_twooter_ui()
 
 
 func _apply_font_overrides_to_subtree(node: Node) -> void:
@@ -2681,6 +2746,8 @@ func _refresh_news() -> void:
 		_rebuild_news_article_cards([])
 		if news_masthead_date_label != null:
 			news_masthead_date_label.text = ""
+		if news_masthead_issue_number_label != null:
+			news_masthead_issue_number_label.text = "No. 0000"
 		_show_news_article({})
 		_apply_font_overrides_to_subtree(news_outlet_buttons)
 		return
@@ -2696,6 +2763,8 @@ func _refresh_news() -> void:
 	var current_trade_date: Dictionary = GameManager.get_current_trade_date()
 	if news_masthead_date_label != null:
 		news_masthead_date_label.text = GameManager.format_trade_date(current_trade_date)
+	if news_masthead_issue_number_label != null:
+		news_masthead_issue_number_label.text = "No. %04d" % max(RunState.day_index + 1, 1)
 	news_intel_status_label.text = ""
 	_rebuild_news_outlet_buttons(outlets)
 	_refresh_news_archive_filters()
@@ -2783,7 +2852,8 @@ func _refresh_news_article_list() -> void:
 	news_article_list.clear()
 	var articles: Array = _current_news_archive_article_summaries()
 	var feed: Dictionary = current_news_snapshot.get("feeds", {}).get(selected_news_outlet_id, {})
-	news_feed_summary_label.text = str(feed.get("tagline", ""))
+	var feed_tagline: String = str(feed.get("tagline", "")).strip_edges()
+	news_feed_summary_label.text = "ARCHIVE" if feed_tagline.is_empty() else "ARCHIVE  ·  %s" % feed_tagline
 
 	for article_value in articles:
 		var article: Dictionary = article_value
@@ -2792,7 +2862,6 @@ func _refresh_news_article_list() -> void:
 		var item_index: int = news_article_list.item_count - 1
 		news_article_list.set_item_tooltip(item_index, "")
 		news_article_list.set_item_metadata(item_index, article.duplicate(true))
-	_rebuild_news_article_cards(articles)
 
 	var selected_index: int = -1
 	for article_index in range(articles.size()):
@@ -2814,12 +2883,17 @@ func _refresh_news_article_list() -> void:
 
 
 func _refresh_social() -> void:
+	_ensure_social_feed_ui()
 	current_social_snapshot = {}
 	social_title_label.text = "Twooter"
 	if not RunState.has_active_run():
 		selected_social_account_id = ""
+		selected_social_feed_filter_id = SOCIAL_FEED_FILTER_ALL
 		social_access_status_label.text = "No run loaded"
-		social_feed_summary_label.text = "Start a run to populate the mobile-style social feed."
+		social_feed_summary_label.text = "Start a run to populate the feed."
+		_refresh_social_tier_indicator(0)
+		_rebuild_social_filter_chips([])
+		_rebuild_social_ticker_tape([], [])
 		_rebuild_social_feed_cards([])
 		_apply_font_overrides_to_subtree(social_feed_cards)
 		return
@@ -2829,13 +2903,21 @@ func _refresh_social() -> void:
 	var selected_account_name: String = _selected_social_account_name(all_posts)
 	if not selected_social_account_id.is_empty() and selected_account_name.is_empty():
 		selected_social_account_id = ""
-	var posts: Array = _filtered_social_posts(all_posts)
+	var account_posts: Array = _filtered_social_posts(all_posts)
+	if selected_social_feed_filter_id.is_empty():
+		selected_social_feed_filter_id = SOCIAL_FEED_FILTER_ALL
+	var posts: Array = _filtered_social_posts_by_feed_filter(account_posts)
+	var tier_label: String = str(current_social_snapshot.get("tier_label", "Tier 1"))
 	social_access_status_label.text = "%s access active" % str(current_social_snapshot.get("tier_label", "Tier 1"))
+	var filter_label: String = _social_feed_filter_label(selected_social_feed_filter_id)
 	if selected_social_account_id.is_empty():
-		social_feed_summary_label.text = "%d post(s)  |  Mobile feed view\nHigher access tiers unlock more credible or more market-moving accounts." % posts.size()
+		social_feed_summary_label.text = "%d of %d posts | %s | %s" % [posts.size(), all_posts.size(), filter_label, tier_label]
 	else:
 		social_title_label.text = "Twooter / %s" % selected_account_name
-		social_feed_summary_label.text = "%d post(s) by %s" % [posts.size(), selected_account_name]
+		social_feed_summary_label.text = "%d of %d posts | %s | %s" % [posts.size(), account_posts.size(), selected_account_name, filter_label]
+	_refresh_social_tier_indicator(int(current_social_snapshot.get("access_tier", current_social_snapshot.get("tier", 1))))
+	_rebuild_social_filter_chips(account_posts)
+	_rebuild_social_ticker_tape(posts, all_posts)
 	_rebuild_social_feed_cards(posts)
 	_apply_font_overrides_to_subtree(social_feed_cards)
 
@@ -6916,6 +6998,73 @@ func _filtered_social_posts(posts: Array) -> Array:
 	return filtered_posts
 
 
+func _filtered_social_posts_by_feed_filter(posts: Array) -> Array:
+	if selected_social_feed_filter_id == SOCIAL_FEED_FILTER_ALL:
+		return posts
+
+	var filtered_posts: Array = []
+	for post_value in posts:
+		if typeof(post_value) != TYPE_DICTIONARY:
+			continue
+		var post: Dictionary = post_value
+		if _social_post_matches_feed_filter(post, selected_social_feed_filter_id):
+			filtered_posts.append(post)
+
+	if selected_social_feed_filter_id == SOCIAL_FEED_FILTER_TRENDING and filtered_posts.is_empty() and not posts.is_empty():
+		var sorted_posts: Array = posts.duplicate()
+		sorted_posts.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return _social_post_engagement_score(a) > _social_post_engagement_score(b)
+		)
+		return sorted_posts.slice(0, min(3, sorted_posts.size()))
+
+	return filtered_posts
+
+
+func _social_post_matches_feed_filter(post: Dictionary, filter_id: String) -> bool:
+	if filter_id == SOCIAL_FEED_FILTER_COMPANIES:
+		return _social_post_is_company(post)
+	if filter_id == SOCIAL_FEED_FILTER_SECTORS:
+		return _social_post_is_sector(post)
+	if filter_id == SOCIAL_FEED_FILTER_TRENDING:
+		return float(post.get("priority", 0.0)) >= 2.4 or _social_post_engagement_score(post) >= 500
+	return true
+
+
+func _social_post_is_company(post: Dictionary) -> bool:
+	return not str(post.get("target_ticker", "")).strip_edges().is_empty() or not str(post.get("target_company_name", "")).strip_edges().is_empty()
+
+
+func _social_post_is_sector(post: Dictionary) -> bool:
+	var category: String = str(post.get("category", "")).to_lower()
+	var has_sector: bool = not str(post.get("sector_name", "")).strip_edges().is_empty()
+	return (has_sector and not _social_post_is_company(post)) or category.contains("sector")
+
+
+func _social_post_engagement_score(post: Dictionary) -> int:
+	return int(post.get("likes", 0)) + int(post.get("retwoots", 0)) * 3 + int(post.get("replies", 0)) * 2
+
+
+func _social_feed_filter_label(filter_id: String) -> String:
+	for filter_value in SOCIAL_FEED_FILTERS:
+		var filter: Dictionary = filter_value
+		if str(filter.get("id", "")) == filter_id:
+			return str(filter.get("label", "All"))
+	return "All"
+
+
+func _count_social_posts_for_filter(posts: Array, filter_id: String) -> int:
+	if filter_id == SOCIAL_FEED_FILTER_ALL:
+		return posts.size()
+	var count: int = 0
+	for post_value in posts:
+		if typeof(post_value) != TYPE_DICTIONARY:
+			continue
+		var post: Dictionary = post_value
+		if _social_post_matches_feed_filter(post, filter_id):
+			count += 1
+	return count
+
+
 func _selected_social_account_name(posts: Array) -> String:
 	if selected_social_account_id.is_empty():
 		return ""
@@ -6930,6 +7079,137 @@ func _selected_social_account_name(posts: Array) -> String:
 			account_name = str(post.get("account_handle", "")).strip_edges()
 		return account_name
 	return ""
+
+
+func _refresh_social_tier_indicator(access_tier: int) -> void:
+	if social_tier_indicator == null:
+		return
+	for child in social_tier_indicator.get_children():
+		social_tier_indicator.remove_child(child)
+		child.queue_free()
+
+	var visible_tier: int = clamp(access_tier, 0, 3)
+	for segment_index in range(3):
+		var segment := PanelContainer.new()
+		segment.name = "SocialTierSegment%d" % (segment_index + 1)
+		segment.custom_minimum_size = Vector2(14, 6)
+		segment.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		_style_twooter_panel(
+			segment,
+			COLOR_TWOOTER_BLUE if segment_index < visible_tier else Color(COLOR_TWOOTER_BLUE_TINT.r, COLOR_TWOOTER_BLUE_TINT.g, COLOR_TWOOTER_BLUE_TINT.b, 0.52),
+			COLOR_TWOOTER_BLUE_EDGE,
+			3,
+			1
+		)
+		social_tier_indicator.add_child(segment)
+
+
+func _rebuild_social_filter_chips(posts: Array) -> void:
+	if social_filter_chips == null:
+		return
+	for child in social_filter_chips.get_children():
+		social_filter_chips.remove_child(child)
+		child.queue_free()
+
+	for filter_value in SOCIAL_FEED_FILTERS:
+		var filter: Dictionary = filter_value
+		var filter_id: String = str(filter.get("id", SOCIAL_FEED_FILTER_ALL))
+		var count: int = _count_social_posts_for_filter(posts, filter_id)
+		var button := Button.new()
+		button.name = "SocialFeedFilter%sButton" % filter_id.capitalize()
+		button.text = "%s %d" % [str(filter.get("label", "All")), count]
+		button.custom_minimum_size = Vector2(82, 30)
+		button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		button.tooltip_text = "Filter the Twooter feed by %s." % str(filter.get("label", "All")).to_lower()
+		button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		button.disabled = filter_id != SOCIAL_FEED_FILTER_ALL and count == 0
+		_style_social_filter_button(button, filter_id == selected_social_feed_filter_id, not button.disabled)
+		social_filter_chips.add_child(button)
+		button.pressed.connect(_on_social_feed_filter_pressed.bind(filter_id))
+
+
+func _on_social_feed_filter_pressed(filter_id: String) -> void:
+	if filter_id.is_empty() or filter_id == selected_social_feed_filter_id:
+		return
+	selected_social_feed_filter_id = filter_id
+	_refresh_social()
+
+
+func _rebuild_social_ticker_tape(visible_posts: Array, all_posts: Array) -> void:
+	if social_ticker_tape == null:
+		return
+	for child in social_ticker_tape.get_children():
+		social_ticker_tape.remove_child(child)
+		child.queue_free()
+
+	var ticker_rows: Array = _social_ticker_rows_from_posts(visible_posts)
+	if ticker_rows.is_empty():
+		ticker_rows = _social_ticker_rows_from_posts(all_posts)
+
+	if ticker_rows.is_empty():
+		var empty_label := Label.new()
+		empty_label.name = "SocialTickerTapeEmptyLabel"
+		empty_label.text = "No ticker chatter yet"
+		empty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		empty_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
+		_apply_font_override_to_control(empty_label, 12, _get_app_font())
+		social_ticker_tape.add_child(empty_label)
+		return
+
+	for row_index in range(min(ticker_rows.size(), SOCIAL_TICKER_TAPE_LIMIT)):
+		var row: Dictionary = ticker_rows[row_index]
+		social_ticker_tape.add_child(_build_social_ticker_chip(row))
+
+
+func _social_ticker_rows_from_posts(posts: Array) -> Array:
+	var lookup: Dictionary = {}
+	var rows: Array = []
+	for post_value in posts:
+		if typeof(post_value) != TYPE_DICTIONARY:
+			continue
+		var post: Dictionary = post_value
+		var ticker: String = str(post.get("target_ticker", "")).strip_edges().to_upper()
+		if ticker.is_empty() or lookup.has(ticker):
+			continue
+		lookup[ticker] = true
+		rows.append({
+			"ticker": ticker,
+			"tone": str(post.get("tone", "mixed")),
+			"score": _social_post_engagement_score(post)
+		})
+	return rows
+
+
+func _build_social_ticker_chip(row: Dictionary) -> PanelContainer:
+	var tone: String = str(row.get("tone", "mixed"))
+	var chip := PanelContainer.new()
+	chip.name = "SocialTickerChip"
+	chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_style_social_ticker_chip(chip, tone)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 8)
+	margin.add_theme_constant_override("margin_top", 4)
+	margin.add_theme_constant_override("margin_right", 8)
+	margin.add_theme_constant_override("margin_bottom", 4)
+	chip.add_child(margin)
+
+	var row_box := HBoxContainer.new()
+	row_box.add_theme_constant_override("separation", 5)
+	margin.add_child(row_box)
+
+	var ticker_label := Label.new()
+	ticker_label.text = "$%s" % str(row.get("ticker", ""))
+	ticker_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
+	_apply_font_override_to_control(ticker_label, 12, _get_dashboard_title_font())
+	row_box.add_child(ticker_label)
+
+	var tone_label := Label.new()
+	tone_label.text = _social_tone_indicator(tone)
+	tone_label.add_theme_color_override("font_color", _social_tone_color(tone))
+	_apply_font_override_to_control(tone_label, 12, _get_app_font())
+	row_box.add_child(tone_label)
+	return chip
 
 
 func _rebuild_social_feed_cards(posts: Array) -> void:
@@ -6976,7 +7256,7 @@ func _build_social_account_filter_card(account_name: String) -> PanelContainer:
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.text = "Showing %s" % account_name
 	label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-	label.add_theme_color_override("font_color", Color(0.121569, 0.160784, 0.258824, 1))
+	label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
 	row.add_child(label)
 
 	var clear_button: Button = Button.new()
@@ -7006,7 +7286,7 @@ func _build_social_empty_card() -> PanelContainer:
 	body.text = "No posts yet.\nAdvance the day to generate fresh chatter."
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-	body.add_theme_color_override("font_color", Color(0.25098, 0.309804, 0.388235, 1))
+	body.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
 	margin.add_child(body)
 	return card
 
@@ -7016,41 +7296,41 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 	card.name = "SocialPostCard"
 	card.set_meta("social_account_id", str(post.get("account_id", "")))
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.custom_minimum_size = Vector2(0, 128)
+	card.custom_minimum_size = Vector2(0, 0)
 	_style_social_post_card(card, str(post.get("tone", "mixed")))
 
 	var margin: MarginContainer = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 12)
+	margin.add_theme_constant_override("margin_left", 11)
+	margin.add_theme_constant_override("margin_top", 11)
+	margin.add_theme_constant_override("margin_right", 11)
+	margin.add_theme_constant_override("margin_bottom", 11)
 	card.add_child(margin)
 
 	var card_row: HBoxContainer = HBoxContainer.new()
 	card_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card_row.add_theme_constant_override("separation", 10)
+	card_row.add_theme_constant_override("separation", 9)
 	margin.add_child(card_row)
 
 	card_row.add_child(_build_social_avatar(post))
 
 	var content: VBoxContainer = VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.add_theme_constant_override("separation", 6)
+	content.add_theme_constant_override("separation", 7)
 	card_row.add_child(content)
 
 	var header_row: HBoxContainer = HBoxContainer.new()
 	header_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_row.add_theme_constant_override("separation", 8)
+	header_row.add_theme_constant_override("separation", 5)
 	content.add_child(header_row)
 
 	var account_button: Button = Button.new()
 	account_button.name = "SocialAccountNameButton"
 	account_button.set_meta("social_account_id", str(post.get("account_id", "")))
 	account_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	account_button.text = "%s%s" % [
-		str(post.get("account_name", "")),
-		" [verified]" if bool(post.get("account_verified", false)) else ""
-	]
+	var account_name: String = str(post.get("account_name", "")).strip_edges()
+	if account_name.is_empty():
+		account_name = str(post.get("account_handle", "")).strip_edges()
+	account_button.text = account_name
 	account_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	account_button.tooltip_text = "Show posts from this account."
 	account_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -7060,42 +7340,66 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 		_on_social_account_pressed(str(post.get("account_id", "")))
 	)
 
-	var meta_badge_label: Label = Label.new()
-	meta_badge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	meta_badge_label.text = "Tier %d" % int(post.get("account_tier", 1))
-	meta_badge_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-	meta_badge_label.add_theme_color_override("font_color", Color(0.254902, 0.4, 0.639216, 1))
-	header_row.add_child(meta_badge_label)
+	if bool(post.get("account_verified", false)):
+		var verified_label := Label.new()
+		verified_label.name = "SocialVerifiedLabel"
+		verified_label.text = "Verified"
+		verified_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		verified_label.add_theme_font_size_override("font_size", 10)
+		verified_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE)
+		header_row.add_child(verified_label)
+
+	header_row.add_child(_build_social_tier_pill(int(post.get("account_tier", 1))))
 
 	var handle_label: Label = Label.new()
-	handle_label.text = str(post.get("account_handle", ""))
-	handle_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-	handle_label.add_theme_color_override("font_color", Color(0.360784, 0.454902, 0.603922, 1))
+	handle_label.text = _build_social_card_meta_line(post)
+	handle_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	handle_label.add_theme_font_size_override("font_size", 12)
+	handle_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
 	content.add_child(handle_label)
+
+	var tag_row := HFlowContainer.new()
+	tag_row.name = "SocialPostTagRow"
+	tag_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tag_row.add_theme_constant_override("h_separation", 5)
+	tag_row.add_theme_constant_override("v_separation", 4)
+	var has_tags: bool = false
+	var target_ticker: String = str(post.get("target_ticker", "")).strip_edges().to_upper()
+	var target_company: String = str(post.get("target_company_name", "")).strip_edges()
+	var sector_name: String = str(post.get("sector_name", "")).strip_edges()
+	if not target_ticker.is_empty():
+		tag_row.add_child(_build_social_tag_chip("$%s" % target_ticker, str(post.get("tone", "mixed"))))
+		has_tags = true
+	if not target_company.is_empty():
+		tag_row.add_child(_build_social_tag_chip(target_company, "mixed"))
+		has_tags = true
+	elif not sector_name.is_empty():
+		tag_row.add_child(_build_social_tag_chip(sector_name, "mixed"))
+		has_tags = true
+	var category_label: String = _social_category_label(post)
+	if not category_label.is_empty():
+		tag_row.add_child(_build_social_tag_chip(category_label, "blue"))
+		has_tags = true
+	if has_tags:
+		content.add_child(tag_row)
 
 	var body_label: Label = Label.new()
 	body_label.text = str(post.get("post_text", ""))
 	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-	body_label.add_theme_color_override("font_color", Color(0.0627451, 0.0862745, 0.117647, 1))
+	body_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 1)
+	body_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
 	content.add_child(body_label)
 
-	var meta_line: String = _build_social_card_meta_line(post)
-	if not meta_line.is_empty():
-		var meta_label: Label = Label.new()
-		meta_label.text = meta_line
-		meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		meta_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-		meta_label.add_theme_color_override("font_color", Color(0.254902, 0.34902, 0.454902, 1))
-		content.add_child(meta_label)
+	content.add_child(_build_social_sentiment_bar(str(post.get("tone", "mixed"))))
 
 	var thread_lines: Array = post.get("thread_lines", [])
 	if not thread_lines.is_empty():
 		var thread_button: Button = Button.new()
 		thread_button.name = "SocialThreadToggleButton"
 		thread_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-		thread_button.text = "Hide Thread" if bool(expanded_social_thread_ids.get(str(post.get("id", "")), false)) else "Thread"
+		thread_button.text = "Hide thread" if bool(expanded_social_thread_ids.get(str(post.get("id", "")), false)) else "Show thread"
 		thread_button.tooltip_text = "Expand this Twooter thread."
+		_style_social_thread_button(thread_button)
 		content.add_child(thread_button)
 
 		var thread_container: VBoxContainer = VBoxContainer.new()
@@ -7110,41 +7414,168 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 			var thread_text: String = str(thread_lines[thread_index])
 			thread_line.text = thread_text if thread_text.begins_with("%d." % (thread_index + 1)) else "%d. %s" % [thread_index + 1, thread_text]
 			thread_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			thread_line.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-			thread_line.add_theme_color_override("font_color", Color(0.094118, 0.141176, 0.207843, 1))
+			thread_line.add_theme_font_size_override("font_size", 12)
+			thread_line.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
 			thread_container.add_child(thread_line)
 		thread_button.pressed.connect(func() -> void:
 			_on_social_thread_toggled(str(post.get("id", "")), thread_container, thread_button)
 		)
 
-	var reactions_label: Label = Label.new()
-	reactions_label.text = "%d likes  |  %d replies  |  %d retwoots" % [
-		int(post.get("likes", 0)),
-		int(post.get("replies", 0)),
-		int(post.get("retwoots", 0))
-	]
-	reactions_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-	reactions_label.add_theme_color_override("font_color", Color(0.317647, 0.403922, 0.537255, 1))
-	content.add_child(reactions_label)
+	var reactions_row := HBoxContainer.new()
+	reactions_row.name = "SocialEngagementRow"
+	reactions_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reactions_row.add_theme_constant_override("separation", 9)
+	content.add_child(reactions_row)
+	reactions_row.add_child(_build_social_engagement_label("Reply", int(post.get("replies", 0))))
+	reactions_row.add_child(_build_social_engagement_label("Retwoot", int(post.get("retwoots", 0))))
+	reactions_row.add_child(_build_social_engagement_label("Like", int(post.get("likes", 0))))
+	var engagement_spacer := Control.new()
+	engagement_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reactions_row.add_child(engagement_spacer)
+	var score_label := Label.new()
+	score_label.text = "%d score" % _social_post_engagement_score(post)
+	score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	score_label.add_theme_font_size_override("font_size", 11)
+	score_label.add_theme_color_override("font_color", COLOR_TWOOTER_FAINT)
+	reactions_row.add_child(score_label)
 
 	return card
+
+
+func _build_social_tier_pill(tier: int) -> PanelContainer:
+	var pill := PanelContainer.new()
+	pill.name = "SocialTierPill"
+	pill.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_style_social_tier_pill(pill)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 6)
+	margin.add_theme_constant_override("margin_top", 2)
+	margin.add_theme_constant_override("margin_right", 6)
+	margin.add_theme_constant_override("margin_bottom", 2)
+	pill.add_child(margin)
+
+	var label := Label.new()
+	label.text = "T%d" % clamp(tier, 1, 3)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 10)
+	label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
+	margin.add_child(label)
+	return pill
+
+
+func _build_social_tag_chip(text: String, tone: String) -> PanelContainer:
+	var chip := PanelContainer.new()
+	chip.name = "SocialPostTagChip"
+	chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_style_social_tag_chip(chip, tone)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 7)
+	margin.add_theme_constant_override("margin_top", 3)
+	margin.add_theme_constant_override("margin_right", 7)
+	margin.add_theme_constant_override("margin_bottom", 3)
+	chip.add_child(margin)
+
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 11)
+	label.add_theme_color_override("font_color", _social_tag_font_color(tone))
+	margin.add_child(label)
+	return chip
+
+
+func _build_social_sentiment_bar(tone: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "SocialSentimentRow"
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 7)
+
+	var track := HBoxContainer.new()
+	track.name = "SocialSentimentBar"
+	track.custom_minimum_size = Vector2(88, 6)
+	track.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	track.add_theme_constant_override("separation", 0)
+	row.add_child(track)
+
+	var ratio: float = 0.48
+	if tone == "positive":
+		ratio = 0.78
+	elif tone == "negative":
+		ratio = 0.62
+
+	var fill_width: float = clamp(88.0 * ratio, 8.0, 88.0)
+	var fill := ColorRect.new()
+	fill.custom_minimum_size = Vector2(fill_width, 6)
+	fill.color = _social_tone_color(tone)
+	track.add_child(fill)
+	var rest := ColorRect.new()
+	rest.custom_minimum_size = Vector2(max(88.0 - fill_width, 1.0), 6)
+	rest.color = Color(COLOR_TWOOTER_BLUE_EDGE.r, COLOR_TWOOTER_BLUE_EDGE.g, COLOR_TWOOTER_BLUE_EDGE.b, 0.28)
+	track.add_child(rest)
+
+	var label := Label.new()
+	label.text = _social_tone_label(tone)
+	label.add_theme_font_size_override("font_size", 11)
+	label.add_theme_color_override("font_color", _social_tone_color(tone))
+	row.add_child(label)
+	return row
+
+
+func _build_social_engagement_label(label_text: String, value: int) -> Label:
+	var label := Label.new()
+	label.text = "%s %d" % [label_text, value]
+	label.add_theme_font_size_override("font_size", 11)
+	label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
+	return label
+
+
+func _social_category_label(post: Dictionary) -> String:
+	var category: String = str(post.get("category", "")).strip_edges()
+	if category.is_empty():
+		return ""
+	return category.replace("_", " ").capitalize()
+
+
+func _social_tone_label(tone: String) -> String:
+	if tone == "positive":
+		return "Bullish"
+	if tone == "negative":
+		return "Bearish"
+	return "Mixed"
+
+
+func _social_tone_indicator(tone: String) -> String:
+	if tone == "positive":
+		return "+"
+	if tone == "negative":
+		return "-"
+	return "watch"
+
+
+func _social_tone_color(tone: String) -> Color:
+	if tone == "positive":
+		return COLOR_TWOOTER_BULL
+	if tone == "negative":
+		return COLOR_TWOOTER_BEAR
+	return COLOR_TWOOTER_BLUE
 
 
 func _build_social_avatar(post: Dictionary) -> PanelContainer:
 	var avatar: PanelContainer = PanelContainer.new()
 	avatar.name = "SocialAvatar"
-	avatar.custom_minimum_size = Vector2(36, 36)
+	avatar.custom_minimum_size = Vector2(40, 40)
 	avatar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	avatar.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = _social_avatar_color(str(post.get("account_id", post.get("account_handle", ""))))
-	style.border_color = Color(1, 1, 1, 0.74)
-	style.set_border_width_all(1)
-	style.corner_radius_top_left = 18
-	style.corner_radius_top_right = 18
-	style.corner_radius_bottom_right = 18
-	style.corner_radius_bottom_left = 18
+	style.border_color = COLOR_TWOOTER_BLUE_EDGE if bool(post.get("account_verified", false)) else Color(COLOR_TWOOTER_BORDER.r, COLOR_TWOOTER_BORDER.g, COLOR_TWOOTER_BORDER.b, 0.68)
+	style.set_border_width_all(2)
+	style.corner_radius_top_left = 20
+	style.corner_radius_top_right = 20
+	style.corner_radius_bottom_right = 20
+	style.corner_radius_bottom_left = 20
 	style.content_margin_left = 0
 	style.content_margin_top = 0
 	style.content_margin_right = 0
@@ -7153,13 +7584,13 @@ func _build_social_avatar(post: Dictionary) -> PanelContainer:
 
 	var initial_label: Label = Label.new()
 	initial_label.name = "SocialAvatarLabel"
-	initial_label.custom_minimum_size = Vector2(36, 36)
+	initial_label.custom_minimum_size = Vector2(40, 40)
 	initial_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	initial_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	initial_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	initial_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	initial_label.text = _social_avatar_initial(post)
-	initial_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 2)
+	initial_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 3)
 	initial_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	avatar.add_child(initial_label)
 	return avatar
@@ -7178,14 +7609,14 @@ func _social_avatar_initial(post: Dictionary) -> String:
 
 func _social_avatar_color(seed_value: String) -> Color:
 	var palette: Array = [
-		Color(0.784314, 0.278431, 0.278431, 1),
-		Color(0.207843, 0.521569, 0.792157, 1),
-		Color(0.172549, 0.572549, 0.431373, 1),
-		Color(0.678431, 0.439216, 0.168627, 1),
-		Color(0.439216, 0.356863, 0.741176, 1),
-		Color(0.776471, 0.313725, 0.533333, 1),
-		Color(0.196078, 0.478431, 0.486275, 1),
-		Color(0.533333, 0.427451, 0.219608, 1)
+		Color(0.109804, 0.431373, 0.709804, 1),
+		Color(0.164706, 0.505882, 0.65098, 1),
+		Color(0.117647, 0.470588, 0.290196, 1),
+		Color(0.447059, 0.364706, 0.176471, 1),
+		Color(0.168627, 0.294118, 0.54902, 1),
+		Color(0.501961, 0.290196, 0.505882, 1),
+		Color(0.0705882, 0.356863, 0.415686, 1),
+		Color(0.635294, 0.098039, 0.164706, 1)
 	]
 	var seed: int = 0
 	for index in range(seed_value.length()):
@@ -7195,6 +7626,9 @@ func _social_avatar_color(seed_value: String) -> Color:
 
 func _build_social_card_meta_line(post: Dictionary) -> String:
 	var meta_parts: Array = []
+	var handle: String = str(post.get("account_handle", "")).strip_edges()
+	if not handle.is_empty():
+		meta_parts.append(handle)
 	var trade_date: Dictionary = post.get("trade_date", {})
 	if not trade_date.is_empty():
 		meta_parts.append(GameManager.format_trade_date(trade_date))
@@ -7231,27 +7665,105 @@ func _on_social_thread_toggled(post_id: String, thread_container: VBoxContainer,
 	var next_visible: bool = not thread_container.visible
 	thread_container.visible = next_visible
 	expanded_social_thread_ids[post_id] = next_visible
-	thread_button.text = "Hide Thread" if next_visible else "Thread"
+	thread_button.text = "Hide thread" if next_visible else "Show thread"
 
 
 func _style_social_post_card(panel: PanelContainer, tone: String) -> void:
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.964706, 0.972549, 0.992157, 1)
+	var style := StyleBoxFlat.new()
+	style.bg_color = COLOR_TWOOTER_CARD
 	style.border_color = _social_card_border_color(tone)
-	style.set_border_width_all(1)
-	style.corner_radius_top_left = 0
-	style.corner_radius_top_right = 0
-	style.corner_radius_bottom_right = 0
-	style.corner_radius_bottom_left = 0
+	style.border_width_left = 4
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_right = 6
+	style.corner_radius_bottom_left = 6
 	panel.add_theme_stylebox_override("panel", style)
 
 
 func _social_card_border_color(tone: String) -> Color:
 	if tone == "positive":
-		return Color(0.333333, 0.607843, 0.470588, 1)
+		return COLOR_TWOOTER_BULL
 	if tone == "negative":
-		return Color(0.709804, 0.403922, 0.423529, 1)
-	return Color(0.556863, 0.647059, 0.776471, 1)
+		return COLOR_TWOOTER_BEAR
+	return COLOR_TWOOTER_BLUE_EDGE
+
+
+func _style_twooter_ui() -> void:
+	if social_window_body == null:
+		return
+	_style_twooter_panel(social_window_body, COLOR_TWOOTER_PAGE, COLOR_TWOOTER_BLUE_EDGE, 0, 2)
+	if social_ticker_tape_panel != null:
+		_style_twooter_panel(social_ticker_tape_panel, COLOR_TWOOTER_BLUE_TINT, COLOR_TWOOTER_BLUE_EDGE, 6, 1)
+	if social_live_dot != null:
+		_style_twooter_panel(social_live_dot, COLOR_TWOOTER_BLUE, COLOR_TWOOTER_BLUE_DARK, 5, 1)
+	if social_live_label != null:
+		social_live_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
+		_apply_font_override_to_control(social_live_label, 11, _get_dashboard_title_font())
+	_set_label_tone(social_title_label, COLOR_TWOOTER_BLUE_DARK)
+	_apply_font_override_to_control(social_title_label, DEFAULT_APP_FONT_SIZE + 4, _get_dashboard_title_font())
+	_set_label_tone(social_access_status_label, COLOR_TWOOTER_MUTED)
+	_apply_font_override_to_control(social_access_status_label, 12, _get_app_font())
+	_set_label_tone(social_feed_summary_label, COLOR_TWOOTER_MUTED)
+	_apply_font_override_to_control(social_feed_summary_label, 12, _get_app_font())
+
+
+func _style_twooter_panel(panel: PanelContainer, fill_color: Color, border_color: Color, radius: int = 6, border_width: int = 1) -> void:
+	if panel == null:
+		return
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = border_color
+	style.set_border_width_all(border_width)
+	style.corner_radius_top_left = radius
+	style.corner_radius_top_right = radius
+	style.corner_radius_bottom_right = radius
+	style.corner_radius_bottom_left = radius
+	panel.add_theme_stylebox_override("panel", style)
+
+
+func _style_social_tier_pill(panel: PanelContainer) -> void:
+	_style_twooter_panel(panel, Color(COLOR_TWOOTER_BLUE_TINT.r, COLOR_TWOOTER_BLUE_TINT.g, COLOR_TWOOTER_BLUE_TINT.b, 0.86), COLOR_TWOOTER_BLUE_EDGE, 5, 1)
+
+
+func _style_social_ticker_chip(panel: PanelContainer, tone: String) -> void:
+	var fill_color: Color = COLOR_TWOOTER_CARD
+	if tone == "positive":
+		fill_color = Color(COLOR_TWOOTER_BULL.r, COLOR_TWOOTER_BULL.g, COLOR_TWOOTER_BULL.b, 0.12)
+	elif tone == "negative":
+		fill_color = COLOR_TWOOTER_BEAR_TINT
+	_style_twooter_panel(panel, fill_color, _social_card_border_color(tone), 5, 1)
+
+
+func _style_social_tag_chip(panel: PanelContainer, tone: String) -> void:
+	var fill_color: Color = Color(COLOR_TWOOTER_BLUE_TINT.r, COLOR_TWOOTER_BLUE_TINT.g, COLOR_TWOOTER_BLUE_TINT.b, 0.62)
+	var border_color: Color = COLOR_TWOOTER_BLUE_EDGE
+	if tone == "positive":
+		fill_color = Color(COLOR_TWOOTER_BULL.r, COLOR_TWOOTER_BULL.g, COLOR_TWOOTER_BULL.b, 0.10)
+		border_color = Color(COLOR_TWOOTER_BULL.r, COLOR_TWOOTER_BULL.g, COLOR_TWOOTER_BULL.b, 0.58)
+	elif tone == "negative":
+		fill_color = COLOR_TWOOTER_BEAR_TINT
+		border_color = Color(COLOR_TWOOTER_BEAR.r, COLOR_TWOOTER_BEAR.g, COLOR_TWOOTER_BEAR.b, 0.58)
+	elif tone == "mixed":
+		fill_color = Color(COLOR_TWOOTER_SURFACE.r, COLOR_TWOOTER_SURFACE.g, COLOR_TWOOTER_SURFACE.b, 0.86)
+		border_color = Color(COLOR_TWOOTER_BORDER.r, COLOR_TWOOTER_BORDER.g, COLOR_TWOOTER_BORDER.b, 0.62)
+	_style_twooter_panel(panel, fill_color, border_color, 5, 1)
+
+
+func _social_tag_font_color(tone: String) -> Color:
+	if tone == "positive":
+		return COLOR_TWOOTER_BULL
+	if tone == "negative":
+		return COLOR_TWOOTER_BEAR
+	if tone == "blue":
+		return COLOR_TWOOTER_BLUE_DARK
+	return COLOR_TWOOTER_MUTED
+
+
+func _style_social_thread_button(button: Button) -> void:
+	_style_button(button, COLOR_TWOOTER_BLUE_TINT, COLOR_TWOOTER_BLUE_EDGE, COLOR_TWOOTER_BLUE_DARK, 5)
 
 
 func _show_news_article(article: Dictionary) -> void:
@@ -7264,6 +7776,8 @@ func _show_news_article(article: Dictionary) -> void:
 			news_detail_byline_label.text = ""
 		if news_detail_chips_label != null:
 			news_detail_chips_label.text = ""
+		if news_detail_photo_caption_label != null:
+			news_detail_photo_caption_label.text = ""
 		_set_news_detail_hero_slot("")
 		news_detail_body.text = "Choose a story from the list."
 		news_detail_hint_label.text = ""
@@ -7282,7 +7796,7 @@ func _show_news_article(article: Dictionary) -> void:
 	if not trade_date.is_empty():
 		trade_date_text = GameManager.format_trade_date(trade_date)
 
-	news_detail_outlet_label.text = str(article.get("outlet_label", "News"))
+	news_detail_outlet_label.text = "FROM · %s" % str(article.get("outlet_label", "News")).to_upper()
 	news_detail_headline_label.text = str(article.get("headline", ""))
 	news_detail_deck_label.text = str(article.get("deck", ""))
 	news_detail_meta_label.text = trade_date_text
@@ -7290,6 +7804,8 @@ func _show_news_article(article: Dictionary) -> void:
 		news_detail_byline_label.text = _news_byline_text(article)
 	if news_detail_chips_label != null:
 		news_detail_chips_label.text = _news_article_chip_line(article)
+	if news_detail_photo_caption_label != null:
+		news_detail_photo_caption_label.text = "Photo: Bursa archive · %s treatment." % _news_image_slot_label(str(article.get("image_slot", "brief"))).to_lower()
 	_set_news_detail_hero_slot(str(article.get("image_slot", "brief")))
 	news_detail_body.text = str(article.get("body", ""))
 	GameManager.discover_network_contacts_from_article(article)
@@ -7308,7 +7824,7 @@ func _show_news_article(article: Dictionary) -> void:
 		news_open_meeting_button.tooltip_text = meeting_blocked_reason if not meeting_blocked_reason.is_empty() else "Open the linked corporate meeting."
 		news_open_meeting_button.set_meta("meeting_id", meeting_id)
 	if not contact.is_empty():
-		news_detail_hint_label.text = "Source lead: %s, %s." % [
+		news_detail_hint_label.text = "SOURCE LEAD\n%s · %s" % [
 			str(contact.get("display_name", "")),
 			str(contact.get("role", ""))
 		]
@@ -7353,7 +7869,7 @@ func _news_article_status_line(article: Dictionary) -> String:
 	var trade_date: Dictionary = article.get("trade_date", {})
 	if not trade_date.is_empty():
 		parts.append(GameManager.format_trade_date(trade_date))
-	return "  |  ".join(parts)
+	return "  ·  ".join(parts)
 
 
 func _news_article_chip_line(article: Dictionary) -> String:
@@ -7367,7 +7883,7 @@ func _news_article_chip_line(article: Dictionary) -> String:
 		chips.append(status_label)
 	if not target_ticker.is_empty():
 		chips.append(target_ticker)
-	return "  /  ".join(chips)
+	return "  ·  ".join(chips)
 
 
 func _news_image_slot_label(image_slot: String) -> String:
@@ -7413,9 +7929,12 @@ func _corporate_meeting_open_blocked_reason(detail: Dictionary) -> String:
 	return ""
 
 
-func _rebuild_news_article_cards(articles: Array) -> void:
+func _rebuild_news_article_cards(articles: Array, reset_scroll: bool = true) -> void:
 	if news_article_cards == null:
 		return
+	var previous_scroll_value: float = 0.0
+	if news_article_cards_scroll != null and news_article_cards_scroll.get_v_scroll_bar() != null:
+		previous_scroll_value = news_article_cards_scroll.get_v_scroll_bar().value
 	for child in news_article_cards.get_children():
 		news_article_cards.remove_child(child)
 		child.queue_free()
@@ -7430,79 +7949,150 @@ func _rebuild_news_article_cards(articles: Array) -> void:
 		var article: Dictionary = article_value
 		news_article_cards.add_child(_build_news_article_card(article))
 	if news_article_cards_scroll != null and news_article_cards_scroll.get_v_scroll_bar() != null:
-		news_article_cards_scroll.get_v_scroll_bar().value = 0.0
+		var next_scroll_value: float = 0.0 if reset_scroll else previous_scroll_value
+		news_article_cards_scroll.get_v_scroll_bar().value = next_scroll_value
+		if not reset_scroll:
+			call_deferred("_restore_news_article_cards_scroll", next_scroll_value)
+
+
+func _restore_news_article_cards_scroll(scroll_value: float) -> void:
+	if news_article_cards_scroll == null:
+		return
+	var scroll_bar := news_article_cards_scroll.get_v_scroll_bar()
+	if scroll_bar == null:
+		return
+	scroll_bar.value = clamp(scroll_value, scroll_bar.min_value, scroll_bar.max_value)
 
 
 func _build_news_article_card(article: Dictionary) -> PanelContainer:
 	var article_id: String = str(article.get("id", ""))
+	var is_selected: bool = article_id == selected_news_article_id
 	var card := PanelContainer.new()
 	card.name = "NewsArticleCard_%s" % article_id.replace("|", "_")
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_news_article_card(card, article_id == selected_news_article_id)
+	_style_news_article_card(card, is_selected)
 
 	var margin := MarginContainer.new()
 	margin.name = "NewsArticleCardMargin"
-	margin.add_theme_constant_override("margin_left", 10)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_bottom", 10)
+	margin.add_theme_constant_override("margin_left", 9)
+	margin.add_theme_constant_override("margin_top", 9)
+	margin.add_theme_constant_override("margin_right", 9)
+	margin.add_theme_constant_override("margin_bottom", 9)
 	card.add_child(margin)
 
 	var vbox := VBoxContainer.new()
 	vbox.name = "NewsArticleCardVBox"
-	vbox.add_theme_constant_override("separation", 6)
+	vbox.add_theme_constant_override("separation", 8)
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
+	var stamp_slot := Control.new()
+	stamp_slot.name = "NewsArticleCardStampSlot"
+	stamp_slot.custom_minimum_size = Vector2(0, 24)
+	stamp_slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(stamp_slot)
+	if is_selected:
+		var stamp_rect := TextureRect.new()
+		stamp_rect.name = "NewsArticleCardOpenStamp"
+		stamp_rect.texture = _market_paper_texture("stamp_open")
+		stamp_rect.custom_minimum_size = Vector2(110, 28)
+		stamp_rect.size = Vector2(110, 28)
+		stamp_rect.position = Vector2(-4, 0)
+		stamp_rect.modulate = Color(1, 1, 1, 0.88)
+		stamp_rect.rotation_degrees = -7.0
+		stamp_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		stamp_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		stamp_slot.add_child(stamp_rect)
+
+	var inner_panel := PanelContainer.new()
+	inner_panel.name = "NewsArticleCardInnerPanel"
+	inner_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_news_inner_panel(inner_panel, COLOR_MARKET_PAPER_CARD)
+	vbox.add_child(inner_panel)
+
+	var inner_margin := MarginContainer.new()
+	inner_margin.name = "NewsArticleCardInnerMargin"
+	inner_margin.add_theme_constant_override("margin_left", 9)
+	inner_margin.add_theme_constant_override("margin_top", 9)
+	inner_margin.add_theme_constant_override("margin_right", 9)
+	inner_margin.add_theme_constant_override("margin_bottom", 9)
+	inner_panel.add_child(inner_margin)
+
+	var inner_vbox := VBoxContainer.new()
+	inner_vbox.name = "NewsArticleCardInnerVBox"
+	inner_vbox.add_theme_constant_override("separation", 8)
+	inner_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	inner_margin.add_child(inner_vbox)
+
+	var top_row := HBoxContainer.new()
+	top_row.name = "NewsArticleCardTopRow"
+	top_row.add_theme_constant_override("separation", 10)
+	top_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	inner_vbox.add_child(top_row)
+
 	var image_frame := PanelContainer.new()
 	image_frame.name = "NewsArticleCardImageFrame"
-	image_frame.custom_minimum_size = Vector2(0, 64)
-	image_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	image_frame.custom_minimum_size = Vector2(112, 82)
+	image_frame.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_style_news_asset_frame(image_frame)
-	vbox.add_child(image_frame)
+	top_row.add_child(image_frame)
 	var image_label := Label.new()
 	image_label.name = "NewsArticleCardImagePlaceholder"
 	image_label.text = _news_image_slot_label(str(article.get("image_slot", "brief")))
 	image_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	image_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_set_label_tone(image_label, Color(0.454902, 0.337255, 0.141176, 1))
+	_apply_font_override_to_control(image_label, 10, _get_app_font())
 	image_frame.add_child(image_label)
+
+	var text_vbox := VBoxContainer.new()
+	text_vbox.name = "NewsArticleCardTextVBox"
+	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_vbox.add_theme_constant_override("separation", 5)
+	top_row.add_child(text_vbox)
 
 	var status_label := Label.new()
 	status_label.name = "NewsArticleCardStatusLabel"
-	status_label.text = _news_article_status_line(article)
+	status_label.text = _news_article_status_line(article).to_upper()
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_set_label_tone(status_label, Color(0.454902, 0.337255, 0.141176, 1))
-	vbox.add_child(status_label)
+	_set_label_tone(status_label, COLOR_MARKET_PAPER_RED)
+	_apply_font_override_to_control(status_label, 11, _get_dashboard_title_font())
+	text_vbox.add_child(status_label)
 
 	var headline_label := Label.new()
 	headline_label.name = "NewsArticleCardHeadlineLabel"
 	headline_label.text = str(article.get("headline", ""))
 	headline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_apply_font_override_to_control(headline_label, 15, _get_app_font())
+	_apply_font_override_to_control(headline_label, 15, _get_dashboard_title_font())
 	_set_label_tone(headline_label, COLOR_WINDOW_TEXT)
-	vbox.add_child(headline_label)
+	text_vbox.add_child(headline_label)
 
 	var deck_label := Label.new()
 	deck_label.name = "NewsArticleCardDeckLabel"
 	deck_label.text = str(article.get("deck", ""))
 	deck_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_set_label_tone(deck_label, Color(0.352941, 0.309804, 0.203922, 1))
-	vbox.add_child(deck_label)
+	inner_vbox.add_child(deck_label)
+
+	var byline_rule := ColorRect.new()
+	byline_rule.name = "NewsArticleCardBylineRule"
+	byline_rule.color = Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.55)
+	byline_rule.custom_minimum_size = Vector2(0, 1)
+	inner_vbox.add_child(byline_rule)
 
 	var byline_label := Label.new()
 	byline_label.name = "NewsArticleCardBylineLabel"
 	byline_label.text = _news_byline_text(article)
 	byline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_set_label_tone(byline_label, Color(0.454902, 0.337255, 0.141176, 1))
-	vbox.add_child(byline_label)
+	inner_vbox.add_child(byline_label)
 
 	var read_button := Button.new()
 	read_button.name = "NewsArticleCardReadButton"
-	read_button.text = "Read Story"
+	read_button.text = "READ STORY"
 	read_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	read_button.pressed.connect(_on_news_article_card_pressed.bind(article_id))
-	_style_button(read_button, Color(0.866667, 0.807843, 0.635294, 1), Color(0.709804, 0.607843, 0.345098, 1), COLOR_WINDOW_TEXT, 0)
+	_style_news_command_button(read_button, is_selected)
 	vbox.add_child(read_button)
 	return card
 
@@ -7516,7 +8106,7 @@ func _on_news_article_card_pressed(article_id: String) -> void:
 		if str(articles[article_index].get("id", "")) == article_id:
 			news_article_list.select(article_index)
 			break
-	_rebuild_news_article_cards(articles)
+	_rebuild_news_article_cards(articles, false)
 	_show_news_article(GameManager.get_news_archive_article(selected_news_article_id))
 
 
@@ -10680,7 +11270,7 @@ func _on_news_article_selected(index: int) -> void:
 	if index < 0 or index >= articles.size():
 		return
 	selected_news_article_id = str(articles[index].get("id", ""))
-	_rebuild_news_article_cards(articles)
+	_rebuild_news_article_cards(articles, false)
 	_show_news_article(GameManager.get_news_archive_article(selected_news_article_id))
 
 
@@ -13989,24 +14579,114 @@ func _ensure_news_newspaper_ui() -> void:
 	news_article_list.custom_minimum_size = Vector2.ZERO
 
 	var header_row: HBoxContainer = news_title_label.get_parent()
-	if news_masthead_logo_frame == null:
-		news_masthead_logo_frame = PanelContainer.new()
-		news_masthead_logo_frame.name = "NewsMastheadLogoFrame"
-		news_masthead_logo_frame.custom_minimum_size = Vector2(74, 44)
-		header_row.add_child(news_masthead_logo_frame)
-		header_row.move_child(news_masthead_logo_frame, 0)
-		var logo_label := Label.new()
-		logo_label.name = "NewsMastheadLogoPlaceholder"
-		logo_label.text = "LOGO"
-		logo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		logo_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		news_masthead_logo_frame.add_child(logo_label)
-	if news_masthead_date_label == null:
+	header_row.visible = false
+
+	var window_vbox: VBoxContainer = news_outlet_buttons.get_parent()
+	if news_masthead_panel == null:
+		news_masthead_panel = PanelContainer.new()
+		news_masthead_panel.name = "NewsMastheadPanel"
+		news_masthead_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		window_vbox.add_child(news_masthead_panel)
+		window_vbox.move_child(news_masthead_panel, window_vbox.get_children().find(news_outlet_buttons))
+
+		var masthead_margin := MarginContainer.new()
+		masthead_margin.name = "NewsMastheadMargin"
+		masthead_margin.add_theme_constant_override("margin_left", 14)
+		masthead_margin.add_theme_constant_override("margin_top", 10)
+		masthead_margin.add_theme_constant_override("margin_right", 14)
+		masthead_margin.add_theme_constant_override("margin_bottom", 10)
+		news_masthead_panel.add_child(masthead_margin)
+
+		var masthead_row := HBoxContainer.new()
+		masthead_row.name = "NewsMastheadRow"
+		masthead_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		masthead_row.add_theme_constant_override("separation", 16)
+		masthead_margin.add_child(masthead_row)
+
+		news_masthead_issue_box = PanelContainer.new()
+		news_masthead_issue_box.name = "NewsMastheadIssueBox"
+		news_masthead_issue_box.custom_minimum_size = Vector2(118, 58)
+		news_masthead_issue_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		masthead_row.add_child(news_masthead_issue_box)
+
+		var issue_vbox := VBoxContainer.new()
+		issue_vbox.name = "NewsMastheadIssueVBox"
+		issue_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		issue_vbox.add_theme_constant_override("separation", 2)
+		news_masthead_issue_box.add_child(issue_vbox)
+		news_masthead_issue_label = Label.new()
+		news_masthead_issue_label.name = "NewsMastheadIssueLabel"
+		news_masthead_issue_label.text = "ISSUE"
+		news_masthead_issue_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		issue_vbox.add_child(news_masthead_issue_label)
+		news_masthead_issue_number_label = Label.new()
+		news_masthead_issue_number_label.name = "NewsMastheadIssueNumberLabel"
+		news_masthead_issue_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		issue_vbox.add_child(news_masthead_issue_number_label)
+
+		var title_block := VBoxContainer.new()
+		title_block.name = "NewsMastheadTitleBlock"
+		title_block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		title_block.alignment = BoxContainer.ALIGNMENT_CENTER
+		title_block.add_theme_constant_override("separation", 3)
+		masthead_row.add_child(title_block)
+		news_masthead_title_label = Label.new()
+		news_masthead_title_label.name = "NewsMastheadTitleLabel"
+		news_masthead_title_label.text = "The Market Papers"
+		news_masthead_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		news_masthead_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		title_block.add_child(news_masthead_title_label)
+		news_masthead_tagline_label = Label.new()
+		news_masthead_tagline_label.name = "NewsMastheadTaglineLabel"
+		news_masthead_tagline_label.text = "DAILY CAPITAL MARKETS JOURNAL"
+		news_masthead_tagline_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		title_block.add_child(news_masthead_tagline_label)
+
+		var date_block := VBoxContainer.new()
+		date_block.name = "NewsMastheadDateBlock"
+		date_block.custom_minimum_size = Vector2(160, 58)
+		date_block.alignment = BoxContainer.ALIGNMENT_CENTER
+		date_block.add_theme_constant_override("separation", 2)
+		masthead_row.add_child(date_block)
+		news_masthead_date_block_label = Label.new()
+		news_masthead_date_block_label.name = "NewsMastheadDateBlockLabel"
+		news_masthead_date_block_label.text = "TODAY'S EDITION"
+		news_masthead_date_block_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		date_block.add_child(news_masthead_date_block_label)
 		news_masthead_date_label = Label.new()
 		news_masthead_date_label.name = "NewsMastheadDateLabel"
 		news_masthead_date_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		news_masthead_date_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		header_row.add_child(news_masthead_date_label)
+		date_block.add_child(news_masthead_date_label)
+		news_masthead_price_label = Label.new()
+		news_masthead_price_label.name = "NewsMastheadPriceLabel"
+		news_masthead_price_label.text = "Cover price · Rp 5.000"
+		news_masthead_price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		date_block.add_child(news_masthead_price_label)
+
+	if news_masthead_rule_container == null:
+		news_masthead_rule_container = VBoxContainer.new()
+		news_masthead_rule_container.name = "NewsMastheadRule"
+		news_masthead_rule_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		news_masthead_rule_container.add_theme_constant_override("separation", 3)
+		window_vbox.add_child(news_masthead_rule_container)
+		window_vbox.move_child(news_masthead_rule_container, window_vbox.get_children().find(news_outlet_buttons))
+		var rule_top := ColorRect.new()
+		rule_top.name = "NewsMastheadRuleTop"
+		rule_top.custom_minimum_size = Vector2(0, 3)
+		news_masthead_rule_container.add_child(rule_top)
+		var rule_bottom := ColorRect.new()
+		rule_bottom.name = "NewsMastheadRuleBottom"
+		rule_bottom.custom_minimum_size = Vector2(0, 1)
+		news_masthead_rule_container.add_child(rule_bottom)
+
+	if news_source_tab_rule == null:
+		news_source_tab_rule = ColorRect.new()
+		news_source_tab_rule.name = "NewsSourceTabRule"
+		news_source_tab_rule.custom_minimum_size = Vector2(0, 1)
+		window_vbox.add_child(news_source_tab_rule)
+		window_vbox.move_child(news_source_tab_rule, window_vbox.get_children().find(news_outlet_buttons) + 1)
+
+	_ensure_news_grunge_overlay()
 
 	var feed_vbox: VBoxContainer = news_article_list.get_parent()
 	if news_article_cards_scroll == null:
@@ -14020,45 +14700,253 @@ func _ensure_news_newspaper_ui() -> void:
 		news_article_cards = VBoxContainer.new()
 		news_article_cards.name = "NewsArticleCards"
 		news_article_cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		news_article_cards.add_theme_constant_override("separation", 10)
+		news_article_cards.add_theme_constant_override("separation", 14)
 		news_article_cards_scroll.add_child(news_article_cards)
 
 	var detail_vbox: VBoxContainer = news_detail_headline_label.get_parent()
 	if news_detail_hero_frame == null:
 		news_detail_hero_frame = PanelContainer.new()
 		news_detail_hero_frame.name = "NewsDetailHeroFrame"
-		news_detail_hero_frame.custom_minimum_size = Vector2(0, 136)
+		news_detail_hero_frame.custom_minimum_size = Vector2(0, 138)
 		news_detail_hero_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		detail_vbox.add_child(news_detail_hero_frame)
-		detail_vbox.move_child(news_detail_hero_frame, detail_vbox.get_children().find(news_detail_headline_label))
 		var hero_label := Label.new()
 		hero_label.name = "NewsDetailHeroPlaceholder"
 		hero_label.text = "IMAGE SLOT"
 		hero_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		hero_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		news_detail_hero_frame.add_child(hero_label)
+	if news_detail_photo_caption_label == null:
+		news_detail_photo_caption_label = Label.new()
+		news_detail_photo_caption_label.name = "NewsDetailPhotoCaptionLabel"
+		news_detail_photo_caption_label.text = "Photo: Bursa archive · trading floor activity."
+		news_detail_photo_caption_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		detail_vbox.add_child(news_detail_photo_caption_label)
 	if news_detail_byline_label == null:
 		news_detail_byline_label = Label.new()
 		news_detail_byline_label.name = "NewsDetailBylineLabel"
 		news_detail_byline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		detail_vbox.add_child(news_detail_byline_label)
-		detail_vbox.move_child(news_detail_byline_label, detail_vbox.get_children().find(news_detail_meta_label))
 	if news_detail_chips_label == null:
 		news_detail_chips_label = Label.new()
 		news_detail_chips_label.name = "NewsDetailChipsLabel"
 		news_detail_chips_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		detail_vbox.add_child(news_detail_chips_label)
-		detail_vbox.move_child(news_detail_chips_label, detail_vbox.get_children().find(news_detail_body))
 	if news_detail_action_row == null:
 		news_detail_action_row = HBoxContainer.new()
 		news_detail_action_row.name = "NewsDetailActionRow"
-		news_detail_action_row.add_theme_constant_override("separation", 8)
+		news_detail_action_row.add_theme_constant_override("separation", 10)
 		detail_vbox.add_child(news_detail_action_row)
-		detail_vbox.move_child(news_detail_action_row, detail_vbox.get_children().find(news_meet_contact_button))
 	if news_meet_contact_button.get_parent() != news_detail_action_row:
 		news_meet_contact_button.reparent(news_detail_action_row)
 	if news_open_meeting_button != null and news_open_meeting_button.get_parent() != news_detail_action_row:
 		news_open_meeting_button.reparent(news_detail_action_row)
+	_order_news_detail_nodes(detail_vbox)
+	_style_news_newspaper_ui()
+
+
+func _ensure_social_feed_ui() -> void:
+	if social_window_body == null:
+		return
+
+	var window_margin := social_window_body.get_node_or_null("SocialWindowMargin") as MarginContainer
+	if window_margin != null:
+		window_margin.add_theme_constant_override("margin_left", 12)
+		window_margin.add_theme_constant_override("margin_top", 12)
+		window_margin.add_theme_constant_override("margin_right", 12)
+		window_margin.add_theme_constant_override("margin_bottom", 12)
+
+	var window_vbox := social_feed_summary_label.get_parent() as VBoxContainer
+	if window_vbox != null:
+		window_vbox.add_theme_constant_override("separation", 9)
+
+	var header_row := social_title_label.get_parent() as HBoxContainer
+	if header_row != null:
+		header_row.add_theme_constant_override("separation", 7)
+		social_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		social_access_status_label.size_flags_horizontal = Control.SIZE_SHRINK_END
+		if social_live_dot == null:
+			social_live_dot = PanelContainer.new()
+			social_live_dot.name = "SocialLiveDot"
+			social_live_dot.custom_minimum_size = Vector2(9, 9)
+			social_live_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			header_row.add_child(social_live_dot)
+			header_row.move_child(social_live_dot, min(1, header_row.get_child_count() - 1))
+		if social_live_label == null:
+			social_live_label = Label.new()
+			social_live_label.name = "SocialLiveLabel"
+			social_live_label.text = "Live"
+			social_live_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			header_row.add_child(social_live_label)
+			header_row.move_child(social_live_label, min(2, header_row.get_child_count() - 1))
+		if social_tier_indicator == null:
+			social_tier_indicator = HBoxContainer.new()
+			social_tier_indicator.name = "SocialTierIndicator"
+			social_tier_indicator.custom_minimum_size = Vector2(54, 14)
+			social_tier_indicator.size_flags_horizontal = Control.SIZE_SHRINK_END
+			social_tier_indicator.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			social_tier_indicator.add_theme_constant_override("separation", 3)
+			header_row.add_child(social_tier_indicator)
+
+	social_feed_summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	social_feed_summary_label.clip_text = true
+	social_feed_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	social_feed_scroll.follow_focus = false
+	social_feed_cards.add_theme_constant_override("separation", 10)
+	social_feed_cards.custom_minimum_size = Vector2(max(min(get_viewport_rect().size.x - 120.0, SOCIAL_WINDOW_MAX_WIDTH - 24.0), 280.0), 0)
+
+	if window_vbox != null and social_filter_scroll == null:
+		social_filter_scroll = ScrollContainer.new()
+		social_filter_scroll.name = "SocialFeedFilterScroll"
+		social_filter_scroll.custom_minimum_size = Vector2(0, 38)
+		social_filter_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		social_filter_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		window_vbox.add_child(social_filter_scroll)
+		window_vbox.move_child(social_filter_scroll, window_vbox.get_children().find(social_feed_scroll))
+
+		social_filter_chips = HBoxContainer.new()
+		social_filter_chips.name = "SocialFeedFilterChips"
+		social_filter_chips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		social_filter_chips.add_theme_constant_override("separation", 6)
+		social_filter_scroll.add_child(social_filter_chips)
+
+	if window_vbox != null and social_ticker_tape_panel == null:
+		social_ticker_tape_panel = PanelContainer.new()
+		social_ticker_tape_panel.name = "SocialTickerTapePanel"
+		social_ticker_tape_panel.custom_minimum_size = Vector2(0, 40)
+		social_ticker_tape_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		window_vbox.add_child(social_ticker_tape_panel)
+		window_vbox.move_child(social_ticker_tape_panel, window_vbox.get_children().find(social_feed_scroll))
+
+		var ticker_margin := MarginContainer.new()
+		ticker_margin.name = "SocialTickerTapeMargin"
+		ticker_margin.add_theme_constant_override("margin_left", 8)
+		ticker_margin.add_theme_constant_override("margin_top", 5)
+		ticker_margin.add_theme_constant_override("margin_right", 8)
+		ticker_margin.add_theme_constant_override("margin_bottom", 5)
+		social_ticker_tape_panel.add_child(ticker_margin)
+
+		social_ticker_tape_scroll = ScrollContainer.new()
+		social_ticker_tape_scroll.name = "SocialTickerTapeScroll"
+		social_ticker_tape_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		social_ticker_tape_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		ticker_margin.add_child(social_ticker_tape_scroll)
+
+		social_ticker_tape = HBoxContainer.new()
+		social_ticker_tape.name = "SocialTickerTape"
+		social_ticker_tape.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		social_ticker_tape.add_theme_constant_override("separation", 6)
+		social_ticker_tape_scroll.add_child(social_ticker_tape)
+
+	_style_twooter_ui()
+
+
+func _order_news_detail_nodes(detail_vbox: VBoxContainer) -> void:
+	var ordered_nodes: Array = [
+		news_detail_outlet_label,
+		news_detail_chips_label,
+		news_detail_headline_label,
+		news_detail_deck_label,
+		news_detail_byline_label,
+		news_detail_meta_label,
+		news_detail_hero_frame,
+		news_detail_photo_caption_label,
+		news_detail_body,
+		news_detail_hint_label,
+		news_detail_action_row
+	]
+	var insert_index: int = 0
+	for node_value in ordered_nodes:
+		var node: Node = node_value
+		if node == null or node.get_parent() != detail_vbox:
+			continue
+		detail_vbox.move_child(node, insert_index)
+		insert_index += 1
+
+
+func _ensure_news_grunge_overlay() -> void:
+	if news_grunge_overlay != null:
+		return
+	news_grunge_overlay = Control.new()
+	news_grunge_overlay.name = "NewsGrungeOverlay"
+	news_grunge_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	news_grunge_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	news_grunge_overlay.z_index = 12
+	news_window_body.add_child(news_grunge_overlay)
+	_add_news_paper_speckles(news_grunge_overlay)
+	_add_news_grunge_texture(news_grunge_overlay, "NewsFoldVertical", "fold_vertical", 0.5, 0.0, 0.5, 1.0, -17.0, 0.0, 17.0, 0.0, 0.16, 0.0, TextureRect.STRETCH_SCALE)
+	_add_news_grunge_texture(news_grunge_overlay, "NewsFoldHorizontal", "fold_horizontal", 0.0, 0.38, 1.0, 0.38, 0.0, -12.0, 0.0, 12.0, 0.10, 0.0, TextureRect.STRETCH_SCALE)
+	_add_news_grunge_texture(news_grunge_overlay, "NewsCoffeeStain", "coffee", 0.52, 1.0, 0.52, 1.0, -72.0, -174.0, 168.0, 6.0, 0.24, 0.0, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
+	_add_news_grunge_texture(news_grunge_overlay, "NewsTraderEditionStamp", "stamp_trader", 1.0, 0.0, 1.0, 0.0, -146.0, 94.0, -34.0, 206.0, 0.32, -14.0, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
+	_add_news_grunge_texture(news_grunge_overlay, "NewsSmudgeOne", "smudge_01", 0.64, 0.29, 0.64, 0.29, 0.0, 0.0, 44.0, 28.0, 0.24, -10.0, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
+	_add_news_grunge_texture(news_grunge_overlay, "NewsSmudgeTwo", "smudge_02", 0.34, 0.52, 0.34, 0.52, 0.0, 0.0, 38.0, 24.0, 0.20, 13.0, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
+	_add_news_grunge_texture(news_grunge_overlay, "NewsSmudgeThree", "smudge_03", 0.79, 0.73, 0.79, 0.73, 0.0, 0.0, 36.0, 22.0, 0.18, -18.0, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
+	_add_news_grunge_texture(news_grunge_overlay, "NewsSmudgeFour", "smudge_04", 0.23, 0.78, 0.23, 0.78, 0.0, 0.0, 32.0, 20.0, 0.18, 8.0, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
+
+
+func _add_news_paper_speckles(parent: Control) -> void:
+	for speck_index in range(72):
+		var speck := ColorRect.new()
+		speck.name = "NewsPaperSpeckle_%02d" % speck_index
+		speck.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var x_ratio: float = float((speck_index * 37 + 11) % 101) / 101.0
+		var y_ratio: float = float((speck_index * 53 + 7) % 97) / 97.0
+		speck.anchor_left = x_ratio
+		speck.anchor_right = x_ratio
+		speck.anchor_top = y_ratio
+		speck.anchor_bottom = y_ratio
+		var speck_size: float = 1.0 + float(speck_index % 3)
+		speck.offset_left = 0.0
+		speck.offset_top = 0.0
+		speck.offset_right = speck_size
+		speck.offset_bottom = speck_size
+		speck.color = Color(COLOR_MARKET_PAPER_MUTED.r, COLOR_MARKET_PAPER_MUTED.g, COLOR_MARKET_PAPER_MUTED.b, 0.055)
+		parent.add_child(speck)
+
+
+func _add_news_grunge_texture(
+	parent: Control,
+	node_name: String,
+	texture_id: String,
+	anchor_left: float,
+	anchor_top: float,
+	anchor_right: float,
+	anchor_bottom: float,
+	offset_left: float,
+	offset_top: float,
+	offset_right: float,
+	offset_bottom: float,
+	alpha: float,
+	rotation: float,
+	stretch_mode: int
+) -> void:
+	var texture: Texture2D = _market_paper_texture(texture_id)
+	if texture == null:
+		return
+	var texture_rect := TextureRect.new()
+	texture_rect.name = node_name
+	texture_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	texture_rect.texture = texture
+	texture_rect.anchor_left = anchor_left
+	texture_rect.anchor_top = anchor_top
+	texture_rect.anchor_right = anchor_right
+	texture_rect.anchor_bottom = anchor_bottom
+	texture_rect.offset_left = offset_left
+	texture_rect.offset_top = offset_top
+	texture_rect.offset_right = offset_right
+	texture_rect.offset_bottom = offset_bottom
+	texture_rect.modulate = Color(1, 1, 1, alpha)
+	texture_rect.rotation_degrees = rotation
+	texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	texture_rect.stretch_mode = stretch_mode
+	parent.add_child(texture_rect)
+
+
+func _market_paper_texture(texture_id: String) -> Texture2D:
+	var path: String = str(MARKET_PAPER_GRUNGE_TEXTURES.get(texture_id, ""))
+	if path.is_empty():
+		return null
+	return _desktop_texture(path)
 
 
 func _populate_watchlist_picker() -> void:
@@ -15193,11 +16081,10 @@ func _apply_visual_theme() -> void:
 	_style_panel(news_window_body, COLOR_WINDOW_BG, 0, 0, 0, 0, 0)
 	_style_panel(news_feed_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
 	_style_panel(news_detail_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
-	if news_masthead_logo_frame != null:
-		_style_news_asset_frame(news_masthead_logo_frame)
 	if news_detail_hero_frame != null:
 		_style_news_asset_frame(news_detail_hero_frame)
-	_style_panel(social_window_body, Color(0.94902, 0.956863, 0.976471, 1), 0)
+	_style_news_newspaper_ui()
+	_style_twooter_ui()
 	_style_panel(network_window_body, COLOR_WINDOW_BG, 0, 0, 0, 0, 0)
 	_style_panel(network_list_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
 	_style_panel(network_detail_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
@@ -15352,10 +16239,11 @@ func _apply_visual_theme() -> void:
 	news_detail_body.add_theme_color_override("default_color", COLOR_WINDOW_TEXT)
 	news_detail_body.add_theme_color_override("font_selected_color", COLOR_WINDOW_TEXT)
 	_refresh_desktop_window_themes()
-	_set_label_tone(social_title_label, Color(0.121569, 0.160784, 0.258824, 1))
-	_set_label_tone(social_access_status_label, Color(0.196078, 0.301961, 0.486275, 1))
+	_set_label_tone(social_title_label, COLOR_TWOOTER_BLUE_DARK)
+	_set_label_tone(social_access_status_label, COLOR_TWOOTER_MUTED)
 	_set_label_tone(debug_generators_hint_label, COLOR_MUTED)
-	_set_label_tone(social_feed_summary_label, Color(0.121569, 0.160784, 0.258824, 1))
+	_set_label_tone(social_feed_summary_label, COLOR_TWOOTER_MUTED)
+	_style_twooter_ui()
 	_set_label_tone(network_title_label, COLOR_WINDOW_TEXT)
 	_set_label_tone(network_recognition_label, Color(0.454902, 0.337255, 0.141176, 1))
 	_set_label_tone(network_summary_label, COLOR_WINDOW_TEXT)
@@ -15458,6 +16346,7 @@ func _apply_visual_theme() -> void:
 	_style_figma_desktop_ui()
 	_style_first_hour_guide_ui()
 	_style_settings_overlay()
+	_style_news_newspaper_ui()
 	_apply_active_window_theme()
 	_refresh_financial_history_header()
 	_refresh_broker_header()
@@ -15589,10 +16478,112 @@ func _style_light_option_button(option_button: OptionButton) -> void:
 	UiTheme.style_option_button(option_button, "desktop")
 
 
+func _style_news_newspaper_ui() -> void:
+	_style_news_panel(news_window_body, COLOR_MARKET_PAPER_PAGE, Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.0), 0)
+	_style_news_panel(news_masthead_panel, Color(COLOR_MARKET_PAPER_PAGE.r, COLOR_MARKET_PAPER_PAGE.g, COLOR_MARKET_PAPER_PAGE.b, 0.0), Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.0), 0)
+	_style_news_panel(news_feed_panel, Color(0.972549, 0.94902, 0.847059, 1), COLOR_MARKET_PAPER_BORDER, 1)
+	_style_news_panel(news_detail_panel, COLOR_MARKET_PAPER_CARD, COLOR_MARKET_PAPER_BORDER, 1)
+	_style_news_inner_panel(news_masthead_issue_box, Color(COLOR_MARKET_PAPER_PAGE.r, COLOR_MARKET_PAPER_PAGE.g, COLOR_MARKET_PAPER_PAGE.b, 0.34))
+
+	var news_window_margin := news_window_body.get_node_or_null("NewsWindowMargin") as MarginContainer
+	if news_window_margin != null:
+		news_window_margin.add_theme_constant_override("margin_left", 18)
+		news_window_margin.add_theme_constant_override("margin_top", 16)
+		news_window_margin.add_theme_constant_override("margin_right", 18)
+		news_window_margin.add_theme_constant_override("margin_bottom", 16)
+	var news_window_vbox := news_outlet_buttons.get_parent() as VBoxContainer
+	if news_window_vbox != null:
+		news_window_vbox.add_theme_constant_override("separation", 12)
+	news_outlet_buttons.add_theme_constant_override("separation", 12)
+	var content_split := news_feed_panel.get_parent() as HSplitContainer
+	if content_split != null:
+		content_split.split_offset = 430
+	news_feed_panel.custom_minimum_size = Vector2(370, 0)
+	news_feed_summary_label.add_theme_color_override("font_color", COLOR_MARKET_PAPER_RED)
+	_apply_font_override_to_control(news_feed_summary_label, 12, _get_dashboard_title_font())
+	_apply_font_override_to_control(news_archive_year_label, 13, _get_app_font())
+	_apply_font_override_to_control(news_archive_month_label, 13, _get_app_font())
+	_style_light_option_button(news_archive_year_option)
+	_style_light_option_button(news_archive_month_option)
+
+	if news_masthead_rule_container != null:
+		for child in news_masthead_rule_container.get_children():
+			if child is ColorRect:
+				var rule: ColorRect = child
+				rule.color = COLOR_MARKET_PAPER_RED
+	if news_source_tab_rule != null:
+		news_source_tab_rule.color = Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.74)
+
+	_style_news_label(news_masthead_issue_label, COLOR_WINDOW_TEXT, 10, _get_dashboard_title_font())
+	_style_news_label(news_masthead_issue_number_label, COLOR_MARKET_PAPER_RED, 18, _get_dashboard_title_font())
+	_style_news_label(news_masthead_title_label, COLOR_WINDOW_TEXT, 32, _get_dashboard_title_font())
+	_style_news_label(news_masthead_tagline_label, COLOR_MARKET_PAPER_MUTED, 11, _get_app_font())
+	_style_news_label(news_masthead_date_block_label, COLOR_WINDOW_TEXT, 10, _get_dashboard_title_font())
+	_style_news_label(news_masthead_date_label, COLOR_WINDOW_TEXT, 15, _get_dashboard_title_font())
+	_style_news_label(news_masthead_price_label, COLOR_MARKET_PAPER_MUTED, 11, _get_app_font())
+
+	_style_news_label(news_detail_outlet_label, COLOR_MARKET_PAPER_RED, 12, _get_dashboard_title_font())
+	_style_news_label(news_detail_chips_label, COLOR_MARKET_PAPER_RED, 12, _get_dashboard_title_font())
+	_style_news_label(news_detail_headline_label, COLOR_WINDOW_TEXT, 24, _get_dashboard_title_font())
+	_style_news_label(news_detail_deck_label, COLOR_MARKET_PAPER_MUTED, 15, _get_app_font())
+	_style_news_label(news_detail_byline_label, COLOR_WINDOW_TEXT, 13, _get_app_font())
+	_style_news_label(news_detail_meta_label, COLOR_MARKET_PAPER_MUTED, 12, _get_app_font())
+	_style_news_label(news_detail_photo_caption_label, COLOR_MARKET_PAPER_MUTED, 12, _get_app_font())
+	_style_news_label(news_detail_hint_label, COLOR_MARKET_PAPER_MUTED, 12, _get_app_font())
+	if news_detail_hero_frame != null:
+		_style_news_asset_frame(news_detail_hero_frame)
+	news_detail_body.add_theme_color_override("default_color", COLOR_WINDOW_TEXT)
+	news_detail_body.add_theme_color_override("font_selected_color", COLOR_WINDOW_TEXT)
+	_apply_font_override_to_control(news_detail_body, 14, _get_app_font())
+	if news_meet_contact_button != null:
+		_style_news_command_button(news_meet_contact_button, true)
+	if news_open_meeting_button != null:
+		_style_news_command_button(news_open_meeting_button, false)
+
+
+func _style_news_label(label: Label, color: Color, font_size: int, font_resource: Font = null) -> void:
+	if label == null:
+		return
+	label.add_theme_color_override("font_color", color)
+	_apply_font_override_to_control(label, font_size, font_resource)
+
+
+func _style_news_panel(panel: PanelContainer, fill_color: Color, border_color: Color, border_width: int) -> void:
+	if panel == null:
+		return
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = border_color
+	style.set_border_width_all(border_width)
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 0
+	style.corner_radius_bottom_right = 0
+	style.corner_radius_bottom_left = 0
+	style.content_margin_left = 0
+	style.content_margin_top = 0
+	style.content_margin_right = 0
+	style.content_margin_bottom = 0
+	panel.add_theme_stylebox_override("panel", style)
+
+
+func _style_news_inner_panel(panel: PanelContainer, fill_color: Color) -> void:
+	if panel == null:
+		return
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.78)
+	style.set_border_width_all(1)
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 0
+	style.corner_radius_bottom_right = 0
+	style.corner_radius_bottom_left = 0
+	panel.add_theme_stylebox_override("panel", style)
+
+
 func _style_news_asset_frame(panel: PanelContainer) -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.894118, 0.870588, 0.745098, 1)
-	style.border_color = Color(0.572549, 0.482353, 0.309804, 0.85)
+	style.bg_color = COLOR_MARKET_PAPER_RAIL
+	style.border_color = Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.85)
 	style.set_border_width_all(1)
 	style.corner_radius_top_left = 0
 	style.corner_radius_top_right = 0
@@ -15603,8 +16594,8 @@ func _style_news_asset_frame(panel: PanelContainer) -> void:
 
 func _style_news_article_card(card: PanelContainer, is_selected: bool) -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.984314, 0.964706, 0.882353, 1) if is_selected else Color(0.960784, 0.941176, 0.839216, 1)
-	style.border_color = Color(0.47451, 0.384314, 0.227451, 1) if is_selected else Color(0.658824, 0.588235, 0.427451, 0.75)
+	style.bg_color = COLOR_MARKET_PAPER_CARD if is_selected else Color(0.972549, 0.94902, 0.847059, 1)
+	style.border_color = COLOR_MARKET_PAPER_RED if is_selected else Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.76)
 	style.set_border_width_all(2 if is_selected else 1)
 	style.corner_radius_top_left = 0
 	style.corner_radius_top_right = 0
@@ -15614,25 +16605,82 @@ func _style_news_article_card(card: PanelContainer, is_selected: bool) -> void:
 
 
 func _style_news_outlet_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
-	var fill_color: Color = Color(0.87451, 0.843137, 0.705882, 1) if is_unlocked else Color(0.85098, 0.835294, 0.772549, 1)
-	var border_color: Color = Color(0.47451, 0.384314, 0.227451, 1)
+	var fill_color: Color = COLOR_MARKET_PAPER_RAIL if is_unlocked else Color(0.85098, 0.835294, 0.772549, 1)
+	var border_color: Color = Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.86)
 	var font_color: Color = COLOR_WINDOW_TEXT if is_unlocked else Color(0.541176, 0.494118, 0.396078, 1)
 	if is_selected:
-		fill_color = Color(0.772549, 0.694118, 0.447059, 1)
-		border_color = Color(0.52549, 0.396078, 0.160784, 1)
+		fill_color = COLOR_MARKET_PAPER_CARD
+		border_color = COLOR_MARKET_PAPER_RED
 		font_color = Color(0.184314, 0.14902, 0.0705882, 1)
-	_style_button(button, fill_color, border_color, font_color, 0)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = fill_color
+	normal.border_color = border_color
+	normal.border_width_left = 1
+	normal.border_width_right = 1
+	normal.border_width_top = 5 if is_selected else 1
+	normal.border_width_bottom = 0 if is_selected else 1
+	normal.content_margin_left = 10
+	normal.content_margin_right = 10
+	normal.content_margin_top = 11 if is_selected else 14
+	normal.content_margin_bottom = 14
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", normal)
+	button.add_theme_stylebox_override("pressed", normal)
+	button.add_theme_stylebox_override("focus", normal)
+	button.add_theme_stylebox_override("disabled", normal)
+	button.add_theme_color_override("font_color", font_color)
+	button.add_theme_color_override("font_hover_color", font_color)
+	button.add_theme_color_override("font_pressed_color", font_color)
+	button.add_theme_color_override("font_focus_color", font_color)
+	button.add_theme_color_override("font_disabled_color", Color(font_color.r, font_color.g, font_color.b, 0.54))
+	_apply_font_override_to_control(button, 15, _get_dashboard_title_font())
+
+
+func _style_news_command_button(button: Button, is_primary: bool) -> void:
+	if button == null:
+		return
+	var fill_color: Color = COLOR_MARKET_PAPER_RED if is_primary else COLOR_MARKET_PAPER_RAIL
+	var border_color: Color = COLOR_WINDOW_TEXT if is_primary else COLOR_MARKET_PAPER_BORDER
+	var font_color: Color = COLOR_MARKET_PAPER_CARD if is_primary else COLOR_WINDOW_TEXT
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = fill_color
+	normal.border_color = border_color
+	normal.set_border_width_all(1)
+	normal.corner_radius_top_left = 0
+	normal.corner_radius_top_right = 0
+	normal.corner_radius_bottom_right = 0
+	normal.corner_radius_bottom_left = 0
+	normal.content_margin_left = 12
+	normal.content_margin_right = 12
+	normal.content_margin_top = 9
+	normal.content_margin_bottom = 9
+	var hover := normal.duplicate()
+	hover.bg_color = fill_color.lightened(0.06)
+	var pressed := normal.duplicate()
+	pressed.bg_color = fill_color.darkened(0.07)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("focus", normal)
+	button.add_theme_stylebox_override("disabled", normal)
+	button.add_theme_color_override("font_color", font_color)
+	button.add_theme_color_override("font_hover_color", font_color)
+	button.add_theme_color_override("font_pressed_color", font_color)
+	button.add_theme_color_override("font_focus_color", font_color)
+	button.add_theme_color_override("font_disabled_color", Color(font_color.r, font_color.g, font_color.b, 0.52))
+	_apply_font_override_to_control(button, 13, _get_dashboard_title_font())
 
 
 func _style_social_filter_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
-	var fill_color: Color = Color(0.85098, 0.890196, 0.964706, 1) if is_unlocked else Color(0.85098, 0.866667, 0.901961, 1)
-	var border_color: Color = Color(0.337255, 0.443137, 0.647059, 1)
-	var font_color: Color = Color(0.0941176, 0.113725, 0.160784, 1) if is_unlocked else Color(0.423529, 0.470588, 0.560784, 1)
+	var fill_color: Color = COLOR_TWOOTER_CARD if is_unlocked else Color(COLOR_TWOOTER_SURFACE.r, COLOR_TWOOTER_SURFACE.g, COLOR_TWOOTER_SURFACE.b, 0.64)
+	var border_color: Color = COLOR_TWOOTER_BLUE_EDGE
+	var font_color: Color = COLOR_TWOOTER_BLUE_DARK if is_unlocked else COLOR_TWOOTER_FAINT
 	if is_selected:
-		fill_color = Color(0.572549, 0.713726, 0.929412, 1)
-		border_color = Color(0.254902, 0.4, 0.639216, 1)
-		font_color = Color(0.0470588, 0.0745098, 0.117647, 1)
-	_style_button(button, fill_color, border_color, font_color, 0)
+		fill_color = COLOR_TWOOTER_BLUE
+		border_color = COLOR_TWOOTER_BLUE_DARK
+		font_color = COLOR_TWOOTER_CARD
+	_style_button(button, fill_color, border_color, font_color, 6)
+	_apply_font_override_to_control(button, 12, _get_dashboard_title_font())
 
 
 func _style_social_account_button(button: Button, is_selected: bool) -> void:
@@ -15646,23 +16694,23 @@ func _style_social_account_button(button: Button, is_selected: bool) -> void:
 	normal.content_margin_bottom = 0
 
 	var hover: StyleBoxFlat = normal.duplicate()
-	hover.bg_color = Color(0.745098, 0.827451, 0.956863, 0.28)
+	hover.bg_color = Color(COLOR_TWOOTER_BLUE_TINT.r, COLOR_TWOOTER_BLUE_TINT.g, COLOR_TWOOTER_BLUE_TINT.b, 0.58)
 
 	var pressed: StyleBoxFlat = normal.duplicate()
-	pressed.bg_color = Color(0.572549, 0.713726, 0.929412, 0.42)
+	pressed.bg_color = Color(COLOR_TWOOTER_BLUE_EDGE.r, COLOR_TWOOTER_BLUE_EDGE.g, COLOR_TWOOTER_BLUE_EDGE.b, 0.36)
 
 	var focus: StyleBoxFlat = pressed.duplicate()
 	if is_selected:
-		normal.bg_color = Color(0.572549, 0.713726, 0.929412, 0.18)
+		normal.bg_color = Color(COLOR_TWOOTER_BLUE_TINT.r, COLOR_TWOOTER_BLUE_TINT.g, COLOR_TWOOTER_BLUE_TINT.b, 0.44)
 
-	var font_color: Color = Color(0.0862745, 0.129412, 0.196078, 1)
+	var font_color: Color = COLOR_TWOOTER_BLUE_DARK
 	button.add_theme_stylebox_override("normal", normal)
 	button.add_theme_stylebox_override("hover", hover)
 	button.add_theme_stylebox_override("pressed", pressed)
 	button.add_theme_stylebox_override("focus", focus)
 	button.add_theme_stylebox_override("disabled", normal)
 	button.add_theme_color_override("font_color", font_color)
-	button.add_theme_color_override("font_hover_color", Color(0.047059, 0.168627, 0.388235, 1))
+	button.add_theme_color_override("font_hover_color", COLOR_TWOOTER_BLUE)
 	button.add_theme_color_override("font_pressed_color", font_color)
 	button.add_theme_color_override("font_focus_color", font_color)
 	_apply_font_override_to_control(button, DEFAULT_APP_FONT_SIZE, _get_app_font())
