@@ -3,13 +3,31 @@ class_name TradeWorkspaceWidget
 
 signal chart_range_changed(range_id)
 
-const COLOR_TEXT := Color(0.92549, 0.941176, 0.956863, 1)
-const COLOR_MUTED := Color(0.694118, 0.756863, 0.803922, 1)
-const COLOR_POSITIVE := Color(0.513726, 0.886275, 0.662745, 1)
-const COLOR_NEGATIVE := Color(0.968627, 0.513726, 0.513726, 1)
-const COLOR_WARNING := Color(0.980392, 0.792157, 0.392157, 1)
-const COLOR_ACCENT := Color(0.560784, 0.772549, 1, 1)
-const COLOR_BORDER := Color(0.333333, 0.462745, 0.580392, 0.8)
+const STOCKBOT_ICON_PATHS := {
+	"chart": "res://assets/icons/chart-candle.svg",
+	"eraser": "res://assets/icons/eraser.svg",
+	"line": "res://assets/icons/line.svg",
+	"line_dashed": "res://assets/icons/line-dashed.svg",
+	"lock": "res://assets/icons/lock.svg",
+	"minus": "res://assets/icons/minus.svg",
+	"pencil": "res://assets/icons/pencil.svg",
+	"plus": "res://assets/icons/plus.svg",
+	"pointer": "res://assets/icons/pointer.svg",
+	"trash": "res://assets/icons/trash.svg",
+	"trending_up": "res://assets/icons/trending-up.svg"
+}
+const COLOR_TEXT := Color(0.901961, 0.929412, 0.968627, 1)
+const COLOR_MUTED := Color(0.545098, 0.611765, 0.701961, 1)
+const COLOR_POSITIVE := Color(0.0901961, 0.768627, 0.419608, 1)
+const COLOR_NEGATIVE := Color(0.94902, 0.235294, 0.352941, 1)
+const COLOR_WARNING := Color(0.941176, 0.717647, 0.239216, 1)
+const COLOR_ACCENT := Color(0.113725, 0.631373, 0.94902, 1)
+const COLOR_BORDER := Color(0.164706, 0.219608, 0.317647, 0.95)
+const COLOR_BASE := Color(0.0431373, 0.0745098, 0.113725, 0.99)
+const COLOR_SURFACE := Color(0.0745098, 0.113725, 0.168627, 0.99)
+const COLOR_SURFACE_ALT := Color(0.101961, 0.145098, 0.219608, 0.99)
+const COLOR_BLUE_TINT := Color(0.0901961, 0.196078, 0.286275, 0.95)
+const COLOR_BLUE_EDGE := Color(0.121569, 0.254902, 0.388235, 1)
 
 var _selected_range_id: String = "1m"
 var _chart_display_mode: String = "line"
@@ -56,6 +74,26 @@ var _pattern_thesis_rows: Array = []
 var indicator_row: HFlowContainer = null
 
 
+func _load_stockbot_icon(icon_id: String) -> Texture2D:
+	var icon_path: String = str(STOCKBOT_ICON_PATHS.get(icon_id, ""))
+	if icon_path.is_empty():
+		return null
+	if not ResourceLoader.exists(icon_path) and not FileAccess.file_exists(icon_path):
+		return null
+	var icon_resource := load(icon_path)
+	if icon_resource is Texture2D:
+		return icon_resource as Texture2D
+	return null
+
+
+func _set_button_icon(button: Button, icon_id: String, text_value: String = "") -> void:
+	if button == null:
+		return
+	button.icon = _load_stockbot_icon(icon_id)
+	button.text = text_value
+	button.expand_icon = text_value.is_empty()
+
+
 func _ready() -> void:
 	work_tabs.set_tab_title(0, "Chart")
 	work_tabs.set_tab_title(1, "Key Stats")
@@ -91,6 +129,17 @@ func _ready() -> void:
 		"trend": trend_line_tool_button
 	}
 	_ensure_pattern_tool_controls()
+	_set_button_icon(display_line_button, "line", "Line")
+	_set_button_icon(display_candle_button, "chart", "Candle")
+	_set_button_icon(zoom_out_button, "minus")
+	_set_button_icon(zoom_in_button, "plus")
+	_set_button_icon(select_tool_button, "pointer")
+	_set_button_icon(horizontal_line_tool_button, "line_dashed")
+	_set_button_icon(trend_line_tool_button, "trending_up")
+	_set_button_icon(delete_drawing_button, "trash")
+	_set_button_icon(clear_drawings_button, "eraser")
+	if pattern_tool_button != null:
+		_set_button_icon(pattern_tool_button, "pencil")
 	for button_value in _chart_range_button_map().values():
 		_style_chart_range_button(button_value)
 	_style_chart_range_button(display_line_button)
@@ -114,6 +163,7 @@ func _ready() -> void:
 		GameManager.thesis_changed.connect(_on_thesis_changed)
 	_ensure_pattern_claim_panel()
 	_ensure_indicator_row()
+	_style_workspace_chrome()
 	chart_header_label.add_theme_color_override("font_color", COLOR_TEXT)
 	chart_subheader_label.add_theme_color_override("font_color", COLOR_MUTED)
 	chart_subheader_label.visible = false
@@ -586,7 +636,7 @@ func _make_pattern_panel_label(text: String, color: Color, font_size: int) -> La
 
 func _style_pattern_claim_panel(panel: PanelContainer) -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.0666667, 0.0941176, 0.12549, 0.98)
+	style.bg_color = COLOR_BASE
 	style.border_color = COLOR_BORDER
 	style.set_border_width_all(1)
 	style.corner_radius_top_left = 7
@@ -594,6 +644,62 @@ func _style_pattern_claim_panel(panel: PanelContainer) -> void:
 	style.corner_radius_bottom_right = 7
 	style.corner_radius_bottom_left = 7
 	panel.add_theme_stylebox_override("panel", style)
+
+
+func _make_stockbot_stylebox(
+	fill_color: Color,
+	border_color: Color,
+	corner_radius: int = 7,
+	border_width: int = 1,
+	content_margin: int = 0
+) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = border_color
+	style.set_border_width_all(border_width)
+	style.corner_radius_top_left = corner_radius
+	style.corner_radius_top_right = corner_radius
+	style.corner_radius_bottom_right = corner_radius
+	style.corner_radius_bottom_left = corner_radius
+	style.content_margin_left = content_margin
+	style.content_margin_top = content_margin
+	style.content_margin_right = content_margin
+	style.content_margin_bottom = content_margin
+	return style
+
+
+func _set_margin_container_margins(margin_container: MarginContainer, left: int, top: int, right: int, bottom: int) -> void:
+	if margin_container == null:
+		return
+	margin_container.add_theme_constant_override("margin_left", left)
+	margin_container.add_theme_constant_override("margin_top", top)
+	margin_container.add_theme_constant_override("margin_right", right)
+	margin_container.add_theme_constant_override("margin_bottom", bottom)
+
+
+func _set_container_separation(container: Container, separation: int) -> void:
+	if container == null:
+		return
+	container.add_theme_constant_override("separation", separation)
+	container.add_theme_constant_override("h_separation", separation)
+	container.add_theme_constant_override("v_separation", separation)
+
+
+func _style_workspace_chrome() -> void:
+	add_theme_stylebox_override("panel", _make_stockbot_stylebox(COLOR_BASE, COLOR_BORDER, 0, 1))
+	var margin := get_node_or_null("WorkAreaMargin") as MarginContainer
+	if margin != null:
+		_set_margin_container_margins(margin, 8, 8, 8, 8)
+		_set_container_separation(margin.get_node_or_null("WorkAreaVBox") as Container, 6)
+	_set_container_separation(work_tabs.get_node_or_null("Chart") as Container, 6)
+	var range_row := work_tabs.get_node_or_null("Chart/ChartRangeRow") as HBoxContainer
+	if range_row != null:
+		range_row.add_theme_constant_override("separation", 4)
+	chart_body_row.add_theme_constant_override("separation", 4)
+	chart_drawing_toolbar.add_theme_constant_override("separation", 5)
+	chart_drawing_toolbar.custom_minimum_size = Vector2(40, 0)
+	chart_header_label.add_theme_font_size_override("font_size", 16)
+	chart_subheader_label.add_theme_font_size_override("font_size", 12)
 
 
 func _decorate_chart_snapshot(chart_snapshot: Dictionary) -> Dictionary:
@@ -605,16 +711,16 @@ func _decorate_chart_snapshot(chart_snapshot: Dictionary) -> Dictionary:
 
 	var plot_palette := {
 		"close": primary_color,
-		"sma_3": Color(0.886275, 0.654902, 0.407843, 1),
-		"sma_5": Color(0.980392, 0.792157, 0.392157, 1),
+		"sma_3": Color(0.941176, 0.717647, 0.239216, 1),
+		"sma_5": Color(0.941176, 0.717647, 0.239216, 1),
 		"sma_10": Color(0.729412, 0.858824, 0.415686, 1),
-		"sma_20": Color(0.980392, 0.792157, 0.392157, 1),
-		"sma_60": Color(0.556863, 0.85098, 0.980392, 1),
-		"sma_100": Color(0.470588, 0.65098, 1, 1),
+		"sma_20": Color(0.113725, 0.631373, 0.94902, 1),
+		"sma_50": Color(0.482353, 0.752941, 1, 1),
+		"sma_60": Color(0.482353, 0.752941, 1, 1),
+		"sma_100": Color(0.686275, 0.576471, 0.964706, 1),
 		"sma_200": Color(0.854902, 0.576471, 0.964706, 1),
 		"ema_20": Color(0.854902, 0.576471, 0.964706, 1),
-		"sma_50": Color(0.556863, 0.85098, 0.980392, 1),
-		"rsi_14": Color(0.513726, 0.886275, 0.662745, 1)
+		"rsi_14": COLOR_POSITIVE
 	}
 	var decorated_plots: Array = []
 	for plot_value in chart_snapshot.get("plots", []):
@@ -634,8 +740,8 @@ func _ensure_indicator_row() -> void:
 	indicator_row = HFlowContainer.new()
 	indicator_row.name = "ChartIndicatorRow"
 	indicator_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	indicator_row.add_theme_constant_override("h_separation", 8)
-	indicator_row.add_theme_constant_override("v_separation", 4)
+	indicator_row.add_theme_constant_override("h_separation", 5)
+	indicator_row.add_theme_constant_override("v_separation", 3)
 	chart_tab.add_child(indicator_row)
 	chart_tab.move_child(indicator_row, range_row.get_index() + 1)
 
@@ -667,8 +773,11 @@ func _refresh_indicator_controls() -> void:
 		button.text = str(indicator.get("label", indicator_id.to_upper())) if unlocked else "%s locked" % str(indicator.get("label", indicator_id.to_upper()))
 		button.disabled = not unlocked
 		button.button_pressed = unlocked and _active_indicator_ids.has(indicator_id)
+		if not unlocked:
+			button.icon = _load_stockbot_icon("lock")
 		button.tooltip_text = "Unlocked by Chart Indicators upgrades." if not unlocked else "Toggle %s." % str(indicator.get("label", indicator_id.to_upper()))
 		button.toggled.connect(_on_indicator_toggled.bind(indicator_id))
+		_style_chart_range_button(button)
 		indicator_row.add_child(button)
 		_indicator_buttons[indicator_id] = button
 
@@ -698,35 +807,37 @@ func _filter_unlocked_indicator_ids(indicator_ids: Array) -> Array:
 
 
 func _style_chart_range_button(button: Button) -> void:
-	var normal: StyleBoxFlat = StyleBoxFlat.new()
-	normal.bg_color = Color(0.0823529, 0.117647, 0.156863, 0.92)
-	normal.border_color = COLOR_BORDER
-	normal.set_border_width_all(1)
-	normal.corner_radius_top_left = 7
-	normal.corner_radius_top_right = 7
-	normal.corner_radius_bottom_right = 7
-	normal.corner_radius_bottom_left = 7
-	normal.content_margin_left = 10
-	normal.content_margin_right = 10
-	normal.content_margin_top = 5
-	normal.content_margin_bottom = 5
+	var normal := _make_stockbot_stylebox(COLOR_SURFACE, COLOR_BORDER, 5, 1, 5)
 
 	var hover: StyleBoxFlat = normal.duplicate()
-	hover.bg_color = normal.bg_color.lightened(0.1)
+	hover.bg_color = COLOR_SURFACE_ALT
 
 	var pressed: StyleBoxFlat = normal.duplicate()
-	pressed.bg_color = Color(0.215686, 0.34902, 0.482353, 0.98)
-	pressed.border_color = Color(0.690196, 0.87451, 1, 1)
+	pressed.bg_color = COLOR_BLUE_TINT
+	pressed.border_color = COLOR_ACCENT
 	pressed.set_border_width_all(2)
+
+	var disabled: StyleBoxFlat = normal.duplicate()
+	disabled.bg_color = Color(COLOR_SURFACE.r, COLOR_SURFACE.g, COLOR_SURFACE.b, 0.42)
+	disabled.border_color = Color(COLOR_BORDER.r, COLOR_BORDER.g, COLOR_BORDER.b, 0.5)
 
 	button.add_theme_stylebox_override("normal", normal)
 	button.add_theme_stylebox_override("hover", hover)
 	button.add_theme_stylebox_override("pressed", pressed)
 	button.add_theme_stylebox_override("focus", pressed)
+	button.add_theme_stylebox_override("disabled", disabled)
 	button.add_theme_color_override("font_color", COLOR_MUTED)
 	button.add_theme_color_override("font_hover_color", COLOR_TEXT)
-	button.add_theme_color_override("font_pressed_color", Color(0.972549, 0.988235, 1, 1))
-	button.add_theme_color_override("font_focus_color", Color(0.972549, 0.988235, 1, 1))
+	button.add_theme_color_override("font_pressed_color", COLOR_TEXT)
+	button.add_theme_color_override("font_focus_color", COLOR_TEXT)
+	button.add_theme_color_override("font_disabled_color", Color(COLOR_MUTED.r, COLOR_MUTED.g, COLOR_MUTED.b, 0.55))
+	button.add_theme_color_override("icon_normal_color", COLOR_MUTED)
+	button.add_theme_color_override("icon_hover_color", COLOR_TEXT)
+	button.add_theme_color_override("icon_pressed_color", COLOR_TEXT)
+	button.add_theme_color_override("icon_focus_color", COLOR_TEXT)
+	button.add_theme_color_override("icon_hover_pressed_color", COLOR_TEXT)
+	button.add_theme_color_override("icon_disabled_color", Color(COLOR_MUTED.r, COLOR_MUTED.g, COLOR_MUTED.b, 0.55))
+	button.add_theme_font_size_override("font_size", 12)
 
 
 func _build_chart_meta_text(chart_snapshot: Dictionary) -> String:

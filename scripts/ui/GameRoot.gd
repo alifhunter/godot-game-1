@@ -30,7 +30,7 @@ const TRADE_RIGHT_SECTION_RATIO := 1.0
 const ORDER_TICKET_TOGGLE_WIDTH := 28.0
 const WATCHLIST_MIN_WIDTH_NARROW := 220.0
 const WATCHLIST_MIN_WIDTH_WIDE := 260.0
-const STOCK_LIST_ADD_BUTTON_WIDTH := 64.0
+const STOCK_LIST_ADD_BUTTON_WIDTH := 72.0
 const COLOR_PANEL_BLUE := Color(0.109804, 0.14902, 0.184314, 0.94)
 const COLOR_PANEL_BLUE_ALT := Color(0.0901961, 0.129412, 0.164706, 0.96)
 const COLOR_PANEL_GREEN := Color(0.0862745, 0.152941, 0.133333, 0.95)
@@ -104,6 +104,45 @@ const DESKTOP_ICON_PATHS := {
 	"cash": "res://assets/ui/desktop/cash_icon.svg",
 	"advance": "res://assets/ui/desktop/advance_icon.svg"
 }
+const STOCKBOT_ICON_PATHS := {
+	"calendar": "res://assets/icons/calendar-event.svg",
+	"chart": "res://assets/icons/chart-candle.svg",
+	"check": "res://assets/icons/check.svg",
+	"chevron_down": "res://assets/icons/chevron-down.svg",
+	"chevron_up": "res://assets/icons/chevron-up.svg",
+	"dots": "res://assets/icons/dots.svg",
+	"eraser": "res://assets/icons/eraser.svg",
+	"line": "res://assets/icons/line.svg",
+	"line_dashed": "res://assets/icons/line-dashed.svg",
+	"lock": "res://assets/icons/lock.svg",
+	"minus": "res://assets/icons/minus.svg",
+	"pencil": "res://assets/icons/pencil.svg",
+	"plus": "res://assets/icons/plus.svg",
+	"pointer": "res://assets/icons/pointer.svg",
+	"search": "res://assets/icons/search.svg",
+	"shopping_cart": "res://assets/icons/shopping-cart.svg",
+	"trash": "res://assets/icons/trash.svg",
+	"trending_up": "res://assets/icons/trending-up.svg",
+	"x": "res://assets/icons/x.svg"
+}
+const COLOR_STOCKBOT_BASE := Color(0.0431373, 0.0745098, 0.113725, 0.99)
+const COLOR_STOCKBOT_SURFACE := Color(0.0745098, 0.113725, 0.168627, 0.99)
+const COLOR_STOCKBOT_SURFACE_ALT := Color(0.101961, 0.145098, 0.219608, 0.99)
+const COLOR_STOCKBOT_EDGE := Color(0.164706, 0.219608, 0.317647, 0.95)
+const COLOR_STOCKBOT_EDGE_STRONG := Color(0.239216, 0.317647, 0.439216, 1)
+const COLOR_STOCKBOT_TEXT := Color(0.901961, 0.929412, 0.968627, 1)
+const COLOR_STOCKBOT_MUTED := Color(0.545098, 0.611765, 0.701961, 1)
+const COLOR_STOCKBOT_FAINT := Color(0.360784, 0.431373, 0.537255, 1)
+const COLOR_STOCKBOT_BLUE := Color(0.113725, 0.631373, 0.94902, 1)
+const COLOR_STOCKBOT_BLUE_TINT := Color(0.0901961, 0.196078, 0.286275, 0.95)
+const COLOR_STOCKBOT_BLUE_EDGE := Color(0.121569, 0.254902, 0.388235, 1)
+const COLOR_STOCKBOT_BULL := Color(0.0901961, 0.768627, 0.419608, 1)
+const COLOR_STOCKBOT_BULL_TINT := Color(0.054902, 0.164706, 0.105882, 0.95)
+const COLOR_STOCKBOT_BULL_EDGE := Color(0.0862745, 0.262745, 0.164706, 1)
+const COLOR_STOCKBOT_BEAR := Color(0.94902, 0.235294, 0.352941, 1)
+const COLOR_STOCKBOT_BEAR_TINT := Color(0.172549, 0.0588235, 0.0901961, 0.95)
+const COLOR_STOCKBOT_BEAR_EDGE := Color(0.352941, 0.121569, 0.164706, 1)
+const COLOR_STOCKBOT_AMBER := Color(0.941176, 0.717647, 0.239216, 1)
 const COLOR_STOCK_WINDOW_BG := Color(0.0901961, 0.129412, 0.164706, 0.98)
 const COLOR_ORDER_PANEL_BG := Color(0.0901961, 0.129412, 0.164706, 0.98)
 const COLOR_ORDER_CARD_BG := Color(0.109804, 0.14902, 0.184314, 0.98)
@@ -198,6 +237,8 @@ const APP_WINDOW_CONTENT_TOP_MARGIN := 64
 const APP_WINDOW_CONTENT_BOTTOM_MARGIN := 20
 const APP_WINDOW_FRAME_BOTTOM_MARGIN := 20
 const APP_WINDOW_INNER_PADDING := 0
+const STOCKBOT_WINDOW_CONTENT_MARGIN := 8
+const STOCKBOT_WINDOW_CONTENT_BOTTOM_MARGIN := 8
 const DESKTOP_WINDOW_TITLE_BAR_HEIGHT := 40.0
 const DESKTOP_WINDOW_MIN_WIDTH := 360.0
 const DESKTOP_WINDOW_MIN_HEIGHT := 260.0
@@ -1008,8 +1049,8 @@ func _apply_compact_layout() -> void:
 
 
 func _apply_trade_layout_ratios() -> void:
-	trade_split.add_theme_constant_override("separation", 0)
-	main_trade_split.add_theme_constant_override("separation", 0)
+	trade_split.add_theme_constant_override("separation", 4)
+	main_trade_split.add_theme_constant_override("separation", 4)
 	watchlist_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	watchlist_panel.size_flags_stretch_ratio = TRADE_LEFT_SECTION_RATIO
 	main_trade_split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2260,8 +2301,19 @@ func _on_order_ticket_toggle_pressed() -> void:
 func _refresh_order_ticket_toggle_state() -> void:
 	if order_ticket_toggle_button == null:
 		return
-	order_ticket_toggle_button.text = "<" if order_ticket_collapsed else ">"
+	order_ticket_toggle_button.text = ""
+	order_ticket_toggle_button.icon = _load_stockbot_icon("chevron_up" if order_ticket_collapsed else "chevron_down")
+	order_ticket_toggle_button.expand_icon = true
 	order_ticket_toggle_button.tooltip_text = "Show the order ticket." if order_ticket_collapsed else "Hide the order ticket."
+	_style_stockbot_icon_button(
+		order_ticket_toggle_button,
+		"chevron_up" if order_ticket_collapsed else "chevron_down",
+		"",
+		order_ticket_toggle_button.tooltip_text,
+		false,
+		COLOR_STOCKBOT_SURFACE_ALT,
+		COLOR_STOCKBOT_EDGE_STRONG
+	)
 
 
 func _refresh_all(refresh_open_apps: bool = true) -> void:
@@ -2661,6 +2713,10 @@ func _refresh_header() -> void:
 	_set_label_tone(top_cash_label, COLOR_ACCENT)
 	_set_label_tone(top_section_label, COLOR_WARNING)
 	_set_label_tone(top_day_label, COLOR_WARNING)
+	_style_stockbot_label_chip(top_market_label, COLOR_STOCKBOT_BLUE_TINT, COLOR_STOCKBOT_BLUE_EDGE, _color_for_change(RunState.market_sentiment))
+	_style_stockbot_label_chip(top_equity_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_TEXT)
+	_style_stockbot_label_chip(top_cash_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_BLUE)
+	_style_stockbot_label_chip(top_section_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_AMBER)
 
 
 func _refresh_desktop() -> void:
@@ -6313,38 +6369,39 @@ func _style_order_market_summary_labels() -> void:
 		var label: Label = label_value as Label
 		if label == null:
 			continue
-		_set_label_tone(label, COLOR_ORDER_METRIC_LABEL)
+		_set_label_tone(label, COLOR_STOCKBOT_MUTED)
 		label.custom_minimum_size = Vector2(42.0, 0.0)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		label.modulate = Color.WHITE
 		label.clip_text = true
-		label.add_theme_font_size_override("font_size", STOCK_APP_FONT_SIZE)
+		label.add_theme_font_size_override("font_size", 11)
 	for label_value in order_market_value_labels.values():
 		var label: Label = label_value as Label
 		if label == null:
 			continue
+		label.add_theme_stylebox_override("normal", _make_stockbot_stylebox(COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_EDGE, 4, 1, 4))
 		label.clip_text = true
-		label.add_theme_font_size_override("font_size", STOCK_APP_FONT_SIZE)
+		label.add_theme_font_size_override("font_size", 11)
 
 
 func _style_order_ticker_badge() -> void:
 	if order_company_name_label == null:
 		return
 	var badge_style := StyleBoxFlat.new()
-	badge_style.bg_color = COLOR_TEXT
-	badge_style.border_color = COLOR_BORDER
-	badge_style.set_border_width_all(0)
-	badge_style.corner_radius_top_left = 2
-	badge_style.corner_radius_top_right = 2
-	badge_style.corner_radius_bottom_left = 2
-	badge_style.corner_radius_bottom_right = 2
+	badge_style.bg_color = COLOR_STOCKBOT_BLUE_TINT
+	badge_style.border_color = COLOR_STOCKBOT_BLUE
+	badge_style.set_border_width_all(1)
+	badge_style.corner_radius_top_left = 5
+	badge_style.corner_radius_top_right = 5
+	badge_style.corner_radius_bottom_left = 5
+	badge_style.corner_radius_bottom_right = 5
 	badge_style.content_margin_left = 6
 	badge_style.content_margin_right = 6
 	badge_style.content_margin_top = 2
 	badge_style.content_margin_bottom = 2
 	order_company_name_label.add_theme_stylebox_override("normal", badge_style)
-	_set_label_tone(order_company_name_label, COLOR_STOCK_WINDOW_BG)
+	_set_label_tone(order_company_name_label, COLOR_STOCKBOT_BLUE)
 	order_company_name_label.clip_text = true
 	order_company_name_label.add_theme_font_size_override("font_size", STOCK_APP_FONT_SIZE)
 
@@ -6352,7 +6409,7 @@ func _style_order_ticker_badge() -> void:
 func _refresh_order_market_summary(snapshot: Dictionary) -> void:
 	if snapshot.is_empty():
 		for key_value in order_market_value_labels.keys():
-			_set_order_market_value(str(key_value), "-", COLOR_MUTED)
+			_set_order_market_value(str(key_value), "-", COLOR_STOCKBOT_MUTED)
 		return
 
 	var current_price: float = float(snapshot.get("current_price", 0.0))
@@ -6370,18 +6427,18 @@ func _refresh_order_market_summary(snapshot: Dictionary) -> void:
 	var broker_flow: Dictionary = snapshot.get("broker_flow", {})
 	var impactability: Dictionary = snapshot.get("impactability", {})
 
-	_set_order_market_value("open", _format_quote_price(open_price), COLOR_WARNING)
-	_set_order_market_value("high", _format_quote_price(high_price), COLOR_POSITIVE)
-	_set_order_market_value("low", _format_quote_price(low_price), COLOR_NEGATIVE)
-	_set_order_market_value("prev", _format_quote_price(previous_close), COLOR_WARNING)
-	_set_order_market_value("ara", _format_quote_price(float(snapshot.get("ara_price", current_price))), COLOR_TEXT)
-	_set_order_market_value("arb", _format_quote_price(float(snapshot.get("arb_price", current_price))), COLOR_MUTED)
-	_set_order_market_value("lot", _format_compact_lots(volume_lots), COLOR_MUTED)
-	_set_order_market_value("val", _format_compact_currency(traded_value), COLOR_MUTED)
-	_set_order_market_value("avg", _format_quote_price(avg_price), COLOR_WARNING)
-	_set_order_market_value("f_buy", _format_compact_currency(_broker_type_side_value(broker_flow, "foreign", "buy")), COLOR_POSITIVE)
-	_set_order_market_value("f_sell", _format_compact_currency(_broker_type_side_value(broker_flow, "foreign", "sell")), COLOR_NEGATIVE)
-	_set_order_market_value("depth", _format_compact_currency(float(impactability.get("visible_depth_value", 0.0))), COLOR_ACCENT)
+	_set_order_market_value("open", _format_quote_price(open_price), COLOR_STOCKBOT_AMBER)
+	_set_order_market_value("high", _format_quote_price(high_price), COLOR_STOCKBOT_BULL)
+	_set_order_market_value("low", _format_quote_price(low_price), COLOR_STOCKBOT_BEAR)
+	_set_order_market_value("prev", _format_quote_price(previous_close), COLOR_STOCKBOT_AMBER)
+	_set_order_market_value("ara", _format_quote_price(float(snapshot.get("ara_price", current_price))), COLOR_STOCKBOT_TEXT)
+	_set_order_market_value("arb", _format_quote_price(float(snapshot.get("arb_price", current_price))), COLOR_STOCKBOT_MUTED)
+	_set_order_market_value("lot", _format_compact_lots(volume_lots), COLOR_STOCKBOT_MUTED)
+	_set_order_market_value("val", _format_compact_currency(traded_value), COLOR_STOCKBOT_MUTED)
+	_set_order_market_value("avg", _format_quote_price(avg_price), COLOR_STOCKBOT_AMBER)
+	_set_order_market_value("f_buy", _format_compact_currency(_broker_type_side_value(broker_flow, "foreign", "buy")), COLOR_STOCKBOT_BULL)
+	_set_order_market_value("f_sell", _format_compact_currency(_broker_type_side_value(broker_flow, "foreign", "sell")), COLOR_STOCKBOT_BEAR)
+	_set_order_market_value("depth", _format_compact_currency(float(impactability.get("visible_depth_value", 0.0))), COLOR_STOCKBOT_BLUE)
 
 
 func _set_order_market_value(key: String, text: String, tone: Color) -> void:
@@ -10002,15 +10059,12 @@ func _refresh_watchlist_rows(company_rows: Array, watchlist_lookup: Dictionary) 
 		if not watchlist_lookup.has(company_id):
 			continue
 		displayed_company_ids.append(company_id)
-		var change_pct: float = float(row.get("daily_change_pct", 0.0))
-		var broker_flow: Dictionary = row.get("broker_flow", {})
-		var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
 		var line: String = _build_stock_list_line(row)
 		company_list.add_item(line)
 		var item_index: int = company_list.item_count - 1
+		company_list.set_item_metadata(item_index, row)
 		company_list.set_item_tooltip(item_index, _watchlist_tooltip(row))
-		company_list.set_item_custom_fg_color(item_index, _color_for_change(change_pct))
-		company_list.set_item_custom_bg_color(item_index, _color_for_flow_bg(flow_tag))
+		_style_watchlist_row_item(item_index, row, false)
 
 	var selected_index: int = displayed_company_ids.find(selected_company_id)
 	if stock_list_tabs.current_tab == STOCK_LIST_TAB_WATCHLIST and selected_index == -1 and not displayed_company_ids.is_empty():
@@ -10018,9 +10072,31 @@ func _refresh_watchlist_rows(company_rows: Array, watchlist_lookup: Dictionary) 
 		selected_index = 0
 
 	if selected_index >= 0:
+		var selected_row: Dictionary = _get_watchlist_row_metadata(selected_index)
+		_style_watchlist_row_item(selected_index, selected_row, true)
 		company_list.select(selected_index)
 	watchlist_empty_label.visible = displayed_company_ids.is_empty()
 	_refresh_watchlist_action_state(watchlist_lookup)
+
+
+func _get_watchlist_row_metadata(item_index: int) -> Dictionary:
+	if company_list == null or item_index < 0 or item_index >= company_list.item_count:
+		return {}
+	var metadata = company_list.get_item_metadata(item_index)
+	if metadata is Dictionary:
+		return metadata
+	return {}
+
+
+func _style_watchlist_row_item(item_index: int, row: Dictionary, is_selected: bool) -> void:
+	if company_list == null or item_index < 0 or item_index >= company_list.item_count:
+		return
+	var broker_flow: Dictionary = row.get("broker_flow", {})
+	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
+	var change_pct: float = float(row.get("daily_change_pct", 0.0))
+	company_list.set_item_icon(item_index, null)
+	company_list.set_item_custom_fg_color(item_index, COLOR_STOCKBOT_TEXT if is_selected else _color_for_change(change_pct))
+	company_list.set_item_custom_bg_color(item_index, COLOR_STOCKBOT_BLUE_TINT if is_selected else _color_for_flow_bg(flow_tag))
 
 
 func _refresh_all_stock_watchlist_button_states(watchlist_lookup: Dictionary) -> void:
@@ -10033,14 +10109,16 @@ func _refresh_all_stock_watchlist_button_states(watchlist_lookup: Dictionary) ->
 		if add_button == null:
 			continue
 		var is_in_watchlist: bool = watchlist_lookup.has(company_id)
-		add_button.text = "Added" if is_in_watchlist else "Add"
+		add_button.text = "" if is_in_watchlist else "Watch"
+		add_button.icon = _load_stockbot_icon("check" if is_in_watchlist else "plus")
+		add_button.expand_icon = is_in_watchlist
 		add_button.disabled = is_in_watchlist
-		_style_button(
+		_style_stockbot_button(
 			add_button,
-			Color(0.164706, 0.215686, 0.278431, 1) if is_in_watchlist else Color(0.117647, 0.32549, 0.239216, 1),
-			COLOR_BORDER,
-			COLOR_TEXT,
-			0
+			COLOR_STOCKBOT_SURFACE_ALT if is_in_watchlist else COLOR_STOCKBOT_BULL_TINT,
+			COLOR_STOCKBOT_EDGE if is_in_watchlist else COLOR_STOCKBOT_BULL_EDGE,
+			COLOR_STOCKBOT_TEXT,
+			4
 		)
 		var add_callable: Callable = Callable(self, "_on_add_to_watchlist_pressed").bind(company_id)
 		if not is_in_watchlist and not add_button.pressed.is_connected(add_callable):
@@ -10072,27 +10150,35 @@ func _refresh_all_stock_rows(company_rows: Array, watchlist_lookup: Dictionary) 
 		row_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row_box.name = "AllStockRow_%s" % company_id
 
+		var selected_stripe: ColorRect = ColorRect.new()
+		selected_stripe.name = "AllStockSelectedStripe_%s" % company_id
+		selected_stripe.custom_minimum_size = Vector2(4, 42)
+		selected_stripe.color = COLOR_STOCKBOT_BLUE if is_selected else Color(COLOR_STOCKBOT_EDGE.r, COLOR_STOCKBOT_EDGE.g, COLOR_STOCKBOT_EDGE.b, 0.25)
+		row_box.add_child(selected_stripe)
+
 		var select_button: Button = Button.new()
 		select_button.name = "AllStockSelectButton_%s" % company_id
 		select_button.text = line
 		select_button.tooltip_text = _watchlist_tooltip(row)
 		select_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		select_button.custom_minimum_size = Vector2(0, 40)
+		select_button.custom_minimum_size = Vector2(0, 42)
 		_style_stock_list_row_button(select_button, is_selected)
 		select_button.pressed.connect(_on_all_stock_selected.bind(company_id))
 		row_box.add_child(select_button)
 
 		var add_button: Button = Button.new()
 		add_button.name = "AllStockAddButton_%s" % company_id
-		add_button.custom_minimum_size = Vector2(STOCK_LIST_ADD_BUTTON_WIDTH, 36)
-		add_button.text = "Added" if is_in_watchlist else "Add"
+		add_button.custom_minimum_size = Vector2(STOCK_LIST_ADD_BUTTON_WIDTH, 42)
+		add_button.text = "" if is_in_watchlist else "Watch"
+		add_button.icon = _load_stockbot_icon("check" if is_in_watchlist else "plus")
+		add_button.expand_icon = is_in_watchlist
 		add_button.disabled = is_in_watchlist
-		_style_button(
+		_style_stockbot_button(
 			add_button,
-			Color(0.164706, 0.215686, 0.278431, 1) if is_in_watchlist else Color(0.117647, 0.32549, 0.239216, 1),
-			COLOR_BORDER,
-			COLOR_TEXT,
-			0
+			COLOR_STOCKBOT_SURFACE_ALT if is_in_watchlist else COLOR_STOCKBOT_BULL_TINT,
+			COLOR_STOCKBOT_EDGE if is_in_watchlist else COLOR_STOCKBOT_BULL_EDGE,
+			COLOR_STOCKBOT_TEXT,
+			4
 		)
 		if not is_in_watchlist:
 			add_button.pressed.connect(_on_add_to_watchlist_pressed.bind(company_id))
@@ -10159,6 +10245,9 @@ func _refresh_portfolio_stock_rows(holdings: Array, company_row_lookup: Dictiona
 
 func _refresh_company_selection_state() -> void:
 	var selected_index: int = displayed_company_ids.find(selected_company_id)
+	for item_index in range(company_list.item_count):
+		var row: Dictionary = _get_watchlist_row_metadata(item_index)
+		_style_watchlist_row_item(item_index, row, item_index == selected_index)
 	if selected_index >= 0:
 		company_list.select(selected_index)
 	else:
@@ -10170,6 +10259,9 @@ func _refresh_company_selection_state() -> void:
 			continue
 		var row_box: HBoxContainer = row_box_value
 		var company_id: String = str(row_box.name).trim_prefix("AllStockRow_")
+		var selected_stripe: ColorRect = row_box.get_node_or_null("AllStockSelectedStripe_%s" % company_id) as ColorRect
+		if selected_stripe != null:
+			selected_stripe.color = COLOR_STOCKBOT_BLUE if company_id == selected_company_id else Color(COLOR_STOCKBOT_EDGE.r, COLOR_STOCKBOT_EDGE.g, COLOR_STOCKBOT_EDGE.b, 0.25)
 		var select_button: Button = row_box.get_node_or_null("AllStockSelectButton_%s" % company_id) as Button
 		if select_button == null:
 			continue
@@ -15407,6 +15499,8 @@ func _selected_lots() -> int:
 func _update_order_side_buttons() -> void:
 	buy_button.set_pressed_no_signal(active_order_side == "buy")
 	sell_button.set_pressed_no_signal(active_order_side == "sell")
+	_style_stockbot_button(buy_button, COLOR_STOCKBOT_BULL_TINT, COLOR_STOCKBOT_BULL_EDGE, COLOR_STOCKBOT_TEXT, 6, active_order_side == "buy")
+	_style_stockbot_button(sell_button, COLOR_STOCKBOT_BEAR_TINT, COLOR_STOCKBOT_BEAR_EDGE, COLOR_STOCKBOT_TEXT, 6, active_order_side == "sell")
 	_refresh_submit_order_button_style()
 
 
@@ -15548,10 +15642,12 @@ func _apply_window_layout() -> void:
 	app_window_title_bar.offset_top = window_margin_top
 	app_window_title_bar.offset_right = -window_margin_right
 	app_window_title_bar.offset_bottom = window_margin_top + 44.0
-	stock_window_container.offset_left = APP_WINDOW_CONTENT_MARGIN
+	var stockbot_content_margin: int = STOCKBOT_WINDOW_CONTENT_MARGIN if active_app_id == APP_ID_STOCK else APP_WINDOW_CONTENT_MARGIN
+	var stockbot_bottom_margin: int = STOCKBOT_WINDOW_CONTENT_BOTTOM_MARGIN if active_app_id == APP_ID_STOCK else APP_WINDOW_CONTENT_BOTTOM_MARGIN
+	stock_window_container.offset_left = stockbot_content_margin
 	stock_window_container.offset_top = APP_WINDOW_CONTENT_TOP_MARGIN
-	stock_window_container.offset_right = -APP_WINDOW_CONTENT_MARGIN
-	stock_window_container.offset_bottom = -APP_WINDOW_CONTENT_BOTTOM_MARGIN
+	stock_window_container.offset_right = -stockbot_content_margin
+	stock_window_container.offset_bottom = -stockbot_bottom_margin
 	_apply_desktop_window_layouts()
 
 
@@ -15563,6 +15659,10 @@ func _apply_active_window_theme() -> void:
 	_style_panel(app_window_panel, window_fill, 8)
 	_style_window_title_bar(app_window_title_bar, window_fill)
 	_style_panel(stock_window_container, COLOR_STOCK_WINDOW_BG, 0)
+	if active_app_id == APP_ID_STOCK:
+		_style_stockbot_panel(app_window_panel, COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_BLUE_EDGE, 8, 1)
+		_style_window_title_bar(app_window_title_bar, COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_BLUE_EDGE, 1)
+		_style_stockbot_panel(stock_window_container, COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_BLUE_EDGE, 0, 1)
 	app_window_title_bar.add_theme_font_size_override("font_size", app_font_size)
 	_set_label_tone(app_window_title_label, window_text)
 	app_window_title_label.add_theme_color_override("font_color", window_text)
@@ -16150,6 +16250,7 @@ func _apply_visual_theme() -> void:
 	_style_button(sell_button, COLOR_ORDER_SELL, COLOR_ORDER_SELL_BORDER, COLOR_TEXT, 0)
 	_style_button(order_ticket_toggle_button, Color(0.0823529, 0.117647, 0.156863, 0.96), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(submit_order_button, COLOR_ORDER_BUY, COLOR_ORDER_BUY_BORDER, COLOR_TEXT, 0)
+	_style_stockbot_app_ui()
 	if contact_intel_button != null:
 		_style_button(contact_intel_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_key_stats_dashboard_ui()
@@ -16347,6 +16448,7 @@ func _apply_visual_theme() -> void:
 	_style_first_hour_guide_ui()
 	_style_settings_overlay()
 	_style_news_newspaper_ui()
+	_style_stockbot_app_ui()
 	_apply_active_window_theme()
 	_refresh_financial_history_header()
 	_refresh_broker_header()
@@ -16472,6 +16574,220 @@ func _style_button(
 			"radius": corner_radius
 		}
 	)
+
+
+func _load_stockbot_icon(icon_id: String) -> Texture2D:
+	var icon_path: String = str(STOCKBOT_ICON_PATHS.get(icon_id, ""))
+	if icon_path.is_empty():
+		return null
+	if not ResourceLoader.exists(icon_path) and not FileAccess.file_exists(icon_path):
+		return null
+	var icon_resource := load(icon_path)
+	if icon_resource is Texture2D:
+		return icon_resource as Texture2D
+	return null
+
+
+func _make_stockbot_stylebox(
+	fill_color: Color,
+	border_color: Color,
+	corner_radius: int = 6,
+	border_width: int = 1,
+	content_margin: int = 0
+) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = border_color
+	style.set_border_width_all(border_width)
+	style.corner_radius_top_left = corner_radius
+	style.corner_radius_top_right = corner_radius
+	style.corner_radius_bottom_right = corner_radius
+	style.corner_radius_bottom_left = corner_radius
+	style.content_margin_left = content_margin
+	style.content_margin_top = content_margin
+	style.content_margin_right = content_margin
+	style.content_margin_bottom = content_margin
+	return style
+
+
+func _set_stockbot_margins(margin_container: MarginContainer, left: int, top: int, right: int, bottom: int) -> void:
+	if margin_container == null:
+		return
+	margin_container.add_theme_constant_override("margin_left", left)
+	margin_container.add_theme_constant_override("margin_top", top)
+	margin_container.add_theme_constant_override("margin_right", right)
+	margin_container.add_theme_constant_override("margin_bottom", bottom)
+
+
+func _set_stockbot_spacing(container: Container, separation: int) -> void:
+	if container == null:
+		return
+	container.add_theme_constant_override("separation", separation)
+	container.add_theme_constant_override("h_separation", separation)
+	container.add_theme_constant_override("v_separation", separation)
+
+
+func _style_stockbot_panel(
+	panel: PanelContainer,
+	fill_color: Color = COLOR_STOCKBOT_SURFACE,
+	border_color: Color = COLOR_STOCKBOT_EDGE,
+	corner_radius: int = 0,
+	border_width: int = 1
+) -> void:
+	if panel == null:
+		return
+	panel.add_theme_stylebox_override("panel", _make_stockbot_stylebox(fill_color, border_color, corner_radius, border_width))
+
+
+func _style_stockbot_button(
+	button: Button,
+	fill_color: Color,
+	border_color: Color,
+	font_color: Color = COLOR_STOCKBOT_TEXT,
+	corner_radius: int = 6,
+	selected: bool = false
+) -> void:
+	if button == null:
+		return
+	var normal := _make_stockbot_stylebox(fill_color, border_color, corner_radius, 1, 3 if button.text.is_empty() else 6)
+	var hover := normal.duplicate()
+	hover.bg_color = fill_color.lightened(0.08)
+	var pressed := normal.duplicate()
+	pressed.bg_color = COLOR_STOCKBOT_BLUE_TINT if selected else fill_color.darkened(0.08)
+	pressed.border_color = COLOR_STOCKBOT_BLUE if selected else border_color.lightened(0.12)
+	pressed.set_border_width_all(2 if selected else 1)
+	var disabled := normal.duplicate()
+	disabled.bg_color = Color(fill_color.r, fill_color.g, fill_color.b, 0.45)
+	disabled.border_color = Color(border_color.r, border_color.g, border_color.b, 0.42)
+
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("focus", pressed)
+	button.add_theme_stylebox_override("disabled", disabled)
+	button.add_theme_color_override("font_color", font_color)
+	button.add_theme_color_override("font_hover_color", COLOR_STOCKBOT_TEXT)
+	button.add_theme_color_override("font_pressed_color", COLOR_STOCKBOT_TEXT)
+	button.add_theme_color_override("font_focus_color", COLOR_STOCKBOT_TEXT)
+	button.add_theme_color_override("font_disabled_color", Color(COLOR_STOCKBOT_MUTED.r, COLOR_STOCKBOT_MUTED.g, COLOR_STOCKBOT_MUTED.b, 0.58))
+	button.add_theme_color_override("icon_normal_color", font_color)
+	button.add_theme_color_override("icon_hover_color", COLOR_STOCKBOT_TEXT)
+	button.add_theme_color_override("icon_pressed_color", COLOR_STOCKBOT_TEXT)
+	button.add_theme_color_override("icon_focus_color", COLOR_STOCKBOT_TEXT)
+	button.add_theme_color_override("icon_hover_pressed_color", COLOR_STOCKBOT_TEXT)
+	button.add_theme_color_override("icon_disabled_color", Color(COLOR_STOCKBOT_MUTED.r, COLOR_STOCKBOT_MUTED.g, COLOR_STOCKBOT_MUTED.b, 0.58))
+
+
+func _style_stockbot_icon_button(
+	button: Button,
+	icon_id: String,
+	text_value: String = "",
+	tooltip_value: String = "",
+	selected: bool = false,
+	fill_color: Color = COLOR_STOCKBOT_SURFACE_ALT,
+	border_color: Color = COLOR_STOCKBOT_EDGE
+) -> void:
+	if button == null:
+		return
+	button.icon = _load_stockbot_icon(icon_id)
+	button.text = text_value
+	button.tooltip_text = tooltip_value
+	button.expand_icon = text_value.is_empty()
+	button.add_theme_constant_override("h_separation", 7)
+	button.add_theme_constant_override("icon_max_width", 22)
+	_style_stockbot_button(button, fill_color, border_color, COLOR_STOCKBOT_TEXT, 6, selected)
+
+
+func _style_stockbot_label_chip(
+	label: Label,
+	fill_color: Color,
+	border_color: Color,
+	font_color: Color,
+	corner_radius: int = 6
+) -> void:
+	if label == null:
+		return
+	label.add_theme_stylebox_override("normal", _make_stockbot_stylebox(fill_color, border_color, corner_radius, 1, 7))
+	label.add_theme_color_override("font_color", font_color)
+	label.add_theme_font_size_override("font_size", 12)
+
+
+func _apply_stockbot_compact_spacing() -> void:
+	_set_stockbot_margins(top_bar_panel.get_node_or_null("TopBarMargin") as MarginContainer, 8, 6, 8, 6)
+	_set_stockbot_spacing(top_bar_panel.get_node_or_null("TopBarMargin/TopBarVBox") as Container, 4)
+	_set_stockbot_spacing(top_bar_panel.get_node_or_null("TopBarMargin/TopBarVBox/TitleRow") as Container, 8)
+	_set_stockbot_margins(watchlist_panel.get_node_or_null("WatchlistMargin") as MarginContainer, 6, 6, 6, 6)
+	_set_stockbot_spacing(stock_list_tabs.get_node_or_null("WatchlistTab/WatchlistActionRow") as Container, 6)
+	_set_stockbot_spacing(stock_list_tabs.get_node_or_null("WatchlistTab") as Container, 6)
+	_set_stockbot_spacing(stock_list_tabs.get_node_or_null("AllStocksTab") as Container, 6)
+	_set_stockbot_spacing(all_stocks_rows, 0)
+	_set_stockbot_spacing(portfolio_stocks_rows, 0)
+	_set_stockbot_margins(action_panel.get_node_or_null("ActionMargin") as MarginContainer, 8, 8, 8, 8)
+	_set_stockbot_spacing(action_panel.get_node_or_null("ActionMargin/ActionVBox") as Container, 8)
+	_set_stockbot_spacing(action_panel.get_node_or_null("ActionMargin/ActionVBox/HeaderVBox") as Container, 5)
+	_set_stockbot_spacing(action_panel.get_node_or_null("ActionMargin/ActionVBox/HeaderVBox/MarketHeaderRow") as Container, 6)
+	_set_stockbot_spacing(action_panel.get_node_or_null("ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid") as Container, 4)
+	_set_stockbot_spacing(action_panel.get_node_or_null("ActionMargin/ActionVBox/TradeButtonRow") as Container, 6)
+	_set_stockbot_margins(order_card_panel.get_node_or_null("OrderCardMargin") as MarginContainer, 9, 9, 9, 9)
+	_set_stockbot_spacing(order_card_panel.get_node_or_null("OrderCardMargin/OrderCardVBox") as Container, 7)
+
+
+func _style_stockbot_app_ui() -> void:
+	_apply_stockbot_compact_spacing()
+	_style_stockbot_panel(stock_window_container, COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_BLUE_EDGE, 0, 1)
+	_style_stockbot_panel(top_bar_panel, COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_BLUE_EDGE, 0, 0)
+	_style_stockbot_panel(sidebar_panel, COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_EDGE, 0, 0)
+	_style_stockbot_panel(watchlist_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 0, 1)
+	_style_stockbot_panel(work_area_panel, COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_EDGE, 0, 1)
+	_style_stockbot_panel(action_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 0, 1)
+	_style_stockbot_panel(order_card_panel, COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_EDGE_STRONG, 6, 1)
+	_style_stockbot_panel(key_stats_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 6, 1)
+	_style_stockbot_panel(financials_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 6, 1)
+	_style_stockbot_panel(broker_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 6, 1)
+	_style_stockbot_panel(analyzer_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 6, 1)
+	_style_stockbot_panel(profile_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 6, 1)
+
+	_style_stockbot_label_chip(top_market_label, COLOR_STOCKBOT_BLUE_TINT, COLOR_STOCKBOT_BLUE_EDGE, _color_for_change(RunState.market_sentiment))
+	_style_stockbot_label_chip(top_equity_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_TEXT)
+	_style_stockbot_label_chip(top_cash_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_BLUE)
+	_style_stockbot_label_chip(top_section_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_AMBER)
+
+	_style_tab_container(stock_list_tabs, 0)
+	_style_tab_container(work_tabs, 0)
+	_style_stockbot_icon_button(add_watchlist_button, "plus", "Watch", "Add the selected stock to your watchlist.", false, COLOR_STOCKBOT_BLUE_TINT, COLOR_STOCKBOT_BLUE_EDGE)
+	_style_stockbot_icon_button(remove_watchlist_button, "trash", "Remove", "Remove the selected stock from your watchlist.", false, COLOR_STOCKBOT_BEAR_TINT, COLOR_STOCKBOT_BEAR_EDGE)
+	_style_stockbot_icon_button(
+		order_ticket_toggle_button,
+		"chevron_up" if order_ticket_collapsed else "chevron_down",
+		"",
+		"Show the order ticket." if order_ticket_collapsed else "Hide the order ticket.",
+		false,
+		COLOR_STOCKBOT_SURFACE_ALT,
+		COLOR_STOCKBOT_EDGE_STRONG
+	)
+	_style_stockbot_icon_button(
+		submit_order_button,
+		"shopping_cart",
+		"Submit Sell Order" if active_order_side == "sell" else "Submit Buy Order",
+		"Submit the current order.",
+		false,
+		COLOR_STOCKBOT_BEAR_TINT if active_order_side == "sell" else COLOR_STOCKBOT_BULL_TINT,
+		COLOR_STOCKBOT_BEAR_EDGE if active_order_side == "sell" else COLOR_STOCKBOT_BULL_EDGE
+	)
+	_style_stockbot_button(financials_previous_button, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_TEXT, 5)
+	_style_stockbot_button(financials_next_button, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_TEXT, 5)
+	_style_stockbot_button(buy_button, COLOR_STOCKBOT_BULL_TINT, COLOR_STOCKBOT_BULL_EDGE, COLOR_STOCKBOT_TEXT, 6, active_order_side == "buy")
+	_style_stockbot_button(sell_button, COLOR_STOCKBOT_BEAR_TINT, COLOR_STOCKBOT_BEAR_EDGE, COLOR_STOCKBOT_TEXT, 6, active_order_side == "sell")
+	order_price_value_label.add_theme_font_size_override("font_size", 22)
+	order_price_change_label.add_theme_font_size_override("font_size", 12)
+	order_title_label.add_theme_font_size_override("font_size", 13)
+	estimated_total_value_label.add_theme_stylebox_override("normal", _make_stockbot_stylebox(COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, 5, 1, 6))
+	estimated_total_value_label.add_theme_font_size_override("font_size", 13)
+	all_stocks_search_input.placeholder_text = "Search ticker, company, sector"
+	_style_line_input(all_stocks_search_input)
+	_style_line_input(order_price_line_edit)
+	_style_spin_input(lot_spin_box)
+	_style_item_list(company_list, 0, 0)
 
 
 func _style_light_option_button(option_button: OptionButton) -> void:
@@ -16718,28 +17034,28 @@ func _style_social_account_button(button: Button, is_selected: bool) -> void:
 
 func _style_line_input(line_edit: LineEdit) -> void:
 	var normal: StyleBoxFlat = StyleBoxFlat.new()
-	normal.bg_color = COLOR_ORDER_INPUT_BG
-	normal.border_color = COLOR_BORDER
+	normal.bg_color = COLOR_STOCKBOT_BASE
+	normal.border_color = COLOR_STOCKBOT_EDGE
 	normal.set_border_width_all(1)
-	normal.corner_radius_top_left = 0
-	normal.corner_radius_top_right = 0
-	normal.corner_radius_bottom_right = 0
-	normal.corner_radius_bottom_left = 0
-	normal.content_margin_left = 10
-	normal.content_margin_right = 10
-	normal.content_margin_top = 8
-	normal.content_margin_bottom = 8
+	normal.corner_radius_top_left = 5
+	normal.corner_radius_top_right = 5
+	normal.corner_radius_bottom_right = 5
+	normal.corner_radius_bottom_left = 5
+	normal.content_margin_left = 8
+	normal.content_margin_right = 8
+	normal.content_margin_top = 5
+	normal.content_margin_bottom = 5
 
 	var focus: StyleBoxFlat = normal.duplicate()
-	focus.border_color = COLOR_ORDER_BUY_BORDER
+	focus.border_color = COLOR_STOCKBOT_BLUE
 	focus.set_border_width_all(2)
 
 	line_edit.add_theme_stylebox_override("normal", normal)
 	line_edit.add_theme_stylebox_override("focus", focus)
 	line_edit.add_theme_stylebox_override("read_only", normal)
-	line_edit.add_theme_color_override("font_color", COLOR_TEXT)
-	line_edit.add_theme_color_override("font_placeholder_color", COLOR_MUTED)
-	line_edit.add_theme_color_override("font_uneditable_color", COLOR_TEXT)
+	line_edit.add_theme_color_override("font_color", COLOR_STOCKBOT_TEXT)
+	line_edit.add_theme_color_override("font_placeholder_color", COLOR_STOCKBOT_MUTED)
+	line_edit.add_theme_color_override("font_uneditable_color", COLOR_STOCKBOT_TEXT)
 	line_edit.alignment = HORIZONTAL_ALIGNMENT_LEFT
 
 
@@ -16751,17 +17067,22 @@ func _style_spin_input(spin_box: SpinBox) -> void:
 
 
 func _refresh_submit_order_button_style() -> void:
+	if submit_order_button == null:
+		return
+	submit_order_button.icon = _load_stockbot_icon("shopping_cart")
+	submit_order_button.expand_icon = false
 	if active_order_side == "sell":
-		_style_button(submit_order_button, COLOR_ORDER_SELL, COLOR_ORDER_SELL_BORDER, COLOR_TEXT, 0)
+		_style_stockbot_button(submit_order_button, COLOR_STOCKBOT_BEAR_TINT, COLOR_STOCKBOT_BEAR_EDGE, COLOR_STOCKBOT_TEXT, 6)
 	else:
-		_style_button(submit_order_button, COLOR_ORDER_BUY, COLOR_ORDER_BUY_BORDER, COLOR_TEXT, 0)
+		_style_stockbot_button(submit_order_button, COLOR_STOCKBOT_BULL_TINT, COLOR_STOCKBOT_BULL_EDGE, COLOR_STOCKBOT_TEXT, 6)
 
 
 func _style_stock_list_row_button(button: Button, is_selected: bool) -> void:
-	var fill_color: Color = COLOR_NAV_ACTIVE_FILL if is_selected else Color(0.0823529, 0.117647, 0.156863, 0.98)
-	var border_color: Color = COLOR_NAV_ACTIVE_BORDER if is_selected else COLOR_BORDER
-	_style_button(button, fill_color, border_color, COLOR_TEXT, 0)
+	var fill_color: Color = COLOR_STOCKBOT_BLUE_TINT if is_selected else COLOR_STOCKBOT_BASE
+	var border_color: Color = COLOR_STOCKBOT_BLUE if is_selected else COLOR_STOCKBOT_EDGE
+	_style_stockbot_button(button, fill_color, border_color, COLOR_STOCKBOT_TEXT, 4, is_selected)
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.add_theme_font_size_override("font_size", 12)
 
 
 func _style_network_journal_filter_button(button: Button, is_selected: bool) -> void:
@@ -16776,8 +17097,8 @@ func _style_light_item_list(item_list: ItemList) -> void:
 
 func _style_item_list(item_list: ItemList, panel_radius: int = 8, cursor_radius: int = 6) -> void:
 	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.0588235, 0.0823529, 0.109804, 0.98)
-	panel_style.border_color = COLOR_BORDER
+	panel_style.bg_color = COLOR_STOCKBOT_BASE
+	panel_style.border_color = COLOR_STOCKBOT_EDGE
 	panel_style.set_border_width_all(1)
 	panel_style.corner_radius_top_left = panel_radius
 	panel_style.corner_radius_top_right = panel_radius
@@ -16785,8 +17106,8 @@ func _style_item_list(item_list: ItemList, panel_radius: int = 8, cursor_radius:
 	panel_style.corner_radius_bottom_left = panel_radius
 
 	var cursor_style: StyleBoxFlat = StyleBoxFlat.new()
-	cursor_style.bg_color = Color(0.239216, 0.407843, 0.572549, 0.7)
-	cursor_style.border_color = COLOR_ACCENT
+	cursor_style.bg_color = COLOR_STOCKBOT_BLUE_TINT
+	cursor_style.border_color = COLOR_STOCKBOT_BLUE
 	cursor_style.set_border_width_all(1)
 	cursor_style.corner_radius_top_left = cursor_radius
 	cursor_style.corner_radius_top_right = cursor_radius
@@ -16797,8 +17118,8 @@ func _style_item_list(item_list: ItemList, panel_radius: int = 8, cursor_radius:
 	item_list.add_theme_stylebox_override("panel_focus", panel_style)
 	item_list.add_theme_stylebox_override("cursor", cursor_style)
 	item_list.add_theme_stylebox_override("cursor_unfocused", cursor_style)
-	item_list.add_theme_color_override("font_color", COLOR_TEXT)
-	item_list.add_theme_color_override("font_selected_color", COLOR_TEXT)
+	item_list.add_theme_color_override("font_color", COLOR_STOCKBOT_TEXT)
+	item_list.add_theme_color_override("font_selected_color", COLOR_STOCKBOT_TEXT)
 	item_list.add_theme_color_override("guide_color", Color(0, 0, 0, 0))
 	item_list.add_theme_constant_override("h_separation", 6)
 	item_list.add_theme_constant_override("v_separation", 6)

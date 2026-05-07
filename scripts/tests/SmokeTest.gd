@@ -1392,7 +1392,7 @@ func _validate_main_menu_flow() -> Dictionary:
 	var loading_progress_bar: ProgressBar = main_menu.find_child("LoadingProgressBar", true, false) as ProgressBar
 	var loading_subprogress_label: Label = main_menu.find_child("LoadingSubprogressLabel", true, false) as Label
 	var loading_note_label: Label = main_menu.find_child("LoadingNoteLabel", true, false) as Label
-	var load_slots_dialog: ConfirmationDialog = main_menu.find_child("LoadSlotsDialog", true, false) as ConfirmationDialog
+	var load_slots_dialog: Control = main_menu.find_child("LoadSlotsDialog", true, false) as Control
 	var load_slots_list: ItemList = main_menu.find_child("LoadSlotsList", true, false) as ItemList
 	var load_slots_delete_button: Button = main_menu.find_child("LoadSlotsDeleteButton", true, false) as Button
 	var load_slot_delete_dialog: ConfirmationDialog = main_menu.find_child("LoadSlotDeleteDialog", true, false) as ConfirmationDialog
@@ -1409,7 +1409,7 @@ func _validate_main_menu_flow() -> Dictionary:
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the loading screen and save-slot load/delete dialogs to expose their required nodes."
+			"message": "Smoke test expected the loading screen and save-slot load/delete controls to expose their required nodes."
 		}
 
 	main_menu.queue_free()

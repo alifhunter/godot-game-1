@@ -10,6 +10,9 @@ const DIFFICULTY_SELECTOR_COMPACT_WIDTH := 1040.0
 const DIFFICULTY_PLAN_GRID_MAX_WIDTH := 992.0
 const DIFFICULTY_PLAN_CARD_WIDTH := 320.0
 const DIFFICULTY_PLAN_CARD_HEIGHT := 230.0
+const LOAD_SLOTS_DIALOG_WIDTH := 760.0
+const LOAD_SLOTS_LIST_HEIGHT := 160.0
+const LOAD_SLOT_DELETE_DIALOG_SIZE := Vector2i(540, 230)
 const COLOR_DESKTOP_BG := Color(0.909804, 0.909804, 0.803922, 1)
 const COLOR_DESKTOP_PANEL := Color(0.945098, 0.909804, 0.803922, 1)
 const COLOR_DESKTOP_CREAM := Color(1.0, 0.976471, 0.929412, 1)
@@ -66,9 +69,16 @@ var difficulty_card_buttons: Dictionary = {}
 var selected_difficulty_id := ""
 var selected_load_slot_id := ""
 var delete_load_slot_id := ""
-var load_slots_dialog: ConfirmationDialog = null
+var load_slots_dialog: Control = null
+var load_slots_window_panel: PanelContainer = null
+var load_slots_title_bar: PanelContainer = null
+var load_slots_title_label: Label = null
+var load_slots_close_button: Button = null
+var load_slots_body_panel: PanelContainer = null
 var load_slots_list: ItemList = null
 var load_slots_hint_label: Label = null
+var load_slots_load_button: Button = null
+var load_slots_cancel_button: Button = null
 var load_slots_delete_button: Button = null
 var load_slot_delete_dialog: ConfirmationDialog = null
 var load_slot_delete_body_label: Label = null
@@ -342,25 +352,86 @@ func _prepare_load_screen(slot_id: String = "") -> void:
 func _ensure_load_slots_dialog() -> void:
 	if load_slots_dialog != null:
 		return
-	load_slots_dialog = ConfirmationDialog.new()
+	load_slots_dialog = Control.new()
 	load_slots_dialog.name = "LoadSlotsDialog"
-	load_slots_dialog.title = "Load Run"
-	load_slots_dialog.confirmed.connect(_on_load_slots_confirmed)
+	load_slots_dialog.visible = false
+	load_slots_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	load_slots_dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(load_slots_dialog)
-	load_slots_dialog.get_ok_button().text = "Load"
-	load_slots_dialog.get_cancel_button().text = "Cancel"
+
+	var center := CenterContainer.new()
+	center.name = "LoadSlotsCenter"
+	center.mouse_filter = Control.MOUSE_FILTER_PASS
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	load_slots_dialog.add_child(center)
+
+	load_slots_window_panel = PanelContainer.new()
+	load_slots_window_panel.name = "LoadSlotsWindowPanel"
+	load_slots_window_panel.custom_minimum_size = Vector2(LOAD_SLOTS_DIALOG_WIDTH, 0)
+	load_slots_window_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	load_slots_window_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	center.add_child(load_slots_window_panel)
+
+	var window_vbox := VBoxContainer.new()
+	window_vbox.name = "LoadSlotsWindowVBox"
+	window_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	window_vbox.add_theme_constant_override("separation", 0)
+	load_slots_window_panel.add_child(window_vbox)
+
+	load_slots_title_bar = PanelContainer.new()
+	load_slots_title_bar.name = "LoadSlotsTitleBar"
+	load_slots_title_bar.custom_minimum_size = Vector2(0, 40)
+	load_slots_title_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	window_vbox.add_child(load_slots_title_bar)
+
+	var title_margin := MarginContainer.new()
+	title_margin.add_theme_constant_override("margin_left", 14)
+	title_margin.add_theme_constant_override("margin_top", 4)
+	title_margin.add_theme_constant_override("margin_right", 8)
+	title_margin.add_theme_constant_override("margin_bottom", 4)
+	load_slots_title_bar.add_child(title_margin)
+
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 8)
+	title_margin.add_child(title_row)
+
+	var title_left_spacer := Control.new()
+	title_left_spacer.custom_minimum_size = Vector2(32, 0)
+	title_row.add_child(title_left_spacer)
+
+	load_slots_title_label = Label.new()
+	load_slots_title_label.name = "LoadSlotsTitleLabel"
+	load_slots_title_label.text = "Load Run"
+	load_slots_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	load_slots_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	load_slots_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(load_slots_title_label)
+
+	load_slots_close_button = Button.new()
+	load_slots_close_button.name = "LoadSlotsCloseButton"
+	load_slots_close_button.text = "X"
+	load_slots_close_button.custom_minimum_size = Vector2(32, 26)
+	load_slots_close_button.pressed.connect(_hide_load_slots_dialog)
+	title_row.add_child(load_slots_close_button)
+
+	load_slots_body_panel = PanelContainer.new()
+	load_slots_body_panel.name = "LoadSlotsBodyPanel"
+	load_slots_body_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	window_vbox.add_child(load_slots_body_panel)
 
 	var dialog_margin := MarginContainer.new()
-	dialog_margin.add_theme_constant_override("margin_left", 16)
-	dialog_margin.add_theme_constant_override("margin_top", 16)
-	dialog_margin.add_theme_constant_override("margin_right", 16)
-	dialog_margin.add_theme_constant_override("margin_bottom", 16)
-	load_slots_dialog.add_child(dialog_margin)
+	dialog_margin.name = "LoadSlotsContentMargin"
+	dialog_margin.add_theme_constant_override("margin_left", 18)
+	dialog_margin.add_theme_constant_override("margin_top", 14)
+	dialog_margin.add_theme_constant_override("margin_right", 18)
+	dialog_margin.add_theme_constant_override("margin_bottom", 14)
+	load_slots_body_panel.add_child(dialog_margin)
 
 	var dialog_vbox := VBoxContainer.new()
-	dialog_vbox.custom_minimum_size = Vector2(720, 360)
+	dialog_vbox.name = "LoadSlotsContentVBox"
+	dialog_vbox.custom_minimum_size = Vector2(0, 0)
 	dialog_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dialog_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dialog_vbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	dialog_vbox.add_theme_constant_override("separation", 10)
 	dialog_margin.add_child(dialog_vbox)
 
@@ -372,28 +443,41 @@ func _ensure_load_slots_dialog() -> void:
 
 	load_slots_list = ItemList.new()
 	load_slots_list.name = "LoadSlotsList"
+	load_slots_list.custom_minimum_size = Vector2(0, LOAD_SLOTS_LIST_HEIGHT)
 	load_slots_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	load_slots_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	load_slots_list.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	load_slots_list.item_selected.connect(_on_load_slot_selected)
 	load_slots_list.item_activated.connect(_on_load_slot_activated)
 	dialog_vbox.add_child(load_slots_list)
 
-	var dialog_button_row := HBoxContainer.new()
-	dialog_button_row.name = "LoadSlotsActionRow"
-	dialog_button_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dialog_button_row.add_theme_constant_override("separation", 10)
-	dialog_vbox.add_child(dialog_button_row)
-
-	var dialog_button_spacer := Control.new()
-	dialog_button_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dialog_button_row.add_child(dialog_button_spacer)
+	var action_row := HBoxContainer.new()
+	action_row.name = "LoadSlotsActionRow"
+	action_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	action_row.add_theme_constant_override("separation", 8)
+	dialog_vbox.add_child(action_row)
 
 	load_slots_delete_button = Button.new()
 	load_slots_delete_button.name = "LoadSlotsDeleteButton"
 	load_slots_delete_button.text = "Delete"
-	load_slots_delete_button.custom_minimum_size = Vector2(96, 34)
 	load_slots_delete_button.pressed.connect(_on_load_slot_delete_pressed)
-	dialog_button_row.add_child(load_slots_delete_button)
+	action_row.add_child(load_slots_delete_button)
+
+	var action_spacer := Control.new()
+	action_spacer.name = "LoadSlotsActionSpacer"
+	action_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	action_row.add_child(action_spacer)
+
+	load_slots_cancel_button = Button.new()
+	load_slots_cancel_button.name = "LoadSlotsCancelButton"
+	load_slots_cancel_button.text = "Cancel"
+	load_slots_cancel_button.pressed.connect(_hide_load_slots_dialog)
+	action_row.add_child(load_slots_cancel_button)
+
+	load_slots_load_button = Button.new()
+	load_slots_load_button.name = "LoadSlotsLoadButton"
+	load_slots_load_button.text = "Load"
+	load_slots_load_button.pressed.connect(_on_load_slots_confirmed)
+	action_row.add_child(load_slots_load_button)
 
 	load_slot_delete_dialog = ConfirmationDialog.new()
 	load_slot_delete_dialog.name = "LoadSlotDeleteDialog"
@@ -421,7 +505,13 @@ func _ensure_load_slots_dialog() -> void:
 
 func _show_load_slots_dialog() -> void:
 	_populate_load_slots_list()
-	load_slots_dialog.popup_centered()
+	load_slots_dialog.show()
+	load_slots_dialog.move_to_front()
+
+
+func _hide_load_slots_dialog() -> void:
+	if load_slots_dialog != null:
+		load_slots_dialog.hide()
 
 
 func _populate_load_slots_list() -> void:
@@ -436,6 +526,7 @@ func _populate_load_slots_list() -> void:
 		var item_index: int = load_slots_list.add_item(_format_save_slot_list_item(slot))
 		load_slots_list.set_item_metadata(item_index, str(slot.get("slot_id", "")))
 		load_slots_list.set_item_disabled(item_index, not selectable)
+		_style_load_slot_item(item_index, slot, selectable)
 		if selectable and first_selectable_index < 0:
 			first_selectable_index = item_index
 	if first_selectable_index >= 0:
@@ -477,11 +568,12 @@ func _on_load_slot_activated(index: int) -> void:
 	_on_load_slot_selected(index)
 	if selected_load_slot_id.is_empty() or not SaveManager.has_loadable_save(selected_load_slot_id):
 		return
-	load_slots_dialog.hide()
+	_hide_load_slots_dialog()
 	await _load_selected_slot()
 
 
 func _on_load_slots_confirmed() -> void:
+	_hide_load_slots_dialog()
 	await _load_selected_slot()
 
 
@@ -506,7 +598,8 @@ func _refresh_load_slots_dialog_buttons() -> void:
 	var slot: Dictionary = SaveManager.get_save_file_info(selected_load_slot_id)
 	var loadable: bool = not selected_load_slot_id.is_empty() and bool(slot.get("loadable", false))
 	var has_file: bool = not selected_load_slot_id.is_empty() and (bool(slot.get("exists", false)) or bool(slot.get("backup_exists", false)))
-	load_slots_dialog.get_ok_button().disabled = not loadable
+	if load_slots_load_button != null:
+		load_slots_load_button.disabled = not loadable
 	if load_slots_delete_button != null:
 		load_slots_delete_button.disabled = not has_file
 
@@ -521,7 +614,7 @@ func _on_load_slot_delete_pressed() -> void:
 	delete_load_slot_id = selected_load_slot_id
 	if load_slot_delete_body_label != null:
 		load_slot_delete_body_label.text = _build_load_slot_delete_text(slot)
-	load_slot_delete_dialog.popup_centered()
+	load_slot_delete_dialog.popup_centered(LOAD_SLOT_DELETE_DIALOG_SIZE)
 
 
 func _on_load_slot_delete_confirmed() -> void:
@@ -753,28 +846,110 @@ func _style_danger_button(button: Button) -> void:
 	UiTheme.style_button(button, "desktop_danger")
 
 
+func _style_dialog_action_button(button: Button, variant: String) -> void:
+	if button == null:
+		return
+	match variant:
+		"primary":
+			_style_button(button, true)
+		"danger":
+			_style_danger_button(button)
+		_:
+			_style_button(button, false)
+	button.custom_minimum_size = Vector2(116, 38)
+	button.add_theme_font_size_override("font_size", 14)
+
+
+func _style_load_slots_item_list() -> void:
+	if load_slots_list == null:
+		return
+	var panel_style := UiTheme.make_stylebox(COLOR_DESKTOP_CREAM, COLOR_DESKTOP_FRAME, 1, 4, {"left": 6, "right": 6, "top": 6, "bottom": 6})
+	var cursor_style := UiTheme.make_stylebox(Color(COLOR_DESKTOP_GOLD.r, COLOR_DESKTOP_GOLD.g, COLOR_DESKTOP_GOLD.b, 0.74), COLOR_DESKTOP_BROWN, 2, 4)
+	var hover_style := UiTheme.make_stylebox(Color(1.0, 0.941176, 0.760784, 0.48), COLOR_DESKTOP_FRAME, 1, 4)
+	load_slots_list.add_theme_stylebox_override("panel", panel_style)
+	load_slots_list.add_theme_stylebox_override("panel_focus", panel_style)
+	load_slots_list.add_theme_stylebox_override("focus", panel_style)
+	load_slots_list.add_theme_stylebox_override("cursor", cursor_style)
+	load_slots_list.add_theme_stylebox_override("cursor_unfocused", cursor_style)
+	load_slots_list.add_theme_stylebox_override("selected", cursor_style)
+	load_slots_list.add_theme_stylebox_override("selected_focus", cursor_style)
+	load_slots_list.add_theme_stylebox_override("hovered", hover_style)
+	load_slots_list.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
+	load_slots_list.add_theme_color_override("font_hovered_color", COLOR_DESKTOP_TEXT)
+	load_slots_list.add_theme_color_override("font_selected_color", COLOR_DESKTOP_TEXT)
+	load_slots_list.add_theme_color_override("font_hovered_selected_color", COLOR_DESKTOP_TEXT)
+	load_slots_list.add_theme_color_override("font_disabled_color", Color(0.431373, 0.392157, 0.282353, 1))
+	load_slots_list.add_theme_color_override("guide_color", Color(0, 0, 0, 0))
+	load_slots_list.add_theme_constant_override("h_separation", 8)
+	load_slots_list.add_theme_constant_override("v_separation", 8)
+	var app_font := _get_app_font()
+	if app_font != null:
+		load_slots_list.add_theme_font_override("font", app_font)
+	load_slots_list.add_theme_font_size_override("font_size", 15)
+
+
+func _style_load_slot_item(item_index: int, slot: Dictionary, selectable: bool) -> void:
+	if load_slots_list == null:
+		return
+	if bool(slot.get("loadable", false)):
+		load_slots_list.set_item_custom_fg_color(item_index, COLOR_DESKTOP_TEXT)
+		if bool(slot.get("active", false)):
+			load_slots_list.set_item_custom_bg_color(item_index, Color(COLOR_DESKTOP_GOLD.r, COLOR_DESKTOP_GOLD.g, COLOR_DESKTOP_GOLD.b, 0.18))
+	elif bool(slot.get("exists", false)) or bool(slot.get("backup_exists", false)):
+		load_slots_list.set_item_custom_fg_color(item_index, COLOR_DESKTOP_BROWN)
+		load_slots_list.set_item_custom_bg_color(item_index, Color(0.956863, 0.760784, 0.521569, 0.16))
+	elif not selectable:
+		load_slots_list.set_item_custom_fg_color(item_index, Color(0.431373, 0.392157, 0.282353, 1))
+
+
 func _style_load_slot_dialogs() -> void:
-	for dialog_value in [load_slots_dialog, load_slot_delete_dialog]:
-		var dialog: ConfirmationDialog = dialog_value as ConfirmationDialog
-		if dialog == null:
-			continue
-		UiTheme.style_panel(dialog, "dialog")
+	if load_slots_window_panel != null:
+		load_slots_window_panel.add_theme_stylebox_override(
+			"panel",
+			UiTheme.make_stylebox(Color(0.207843, 0.2, 0.184314, 1), Color(0.207843, 0.2, 0.184314, 1), 0, 5)
+		)
+	if load_slots_title_bar != null:
+		load_slots_title_bar.add_theme_stylebox_override(
+			"panel",
+			UiTheme.make_stylebox(Color(0.207843, 0.2, 0.184314, 1), Color(0.207843, 0.2, 0.184314, 1), 0, 5)
+		)
+	if load_slots_body_panel != null:
+		load_slots_body_panel.add_theme_stylebox_override(
+			"panel",
+			UiTheme.make_stylebox(COLOR_DESKTOP_CREAM, COLOR_DESKTOP_BROWN, 2, 5)
+		)
+	if load_slots_title_label != null:
+		load_slots_title_label.add_theme_font_override("font", UiTheme.font("bold"))
+		load_slots_title_label.add_theme_font_size_override("font_size", 16)
+		load_slots_title_label.add_theme_color_override("font_color", COLOR_DESKTOP_CREAM)
+	if load_slots_close_button != null:
+		UiTheme.style_button(load_slots_close_button, "window_control")
+		load_slots_close_button.custom_minimum_size = Vector2(32, 26)
+		load_slots_close_button.add_theme_font_size_override("font_size", 14)
+
+	if load_slot_delete_dialog != null:
+		UiTheme.style_panel(load_slot_delete_dialog, "dialog")
+		load_slot_delete_dialog.add_theme_color_override("title_color", COLOR_DESKTOP_CREAM)
+		load_slot_delete_dialog.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
 
 	if load_slots_hint_label != null:
 		_style_body_label(load_slots_hint_label)
+		load_slots_hint_label.add_theme_color_override("font_color", COLOR_DESKTOP_MUTED)
+		load_slots_hint_label.add_theme_font_size_override("font_size", 15)
 	if load_slot_delete_body_label != null:
 		_style_body_label(load_slot_delete_body_label)
 	if load_slots_list != null:
-		UiTheme.style_item_list(load_slots_list, "desktop")
+		_style_load_slots_item_list()
 
 	if load_slots_delete_button != null:
-		_style_danger_button(load_slots_delete_button)
-	if load_slots_dialog != null:
-		_style_button(load_slots_dialog.get_ok_button(), true)
-		_style_button(load_slots_dialog.get_cancel_button(), false)
+		_style_dialog_action_button(load_slots_delete_button, "danger")
+	if load_slots_cancel_button != null:
+		_style_dialog_action_button(load_slots_cancel_button, "secondary")
+	if load_slots_load_button != null:
+		_style_dialog_action_button(load_slots_load_button, "primary")
 	if load_slot_delete_dialog != null:
-		_style_danger_button(load_slot_delete_dialog.get_ok_button())
-		_style_button(load_slot_delete_dialog.get_cancel_button(), false)
+		_style_dialog_action_button(load_slot_delete_dialog.get_ok_button(), "danger")
+		_style_dialog_action_button(load_slot_delete_dialog.get_cancel_button(), "secondary")
 
 
 func _style_difficulty_card_button(button: Button) -> void:

@@ -64,6 +64,12 @@ Read this file first in the next session.
 - Balance/upgrades runtime hookup is now partially data-driven. `autoloads/RunState.gd` reads effective buy/sell trading fees and daily Network action limits from `data/upgrades/upgrade_catalog.json` through `DataRepository.get_upgrade_catalog()`, with previous constant fallbacks if catalog fields are missing.
 - Latest content-tool validation summary: the previous `117` News/Twooter singleton-pool warnings were fixed by adding second variants to every one-line News driver phrase and Twooter voice/fallback pool. `python3 tools/content_lint_dashboard/server.py --validate` now passes with all nine content-editor validators valid, all 15 runtime JSON files parsed, and `0` errors / `0` warnings. `python3 tools/content_lint_dashboard/server.py --preview --seed 42` generated all seven preview sections successfully with `0` quality issues, and `python3 tools/content_lint_dashboard/server.py --preview-scan --seed 42 --count 20` passed with `0` issues across seeds `42-61`.
 - Mac Godot verification now passes from PATH with Godot `4.6.2.stable.official.71f334935`: `godot --headless --path . --log-file /private/tmp/gorengan-project-load.log --quit` exited `0`, and `godot --headless --path . --log-file /private/tmp/gorengan-smoke-quick.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` exited `0` with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.` Non-blocking output included Steam not running, the macOS certificate-store warning, and trailing RID/ObjectDB cleanup warnings after smoke success.
+- Recent UI redesign batch is in the current uncommitted worktree: News, Twooter, and Stockbot received visual passes; `Load Run` was converted to a compact custom overlay; and new `assets/icons/` SVGs plus `.import` files are present. Do not assume a clean tree until this batch is committed.
+- News Browser has a Market Papers-inspired newspaper redesign while keeping the existing cream/brown game style. It uses `res://assets/market_papers/grunge/*.png` for subtle folds/smudges/stamps, adds a masthead with issue/date/price framing, source tabs, newspaper story cards, selected `OPEN` stamp treatment, and a fuller article detail pane. Behavior remains the same: outlet/year/month archive flow, article selection, source meetings, and linked meeting actions. The sidebar selected-card scroll jump was fixed so clicking a low card no longer yanks the list upward.
+- Twooter has a cream + blue old-social redesign. The app has a blue outer frame, compact header, live/access tier indicator, filter chips (`All`, `Companies`, `Sectors`, `Trending`), a derived ticker tape, circular avatar initials, tier pills, verified markers, sentiment bars, engagement rows, clickable account filters, and in-place thread expansion. No save/content schema changed.
+- Stockbot has a dark trading-dashboard redesign based on the attached reference while preserving the existing three-zone app structure. The shell, stock list, chart workspace, order ticket, chart grid/candles, toolbar buttons, search/tabs, and submit controls now use dark panels with blue trading accents. New SVG icons from `res://assets/icons/` are used by the toolbar/order/list controls; icon strokes were changed to light colors so they remain readable on dark buttons. Inner padding was reduced, watchlist row icons were removed, and watchlist selected-row styling now matches the `All Stock` selected state.
+- Main Menu `Load Run` now uses a custom compact `Control` overlay rather than a tall native `ConfirmationDialog`. The window hugs the save-slot content, keeps `Delete`, `Cancel`, and `Load` visible, uses readable cream/brown styling, and still supports deleting unreadable/current slots through the separate delete confirmation dialog. Smoke now treats `LoadSlotsDialog` as a `Control`.
+- Latest UI-batch validation before this handoff update: `git diff --check` passed; Godot headless project load passed; quick smoke passed with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.` Usual post-success Godot RID/resource cleanup warnings remain non-blocking.
 - Difficulty selector width is tightened. The New Run difficulty window now caps at the actual three-card plan grid width plus margins (`1040px` max selector width, `992px` grid width), so wide desktop viewports no longer show large unused cream space around the cards. The three-column layout is only used when that compact width is available; smaller widths fall back to the single-column plan-card layout. Smoke now asserts the selector both fits within viewport bounds and hugs the plan-card grid. Verification for this pass: `git diff --check` passed, Godot headless project load passed outside the sandbox, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3`; the usual trailing RID/resource warnings appeared after smoke success.
 - Disabled desktop shortcut styling is fixed. `UiTheme.style_button(..., "desktop_shortcut")` now gives disabled shortcuts a warm desktop disabled fill and muted brown icon/text instead of inheriting the dark terminal fallback, which was making the locked Company app tile look broken. `docs/DESIGN_SYSTEM.md` documents the rule, and smoke now validates both the generic disabled desktop shortcut style and the locked `CompanyAppButton` disabled icon/background state. Verification for this pass: `git diff --check` passed, Godot headless project load passed outside the sandbox, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3`; the usual trailing RID/resource warnings appeared after smoke success.
 - Main Menu difficulty card redesign is implemented. Difficulty choices now render as compact hosting-plan-style cards instead of stretched multiline buttons: the selector/card width is capped, the plan grid is centered, each card has a dedicated title banner, centered larger plan title, compact cash/company/volatility/event rows, and selected cards restyle the banner/text with the desktop selected contrast. The difficulty intro copy now says events hit the `market` instead of `tape`. Smoke now validates compact plan-card width, banner/title structure, centered larger titles, and selected-card banner contrast. Verification for this pass: `git diff --check` passed, Godot headless project load passed outside the sandbox, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3`; the usual trailing RID/resource warnings appeared after smoke success.
@@ -619,8 +625,8 @@ Read this file first in the next session.
   - `Day / Date`
 - The stock-terminal `Advance Day` button was removed; day progression now only lives on the desktop top bar
 - The old top `Focus` read in the navbar has been removed and replaced by `Cash Available`
-- The stock app window intentionally uses a dark theme, while the desktop, `News`, `Twooter`, `Academy`, `Network`, and `Upgrades` content areas use beige/light themes
-- `News`, `Academy`, `Network`, and `Upgrades` use shared Academy-style dark-brown desktop-window title chrome; `Twooter` keeps the lighter social window chrome for now
+- The stock app window intentionally uses a dark trading theme, while the broader desktop, `News`, `Academy`, `Network`, and `Upgrades` content areas stay in the cream/brown visual language
+- `News`, `Academy`, `Network`, and `Upgrades` use shared Academy-style dark-brown desktop-window title chrome; `Twooter` keeps its specialized cream/blue social frame and `STOCKBOT` keeps its specialized dark trading frame
 - Optional UI font files now live in `assets/fonts/`; the UI auto-loads `app_font.ttf`, `app_font.otf`, then `OpenSans-Regular.ttf` for the main menu + game UI font style
 - Money formatting now uses Indonesian Rupiah style like `Rp1.000.000,00`; compact money uses comma decimals, e.g. `Rp1,25B`
 - The stock app is now contained inside a dedicated window container so the trading shell cannot spill outside the desktop window bounds
@@ -634,6 +640,8 @@ Read this file first in the next session.
   - Trade columns are clipped to their container
   - Portfolio sections were tightened to sit flush
   - internal stock-app border radii were stripped out for a squarer terminal look
+  - the latest dark trading redesign reduced the post-redesign padding again so the stock list, chart/workspace, and order ticket sit closer to the window edges
+  - new SVG icons under `assets/icons/` are used for tool/order/list buttons and are imported into Godot; icon strokes are explicitly light so they remain readable on dark controls
 
 ## Trade View
 - Trade view now uses:
@@ -705,6 +713,10 @@ Read this file first in the next session.
   - `All Stock`
   - `Portfolio`
 - Current default tab is `Watchlist`
+- Current stock-list behavior:
+  - Watchlist rows no longer show left-side icons
+  - selected Watchlist rows use the same blue selected-row treatment as `All Stock`
+  - `Add Watch` and `Remove` controls stay readable on dark button surfaces
 - Current right-side order ticket is now a simplified execution card:
   - darker stock-terminal styling again instead of the earlier bright prototype card
   - the ticket can now be hidden/shown with the narrow center toggle button without changing order state or trade logic
@@ -926,14 +938,17 @@ Read this file first in the next session.
   - `source_chain_id`, `chain_family`, `meeting_id`, `venue_type`, and `meeting_label` when the article came from the corporate-action layer
   - target company / ticker / sector / person metadata when available
 - Current rendering behavior:
-  - News now uses a newspaper-style surface rather than a raw event-list feel
-  - top area has a masthead, logo placeholder frame, trade-date line, and publication/outlet buttons
-  - left side shows archive filters plus article cards
-  - article cards include a reserved image frame, public section/status, headline, deck, byline, and a `Read Story` action
+  - News now uses a Market Papers-inspired cream newspaper surface rather than a raw event-list feel
+  - the style keeps the game's cream/brown palette first, with red used sparingly for masthead rules, selected states, and stamped accents
+  - subtle pass-through grunge overlays from `assets/market_papers/grunge/` add folds, smudges, coffee stain, and trader-edition stamp texture without overpowering readability
+  - top area has a masthead, issue/date/cover-price blocks, trade-date line, and newspaper source tabs
+  - left side shows archive filters plus newspaper story cards
+  - article cards include a reserved image frame, public section/status, headline, deck, byline, and a `READ STORY` action
+  - selected article cards show the `OPEN` stamp treatment and no longer force the sidebar scroll position upward when clicked near the bottom
   - article card headline and placeholder-frame text are explicitly dark on the pale newspaper cards so the reserved asset frames stay readable until real images/logos are dropped in
   - the article list can browse archived articles by outlet, year, and month
   - a hidden legacy `NewsArticleList` is still populated for compatibility/smoke plumbing, but the visible player surface is the card stack
-  - right side shows article detail as a newspaper story with reserved hero frame, headline, deck, byline, date, public chips, and body
+  - right side shows article detail as a newspaper story with source header, section/status tag, reserved hero frame, headline, deck, byline, date, public chips, body, and action buttons
   - full article bodies are loaded when an archived article is selected, rather than dumping all history into the list at once
   - article bodies now use 5-6 paragraph newspaper prose with deterministic slots for lead, context, market reaction, source color, continuity, and closing watch note
   - article copy now leans into light local market flavor (`bandar`, `ritel`, `tape`, `RUPSLB`) while keeping raw system phase/debug labels hidden
@@ -996,12 +1011,15 @@ Read this file first in the next session.
   - target company / ticker / sector / person metadata when available
   - deterministic `likes`, `replies`, and `retwoots`
 - Current rendering behavior:
-  - the window is now intentionally smaller and centered so it reads more like a phone/social app than a desktop dashboard
-  - top row shows the current prototype access-tier status
-  - the body is now a single scrollable feed
-  - each post renders as a simple stacked card with account, handle, post text, compact meta/context, and reactions
+  - the window is intentionally smaller and centered so it reads more like a phone/social app than a desktop dashboard
+  - the app now uses a cream + blue social frame with a visible blue border, blue active accents, soft blue-tinted panels, and cream/off-white feed surfaces
+  - header shows `Twooter`, live/status copy, access-tier label, and a compact tier progress indicator
+  - feed controls include chips for `All`, `Companies`, `Sectors`, and `Trending`; account-name filtering still works on top of the feed filter and can be cleared with `All accounts`
+  - a ticker tape is derived from visible posts first, then all posts, and shows `$TICKER` markers with tone coloring; there is no ticker click behavior yet
+  - the body is a single scrollable feed
+  - each post renders as a compact card with a circular avatar initial, verified marker when applicable, tier pill, account/handle/date/topic metadata, post text, optional ticker/company/sector chips, sentiment bar, and reactions
   - thread-capable posts render a compact `Thread` button; pressing it expands/collapses numbered thread lines in-place without opening a detail view
-  - there are no per-account filter tabs/buttons in the current UI
+  - there are no full profile pages or per-account tab pages in the current UI
   - there is no separate selected-post detail pane in the current UI
   - there are still no profile pages, follow buttons, relationship state, or player-reply mechanics in Twooter
 - Current content source is editable:
@@ -2530,6 +2548,10 @@ Read this file first in the next session.
 - Keep the checkpoint clean:
   - run `git status --short` before starting a new pass and preserve ignored local `logs/` output as disposable test data
   - treat a trailing `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` as non-blocking Windows/Godot noise
+- Negative cash / bankruptcy design for later:
+  - decide what should happen if player cash goes below zero after Life obligations, fees, or other future cash drains
+  - open design questions: allow temporary negative cash with stress warnings, apply interest/penalties, block new buys, force liquidation, trigger creditor/broker calls, offer emergency funding, or end the run through a bankruptcy flow
+  - do not implement this until the intended game feel is chosen; current note is a backlog marker so the next session can return to it deliberately
 - Continue performance work from the trimmed save payload:
   - use the `[perf][advance]`, `[perf][apply]`, `[perf][ui]`, and `[perf][save]` logs to choose the next target from `simulate_day`, Summary row collection, News company-row/feed rendering, post-recap save flush, and deferred per-app redraw
   - keep tracking both `*_recap_ready` and settled `advance_*` timings; visible responsiveness should be judged from recap-ready, while settled timing captures save flush plus app catch-up
