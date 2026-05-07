@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gorengan News Editor</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Dev Tool</p>
+        <h1>News Content Editor</h1>
+      </div>
+      <div class="actions">
+        <button id="loadButton">Load</button>
+        <button id="saveButton">Save Source</button>
+        <button id="validateButton">Validate</button>
+        <button id="exportButton" class="primary">Export Runtime JSON</button>
+      </div>
+    </header>
+
+    <main class="shell">
+      <aside class="sidebar">
+        <button class="nav active" data-view="overview">Overview</button>
+        <button class="nav" data-view="outlets">Outlets</button>
+        <button class="nav" data-view="authors">Authors</button>
+        <button class="nav" data-view="pools">Phrase Pools</button>
+        <button class="nav" data-view="bodySlots">Body Slots</button>
+        <button class="nav" data-view="voices">Voice Profiles</button>
+        <button class="nav" data-view="raw">Raw JSON</button>
+      </aside>
+
+      <section class="workspace">
+        <div id="status" class="status">Loading news source...</div>
+        <div id="view"></div>
+      </section>
+    </main>
+
+    <input id="uploadInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

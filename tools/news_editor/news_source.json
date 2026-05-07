@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "catalog": null,
+  "notes": "Editable News source. The editor imports data/news/news_feed_data.json when catalog is null."
+}

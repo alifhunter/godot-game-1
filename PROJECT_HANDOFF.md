@@ -3,8 +3,9 @@
 Read this file first in the next session.
 
 ## Project Snapshot
-- Engine: Godot `4.6.1`
-- Project path: `c:\Users\Alif\Documents\godot game 1\new-game-project`
+- Engine target: Godot `4.6.1`; current Mac CLI on PATH is Godot `4.6.2.stable.official.71f334935` via `~/.local/bin/godot` and `~/.local/bin/godot4`
+- Current Mac project path: `/Users/user/Documents/gorengangame/godot-game-1`
+- Original Windows project path: `c:\Users\Alif\Documents\godot game 1\new-game-project`
 - Current milestone: `first playable prototype`
 - Seed date in-game: `Thursday, 2 January 2020`
 - First player-visible session on a fresh run: `Friday, 3 January 2020`
@@ -39,10 +40,26 @@ Read this file first in the next session.
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
     - latest checkpoint message: `Avoid shadowing sign built-in`
-  - after checkpoint commits, `git status --short` should generally be clean except ignored local `logs/` output
+  - after checkpoint commits, `git status --short` should generally be clean except ignored local `logs/` output; the current Mac continuation has uncommitted local tool/docs/runtime-hook edits, so inspect status before assuming a clean tree
   - current local note: formatter locals that previously shadowed Godot's built-in `sign()` are now renamed to `sign_prefix`
 
 ## Latest Session Snapshot
+- 2026-05-07 Mac continuation status: this project was originally developed on Windows, and development is now continuing successfully on macOS from `/Users/user/Documents/gorengangame/godot-game-1`. The Python web tools in this pass are dev-only content authoring/QA tools. They are modding-adjacent because they edit structured game content, but they are not a player-facing mod system yet: there is no `mods/` folder, package format, load order, enable/disable UI, or runtime mod isolation.
+- Content editor stack now available:
+  - `tools/academy_editor` (default port `8765`) edits `data/academy/academy_catalog.json`
+  - `tools/news_editor` (`8766`) edits `data/news/news_feed_data.json`
+  - `tools/twooter_editor` (`8767`) edits `data/social/twooter_feed_data.json`
+  - `tools/network_editor` (`8768`) edits `data/network/contact_network_data.json`
+  - `tools/corporate_action_editor` (`8769`) edits `data/corporate_actions/corporate_action_catalog.json`
+  - `tools/broker_roster_editor` (`8770`) edits `data/brokers/broker_roster.json`
+  - `tools/company_narrative_editor` (`8771`) edits `data/companies/company_archetypes.json`, `data/companies/company_words.json`, and `data/companies/company_profile_data.json`
+  - `tools/balance_upgrades_editor` (`8772`) edits `data/upgrades/upgrade_catalog.json`
+  - `tools/event_content_editor` (`8773`) edits `data/events/events.json`
+  - `tools/content_lint_dashboard` (`8774`) is read-only and aggregates editor validators, runtime JSON checks, and generated previews
+- Tool index added at `tools/README.md` with editor ports, launch commands, validate/export commands, dashboard usage, and the current Godot smoke commands for Mac.
+- Balance/upgrades runtime hookup is now partially data-driven. `autoloads/RunState.gd` reads effective buy/sell trading fees and daily Network action limits from `data/upgrades/upgrade_catalog.json` through `DataRepository.get_upgrade_catalog()`, with previous constant fallbacks if catalog fields are missing.
+- Latest content-tool validation summary: `python3 tools/content_lint_dashboard/server.py --validate` passed on 2026-05-07. The dashboard imported and ran all nine content-editor validators, all 14 runtime JSON files parsed, and the aggregate lint run reported `0` errors plus `117` warnings. Those warnings are known content-depth warnings from existing News/Twooter single-line template pools, not failures from the new tools. Each new tool also passed Python compile, JS syntax checks, HTML parse checks, `git diff --check`, and localhost smoke checks where applicable.
+- Mac Godot verification now passes from PATH with Godot `4.6.2.stable.official.71f334935`: `godot --headless --path . --log-file /private/tmp/gorengan-project-load.log --quit` exited `0`, and `godot --headless --path . --log-file /private/tmp/gorengan-smoke-quick.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` exited `0` with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.` Non-blocking output included Steam not running, the macOS certificate-store warning, and trailing RID/ObjectDB cleanup warnings after smoke success.
 - Difficulty selector width is tightened. The New Run difficulty window now caps at the actual three-card plan grid width plus margins (`1040px` max selector width, `992px` grid width), so wide desktop viewports no longer show large unused cream space around the cards. The three-column layout is only used when that compact width is available; smaller widths fall back to the single-column plan-card layout. Smoke now asserts the selector both fits within viewport bounds and hugs the plan-card grid. Verification for this pass: `git diff --check` passed, Godot headless project load passed outside the sandbox, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3`; the usual trailing RID/resource warnings appeared after smoke success.
 - Disabled desktop shortcut styling is fixed. `UiTheme.style_button(..., "desktop_shortcut")` now gives disabled shortcuts a warm desktop disabled fill and muted brown icon/text instead of inheriting the dark terminal fallback, which was making the locked Company app tile look broken. `docs/DESIGN_SYSTEM.md` documents the rule, and smoke now validates both the generic disabled desktop shortcut style and the locked `CompanyAppButton` disabled icon/background state. Verification for this pass: `git diff --check` passed, Godot headless project load passed outside the sandbox, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3`; the usual trailing RID/resource warnings appeared after smoke success.
 - Main Menu difficulty card redesign is implemented. Difficulty choices now render as compact hosting-plan-style cards instead of stretched multiline buttons: the selector/card width is capped, the plan grid is centered, each card has a dedicated title banner, centered larger plan title, compact cash/company/volatility/event rows, and selected cards restyle the banner/text with the desktop selected contrast. The difficulty intro copy now says events hit the `market` instead of `tape`. Smoke now validates compact plan-card width, banner/title structure, centered larger titles, and selected-card banner contrast. Verification for this pass: `git diff --check` passed, Godot headless project load passed outside the sandbox, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3`; the usual trailing RID/resource warnings appeared after smoke success.

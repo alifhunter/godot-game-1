@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "catalog": null,
+  "notes": "Editable Twooter source. The editor imports data/social/twooter_feed_data.json when catalog is null."
+}

@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "catalog": null,
+  "notes": "Editable Network source. The editor imports data/network/contact_network_data.json when catalog is null."
+}

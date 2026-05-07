@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gorengan Content Lint Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Dev Tool</p>
+        <h1>Content Lint Dashboard</h1>
+      </div>
+      <div class="actions">
+        <button id="refreshButton">Refresh Lints</button>
+        <button id="previewButton" class="primary">Generate Preview</button>
+      </div>
+    </header>
+
+    <main class="shell">
+      <aside class="sidebar">
+        <button class="nav active" data-view="overview">Overview</button>
+        <button class="nav" data-view="tools">Tool Lints</button>
+        <button class="nav" data-view="runtime">Runtime JSON</button>
+        <button class="nav" data-view="preview">Generated Preview</button>
+        <button class="nav" data-view="raw">Raw JSON</button>
+      </aside>
+
+      <section class="workspace">
+        <div id="status" class="status">Loading content dashboard...</div>
+        <div id="view"></div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

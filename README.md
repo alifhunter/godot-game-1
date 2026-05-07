@@ -90,6 +90,19 @@ Shared UI styling is documented in [`docs/DESIGN_SYSTEM.md`](./docs/DESIGN_SYSTE
 
 If you want to inspect the latest implementation status first, read [`PROJECT_HANDOFF.md`](./PROJECT_HANDOFF.md).
 
+## Content Tools
+
+- [`tools/academy_editor`](./tools/academy_editor/README.md) edits Academy lesson content and exports `data/academy/academy_catalog.json`.
+- [`tools/news_editor`](./tools/news_editor/README.md) edits News outlet, author, phrase, body-slot, and voice-profile pools and exports `data/news/news_feed_data.json`.
+- [`tools/twooter_editor`](./tools/twooter_editor/README.md) edits Twooter accounts, post templates, thread templates, and fallback pools and exports `data/social/twooter_feed_data.json`.
+- [`tools/network_editor`](./tools/network_editor/README.md) edits Network contacts, insider templates, RUPSLB room lead profiles, and tip/request templates and exports `data/network/contact_network_data.json`.
+- [`tools/corporate_action_editor`](./tools/corporate_action_editor/README.md) edits corporate-action generator rules, stage templates, family agendas, and RUPSLB meeting copy and exports `data/corporate_actions/corporate_action_catalog.json`.
+- [`tools/broker_roster_editor`](./tools/broker_roster_editor/README.md) edits broker codes, broker type buckets, and personality tags and exports `data/brokers/broker_roster.json`.
+- [`tools/company_narrative_editor`](./tools/company_narrative_editor/README.md) edits seeded company templates, generated name words, profile archetypes, sector/size copy pools, and narrative tag sentences and exports `data/companies/company_archetypes.json`, `data/companies/company_words.json`, and `data/companies/company_profile_data.json`.
+- [`tools/balance_upgrades_editor`](./tools/balance_upgrades_editor/README.md) edits upgrade costs, shop copy, trading fee rates, content unlock levels, chart indicator unlocks, and Network AP limits and exports `data/upgrades/upgrade_catalog.json`.
+- [`tools/event_content_editor`](./tools/event_content_editor/README.md) edits market, company, person, corporate-action, and special event definitions and exports `data/events/events.json`.
+- [`tools/content_lint_dashboard`](./tools/content_lint_dashboard/README.md) runs all content-editor validators, checks runtime JSON health, and renders generated copy previews without writing runtime data.
+
 For Steam Early Access testing prep:
 
 - [`docs/KNOWN_ISSUES.md`](./docs/KNOWN_ISSUES.md) tracks current player-facing issues and workarounds.

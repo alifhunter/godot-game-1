@@ -1544,17 +1544,39 @@ func set_upgrade_tier(track_id: String, tier: int) -> void:
 
 func get_effective_buy_fee_rate() -> float:
 	var tier: int = get_upgrade_tier("trading_fee")
+	var tier_data: Dictionary = _upgrade_catalog_tier_data("trading_fee", tier)
+	if tier_data.has("buy_fee_rate"):
+		return float(tier_data.get("buy_fee_rate", BUY_FEE_RATE))
 	return float(TRADING_FEE_BY_TIER.get(tier, TRADING_FEE_BY_TIER[DEFAULT_UPGRADE_TIER]).get("buy_fee_rate", BUY_FEE_RATE))
 
 
 func get_effective_sell_fee_rate() -> float:
 	var tier: int = get_upgrade_tier("trading_fee")
+	var tier_data: Dictionary = _upgrade_catalog_tier_data("trading_fee", tier)
+	if tier_data.has("sell_fee_rate"):
+		return float(tier_data.get("sell_fee_rate", SELL_FEE_RATE))
 	return float(TRADING_FEE_BY_TIER.get(tier, TRADING_FEE_BY_TIER[DEFAULT_UPGRADE_TIER]).get("sell_fee_rate", SELL_FEE_RATE))
 
 
 func get_daily_action_limit() -> int:
 	var tier: int = get_upgrade_tier("daily_action_points")
+	var tier_data: Dictionary = _upgrade_catalog_tier_data("daily_action_points", tier)
+	if tier_data.has("daily_action_limit"):
+		return max(int(tier_data.get("daily_action_limit", DAILY_ACTION_LIMIT_BY_TIER[DEFAULT_UPGRADE_TIER])), 0)
 	return int(DAILY_ACTION_LIMIT_BY_TIER.get(tier, DAILY_ACTION_LIMIT_BY_TIER[DEFAULT_UPGRADE_TIER]))
+
+
+func _upgrade_catalog_tier_data(track_id: String, tier: int) -> Dictionary:
+	for track_value in DataRepository.get_upgrade_catalog().get("tracks", []):
+		if typeof(track_value) != TYPE_DICTIONARY:
+			continue
+		var track: Dictionary = track_value
+		if str(track.get("id", "")) != track_id:
+			continue
+		var tiers: Dictionary = track.get("tiers", {})
+		var tier_data: Dictionary = tiers.get(str(tier), {})
+		return tier_data.duplicate(true)
+	return {}
 
 
 func get_daily_action_snapshot() -> Dictionary:
