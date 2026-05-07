@@ -407,6 +407,7 @@ var news_feed_system = preload("res://systems/NewsFeedSystem.gd").new()
 var twooter_feed_system = preload("res://systems/TwooterFeedSystem.gd").new()
 var contact_network_system = preload("res://systems/ContactNetworkSystem.gd").new()
 var corporate_action_system = preload("res://systems/CorporateActionSystem.gd").new()
+var index_review_system = preload("res://systems/IndexReviewSystem.gd").new()
 var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
 var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
 var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
@@ -463,6 +464,7 @@ func start_new_run(run_seed: int = 0, difficulty_id: String = DEFAULT_DIFFICULTY
 	_invalidate_dashboard_event_snapshot_cache()
 	_invalidate_daily_activity_snapshot_cache()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	index_review_system.ensure_initialized(RunState, DataRepository)
 	simulate_opening_session(false)
 	_save_active_run_now("start_new_run")
 	run_started.emit()
@@ -508,6 +510,7 @@ func start_new_run_with_loading(
 	_emit_run_loading_step(3)
 	var corporate_started_at_usec: int = Time.get_ticks_usec()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	index_review_system.ensure_initialized(RunState, DataRepository)
 	_log_startup_perf_elapsed("new_run_corporate_actions", corporate_started_at_usec)
 	await get_tree().process_frame
 
@@ -543,6 +546,7 @@ func load_run_from_save(slot_id: String = "") -> bool:
 	_invalidate_dashboard_event_snapshot_cache()
 	_invalidate_daily_activity_snapshot_cache()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	index_review_system.ensure_initialized(RunState, DataRepository)
 	run_loaded.emit()
 	_enter_game_scene()
 	return true
@@ -569,6 +573,7 @@ func load_run_from_save_with_loading(slot_id: String = "") -> bool:
 	_emit_load_run_loading_step(2)
 	var corporate_started_at_usec: int = Time.get_ticks_usec()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	index_review_system.ensure_initialized(RunState, DataRepository)
 	_log_startup_perf_elapsed("load_run_corporate_actions", corporate_started_at_usec)
 	run_loaded.emit()
 	await get_tree().process_frame
@@ -611,6 +616,7 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	var total_started_at_usec: int = Time.get_ticks_usec()
 	var phase_started_at_usec: int = total_started_at_usec
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	index_review_system.ensure_initialized(RunState, DataRepository)
 	_log_advance_perf_elapsed(log_advance_perf, "ensure_corporate_actions", phase_started_at_usec)
 
 	if emit_runtime_signals:
@@ -887,6 +893,47 @@ func debug_generate_corporate_action(generator_id: String, company_id: String) -
 	result["generator_id"] = str(generator.get("id", generator_id))
 	result["generator_label"] = str(generator.get("full_label", generator.get("label", "Corporate Action")))
 	return result
+
+
+func get_debug_index_review_generator_catalog() -> Array:
+	return index_review_system.get_debug_generator_catalog(DataRepository)
+
+
+func debug_generate_index_review(generator_id: String, company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var generator: Dictionary = _debug_index_review_generator_by_id(generator_id)
+	if generator.is_empty():
+		return {"success": false, "message": "Unknown index-review generator."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	index_review_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = index_review_system.debug_force_review_event(
+		RunState,
+		DataRepository,
+		str(generator.get("provider_id", "")),
+		str(generator.get("side", "include")),
+		company_id
+	)
+	if result.is_empty():
+		return {"success": false, "message": "Could not generate an index-review event for that company."}
+	RunState.set_index_review_state(result.get("index_review_state", {}))
+	RunState.debug_add_company_arc(result.get("arc", {}), result.get("event", {}))
+	_invalidate_dashboard_event_snapshot_cache()
+	_invalidate_daily_activity_snapshot_cache()
+	_request_autosave("debug_generate_index_review")
+	var event: Dictionary = result.get("event", {})
+	return {
+		"success": true,
+		"message": "Generated %s for %s." % [
+			str(generator.get("label", "index review")),
+			str(event.get("target_ticker", company_id.to_upper()))
+		],
+		"generator_id": generator_id,
+		"generator_label": str(generator.get("label", "Index Review")),
+		"event": event.duplicate(true),
+		"action": result.get("action", {}).duplicate(true)
+	}
 
 
 func debug_force_rights_issue_rupslb(company_id: String) -> Dictionary:
@@ -1422,6 +1469,20 @@ func _debug_corporate_action_generator_by_id(generator_id: String) -> Dictionary
 	return {}
 
 
+func _debug_index_review_generator_by_id(generator_id: String) -> Dictionary:
+	for group_value in get_debug_index_review_generator_catalog():
+		if typeof(group_value) != TYPE_DICTIONARY:
+			continue
+		var group: Dictionary = group_value
+		for generator_value in group.get("generators", []):
+			if typeof(generator_value) != TYPE_DICTIONARY:
+				continue
+			var generator: Dictionary = generator_value
+			if str(generator.get("id", "")) == generator_id:
+				return generator.duplicate(true)
+	return {}
+
+
 func _stock_contact_tip_relevance(contact: Dictionary, company_id: String, sector_id: String) -> Dictionary:
 	var score: int = int(contact.get("relationship", 0))
 	var group: int = 90
@@ -1818,6 +1879,9 @@ func _rebuild_dashboard_event_snapshot_cache(cache_key: String = "", log_phase_d
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	_log_advance_perf_elapsed(log_phase_details, "build_dashboard_event_cache:ensure_corporate_actions", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
+	index_review_system.ensure_initialized(RunState, DataRepository)
+	_log_advance_perf_elapsed(log_phase_details, "build_dashboard_event_cache:ensure_index_reviews", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	var trade_date: Dictionary = RunState.get_current_trade_date()
 	var report_calendar_snapshot: Dictionary = RunState.get_report_calendar_month(
 		int(trade_date.get("year", 2020)),
@@ -1832,6 +1896,9 @@ func _rebuild_dashboard_event_snapshot_cache(cache_key: String = "", log_phase_d
 	meeting_snapshot["upcoming_rows"] = prioritized_upcoming_rows.duplicate(true)
 	_log_advance_perf_elapsed(log_phase_details, "build_dashboard_event_cache:meeting_snapshot", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
+	var index_review_snapshot: Dictionary = index_review_system.get_dashboard_snapshot(RunState, DataRepository, 10)
+	_log_advance_perf_elapsed(log_phase_details, "build_dashboard_event_cache:index_reviews", phase_started_at_usec)
+	phase_started_at_usec = Time.get_ticks_usec()
 	var upcoming_report_rows: Array = RunState.get_upcoming_quarterly_reports(DASHBOARD_REPORT_ROW_CACHE_LIMIT)
 	_log_advance_perf_elapsed(log_phase_details, "build_dashboard_event_cache:upcoming_reports", phase_started_at_usec)
 	var resolved_cache_key: String = cache_key if not cache_key.is_empty() else _dashboard_event_snapshot_cache_key()
@@ -1842,7 +1909,9 @@ func _rebuild_dashboard_event_snapshot_cache(cache_key: String = "", log_phase_d
 		"report_calendar_snapshot": report_calendar_snapshot,
 		"upcoming_report_rows": upcoming_report_rows,
 		"corporate_meeting_snapshot": meeting_snapshot,
-		"upcoming_meeting_rows": prioritized_upcoming_rows.duplicate(true)
+		"upcoming_meeting_rows": prioritized_upcoming_rows.duplicate(true),
+		"index_review_snapshot": index_review_snapshot,
+		"upcoming_index_review_rows": index_review_snapshot.get("upcoming_rows", []).duplicate(true)
 	}
 	return dashboard_event_snapshot_cache
 
@@ -1865,7 +1934,14 @@ func _empty_dashboard_event_snapshot() -> Dictionary:
 			"upcoming_rows": [],
 			"all_rows": []
 		},
-		"upcoming_meeting_rows": []
+		"upcoming_meeting_rows": [],
+		"index_review_snapshot": {
+			"day_index": RunState.day_index if RunState.has_active_run() else 0,
+			"trade_date": RunState.get_current_trade_date() if RunState.has_active_run() else {},
+			"upcoming_rows": [],
+			"providers": []
+		},
+		"upcoming_index_review_rows": []
 	}
 
 
@@ -1947,12 +2023,36 @@ func _dashboard_event_snapshot_cache_key() -> String:
 				int(meeting.get("trading_day_number", 0))
 			])
 	meeting_parts.sort()
-	return "%d|%s|%s|%s|%s" % [
+	var index_review_parts: Array = []
+	var index_state: Dictionary = RunState.get_index_review_state()
+	var providers: Dictionary = index_state.get("providers", {})
+	for provider_id_value in providers.keys():
+		var provider_id: String = str(provider_id_value)
+		var provider_state: Dictionary = providers.get(provider_id, {})
+		var member_count: int = provider_state.get("members", []).size()
+		var watch_count: int = provider_state.get("candidate_watch", []).size()
+		var schedule_flags: Array = []
+		for review_value in provider_state.get("schedule", {}).values():
+			if typeof(review_value) != TYPE_DICTIONARY:
+				continue
+			var review: Dictionary = review_value
+			schedule_flags.append("%s:%d:%d:%s:%s" % [
+				str(review.get("id", "")),
+				int(review.get("announcement_day_number", 0)),
+				int(review.get("effective_day_number", 0)),
+				str(review.get("announcement_emitted", false)),
+				str(review.get("effective_applied", false))
+			])
+		schedule_flags.sort()
+		index_review_parts.append("%s:%d:%d:%s" % [provider_id, member_count, watch_count, "|".join(schedule_flags)])
+	index_review_parts.sort()
+	return "%d|%s|%s|%s|%s|%s" % [
 		RunState.day_index,
 		trading_calendar.to_key(trade_date),
 		str(STABLE_RNG.seed_from_parts(["dashboard_holdings", "|".join(holding_parts)])),
 		str(STABLE_RNG.seed_from_parts(["dashboard_attended", "|".join(attended_parts)])),
-		str(STABLE_RNG.seed_from_parts(["dashboard_meetings", "|".join(meeting_parts)]))
+		str(STABLE_RNG.seed_from_parts(["dashboard_meetings", "|".join(meeting_parts)])),
+		str(STABLE_RNG.seed_from_parts(["dashboard_index_reviews", "|".join(index_review_parts)]))
 	]
 
 
@@ -1968,6 +2068,20 @@ func get_company_corporate_action_snapshot(company_id: String) -> Dictionary:
 		return {}
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	return corporate_action_system.get_company_snapshot(RunState, company_id)
+
+
+func get_index_review_snapshot() -> Dictionary:
+	if not RunState.has_active_run():
+		return {"day_index": 0, "trade_date": {}, "upcoming_rows": [], "providers": []}
+	index_review_system.ensure_initialized(RunState, DataRepository)
+	return index_review_system.get_dashboard_snapshot(RunState, DataRepository, 10)
+
+
+func get_company_index_review_snapshot(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+	index_review_system.ensure_initialized(RunState, DataRepository)
+	return index_review_system.get_company_index_snapshot(RunState, DataRepository, company_id)
 
 
 func get_corporate_dividend_snapshot(company_id: String = "") -> Dictionary:
@@ -2205,6 +2319,7 @@ func get_company_snapshot(
 		runtime.get("broker_flow", {}),
 		include_price_history or include_financial_history or include_statement_history
 	)
+	var index_review_snapshot: Dictionary = get_company_index_review_snapshot(company_id)
 	var market_depth_context: Dictionary = runtime.get("market_depth_context", {}).duplicate(true)
 	var impactability_snapshot: Dictionary = _build_impactability_snapshot(definition, runtime, market_depth_context)
 	var player_market_impact: Dictionary = runtime.get("player_market_impact", {}).duplicate(true)
@@ -2256,6 +2371,7 @@ func get_company_snapshot(
 		"since_start_pct": since_start_pct,
 		"ytd_change_pct": ytd_change_pct,
 		"broker_flow": broker_flow_view,
+		"index_review": index_review_snapshot,
 		"market_depth_context": market_depth_context,
 		"impactability": impactability_snapshot,
 		"player_market_impact": player_market_impact,

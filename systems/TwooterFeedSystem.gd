@@ -223,6 +223,8 @@ func _build_recent_event_posts(
 			post = _build_persona_post(feed_data, unlocked_accounts, event_data, current_trade_date, context)
 		if post.is_empty():
 			var minimum_tier: int = _required_tier_for_event_age(age_days)
+			if str(event_data.get("event_family", "")) == "index_review":
+				minimum_tier = 1
 			var account: Dictionary = _pick_generic_account(unlocked_accounts, minimum_tier, "event|%s|%s" % [str(event_data.get("event_id", "")), company_id])
 			if account.is_empty():
 				continue
@@ -234,6 +236,9 @@ func _build_recent_event_posts(
 				"event|%s|%s|%s" % [str(event_data.get("event_id", "")), company_id, age_days],
 				context
 			)
+			var post_priority: float = 2.4 - min(float(age_days) * 0.08, 1.0)
+			if str(event_data.get("event_family", "")) == "index_review":
+				post_priority = 4.25 - min(float(age_days) * 0.05, 0.4)
 			post = _build_post(
 				feed_data,
 				account,
@@ -243,7 +248,7 @@ func _build_recent_event_posts(
 				current_trade_date,
 				context,
 				_visibility_label_for_age(age_days),
-				2.4 - min(float(age_days) * 0.08, 1.0)
+				post_priority
 			)
 
 		if not post.is_empty():
@@ -646,9 +651,11 @@ func _build_context(feed_data: Dictionary, source_data: Dictionary, company_row:
 	var continuity_phrase: String = _continuity_phrase_for_source(feed_data, source_data, article_day_index, story_memory)
 	var category: String = str(source_data.get("category", ""))
 	var tone: String = str(source_data.get("tone", "mixed"))
+	var provider_label: String = str(source_data.get("provider_label", ""))
 	return {
 		"target_ticker": str(source_data.get("target_ticker", company_row.get("ticker", ""))),
 		"target_company_name": str(source_data.get("target_company_name", company_row.get("name", ""))),
+		"provider_label": provider_label,
 		"sector_name": str(source_data.get("sector_name", company_row.get("sector_name", sector_definition.get("name", "the sector")))),
 		"person_name": str(source_data.get("person_name", "")),
 		"scope": str(source_data.get("scope", "")),
@@ -775,6 +782,8 @@ func _template_lookup_keys(source_data: Dictionary, context: Dictionary) -> Arra
 	var keys: Array = []
 	if not category.is_empty():
 		keys.append(category)
+	if category.begins_with("index_") or str(source_data.get("event_family", "")) == "index_review":
+		keys.append("index_review")
 	if category.begins_with("corporate_action"):
 		keys.append("corporate_action")
 	if category == "corporate_meeting":
@@ -792,6 +801,8 @@ func _template_lookup_keys(source_data: Dictionary, context: Dictionary) -> Arra
 
 func _category_family_key(source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("index_") or str(source_data.get("event_family", "")) == "index_review":
+		return "index_review"
 	if category.begins_with("corporate_action"):
 		return "corporate_action"
 	if category == "corporate_meeting":
@@ -807,6 +818,8 @@ func _category_family_key(source_data: Dictionary) -> String:
 
 func _public_topic_label(source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("index_") or str(source_data.get("event_family", "")) == "index_review":
+		return "Index review"
 	if category.begins_with("corporate_action"):
 		return "Corporate action"
 	if category == "corporate_meeting":
@@ -826,6 +839,10 @@ func _public_topic_label(source_data: Dictionary) -> String:
 
 func _public_confidence_label(source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category == "index_inclusion" or category == "index_exclusion":
+		return "Review list"
+	if category == "index_watch":
+		return "Watchlist"
 	if category in ["corporate_action_filing", "corporate_action_resolution", "corporate_action_execution"]:
 		return "Paperwork"
 	if category == "corporate_meeting":
@@ -865,6 +882,12 @@ func _looks_like_system_summary(value: String) -> bool:
 
 func _memory_label(source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category == "index_inclusion":
+		return "index inclusion"
+	if category == "index_exclusion":
+		return "index exclusion"
+	if category == "index_watch":
+		return "index watch"
 	if category == "corporate_action_denial":
 		return "denial"
 	if category == "corporate_action_filing":
@@ -897,6 +920,8 @@ func _pick_generic_account(unlocked_accounts: Array, minimum_tier: int, seed_key
 func _preferred_voice_for_seed(seed_key: String) -> String:
 	if seed_key == "market_wrap" or seed_key.begins_with("fallback"):
 		return "market_diary"
+	if seed_key.contains("index_review") or seed_key.contains("index_"):
+		return "funda_thread"
 	if seed_key.contains("market_mood") or seed_key.contains("watching_tomorrow"):
 		return "market_diary"
 	if seed_key.contains("rights_issue") or seed_key.contains("corporate_action"):
@@ -911,6 +936,8 @@ func _preferred_voice_for_seed(seed_key: String) -> String:
 func _voice_key_for_event(event_data: Dictionary) -> String:
 	var event_family: String = str(event_data.get("event_family", ""))
 	var category: String = str(event_data.get("category", ""))
+	if event_family == "index_review" and not category.is_empty():
+		return category
 	if event_family == "corporate_action" and not category.is_empty():
 		return category
 	var scope: String = str(event_data.get("scope", "company"))
@@ -925,6 +952,8 @@ func _voice_key_for_event(event_data: Dictionary) -> String:
 func _scope_voice_key(event_data: Dictionary) -> String:
 	var event_family: String = str(event_data.get("event_family", ""))
 	var category: String = str(event_data.get("category", ""))
+	if event_family == "index_review" and not category.is_empty():
+		return category
 	if event_family == "corporate_action" and not category.is_empty():
 		return category
 	var scope: String = str(event_data.get("scope", "company"))
@@ -939,6 +968,15 @@ func _scope_voice_key(event_data: Dictionary) -> String:
 func _pick_voice_text(feed_data: Dictionary, voice_id: String, text_key: String, seed_key: String, context: Dictionary) -> String:
 	var voice_templates: Dictionary = feed_data.get("voice_templates", {})
 	var voice_pool: Array = voice_templates.get(voice_id, {}).get(text_key, [])
+	var is_index_key: bool = text_key.begins_with("index_") or text_key == "index_review"
+	if voice_pool.is_empty() and is_index_key:
+		voice_pool = voice_templates.get(voice_id, {}).get("index_review", [])
+	if voice_pool.is_empty() and is_index_key:
+		var index_fallback_templates: Dictionary = feed_data.get("fallback_templates", {})
+		for index_fallback_key in [text_key, "index_review"]:
+			voice_pool = index_fallback_templates.get(str(index_fallback_key), [])
+			if not voice_pool.is_empty():
+				break
 	if voice_pool.is_empty() and text_key.begins_with("corporate_action"):
 		voice_pool = voice_templates.get(voice_id, {}).get("corporate_action", [])
 	if voice_pool.is_empty() and text_key == "corporate_meeting":

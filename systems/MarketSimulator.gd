@@ -10,6 +10,7 @@ const CHART_GAP_FOLLOWTHROUGH := ["hold", "fade", "fill", "continue"]
 var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
 var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
 var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
+var index_review_system = preload("res://systems/IndexReviewSystem.gd").new()
 
 
 func simulate_day(run_state, data_repository, broker_flow_system, corporate_action_system) -> Dictionary:
@@ -32,8 +33,16 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		day_number,
 		macro_state
 	)
+	var index_review_resolution: Dictionary = index_review_system.resolve_day(
+		run_state,
+		data_repository,
+		trade_date,
+		day_number,
+		macro_state
+	)
 	var active_company_arcs: Array = company_arc_resolution.get("active_arcs", []).duplicate(true)
 	active_company_arcs.append_array(corporate_action_resolution.get("active_company_arcs", []).duplicate(true))
+	active_company_arcs.append_array(index_review_resolution.get("active_company_arcs", []).duplicate(true))
 	var special_event_resolution: Dictionary = special_event_system.resolve_day(
 		run_state,
 		trade_date,
@@ -141,6 +150,7 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 			"sector_sentiment": sector_sentiment,
 			"recent_momentum": recent_momentum,
 			"event_bias": float(event_context.get("event_bias", 0.0)),
+			"passive_flow_pressure": float(event_context.get("passive_flow_pressure", 0.0)),
 			"player_flow": player_flow_context.duplicate(true)
 		}
 		var broker_flow: Dictionary = broker_flow_system.generate_day_flow(
@@ -257,6 +267,8 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		"started_company_arcs": company_arc_resolution.get("started_events", []).duplicate(true),
 		"company_arc_phase_events": company_arc_resolution.get("phase_events", []).duplicate(true),
 		"corporate_action_events": corporate_action_resolution.get("corporate_action_events", []).duplicate(true),
+		"index_review_events": index_review_resolution.get("index_review_events", []).duplicate(true),
+		"index_review_state": index_review_resolution.get("index_review_state", {}).duplicate(true),
 		"active_company_arcs": active_company_arcs,
 		"started_special_events": special_event_resolution.get("started_events", []).duplicate(true),
 		"active_special_events": active_special_events,
@@ -605,6 +617,9 @@ func _resolve_event_context(
 	var hidden_story_flags: Array = runtime.get("hidden_story_flags", []).duplicate()
 	var event_bias: float = 0.0
 	var event_volatility_multiplier: float = 1.0
+	var passive_flow_pressure: float = 0.0
+	var volume_activity_multiplier: float = 1.0
+	var depth_liquidity_multiplier: float = 1.0
 	var company_id: String = str(definition.get("id", ""))
 	var sector_id: String = str(sector_definition.get("id", ""))
 
@@ -642,6 +657,9 @@ func _resolve_event_context(
 
 		event_bias += float(company_arc.get("phase_sentiment_shift", 0.0))
 		event_volatility_multiplier *= float(company_arc.get("phase_volatility_multiplier", 1.0))
+		passive_flow_pressure += float(company_arc.get("phase_passive_flow_pressure", 0.0))
+		volume_activity_multiplier *= float(company_arc.get("phase_volume_activity_multiplier", 1.0))
+		depth_liquidity_multiplier *= float(company_arc.get("phase_depth_liquidity_multiplier", 1.0))
 		var phase_visibility: String = str(company_arc.get("phase_visibility", "visible"))
 		if phase_visibility == "hidden":
 			var hidden_flag: String = str(company_arc.get("phase_hidden_flag", ""))
@@ -665,6 +683,9 @@ func _resolve_event_context(
 		"active_events": active_events,
 		"event_bias": event_bias,
 		"event_volatility_multiplier": clamp(event_volatility_multiplier, 0.55, 2.1),
+		"passive_flow_pressure": clamp(passive_flow_pressure, -1.0, 1.0),
+		"volume_activity_multiplier": clamp(volume_activity_multiplier, 0.35, 3.0),
+		"depth_liquidity_multiplier": clamp(depth_liquidity_multiplier, 0.55, 2.4),
 		"hidden_story_flags": hidden_story_flags,
 		"sector_id": str(sector_definition.get("id", ""))
 	}
@@ -763,6 +784,10 @@ func _build_market_depth_context(
 	var story_heat: float = clamp(float(traits.get("story_heat", 0.5)), 0.0, 1.0)
 	var base_volatility: float = max(float(definition.get("base_volatility", 0.025)), 0.004)
 	var event_intensity: float = min(absf(float(event_context.get("event_bias", 0.0))) * 7.0, 1.35)
+	var passive_flow_pressure: float = clamp(float(event_context.get("passive_flow_pressure", 0.0)), -1.0, 1.0)
+	var depth_liquidity_multiplier: float = clamp(float(event_context.get("depth_liquidity_multiplier", 1.0)), 0.65, 2.0)
+	if not is_zero_approx(passive_flow_pressure):
+		event_intensity = max(event_intensity, min(absf(passive_flow_pressure) * 1.35, 1.35))
 	if has_delisting_watch or volatility_event_multiplier > 1.0:
 		event_intensity = max(event_intensity, min((volatility_event_multiplier - 1.0) * 1.4, 1.35))
 	var sponsor_overhang_pressure: float = 0.0
@@ -815,12 +840,20 @@ func _build_market_depth_context(
 		2.85
 	)
 	synthetic_daily_value = max(synthetic_daily_value * liquidity_penalty, current_price * 1000.0)
+	synthetic_daily_value = max(synthetic_daily_value * depth_liquidity_multiplier, current_price * 1000.0)
 
 	var depth_quality: float = lerp(0.72, 1.72, liquidity_profile) * lerp(0.78, 1.18, free_float_ratio) * liquidity_penalty
 	var ask_sentiment_modifier: float = clamp(1.0 - max(sentiment_bias, 0.0) * 0.28 + max(-sentiment_bias, 0.0) * 0.16, 0.62, 1.35)
 	var bid_sentiment_modifier: float = clamp(1.0 + max(sentiment_bias, 0.0) * 0.16 - max(-sentiment_bias, 0.0) * 0.30, 0.62, 1.35)
 	var ask_depth_value: float = max(synthetic_daily_value * depth_quality * ask_sentiment_modifier, current_price * 1000.0)
 	var bid_depth_value: float = max(synthetic_daily_value * depth_quality * bid_sentiment_modifier, current_price * 1000.0)
+	if passive_flow_pressure > 0.0:
+		ask_depth_value = max(ask_depth_value * clamp(1.0 - passive_flow_pressure * 0.16, 0.70, 1.0), current_price * 1000.0)
+		bid_depth_value = max(bid_depth_value * (1.0 + passive_flow_pressure * 0.24), current_price * 1000.0)
+	elif passive_flow_pressure < 0.0:
+		var passive_sell_pressure: float = absf(passive_flow_pressure)
+		ask_depth_value = max(ask_depth_value * (1.0 + passive_sell_pressure * 0.24), current_price * 1000.0)
+		bid_depth_value = max(bid_depth_value * clamp(1.0 - passive_sell_pressure * 0.16, 0.70, 1.0), current_price * 1000.0)
 	if sponsor_overhang_pressure > 0.0:
 		synthetic_daily_value = max(synthetic_daily_value * (1.0 + sponsor_overhang_pressure * 0.55), current_price * 1000.0)
 		ask_depth_value = max(ask_depth_value * (1.0 + sponsor_overhang_pressure * 1.45), current_price * 1000.0)
@@ -865,6 +898,8 @@ func _build_market_depth_context(
 		"backdoor_milestone_pressure_pct": milestone_pressure,
 		"sponsor_lockup_state": sponsor_lockup_state,
 		"sponsor_overhang_pressure_pct": sponsor_overhang_pressure,
+		"passive_flow_pressure": passive_flow_pressure,
+		"depth_liquidity_multiplier": depth_liquidity_multiplier,
 		"liquidity_penalty_multiplier": liquidity_penalty,
 		"volatility_event_multiplier": volatility_event_multiplier
 	}
@@ -1084,6 +1119,8 @@ func _build_volume_activity_context(
 	var price_bars: Array = runtime.get("price_bars", [])
 	var event_bias: float = float(event_context.get("event_bias", 0.0))
 	var event_volatility_multiplier: float = clamp(float(event_context.get("event_volatility_multiplier", 1.0)), 0.55, 2.1)
+	var passive_flow_pressure: float = clamp(float(event_context.get("passive_flow_pressure", 0.0)), -1.0, 1.0)
+	var passive_volume_multiplier: float = clamp(float(event_context.get("volume_activity_multiplier", 1.0)), 0.35, 3.0)
 	var net_pressure: float = clamp(float(broker_flow.get("net_pressure", 0.0)), -1.0, 1.0)
 	var smart_money_pressure: float = clamp(float(broker_flow.get("smart_money_pressure", 0.0)), -1.0, 1.0)
 	var retail_pressure: float = clamp(float(broker_flow.get("retail_net", 0.0)) / 100.0, -1.0, 1.0)
@@ -1149,6 +1186,7 @@ func _build_volume_activity_context(
 		max(net_pressure, 0.0) * 0.25 +
 		max(smart_money_pressure, 0.0) * 0.38 +
 		max(event_bias, 0.0) * 5.0 +
+		max(passive_flow_pressure, 0.0) * 0.26 +
 		max(sector_sentiment, 0.0) * 1.6 +
 		max(market_sentiment, 0.0) * 0.9 +
 		float_tightness * 0.14 +
@@ -1162,6 +1200,7 @@ func _build_volume_activity_context(
 		max(-smart_money_pressure, 0.0) * 0.36 +
 		max(-net_pressure, 0.0) * 0.18 +
 		max(-event_bias, 0.0) * 5.0 +
+		max(-passive_flow_pressure, 0.0) * 0.26 +
 		max(-sector_sentiment, 0.0) * 1.6 +
 		max(-market_sentiment, 0.0) * 0.9 +
 		float_tightness * 0.12 +
@@ -1231,6 +1270,7 @@ func _build_volume_activity_context(
 		memory_multiplier *
 		exhaustion_multiplier *
 		float(technical_context.get("volume_multiplier", 1.0)) *
+		passive_volume_multiplier *
 		player_volume_multiplier *
 		lumpy_noise,
 		0.30,
@@ -1241,6 +1281,8 @@ func _build_volume_activity_context(
 	return {
 		"base_daily_value": base_daily_value,
 		"volume_multiplier": volume_multiplier,
+		"passive_flow_pressure": passive_flow_pressure,
+		"passive_volume_multiplier": passive_volume_multiplier,
 		"expected_activity_ratio": expected_activity_ratio,
 		"previous_activity_ratio": previous_activity_ratio,
 		"short_activity_ratio": short_activity_ratio,

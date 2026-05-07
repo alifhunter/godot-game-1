@@ -23,6 +23,7 @@ Run the aggregate CLI checks:
 ```bash
 python3 tools/content_lint_dashboard/server.py --validate
 python3 tools/content_lint_dashboard/server.py --preview --seed 42
+python3 tools/content_lint_dashboard/server.py --preview-scan --seed 42 --count 20
 ```
 
 ## Editors
@@ -62,7 +63,7 @@ Run the whole content tool stack:
 python3 tools/content_lint_dashboard/server.py --validate
 ```
 
-The dashboard imports the editor validators, parses the key runtime JSON files, reports content warnings, and generates sample previews for companies, events, News, Twooter, Network, corporate actions, and Academy content.
+The dashboard imports the editor validators, parses the key runtime JSON files, reports content warnings, launches from a tool index, generates sample previews for companies, events, News, Twooter, Network, corporate actions, and Academy content, and can scan preview seed ranges for generated-copy issues.
 
 ## Godot Smoke
 

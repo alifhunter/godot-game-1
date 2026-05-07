@@ -1,5 +1,767 @@
 {
   "schema_version": 1,
-  "catalog": null,
-  "notes": "Editable Twooter source. The editor imports data/social/twooter_feed_data.json when catalog is null."
+  "catalog": {
+    "prototype_default_access_tier": 4,
+    "post_limit": 18,
+    "tier_labels": {
+      "1": "Tier 1",
+      "2": "Tier 2",
+      "3": "Tier 3",
+      "4": "Tier 4"
+    },
+    "accounts": [
+      {
+        "id": "gorengan_hunter",
+        "display_name": "Gorengan Hunter",
+        "handle": "@gorenganhunter",
+        "tier": 1,
+        "verified": false,
+        "voice": "retail_hype"
+      },
+      {
+        "id": "rumor_lokal",
+        "display_name": "Rumor Lokal",
+        "handle": "@rumorlokal",
+        "tier": 1,
+        "verified": false,
+        "voice": "rumor_feed"
+      },
+      {
+        "id": "market_diary_id",
+        "display_name": "Market Diary ID",
+        "handle": "@marketdiaryid",
+        "tier": 1,
+        "verified": false,
+        "voice": "market_diary",
+        "thread_preference": true
+      },
+      {
+        "id": "flow_warung",
+        "display_name": "Flow Warung",
+        "handle": "@flowwarung",
+        "tier": 2,
+        "verified": false,
+        "voice": "flow_watch"
+      },
+      {
+        "id": "waduh_macro",
+        "display_name": "Waduh Macro",
+        "handle": "@waduhmacro",
+        "tier": 2,
+        "verified": true,
+        "voice": "macro_watch"
+      },
+      {
+        "id": "oil_tape_watch",
+        "display_name": "Oil Tape Watch",
+        "handle": "@oiltapewatch",
+        "tier": 2,
+        "verified": false,
+        "voice": "oil_psych"
+      },
+      {
+        "id": "stockmap_notes",
+        "display_name": "Stockmap Notes",
+        "handle": "@stockmapnotes",
+        "tier": 2,
+        "verified": true,
+        "voice": "stock_mapper",
+        "thread_preference": true
+      },
+      {
+        "id": "investor_kantor",
+        "display_name": "Investor Kantor",
+        "handle": "@investorkantor",
+        "tier": 3,
+        "verified": true,
+        "voice": "desk_analyst"
+      },
+      {
+        "id": "funda_thread",
+        "display_name": "Funda Thread",
+        "handle": "@fundathread",
+        "tier": 3,
+        "verified": true,
+        "voice": "funda_thread",
+        "thread_preference": true
+      },
+      {
+        "id": "emiten_concepts",
+        "display_name": "Emiten Concepts",
+        "handle": "@emitenconcepts",
+        "tier": 3,
+        "verified": true,
+        "voice": "concept_value",
+        "thread_preference": true
+      },
+      {
+        "id": "quality_hold_id",
+        "display_name": "Quality Hold ID",
+        "handle": "@qualityholdid",
+        "tier": 3,
+        "verified": true,
+        "voice": "quality_hold",
+        "thread_preference": true
+      },
+      {
+        "id": "macro_classroom",
+        "display_name": "Macro Classroom",
+        "handle": "@macroclassroom",
+        "tier": 3,
+        "verified": true,
+        "voice": "sector_classroom",
+        "thread_preference": true
+      },
+      {
+        "id": "tonald_drump",
+        "display_name": "Tonald Drump",
+        "handle": "@realtonalddrump",
+        "tier": 4,
+        "verified": true,
+        "voice": "tonald_drump",
+        "person_id": "donald_trump"
+      },
+      {
+        "id": "melon_tusk",
+        "display_name": "Melon Tusk",
+        "handle": "@melontusk",
+        "tier": 4,
+        "verified": true,
+        "voice": "melon_tusk",
+        "person_id": "elon_musk"
+      }
+    ],
+    "voice_templates": {
+      "retail_hype": {
+        "company_positive": [
+          "{target_ticker} still hot. If ritel notices this again, the chase can continue.",
+          "{target_ticker} has that gorengan smell today. Not clean, but the crowd loves a moving tape."
+        ],
+        "company_negative": [
+          "{target_ticker} starting to feel wrong. Late buyers usually panic first when the bid gets thin.",
+          "Careful with {target_ticker}. If bandar steps back, ritel can get stuck very fast."
+        ],
+        "sector_positive": [
+          "{sector_name} is getting crowded. Every ritel watchlist will look the same if this keeps going.",
+          "{sector_name} starting to look like the main room. If volume stays loud, chasers will rotate there next."
+        ],
+        "sector_negative": [
+          "{sector_name} looks tired. Crowd usually notices only after the ugly candle arrives.",
+          "{sector_name} feels heavy. When the crowd finally sees it, exits can get narrow."
+        ],
+        "corporate_action_rumor": [
+          "{target_ticker} rumor is getting louder. Still early, but the tape already changed.",
+          "People whispering about {target_ticker}. If this becomes a RUPSLB story, ritel will go wild."
+        ],
+        "corporate_action_denial": [
+          "{target_ticker} denial does not always mean dead. Sometimes it means the game just got messier.",
+          "{target_ticker} denial shook people, but messy stories can still trap both sides."
+        ],
+        "corporate_action_filing": [
+          "{target_ticker} has paperwork now. Rumor with a date hits different.",
+          "{target_ticker} paperwork is out. Now ritel has a date to argue about."
+        ],
+        "corporate_meeting": [
+          "{target_ticker} meeting watch. RUPSLB day can make brave people look smart or very stuck.",
+          "{target_ticker} RUPSLB watch. The room can turn confidence into fireworks or regret."
+        ],
+        "market_wrap": [
+          "Market today {market_change}. {biggest_winner} got the spotlight, {biggest_loser} gave people pain.",
+          "IHSG mood: {market_change}. Still a picker market, not everything deserves a chase."
+        ]
+      },
+      "rumor_feed": {
+        "company_positive": [
+          "Somebody is whispering about {target_ticker}. Not clear yet, but the flow moved first.",
+          "{target_ticker} is on the rumor table. I do not know the full story, but the price action is not normal."
+        ],
+        "company_negative": [
+          "Bad talk around {target_ticker}. No clean confirmation, but people are already throwing shares away.",
+          "Something feels off in {target_ticker}. No clean proof, but the sell button is already busy."
+        ],
+        "sector_positive": [
+          "New story in {sector_name}, katanya. Still messy, but the speculative desks are gathering.",
+          "{sector_name} whisper getting louder. Still early, but the right desks are listening."
+        ],
+        "sector_negative": [
+          "{sector_name} chatter getting heavy. Crowd usually wakes up after the chart already looks broken.",
+          "Pressure talk around {sector_name}. If the rumor is true, the chart may have warned first."
+        ],
+        "corporate_action_rumor": [
+          "Hearing early corporate-action talk in {target_ticker}. Could be nothing, could be the first breadcrumb.",
+          "{target_ticker} rumor flow is too specific to ignore, but still too early to call it clean."
+        ],
+        "corporate_action_clarification": [
+          "{target_ticker} clarified the talk. That does not kill the story; it just changes the timing.",
+          "{target_ticker} clarification changes the map. The story is not dead, just less simple."
+        ],
+        "corporate_action_cancellation": [
+          "{target_ticker} setup looks broken now. Rumor traders hate when the story loses its calendar.",
+          "{target_ticker} calendar gone, story weaker. Rumor money hates waiting without a date."
+        ]
+      },
+      "market_diary": {
+        "market_positive": [
+          "Market diary: IHSG feels better, but I still want to see breadth hold tomorrow.",
+          "Gold up, stocks firm, oil softer. Macro mood is not terrible, but the details still matter."
+        ],
+        "market_negative": [
+          "Market diary: IHSG discount continues. In this market, cash is a position too.",
+          "If the index keeps sliding, even good charts need patience. No need to force every bounce."
+        ],
+        "market_wrap": [
+          "Diary note: {advancers} up versus {decliners} down. That is the real story behind the {market_change} close.",
+          "Hundreds of charts later: today's market still says be selective."
+        ],
+        "sector_positive": [
+          "Diary note: {sector_name} is getting the better flow. I want confirmation, but the first read is constructive.",
+          "Diary note: {sector_name} has constructive flow. I still need a second day before trusting it."
+        ],
+        "sector_negative": [
+          "Diary note: {sector_name} is where the pressure shows. The weak groups are telling us not to rush.",
+          "Diary note: {sector_name} is showing stress. I would rather let the dust settle first."
+        ],
+        "index_review": [
+          "Diary note: {provider_label} review flow is a calendar trade. Announcement matters, effective date matters more.",
+          "Index review note: {provider_label} puts flow timing on the screen. I want to see whether the tape confirms it."
+        ]
+      },
+      "flow_watch": {
+        "company_positive": [
+          "Flow in {target_ticker} is getting cleaner. Not finished, but buyers look more disciplined.",
+          "{target_ticker}: bid is not random today. The tape is absorbing supply better."
+        ],
+        "company_negative": [
+          "Supply in {target_ticker} is consistent. If this continues, thin bids can break fast.",
+          "{target_ticker} supply keeps appearing. Unless demand improves, support can disappear quickly."
+        ],
+        "sector_positive": [
+          "Rotation into {sector_name} is easier to read now. It is not only one ticker being pulled.",
+          "{sector_name} rotation has more than one buyer now. That makes the move easier to respect."
+        ],
+        "sector_negative": [
+          "{sector_name} is being sold in stages. Not chaos yet, but distribution is visible.",
+          "{sector_name} selling looks organized. Not panic, but the pressure keeps refreshing."
+        ],
+        "corporate_action_rumor": [
+          "{target_ticker} flow started before the crowd got the story. That is why the rumor matters.",
+          "{target_ticker} had flow before the headline. That usually means someone is early or very confident."
+        ],
+        "corporate_action_denial": [
+          "{target_ticker} denial caused a shakeout, but watch whether the buyer returns after weak hands leave.",
+          "{target_ticker} denial flushed weak hands. Next clue is whether the bid rebuilds."
+        ],
+        "corporate_action_filing": [
+          "{target_ticker} filing gives the move a cleaner anchor. Now watch whether volume confirms.",
+          "{target_ticker} filing gives the tape a reference point. The next test is follow-through volume."
+        ],
+        "index_inclusion": [
+          "{target_ticker} {provider_label} inclusion setup: passive buyers may need stock near the effective date.",
+          "{target_ticker} index inclusion flow is readable now. Watch foreign and institution buyers into the effective date."
+        ],
+        "index_exclusion": [
+          "{target_ticker} {provider_label} exclusion setup: passive supply can keep refreshing until the effective date.",
+          "{target_ticker} index exclusion flow is the kind of selling that can look mechanical but still hurt."
+        ],
+        "index_watch": [
+          "{target_ticker} is on {provider_label} review watch. Near-cutoff names can get jumpy before the list is final.",
+          "{provider_label} review watch in {target_ticker}. This is a flow setup first, not a clean fundamental call."
+        ],
+        "index_review": [
+          "{provider_label} review flow is active. The tape should show whether passive money is real or already priced.",
+          "Index-review flow is about timing. Announcement starts attention; effective date tests the actual demand or supply."
+        ],
+        "market_wrap": [
+          "Breadth today {advancers} versus {decliners}. Still selective, not broad risk-on.",
+          "Breadth check: {advancers} up, {decliners} down. The index headline needs that context."
+        ]
+      },
+      "macro_watch": {
+        "sector_positive": [
+          "{sector_name} has the macro wind now. As long as breadth holds, traders have a reason to stay constructive.",
+          "{sector_name} has macro support for now. If breadth confirms, the trade has room."
+        ],
+        "sector_negative": [
+          "{sector_name} is under macro pressure. Hard to fight the flow before the context changes.",
+          "{sector_name} is fighting the macro tide. Better setups can still fail in that weather."
+        ],
+        "market_positive": [
+          "Risk appetite improved. If breadth stays healthy, the market can keep giving room to aggressive names.",
+          "Risk tone improved. I still want {advancers}/{decliners} breadth to confirm the move."
+        ],
+        "market_negative": [
+          "Risk appetite cracked. Until it recovers, small rallies can become exit liquidity.",
+          "Risk tone broke down. Until breadth repairs, rallies need suspicion."
+        ],
+        "commodity_positive": [
+          "Commodity shock is changing the board. Watch who benefits directly and who only gets dragged by narrative.",
+          "Commodity move is rewriting assumptions. Direct winners matter more than story passengers."
+        ],
+        "geopolitics_negative": [
+          "Geopolitics can turn a cheap IHSG into a cheaper IHSG. Position sizing matters more than hot takes.",
+          "Geopolitics raises the discount rate on every hot take. I want smaller size and cleaner reasons."
+        ],
+        "market_wrap": [
+          "Macro read: {market_change} close, {advancers}/{decliners} breadth. The index is only half the story.",
+          "Macro board: {market_change}, breadth {advancers}/{decliners}. Participation matters more than vibes."
+        ]
+      },
+      "oil_psych": {
+        "sector_positive": [
+          "{sector_name} is fighting the IHSG discount better than most groups. When the market is ugly, relative strength matters.",
+          "In this kind of market, energy-linked names can become the place people hide and speculate at the same time."
+        ],
+        "sector_negative": [
+          "{sector_name} below key averages is painful because nobody knows where the real floor is.",
+          "{sector_name} losing key levels makes everyone search for support lower than they planned."
+        ],
+        "commodity_positive": [
+          "If oil keeps squeezing, every emiten touching the chain gets a new narrative. The market loves a simple story.",
+          "Oil strength gives the chain a simple story. Now separate margin winners from hype riders."
+        ],
+        "commodity_negative": [
+          "Oil cooling can kill lazy narratives fast. The good names survive; the pure hype names do not.",
+          "Oil cooling tests every lazy thesis. Real cash flow matters more when the theme fades."
+        ],
+        "market_negative": [
+          "When IHSG is below the important averages, technicals help less. You need patience and a reason to own the name.",
+          "Below key averages, IHSG can punish impatience. I need structure before confidence."
+        ],
+        "market_wrap": [
+          "IHSG close {market_change}. I am watching which sectors refuse to follow the index down.",
+          "IHSG {market_change}. I am tracking which groups absorb selling instead of just bouncing."
+        ]
+      },
+      "stock_mapper": {
+        "company_positive": [
+          "{target_ticker} has the combo people like: narrative, decent price action, and visible progress. That is why discarded shares can become valuable.",
+          "Before calling {target_ticker}, ask the boring question first: why should this emiten deserve attention beyond one candle?"
+        ],
+        "company_negative": [
+          "{target_ticker} breaks the framework for now. If narrative and price action disagree, I would rather wait.",
+          "{target_ticker} no longer fits the map cleanly. I need price and narrative to line up again."
+        ],
+        "sector_positive": [
+          "{sector_name} has a usable setup: story first, confirmation second, risk plan always.",
+          "{sector_name} setup is usable, but the invalidation point has to be clear before entry."
+        ],
+        "corporate_action_filing": [
+          "{target_ticker} now has a formal step. For a right issue, dates matter: cum date, ex date, and the theoretical price.",
+          "{target_ticker} filing turns the idea into a calendar trade. Dates and ratios matter now."
+        ],
+        "corporate_meeting": [
+          "{target_ticker} RUPSLB is not just a headline. It is a process with dates, eligibility, and market expectation.",
+          "{target_ticker} RUPSLB means process risk. Eligibility and expectations can move price before the vote."
+        ],
+        "market_wrap": [
+          "Rule I keep breaking: buying too early before the setup proves itself. Today's breadth {advancers}/{decliners} says stay disciplined.",
+          "Breadth {advancers}/{decliners}. My rule today: do not call a setup valid just because it is green."
+        ]
+      },
+      "desk_analyst": {
+        "company_positive": [
+          "{target_ticker} remains constructive. The interesting part is not only the candle, but how the flow absorbs supply.",
+          "{target_ticker} still has a constructive read. The better clue is whether supply keeps getting absorbed."
+        ],
+        "company_negative": [
+          "{target_ticker} lost structure. If buyers do not return soon, this can weaken further.",
+          "{target_ticker} structure weakened. I need buyers to prove this is not distribution."
+        ],
+        "sector_positive": [
+          "{sector_name} is leading. As long as leadership holds, the sector deserves priority.",
+          "{sector_name} leadership is intact for now. I would rank the cleanest names first."
+        ],
+        "sector_negative": [
+          "{sector_name} is losing leadership. For now, waiting for fresh confirmation is cleaner.",
+          "{sector_name} leadership is fading. Confirmation matters more than bargain hunting."
+        ],
+        "hidden_company": [
+          "There is positioning in {target_ticker} that is not widely discussed yet. Not obvious, but enough to enter the early radar.",
+          "{target_ticker} has quiet positioning. Not enough for certainty, enough for a watchlist slot."
+        ],
+        "corporate_action_denial": [
+          "{target_ticker} denial is a useful stress test. The question is whether price action collapses or quietly re-accumulates.",
+          "{target_ticker} denial showed where weak hands were. The follow-up volume will tell more."
+        ]
+      },
+      "funda_thread": {
+        "company_positive": [
+          "If you want to understand {target_ticker}, read the story behind the numbers. This is not just a one-day squeeze.",
+          "{target_ticker} looks investable only if the business quality backs the move. Price alone is not enough."
+        ],
+        "company_negative": [
+          "{target_ticker}'s problem is not only a red candle. The fundamental narrative is losing support.",
+          "{target_ticker} weakness is starting to match the weaker thesis. That is harder to ignore."
+        ],
+        "sector_positive": [
+          "{sector_name} strength does not look random. There is a reason capital may stay longer here.",
+          "{sector_name} strength has a fundamental angle. I want to know which names can sustain it."
+        ],
+        "sector_negative": [
+          "{sector_name} is having trouble selling the story. Weak narrative usually means short bounces.",
+          "{sector_name} narrative is fading. Without a better business read, rallies stay fragile."
+        ],
+        "earnings": [
+          "{target_ticker} earnings need context. A number can look good while quality, cash flow, or sustainability says wait.",
+          "{target_ticker} earnings need quality checks. Growth without cash support can fool the headline."
+        ],
+        "corporate_action_filing": [
+          "{target_ticker} filing matters, but the real question is capital allocation after the action.",
+          "{target_ticker} filing is only step one. The balance sheet effect decides the real read."
+        ],
+        "index_inclusion": [
+          "{target_ticker} {provider_label} inclusion is not a thesis by itself. Passive demand can help price, but quality still decides what remains.",
+          "{target_ticker} entering {provider_label} can create demand. I still want to know if the business deserves new holders."
+        ],
+        "index_exclusion": [
+          "{target_ticker} {provider_label} exclusion can create forced supply. The business case needs to be strong enough to absorb it.",
+          "{target_ticker} leaving {provider_label} is a flow problem first, then a thesis stress test."
+        ],
+        "index_review": [
+          "{provider_label} review changes ownership mechanics. It does not replace valuation, but it can change near-term flow.",
+          "{provider_label} reviews move holders, not only headlines. The useful read is who needs to buy or sell after the list."
+        ]
+      },
+      "concept_value": {
+        "company_positive": [
+          "{target_ticker} is interesting because the concept can travel. Do not stare only at the emiten; study why the model works.",
+          "Narrative can make valuation look expensive before the spreadsheet catches up. {target_ticker} is entering that zone."
+        ],
+        "company_negative": [
+          "{target_ticker} lost the concept premium. Once the market stops paying for the story, valuation gets stricter.",
+          "{target_ticker} is losing story premium. Once that happens, numbers need to carry more weight."
+        ],
+        "sector_positive": [
+          "{sector_name} has a transferable concept. The first winner is obvious; the second winner is where research matters.",
+          "{sector_name} theme can travel. The research edge is finding the less obvious beneficiary."
+        ],
+        "sector_negative": [
+          "{sector_name} narrative is not enough right now. The market wants proof, not only a theme.",
+          "{sector_name} theme is not enough today. The market wants evidence before paying up."
+        ],
+        "earnings": [
+          "For {target_ticker}, the question is whether the earnings prove the concept or only dress up one quarter.",
+          "{target_ticker} earnings should prove the concept, not just decorate the quarter."
+        ],
+        "management": [
+          "Management change only matters if it changes capital allocation, disclosure, or execution discipline.",
+          "Management change needs evidence. Better disclosure and capital discipline matter more than titles."
+        ]
+      },
+      "quality_hold": {
+        "company_positive": [
+          "Honest view: {target_ticker} is rare if growth stays consistent. In IDX, real long-term holds are counted on fingers.",
+          "{target_ticker} may be expensive, but quality stocks often look expensive before people accept the compounding."
+        ],
+        "company_negative": [
+          "I can hold volatility, but not broken quality. {target_ticker} needs to prove the long-term case is intact.",
+          "{target_ticker} volatility is acceptable only if quality survives. The thesis needs fresh proof."
+        ],
+        "earnings": [
+          "For {target_ticker}, I care less about one quarter and more about whether the compounding path survives.",
+          "{target_ticker} quarter is less important than whether reinvestment and margins still compound."
+        ],
+        "corporate_action_filing": [
+          "{target_ticker} corporate action needs a capital-allocation read. Good companies still need good use of money.",
+          "{target_ticker} action needs a quality read. Capital discipline can make or break the setup."
+        ],
+        "corporate_action_cancellation": [
+          "{target_ticker} cancellation is not automatically fatal, but it forces a reset on the long-term thesis.",
+          "{target_ticker} cancellation resets expectations. Long-term holders need to retest the thesis."
+        ]
+      },
+      "sector_classroom": {
+        "market_positive": [
+          "Simple macro: when rates fall and inflation rises, the market starts asking which sectors can protect pricing power.",
+          "Classroom note: stronger risk appetite still needs sector selection. Pricing power matters most when macro shifts."
+        ],
+        "market_negative": [
+          "Strategy in this market: hold more cash, reduce forced trades, wait until the setup gives you odds again.",
+          "Classroom note: weak markets reward selectivity. Cash protects the next good decision."
+        ],
+        "sector_positive": [
+          "{sector_name} is a case study in sector impact. First ask what variable improved, then ask which emiten benefits directly.",
+          "{sector_name} strength is a lesson in transmission. First identify the driver, then the direct beneficiaries."
+        ],
+        "sector_negative": [
+          "{sector_name} pressure is not only price action. It can be policy, commodity, funding, or demand.",
+          "{sector_name} pressure can come from costs, demand, policy, or funding. Price is only the summary."
+        ],
+        "commodity_positive": [
+          "Commodity up, winners are not always the largest names. Capacity, margin, and market cap mismatch can matter more.",
+          "Commodity strength creates layers of winners. Margin sensitivity can beat size."
+        ],
+        "earnings": [
+          "Earnings turnaround: do not stop at profit growth. Check whether margin, revenue, and balance sheet tell the same story.",
+          "Earnings lesson: profit growth is step one. Cash flow and balance sheet decide quality."
+        ],
+        "market_wrap": [
+          "Education note: {market_change} index move with {advancers}/{decliners} breadth. Always separate index from participation.",
+          "Classroom breadth: {advancers}/{decliners} with {market_change}. Index direction and participation can disagree."
+        ]
+      },
+      "tonald_drump": {
+        "person_positive": [
+          "{sector_name} is looking very strong. Great things coming. Everybody knows it.",
+          "{sector_name} strength is beautiful. Very strong, very respected, maybe the best sector."
+        ],
+        "person_negative": [
+          "{sector_name} has been treated very unfairly. Big changes coming, believe me.",
+          "{sector_name} has problems, but we will see tremendous action. The market knows."
+        ]
+      },
+      "melon_tusk": {
+        "person_positive": [
+          "{target_ticker} + future tech + vibes. Interesting.",
+          "{target_ticker} plus optionality plus chaos. Watching."
+        ],
+        "person_negative": [
+          "Market overreacting again. Still weird though.",
+          "{target_ticker} sentiment is getting compressed. Could still be noise."
+        ]
+      }
+    },
+    "thread_templates": {
+      "market_diary": {
+        "market_wrap": [
+          "1. Index close: {market_change}.",
+          "2. Breadth check: {advancers} up versus {decliners} down.",
+          "3. My rule for tomorrow: follow leadership, avoid forcing weak setups."
+        ],
+        "market_positive": [
+          "1. Positive index day is useful, but not enough.",
+          "2. I want breadth and sector leadership to agree.",
+          "3. If both hold, the next session gets more interesting."
+        ],
+        "market_negative": [
+          "1. Weak IHSG means reduce ego first.",
+          "2. Cash gives you optionality when charts are messy.",
+          "3. The next clean setup matters more than catching every bounce."
+        ],
+        "index_review": [
+          "1. {provider_label} review is a calendar setup.",
+          "2. Announcement changes attention; effective date changes passive flow.",
+          "3. Watch foreign and institution tape before trusting the first move."
+        ]
+      },
+      "stock_mapper": {
+        "company_positive": [
+          "1. Narrative gets people to open the chart.",
+          "2. Price action tells whether the story already has real buyers.",
+          "3. Risk plan decides whether you are trading the emiten or just your own excitement."
+        ],
+        "corporate_action_filing": [
+          "1. Right issue stories are calendar stories.",
+          "2. Cum date decides who has the right; ex date usually adjusts the price expectation.",
+          "3. The trade is not only the headline. It is whether the market likes the use of funds."
+        ],
+        "corporate_meeting": [
+          "1. RUPSLB means the story now has a room and a vote.",
+          "2. Price can move before the result because expectation moves first.",
+          "3. After the room speaks, price action decides if the setup was already priced."
+        ],
+        "market_wrap": [
+          "1. Do not buy just because the index is green.",
+          "2. Check breadth: {advancers} up versus {decliners} down.",
+          "3. If leadership is narrow, size smaller and let the move prove itself."
+        ]
+      },
+      "funda_thread": {
+        "company_positive": [
+          "1. Good emiten is not only a good candle.",
+          "2. Look for growth quality, margin durability, and management discipline.",
+          "3. If the business keeps compounding, short-term noise becomes easier to survive."
+        ],
+        "earnings": [
+          "1. Read revenue first, then margin, then cash quality.",
+          "2. A one-quarter beat is useful, but repeatability matters more.",
+          "3. The best post-earnings setup is when price action confirms the business read."
+        ],
+        "corporate_action_filing": [
+          "1. Corporate action is capital allocation in public.",
+          "2. Ask whether the money strengthens the company or only patches a hole.",
+          "3. Good use of funds can extend a thesis; bad use of funds dilutes trust."
+        ],
+        "index_review": [
+          "1. Index review changes the shareholder base mechanically.",
+          "2. Inclusion can add passive demand; exclusion can add forced supply.",
+          "3. After the effective date, the real test is whether ordinary demand remains."
+        ]
+      },
+      "concept_value": {
+        "company_positive": [
+          "1. Do not only look at the ticker.",
+          "2. Ask what concept the market is paying for.",
+          "3. If the concept can scale, valuation can look expensive before the numbers catch up."
+        ],
+        "sector_positive": [
+          "1. The first sector winner is usually obvious.",
+          "2. The second winner comes from understanding the concept, not copying the first ticker.",
+          "3. That is where research has edge."
+        ],
+        "management": [
+          "1. New management is not automatically bullish.",
+          "2. The real variables are capital allocation, execution speed, and disclosure quality.",
+          "3. If those do not change, the title change is just a headline."
+        ]
+      },
+      "quality_hold": {
+        "company_positive": [
+          "1. Investable names are many; holdable names are rare.",
+          "2. Consistent growth plus good capital allocation is the real filter.",
+          "3. If {target_ticker} keeps that quality, volatility is not the main enemy."
+        ],
+        "earnings": [
+          "1. Quarter-to-quarter noise is normal.",
+          "2. I care whether the long-term compounding path is still intact.",
+          "3. If quality survives, patience becomes an advantage."
+        ]
+      },
+      "sector_classroom": {
+        "market_negative": [
+          "1. In a weak IHSG, the first job is not to be heroic.",
+          "2. Hold cash when setups are low quality.",
+          "3. When the market improves, cash becomes ammunition instead of regret."
+        ],
+        "sector_positive": [
+          "1. Sector impact starts with the driver.",
+          "2. Then map which emiten gets revenue, margin, or sentiment benefit.",
+          "3. The best trade is usually where the market cap has not fully adjusted."
+        ],
+        "commodity_positive": [
+          "1. Commodity moves change winners and losers.",
+          "2. Do not stop at the biggest market cap.",
+          "3. Production capacity, cost curve, and valuation gap can create the better setup."
+        ],
+        "market_wrap": [
+          "1. Index: {market_change}.",
+          "2. Breadth: {advancers} advancers versus {decliners} decliners.",
+          "3. If breadth disagrees with the index, trust participation more than the headline."
+        ]
+      }
+    },
+    "continuity_templates": {
+      "corporate_action_denial": [
+        "Yesterday's denial did not fully kill the setup. It changed the risk.",
+        "The company response shook out weak hands, but the story still has to be watched through price action."
+      ],
+      "corporate_action_filing": [
+        "The formal notice makes the rumor easier to track now.",
+        "Once paperwork appears, the market stops guessing only from whispers."
+      ],
+      "corporate_meeting": [
+        "With RUPSLB on the calendar, the trade becomes about expectation versus room outcome.",
+        "Meeting day gives the story a clock. That is why price action can get jumpy."
+      ],
+      "corporate_action_resolution": [
+        "The vote result turns speculation into a cleaner follow-through test.",
+        "Approval is not the finish line; it is where execution risk starts."
+      ],
+      "corporate_action_cancellation": [
+        "Cancellation forces the market to reset the old rumor premium.",
+        "When the calendar breaks, fast money usually leaves first."
+      ],
+      "index_inclusion": [
+        "The inclusion headline is only the first step; the effective-date flow is the next test.",
+        "Index inclusion already gave the market a reference point. Now the tape needs to confirm demand."
+      ],
+      "index_exclusion": [
+        "The exclusion headline is only the first step; the effective-date flow is the next test.",
+        "Index exclusion already gave the market a reference point. Now the tape needs to absorb supply."
+      ],
+      "index_watch": [
+        "The review watch is still open, so the next list can change the setup quickly.",
+        "Near-cutoff review names stay noisy until the list and effective date are both clear."
+      ],
+      "fallback": [
+        "This follows an earlier related post, so today's move has a reference point.",
+        "The story is no longer starting from zero."
+      ]
+    },
+    "fallback_templates": {
+      "ambient_company": [
+        "{target_ticker} is on more screens after today's move. I want to see whether volume follows tomorrow.",
+        "{target_ticker} moved enough to deserve a note. Not a signal by itself, but worth watching."
+      ],
+      "ambient_sector": [
+        "{sector_name} was one of the clearer groups today. The next clue is whether more names join the move.",
+        "{sector_name} has attention now. Sector moves get better when leadership spreads."
+      ],
+      "ambient_market": [
+        "Market mood: {market_change}, breadth {advancers}/{decliners}. Still a stock-picker day.",
+        "Index move {market_change}. I care more about breadth: {advancers} up, {decliners} down."
+      ],
+      "ambient_watch": [
+        "Quiet day, but quiet days still build the next watchlist.",
+        "Nothing to force. Tomorrow's leadership will matter more than today's boredom."
+      ],
+      "market_positive": [
+        "Market is firmer today, but I still want breadth to stay healthy tomorrow.",
+        "Market improved today. I still want tomorrow to confirm the breadth."
+      ],
+      "market_negative": [
+        "Market is softer today. Cash and patience are both positions.",
+        "Market softened today. I would rather protect decision quality than force trades."
+      ],
+      "market_mixed": [
+        "Mixed close. I would rather wait for cleaner leadership than chase random green candles.",
+        "Mixed tape. Leadership is still too unclear for random chasing."
+      ],
+      "company_positive": [
+        "{target_ticker} moved well today. The next test is whether buyers return tomorrow.",
+        "{target_ticker} had a strong session. Confirmation matters more than the first candle."
+      ],
+      "company_negative": [
+        "{target_ticker} looked weak today. I want to see whether support shows up or the bid stays thin.",
+        "{target_ticker} weakened today. I want proof the bid is not disappearing."
+      ],
+      "company_mixed": [
+        "{target_ticker} is moving sideways enough to be annoying. Waiting is also a trade.",
+        "{target_ticker} is stuck in the middle. No need to invent conviction."
+      ],
+      "company": [
+        "{target_ticker} is worth a note, but the setup still needs confirmation.",
+        "{target_ticker} belongs on the watchlist, but the trade still needs evidence."
+      ],
+      "sector_positive": [
+        "{sector_name} has better flow today. The group needs more than one leader to keep attention.",
+        "{sector_name} flow improved today. It needs broader leadership to last."
+      ],
+      "sector_negative": [
+        "{sector_name} is under pressure. The weak names are telling people not to rush.",
+        "{sector_name} is heavy. I would wait for pressure to stop refreshing."
+      ],
+      "corporate_action": [
+        "{target_ticker} has a corporate-action angle now. Calendar, volume, and price reaction all matter.",
+        "{target_ticker} now has a calendar angle. The reaction after each date matters."
+      ],
+      "index_inclusion": [
+        "{target_ticker} has {provider_label} inclusion flow now. I want to see whether passive demand actually appears.",
+        "{target_ticker} index inclusion is constructive, but the effective-date tape still has to prove it."
+      ],
+      "index_exclusion": [
+        "{target_ticker} has {provider_label} exclusion flow now. I want to see whether the market can absorb the supply.",
+        "{target_ticker} index exclusion is a pressure point until the effective-date selling is done."
+      ],
+      "index_watch": [
+        "{target_ticker} is on {provider_label} review watch. Near-cutoff flow can get messy fast.",
+        "{target_ticker} review watch is not confirmation yet, but it can move positioning."
+      ],
+      "index_review": [
+        "{provider_label} review flow matters here. Track the effective date, not only the announcement.",
+        "Index-review stories are calendar stories. Flow confirmation matters more than the first headline."
+      ],
+      "all": [
+        "Watching the board, not forcing a trade. Clean setups usually show themselves.",
+        "The market gave enough clues for a watchlist, not enough for blind confidence."
+      ]
+    },
+    "fallback_posts": {
+      "all": [
+        "Market still setting up. Watching where leadership forms next.",
+        "No need to force a trade. IHSG will give another setup when the market gets cleaner."
+      ]
+    }
+  },
+  "notes": "Imported from data/social/twooter_feed_data.json."
 }

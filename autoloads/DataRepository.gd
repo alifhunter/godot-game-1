@@ -6,6 +6,7 @@ const COMPANY_PROFILE_DATA_PATH := "res://data/companies/company_profile_data.js
 const BROKER_ROSTER_PATH := "res://data/brokers/broker_roster.json"
 const SECTORS_PATH := "res://data/sectors/sectors.json"
 const EVENTS_PATH := "res://data/events/events.json"
+const INDEX_REVIEW_CATALOG_PATH := "res://data/index_reviews/index_review_catalog.json"
 const CORPORATE_ACTION_CATALOG_PATH := "res://data/corporate_actions/corporate_action_catalog.json"
 const NEWS_FEED_DATA_PATH := "res://data/news/news_feed_data.json"
 const TWOOTER_FEED_DATA_PATH := "res://data/social/twooter_feed_data.json"
@@ -19,6 +20,7 @@ var company_profile_data = {}
 var broker_roster = []
 var sectors = []
 var event_definitions = []
+var index_review_catalog = {}
 var corporate_action_catalog = {}
 var news_feed_data = {}
 var twooter_feed_data = {}
@@ -42,6 +44,7 @@ func reload_all() -> void:
 	broker_roster = _load_array_json(BROKER_ROSTER_PATH)
 	sectors = _load_array_json(SECTORS_PATH)
 	event_definitions = _load_array_json(EVENTS_PATH)
+	index_review_catalog = _load_dictionary_json(INDEX_REVIEW_CATALOG_PATH)
 	corporate_action_catalog = _load_dictionary_json(CORPORATE_ACTION_CATALOG_PATH)
 	news_feed_data = _load_dictionary_json(NEWS_FEED_DATA_PATH)
 	twooter_feed_data = _load_dictionary_json(TWOOTER_FEED_DATA_PATH)
@@ -109,6 +112,10 @@ func get_news_feed_data() -> Dictionary:
 
 func get_corporate_action_catalog() -> Dictionary:
 	return corporate_action_catalog.duplicate(true)
+
+
+func get_index_review_catalog() -> Dictionary:
+	return index_review_catalog.duplicate(true)
 
 
 func get_twooter_feed_data() -> Dictionary:

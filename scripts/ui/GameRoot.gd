@@ -51,6 +51,10 @@ const COLOR_DESKTOP_OLIVE := Color(0.247059, 0.278431, 0.117647, 1)
 const COLOR_DESKTOP_GOLD := Color(0.972549, 0.713726, 0.0627451, 1)
 const COLOR_DESKTOP_FRAME := Color(0.729412, 0.694118, 0.603922, 1)
 const DESKTOP_REFERENCE_VIEWPORT := Vector2(1920.0, 1080.0)
+const DESKTOP_EDGE_CONTENT_MARGIN := 28.0
+const MAC_FULLSCREEN_SAFE_MARGIN_X := 36.0
+const MAC_FULLSCREEN_SAFE_MARGIN_TOP := 20.0
+const MAC_FULLSCREEN_SAFE_MARGIN_BOTTOM := 18.0
 const DESKTOP_ICON_PATHS := {
 	"stock": {
 		"shortcut": "res://assets/ui/desktop/stockbot_shortcut.svg",
@@ -265,8 +269,10 @@ var current_academy_snapshot: Dictionary = {}
 var current_corporate_meeting_id: String = ""
 var debug_generator_buttons: Dictionary = {}
 var debug_corporate_action_buttons: Dictionary = {}
+var debug_index_review_buttons: Dictionary = {}
 var debug_start_rupslb_button: Button = null
 var debug_start_rupslb_status_label: Label = null
+var debug_index_review_status_label: Label = null
 var contact_intel_panel: PanelContainer = null
 var contact_intel_option: OptionButton = null
 var contact_intel_button: Button = null
@@ -492,6 +498,7 @@ var academy_glossary_list: ItemList = null
 @onready var app_window_minimize_button: Button = $AppWindowTitleBar/AppWindowTitleMargin/AppWindowTitleRow/AppWindowMinimizeButton
 @onready var app_window_close_button: Button = $AppWindowTitleBar/AppWindowTitleMargin/AppWindowTitleRow/AppWindowCloseButton
 @onready var taskbar_panel: PanelContainer = $TaskbarLayer/TaskbarPanel
+@onready var taskbar_layer: MarginContainer = $TaskbarLayer
 @onready var taskbar_home_button: Button = $TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow/TaskbarHomeButton
 @onready var taskbar_stock_button: Button = $TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow/TaskbarStockButton
 @onready var taskbar_news_button: Button = $TaskbarLayer/TaskbarPanel/TaskbarMargin/TaskbarRow/TaskbarNewsButton
@@ -3314,6 +3321,33 @@ func _desktop_texture(path: String) -> Texture2D:
 	return null
 
 
+func _is_fullscreen_window_mode() -> bool:
+	if OS.has_feature("headless"):
+		return false
+	var mode: int = DisplayServer.window_get_mode()
+	return mode == DisplayServer.WINDOW_MODE_FULLSCREEN or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+
+
+func _desktop_safe_insets() -> Vector4:
+	if OS.get_name() != "macOS" or not _is_fullscreen_window_mode():
+		return Vector4.ZERO
+	return Vector4(
+		MAC_FULLSCREEN_SAFE_MARGIN_X,
+		MAC_FULLSCREEN_SAFE_MARGIN_TOP,
+		MAC_FULLSCREEN_SAFE_MARGIN_X,
+		MAC_FULLSCREEN_SAFE_MARGIN_BOTTOM
+	)
+
+
+func _desktop_effective_viewport_size() -> Vector2:
+	var viewport_size: Vector2 = get_viewport_rect().size
+	var safe_insets: Vector4 = _desktop_safe_insets()
+	return Vector2(
+		max(viewport_size.x - safe_insets.x - safe_insets.z, 1.0),
+		max(viewport_size.y - safe_insets.y - safe_insets.w, 1.0)
+	)
+
+
 func _make_desktop_icon_rect(path: String, minimum_size: Vector2) -> TextureRect:
 	var icon := TextureRect.new()
 	icon.name = "DesktopIcon"
@@ -3328,7 +3362,7 @@ func _make_desktop_icon_rect(path: String, minimum_size: Vector2) -> TextureRect
 
 
 func _desktop_reference_scale() -> float:
-	var viewport_size: Vector2 = get_viewport_rect().size
+	var viewport_size: Vector2 = _desktop_effective_viewport_size()
 	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
 		return 1.0
 	var width_scale: float = viewport_size.x / DESKTOP_REFERENCE_VIEWPORT.x
@@ -3343,12 +3377,13 @@ func _desktop_scaled_px(reference_px: float, min_px: int, max_px: int) -> int:
 func _update_desktop_figma_layout() -> void:
 	if desktop_shortcut_grid == null:
 		return
-	var viewport_width: float = get_viewport_rect().size.x
-	if viewport_width >= 1500.0:
+	var safe_insets: Vector4 = _desktop_safe_insets()
+	var effective_viewport_width: float = _desktop_effective_viewport_size().x
+	if effective_viewport_width >= 1760.0:
 		desktop_shortcut_grid.columns = 7
-	elif viewport_width >= 1040.0:
+	elif effective_viewport_width >= 1040.0:
 		desktop_shortcut_grid.columns = 4
-	elif viewport_width >= 720.0:
+	elif effective_viewport_width >= 720.0:
 		desktop_shortcut_grid.columns = 3
 	else:
 		desktop_shortcut_grid.columns = 2
@@ -3359,13 +3394,15 @@ func _update_desktop_figma_layout() -> void:
 	desktop_margin.add_theme_constant_override("margin_right", 0)
 	desktop_margin.add_theme_constant_override("margin_bottom", 0)
 
+	_update_desktop_shortcut_metrics()
+
 	var top_bar_height: float = float(_desktop_scaled_px(84.0, 72, 96))
 	if desktop_figma_top_bar != null:
 		desktop_figma_top_bar.custom_minimum_size = Vector2(0, top_bar_height)
 	if desktop_figma_top_margin != null:
-		desktop_figma_top_margin.add_theme_constant_override("margin_left", _desktop_scaled_px(28.0, 18, 36))
-		desktop_figma_top_margin.add_theme_constant_override("margin_top", 0)
-		desktop_figma_top_margin.add_theme_constant_override("margin_right", 0)
+		desktop_figma_top_margin.add_theme_constant_override("margin_left", int(DESKTOP_EDGE_CONTENT_MARGIN + safe_insets.x))
+		desktop_figma_top_margin.add_theme_constant_override("margin_top", int(safe_insets.y))
+		desktop_figma_top_margin.add_theme_constant_override("margin_right", int(DESKTOP_EDGE_CONTENT_MARGIN + safe_insets.z))
 		desktop_figma_top_margin.add_theme_constant_override("margin_bottom", 0)
 	if desktop_figma_cash_panel != null:
 		desktop_figma_cash_panel.custom_minimum_size = Vector2(
@@ -3403,10 +3440,10 @@ func _update_desktop_figma_layout() -> void:
 			content_side_margin = _desktop_scaled_px(26.0, 16, 34)
 			content_top_margin = _desktop_scaled_px(28.0, 18, 34)
 			content_bottom_margin = _desktop_scaled_px(26.0, 16, 32)
-		desktop_figma_canvas_content_margin.add_theme_constant_override("margin_left", content_side_margin)
-		desktop_figma_canvas_content_margin.add_theme_constant_override("margin_top", content_top_margin)
-		desktop_figma_canvas_content_margin.add_theme_constant_override("margin_right", content_side_margin)
-		desktop_figma_canvas_content_margin.add_theme_constant_override("margin_bottom", content_bottom_margin)
+		desktop_figma_canvas_content_margin.add_theme_constant_override("margin_left", int(content_side_margin + safe_insets.x))
+		desktop_figma_canvas_content_margin.add_theme_constant_override("margin_top", int(content_top_margin))
+		desktop_figma_canvas_content_margin.add_theme_constant_override("margin_right", int(content_side_margin + safe_insets.z))
+		desktop_figma_canvas_content_margin.add_theme_constant_override("margin_bottom", int(content_bottom_margin + safe_insets.w))
 
 	var h_separation: int = _desktop_scaled_px(24.0, 14, 32)
 	var v_separation: int = _desktop_scaled_px(26.0, 16, 34)
@@ -3421,6 +3458,43 @@ func _update_desktop_figma_layout() -> void:
 		v_separation = _desktop_scaled_px(28.0, 18, 34)
 	desktop_shortcut_grid.add_theme_constant_override("h_separation", h_separation)
 	desktop_shortcut_grid.add_theme_constant_override("v_separation", v_separation)
+	_apply_taskbar_safe_insets(safe_insets)
+
+
+func _update_desktop_shortcut_metrics() -> void:
+	if desktop_shortcut_grid == null:
+		return
+	var tile_size := Vector2(
+		float(_desktop_scaled_px(156.0, 132, 156)),
+		float(_desktop_scaled_px(184.0, 156, 184))
+	)
+	var button_size := Vector2(
+		float(_desktop_scaled_px(132.0, 112, 132)),
+		float(_desktop_scaled_px(132.0, 112, 132))
+	)
+	var icon_width: int = _desktop_scaled_px(50.0, 42, 50)
+	var tile_separation: int = _desktop_scaled_px(14.0, 10, 14)
+	for child_value in desktop_shortcut_grid.get_children():
+		var tile: Control = child_value as Control
+		if tile == null:
+			continue
+		tile.custom_minimum_size = tile_size
+		if tile is VBoxContainer:
+			(tile as VBoxContainer).add_theme_constant_override("separation", tile_separation)
+		for tile_child_value in tile.get_children():
+			var button: Button = tile_child_value as Button
+			if button != null:
+				button.custom_minimum_size = button_size
+				button.add_theme_constant_override("icon_max_width", icon_width)
+
+
+func _apply_taskbar_safe_insets(safe_insets: Vector4) -> void:
+	if taskbar_layer == null:
+		return
+	taskbar_layer.offset_left = 18.0 + safe_insets.x
+	taskbar_layer.offset_top = -70.0 - safe_insets.w
+	taskbar_layer.offset_right = -18.0 - safe_insets.z
+	taskbar_layer.offset_bottom = -18.0 - safe_insets.w
 
 
 func _refresh_figma_desktop_status() -> void:
@@ -3742,10 +3816,11 @@ func _desktop_window_min_size_for_app(app_id: String) -> Vector2:
 
 func _desktop_window_work_rect() -> Rect2:
 	var viewport_size: Vector2 = get_viewport_rect().size
-	var inset_left: float = 4.0
-	var inset_top: float = 4.0
-	var inset_right: float = 4.0
-	var inset_bottom: float = 4.0
+	var safe_insets: Vector4 = _desktop_safe_insets()
+	var inset_left: float = 4.0 + safe_insets.x
+	var inset_top: float = 4.0 + safe_insets.y
+	var inset_right: float = 4.0 + safe_insets.z
+	var inset_bottom: float = 4.0 + safe_insets.w
 	return Rect2(
 		Vector2(inset_left, inset_top),
 		Vector2(
@@ -7500,7 +7575,7 @@ func _refresh_dashboard() -> void:
 		dashboard_index_hint_label.text = "Use New Game or Load Run to begin."
 		_refresh_dashboard_index_recap({})
 		dashboard_calendar_month_label.text = "-"
-		_refresh_dashboard_calendar({})
+		_refresh_dashboard_calendar({}, {}, [], [])
 		_refresh_dashboard_movers([])
 		_refresh_dashboard_sector_panel([])
 		_log_perf_phase(log_phase_details, "_refresh_dashboard:no_active_run", started_at_usec)
@@ -7550,7 +7625,8 @@ func _refresh_dashboard() -> void:
 	_refresh_dashboard_calendar(
 		trade_date,
 		dashboard_event_snapshot.get("report_calendar_snapshot", {}),
-		dashboard_event_snapshot.get("upcoming_meeting_rows", [])
+		dashboard_event_snapshot.get("upcoming_meeting_rows", []),
+		dashboard_event_snapshot.get("upcoming_index_review_rows", [])
 	)
 	_log_perf_phase(log_phase_details, "_refresh_dashboard:calendar", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -8174,7 +8250,8 @@ func _build_dashboard_mover_row(company_row: Dictionary, rank_number: int) -> Co
 func _refresh_dashboard_calendar(
 	current_date: Dictionary,
 	cached_report_snapshot: Dictionary = {},
-	meeting_rows: Array = []
+	meeting_rows: Array = [],
+	index_review_rows: Array = []
 ) -> void:
 	if dashboard_calendar_days_grid == null:
 		return
@@ -8209,12 +8286,14 @@ func _refresh_dashboard_calendar(
 		var is_trade_day: bool = weekday_value < 5 and not portfolio_trading_calendar.is_holiday(day_info)
 		var day_reports: Array = reports_by_day.get(str(day_value), [])
 		var day_meetings: Array = _dashboard_calendar_meetings_for_day(meeting_rows, year_value, month_value, day_value)
+		var day_index_reviews: Array = _dashboard_calendar_index_reviews_for_day(index_review_rows, year_value, month_value, day_value)
 		dashboard_calendar_days_grid.add_child(_build_dashboard_calendar_day_cell(
 			day_value,
 			is_current_day,
 			is_trade_day,
 			day_reports,
 			day_meetings,
+			day_index_reviews,
 			day_info
 		))
 
@@ -8255,8 +8334,24 @@ func _dashboard_calendar_meetings_for_day(meeting_rows: Array, year_value: int, 
 	return rows
 
 
-func _format_calendar_event_tooltip(reports: Array, meetings: Array) -> String:
-	if reports.is_empty() and meetings.is_empty():
+func _dashboard_calendar_index_reviews_for_day(index_review_rows: Array, year_value: int, month_value: int, day_value: int) -> Array:
+	var rows: Array = []
+	for review_value in index_review_rows:
+		if typeof(review_value) != TYPE_DICTIONARY:
+			continue
+		var review: Dictionary = review_value
+		var trade_date: Dictionary = review.get("trade_date", {})
+		if (
+			int(trade_date.get("year", 0)) == year_value and
+			int(trade_date.get("month", 0)) == month_value and
+			int(trade_date.get("day", 0)) == day_value
+		):
+			rows.append(review.duplicate(true))
+	return rows
+
+
+func _format_calendar_event_tooltip(reports: Array, meetings: Array, index_reviews: Array) -> String:
+	if reports.is_empty() and meetings.is_empty() and index_reviews.is_empty():
 		return ""
 	var parts: Array = []
 	var report_labels: Array = []
@@ -8271,6 +8366,12 @@ func _format_calendar_event_tooltip(reports: Array, meetings: Array) -> String:
 		meeting_labels.append("%s %s" % [str(meeting.get("ticker", "")), str(meeting.get("meeting_label", "Meeting"))])
 	if not meeting_labels.is_empty():
 		parts.append("Meetings: %s" % ", ".join(meeting_labels))
+	var index_review_labels: Array = []
+	for review_value in index_reviews:
+		var review: Dictionary = review_value
+		index_review_labels.append("%s %s" % [str(review.get("provider_label", "Index")), str(review.get("event_type", "review")).capitalize()])
+	if not index_review_labels.is_empty():
+		parts.append("Index reviews: %s" % ", ".join(index_review_labels))
 	return "\n".join(parts)
 
 
@@ -8311,6 +8412,7 @@ func _build_dashboard_calendar_day_cell(
 	is_trade_day: bool,
 	reports: Array = [],
 	meetings: Array = [],
+	index_reviews: Array = [],
 	date_info: Dictionary = {}
 ) -> Control:
 	var panel: PanelContainer = PanelContainer.new()
@@ -8319,11 +8421,12 @@ func _build_dashboard_calendar_day_cell(
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_FILL
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	panel.tooltip_text = _format_calendar_event_tooltip(reports, meetings)
+	panel.tooltip_text = _format_calendar_event_tooltip(reports, meetings, index_reviews)
 	panel.set_meta("day", day_value)
 	panel.set_meta("report_count", reports.size())
 	panel.set_meta("meeting_count", meetings.size())
-	panel.set_meta("has_events", not reports.is_empty() or not meetings.is_empty())
+	panel.set_meta("index_review_count", index_reviews.size())
+	panel.set_meta("has_events", not reports.is_empty() or not meetings.is_empty() or not index_reviews.is_empty())
 	var meeting_ids: Array = []
 	for meeting_value in meetings:
 		var meeting: Dictionary = meeting_value
@@ -8334,7 +8437,8 @@ func _build_dashboard_calendar_day_cell(
 	panel.gui_input.connect(_on_dashboard_calendar_day_cell_gui_input.bind(
 		date_info.duplicate(true),
 		reports.duplicate(true),
-		meetings.duplicate(true)
+		meetings.duplicate(true),
+		index_reviews.duplicate(true)
 	))
 
 	var label: Label = Label.new()
@@ -8344,6 +8448,8 @@ func _build_dashboard_calendar_day_cell(
 		badges.append("%dR" % reports.size())
 	if not meetings.is_empty():
 		badges.append("%dM" % meetings.size())
+	if not index_reviews.is_empty():
+		badges.append("%dIR" % index_reviews.size())
 	if not badges.is_empty():
 		label.text = "%d\n%s" % [day_value, " ".join(badges)]
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -8359,7 +8465,7 @@ func _build_dashboard_calendar_day_cell(
 		fill_color = Color(0.054902, 0.0705882, 0.0901961, 0.72)
 		border_color = Color(0.141176, 0.176471, 0.215686, 0.6)
 		text_color = COLOR_MUTED
-	if not reports.is_empty() or not meetings.is_empty():
+	if not reports.is_empty() or not meetings.is_empty() or not index_reviews.is_empty():
 		fill_color = Color(0.192157, 0.152941, 0.0823529, 0.96)
 		border_color = COLOR_WARNING
 		text_color = Color(1, 0.941176, 0.760784, 1)
@@ -8367,6 +8473,10 @@ func _build_dashboard_calendar_day_cell(
 		fill_color = Color(0.0901961, 0.164706, 0.168627, 0.96)
 		border_color = COLOR_ACCENT
 		text_color = Color(0.815686, 0.933333, 1, 1)
+	if reports.is_empty() and meetings.is_empty() and not index_reviews.is_empty():
+		fill_color = Color(0.121569, 0.137255, 0.207843, 0.96)
+		border_color = Color(0.517647, 0.658824, 0.92549, 1)
+		text_color = Color(0.858824, 0.901961, 1, 1)
 	if is_current_day:
 		fill_color = Color(0.219608, 0.439216, 0.65098, 0.92)
 		border_color = COLOR_NAV_ACTIVE_BORDER
@@ -8392,23 +8502,24 @@ func _on_dashboard_calendar_day_cell_gui_input(
 	event: InputEvent,
 	date_info: Dictionary,
 	reports: Array,
-	meetings: Array
+	meetings: Array,
+	index_reviews: Array
 ) -> void:
 	if event is InputEventMouseButton:
 		var mouse_button: InputEventMouseButton = event
 		if mouse_button.button_index == MOUSE_BUTTON_LEFT and mouse_button.pressed:
-			_show_dashboard_calendar_event_popup(date_info, reports, meetings)
+			_show_dashboard_calendar_event_popup(date_info, reports, meetings, index_reviews)
 			get_viewport().set_input_as_handled()
 
 
-func _show_dashboard_calendar_event_popup(date_info: Dictionary, reports: Array, meetings: Array) -> void:
+func _show_dashboard_calendar_event_popup(date_info: Dictionary, reports: Array, meetings: Array, index_reviews: Array) -> void:
 	_ensure_dashboard_calendar_event_popup()
 	if dashboard_calendar_event_popup == null:
 		return
 	if dashboard_calendar_event_title_label != null:
 		dashboard_calendar_event_title_label.text = GameManager.format_trade_date(date_info)
 	if dashboard_calendar_event_body_label != null:
-		dashboard_calendar_event_body_label.text = _build_dashboard_calendar_event_popup_body(reports, meetings)
+		dashboard_calendar_event_body_label.text = _build_dashboard_calendar_event_popup_body(reports, meetings, index_reviews)
 	_refresh_dashboard_calendar_event_actions(meetings)
 	dashboard_calendar_event_popup.visible = true
 	dashboard_calendar_event_popup.move_to_front()
@@ -8419,7 +8530,7 @@ func _hide_dashboard_calendar_event_popup() -> void:
 		dashboard_calendar_event_popup.visible = false
 
 
-func _build_dashboard_calendar_event_popup_body(reports: Array, meetings: Array) -> String:
+func _build_dashboard_calendar_event_popup_body(reports: Array, meetings: Array, index_reviews: Array) -> String:
 	var lines: Array = []
 	if not reports.is_empty():
 		lines.append("Reports")
@@ -8444,6 +8555,20 @@ func _build_dashboard_calendar_event_popup_body(reports: Array, meetings: Array)
 			if not summary.is_empty():
 				meeting_line += "\n  %s" % summary
 			lines.append(meeting_line)
+	if not index_reviews.is_empty():
+		if not lines.is_empty():
+			lines.append("")
+		lines.append("Index Reviews")
+		for review_value in index_reviews:
+			var review: Dictionary = review_value
+			var review_line: String = "- %s | %s" % [
+				str(review.get("provider_label", "Index")).strip_edges(),
+				str(review.get("label", "Review")).strip_edges()
+			]
+			var summary: String = str(review.get("public_summary", "")).strip_edges()
+			if not summary.is_empty():
+				review_line += "\n  %s" % summary
+			lines.append(review_line)
 	if lines.is_empty():
 		lines.append("No scheduled events.")
 	return "\n".join(lines)
@@ -8584,6 +8709,7 @@ func _refresh_help() -> void:
 func _refresh_debug_overlay() -> void:
 	_update_debug_generator_buttons_enabled(RunState.has_active_run())
 	_refresh_debug_corporate_action_controls()
+	_refresh_debug_index_review_controls()
 	if not RunState.has_active_run():
 		upcoming_events_label.text = "No active run."
 		current_events_label.text = "No active run."
@@ -8675,8 +8801,10 @@ func _on_console_command_submitted(command_text: String) -> void:
 func _build_debug_generator_controls() -> void:
 	debug_generator_buttons.clear()
 	debug_corporate_action_buttons.clear()
+	debug_index_review_buttons.clear()
 	debug_start_rupslb_button = null
 	debug_start_rupslb_status_label = null
+	debug_index_review_status_label = null
 	for child in debug_generator_groups.get_children():
 		child.queue_free()
 
@@ -8716,7 +8844,9 @@ func _build_debug_generator_controls() -> void:
 
 	_update_debug_generator_buttons_enabled(RunState.has_active_run())
 	_build_debug_corporate_action_controls()
+	_build_debug_index_review_controls()
 	_refresh_debug_corporate_action_controls()
+	_refresh_debug_index_review_controls()
 
 
 func _update_debug_generator_buttons_enabled(is_enabled: bool) -> void:
@@ -8730,6 +8860,11 @@ func _update_debug_generator_buttons_enabled(is_enabled: bool) -> void:
 		if corporate_button == null:
 			continue
 		corporate_button.disabled = not is_enabled
+	for button_value in debug_index_review_buttons.values():
+		var index_button: Button = button_value as Button
+		if index_button == null:
+			continue
+		index_button.disabled = not is_enabled
 
 
 func _on_debug_generate_event_pressed(event_id: String) -> void:
@@ -8953,6 +9088,199 @@ func _on_debug_corporate_action_pressed(generator_id: String) -> void:
 	_refresh_dashboard()
 	_refresh_news()
 	_refresh_network()
+	_refresh_trade_workspace()
+
+
+func _build_debug_index_review_controls() -> void:
+	if debug_generator_groups == null:
+		return
+	var group_label := Label.new()
+	group_label.name = "DebugIndexReviewsLabel"
+	group_label.text = "Index Review Generator"
+	group_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	group_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	_set_label_tone(group_label, COLOR_TEXT)
+	debug_generator_groups.add_child(group_label)
+
+	var status_label := Label.new()
+	status_label.name = "DebugIndexReviewStatusLabel"
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_tone(status_label, COLOR_MUTED)
+	debug_generator_groups.add_child(status_label)
+	debug_index_review_status_label = status_label
+
+	var hint_label := Label.new()
+	hint_label.name = "DebugIndexReviewsHintLabel"
+	hint_label.text = "Uses the selected STOCKBOT stock. Index generators create same-day MSCY/FTSI announcements and next-day effective passive flow."
+	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hint_label.add_theme_font_size_override("font_size", 11)
+	_set_label_tone(hint_label, COLOR_MUTED)
+	debug_generator_groups.add_child(hint_label)
+
+	for group_value in GameManager.get_debug_index_review_generator_catalog():
+		if typeof(group_value) != TYPE_DICTIONARY:
+			continue
+		var index_group: Dictionary = group_value
+		var generators: Array = index_group.get("generators", [])
+		if generators.is_empty():
+			continue
+
+		var subgroup_label := Label.new()
+		subgroup_label.text = str(index_group.get("label", "Index Review"))
+		subgroup_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		subgroup_label.add_theme_font_size_override("font_size", 11)
+		_set_label_tone(subgroup_label, COLOR_TEXT)
+		debug_generator_groups.add_child(subgroup_label)
+
+		var flow := HFlowContainer.new()
+		flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		flow.add_theme_constant_override("h_separation", 8)
+		flow.add_theme_constant_override("v_separation", 8)
+		debug_generator_groups.add_child(flow)
+
+		for generator_value in generators:
+			if typeof(generator_value) != TYPE_DICTIONARY:
+				continue
+			var generator: Dictionary = generator_value
+			var generator_id: String = str(generator.get("id", ""))
+			if generator_id.is_empty():
+				continue
+			var action_button := Button.new()
+			action_button.name = "DebugIndexReviewButton%s" % _debug_node_suffix(generator_id)
+			action_button.custom_minimum_size = Vector2(170, 34)
+			action_button.text = str(generator.get("label", "Index Review"))
+			action_button.tooltip_text = str(generator.get("description", "Generate an index review event for the selected stock."))
+			action_button.pressed.connect(_on_debug_index_review_pressed.bind(generator_id))
+			_style_button(action_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+			flow.add_child(action_button)
+			debug_index_review_buttons[generator_id] = action_button
+
+
+func _debug_index_review_generator_definition(generator_id: String) -> Dictionary:
+	for group_value in GameManager.get_debug_index_review_generator_catalog():
+		if typeof(group_value) != TYPE_DICTIONARY:
+			continue
+		var group: Dictionary = group_value
+		for generator_value in group.get("generators", []):
+			if typeof(generator_value) != TYPE_DICTIONARY:
+				continue
+			var generator: Dictionary = generator_value
+			if str(generator.get("id", "")) == generator_id:
+				return generator.duplicate(true)
+	return {}
+
+
+func _refresh_debug_index_review_controls() -> void:
+	if debug_index_review_status_label != null:
+		debug_index_review_status_label.text = str(_debug_index_review_status_state().get("status_text", "Pick a stock first."))
+	for generator_id_value in debug_index_review_buttons.keys():
+		var generator_id: String = str(generator_id_value)
+		var button: Button = debug_index_review_buttons.get(generator_id) as Button
+		if button == null:
+			continue
+		var button_state: Dictionary = _debug_index_review_target_state(generator_id)
+		button.disabled = not bool(button_state.get("enabled", false))
+		button.tooltip_text = str(button_state.get("tooltip_text", "Generate an index review event for the selected stock."))
+
+
+func _debug_index_review_status_state() -> Dictionary:
+	if not RunState.has_active_run():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "No active run. Start or load a run first."
+		}
+	if debug_index_review_buttons.is_empty():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "No index-review debug providers are loaded."
+		}
+	if selected_company_id.is_empty():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "Target: none | Pick a stock first."
+		}
+	var definition: Dictionary = RunState.get_effective_company_definition(selected_company_id, false, false)
+	if definition.is_empty():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "Target: none | Pick a valid stock first."
+		}
+	var ticker: String = str(definition.get("ticker", selected_company_id.to_upper()))
+	var company_index_snapshot: Dictionary = GameManager.get_company_index_review_snapshot(selected_company_id)
+	var status_suffix: String = str(company_index_snapshot.get("summary_label", "No MSCY/FTSI membership"))
+	return {
+		"enabled": true,
+		"company_id": selected_company_id,
+		"ticker": ticker,
+		"status_text": "Target: %s | %s | Buttons force MSCY/FTSI inclusion or exclusion." % [ticker, status_suffix]
+	}
+
+
+func _debug_index_review_target_state(generator_id: String) -> Dictionary:
+	var generator: Dictionary = _debug_index_review_generator_definition(generator_id)
+	if not RunState.has_active_run():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "No active run. Start or load a run first.",
+			"tooltip_text": "Start or load a run first."
+		}
+	if generator.is_empty():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "Unknown index-review generator.",
+			"tooltip_text": "Unknown index-review generator."
+		}
+	if selected_company_id.is_empty():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "Target: none | Pick a stock first.",
+			"tooltip_text": "Select a stock in STOCKBOT first."
+		}
+	var definition: Dictionary = RunState.get_effective_company_definition(selected_company_id, false, false)
+	if definition.is_empty():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "Target: none | Pick a valid stock first.",
+			"tooltip_text": "Select a valid stock in STOCKBOT first."
+		}
+	var ticker: String = str(definition.get("ticker", selected_company_id.to_upper()))
+	var company_index_snapshot: Dictionary = GameManager.get_company_index_review_snapshot(selected_company_id)
+	var provider_label: String = str(generator.get("label", "Index Review")).split(" ")[0]
+	var status_suffix: String = str(company_index_snapshot.get("summary_label", "No MSCY/FTSI membership"))
+	return {
+		"enabled": true,
+		"company_id": selected_company_id,
+		"ticker": ticker,
+		"status_text": "Target: %s | %s | %s." % [ticker, provider_label, status_suffix],
+		"tooltip_text": str(generator.get("description", "Generate an index review event for the selected stock."))
+	}
+
+
+func _on_debug_index_review_pressed(generator_id: String) -> void:
+	var state: Dictionary = _debug_index_review_target_state(generator_id)
+	if not bool(state.get("enabled", false)):
+		_show_toast(str(state.get("status_text", "Could not generate index review.")), false)
+		_refresh_debug_index_review_controls()
+		return
+	var company_id: String = str(state.get("company_id", ""))
+	var result: Dictionary = GameManager.debug_generate_index_review(generator_id, company_id)
+	_show_toast(str(result.get("message", "Debug index review updated.")), bool(result.get("success", false)))
+	_refresh_debug_overlay()
+	if not bool(result.get("success", false)):
+		return
+	_refresh_dashboard()
+	_refresh_news()
+	_refresh_social()
 	_refresh_trade_workspace()
 
 
@@ -9649,14 +9977,28 @@ func _refresh_profile_company_layout(snapshot: Dictionary, detail_ready: bool) -
 		return
 
 	profile_background_title_label.text = "Company Background"
-	profile_background_meta_label.text = "%s | %s | %s | %s board" % [
+	var index_snapshot: Dictionary = snapshot.get("index_review", {})
+	var meta_parts: Array = [
 		str(snapshot.get("ticker", "")),
 		str(snapshot.get("sector_name", "Unknown")),
 		str(snapshot.get("archetype_label", "Unclassified")),
-		str(snapshot.get("listing_board", "main")).capitalize()
+		"%s board" % str(snapshot.get("listing_board", "main")).capitalize()
 	]
+	var index_summary: String = str(index_snapshot.get("summary_label", "")).strip_edges()
+	if not index_summary.is_empty():
+		meta_parts.append(index_summary)
+	profile_background_meta_label.text = " | ".join(meta_parts)
 	profile_background_body_label.text = _build_profile_background_text(snapshot, detail_ready)
-	_refresh_profile_tags(snapshot.get("profile_tags", []) if detail_ready else [])
+	var profile_tags: Array = snapshot.get("profile_tags", []).duplicate() if detail_ready else []
+	for membership_label_value in index_snapshot.get("membership_labels", []):
+		var membership_label: String = str(membership_label_value).strip_edges()
+		if not membership_label.is_empty():
+			profile_tags.append("%s member" % membership_label)
+	for candidate_label_value in index_snapshot.get("candidate_labels", []):
+		var candidate_label: String = str(candidate_label_value).strip_edges()
+		if not candidate_label.is_empty():
+			profile_tags.append(candidate_label)
+	_refresh_profile_tags(profile_tags)
 	_refresh_profile_shareholder_table(snapshot)
 	_refresh_profile_management_table(snapshot)
 
@@ -9685,7 +10027,7 @@ func _build_profile_tag_pill(tag_text: String) -> PanelContainer:
 	style.content_margin_bottom = 3
 	pill.add_theme_stylebox_override("panel", style)
 	var label := Label.new()
-	label.text = tag_text.replace("_", " ").capitalize()
+	label.text = tag_text if tag_text.contains("MSCY") or tag_text.contains("FTSI") else tag_text.replace("_", " ").capitalize()
 	label.add_theme_color_override("font_color", COLOR_POSITIVE)
 	label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE, _get_app_font())
@@ -14237,10 +14579,11 @@ func _set_active_app(app_id: String) -> void:
 
 
 func _apply_window_layout() -> void:
-	var window_margin_left: float = APP_WINDOW_INSET
-	var window_margin_top: float = APP_WINDOW_INSET
-	var window_margin_right: float = APP_WINDOW_INSET
-	var window_margin_bottom: float = APP_WINDOW_FRAME_BOTTOM_MARGIN
+	var safe_insets: Vector4 = _desktop_safe_insets()
+	var window_margin_left: float = APP_WINDOW_INSET + safe_insets.x
+	var window_margin_top: float = APP_WINDOW_INSET + safe_insets.y
+	var window_margin_right: float = APP_WINDOW_INSET + safe_insets.z
+	var window_margin_bottom: float = APP_WINDOW_FRAME_BOTTOM_MARGIN + safe_insets.w
 	var social_margin_left: float = APP_WINDOW_CONTENT_MARGIN
 	var social_margin_top: float = APP_WINDOW_CONTENT_TOP_MARGIN
 	var social_margin_right: float = APP_WINDOW_CONTENT_MARGIN
@@ -14271,12 +14614,12 @@ func _apply_window_layout() -> void:
 	app_content_margin.add_theme_constant_override("margin_top", APP_WINDOW_INNER_PADDING)
 	app_content_margin.add_theme_constant_override("margin_right", APP_WINDOW_INNER_PADDING)
 	app_content_margin.add_theme_constant_override("margin_bottom", APP_WINDOW_INNER_PADDING)
-	top_bar_outer_margin.add_theme_constant_override("margin_left", 0)
-	top_bar_outer_margin.add_theme_constant_override("margin_top", 0)
-	top_bar_outer_margin.add_theme_constant_override("margin_right", 0)
-	sidebar_outer_margin.add_theme_constant_override("margin_left", 0)
-	sidebar_outer_margin.add_theme_constant_override("margin_top", 0)
-	sidebar_outer_margin.add_theme_constant_override("margin_bottom", 0)
+	top_bar_outer_margin.add_theme_constant_override("margin_left", int(safe_insets.x))
+	top_bar_outer_margin.add_theme_constant_override("margin_top", int(safe_insets.y))
+	top_bar_outer_margin.add_theme_constant_override("margin_right", int(safe_insets.z))
+	sidebar_outer_margin.add_theme_constant_override("margin_left", int(safe_insets.x))
+	sidebar_outer_margin.add_theme_constant_override("margin_top", int(safe_insets.y))
+	sidebar_outer_margin.add_theme_constant_override("margin_bottom", int(safe_insets.w))
 	news_window.add_theme_constant_override("margin_left", APP_WINDOW_CONTENT_MARGIN)
 	news_window.add_theme_constant_override("margin_top", APP_WINDOW_CONTENT_TOP_MARGIN)
 	news_window.add_theme_constant_override("margin_right", APP_WINDOW_CONTENT_MARGIN)

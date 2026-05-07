@@ -56,6 +56,7 @@ KNOWN_TEMPLATE_TOKENS = {
     "target_sector_id",
     "sector_name",
     "person_name",
+    "provider_label",
     "scope",
     "tone",
     "focus_label",

@@ -558,6 +558,8 @@ func _build_public_sector_brief_source(company_rows: Array, current_trade_date: 
 
 func _is_public_calendar_event(event_data: Dictionary) -> bool:
 	var category: String = str(event_data.get("category", ""))
+	if str(event_data.get("event_family", "")) == "index_review" or category.begins_with("index_"):
+		return true
 	if category == "corporate_meeting" or not str(event_data.get("meeting_id", "")).is_empty():
 		return true
 	if category in ["corporate_action_filing", "corporate_action_resolution", "corporate_action_execution", "corporate_action_cancellation"]:
@@ -567,6 +569,13 @@ func _is_public_calendar_event(event_data: Dictionary) -> bool:
 
 func _build_public_calendar_source(event_data: Dictionary) -> Dictionary:
 	var source_data: Dictionary = event_data.duplicate(true)
+	if str(source_data.get("event_family", "")) == "index_review" or str(source_data.get("category", "")).begins_with("index_"):
+		var provider_label: String = str(source_data.get("provider_label", "Index"))
+		var ticker: String = str(source_data.get("target_ticker", ""))
+		source_data["scope"] = str(source_data.get("scope", "market" if ticker.is_empty() else "company"))
+		source_data["headline"] = "%s review is on the calendar" % provider_label
+		source_data["summary"] = "%s review timing is now visible. Traders are watching announcement and effective-date passive flow." % provider_label
+		return source_data
 	var ticker: String = str(source_data.get("target_ticker", ""))
 	var focus_label: String = ticker if not ticker.is_empty() else str(source_data.get("target_company_name", "The company"))
 	source_data["scope"] = "company"
@@ -751,6 +760,7 @@ func _build_story_context(
 	var sector_name: String = str(sector_context.get("name", "the market"))
 	var scope: String = str(source_data.get("scope", "company"))
 	var person_name: String = str(source_data.get("person_name", ""))
+	var provider_label: String = str(source_data.get("provider_label", ""))
 
 	var focus_label: String = "Index Gorengan"
 	if not target_ticker.is_empty():
@@ -759,6 +769,8 @@ func _build_story_context(
 		focus_label = sector_name
 	elif not person_name.is_empty():
 		focus_label = person_name
+	elif not provider_label.is_empty():
+		focus_label = provider_label
 	elif scope == "market":
 		focus_label = "Index Gorengan"
 
@@ -769,6 +781,8 @@ func _build_story_context(
 		subject_label = sector_name
 	elif not person_name.is_empty():
 		subject_label = person_name
+	elif not provider_label.is_empty():
+		subject_label = provider_label
 	var subject_reference: String = subject_label
 	if not target_company_name.is_empty() and not target_ticker.is_empty():
 		subject_reference = "%s (%s)" % [target_company_name, target_ticker]
@@ -818,6 +832,7 @@ func _build_story_context(
 		"target_sector_id": target_sector_id,
 		"sector_name": sector_name,
 		"person_name": person_name,
+		"provider_label": provider_label,
 		"scope": scope,
 		"tone": tone,
 		"focus_label": focus_label,
@@ -975,6 +990,12 @@ func _continuity_phrase_for_source(source_data: Dictionary, article_day_index: i
 
 func _public_memory_label(source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category == "index_inclusion":
+		return "index inclusion"
+	if category == "index_exclusion":
+		return "index exclusion"
+	if category == "index_watch":
+		return "index review watch"
 	if category == "corporate_action_rumor":
 		return "market talk"
 	if category == "corporate_action_speculation":
@@ -1034,6 +1055,12 @@ func _public_detail_hint(source_data: Dictionary, phase_phrase: String) -> Strin
 		return "the story is shifting from approval into execution"
 	if category == "corporate_action_cancellation":
 		return "the setup has lost momentum and the market is resetting expectations"
+	if category == "index_inclusion":
+		return "the review list points to potential passive buying around the effective date"
+	if category == "index_exclusion":
+		return "the review list points to potential passive selling around the effective date"
+	if category == "index_watch":
+		return "index-review positioning is active while traders wait for the formal list"
 	if category.begins_with("corporate_action"):
 		return "the corporate-action track is now in %s" % phase_phrase
 	return ""
@@ -1078,6 +1105,9 @@ func _pick_driver_phrase(feed_data: Dictionary, source_data: Dictionary, tone: S
 	var keys: Array = []
 	if category == "market_wrap":
 		keys.append("market_wrap")
+	if category.begins_with("index_"):
+		keys.append("index_review_%s" % tone)
+		keys.append("index_review")
 	if not category.is_empty():
 		keys.append("%s_%s" % [category, tone])
 		keys.append(category)
@@ -1135,6 +1165,8 @@ func _body_template_keys(source_data: Dictionary) -> Array:
 		keys.append("corporate_action")
 	if category == "corporate_meeting":
 		keys.append("corporate_meeting")
+	if category.begins_with("index_"):
+		keys.append("index_review")
 	if category == "rumor_positive" or category == "rumor_negative" or category == "rumor":
 		keys.append("rumor")
 	if event_family == "special" or scope == "market":
@@ -1152,6 +1184,8 @@ func _body_template_keys(source_data: Dictionary) -> Array:
 
 func _category_family_key(source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("index_") or str(source_data.get("event_family", "")) == "index_review":
+		return "index_review"
 	if category.begins_with("corporate_action"):
 		return "corporate_action"
 	if category == "corporate_meeting":
@@ -1172,6 +1206,10 @@ func _category_family_key(source_data: Dictionary) -> String:
 
 func _public_confidence_label(stage_key: String, source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category == "index_inclusion" or category == "index_exclusion":
+		return "Effective flow" if str(source_data.get("review_stage", "")) == "effective" else "Review list"
+	if category == "index_watch":
+		return "Review watch"
 	if category == "corporate_action_filing" or category == "corporate_action_resolution" or category == "corporate_action_execution":
 		return "Filing-backed"
 	if category == "corporate_meeting":
@@ -1193,6 +1231,8 @@ func _public_confidence_label(stage_key: String, source_data: Dictionary) -> Str
 
 func _public_story_angle(source_data: Dictionary, stage_key: String, tone: String, scope: String) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("index_") or str(source_data.get("event_family", "")) == "index_review":
+		return "Index review"
 	if category.begins_with("corporate_action"):
 		return "Corporate action"
 	if category == "corporate_meeting":
@@ -1271,6 +1311,8 @@ func _public_status_label(feed_data: Dictionary, progress_key: String, stage_key
 func _public_section_label(source_data: Dictionary, context: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
 	var event_family: String = str(source_data.get("event_family", ""))
+	if category.begins_with("index_") or event_family == "index_review":
+		return "Index Review"
 	if category.begins_with("corporate_action") or category == "corporate_meeting":
 		return "Boardroom"
 	if event_family == "market" or category == "market_wrap":
@@ -1288,6 +1330,8 @@ func _public_section_label(source_data: Dictionary, context: Dictionary) -> Stri
 
 func _image_slot_for_article(source_data: Dictionary, context: Dictionary, stage_key: String) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("index_") or str(source_data.get("event_family", "")) == "index_review":
+		return "market"
 	if category.begins_with("corporate_action") or category == "corporate_meeting":
 		return "boardroom"
 	if stage_key == "market_wrap" or str(context.get("scope", "")) == "market":
@@ -1336,29 +1380,51 @@ func _render_template(template: String, context: Dictionary) -> String:
 	for context_key in context.keys():
 		var placeholder: String = "{%s}" % str(context_key)
 		rendered = rendered.replace(placeholder, str(context.get(context_key, "")))
-	return rendered
+	return _clean_generated_copy(rendered)
 
 
 func _join_sentences(lines: Array) -> String:
 	var sentences: Array = []
 	for line_value in lines:
-		var sentence: String = str(line_value).strip_edges()
+		var sentence: String = _clean_generated_copy(str(line_value))
 		if sentence.is_empty():
 			continue
 		if not sentence.ends_with(".") and not sentence.ends_with("!") and not sentence.ends_with("?"):
 			sentence += "."
-		sentences.append(sentence)
+		sentences.append(_clean_generated_copy(sentence))
 	return " ".join(sentences)
 
 
 func _join_paragraphs(paragraphs: Array) -> String:
 	var filtered: Array = []
 	for paragraph_value in paragraphs:
-		var paragraph: String = str(paragraph_value).strip_edges()
+		var paragraph: String = _clean_generated_copy(str(paragraph_value))
 		if paragraph.is_empty():
 			continue
 		filtered.append(paragraph)
 	return "\n\n".join(filtered)
+
+
+func _clean_generated_copy(value: String) -> String:
+	var cleaned: String = value.strip_edges()
+	var replacements: Array = [
+		[" .", "."],
+		[" ,", ","],
+		[" ;", ";"],
+		[" :", ":"],
+		[" !", "!"],
+		[" ?", "?"],
+		["?.", "?"],
+		["!.", "!"],
+		["..", "."],
+		["!!", "!"],
+		["??", "?"]
+	]
+	for _iteration in range(3):
+		cleaned = cleaned.replace("  ", " ")
+		for replacement in replacements:
+			cleaned = cleaned.replace(str(replacement[0]), str(replacement[1]))
+	return cleaned
 
 
 func _progress_key_for_ratio(progress_ratio: float) -> String:

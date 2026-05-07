@@ -31,6 +31,8 @@ TOOL_SPECS = [
     {
         "id": "academy",
         "label": "Academy",
+        "port": 8765,
+        "description": "Lesson catalog, pages, blocks, quiz data, and lesson metadata.",
         "server": PROJECT_ROOT / "tools" / "academy_editor" / "server.py",
         "source": PROJECT_ROOT / "tools" / "academy_editor" / "academy_source.json",
         "runtime": ["data/academy/academy_catalog.json"],
@@ -38,6 +40,8 @@ TOOL_SPECS = [
     {
         "id": "news",
         "label": "News",
+        "port": 8766,
+        "description": "News outlets, authors, body slots, voice templates, and generated article copy pools.",
         "server": PROJECT_ROOT / "tools" / "news_editor" / "server.py",
         "source": PROJECT_ROOT / "tools" / "news_editor" / "news_source.json",
         "runtime": ["data/news/news_feed_data.json"],
@@ -45,6 +49,8 @@ TOOL_SPECS = [
     {
         "id": "twooter",
         "label": "Twooter",
+        "port": 8767,
+        "description": "Social accounts, post templates, fallback pools, threads, and continuity copy.",
         "server": PROJECT_ROOT / "tools" / "twooter_editor" / "server.py",
         "source": PROJECT_ROOT / "tools" / "twooter_editor" / "twooter_source.json",
         "runtime": ["data/social/twooter_feed_data.json"],
@@ -52,6 +58,8 @@ TOOL_SPECS = [
     {
         "id": "network",
         "label": "Network",
+        "port": 8768,
+        "description": "Contacts, relationship gates, tip copy, request copy, meetings, and lead templates.",
         "server": PROJECT_ROOT / "tools" / "network_editor" / "server.py",
         "source": PROJECT_ROOT / "tools" / "network_editor" / "network_source.json",
         "runtime": ["data/network/contact_network_data.json"],
@@ -59,6 +67,8 @@ TOOL_SPECS = [
     {
         "id": "corporate_action",
         "label": "Corporate Action",
+        "port": 8769,
+        "description": "Corporate-action stages, agendas, family metadata, and market impact parameters.",
         "server": PROJECT_ROOT / "tools" / "corporate_action_editor" / "server.py",
         "source": PROJECT_ROOT / "tools" / "corporate_action_editor" / "corporate_action_source.json",
         "runtime": ["data/corporate_actions/corporate_action_catalog.json"],
@@ -66,6 +76,8 @@ TOOL_SPECS = [
     {
         "id": "broker_roster",
         "label": "Broker Roster",
+        "port": 8770,
+        "description": "Broker identities, desks, style tags, flow bias, and roster presentation data.",
         "server": PROJECT_ROOT / "tools" / "broker_roster_editor" / "server.py",
         "source": PROJECT_ROOT / "tools" / "broker_roster_editor" / "broker_roster_source.json",
         "runtime": ["data/brokers/broker_roster.json"],
@@ -73,6 +85,8 @@ TOOL_SPECS = [
     {
         "id": "company_narrative",
         "label": "Company Narrative",
+        "port": 8771,
+        "description": "Company archetypes, naming words, profile copy, and generated roster narrative pools.",
         "server": PROJECT_ROOT / "tools" / "company_narrative_editor" / "server.py",
         "source": PROJECT_ROOT / "tools" / "company_narrative_editor" / "company_narrative_source.json",
         "runtime": [
@@ -84,6 +98,8 @@ TOOL_SPECS = [
     {
         "id": "balance_upgrades",
         "label": "Balance / Upgrades",
+        "port": 8772,
+        "description": "Upgrade catalog costs, unlocks, balance metadata, and progression copy.",
         "server": PROJECT_ROOT / "tools" / "balance_upgrades_editor" / "server.py",
         "source": PROJECT_ROOT / "tools" / "balance_upgrades_editor" / "balance_upgrades_source.json",
         "runtime": ["data/upgrades/upgrade_catalog.json"],
@@ -91,6 +107,8 @@ TOOL_SPECS = [
     {
         "id": "event_content",
         "label": "Event Content",
+        "port": 8773,
+        "description": "Market event definitions, special events, tone, scope, duration, and shock parameters.",
         "server": PROJECT_ROOT / "tools" / "event_content_editor" / "server.py",
         "source": PROJECT_ROOT / "tools" / "event_content_editor" / "event_content_source.json",
         "runtime": ["data/events/events.json"],
@@ -105,9 +123,13 @@ RUNTIME_FILES = sorted({
     "data/sectors/sectors.json",
     "data/steam/achievement_catalog.json",
     "data/calendar/idx_holidays.json",
+    "data/index_reviews/index_review_catalog.json",
 })
 
 TOKEN_RE = re.compile(r"\{([A-Za-z0-9_]+)\}")
+UNRESOLVED_TOKEN_RE = re.compile(r"\{[A-Za-z0-9_]+\}")
+MULTI_PUNCT_RE = re.compile(r"(\.{2,}|!!+|\?\?+)")
+SPACE_BEFORE_PUNCT_RE = re.compile(r"\s+[,.!?;:]")
 
 
 def read_json(path: Path):
@@ -129,6 +151,12 @@ def run_tool_validator(spec: dict) -> dict:
     result = {
         "id": spec["id"],
         "label": spec["label"],
+        "description": spec.get("description", ""),
+        "port": spec.get("port", 0),
+        "launch_url": f"http://127.0.0.1:{spec.get('port', 0)}" if spec.get("port") else "",
+        "launch_command": python_tool_command(spec["server"]),
+        "validate_command": python_tool_command(spec["server"], "--validate"),
+        "dry_run_export_command": python_tool_command(spec["server"], "--export", "--dry-run"),
         "source": relative_path(spec["source"]),
         "runtime": spec["runtime"],
         "valid": False,
@@ -269,6 +297,11 @@ def relative_path(path: Path) -> str:
         return str(path)
 
 
+def python_tool_command(path: Path, *args: str) -> str:
+    parts = ["python3", relative_path(path), *args]
+    return " ".join(parts)
+
+
 def build_preview(seed: int = 42) -> dict:
     rng = random.Random(seed)
     event_rows = read_json(PROJECT_ROOT / "data" / "events" / "events.json")
@@ -284,7 +317,7 @@ def build_preview(seed: int = 42) -> dict:
     event = rng.choice(event_rows)
     sector = rng.choice(sectors)
     context = preview_context(event, sector)
-    return {
+    preview = {
         "seed": seed,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "sections": [
@@ -297,28 +330,64 @@ def build_preview(seed: int = 42) -> dict:
             academy_preview_section(rng, academy_data),
         ],
     }
+    normalize_preview_payload(preview)
+    preview["quality"] = collect_preview_quality(preview)
+    preview["quality_summary"] = {
+        "issues": len(preview["quality"]),
+        "errors": len([row for row in preview["quality"] if row.get("severity") == "error"]),
+        "warnings": len([row for row in preview["quality"] if row.get("severity") == "warning"]),
+    }
+    return preview
 
 
 def preview_context(event: dict, sector: dict) -> dict:
     ticker = "MBNK"
     company_name = "Mock Bank Tbk"
-    focus_label = event.get("headline_template") or event.get("description") or event.get("id", "market event")
+    scope = str(event.get("scope", "company"))
+    sector_name = str(sector.get("name", "Finance"))
+    provider_label = str(event.get("provider_label", "MSCY"))
+    focus_label = ticker
+    if scope == "market":
+        focus_label = "Index Gorengan"
+    elif scope == "sector":
+        focus_label = sector_name
+    elif str(event.get("person_name", "")).strip():
+        focus_label = str(event.get("person_name", "")).strip()
+    if str(event.get("event_family", "")) == "index_review" or str(event.get("category", "")).startswith("index_"):
+        focus_label = ticker if scope == "company" else provider_label
+    detail = str(event.get("headline_detail_template") or event.get("description") or "the setup is still developing")
     return {
         "target_ticker": ticker,
         "ticker": ticker,
         "target_company_name": company_name,
         "company_name": company_name,
+        "company": company_name,
+        "contact": "contact",
+        "agenda": "the next market update",
+        "provider_label": provider_label,
         "focus_label": focus_label,
-        "sector_name": str(sector.get("name", "Finance")),
+        "scope": scope,
+        "headline_hint": str(event.get("headline_template", "")),
+        "detail_hint": detail,
+        "sector_name": sector_name,
         "market_change": "mixed with selective buying",
+        "market_state_label": "mixed",
+        "advancers": "142",
+        "decliners": "136",
         "breadth_summary": "winners and losers are split across the board",
         "driver_phrase": str(event.get("description", "a fresh market driver is changing positioning")),
-        "detail_blend": str(event.get("description", "the setup is still developing")),
+        "detail_blend": detail,
         "subject_reference": company_name,
         "desk_watch": "Dealers are watching whether the move gets follow-through",
         "formal_phrase": "The formal read is still developing",
         "analysis_phrase": "The market wants confirmation",
+        "reaction_phrase": "waiting for confirmation",
         "watch_phrase": "The next session should show whether the move has real depth.",
+        "price_action_label": "trying to hold its first reaction",
+        "flow_label": "broker flow is still mixed",
+        "market_jargon": "leadership has not fully broadened",
+        "whisper_phrase": "Early desk chatter suggests",
+        "continuity_phrase": "This follows an earlier market read.",
         "biggest_winner": "MBNK",
         "biggest_loser": "RISK",
         "tone": str(event.get("tone", "mixed")),
@@ -358,7 +427,7 @@ def company_preview_section(rng: random.Random, profile_data: dict, word_data: d
         rows.append({
             "title": f"{ticker} - {name}",
             "meta": f"{sector.get('name', sector.get('id', 'Sector'))} / {archetype.get('label', archetype_id)} / size {size_id}",
-            "body": render_template(template, context),
+            "body": ensure_terminal_punctuation(render_template(template, context)),
         })
     return {"id": "companies", "label": "Company Narrative Samples", "items": rows}
 
@@ -409,11 +478,25 @@ def twooter_preview_section(rng: random.Random, data: dict, context: dict) -> di
     accounts = data.get("accounts", [])
     voices = data.get("voice_templates", {})
     fallback = data.get("fallback_templates", {})
+    fallback_posts = data.get("fallback_posts", {})
     rows = []
     for account in rng.sample(accounts, min(6, len(accounts))):
         voice = voices.get(account.get("voice", ""), {})
-        key = twooter_template_key(context)
-        template = choose(rng, voice.get(key, []), "") or choose(rng, fallback.get(key, []), "") or choose(rng, data.get("fallback_posts", []), "")
+        template = ""
+        keys = twooter_template_keys(context)
+        for key in keys:
+            template = choose(rng, voice.get(key, []), "")
+            if template:
+                break
+        if not template:
+            for key in keys:
+                template = choose(rng, fallback.get(key, []), "")
+                if template:
+                    break
+        if not template and isinstance(fallback_posts, dict):
+            template = choose(rng, fallback_posts.get("all", []), "")
+        if not template:
+            template = choose(rng, fallback_posts, "")
         rows.append({
             "title": "%s %s" % (account.get("display_name", "Account"), account.get("handle", "")),
             "meta": "tier %s / %s" % (account.get("tier", ""), account.get("voice", "")),
@@ -422,11 +505,50 @@ def twooter_preview_section(rng: random.Random, data: dict, context: dict) -> di
     return {"id": "twooter", "label": "Generated Twooter Posts", "items": rows}
 
 
-def twooter_template_key(context: dict) -> str:
-    if context.get("event_id", "").startswith("market") or context.get("category") in ["market", "macro_shock"]:
+def twooter_template_keys(context: dict) -> list[str]:
+    category = str(context.get("category", ""))
+    tone = str(context.get("tone", "mixed"))
+    scope = str(context.get("scope", "company"))
+    keys = []
+    if category:
+        keys.append(category)
+    if category.startswith("index_"):
+        keys.append("index_review")
+    if category.startswith("corporate_action"):
+        keys.append("corporate_action")
+    if category == "corporate_meeting":
+        keys.append("corporate_meeting")
+    if scope == "market":
+        keys.extend([f"market_{tone}", "market_wrap"])
+    elif scope == "sector":
+        keys.append(f"sector_{tone}")
+    else:
+        keys.append(f"company_{tone}")
+    family_key = category_family_key(category, scope)
+    if family_key:
+        keys.append(family_key)
+    keys.extend([f"company_{tone}", "company", "all"])
+    unique = []
+    for key in keys:
+        if key and key not in unique:
+            unique.append(key)
+    return unique
+
+
+def category_family_key(category: str, scope: str) -> str:
+    if category.startswith("index_"):
+        return "index_review"
+    if category.startswith("corporate_action"):
+        return "corporate_action"
+    if category == "corporate_meeting":
+        return "corporate_meeting"
+    if category in ["earnings", "management", "market_wrap"]:
+        return category
+    if "commodity" in category:
+        return "commodity"
+    if scope == "market":
         return "market_wrap"
-    tone = "negative" if context.get("tone") == "negative" else "positive"
-    return f"company_{tone}"
+    return "company"
 
 
 def network_preview_section(rng: random.Random, data: dict, context: dict) -> dict:
@@ -486,18 +608,18 @@ def corporate_preview_section(rng: random.Random, data: dict, context: dict) -> 
 
 def academy_preview_section(rng: random.Random, data: dict) -> dict:
     categories = data.get("categories", [])
-    playable = [row for row in categories if row.get("sections")]
-    category = choose(rng, playable, {})
-    section = choose(rng, category.get("sections", []), {})
+    playable_sections = [
+        (category, section)
+        for category in categories
+        for section in category.get("sections", [])
+        if section.get("content_blocks") or section.get("pages")
+    ]
+    category, section = choose(rng, playable_sections, ({}, {}))
     blocks = section.get("content_blocks", [])
     pages = section.get("pages", [])
-    body = ""
-    if blocks:
-        block = choose(rng, blocks, {})
-        body = "\n".join([str(block.get("heading", "")), str(block.get("body", ""))]).strip()
-    elif pages:
-        page = choose(rng, pages, {})
-        body = "\n".join([str(page.get("heading", "")), str(page.get("body", ""))]).strip()
+    content_rows = [academy_content_body(row) for row in [*blocks, *pages]]
+    content_rows = [row for row in content_rows if row.strip()]
+    body = choose(rng, content_rows, "")
     return {
         "id": "academy",
         "label": "Academy Lesson Preview",
@@ -507,6 +629,17 @@ def academy_preview_section(rng: random.Random, data: dict) -> dict:
             "body": body,
         }],
     }
+
+
+def academy_content_body(row: dict) -> str:
+    parts = [
+        str(row.get("heading", row.get("title", row.get("label", "")))),
+        str(row.get("body", row.get("text", row.get("description", "")))),
+    ]
+    bullets = row.get("bullets", [])
+    if isinstance(bullets, list) and bullets:
+        parts.extend(f"- {bullet}" for bullet in bullets)
+    return "\n".join(part for part in parts if str(part).strip()).strip()
 
 
 def choose(rng: random.Random, value, default):
@@ -535,9 +668,121 @@ def choose_template(rng: random.Random, container, preferred_key: str) -> str:
 def render_template(template: str, context: dict) -> str:
     def replace(match: re.Match) -> str:
         token = match.group(1)
-        return str(context.get(token, context.get(token.lower(), token.lower().replace("_", " "))))
+        return str(context.get(token, context.get(token.lower(), "{%s}" % token)))
 
     return TOKEN_RE.sub(replace, str(template or ""))
+
+
+def normalize_preview_payload(preview: dict) -> None:
+    for section in preview.get("sections", []):
+        for item in section.get("items", []):
+            item["title"] = clean_copy(item.get("title", ""))
+            item["meta"] = clean_copy(item.get("meta", ""))
+            item["body"] = clean_copy(item.get("body", ""), preserve_newlines=True)
+
+
+def clean_copy(value, preserve_newlines: bool = False) -> str:
+    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    if preserve_newlines:
+        lines = [re.sub(r"[ \t]+", " ", line).strip() for line in text.split("\n")]
+        text = "\n".join(lines)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+    else:
+        text = re.sub(r"\s+", " ", text)
+    replacements = [
+        (" .", "."),
+        (" ,", ","),
+        (" ;", ";"),
+        (" :", ":"),
+        (" !", "!"),
+        (" ?", "?"),
+        ("?.", "?"),
+        ("!.", "!"),
+        ("..", "."),
+        ("!!", "!"),
+        ("??", "?"),
+    ]
+    for _ in range(3):
+        for old, new in replacements:
+            text = text.replace(old, new)
+    return text.strip()
+
+
+def ensure_terminal_punctuation(value) -> str:
+    text = clean_copy(value)
+    if text and text[-1] not in ".!?":
+        text += "."
+    return text
+
+
+def collect_preview_quality(preview: dict) -> list[dict]:
+    issues: list[dict] = []
+    for section in preview.get("sections", []):
+        section_id = str(section.get("id", ""))
+        section_label = str(section.get("label", section_id))
+        for index, item in enumerate(section.get("items", []), start=1):
+            item_title = clean_copy(item.get("title", "")) or f"item {index}"
+            for field in ["title", "meta", "body"]:
+                text = str(item.get(field, ""))
+                context = {
+                    "section_id": section_id,
+                    "section_label": section_label,
+                    "item_index": index,
+                    "item_title": item_title,
+                    "field": field,
+                }
+                if field in ["title", "body"] and not text.strip():
+                    issues.append(preview_issue(context, "warning", f"{field} is empty.", text))
+                if UNRESOLVED_TOKEN_RE.search(text):
+                    issues.append(preview_issue(context, "error", f"{field} has an unresolved template token.", text))
+                if MULTI_PUNCT_RE.search(text):
+                    issues.append(preview_issue(context, "warning", f"{field} has repeated punctuation.", text))
+                if re.search(r"[ \t]{2,}", text):
+                    issues.append(preview_issue(context, "warning", f"{field} has repeated spaces.", text))
+                if SPACE_BEFORE_PUNCT_RE.search(text):
+                    issues.append(preview_issue(context, "warning", f"{field} has a space before punctuation.", text))
+                if field == "title" and len(text) > 110:
+                    issues.append(preview_issue(context, "warning", "title is longer than 110 characters.", text))
+                if field == "body" and len(text) > 1800:
+                    issues.append(preview_issue(context, "warning", "body is longer than 1800 characters.", text))
+    return issues
+
+
+def preview_issue(context: dict, severity: str, message: str, sample: str) -> dict:
+    compact_sample = clean_copy(sample, preserve_newlines=False)
+    if len(compact_sample) > 220:
+        compact_sample = compact_sample[:217].rstrip() + "..."
+    return {
+        **context,
+        "severity": severity,
+        "message": message,
+        "sample": compact_sample,
+    }
+
+
+def build_preview_scan(seed: int = 42, count: int = 20) -> dict:
+    bounded_count = max(1, min(int(count), 200))
+    rows = []
+    total_issues = 0
+    for current_seed in range(seed, seed + bounded_count):
+        preview = build_preview(current_seed)
+        issues = preview.get("quality", [])
+        total_issues += len(issues)
+        rows.append({
+            "seed": current_seed,
+            "section_count": len(preview.get("sections", [])),
+            "item_count": sum(len(section.get("items", [])) for section in preview.get("sections", [])),
+            "issue_count": len(issues),
+            "issues": issues[:12],
+        })
+    return {
+        "seed": seed,
+        "count": bounded_count,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "total_issues": total_issues,
+        "seeds_with_issues": len([row for row in rows if row.get("issue_count", 0) > 0]),
+        "rows": rows,
+    }
 
 
 def flatten_strings(value) -> list[str]:
@@ -565,6 +810,12 @@ class ContentLintDashboardHandler(BaseHTTPRequestHandler):
             params = parse_qs(parsed.query)
             seed = int(params.get("seed", ["42"])[0] or 42)
             self.send_json(build_preview(seed))
+            return
+        if parsed.path == "/api/preview-scan":
+            params = parse_qs(parsed.query)
+            seed = int(params.get("seed", ["42"])[0] or 42)
+            count = int(params.get("count", ["20"])[0] or 20)
+            self.send_json(build_preview_scan(seed, count))
             return
         if parsed.path == "/" or parsed.path == "/index.html":
             self.serve_file(STATIC_DIR / "index.html")
@@ -618,7 +869,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--port", type=int, default=8774)
     parser.add_argument("--validate", action="store_true", help="Run dashboard lints and exit.")
     parser.add_argument("--preview", action="store_true", help="Print generated preview JSON and exit.")
+    parser.add_argument("--preview-scan", action="store_true", help="Scan generated previews across multiple seeds and exit.")
     parser.add_argument("--seed", type=int, default=42, help="Preview seed.")
+    parser.add_argument("--count", type=int, default=20, help="Preview scan seed count.")
     args = parser.parse_args(argv)
 
     if args.validate:
@@ -628,6 +881,10 @@ def main(argv: list[str]) -> int:
     if args.preview:
         print(json.dumps(build_preview(args.seed), ensure_ascii=False, indent=2))
         return 0
+    if args.preview_scan:
+        scan = build_preview_scan(args.seed, args.count)
+        print(json.dumps(scan, ensure_ascii=False, indent=2))
+        return 0 if int(scan.get("total_issues", 1)) == 0 else 1
 
     run_server(args.host, args.port)
     return 0

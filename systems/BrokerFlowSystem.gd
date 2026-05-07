@@ -147,6 +147,11 @@ func generate_day_flow(definition: Dictionary, runtime: Dictionary, context: Dic
 	if not is_zero_approx(player_depth_impact_ratio):
 		raw_scores["retail_net"] = clamp(float(raw_scores.get("retail_net", 0.0)) + player_depth_impact_ratio * 26.0, -100.0, 100.0)
 		raw_scores["bandar_net"] = clamp(float(raw_scores.get("bandar_net", 0.0)) + player_depth_impact_ratio * 10.0, -100.0, 100.0)
+	var passive_flow_pressure: float = clamp(float(context.get("passive_flow_pressure", 0.0)), -1.0, 1.0)
+	if not is_zero_approx(passive_flow_pressure):
+		raw_scores["foreign_net"] = clamp(float(raw_scores.get("foreign_net", 0.0)) + passive_flow_pressure * 58.0, -100.0, 100.0)
+		raw_scores["institution_net"] = clamp(float(raw_scores.get("institution_net", 0.0)) + passive_flow_pressure * 44.0, -100.0, 100.0)
+		raw_scores["retail_net"] = clamp(float(raw_scores.get("retail_net", 0.0)) + passive_flow_pressure * 10.0, -100.0, 100.0)
 	var net_pressure: float = 0.0
 	for key in BROKER_KEYS:
 		net_pressure += float(raw_scores.get(key, 0.0))
@@ -194,6 +199,7 @@ func generate_day_flow(definition: Dictionary, runtime: Dictionary, context: Dic
 		"flow_tag": flow_tag,
 		"action_meter_score": action_meter_score,
 		"action_meter_label": action_meter_label,
+		"passive_flow_pressure": passive_flow_pressure,
 		"player_flow": player_flow.duplicate(true),
 		"player_impact_summary": str(player_flow.get("impact_summary", "")),
 		"limit_lock": player_limit_lock,
@@ -522,6 +528,13 @@ func _derive_broker_side_weights(
 	var volatility_read: float = abs(recent_momentum) + abs(event_bias) + abs(sector_sentiment)
 	var buy_weight: float = 4.0 + max(type_score, 0.0) * 0.10
 	var sell_weight: float = 4.0 + max(-type_score, 0.0) * 0.10
+	var passive_flow_pressure: float = clamp(float(context.get("passive_flow_pressure", broker_flow.get("passive_flow_pressure", 0.0))), -1.0, 1.0)
+	if not is_zero_approx(passive_flow_pressure) and broker_type in ["foreign", "institution"]:
+		var passive_weight_bonus: float = absf(passive_flow_pressure) * (4.6 if broker_type == "foreign" else 3.8)
+		if passive_flow_pressure > 0.0:
+			buy_weight += passive_weight_bonus
+		else:
+			sell_weight += passive_weight_bonus
 
 	if "market_maker" in tags:
 		var maker_bonus: float = 2.4 + (volatility_read * 18.0)

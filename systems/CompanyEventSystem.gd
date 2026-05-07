@@ -590,7 +590,7 @@ func _active_arcs_for_day(stored_arcs: Array, day_number: int) -> Array:
 	var active_arcs: Array = []
 	for arc_value in stored_arcs:
 		var arc_data: Dictionary = arc_value.duplicate(true)
-		if str(arc_data.get("source_system", "")) == "corporate_action":
+		if str(arc_data.get("source_system", "")) in ["corporate_action", "index_review"]:
 			continue
 		if int(arc_data.get("end_day_index", 0)) >= day_number:
 			active_arcs.append(arc_data)

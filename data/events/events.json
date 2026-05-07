@@ -320,6 +320,83 @@
 	"description": "A listed company pursues a targeted private placement."
   },
   {
+	"id": "mscy_index_inclusion",
+	"scope": "company",
+	"event_family": "index_review",
+	"category": "index_inclusion",
+	"tone": "positive",
+	"duration_days": 6,
+	"sentiment_shift": 0.007,
+	"broker_bias": "foreign_institution",
+	"description": "MSCY announces an index inclusion candidate and passive buying prepares for the effective date."
+  },
+  {
+	"id": "mscy_index_exclusion",
+	"scope": "company",
+	"event_family": "index_review",
+	"category": "index_exclusion",
+	"tone": "negative",
+	"duration_days": 6,
+	"sentiment_shift": -0.007,
+	"broker_bias": "foreign_institution",
+	"description": "MSCY announces an index exclusion candidate and passive selling prepares for the effective date."
+  },
+  {
+	"id": "mscy_index_watch",
+	"scope": "company",
+	"event_family": "index_review",
+	"category": "index_watch",
+	"tone": "mixed",
+	"duration_days": 4,
+	"sentiment_shift": 0.0,
+	"broker_bias": "foreign_institution",
+	"description": "MSCY review watch puts a company near the inclusion or exclusion cutoff."
+  },
+  {
+	"id": "ftsi_index_inclusion",
+	"scope": "company",
+	"event_family": "index_review",
+	"category": "index_inclusion",
+	"tone": "positive",
+	"duration_days": 6,
+	"sentiment_shift": 0.007,
+	"broker_bias": "foreign_institution",
+	"description": "FTSI announces an index inclusion candidate and passive buying prepares for the effective date."
+  },
+  {
+	"id": "ftsi_index_exclusion",
+	"scope": "company",
+	"event_family": "index_review",
+	"category": "index_exclusion",
+	"tone": "negative",
+	"duration_days": 6,
+	"sentiment_shift": -0.007,
+	"broker_bias": "foreign_institution",
+	"description": "FTSI announces an index exclusion candidate and passive selling prepares for the effective date."
+  },
+  {
+	"id": "ftsi_index_watch",
+	"scope": "company",
+	"event_family": "index_review",
+	"category": "index_watch",
+	"tone": "mixed",
+	"duration_days": 4,
+	"sentiment_shift": 0.0,
+	"broker_bias": "foreign_institution",
+	"description": "FTSI review watch puts a company near the inclusion or exclusion cutoff."
+  },
+  {
+	"id": "index_review_no_change",
+	"scope": "market",
+	"event_family": "index_review",
+	"category": "index_watch",
+	"tone": "mixed",
+	"duration_days": 1,
+	"sentiment_shift": 0.0,
+	"broker_bias": "foreign_institution",
+	"description": "An index review is announced with no membership changes for the current cycle."
+  },
+  {
 	"id": "commodity_price_shock",
 	"scope": "market",
 	"event_family": "special",

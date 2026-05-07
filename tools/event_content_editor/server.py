@@ -26,9 +26,9 @@ RUNTIME_PATH = PROJECT_ROOT / "data" / "events" / "events.json"
 SECTORS_PATH = PROJECT_ROOT / "data" / "sectors" / "sectors.json"
 
 SCOPES = ["market", "sector", "company"]
-EVENT_FAMILIES = ["market", "company", "person", "special", "corporate_action"]
+EVENT_FAMILIES = ["market", "company", "person", "special", "corporate_action", "index_review"]
 TONES = ["positive", "negative", "mixed", "neutral"]
-BROKER_BIASES = ["foreign", "retail", "institution", "bandar", "zombie", "balanced"]
+BROKER_BIASES = ["foreign", "retail", "institution", "foreign_institution", "bandar", "zombie", "balanced"]
 SHOCK_APPLY_BIAS_SIGNS = ["all", "positive", "negative"]
 SHOCK_LIMIT_SIDES = ["upper", "lower"]
 SHOCK_POST_SHOCK_MODES = ["", "sideways"]

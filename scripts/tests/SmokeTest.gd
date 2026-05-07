@@ -25,6 +25,7 @@ const SMOKE_QUICK_ARG := "--smoke-quick"
 const SMOKE_LOCAL_IO_ARG := "--smoke-local-io"
 const NEWS_FEED_SYSTEM_SCRIPT = preload("res://systems/NewsFeedSystem.gd")
 const TWOOTER_FEED_SYSTEM_SCRIPT = preload("res://systems/TwooterFeedSystem.gd")
+const INDEX_REVIEW_SYSTEM_SCRIPT = preload("res://systems/IndexReviewSystem.gd")
 const COMPANY_GENERATOR_SCRIPT = preload("res://systems/CompanyGenerator.gd")
 const CHART_SYSTEM_SCRIPT = preload("res://systems/ChartSystem.gd")
 const CHART_PATTERN_SYSTEM_SCRIPT = preload("res://systems/ChartPatternSystem.gd")
@@ -84,6 +85,12 @@ func _ready() -> void:
 	var corporate_action_price_validation: String = _validate_corporate_action_price_factor_limits()
 	if not corporate_action_price_validation.is_empty():
 		push_error(corporate_action_price_validation)
+		get_tree().quit(1)
+		return
+
+	var index_review_content_validation: String = _validate_index_review_content_assets()
+	if not index_review_content_validation.is_empty():
+		push_error(index_review_content_validation)
 		get_tree().quit(1)
 		return
 
@@ -2669,6 +2676,240 @@ func _validate_corporate_action_price_factor_limits() -> String:
 	return ""
 
 
+func _validate_index_review_content_assets() -> String:
+	var catalog: Dictionary = DataRepository.get_index_review_catalog()
+	var providers: Array = catalog.get("providers", [])
+	if providers.size() != 2:
+		return "Smoke test expected exactly two index-review providers."
+	var expected_labels := {"mscy": "MSCY", "ftsi": "FTSI"}
+	var expected_months := {"mscy": [2, 5, 8, 11], "ftsi": [3, 6, 9, 12]}
+	for provider_value in providers:
+		if typeof(provider_value) != TYPE_DICTIONARY:
+			return "Smoke test expected index-review provider rows to be dictionaries."
+		var provider: Dictionary = provider_value
+		var provider_id: String = str(provider.get("id", ""))
+		if not expected_labels.has(provider_id):
+			return "Smoke test found an unexpected index-review provider id: %s." % provider_id
+		if str(provider.get("label", "")) != str(expected_labels.get(provider_id, "")):
+			return "Smoke test expected provider %s to use fictional label %s." % [provider_id, expected_labels.get(provider_id, "")]
+		if _int_array_from_variant(provider.get("review_months", [])) != _int_array_from_variant(expected_months.get(provider_id, [])):
+			return "Smoke test expected provider %s review months to match the quarterly catalog." % provider_id
+		if int(provider.get("announcement_day", 0)) != 10 or int(provider.get("effective_day", 0)) != 20:
+			return "Smoke test expected provider %s to use day-10 announcement and day-20 effective rules." % provider_id
+
+	for event_id in [
+		"mscy_index_inclusion",
+		"mscy_index_exclusion",
+		"mscy_index_watch",
+		"ftsi_index_inclusion",
+		"ftsi_index_exclusion",
+		"ftsi_index_watch",
+		"index_review_no_change"
+	]:
+		var event_definition: Dictionary = DataRepository.get_event_definition(event_id)
+		if event_definition.is_empty():
+			return "Smoke test expected index-review event definition %s." % event_id
+		if str(event_definition.get("event_family", "")) != "index_review":
+			return "Smoke test expected %s to use event_family index_review." % event_id
+
+	var trade_date: Dictionary = {
+		"weekday": 3,
+		"day": 10,
+		"month": 2,
+		"year": 2020,
+		"day_index": 29
+	}
+	var company_rows: Array = [{
+		"id": "mock_bank",
+		"ticker": "MBNK",
+		"name": "Mock Bank Tbk",
+		"sector_id": "finance",
+		"sector_name": "Finance",
+		"current_price": 1200.0,
+		"daily_change_pct": 0.036,
+		"broker_flow": {"flow_tag": "accumulation"}
+	}]
+	var market_history: Array = [{
+		"day_index": 29,
+		"trade_date": trade_date.duplicate(true),
+		"average_change_pct": 0.006,
+		"advancers": 20,
+		"decliners": 10,
+		"biggest_winner": {"ticker": "MBNK"},
+		"biggest_loser": {"ticker": "DROP"}
+	}]
+	var index_event: Dictionary = {
+		"event_id": "mscy_index_inclusion",
+		"event_family": "index_review",
+		"scope": "company",
+		"category": "index_inclusion",
+		"tone": "positive",
+		"target_company_id": "mock_bank",
+		"target_ticker": "MBNK",
+		"target_company_name": "Mock Bank Tbk",
+		"target_sector_id": "finance",
+		"provider_label": "MSCY",
+		"summary": "MSCY announced MBNK as an index inclusion candidate, with passive buying expected around the effective date.",
+		"review_stage": "announcement",
+		"day_index": 29,
+		"trade_date": trade_date.duplicate(true)
+	}
+	var news_snapshot: Dictionary = NEWS_FEED_SYSTEM_SCRIPT.new().build_news_snapshot(
+		null,
+		DataRepository.get_news_feed_data(),
+		company_rows,
+		market_history,
+		[index_event],
+		[],
+		[],
+		trade_date,
+		4
+	)
+	var found_news_article: bool = false
+	for feed_value in news_snapshot.get("feeds", {}).values():
+		var feed: Dictionary = feed_value
+		for article_value in feed.get("articles", []):
+			var article: Dictionary = article_value
+			if str(article.get("category", "")) != "index_inclusion":
+				continue
+			found_news_article = true
+			var article_text: String = "%s\n%s\n%s" % [str(article.get("headline", "")), str(article.get("deck", "")), str(article.get("body", ""))]
+			if article_text.find("MSCY") == -1:
+				return "Smoke test expected index-review News copy to include fictional provider MSCY."
+			if article_text.find("{") != -1 or article_text.find("}") != -1:
+				return "Smoke test expected index-review News copy to render without unresolved template tokens."
+	if not found_news_article:
+		return "Smoke test expected News generation to produce an index-review article."
+
+	var social_snapshot: Dictionary = TWOOTER_FEED_SYSTEM_SCRIPT.new().build_social_snapshot(
+		null,
+		DataRepository.get_twooter_feed_data(),
+		company_rows,
+		market_history,
+		[index_event],
+		[],
+		[],
+		trade_date,
+		4
+	)
+	var found_social_post: bool = false
+	for post_value in social_snapshot.get("posts", []):
+		var post: Dictionary = post_value
+		if str(post.get("category", "")) != "index_inclusion":
+			continue
+		found_social_post = true
+		var post_text: String = str(post.get("post_text", ""))
+		if post_text.find("MSCY") == -1:
+			return "Smoke test expected index-review Twooter copy to include fictional provider MSCY."
+		if post_text.find("{") != -1 or post_text.find("}") != -1:
+			return "Smoke test expected index-review Twooter copy to render without unresolved template tokens."
+	if not found_social_post:
+		return "Smoke test expected Twooter generation to produce an index-review post."
+
+	return ""
+
+
+func _int_array_from_variant(source: Variant) -> Array:
+	var values: Array = []
+	if typeof(source) != TYPE_ARRAY:
+		return values
+	for value in source:
+		values.append(int(value))
+	return values
+
+
+func _validate_index_review_runtime_flow() -> String:
+	var saved_state: Dictionary = RunState.to_save_dict()
+	var target_company_id: String = _first_non_member_company_id("mscy")
+	if target_company_id.is_empty():
+		return "Smoke test expected at least one non-member company for MSCY debug inclusion."
+
+	var generator_catalog: Array = GameManager.get_debug_index_review_generator_catalog()
+	if generator_catalog.size() != 2:
+		return "Smoke test expected debug index-review catalog to expose MSCY and FTSI groups."
+	var debug_result: Dictionary = GameManager.debug_generate_index_review("mscy_inclusion", target_company_id)
+	if not bool(debug_result.get("success", false)):
+		RunState.load_from_dict(saved_state)
+		return "Smoke test expected MSCY debug inclusion generation to succeed: %s" % str(debug_result.get("message", ""))
+
+	var has_index_arc: bool = false
+	for arc_value in RunState.get_active_company_arcs():
+		if typeof(arc_value) == TYPE_DICTIONARY and str(arc_value.get("source_system", "")) == "index_review":
+			has_index_arc = true
+			break
+	if not has_index_arc:
+		RunState.load_from_dict(saved_state)
+		return "Smoke test expected debug index-review generation to create an active index_review arc."
+
+	var company_index_snapshot: Dictionary = GameManager.get_company_index_review_snapshot(target_company_id)
+	if company_index_snapshot.is_empty() or str(company_index_snapshot.get("summary_label", "")).find("MSCY") == -1:
+		RunState.load_from_dict(saved_state)
+		return "Smoke test expected company index-review badges to show MSCY after debug generation."
+
+	GameManager.simulate_opening_session(false)
+	var index_state: Dictionary = RunState.get_index_review_state()
+	var mscy_members: Array = index_state.get("providers", {}).get("mscy", {}).get("members", [])
+	if not mscy_members.has(target_company_id):
+		RunState.load_from_dict(saved_state)
+		return "Smoke test expected next-day effective date to apply MSCY inclusion membership."
+	var effective_events: Array = RunState.last_day_results.get("index_review_events", [])
+	if effective_events.is_empty():
+		RunState.load_from_dict(saved_state)
+		return "Smoke test expected next-day index-review effective event output."
+	var broker_flow: Dictionary = RunState.get_company(target_company_id).get("broker_flow", {})
+	if absf(float(broker_flow.get("passive_flow_pressure", 0.0))) <= 0.0:
+		RunState.load_from_dict(saved_state)
+		return "Smoke test expected index-review passive flow pressure to reach broker flow."
+
+	var news_text: String = _snapshot_visible_text(GameManager.get_news_snapshot())
+	var social_text: String = _snapshot_visible_text(GameManager.get_twooter_snapshot())
+	if news_text.find("MSCY") == -1:
+		RunState.load_from_dict(saved_state)
+		return "Smoke test expected News output to include MSCY index-review coverage."
+	if social_text.find("MSCY") == -1:
+		RunState.load_from_dict(saved_state)
+		return "Smoke test expected Twooter output to include MSCY index-review coverage."
+
+	RunState.load_from_dict(saved_state)
+	GameManager.get_dashboard_event_snapshot(true)
+	return ""
+
+
+func _first_non_member_company_id(provider_id: String) -> String:
+	var index_system = INDEX_REVIEW_SYSTEM_SCRIPT.new()
+	index_system.ensure_initialized(RunState, DataRepository)
+	var index_state: Dictionary = RunState.get_index_review_state()
+	var members: Array = index_state.get("providers", {}).get(provider_id, {}).get("members", [])
+	for company_id_value in RunState.company_order:
+		var company_id: String = str(company_id_value)
+		if not members.has(company_id):
+			return company_id
+	return ""
+
+
+func _snapshot_visible_text(snapshot: Dictionary) -> String:
+	var parts: Array = []
+	for feed_value in snapshot.get("feeds", {}).values():
+		if typeof(feed_value) != TYPE_DICTIONARY:
+			continue
+		var feed: Dictionary = feed_value
+		for article_value in feed.get("articles", []):
+			if typeof(article_value) != TYPE_DICTIONARY:
+				continue
+			var article: Dictionary = article_value
+			parts.append(str(article.get("headline", "")))
+			parts.append(str(article.get("deck", "")))
+			parts.append(str(article.get("body", "")))
+	for post_value in snapshot.get("posts", []):
+		if typeof(post_value) != TYPE_DICTIONARY:
+			continue
+		var post: Dictionary = post_value
+		parts.append(str(post.get("post_text", "")))
+		for line_value in post.get("thread_lines", []):
+			parts.append(str(line_value))
+	return "\n".join(parts)
+
+
 func _run_scenario(
 	run_seed: int,
 	difficulty_id: String,
@@ -2790,13 +3031,31 @@ func _run_scenario(
 	if (
 		dashboard_event_snapshot.get("upcoming_report_rows", []).is_empty() or
 		dashboard_event_snapshot.get("upcoming_meeting_rows", []).is_empty() or
+		dashboard_event_snapshot.get("upcoming_index_review_rows", []).is_empty() or
 		dashboard_event_snapshot.get("report_calendar_snapshot", {}).is_empty()
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the cached dashboard event snapshot to include reports, meetings, and the current report calendar."
+			"message": "Smoke test expected the cached dashboard event snapshot to include reports, meetings, index reviews, and the current report calendar."
+		}
+
+	var opening_index_snapshot: Dictionary = GameManager.get_index_review_snapshot()
+	if opening_index_snapshot.get("upcoming_rows", []).is_empty() or opening_index_snapshot.get("providers", []).size() != 2:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the index-review dashboard snapshot to include MSCY and FTSI schedules."
+		}
+	var opening_company_index_snapshot: Dictionary = GameManager.get_company_index_review_snapshot(str(RunState.company_order[0]))
+	if opening_company_index_snapshot.get("rows", []).size() != 2:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected company detail index-review snapshots to expose MSCY/FTSI rows."
 		}
 
 	var opening_meeting_snapshot: Dictionary = GameManager.get_corporate_meeting_snapshot()
@@ -2872,6 +3131,8 @@ func _run_scenario(
 			not GameManager.has_method("debug_force_backdoor_listing_execution") or
 			not GameManager.has_method("debug_force_restructuring_execution") or
 			not GameManager.has_method("debug_force_ceo_change_execution") or
+			not GameManager.has_method("get_debug_index_review_generator_catalog") or
+			not GameManager.has_method("debug_generate_index_review") or
 			not GameManager.has_method("start_corporate_meeting_session") or
 			not GameManager.has_method("get_corporate_meeting_session_snapshot") or
 			not GameManager.has_method("set_corporate_meeting_session_stage") or
@@ -2885,6 +3146,15 @@ func _run_scenario(
 			return {
 				"success": false,
 				"message": "Smoke test expected the interactive RUPSLB session helpers to be exposed through GameManager and GameRoot."
+			}
+
+		var index_review_runtime_validation: String = _validate_index_review_runtime_flow()
+		if not index_review_runtime_validation.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": index_review_runtime_validation
 			}
 
 		var rupslb_candidate_ids: Array = []
@@ -3572,20 +3842,26 @@ func _run_scenario(
 		var debug_start_rupslb_button: Button = game_root.find_child("DebugStartRupslbButton", true, false) as Button
 		var debug_cash_dividend_button: Button = game_root.find_child("DebugCorporateActionButtonCashDividend", true, false) as Button
 		var debug_stock_split_button: Button = game_root.find_child("DebugCorporateActionButtonStockSplitRupslb", true, false) as Button
+		var debug_mscy_inclusion_button: Button = game_root.find_child("DebugIndexReviewButtonMscyInclusion", true, false) as Button
+		var debug_ftsi_exclusion_button: Button = game_root.find_child("DebugIndexReviewButtonFtsiExclusion", true, false) as Button
 		var debug_start_rupslb_status_label: Label = game_root.find_child("DebugStartRupslbStatusLabel", true, false) as Label
+		var debug_index_review_status_label: Label = game_root.find_child("DebugIndexReviewStatusLabel", true, false) as Label
 		if (
 			debug_overlay == null or
 			not debug_overlay.visible or
 			debug_start_rupslb_button == null or
 			debug_cash_dividend_button == null or
 			debug_stock_split_button == null or
-			debug_start_rupslb_status_label == null
+			debug_mscy_inclusion_button == null or
+			debug_ftsi_exclusion_button == null or
+			debug_start_rupslb_status_label == null or
+			debug_index_review_status_label == null
 		):
 			game_root.queue_free()
 			await get_tree().process_frame
 			return {
 				"success": false,
-				"message": "Smoke test expected the debug overlay to expose selected-stock corporate-action generator controls."
+				"message": "Smoke test expected the debug overlay to expose selected-stock corporate-action and index-review generator controls."
 			}
 
 		game_root.selected_company_id = ""
@@ -3600,6 +3876,16 @@ func _run_scenario(
 			return {
 				"success": false,
 				"message": "Smoke test expected the debug Start RUPSLB control to stay disabled until a stock is selected."
+			}
+		if (
+			not debug_mscy_inclusion_button.disabled or
+			debug_index_review_status_label.text.find("Pick a stock first.") == -1
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected index-review debug generators to stay disabled until a stock is selected."
 			}
 
 		game_root._on_all_stock_selected(debug_non_owned_company_id)
@@ -3620,6 +3906,17 @@ func _run_scenario(
 			return {
 				"success": false,
 				"message": "Smoke test expected non-RUPSLB debug corporate-action generators to work for a selected stock without a held lot."
+			}
+		if (
+			debug_mscy_inclusion_button.disabled or
+			debug_ftsi_exclusion_button.disabled or
+			debug_index_review_status_label.text.find("Buttons force MSCY/FTSI") == -1
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the debug index-review generators to enable for any selected stock."
 			}
 
 		var debug_target_buy_result: Dictionary = GameManager.buy_lots(debug_target_company_id, 1)

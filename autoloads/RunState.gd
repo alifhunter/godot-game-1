@@ -1,7 +1,7 @@
 extends Node
 
 const STABLE_RNG = preload("res://systems/StableRng.gd")
-const SAVE_SCHEMA_VERSION := 2
+const SAVE_SCHEMA_VERSION := 3
 const SAVE_FORMAT_ID := "daytrader_single_run"
 const LOT_SIZE := 100
 const PLAYER_BROKER_CODE := "XL"
@@ -135,6 +135,7 @@ var active_corporate_action_chains = {}
 var corporate_meeting_calendar = {}
 var corporate_action_intel = {}
 var corporate_dividend_calendar = {}
+var index_review_state = {}
 var attended_meetings = {}
 var corporate_meeting_sessions = {}
 var shareholder_registry = {}
@@ -212,6 +213,7 @@ func reset() -> void:
 	corporate_meeting_calendar = {}
 	corporate_action_intel = {}
 	corporate_dividend_calendar = {}
+	index_review_state = {}
 	attended_meetings = {}
 	corporate_meeting_sessions = {}
 	shareholder_registry = {}
@@ -452,6 +454,7 @@ func load_from_dict(data: Dictionary) -> void:
 	corporate_meeting_calendar = data.get("corporate_meeting_calendar", {}).duplicate(true)
 	corporate_action_intel = data.get("corporate_action_intel", {}).duplicate(true)
 	corporate_dividend_calendar = data.get("corporate_dividend_calendar", {}).duplicate(true)
+	index_review_state = _normalize_index_review_state(data.get("index_review_state", {}))
 	attended_meetings = data.get("attended_meetings", {}).duplicate(true)
 	corporate_meeting_sessions = data.get("corporate_meeting_sessions", {}).duplicate(true)
 	shareholder_registry = data.get("shareholder_registry", {}).duplicate(true)
@@ -553,6 +556,7 @@ func to_save_dict() -> Dictionary:
 		"corporate_meeting_calendar": corporate_meeting_calendar.duplicate(true),
 		"corporate_action_intel": corporate_action_intel.duplicate(true),
 		"corporate_dividend_calendar": corporate_dividend_calendar.duplicate(true),
+		"index_review_state": _normalize_index_review_state(index_review_state),
 		"attended_meetings": attended_meetings.duplicate(true),
 		"corporate_meeting_sessions": corporate_meeting_sessions.duplicate(true),
 		"shareholder_registry": shareholder_registry.duplicate(true),
@@ -711,6 +715,7 @@ func _build_last_day_results_save_payload(source_results: Variant) -> Dictionary
 		"started_company_arcs": source.get("started_company_arcs", []).duplicate(true),
 		"company_arc_phase_events": source.get("company_arc_phase_events", []).duplicate(true),
 		"corporate_action_events": source.get("corporate_action_events", []).duplicate(true),
+		"index_review_events": source.get("index_review_events", []).duplicate(true),
 		"dividend_payments": source.get("dividend_payments", []).duplicate(true),
 		"stock_dividend_distributions": source.get("stock_dividend_distributions", []).duplicate(true),
 		"corporate_action_applications": source.get("corporate_action_applications", []).duplicate(true),
@@ -1076,6 +1081,8 @@ func apply_day_result(day_result: Dictionary) -> void:
 		_record_event(special_event_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	for corporate_event_value in day_result.get("corporate_action_events", []):
 		_record_event(corporate_event_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
+	for index_review_event_value in day_result.get("index_review_events", []):
+		_record_event(index_review_event_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	_log_apply_day_perf_elapsed(log_apply_perf, "record_events", phase_started_at_usec, " events=%d" % event_history.size())
 	phase_started_at_usec = Time.get_ticks_usec()
 	active_company_arcs = day_result.get("active_company_arcs", []).duplicate(true)
@@ -1084,6 +1091,7 @@ func apply_day_result(day_result: Dictionary) -> void:
 	corporate_meeting_calendar = day_result.get("corporate_meeting_calendar", {}).duplicate(true)
 	corporate_action_intel = day_result.get("corporate_action_intel", {}).duplicate(true)
 	corporate_dividend_calendar = day_result.get("corporate_dividend_calendar", corporate_dividend_calendar).duplicate(true)
+	index_review_state = _normalize_index_review_state(day_result.get("index_review_state", index_review_state))
 	attended_meetings = day_result.get("attended_meetings", {}).duplicate(true)
 	corporate_meeting_sessions = day_result.get("corporate_meeting_sessions", {}).duplicate(true)
 	shareholder_registry = day_result.get("shareholder_registry", shareholder_registry).duplicate(true)
@@ -1426,6 +1434,15 @@ func get_corporate_dividend_calendar() -> Dictionary:
 
 func set_corporate_dividend_calendar(next_calendar: Dictionary) -> void:
 	corporate_dividend_calendar = next_calendar.duplicate(true)
+
+
+func get_index_review_state() -> Dictionary:
+	index_review_state = _normalize_index_review_state(index_review_state)
+	return index_review_state.duplicate(true)
+
+
+func set_index_review_state(next_state: Dictionary) -> void:
+	index_review_state = _normalize_index_review_state(next_state)
 
 
 func get_attended_meetings() -> Dictionary:
@@ -2054,6 +2071,27 @@ func _normalize_academy_progress(source_progress: Variant) -> Dictionary:
 	normalized["completed_modules"] = _normalize_unique_string_array(source.get("completed_modules", []))
 	normalized["last_category_id"] = str(source.get("last_category_id", "technical"))
 	normalized["last_section_id"] = str(source.get("last_section_id", "intro"))
+	return normalized
+
+
+func _normalize_index_review_state(source_state: Variant) -> Dictionary:
+	var normalized: Dictionary = {
+		"schema_version": 1,
+		"providers": {},
+		"pending_membership_actions": [],
+		"review_history": []
+	}
+	if typeof(source_state) != TYPE_DICTIONARY:
+		return normalized
+
+	var source: Dictionary = source_state
+	normalized["schema_version"] = max(int(source.get("schema_version", 1)), 1)
+	if typeof(source.get("providers", {})) == TYPE_DICTIONARY:
+		normalized["providers"] = source.get("providers", {}).duplicate(true)
+	if typeof(source.get("pending_membership_actions", [])) == TYPE_ARRAY:
+		normalized["pending_membership_actions"] = source.get("pending_membership_actions", []).duplicate(true)
+	if typeof(source.get("review_history", [])) == TYPE_ARRAY:
+		normalized["review_history"] = source.get("review_history", []).duplicate(true)
 	return normalized
 
 

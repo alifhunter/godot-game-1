@@ -40,6 +40,7 @@ REQUIRED_FALLBACK_KEYS = ["all"]
 KNOWN_TEMPLATE_TOKENS = {
     "target_ticker",
     "target_company_name",
+    "provider_label",
     "sector_name",
     "person_name",
     "scope",

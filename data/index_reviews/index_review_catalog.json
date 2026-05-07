@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "initial_membership_ratio": 0.28,
+  "minimum_members": 5,
+  "maximum_review_turnover": 4,
+  "candidate_watch_count": 4,
+  "watch_lead_trading_days": 5,
+  "schedule_years_ahead": 2,
+  "providers": [
+    {
+      "id": "mscy",
+      "label": "MSCY",
+      "full_label": "MSCY Indonesia Index",
+      "review_months": [2, 5, 8, 11],
+      "announcement_day": 10,
+      "effective_day": 20
+    },
+    {
+      "id": "ftsi",
+      "label": "FTSI",
+      "full_label": "FTSI Indonesia Index",
+      "review_months": [3, 6, 9, 12],
+      "announcement_day": 10,
+      "effective_day": 20
+    }
+  ]
+}

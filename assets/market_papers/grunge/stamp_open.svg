@@ -1,0 +1,6 @@
+<svg viewBox="0 0 130 32" xmlns="http://www.w3.org/2000/svg">
+  <g opacity="0.9">
+    <rect x="2" y="2" width="126" height="28" fill="none" stroke="#8B1A1A" stroke-width="2.4"/>
+    <text x="65" y="22" fill="#8B1A1A" font-size="15" text-anchor="middle" font-weight="bold" font-family="serif" letter-spacing="3">OPEN</text>
+  </g>
+</svg>

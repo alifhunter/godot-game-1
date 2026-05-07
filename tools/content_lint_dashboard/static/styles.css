@@ -102,6 +102,36 @@ button:disabled {
   opacity: 0.55;
 }
 
+a.button-link {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #214a37;
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: var(--green);
+  color: #fff8ea;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+a.button-link:hover {
+  background: #25573f;
+}
+
+code {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fffdf6;
+  color: var(--brown);
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 .shell {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
@@ -291,6 +321,35 @@ textarea.tall {
   margin-bottom: 12px;
 }
 
+.control-panel {
+  display: grid;
+  grid-template-columns: auto minmax(90px, 130px) auto auto auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.control-panel label {
+  align-self: center;
+}
+
+.command-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.quality {
+  margin-bottom: 14px;
+}
+
+.quality.ok {
+  border-color: #81a782;
+}
+
+.quality.error {
+  border-color: #c96b62;
+}
+
 .empty {
   padding: 18px;
   border: 1px dashed var(--line);
@@ -346,7 +405,8 @@ textarea.tall {
   .shell,
   .pool-grid,
   .grid.two,
-  .row {
+  .row,
+  .control-panel {
     grid-template-columns: 1fr;
   }
 

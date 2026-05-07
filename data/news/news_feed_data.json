@@ -52,7 +52,7 @@
       "display_name": "Raka Pradipta",
       "role": "Corporate Desk",
       "outlet_ids": ["waduh_finance"],
-      "specialties": ["corporate_action", "corporate_meeting", "management", "mna"],
+      "specialties": ["corporate_action", "corporate_meeting", "management", "mna", "index_review", "index_inclusion", "index_exclusion"],
       "sector_ids": ["finance", "basicindustry", "infra", "energy"],
       "contact_id": "journalist_raka_pradipta",
       "portrait_asset": "",
@@ -63,7 +63,7 @@
       "display_name": "Maya Wicaksono",
       "role": "Senior Markets Writer",
       "outlet_ids": ["harian_investor"],
-      "specialties": ["earnings", "sector_rotation", "policy_post", "macro_shock", "market_wrap"],
+      "specialties": ["earnings", "sector_rotation", "policy_post", "macro_shock", "market_wrap", "index_review"],
       "sector_ids": ["finance", "consumer", "industrial", "health", "tech"],
       "contact_id": "journalist_maya_wicaksono",
       "portrait_asset": "",
@@ -74,7 +74,7 @@
       "display_name": "Dian Permatasari",
       "role": "Boardroom Columnist",
       "outlet_ids": ["ordal_news"],
-      "specialties": ["corporate_action", "rumor", "company_arc", "management"],
+      "specialties": ["corporate_action", "rumor", "company_arc", "management", "index_review", "index_watch"],
       "sector_ids": ["finance", "property", "energy", "basicindustry", "infra"],
       "contact_id": "journalist_dian_permatasari",
       "portrait_asset": "",
@@ -229,6 +229,30 @@
       "the failed setup is forcing the market to reset expectations fast",
       "the cancellation removes the catalyst that traders were leaning on"
     ],
+    "index_inclusion_positive": [
+      "the review list is pointing to passive buying demand",
+      "index-trackers are preparing for extra demand around the effective date"
+    ],
+    "index_exclusion_negative": [
+      "the review list is pointing to passive selling pressure",
+      "index-trackers are preparing to reduce exposure around the effective date"
+    ],
+    "index_watch_mixed": [
+      "index-review positioning is keeping desks alert before the formal list",
+      "traders are watching whether the name lands above or below the review cutoff"
+    ],
+    "index_review_positive": [
+      "passive-flow expectations are keeping index-sensitive buyers involved",
+      "the index-review setup is pulling attention into names with likely demand"
+    ],
+    "index_review_negative": [
+      "passive-flow expectations are making index-sensitive sellers more active",
+      "the index-review setup is making desks reduce names with likely supply"
+    ],
+    "index_review_mixed": [
+      "the review cycle is making flow timing more important than the headline alone",
+      "desks are separating confirmed changes from pre-review positioning"
+    ],
     "earnings_positive": [
       "good numbers are helping the company look stronger",
       "the result gives buyers a cleaner fundamental reason to stay"
@@ -367,6 +391,10 @@
         "With the meeting angle now public, the market is watching whether shareholders treat the agenda as routine or as a real turning point.",
         "RUPSLB and call-linked stories can move in waves, because traders often price the room before the room has actually spoken."
       ],
+      "index_review": [
+        "{provider_label} review flow is now a date-specific setup: announcement moves attention, while the effective date decides the passive-flow pressure.",
+        "Index-review trades are less about one headline and more about whether passive buyers or sellers still need to finish around the effective date."
+      ],
       "earnings": [
         "The market is reading the numbers through price action first. {focus_label} is {price_action_label}, and {flow_label}.",
         "For earnings, the first reaction is only part of the story. The better clue is whether buyers defend the name after the headline has cooled."
@@ -408,6 +436,10 @@
       "corporate_meeting": [
         "Meeting-linked stories are usually about who has prepared before the notice becomes obvious. That is why the calendar matters as much as the headline.",
         "The room is not just ceremony for traders. A visible agenda can turn soft speculation into something with dates, votes, and consequences."
+      ],
+      "index_review": [
+        "Flow desks are watching the effective date, because passive baskets often finish after the first announcement reaction has already cooled.",
+        "The review is public enough to trade, but the cleaner read still comes from whether foreign and institution flow confirms the direction."
       ],
       "earnings": [
         "Analysts are likely to focus on whether the result changes the next few quarters, while shorter-term traders focus on whether volume confirms the move.",
@@ -462,6 +494,10 @@
       "corporate_meeting": [
         "The meeting path gives the story a date to orbit. Now the market has to decide whether the agenda is already priced or still has room to surprise.",
         "From here, the key is whether the room outcome confirms the trade or forces a reset."
+      ],
+      "index_review": [
+        "The next practical clue is whether passive flow shows up into the effective date or fades after the first review headline.",
+        "Market watchers should track foreign and institution tape from here, because index-review pressure often shows there first."
       ],
       "earnings": [
         "The next session should show whether investors treat the result as a one-day print or a reason to keep repricing the company.",
@@ -691,7 +727,7 @@
           "New confirmation puts {focus_label} back into focus"
         ],
         "analysis": [
-          "{focus_label} moves into the stage where the market looks for staying power",
+          "The market watches whether {focus_label} has staying power",
           "The market is checking whether the {focus_label} story can last"
         ],
         "recap": [
@@ -713,7 +749,7 @@
           "{formal_phrase}, {detail_blend}. Attention now shifts from the headline to what happens next."
         ],
         "analysis": [
-          "{detail_blend}. At this point, the market cares more about whether the story lasts than about how loud it sounds.",
+          "At this point, the market cares more about whether the story lasts than about how loud it sounds. {detail_blend}",
           "{analysis_phrase}, {subject_reference} is now being judged on whether the first move can hold up."
         ],
         "recap": [
@@ -802,7 +838,7 @@
         ],
         "recap": [
           "{subject_reference} still matters, but the early advantage in knowing about it is clearly shrinking.",
-          "{detail_blend}. At this point, the story matters more for timing than surprise."
+          "At this point, the story matters more for timing than surprise. {detail_blend}"
         ],
         "market_wrap": [
           "The market closed {market_change}, and the overall move still looked uneven.",

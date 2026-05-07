@@ -218,6 +218,10 @@
       "sector_negative": [
         "Diary note: {sector_name} is where the pressure shows. The weak groups are telling us not to rush.",
         "Diary note: {sector_name} is showing stress. I would rather let the dust settle first."
+      ],
+      "index_review": [
+        "Diary note: {provider_label} review flow is a calendar trade. Announcement matters, effective date matters more.",
+        "Index review note: {provider_label} puts flow timing on the screen. I want to see whether the tape confirms it."
       ]
     },
     "flow_watch": {
@@ -248,6 +252,22 @@
       "corporate_action_filing": [
         "{target_ticker} filing gives the move a cleaner anchor. Now watch whether volume confirms.",
         "{target_ticker} filing gives the tape a reference point. The next test is follow-through volume."
+      ],
+      "index_inclusion": [
+        "{target_ticker} {provider_label} inclusion setup: passive buyers may need stock near the effective date.",
+        "{target_ticker} index inclusion flow is readable now. Watch foreign and institution buyers into the effective date."
+      ],
+      "index_exclusion": [
+        "{target_ticker} {provider_label} exclusion setup: passive supply can keep refreshing until the effective date.",
+        "{target_ticker} index exclusion flow is the kind of selling that can look mechanical but still hurt."
+      ],
+      "index_watch": [
+        "{target_ticker} is on {provider_label} review watch. Near-cutoff names can get jumpy before the list is final.",
+        "{provider_label} review watch in {target_ticker}. This is a flow setup first, not a clean fundamental call."
+      ],
+      "index_review": [
+        "{provider_label} review flow is active. The tape should show whether passive money is real or already priced.",
+        "Index-review flow is about timing. Announcement starts attention; effective date tests the actual demand or supply."
       ],
       "market_wrap": [
         "Breadth today {advancers} versus {decliners}. Still selective, not broad risk-on.",
@@ -386,6 +406,18 @@
       "corporate_action_filing": [
         "{target_ticker} filing matters, but the real question is capital allocation after the action.",
         "{target_ticker} filing is only step one. The balance sheet effect decides the real read."
+      ],
+      "index_inclusion": [
+        "{target_ticker} {provider_label} inclusion is not a thesis by itself. Passive demand can help price, but quality still decides what remains.",
+        "{target_ticker} entering {provider_label} can create demand. I still want to know if the business deserves new holders."
+      ],
+      "index_exclusion": [
+        "{target_ticker} {provider_label} exclusion can create forced supply. The business case needs to be strong enough to absorb it.",
+        "{target_ticker} leaving {provider_label} is a flow problem first, then a thesis stress test."
+      ],
+      "index_review": [
+        "{provider_label} review changes ownership mechanics. It does not replace valuation, but it can change near-term flow.",
+        "{provider_label} reviews move holders, not only headlines. The useful read is who needs to buy or sell after the list."
       ]
     },
     "concept_value": {
@@ -503,6 +535,11 @@
         "1. Weak IHSG means reduce ego first.",
         "2. Cash gives you optionality when charts are messy.",
         "3. The next clean setup matters more than catching every bounce."
+      ],
+      "index_review": [
+        "1. {provider_label} review is a calendar setup.",
+        "2. Announcement changes attention; effective date changes passive flow.",
+        "3. Watch foreign and institution tape before trusting the first move."
       ]
     },
     "stock_mapper": {
@@ -542,6 +579,11 @@
         "1. Corporate action is capital allocation in public.",
         "2. Ask whether the money strengthens the company or only patches a hole.",
         "3. Good use of funds can extend a thesis; bad use of funds dilutes trust."
+      ],
+      "index_review": [
+        "1. Index review changes the shareholder base mechanically.",
+        "2. Inclusion can add passive demand; exclusion can add forced supply.",
+        "3. After the effective date, the real test is whether ordinary demand remains."
       ]
     },
     "concept_value": {
@@ -617,6 +659,18 @@
       "Cancellation forces the market to reset the old rumor premium.",
       "When the calendar breaks, fast money usually leaves first."
     ],
+    "index_inclusion": [
+      "The inclusion headline is only the first step; the effective-date flow is the next test.",
+      "Index inclusion already gave the market a reference point. Now the tape needs to confirm demand."
+    ],
+    "index_exclusion": [
+      "The exclusion headline is only the first step; the effective-date flow is the next test.",
+      "Index exclusion already gave the market a reference point. Now the tape needs to absorb supply."
+    ],
+    "index_watch": [
+      "The review watch is still open, so the next list can change the setup quickly.",
+      "Near-cutoff review names stay noisy until the list and effective date are both clear."
+    ],
     "fallback": [
       "This follows an earlier related post, so today's move has a reference point.",
       "The story is no longer starting from zero."
@@ -678,6 +732,22 @@
     "corporate_action": [
       "{target_ticker} has a corporate-action angle now. Calendar, volume, and price reaction all matter.",
       "{target_ticker} now has a calendar angle. The reaction after each date matters."
+    ],
+    "index_inclusion": [
+      "{target_ticker} has {provider_label} inclusion flow now. I want to see whether passive demand actually appears.",
+      "{target_ticker} index inclusion is constructive, but the effective-date tape still has to prove it."
+    ],
+    "index_exclusion": [
+      "{target_ticker} has {provider_label} exclusion flow now. I want to see whether the market can absorb the supply.",
+      "{target_ticker} index exclusion is a pressure point until the effective-date selling is done."
+    ],
+    "index_watch": [
+      "{target_ticker} is on {provider_label} review watch. Near-cutoff flow can get messy fast.",
+      "{target_ticker} review watch is not confirmation yet, but it can move positioning."
+    ],
+    "index_review": [
+      "{provider_label} review flow matters here. Track the effective date, not only the announcement.",
+      "Index-review stories are calendar stories. Flow confirmation matters more than the first headline."
     ],
     "all": [
       "Watching the board, not forcing a trade. Clean setups usually show themselves.",
