@@ -51,14 +51,6 @@ const COLORS := {
 
 const FONT_SIZE_PRESETS := {
 	"compact": {
-		"caption": 10,
-		"body": 11,
-		"button": 11,
-		"section": 13,
-		"title": 15,
-		"metric": 17
-	},
-	"normal": {
 		"caption": 11,
 		"body": 12,
 		"button": 12,
@@ -66,7 +58,7 @@ const FONT_SIZE_PRESETS := {
 		"title": 16,
 		"metric": 18
 	},
-	"large": {
+	"normal": {
 		"caption": 12,
 		"body": 14,
 		"button": 14,
@@ -74,13 +66,21 @@ const FONT_SIZE_PRESETS := {
 		"title": 18,
 		"metric": 20
 	},
-	"accessibility": {
+	"large": {
 		"caption": 14,
 		"body": 16,
 		"button": 16,
 		"section": 18,
 		"title": 20,
-		"metric": 24
+		"metric": 22
+	},
+	"accessibility": {
+		"caption": 16,
+		"body": 18,
+		"button": 18,
+		"section": 20,
+		"title": 22,
+		"metric": 26
 	}
 }
 

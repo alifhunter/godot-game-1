@@ -52,17 +52,17 @@ Font roles:
 
 Normal scale sizes:
 
-- `caption`: 11
-- `body`: 12
-- `button`: 12
-- `section`: 14
-- `title`: 16
-- `metric`: 18
+- `caption`: 12
+- `body`: 14
+- `button`: 14
+- `section`: 16
+- `title`: 18
+- `metric`: 20
 
 Scale presets:
 
 - `compact`: one step smaller for dense screens.
-- `normal`: default.
+- `normal`: default, with `body` and `button` at `14`.
 - `large`: larger readable UI without major layout shock.
 - `accessibility`: largest supported preset for comfort.
 

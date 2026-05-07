@@ -2,7 +2,8 @@ extends RefCounted
 
 const RATING_BUY := "Buy"
 const RATING_ACCUMULATE := "Accumulate"
-const RATING_WATCH := "Hold/Watch"
+const RATING_WATCH := "Watchlist"
+const RATING_HOLD := "Hold"
 const RATING_TRADE_ONLY := "Trade Only"
 const RATING_AVOID := "Avoid"
 const RATING_DIVIDEND_HOLD := "Dividend Hold"
@@ -24,9 +25,9 @@ func build_report(thesis: Dictionary, context: Dictionary) -> Dictionary:
 	var score_data: Dictionary = _score_evidence(thesis, evidence)
 	var score: int = int(score_data.get("score", 0))
 	var grade: String = _grade_for_score(score)
-	var rating: String = _rating_for(thesis, company, score, score_data)
 	var price: float = float(company.get("current_price", 0.0))
 	var target: Dictionary = _target_range_for(thesis, company, score, score_data)
+	var rating: String = _rating_for(thesis, company, score, score_data, target)
 	var report_date: Dictionary = context.get("trade_date", {})
 
 	return {
@@ -207,7 +208,7 @@ func _score_evidence(thesis: Dictionary, evidence: Array) -> Dictionary:
 	}
 
 
-func _rating_for(thesis: Dictionary, company: Dictionary, score: int, score_data: Dictionary) -> String:
+func _rating_for(thesis: Dictionary, company: Dictionary, score: int, score_data: Dictionary, target: Dictionary) -> String:
 	var stance: String = str(thesis.get("stance", "bullish")).to_lower()
 	var quality: int = int(company.get("quality_score", 0))
 	var growth: int = int(company.get("growth_score", 0))
@@ -220,21 +221,32 @@ func _rating_for(thesis: Dictionary, company: Dictionary, score: int, score_data
 	var has_price: bool = categories.has("price_action")
 	var has_invalidation: bool = categories.has("risk_invalidation")
 	var has_contradicted_pattern: bool = int(score_data.get("contradicted_pattern_count", 0)) > 0
+	var implied_upside: float = float(target.get("implied_upside_pct", 0.0))
+	var target_defensible: bool = bool(target.get("defensible", false))
+	var owns_position: bool = int(company.get("lots_owned", 0)) > 0
 
 	if stance == "bearish":
 		if score >= 70 and missing_pillar_count <= 1:
 			return RATING_AVOID
 		return RATING_TRADE_ONLY
 	if stance == "income":
-		return RATING_DIVIDEND_HOLD if score >= 64 and risk <= 58 and has_anchor and has_invalidation else RATING_WATCH
+		if target_defensible and implied_upside <= -0.10 and flow_tag == "distribution":
+			return RATING_AVOID
+		if score >= 64 and risk <= 58 and has_anchor and has_invalidation:
+			return RATING_DIVIDEND_HOLD if owns_position else RATING_WATCH
+		return RATING_HOLD if owns_position and implied_upside >= -0.04 else RATING_WATCH
 	if has_contradicted_pattern:
-		return RATING_WATCH if score >= 52 else RATING_AVOID
-	if score >= 84 and quality >= 62 and risk <= 62 and contradiction_count == 0 and missing_pillar_count == 0:
+		return RATING_HOLD if owns_position and score >= 52 and implied_upside >= -0.04 else (RATING_WATCH if score >= 52 and implied_upside >= 0.0 else RATING_AVOID)
+	if target_defensible and implied_upside <= -0.08:
+		return RATING_AVOID
+	if target_defensible and implied_upside < 0.02:
+		return RATING_HOLD if owns_position and score >= 64 and flow_tag != "distribution" else RATING_WATCH
+	if target_defensible and score >= 84 and quality >= 62 and risk <= 62 and contradiction_count == 0 and missing_pillar_count == 0 and implied_upside >= 0.12:
 		return RATING_BUY
-	if score >= 70 and has_anchor and has_price and has_invalidation and contradiction_count <= 1 and (growth >= 58 or flow_tag == "accumulation"):
+	if target_defensible and score >= 70 and has_anchor and has_price and has_invalidation and contradiction_count <= 1 and implied_upside >= 0.05 and (growth >= 58 or flow_tag == "accumulation"):
 		return RATING_ACCUMULATE
 	if score >= 54:
-		return RATING_WATCH
+		return RATING_HOLD if owns_position and implied_upside >= -0.04 else RATING_WATCH
 	if flow_tag == "accumulation" and growth >= 60 and has_price:
 		return RATING_TRADE_ONLY
 	return RATING_AVOID
@@ -369,9 +381,9 @@ func _valuation_recommendation_bullets(thesis: Dictionary, company: Dictionary, 
 	var missing_notes: Array = score_data.get("missing_notes", [])
 	var grade: String = _grade_for_score(int(score_data.get("score", 0)))
 	if missing_notes.is_empty():
-		bullets.append(_make_claim_bullet("PROCESS QUALITY SUPPORTS THE CALL", "The reasoning grade is %s because the thesis includes enough evidence categories, risk handling, and confirmation checks to support a disciplined decision." % grade))
+		bullets.append(_make_claim_bullet("PROCESS QUALITY SUPPORTS THE CALL", "The thesis quality grade is %s because the thesis includes enough evidence categories, risk handling, and confirmation checks to support a disciplined decision." % grade))
 	else:
-		bullets.append(_make_claim_bullet("GRADE LIMITED BY EVIDENCE GAPS", "The reasoning grade is %s because the report still needs: %s" % [grade, "; ".join(_plain_notes(missing_notes, 3))]))
+		bullets.append(_make_claim_bullet("GRADE LIMITED BY EVIDENCE GAPS", "The thesis quality grade is %s because the report still needs: %s" % [grade, "; ".join(_plain_notes(missing_notes, 3))]))
 	return bullets
 
 

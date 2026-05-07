@@ -8606,8 +8606,9 @@ func _run_scenario(
 		}
 
 	var broker_rows_vbox: VBoxContainer = game_root.find_child("BrokerRows", true, false) as VBoxContainer
+	var broker_header_row: HBoxContainer = game_root.find_child("BrokerHeaderRow", true, false) as HBoxContainer
 	var broker_meter_bar: ProgressBar = game_root.find_child("BrokerMeterBar", true, false) as ProgressBar
-	if financial_history_summary_label == null or broker_rows_vbox == null or broker_meter_bar == null:
+	if financial_history_summary_label == null or broker_rows_vbox == null or broker_header_row == null or broker_meter_bar == null:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
@@ -8625,6 +8626,13 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected Key Stats history and Broker rows to stay populated after the opening buy refresh."
+		}
+	if not _broker_table_rows_use_expanding_halves(broker_header_row, broker_rows_vbox):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Broker table header and rows to use the full-width two-sided layout."
 		}
 	if (
 		(broker_summary_helper_label != null and (broker_summary_helper_label.visible or not broker_summary_helper_label.text.is_empty())) or
@@ -9455,10 +9463,29 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 	var thesis_report_preparing_panel: Control = game_root.find_child("ThesisReportPreparingPanel", true, false) as Control
 	var thesis_report_preparing_label: Label = game_root.find_child("ThesisReportPreparingLabel", true, false) as Label
 	var thesis_white_paper_panel: Control = game_root.find_child("ThesisWhitePaperPanel", true, false) as Control
+	var thesis_white_paper_recommendation_label: Label = game_root.find_child("ThesisWhitePaperRecommendationLabel", true, false) as Label
+	var thesis_white_paper_implied_label: Label = game_root.find_child("ThesisWhitePaperImpliedLabel", true, false) as Label
+	var thesis_white_paper_sections: VBoxContainer = game_root.find_child("ThesisWhitePaperSections", true, false) as VBoxContainer
 	var thesis_report_text: RichTextLabel = game_root.find_child("ThesisReportText", true, false) as RichTextLabel
 	var thesis_report_close_button: Button = game_root.find_child("ThesisReportCloseButton", true, false) as Button
 	var thesis_report_regenerate_button: Button = game_root.find_child("ThesisReportRegenerateButton", true, false) as Button
 	var thesis_use_selected_button: Button = game_root.find_child("ThesisUseSelectedStockButton", true, false) as Button
+	var thesis_step_flow_row: HBoxContainer = game_root.find_child("ThesisStepFlowRow", true, false) as HBoxContainer
+	var thesis_stance_bullish_button: Button = game_root.find_child("ThesisStanceBullishButton", true, false) as Button
+	var thesis_stance_bearish_button: Button = game_root.find_child("ThesisStanceBearishButton", true, false) as Button
+	var thesis_stance_income_button: Button = game_root.find_child("ThesisStanceIncomeButton", true, false) as Button
+	var thesis_stance_watch_button: Button = game_root.find_child("ThesisStanceWatchButton", true, false) as Button
+	var thesis_evidence_tab_fundamental_button: Button = game_root.find_child("ThesisEvidenceTabFundamentalButton", true, false) as Button
+	var thesis_evidence_tab_technical_button: Button = game_root.find_child("ThesisEvidenceTabTechnicalButton", true, false) as Button
+	var thesis_evidence_tab_news_button: Button = game_root.find_child("ThesisEvidenceTabNewsButton", true, false) as Button
+	var thesis_evidence_tab_social_button: Button = game_root.find_child("ThesisEvidenceTabSocialButton", true, false) as Button
+	var thesis_evidence_card_grid: HFlowContainer = game_root.find_child("ThesisEvidenceCardGrid", true, false) as HFlowContainer
+	var thesis_evidence_chip_flow: HFlowContainer = game_root.find_child("ThesisEvidenceChipFlow", true, false) as HFlowContainer
+	var thesis_sidebar_pip_row: HBoxContainer = game_root.find_child("ThesisSidebarPipRow", true, false) as HBoxContainer
+	var thesis_sidebar_title_label: Label = game_root.find_child("ThesisSidebarTitleLabel", true, false) as Label
+	var thesis_sidebar_meta_label: Label = game_root.find_child("ThesisSidebarMetaLabel", true, false) as Label
+	var thesis_sidebar_evidence_label: Label = game_root.find_child("ThesisSidebarEvidenceLabel", true, false) as Label
+	var thesis_sidebar_next_gap_label: Label = game_root.find_child("ThesisSidebarNextGapLabel", true, false) as Label
 	if (
 		thesis_window == null or
 		not thesis_window.visible or
@@ -9481,13 +9508,46 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 		thesis_report_preparing_panel == null or
 		thesis_report_preparing_label == null or
 		thesis_white_paper_panel == null or
+		thesis_white_paper_recommendation_label == null or
+		thesis_white_paper_implied_label == null or
+		thesis_white_paper_sections == null or
 		thesis_white_paper_panel.visible or
 		thesis_report_text == null or
 		thesis_report_close_button == null or
 		thesis_report_regenerate_button == null or
-		thesis_use_selected_button == null
+		thesis_use_selected_button == null or
+		thesis_step_flow_row == null or
+		thesis_stance_bullish_button == null or
+		thesis_stance_bearish_button == null or
+		thesis_stance_income_button == null or
+		thesis_stance_watch_button == null or
+		thesis_evidence_tab_fundamental_button == null or
+		thesis_evidence_tab_technical_button == null or
+		thesis_evidence_tab_news_button == null or
+		thesis_evidence_tab_social_button == null or
+		thesis_evidence_card_grid == null or
+		thesis_evidence_chip_flow == null or
+		thesis_sidebar_pip_row == null or
+		thesis_sidebar_title_label == null or
+		thesis_sidebar_meta_label == null or
+		thesis_sidebar_evidence_label == null or
+		thesis_sidebar_next_gap_label == null
 	):
-		return "Smoke test expected the Thesis Board icon to open a settled brown-framed two-column window with a hidden report overlay."
+		return "Smoke test expected the Thesis Board icon to open a settled brown-framed redesigned workflow with a hidden report overlay."
+
+	var step_flow_text: String = _collect_node_text(thesis_step_flow_row)
+	if thesis_step_flow_row.get_child_count() != 3 or step_flow_text.find("Build") == -1 or step_flow_text.find("Add Evidence") == -1 or step_flow_text.find("Review") == -1:
+		return "Smoke test expected the Thesis Board redesign to render the three numbered Build, Add Evidence, and Review steps."
+	var bullish_style: StyleBoxFlat = thesis_stance_bullish_button.get_theme_stylebox("normal") as StyleBoxFlat
+	var bearish_style: StyleBoxFlat = thesis_stance_bearish_button.get_theme_stylebox("normal") as StyleBoxFlat
+	if (
+		not thesis_stance_bullish_button.button_pressed or
+		bullish_style == null or
+		bullish_style.bg_color.g <= bullish_style.bg_color.r or
+		bearish_style == null or
+		not _color_close(thesis_stance_bearish_button.get_theme_color("font_color"), Color(0.65098, 0.247059, 0.219608, 1), 0.03)
+	):
+		return "Smoke test expected Thesis stance selection to use color-coded segmented buttons."
 
 	thesis_use_selected_button.emit_signal("pressed")
 	await get_tree().process_frame
@@ -9574,6 +9634,67 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 	await _wait_for_ui_animation_settle()
 	if thesis_evidence_category_option.item_count <= 0 or thesis_evidence_option.item_count <= 0:
 		return "Smoke test expected the Thesis Board evidence picker to render categories and options after creating a thesis."
+	if (
+		thesis_sidebar_title_label.text.find("Smoke Thesis") == -1 or
+		thesis_sidebar_meta_label.text.find("Bullish") == -1 or
+		thesis_sidebar_evidence_label.text.find("Evidence") == -1 or
+		thesis_sidebar_pip_row.get_child_count() != 5 or
+		thesis_sidebar_next_gap_label.text.strip_edges().is_empty()
+	):
+		return "Smoke test expected the Thesis Board sidebar to summarize active thesis stance, timeframe, pips, and next evidence gap."
+	var thesis_tab_buttons: Array = [
+		thesis_evidence_tab_fundamental_button,
+		thesis_evidence_tab_technical_button,
+		thesis_evidence_tab_news_button,
+		thesis_evidence_tab_social_button
+	]
+	for tab_button_value in thesis_tab_buttons:
+		var tab_button: Button = tab_button_value
+		tab_button.emit_signal("pressed")
+		await get_tree().process_frame
+		if thesis_evidence_card_grid.get_child_count() <= 0:
+			return "Smoke test expected every Thesis evidence tab to render browsable card content."
+		var tab_card_text: String = _collect_node_text(thesis_evidence_card_grid).to_lower()
+		if tab_card_text.strip_edges().is_empty() or (tab_card_text.find("positive") == -1 and tab_card_text.find("negative") == -1 and tab_card_text.find("mixed") == -1):
+			return "Smoke test expected Thesis evidence cards to show label, value, detail, and impact badge text."
+	thesis_evidence_tab_technical_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if _collect_node_text(thesis_evidence_chip_flow).find("Price Action") == -1:
+		return "Smoke test expected chart-pattern evidence added from STOCKBOT to appear as a selected Technical chip."
+	thesis_evidence_tab_fundamental_button.emit_signal("pressed")
+	await get_tree().process_frame
+	var first_fundamental_card: Button = null
+	for card_value in thesis_evidence_card_grid.get_children():
+		if card_value is Button:
+			first_fundamental_card = card_value
+			break
+	if first_fundamental_card == null:
+		return "Smoke test expected the Thesis Fundamental tab to expose clickable evidence cards."
+	var thesis_card_count_before: int = RunState.get_player_thesis(thesis_id).get("evidence", []).size()
+	first_fundamental_card.emit_signal("pressed")
+	await get_tree().process_frame
+	var thesis_rows_after_card_add: Array = RunState.get_player_thesis(thesis_id).get("evidence", [])
+	if thesis_rows_after_card_add.size() <= thesis_card_count_before or thesis_evidence_chip_flow.get_child_count() <= 0:
+		return "Smoke test expected clicking a Thesis evidence card to add it and update board chips immediately."
+	var added_card_label: String = ""
+	for evidence_value in thesis_rows_after_card_add:
+		if typeof(evidence_value) != TYPE_DICTIONARY:
+			continue
+		var evidence_row: Dictionary = evidence_value
+		if str(evidence_row.get("source_label", "")) != "STOCKBOT Chart":
+			added_card_label = str(evidence_row.get("label", ""))
+			break
+	var chip_remove_button: Button = null
+	for chip_value in thesis_evidence_chip_flow.get_children():
+		if chip_value is Button and str((chip_value as Button).text).find(added_card_label) != -1:
+			chip_remove_button = chip_value
+			break
+	if chip_remove_button == null:
+		return "Smoke test expected added Thesis evidence to render as a removable board chip."
+	chip_remove_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if RunState.get_player_thesis(thesis_id).get("evidence", []).size() >= thesis_rows_after_card_add.size():
+		return "Smoke test expected clicking a Thesis board chip to remove that evidence."
 	if thesis_evidence_discipline_label.text.find("Evidence discipline") == -1 or thesis_evidence_discipline_label.text.find("Price ready") == -1:
 		return "Smoke test expected the Thesis Board evidence discipline strip to summarize selected evidence pillars."
 	if game_root.find_child("ThesisFocusGapButton", true, false) != null:
@@ -9622,6 +9743,8 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 	await get_tree().process_frame
 	if thesis_evidence_list.item_count < required_evidence_categories.size():
 		return "Smoke test expected the Thesis Board selected evidence list to update after add/remove operations."
+	if thesis_evidence_chip_flow.get_child_count() < required_evidence_categories.size() or _collect_node_text(thesis_evidence_chip_flow).find("Risk") == -1:
+		return "Smoke test expected the Thesis Board evidence chips to update after direct add/remove operations."
 
 	var saved_thesis_state: Dictionary = RunState.to_save_dict()
 	RunState.load_from_dict(saved_thesis_state)
@@ -9680,6 +9803,15 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 		report.get("sections", []).size() < 6
 	):
 		return "Smoke test expected generated Thesis reports to include verdict, grade, discipline rows, target area, and analyst-style sections."
+	var rating_alignment_validation: String = _validate_thesis_report_rating_alignment()
+	if not rating_alignment_validation.is_empty():
+		return rating_alignment_validation
+	if (
+		thesis_white_paper_recommendation_label.text != str(report.get("rating", "")) or
+		thesis_white_paper_implied_label.text.strip_edges().is_empty() or
+		thesis_white_paper_sections.get_child_count() <= 0
+	):
+		return "Smoke test expected the redesigned Thesis white paper to show summary recommendation, implied move, and structured thesis sections."
 	var required_report_sections := [
 		"Investment Thesis",
 		"Valuation & Recommendation",
@@ -9703,8 +9835,8 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 		var forbidden_term: String = str(forbidden_term_value)
 		if visible_report_text.find(forbidden_term) != -1:
 			return "Smoke test expected Thesis report copy to avoid raw system/debug wording like %s." % forbidden_term
-	if visible_report_text.find("recommendation") == -1 or visible_report_text.find("reasoning grade") == -1 or visible_report_text.find("target area") == -1:
-		return "Smoke test expected the Thesis white paper to show recommendation, reasoning grade, and target area."
+	if visible_report_text.find("recommendation") == -1 or visible_report_text.find("thesis quality grade") == -1 or visible_report_text.find("target area") == -1:
+		return "Smoke test expected the Thesis white paper to show recommendation, thesis quality grade, and target area."
 	if visible_report_text.find("player marked") == -1 or visible_report_text.find("coaching feedback") == -1:
 		return "Smoke test expected the Thesis white paper to include player-led chart pattern evidence."
 	if visible_report_text.find("evidence discipline") == -1 or visible_report_text.find("next check") == -1:
@@ -10158,6 +10290,49 @@ func _thesis_report_section(report: Dictionary, section_title: String) -> Dictio
 	return {}
 
 
+func _validate_thesis_report_rating_alignment() -> String:
+	var report_system = load("res://systems/ThesisReportSystem.gd").new()
+	var thesis := {
+		"id": "rating_alignment_fixture",
+		"company_id": "fixture",
+		"stance": "bullish",
+		"horizon": "swing",
+		"evidence": [
+			{"category": "fundamentals", "category_label": "Fundamentals", "label": "Business quality", "value": "Weak", "detail": "Quality is weak.", "impact": "mixed"},
+			{"category": "financials", "category_label": "Financials", "label": "Revenue growth YoY", "value": "-8.0%", "detail": "Revenue is fading.", "impact": "mixed"},
+			{"category": "valuation", "category_label": "Valuation", "label": "Current PE", "value": "24.0x", "detail": "Valuation is not cheap.", "impact": "mixed"},
+			{"category": "price_action", "category_label": "Price Action", "label": "Five-bar trend", "value": "-6.0%", "detail": "Price confirms weakness.", "impact": "mixed"},
+			{"category": "broker_flow", "category_label": "Broker Flow", "label": "Broker flow", "value": "Neutral", "detail": "Flow is not supportive.", "impact": "mixed"},
+			{"category": "sector_macro", "category_label": "Sector / Macro", "label": "Sector macro bias", "value": "Weak", "detail": "Sector backdrop is soft.", "impact": "mixed"},
+			{"category": "risk_invalidation", "category_label": "Risk / Invalidation", "label": "Price invalidation", "value": "Breaks below report price", "detail": "Risk is explicit.", "impact": "mixed"}
+		]
+	}
+	var context := {
+		"day_index": 0,
+		"trade_date": {"year": 2020, "month": 1, "day": 3},
+		"company": {
+			"id": "fixture",
+			"ticker": "FIX",
+			"name": "Fixture Downtrend",
+			"sector_name": "Industrial",
+			"current_price": 1000.0,
+			"quality_score": 35,
+			"growth_score": 35,
+			"risk_score": 70,
+			"daily_change_pct": -0.02,
+			"lots_owned": 8,
+			"broker_flow": {"flow_tag": "neutral"}
+		}
+	}
+	var report: Dictionary = report_system.build_report(thesis, context)
+	if float(report.get("implied_upside_pct", 0.0)) > -0.05:
+		return "Smoke test expected the Thesis rating alignment fixture to produce a meaningfully negative implied move."
+	var rating: String = str(report.get("rating", ""))
+	if rating in ["Hold/Watch", "Hold", "Buy", "Accumulate"]:
+		return "Smoke test expected negative-upside bullish Thesis reports to avoid hold/buy-style recommendations."
+	return ""
+
+
 func _count_down_days(price_history: Array) -> int:
 	var down_days: int = 0
 	for index in range(1, price_history.size()):
@@ -10257,7 +10432,7 @@ func _validate_design_system_assets() -> String:
 	for scale_id in ["compact", "normal", "large", "accessibility"]:
 		if UiTheme.font_size("body", scale_id) <= 0:
 			return "Smoke test expected UiTheme body size to resolve for %s scale." % scale_id
-	if UiTheme.font_size("caption", "normal") != 11 or UiTheme.font_size("metric", "normal") != 18:
+	if UiTheme.font_size("caption", "normal") != 12 or UiTheme.font_size("body", "normal") != 14 or UiTheme.font_size("metric", "normal") != 20:
 		return "Smoke test expected UiTheme normal typography sizes to match the design system."
 	if UiTheme.font("regular") == null or UiTheme.font("semibold") == null or UiTheme.font("bold") == null:
 		return "Smoke test expected UiTheme to load Open Sans regular, semibold, and bold fonts."
@@ -10656,6 +10831,36 @@ func _broker_rows_contain_code(rows: Array, broker_code: String) -> bool:
 		if str(row.get("code", "")) == broker_code:
 			return true
 	return false
+
+
+func _broker_table_rows_use_expanding_halves(header_row: HBoxContainer, rows_vbox: VBoxContainer) -> bool:
+	if not _broker_table_line_uses_expanding_halves(header_row):
+		return false
+	for child in rows_vbox.get_children():
+		if child is Label:
+			continue
+		var row_wrap: VBoxContainer = child as VBoxContainer
+		if row_wrap == null or row_wrap.get_child_count() <= 0:
+			continue
+		var row: HBoxContainer = row_wrap.get_child(0) as HBoxContainer
+		return row != null and _broker_table_line_uses_expanding_halves(row)
+	return false
+
+
+func _broker_table_line_uses_expanding_halves(row: HBoxContainer) -> bool:
+	if row == null or row.get_child_count() != 9:
+		return false
+	if not (row.get_child(4) is VSeparator):
+		return false
+	for child_index in range(row.get_child_count()):
+		if child_index == 4:
+			continue
+		var label: Label = row.get_child(child_index) as Label
+		if label == null:
+			return false
+		if label.size_flags_horizontal != Control.SIZE_EXPAND_FILL or label.size_flags_stretch_ratio <= 0.0:
+			return false
+	return true
 
 
 func _has_met_network_contact(network_snapshot: Dictionary, contact_id: String) -> bool:

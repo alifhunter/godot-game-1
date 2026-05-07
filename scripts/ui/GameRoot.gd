@@ -16,8 +16,8 @@ const NETWORK_FOLLOWUP_ACTIONS := {
 	1: "ask_why",
 	2: "challenge"
 }
-const STOCK_APP_FONT_SIZE := 12
-const DEFAULT_APP_FONT_SIZE := 12
+const STOCK_APP_FONT_SIZE := 14
+const DEFAULT_APP_FONT_SIZE := 14
 const APP_FONT_CANDIDATE_PATHS := [
 	"res://assets/fonts/app_font.ttf",
 	"res://assets/fonts/app_font.otf",
@@ -164,6 +164,11 @@ const BROKER_CODE_WIDTH := 42.0
 const BROKER_VALUE_WIDTH := 76.0
 const BROKER_LOT_WIDTH := 62.0
 const BROKER_AVERAGE_WIDTH := 70.0
+const BROKER_SIDE_DIVIDER_WIDTH := 28.0
+const BROKER_CODE_RATIO := 0.72
+const BROKER_VALUE_RATIO := 1.52
+const BROKER_LOT_RATIO := 1.0
+const BROKER_AVERAGE_RATIO := 1.1
 const STATEMENT_LABEL_WIDTH := 286.0
 const STATEMENT_VALUE_WIDTH := 148.0
 const APP_WINDOW_INSET := 20
@@ -15624,25 +15629,16 @@ func _refresh_broker_header() -> void:
 	for child in broker_header_row.get_children():
 		broker_header_row.remove_child(child)
 		child.queue_free()
+	broker_header_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	if broker_net_mode:
-		broker_header_row.add_child(_build_table_cell("Net Buy", BROKER_CODE_WIDTH, COLOR_POSITIVE))
-		broker_header_row.add_child(_build_table_cell("N.Val", BROKER_VALUE_WIDTH, COLOR_POSITIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
-		broker_header_row.add_child(_build_table_cell("N.Lot", BROKER_LOT_WIDTH, COLOR_POSITIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
-		broker_header_row.add_child(_build_table_cell("N.Avg", BROKER_AVERAGE_WIDTH, COLOR_POSITIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
-		broker_header_row.add_child(_build_table_cell("Net Sell", BROKER_CODE_WIDTH, COLOR_NEGATIVE))
-		broker_header_row.add_child(_build_table_cell("N.Val", BROKER_VALUE_WIDTH, COLOR_NEGATIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
-		broker_header_row.add_child(_build_table_cell("N.Lot", BROKER_LOT_WIDTH, COLOR_NEGATIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
-		broker_header_row.add_child(_build_table_cell("N.Avg", BROKER_AVERAGE_WIDTH, COLOR_NEGATIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
+		_add_broker_table_side(broker_header_row, "Net Buy", "N.Val", "N.Lot", "N.Avg", COLOR_POSITIVE)
+		broker_header_row.add_child(_build_broker_side_divider())
+		_add_broker_table_side(broker_header_row, "Net Sell", "N.Val", "N.Lot", "N.Avg", COLOR_NEGATIVE)
 	else:
-		broker_header_row.add_child(_build_table_cell("Buy", BROKER_CODE_WIDTH, COLOR_POSITIVE))
-		broker_header_row.add_child(_build_table_cell("B.Val", BROKER_VALUE_WIDTH, COLOR_POSITIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
-		broker_header_row.add_child(_build_table_cell("B.Lot", BROKER_LOT_WIDTH, COLOR_POSITIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
-		broker_header_row.add_child(_build_table_cell("B.Avg", BROKER_AVERAGE_WIDTH, COLOR_POSITIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
-		broker_header_row.add_child(_build_table_cell("Sell", BROKER_CODE_WIDTH, COLOR_NEGATIVE))
-		broker_header_row.add_child(_build_table_cell("S.Val", BROKER_VALUE_WIDTH, COLOR_NEGATIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
-		broker_header_row.add_child(_build_table_cell("S.Lot", BROKER_LOT_WIDTH, COLOR_NEGATIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
-		broker_header_row.add_child(_build_table_cell("S.Avg", BROKER_AVERAGE_WIDTH, COLOR_NEGATIVE, false, HORIZONTAL_ALIGNMENT_RIGHT))
+		_add_broker_table_side(broker_header_row, "Buy", "B.Val", "B.Lot", "B.Avg", COLOR_POSITIVE)
+		broker_header_row.add_child(_build_broker_side_divider())
+		_add_broker_table_side(broker_header_row, "Sell", "S.Val", "S.Lot", "S.Avg", COLOR_NEGATIVE)
 
 
 func _refresh_broker_table(broker_flow: Dictionary) -> void:
@@ -15687,66 +15683,66 @@ func _on_broker_net_toggled(toggled_on: bool) -> void:
 		_refresh_broker_table(current_trade_snapshot.get("broker_flow", {}))
 
 
+func _add_broker_table_side(
+	row: HBoxContainer,
+	code_text: String,
+	value_text: String,
+	lot_text: String,
+	average_text: String,
+	font_color: Color
+) -> void:
+	row.add_child(_build_broker_table_cell(code_text, BROKER_CODE_WIDTH, font_color, HORIZONTAL_ALIGNMENT_LEFT, BROKER_CODE_RATIO))
+	row.add_child(_build_broker_table_cell(value_text, BROKER_VALUE_WIDTH, font_color, HORIZONTAL_ALIGNMENT_RIGHT, BROKER_VALUE_RATIO))
+	row.add_child(_build_broker_table_cell(lot_text, BROKER_LOT_WIDTH, font_color, HORIZONTAL_ALIGNMENT_RIGHT, BROKER_LOT_RATIO))
+	row.add_child(_build_broker_table_cell(average_text, BROKER_AVERAGE_WIDTH, font_color, HORIZONTAL_ALIGNMENT_RIGHT, BROKER_AVERAGE_RATIO))
+
+
+func _build_broker_table_cell(
+	text: String,
+	minimum_width: float,
+	font_color: Color,
+	alignment: HorizontalAlignment,
+	stretch_ratio: float
+) -> Label:
+	var label: Label = _build_table_cell(text, minimum_width, font_color, true, alignment)
+	label.size_flags_stretch_ratio = stretch_ratio
+	return label
+
+
+func _build_broker_side_divider() -> VSeparator:
+	var divider := VSeparator.new()
+	divider.custom_minimum_size = Vector2(BROKER_SIDE_DIVIDER_WIDTH, 0.0)
+	divider.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	return divider
+
+
 func _build_broker_table_row(buy_row: Dictionary, sell_row: Dictionary) -> Control:
 	var row_wrap: VBoxContainer = VBoxContainer.new()
+	row_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row_wrap.add_theme_constant_override("separation", 4)
 
 	var row: HBoxContainer = HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 8)
 	row_wrap.add_child(row)
 
-	row.add_child(_build_table_cell(
+	_add_broker_table_side(
+		row,
 		str(buy_row.get("code", "-")),
-		BROKER_CODE_WIDTH,
-		COLOR_POSITIVE if not buy_row.is_empty() else COLOR_MUTED
-	))
-	row.add_child(_build_table_cell(
 		_format_compact_currency(float(buy_row.get("value", 0.0))) if not buy_row.is_empty() else "-",
-		BROKER_VALUE_WIDTH,
-		COLOR_POSITIVE if not buy_row.is_empty() else COLOR_MUTED,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	row.add_child(_build_table_cell(
 		_format_compact_lots(float(buy_row.get("lots", 0.0))) if not buy_row.is_empty() else "-",
-		BROKER_LOT_WIDTH,
-		COLOR_POSITIVE if not buy_row.is_empty() else COLOR_MUTED,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	row.add_child(_build_table_cell(
 		_format_last_price(float(buy_row.get("avg_price", 0.0))) if not buy_row.is_empty() else "-",
-		BROKER_AVERAGE_WIDTH,
-		COLOR_POSITIVE if not buy_row.is_empty() else COLOR_MUTED,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	row.add_child(_build_table_cell(
+		COLOR_POSITIVE if not buy_row.is_empty() else COLOR_MUTED
+	)
+	row.add_child(_build_broker_side_divider())
+	_add_broker_table_side(
+		row,
 		str(sell_row.get("code", "-")),
-		BROKER_CODE_WIDTH,
-		COLOR_NEGATIVE if not sell_row.is_empty() else COLOR_MUTED
-	))
-	row.add_child(_build_table_cell(
 		_format_compact_currency(float(sell_row.get("value", 0.0))) if not sell_row.is_empty() else "-",
-		BROKER_VALUE_WIDTH,
-		COLOR_NEGATIVE if not sell_row.is_empty() else COLOR_MUTED,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	row.add_child(_build_table_cell(
 		_format_compact_lots(float(sell_row.get("lots", 0.0))) if not sell_row.is_empty() else "-",
-		BROKER_LOT_WIDTH,
-		COLOR_NEGATIVE if not sell_row.is_empty() else COLOR_MUTED,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	row.add_child(_build_table_cell(
 		_format_last_price(float(sell_row.get("avg_price", 0.0))) if not sell_row.is_empty() else "-",
-		BROKER_AVERAGE_WIDTH,
-		COLOR_NEGATIVE if not sell_row.is_empty() else COLOR_MUTED,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
+		COLOR_NEGATIVE if not sell_row.is_empty() else COLOR_MUTED
+	)
 
 	var separator: HSeparator = HSeparator.new()
 	row_wrap.add_child(separator)
