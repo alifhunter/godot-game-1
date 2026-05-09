@@ -1,7 +1,7 @@
 extends Node
 
 const STABLE_RNG = preload("res://systems/StableRng.gd")
-const SAVE_SCHEMA_VERSION := 4
+const SAVE_SCHEMA_VERSION := 5
 const SAVE_FORMAT_ID := "daytrader_single_run"
 const LOT_SIZE := 100
 const PLAYER_BROKER_CODE := "XL"
@@ -46,7 +46,29 @@ const REPORT_MONTH_BY_QUARTER := {
 const STARTUP_PERF_LOG_PREFIX := "[perf][startup]"
 const COMPANY_DETAIL_PERSISTENCE_PERSISTENT := "persistent"
 const COMPANY_DETAIL_PERSISTENCE_EPHEMERAL := "ephemeral"
+const COMPANY_PROFILE_SCALE_VERSION := 1
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
+const GUIDE_FLOW_SYSTEM = preload("res://systems/GuideFlowSystem.gd")
+const PROFILE_SIZE_ID_BY_SCALE_TIER := {
+	"micro": 0,
+	"small": 1,
+	"mid": 2,
+	"large": 3,
+	"giant": 4
+}
+const PROFILE_SIZE_TAG_RULES := {
+	"micro-cap": {"max": 0},
+	"small-cap": {"min": 1, "max": 1},
+	"mid-cap": {"min": 2, "max": 2},
+	"large-cap": {"min": 3},
+	"mega-cap": {"min": 4},
+	"blue-chip": {"min": 3},
+	"systemic": {"min": 4},
+	"institutional-grade": {"min": 3},
+	"market-followed": {"min": 3},
+	"market-leader": {"min": 3},
+	"national-champion": {"min": 3}
+}
 const COMPANY_PROFILE_KEYS := [
 	"name",
 	"sector_id",
@@ -62,6 +84,7 @@ const COMPANY_PROFILE_KEYS := [
 	"shares_outstanding",
 	"detail_status",
 	"profile_seed",
+	"profile_scale_version",
 	"archetype_id",
 	"archetype_label",
 	"company_size_id",
@@ -117,6 +140,14 @@ const CASH_STRESS_GRACE_TRADING_DAYS := 3
 const EMERGENCY_LOAN_PAYMENT_COUNT := 6
 const EMERGENCY_LOAN_REPAYMENT_MULTIPLIER := 1.24
 const MAX_LIFE_FINANCE_HISTORY := 24
+const LIFE_BASICS_TIER_IDS := ["bare", "lean", "stable", "comfortable"]
+const LIFE_DEFAULT_BASICS_TIER_ID := "stable"
+const LIFE_DEFAULT_STRESS_VALUE := 20.0
+const LIFE_DEFAULT_HAPPINESS_VALUE := 65.0
+const LIFE_BURNOUT_WARNING_TRADING_DAYS := 2
+const LIFE_HOSPITAL_TRADING_DAYS := 2
+const LIFE_HOSPITAL_RECOVERY_STRESS := 45.0
+const LIFE_HOSPITAL_RECOVERY_HAPPINESS := 45.0
 
 var run_seed = 0
 var day_index = 0
@@ -181,6 +212,7 @@ var first_hour_guide_start_day_index = 0
 var first_hour_guide_anchor_company_id = ""
 var first_hour_guide_seeded_meeting_id = ""
 var first_hour_guide_seeded_chain_id = ""
+var guide_state = {}
 var current_trade_date = {}
 var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 var company_generator = preload("res://systems/CompanyGenerator.gd").new()
@@ -259,6 +291,7 @@ func reset() -> void:
 	first_hour_guide_anchor_company_id = ""
 	first_hour_guide_seeded_meeting_id = ""
 	first_hour_guide_seeded_chain_id = ""
+	guide_state = GUIDE_FLOW_SYSTEM.default_state(false)
 	current_trade_date = trading_calendar.start_date()
 
 
@@ -341,13 +374,14 @@ func _initialize_new_run_state(
 	difficulty_id = str(difficulty_config.get("id", "normal"))
 	tutorial_enabled = wants_tutorial
 	tutorial_shown = false
-	ftue_enabled = wants_tutorial
+	guide_state = GUIDE_FLOW_SYSTEM.default_state(wants_tutorial)
+	ftue_enabled = false
 	ftue_completed = false
 	ftue_skipped = false
-	ftue_current_step_id = FTUE_FIRST_STEP_ID if wants_tutorial else ""
+	ftue_current_step_id = ""
 	ftue_completed_step_ids = []
 	ftue_start_day_index = day_index
-	first_hour_guide_enabled = wants_tutorial
+	first_hour_guide_enabled = false
 	first_hour_guide_completed = false
 	first_hour_guide_skipped = false
 	first_hour_guide_current_step_id = ""
@@ -490,6 +524,7 @@ func load_from_dict(data: Dictionary) -> void:
 	tutorial_shown = bool(data.get("tutorial_shown", false))
 	_load_ftue_state(data)
 	_load_first_hour_guide_state(data)
+	_load_guide_state(data)
 	current_trade_date = data.get("current_trade_date", {}).duplicate(true)
 	if current_trade_date.is_empty():
 		current_trade_date = trading_calendar.trade_date_for_index(day_index + 1)
@@ -530,6 +565,7 @@ func load_from_dict(data: Dictionary) -> void:
 
 
 func to_save_dict() -> Dictionary:
+	_sync_legacy_guide_fields_from_unified()
 	return {
 		"save_schema_version": SAVE_SCHEMA_VERSION,
 		"save_format_id": SAVE_FORMAT_ID,
@@ -599,6 +635,7 @@ func to_save_dict() -> Dictionary:
 		"first_hour_guide_anchor_company_id": first_hour_guide_anchor_company_id,
 		"first_hour_guide_seeded_meeting_id": first_hour_guide_seeded_meeting_id,
 		"first_hour_guide_seeded_chain_id": first_hour_guide_seeded_chain_id,
+		"guide_state": get_guide_state(),
 		"current_trade_date": current_trade_date.duplicate(true)
 	}
 
@@ -645,7 +682,12 @@ func ensure_company_full_detail(company_id: String, persist_detail: bool = true)
 	var company_profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
 	if company_profile.is_empty():
 		return false
-	if str(company_profile.get("detail_status", "ready")) == "ready":
+	var current_status: String = str(company_profile.get("detail_status", "ready"))
+	if current_status == "ready" and _company_profile_needs_scale_refresh(company_id, company_profile):
+		company_profile["detail_status"] = "cold"
+		company_profile["detail_persistence"] = ""
+		current_status = "cold"
+	if current_status == "ready":
 		if persist_detail and str(company_profile.get("detail_persistence", COMPANY_DETAIL_PERSISTENCE_PERSISTENT)) != COMPANY_DETAIL_PERSISTENCE_PERSISTENT:
 			company_profile["detail_persistence"] = COMPANY_DETAIL_PERSISTENCE_PERSISTENT
 			runtime["company_profile"] = company_profile
@@ -674,6 +716,52 @@ func ensure_company_full_detail(company_id: String, persist_detail: bool = true)
 	if queued_index >= 0:
 		company_detail_hydration_queue.remove_at(queued_index)
 	return true
+
+
+func _company_profile_needs_scale_refresh(company_id: String, company_profile: Dictionary) -> bool:
+	if int(company_profile.get("profile_scale_version", 0)) >= COMPANY_PROFILE_SCALE_VERSION:
+		return false
+	var definition: Dictionary = _get_base_company_definition(company_id)
+	if definition.is_empty():
+		return false
+	var expected_size_id: int = _profile_size_id_for_definition(definition, company_profile)
+	if expected_size_id < 0:
+		return false
+	if int(company_profile.get("company_size_id", -1)) != expected_size_id:
+		return true
+	for tag_value in company_profile.get("profile_tags", []):
+		if not _profile_tag_matches_size(str(tag_value), expected_size_id):
+			return true
+	return false
+
+
+func _profile_size_id_for_definition(definition: Dictionary, company_profile: Dictionary) -> int:
+	var anchors: Dictionary = definition.get("anchors", {})
+	var scale_tier: String = str(anchors.get("scale_tier", "")).strip_edges().to_lower()
+	if PROFILE_SIZE_ID_BY_SCALE_TIER.has(scale_tier):
+		return int(PROFILE_SIZE_ID_BY_SCALE_TIER.get(scale_tier, -1))
+
+	var financials: Dictionary = company_profile.get("financials", {})
+	var market_cap: float = float(financials.get("market_cap", anchors.get("market_cap", 0.0)))
+	if market_cap <= 0.0:
+		return -1
+	if market_cap < 950000000000.0:
+		return 0
+	if market_cap < 2500000000000.0:
+		return 1
+	if market_cap < 10000000000000.0:
+		return 2
+	if market_cap < 35000000000000.0:
+		return 3
+	return 4
+
+
+func _profile_tag_matches_size(tag: String, size_id: int) -> bool:
+	var normalized_tag: String = tag.strip_edges().to_lower()
+	if not PROFILE_SIZE_TAG_RULES.has(normalized_tag):
+		return true
+	var rule: Dictionary = PROFILE_SIZE_TAG_RULES.get(normalized_tag, {})
+	return size_id >= int(rule.get("min", 0)) and size_id <= int(rule.get("max", 4))
 
 
 func _build_companies_save_payload() -> Dictionary:
@@ -743,6 +831,10 @@ func queue_company_detail_hydration(company_id: String, priority: bool = false) 
 	if company_profile.is_empty():
 		return
 	var current_status: String = str(company_profile.get("detail_status", "ready"))
+	if current_status == "ready" and _company_profile_needs_scale_refresh(company_id, company_profile):
+		company_profile["detail_status"] = "cold"
+		company_profile["detail_persistence"] = ""
+		current_status = "cold"
 	if current_status == "ready" or current_status == "hydrating":
 		return
 	company_profile["detail_status"] = "queued"
@@ -1560,6 +1652,61 @@ func set_player_life(next_life: Dictionary) -> void:
 	player_life = _normalize_life_state(next_life)
 
 
+func is_hospitalized() -> bool:
+	player_life = _normalize_life_state(player_life)
+	return int(player_life.get("hospital_days_remaining", 0)) > 0
+
+
+func get_life_stress_ap_penalty(life_state: Dictionary = {}) -> int:
+	var source: Dictionary = life_state
+	if source.is_empty():
+		source = get_player_life()
+	else:
+		source = _normalize_life_state(source)
+	var stress_value: float = float(source.get("stress_value", LIFE_DEFAULT_STRESS_VALUE))
+	if stress_value >= 100.0:
+		return 4
+	if stress_value >= 80.0:
+		return 3
+	if stress_value >= 60.0:
+		return 2
+	if stress_value >= 40.0:
+		return 1
+	return 0
+
+
+func get_life_stress_stage(life_state: Dictionary = {}) -> Dictionary:
+	var source: Dictionary = life_state
+	if source.is_empty():
+		source = get_player_life()
+	else:
+		source = _normalize_life_state(source)
+	var stress_value: float = float(source.get("stress_value", LIFE_DEFAULT_STRESS_VALUE))
+	if int(source.get("hospital_days_remaining", 0)) > 0:
+		return {"id": "hospital", "label": "Hospitalized", "severity": 5}
+	if bool(source.get("burnout_risk_active", false)):
+		return {"id": "burnout_risk", "label": "Burnout Risk", "severity": 4}
+	if stress_value >= 80.0:
+		return {"id": "strained", "label": "Strained", "severity": 3}
+	if stress_value >= 60.0:
+		return {"id": "stressed", "label": "Stressed", "severity": 2}
+	if stress_value >= 40.0:
+		return {"id": "tense", "label": "Tense", "severity": 1}
+	return {"id": "calm", "label": "Calm", "severity": 0}
+
+
+func pause_cash_stress_deadline(days: int = 1) -> void:
+	var resolved_days: int = max(days, 0)
+	if resolved_days <= 0:
+		return
+	player_life = _normalize_life_state(player_life)
+	var finance: Dictionary = player_life.get("finance", {}).duplicate(true)
+	if not bool(finance.get("cash_stress_active", false)):
+		return
+	finance["cash_stress_deadline_day_index"] = int(finance.get("cash_stress_deadline_day_index", day_index)) + resolved_days
+	player_life["finance"] = _normalize_life_finance_state(finance)
+
+
 func get_life_finance() -> Dictionary:
 	player_life = _normalize_life_state(player_life)
 	return player_life.get("finance", {}).duplicate(true)
@@ -1810,12 +1957,23 @@ func get_effective_sell_fee_rate() -> float:
 	return float(TRADING_FEE_BY_TIER.get(tier, TRADING_FEE_BY_TIER[DEFAULT_UPGRADE_TIER]).get("sell_fee_rate", SELL_FEE_RATE))
 
 
-func get_daily_action_limit() -> int:
+func get_daily_action_base_limit() -> int:
 	var tier: int = get_upgrade_tier("daily_action_points")
 	var tier_data: Dictionary = _upgrade_catalog_tier_data("daily_action_points", tier)
 	if tier_data.has("daily_action_limit"):
 		return max(int(tier_data.get("daily_action_limit", DAILY_ACTION_LIMIT_BY_TIER[DEFAULT_UPGRADE_TIER])), 0)
 	return int(DAILY_ACTION_LIMIT_BY_TIER.get(tier, DAILY_ACTION_LIMIT_BY_TIER[DEFAULT_UPGRADE_TIER]))
+
+
+func get_daily_action_limit() -> int:
+	var base_limit: int = get_daily_action_base_limit()
+	var life_state: Dictionary = get_player_life()
+	if int(life_state.get("hospital_days_remaining", 0)) > 0:
+		return 0
+	var penalty: int = get_life_stress_ap_penalty(life_state)
+	if penalty <= 0:
+		return base_limit
+	return max(base_limit - penalty, 1)
 
 
 func _upgrade_catalog_tier_data(track_id: String, tier: int) -> Dictionary:
@@ -1967,152 +2125,328 @@ func estimate_sell_order(company_id: String, shares: int) -> Dictionary:
 	return _estimate_order(company_id, shares, false)
 
 
+func should_show_guide() -> bool:
+	var snapshot: Dictionary = get_guide_snapshot()
+	return (
+		bool(snapshot.get("enabled", false)) and
+		not str(snapshot.get("active_flow_id", "")).is_empty() and
+		not str(snapshot.get("active_step_id", "")).is_empty()
+	)
+
+
+func get_guide_state() -> Dictionary:
+	return _normalize_guide_state(guide_state)
+
+
+func get_guide_snapshot() -> Dictionary:
+	guide_state = _normalize_guide_state(guide_state)
+	var active_flow_id: String = str(guide_state.get("active_flow_id", ""))
+	var active_step_id: String = str(guide_state.get("active_step_id", ""))
+	var flow_data: Dictionary = GUIDE_FLOW_SYSTEM.flow(active_flow_id)
+	var step_data: Dictionary = GUIDE_FLOW_SYSTEM.step(active_flow_id, active_step_id)
+	return {
+		"enabled": bool(guide_state.get("enabled", false)),
+		"auto_prompt_enabled": bool(guide_state.get("auto_prompt_enabled", false)),
+		"active_flow_id": active_flow_id,
+		"active_step_id": active_step_id,
+		"flow": flow_data,
+		"step": step_data,
+		"flow_label": str(flow_data.get("label", "")),
+		"flow_short_label": str(flow_data.get("short_label", "")),
+		"step_index": GUIDE_FLOW_SYSTEM.step_index(active_flow_id, active_step_id),
+		"step_count": GUIDE_FLOW_SYSTEM.step_count(active_flow_id),
+		"completed_flow_ids": guide_state.get("completed_flow_ids", []).duplicate(),
+		"skipped_flow_ids": guide_state.get("skipped_flow_ids", []).duplicate(),
+		"dismissed_prompt_flow_ids": guide_state.get("dismissed_prompt_flow_ids", []).duplicate(),
+		"completed_step_ids": guide_state.get("completed_step_ids", {}).duplicate(true),
+		"anchor_company_id": str(guide_state.get("anchor_company_id", "")),
+		"seeded_meeting_id": str(guide_state.get("seeded_meeting_id", "")),
+		"seeded_chain_id": str(guide_state.get("seeded_chain_id", "")),
+		"starter_handoff_seen": bool(guide_state.get("starter_handoff_seen", false))
+	}
+
+
+func get_available_guide_flows() -> Array:
+	guide_state = _normalize_guide_state(guide_state)
+	var rows: Array = []
+	for flow_id_value in GUIDE_FLOW_SYSTEM.FLOW_ORDER:
+		var flow_id: String = str(flow_id_value)
+		var flow_data: Dictionary = GUIDE_FLOW_SYSTEM.flow(flow_id)
+		if flow_data.is_empty():
+			continue
+		var status: String = "available"
+		var release_status: String = GUIDE_FLOW_SYSTEM.flow_release_status(flow_id)
+		var is_enabled: bool = GUIDE_FLOW_SYSTEM.flow_enabled(flow_id)
+		if not is_enabled:
+			status = "coming_soon"
+		elif guide_state.get("completed_flow_ids", []).has(flow_id):
+			status = "completed"
+		elif guide_state.get("skipped_flow_ids", []).has(flow_id):
+			status = "skipped"
+		elif flow_id == str(guide_state.get("active_flow_id", "")):
+			status = "active"
+		rows.append({
+			"id": flow_id,
+			"label": str(flow_data.get("label", flow_id)),
+			"short_label": str(flow_data.get("short_label", flow_id)),
+			"description": str(flow_data.get("description", "")),
+			"status": status,
+			"enabled": is_enabled,
+			"release_status": release_status
+		})
+	return rows
+
+
+func get_contextual_guide_prompt(context_id: String) -> Dictionary:
+	guide_state = _normalize_guide_state(guide_state)
+	if not bool(guide_state.get("auto_prompt_enabled", false)):
+		return {}
+	var flow_id: String = GUIDE_FLOW_SYSTEM.flow_for_context(context_id)
+	if flow_id.is_empty():
+		return {}
+	if guide_state.get("completed_flow_ids", []).has(flow_id):
+		return {}
+	if guide_state.get("skipped_flow_ids", []).has(flow_id):
+		return {}
+	if guide_state.get("dismissed_prompt_flow_ids", []).has(flow_id):
+		return {}
+	if flow_id == str(guide_state.get("active_flow_id", "")):
+		return {}
+	var flow_data: Dictionary = GUIDE_FLOW_SYSTEM.flow(flow_id)
+	return {
+		"flow_id": flow_id,
+		"label": str(flow_data.get("label", flow_id)),
+		"description": str(flow_data.get("description", ""))
+	}
+
+
+func start_guide_flow(flow_id: String) -> bool:
+	var normalized_flow_id: String = flow_id.strip_edges()
+	if not GUIDE_FLOW_SYSTEM.flow_exists(normalized_flow_id) or not GUIDE_FLOW_SYSTEM.flow_enabled(normalized_flow_id):
+		return false
+	guide_state = _normalize_guide_state(guide_state)
+	guide_state["enabled"] = true
+	if str(guide_state.get("active_flow_id", "")) == normalized_flow_id:
+		return true
+	guide_state["active_flow_id"] = normalized_flow_id
+	_array_erase_value(guide_state["completed_flow_ids"], normalized_flow_id)
+	var completed_steps: Dictionary = guide_state.get("completed_step_ids", {})
+	completed_steps.erase(normalized_flow_id)
+	guide_state["completed_step_ids"] = completed_steps
+	guide_state["active_step_id"] = GUIDE_FLOW_SYSTEM.first_step_for_flow(normalized_flow_id)
+	_array_erase_value(guide_state["skipped_flow_ids"], normalized_flow_id)
+	_array_erase_value(guide_state["dismissed_prompt_flow_ids"], normalized_flow_id)
+	return true
+
+
+func advance_guide_step(flow_id: String = "", step_id: String = "") -> bool:
+	guide_state = _normalize_guide_state(guide_state)
+	var active_flow_id: String = str(guide_state.get("active_flow_id", ""))
+	var active_step_id: String = str(guide_state.get("active_step_id", ""))
+	if active_flow_id.is_empty() or active_step_id.is_empty():
+		return false
+	if not flow_id.is_empty() and flow_id != active_flow_id:
+		return false
+	if not step_id.is_empty() and step_id != active_step_id:
+		return false
+
+	var completed_steps: Dictionary = guide_state.get("completed_step_ids", {})
+	var flow_steps: Array = completed_steps.get(active_flow_id, [])
+	if not flow_steps.has(active_step_id):
+		flow_steps.append(active_step_id)
+	completed_steps[active_flow_id] = flow_steps
+	guide_state["completed_step_ids"] = completed_steps
+
+	var next_step_id: String = GUIDE_FLOW_SYSTEM.next_step_for_flow(active_flow_id, active_step_id)
+	if next_step_id.is_empty():
+		return complete_guide_flow(active_flow_id)
+	guide_state["active_step_id"] = next_step_id
+	return true
+
+
+func skip_guide_flow(flow_id: String = "") -> bool:
+	guide_state = _normalize_guide_state(guide_state)
+	var active_flow_id: String = str(guide_state.get("active_flow_id", ""))
+	var target_flow_id: String = flow_id.strip_edges() if not flow_id.is_empty() else active_flow_id
+	if target_flow_id.is_empty() or not GUIDE_FLOW_SYSTEM.flow_exists(target_flow_id):
+		return false
+	_array_add_unique(guide_state["skipped_flow_ids"], target_flow_id)
+	if active_flow_id == target_flow_id:
+		_clear_active_guide_flow()
+	if target_flow_id == GUIDE_FLOW_SYSTEM.FLOW_TRADE:
+		tutorial_shown = true
+		guide_state["starter_handoff_seen"] = true
+	return true
+
+
+func complete_guide_flow(flow_id: String = "") -> bool:
+	guide_state = _normalize_guide_state(guide_state)
+	var active_flow_id: String = str(guide_state.get("active_flow_id", ""))
+	var target_flow_id: String = flow_id.strip_edges() if not flow_id.is_empty() else active_flow_id
+	if target_flow_id.is_empty() or not GUIDE_FLOW_SYSTEM.flow_exists(target_flow_id):
+		return false
+	_array_add_unique(guide_state["completed_flow_ids"], target_flow_id)
+	_array_erase_value(guide_state["skipped_flow_ids"], target_flow_id)
+	if active_flow_id == target_flow_id:
+		_clear_active_guide_flow()
+		_maybe_start_next_starter_guide(target_flow_id)
+	return true
+
+
+func dismiss_guide_prompt(flow_id: String) -> bool:
+	guide_state = _normalize_guide_state(guide_state)
+	var normalized_flow_id: String = flow_id.strip_edges()
+	if normalized_flow_id.is_empty() or not GUIDE_FLOW_SYSTEM.flow_exists(normalized_flow_id):
+		return false
+	_array_add_unique(guide_state["dismissed_prompt_flow_ids"], normalized_flow_id)
+	guide_state["last_prompt_flow_id"] = normalized_flow_id
+	if str(guide_state.get("active_flow_id", "")) == normalized_flow_id:
+		_clear_active_guide_flow()
+	return true
+
+
+func set_guide_anchor_company_id(company_id: String) -> bool:
+	guide_state = _normalize_guide_state(guide_state)
+	var normalized_company_id: String = company_id.strip_edges()
+	if normalized_company_id == str(guide_state.get("anchor_company_id", "")):
+		return false
+	guide_state["anchor_company_id"] = normalized_company_id
+	return true
+
+
+func set_guide_seeded_hook(chain_id: String, meeting_id: String) -> bool:
+	guide_state = _normalize_guide_state(guide_state)
+	var normalized_chain_id: String = chain_id.strip_edges()
+	var normalized_meeting_id: String = meeting_id.strip_edges()
+	if normalized_chain_id == str(guide_state.get("seeded_chain_id", "")) and normalized_meeting_id == str(guide_state.get("seeded_meeting_id", "")):
+		return false
+	guide_state["seeded_chain_id"] = normalized_chain_id
+	guide_state["seeded_meeting_id"] = normalized_meeting_id
+	return true
+
+
+func _first_uncompleted_guide_step(flow_id: String) -> String:
+	var completed_steps: Dictionary = guide_state.get("completed_step_ids", {})
+	var flow_steps: Array = completed_steps.get(flow_id, [])
+	for step_id_value in GUIDE_FLOW_SYSTEM.step_ids_for_flow(flow_id):
+		var step_id: String = str(step_id_value)
+		if not flow_steps.has(step_id):
+			return step_id
+	return GUIDE_FLOW_SYSTEM.first_step_for_flow(flow_id)
+
+
+func _clear_active_guide_flow() -> void:
+	guide_state["active_flow_id"] = ""
+	guide_state["active_step_id"] = ""
+
+
+func _maybe_start_next_starter_guide(completed_or_skipped_flow_id: String) -> void:
+	if completed_or_skipped_flow_id == GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST and not guide_state.get("completed_flow_ids", []).has(GUIDE_FLOW_SYSTEM.FLOW_TRADE) and not guide_state.get("skipped_flow_ids", []).has(GUIDE_FLOW_SYSTEM.FLOW_TRADE):
+		start_guide_flow(GUIDE_FLOW_SYSTEM.FLOW_TRADE)
+		return
+	if completed_or_skipped_flow_id == GUIDE_FLOW_SYSTEM.FLOW_TRADE:
+		tutorial_shown = true
+		guide_state["starter_handoff_seen"] = true
+
+
+func _array_add_unique(target: Array, value: String) -> void:
+	if not target.has(value):
+		target.append(value)
+
+
+func _array_erase_value(target: Array, value: String) -> void:
+	while target.has(value):
+		target.erase(value)
+
+
 func should_show_tutorial() -> bool:
-	return should_show_ftue()
+	return should_show_guide()
 
 
 func mark_tutorial_shown() -> void:
 	tutorial_shown = true
-	if ftue_enabled and not ftue_completed and not ftue_skipped:
-		mark_ftue_completed()
+	if should_show_guide():
+		complete_guide_flow()
 
 
 func should_show_ftue() -> bool:
-	return ftue_enabled and not ftue_completed and not ftue_skipped and not ftue_current_step_id.is_empty()
+	return should_show_guide()
 
 
 func get_ftue_snapshot() -> Dictionary:
-	var step_index: int = FTUE_STEP_IDS.find(ftue_current_step_id)
+	var guide_snapshot: Dictionary = get_guide_snapshot()
 	return {
-		"enabled": ftue_enabled,
-		"completed": ftue_completed,
-		"skipped": ftue_skipped,
-		"current_step_id": ftue_current_step_id,
-		"completed_step_ids": ftue_completed_step_ids.duplicate(),
+		"enabled": bool(guide_snapshot.get("enabled", false)),
+		"completed": guide_snapshot.get("completed_flow_ids", []).has(GUIDE_FLOW_SYSTEM.FLOW_TRADE),
+		"skipped": not guide_snapshot.get("skipped_flow_ids", []).is_empty(),
+		"current_step_id": str(guide_snapshot.get("active_step_id", "")),
+		"current_flow_id": str(guide_snapshot.get("active_flow_id", "")),
+		"completed_step_ids": guide_snapshot.get("completed_step_ids", {}).get(str(guide_snapshot.get("active_flow_id", "")), []).duplicate(),
 		"start_day_index": ftue_start_day_index,
-		"step_index": step_index,
-		"step_count": FTUE_STEP_IDS.size()
+		"step_index": int(guide_snapshot.get("step_index", 0)),
+		"step_count": int(guide_snapshot.get("step_count", 1))
 	}
 
 
 func advance_ftue_step(step_id: String = "") -> bool:
-	if not should_show_ftue():
-		return false
-	var current_step_id: String = ftue_current_step_id
-	if not step_id.is_empty() and step_id != current_step_id:
-		return false
-	if not ftue_completed_step_ids.has(current_step_id):
-		ftue_completed_step_ids.append(current_step_id)
-	if current_step_id == FTUE_FINAL_STEP_ID:
-		mark_ftue_completed()
-		return true
-	var current_index: int = FTUE_STEP_IDS.find(current_step_id)
-	if current_index < 0 or current_index >= FTUE_STEP_IDS.size() - 1:
-		mark_ftue_completed()
-		return true
-	ftue_current_step_id = str(FTUE_STEP_IDS[current_index + 1])
-	return true
+	return advance_guide_step("", step_id)
 
 
 func skip_ftue() -> bool:
-	if not ftue_enabled or ftue_completed or ftue_skipped:
-		return false
-	ftue_skipped = true
-	ftue_current_step_id = ""
 	tutorial_shown = true
-	if first_hour_guide_enabled and not first_hour_guide_completed:
-		first_hour_guide_skipped = true
-		first_hour_guide_current_step_id = ""
-	return true
+	return skip_guide_flow()
 
 
 func mark_ftue_completed() -> bool:
-	if not ftue_enabled or ftue_completed:
-		return false
-	ftue_completed = true
-	ftue_current_step_id = ""
 	tutorial_shown = true
-	_start_first_hour_guide_if_needed()
-	return true
+	return complete_guide_flow()
 
 
 func should_show_first_hour_guide() -> bool:
-	return (
-		first_hour_guide_enabled and
-		not first_hour_guide_completed and
-		not first_hour_guide_skipped and
-		not first_hour_guide_current_step_id.is_empty()
-	)
+	var snapshot: Dictionary = get_guide_snapshot()
+	return str(snapshot.get("active_flow_id", "")) == GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT
 
 
 func get_first_hour_guide_snapshot() -> Dictionary:
-	var step_index: int = FIRST_HOUR_GUIDE_STEP_IDS.find(first_hour_guide_current_step_id)
+	var guide_snapshot: Dictionary = get_guide_snapshot()
+	var current_step_id: String = str(guide_snapshot.get("active_step_id", ""))
+	var completed_steps: Dictionary = guide_snapshot.get("completed_step_ids", {})
 	return {
-		"enabled": first_hour_guide_enabled,
-		"completed": first_hour_guide_completed,
-		"skipped": first_hour_guide_skipped,
-		"current_step_id": first_hour_guide_current_step_id,
-		"completed_step_ids": first_hour_guide_completed_step_ids.duplicate(),
+		"enabled": bool(guide_snapshot.get("enabled", false)),
+		"completed": guide_snapshot.get("completed_flow_ids", []).has(GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT),
+		"skipped": guide_snapshot.get("skipped_flow_ids", []).has(GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT),
+		"current_step_id": _legacy_first_hour_step_id(current_step_id),
+		"completed_step_ids": _legacy_first_hour_completed_steps(completed_steps.get(GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT, [])),
 		"start_day_index": first_hour_guide_start_day_index,
-		"step_index": step_index,
-		"step_count": FIRST_HOUR_GUIDE_STEP_IDS.size(),
-		"anchor_company_id": first_hour_guide_anchor_company_id,
-		"seeded_meeting_id": first_hour_guide_seeded_meeting_id,
-		"seeded_chain_id": first_hour_guide_seeded_chain_id
+		"step_index": int(guide_snapshot.get("step_index", 0)),
+		"step_count": int(guide_snapshot.get("step_count", 1)),
+		"anchor_company_id": str(guide_snapshot.get("anchor_company_id", "")),
+		"seeded_meeting_id": str(guide_snapshot.get("seeded_meeting_id", "")),
+		"seeded_chain_id": str(guide_snapshot.get("seeded_chain_id", ""))
 	}
 
 
 func advance_first_hour_guide_step(step_id: String = "") -> bool:
-	if not should_show_first_hour_guide():
-		return false
-	var current_step_id: String = first_hour_guide_current_step_id
-	if not step_id.is_empty() and step_id != current_step_id:
-		return false
-	if not first_hour_guide_completed_step_ids.has(current_step_id):
-		first_hour_guide_completed_step_ids.append(current_step_id)
-	if current_step_id == FIRST_HOUR_GUIDE_FINAL_STEP_ID:
-		mark_first_hour_guide_completed()
-		return true
-	var current_index: int = FIRST_HOUR_GUIDE_STEP_IDS.find(current_step_id)
-	if current_index < 0 or current_index >= FIRST_HOUR_GUIDE_STEP_IDS.size() - 1:
-		mark_first_hour_guide_completed()
-		return true
-	first_hour_guide_current_step_id = str(FIRST_HOUR_GUIDE_STEP_IDS[current_index + 1])
-	return true
+	return advance_guide_step(GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT, _new_corporate_step_id_from_legacy(step_id))
 
 
 func skip_first_hour_guide() -> bool:
-	if not first_hour_guide_enabled or first_hour_guide_completed or first_hour_guide_skipped:
-		return false
-	first_hour_guide_skipped = true
-	first_hour_guide_current_step_id = ""
-	return true
+	return skip_guide_flow(GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT)
 
 
 func mark_first_hour_guide_completed() -> bool:
-	if not first_hour_guide_enabled or first_hour_guide_completed:
-		return false
-	first_hour_guide_completed = true
-	first_hour_guide_current_step_id = ""
-	return true
+	return complete_guide_flow(GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT)
 
 
 func set_first_hour_guide_anchor_company_id(company_id: String) -> bool:
-	var normalized_company_id: String = company_id.strip_edges()
-	if normalized_company_id == first_hour_guide_anchor_company_id:
-		return false
-	first_hour_guide_anchor_company_id = normalized_company_id
-	return true
+	first_hour_guide_anchor_company_id = company_id.strip_edges()
+	return set_guide_anchor_company_id(company_id)
 
 
 func set_first_hour_guide_seeded_hook(chain_id: String, meeting_id: String) -> bool:
-	var normalized_chain_id: String = chain_id.strip_edges()
-	var normalized_meeting_id: String = meeting_id.strip_edges()
-	if normalized_chain_id == first_hour_guide_seeded_chain_id and normalized_meeting_id == first_hour_guide_seeded_meeting_id:
-		return false
-	first_hour_guide_seeded_chain_id = normalized_chain_id
-	first_hour_guide_seeded_meeting_id = normalized_meeting_id
-	return true
+	first_hour_guide_seeded_chain_id = chain_id.strip_edges()
+	first_hour_guide_seeded_meeting_id = meeting_id.strip_edges()
+	return set_guide_seeded_hook(chain_id, meeting_id)
 
 
 func _load_ftue_state(data: Dictionary) -> void:
@@ -2184,6 +2518,217 @@ func _load_first_hour_guide_state(data: Dictionary) -> void:
 		return
 	if not FIRST_HOUR_GUIDE_STEP_IDS.has(first_hour_guide_current_step_id):
 		first_hour_guide_current_step_id = FIRST_HOUR_GUIDE_FIRST_STEP_ID
+
+
+func _load_guide_state(data: Dictionary) -> void:
+	if data.has("guide_state"):
+		guide_state = _normalize_guide_state(data.get("guide_state", {}))
+		_sync_legacy_guide_fields_from_unified()
+		return
+
+	var legacy_enabled: bool = tutorial_enabled or ftue_enabled or first_hour_guide_enabled
+	guide_state = GUIDE_FLOW_SYSTEM.default_state(false)
+	guide_state["enabled"] = legacy_enabled
+	guide_state["auto_prompt_enabled"] = legacy_enabled
+	guide_state["anchor_company_id"] = first_hour_guide_anchor_company_id
+	guide_state["seeded_meeting_id"] = first_hour_guide_seeded_meeting_id
+	guide_state["seeded_chain_id"] = first_hour_guide_seeded_chain_id
+
+	var completed_flow_ids: Array = guide_state.get("completed_flow_ids", [])
+	var skipped_flow_ids: Array = guide_state.get("skipped_flow_ids", [])
+	var completed_steps: Dictionary = guide_state.get("completed_step_ids", {})
+	for ftue_step_id_value in ftue_completed_step_ids:
+		_add_legacy_guide_completed_step(completed_steps, _guide_flow_step_from_legacy_ftue(str(ftue_step_id_value)))
+	for first_hour_step_id_value in first_hour_guide_completed_step_ids:
+		_add_legacy_guide_completed_step(completed_steps, _guide_flow_step_from_legacy_first_hour(str(first_hour_step_id_value)))
+
+	if ftue_completed or tutorial_shown:
+		_array_add_unique(completed_flow_ids, GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST)
+		_array_add_unique(completed_flow_ids, GUIDE_FLOW_SYSTEM.FLOW_TRADE)
+		guide_state["starter_handoff_seen"] = true
+	elif ftue_skipped:
+		_array_add_unique(skipped_flow_ids, GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST)
+		_array_add_unique(skipped_flow_ids, GUIDE_FLOW_SYSTEM.FLOW_TRADE)
+		guide_state["starter_handoff_seen"] = true
+
+	if first_hour_guide_completed:
+		_array_add_unique(completed_flow_ids, GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT)
+	elif first_hour_guide_skipped:
+		_array_add_unique(skipped_flow_ids, GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT)
+
+	var active_mapping: Dictionary = {}
+	if ftue_enabled and not ftue_completed and not ftue_skipped and not ftue_current_step_id.is_empty():
+		active_mapping = _guide_flow_step_from_legacy_ftue(ftue_current_step_id)
+	elif first_hour_guide_enabled and not first_hour_guide_completed and not first_hour_guide_skipped and not first_hour_guide_current_step_id.is_empty():
+		active_mapping = _guide_flow_step_from_legacy_first_hour(first_hour_guide_current_step_id)
+	elif tutorial_enabled and not tutorial_shown and not ftue_skipped:
+		active_mapping = {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST, "step_id": GUIDE_FLOW_SYSTEM.first_step_for_flow(GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST)}
+	if not active_mapping.is_empty():
+		var active_flow_id: String = str(active_mapping.get("flow_id", ""))
+		_array_erase_value(completed_flow_ids, active_flow_id)
+		_array_erase_value(skipped_flow_ids, active_flow_id)
+		guide_state["active_flow_id"] = active_flow_id
+		guide_state["active_step_id"] = str(active_mapping.get("step_id", GUIDE_FLOW_SYSTEM.first_step_for_flow(active_flow_id)))
+	guide_state["completed_flow_ids"] = completed_flow_ids
+	guide_state["skipped_flow_ids"] = skipped_flow_ids
+	guide_state["completed_step_ids"] = completed_steps
+	guide_state = _normalize_guide_state(guide_state)
+	_sync_legacy_guide_fields_from_unified()
+
+
+func _add_legacy_guide_completed_step(completed_steps: Dictionary, mapped_step: Dictionary) -> void:
+	var flow_id: String = str(mapped_step.get("flow_id", "")).strip_edges()
+	var step_id: String = str(mapped_step.get("step_id", "")).strip_edges()
+	if flow_id.is_empty() or step_id.is_empty() or not GUIDE_FLOW_SYSTEM.flow_exists(flow_id):
+		return
+	if GUIDE_FLOW_SYSTEM.step(flow_id, step_id).is_empty():
+		return
+	var flow_steps: Array = completed_steps.get(flow_id, [])
+	if not flow_steps.has(step_id):
+		flow_steps.append(step_id)
+	completed_steps[flow_id] = flow_steps
+
+
+func _normalize_guide_state(source_state: Variant) -> Dictionary:
+	var source: Dictionary = source_state if typeof(source_state) == TYPE_DICTIONARY else {}
+	var normalized: Dictionary = GUIDE_FLOW_SYSTEM.default_state(false)
+	normalized["enabled"] = bool(source.get("enabled", false))
+	normalized["auto_prompt_enabled"] = bool(source.get("auto_prompt_enabled", normalized.get("enabled", false)))
+	normalized["completed_flow_ids"] = _normalize_guide_flow_ids(source.get("completed_flow_ids", []))
+	normalized["skipped_flow_ids"] = _normalize_guide_flow_ids(source.get("skipped_flow_ids", []))
+	normalized["dismissed_prompt_flow_ids"] = _normalize_guide_flow_ids(source.get("dismissed_prompt_flow_ids", []))
+	normalized["completed_step_ids"] = _normalize_guide_completed_steps(source.get("completed_step_ids", {}))
+	normalized["anchor_company_id"] = str(source.get("anchor_company_id", "")).strip_edges()
+	normalized["seeded_meeting_id"] = str(source.get("seeded_meeting_id", "")).strip_edges()
+	normalized["seeded_chain_id"] = str(source.get("seeded_chain_id", "")).strip_edges()
+	normalized["last_prompt_flow_id"] = str(source.get("last_prompt_flow_id", "")).strip_edges()
+	normalized["starter_handoff_seen"] = bool(source.get("starter_handoff_seen", false))
+
+	var active_flow_id: String = str(source.get("active_flow_id", "")).strip_edges()
+	var active_step_id: String = str(source.get("active_step_id", "")).strip_edges()
+	if not GUIDE_FLOW_SYSTEM.flow_exists(active_flow_id):
+		active_flow_id = ""
+		active_step_id = ""
+	if not active_flow_id.is_empty() and not GUIDE_FLOW_SYSTEM.flow_enabled(active_flow_id):
+		active_flow_id = ""
+		active_step_id = ""
+	if not active_flow_id.is_empty() and GUIDE_FLOW_SYSTEM.step(active_flow_id, active_step_id).is_empty():
+		active_step_id = GUIDE_FLOW_SYSTEM.first_step_for_flow(active_flow_id)
+	if not bool(normalized.get("enabled", false)):
+		active_flow_id = ""
+		active_step_id = ""
+	if normalized.get("completed_flow_ids", []).has(active_flow_id) or normalized.get("skipped_flow_ids", []).has(active_flow_id):
+		active_flow_id = ""
+		active_step_id = ""
+	normalized["active_flow_id"] = active_flow_id
+	normalized["active_step_id"] = active_step_id
+	return normalized
+
+
+func _normalize_guide_flow_ids(source_ids: Variant) -> Array:
+	var normalized: Array = []
+	if typeof(source_ids) != TYPE_ARRAY:
+		return normalized
+	for flow_id_value in source_ids:
+		var flow_id: String = str(flow_id_value).strip_edges()
+		if flow_id.is_empty() or not GUIDE_FLOW_SYSTEM.flow_exists(flow_id) or normalized.has(flow_id):
+			continue
+		normalized.append(flow_id)
+	return normalized
+
+
+func _normalize_guide_completed_steps(source_steps: Variant) -> Dictionary:
+	var normalized: Dictionary = {}
+	if typeof(source_steps) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_steps
+	for flow_id_value in source.keys():
+		var flow_id: String = str(flow_id_value).strip_edges()
+		if not GUIDE_FLOW_SYSTEM.flow_exists(flow_id):
+			continue
+		var step_ids: Array = []
+		if typeof(source.get(flow_id_value, [])) == TYPE_ARRAY:
+			for step_id_value in source.get(flow_id_value, []):
+				var step_id: String = str(step_id_value).strip_edges()
+				if step_id.is_empty() or GUIDE_FLOW_SYSTEM.step(flow_id, step_id).is_empty() or step_ids.has(step_id):
+					continue
+				step_ids.append(step_id)
+		normalized[flow_id] = step_ids
+	return normalized
+
+
+func _sync_legacy_guide_fields_from_unified() -> void:
+	var snapshot: Dictionary = get_guide_snapshot()
+	ftue_enabled = bool(snapshot.get("enabled", false))
+	ftue_completed = snapshot.get("completed_flow_ids", []).has(GUIDE_FLOW_SYSTEM.FLOW_TRADE)
+	ftue_skipped = snapshot.get("skipped_flow_ids", []).has(GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST) or snapshot.get("skipped_flow_ids", []).has(GUIDE_FLOW_SYSTEM.FLOW_TRADE)
+	ftue_current_step_id = str(snapshot.get("active_step_id", "")) if [GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST, GUIDE_FLOW_SYSTEM.FLOW_TRADE].has(str(snapshot.get("active_flow_id", ""))) else ""
+	first_hour_guide_enabled = bool(snapshot.get("enabled", false))
+	first_hour_guide_completed = snapshot.get("completed_flow_ids", []).has(GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT)
+	first_hour_guide_skipped = snapshot.get("skipped_flow_ids", []).has(GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT)
+	first_hour_guide_current_step_id = _legacy_first_hour_step_id(str(snapshot.get("active_step_id", ""))) if str(snapshot.get("active_flow_id", "")) == GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT else ""
+	first_hour_guide_anchor_company_id = str(snapshot.get("anchor_company_id", ""))
+	first_hour_guide_seeded_meeting_id = str(snapshot.get("seeded_meeting_id", ""))
+	first_hour_guide_seeded_chain_id = str(snapshot.get("seeded_chain_id", ""))
+
+
+func _guide_flow_step_from_legacy_ftue(step_id: String) -> Dictionary:
+	match step_id:
+		"welcome_desktop":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST, "step_id": "open_stockbot"}
+		"pick_stock":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST, "step_id": "select_stock"}
+		"inspect_setup":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_TRADE, "step_id": "inspect_setup"}
+		"buy_one_lot":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_TRADE, "step_id": "buy_one_lot"}
+		"advance_day":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_TRADE, "step_id": "advance_day"}
+		"read_recap":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_TRADE, "step_id": "read_recap"}
+		"next_steps":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_TRADE, "step_id": "handoff"}
+	return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST, "step_id": "open_stockbot"}
+
+
+func _guide_flow_step_from_legacy_first_hour(step_id: String) -> Dictionary:
+	match step_id:
+		"portfolio_check":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_TRADE, "step_id": "open_portfolio"}
+		"create_thesis":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_THESIS, "step_id": "create_thesis"}
+		"add_watchlist":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST, "step_id": "add_watchlist"}
+		"read_market_context":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_RESEARCH, "step_id": "open_research_app"}
+		"seeded_rupslb":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT, "step_id": "schedule_event"}
+		"attend_rupslb":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT, "step_id": "attend_rupslb"}
+		"approach_lead":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT, "step_id": "approach_lead"}
+		"handoff":
+			return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT, "step_id": "handoff"}
+	return {"flow_id": GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT, "step_id": "schedule_event"}
+
+
+func _legacy_first_hour_step_id(step_id: String) -> String:
+	if step_id == "schedule_event":
+		return "seeded_rupslb"
+	return step_id
+
+
+func _new_corporate_step_id_from_legacy(step_id: String) -> String:
+	if step_id == "seeded_rupslb":
+		return "schedule_event"
+	return step_id
+
+
+func _legacy_first_hour_completed_steps(step_ids: Array) -> Array:
+	var rows: Array = []
+	for step_id_value in step_ids:
+		rows.append(_legacy_first_hour_step_id(str(step_id_value)))
+	return rows
 
 
 func _normalize_ftue_completed_step_ids(source_ids: Variant) -> Array:
@@ -2334,7 +2879,15 @@ func _default_life_state() -> Dictionary:
 	return {
 		"housing_id": "kost_room",
 		"lifestyle_id": "balanced",
+		"basics_tier_id": LIFE_DEFAULT_BASICS_TIER_ID,
 		"monthly_extra": 0.0,
+		"stress_value": LIFE_DEFAULT_STRESS_VALUE,
+		"happiness_value": LIFE_DEFAULT_HAPPINESS_VALUE,
+		"burnout_risk_active": false,
+		"burnout_risk_days_remaining": 0,
+		"hospital_days_remaining": 0,
+		"hospital_started_day_index": -1,
+		"last_hospital_trade_date": {},
 		"updated_day_index": day_index,
 		"last_obligation_period": "",
 		"last_obligation_day_index": -1,
@@ -2372,9 +2925,26 @@ func _normalize_life_state(source_life: Variant) -> Dictionary:
 	var lifestyle_id: String = str(source.get("lifestyle_id", normalized.get("lifestyle_id", "")))
 	if not (lifestyle_id in ["frugal", "balanced", "status"]):
 		lifestyle_id = str(normalized.get("lifestyle_id", "balanced"))
+	var basics_tier_id: String = str(source.get("basics_tier_id", normalized.get("basics_tier_id", "")))
+	if not (basics_tier_id in LIFE_BASICS_TIER_IDS):
+		basics_tier_id = str(normalized.get("basics_tier_id", LIFE_DEFAULT_BASICS_TIER_ID))
 	normalized["housing_id"] = housing_id
 	normalized["lifestyle_id"] = lifestyle_id
+	normalized["basics_tier_id"] = basics_tier_id
 	normalized["monthly_extra"] = max(float(source.get("monthly_extra", 0.0)), 0.0)
+	normalized["stress_value"] = clamp(float(source.get("stress_value", LIFE_DEFAULT_STRESS_VALUE)), 0.0, 100.0)
+	normalized["happiness_value"] = clamp(float(source.get("happiness_value", LIFE_DEFAULT_HAPPINESS_VALUE)), 0.0, 100.0)
+	normalized["burnout_risk_active"] = bool(source.get("burnout_risk_active", false))
+	normalized["burnout_risk_days_remaining"] = clampi(int(source.get("burnout_risk_days_remaining", 0)), 0, LIFE_BURNOUT_WARNING_TRADING_DAYS)
+	normalized["hospital_days_remaining"] = clampi(int(source.get("hospital_days_remaining", 0)), 0, LIFE_HOSPITAL_TRADING_DAYS)
+	normalized["hospital_started_day_index"] = int(source.get("hospital_started_day_index", -1))
+	if int(normalized.get("hospital_days_remaining", 0)) > 0:
+		normalized["burnout_risk_active"] = false
+		normalized["burnout_risk_days_remaining"] = 0
+	else:
+		normalized["hospital_started_day_index"] = -1
+		if not bool(normalized.get("burnout_risk_active", false)):
+			normalized["burnout_risk_days_remaining"] = 0
 	normalized["updated_day_index"] = max(int(source.get("updated_day_index", day_index)), 0)
 	normalized["last_obligation_period"] = str(source.get("last_obligation_period", ""))
 	normalized["last_obligation_day_index"] = int(source.get("last_obligation_day_index", -1))
@@ -2383,6 +2953,8 @@ func _normalize_life_state(source_life: Variant) -> Dictionary:
 		normalized["updated_trade_date"] = source.get("updated_trade_date", {}).duplicate(true)
 	if source.has("last_obligation_trade_date") and typeof(source.get("last_obligation_trade_date")) == TYPE_DICTIONARY:
 		normalized["last_obligation_trade_date"] = source.get("last_obligation_trade_date", {}).duplicate(true)
+	if source.has("last_hospital_trade_date") and typeof(source.get("last_hospital_trade_date")) == TYPE_DICTIONARY:
+		normalized["last_hospital_trade_date"] = source.get("last_hospital_trade_date", {}).duplicate(true)
 	normalized["finance"] = _normalize_life_finance_state(source.get("finance", {}))
 	return normalized
 
@@ -2596,7 +3168,8 @@ func _empty_broker_flow() -> Dictionary:
 		"sell_brokers": [],
 		"broker_type_totals": {},
 		"net_buy_brokers": [],
-		"net_sell_brokers": []
+		"net_sell_brokers": [],
+		"broker_rows": []
 	}
 
 

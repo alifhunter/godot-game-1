@@ -50,16 +50,16 @@ Smoke-test files under `res://logs/` are local test artifacts and should not be 
 Current Early Access target is Windows. Godot globalizes `user://` under the app userdata folder. With the current Windows-safe project name, expect the path to be:
 
 ```text
-%APPDATA%\Godot\app_userdata\Gorengan Stock Trading Simulator
+%APPDATA%\Godot\app_userdata\Buy High Sell Low Stock Trading Simulator
 ```
 
 Recommended Steam Auto-Cloud entries:
 
 | Root | Subdirectory | Pattern | Recursive | OS |
 | --- | --- | --- | --- | --- |
-| `WinAppDataRoaming` | `Godot/app_userdata/Gorengan Stock Trading Simulator/saves` | `*.json` | No | Windows |
-| `WinAppDataRoaming` | `Godot/app_userdata/Gorengan Stock Trading Simulator` | `daytrader_save_config.json` | No | Windows |
-| `WinAppDataRoaming` | `Godot/app_userdata/Gorengan Stock Trading Simulator` | `daytrader_save*.json` | No | Windows |
+| `WinAppDataRoaming` | `Godot/app_userdata/Buy High Sell Low Stock Trading Simulator/saves` | `*.json` | No | Windows |
+| `WinAppDataRoaming` | `Godot/app_userdata/Buy High Sell Low Stock Trading Simulator` | `daytrader_save_config.json` | No | Windows |
+| `WinAppDataRoaming` | `Godot/app_userdata/Buy High Sell Low Stock Trading Simulator` | `daytrader_save*.json` | No | Windows |
 
 Do not use a broad `*` pattern at the userdata root unless we intentionally want to sync unrelated future files.
 

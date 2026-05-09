@@ -1,6 +1,6 @@
-# Gorengan: Stock Trading Simulator
+# Buy High Sell Low Stock Trading Simulator
 
-`Gorengan: Stock Trading Simulator` is a Godot `4.6.1` prototype about reading a procedurally generated market, trading stocks, and learning from event-driven moves.
+`Buy High Sell Low Stock Trading Simulator` is a Godot `4.6.1` prototype about reading a procedurally generated market, trading stocks, and learning from event-driven moves.
 
 The project is currently in a `first playable prototype` state. A new run lands on a desktop-style shell where the player opens:
 

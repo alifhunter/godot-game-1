@@ -24,9 +24,15 @@ var outflow_label: Label = null
 var dividend_label: Label = null
 var net_monthly_label: Label = null
 var runway_label: Label = null
+var stress_label: Label = null
+var happiness_label: Label = null
+var ap_penalty_label: Label = null
 var next_payment_label: Label = null
 var housing_option: OptionButton = null
 var lifestyle_option: OptionButton = null
+var basics_slider: HSlider = null
+var basics_detail_label: Label = null
+var wellbeing_detail_label: Label = null
 var housing_detail_label: Label = null
 var lifestyle_detail_label: Label = null
 var update_plan_button: Button = null
@@ -62,6 +68,7 @@ func refresh() -> void:
 	suppress_option_refresh = true
 	_populate_option(housing_option, snapshot.get("housing_options", []), str(state.get("housing_id", "")))
 	_populate_option(lifestyle_option, snapshot.get("lifestyle_options", []), str(state.get("lifestyle_id", "")))
+	_populate_basics_slider(str(state.get("basics_tier_id", "stable")))
 	suppress_option_refresh = false
 
 	status_label.text = str(snapshot.get("status_label", "Runway ready"))
@@ -73,6 +80,11 @@ func refresh() -> void:
 	net_monthly_label.text = _format_currency(net_monthly)
 	net_monthly_label.add_theme_color_override("font_color", COLOR_POSITIVE if net_monthly >= 0.0 else COLOR_NEGATIVE)
 	runway_label.text = _format_runway(float(snapshot.get("runway_months", 0.0)))
+	var stress_stage: Dictionary = snapshot.get("stress_stage", {})
+	stress_label.text = "%d / 100 (%s)" % [int(round(float(snapshot.get("stress_value", 0.0)))), str(stress_stage.get("label", "Calm"))]
+	happiness_label.text = "%d / 100" % int(round(float(snapshot.get("happiness_value", 0.0))))
+	var ap_penalty: int = int(snapshot.get("stress_ap_penalty", 0))
+	ap_penalty_label.text = "-%d AP" % ap_penalty if ap_penalty > 0 else "No penalty"
 	summary_label.text = "Monthly outflow %s | Declared dividend avg %s | Net %s" % [
 		_format_currency(float(snapshot.get("monthly_outflow", 0.0))),
 		_format_currency(float(snapshot.get("estimated_monthly_dividends", 0.0))),
@@ -172,6 +184,9 @@ func _build_ui() -> void:
 	outflow_label = _add_stat_card(stat_grid, "Monthly outflow", "LifeMonthlyOutflowLabel")
 	dividend_label = _add_stat_card(stat_grid, "Declared div avg", "LifeDividendLabel")
 	net_monthly_label = _add_stat_card(stat_grid, "Net monthly", "LifeNetMonthlyLabel")
+	stress_label = _add_stat_card(stat_grid, "Stress", "LifeStressLabel")
+	happiness_label = _add_stat_card(stat_grid, "Happiness", "LifeHappinessLabel")
+	ap_penalty_label = _add_stat_card(stat_grid, "AP pressure", "LifeStressApPenaltyLabel")
 
 	var split := HBoxContainer.new()
 	split.name = "LifeContentSplit"
@@ -192,6 +207,22 @@ func _build_ui() -> void:
 	plan_vbox.add_child(housing_option)
 	housing_detail_label = _make_body_label("LifeHousingDetailLabel")
 	plan_vbox.add_child(housing_detail_label)
+	var basics_title := _make_body_label("LifeBasicsTitleLabel")
+	basics_title.text = "Basics"
+	_style_label(basics_title, COLOR_TEXT, 12)
+	plan_vbox.add_child(basics_title)
+	basics_slider = HSlider.new()
+	basics_slider.name = "LifeBasicsSlider"
+	basics_slider.min_value = 0.0
+	basics_slider.max_value = 3.0
+	basics_slider.step = 1.0
+	basics_slider.tick_count = 4
+	basics_slider.ticks_on_borders = true
+	basics_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	basics_slider.value_changed.connect(_on_basics_slider_changed)
+	plan_vbox.add_child(basics_slider)
+	basics_detail_label = _make_body_label("LifeBasicsDetailLabel")
+	plan_vbox.add_child(basics_detail_label)
 	lifestyle_option = OptionButton.new()
 	lifestyle_option.name = "LifeLifestyleOption"
 	lifestyle_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -199,6 +230,8 @@ func _build_ui() -> void:
 	plan_vbox.add_child(lifestyle_option)
 	lifestyle_detail_label = _make_body_label("LifeLifestyleDetailLabel")
 	plan_vbox.add_child(lifestyle_detail_label)
+	wellbeing_detail_label = _make_body_label("LifeWellbeingDetailLabel")
+	plan_vbox.add_child(wellbeing_detail_label)
 	update_plan_button = Button.new()
 	update_plan_button.name = "LifeUpdatePlanButton"
 	update_plan_button.text = "Update Plan"
@@ -236,7 +269,7 @@ func _build_ui() -> void:
 func _set_empty_state() -> void:
 	status_label.text = "No active run"
 	summary_label.text = "Start or load a run to use Life."
-	for value_label in [cash_label, equity_label, outflow_label, dividend_label, net_monthly_label, runway_label]:
+	for value_label in [cash_label, equity_label, outflow_label, dividend_label, net_monthly_label, runway_label, stress_label, happiness_label, ap_penalty_label]:
 		if value_label != null:
 			value_label.text = "-"
 	if next_payment_label != null:
@@ -396,25 +429,64 @@ func _populate_option(option: OptionButton, rows: Array, selected_id: String) ->
 		option.select(0)
 
 
+func _populate_basics_slider(selected_id: String) -> void:
+	if basics_slider == null:
+		return
+	var rows: Array = snapshot.get("basics_tiers", [])
+	var selected_index: int = _basics_tier_index(selected_id)
+	if selected_index < 0 and not rows.is_empty():
+		selected_index = _basics_tier_index("stable")
+	basics_slider.set_value_no_signal(max(selected_index, 0))
+
+
 func _refresh_option_details() -> void:
 	var housing: Dictionary = _selected_option_data(snapshot.get("housing_options", []), _selected_option_id(housing_option))
 	var lifestyle: Dictionary = _selected_option_data(snapshot.get("lifestyle_options", []), _selected_option_id(lifestyle_option))
+	var basics_tier: Dictionary = _selected_basics_tier_data()
 	housing_detail_label.text = "%s / month. %s" % [
 		_format_currency(float(housing.get("monthly_cost", 0.0))),
 		str(housing.get("detail", ""))
 	]
+	if basics_detail_label != null:
+		basics_detail_label.text = "%s: %s / month. Stress %+d/day | Happiness %+d/day. %s" % [
+			str(basics_tier.get("label", "Stable")),
+			_format_currency(float(basics_tier.get("monthly_cost", snapshot.get("basic_expenses_monthly", 0.0)))),
+			int(basics_tier.get("stress_delta", 0)),
+			int(basics_tier.get("happiness_delta", 0)),
+			str(basics_tier.get("detail", ""))
+		]
 	lifestyle_detail_label.text = "%s / month. %s" % [
 		_format_currency(float(lifestyle.get("monthly_cost", 0.0))),
 		str(lifestyle.get("detail", ""))
 	]
+	if wellbeing_detail_label != null:
+		var stress_stage: Dictionary = snapshot.get("stress_stage", {})
+		var detail_text: String = "Stress %d/100 (%s). Happiness %d/100. AP penalty: %s." % [
+			int(round(float(snapshot.get("stress_value", 0.0)))),
+			str(stress_stage.get("label", "Calm")),
+			int(round(float(snapshot.get("happiness_value", 0.0)))),
+			"-%d" % int(snapshot.get("stress_ap_penalty", 0)) if int(snapshot.get("stress_ap_penalty", 0)) > 0 else "none"
+		]
+		if bool(snapshot.get("hospitalized", false)):
+			detail_text += " Hospital recovery: %d trading day%s left." % [
+				int(snapshot.get("hospital_days_remaining", 0)),
+				"" if int(snapshot.get("hospital_days_remaining", 0)) == 1 else "s"
+			]
+		elif bool(snapshot.get("burnout_risk_active", false)):
+			detail_text += " Burnout risk: %d trading day%s to recover before hospital." % [
+				int(snapshot.get("burnout_risk_days_remaining", 0)),
+				"" if int(snapshot.get("burnout_risk_days_remaining", 0)) == 1 else "s"
+			]
+		wellbeing_detail_label.text = detail_text
 
 
 func _refresh_budget_rows() -> void:
 	_clear_rows(budget_rows)
 	var housing: Dictionary = snapshot.get("housing", {})
+	var basics_tier: Dictionary = snapshot.get("basics_tier", {})
 	var lifestyle: Dictionary = snapshot.get("lifestyle", {})
 	_add_budget_row("Housing", str(housing.get("label", "")), float(housing.get("monthly_cost", 0.0)), false)
-	_add_budget_row("Basics", "Food, transport, phone, and utilities", float(snapshot.get("basic_expenses_monthly", 0.0)), false)
+	_add_budget_row("Basics", str(basics_tier.get("label", "Stable")), float(snapshot.get("basic_expenses_monthly", 0.0)), false)
 	_add_budget_row("Lifestyle", str(lifestyle.get("label", "")), float(lifestyle.get("monthly_cost", 0.0)), false)
 	if float(snapshot.get("monthly_extra", 0.0)) > 0.0:
 		_add_budget_row("Extra", "Manual buffer", float(snapshot.get("monthly_extra", 0.0)), false)
@@ -508,8 +580,14 @@ func _on_option_changed(_index: int) -> void:
 	status_label.text = "Unsaved plan"
 
 
+func _on_basics_slider_changed(_value: float) -> void:
+	if basics_slider != null:
+		basics_slider.value = round(basics_slider.value)
+	_on_option_changed(0)
+
+
 func _on_update_plan_pressed() -> void:
-	var result: Dictionary = GameManager.set_life_plan(_selected_option_id(housing_option), _selected_option_id(lifestyle_option))
+	var result: Dictionary = GameManager.set_life_plan(_selected_option_id(housing_option), _selected_option_id(lifestyle_option), _selected_basics_tier_id())
 	status_label.text = str(result.get("message", "Life plan updated."))
 	if bool(result.get("success", false)):
 		refresh()
@@ -542,6 +620,41 @@ func _selected_option_data(rows: Array, option_id: String) -> Dictionary:
 	if rows.is_empty() or typeof(rows[0]) != TYPE_DICTIONARY:
 		return {}
 	return rows[0]
+
+
+func _selected_basics_tier_id() -> String:
+	var rows: Array = snapshot.get("basics_tiers", [])
+	if rows.is_empty():
+		return "stable"
+	var index: int = clampi(int(round(basics_slider.value if basics_slider != null else 0.0)), 0, rows.size() - 1)
+	var row: Variant = rows[index]
+	if typeof(row) == TYPE_DICTIONARY:
+		var tier: Dictionary = row
+		return str(tier.get("id", "stable"))
+	return "stable"
+
+
+func _selected_basics_tier_data() -> Dictionary:
+	var rows: Array = snapshot.get("basics_tiers", [])
+	var tier_id: String = _selected_basics_tier_id()
+	for row_value in rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		if str(row.get("id", "")) == tier_id:
+			return row
+	return snapshot.get("basics_tier", {})
+
+
+func _basics_tier_index(tier_id: String) -> int:
+	var rows: Array = snapshot.get("basics_tiers", [])
+	for index in range(rows.size()):
+		var row_value: Variant = rows[index]
+		if typeof(row_value) == TYPE_DICTIONARY:
+			var row: Dictionary = row_value
+			if str(row.get("id", "")) == tier_id:
+				return index
+	return -1
 
 
 func _add_stat_card(grid: GridContainer, label_text: String, value_name: String) -> Label:

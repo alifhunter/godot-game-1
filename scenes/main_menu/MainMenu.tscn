@@ -153,8 +153,8 @@ theme_override_constants/h_separation = 16
 theme_override_constants/v_separation = 16
 
 [node name="SelectionDetailLabel" type="Label" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
+visible = false
 autowrap_mode = 3
-text = "Pick one difficulty card to preview bankroll size, company count, and market intensity before you continue."
 
 [node name="TutorialCheckBox" type="CheckBox" parent="Margin/ScreenRoot/DifficultyScreen/CenterContent/SelectorCard/SelectorMargin/SelectorVBox"]
 text = "Show tutorial"

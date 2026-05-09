@@ -2,6 +2,7 @@ extends PanelContainer
 class_name TradeWorkspaceWidget
 
 signal chart_range_changed(range_id)
+signal chart_interaction(action_id)
 
 const STOCKBOT_ICON_PATHS := {
 	"chart": "res://assets/icons/chart-candle.svg",
@@ -295,6 +296,7 @@ func _bind_chart_range_button(button: Button, range_id: String) -> void:
 
 
 func _on_chart_range_pressed(range_id: String) -> void:
+	var previous_range_id: String = _selected_range_id
 	_selected_range_id = str(range_id).to_lower()
 	chart_canvas.reset_zoom()
 	_last_pattern_claim.clear()
@@ -302,6 +304,8 @@ func _on_chart_range_pressed(range_id: String) -> void:
 	_update_chart_range_buttons()
 	_refresh_chart()
 	chart_range_changed.emit(_selected_range_id)
+	if _selected_range_id != previous_range_id:
+		chart_interaction.emit("range")
 
 
 func _update_chart_range_buttons() -> void:
@@ -336,6 +340,7 @@ func _on_chart_display_mode_pressed(display_mode: String) -> void:
 	_chart_display_mode = "candle" if normalized_mode == "candle" else "line"
 	_update_chart_display_mode_buttons()
 	_refresh_chart()
+	chart_interaction.emit("display")
 
 
 func _ensure_valid_chart_display_mode() -> void:
@@ -374,6 +379,7 @@ func _on_drawing_tool_pressed(tool_id: String) -> void:
 	chart_canvas.set_drawing_tool(tool_id)
 	_update_drawing_tool_buttons()
 	_refresh_pattern_panel()
+	chart_interaction.emit(str(tool_id))
 
 
 func _update_drawing_tool_buttons() -> void:

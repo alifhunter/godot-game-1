@@ -514,12 +514,14 @@ func _build_traits(
 		0.08,
 		0.95
 	)
+	var tier_scale: float = _scale_trait_from_tier(template, market_cap_anchor)
 	var scale: float = clamp(
-		(market_cap_anchor * 0.55) +
-		(float(sector_profile.get("scale", 0.45)) * 0.30) +
+		(tier_scale * 0.72) +
+		(float(sector_profile.get("scale", 0.45)) * 0.18) +
+		(market_cap_anchor * 0.10) +
 		rng.randf_range(-0.08, 0.08),
-		0.08,
-		0.95
+		0.06,
+		0.96
 	)
 
 	if "quiet_execution" in narrative_tags:
@@ -571,6 +573,25 @@ func _build_traits(
 		company_id
 	)
 	return traits
+
+
+func _scale_trait_from_tier(template: Dictionary, fallback_scale: float) -> float:
+	var anchors: Dictionary = template.get("anchors", {})
+	if not anchors.has("scale_tier_rank"):
+		return fallback_scale
+	match int(anchors.get("scale_tier_rank", 2)):
+		0:
+			return 0.10
+		1:
+			return 0.28
+		2:
+			return 0.52
+		3:
+			return 0.74
+		4:
+			return 0.92
+		_:
+			return fallback_scale
 
 
 func _build_chart_profile(
@@ -1226,10 +1247,11 @@ func _build_financial_history(
 	run_seed: int,
 	company_id: String
 ) -> Array:
-	var target_market_cap: float = max(
-		_anchor_value(template, "market_cap", 0.0),
-		lerp(800000000000.0, 4200000000000.0, float(traits.get("scale", 0.5)))
-	)
+	var target_market_cap: float = _anchor_value(template, "market_cap", 0.0)
+	if target_market_cap <= 0.0:
+		target_market_cap = lerp(800000000000.0, 4200000000000.0, float(traits.get("scale", 0.5)))
+	var scale_market_cap_floor: float = _anchor_value(template, "scale_market_cap_floor", 0.0)
+	var scale_market_cap_ceiling: float = _anchor_value(template, "scale_market_cap_ceiling", 0.0)
 	var target_margin: float = clamp(
 		_anchor_value(template, "net_profit_margin", 7.5) / 100.0,
 		0.01,
@@ -1254,7 +1276,8 @@ func _build_financial_history(
 		0.40,
 		3.20
 	)
-	var target_revenue_2019: float = max(target_market_cap / price_to_sales_multiple, 120000000000.0)
+	var minimum_revenue_floor: float = clamp(target_market_cap * 0.12, 30000000000.0, 120000000000.0)
+	var target_revenue_2019: float = max(target_market_cap / price_to_sales_multiple, minimum_revenue_floor)
 	var expected_growth_rate: float = clamp(
 		0.035 +
 		(float(traits.get("growth_engine", 0.5)) * 0.11) +
@@ -1378,6 +1401,12 @@ func _build_financial_history(
 			3.20
 		)
 		var market_cap: float = max(net_income * pe_multiple, revenue * sales_floor_multiple)
+		if (
+			year == HISTORY_END_YEAR and
+			scale_market_cap_floor > 0.0 and
+			scale_market_cap_ceiling >= scale_market_cap_floor
+		):
+			market_cap = clamp(market_cap, scale_market_cap_floor, scale_market_cap_ceiling)
 		free_float_pct = clamp(
 			lerp(free_float_pct, target_free_float, 0.18) +
 			_sample_noise(run_seed, company_id, "free_float_year", -0.8, 0.8, year),

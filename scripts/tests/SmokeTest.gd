@@ -82,6 +82,12 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 
+	var macro_scale_validation: String = _validate_macro_scale_tier_generation()
+	if not macro_scale_validation.is_empty():
+		push_error(macro_scale_validation)
+		get_tree().quit(1)
+		return
+
 	var corporate_action_price_validation: String = _validate_corporate_action_price_factor_limits()
 	if not corporate_action_price_validation.is_empty():
 		push_error(corporate_action_price_validation)
@@ -195,12 +201,7 @@ func _validate_first_month_balance_smoke() -> Dictionary:
 			var buy_result: Dictionary = GameManager.buy_lots(buy_company_id, 1)
 			if not bool(buy_result.get("success", false)):
 				return {"success": false, "message": "First-month smoke could not buy a guided starter lot: %s" % str(buy_result.get("message", ""))}
-			GameManager.mark_ftue_completed()
-			for _step_index in range(6):
-				var guide_snapshot: Dictionary = GameManager.get_first_hour_guide_snapshot()
-				if str(guide_snapshot.get("current_step_id", "")) == "seeded_rupslb":
-					break
-				GameManager.advance_first_hour_guide_step()
+			GameManager.start_guide_flow("corporate_event_flow")
 			var hook_result: Dictionary = GameManager.ensure_first_hour_guide_hook()
 			if not bool(hook_result.get("success", false)):
 				return {"success": false, "message": "First-month smoke expected the guided RUPSLB hook to schedule: %s" % str(hook_result.get("message", ""))}
@@ -942,6 +943,221 @@ func _validate_structured_chart_generation() -> String:
 		return "Smoke test expected structured chart histories to include measurable SMA support and resistance examples."
 	if not saw_gap_up or not saw_gap_down:
 		return "Smoke test expected structured chart histories to include both gap-up and gap-down examples."
+	return ""
+
+
+func _validate_macro_scale_tier_generation() -> String:
+	var difficulty_config: Dictionary = GameManager.get_difficulty_config(GameManager.DEFAULT_DIFFICULTY_ID)
+	var smoke_seeds: Array = [13579, 246810, 424242]
+	var reference_tier_signature: String = ""
+	for seed_value in smoke_seeds:
+		var run_seed: int = int(seed_value)
+		var roster: Array = GameManager.build_company_roster(run_seed, difficulty_config)
+		var distribution_error: String = _validate_scale_tier_roster_distribution(roster, run_seed)
+		if not distribution_error.is_empty():
+			return distribution_error
+		var tier_signature: String = _scale_tier_signature(roster)
+		if reference_tier_signature.is_empty():
+			reference_tier_signature = tier_signature
+		elif tier_signature == reference_tier_signature:
+			var matching_market_caps: bool = true
+			var reference_roster: Array = GameManager.build_company_roster(int(smoke_seeds[0]), difficulty_config)
+			for company_index in range(min(reference_roster.size(), roster.size())):
+				var left_anchors: Dictionary = reference_roster[company_index].get("anchors", {})
+				var right_anchors: Dictionary = roster[company_index].get("anchors", {})
+				if not is_equal_approx(float(left_anchors.get("market_cap", 0.0)), float(right_anchors.get("market_cap", 0.0))):
+					matching_market_caps = false
+					break
+			if matching_market_caps:
+				return "Smoke test expected macro-aware scale generation to vary across fixed seeds."
+
+	var downstream_roster: Array = GameManager.build_company_roster(int(smoke_seeds[0]), difficulty_config)
+	RunState.setup_new_run(int(smoke_seeds[0]), downstream_roster, difficulty_config, false)
+	var smallest_market_cap: float = INF
+	var smallest_adv: float = INF
+	var largest_market_cap: float = 0.0
+	var largest_adv: float = 0.0
+	for company_id_value in RunState.company_order:
+		var company_id: String = str(company_id_value)
+		RunState.ensure_company_full_detail(company_id, false)
+		var snapshot: Dictionary = GameManager.get_company_snapshot(company_id, false, true, true)
+		var financials: Dictionary = snapshot.get("financials", {})
+		var statement_snapshot: Dictionary = snapshot.get("financial_statement_snapshot", {})
+		var market_cap: float = float(financials.get("market_cap", 0.0))
+		var current_price: float = float(snapshot.get("current_price", 0.0))
+		var shares_outstanding: float = float(snapshot.get("shares_outstanding", financials.get("shares_outstanding", 0.0)))
+		var revenue: float = float(financials.get("revenue", 0.0))
+		var net_income: float = float(financials.get("net_income", 0.0))
+		var avg_daily_value: float = float(financials.get("avg_daily_value", 0.0))
+		var definition: Dictionary = RunState.get_effective_company_definition(company_id, false, false)
+		var anchors: Dictionary = definition.get("anchors", {})
+		var scale_tier: String = str(anchors.get("scale_tier", ""))
+		var scale_market_cap_floor: float = float(anchors.get("scale_market_cap_floor", 0.0))
+		var scale_market_cap_ceiling: float = float(anchors.get("scale_market_cap_ceiling", 0.0))
+		var expected_profile_size_id: int = _smoke_profile_size_id_for_scale_tier(scale_tier, market_cap)
+		var total_assets: float = _smoke_statement_line_value(statement_snapshot.get("balance_sheet", []), "total_assets")
+		if (
+			market_cap <= 0.0 or
+			current_price <= 0.0 or
+			shares_outstanding <= 0.0 or
+			revenue <= 0.0 or
+			net_income <= 0.0 or
+			total_assets <= 0.0 or
+			avg_daily_value <= 0.0
+		):
+			return "Smoke test expected %s generated fundamentals to stay positive after scale-tier setup." % company_id.to_upper()
+		if (
+			scale_market_cap_floor > 0.0 and
+			scale_market_cap_ceiling >= scale_market_cap_floor and
+			(market_cap < scale_market_cap_floor or market_cap > scale_market_cap_ceiling)
+		):
+			return "Smoke test expected %s hydrated market cap to stay inside assigned %s range." % [
+				company_id.to_upper(),
+				scale_tier
+			]
+		if expected_profile_size_id >= 0 and int(snapshot.get("company_size_id", -1)) != expected_profile_size_id:
+			return "Smoke test expected %s profile size to follow generated %s tier." % [
+				company_id.to_upper(),
+				scale_tier
+			]
+		var incompatible_profile_tag: String = _smoke_incompatible_profile_tag(snapshot.get("profile_tags", []), expected_profile_size_id)
+		if not incompatible_profile_tag.is_empty():
+			return "Smoke test expected %s profile tags to respect generated %s tier, but found %s." % [
+				company_id.to_upper(),
+				scale_tier,
+				incompatible_profile_tag
+			]
+		var implied_market_cap: float = current_price * shares_outstanding
+		var market_cap_gap: float = absf(implied_market_cap - market_cap) / max(market_cap, 1.0)
+		if market_cap_gap > 0.35:
+			return "Smoke test expected %s price * shares to stay close to market cap; gap was %.2f%%." % [
+				company_id.to_upper(),
+				market_cap_gap * 100.0
+			]
+		if market_cap < smallest_market_cap:
+			smallest_market_cap = market_cap
+			smallest_adv = avg_daily_value
+		if market_cap > largest_market_cap:
+			largest_market_cap = market_cap
+			largest_adv = avg_daily_value
+	if largest_market_cap <= smallest_market_cap or largest_adv <= smallest_adv:
+		return "Smoke test expected larger generated companies to retain higher liquidity than the smallest generated company."
+	return ""
+
+
+func _validate_scale_tier_roster_distribution(roster: Array, run_seed: int) -> String:
+	if roster.size() < 30:
+		return "Smoke test expected seed %d to generate a 30-company default roster." % run_seed
+	var under_1t_count: int = 0
+	var over_10t_count: int = 0
+	var over_35t_count: int = 0
+	var seen_tiers := {}
+	for definition_value in roster:
+		if typeof(definition_value) != TYPE_DICTIONARY:
+			continue
+		var definition: Dictionary = definition_value
+		var anchors: Dictionary = definition.get("anchors", {})
+		var market_cap: float = float(anchors.get("market_cap", 0.0))
+		var scale_tier: String = str(anchors.get("scale_tier", ""))
+		if market_cap <= 0.0 or float(anchors.get("avg_daily_value", 0.0)) <= 0.0 or float(anchors.get("base_price", 0.0)) <= 0.0:
+			return "Smoke test expected %s scale-tier anchors to contain positive market cap, price, and liquidity." % str(definition.get("ticker", "")).to_upper()
+		if scale_tier.is_empty() or not anchors.has("scale_tier_rank") or not anchors.has("scale_market_cap_floor") or not anchors.has("scale_market_cap_ceiling"):
+			return "Smoke test expected %s to store generated scale-tier metadata." % str(definition.get("ticker", "")).to_upper()
+		var floor_value: float = float(anchors.get("scale_market_cap_floor", 0.0))
+		var ceiling_value: float = float(anchors.get("scale_market_cap_ceiling", 0.0))
+		if market_cap < floor_value or market_cap > ceiling_value:
+			return "Smoke test expected %s market cap %.2f to stay inside assigned %s range." % [
+				str(definition.get("ticker", "")).to_upper(),
+				market_cap,
+				scale_tier
+			]
+		seen_tiers[scale_tier] = true
+		if market_cap < 1000000000000.0:
+			under_1t_count += 1
+		if market_cap > 10000000000000.0:
+			over_10t_count += 1
+		if market_cap > 35000000000000.0:
+			over_35t_count += 1
+	if under_1t_count < 3:
+		return "Smoke test expected seed %d roster to include at least 3 sub-Rp1T companies, found %d." % [run_seed, under_1t_count]
+	if over_10t_count < 5:
+		return "Smoke test expected seed %d roster to include at least 5 companies above Rp10T, found %d." % [run_seed, over_10t_count]
+	if over_35t_count < 1:
+		return "Smoke test expected seed %d roster to include at least 1 company above Rp35T." % run_seed
+	if seen_tiers.size() < 5:
+		return "Smoke test expected seed %d roster to cover all five generated scale tiers." % run_seed
+	return ""
+
+
+func _scale_tier_signature(roster: Array) -> String:
+	var tiers: Array = []
+	for definition_value in roster:
+		if typeof(definition_value) != TYPE_DICTIONARY:
+			continue
+		var definition: Dictionary = definition_value
+		tiers.append(str(definition.get("anchors", {}).get("scale_tier", "")))
+	return "|".join(tiers)
+
+
+func _smoke_statement_line_value(lines: Array, line_id: String) -> float:
+	for line_value in lines:
+		if typeof(line_value) != TYPE_DICTIONARY:
+			continue
+		var line: Dictionary = line_value
+		if str(line.get("id", "")) == line_id:
+			return float(line.get("value", 0.0))
+	return 0.0
+
+
+func _smoke_profile_size_id_for_scale_tier(scale_tier: String, market_cap: float) -> int:
+	match scale_tier:
+		"micro":
+			return 0
+		"small":
+			return 1
+		"mid":
+			return 2
+		"large":
+			return 3
+		"giant":
+			return 4
+		_:
+			if market_cap <= 0.0:
+				return -1
+			if market_cap < 950000000000.0:
+				return 0
+			if market_cap < 2500000000000.0:
+				return 1
+			if market_cap < 10000000000000.0:
+				return 2
+			if market_cap < 35000000000000.0:
+				return 3
+			return 4
+
+
+func _smoke_incompatible_profile_tag(profile_tags: Array, size_id: int) -> String:
+	if size_id < 0:
+		return ""
+	var tag_rules := {
+		"micro-cap": {"max": 0},
+		"small-cap": {"min": 1, "max": 1},
+		"mid-cap": {"min": 2, "max": 2},
+		"large-cap": {"min": 3},
+		"mega-cap": {"min": 4},
+		"blue-chip": {"min": 3},
+		"systemic": {"min": 4},
+		"institutional-grade": {"min": 3},
+		"market-followed": {"min": 3},
+		"market-leader": {"min": 3},
+		"national-champion": {"min": 3}
+	}
+	for tag_value in profile_tags:
+		var tag: String = str(tag_value).strip_edges().to_lower()
+		if not tag_rules.has(tag):
+			continue
+		var rule: Dictionary = tag_rules.get(tag, {})
+		if size_id < int(rule.get("min", 0)) or size_id > int(rule.get("max", 4)):
+			return tag
 	return ""
 
 
@@ -1748,7 +1964,495 @@ func _validate_save_metadata_and_recovery() -> Dictionary:
 	return {"success": true}
 
 
+func _guide_smoke_rect_from_dict(rect_data: Dictionary) -> Rect2:
+	return Rect2(
+		Vector2(float(rect_data.get("x", 0.0)), float(rect_data.get("y", 0.0))),
+		Vector2(float(rect_data.get("width", 0.0)), float(rect_data.get("height", 0.0)))
+	)
+
+
+func _guide_smoke_tab_index(tabs: TabContainer, title: String) -> int:
+	if tabs == null:
+		return -1
+	for tab_index in range(tabs.get_tab_count()):
+		if tabs.get_tab_title(tab_index) == title:
+			return tab_index
+	return -1
+
+
+func _guide_smoke_flow_steps(state: Dictionary, flow_id: String) -> Array:
+	var completed_steps: Dictionary = state.get("completed_step_ids", {})
+	return completed_steps.get(flow_id, [])
+
+
+func _guide_smoke_fail(root: Node, message: String) -> Dictionary:
+	if root != null:
+		root.queue_free()
+		await get_tree().process_frame
+	return {"success": false, "message": message}
+
+
+func _guide_smoke_wait(frame_count: int = 4) -> void:
+	for _frame in range(frame_count):
+		await get_tree().process_frame
+
+
+func _guide_smoke_press_handoff(root: Node) -> bool:
+	var state: Dictionary = root.call("get_guide_smoke_state")
+	if str(state.get("current_step_id", "")) != "handoff":
+		return true
+	var done_button: Button = root.find_child("GuideCoachmarkSkipButton", true, false) as Button
+	if done_button == null:
+		return false
+	done_button.emit_signal("pressed")
+	await _guide_smoke_wait(4)
+	return true
+
+
+func _validate_progressive_guide_flow() -> Dictionary:
+	var difficulty_config: Dictionary = GameManager.get_difficulty_config(GameManager.DEFAULT_DIFFICULTY_ID)
+	var company_definitions: Array = GameManager.build_company_roster(246810, difficulty_config)
+	RunState.setup_new_run(246810, company_definitions, difficulty_config, true)
+	GameManager.simulate_opening_session(false)
+	var game_root = load("res://scenes/game/GameRoot.tscn").instantiate()
+	add_child(game_root)
+	await _guide_smoke_wait(8)
+
+	if not game_root.has_method("get_guide_smoke_state"):
+		return await _guide_smoke_fail(game_root, "Smoke test expected GameRoot to expose unified guide smoke state.")
+
+	var guide_state: Dictionary = game_root.call("get_guide_smoke_state")
+	if (
+		not bool(guide_state.get("overlay_exists", false)) or
+		not bool(guide_state.get("visible", false)) or
+		str(guide_state.get("current_flow_id", "")) != "watchlist_flow" or
+		str(guide_state.get("current_step_id", "")) != "open_stockbot"
+	):
+		return await _guide_smoke_fail(game_root, "Smoke test expected tutorial-enabled runs to start watchlist_flow at open_stockbot, got %s." % str(guide_state))
+	if (
+		float(guide_state.get("card_min_width", 0.0)) < 520.0 or
+		not bool(guide_state.get("hub_button_exists", false)) or
+		not bool(guide_state.get("taskbar_hub_exists", false)) or
+		not bool(guide_state.get("help_hub_exists", false)) or
+		str(guide_state.get("title", "")).is_empty() or
+		str(guide_state.get("objective", "")).is_empty() or
+		str(guide_state.get("progress", "")).find("Step 1") == -1
+	):
+		return await _guide_smoke_fail(game_root, "Smoke test expected the guide card to be large, readable, and expose Guide Hub entry points.")
+	if int(guide_state.get("overlay_mouse_filter", -1)) != Control.MOUSE_FILTER_IGNORE or int(guide_state.get("card_mouse_filter", -1)) != Control.MOUSE_FILTER_STOP or bool(guide_state.get("card_parent_is_overlay", true)):
+		return await _guide_smoke_fail(game_root, "Smoke test expected the guide dim/highlight layer to ignore mouse input while only the card captures clicks.")
+	if not bool(guide_state.get("highlight_visible", false)) or str(guide_state.get("highlight_target_name", "")) != "StockAppButton":
+		return await _guide_smoke_fail(game_root, "Smoke test expected the first guide step to highlight STOCKBOT.")
+	var initial_card_rect: Rect2 = _guide_smoke_rect_from_dict(guide_state.get("card_rect", {}))
+	var initial_highlight_rect: Rect2 = _guide_smoke_rect_from_dict(guide_state.get("highlight_rect", {}))
+	if initial_card_rect.size.x < 520.0 or initial_card_rect.intersects(initial_highlight_rect):
+		return await _guide_smoke_fail(game_root, "Smoke test expected the guide card to stay large and not overlap the highlighted desktop target.")
+
+	var settings_app_button: Button = game_root.find_child("ExitAppButton", true, false) as Button
+	var settings_dialog: Control = game_root.find_child("SettingsDialog", true, false) as Control
+	if settings_app_button == null or settings_dialog == null:
+		return await _guide_smoke_fail(game_root, "Smoke test could not find Settings controls for stale-highlight coverage.")
+	settings_app_button.emit_signal("pressed")
+	await _guide_smoke_wait(3)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if bool(guide_state.get("visible", false)) or bool(guide_state.get("highlight_visible", false)):
+		return await _guide_smoke_fail(game_root, "Smoke test expected modal windows to pause the guide and clear stale highlights. settings_visible=%s state=%s" % [str(settings_dialog.visible), str(guide_state)])
+	game_root.call("_hide_settings_dialog")
+	await _guide_smoke_wait(2)
+
+	var guide_hub_button: Button = game_root.find_child("GuideHubButton", true, false) as Button
+	var guide_hub_close_button: Button = game_root.find_child("GuideHubCloseButton", true, false) as Button
+	if guide_hub_button == null or guide_hub_close_button == null:
+		return await _guide_smoke_fail(game_root, "Smoke test expected the coachmark to expose Guide Hub controls.")
+	guide_hub_button.emit_signal("pressed")
+	await _guide_smoke_wait(2)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if not bool(guide_state.get("hub_visible", false)):
+		return await _guide_smoke_fail(game_root, "Smoke test expected Guide Hub to open from the guide card.")
+	guide_hub_close_button.emit_signal("pressed")
+	await _guide_smoke_wait(2)
+
+	var stock_app_button: Button = game_root.find_child("StockAppButton", true, false) as Button
+	var dashboard_button: Button = game_root.find_child("DashboardButton", true, false) as Button
+	var markets_button: Button = game_root.find_child("MarketsButton", true, false) as Button
+	var stock_list_tabs: TabContainer = game_root.find_child("StockListTabs", true, false) as TabContainer
+	var work_tabs: TabContainer = game_root.find_child("WorkTabs", true, false) as TabContainer
+	var buy_button: Button = game_root.find_child("BuyButton", true, false) as Button
+	var lot_spin_box: SpinBox = game_root.find_child("LotSpinBox", true, false) as SpinBox
+	var submit_order_button: Button = game_root.find_child("SubmitOrderButton", true, false) as Button
+	var portfolio_button: Button = game_root.find_child("PortfolioButton", true, false) as Button
+	var advance_day_button: Button = game_root.find_child("DesktopAdvanceDayButton", true, false) as Button
+	var stockbot_close_button: Button = game_root.find_child("StockbotCloseButton", true, false) as Button
+	if stock_app_button == null or dashboard_button == null or markets_button == null or stock_list_tabs == null or work_tabs == null or buy_button == null or lot_spin_box == null or submit_order_button == null or portfolio_button == null or advance_day_button == null or stockbot_close_button == null:
+		return await _guide_smoke_fail(game_root, "Smoke test could not find the controls needed to drive the starter guide loop.")
+
+	stock_app_button.emit_signal("pressed")
+	await _guide_smoke_wait(8)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if (
+		str(guide_state.get("current_flow_id", "")) != "watchlist_flow" or
+		not ["open_all_stock", "select_stock", "add_watchlist"].has(str(guide_state.get("current_step_id", ""))) or
+		str(guide_state.get("highlight_target_name", "")) != "MarketsButton"
+	):
+		return await _guide_smoke_fail(game_root, "Smoke test expected Watchlist setup to highlight Trade before showing hidden list controls; state=%s." % str(guide_state))
+	markets_button.emit_signal("pressed")
+	await _guide_smoke_wait(4)
+	var all_stock_tab_index: int = _guide_smoke_tab_index(stock_list_tabs, "All Stock")
+	if all_stock_tab_index >= 0 and stock_list_tabs.current_tab != all_stock_tab_index:
+		stock_list_tabs.current_tab = all_stock_tab_index
+		stock_list_tabs.emit_signal("tab_changed", all_stock_tab_index)
+		await _guide_smoke_wait(4)
+	var guide_company_id: String = str(RunState.company_order[0])
+	var all_stock_select_button: Button = game_root.find_child("AllStockSelectButton_%s" % guide_company_id, true, false) as Button
+	var all_stock_add_button: Button = game_root.find_child("AllStockAddButton_%s" % guide_company_id, true, false) as Button
+	if all_stock_select_button == null or all_stock_add_button == null:
+		return await _guide_smoke_fail(game_root, "Smoke test expected All Stock rows to expose select and watchlist controls.")
+	guide_state = game_root.call("get_guide_smoke_state")
+	if str(guide_state.get("current_step_id", "")) != "select_stock":
+		return await _guide_smoke_fail(game_root, "Smoke test expected Watchlist to wait for an explicit stock selection, got %s." % str(guide_state))
+	if str(guide_state.get("current_step_id", "")) != "add_watchlist":
+		all_stock_select_button.emit_signal("pressed")
+		await _guide_smoke_wait(4)
+	dashboard_button.emit_signal("pressed")
+	await _guide_smoke_wait(4)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if str(guide_state.get("current_flow_id", "")) != "watchlist_flow" or str(guide_state.get("current_step_id", "")) != "add_watchlist" or str(guide_state.get("highlight_target_name", "")) != "MarketsButton":
+		return await _guide_smoke_fail(game_root, "Smoke test expected Save Company to highlight Trade when the player is still on Dashboard; state=%s." % str(guide_state))
+	markets_button.emit_signal("pressed")
+	await _guide_smoke_wait(4)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if str(guide_state.get("highlight_target_name", "")) != "AllStocksScroll":
+		return await _guide_smoke_fail(game_root, "Smoke test expected Save Company to highlight the stock/watch column after Trade opens; state=%s." % str(guide_state))
+	all_stock_add_button.emit_signal("pressed")
+	await _guide_smoke_wait(6)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if str(guide_state.get("current_flow_id", "")) != "watchlist_flow" or str(guide_state.get("current_step_id", "")) != "handoff":
+		return await _guide_smoke_fail(game_root, "Smoke test expected adding a watchlist stock to finish watchlist_flow, got %s." % str(guide_state))
+	var completed_watchlist_steps: Array = _guide_smoke_flow_steps(guide_state, "watchlist_flow")
+	for required_step in ["open_stockbot", "open_all_stock", "select_stock", "add_watchlist"]:
+		if not completed_watchlist_steps.has(required_step):
+			return await _guide_smoke_fail(game_root, "Smoke test expected watchlist_flow to complete %s." % required_step)
+	var handoff_ok: bool = await _guide_smoke_press_handoff(game_root)
+	if not handoff_ok:
+		return await _guide_smoke_fail(game_root, "Smoke test could not complete the watchlist handoff card.")
+
+	guide_state = game_root.call("get_guide_smoke_state")
+	if str(guide_state.get("current_flow_id", "")) != "trade_flow":
+		return await _guide_smoke_fail(game_root, "Smoke test expected completing watchlist_flow to start trade_flow.")
+	var key_stats_tab_index: int = _guide_smoke_tab_index(work_tabs, "Key Stats")
+	if key_stats_tab_index >= 0:
+		work_tabs.current_tab = key_stats_tab_index
+		work_tabs.emit_signal("tab_changed", key_stats_tab_index)
+		await _guide_smoke_wait(5)
+	buy_button.emit_signal("pressed")
+	lot_spin_box.value = 1.0
+	await _guide_smoke_wait(2)
+	submit_order_button.emit_signal("pressed")
+	await _guide_smoke_wait(6)
+	portfolio_button.emit_signal("pressed")
+	await _guide_smoke_wait(5)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if (
+		str(guide_state.get("current_flow_id", "")) != "trade_flow" or
+		str(guide_state.get("current_step_id", "")) != "close_stockbot" or
+		str(guide_state.get("active_app_id", "")) != "stock" or
+		not bool(game_root.call("is_desktop_app_open", "stock")) or
+		str(guide_state.get("active_section_id", "")) != "portfolio" or
+		str(guide_state.get("highlight_target_name", "")) != "StockbotCloseButton"
+	):
+		return await _guide_smoke_fail(game_root, "Smoke test expected trade_flow to keep Portfolio visible and target the STOCKBOT close button; state=%s." % str(guide_state))
+	stockbot_close_button.emit_signal("pressed")
+	await _guide_smoke_wait(5)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if (
+		str(guide_state.get("current_flow_id", "")) != "trade_flow" or
+		str(guide_state.get("current_step_id", "")) != "advance_day" or
+		str(guide_state.get("active_app_id", "")) != "desktop" or
+		bool(game_root.call("is_desktop_app_open", "stock")) or
+		str(guide_state.get("highlight_target_name", "")) != "DesktopAdvanceDayButton"
+	):
+		return await _guide_smoke_fail(game_root, "Smoke test expected closing STOCKBOT to move trade_flow to the desktop Advance Day button; state=%s." % str(guide_state))
+	advance_day_button.emit_signal("pressed")
+	await _guide_smoke_wait(16)
+	var daily_recap_dialog: Control = game_root.find_child("DailyRecapDialog", true, false) as Control
+	var daily_recap_continue_button: Button = game_root.find_child("DailyRecapContinueButton", true, false) as Button
+	if daily_recap_dialog == null or daily_recap_continue_button == null or not daily_recap_dialog.visible:
+		return await _guide_smoke_fail(game_root, "Smoke test expected trade_flow to open Daily Recap after Advance Day.")
+	daily_recap_continue_button.emit_signal("pressed")
+	await _guide_smoke_wait(6)
+	guide_state = game_root.call("get_guide_smoke_state")
+	var completed_trade_steps: Array = _guide_smoke_flow_steps(guide_state, "trade_flow")
+	for required_step in ["inspect_setup", "buy_one_lot", "open_portfolio", "close_stockbot", "advance_day", "read_recap"]:
+		if not completed_trade_steps.has(required_step):
+			return await _guide_smoke_fail(game_root, "Smoke test expected trade_flow to complete %s; state=%s." % [required_step, str(guide_state)])
+	if str(guide_state.get("current_flow_id", "")) != "trade_flow" or str(guide_state.get("current_step_id", "")) != "handoff":
+		return await _guide_smoke_fail(game_root, "Smoke test expected trade_flow to end on its handoff card.")
+	handoff_ok = await _guide_smoke_press_handoff(game_root)
+	if not handoff_ok:
+		return await _guide_smoke_fail(game_root, "Smoke test could not complete the trade handoff card.")
+	await _guide_smoke_wait(4)
+	guide_state = game_root.call("get_guide_smoke_state")
+	var completed_fundamental_early: bool = false
+	if str(guide_state.get("current_flow_id", "")) == "fundamental_flow":
+		var financials_tab_index_early: int = _guide_smoke_tab_index(work_tabs, "Financials")
+		if financials_tab_index_early >= 0:
+			work_tabs.current_tab = financials_tab_index_early
+			work_tabs.emit_signal("tab_changed", financials_tab_index_early)
+		await _guide_smoke_wait(6)
+		handoff_ok = await _guide_smoke_press_handoff(game_root)
+		if not handoff_ok:
+			return await _guide_smoke_fail(game_root, "Smoke test could not complete the immediate contextual fundamental_flow.")
+		completed_fundamental_early = true
+
+	var news_app_button: Button = game_root.find_child("NewsAppButton", true, false) as Button
+	var news_article_list: ItemList = game_root.find_child("NewsArticleList", true, false) as ItemList
+	if news_app_button == null or news_article_list == null:
+		return await _guide_smoke_fail(game_root, "Smoke test could not find News controls for research_flow.")
+	news_app_button.emit_signal("pressed")
+	await _guide_smoke_wait(8)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if str(guide_state.get("current_flow_id", "")) != "research_flow":
+		return await _guide_smoke_fail(game_root, "Smoke test expected opening News to prompt research_flow, got %s." % str(guide_state))
+	if str(guide_state.get("current_step_id", "")) != "inspect_context" or str(guide_state.get("button_text", "")) == "Done":
+		return await _guide_smoke_fail(game_root, "Smoke test expected opening News to wait for an explicit research action, got %s." % str(guide_state))
+	if news_article_list.item_count > 0:
+		news_article_list.select(0)
+		news_article_list.emit_signal("item_selected", 0)
+	await _guide_smoke_wait(5)
+	handoff_ok = await _guide_smoke_press_handoff(game_root)
+	if not handoff_ok:
+		return await _guide_smoke_fail(game_root, "Smoke test could not complete research_flow.")
+
+	if not completed_fundamental_early:
+		stock_app_button.emit_signal("pressed")
+		await _guide_smoke_wait(5)
+		guide_state = game_root.call("get_guide_smoke_state")
+		if str(guide_state.get("current_flow_id", "")) != "fundamental_flow" and key_stats_tab_index >= 0:
+			work_tabs.current_tab = key_stats_tab_index
+			work_tabs.emit_signal("tab_changed", key_stats_tab_index)
+			await _guide_smoke_wait(6)
+			guide_state = game_root.call("get_guide_smoke_state")
+		if str(guide_state.get("current_flow_id", "")) != "fundamental_flow":
+			return await _guide_smoke_fail(game_root, "Smoke test expected Key Stats to prompt fundamental_flow.")
+		if str(guide_state.get("current_step_id", "")) != "open_key_stats":
+			return await _guide_smoke_fail(game_root, "Smoke test expected fundamental_flow to wait on Key Stats instead of auto-jumping, got %s." % str(guide_state))
+		var financials_tab_index: int = _guide_smoke_tab_index(work_tabs, "Financials")
+		if financials_tab_index >= 0:
+			work_tabs.current_tab = financials_tab_index
+			work_tabs.emit_signal("tab_changed", financials_tab_index)
+		await _guide_smoke_wait(6)
+		handoff_ok = await _guide_smoke_press_handoff(game_root)
+		if not handoff_ok:
+			return await _guide_smoke_fail(game_root, "Smoke test could not complete fundamental_flow.")
+
+	var chart_tab_index: int = _guide_smoke_tab_index(work_tabs, "Chart")
+	stock_app_button.emit_signal("pressed")
+	await _guide_smoke_wait(5)
+	if chart_tab_index >= 0:
+		work_tabs.current_tab = chart_tab_index
+		work_tabs.emit_signal("tab_changed", chart_tab_index)
+	await _guide_smoke_wait(6)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if str(guide_state.get("current_flow_id", "")) != "technical_flow":
+		return await _guide_smoke_fail(game_root, "Smoke test expected Chart to prompt technical_flow, got %s." % str(guide_state))
+	if str(guide_state.get("current_step_id", "")) != "use_chart_tool":
+		return await _guide_smoke_fail(game_root, "Smoke test expected technical_flow to wait for a fresh chart action, got %s." % str(guide_state))
+	var chart_range_button: Button = game_root.find_child("Range6MButton", true, false) as Button
+	if chart_range_button != null:
+		chart_range_button.emit_signal("pressed")
+	else:
+		game_root.call("_on_guide_chart_interaction", "6m")
+	await _guide_smoke_wait(6)
+	handoff_ok = await _guide_smoke_press_handoff(game_root)
+	if not handoff_ok:
+		return await _guide_smoke_fail(game_root, "Smoke test could not complete technical_flow.")
+
+	var thesis_app_button: Button = game_root.find_child("ThesisAppButton", true, false) as Button
+	var thesis_company_option: OptionButton = game_root.find_child("ThesisCompanyOption", true, false) as OptionButton
+	if thesis_app_button == null:
+		return await _guide_smoke_fail(game_root, "Smoke test could not find Thesis Board for thesis_flow.")
+	thesis_app_button.emit_signal("pressed")
+	await _guide_smoke_wait(8)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if str(guide_state.get("current_flow_id", "")) != "thesis_flow":
+		return await _guide_smoke_fail(game_root, "Smoke test expected opening Thesis Board to prompt thesis_flow, got %s." % str(guide_state))
+	if str(guide_state.get("current_step_id", "")) != "open_thesis" or str(guide_state.get("progress", "")).find("Step 1 of 5") < 0:
+		return await _guide_smoke_fail(game_root, "Smoke test expected opening Thesis Board to start at Step 1 until a company is chosen, got %s." % str(guide_state))
+	if not bool(guide_state.get("highlight_visible", false)) or str(guide_state.get("highlight_target_name", "")) != "ThesisCompanyOption":
+		return await _guide_smoke_fail(game_root, "Smoke test expected thesis_flow Step 1 to highlight the company selector, got %s." % str(guide_state))
+	if thesis_company_option != null and thesis_company_option.item_count > 0:
+		thesis_company_option.select(0)
+		thesis_company_option.emit_signal("item_selected", 0)
+	else:
+		game_root.call("_mark_guide_thesis_subject_chosen")
+	await _guide_smoke_wait(6)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if str(guide_state.get("current_step_id", "")) != "create_thesis" or str(guide_state.get("progress", "")).find("Step 2 of 5") < 0:
+		return await _guide_smoke_fail(game_root, "Smoke test expected choosing a Thesis company to move to Step 2, got %s." % str(guide_state))
+	var thesis_result: Dictionary = GameManager.create_thesis(guide_company_id, "bullish", "swing", "Guide Smoke Thesis")
+	if not bool(thesis_result.get("success", false)):
+		return await _guide_smoke_fail(game_root, "Smoke test expected thesis_flow to create a thesis for the guide company.")
+	await _guide_smoke_wait(6)
+	guide_state = game_root.call("get_guide_smoke_state")
+	var thesis_completed_steps: Array = guide_state.get("completed_step_ids", {}).get("thesis_flow", [])
+	if str(guide_state.get("current_step_id", "")) != "add_evidence" or not thesis_completed_steps.has("create_thesis"):
+		return await _guide_smoke_fail(game_root, "Smoke test expected creating a thesis to advance thesis_flow to evidence, got %s." % str(guide_state))
+	var thesis_id: String = str(thesis_result.get("thesis", {}).get("id", ""))
+	GameManager.add_thesis_evidence(thesis_id, {"category": "fundamental", "category_label": "Fundamental", "label": "Profitability", "value": "Improving", "detail": "Guide smoke evidence.", "source_label": "Key Stats", "impact": "positive"})
+	GameManager.add_thesis_evidence(thesis_id, {"category": "price_action", "category_label": "Price Action", "label": "Trend", "value": "Constructive", "detail": "Guide smoke chart evidence.", "source_label": "Chart", "impact": "positive"})
+	game_root.call("_refresh_ftue_progress")
+	await _guide_smoke_wait(8)
+	handoff_ok = await _guide_smoke_press_handoff(game_root)
+	if not handoff_ok:
+		return await _guide_smoke_fail(game_root, "Smoke test could not complete thesis_flow.")
+
+	var life_app_button: Button = game_root.find_child("LifeAppButton", true, false) as Button
+	if life_app_button == null:
+		return await _guide_smoke_fail(game_root, "Smoke test could not find Life for life_finance_flow.")
+	life_app_button.emit_signal("pressed")
+	await _guide_smoke_wait(8)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if str(guide_state.get("current_flow_id", "")) != "life_finance_flow":
+		return await _guide_smoke_fail(game_root, "Smoke test expected opening Life to prompt life_finance_flow.")
+	if str(guide_state.get("current_step_id", "")) != "open_life" or str(guide_state.get("progress", "")).find("Step 1 of 3") < 0:
+		return await _guide_smoke_fail(game_root, "Smoke test expected opening Life to start at Step 1 until the overview is reviewed, got %s." % str(guide_state))
+	var life_update_button: Button = game_root.find_child("LifeUpdatePlanButton", true, false) as Button
+	if life_update_button != null:
+		life_update_button.emit_signal("pressed")
+	else:
+		game_root.call("_mark_guide_life_plan_reviewed")
+	await _guide_smoke_wait(6)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if str(guide_state.get("current_step_id", "")) != "open_finance" or str(guide_state.get("progress", "")).find("Step 2 of 3") < 0:
+		return await _guide_smoke_fail(game_root, "Smoke test expected reviewing Life overview to move to Step 2, got %s." % str(guide_state))
+	var life_tabs: TabContainer = game_root.find_child("LifeTabs", true, false) as TabContainer
+	var finance_tab_index: int = _guide_smoke_tab_index(life_tabs, "Finance")
+	if finance_tab_index >= 0:
+		life_tabs.current_tab = finance_tab_index
+		life_tabs.emit_signal("tab_changed", finance_tab_index)
+	await _guide_smoke_wait(6)
+	handoff_ok = await _guide_smoke_press_handoff(game_root)
+	if not handoff_ok:
+		return await _guide_smoke_fail(game_root, "Smoke test could not complete life_finance_flow.")
+
+	var academy_app_button: Button = game_root.find_child("AcademyAppButton", true, false) as Button
+	if academy_app_button == null:
+		return await _guide_smoke_fail(game_root, "Smoke test could not find the Academy desktop shortcut.")
+	academy_app_button.emit_signal("pressed")
+	await _guide_smoke_wait(4)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if game_root.call("is_desktop_app_open", "academy") or str(guide_state.get("current_flow_id", "")) == "academy_flow":
+		return await _guide_smoke_fail(game_root, "Smoke test expected Academy to be release-locked instead of opening or prompting academy_flow, got %s." % str(guide_state))
+
+	GameManager.start_guide_flow("corporate_event_flow")
+	game_root.call("_refresh_ftue_progress")
+	await _guide_smoke_wait(8)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if str(guide_state.get("current_flow_id", "")) != "corporate_event_flow" or str(guide_state.get("seeded_meeting_id", "")).is_empty():
+		return await _guide_smoke_fail(game_root, "Smoke test expected corporate_event_flow to seed a guided RUPSLB event.")
+	GameManager.complete_guide_flow("corporate_event_flow")
+	await _guide_smoke_wait(3)
+
+	game_root.call("_show_guide_hub")
+	await _guide_smoke_wait(3)
+	var academy_flow_token: String = str(game_root.call("_node_token", "academy_flow"))
+	var academy_flow_button: Button = game_root.find_child("GuideHubStart%sButton" % academy_flow_token, true, false) as Button
+	if academy_flow_button == null or academy_flow_button.text != "Soon" or not academy_flow_button.disabled:
+		return await _guide_smoke_fail(game_root, "Smoke test expected Guide Hub to show Academy as a disabled coming-soon guide.")
+	var research_flow_token: String = str(game_root.call("_node_token", "research_flow"))
+	var restart_research_button: Button = game_root.find_child("GuideHubStart%sButton" % research_flow_token, true, false) as Button
+	if restart_research_button == null or restart_research_button.text != "Restart":
+		return await _guide_smoke_fail(game_root, "Smoke test expected completed Guide Hub flows to expose a working Restart button.")
+	restart_research_button.emit_signal("pressed")
+	await _guide_smoke_wait(5)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if (
+		str(guide_state.get("current_flow_id", "")) != "research_flow" or
+		str(guide_state.get("current_step_id", "")) != "open_research_app" or
+		guide_state.get("completed_flow_ids", []).has("research_flow")
+	):
+		return await _guide_smoke_fail(game_root, "Smoke test expected Guide Hub Restart to reopen research_flow from the first step, got %s." % str(guide_state))
+	GameManager.complete_guide_flow("research_flow")
+	await _guide_smoke_wait(3)
+
+	GameManager.start_guide_flow("research_flow")
+	game_root.call("_refresh_ftue_progress")
+	await _guide_smoke_wait(3)
+	var later_button: Button = game_root.find_child("GuidePromptDismissButton", true, false) as Button
+	if later_button == null:
+		return await _guide_smoke_fail(game_root, "Smoke test expected contextual guide flows to expose a Later button.")
+	later_button.emit_signal("pressed")
+	await _guide_smoke_wait(3)
+	var dismissed_snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if (
+		not str(dismissed_snapshot.get("active_flow_id", "")).is_empty() or
+		not dismissed_snapshot.get("dismissed_prompt_flow_ids", []).has("research_flow") or
+		dismissed_snapshot.get("skipped_flow_ids", []).has("research_flow")
+	):
+		return await _guide_smoke_fail(game_root, "Smoke test expected Later to dismiss research_flow without marking it skipped, got %s." % str(dismissed_snapshot))
+	GameManager.start_guide_flow("research_flow")
+	GameManager.complete_guide_flow("research_flow")
+	GameManager.dismiss_guide_prompt("research_flow")
+	await _guide_smoke_wait(3)
+
+	var completed_save_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(completed_save_state)
+	var loaded_guide_snapshot: Dictionary = GameManager.get_guide_snapshot()
+	var completed_flow_ids: Array = loaded_guide_snapshot.get("completed_flow_ids", [])
+	for required_flow in ["watchlist_flow", "trade_flow", "research_flow", "fundamental_flow", "technical_flow", "thesis_flow", "life_finance_flow", "corporate_event_flow"]:
+		if not completed_flow_ids.has(required_flow):
+			return await _guide_smoke_fail(game_root, "Smoke test expected save/load to preserve completed guide flow %s." % required_flow)
+	if not loaded_guide_snapshot.get("dismissed_prompt_flow_ids", []).has("research_flow"):
+		return await _guide_smoke_fail(game_root, "Smoke test expected save/load to preserve dismissed contextual prompts.")
+	game_root.queue_free()
+	await get_tree().process_frame
+
+	RunState.setup_new_run(246811, company_definitions, difficulty_config, true)
+	GameManager.simulate_opening_session(false)
+	var skip_root = load("res://scenes/game/GameRoot.tscn").instantiate()
+	add_child(skip_root)
+	await _guide_smoke_wait(6)
+	var skip_button: Button = skip_root.find_child("GuideCoachmarkSkipButton", true, false) as Button
+	if skip_button == null:
+		return await _guide_smoke_fail(skip_root, "Smoke test expected tutorial-enabled guide to expose Skip Flow.")
+	skip_button.emit_signal("pressed")
+	await _guide_smoke_wait(4)
+	var skip_snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if not skip_snapshot.get("skipped_flow_ids", []).has("watchlist_flow") or GameManager.should_show_tutorial():
+		return await _guide_smoke_fail(skip_root, "Smoke test expected Skip Flow to persist a skipped watchlist guide and hide the active prompt.")
+	var skipped_save_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(skipped_save_state)
+	if not GameManager.get_guide_snapshot().get("skipped_flow_ids", []).has("watchlist_flow"):
+		return await _guide_smoke_fail(skip_root, "Smoke test expected skipped flows to survive reload.")
+	skip_root.queue_free()
+	await get_tree().process_frame
+
+	RunState.setup_new_run(246812, company_definitions, difficulty_config, false)
+	GameManager.simulate_opening_session(false)
+	var disabled_root = load("res://scenes/game/GameRoot.tscn").instantiate()
+	add_child(disabled_root)
+	await _guide_smoke_wait(6)
+	var disabled_state: Dictionary = disabled_root.call("get_guide_smoke_state") if disabled_root.has_method("get_guide_smoke_state") else {}
+	if bool(disabled_state.get("visible", false)) or GameManager.should_show_tutorial():
+		return await _guide_smoke_fail(disabled_root, "Smoke test expected tutorial-disabled runs to suppress automatic guides.")
+	var disabled_hub_button: Button = disabled_root.find_child("GuideHubTaskbarButton", true, false) as Button
+	if disabled_hub_button == null:
+		return await _guide_smoke_fail(disabled_root, "Smoke test expected Guide Hub to remain manually available when tutorial is disabled.")
+	disabled_hub_button.emit_signal("pressed")
+	await _guide_smoke_wait(3)
+	disabled_state = disabled_root.call("get_guide_smoke_state")
+	if not bool(disabled_state.get("hub_visible", false)):
+		return await _guide_smoke_fail(disabled_root, "Smoke test expected tutorial-disabled runs to open Guide Hub manually.")
+	disabled_root.queue_free()
+	await get_tree().process_frame
+
+	if SaveManager.has_pending_save():
+		SaveManager.flush_pending_save()
+	return {"success": true}
+
+
 func _validate_ftue_flow() -> Dictionary:
+	return await _validate_progressive_guide_flow()
 	var difficulty_config: Dictionary = GameManager.get_difficulty_config(GameManager.DEFAULT_DIFFICULTY_ID)
 	var company_definitions: Array = GameManager.build_company_roster(246810, difficulty_config)
 	RunState.setup_new_run(246810, company_definitions, difficulty_config, true)
@@ -2936,6 +3640,7 @@ func _run_scenario(
 	var social_app_button: Button = game_root.find_child("SocialAppButton", true, false) as Button
 	var network_app_button: Button = game_root.find_child("NetworkAppButton", true, false) as Button
 	var academy_app_button: Button = game_root.find_child("AcademyAppButton", true, false) as Button
+	var academy_app_label: Label = game_root.find_child("AcademyAppLabel", true, false) as Label
 	var thesis_app_button: Button = game_root.find_child("ThesisAppButton", true, false) as Button
 	var life_app_button: Button = game_root.find_child("LifeAppButton", true, false) as Button
 	var upgrades_app_button: Button = game_root.find_child("UpgradesAppButton", true, false) as Button
@@ -6268,46 +6973,35 @@ func _run_scenario(
 
 	academy_app_button.emit_signal("pressed")
 	await get_tree().process_frame
-	var academy_category_count: int = int(DataRepository.get_academy_catalog().get("categories", []).size())
+	var academy_available: bool = GameManager.is_academy_available()
+	var academy_window_missing: bool = academy_window == null
+	var academy_window_visible: bool = academy_window.visible if academy_window != null else false
+	var academy_app_open: bool = game_root.is_desktop_app_open("academy")
+	var academy_active_app: String = str(game_root.get_active_desktop_app_id())
+	var academy_label_text: String = str(academy_app_label.text if academy_app_label != null else "<missing>")
+	var academy_tooltip_text: String = str(academy_app_button.tooltip_text if academy_app_button != null else "<missing>")
 	if (
-		academy_window == null or
-		not academy_window.visible or
-		not game_root.is_desktop_app_open("academy") or
-		game_root.get_active_desktop_app_id() != "academy" or
-		game_root.get_desktop_app_window_title("academy") != "Academy" or
-		not _desktop_window_has_settings_brown_chrome(game_root, "AcademyDesktopWindow") or
-		academy_category_tabs == null or
-		academy_category_tabs.get_child_count() != academy_category_count or
-		academy_section_list == null or
-		academy_section_list.item_count != 8 or
-		academy_banner_frame == null or
-		not academy_banner_frame.visible or
-		academy_action_row == null or
-		not academy_action_row.visible
+		academy_available or
+		academy_window_missing or
+		academy_window_visible or
+		academy_app_open or
+		academy_active_app == "academy" or
+		academy_app_label == null or
+		academy_label_text.find("COMING SOON") < 0
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the Academy icon to open a brown-framed lesson window with catalog categories, eight Technical sections, a banner frame, and an action row."
-		}
-
-	var academy_content_host: Control = academy_window.get_parent() as Control
-	if academy_content_host == null:
-		game_root.queue_free()
-		await get_tree().process_frame
-		return {
-			"success": false,
-			"message": "Smoke test could not resolve the Academy desktop content host."
-		}
-	var academy_action_rect: Rect2 = academy_action_row.get_global_rect()
-	var academy_host_rect: Rect2 = academy_content_host.get_global_rect()
-	if academy_action_rect.end.y > academy_host_rect.end.y + 1.0:
-		game_root.queue_free()
-		await get_tree().process_frame
-		return {
-			"success": false,
-			"message": "Smoke test expected the Academy action row to fit inside the visible desktop window."
+			"message": "Smoke test expected the Academy icon to stay visible but release-locked as Coming Soon. available=%s window_null=%s window_visible=%s app_open=%s active=%s label=%s tooltip=%s" % [
+				str(academy_available),
+				str(academy_window_missing),
+				str(academy_window_visible),
+				str(academy_app_open),
+				academy_active_app,
+				academy_label_text,
+				academy_tooltip_text
+			]
 		}
 
 	var academy_text_block: PanelContainer = game_root._build_academy_content_block({
@@ -7698,6 +8392,7 @@ func _run_scenario(
 
 	var dashboard_grid: GridContainer = game_root.find_child("DashboardGrid", true, false) as GridContainer
 	var movers_tabs: TabContainer = game_root.find_child("MoversTabs", true, false) as TabContainer
+	var top_broker_flow_rows: VBoxContainer = game_root.find_child("TopBrokerFlowRows", true, false) as VBoxContainer
 	var work_tabs: TabContainer = game_root.find_child("WorkTabs", true, false) as TabContainer
 	var calendar_week_header: GridContainer = game_root.find_child("CalendarWeekHeader", true, false) as GridContainer
 	var calendar_days_grid: GridContainer = game_root.find_child("CalendarDaysGrid", true, false) as GridContainer
@@ -7717,7 +8412,9 @@ func _run_scenario(
 		int(dashboard_grid.get_theme_constant("h_separation")) != 0 or
 		int(dashboard_grid.get_theme_constant("v_separation")) != 0 or
 		movers_tabs == null or
-		movers_tabs.get_tab_count() < 2 or
+		movers_tabs.get_tab_count() < 3 or
+		movers_tabs.get_tab_title(2) != "Broker Flow" or
+		top_broker_flow_rows == null or
 		work_tabs == null or
 		not work_tabs.is_tab_hidden(4) or
 		calendar_week_header == null or
@@ -7735,7 +8432,22 @@ func _run_scenario(
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected Dashboard movers, sector cards, uniform calendar grid, zero dashboard separation, and hidden Analyzer tab."
+			"message": "Smoke test expected Dashboard movers with a Broker Flow tab, sector cards, uniform calendar grid, zero dashboard separation, and hidden Analyzer tab."
+		}
+	if top_broker_flow_rows.get_child_count() <= 1:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Dashboard Broker Flow tab to render aggregated broker buy/sell rows."
+		}
+	var broker_roster_size: int = DataRepository.get_broker_roster().size()
+	if broker_roster_size > 0 and top_broker_flow_rows.get_child_count() - 1 < broker_roster_size:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Dashboard Broker Flow tab to show every broker."
 		}
 
 	var dashboard_title_labels := [
@@ -8582,6 +9294,22 @@ func _run_scenario(
 				"message": "Smoke test expected the Key Stats dashboard card %s to exist." % str(key_stats_card_name)
 			}
 
+	var key_stats_dashboard_grid: GridContainer = game_root.find_child("KeyStatsDashboardGrid", true, false) as GridContainer
+	var key_stats_scroll: ScrollContainer = game_root.find_child("KeyStats", true, false) as ScrollContainer
+	if (
+		key_stats_dashboard_grid == null or
+		key_stats_dashboard_grid.columns != 3 or
+		key_stats_dashboard_grid.custom_minimum_size.x < 800.0 or
+		key_stats_scroll == null or
+		key_stats_scroll.horizontal_scroll_mode != ScrollContainer.SCROLL_MODE_AUTO
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Key Stats to default to the three-column dashboard layout with horizontal scrolling as the narrow-width fallback."
+		}
+
 	var key_stats_row_names := [
 		"KeyStatsCurrentValuationRows",
 		"KeyStatsPerShareRows",
@@ -8630,6 +9358,15 @@ func _run_scenario(
 		}
 
 	var key_stats_net_income_text: String = _collect_node_text(key_stats_metric_rows)
+	var key_stats_annualised_values: Array = _metric_table_values_for_label(key_stats_metric_rows, "Annualised")
+	var key_stats_ttm_values: Array = _metric_table_values_for_label(key_stats_metric_rows, "TTM")
+	if key_stats_annualised_values.is_empty() or key_stats_ttm_values.is_empty() or key_stats_annualised_values == key_stats_ttm_values:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Key Stats Annualised to be a quarter run-rate, not a duplicate of TTM."
+		}
 	key_stats_eps_button.emit_signal("pressed")
 	await get_tree().process_frame
 	var key_stats_eps_text: String = _collect_node_text(key_stats_metric_rows)
@@ -9471,13 +10208,29 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 	var backfilled_life: Dictionary = RunState.get_player_life()
 	if str(backfilled_life.get("housing_id", "")).is_empty() or str(backfilled_life.get("lifestyle_id", "")).is_empty():
 		return "Smoke test expected old saves without player_life to backfill a default Life plan."
+	if (
+		str(backfilled_life.get("basics_tier_id", "")) != RunState.LIFE_DEFAULT_BASICS_TIER_ID or
+		int(round(float(backfilled_life.get("stress_value", -1.0)))) != int(RunState.LIFE_DEFAULT_STRESS_VALUE) or
+		int(round(float(backfilled_life.get("happiness_value", -1.0)))) != int(RunState.LIFE_DEFAULT_HAPPINESS_VALUE) or
+		int(backfilled_life.get("hospital_days_remaining", -1)) != 0
+	):
+		return "Smoke test expected old saves without player_life to backfill Life wellbeing defaults."
 	var legacy_finance_state: Dictionary = baseline_state.duplicate(true)
 	legacy_finance_state["save_schema_version"] = 3
 	var legacy_life_state: Dictionary = legacy_finance_state.get("player_life", {}).duplicate(true)
 	legacy_life_state.erase("finance")
+	legacy_life_state.erase("basics_tier_id")
+	legacy_life_state.erase("stress_value")
+	legacy_life_state.erase("happiness_value")
+	legacy_life_state.erase("burnout_risk_active")
+	legacy_life_state.erase("burnout_risk_days_remaining")
+	legacy_life_state.erase("hospital_days_remaining")
+	legacy_life_state.erase("hospital_started_day_index")
+	legacy_life_state.erase("last_hospital_trade_date")
 	legacy_finance_state["player_life"] = legacy_life_state
 	RunState.load_from_dict(legacy_finance_state)
 	var backfilled_finance: Dictionary = RunState.get_life_finance()
+	backfilled_life = RunState.get_player_life()
 	if (
 		not backfilled_finance.has("active_loan") or
 		not backfilled_finance.has("cash_stress_active") or
@@ -9485,6 +10238,12 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 		bool(backfilled_finance.get("bankrupt", false))
 	):
 		return "Smoke test expected v3 saves without Life finance to backfill empty loan, cash stress, and bankruptcy state."
+	if (
+		str(backfilled_life.get("basics_tier_id", "")) != RunState.LIFE_DEFAULT_BASICS_TIER_ID or
+		int(round(float(backfilled_life.get("stress_value", -1.0)))) != int(RunState.LIFE_DEFAULT_STRESS_VALUE) or
+		int(round(float(backfilled_life.get("happiness_value", -1.0)))) != int(RunState.LIFE_DEFAULT_HAPPINESS_VALUE)
+	):
+		return "Smoke test expected old Life saves without wellbeing fields to backfill defaults."
 
 	RunState.load_from_dict(baseline_state)
 	game_root._refresh_all()
@@ -9498,10 +10257,15 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 		life_window = game_root.find_child("LifeWindow", true, false) as Control
 	var life_summary_label: Label = game_root.find_child("LifeSummaryLabel", true, false) as Label
 	var life_housing_option: OptionButton = game_root.find_child("LifeHousingOption", true, false) as OptionButton
+	var life_basics_slider: HSlider = game_root.find_child("LifeBasicsSlider", true, false) as HSlider
 	var life_lifestyle_option: OptionButton = game_root.find_child("LifeLifestyleOption", true, false) as OptionButton
 	var life_update_button: Button = game_root.find_child("LifeUpdatePlanButton", true, false) as Button
 	var life_budget_rows: VBoxContainer = game_root.find_child("LifeBudgetRows", true, false) as VBoxContainer
 	var life_runway_label: Label = game_root.find_child("LifeRunwayLabel", true, false) as Label
+	var life_stress_label: Label = game_root.find_child("LifeStressLabel", true, false) as Label
+	var life_happiness_label: Label = game_root.find_child("LifeHappinessLabel", true, false) as Label
+	var life_stress_ap_penalty_label: Label = game_root.find_child("LifeStressApPenaltyLabel", true, false) as Label
+	var life_basics_detail_label: Label = game_root.find_child("LifeBasicsDetailLabel", true, false) as Label
 	var life_dividend_rows: VBoxContainer = game_root.find_child("LifeDividendRows", true, false) as VBoxContainer
 	var life_tabs: TabContainer = game_root.find_child("LifeTabs", true, false) as TabContainer
 	var life_overview_tab: Control = game_root.find_child("LifeOverviewTab", true, false) as Control
@@ -9510,6 +10274,11 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 	var life_emergency_loan_button: Button = game_root.find_child("LifeEmergencyLoanButton", true, false) as Button
 	var life_active_loan_panel: PanelContainer = game_root.find_child("LifeActiveLoanPanel", true, false) as PanelContainer
 	var life_bankruptcy_status_panel: PanelContainer = game_root.find_child("LifeBankruptcyStatusPanel", true, false) as PanelContainer
+	var stress_meter_panel: Control = game_root.find_child("LifeStressMeterPanel", true, false) as Control
+	var stress_meter_bar: ProgressBar = game_root.find_child("LifeStressMeterBar", true, false) as ProgressBar
+	var stress_meter_title_label: Label = game_root.find_child("LifeStressMeterTitleLabel", true, false) as Label
+	var hospital_overlay: Control = game_root.find_child("HospitalOverlay", true, false) as Control
+	var hospital_advance_button: Button = game_root.find_child("HospitalAdvanceDayButton", true, false) as Button
 	var life_snapshot: Dictionary = GameManager.get_life_snapshot()
 	if (
 		life_window == null or
@@ -9523,6 +10292,9 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 		life_summary_label.text.find("Monthly outflow") == -1 or
 		life_housing_option == null or
 		life_housing_option.item_count < 3 or
+		life_basics_slider == null or
+		life_basics_slider.min_value != 0.0 or
+		life_basics_slider.max_value != 3.0 or
 		life_lifestyle_option == null or
 		life_lifestyle_option.item_count < 3 or
 		life_update_button == null or
@@ -9530,6 +10302,14 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 		life_budget_rows.get_child_count() < 5 or
 		life_runway_label == null or
 		life_runway_label.text.is_empty() or
+		life_stress_label == null or
+		life_stress_label.text.is_empty() or
+		life_happiness_label == null or
+		life_happiness_label.text.is_empty() or
+		life_stress_ap_penalty_label == null or
+		life_stress_ap_penalty_label.text.is_empty() or
+		life_basics_detail_label == null or
+		not life_basics_detail_label.text.contains("Stress") or
 		life_dividend_rows == null or
 		life_tabs == null or
 		life_overview_tab == null or
@@ -9538,15 +10318,31 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 		life_emergency_loan_button == null or
 		life_active_loan_panel == null or
 		life_bankruptcy_status_panel == null or
+		stress_meter_panel == null or
+		not stress_meter_panel.visible or
+		stress_meter_panel.get_parent() == null or
+		stress_meter_panel.get_parent().name != "DesktopVBox" or
+		stress_meter_bar == null or
+		float(stress_meter_bar.max_value) != 100.0 or
+		stress_meter_title_label == null or
+		stress_meter_title_label.text != "STRESS LEVEL" or
+		hospital_overlay == null or
+		hospital_advance_button == null or
 		life_snapshot.is_empty() or
 		not life_snapshot.has("finance") or
+		not life_snapshot.has("basics_tiers") or
+		life_snapshot.get("basics_tiers", []).size() != 4 or
+		not life_snapshot.has("basics_tier") or
+		not life_snapshot.has("stress_stage") or
+		not life_snapshot.has("stress_ap_penalty") or
 		float(life_snapshot.get("monthly_outflow", 0.0)) <= 0.0 or
 		not life_snapshot.has("housing_options") or
 		not life_snapshot.has("lifestyle_options")
 	):
-		return "Smoke test expected the Life icon to open a settled brown-framed cash-flow planning window with populated selectors, budget rows, and runway summary."
+		return "Smoke test expected the Life icon to open a settled brown-framed cash-flow planning window with populated selectors, basics controls, stress readouts, budget rows, and runway summary."
 
 	var starting_lifestyle_id: String = str(RunState.get_player_life().get("lifestyle_id", ""))
+	var starting_basics_tier_id: String = str(RunState.get_player_life().get("basics_tier_id", ""))
 	var target_lifestyle_index: int = -1
 	for index in range(life_lifestyle_option.item_count):
 		if str(life_lifestyle_option.get_item_metadata(index)) != starting_lifestyle_id:
@@ -9554,13 +10350,37 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 			break
 	if target_lifestyle_index < 0:
 		return "Smoke test expected Life to expose at least one alternate lifestyle choice."
+	var basics_tiers: Array = life_snapshot.get("basics_tiers", [])
+	var target_basics_index: int = -1
+	var target_basics_id: String = ""
+	var target_basics_cost: float = 0.0
+	for basics_index in range(basics_tiers.size()):
+		var tier_value: Variant = basics_tiers[basics_index]
+		if typeof(tier_value) != TYPE_DICTIONARY:
+			continue
+		var tier: Dictionary = tier_value
+		if str(tier.get("id", "")) == starting_basics_tier_id:
+			continue
+		target_basics_index = basics_index
+		target_basics_id = str(tier.get("id", ""))
+		target_basics_cost = float(tier.get("monthly_cost", 0.0))
+		break
+	if target_basics_index < 0 or target_basics_id.is_empty():
+		return "Smoke test expected Life to expose at least one alternate Basics tier."
 	var target_lifestyle_id: String = str(life_lifestyle_option.get_item_metadata(target_lifestyle_index))
 	life_lifestyle_option.select(target_lifestyle_index)
 	life_lifestyle_option.emit_signal("item_selected", target_lifestyle_index)
+	life_basics_slider.value = float(target_basics_index)
+	life_basics_slider.emit_signal("value_changed", float(target_basics_index))
 	life_update_button.emit_signal("pressed")
 	await get_tree().process_frame
 	if str(RunState.get_player_life().get("lifestyle_id", "")) != target_lifestyle_id:
 		return "Smoke test expected updating the Life plan to persist the selected lifestyle."
+	if str(RunState.get_player_life().get("basics_tier_id", "")) != target_basics_id:
+		return "Smoke test expected updating the Life plan to persist the selected Basics tier."
+	var basics_updated_snapshot: Dictionary = GameManager.get_life_snapshot()
+	if absf(float(basics_updated_snapshot.get("basic_expenses_monthly", 0.0)) - target_basics_cost) > 0.01:
+		return "Smoke test expected the selected Basics tier cost to drive Life monthly outflow."
 	if not SaveManager.has_pending_save():
 		return "Smoke test expected updating the Life plan to queue an autosave."
 
@@ -9568,11 +10388,100 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 	RunState.load_from_dict(saved_life_state)
 	if str(RunState.get_player_life().get("lifestyle_id", "")) != target_lifestyle_id:
 		return "Smoke test expected Life plan choices to survive a RunState save/load round trip."
+	if str(RunState.get_player_life().get("basics_tier_id", "")) != target_basics_id:
+		return "Smoke test expected Basics tier choice to survive a RunState save/load round trip."
 	if not SaveManager.flush_pending_save():
 		return "Smoke test expected Life autosave flush to succeed."
 	var persisted_life_state: Dictionary = SaveManager.load_run()
 	if str(persisted_life_state.get("player_life", {}).get("lifestyle_id", "")) != target_lifestyle_id:
 		return "Smoke test expected flushed Life saves to persist player_life to disk."
+	if str(persisted_life_state.get("player_life", {}).get("basics_tier_id", "")) != target_basics_id:
+		return "Smoke test expected flushed Life saves to persist player_life Basics tier to disk."
+
+	var wellbeing_test_state: Dictionary = RunState.to_save_dict()
+	var base_ap_limit: int = RunState.get_daily_action_base_limit()
+	var wellbeing_life: Dictionary = RunState.get_player_life()
+	wellbeing_life["stress_value"] = 65.0
+	wellbeing_life["happiness_value"] = 25.0
+	wellbeing_life["burnout_risk_active"] = false
+	wellbeing_life["burnout_risk_days_remaining"] = 0
+	wellbeing_life["hospital_days_remaining"] = 0
+	RunState.set_player_life(wellbeing_life)
+	game_root._refresh_all()
+	await get_tree().process_frame
+	stress_meter_bar = game_root.find_child("LifeStressMeterBar", true, false) as ProgressBar
+	if (
+		RunState.get_life_stress_ap_penalty() != 2 or
+		RunState.get_daily_action_limit() != max(base_ap_limit - 2, 1) or
+		stress_meter_bar == null or
+		int(round(float(stress_meter_bar.value))) != 65
+	):
+		return "Smoke test expected stress in the 60s to apply a 2 AP pressure penalty and update the top stress meter."
+
+	wellbeing_life = RunState.get_player_life()
+	wellbeing_life["stress_value"] = 100.0
+	wellbeing_life["happiness_value"] = 35.0
+	wellbeing_life["burnout_risk_active"] = false
+	wellbeing_life["burnout_risk_days_remaining"] = 0
+	wellbeing_life["hospital_days_remaining"] = 0
+	RunState.set_player_life(wellbeing_life)
+	GameManager.advance_day()
+	await get_tree().process_frame
+	var burnout_warning_life: Dictionary = RunState.get_player_life()
+	if (
+		not bool(burnout_warning_life.get("burnout_risk_active", false)) or
+		int(burnout_warning_life.get("burnout_risk_days_remaining", 0)) != RunState.LIFE_BURNOUT_WARNING_TRADING_DAYS or
+		int(burnout_warning_life.get("hospital_days_remaining", 0)) != 0
+	):
+		return "Smoke test expected stress 100 to start a burnout warning countdown before hospital."
+
+	burnout_warning_life["stress_value"] = 100.0
+	burnout_warning_life["burnout_risk_active"] = true
+	burnout_warning_life["burnout_risk_days_remaining"] = 1
+	burnout_warning_life["hospital_days_remaining"] = 0
+	RunState.set_player_life(burnout_warning_life)
+	GameManager.advance_day()
+	await get_tree().process_frame
+	var hospital_life: Dictionary = RunState.get_player_life()
+	if int(hospital_life.get("hospital_days_remaining", 0)) != RunState.LIFE_HOSPITAL_TRADING_DAYS:
+		return "Smoke test expected staying at stress 100 through the warning countdown to start two hospital trading days."
+	if RunState.get_daily_action_limit() != 0:
+		return "Smoke test expected hospital recovery to reduce the AP limit to zero."
+	var hospital_buy_result: Dictionary = GameManager.buy_lots(str(RunState.company_order[0]), 1)
+	if bool(hospital_buy_result.get("success", false)) or not str(hospital_buy_result.get("message", "")).contains("Hospital recovery"):
+		return "Smoke test expected hospital recovery to block trading actions."
+	if not GameManager.get_life_action_block_reason("advance_day").is_empty():
+		return "Smoke test expected hospital recovery to keep Advance Day available."
+	game_root._refresh_all()
+	await get_tree().process_frame
+	hospital_overlay = game_root.find_child("HospitalOverlay", true, false) as Control
+	hospital_advance_button = game_root.find_child("HospitalAdvanceDayButton", true, false) as Button
+	if hospital_overlay == null or not hospital_overlay.visible or hospital_advance_button == null or hospital_advance_button.disabled:
+		return "Smoke test expected hospital recovery to show a blocking overlay with only Advance Day available."
+
+	GameManager.advance_day()
+	await get_tree().process_frame
+	if int(RunState.get_player_life().get("hospital_days_remaining", 0)) != 1:
+		return "Smoke test expected the first hospital Advance Day to decrement remaining recovery days."
+	GameManager.advance_day()
+	await get_tree().process_frame
+	var recovered_life: Dictionary = RunState.get_player_life()
+	if (
+		int(recovered_life.get("hospital_days_remaining", 0)) != 0 or
+		int(round(float(recovered_life.get("stress_value", 0.0)))) != int(RunState.LIFE_HOSPITAL_RECOVERY_STRESS) or
+		int(round(float(recovered_life.get("happiness_value", 0.0)))) != int(RunState.LIFE_HOSPITAL_RECOVERY_HAPPINESS) or
+		RunState.get_daily_action_limit() <= 0
+	):
+		return "Smoke test expected hospital recovery to end after two Advance Days and reset stress/happiness to recovery values."
+	game_root._refresh_all()
+	await get_tree().process_frame
+	hospital_overlay = game_root.find_child("HospitalOverlay", true, false) as Control
+	if hospital_overlay != null and hospital_overlay.visible:
+		return "Smoke test expected the hospital overlay to hide after recovery ends."
+
+	RunState.load_from_dict(wellbeing_test_state)
+	game_root._refresh_all()
+	await get_tree().process_frame
 
 	var monthly_obligation_snapshot: Dictionary = GameManager.get_life_snapshot()
 	var monthly_obligation_due: float = float(monthly_obligation_snapshot.get("monthly_outflow", 0.0))
@@ -9928,7 +10837,6 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 	var thesis_report_text: RichTextLabel = game_root.find_child("ThesisReportText", true, false) as RichTextLabel
 	var thesis_report_close_button: Button = game_root.find_child("ThesisReportCloseButton", true, false) as Button
 	var thesis_report_regenerate_button: Button = game_root.find_child("ThesisReportRegenerateButton", true, false) as Button
-	var thesis_use_selected_button: Button = game_root.find_child("ThesisUseSelectedStockButton", true, false) as Button
 	var thesis_step_flow_row: HBoxContainer = game_root.find_child("ThesisStepFlowRow", true, false) as HBoxContainer
 	var thesis_stance_bullish_button: Button = game_root.find_child("ThesisStanceBullishButton", true, false) as Button
 	var thesis_stance_bearish_button: Button = game_root.find_child("ThesisStanceBearishButton", true, false) as Button
@@ -9974,7 +10882,6 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 		thesis_report_text == null or
 		thesis_report_close_button == null or
 		thesis_report_regenerate_button == null or
-		thesis_use_selected_button == null or
 		thesis_step_flow_row == null or
 		thesis_stance_bullish_button == null or
 		thesis_stance_bearish_button == null or
@@ -10008,8 +10915,6 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 	):
 		return "Smoke test expected Thesis stance selection to use color-coded segmented buttons."
 
-	thesis_use_selected_button.emit_signal("pressed")
-	await get_tree().process_frame
 	if thesis_company_option.item_count <= 0:
 		return "Smoke test expected the Thesis Board company picker to render generated stocks."
 
@@ -10995,10 +11900,10 @@ func _validate_design_system_assets() -> String:
 
 
 func _validate_release_readiness_assets() -> String:
-	if BuildInfo.get_product_name() != "Gorengan: Stock Trading Simulator":
-		return "Smoke test expected the player-facing product name to be Gorengan: Stock Trading Simulator."
-	if str(ProjectSettings.get_setting("application/config/name", "")) != "Gorengan Stock Trading Simulator":
-		return "Smoke test expected project.godot application name to use the Windows-safe Gorengan name."
+	if BuildInfo.get_product_name() != "Buy High Sell Low Stock Trading Simulator":
+		return "Smoke test expected the player-facing product name to be Buy High Sell Low Stock Trading Simulator."
+	if str(ProjectSettings.get_setting("application/config/name", "")) != "Buy High Sell Low Stock Trading Simulator":
+		return "Smoke test expected project.godot application name to use the Buy High Sell Low Stock Trading Simulator name."
 
 	var build_number: String = BuildInfo.get_build_number()
 	if build_number.is_empty() or BuildInfo.get_short_display_string().find(build_number) == -1:
@@ -11664,6 +12569,23 @@ func _collect_item_list_text(item_list: ItemList) -> String:
 	for item_index in range(item_list.item_count):
 		parts.append(item_list.get_item_text(item_index))
 	return "\n".join(parts)
+
+
+func _metric_table_values_for_label(rows: VBoxContainer, row_label: String) -> Array:
+	if rows == null:
+		return []
+	for row_node in rows.get_children():
+		var labels: Array = []
+		for cell_node in row_node.get_children():
+			if cell_node is Label:
+				labels.append((cell_node as Label).text)
+		if labels.size() <= 1 or str(labels[0]) != row_label:
+			continue
+		var values: Array = []
+		for value_index in range(1, labels.size()):
+			values.append(str(labels[value_index]))
+		return values
+	return []
 
 
 func _collect_node_text_into(node: Node, parts: Array) -> void:

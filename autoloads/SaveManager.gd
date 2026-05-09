@@ -29,6 +29,7 @@ var _autosave_enabled: bool = true
 var _has_unsaved_changes: bool = false
 var _unsaved_reason: String = ""
 var _unsaved_since_unix: int = 0
+var _save_file_info_cache: Dictionary = {}
 func _ready() -> void:
 	_ensure_save_timer()
 	_load_save_config()
@@ -69,6 +70,7 @@ func set_active_slot_id(slot_id: String) -> void:
 	if _active_slot_id == normalized_slot_id:
 		return
 	_active_slot_id = normalized_slot_id
+	_invalidate_save_file_info_cache()
 	_save_save_config()
 	save_status_changed.emit()
 
@@ -90,11 +92,11 @@ func get_first_loadable_slot_id() -> String:
 	return ""
 
 
-func get_save_slots() -> Array:
+func get_save_slots(validate_backup_when_primary_loadable: bool = false) -> Array:
 	var slots: Array = []
 	for index in range(1, SAVE_SLOT_COUNT + 1):
 		var slot_id: String = "slot_%d" % index
-		var slot_info: Dictionary = get_save_file_info(slot_id)
+		var slot_info: Dictionary = get_save_file_info(slot_id, validate_backup_when_primary_loadable)
 		slot_info["slot_id"] = slot_id
 		slot_info["slot_index"] = index
 		slot_info["slot_label"] = "Slot %d" % index
@@ -120,7 +122,7 @@ func set_autosave_enabled(enabled: bool) -> void:
 		request_save("autosave_reenabled")
 
 
-func get_save_file_info(slot_id: String = "") -> Dictionary:
+func get_save_file_info(slot_id: String = "", validate_backup_when_primary_loadable: bool = true) -> Dictionary:
 	var resolved_slot_id: String = _normalize_slot_id(slot_id)
 	var primary_path: String = _read_save_path(resolved_slot_id)
 	var backup_path: String = _read_backup_path(resolved_slot_id)
@@ -128,8 +130,22 @@ func get_save_file_info(slot_id: String = "") -> Dictionary:
 	var write_backup_path: String = _write_backup_path(resolved_slot_id)
 	var primary_exists: bool = FileAccess.file_exists(primary_path)
 	var backup_exists: bool = FileAccess.file_exists(backup_path)
-	var primary_data: Dictionary = _read_save_dictionary(primary_path, false)
-	var backup_data: Dictionary = _read_save_dictionary(backup_path, false)
+	var fingerprint: Dictionary = _save_file_info_fingerprint(
+		resolved_slot_id,
+		primary_path,
+		backup_path,
+		primary_exists,
+		backup_exists,
+		validate_backup_when_primary_loadable
+	)
+	var cached_info: Dictionary = _cached_save_file_info(resolved_slot_id, fingerprint)
+	if not cached_info.is_empty():
+		return cached_info
+
+	var primary_data: Dictionary = _read_save_dictionary(primary_path, false) if primary_exists else {}
+	var backup_data: Dictionary = {}
+	if backup_exists and (validate_backup_when_primary_loadable or primary_data.is_empty()):
+		backup_data = _read_save_dictionary(backup_path, false)
 	var selected_data: Dictionary = primary_data
 	var recovered_from_backup: bool = false
 	if selected_data.is_empty() and not backup_data.is_empty():
@@ -166,6 +182,10 @@ func get_save_file_info(slot_id: String = "") -> Dictionary:
 
 	if not selected_data.is_empty():
 		info.merge(_build_save_summary(selected_data), true)
+	_save_file_info_cache[resolved_slot_id] = {
+		"fingerprint": fingerprint,
+		"info": info.duplicate(true)
+	}
 	return info
 
 
@@ -307,6 +327,7 @@ func save_run(run_state: Dictionary, slot_id: String = "") -> bool:
 	_last_save_unix = int(save_payload.get("saved_at_unix", Time.get_unix_time_from_system()))
 	_last_save_reason = _active_save_context if not _active_save_context.is_empty() else "manual"
 	_clear_unsaved_state()
+	_invalidate_save_file_info_cache(resolved_slot_id)
 	_save_save_config()
 	_log_elapsed("save_run", started_at_usec)
 	save_status_changed.emit()
@@ -368,6 +389,7 @@ func delete_save(slot_id: String = "") -> void:
 			_mark_unsaved("delete_save")
 		else:
 			_clear_unsaved_state()
+	_invalidate_save_file_info_cache(resolved_slot_id)
 	save_status_changed.emit()
 
 
@@ -486,14 +508,17 @@ func _load_save_config() -> void:
 	_autosave_enabled = true
 	var config_path: String = _config_path()
 	if not FileAccess.file_exists(config_path):
+		_invalidate_save_file_info_cache()
 		return
 	var raw_text: String = FileAccess.get_file_as_string(config_path)
 	var json := JSON.new()
 	if json.parse(raw_text) != OK or typeof(json.data) != TYPE_DICTIONARY:
+		_invalidate_save_file_info_cache()
 		return
 	var config: Dictionary = json.data
 	_active_slot_id = _normalize_slot_id(str(config.get("active_slot_id", DEFAULT_SLOT_ID)))
 	_autosave_enabled = bool(config.get("autosave_enabled", true))
+	_invalidate_save_file_info_cache()
 
 
 func _save_save_config() -> void:
@@ -521,6 +546,48 @@ func _normalize_slot_id(slot_id: String = "") -> String:
 	if as_index >= 1 and as_index <= SAVE_SLOT_COUNT:
 		return "slot_%d" % as_index
 	return DEFAULT_SLOT_ID
+
+
+func _invalidate_save_file_info_cache(slot_id: String = "") -> void:
+	if slot_id.strip_edges().is_empty():
+		_save_file_info_cache.clear()
+		return
+	_save_file_info_cache.erase(_normalize_slot_id(slot_id))
+
+
+func _save_file_info_fingerprint(
+	resolved_slot_id: String,
+	primary_path: String,
+	backup_path: String,
+	primary_exists: bool,
+	backup_exists: bool,
+	validate_backup_when_primary_loadable: bool
+) -> Dictionary:
+	return {
+		"slot_id": resolved_slot_id,
+		"active_slot_id": _active_slot_id,
+		"primary_path": primary_path,
+		"backup_path": backup_path,
+		"primary_exists": primary_exists,
+		"backup_exists": backup_exists,
+		"primary_modified": FileAccess.get_modified_time(primary_path) if primary_exists else 0,
+		"backup_modified": FileAccess.get_modified_time(backup_path) if backup_exists else 0,
+		"validate_backup_when_primary_loadable": validate_backup_when_primary_loadable
+	}
+
+
+func _cached_save_file_info(resolved_slot_id: String, fingerprint: Dictionary) -> Dictionary:
+	var cached_value = _save_file_info_cache.get(resolved_slot_id, {})
+	if typeof(cached_value) != TYPE_DICTIONARY:
+		return {}
+	var cached: Dictionary = cached_value
+	if cached.is_empty() or cached.get("fingerprint", {}) != fingerprint:
+		return {}
+	var info_value = cached.get("info", {})
+	if typeof(info_value) != TYPE_DICTIONARY:
+		return {}
+	var info: Dictionary = info_value
+	return info.duplicate(true)
 
 
 func _slot_index(slot_id: String) -> int:

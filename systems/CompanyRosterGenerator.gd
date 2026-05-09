@@ -312,6 +312,57 @@ const SECTOR_BIASES := {
 		"turnover": 0.0002
 	}
 }
+const SCALE_TIER_ORDER := ["micro", "small", "mid", "large", "giant"]
+const SCALE_TIER_DEFS := {
+	"micro": {
+		"rank": 0,
+		"floor": 250000000000.0,
+		"ceiling": 950000000000.0,
+		"scale": 0.10,
+		"liquidity_floor": 80000000.0,
+		"float_bias": -5.0
+	},
+	"small": {
+		"rank": 1,
+		"floor": 950000000000.0,
+		"ceiling": 2500000000000.0,
+		"scale": 0.28,
+		"liquidity_floor": 180000000.0,
+		"float_bias": -2.0
+	},
+	"mid": {
+		"rank": 2,
+		"floor": 2500000000000.0,
+		"ceiling": 10000000000000.0,
+		"scale": 0.52,
+		"liquidity_floor": 600000000.0,
+		"float_bias": 0.0
+	},
+	"large": {
+		"rank": 3,
+		"floor": 10000000000000.0,
+		"ceiling": 35000000000000.0,
+		"scale": 0.74,
+		"liquidity_floor": 2000000000.0,
+		"float_bias": 3.0
+	},
+	"giant": {
+		"rank": 4,
+		"floor": 35000000000000.0,
+		"ceiling": 120000000000000.0,
+		"scale": 0.92,
+		"liquidity_floor": 8000000000.0,
+		"float_bias": 6.0
+	}
+}
+const SCALE_TIER_BASE_RATIOS := {
+	"micro": 4.0 / 30.0,
+	"small": 7.0 / 30.0,
+	"mid": 12.0 / 30.0,
+	"large": 5.0 / 30.0,
+	"giant": 2.0 / 30.0
+}
+const SCALE_TIER_DESCENDING := ["giant", "large", "mid", "small", "micro"]
 
 
 func generate_roster(
@@ -319,7 +370,8 @@ func generate_roster(
 	sector_definitions: Array,
 	company_word_data: Dictionary,
 	run_seed: int,
-	company_count: int
+	company_count: int,
+	macro_state: Dictionary = {}
 ) -> Array:
 	if company_count <= 0:
 		return archetype_templates.duplicate(true)
@@ -331,6 +383,7 @@ func generate_roster(
 	var sector_rotation: Array = _build_sector_rotation(sector_definitions, company_count, run_seed)
 	var used_names := {}
 	var used_tickers := {}
+	var slot_specs: Array = []
 	var generated_definitions: Array = []
 
 	for company_index in range(company_count):
@@ -341,19 +394,218 @@ func generate_roster(
 		var template: Dictionary = _pick_template(archetype_templates, sector_id, run_seed, company_index)
 		var name_words: Array = _build_unique_name_words(words, sector_id, used_names, run_seed, company_index)
 		var ticker: String = _build_unique_ticker(name_words, sector_id, used_tickers)
-		var listing_board: String = _derive_listing_board(template, sector_id, run_seed, company_index)
-		generated_definitions.append({
-			"id": ticker.to_lower(),
+		slot_specs.append({
+			"index": company_index,
+			"sector_id": sector_id,
+			"sector_definition": sector_definition,
+			"template": template,
+			"name_words": name_words,
 			"ticker": ticker,
-			"name": _join_words(name_words),
+			"narrative_tags": _build_narrative_tags(template, sector_id, run_seed, company_index)
+		})
+
+	var scale_tier_assignments: Array = _build_scale_tier_assignments(slot_specs, run_seed, macro_state)
+	for slot_value in slot_specs:
+		var slot: Dictionary = slot_value
+		var company_index: int = int(slot.get("index", 0))
+		var sector_id: String = str(slot.get("sector_id", "consumer"))
+		var template: Dictionary = slot.get("template", {})
+		var anchors: Dictionary = _build_anchors(
+			template,
+			sector_id,
+			run_seed,
+			company_index,
+			scale_tier_assignments[company_index],
+			macro_state
+		)
+		var listing_board: String = _derive_listing_board(template, sector_id, run_seed, company_index, anchors)
+		generated_definitions.append({
+			"id": str(slot.get("ticker", "")).to_lower(),
+			"ticker": str(slot.get("ticker", "")),
+			"name": _join_words(slot.get("name_words", [])),
 			"sector_id": sector_id,
 			"listing_board": listing_board,
-			"narrative_tags": _build_narrative_tags(template, sector_id, run_seed, company_index),
-			"anchors": _build_anchors(template, sector_id, run_seed, company_index)
+			"narrative_tags": slot.get("narrative_tags", []),
+			"anchors": anchors
 		})
 
 	_apply_nominal_price_profiles(generated_definitions, run_seed)
 	return generated_definitions
+
+
+func _build_scale_tier_assignments(slot_specs: Array, run_seed: int, macro_state: Dictionary) -> Array:
+	var assignments: Array = []
+	for _slot_value in slot_specs:
+		assignments.append(_scale_tier_payload("mid"))
+	if slot_specs.is_empty():
+		return assignments
+
+	var tier_counts: Dictionary = _scale_tier_counts(slot_specs.size(), macro_state)
+	var scored_slots: Array = []
+	for slot_index in range(slot_specs.size()):
+		scored_slots.append({
+			"index": int(slot_specs[slot_index].get("index", slot_index)),
+			"score": _scale_tier_score(slot_specs[slot_index], run_seed, slot_index, macro_state)
+		})
+	scored_slots.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return float(left.get("score", 0.0)) > float(right.get("score", 0.0))
+	)
+
+	var tier_pool: Array = []
+	for tier_id_value in SCALE_TIER_DESCENDING:
+		var tier_id: String = str(tier_id_value)
+		for _tier_index in range(int(tier_counts.get(tier_id, 0))):
+			tier_pool.append(tier_id)
+	while tier_pool.size() < slot_specs.size():
+		tier_pool.append("mid")
+
+	for rank_index in range(scored_slots.size()):
+		var tier_id: String = str(tier_pool[min(rank_index, tier_pool.size() - 1)])
+		var assignment_index: int = int(scored_slots[rank_index].get("index", rank_index))
+		if assignment_index >= 0 and assignment_index < assignments.size():
+			assignments[assignment_index] = _scale_tier_payload(tier_id)
+	return assignments
+
+
+func _scale_tier_counts(company_count: int, macro_state: Dictionary) -> Dictionary:
+	var counts: Dictionary = {}
+	var remainders: Array = []
+	var assigned_count: int = 0
+	for tier_id_value in SCALE_TIER_ORDER:
+		var tier_id: String = str(tier_id_value)
+		var raw_count: float = float(company_count) * float(SCALE_TIER_BASE_RATIOS.get(tier_id, 0.0))
+		var base_count: int = int(floor(raw_count))
+		counts[tier_id] = base_count
+		assigned_count += base_count
+		remainders.append({
+			"tier_id": tier_id,
+			"remainder": raw_count - float(base_count)
+		})
+	remainders.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return float(left.get("remainder", 0.0)) > float(right.get("remainder", 0.0))
+	)
+	var remaining_count: int = max(company_count - assigned_count, 0)
+	for remainder_index in range(remaining_count):
+		var tier_id: String = str(remainders[remainder_index % remainders.size()].get("tier_id", "mid"))
+		counts[tier_id] = int(counts.get(tier_id, 0)) + 1
+
+	var risk_appetite: float = clamp(float(macro_state.get("risk_appetite", 0.5)), 0.0, 1.0)
+	if risk_appetite >= 0.62:
+		_shift_scale_tier_count(counts, "large", "small", 0)
+	if risk_appetite >= 0.74:
+		_shift_scale_tier_count(counts, "giant", "micro", 1 if company_count >= 20 else 0)
+	if risk_appetite <= 0.38:
+		_shift_scale_tier_count(counts, "small", "large", 0)
+	if risk_appetite <= 0.26:
+		_shift_scale_tier_count(counts, "micro", "giant", 3 if company_count >= 30 else 0)
+
+	if company_count >= 30:
+		while int(counts.get("micro", 0)) < 3:
+			if not _shift_scale_tier_count(counts, "mid", "micro", 1):
+				if not _shift_scale_tier_count(counts, "small", "micro", 1):
+					break
+		while int(counts.get("large", 0)) + int(counts.get("giant", 0)) < 5:
+			if not _shift_scale_tier_count(counts, "mid", "large", 1):
+				if not _shift_scale_tier_count(counts, "small", "large", 1):
+					break
+		if int(counts.get("giant", 0)) < 1:
+			if not _shift_scale_tier_count(counts, "large", "giant", 1):
+				_shift_scale_tier_count(counts, "mid", "giant", 1)
+
+	return _rebalance_scale_tier_counts(counts, company_count)
+
+
+func _shift_scale_tier_count(counts: Dictionary, from_tier: String, to_tier: String, minimum_from_count: int) -> bool:
+	if int(counts.get(from_tier, 0)) <= minimum_from_count:
+		return false
+	counts[from_tier] = int(counts.get(from_tier, 0)) - 1
+	counts[to_tier] = int(counts.get(to_tier, 0)) + 1
+	return true
+
+
+func _rebalance_scale_tier_counts(counts: Dictionary, company_count: int) -> Dictionary:
+	var total_count: int = 0
+	for tier_id_value in SCALE_TIER_ORDER:
+		total_count += int(counts.get(str(tier_id_value), 0))
+	while total_count < company_count:
+		counts["mid"] = int(counts.get("mid", 0)) + 1
+		total_count += 1
+	var removal_order: Array = ["mid", "small", "large", "micro", "giant"]
+	var removal_index: int = 0
+	while total_count > company_count and removal_index < removal_order.size() * 4:
+		var tier_id: String = str(removal_order[removal_index % removal_order.size()])
+		if int(counts.get(tier_id, 0)) > 0:
+			counts[tier_id] = int(counts.get(tier_id, 0)) - 1
+			total_count -= 1
+		removal_index += 1
+	return counts
+
+
+func _scale_tier_score(slot: Dictionary, run_seed: int, slot_index: int, macro_state: Dictionary) -> float:
+	var sector_id: String = str(slot.get("sector_id", "consumer"))
+	var template: Dictionary = slot.get("template", {})
+	var template_anchors: Dictionary = template.get("anchors", {})
+	var sector_bias: Dictionary = SECTOR_BIASES.get(sector_id, DEFAULT_SECTOR_BIAS)
+	var rng: RandomNumberGenerator = _rng_for(run_seed, "scale_tier_score_%d" % slot_index)
+	var template_market_cap: float = float(template_anchors.get("market_cap", 1000000000000.0))
+	var score: float = _size_score_from_market_cap(template_market_cap) * 100.0
+	score += float(sector_bias.get("scale", 0.0)) * 48.0
+	score += _macro_sector_bias(macro_state, sector_id) * 650.0
+	score += float(template_anchors.get("quality", 58.0)) * 0.20
+	score += float(template_anchors.get("net_profit_margin", 7.5)) * 0.85
+	score += float(template_anchors.get("free_float_pct", 28.0)) * 0.08
+	score -= float(template_anchors.get("risk", 42.0)) * 0.12
+	score += rng.randf_range(-8.0, 8.0)
+	if sector_id in ["finance", "infra", "energy"]:
+		score += 4.0
+	if sector_id == "tech" and float(macro_state.get("risk_appetite", 0.5)) >= 0.62:
+		score += 5.0
+	return score
+
+
+func _scale_tier_payload(tier_id: String) -> Dictionary:
+	var normalized_tier_id: String = tier_id
+	if not SCALE_TIER_DEFS.has(normalized_tier_id):
+		normalized_tier_id = "mid"
+	var tier_def: Dictionary = _scale_tier_def(normalized_tier_id)
+	return {
+		"id": normalized_tier_id,
+		"rank": int(tier_def.get("rank", 2)),
+		"floor": float(tier_def.get("floor", 2500000000000.0)),
+		"ceiling": float(tier_def.get("ceiling", 10000000000000.0))
+	}
+
+
+func _scale_tier_def(tier_id: String) -> Dictionary:
+	if SCALE_TIER_DEFS.has(tier_id):
+		return SCALE_TIER_DEFS[tier_id].duplicate(true)
+	return SCALE_TIER_DEFS["mid"].duplicate(true)
+
+
+func _sample_log_market_cap(tier_def: Dictionary, rng: RandomNumberGenerator) -> float:
+	var floor_value: float = max(float(tier_def.get("floor", 2500000000000.0)), 1.0)
+	var ceiling_value: float = max(float(tier_def.get("ceiling", 10000000000000.0)), floor_value * 1.01)
+	var log_floor: float = log(floor_value)
+	var log_ceiling: float = log(ceiling_value)
+	return exp(rng.randf_range(log_floor, log_ceiling))
+
+
+func _size_score_from_market_cap(market_cap: float) -> float:
+	var floor_value: float = 250000000000.0
+	var ceiling_value: float = 120000000000000.0
+	return clamp(
+		(log(max(market_cap, floor_value)) - log(floor_value)) / (log(ceiling_value) - log(floor_value)),
+		0.0,
+		1.0
+	)
+
+
+func _macro_sector_bias(macro_state: Dictionary, sector_id: String) -> float:
+	var sector_biases_value: Variant = macro_state.get("sector_biases", {})
+	if typeof(sector_biases_value) != TYPE_DICTIONARY:
+		return 0.0
+	var sector_biases: Dictionary = sector_biases_value
+	return float(sector_biases.get(sector_id, 0.0))
 
 
 func _extract_words(company_word_data: Dictionary) -> Array:
@@ -575,14 +827,29 @@ func _add_unique_tag(narrative_tags: Array, tag: String) -> void:
 	narrative_tags.append(tag)
 
 
-func _build_anchors(template: Dictionary, sector_id: String, run_seed: int, company_index: int) -> Dictionary:
+func _build_anchors(
+	template: Dictionary,
+	sector_id: String,
+	run_seed: int,
+	company_index: int,
+	scale_tier: Dictionary = {},
+	macro_state: Dictionary = {}
+) -> Dictionary:
 	var template_anchors: Dictionary = template.get("anchors", {})
 	var sector_bias: Dictionary = SECTOR_BIASES.get(sector_id, DEFAULT_SECTOR_BIAS)
 	var rng: RandomNumberGenerator = _rng_for(run_seed, "anchors_%s_%d" % [sector_id, company_index])
+	var tier_id: String = str(scale_tier.get("id", "mid"))
+	var tier_def: Dictionary = _scale_tier_def(tier_id)
+	if not SCALE_TIER_DEFS.has(tier_id):
+		tier_id = "mid"
+	var tier_rank: int = int(tier_def.get("rank", 2))
+	var macro_sector_bias: float = _macro_sector_bias(macro_state, sector_id)
+	var risk_appetite: float = clamp(float(macro_state.get("risk_appetite", 0.5)), 0.0, 1.0)
 
 	var quality: float = clamp(
 		float(template_anchors.get("quality", 58.0)) +
 		float(sector_bias.get("quality", 0.0)) +
+		(macro_sector_bias * 90.0) +
 		rng.randf_range(-9.0, 9.0),
 		35.0,
 		88.0
@@ -590,6 +857,8 @@ func _build_anchors(template: Dictionary, sector_id: String, run_seed: int, comp
 	var growth: float = clamp(
 		float(template_anchors.get("growth", 58.0)) +
 		float(sector_bias.get("growth", 0.0)) +
+		(macro_sector_bias * 160.0) +
+		((risk_appetite - 0.5) * 4.0) +
 		rng.randf_range(-10.0, 10.0),
 		35.0,
 		92.0
@@ -597,22 +866,18 @@ func _build_anchors(template: Dictionary, sector_id: String, run_seed: int, comp
 	var risk: float = clamp(
 		float(template_anchors.get("risk", 42.0)) +
 		float(sector_bias.get("risk", 0.0)) +
+		((0.5 - risk_appetite) * 5.0) -
+		(macro_sector_bias * 90.0) +
 		rng.randf_range(-9.0, 9.0),
 		20.0,
 		86.0
 	)
-	var market_cap_multiplier: float = clamp(
-		1.0 + float(sector_bias.get("scale", 0.0)) + rng.randf_range(-0.22, 0.28),
-		0.45,
-		1.95
-	)
-	var market_cap: float = max(
-		float(template_anchors.get("market_cap", 1000000000000.0)) * market_cap_multiplier,
-		250000000000.0
-	)
+	var market_cap: float = _sample_log_market_cap(tier_def, rng)
 	var free_float_pct: float = clamp(
 		float(template_anchors.get("free_float_pct", 28.0)) +
 		float(sector_bias.get("free_float", 0.0)) +
+		float(tier_def.get("float_bias", 0.0)) +
+		((risk_appetite - 0.5) * 3.0) +
 		rng.randf_range(-6.0, 6.0),
 		7.0,
 		60.0
@@ -631,8 +896,7 @@ func _build_anchors(template: Dictionary, sector_id: String, run_seed: int, comp
 		0.05,
 		1.70
 	)
-	var market_cap_trillions: float = market_cap / 1000000000000.0
-	var size_score: float = clamp((market_cap_trillions - 1.4) / 4.4, 0.0, 1.0)
+	var size_score: float = _size_score_from_market_cap(market_cap)
 	var float_score: float = clamp((free_float_pct - 24.0) / 26.0, 0.0, 1.0)
 	var financial_score: float = clamp(
 		(((quality - 50.0) / 38.0) * 0.40) +
@@ -657,16 +921,18 @@ func _build_anchors(template: Dictionary, sector_id: String, run_seed: int, comp
 	)
 	base_price = clamp(base_price, 50.0, 2400.0)
 	var turnover_ratio: float = clamp(
-		0.0010 +
+		0.0009 +
 		((growth / 100.0) * 0.0008) +
 		((risk / 100.0) * 0.0006) +
 		((free_float_pct / 100.0) * 0.0012) +
+		(float(tier_rank) * 0.00016) +
+		((risk_appetite - 0.5) * 0.00045) +
 		float(sector_bias.get("turnover", 0.0)) +
 		rng.randf_range(-0.0002, 0.0002),
-		0.0007,
-		0.0065
+		0.00025,
+		0.0095
 	)
-	var avg_daily_value: float = max(market_cap * turnover_ratio, 600000000.0)
+	var avg_daily_value: float = max(market_cap * turnover_ratio, float(tier_def.get("liquidity_floor", 600000000.0)))
 
 	return {
 		"base_price": round(base_price),
@@ -674,6 +940,10 @@ func _build_anchors(template: Dictionary, sector_id: String, run_seed: int, comp
 		"growth": int(round(growth)),
 		"risk": int(round(risk)),
 		"market_cap": _round_to_step(market_cap, 10000000000.0),
+		"scale_tier": tier_id,
+		"scale_tier_rank": tier_rank,
+		"scale_market_cap_floor": float(tier_def.get("floor", 2500000000000.0)),
+		"scale_market_cap_ceiling": float(tier_def.get("ceiling", 10000000000000.0)),
 		"free_float_pct": _round_to_step(free_float_pct, 0.1),
 		"avg_daily_value": _round_to_step(avg_daily_value, 10000000.0),
 		"net_profit_margin": _round_to_step(net_profit_margin, 0.1),
@@ -931,10 +1201,20 @@ func _apply_default_capital_structure(definition: Dictionary, run_seed: int, def
 	var market_cap: float = float(anchors.get("market_cap", 1000000000000.0))
 	var quality: float = float(anchors.get("quality", 58.0))
 	var margin: float = float(anchors.get("net_profit_margin", 7.5))
+	var scale_tier: String = str(anchors.get("scale_tier", "mid"))
 	var narrative_tags: Array = definition.get("narrative_tags", []).duplicate()
 	var style: String = "balanced"
 
-	if market_cap >= 3500000000000.0 and free_float_pct >= 28.0 and quality >= 66.0 and margin >= 7.0:
+	if scale_tier in ["large", "giant"] and free_float_pct >= 24.0 and quality >= 62.0 and margin >= 6.0:
+		style = "institutional_premium"
+	elif scale_tier in ["micro", "small"] and (
+		free_float_pct <= 18.0 or
+		"stealth_interest" in narrative_tags or
+		"retail_favorite" in narrative_tags or
+		"narrative_hot" in narrative_tags
+	):
+		style = "owner_controlled"
+	elif market_cap >= 3500000000000.0 and free_float_pct >= 28.0 and quality >= 66.0 and margin >= 7.0:
 		style = "institutional_premium"
 	elif free_float_pct <= 15.0 and market_cap >= 900000000000.0 and (
 		"stealth_interest" in narrative_tags or
@@ -972,19 +1252,38 @@ func _apply_default_capital_structure(definition: Dictionary, run_seed: int, def
 	definition["anchors"] = anchors
 
 
-func _derive_listing_board(template: Dictionary, sector_id: String, run_seed: int, company_index: int) -> String:
+func _derive_listing_board(
+	template: Dictionary,
+	sector_id: String,
+	run_seed: int,
+	company_index: int,
+	anchors: Dictionary = {}
+) -> String:
 	var template_anchors: Dictionary = template.get("anchors", {})
 	var sector_bias: Dictionary = SECTOR_BIASES.get(sector_id, DEFAULT_SECTOR_BIAS)
 	var rng: RandomNumberGenerator = _rng_for(run_seed, "board_%s_%d" % [sector_id, company_index])
-	var market_cap_score: float = float(template_anchors.get("market_cap", 1000000000000.0))
-	var risk_score: float = float(template_anchors.get("risk", 42.0)) + float(sector_bias.get("risk", 0.0))
+	var source_anchors: Dictionary = anchors if not anchors.is_empty() else template_anchors
+	var scale_tier: String = str(source_anchors.get("scale_tier", "mid"))
+	var market_cap_score: float = float(source_anchors.get("market_cap", template_anchors.get("market_cap", 1000000000000.0)))
+	var risk_score: float = float(source_anchors.get("risk", template_anchors.get("risk", 42.0))) + float(sector_bias.get("risk", 0.0))
 	var development_probability: float = 0.10
-	if market_cap_score < 1100000000000.0:
-		development_probability += 0.12
+	match scale_tier:
+		"micro":
+			development_probability += 0.20
+		"small":
+			development_probability += 0.10
+		"large":
+			development_probability -= 0.05
+		"giant":
+			development_probability -= 0.08
+		_:
+			if market_cap_score < 1100000000000.0:
+				development_probability += 0.12
 	if risk_score > 58.0:
 		development_probability += 0.12
 	if sector_id in ["tech", "property", "transport"]:
 		development_probability += 0.08
+	development_probability = clamp(development_probability, 0.03, 0.55)
 	return "development" if rng.randf() < development_probability else "main"
 
 

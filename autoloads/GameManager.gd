@@ -303,6 +303,40 @@ const LIFE_EMERGENCY_LOAN_EQUITY_CAP_PCT := 0.35
 const LIFE_EMERGENCY_LOAN_MONTHLY_OUTFLOW_CAP := 4.0
 const LIFE_EMERGENCY_LOAN_PAYMENT_COUNT := 6
 const LIFE_EMERGENCY_LOAN_REPAYMENT_MULTIPLIER := 1.24
+const LIFE_BASICS_TIERS := [
+	{
+		"id": "bare",
+		"label": "Bare minimum",
+		"monthly_cost": 1250000.0,
+		"stress_delta": 3.0,
+		"happiness_delta": -3.0,
+		"detail": "Cheapest survival setup. Saves cash, but pressure builds quickly."
+	},
+	{
+		"id": "lean",
+		"label": "Lean",
+		"monthly_cost": 1750000.0,
+		"stress_delta": 1.0,
+		"happiness_delta": -1.0,
+		"detail": "Tight basics with little buffer. Useful short term, tiring over time."
+	},
+	{
+		"id": "stable",
+		"label": "Stable",
+		"monthly_cost": LIFE_BASIC_EXPENSES_MONTHLY,
+		"stress_delta": 0.0,
+		"happiness_delta": 0.0,
+		"detail": "Food, transport, phone, utilities, and a small daily buffer."
+	},
+	{
+		"id": "comfortable",
+		"label": "Comfortable",
+		"monthly_cost": 3250000.0,
+		"stress_delta": -1.0,
+		"happiness_delta": 1.0,
+		"detail": "More room for basics and less daily friction, at a higher cash hurdle."
+	}
+]
 const LIFE_HOUSING_OPTIONS := [
 	{
 		"id": "family_home",
@@ -406,6 +440,7 @@ var summary_system = preload("res://systems/SummaryInsightSystem.gd").new()
 var broker_flow_system = preload("res://systems/BrokerFlowSystem.gd").new()
 var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 var company_roster_generator = preload("res://systems/CompanyRosterGenerator.gd").new()
+var macro_state_system = preload("res://systems/MacroStateSystem.gd").new()
 var chart_system = preload("res://systems/ChartSystem.gd").new()
 var chart_pattern_system = preload("res://systems/ChartPatternSystem.gd").new()
 var news_feed_system = preload("res://systems/NewsFeedSystem.gd").new()
@@ -645,6 +680,9 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	var life_loan_payment_result: Dictionary = _apply_life_loan_payment_if_due(previous_trade_date, RunState.current_trade_date)
 	_log_advance_perf_elapsed(log_advance_perf, "apply_life_loan_payment", phase_started_at_usec, " amount=%.2f" % float(life_loan_payment_result.get("amount", 0.0)))
 	phase_started_at_usec = Time.get_ticks_usec()
+	var life_wellbeing_result: Dictionary = _apply_life_daily_wellbeing_update()
+	_log_advance_perf_elapsed(log_advance_perf, "apply_life_wellbeing", phase_started_at_usec, " stress=%.2f" % float(life_wellbeing_result.get("stress_value", 0.0)))
+	phase_started_at_usec = Time.get_ticks_usec()
 	var network_results: Array = contact_network_system.process_due_requests(RunState, DataRepository)
 	_log_advance_perf_elapsed(log_advance_perf, "process_due_requests", phase_started_at_usec, " count=%d" % network_results.size())
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -671,7 +709,7 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 		phase_started_at_usec = Time.get_ticks_usec()
 		daily_actions_changed.emit()
 		_log_advance_perf_elapsed(log_advance_perf, "emit_daily_actions_changed", phase_started_at_usec)
-		if not life_obligation_result.is_empty() or not life_loan_payment_result.is_empty():
+		if not life_obligation_result.is_empty() or not life_loan_payment_result.is_empty() or not life_wellbeing_result.is_empty():
 			phase_started_at_usec = Time.get_ticks_usec()
 			life_changed.emit()
 			_log_advance_perf_elapsed(log_advance_perf, "emit_life_changed", phase_started_at_usec)
@@ -715,7 +753,7 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 
 
 func buy_company(company_id: String, shares: int = 1) -> Dictionary:
-	var block_reason: String = get_cash_stress_block_reason("buy")
+	var block_reason: String = get_life_action_block_reason("buy")
 	if not block_reason.is_empty():
 		return {"success": false, "message": block_reason}
 	var result: Dictionary = RunState.buy_company(company_id, shares)
@@ -727,6 +765,9 @@ func buy_company(company_id: String, shares: int = 1) -> Dictionary:
 
 
 func sell_company(company_id: String, shares: int = 1) -> Dictionary:
+	var block_reason: String = get_life_action_block_reason("sell")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
 	var result: Dictionary = RunState.sell_company(company_id, shares)
 	if result.get("success", false):
 		_invalidate_dashboard_event_snapshot_cache()
@@ -769,7 +810,7 @@ func remove_company_from_watchlist(company_id: String) -> Dictionary:
 
 func get_upgrade_shop_snapshot() -> Dictionary:
 	var cash_available: float = float(RunState.player_portfolio.get("cash", 0.0))
-	var upgrade_block_reason: String = get_cash_stress_block_reason("upgrade")
+	var upgrade_block_reason: String = get_life_action_block_reason("upgrade")
 	var tracks: Array = []
 	for track_value in DataRepository.get_upgrade_catalog().get("tracks", []):
 		if typeof(track_value) != TYPE_DICTIONARY:
@@ -808,7 +849,7 @@ func get_upgrade_shop_snapshot() -> Dictionary:
 func purchase_upgrade(track_id: String) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
-	var block_reason: String = get_cash_stress_block_reason("upgrade")
+	var block_reason: String = get_life_action_block_reason("upgrade")
 	if not block_reason.is_empty():
 		return {"success": false, "message": block_reason}
 
@@ -1433,6 +1474,9 @@ func get_company_management_snapshot(selected_company_id: String = "") -> Dictio
 
 
 func request_governance_control_action(company_id: String, action_id: String) -> Dictionary:
+	var block_reason: String = get_life_action_block_reason("governance")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
 	var option_state: Dictionary = get_governance_control_options(company_id)
 	if not bool(option_state.get("enabled", false)):
 		return {"success": false, "message": str(option_state.get("status_text", "Governance control is locked."))}
@@ -1736,6 +1780,13 @@ func get_thesis_report_action_cost() -> int:
 func try_spend_daily_action(action_id: String, metadata: Dictionary = {}) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
+	var block_reason: String = get_life_action_block_reason(action_id)
+	if not block_reason.is_empty():
+		return {
+			"success": false,
+			"message": block_reason,
+			"snapshot": RunState.get_daily_action_snapshot()
+		}
 	if not RunState.can_spend_daily_action(1):
 		return {
 			"success": false,
@@ -1758,10 +1809,19 @@ func get_network_action_cost(action_id: String) -> int:
 
 
 func _can_spend_network_action(action_id: String) -> bool:
+	if not get_life_action_block_reason(action_id).is_empty():
+		return false
 	return RunState.can_spend_daily_action(get_network_action_cost(action_id))
 
 
 func _spend_network_action(action_id: String) -> Dictionary:
+	var block_reason: String = get_life_action_block_reason(action_id)
+	if not block_reason.is_empty():
+		return {
+			"success": false,
+			"message": block_reason,
+			"snapshot": RunState.get_daily_action_snapshot()
+		}
 	return RunState.spend_daily_action(get_network_action_cost(action_id))
 
 
@@ -1841,6 +1901,14 @@ func submit_academy_quiz(category_id: String, answers: Dictionary) -> Dictionary
 
 func search_academy_glossary(query: String) -> Array:
 	return academy_system.search_glossary(DataRepository.get_academy_catalog(), query)
+
+
+func is_academy_available() -> bool:
+	return RunState.GUIDE_FLOW_SYSTEM.flow_enabled(RunState.GUIDE_FLOW_SYSTEM.FLOW_ACADEMY)
+
+
+func get_academy_release_message() -> String:
+	return "Academy is coming soon for this release while lesson content is being reviewed."
 
 
 func get_watchlist_company_ids() -> Array:
@@ -2568,6 +2636,7 @@ func _build_broker_flow_view(broker_flow: Dictionary, include_rows: bool) -> Dic
 		broker_flow_view.erase("sell_brokers")
 		broker_flow_view.erase("net_buy_brokers")
 		broker_flow_view.erase("net_sell_brokers")
+		broker_flow_view.erase("broker_rows")
 	return broker_flow_view
 
 
@@ -2758,6 +2827,21 @@ func get_finance_status_snapshot() -> Dictionary:
 	}
 
 
+func get_life_action_block_reason(action_id: String) -> String:
+	if not RunState.has_active_run():
+		return "No active run."
+	var normalized_action: String = action_id.to_lower()
+	var life_state: Dictionary = RunState.get_player_life()
+	if int(life_state.get("hospital_days_remaining", 0)) > 0:
+		if normalized_action == "advance_day":
+			return ""
+		return "Hospital recovery is active. Only Advance Day is available for %d trading day%s." % [
+			int(life_state.get("hospital_days_remaining", 0)),
+			"" if int(life_state.get("hospital_days_remaining", 0)) == 1 else "s"
+		]
+	return get_cash_stress_block_reason(action_id)
+
+
 func get_cash_stress_block_reason(action_id: String) -> String:
 	if not RunState.has_active_run():
 		return "No active run."
@@ -2790,7 +2874,7 @@ func get_cash_stress_block_reason(action_id: String) -> String:
 
 
 func resolve_advance_day_finance_gate() -> Dictionary:
-	var block_reason: String = get_cash_stress_block_reason("advance_day")
+	var block_reason: String = get_life_action_block_reason("advance_day")
 	if block_reason.is_empty():
 		return {"success": true}
 	if block_reason == "BANKRUPTCY_REQUIRED":
@@ -2813,6 +2897,9 @@ func resolve_advance_day_finance_gate() -> Dictionary:
 
 
 func take_emergency_loan() -> Dictionary:
+	var block_reason: String = get_life_action_block_reason("life_finance")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
 	var finance_status: Dictionary = get_finance_status_snapshot()
 	if not bool(finance_status.get("loan_eligible", false)):
 		return {
@@ -2842,9 +2929,11 @@ func get_life_snapshot() -> Dictionary:
 	var life_state: Dictionary = RunState.get_player_life()
 	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, str(life_state.get("housing_id", "")))
 	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, str(life_state.get("lifestyle_id", "")))
+	var basics_tier: Dictionary = _life_basics_tier_by_id(str(life_state.get("basics_tier_id", RunState.LIFE_DEFAULT_BASICS_TIER_ID)))
 	var portfolio: Dictionary = get_portfolio_snapshot()
 	var dividend_projection: Dictionary = _build_life_dividend_projection()
 	var housing_cost: float = float(housing.get("monthly_cost", 0.0))
+	var basics_cost: float = float(basics_tier.get("monthly_cost", LIFE_BASIC_EXPENSES_MONTHLY))
 	var lifestyle_cost: float = float(lifestyle.get("monthly_cost", 0.0))
 	var monthly_extra: float = max(float(life_state.get("monthly_extra", 0.0)), 0.0)
 	var monthly_outflow: float = _life_monthly_outflow_for_state(life_state)
@@ -2857,8 +2946,13 @@ func get_life_snapshot() -> Dictionary:
 	var next_life_payment: Dictionary = _build_next_life_payment_snapshot(monthly_outflow)
 	var status_label: String = "Comfortable runway"
 	var finance_status: Dictionary = get_finance_status_snapshot()
+	var stress_stage: Dictionary = RunState.get_life_stress_stage(life_state)
 	if bool(finance_status.get("bankrupt", false)):
 		status_label = "Bankrupt"
+	elif int(life_state.get("hospital_days_remaining", 0)) > 0:
+		status_label = "Hospitalized"
+	elif bool(life_state.get("burnout_risk_active", false)):
+		status_label = "Burnout risk"
 	elif bool(finance_status.get("cash_stress_active", false)):
 		status_label = "Cash stress"
 	elif runway_months < 6.0:
@@ -2875,10 +2969,12 @@ func get_life_snapshot() -> Dictionary:
 		"equity": float(portfolio.get("equity", 0.0)),
 		"market_value": float(portfolio.get("market_value", 0.0)),
 		"housing": housing,
+		"basics_tier": basics_tier,
 		"lifestyle": lifestyle,
 		"housing_options": LIFE_HOUSING_OPTIONS.duplicate(true),
+		"basics_tiers": LIFE_BASICS_TIERS.duplicate(true),
 		"lifestyle_options": LIFE_LIFESTYLE_OPTIONS.duplicate(true),
-		"basic_expenses_monthly": LIFE_BASIC_EXPENSES_MONTHLY,
+		"basic_expenses_monthly": basics_cost,
 		"monthly_extra": monthly_extra,
 		"monthly_outflow": monthly_outflow,
 		"next_life_payment": next_life_payment,
@@ -2889,6 +2985,14 @@ func get_life_snapshot() -> Dictionary:
 		"runway_months": runway_months,
 		"finance": finance_status,
 		"status_label": status_label,
+		"stress_value": float(life_state.get("stress_value", RunState.LIFE_DEFAULT_STRESS_VALUE)),
+		"happiness_value": float(life_state.get("happiness_value", RunState.LIFE_DEFAULT_HAPPINESS_VALUE)),
+		"stress_stage": stress_stage,
+		"stress_ap_penalty": RunState.get_life_stress_ap_penalty(life_state),
+		"burnout_risk_active": bool(life_state.get("burnout_risk_active", false)),
+		"burnout_risk_days_remaining": int(life_state.get("burnout_risk_days_remaining", 0)),
+		"hospital_days_remaining": int(life_state.get("hospital_days_remaining", 0)),
+		"hospitalized": int(life_state.get("hospital_days_remaining", 0)) > 0,
 		"dividend_rows": dividend_projection.get("rows", []).duplicate(true),
 		"note": "Monthly costs and loan payments deduct cash on the first trading day of each new month. Dividends only count after corporate actions are declared."
 	}
@@ -3125,16 +3229,21 @@ func _build_first_month_warning_rows(
 	return rows
 
 
-func set_life_plan(housing_id: String, lifestyle_id: String) -> Dictionary:
+func set_life_plan(housing_id: String, lifestyle_id: String, basics_tier_id: String = "") -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
+	var hospital_block_reason: String = get_life_action_block_reason("life_plan")
+	if not hospital_block_reason.is_empty():
+		return {"success": false, "message": hospital_block_reason}
 	var life_state: Dictionary = RunState.get_player_life()
 	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, housing_id)
 	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, lifestyle_id)
+	var basics_tier: Dictionary = _life_basics_tier_by_id(basics_tier_id if not basics_tier_id.is_empty() else str(life_state.get("basics_tier_id", RunState.LIFE_DEFAULT_BASICS_TIER_ID)))
 	var current_outflow: float = _life_monthly_outflow_for_state(life_state)
 	var next_outflow: float = _life_monthly_outflow_for_options(
 		str(housing.get("id", "kost_room")),
 		str(lifestyle.get("id", "balanced")),
+		str(basics_tier.get("id", RunState.LIFE_DEFAULT_BASICS_TIER_ID)),
 		max(float(life_state.get("monthly_extra", 0.0)), 0.0)
 	)
 	var finance_status: Dictionary = get_finance_status_snapshot()
@@ -3144,6 +3253,7 @@ func set_life_plan(housing_id: String, lifestyle_id: String) -> Dictionary:
 		return {"success": false, "message": "Cash stress is active. Lower or maintain Life costs before increasing monthly outflow."}
 	life_state["housing_id"] = str(housing.get("id", "kost_room"))
 	life_state["lifestyle_id"] = str(lifestyle.get("id", "balanced"))
+	life_state["basics_tier_id"] = str(basics_tier.get("id", RunState.LIFE_DEFAULT_BASICS_TIER_ID))
 	life_state["updated_day_index"] = RunState.day_index
 	life_state["updated_trade_date"] = get_current_trade_date()
 	RunState.set_player_life(life_state)
@@ -3226,14 +3336,119 @@ func _apply_life_loan_payment_if_due(previous_trade_date: Dictionary, current_tr
 	return result
 
 
+func _apply_life_daily_wellbeing_update() -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+	var life_state: Dictionary = RunState.get_player_life()
+	var was_hospitalized: bool = int(life_state.get("hospital_days_remaining", 0)) > 0
+	if was_hospitalized:
+		RunState.pause_cash_stress_deadline(1)
+		life_state = RunState.get_player_life()
+		var remaining_days: int = max(int(life_state.get("hospital_days_remaining", 0)) - 1, 0)
+		life_state["hospital_days_remaining"] = remaining_days
+		life_state["last_hospital_trade_date"] = RunState.current_trade_date.duplicate(true)
+		life_state["burnout_risk_active"] = false
+		life_state["burnout_risk_days_remaining"] = 0
+		if remaining_days <= 0:
+			life_state["stress_value"] = RunState.LIFE_HOSPITAL_RECOVERY_STRESS
+			life_state["happiness_value"] = RunState.LIFE_HOSPITAL_RECOVERY_HAPPINESS
+			life_state["hospital_started_day_index"] = -1
+		RunState.set_player_life(life_state)
+		var hospital_result: Dictionary = {
+			"hospitalized": remaining_days > 0,
+			"hospital_day_completed": true,
+			"hospital_days_remaining": remaining_days,
+			"stress_value": float(life_state.get("stress_value", RunState.LIFE_DEFAULT_STRESS_VALUE)),
+			"happiness_value": float(life_state.get("happiness_value", RunState.LIFE_DEFAULT_HAPPINESS_VALUE)),
+			"stress_stage": RunState.get_life_stress_stage(life_state)
+		}
+		RunState.last_day_results["life_wellbeing"] = hospital_result.duplicate(true)
+		return hospital_result
+
+	var basics_tier: Dictionary = _life_basics_tier_by_id(str(life_state.get("basics_tier_id", RunState.LIFE_DEFAULT_BASICS_TIER_ID)))
+	var lifestyle_id: String = str(life_state.get("lifestyle_id", "balanced"))
+	var stress_delta: float = float(basics_tier.get("stress_delta", 0.0))
+	var happiness_delta: float = float(basics_tier.get("happiness_delta", 0.0))
+	match lifestyle_id:
+		"frugal":
+			stress_delta += 1.0
+			happiness_delta -= 1.0
+		"status":
+			stress_delta -= 1.0
+			happiness_delta += 1.0
+	var finance_status: Dictionary = get_finance_status_snapshot()
+	var runway_months: float = float(finance_status.get("runway_months", 999.0))
+	if bool(finance_status.get("cash_stress_active", false)):
+		stress_delta += 8.0
+		happiness_delta -= 4.0
+	elif runway_months < 0.5:
+		stress_delta += 6.0
+		happiness_delta -= 3.0
+	elif runway_months < 1.0:
+		stress_delta += 4.0
+		happiness_delta -= 2.0
+	elif runway_months < 3.0:
+		stress_delta += 2.0
+		happiness_delta -= 1.0
+	elif runway_months >= 12.0:
+		stress_delta -= 1.0
+		happiness_delta += 1.0
+
+	var previous_happiness: float = float(life_state.get("happiness_value", RunState.LIFE_DEFAULT_HAPPINESS_VALUE))
+	var next_happiness: float = clamp(previous_happiness + happiness_delta, 0.0, 100.0)
+	if next_happiness < 30.0:
+		stress_delta += 3.0
+	elif next_happiness < 45.0:
+		stress_delta += 1.0
+	elif next_happiness >= 75.0:
+		stress_delta -= 1.0
+	var next_stress: float = clamp(float(life_state.get("stress_value", RunState.LIFE_DEFAULT_STRESS_VALUE)) + stress_delta, 0.0, 100.0)
+	life_state["stress_value"] = next_stress
+	life_state["happiness_value"] = next_happiness
+	var hospital_started: bool = false
+	if next_stress >= 100.0:
+		if not bool(life_state.get("burnout_risk_active", false)):
+			life_state["burnout_risk_active"] = true
+			life_state["burnout_risk_days_remaining"] = RunState.LIFE_BURNOUT_WARNING_TRADING_DAYS
+		else:
+			var risk_days_remaining: int = max(int(life_state.get("burnout_risk_days_remaining", RunState.LIFE_BURNOUT_WARNING_TRADING_DAYS)) - 1, 0)
+			life_state["burnout_risk_days_remaining"] = risk_days_remaining
+			if risk_days_remaining <= 0:
+				hospital_started = true
+				life_state["hospital_days_remaining"] = RunState.LIFE_HOSPITAL_TRADING_DAYS
+				life_state["hospital_started_day_index"] = RunState.day_index
+				life_state["last_hospital_trade_date"] = RunState.current_trade_date.duplicate(true)
+				life_state["burnout_risk_active"] = false
+	else:
+		life_state["burnout_risk_active"] = false
+		life_state["burnout_risk_days_remaining"] = 0
+	RunState.set_player_life(life_state)
+	var result: Dictionary = {
+		"stress_value": next_stress,
+		"happiness_value": next_happiness,
+		"stress_delta": stress_delta,
+		"happiness_delta": happiness_delta,
+		"stress_stage": RunState.get_life_stress_stage(life_state),
+		"stress_ap_penalty": RunState.get_life_stress_ap_penalty(life_state),
+		"burnout_risk_active": bool(life_state.get("burnout_risk_active", false)),
+		"burnout_risk_days_remaining": int(life_state.get("burnout_risk_days_remaining", 0)),
+		"hospital_started": hospital_started,
+		"hospital_days_remaining": int(life_state.get("hospital_days_remaining", 0))
+	}
+	RunState.last_day_results["life_wellbeing"] = result.duplicate(true)
+	return result
+
+
 func _build_life_monthly_obligation() -> Dictionary:
 	var life_state: Dictionary = RunState.get_player_life()
 	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, str(life_state.get("housing_id", "")))
 	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, str(life_state.get("lifestyle_id", "")))
+	var basics_tier: Dictionary = _life_basics_tier_by_id(str(life_state.get("basics_tier_id", RunState.LIFE_DEFAULT_BASICS_TIER_ID)))
 	var housing_cost: float = max(float(housing.get("monthly_cost", 0.0)), 0.0)
+	var basics_cost: float = max(float(basics_tier.get("monthly_cost", LIFE_BASIC_EXPENSES_MONTHLY)), 0.0)
 	var lifestyle_cost: float = max(float(lifestyle.get("monthly_cost", 0.0)), 0.0)
 	var monthly_extra: float = max(float(life_state.get("monthly_extra", 0.0)), 0.0)
-	var amount: float = housing_cost + LIFE_BASIC_EXPENSES_MONTHLY + lifestyle_cost + monthly_extra
+	var amount: float = housing_cost + basics_cost + lifestyle_cost + monthly_extra
 	return {
 		"company_id": "life",
 		"side": "life_obligation",
@@ -3241,7 +3456,9 @@ func _build_life_monthly_obligation() -> Dictionary:
 		"housing_id": str(housing.get("id", "")),
 		"housing_label": str(housing.get("label", "")),
 		"housing_cost": housing_cost,
-		"basic_expenses": LIFE_BASIC_EXPENSES_MONTHLY,
+		"basics_tier_id": str(basics_tier.get("id", "")),
+		"basics_tier_label": str(basics_tier.get("label", "")),
+		"basic_expenses": basics_cost,
 		"lifestyle_id": str(lifestyle.get("id", "")),
 		"lifestyle_label": str(lifestyle.get("label", "")),
 		"lifestyle_cost": lifestyle_cost,
@@ -3252,18 +3469,20 @@ func _build_life_monthly_obligation() -> Dictionary:
 func _life_monthly_outflow_for_state(life_state: Dictionary) -> float:
 	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, str(life_state.get("housing_id", "")))
 	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, str(life_state.get("lifestyle_id", "")))
+	var basics_tier: Dictionary = _life_basics_tier_by_id(str(life_state.get("basics_tier_id", RunState.LIFE_DEFAULT_BASICS_TIER_ID)))
 	return (
 		max(float(housing.get("monthly_cost", 0.0)), 0.0) +
-		LIFE_BASIC_EXPENSES_MONTHLY +
+		max(float(basics_tier.get("monthly_cost", LIFE_BASIC_EXPENSES_MONTHLY)), 0.0) +
 		max(float(lifestyle.get("monthly_cost", 0.0)), 0.0) +
 		max(float(life_state.get("monthly_extra", 0.0)), 0.0)
 	)
 
 
-func _life_monthly_outflow_for_options(housing_id: String, lifestyle_id: String, monthly_extra: float = 0.0) -> float:
+func _life_monthly_outflow_for_options(housing_id: String, lifestyle_id: String, basics_tier_id: String = "", monthly_extra: float = 0.0) -> float:
 	var life_state: Dictionary = {
 		"housing_id": housing_id,
 		"lifestyle_id": lifestyle_id,
+		"basics_tier_id": basics_tier_id if not basics_tier_id.is_empty() else RunState.LIFE_DEFAULT_BASICS_TIER_ID,
 		"monthly_extra": monthly_extra
 	}
 	return _life_monthly_outflow_for_state(life_state)
@@ -3294,6 +3513,21 @@ func _life_option_by_id(options: Array, option_id: String) -> Dictionary:
 	if options.is_empty() or typeof(options[0]) != TYPE_DICTIONARY:
 		return {}
 	return options[0].duplicate(true)
+
+
+func _life_basics_tier_by_id(tier_id: String) -> Dictionary:
+	for tier_value in LIFE_BASICS_TIERS:
+		if typeof(tier_value) != TYPE_DICTIONARY:
+			continue
+		var tier: Dictionary = tier_value
+		if str(tier.get("id", "")) == tier_id:
+			return tier.duplicate(true)
+	for tier_value in LIFE_BASICS_TIERS:
+		if typeof(tier_value) == TYPE_DICTIONARY:
+			var tier: Dictionary = tier_value
+			if str(tier.get("id", "")) == RunState.LIFE_DEFAULT_BASICS_TIER_ID:
+				return tier.duplicate(true)
+	return LIFE_BASICS_TIERS[0].duplicate(true)
 
 
 func _build_life_dividend_projection() -> Dictionary:
@@ -4172,6 +4406,9 @@ func add_chart_pattern_evidence_to_thesis(thesis_id: String, claim: Dictionary) 
 func create_thesis(company_id: String, stance: String, horizon: String, title: String = "") -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
+	var block_reason: String = get_life_action_block_reason("thesis")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
 	var company: Dictionary = get_company_snapshot(company_id, false, true, true)
 	if company.is_empty():
 		return {"success": false, "message": "Unknown company selection."}
@@ -4204,6 +4441,9 @@ func create_thesis(company_id: String, stance: String, horizon: String, title: S
 
 
 func update_thesis_meta(thesis_id: String, fields: Dictionary) -> Dictionary:
+	var block_reason: String = get_life_action_block_reason("thesis")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
 	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
 	if thesis.is_empty():
 		return {"success": false, "message": "Unknown thesis."}
@@ -4224,6 +4464,9 @@ func update_thesis_meta(thesis_id: String, fields: Dictionary) -> Dictionary:
 
 
 func add_thesis_evidence(thesis_id: String, evidence: Dictionary) -> Dictionary:
+	var block_reason: String = get_life_action_block_reason("thesis")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
 	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
 	if thesis.is_empty():
 		return {"success": false, "message": "Unknown thesis."}
@@ -4253,6 +4496,9 @@ func add_thesis_evidence(thesis_id: String, evidence: Dictionary) -> Dictionary:
 
 
 func remove_thesis_evidence(thesis_id: String, evidence_id: String) -> Dictionary:
+	var block_reason: String = get_life_action_block_reason("thesis")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
 	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
 	if thesis.is_empty():
 		return {"success": false, "message": "Unknown thesis."}
@@ -4274,6 +4520,14 @@ func remove_thesis_evidence(thesis_id: String, evidence_id: String) -> Dictionar
 func generate_thesis_report(thesis_id: String) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run.", "action_cost": THESIS_REPORT_ACTION_COST}
+	var block_reason: String = get_life_action_block_reason("thesis")
+	if not block_reason.is_empty():
+		return {
+			"success": false,
+			"message": block_reason,
+			"action_cost": THESIS_REPORT_ACTION_COST,
+			"snapshot": RunState.get_daily_action_snapshot()
+		}
 	if not RunState.can_spend_daily_action(THESIS_REPORT_ACTION_COST):
 		return {
 			"success": false,
@@ -4314,6 +4568,9 @@ func generate_thesis_report(thesis_id: String) -> Dictionary:
 
 
 func refresh_thesis_review(thesis_id: String) -> Dictionary:
+	var block_reason: String = get_life_action_block_reason("thesis")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
 	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
 	if thesis.is_empty():
 		return {"success": false, "message": "Unknown thesis."}
@@ -4878,12 +5135,18 @@ func build_company_roster(run_seed: int, selected_difficulty_config: Dictionary)
 		difficulty_config = get_difficulty_config(DEFAULT_DIFFICULTY_ID)
 
 	var company_count: int = int(difficulty_config.get("company_count", DataRepository.get_company_archetypes().size()))
+	var base_macro_state: Dictionary = macro_state_system.build_year_state(
+		run_seed,
+		2020,
+		DataRepository.get_sector_definitions()
+	)
 	var generated_roster: Array = company_roster_generator.generate_roster(
 		DataRepository.get_company_archetypes(),
 		DataRepository.get_sector_definitions(),
 		DataRepository.get_company_word_data(),
 		run_seed,
-		company_count
+		company_count,
+		base_macro_state
 	)
 	_log_startup_perf_elapsed("build_company_roster", started_at_usec, " companies=%d" % generated_roster.size())
 	return generated_roster
@@ -5006,6 +5269,64 @@ func mark_ftue_completed() -> bool:
 	if completed:
 		_request_autosave("ftue_completed")
 	return completed
+
+
+func get_guide_snapshot() -> Dictionary:
+	var snapshot: Dictionary = RunState.get_guide_snapshot()
+	var anchor_company_id: String = str(snapshot.get("anchor_company_id", ""))
+	if not anchor_company_id.is_empty():
+		var definition: Dictionary = RunState.get_effective_company_definition(anchor_company_id, false, false)
+		snapshot["anchor_ticker"] = str(definition.get("ticker", anchor_company_id.to_upper()))
+		snapshot["anchor_company_name"] = str(definition.get("name", anchor_company_id.to_upper()))
+	else:
+		snapshot["anchor_ticker"] = ""
+		snapshot["anchor_company_name"] = ""
+	if not str(snapshot.get("seeded_meeting_id", "")).is_empty():
+		snapshot["seeded_meeting"] = get_corporate_meeting_detail(str(snapshot.get("seeded_meeting_id", "")))
+	return snapshot
+
+
+func start_guide_flow(flow_id: String) -> bool:
+	var started: bool = RunState.start_guide_flow(flow_id)
+	if started:
+		_request_autosave("guide_start_%s" % flow_id)
+	return started
+
+
+func advance_guide_step(flow_id: String = "", step_id: String = "") -> bool:
+	var advanced: bool = RunState.advance_guide_step(flow_id, step_id)
+	if advanced:
+		_request_autosave("guide_advance")
+	return advanced
+
+
+func skip_guide_flow(flow_id: String = "") -> bool:
+	var skipped: bool = RunState.skip_guide_flow(flow_id)
+	if skipped:
+		_request_autosave("guide_skip")
+	return skipped
+
+
+func complete_guide_flow(flow_id: String = "") -> bool:
+	var completed: bool = RunState.complete_guide_flow(flow_id)
+	if completed:
+		_request_autosave("guide_complete")
+	return completed
+
+
+func dismiss_guide_prompt(flow_id: String) -> bool:
+	var dismissed: bool = RunState.dismiss_guide_prompt(flow_id)
+	if dismissed:
+		_request_autosave("guide_prompt_dismiss")
+	return dismissed
+
+
+func get_available_guide_flows() -> Array:
+	return RunState.get_available_guide_flows()
+
+
+func get_contextual_guide_prompt(context_id: String) -> Dictionary:
+	return RunState.get_contextual_guide_prompt(context_id)
 
 
 func should_show_first_hour_guide() -> bool:

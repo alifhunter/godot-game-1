@@ -3,6 +3,27 @@ extends RefCounted
 const STABLE_RNG = preload("res://systems/StableRng.gd")
 const UINT32_RANGE := 4294967296.0
 const MULBERRY32_INCREMENT := 0x6D2B79F5
+const PROFILE_SCALE_VERSION := 1
+const SCALE_TIER_SIZE_IDS := {
+	"micro": 0,
+	"small": 1,
+	"mid": 2,
+	"large": 3,
+	"giant": 4
+}
+const SIZE_TAG_RULES := {
+	"micro-cap": {"max": 0},
+	"small-cap": {"min": 1, "max": 1},
+	"mid-cap": {"min": 2, "max": 2},
+	"large-cap": {"min": 3},
+	"mega-cap": {"min": 4},
+	"blue-chip": {"min": 3},
+	"systemic": {"min": 4},
+	"institutional-grade": {"min": 3},
+	"market-followed": {"min": 3},
+	"market-leader": {"min": 3},
+	"national-champion": {"min": 3}
+}
 
 
 func build_profile(
@@ -24,12 +45,13 @@ func build_profile(
 	var sector_data: Dictionary = sectors.get(sector_id, {}).duplicate(true)
 	var sector_name: String = str(sector_definition.get("name", sector_id.capitalize()))
 	var rng: Dictionary = _make_rng(_seed_from(run_seed, company_id))
-	var archetype_id: String = _pick_archetype_id(profile_data, sector_id, rng)
+	var scale_size_id: int = _size_id_from_scale(template, financials)
+	var archetype_id: String = _pick_archetype_id(profile_data, sector_id, rng, scale_size_id)
 	if archetype_id.is_empty():
 		return {}
 
 	var archetype_data: Dictionary = profile_data.get("archetypes", {}).get(archetype_id, {}).duplicate(true)
-	var size_id: int = _pick_size_id(profile_data, archetype_data, float(financials.get("revenue", 0.0)), rng)
+	var size_id: int = _pick_size_id(profile_data, archetype_data, float(financials.get("revenue", 0.0)), rng, scale_size_id)
 	var size_data: Dictionary = profile_data.get("sizes", {}).get(str(size_id), {}).duplicate(true)
 	var age: int = _pick_age(archetype_data, size_id, rng)
 	var reference_year: int = int(profile_data.get("reference_year", 2020))
@@ -54,6 +76,7 @@ func build_profile(
 
 	return {
 		"profile_seed": int(rng.get("initial_seed", 0)),
+		"profile_scale_version": PROFILE_SCALE_VERSION,
 		"archetype_id": archetype_id,
 		"archetype_label": str(archetype_data.get("label", archetype_id.capitalize())),
 		"company_size_id": size_id,
@@ -69,21 +92,37 @@ func build_profile(
 	}
 
 
-func _pick_archetype_id(profile_data: Dictionary, sector_id: String, rng: Dictionary) -> String:
+func _pick_archetype_id(profile_data: Dictionary, sector_id: String, rng: Dictionary, size_id: int = -1) -> String:
 	var sector_weights: Dictionary = profile_data.get("archetype_weights_by_sector", {}).get(sector_id, {})
 	if sector_weights.is_empty():
 		return ""
 
+	var archetypes: Dictionary = profile_data.get("archetypes", {})
 	var archetype_ids: Array = sector_weights.keys()
 	archetype_ids.sort()
+	var options: Array = []
 	var weights: Array = []
 	for archetype_id_value in archetype_ids:
-		weights.append(max(float(sector_weights.get(str(archetype_id_value), 0.0)), 0.01))
-	return str(_pick_weighted(archetype_ids, weights, rng))
+		var archetype_id: String = str(archetype_id_value)
+		var archetype_data: Dictionary = archetypes.get(archetype_id, {})
+		if size_id >= 0 and not _archetype_supports_size(archetype_data, size_id):
+			continue
+		options.append(archetype_id)
+		weights.append(max(float(sector_weights.get(archetype_id, 0.0)), 0.01))
+
+	if options.is_empty():
+		for archetype_id_value in archetype_ids:
+			var archetype_id: String = str(archetype_id_value)
+			options.append(archetype_id)
+			weights.append(max(float(sector_weights.get(archetype_id, 0.0)), 0.01))
+	return str(_pick_weighted(options, weights, rng))
 
 
-func _pick_size_id(profile_data: Dictionary, archetype_data: Dictionary, revenue: float, rng: Dictionary) -> int:
+func _pick_size_id(profile_data: Dictionary, archetype_data: Dictionary, revenue: float, rng: Dictionary, scale_size_id: int = -1) -> int:
 	var sizes: Dictionary = profile_data.get("sizes", {})
+	if scale_size_id >= 0 and sizes.has(str(scale_size_id)):
+		return scale_size_id
+
 	var size_weights: Dictionary = archetype_data.get("size_weights", {})
 	var allowed_sizes: Array = archetype_data.get("allowed_sizes", [])
 	var options: Array = []
@@ -103,6 +142,33 @@ func _pick_size_id(profile_data: Dictionary, archetype_data: Dictionary, revenue
 	if options.is_empty():
 		return 1
 	return int(_pick_weighted(options, weights, rng))
+
+
+func _size_id_from_scale(template: Dictionary, financials: Dictionary) -> int:
+	var anchors: Dictionary = template.get("anchors", {})
+	var scale_tier: String = str(anchors.get("scale_tier", "")).strip_edges().to_lower()
+	if SCALE_TIER_SIZE_IDS.has(scale_tier):
+		return int(SCALE_TIER_SIZE_IDS.get(scale_tier, -1))
+
+	var market_cap: float = float(financials.get("market_cap", anchors.get("market_cap", 0.0)))
+	if market_cap <= 0.0:
+		return -1
+	if market_cap < 950000000000.0:
+		return 0
+	if market_cap < 2500000000000.0:
+		return 1
+	if market_cap < 10000000000000.0:
+		return 2
+	if market_cap < 35000000000000.0:
+		return 3
+	return 4
+
+
+func _archetype_supports_size(archetype_data: Dictionary, size_id: int) -> bool:
+	for allowed_size_value in archetype_data.get("allowed_sizes", []):
+		if int(allowed_size_value) == size_id:
+			return true
+	return false
 
 
 func _pick_age(archetype_data: Dictionary, size_id: int, rng: Dictionary) -> int:
@@ -221,9 +287,35 @@ func _build_tags(profile_data: Dictionary, sector_id: String, archetype_id: Stri
 
 	while tags.size() < 2 and not combined_pool.is_empty():
 		_add_unique_tag(tags, _pick_string(combined_pool, rng))
+	tags = _filter_size_consistent_tags(tags, size_id)
+	while tags.size() < 2 and not size_pool.is_empty():
+		_add_unique_tag(tags, _pick_string(size_pool, rng))
+	tags = _filter_size_consistent_tags(tags, size_id)
 	if tags.size() > 4:
 		return tags.slice(0, 4)
 	return tags
+
+
+func _filter_size_consistent_tags(tags: Array, size_id: int) -> Array:
+	var filtered: Array = []
+	for tag_value in tags:
+		var tag: String = str(tag_value).strip_edges()
+		if tag.is_empty() or filtered.has(tag):
+			continue
+		if not _tag_matches_size(tag, size_id):
+			continue
+		filtered.append(tag)
+	return filtered
+
+
+func _tag_matches_size(tag: String, size_id: int) -> bool:
+	var normalized_tag: String = tag.strip_edges().to_lower()
+	if not SIZE_TAG_RULES.has(normalized_tag):
+		return true
+	var rule: Dictionary = SIZE_TAG_RULES.get(normalized_tag, {})
+	var minimum_size: int = int(rule.get("min", 0))
+	var maximum_size: int = int(rule.get("max", 4))
+	return size_id >= minimum_size and size_id <= maximum_size
 
 
 func _compact_revenue(revenue: float) -> Dictionary:

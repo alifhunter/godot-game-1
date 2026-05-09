@@ -8,6 +8,10 @@ const COLOR_TEXT := Color(0.184314, 0.172549, 0.109804, 1)
 const COLOR_MUTED := Color(0.403922, 0.380392, 0.301961, 1)
 const COLOR_BORDER := Color(0.52549, 0.396078, 0.160784, 1)
 const COLOR_PAPER := Color(0.992157, 0.988235, 0.956863, 1)
+const COLOR_MARKET_PAPER_CARD := Color(1.0, 0.976471, 0.929412, 1)
+const COLOR_MARKET_PAPER_RAIL := Color(0.917647, 0.878431, 0.721569, 1)
+const COLOR_MARKET_PAPER_BORDER := Color(0.52549, 0.396078, 0.160784, 1)
+const COLOR_MARKET_PAPER_RED := Color(0.545098, 0.101961, 0.101961, 1)
 const COLOR_POSITIVE := Color(0.184314, 0.482353, 0.298039, 1)
 const COLOR_NEGATIVE := Color(0.65098, 0.247059, 0.219608, 1)
 const COLOR_WARNING := Color(0.72549, 0.470588, 0.117647, 1)
@@ -69,7 +73,6 @@ var company_option: OptionButton = null
 var title_edit: LineEdit = null
 var stance_option: OptionButton = null
 var horizon_option: OptionButton = null
-var use_selected_stock_button: Button = null
 var create_button: Button = null
 var update_button: Button = null
 var evidence_category_option: OptionButton = null
@@ -276,21 +279,19 @@ func _build_ui() -> void:
 
 	var create_row := HBoxContainer.new()
 	create_row.name = "ThesisCreateRow"
+	create_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	create_row.add_theme_constant_override("separation", 8)
 	center_vbox.add_child(create_row)
-	use_selected_stock_button = Button.new()
-	use_selected_stock_button.name = "ThesisUseSelectedStockButton"
-	use_selected_stock_button.text = "Use selected STOCKBOT stock"
-	use_selected_stock_button.pressed.connect(_on_use_selected_stock_pressed)
-	create_row.add_child(use_selected_stock_button)
 	create_button = Button.new()
 	create_button.name = "ThesisCreateButton"
 	create_button.text = "Create"
+	create_button.custom_minimum_size = Vector2(96, 34)
 	create_button.pressed.connect(_on_create_thesis_pressed)
 	create_row.add_child(create_button)
 	update_button = Button.new()
 	update_button.name = "ThesisUpdateButton"
 	update_button.text = "Update"
+	update_button.custom_minimum_size = Vector2(96, 34)
 	update_button.pressed.connect(_on_update_thesis_pressed)
 	create_row.add_child(update_button)
 
@@ -306,7 +307,7 @@ func _build_ui() -> void:
 	var evidence_tab_row := HBoxContainer.new()
 	evidence_tab_row.name = "ThesisEvidenceTabRow"
 	evidence_tab_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	evidence_tab_row.add_theme_constant_override("separation", 6)
+	evidence_tab_row.add_theme_constant_override("separation", 12)
 	center_vbox.add_child(evidence_tab_row)
 	for tab_value in EVIDENCE_TABS:
 		var tab: Dictionary = tab_value
@@ -1057,7 +1058,7 @@ func _refresh_evidence_tab_buttons() -> void:
 			continue
 		var selected: bool = tab_id == selected_evidence_tab_id
 		button.set_pressed_no_signal(selected)
-		_style_segment_button(button, COLOR_BROWN, selected)
+		_style_evidence_tab_button(button, selected, true)
 
 
 func _refresh_evidence_discipline(thesis: Dictionary) -> void:
@@ -1672,31 +1673,31 @@ func _on_thesis_selected(index: int) -> void:
 	_refresh_selected_thesis()
 
 
-func _on_use_selected_stock_pressed() -> void:
-	if selected_external_company_id.is_empty():
-		_set_status("No STOCKBOT stock is selected yet.")
-		return
-	_select_company_option(selected_external_company_id)
-	_set_status("Selected stock loaded into the Thesis form.")
-
-
 func _on_create_thesis_pressed() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	suppress_thesis_changed_refresh = true
 	var result: Dictionary = GameManager.create_thesis(_selected_company_id(), selected_stance_id, _selected_option_id(horizon_option), title_edit.text)
+	suppress_thesis_changed_refresh = false
 	_set_status(str(result.get("message", "")))
 	if bool(result.get("success", false)):
 		selected_thesis_id = str(result.get("thesis", {}).get("id", ""))
 		refresh()
+	_log_perf_elapsed("_on_create_thesis_pressed", started_at_usec)
 
 
 func _on_update_thesis_pressed() -> void:
 	if selected_thesis_id.is_empty():
 		return
+	suppress_thesis_changed_refresh = true
 	var result: Dictionary = GameManager.update_thesis_meta(selected_thesis_id, {
 		"title": title_edit.text,
 		"stance": selected_stance_id,
 		"horizon": _selected_option_id(horizon_option)
 	})
+	suppress_thesis_changed_refresh = false
 	_set_status(str(result.get("message", "")))
+	if bool(result.get("success", false)):
+		refresh()
 
 
 func _on_evidence_category_selected(_index: int) -> void:
@@ -1710,16 +1711,24 @@ func _on_evidence_option_selected(_index: int) -> void:
 func _on_add_evidence_pressed() -> void:
 	if selected_thesis_id.is_empty():
 		return
+	suppress_thesis_changed_refresh = true
 	var result: Dictionary = GameManager.add_thesis_evidence(selected_thesis_id, _selected_evidence_option())
+	suppress_thesis_changed_refresh = false
 	_set_status(str(result.get("message", "")))
+	if bool(result.get("success", false)):
+		refresh()
 
 
 func _on_remove_evidence_pressed() -> void:
 	if selected_thesis_id.is_empty() or selected_evidence_list.get_selected_items().is_empty():
 		return
 	var index: int = int(selected_evidence_list.get_selected_items()[0])
+	suppress_thesis_changed_refresh = true
 	var result: Dictionary = GameManager.remove_thesis_evidence(selected_thesis_id, str(selected_evidence_list.get_item_metadata(index)))
+	suppress_thesis_changed_refresh = false
 	_set_status(str(result.get("message", "")))
+	if bool(result.get("success", false)):
+		refresh()
 
 
 func _on_generate_report_pressed() -> void:
@@ -1741,15 +1750,23 @@ func _on_regenerate_report_pressed() -> void:
 func _on_refresh_review_pressed() -> void:
 	if selected_thesis_id.is_empty():
 		return
+	suppress_thesis_changed_refresh = true
 	var result: Dictionary = GameManager.refresh_thesis_review(selected_thesis_id)
+	suppress_thesis_changed_refresh = false
 	_set_status(str(result.get("message", "")))
+	if bool(result.get("success", false)):
+		refresh()
 
 
 func _on_close_thesis_pressed() -> void:
 	if selected_thesis_id.is_empty():
 		return
+	suppress_thesis_changed_refresh = true
 	var result: Dictionary = GameManager.close_thesis(selected_thesis_id)
+	suppress_thesis_changed_refresh = false
 	_set_status(str(result.get("message", "")))
+	if bool(result.get("success", false)):
+		refresh()
 
 
 func _selected_thesis() -> Dictionary:
@@ -1925,11 +1942,11 @@ func _make_evidence_tab_button(tab_id: String, label: String) -> Button:
 	button.name = "ThesisEvidenceTab%sButton" % _node_token(label)
 	button.text = label
 	button.toggle_mode = true
-	button.custom_minimum_size = Vector2(96, 32)
+	button.custom_minimum_size = Vector2(96, 44)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.set_meta("skip_thesis_style", true)
 	button.pressed.connect(_on_evidence_tab_pressed.bind(tab_id))
-	_style_segment_button(button, COLOR_BROWN, tab_id == selected_evidence_tab_id)
+	_style_evidence_tab_button(button, tab_id == selected_evidence_tab_id, true)
 	return button
 
 
@@ -2059,20 +2076,28 @@ func _on_evidence_card_pressed(option_key: String) -> void:
 	var thesis: Dictionary = _selected_thesis()
 	var selected_row: Dictionary = _selected_evidence_for_option(thesis, option)
 	var result: Dictionary = {}
+	suppress_thesis_changed_refresh = true
 	if selected_row.is_empty():
 		result = GameManager.add_thesis_evidence(selected_thesis_id, option)
 	else:
 		result = GameManager.remove_thesis_evidence(selected_thesis_id, str(selected_row.get("id", "")))
+	suppress_thesis_changed_refresh = false
 	_set_status(str(result.get("message", "")))
-	refresh()
+	if bool(result.get("success", false)):
+		refresh()
+	else:
+		_refresh_evidence_cards(_selected_thesis())
 
 
 func _on_evidence_chip_remove_pressed(evidence_id: String) -> void:
 	if selected_thesis_id.is_empty() or evidence_id.is_empty():
 		return
+	suppress_thesis_changed_refresh = true
 	var result: Dictionary = GameManager.remove_thesis_evidence(selected_thesis_id, evidence_id)
+	suppress_thesis_changed_refresh = false
 	_set_status(str(result.get("message", "")))
-	refresh()
+	if bool(result.get("success", false)):
+		refresh()
 
 
 func _flatten_evidence_options_for_tab(tab_id: String) -> Array:
@@ -2166,6 +2191,38 @@ func _style_segment_button(button: Button, accent: Color, selected: bool) -> voi
 	button.add_theme_color_override("font_disabled_color", COLOR_MUTED)
 
 
+func _style_evidence_tab_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
+	var fill_color: Color = COLOR_MARKET_PAPER_RAIL if is_unlocked else Color(0.85098, 0.835294, 0.772549, 1)
+	var border_color: Color = Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.86)
+	var font_color: Color = COLOR_TEXT if is_unlocked else Color(0.541176, 0.494118, 0.396078, 1)
+	if is_selected:
+		fill_color = COLOR_MARKET_PAPER_CARD
+		border_color = COLOR_MARKET_PAPER_RED
+		font_color = Color(0.184314, 0.14902, 0.0705882, 1)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = fill_color
+	normal.border_color = border_color
+	normal.border_width_left = 1
+	normal.border_width_right = 1
+	normal.border_width_top = 5 if is_selected else 1
+	normal.border_width_bottom = 0 if is_selected else 1
+	normal.content_margin_left = 10
+	normal.content_margin_right = 10
+	normal.content_margin_top = 11 if is_selected else 14
+	normal.content_margin_bottom = 14
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", normal)
+	button.add_theme_stylebox_override("pressed", normal)
+	button.add_theme_stylebox_override("focus", normal)
+	button.add_theme_stylebox_override("disabled", normal)
+	button.add_theme_color_override("font_color", font_color)
+	button.add_theme_color_override("font_hover_color", font_color)
+	button.add_theme_color_override("font_pressed_color", font_color)
+	button.add_theme_color_override("font_focus_color", font_color)
+	button.add_theme_color_override("font_disabled_color", Color(font_color.r, font_color.g, font_color.b, 0.54))
+	button.add_theme_font_size_override("font_size", 15)
+
+
 func _style_evidence_card_button(button: Button, selected: bool, impact: String) -> void:
 	var accent: Color = COLOR_POSITIVE if selected else _impact_color(impact)
 	var bg: Color = Color(0.984314, 0.972549, 0.917647, 1)
@@ -2250,6 +2307,13 @@ func _set_status(text: String) -> void:
 	status_label.text = text
 
 
+func _log_perf_elapsed(label: String, started_at_usec: int) -> void:
+	if not OS.is_debug_build():
+		return
+	var elapsed_ms: float = float(Time.get_ticks_usec() - started_at_usec) / 1000.0
+	print("[perf][ui] %s %.2fms" % [label, elapsed_ms])
+
+
 func _make_panel(panel_name: String) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.name = panel_name
@@ -2316,12 +2380,26 @@ func _style_button(button: Button) -> void:
 	style.border_color = COLOR_BORDER
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(0)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 7
+	style.content_margin_bottom = 7
+	var hover := style.duplicate()
+	hover.bg_color = COLOR_BROWN.lightened(0.06)
+	var pressed := style.duplicate()
+	pressed.bg_color = COLOR_BROWN.darkened(0.07)
+	var disabled := style.duplicate()
+	disabled.bg_color = Color(COLOR_BROWN.r, COLOR_BROWN.g, COLOR_BROWN.b, 0.28)
+	disabled.border_color = Color(COLOR_BORDER.r, COLOR_BORDER.g, COLOR_BORDER.b, 0.38)
 	button.add_theme_stylebox_override("normal", style)
-	button.add_theme_stylebox_override("hover", style)
-	button.add_theme_stylebox_override("pressed", style)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("disabled", disabled)
 	button.add_theme_color_override("font_color", COLOR_BG)
 	button.add_theme_color_override("font_hover_color", COLOR_BG)
 	button.add_theme_color_override("font_pressed_color", COLOR_BG)
+	button.add_theme_color_override("font_disabled_color", Color(COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, 0.60))
+	button.add_theme_font_size_override("font_size", _theme_font_size("button", 14))
 
 
 func _format_currency(value: float) -> String:

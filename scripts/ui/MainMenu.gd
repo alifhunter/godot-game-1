@@ -292,11 +292,13 @@ func _on_difficulty_card_pressed(difficulty_id: String) -> void:
 
 func _update_selection_detail() -> void:
 	if selected_difficulty_id.is_empty():
-		selection_detail_label.text = "Pick one difficulty card to preview bankroll size, company count, and market intensity before you continue."
+		selection_detail_label.text = ""
+		selection_detail_label.visible = false
 		continue_button.disabled = true
 		return
 
 	var difficulty_config: Dictionary = GameManager.get_difficulty_config(selected_difficulty_id)
+	selection_detail_label.visible = true
 	selection_detail_label.text = "%s run selected.\nCash: %s  |  Companies: %d  |  Volatility: %s  |  Event pace: about once every %d day(s)." % [
 		str(difficulty_config.get("label", "Normal")),
 		_format_currency(float(difficulty_config.get("starting_cash", 0.0))),

@@ -208,7 +208,8 @@ func generate_day_flow(definition: Dictionary, runtime: Dictionary, context: Dic
 		"sell_brokers": [],
 		"broker_type_totals": {},
 		"net_buy_brokers": [],
-		"net_sell_brokers": []
+		"net_sell_brokers": [],
+		"broker_rows": []
 	}
 
 
@@ -370,6 +371,10 @@ func _build_broker_tape(
 		top_net_buy_brokers.append(net_buy_ranked[index].duplicate(true))
 	for index in range(min(TOP_BROKER_ROW_COUNT, net_sell_ranked.size())):
 		top_net_sell_brokers.append(net_sell_ranked[index].duplicate(true))
+	var all_broker_rows: Array = []
+	for broker_row_value in broker_rows:
+		if broker_row_value is Dictionary:
+			all_broker_rows.append(_build_broker_activity_snapshot(broker_row_value))
 
 	var dominant_buy: Dictionary = top_buy_brokers[0] if not top_buy_brokers.is_empty() else {}
 	var dominant_sell: Dictionary = top_sell_brokers[0] if not top_sell_brokers.is_empty() else {}
@@ -398,7 +403,8 @@ func _build_broker_tape(
 		"action_meter_label": action_meter_label,
 		"broker_type_totals": broker_type_totals,
 		"net_buy_brokers": top_net_buy_brokers,
-		"net_sell_brokers": top_net_sell_brokers
+		"net_sell_brokers": top_net_sell_brokers,
+		"broker_rows": all_broker_rows
 	}
 
 
@@ -906,6 +912,21 @@ func _build_broker_net_snapshot(broker_row: Dictionary) -> Dictionary:
 		"lots": display_lots,
 		"avg_price": display_avg_price,
 		"net_side": net_side
+	}
+
+
+func _build_broker_activity_snapshot(broker_row: Dictionary) -> Dictionary:
+	return {
+		"code": str(broker_row.get("code", "")),
+		"company_name": str(broker_row.get("company_name", "")),
+		"broker_type": str(broker_row.get("broker_type", "")),
+		"personality_tags": broker_row.get("personality_tags", []).duplicate(),
+		"buy_value": float(broker_row.get("buy_value", 0.0)),
+		"sell_value": float(broker_row.get("sell_value", 0.0)),
+		"buy_lots": float(broker_row.get("buy_lots", 0.0)),
+		"sell_lots": float(broker_row.get("sell_lots", 0.0)),
+		"buy_avg_price": float(broker_row.get("buy_avg_price", 0.0)),
+		"sell_avg_price": float(broker_row.get("sell_avg_price", 0.0)),
 	}
 
 

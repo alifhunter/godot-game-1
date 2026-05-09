@@ -30,6 +30,8 @@ const TRADE_RIGHT_SECTION_RATIO := 1.0
 const ORDER_TICKET_TOGGLE_WIDTH := 28.0
 const WATCHLIST_MIN_WIDTH_NARROW := 220.0
 const WATCHLIST_MIN_WIDTH_WIDE := 260.0
+const KEY_STATS_DASHBOARD_DESKTOP_WIDTH := 804.0
+const KEY_STATS_DASHBOARD_TWO_COLUMN_WIDTH := 540.0
 const STOCK_LIST_ADD_BUTTON_WIDTH := 72.0
 const COLOR_PANEL_BLUE := Color(0.109804, 0.14902, 0.184314, 0.94)
 const COLOR_PANEL_BLUE_ALT := Color(0.0901961, 0.129412, 0.164706, 0.96)
@@ -188,9 +190,12 @@ const UI_DAILY_RECAP_REVEAL_SECONDS := 0.22
 const UI_DESKTOP_WINDOW_OPEN_SECONDS := 0.14
 const UI_DESKTOP_WINDOW_FOCUS_SECONDS := 0.10
 const UI_DAILY_RECAP_SCRIM_ALPHA := 0.18
-const FTUE_CARD_SIZE := Vector2(390.0, 0.0)
-const FTUE_CARD_MARGIN := 18.0
-const FTUE_TARGET_PADDING := 8.0
+const GUIDE_CARD_SIZE := Vector2(520.0, 0.0)
+const GUIDE_CARD_MARGIN := 18.0
+const GUIDE_TARGET_PADDING := 10.0
+const FTUE_CARD_SIZE := GUIDE_CARD_SIZE
+const FTUE_CARD_MARGIN := GUIDE_CARD_MARGIN
+const FTUE_TARGET_PADDING := GUIDE_TARGET_PADDING
 const FIRST_HOUR_GUIDE_CARD_SIZE := Vector2(360.0, 0.0)
 const FIRST_HOUR_GUIDE_CARD_MARGIN := 18.0
 const FIRST_HOUR_GUIDE_TARGET_PADDING := 6.0
@@ -305,9 +310,33 @@ var ftue_card: PanelContainer = null
 var ftue_title_label: Label = null
 var ftue_objective_label: Label = null
 var ftue_body_label: Label = null
+var ftue_status_label: Label = null
 var ftue_progress_label: Label = null
+var ftue_hub_button: Button = null
+var ftue_dismiss_button: Button = null
 var ftue_skip_button: Button = null
 var ftue_last_step_id: String = ""
+var guide_hub_overlay: Control = null
+var guide_hub_panel: PanelContainer = null
+var guide_hub_flow_list: VBoxContainer = null
+var guide_hub_close_button: Button = null
+var guide_hub_taskbar_button: Button = null
+var guide_hub_help_button: Button = null
+var guide_target_name: String = ""
+var guide_focus_in_progress: bool = false
+var guide_active_flow_id: String = ""
+var guide_watchlist_all_stock_seen: bool = false
+var guide_watchlist_stock_selected: bool = false
+var guide_research_interaction_seen: bool = false
+var guide_fundamental_key_stats_seen: bool = false
+var guide_fundamental_financials_seen: bool = false
+var guide_technical_tool_action_seen: bool = false
+var guide_thesis_subject_chosen: bool = false
+var guide_thesis_create_action_seen: bool = false
+var guide_life_plan_reviewed: bool = false
+var guide_life_finance_tab_seen: bool = false
+var guide_academy_lesson_chosen: bool = false
+var guide_academy_read_action_seen: bool = false
 var first_hour_guide_highlight_layer: Control = null
 var first_hour_guide_highlight_frame: PanelContainer = null
 var first_hour_guide_panel: PanelContainer = null
@@ -479,6 +508,13 @@ var bankruptcy_overlay: Control = null
 var bankruptcy_body_label: Label = null
 var bankruptcy_menu_button: Button = null
 var bankruptcy_restart_button: Button = null
+var stress_meter_panel: PanelContainer = null
+var stress_meter_bar: ProgressBar = null
+var stress_meter_title_label: Label = null
+var stress_meter_label: Label = null
+var hospital_overlay: Control = null
+var hospital_body_label: Label = null
+var hospital_advance_button: Button = null
 @onready var app_window_backdrop: Control = $AppWindowBackdrop
 @onready var app_window_margin: MarginContainer = $AppWindowBackdrop/AppWindowMargin
 @onready var app_window_panel: PanelContainer = $AppWindowBackdrop/AppWindowMargin/AppWindowPanel
@@ -648,6 +684,8 @@ var academy_glossary_list: ItemList = null
 @onready var dashboard_top_gainers_empty_label: Label = %DashboardView/DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs/TopGainers/TopGainersRows/TopGainersEmptyLabel
 @onready var dashboard_top_losers_rows: VBoxContainer = %DashboardView/DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs/TopLosers/TopLosersRows
 @onready var dashboard_top_losers_empty_label: Label = %DashboardView/DashboardGrid/MoversPanel/MoversMargin/MoversVBox/MoversTabs/TopLosers/TopLosersRows/TopLosersEmptyLabel
+var dashboard_top_broker_flow_rows: VBoxContainer = null
+var dashboard_top_broker_flow_empty_label: Label = null
 @onready var dashboard_calendar_panel: PanelContainer = %DashboardView/DashboardGrid/CalendarPanel
 @onready var dashboard_calendar_title_label: Label = %DashboardView/DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarTitleLabel
 @onready var dashboard_calendar_month_label: Label = %DashboardView/DashboardGrid/CalendarPanel/CalendarMargin/CalendarVBox/CalendarMonthLabel
@@ -835,9 +873,11 @@ func _ready() -> void:
 	_ensure_upgrade_purchase_dialog()
 	_ensure_settings_dialog()
 	_ensure_bankruptcy_overlay()
+	_ensure_hospital_overlay()
 	_ensure_daily_recap_dialog()
 	_ensure_dashboard_calendar_event_popup()
 	_ensure_dashboard_index_recap_ui()
+	_ensure_dashboard_broker_flow_ui()
 	_ensure_dashboard_sector_ui()
 	_ensure_console_overlay()
 	_ensure_academy_ui()
@@ -848,6 +888,7 @@ func _ready() -> void:
 	_ensure_news_newspaper_ui()
 	_ensure_social_feed_ui()
 	_ensure_figma_desktop_ui()
+	_ensure_stress_meter_ui()
 	_cache_order_market_summary_labels()
 	_ensure_profile_company_layout()
 	_ensure_desktop_window_layer()
@@ -891,6 +932,10 @@ func _ready() -> void:
 	toast_timer.timeout.connect(_hide_toast)
 	stock_list_tabs.tab_changed.connect(_on_stock_list_tab_changed)
 	work_tabs.tab_changed.connect(_on_work_tab_changed)
+	if trade_workspace_widget.has_signal("chart_interaction"):
+		trade_workspace_widget.chart_interaction.connect(_on_guide_chart_interaction)
+	elif trade_workspace_widget.has_signal("chart_range_changed"):
+		trade_workspace_widget.chart_range_changed.connect(_on_guide_chart_interaction)
 	add_watchlist_button.pressed.connect(_on_add_watchlist_pressed)
 	remove_watchlist_button.pressed.connect(_on_remove_watchlist_pressed)
 	all_stocks_search_input.text_changed.connect(_on_all_stock_search_text_changed)
@@ -942,7 +987,7 @@ func _ready() -> void:
 	social_app_button.tooltip_text = "Open the mobile-style social feed."
 	network_app_button.tooltip_text = "Open the relationship network."
 	if academy_app_button != null:
-		academy_app_button.tooltip_text = "Open Academy lessons."
+		academy_app_button.tooltip_text = "Open Academy lessons." if GameManager.is_academy_available() else GameManager.get_academy_release_message()
 	if thesis_app_button != null:
 		thesis_app_button.tooltip_text = "Open Thesis Board."
 	if life_app_button != null:
@@ -979,6 +1024,9 @@ func _ready() -> void:
 	call_deferred("_start_background_company_detail_hydration_after_startup")
 	call_deferred("_show_ftue_if_needed")
 	call_deferred("_show_first_hour_guide_if_needed")
+	call_deferred("_bind_thesis_guide_controls")
+	call_deferred("_bind_life_guide_tabs")
+	call_deferred("_apply_academy_release_lock_state")
 
 
 func _input(event: InputEvent) -> void:
@@ -1291,6 +1339,44 @@ func _style_dashboard_section_title(label: Label) -> void:
 		label.add_theme_font_override("font", title_font)
 
 
+func _ensure_dashboard_broker_flow_ui() -> void:
+	if dashboard_movers_tabs == null:
+		return
+	var broker_scroll: ScrollContainer = dashboard_movers_tabs.get_node_or_null("TopBrokerFlow") as ScrollContainer
+	if broker_scroll == null:
+		broker_scroll = ScrollContainer.new()
+		broker_scroll.name = "TopBrokerFlow"
+		broker_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		broker_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		broker_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		dashboard_movers_tabs.add_child(broker_scroll)
+
+	var rows: VBoxContainer = broker_scroll.get_node_or_null("TopBrokerFlowRows") as VBoxContainer
+	if rows == null:
+		rows = VBoxContainer.new()
+		rows.name = "TopBrokerFlowRows"
+		rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rows.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		rows.add_theme_constant_override("separation", 4)
+		broker_scroll.add_child(rows)
+
+	var empty_label: Label = rows.get_node_or_null("TopBrokerFlowEmptyLabel") as Label
+	if empty_label == null:
+		empty_label = Label.new()
+		empty_label.name = "TopBrokerFlowEmptyLabel"
+		empty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		empty_label.text = "No broker flow this session."
+		rows.add_child(empty_label)
+
+	dashboard_top_broker_flow_rows = rows
+	dashboard_top_broker_flow_empty_label = empty_label
+	var broker_tab_index: int = broker_scroll.get_index()
+	if broker_tab_index >= 0 and broker_tab_index < dashboard_movers_tabs.get_tab_count():
+		dashboard_movers_tabs.set_tab_title(broker_tab_index, "Broker Flow")
+
+
 func _ensure_key_stats_dashboard_ui() -> void:
 	if key_stats_dashboard_grid != null:
 		return
@@ -1299,6 +1385,9 @@ func _ensure_key_stats_dashboard_ui() -> void:
 	var key_stats_vbox: VBoxContainer = key_stats_panel.get_node_or_null("KeyStatsMargin/KeyStatsVBox") as VBoxContainer
 	if key_stats_vbox == null:
 		return
+	var key_stats_scroll: ScrollContainer = key_stats_panel.get_parent() as ScrollContainer
+	if key_stats_scroll != null:
+		key_stats_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	var old_title: Control = key_stats_vbox.get_node_or_null("KeyStatsTitle") as Control
 	if old_title != null:
 		old_title.visible = false
@@ -1311,6 +1400,7 @@ func _ensure_key_stats_dashboard_ui() -> void:
 	key_stats_dashboard_grid = GridContainer.new()
 	key_stats_dashboard_grid.name = "KeyStatsDashboardGrid"
 	key_stats_dashboard_grid.columns = 3
+	key_stats_dashboard_grid.custom_minimum_size = Vector2(KEY_STATS_DASHBOARD_DESKTOP_WIDTH, 0)
 	key_stats_dashboard_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	key_stats_dashboard_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	key_stats_dashboard_grid.add_theme_constant_override("h_separation", 12)
@@ -1470,15 +1560,20 @@ func _style_key_stats_card_tree(node: Node) -> void:
 func _update_key_stats_dashboard_layout() -> void:
 	if key_stats_dashboard_grid == null:
 		return
-	var content_width: float = work_area_panel.get_rect().size.x
-	if content_width <= 0.0:
-		content_width = get_viewport_rect().size.x - 520.0
-	if content_width >= 940.0:
+	var viewport_width: float = get_viewport_rect().size.x
+	var content_width: float = 0.0
+	if work_area_panel != null:
+		content_width = work_area_panel.get_rect().size.x
+	content_width = max(content_width, viewport_width - 520.0)
+	if viewport_width >= 1200.0 or content_width >= KEY_STATS_DASHBOARD_DESKTOP_WIDTH:
 		key_stats_dashboard_grid.columns = 3
-	elif content_width >= 620.0:
+		key_stats_dashboard_grid.custom_minimum_size = Vector2(KEY_STATS_DASHBOARD_DESKTOP_WIDTH, 0)
+	elif content_width >= KEY_STATS_DASHBOARD_TWO_COLUMN_WIDTH:
 		key_stats_dashboard_grid.columns = 2
+		key_stats_dashboard_grid.custom_minimum_size = Vector2.ZERO
 	else:
 		key_stats_dashboard_grid.columns = 1
+		key_stats_dashboard_grid.custom_minimum_size = Vector2.ZERO
 
 
 func _on_key_stats_metric_button_pressed(metric_id: String) -> void:
@@ -2031,16 +2126,11 @@ func _key_stats_metric_annual_result(
 	metric_id: String,
 	year: int
 ) -> Dictionary:
-	var total: float = 0.0
-	var valid_count: int = 0
-	for quarter in range(1, 5):
+	for quarter in range(4, 0, -1):
 		var statement: Dictionary = _key_stats_statement_for_year_quarter(financial_statement_snapshot, year, quarter)
 		var result: Dictionary = _key_stats_metric_result_from_statement(statement, metric_id)
 		if bool(result.get("valid", false)):
-			total += float(result.get("value", 0.0))
-			valid_count += 1
-	if valid_count > 0:
-		return {"valid": true, "value": total}
+			return {"valid": true, "value": float(result.get("value", 0.0)) * 4.0}
 	return _key_stats_history_metric_result(financial_history, metric_id, year)
 
 
@@ -2582,6 +2672,8 @@ func _on_network_changed() -> void:
 func _on_thesis_changed() -> void:
 	if _is_desktop_app_window_open(APP_ID_THESIS):
 		_refresh_thesis()
+	_refresh_ftue_progress()
+	call_deferred("_refresh_ftue_progress")
 	_refresh_first_hour_guide_progress()
 
 
@@ -2756,15 +2848,18 @@ func _refresh_header() -> void:
 	_style_stockbot_label_chip(top_equity_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_TEXT)
 	_style_stockbot_label_chip(top_cash_label, cash_chip_fill, cash_chip_edge, cash_chip_text)
 	_style_stockbot_label_chip(top_section_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_AMBER)
+	_refresh_stress_meter()
+	_refresh_hospital_overlay()
 
 
 func _refresh_desktop() -> void:
 	_sync_desktop_app_state()
+	_apply_academy_release_lock_state()
 	if not RunState.has_active_run():
 		desktop_title_label.text = "Gorengan OS"
 		desktop_date_label.text = "No active run"
 		desktop_subtitle_label.text = "Boot a run from the main menu to bring the terminal online."
-		desktop_hint_label.text = "Desktop icons launch apps. STOCKBOT trades, News reads the event tape, Twooter surfaces chatter, Network manages contacts, Academy teaches chart reading, and Settings handles save/load."
+		desktop_hint_label.text = "Desktop icons launch apps. STOCKBOT trades, News reads the event tape, Twooter surfaces chatter, Network manages contacts, Academy is coming soon, and Settings handles save/load."
 		taskbar_status_label.text = "No active run loaded."
 		_refresh_build_number_labels()
 		taskbar_clock_label.text = "MENU"
@@ -2784,7 +2879,7 @@ func _refresh_desktop() -> void:
 		GameManager.get_current_difficulty_label(),
 		_format_currency(RunState.get_total_equity())
 	]
-	desktop_hint_label.text = "STOCKBOT is live. News renders event-driven intel feeds, Twooter shows tiered social chatter, Network tracks contacts, Academy teaches routines, Company unlocks with majority control, and Settings handles save/load."
+	desktop_hint_label.text = "STOCKBOT is live. News renders event-driven intel feeds, Twooter shows tiered social chatter, Network tracks contacts, Academy is coming soon, Company unlocks with majority control, and Settings handles save/load."
 	taskbar_status_label.text = _append_save_status(_build_taskbar_status_text(focus_snapshot))
 	_refresh_build_number_labels()
 	taskbar_clock_label.text = "DAY %d  |  %s" % [
@@ -3377,6 +3472,54 @@ func _configure_desktop_shortcut_tile(tile: Control, button: Button, label: Labe
 	label.add_theme_font_size_override("font_size", 15)
 	label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
 	_style_desktop_label_plaque(label)
+	if app_id == APP_ID_ACADEMY:
+		_apply_academy_release_lock_state()
+
+
+func _apply_academy_release_lock_state() -> void:
+	if academy_app_button == null:
+		return
+	var academy_available: bool = GameManager.is_academy_available()
+	if academy_window != null:
+		academy_window.visible = academy_available
+	academy_app_button.tooltip_text = "Open Academy lessons." if academy_available else GameManager.get_academy_release_message()
+	academy_app_button.modulate = Color(1, 1, 1, 1) if academy_available else Color(0.74, 0.72, 0.66, 1)
+	academy_app_button.set_pressed_no_signal(false if not academy_available else academy_app_button.button_pressed)
+	if academy_app_label != null:
+		academy_app_label.text = "ACADEMY" if academy_available else "ACADEMY\nCOMING SOON"
+		academy_app_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN if academy_available else Color(0.431373, 0.380392, 0.286275, 1))
+		academy_app_label.add_theme_font_size_override("font_size", 15 if academy_available else 13)
+	_ensure_academy_coming_soon_badge(not academy_available)
+	if not academy_available and _is_desktop_app_window_open(APP_ID_ACADEMY):
+		_close_desktop_app_window(APP_ID_ACADEMY)
+
+
+func _ensure_academy_coming_soon_badge(visible: bool) -> void:
+	if academy_app_button == null:
+		return
+	var badge: Label = academy_app_button.get_node_or_null("AcademyComingSoonBadge") as Label
+	if badge == null:
+		badge = Label.new()
+		badge.name = "AcademyComingSoonBadge"
+		badge.text = "SOON"
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		badge.add_theme_font_size_override("font_size", 11)
+		badge.add_theme_color_override("font_color", COLOR_DESKTOP_CREAM)
+		badge.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		badge.offset_left = -54
+		badge.offset_top = -30
+		badge.offset_right = -8
+		badge.offset_bottom = -8
+		academy_app_button.add_child(badge)
+		var badge_style := StyleBoxFlat.new()
+		badge_style.bg_color = Color(0.509804, 0.231373, 0.0941176, 0.94)
+		badge_style.border_color = COLOR_DESKTOP_GOLD
+		badge_style.set_border_width_all(1)
+		badge_style.set_corner_radius_all(4)
+		badge.add_theme_stylebox_override("normal", badge_style)
+	badge.visible = visible
 
 
 func _ensure_desktop_shortcut_corner_marker(button: Button) -> void:
@@ -3715,7 +3858,7 @@ func _refresh_figma_desktop_status() -> void:
 		desktop_advance_day_button.disabled = advance_day_processing or bankrupt
 		if not advance_day_processing:
 			desktop_advance_day_button.text = "BANKRUPT" if bankrupt else "ADVANCE DAY"
-			var advance_block_reason: String = GameManager.get_cash_stress_block_reason("advance_day")
+			var advance_block_reason: String = GameManager.get_life_action_block_reason("advance_day")
 			if bankrupt:
 				desktop_advance_day_button.tooltip_text = "Run ended. Use the bankruptcy overlay or Settings."
 			elif not advance_block_reason.is_empty() and advance_block_reason != "BANKRUPTCY_REQUIRED":
@@ -3945,7 +4088,7 @@ func _register_desktop_app_window(app_id: String, title: String, content_nodes: 
 	title_row.add_child(minimize_button)
 
 	var close_button := Button.new()
-	close_button.name = "CloseButton"
+	close_button.name = "StockbotCloseButton" if app_id == APP_ID_STOCK else "CloseButton"
 	close_button.text = "X"
 	close_button.custom_minimum_size = Vector2(28, 24)
 	close_button.tooltip_text = "Close this window."
@@ -4594,6 +4737,7 @@ func _refresh_thesis() -> void:
 		thesis_window.call("set_selected_company_id", selected_company_id)
 	if thesis_window.has_method("refresh"):
 		thesis_window.call("refresh")
+	_bind_thesis_guide_controls()
 
 
 func _ensure_life_ui() -> void:
@@ -7787,6 +7931,7 @@ func _on_social_account_pressed(account_id: String) -> void:
 		return
 	selected_social_account_id = account_id
 	_refresh_social()
+	_mark_guide_research_interaction()
 
 
 func _on_social_account_filter_cleared() -> void:
@@ -7801,6 +7946,8 @@ func _on_social_thread_toggled(post_id: String, thread_container: VBoxContainer,
 	thread_container.visible = next_visible
 	expanded_social_thread_ids[post_id] = next_visible
 	thread_button.text = "Hide thread" if next_visible else "Show thread"
+	if next_visible:
+		_mark_guide_research_interaction()
 
 
 func _style_social_post_card(panel: PanelContainer, tone: String) -> void:
@@ -8243,6 +8390,7 @@ func _on_news_article_card_pressed(article_id: String) -> void:
 			break
 	_rebuild_news_article_cards(articles, false)
 	_show_news_article(GameManager.get_news_archive_article(selected_news_article_id))
+	_mark_guide_research_interaction()
 
 
 func _ticker_for_company(company_id: String) -> String:
@@ -8903,10 +9051,14 @@ func _dashboard_index_close_series_for_runtime(runtime: Dictionary) -> Array:
 func _refresh_dashboard_movers(company_rows: Array) -> void:
 	if dashboard_movers_tabs == null:
 		return
+	_ensure_dashboard_broker_flow_ui()
 	dashboard_movers_tabs.set_tab_title(0, "Top 15 Gainer")
 	dashboard_movers_tabs.set_tab_title(1, "Top 15 Loser")
+	if dashboard_movers_tabs.get_tab_count() >= 3:
+		dashboard_movers_tabs.set_tab_title(2, "Broker Flow")
 	_refresh_dashboard_mover_side(company_rows, true)
 	_refresh_dashboard_mover_side(company_rows, false)
+	_refresh_dashboard_broker_movement_rows()
 
 
 func _refresh_dashboard_mover_side(company_rows: Array, wants_gainers: bool) -> void:
@@ -8940,6 +9092,134 @@ func _refresh_dashboard_mover_side(company_rows: Array, wants_gainers: bool) -> 
 		rows_container.add_child(_build_dashboard_mover_row(movers[mover_index], mover_index + 1))
 
 
+func _refresh_dashboard_broker_movement_rows() -> void:
+	if dashboard_top_broker_flow_rows == null or dashboard_top_broker_flow_empty_label == null:
+		return
+
+	_clear_dynamic_rows(dashboard_top_broker_flow_rows, dashboard_top_broker_flow_empty_label)
+	var broker_rows: Array = _build_dashboard_broker_movement_rows()
+	dashboard_top_broker_flow_empty_label.visible = broker_rows.is_empty()
+	dashboard_top_broker_flow_empty_label.text = "No broker tape this session."
+	for broker_index in range(broker_rows.size()):
+		dashboard_top_broker_flow_rows.add_child(_build_dashboard_broker_movement_row(broker_rows[broker_index], broker_index + 1))
+
+
+func _build_dashboard_broker_movement_rows() -> Array:
+	if not RunState.has_active_run():
+		return []
+	var brokers_by_code: Dictionary = {}
+	var broker_roster: Array = DataRepository.get_broker_roster()
+	for broker_value in broker_roster:
+		if broker_value is Dictionary:
+			_ensure_dashboard_broker_movement_row(brokers_by_code, broker_value)
+	for company_id_value in RunState.company_order:
+		var company_id: String = str(company_id_value)
+		if company_id.is_empty():
+			continue
+		var runtime: Dictionary = RunState.get_company(company_id)
+		var broker_flow: Dictionary = runtime.get("broker_flow", {})
+		if broker_flow.is_empty():
+			continue
+
+		var all_brokers: Array = broker_flow.get("broker_rows", [])
+		if not all_brokers.is_empty():
+			for broker_value in all_brokers:
+				if typeof(broker_value) != TYPE_DICTIONARY:
+					continue
+				_accumulate_dashboard_broker_activity(brokers_by_code, broker_value)
+			continue
+
+		var buy_brokers: Array = broker_flow.get("buy_brokers", [])
+		for broker_value in buy_brokers:
+			if typeof(broker_value) != TYPE_DICTIONARY:
+				continue
+			_accumulate_dashboard_broker_movement(brokers_by_code, broker_value, true)
+
+		var sell_brokers: Array = broker_flow.get("sell_brokers", [])
+		for broker_value in sell_brokers:
+			if typeof(broker_value) != TYPE_DICTIONARY:
+				continue
+			_accumulate_dashboard_broker_movement(brokers_by_code, broker_value, false)
+
+	var rows: Array = []
+	for broker_code_value in brokers_by_code.keys():
+		var broker_row: Dictionary = brokers_by_code.get(broker_code_value, {})
+		var net_value: float = float(broker_row.get("buy_value", 0.0)) - float(broker_row.get("sell_value", 0.0))
+		var net_lots: float = float(broker_row.get("buy_lots", 0.0)) - float(broker_row.get("sell_lots", 0.0))
+		broker_row["net_value"] = net_value
+		broker_row["net_lots"] = net_lots
+		broker_row["gross_value"] = float(broker_row.get("buy_value", 0.0)) + float(broker_row.get("sell_value", 0.0))
+		broker_row["gross_lots"] = float(broker_row.get("buy_lots", 0.0)) + float(broker_row.get("sell_lots", 0.0))
+		if (
+			not broker_roster.is_empty() or
+			float(broker_row.get("gross_value", 0.0)) > 0.0 or
+			float(broker_row.get("gross_lots", 0.0)) > 0.0
+		):
+			rows.append(broker_row)
+
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_net_value: float = absf(float(a.get("net_value", 0.0)))
+		var b_net_value: float = absf(float(b.get("net_value", 0.0)))
+		if not is_equal_approx(a_net_value, b_net_value):
+			return a_net_value > b_net_value
+		return float(a.get("gross_value", 0.0)) > float(b.get("gross_value", 0.0))
+	)
+	return rows
+
+
+func _accumulate_dashboard_broker_movement(brokers_by_code: Dictionary, broker_source: Dictionary, is_buy_side: bool) -> void:
+	var broker_row: Dictionary = _ensure_dashboard_broker_movement_row(brokers_by_code, broker_source)
+	if broker_row.is_empty():
+		return
+	var side_prefix: String = "buy" if is_buy_side else "sell"
+	broker_row["%s_value" % side_prefix] = float(broker_row.get("%s_value" % side_prefix, 0.0)) + float(broker_source.get("value", 0.0))
+	broker_row["%s_lots" % side_prefix] = float(broker_row.get("%s_lots" % side_prefix, 0.0)) + float(broker_source.get("lots", 0.0))
+	brokers_by_code[str(broker_row.get("code", ""))] = broker_row
+
+
+func _accumulate_dashboard_broker_activity(brokers_by_code: Dictionary, broker_source: Dictionary) -> void:
+	var broker_row: Dictionary = _ensure_dashboard_broker_movement_row(brokers_by_code, broker_source)
+	if broker_row.is_empty():
+		return
+	broker_row["buy_value"] = float(broker_row.get("buy_value", 0.0)) + float(broker_source.get("buy_value", 0.0))
+	broker_row["sell_value"] = float(broker_row.get("sell_value", 0.0)) + float(broker_source.get("sell_value", 0.0))
+	broker_row["buy_lots"] = float(broker_row.get("buy_lots", 0.0)) + float(broker_source.get("buy_lots", 0.0))
+	broker_row["sell_lots"] = float(broker_row.get("sell_lots", 0.0)) + float(broker_source.get("sell_lots", 0.0))
+	brokers_by_code[str(broker_row.get("code", ""))] = broker_row
+
+
+func _ensure_dashboard_broker_movement_row(brokers_by_code: Dictionary, broker_source: Dictionary) -> Dictionary:
+	var broker_code: String = str(broker_source.get("code", "")).strip_edges()
+	if broker_code.is_empty():
+		return {}
+	var broker_row: Dictionary = brokers_by_code.get(broker_code, {})
+	if broker_row.is_empty():
+		broker_row = {
+			"code": broker_code,
+			"name": _get_dashboard_broker_name(broker_source),
+			"broker_type": str(broker_source.get("broker_type", "")),
+			"buy_value": 0.0,
+			"sell_value": 0.0,
+			"buy_lots": 0.0,
+			"sell_lots": 0.0
+		}
+		brokers_by_code[broker_code] = broker_row
+	else:
+		var source_name: String = _get_dashboard_broker_name(broker_source)
+		if str(broker_row.get("name", "")).is_empty() and not source_name.is_empty():
+			broker_row["name"] = source_name
+		if str(broker_row.get("broker_type", "")).is_empty():
+			broker_row["broker_type"] = str(broker_source.get("broker_type", ""))
+	return broker_row
+
+
+func _get_dashboard_broker_name(broker_source: Dictionary) -> String:
+	var source_name: String = str(broker_source.get("company_name", "")).strip_edges()
+	if source_name.is_empty():
+		source_name = str(broker_source.get("name", "")).strip_edges()
+	return source_name
+
+
 func _build_dashboard_mover_row(company_row: Dictionary, rank_number: int) -> Control:
 	var row_wrap: VBoxContainer = VBoxContainer.new()
 	row_wrap.add_theme_constant_override("separation", 4)
@@ -8964,6 +9244,59 @@ func _build_dashboard_mover_row(company_row: Dictionary, rank_number: int) -> Co
 		_format_change(float(company_row.get("daily_change_pct", 0.0))),
 		64.0,
 		_color_for_change(float(company_row.get("daily_change_pct", 0.0))),
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	var separator: HSeparator = HSeparator.new()
+	row_wrap.add_child(separator)
+	return row_wrap
+
+
+func _build_dashboard_broker_movement_row(broker_row: Dictionary, rank_number: int) -> Control:
+	var row_wrap: VBoxContainer = VBoxContainer.new()
+	row_wrap.add_theme_constant_override("separation", 4)
+	var row: HBoxContainer = HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 8)
+	row_wrap.add_child(row)
+
+	var net_value: float = float(broker_row.get("net_value", 0.0))
+	var buy_lots: float = float(broker_row.get("buy_lots", 0.0))
+	var sell_lots: float = float(broker_row.get("sell_lots", 0.0))
+	var net_color: Color = _color_for_change(net_value)
+	row_wrap.tooltip_text = "%s\nBuy %s lot(s), %s\nSell %s lot(s), %s\nNet %s lot(s), %s" % [
+		str(broker_row.get("name", broker_row.get("code", ""))),
+		_format_compact_lots(buy_lots),
+		_format_compact_currency(float(broker_row.get("buy_value", 0.0))),
+		_format_compact_lots(sell_lots),
+		_format_compact_currency(float(broker_row.get("sell_value", 0.0))),
+		_format_signed_compact_lots(float(broker_row.get("net_lots", 0.0))),
+		_format_signed_compact_currency(net_value)
+	]
+
+	row.add_child(_build_table_cell("%02d" % rank_number, 30.0, COLOR_MUTED))
+	row.add_child(_build_table_cell(str(broker_row.get("code", "")), 48.0, COLOR_TEXT))
+	var name_label: Label = _build_table_cell(str(broker_row.get("name", "")), 0.0, COLOR_TEXT, true)
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(name_label)
+	row.add_child(_build_table_cell(
+		_format_compact_lots(buy_lots),
+		64.0,
+		COLOR_POSITIVE,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	row.add_child(_build_table_cell(
+		_format_compact_lots(sell_lots),
+		64.0,
+		COLOR_NEGATIVE,
+		false,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	))
+	row.add_child(_build_table_cell(
+		_format_signed_compact_currency(net_value),
+		84.0,
+		net_color,
 		false,
 		HORIZONTAL_ALIGNMENT_RIGHT
 	))
@@ -11229,11 +11562,16 @@ func _on_network_app_pressed() -> void:
 
 
 func _on_academy_app_pressed() -> void:
+	if not GameManager.is_academy_available():
+		_show_toast(GameManager.get_academy_release_message(), false)
+		_apply_academy_release_lock_state()
+		return
 	_set_active_app(APP_ID_ACADEMY)
 
 
 func _on_thesis_app_pressed() -> void:
 	_set_active_app(APP_ID_THESIS)
+	call_deferred("_refresh_ftue_progress")
 
 
 func _on_life_app_pressed() -> void:
@@ -11289,6 +11627,7 @@ func _on_academy_category_pressed(category_id: String) -> void:
 	selected_academy_category_id = category_id
 	selected_academy_section_id = ""
 	_refresh_academy()
+	_mark_guide_academy_lesson_chosen()
 
 
 func _on_academy_section_selected(index: int) -> void:
@@ -11300,6 +11639,7 @@ func _on_academy_section_selected(index: int) -> void:
 		return
 	selected_academy_section_id = str(section.get("id", ""))
 	_refresh_academy()
+	_mark_guide_academy_lesson_chosen()
 
 
 func _on_academy_section_tab_pressed(section_id: String) -> void:
@@ -11307,12 +11647,14 @@ func _on_academy_section_tab_pressed(section_id: String) -> void:
 		return
 	selected_academy_section_id = section_id
 	_refresh_academy()
+	_mark_guide_academy_lesson_chosen()
 
 
 func _on_academy_mark_read_pressed() -> void:
 	var result: Dictionary = GameManager.mark_academy_section_read(selected_academy_category_id, selected_academy_section_id)
 	_show_toast(str(result.get("message", "Academy updated.")), bool(result.get("success", false)))
 	_refresh_academy()
+	_mark_guide_academy_read_action()
 
 
 func _on_academy_next_pressed() -> void:
@@ -11321,6 +11663,7 @@ func _on_academy_next_pressed() -> void:
 		return
 	selected_academy_section_id = next_section_id
 	_refresh_academy()
+	_mark_guide_academy_lesson_chosen()
 
 
 func _on_academy_inline_check_pressed(section_id: String, check_id: String, answer_id: String) -> void:
@@ -11442,17 +11785,20 @@ func _on_news_article_selected(index: int) -> void:
 	selected_news_article_id = str(articles[index].get("id", ""))
 	_rebuild_news_article_cards(articles, false)
 	_show_news_article(GameManager.get_news_archive_article(selected_news_article_id))
+	_mark_guide_research_interaction()
 
 
 func _on_news_meet_contact_pressed() -> void:
 	var contact_id: String = str(news_meet_contact_button.get_meta("contact_id", ""))
 	_meet_contact_from_context(contact_id, {"source_type": "news", "source_id": selected_news_article_id})
+	_mark_guide_research_interaction()
 
 
 func _on_news_open_meeting_pressed() -> void:
 	if news_open_meeting_button == null:
 		return
 	_open_corporate_meeting_modal(str(news_open_meeting_button.get_meta("meeting_id", "")))
+	_mark_guide_research_interaction()
 
 
 func _on_profile_meet_contact_pressed() -> void:
@@ -11818,12 +12164,71 @@ func _on_stock_list_tab_changed(_tab_index: int) -> void:
 			_refresh_debug_overlay()
 		_start_background_company_detail_hydration()
 	_log_perf_elapsed("_on_stock_list_tab_changed", started_at_usec)
+	_mark_guide_watchlist_all_stock_seen()
 	_refresh_ftue_progress()
 
 
-func _on_work_tab_changed(_tab_index: int) -> void:
+func _on_work_tab_changed(tab_index: int) -> void:
+	_mark_guide_fundamental_tab_seen(tab_index)
 	_refresh_ftue_progress()
 	_refresh_first_hour_guide_progress()
+
+
+func _on_guide_chart_interaction(_range_id = "") -> void:
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if str(snapshot.get("active_flow_id", "")) == RunState.GUIDE_FLOW_SYSTEM.FLOW_TECHNICAL:
+		guide_technical_tool_action_seen = true
+	_refresh_ftue_progress()
+
+
+func _bind_thesis_guide_controls() -> void:
+	if thesis_window == null:
+		return
+	var company_option: OptionButton = thesis_window.find_child("ThesisCompanyOption", true, false) as OptionButton
+	if company_option != null and not company_option.item_selected.is_connected(_on_thesis_guide_company_selected):
+		company_option.item_selected.connect(_on_thesis_guide_company_selected)
+	var create_button: Button = thesis_window.find_child("ThesisCreateButton", true, false) as Button
+	if create_button != null and not create_button.pressed.is_connected(_mark_guide_thesis_create_action):
+		create_button.pressed.connect(_mark_guide_thesis_create_action)
+
+
+func _on_thesis_guide_company_selected(_index: int) -> void:
+	_mark_guide_thesis_subject_chosen()
+
+
+func _bind_life_guide_tabs() -> void:
+	if life_window == null:
+		return
+	var tabs: TabContainer = life_window.find_child("LifeTabs", true, false) as TabContainer
+	if tabs != null and not tabs.tab_changed.is_connected(_on_life_guide_tab_changed):
+		tabs.tab_changed.connect(_on_life_guide_tab_changed)
+	var housing_option: OptionButton = life_window.find_child("LifeHousingOption", true, false) as OptionButton
+	if housing_option != null and not housing_option.item_selected.is_connected(_on_life_guide_plan_changed):
+		housing_option.item_selected.connect(_on_life_guide_plan_changed)
+	var lifestyle_option: OptionButton = life_window.find_child("LifeLifestyleOption", true, false) as OptionButton
+	if lifestyle_option != null and not lifestyle_option.item_selected.is_connected(_on_life_guide_plan_changed):
+		lifestyle_option.item_selected.connect(_on_life_guide_plan_changed)
+	var basics_slider: HSlider = life_window.find_child("LifeBasicsSlider", true, false) as HSlider
+	if basics_slider != null and not basics_slider.value_changed.is_connected(_on_life_guide_plan_changed):
+		basics_slider.value_changed.connect(_on_life_guide_plan_changed)
+	var update_button: Button = life_window.find_child("LifeUpdatePlanButton", true, false) as Button
+	if update_button != null and not update_button.pressed.is_connected(_mark_guide_life_plan_reviewed):
+		update_button.pressed.connect(_mark_guide_life_plan_reviewed)
+
+
+func _on_life_guide_tab_changed(_tab_index: int) -> void:
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if str(snapshot.get("active_flow_id", "")) == RunState.GUIDE_FLOW_SYSTEM.FLOW_LIFE_FINANCE:
+		var tabs: TabContainer = null
+		if life_window != null:
+			tabs = life_window.find_child("LifeTabs", true, false) as TabContainer
+		if tabs != null and _tab_index >= 0 and _tab_index < tabs.get_tab_count() and tabs.get_tab_title(_tab_index) == "Finance":
+			guide_life_finance_tab_seen = true
+	_refresh_ftue_progress()
+
+
+func _on_life_guide_plan_changed(_value = 0) -> void:
+	_mark_guide_life_plan_reviewed()
 
 
 func _on_add_watchlist_pressed() -> void:
@@ -11886,6 +12291,7 @@ func _on_watchlist_picker_item_activated(index: int) -> void:
 func _on_all_stock_selected(company_id: String) -> void:
 	selected_company_id = company_id
 	_refresh_after_company_selection()
+	_mark_guide_watchlist_stock_selected()
 
 
 func _on_portfolio_stock_selected(company_id: String) -> void:
@@ -11926,36 +12332,42 @@ func _on_settings_app_pressed() -> void:
 func _show_settings_dialog() -> void:
 	if settings_dialog == null:
 		return
+	var started_at_usec: int = Time.get_ticks_usec()
 	_hide_settings_confirmation()
 	_refresh_settings_dialog()
 	settings_dialog.visible = true
 	settings_dialog.move_to_front()
+	_refresh_ftue_progress()
+	_log_perf_elapsed("_show_settings_dialog", started_at_usec)
 
 
 func _hide_settings_dialog() -> void:
 	_hide_settings_confirmation()
 	if settings_dialog != null:
 		settings_dialog.visible = false
+	_refresh_ftue_progress()
 
 
 func _refresh_settings_dialog(status_text: String = "") -> void:
 	if settings_dialog == null or settings_save_slots_list == null:
 		return
+	var started_at_usec: int = Time.get_ticks_usec()
 	selected_settings_slot_id = SaveManager.get_active_slot_id()
 	settings_autosave_checkbox.set_pressed_no_signal(SaveManager.is_autosave_enabled())
 	settings_save_slots_list.clear()
-	for slot_value in SaveManager.get_save_slots():
+	for slot_value in SaveManager.get_save_slots(false):
 		var slot: Dictionary = slot_value
 		var item_index: int = settings_save_slots_list.add_item(_format_settings_slot_item(slot))
 		settings_save_slots_list.set_item_metadata(item_index, str(slot.get("slot_id", "")))
 		if str(slot.get("slot_id", "")) == selected_settings_slot_id:
 			settings_save_slots_list.select(item_index)
 	settings_save_button.disabled = not RunState.has_active_run() or selected_settings_slot_id.is_empty()
-	settings_load_button.disabled = not bool(SaveManager.get_save_file_info(selected_settings_slot_id).get("loadable", false))
+	settings_load_button.disabled = not bool(SaveManager.get_save_file_info(selected_settings_slot_id, false).get("loadable", false))
 	settings_delete_button.disabled = not _settings_slot_has_file(selected_settings_slot_id)
 	settings_status_label.text = status_text if not status_text.is_empty() else _settings_slot_status_text(selected_settings_slot_id)
 	settings_status_label.tooltip_text = _settings_slot_path_text(selected_settings_slot_id)
 	_refresh_settings_summary_labels()
+	_log_perf_elapsed("_refresh_settings_dialog", started_at_usec)
 
 
 func _format_settings_slot_item(slot: Dictionary) -> String:
@@ -11976,7 +12388,7 @@ func _format_settings_slot_item(slot: Dictionary) -> String:
 
 
 func _settings_slot_status_text(slot_id: String) -> String:
-	var slot: Dictionary = SaveManager.get_save_file_info(slot_id)
+	var slot: Dictionary = SaveManager.get_save_file_info(slot_id, false)
 	var unsaved: Dictionary = SaveManager.get_unsaved_change_summary()
 	var prefix: String = "Unsaved changes pending. " if bool(unsaved.get("unsaved", false)) else ""
 	if bool(slot.get("loadable", false)):
@@ -11997,7 +12409,7 @@ func _settings_slot_status_text(slot_id: String) -> String:
 
 
 func _settings_slot_path_text(slot_id: String) -> String:
-	var slot: Dictionary = SaveManager.get_save_file_info(slot_id)
+	var slot: Dictionary = SaveManager.get_save_file_info(slot_id, false)
 	if bool(slot.get("loadable", false)):
 		return str(slot.get("absolute_path", ""))
 	if bool(slot.get("exists", false)):
@@ -12010,7 +12422,7 @@ func _settings_slot_path_text(slot_id: String) -> String:
 func _settings_slot_has_file(slot_id: String) -> bool:
 	if slot_id.is_empty():
 		return false
-	var slot: Dictionary = SaveManager.get_save_file_info(slot_id)
+	var slot: Dictionary = SaveManager.get_save_file_info(slot_id, false)
 	return bool(slot.get("exists", false)) or bool(slot.get("backup_exists", false))
 
 
@@ -12024,7 +12436,7 @@ func _on_settings_slot_selected(index: int) -> void:
 		return
 	selected_settings_slot_id = str(settings_save_slots_list.get_item_metadata(index))
 	settings_save_button.disabled = not RunState.has_active_run() or selected_settings_slot_id.is_empty()
-	settings_load_button.disabled = not bool(SaveManager.get_save_file_info(selected_settings_slot_id).get("loadable", false))
+	settings_load_button.disabled = not bool(SaveManager.get_save_file_info(selected_settings_slot_id, false).get("loadable", false))
 	settings_delete_button.disabled = not _settings_slot_has_file(selected_settings_slot_id)
 	settings_status_label.text = _settings_slot_status_text(selected_settings_slot_id)
 	settings_status_label.tooltip_text = _settings_slot_path_text(selected_settings_slot_id)
@@ -12042,12 +12454,12 @@ func _on_settings_save_pressed() -> void:
 	var saved: bool = GameManager.save_active_run_now("manual_settings_save")
 	var status_text: String = "Save failed."
 	if saved:
-		status_text = "Saved to %s." % str(SaveManager.get_save_file_info(selected_settings_slot_id).get("slot_label", "slot"))
+		status_text = "Saved to %s." % str(SaveManager.get_save_file_info(selected_settings_slot_id, false).get("slot_label", "slot"))
 	_refresh_settings_dialog(status_text)
 
 
 func _on_settings_load_pressed() -> void:
-	if selected_settings_slot_id.is_empty() or not bool(SaveManager.get_save_file_info(selected_settings_slot_id).get("loadable", false)):
+	if selected_settings_slot_id.is_empty() or not bool(SaveManager.get_save_file_info(selected_settings_slot_id, false).get("loadable", false)):
 		_refresh_settings_dialog("Choose a readable save slot first.")
 		return
 	_show_settings_confirmation("load", selected_settings_slot_id)
@@ -12067,7 +12479,7 @@ func _on_settings_exit_pressed() -> void:
 func _refresh_settings_summary_labels() -> void:
 	if settings_current_slot_label == null or settings_last_saved_label == null:
 		return
-	var active_slot: Dictionary = SaveManager.get_save_file_info(SaveManager.get_active_slot_id())
+	var active_slot: Dictionary = SaveManager.get_save_file_info(SaveManager.get_active_slot_id(), false)
 	var runtime_status: Dictionary = SaveManager.get_runtime_save_status()
 	settings_current_slot_label.text = "Current slot: %s" % str(active_slot.get("slot_label", "Slot 1"))
 	var last_saved_text: String = str(active_slot.get("saved_at_text", "Never")) if bool(active_slot.get("loadable", false)) else "Never"
@@ -12088,7 +12500,7 @@ func _show_settings_confirmation(action_id: String, slot_id: String = "") -> voi
 	var body_lines: Array[String] = []
 	var append_current_save_state := true
 	if action_id == "load":
-		var slot: Dictionary = SaveManager.get_save_file_info(slot_id)
+		var slot: Dictionary = SaveManager.get_save_file_info(slot_id, false)
 		settings_confirm_title_label.text = "Load Save?"
 		settings_confirm_confirm_button.text = "Load"
 		body_lines.append("Load %s and replace the current run?" % str(slot.get("slot_label", "this slot")))
@@ -12098,7 +12510,7 @@ func _show_settings_confirmation(action_id: String, slot_id: String = "") -> voi
 			str(slot.get("difficulty_label", "Normal"))
 		])
 	elif action_id == "delete":
-		var slot: Dictionary = SaveManager.get_save_file_info(slot_id)
+		var slot: Dictionary = SaveManager.get_save_file_info(slot_id, false)
 		settings_confirm_title_label.text = "Delete Save?"
 		settings_confirm_confirm_button.text = "Delete"
 		body_lines.append("Delete %s?" % str(slot.get("slot_label", "this slot")))
@@ -12155,7 +12567,7 @@ func _on_settings_confirm_confirm_pressed() -> void:
 	elif action_id == "delete":
 		if slot_id.is_empty():
 			return
-		var slot_label: String = str(SaveManager.get_save_file_info(slot_id).get("slot_label", "Slot"))
+		var slot_label: String = str(SaveManager.get_save_file_info(slot_id, false).get("slot_label", "Slot"))
 		var deleting_active_slot: bool = slot_id == SaveManager.get_active_slot_id()
 		SaveManager.delete_save(slot_id)
 		var status_text := "Deleted %s." % slot_label
@@ -12190,6 +12602,231 @@ func _show_bankruptcy_overlay(bankruptcy: Dictionary = {}) -> void:
 	bankruptcy_overlay.move_to_front()
 
 
+func _ensure_stress_meter_ui() -> void:
+	if stress_meter_panel != null:
+		return
+	var desktop_vbox: VBoxContainer = $DesktopLayer/DesktopMargin/DesktopVBox
+	if desktop_vbox == null or desktop_figma_top_bar == null:
+		return
+	stress_meter_panel = PanelContainer.new()
+	stress_meter_panel.name = "LifeStressMeterPanel"
+	stress_meter_panel.custom_minimum_size = Vector2(0, 16)
+	stress_meter_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stress_meter_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	stress_meter_panel.gui_input.connect(_on_stress_meter_gui_input)
+	desktop_vbox.add_child(stress_meter_panel)
+	desktop_vbox.move_child(stress_meter_panel, min(1, desktop_vbox.get_child_count() - 1))
+
+	var margin := MarginContainer.new()
+	margin.name = "LifeStressMeterMargin"
+	margin.add_theme_constant_override("margin_left", 0)
+	margin.add_theme_constant_override("margin_top", 0)
+	margin.add_theme_constant_override("margin_right", 0)
+	margin.add_theme_constant_override("margin_bottom", 0)
+	stress_meter_panel.add_child(margin)
+
+	var row := HBoxContainer.new()
+	row.name = "LifeStressMeterRow"
+	row.custom_minimum_size = Vector2(0, 16)
+	row.add_theme_constant_override("separation", 8)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.add_child(row)
+
+	stress_meter_title_label = Label.new()
+	stress_meter_title_label.name = "LifeStressMeterTitleLabel"
+	stress_meter_title_label.text = "STRESS LEVEL"
+	stress_meter_title_label.custom_minimum_size = Vector2(140, 16)
+	stress_meter_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stress_meter_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	stress_meter_title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stress_meter_title_label.add_theme_font_size_override("font_size", 10)
+	stress_meter_title_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	row.add_child(stress_meter_title_label)
+
+	stress_meter_bar = ProgressBar.new()
+	stress_meter_bar.name = "LifeStressMeterBar"
+	stress_meter_bar.min_value = 0.0
+	stress_meter_bar.max_value = 100.0
+	stress_meter_bar.show_percentage = false
+	stress_meter_bar.custom_minimum_size = Vector2(0, 8)
+	stress_meter_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stress_meter_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	stress_meter_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(stress_meter_bar)
+
+	stress_meter_label = Label.new()
+	stress_meter_label.name = "LifeStressMeterLabel"
+	stress_meter_label.custom_minimum_size = Vector2(126, 16)
+	stress_meter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	stress_meter_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	stress_meter_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stress_meter_label.add_theme_font_size_override("font_size", 10)
+	stress_meter_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	row.add_child(stress_meter_label)
+	_refresh_stress_meter()
+
+
+func _refresh_stress_meter() -> void:
+	if stress_meter_panel == null or stress_meter_bar == null:
+		return
+	if not RunState.has_active_run():
+		stress_meter_panel.visible = false
+		return
+	stress_meter_panel.visible = true
+	var life_state: Dictionary = RunState.get_player_life()
+	var stress_value: float = float(life_state.get("stress_value", RunState.LIFE_DEFAULT_STRESS_VALUE))
+	var stage: Dictionary = RunState.get_life_stress_stage(life_state)
+	var stage_id: String = str(stage.get("id", "calm"))
+	var fill_color: Color = _stress_stage_color(stage_id)
+	stress_meter_bar.value = stress_value
+	var bg_style := StyleBoxFlat.new()
+	bg_style.bg_color = Color(COLOR_DESKTOP_FRAME.r, COLOR_DESKTOP_FRAME.g, COLOR_DESKTOP_FRAME.b, 0.18)
+	bg_style.border_color = Color(COLOR_DESKTOP_BROWN.r, COLOR_DESKTOP_BROWN.g, COLOR_DESKTOP_BROWN.b, 0.0)
+	bg_style.set_border_width_all(0)
+	bg_style.set_corner_radius_all(0)
+	var track_style := StyleBoxFlat.new()
+	track_style.bg_color = Color(COLOR_DESKTOP_FRAME.r, COLOR_DESKTOP_FRAME.g, COLOR_DESKTOP_FRAME.b, 0.34)
+	track_style.border_color = Color(COLOR_DESKTOP_BROWN.r, COLOR_DESKTOP_BROWN.g, COLOR_DESKTOP_BROWN.b, 0.22)
+	track_style.set_border_width_all(1)
+	track_style.set_corner_radius_all(0)
+	var fill_style := StyleBoxFlat.new()
+	fill_style.bg_color = fill_color
+	fill_style.border_color = Color(fill_color.r, fill_color.g, fill_color.b, 0.0)
+	fill_style.set_corner_radius_all(0)
+	stress_meter_panel.add_theme_stylebox_override("panel", bg_style)
+	stress_meter_bar.add_theme_stylebox_override("background", track_style)
+	stress_meter_bar.add_theme_stylebox_override("fill", fill_style)
+	if stress_meter_title_label != null:
+		stress_meter_title_label.text = "STRESS LEVEL"
+		stress_meter_title_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	var ap_penalty: int = RunState.get_life_stress_ap_penalty(life_state)
+	var hospital_days: int = int(life_state.get("hospital_days_remaining", 0))
+	var risk_days: int = int(life_state.get("burnout_risk_days_remaining", 0))
+	var tooltip: String = "Stress %d/100: %s. AP penalty: %s." % [
+		int(round(stress_value)),
+		str(stage.get("label", "Calm")),
+		"-%d" % ap_penalty if ap_penalty > 0 else "none"
+	]
+	if hospital_days > 0:
+		tooltip += " Hospital recovery: %d trading day%s remaining." % [hospital_days, "" if hospital_days == 1 else "s"]
+	elif bool(life_state.get("burnout_risk_active", false)):
+		tooltip += " Burnout risk: %d trading day%s to recover before hospital." % [risk_days, "" if risk_days == 1 else "s"]
+	stress_meter_panel.tooltip_text = tooltip
+	if stress_meter_label != null:
+		stress_meter_label.visible = true
+		stress_meter_label.text = "%d/100 %s" % [
+			int(round(stress_value)),
+			str(stage.get("label", "Stress"))
+		]
+
+
+func _stress_stage_color(stage_id: String) -> Color:
+	match stage_id:
+		"hospital":
+			return Color(0.34, 0.05, 0.06, 1)
+		"burnout_risk":
+			return Color(0.74, 0.08, 0.06, 1)
+		"strained":
+			return Color(0.92, 0.30, 0.12, 1)
+		"stressed":
+			return Color(0.95, 0.62, 0.10, 1)
+		"tense":
+			return Color(0.82, 0.74, 0.22, 1)
+		_:
+			return Color(0.22, 0.62, 0.32, 1)
+
+
+func _on_stress_meter_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mouse_event: InputEventMouseButton = event
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
+			_set_active_app(APP_ID_LIFE)
+			get_viewport().set_input_as_handled()
+
+
+func _ensure_hospital_overlay() -> void:
+	if hospital_overlay != null:
+		return
+	hospital_overlay = Control.new()
+	hospital_overlay.name = "HospitalOverlay"
+	hospital_overlay.visible = false
+	hospital_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	hospital_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(hospital_overlay)
+	var scrim := ColorRect.new()
+	scrim.name = "HospitalOverlayScrim"
+	scrim.color = Color(0.06, 0.04, 0.03, 0.78)
+	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hospital_overlay.add_child(scrim)
+	var center := CenterContainer.new()
+	center.name = "HospitalOverlayCenter"
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hospital_overlay.add_child(center)
+	var panel := PanelContainer.new()
+	panel.name = "HospitalOverlayPanel"
+	panel.custom_minimum_size = Vector2(520, 260)
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = COLOR_DESKTOP_CREAM
+	panel_style.border_color = COLOR_DESKTOP_BROWN
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(6)
+	panel.add_theme_stylebox_override("panel", panel_style)
+	center.add_child(panel)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 22)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_right", 22)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 14)
+	margin.add_child(vbox)
+	var title := Label.new()
+	title.text = "Hospital Recovery"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	vbox.add_child(title)
+	hospital_body_label = Label.new()
+	hospital_body_label.name = "HospitalBodyLabel"
+	hospital_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hospital_body_label.add_theme_font_size_override("font_size", 14)
+	hospital_body_label.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
+	vbox.add_child(hospital_body_label)
+	hospital_advance_button = Button.new()
+	hospital_advance_button.name = "HospitalAdvanceDayButton"
+	hospital_advance_button.text = "ADVANCE DAY"
+	hospital_advance_button.custom_minimum_size = Vector2(220, 42)
+	hospital_advance_button.pressed.connect(_on_hospital_advance_pressed)
+	vbox.add_child(hospital_advance_button)
+	_style_button(hospital_advance_button, COLOR_DESKTOP_BROWN, COLOR_DESKTOP_BROWN, COLOR_DESKTOP_CREAM, 5)
+
+
+func _refresh_hospital_overlay() -> void:
+	if hospital_overlay == null:
+		return
+	var hospital_days: int = 0
+	if RunState.has_active_run():
+		hospital_days = int(RunState.get_player_life().get("hospital_days_remaining", 0))
+	hospital_overlay.visible = hospital_days > 0
+	if hospital_days <= 0:
+		return
+	hospital_overlay.move_to_front()
+	if hospital_body_label != null:
+		hospital_body_label.text = "Stress hit full burnout. You are in hospital recovery for %d more trading day%s.\n\nAll apps are paused. Advance Day to recover." % [
+			hospital_days,
+			"" if hospital_days == 1 else "s"
+		]
+	if hospital_advance_button != null:
+		hospital_advance_button.disabled = advance_day_processing
+		hospital_advance_button.text = "ADVANCING..." if advance_day_processing else "ADVANCE DAY"
+
+
+func _on_hospital_advance_pressed() -> void:
+	_on_next_day_pressed()
+
+
 func _on_bankruptcy_menu_pressed() -> void:
 	GameManager.return_to_menu()
 
@@ -12210,6 +12847,7 @@ func _on_app_window_close_pressed() -> void:
 
 func _on_markets_pressed() -> void:
 	_set_active_section("markets")
+	_mark_guide_watchlist_all_stock_seen()
 
 
 func _on_portfolio_pressed() -> void:
@@ -12306,6 +12944,7 @@ func _on_next_day_pressed() -> void:
 	var started_at_usec: int = Time.get_ticks_usec()
 	advance_day_processing = true
 	pending_daily_recap_snapshot = {}
+	_refresh_hospital_overlay()
 	_refresh_ftue_overlay()
 	_set_advance_day_phase("Closing Market", false)
 	_play_advance_day_button_feedback()
@@ -12378,6 +13017,7 @@ func _set_advance_day_phase(label: String, play_pulse: bool = true) -> void:
 			_play_advance_day_phase_pulse()
 	_refresh_dashboard()
 	_refresh_desktop()
+	_refresh_hospital_overlay()
 
 
 func _finish_advance_day_processing() -> void:
@@ -12388,6 +13028,7 @@ func _finish_advance_day_processing() -> void:
 		desktop_advance_day_button.tooltip_text = "Advance to the next trading day."
 		_reset_advance_day_button_animation_state()
 	_refresh_desktop()
+	_refresh_hospital_overlay()
 
 
 func _show_daily_recap_if_pending() -> void:
@@ -12718,12 +13359,8 @@ func _on_lot_size_changed(value: float) -> void:
 
 
 func _show_ftue_if_needed() -> void:
-	if not GameManager.should_show_tutorial():
-		_hide_ftue_overlay()
-		return
 	_ensure_ftue_overlay()
 	_refresh_ftue_progress()
-	_refresh_ftue_overlay()
 
 
 func _ensure_ftue_overlay() -> void:
@@ -12731,7 +13368,7 @@ func _ensure_ftue_overlay() -> void:
 		return
 
 	ftue_overlay = Control.new()
-	ftue_overlay.name = "FtueOverlay"
+	ftue_overlay.name = "GuideCoachmarkOverlay"
 	ftue_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	ftue_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ftue_overlay.visible = false
@@ -12747,64 +13384,85 @@ func _ensure_ftue_overlay() -> void:
 	ftue_overlay.add_child(ftue_dim_right)
 
 	ftue_highlight_frame = PanelContainer.new()
-	ftue_highlight_frame.name = "FtueHighlightFrame"
+	ftue_highlight_frame.name = "GuideHighlightFrame"
 	ftue_highlight_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ftue_overlay.add_child(ftue_highlight_frame)
 
 	ftue_card = PanelContainer.new()
-	ftue_card.name = "FtueCoachmarkPanel"
+	ftue_card.name = "GuideCoachmarkPanel"
 	ftue_card.custom_minimum_size = FTUE_CARD_SIZE
 	ftue_card.mouse_filter = Control.MOUSE_FILTER_STOP
 	ftue_card.visible = false
 	add_child(ftue_card)
 
 	var card_margin := MarginContainer.new()
-	card_margin.name = "FtueCoachmarkMargin"
-	card_margin.add_theme_constant_override("margin_left", 14)
-	card_margin.add_theme_constant_override("margin_top", 12)
-	card_margin.add_theme_constant_override("margin_right", 14)
-	card_margin.add_theme_constant_override("margin_bottom", 12)
+	card_margin.name = "GuideCoachmarkMargin"
+	card_margin.add_theme_constant_override("margin_left", 18)
+	card_margin.add_theme_constant_override("margin_top", 16)
+	card_margin.add_theme_constant_override("margin_right", 18)
+	card_margin.add_theme_constant_override("margin_bottom", 16)
 	ftue_card.add_child(card_margin)
 
 	var card_vbox := VBoxContainer.new()
-	card_vbox.name = "FtueCoachmarkVBox"
-	card_vbox.add_theme_constant_override("separation", 8)
+	card_vbox.name = "GuideCoachmarkVBox"
+	card_vbox.add_theme_constant_override("separation", 9)
 	card_margin.add_child(card_vbox)
 
 	ftue_title_label = Label.new()
-	ftue_title_label.name = "FtueCoachmarkTitleLabel"
+	ftue_title_label.name = "GuideCoachmarkTitleLabel"
 	ftue_title_label.text = ""
 	ftue_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	card_vbox.add_child(ftue_title_label)
 
 	ftue_objective_label = Label.new()
-	ftue_objective_label.name = "FtueCoachmarkObjectiveLabel"
+	ftue_objective_label.name = "GuideCoachmarkObjectiveLabel"
 	ftue_objective_label.text = ""
 	ftue_objective_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	card_vbox.add_child(ftue_objective_label)
 
 	ftue_body_label = Label.new()
-	ftue_body_label.name = "FtueCoachmarkBodyLabel"
+	ftue_body_label.name = "GuideCoachmarkBodyLabel"
 	ftue_body_label.text = ""
 	ftue_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	card_vbox.add_child(ftue_body_label)
 
+	ftue_status_label = Label.new()
+	ftue_status_label.name = "GuideCoachmarkStatusLabel"
+	ftue_status_label.text = ""
+	ftue_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	card_vbox.add_child(ftue_status_label)
+
 	var footer := HBoxContainer.new()
-	footer.name = "FtueCoachmarkFooter"
+	footer.name = "GuideCoachmarkFooter"
 	footer.add_theme_constant_override("separation", 8)
 	card_vbox.add_child(footer)
 
 	ftue_progress_label = Label.new()
-	ftue_progress_label.name = "FtueCoachmarkProgressLabel"
+	ftue_progress_label.name = "GuideCoachmarkProgressLabel"
 	ftue_progress_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	footer.add_child(ftue_progress_label)
 
+	ftue_hub_button = Button.new()
+	ftue_hub_button.name = "GuideHubButton"
+	ftue_hub_button.text = "Guide Hub"
+	ftue_hub_button.custom_minimum_size = Vector2(104, 34)
+	ftue_hub_button.pressed.connect(_show_guide_hub)
+	footer.add_child(ftue_hub_button)
+
+	ftue_dismiss_button = Button.new()
+	ftue_dismiss_button.name = "GuidePromptDismissButton"
+	ftue_dismiss_button.text = "Later"
+	ftue_dismiss_button.custom_minimum_size = Vector2(78, 34)
+	ftue_dismiss_button.pressed.connect(_on_guide_prompt_dismiss_pressed)
+	footer.add_child(ftue_dismiss_button)
+
 	ftue_skip_button = Button.new()
-	ftue_skip_button.name = "FtueCoachmarkSkipButton"
-	ftue_skip_button.text = "Skip"
-	ftue_skip_button.custom_minimum_size = Vector2(92, 34)
+	ftue_skip_button.name = "GuideCoachmarkSkipButton"
+	ftue_skip_button.text = "Skip Flow"
+	ftue_skip_button.custom_minimum_size = Vector2(104, 34)
 	ftue_skip_button.pressed.connect(_on_ftue_skip_pressed)
 	footer.add_child(ftue_skip_button)
+	_ensure_guide_hub()
 	_style_ftue_overlay()
 
 
@@ -12814,6 +13472,207 @@ func _build_ftue_dim_rect(rect_name: String) -> ColorRect:
 	dim_rect.color = Color(0.0, 0.0, 0.0, 0.30)
 	dim_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return dim_rect
+
+
+func _ensure_guide_hub() -> void:
+	if guide_hub_overlay != null:
+		_ensure_guide_hub_entry_points()
+		return
+	guide_hub_overlay = Control.new()
+	guide_hub_overlay.name = "GuideHubOverlay"
+	guide_hub_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	guide_hub_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	guide_hub_overlay.visible = false
+	add_child(guide_hub_overlay)
+
+	var scrim := ColorRect.new()
+	scrim.name = "GuideHubScrim"
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scrim.color = Color(0.0, 0.0, 0.0, 0.22)
+	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	guide_hub_overlay.add_child(scrim)
+
+	guide_hub_panel = PanelContainer.new()
+	guide_hub_panel.name = "GuideHubPanel"
+	guide_hub_panel.custom_minimum_size = Vector2(720, 520)
+	guide_hub_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	guide_hub_overlay.add_child(guide_hub_panel)
+
+	var margin := MarginContainer.new()
+	margin.name = "GuideHubMargin"
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	guide_hub_panel.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.name = "GuideHubVBox"
+	vbox.add_theme_constant_override("separation", 10)
+	margin.add_child(vbox)
+
+	var header := HBoxContainer.new()
+	header.name = "GuideHubHeader"
+	header.add_theme_constant_override("separation", 10)
+	vbox.add_child(header)
+	var title := Label.new()
+	title.name = "GuideHubTitleLabel"
+	title.text = "Guide Hub"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	title.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 6)
+	header.add_child(title)
+	guide_hub_close_button = Button.new()
+	guide_hub_close_button.name = "GuideHubCloseButton"
+	guide_hub_close_button.text = "Close"
+	guide_hub_close_button.custom_minimum_size = Vector2(92, 34)
+	guide_hub_close_button.pressed.connect(_hide_guide_hub)
+	header.add_child(guide_hub_close_button)
+
+	var body := Label.new()
+	body.name = "GuideHubBodyLabel"
+	body.text = "Start a short guide when the related system matters. Completed and skipped guides stay available for review."
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
+	body.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 1)
+	vbox.add_child(body)
+
+	var scroll := ScrollContainer.new()
+	scroll.name = "GuideHubScroll"
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(scroll)
+	guide_hub_flow_list = VBoxContainer.new()
+	guide_hub_flow_list.name = "GuideHubFlowList"
+	guide_hub_flow_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	guide_hub_flow_list.add_theme_constant_override("separation", 8)
+	scroll.add_child(guide_hub_flow_list)
+
+	_style_panel(guide_hub_panel, COLOR_DESKTOP_CREAM, 8)
+	_style_button(guide_hub_close_button, COLOR_DESKTOP_BROWN, COLOR_ACADEMY_BORDER, COLOR_DESKTOP_CREAM, 6)
+	_ensure_guide_hub_entry_points()
+
+
+func _ensure_guide_hub_entry_points() -> void:
+	if guide_hub_taskbar_button == null and taskbar_status_label != null:
+		var taskbar_row: Control = taskbar_status_label.get_parent() as Control
+		if taskbar_row != null:
+			guide_hub_taskbar_button = Button.new()
+			guide_hub_taskbar_button.name = "GuideHubTaskbarButton"
+			guide_hub_taskbar_button.text = "Guide"
+			guide_hub_taskbar_button.custom_minimum_size = Vector2(78, 32)
+			guide_hub_taskbar_button.tooltip_text = "Open Guide Hub."
+			guide_hub_taskbar_button.pressed.connect(_show_guide_hub)
+			taskbar_row.add_child(guide_hub_taskbar_button)
+			taskbar_row.move_child(guide_hub_taskbar_button, taskbar_status_label.get_index())
+	if guide_hub_help_button == null and help_text_label != null:
+		var help_vbox: Control = help_text_label.get_parent() as Control
+		if help_vbox != null:
+			guide_hub_help_button = Button.new()
+			guide_hub_help_button.name = "HelpGuideHubButton"
+			guide_hub_help_button.text = "Open Guide Hub"
+			guide_hub_help_button.custom_minimum_size = Vector2(160, 34)
+			guide_hub_help_button.tooltip_text = "Start, resume, or revisit guide flows."
+			guide_hub_help_button.pressed.connect(_show_guide_hub)
+			help_vbox.add_child(guide_hub_help_button)
+			help_vbox.move_child(guide_hub_help_button, help_text_label.get_index())
+	if guide_hub_taskbar_button != null:
+		_style_button(guide_hub_taskbar_button, COLOR_DESKTOP_PANEL, COLOR_DESKTOP_FRAME, COLOR_DESKTOP_TEXT, 5)
+	if guide_hub_help_button != null:
+		_style_button(guide_hub_help_button, COLOR_DESKTOP_GOLD, Color(0.643137, 0.466667, 0.137255, 1), COLOR_DESKTOP_TEXT, 6)
+
+
+func _show_guide_hub() -> void:
+	_ensure_guide_hub()
+	_refresh_guide_hub()
+	var viewport_size: Vector2 = get_viewport_rect().size
+	var panel_size: Vector2 = guide_hub_panel.get_combined_minimum_size()
+	panel_size.x = min(max(panel_size.x, 720.0), max(viewport_size.x - 48.0, 320.0))
+	panel_size.y = min(max(panel_size.y, 520.0), max(viewport_size.y - 72.0, 360.0))
+	guide_hub_panel.size = panel_size
+	guide_hub_panel.position = Vector2((viewport_size.x - panel_size.x) * 0.5, (viewport_size.y - panel_size.y) * 0.5)
+	guide_hub_overlay.visible = true
+	guide_hub_overlay.move_to_front()
+
+
+func _hide_guide_hub() -> void:
+	if guide_hub_overlay != null:
+		guide_hub_overlay.visible = false
+
+
+func _refresh_guide_hub() -> void:
+	if guide_hub_flow_list == null:
+		return
+	_clear_node_children(guide_hub_flow_list)
+	for flow_value in GameManager.get_available_guide_flows():
+		if typeof(flow_value) != TYPE_DICTIONARY:
+			continue
+		guide_hub_flow_list.add_child(_build_guide_hub_flow_row(flow_value))
+
+
+func _build_guide_hub_flow_row(flow: Dictionary) -> Control:
+	var panel := PanelContainer.new()
+	panel.name = "GuideHubFlow_%s" % _node_token(str(flow.get("id", "")))
+	_style_panel(panel, Color(0.984314, 0.964706, 0.886275, 1), 6)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	panel.add_child(margin)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	margin.add_child(row)
+	var copy := VBoxContainer.new()
+	copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(copy)
+	var title := Label.new()
+	var flow_is_enabled: bool = bool(flow.get("enabled", true))
+	var flow_status: String = str(flow.get("status", ""))
+	title.text = "%s  |  %s" % [str(flow.get("label", "")), "Coming Soon" if not flow_is_enabled else flow_status.capitalize()]
+	title.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	title.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 2)
+	copy.add_child(title)
+	var body := Label.new()
+	body.text = GameManager.get_academy_release_message() if not flow_is_enabled and str(flow.get("id", "")) == RunState.GUIDE_FLOW_SYSTEM.FLOW_ACADEMY else str(flow.get("description", ""))
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
+	body.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	copy.add_child(body)
+	var action := Button.new()
+	action.name = "GuideHubStart%sButton" % _node_token(str(flow.get("id", "")))
+	action.text = "Soon" if not flow_is_enabled else ("Resume" if flow_status == "active" else ("Restart" if flow_status == "completed" else "Start"))
+	action.custom_minimum_size = Vector2(96, 34)
+	action.disabled = not flow_is_enabled
+	action.tooltip_text = GameManager.get_academy_release_message() if not flow_is_enabled else "Start or resume this guide."
+	if flow_is_enabled:
+		action.pressed.connect(_on_guide_hub_flow_pressed.bind(str(flow.get("id", ""))))
+	_style_button(action, COLOR_DESKTOP_GOLD, Color(0.643137, 0.466667, 0.137255, 1), COLOR_DESKTOP_TEXT, 6)
+	row.add_child(action)
+	return panel
+
+
+func _on_guide_hub_flow_pressed(flow_id: String) -> void:
+	GameManager.start_guide_flow(flow_id)
+	_hide_guide_hub()
+	_refresh_ftue_progress()
+
+
+func _clear_node_children(node: Node) -> void:
+	for child in node.get_children():
+		node.remove_child(child)
+		child.queue_free()
+
+
+func _node_token(value: String) -> String:
+	var token := ""
+	for index in range(value.length()):
+		var character := value.substr(index, 1)
+		if character.is_valid_identifier():
+			token += character
+		elif character == "_" or character == "-":
+			token += "_"
+	return token.capitalize().replace(" ", "")
 
 
 func _style_ftue_overlay() -> void:
@@ -12835,16 +13694,23 @@ func _style_ftue_overlay() -> void:
 
 	if ftue_title_label != null:
 		ftue_title_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
-		ftue_title_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 2)
+		ftue_title_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 5)
 	if ftue_objective_label != null:
 		ftue_objective_label.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
-		ftue_objective_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+		ftue_objective_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 2)
 	if ftue_body_label != null:
 		ftue_body_label.add_theme_color_override("font_color", Color(0.282353, 0.247059, 0.160784, 1))
-		ftue_body_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+		ftue_body_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 1)
+	if ftue_status_label != null:
+		ftue_status_label.add_theme_color_override("font_color", Color(0.454902, 0.337255, 0.141176, 1))
+		ftue_status_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 	if ftue_progress_label != null:
 		ftue_progress_label.add_theme_color_override("font_color", Color(0.423529, 0.337255, 0.188235, 1))
-		ftue_progress_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE - 1)
+		ftue_progress_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	if ftue_hub_button != null:
+		_style_button(ftue_hub_button, COLOR_DESKTOP_GOLD, Color(0.643137, 0.466667, 0.137255, 1), COLOR_DESKTOP_TEXT, 6)
+	if ftue_dismiss_button != null:
+		_style_button(ftue_dismiss_button, Color(0.835294, 0.819608, 0.772549, 1), Color(0.658824, 0.631373, 0.552941, 1), COLOR_WINDOW_TEXT, 6)
 	if ftue_skip_button != null:
 		_style_button(ftue_skip_button, COLOR_DESKTOP_BROWN, COLOR_ACADEMY_BORDER, COLOR_DESKTOP_CREAM, 6)
 
@@ -12852,35 +13718,37 @@ func _style_ftue_overlay() -> void:
 func _hide_ftue_overlay() -> void:
 	if ftue_overlay != null:
 		ftue_overlay.visible = false
+	for dim_rect in [ftue_dim_top, ftue_dim_bottom, ftue_dim_left, ftue_dim_right]:
+		if dim_rect != null:
+			dim_rect.visible = false
+	if ftue_highlight_frame != null:
+		ftue_highlight_frame.visible = false
 	if ftue_card != null:
 		ftue_card.visible = false
+	if first_hour_guide_panel != null:
+		first_hour_guide_panel.visible = false
+	if first_hour_guide_highlight_layer != null:
+		first_hour_guide_highlight_layer.visible = false
 	ftue_last_step_id = ""
 
 
 func _refresh_ftue_progress() -> void:
-	if not GameManager.should_show_tutorial():
+	if guide_focus_in_progress:
+		return
+	if not _ensure_active_or_contextual_guide():
+		_sync_guide_flow_tracking("")
 		_hide_ftue_overlay()
 		return
 
-	var snapshot: Dictionary = GameManager.get_ftue_snapshot()
-	var current_step_id: String = str(snapshot.get("current_step_id", ""))
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	_sync_guide_flow_tracking(str(snapshot.get("active_flow_id", "")))
+	var active_flow_id: String = str(snapshot.get("active_flow_id", ""))
+	var current_step_id: String = str(snapshot.get("active_step_id", ""))
 	var advanced: bool = false
-	match current_step_id:
-		"welcome_desktop":
-			advanced = active_app_id == APP_ID_STOCK
-		"pick_stock":
-			_ftue_prepare_stock_pick()
-			advanced = active_app_id == APP_ID_STOCK and not selected_company_id.is_empty()
-		"inspect_setup":
-			advanced = active_app_id == APP_ID_STOCK and not selected_company_id.is_empty() and _ftue_research_tab_viewed()
-		"buy_one_lot":
-			advanced = _ftue_has_first_buy()
-		"advance_day":
-			advanced = RunState.day_index > int(snapshot.get("start_day_index", 0)) and daily_recap_dialog != null and daily_recap_dialog.visible
-		"read_recap":
-			advanced = RunState.day_index > int(snapshot.get("start_day_index", 0)) and (daily_recap_dialog == null or not daily_recap_dialog.visible)
+	_guide_prepare_step(snapshot)
+	advanced = _guide_step_completed(snapshot)
 
-	if advanced and GameManager.advance_ftue_step(current_step_id):
+	if advanced and GameManager.advance_guide_step(active_flow_id, current_step_id):
 		call_deferred("_refresh_ftue_progress")
 		_refresh_ftue_overlay()
 		return
@@ -12888,38 +13756,75 @@ func _refresh_ftue_progress() -> void:
 	_refresh_ftue_overlay()
 
 
+func _sync_guide_flow_tracking(active_flow_id: String) -> void:
+	if active_flow_id == guide_active_flow_id:
+		return
+	guide_active_flow_id = active_flow_id
+	if active_flow_id == RunState.GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST:
+		guide_watchlist_all_stock_seen = false
+		guide_watchlist_stock_selected = false
+	if active_flow_id == RunState.GUIDE_FLOW_SYSTEM.FLOW_RESEARCH:
+		guide_research_interaction_seen = false
+	if active_flow_id == RunState.GUIDE_FLOW_SYSTEM.FLOW_FUNDAMENTAL:
+		guide_fundamental_key_stats_seen = false
+		guide_fundamental_financials_seen = false
+	if active_flow_id == RunState.GUIDE_FLOW_SYSTEM.FLOW_TECHNICAL:
+		guide_technical_tool_action_seen = false
+	if active_flow_id == RunState.GUIDE_FLOW_SYSTEM.FLOW_THESIS:
+		guide_thesis_subject_chosen = false
+		guide_thesis_create_action_seen = false
+	if active_flow_id == RunState.GUIDE_FLOW_SYSTEM.FLOW_LIFE_FINANCE:
+		guide_life_plan_reviewed = false
+		guide_life_finance_tab_seen = false
+	if active_flow_id == RunState.GUIDE_FLOW_SYSTEM.FLOW_ACADEMY:
+		guide_academy_lesson_chosen = false
+		guide_academy_read_action_seen = false
+
+
 func _refresh_ftue_overlay() -> void:
 	if ftue_overlay == null:
 		return
-	if not GameManager.should_show_tutorial():
+	if not GameManager.get_guide_snapshot().get("enabled", false):
 		_hide_ftue_overlay()
 		return
 
-	var snapshot: Dictionary = GameManager.get_ftue_snapshot()
-	var step_id: String = str(snapshot.get("current_step_id", ""))
-	if step_id.is_empty() or _ftue_should_pause_for_modal(step_id):
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	var flow_id: String = str(snapshot.get("active_flow_id", ""))
+	var step_id: String = str(snapshot.get("active_step_id", ""))
+	if flow_id.is_empty() or step_id.is_empty() or _ftue_should_pause_for_modal(step_id):
 		ftue_overlay.visible = false
+		for dim_rect in [ftue_dim_top, ftue_dim_bottom, ftue_dim_left, ftue_dim_right]:
+			if dim_rect != null:
+				dim_rect.visible = false
+		if ftue_highlight_frame != null:
+			ftue_highlight_frame.visible = false
 		if ftue_card != null:
 			ftue_card.visible = false
 		return
 
-	var copy: Dictionary = _ftue_step_copy(step_id)
-	ftue_title_label.text = str(copy.get("title", "Guided Start"))
-	ftue_objective_label.text = "Objective: %s" % str(copy.get("objective", "Follow the highlighted control."))
-	ftue_body_label.text = str(copy.get("body", ""))
+	var step: Dictionary = snapshot.get("step", {})
+	ftue_title_label.text = str(step.get("title", snapshot.get("flow_label", "Guide")))
+	ftue_objective_label.text = "Objective: %s" % str(step.get("objective", "Follow the highlighted control."))
+	ftue_body_label.text = str(step.get("body", ""))
+	var status_text: String = _guide_status_text(snapshot)
+	if ftue_status_label != null:
+		ftue_status_label.text = status_text
+		ftue_status_label.visible = not status_text.is_empty()
 	var step_index: int = max(int(snapshot.get("step_index", 0)), 0)
 	var step_count: int = max(int(snapshot.get("step_count", 1)), 1)
-	ftue_progress_label.text = "Step %d of %d" % [step_index + 1, step_count]
-	ftue_skip_button.text = "Finish" if step_id == "next_steps" else "Skip"
+	ftue_progress_label.text = "%s  |  Step %d of %d" % [str(snapshot.get("flow_short_label", "Guide")), step_index + 1, step_count]
+	ftue_skip_button.text = "Done" if step_id == "handoff" else "Skip Flow"
+	if ftue_dismiss_button != null:
+		ftue_dismiss_button.visible = not [RunState.GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST, RunState.GUIDE_FLOW_SYSTEM.FLOW_TRADE].has(flow_id)
 
-	var target_rect: Rect2 = _ftue_target_rect_for_step(step_id)
+	var target_rect: Rect2 = _guide_target_rect_for_snapshot(snapshot)
 	_layout_ftue_highlight(target_rect)
 	_position_ftue_card(target_rect)
 	ftue_overlay.visible = true
 	ftue_card.visible = true
 	ftue_overlay.move_to_front()
 	ftue_card.move_to_front()
-	ftue_last_step_id = step_id
+	ftue_last_step_id = "%s:%s" % [flow_id, step_id]
 
 
 func _ftue_should_pause_for_modal(step_id: String) -> bool:
@@ -12936,6 +13841,148 @@ func _ftue_should_pause_for_modal(step_id: String) -> bool:
 	if settings_dialog != null and settings_dialog.visible:
 		return true
 	return false
+
+
+func _ensure_active_or_contextual_guide() -> bool:
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if not str(snapshot.get("active_flow_id", "")).is_empty():
+		return true
+	var context_id: String = _guide_context_id_for_current_surface()
+	var prompt: Dictionary = GameManager.get_contextual_guide_prompt(context_id)
+	if prompt.is_empty():
+		return false
+	GameManager.start_guide_flow(str(prompt.get("flow_id", "")))
+	return not str(GameManager.get_guide_snapshot().get("active_flow_id", "")).is_empty()
+
+
+func _guide_context_id_for_current_surface() -> String:
+	if active_app_id == APP_ID_NEWS or active_app_id == APP_ID_SOCIAL:
+		return "research"
+	if active_app_id == APP_ID_ACADEMY and GameManager.is_academy_available():
+		return "academy"
+	if active_app_id == APP_ID_THESIS:
+		return "thesis"
+	if active_app_id == APP_ID_LIFE:
+		return "life_finance"
+	if active_app_id == APP_ID_STOCK:
+		if _current_work_tab_title() in ["Key Stats", "Financials"]:
+			return "fundamental"
+		if _current_work_tab_title() == "Chart":
+			return "technical"
+		return "trade"
+	if rupslb_meeting_overlay != null and rupslb_meeting_overlay.visible:
+		return "corporate_event"
+	return ""
+
+
+func _guide_prepare_step(snapshot: Dictionary) -> void:
+	var flow_id: String = str(snapshot.get("active_flow_id", ""))
+	var step_id: String = str(snapshot.get("active_step_id", ""))
+	if flow_id == RunState.GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT and step_id == "schedule_event":
+		var hook_result: Dictionary = GameManager.ensure_first_hour_guide_hook()
+		if bool(hook_result.get("success", false)):
+			return
+
+
+func _guide_step_completed(snapshot: Dictionary) -> bool:
+	var flow_id: String = str(snapshot.get("active_flow_id", ""))
+	var step_id: String = str(snapshot.get("active_step_id", ""))
+	match flow_id:
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST:
+			match step_id:
+				"open_stockbot":
+					return active_app_id == APP_ID_STOCK
+				"open_all_stock":
+					return active_app_id == APP_ID_STOCK and stock_list_tabs.current_tab == STOCK_LIST_TAB_ALL_STOCKS and guide_watchlist_all_stock_seen
+				"select_stock":
+					return active_app_id == APP_ID_STOCK and guide_watchlist_stock_selected and not selected_company_id.is_empty()
+				"add_watchlist":
+					return _guide_has_watchlist_stock()
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_TRADE:
+			match step_id:
+				"inspect_setup":
+					return active_app_id == APP_ID_STOCK and not selected_company_id.is_empty() and _ftue_research_tab_viewed()
+				"buy_one_lot":
+					return _ftue_has_first_buy()
+				"open_portfolio":
+					return active_app_id == APP_ID_STOCK and active_section_id == "portfolio"
+				"close_stockbot":
+					return not _is_desktop_app_window_open(APP_ID_STOCK)
+				"advance_day":
+					return daily_recap_dialog != null and daily_recap_dialog.visible
+				"read_recap":
+					return RunState.day_index > 1 and (daily_recap_dialog == null or not daily_recap_dialog.visible)
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_RESEARCH:
+			match step_id:
+				"open_research_app":
+					return active_app_id == APP_ID_NEWS or active_app_id == APP_ID_SOCIAL
+				"inspect_context":
+					return guide_research_interaction_seen
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_FUNDAMENTAL:
+			match step_id:
+				"open_key_stats":
+					return active_app_id == APP_ID_STOCK and guide_fundamental_key_stats_seen
+				"open_financials":
+					return active_app_id == APP_ID_STOCK and guide_fundamental_key_stats_seen and _current_work_tab_title() == "Financials"
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_TECHNICAL:
+			match step_id:
+				"use_chart_tool":
+					return active_app_id == APP_ID_STOCK and _current_work_tab_title() == "Chart" and guide_technical_tool_action_seen
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_THESIS:
+			match step_id:
+				"open_thesis":
+					return active_app_id == APP_ID_THESIS and (guide_thesis_subject_chosen or _guide_any_open_thesis())
+				"create_thesis":
+					return _guide_any_open_thesis()
+				"add_evidence":
+					return _guide_any_thesis_evidence_count() >= 2
+				"generate_or_defer":
+					return _guide_any_thesis_evidence_count() >= 2
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_LIFE_FINANCE:
+			match step_id:
+				"open_life":
+					return active_app_id == APP_ID_LIFE and guide_life_plan_reviewed
+				"open_finance":
+					return guide_life_finance_tab_seen and _guide_life_finance_tab_open()
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT:
+			match step_id:
+				"schedule_event":
+					return not str(GameManager.get_guide_snapshot().get("seeded_meeting_id", "")).is_empty()
+				"attend_rupslb":
+					return (
+						_guide_meeting_is_concluded(snapshot) or
+						_guide_meeting_has_passed(snapshot) or
+						(
+							rupslb_meeting_overlay != null and
+							rupslb_meeting_overlay.visible and
+							current_corporate_meeting_id == str(snapshot.get("seeded_meeting_id", ""))
+						)
+					)
+				"approach_lead":
+					return _guide_has_approached_lead(snapshot) or _guide_meeting_is_concluded(snapshot) or _guide_meeting_has_passed(snapshot)
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_ACADEMY:
+			match step_id:
+				"open_academy":
+					return active_app_id == APP_ID_ACADEMY and guide_academy_lesson_chosen
+				"read_lesson":
+					return guide_academy_read_action_seen and _guide_current_academy_lesson_read()
+	return false
+
+
+func _guide_status_text(snapshot: Dictionary) -> String:
+	var flow_id: String = str(snapshot.get("active_flow_id", ""))
+	var step_id: String = str(snapshot.get("active_step_id", ""))
+	var action_hint: String = str(snapshot.get("step", {}).get("action_hint", ""))
+	var target_rect: Rect2 = _guide_target_rect_for_snapshot(snapshot, false)
+	if target_rect.size.x <= 1.0 or target_rect.size.y <= 1.0:
+		var required_app: String = _guide_required_app_for_step(flow_id, step_id)
+		if not required_app.is_empty() and active_app_id != required_app:
+			return "Open or focus %s to continue." % _guide_app_label(required_app)
+		if not action_hint.is_empty():
+			return "Next action: %s." % action_hint
+	if not action_hint.is_empty():
+		return "Next action: %s." % action_hint
+	return ""
 
 
 func _ftue_step_copy(step_id: String) -> Dictionary:
@@ -12980,7 +14027,7 @@ func _ftue_step_copy(step_id: String) -> Dictionary:
 			return {
 				"title": "Your Next Loop",
 				"objective": "Choose the next tool when you are ready.",
-				"body": "Portfolio audits fills, Thesis records your reason, Academy teaches concepts, Life tracks runway, and Network grows through News, referrals, and RUPSLB room leads."
+				"body": "Portfolio audits fills, Thesis records your reason, Life tracks runway, and Network grows through News, referrals, and RUPSLB room leads. Academy is coming soon."
 			}
 	return {
 		"title": "Guided Start",
@@ -13007,6 +14054,324 @@ func _ftue_target_rect_for_step(step_id: String) -> Rect2:
 	if target == null or not target.is_visible_in_tree():
 		return Rect2()
 	return target.get_global_rect().grow(FTUE_TARGET_PADDING)
+
+
+func _guide_target_rect_for_snapshot(snapshot: Dictionary, allow_focus: bool = true) -> Rect2:
+	var flow_id: String = str(snapshot.get("active_flow_id", ""))
+	var step_id: String = str(snapshot.get("active_step_id", ""))
+	guide_target_name = ""
+	if allow_focus:
+		_guide_focus_required_surface(flow_id, step_id)
+	var target: Control = _guide_target_for_step(flow_id, step_id)
+	if target == null or not target.is_visible_in_tree():
+		return Rect2()
+	if target is BaseButton and (target as BaseButton).disabled:
+		return Rect2()
+	var rect: Rect2 = target.get_global_rect().grow(GUIDE_TARGET_PADDING)
+	var viewport_rect: Rect2 = get_viewport_rect()
+	if not viewport_rect.intersects(rect):
+		return Rect2()
+	guide_target_name = str(target.name)
+	return rect
+
+
+func _guide_focus_required_surface(flow_id: String, step_id: String) -> void:
+	if guide_focus_in_progress:
+		return
+	var required_app: String = _guide_required_app_for_step(flow_id, step_id)
+	if required_app.is_empty() or required_app == active_app_id:
+		return
+	if _is_guide_modal_blocking_focus():
+		return
+	if _is_desktop_app_window_open(required_app):
+		guide_focus_in_progress = true
+		_focus_desktop_app_window(required_app)
+		guide_focus_in_progress = false
+
+
+func _is_guide_modal_blocking_focus() -> bool:
+	return (
+		(daily_recap_dialog != null and daily_recap_dialog.visible) or
+		(rupslb_meeting_overlay != null and rupslb_meeting_overlay.visible) or
+		(corporate_meeting_overlay != null and corporate_meeting_overlay.visible) or
+		(settings_dialog != null and settings_dialog.visible) or
+		(guide_hub_overlay != null and guide_hub_overlay.visible)
+	)
+
+
+func _guide_required_app_for_step(flow_id: String, step_id: String) -> String:
+	match flow_id:
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST:
+			if step_id in ["open_all_stock", "select_stock", "add_watchlist"]:
+				return APP_ID_STOCK
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_TRADE:
+			if step_id in ["inspect_setup", "buy_one_lot", "open_portfolio", "close_stockbot"]:
+				return APP_ID_STOCK
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_RESEARCH:
+			if step_id == "inspect_context":
+				return active_app_id if active_app_id in [APP_ID_NEWS, APP_ID_SOCIAL] else APP_ID_NEWS
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_FUNDAMENTAL, RunState.GUIDE_FLOW_SYSTEM.FLOW_TECHNICAL:
+			return APP_ID_STOCK
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_THESIS:
+			return APP_ID_THESIS
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_LIFE_FINANCE:
+			return APP_ID_LIFE
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_ACADEMY:
+			return APP_ID_ACADEMY if GameManager.is_academy_available() else ""
+	return ""
+
+
+func _guide_target_for_step(flow_id: String, step_id: String) -> Control:
+	match flow_id:
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST:
+			match step_id:
+				"open_stockbot":
+					return stock_app_button if active_app_id == APP_ID_DESKTOP else null
+				"open_all_stock":
+					if active_app_id != APP_ID_STOCK:
+						return stock_app_button
+					return markets_button if active_section_id != "markets" else stock_list_tabs
+				"select_stock":
+					if active_app_id != APP_ID_STOCK:
+						return stock_app_button
+					if active_section_id != "markets":
+						return markets_button
+					return all_stocks_rows if stock_list_tabs.current_tab == STOCK_LIST_TAB_ALL_STOCKS else stock_list_tabs
+				"add_watchlist":
+					if active_app_id != APP_ID_STOCK:
+						return stock_app_button
+					if active_section_id != "markets":
+						return markets_button
+					return _guide_all_stock_watch_column_target() if stock_list_tabs.current_tab == STOCK_LIST_TAB_ALL_STOCKS else stock_list_tabs
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_TRADE:
+			match step_id:
+				"inspect_setup":
+					return work_tabs if active_app_id == APP_ID_STOCK else stock_app_button
+				"buy_one_lot":
+					if active_app_id != APP_ID_STOCK:
+						return stock_app_button
+					return submit_order_button if submit_order_button != null and submit_order_button.is_visible_in_tree() else buy_button
+				"open_portfolio":
+					return portfolio_button if active_app_id == APP_ID_STOCK else stock_app_button
+				"close_stockbot":
+					return _guide_desktop_window_close_button(APP_ID_STOCK) if active_app_id == APP_ID_STOCK else stock_app_button
+				"advance_day":
+					return desktop_advance_day_button
+				"read_recap":
+					return daily_recap_continue_button if daily_recap_continue_button != null else daily_recap_dialog
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_RESEARCH:
+			match step_id:
+				"open_research_app":
+					if active_app_id == APP_ID_DESKTOP:
+						return news_app_button if news_app_button != null else social_app_button
+					return news_window if active_app_id == APP_ID_NEWS else social_window
+				"inspect_context":
+					return news_window if active_app_id == APP_ID_NEWS else social_window
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_FUNDAMENTAL:
+			if active_app_id != APP_ID_STOCK:
+				return stock_app_button
+			if active_section_id != "markets":
+				return markets_button
+			return work_tabs
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_TECHNICAL:
+			if active_app_id != APP_ID_STOCK:
+				return stock_app_button
+			if active_section_id != "markets":
+				return markets_button
+			if _current_work_tab_title() != "Chart":
+				return work_tabs
+			if step_id == "use_chart_tool":
+				var chart_controls: Control = trade_workspace_widget.find_child("ChartRangeRow", true, false) as Control
+				if chart_controls != null:
+					return chart_controls
+				var pattern_button: Control = trade_workspace_widget.find_child("PatternToolButton", true, false) as Control
+				return pattern_button if pattern_button != null else work_tabs
+			return work_tabs
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_THESIS:
+			if active_app_id != APP_ID_THESIS:
+				return thesis_app_button
+			if step_id == "open_thesis":
+				return _guide_thesis_subject_target()
+			if step_id == "create_thesis":
+				return thesis_window.find_child("ThesisCreateButton", true, false) as Control
+			if step_id == "add_evidence":
+				return thesis_window.find_child("ThesisEvidenceCardGrid", true, false) as Control
+			if step_id == "generate_or_defer":
+				return thesis_window.find_child("ThesisGenerateReportButton", true, false) as Control
+			return thesis_window
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_LIFE_FINANCE:
+			if active_app_id != APP_ID_LIFE:
+				return life_app_button
+			if step_id == "open_life":
+				var update_button: Control = life_window.find_child("LifeBasicsSlider", true, false) as Control
+				if update_button == null:
+					update_button = life_window.find_child("LifeUpdatePlanButton", true, false) as Control
+				var runway_label: Control = life_window.find_child("LifeRunwayLabel", true, false) as Control
+				return update_button if update_button != null else runway_label
+			if step_id == "open_finance":
+				return life_window.find_child("LifeTabs", true, false) as Control
+			return life_window
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT:
+			match step_id:
+				"schedule_event":
+					return desktop_advance_day_button if active_app_id == APP_ID_DESKTOP else null
+				"attend_rupslb":
+					if rupslb_meeting_overlay != null and rupslb_meeting_overlay.visible:
+						return rupslb_meeting_overlay
+					if active_app_id == APP_ID_STOCK:
+						return dashboard_button
+					return stock_app_button if active_app_id == APP_ID_DESKTOP else null
+				"approach_lead":
+					return rupslb_meeting_overlay
+		RunState.GUIDE_FLOW_SYSTEM.FLOW_ACADEMY:
+			if not GameManager.is_academy_available():
+				return null
+			if active_app_id != APP_ID_ACADEMY:
+				return academy_app_button
+			if step_id == "open_academy":
+				return academy_section_list if academy_section_list != null else academy_window
+			if step_id == "read_lesson":
+				return academy_mark_read_button
+			return academy_window
+	return null
+
+
+func _guide_thesis_subject_target() -> Control:
+	if thesis_window == null:
+		return null
+	var company_option: Control = thesis_window.find_child("ThesisCompanyOption", true, false) as Control
+	if _guide_target_inside_named_parent(company_option, "ThesisBuilderPanel"):
+		return company_option
+	var builder_panel: Control = thesis_window.find_child("ThesisBuilderPanel", true, false) as Control
+	return builder_panel if builder_panel != null else thesis_window
+
+
+func _guide_target_inside_named_parent(target: Control, parent_name: String) -> bool:
+	if target == null or not target.is_visible_in_tree():
+		return false
+	var parent_control: Control = null
+	if thesis_window != null:
+		parent_control = thesis_window.find_child(parent_name, true, false) as Control
+	if parent_control == null or not parent_control.is_visible_in_tree():
+		return true
+	var target_rect: Rect2 = target.get_global_rect()
+	var parent_rect: Rect2 = parent_control.get_global_rect().grow(8.0)
+	return target_rect.size.x > 1.0 and target_rect.size.y > 1.0 and parent_rect.intersects(target_rect)
+
+
+func _guide_all_stock_watch_column_target() -> Control:
+	if all_stocks_rows == null:
+		return stock_list_tabs
+	var scroll_parent: Control = all_stocks_rows.get_parent() as Control
+	return scroll_parent if scroll_parent != null else all_stocks_rows
+
+
+func _guide_desktop_window_close_button(app_id: String) -> Control:
+	var meta: Dictionary = desktop_app_windows.get(app_id, {})
+	if meta.is_empty():
+		return null
+	return meta.get("close_button", null) as Control
+
+
+func _mark_guide_watchlist_all_stock_seen() -> void:
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if str(snapshot.get("active_flow_id", "")) != RunState.GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST:
+		return
+	if stock_list_tabs == null or stock_list_tabs.current_tab != STOCK_LIST_TAB_ALL_STOCKS:
+		return
+	guide_watchlist_all_stock_seen = true
+	_refresh_ftue_progress()
+
+
+func _mark_guide_watchlist_stock_selected() -> void:
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if str(snapshot.get("active_flow_id", "")) != RunState.GUIDE_FLOW_SYSTEM.FLOW_WATCHLIST:
+		return
+	guide_watchlist_stock_selected = true
+	_refresh_ftue_progress()
+
+
+func _mark_guide_research_interaction() -> void:
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if str(snapshot.get("active_flow_id", "")) != RunState.GUIDE_FLOW_SYSTEM.FLOW_RESEARCH:
+		return
+	guide_research_interaction_seen = true
+	_refresh_ftue_progress()
+
+
+func _mark_guide_fundamental_tab_seen(tab_index: int) -> void:
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if str(snapshot.get("active_flow_id", "")) != RunState.GUIDE_FLOW_SYSTEM.FLOW_FUNDAMENTAL:
+		return
+	if work_tabs == null or tab_index < 0 or tab_index >= work_tabs.get_tab_count():
+		return
+	var tab_title: String = work_tabs.get_tab_title(tab_index)
+	var step_id: String = str(snapshot.get("active_step_id", ""))
+	if tab_title == "Key Stats":
+		guide_fundamental_key_stats_seen = true
+	elif tab_title == "Financials" and step_id == "open_key_stats":
+		guide_fundamental_key_stats_seen = true
+	elif tab_title == "Financials":
+		guide_fundamental_financials_seen = true
+
+
+func _mark_guide_thesis_subject_chosen() -> void:
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if str(snapshot.get("active_flow_id", "")) != RunState.GUIDE_FLOW_SYSTEM.FLOW_THESIS:
+		return
+	guide_thesis_subject_chosen = true
+	_refresh_ftue_progress()
+
+
+func _mark_guide_thesis_create_action() -> void:
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if str(snapshot.get("active_flow_id", "")) != RunState.GUIDE_FLOW_SYSTEM.FLOW_THESIS:
+		return
+	guide_thesis_create_action_seen = true
+	_refresh_ftue_progress()
+
+
+func _mark_guide_life_plan_reviewed() -> void:
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if str(snapshot.get("active_flow_id", "")) != RunState.GUIDE_FLOW_SYSTEM.FLOW_LIFE_FINANCE:
+		return
+	guide_life_plan_reviewed = true
+	_refresh_ftue_progress()
+
+
+func _mark_guide_academy_lesson_chosen() -> void:
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if str(snapshot.get("active_flow_id", "")) != RunState.GUIDE_FLOW_SYSTEM.FLOW_ACADEMY:
+		return
+	guide_academy_lesson_chosen = true
+	_refresh_ftue_progress()
+
+
+func _mark_guide_academy_read_action() -> void:
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if str(snapshot.get("active_flow_id", "")) != RunState.GUIDE_FLOW_SYSTEM.FLOW_ACADEMY:
+		return
+	guide_academy_read_action_seen = true
+	_refresh_ftue_progress()
+
+
+func _guide_app_label(app_id: String) -> String:
+	match app_id:
+		APP_ID_STOCK:
+			return "STOCKBOT"
+		APP_ID_NEWS:
+			return "News"
+		APP_ID_SOCIAL:
+			return "Twooter"
+		APP_ID_NETWORK:
+			return "Network"
+		APP_ID_ACADEMY:
+			return "Academy"
+		APP_ID_THESIS:
+			return "Thesis Board"
+		APP_ID_LIFE:
+			return "Life"
+	return "the right window"
 
 
 func _ftue_prepare_stock_pick() -> void:
@@ -13103,38 +14468,197 @@ func _ftue_has_first_buy() -> bool:
 	return false
 
 
+func _guide_has_watchlist_stock() -> bool:
+	var watchlist_ids: Array = GameManager.get_watchlist_company_ids()
+	if watchlist_ids.is_empty():
+		return false
+	if selected_company_id.is_empty():
+		return true
+	return watchlist_ids.has(selected_company_id)
+
+
+func _current_work_tab_title() -> String:
+	if work_tabs == null:
+		return ""
+	var index: int = work_tabs.current_tab
+	if index < 0 or index >= work_tabs.get_tab_count():
+		return ""
+	return work_tabs.get_tab_title(index)
+
+
+func _guide_chart_tool_used() -> bool:
+	if trade_workspace_widget == null:
+		return false
+	if trade_workspace_widget.has_method("get_selected_range_id") and str(trade_workspace_widget.call("get_selected_range_id")).to_lower() != "1m":
+		return true
+	var pattern_panel: Control = trade_workspace_widget.find_child("ChartPatternPanel", true, false) as Control
+	return pattern_panel != null and pattern_panel.visible
+
+
+func _guide_any_open_thesis() -> bool:
+	for thesis_value in GameManager.get_thesis_board_snapshot().get("theses", []):
+		if typeof(thesis_value) != TYPE_DICTIONARY:
+			continue
+		var thesis: Dictionary = thesis_value
+		if str(thesis.get("status", "open")) != "closed":
+			return true
+	return false
+
+
+func _guide_any_thesis_evidence_count() -> int:
+	var max_count: int = 0
+	for thesis_value in GameManager.get_thesis_board_snapshot().get("theses", []):
+		if typeof(thesis_value) != TYPE_DICTIONARY:
+			continue
+		var thesis: Dictionary = thesis_value
+		max_count = max(max_count, thesis.get("evidence", []).size())
+	return max_count
+
+
+func _guide_life_finance_tab_open() -> bool:
+	if active_app_id != APP_ID_LIFE or life_window == null:
+		return false
+	var tabs: TabContainer = life_window.find_child("LifeTabs", true, false) as TabContainer
+	return tabs != null and tabs.current_tab == 1
+
+
+func _guide_current_academy_lesson_read() -> bool:
+	var progress: Dictionary = RunState.get_academy_progress()
+	var read_sections: Dictionary = progress.get("read_sections", {})
+	return read_sections.get(selected_academy_category_id, []).has(selected_academy_section_id)
+
+
+func _guide_has_approached_lead(snapshot: Dictionary) -> bool:
+	var meeting_id: String = str(snapshot.get("seeded_meeting_id", "")).strip_edges()
+	if meeting_id.is_empty():
+		return false
+	var session_snapshot: Dictionary = GameManager.get_corporate_meeting_session_snapshot(meeting_id)
+	for lead_value in session_snapshot.get("meeting_leads", []):
+		if typeof(lead_value) != TYPE_DICTIONARY:
+			continue
+		var lead: Dictionary = lead_value
+		if bool(lead.get("approached", false)) and not str(lead.get("response_text", "")).is_empty():
+			return true
+	return false
+
+
+func _guide_meeting_is_concluded(snapshot: Dictionary) -> bool:
+	var meeting_id: String = str(snapshot.get("seeded_meeting_id", "")).strip_edges()
+	if meeting_id.is_empty():
+		return false
+	var session_snapshot: Dictionary = GameManager.get_corporate_meeting_session_snapshot(meeting_id)
+	if session_snapshot.is_empty():
+		return false
+	var session: Dictionary = session_snapshot.get("session", {})
+	if bool(session.get("closed", false)):
+		return true
+	if str(session_snapshot.get("current_stage_id", session.get("presentation_stage", ""))) == "result":
+		return true
+	return not session_snapshot.get("result_summary", {}).is_empty() or not session.get("resolved_result_summary", {}).is_empty()
+
+
+func _guide_meeting_has_passed(snapshot: Dictionary) -> bool:
+	var meeting: Dictionary = snapshot.get("seeded_meeting", {})
+	if meeting.is_empty():
+		return false
+	var meeting_day_number: int = int(meeting.get("trading_day_number", 0))
+	if meeting_day_number <= 0:
+		return false
+	return meeting_day_number < int(RunState.day_index) + 1
+
+
 func _on_ftue_skip_pressed() -> void:
-	var snapshot: Dictionary = GameManager.get_ftue_snapshot()
-	if str(snapshot.get("current_step_id", "")) == "next_steps":
-		GameManager.mark_ftue_completed()
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	if str(snapshot.get("active_step_id", "")) == "handoff":
+		GameManager.complete_guide_flow(str(snapshot.get("active_flow_id", "")))
 	else:
-		GameManager.skip_ftue()
+		GameManager.skip_guide_flow(str(snapshot.get("active_flow_id", "")))
 	_hide_ftue_overlay()
-	_refresh_first_hour_guide_progress()
+	_refresh_ftue_progress()
 
 
-func get_ftue_smoke_state() -> Dictionary:
-	var snapshot: Dictionary = GameManager.get_ftue_snapshot()
+func _on_guide_prompt_dismiss_pressed() -> void:
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	var flow_id: String = str(snapshot.get("active_flow_id", ""))
+	if not flow_id.is_empty():
+		GameManager.dismiss_guide_prompt(flow_id)
+	_hide_ftue_overlay()
+
+
+func _smoke_rect_dict(rect: Rect2) -> Dictionary:
 	return {
-		"overlay_exists": ftue_overlay != null,
-		"visible": ftue_overlay != null and ftue_overlay.visible,
-		"current_step_id": str(snapshot.get("current_step_id", "")),
-		"completed": bool(snapshot.get("completed", false)),
-		"skipped": bool(snapshot.get("skipped", false)),
-		"title": ftue_title_label.text if ftue_title_label != null else "",
-		"objective": ftue_objective_label.text if ftue_objective_label != null else "",
-		"button_text": ftue_skip_button.text if ftue_skip_button != null else "",
-		"highlight_visible": ftue_highlight_frame != null and ftue_highlight_frame.visible,
-		"overlay_mouse_filter": ftue_overlay.mouse_filter if ftue_overlay != null else -1,
-		"card_mouse_filter": ftue_card.mouse_filter if ftue_card != null else -1,
-		"card_parent_is_overlay": ftue_card != null and ftue_overlay != null and ftue_card.get_parent() == ftue_overlay
+		"x": rect.position.x,
+		"y": rect.position.y,
+		"width": rect.size.x,
+		"height": rect.size.y
 	}
 
 
+func get_guide_smoke_state() -> Dictionary:
+	var snapshot: Dictionary = GameManager.get_guide_snapshot()
+	var card_rect: Dictionary = {}
+	var highlight_rect: Dictionary = {}
+	if ftue_card != null and ftue_card.visible:
+		card_rect = _smoke_rect_dict(ftue_card.get_global_rect())
+	if ftue_overlay != null and ftue_overlay.visible and ftue_highlight_frame != null and ftue_highlight_frame.visible:
+		highlight_rect = _smoke_rect_dict(ftue_highlight_frame.get_global_rect())
+	var highlight_visible: bool = ftue_overlay != null and ftue_overlay.visible and ftue_highlight_frame != null and ftue_highlight_frame.visible
+	var all_stocks_scroll: Control = all_stocks_rows.get_parent() as Control if all_stocks_rows != null else null
+	return {
+		"overlay_exists": ftue_overlay != null,
+		"visible": ftue_overlay != null and ftue_overlay.visible and ftue_card != null and ftue_card.visible,
+		"current_flow_id": str(snapshot.get("active_flow_id", "")),
+		"current_step_id": str(snapshot.get("active_step_id", "")),
+		"completed_flow_ids": snapshot.get("completed_flow_ids", []).duplicate(),
+		"skipped_flow_ids": snapshot.get("skipped_flow_ids", []).duplicate(),
+		"dismissed_prompt_flow_ids": snapshot.get("dismissed_prompt_flow_ids", []).duplicate(),
+		"completed_step_ids": snapshot.get("completed_step_ids", {}).duplicate(true),
+		"anchor_company_id": str(snapshot.get("anchor_company_id", "")),
+		"seeded_meeting_id": str(snapshot.get("seeded_meeting_id", "")),
+		"seeded_chain_id": str(snapshot.get("seeded_chain_id", "")),
+		"title": ftue_title_label.text if ftue_title_label != null else "",
+		"objective": ftue_objective_label.text if ftue_objective_label != null else "",
+		"body": ftue_body_label.text if ftue_body_label != null else "",
+		"status": ftue_status_label.text if ftue_status_label != null else "",
+		"progress": ftue_progress_label.text if ftue_progress_label != null else "",
+		"button_text": ftue_skip_button.text if ftue_skip_button != null else "",
+		"highlight_visible": highlight_visible,
+		"highlight_target_name": guide_target_name,
+		"highlight_rect": highlight_rect,
+		"card_rect": card_rect,
+		"card_min_width": ftue_card.custom_minimum_size.x if ftue_card != null else 0.0,
+		"hub_button_exists": ftue_hub_button != null,
+		"hub_visible": guide_hub_overlay != null and guide_hub_overlay.visible,
+		"taskbar_hub_exists": guide_hub_taskbar_button != null,
+		"help_hub_exists": guide_hub_help_button != null,
+		"dismiss_button_exists": ftue_dismiss_button != null,
+		"overlay_mouse_filter": ftue_overlay.mouse_filter if ftue_overlay != null else -1,
+		"card_mouse_filter": ftue_card.mouse_filter if ftue_card != null else -1,
+		"card_parent_is_overlay": ftue_card != null and ftue_overlay != null and ftue_card.get_parent() == ftue_overlay,
+		"active_app_id": active_app_id,
+		"active_section_id": active_section_id,
+		"stock_list_tab_index": stock_list_tabs.current_tab if stock_list_tabs != null else -1,
+		"stock_list_tabs_visible": stock_list_tabs.is_visible_in_tree() if stock_list_tabs != null else false,
+		"stock_list_tabs_rect": _smoke_rect_dict(stock_list_tabs.get_global_rect()) if stock_list_tabs != null else {},
+		"all_stocks_rows_visible": all_stocks_rows.is_visible_in_tree() if all_stocks_rows != null else false,
+		"all_stocks_rows_rect": _smoke_rect_dict(all_stocks_rows.get_global_rect()) if all_stocks_rows != null else {},
+		"all_stocks_scroll_visible": all_stocks_scroll.is_visible_in_tree() if all_stocks_scroll != null else false,
+		"all_stocks_scroll_rect": _smoke_rect_dict(all_stocks_scroll.get_global_rect()) if all_stocks_scroll != null else {}
+	}
+
+
+func get_ftue_smoke_state() -> Dictionary:
+	var guide_state: Dictionary = get_guide_smoke_state()
+	var legacy_snapshot: Dictionary = GameManager.get_ftue_snapshot()
+	guide_state["current_step_id"] = str(legacy_snapshot.get("current_step_id", guide_state.get("current_step_id", "")))
+	guide_state["current_flow_id"] = str(legacy_snapshot.get("current_flow_id", guide_state.get("current_flow_id", "")))
+	guide_state["completed"] = bool(legacy_snapshot.get("completed", false))
+	guide_state["skipped"] = bool(legacy_snapshot.get("skipped", false))
+	return guide_state
+
+
 func _show_first_hour_guide_if_needed() -> void:
-	_ensure_first_hour_guide_ui()
-	_refresh_first_hour_guide_progress()
-	_refresh_first_hour_guide_panel()
+	_refresh_ftue_progress()
 
 
 func _ensure_first_hour_guide_ui() -> void:
@@ -13266,6 +14790,8 @@ func _hide_first_hour_guide_ui() -> void:
 
 
 func _refresh_first_hour_guide_progress() -> void:
+	_refresh_ftue_progress()
+	return
 	if not GameManager.should_show_first_hour_guide():
 		_hide_first_hour_guide_ui()
 		return
@@ -13314,6 +14840,8 @@ func _refresh_first_hour_guide_progress() -> void:
 
 
 func _refresh_first_hour_guide_panel() -> void:
+	_refresh_ftue_overlay()
+	return
 	if first_hour_guide_panel == null:
 		return
 	if not GameManager.should_show_first_hour_guide() or _first_hour_guide_should_pause_for_modal():
@@ -13436,7 +14964,7 @@ func _first_hour_guide_step_copy(step_id: String, snapshot: Dictionary) -> Dicti
 			return {
 				"title": "Loop Guide Complete",
 				"objective": "Choose your next longer-term goal.",
-				"body": "Useful goals: build a 3-stock watchlist, complete an Academy module, survive the first month, generate a thesis report, attend another RUPSLB, or grow portfolio value."
+				"body": "Useful goals: build a 3-stock watchlist, survive the first month, generate a thesis report, attend another RUPSLB, or grow portfolio value. Academy is coming soon."
 			}
 	return {
 		"title": "Loop Guide",
@@ -13619,35 +15147,29 @@ func _on_first_hour_guide_hide_pressed() -> void:
 
 func get_first_hour_guide_smoke_state() -> Dictionary:
 	var snapshot: Dictionary = GameManager.get_first_hour_guide_snapshot()
-	var highlight_rect: Dictionary = {}
-	if first_hour_guide_highlight_frame != null and first_hour_guide_highlight_frame.visible:
-		var rect: Rect2 = first_hour_guide_highlight_frame.get_global_rect()
-		highlight_rect = {
-			"x": rect.position.x,
-			"y": rect.position.y,
-			"width": rect.size.x,
-			"height": rect.size.y
-		}
+	var guide_state: Dictionary = get_guide_smoke_state()
+	var visible_as_corporate: bool = str(guide_state.get("current_flow_id", "")) == RunState.GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT and bool(guide_state.get("visible", false))
+	var completed_steps: Dictionary = guide_state.get("completed_step_ids", {})
 	return {
-		"panel_exists": first_hour_guide_panel != null,
-		"visible": first_hour_guide_panel != null and first_hour_guide_panel.visible,
+		"panel_exists": ftue_card != null,
+		"visible": visible_as_corporate,
 		"current_step_id": str(snapshot.get("current_step_id", "")),
 		"completed": bool(snapshot.get("completed", false)),
 		"skipped": bool(snapshot.get("skipped", false)),
-		"completed_step_ids": snapshot.get("completed_step_ids", []).duplicate(),
+		"completed_step_ids": snapshot.get("completed_step_ids", completed_steps.get(RunState.GUIDE_FLOW_SYSTEM.FLOW_CORPORATE_EVENT, [])).duplicate(),
 		"anchor_company_id": str(snapshot.get("anchor_company_id", "")),
 		"seeded_meeting_id": str(snapshot.get("seeded_meeting_id", "")),
 		"seeded_chain_id": str(snapshot.get("seeded_chain_id", "")),
-		"title": first_hour_guide_title_label.text if first_hour_guide_title_label != null else "",
-		"objective": first_hour_guide_objective_label.text if first_hour_guide_objective_label != null else "",
-		"status": first_hour_guide_status_label.text if first_hour_guide_status_label != null else "",
-		"button_text": first_hour_guide_skip_button.text if first_hour_guide_skip_button != null else "",
-		"highlight_visible": first_hour_guide_highlight_frame != null and first_hour_guide_highlight_frame.visible,
-		"highlight_target_name": first_hour_guide_target_name,
-		"highlight_rect": highlight_rect,
+		"title": str(guide_state.get("title", "")),
+		"objective": str(guide_state.get("objective", "")),
+		"status": str(guide_state.get("status", "")),
+		"button_text": str(guide_state.get("button_text", "")),
+		"highlight_visible": visible_as_corporate and bool(guide_state.get("highlight_visible", false)),
+		"highlight_target_name": str(guide_state.get("highlight_target_name", "")) if visible_as_corporate else "",
+		"highlight_rect": guide_state.get("highlight_rect", {}) if visible_as_corporate else {},
 		"active_app_id": active_app_id,
 		"active_section_id": active_section_id,
-		"panel_mouse_filter": first_hour_guide_panel.mouse_filter if first_hour_guide_panel != null else -1
+		"panel_mouse_filter": ftue_card.mouse_filter if ftue_card != null else -1
 	}
 
 
@@ -15309,7 +16831,7 @@ func _build_tutorial_text() -> String:
 
 
 func _build_help_text() -> String:
-	return "OVERVIEW\nThe desktop is your trading desk. Apps can be opened, moved, and revisited as the market changes.\n\nOBJECTIVE\nFind one readable setup, size lightly, advance the day, then learn from the recap.\n\nSECTIONS\n%s\n\n%s\n\n%s\n\nFIRST LOOP\n1. Open STOCKBOT from the desktop.\n2. Pick one stock to study.\n3. Use Key Stats, Financials, Broker, or Profile before buying.\n4. Buy a small starter lot from the order ticket.\n5. Press Advance Day and read the Daily Recap.\n6. Use Portfolio, Thesis, Academy, Life, and Network for the next decision.\n\nGUIDED FIRST WEEK\nAfter the first loop, the Loop Guide nudges you to review Portfolio, create a Thesis, keep a Watchlist, read market context, attend a low-stakes RUPSLB, and approach one room lead.\n\nNOTES\nUse sector context to decide whether a stock is moving with its group or fighting it.\nNewest fills appear first in Trade History so you can audit lots, fees, cash impact, and realized P/L.\n\nCURRENT DIFFICULTY\n%s" % [
+	return "OVERVIEW\nThe desktop is your trading desk. Apps can be opened, moved, and revisited as the market changes.\n\nOBJECTIVE\nFind one readable setup, size lightly, advance the day, then learn from the recap.\n\nSECTIONS\n%s\n\n%s\n\n%s\n\nFIRST LOOP\n1. Open STOCKBOT from the desktop.\n2. Pick one stock to study.\n3. Use Key Stats, Financials, Broker, or Profile before buying.\n4. Buy a small starter lot from the order ticket.\n5. Press Advance Day and read the Daily Recap.\n6. Use Portfolio, Thesis, Life, and Network for the next decision. Academy is coming soon.\n\nGUIDED FIRST WEEK\nAfter the first loop, the Loop Guide nudges you to review Portfolio, create a Thesis, keep a Watchlist, read market context, attend a low-stakes RUPSLB, and approach one room lead.\n\nNOTES\nUse sector context to decide whether a stock is moving with its group or fighting it.\nNewest fills appear first in Trade History so you can audit lots, fees, cash impact, and realized P/L.\n\nCURRENT DIFFICULTY\n%s" % [
 		_sidebar_hint_for_section("dashboard"),
 		_sidebar_hint_for_section("markets"),
 		_sidebar_hint_for_section("portfolio"),
@@ -15640,8 +17162,8 @@ func _refresh_order_controls(snapshot: Dictionary) -> void:
 	var available_cash: float = float(portfolio.get("cash", 0.0))
 	var max_sellable_lots: int = int(floor(float(shares_owned) / float(lot_size)))
 	var buy_total_cost: float = float(buy_estimate.get("total_cost", 0.0))
-	var buy_block_reason: String = GameManager.get_cash_stress_block_reason("buy") if RunState.has_active_run() else ""
-	var sell_block_reason: String = GameManager.get_cash_stress_block_reason("sell") if RunState.has_active_run() else ""
+	var buy_block_reason: String = GameManager.get_life_action_block_reason("buy") if RunState.has_active_run() else ""
+	var sell_block_reason: String = GameManager.get_life_action_block_reason("sell") if RunState.has_active_run() else ""
 	var can_buy: bool = bool(buy_estimate.get("success", false)) and buy_total_cost <= available_cash + 0.0001
 	var can_sell: bool = bool(sell_estimate.get("success", false)) and max_sellable_lots >= current_lots
 	if not buy_block_reason.is_empty():
@@ -15761,6 +17283,7 @@ func _set_active_section(section_id: String) -> void:
 	_refresh_sidebar()
 	_refresh_header()
 	_refresh_first_hour_guide_progress()
+	call_deferred("_refresh_ftue_progress")
 
 
 func _set_active_app(app_id: String) -> void:
@@ -15777,6 +17300,11 @@ func _set_active_app(app_id: String) -> void:
 		normalized_app_id != APP_ID_UPGRADES
 	):
 		normalized_app_id = APP_ID_DESKTOP
+	if normalized_app_id == APP_ID_ACADEMY and not GameManager.is_academy_available():
+		_show_toast(GameManager.get_academy_release_message(), false)
+		_apply_academy_release_lock_state()
+		_refresh_desktop()
+		return
 
 	desktop_layer.visible = true
 	app_window_backdrop.visible = false
@@ -15972,7 +17500,7 @@ func _build_taskbar_status_text(focus_snapshot: Dictionary) -> String:
 		return "Company open  |  Majority-control agenda tools online."
 	if active_app_id == APP_ID_UPGRADES:
 		return "Upgrades open  |  Spend cash to improve your desk."
-	return "Desktop ready  |  Open STOCKBOT, News, Twooter, Network, Academy, Thesis, Life, Company, Shop, or Settings."
+	return "Desktop ready  |  Open STOCKBOT, News, Twooter, Network, Thesis, Life, Company, Shop, or Settings. Academy is coming soon."
 
 
 func _section_label(section_id: String) -> String:
@@ -17871,6 +19399,12 @@ func _format_compact_currency(value: float) -> String:
 	return _format_currency(value)
 
 
+func _format_signed_compact_currency(value: float) -> String:
+	if is_zero_approx(value):
+		return "Rp0"
+	return "%s%s" % ["+" if value > 0.0 else "", _format_compact_currency(value)]
+
+
 func _format_compact_lots(value: float) -> String:
 	var absolute_value: float = absf(value)
 	if absolute_value >= 1000000.0:
@@ -17878,6 +19412,12 @@ func _format_compact_lots(value: float) -> String:
 	if absolute_value >= 1000.0:
 		return "%sK" % String.num(value / 1000.0, 1)
 	return String.num(value, 1)
+
+
+func _format_signed_compact_lots(value: float) -> String:
+	if is_zero_approx(value):
+		return "0.0"
+	return "%s%s" % ["+" if value > 0.0 else "", _format_compact_lots(value)]
 
 
 func _format_grouped_integer(value: int) -> String:
