@@ -3068,7 +3068,10 @@ func _derive_target_price(template: Dictionary, traits: Dictionary, run_seed: in
 		"institutional_premium":
 			fundamental_price_floor = lerp(220.0, 2200.0, pow(institutional_score, 1.15))
 		"owner_controlled":
-			fundamental_price_floor = lerp(160.0, 2600.0, pow(scarcity_score, 1.05))
+			if market_cap_trillions < 1.0:
+				fundamental_price_floor = lerp(80.0, 1650.0, pow(scarcity_score, 1.35))
+			else:
+				fundamental_price_floor = lerp(160.0, 2600.0, pow(scarcity_score, 1.05))
 		_:
 			fundamental_price_floor = lerp(60.0, 1400.0, pow(institutional_score, 1.35))
 	target_price = max(target_price, fundamental_price_floor)
