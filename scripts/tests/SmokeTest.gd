@@ -26,6 +26,10 @@ const SMOKE_LOCAL_IO_ARG := "--smoke-local-io"
 const NEWS_FEED_SYSTEM_SCRIPT = preload("res://systems/NewsFeedSystem.gd")
 const TWOOTER_FEED_SYSTEM_SCRIPT = preload("res://systems/TwooterFeedSystem.gd")
 const INDEX_REVIEW_SYSTEM_SCRIPT = preload("res://systems/IndexReviewSystem.gd")
+const ATTENTION_DIRECTOR_SYSTEM_SCRIPT = preload("res://systems/AttentionDirectorSystem.gd")
+const SPECIAL_EVENT_SYSTEM_SCRIPT = preload("res://systems/SpecialEventSystem.gd")
+const COMPANY_EVENT_SYSTEM_SCRIPT = preload("res://systems/CompanyEventSystem.gd")
+const MARKET_SIMULATOR_SCRIPT = preload("res://systems/MarketSimulator.gd")
 const COMPANY_GENERATOR_SCRIPT = preload("res://systems/CompanyGenerator.gd")
 const CHART_SYSTEM_SCRIPT = preload("res://systems/ChartSystem.gd")
 const CHART_PATTERN_SYSTEM_SCRIPT = preload("res://systems/ChartPatternSystem.gd")
@@ -7986,6 +7990,7 @@ func _run_scenario(
 	var daily_recap_frame: PanelContainer = game_root.find_child("DailyRecapFrame", true, false) as PanelContainer
 	var daily_recap_scrim: ColorRect = game_root.find_child("DailyRecapScrim", true, false) as ColorRect
 	var daily_recap_body_label: Label = game_root.find_child("DailyRecapBodyLabel", true, false) as Label
+	var daily_recap_continue_button: Button = game_root.find_child("DailyRecapContinueButton", true, false) as Button
 	var daily_recap_content_panel: PanelContainer = game_root.find_child("DailyRecapContentPanel", true, false) as PanelContainer
 	var daily_recap_title_bar: PanelContainer = game_root.find_child("DailyRecapTitleBar", true, false) as PanelContainer
 	var recap_frame_style: StyleBoxFlat = null
@@ -8010,6 +8015,7 @@ func _run_scenario(
 		daily_recap_dialog == null or
 		not daily_recap_dialog.visible or
 		daily_recap_frame == null or
+		daily_recap_continue_button == null or
 		not _control_animation_settled(daily_recap_frame) or
 		recap_frame_style == null or
 		recap_frame_style.border_width_left != 0 or
@@ -8048,8 +8054,284 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected the deferred Advance Day save to flush after the daily recap appears."
 		}
-	daily_recap_dialog.visible = false
+	var early_special_events: Array = RunState.last_day_results.get("started_special_events", [])
+	if not early_special_events.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected player-facing day 3 to stay free of forced macro special events."
+		}
+	var attention_director = ATTENTION_DIRECTOR_SYSTEM_SCRIPT.new()
+	var day_three_attention_directives: Dictionary = attention_director.resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		2,
+		GameManager.get_current_macro_state()
+	)
+	if bool(day_three_attention_directives.get("force_special_event", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Attention Director to keep player-facing day 3 free of forced macro events."
+		}
+	var day_six_attention_directives: Dictionary = attention_director.resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		5,
+		GameManager.get_current_macro_state()
+	)
+	if (
+		not bool(day_six_attention_directives.get("force_special_event", false)) or
+		not bool(day_six_attention_directives.get("suppress_company_arc_start", false)) or
+		not bool(day_six_attention_directives.get("suppress_market_scheduled_event", false)) or
+		str(day_six_attention_directives.get("attention_tier", "")) != "headline_reserved"
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Attention Director to reserve player-facing day 6 for the first macro headline."
+		}
+	var attention_director_event_history: Array = RunState.event_history.duplicate(true)
+	RunState.event_history = [{
+		"event_id": "risk_off_headline",
+		"scope": "market",
+		"event_family": "macro",
+		"category": "macro",
+		"day_index": 11
+	}]
+	var digestion_attention_directives: Dictionary = attention_director.resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		12,
+		GameManager.get_current_macro_state()
+	)
+	if (
+		str(digestion_attention_directives.get("attention_tier", "")) != "digestion" or
+		not bool(digestion_attention_directives.get("suppress_special_event", false)) or
+		not bool(digestion_attention_directives.get("suppress_company_arc_start", false)) or
+		not bool(digestion_attention_directives.get("suppress_market_scheduled_event", false))
+	):
+		RunState.event_history = attention_director_event_history
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Attention Director to create a digestion cooldown after a headline day."
+		}
+	RunState.event_history = []
+	var quiet_attention_directives: Dictionary = attention_director.resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		12,
+		GameManager.get_current_macro_state()
+	)
+	if (
+		str(quiet_attention_directives.get("attention_tier", "")) != "clue_due" or
+		not bool(quiet_attention_directives.get("force_company_arc_start", false)) or
+		float(quiet_attention_directives.get("company_arc_probability_multiplier", 0.0)) <= 1.0 or
+		float(quiet_attention_directives.get("scheduled_event_probability_multiplier", 0.0)) <= 1.0
+	):
+		RunState.event_history = attention_director_event_history
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Attention Director to raise clue pressure after a quiet stretch."
+		}
+	RunState.event_history = [{
+		"event_id": "geopolitical_turmoil",
+		"scope": "market",
+		"event_family": "special",
+		"category": "special",
+		"day_index": 8
+	}]
+	var macro_cooldown_attention_directives: Dictionary = attention_director.resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		12,
+		GameManager.get_current_macro_state()
+	)
+	if (
+		not bool(macro_cooldown_attention_directives.get("suppress_special_event", false)) or
+		float(macro_cooldown_attention_directives.get("special_event_probability_multiplier", 1.0)) != 0.0
+	):
+		RunState.event_history = attention_director_event_history
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Attention Director to cool down macro special events after a recent macro beat."
+		}
+	RunState.event_history = attention_director_event_history
+	var suppressed_company_arc_resolution: Dictionary = COMPANY_EVENT_SYSTEM_SCRIPT.new().resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		5,
+		GameManager.get_current_macro_state(),
+		day_six_attention_directives
+	)
+	if not suppressed_company_arc_resolution.get("started_events", []).is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Attention Director to suppress new company arc starts on the reserved macro day."
+		}
+	var scheduled_event_test_difficulty: Dictionary = RunState.get_difficulty_config()
+	scheduled_event_test_difficulty["event_interval_days"] = 1.0
+	var scheduled_event_test_macro: Dictionary = GameManager.get_current_macro_state()
+	scheduled_event_test_macro["market_bias"] = -0.02
+	scheduled_event_test_macro["policy_action_bps"] = 25
+	var suppressed_scheduled_event_value = MARKET_SIMULATOR_SCRIPT.new().call(
+		"_build_daily_event_plan",
+		RunState,
+		RunState.get_current_trade_date(),
+		{},
+		-0.04,
+		5,
+		scheduled_event_test_difficulty,
+		scheduled_event_test_macro,
+		day_six_attention_directives
+	)
+	var suppressed_scheduled_event: Dictionary = suppressed_scheduled_event_value if typeof(suppressed_scheduled_event_value) == TYPE_DICTIONARY else {}
+	if str(suppressed_scheduled_event.get("scope", "")) == "market":
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Attention Director to suppress market-scope scheduled headlines on the reserved macro day."
+		}
+	var saved_recap_last_day_results: Dictionary = post_recap_saved_run.get("last_day_results", {})
+	if RunState.last_day_results.has("attention_directives") or saved_recap_last_day_results.has("attention_directives"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Attention Director directives to stay out of the save payload."
+		}
+	var day_six_special_resolution: Dictionary = SPECIAL_EVENT_SYSTEM_SCRIPT.new().resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		5,
+		GameManager.get_current_macro_state(),
+		day_six_attention_directives
+	)
+	var day_six_special_events: Array = day_six_special_resolution.get("started_events", [])
+	if day_six_special_events.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected player-facing day 6 to trigger a random macro special event."
+		}
+	var early_special_event: Dictionary = day_six_special_events[0] if typeof(day_six_special_events[0]) == TYPE_DICTIONARY else {}
+	if (
+		early_special_event.is_empty() or
+		str(early_special_event.get("scope", "")) != "market" or
+		str(early_special_event.get("event_family", "")) != "special" or
+		not SPECIAL_EVENT_IDS.has(str(early_special_event.get("event_id", "")))
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the day-6 macro event to be one of the special market regimes."
+		}
+	var macro_event_dialog: Control = game_root.find_child("MacroEventDialog", true, false) as Control
+	if macro_event_dialog == null or macro_event_dialog.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Macro Events overlay to exist but stay hidden while Daily Recap is still open."
+		}
+	var macro_template_headline: String = str(DataRepository.get_event_definition("covid_wave").get("headline_template", ""))
+	var macro_direct_headline := "Custom geopolitical headline"
+	var macro_index_headline := "Index desk no changes"
+	var macro_recap_snapshot: Dictionary = {
+		"last_day_results": {
+			"scheduled_event": {"event_id": "covid_wave", "scope": "market"},
+			"started_special_events": [
+				{"event_id": "geopolitical_turmoil", "scope": "market", "headline": macro_direct_headline},
+				{"event_id": "sector_tailwind", "scope": "sector", "headline": "Sector alert should not show"}
+			],
+			"index_review_events": [
+				{"event_id": "index_review_no_change", "scope": "market", "headline": macro_index_headline},
+				{"event_id": "mscy_index_inclusion", "scope": "company", "headline": "Company alert should not show"}
+			]
+		}
+	}
+	game_root.call("_queue_macro_event_alerts_from_recap_snapshot", macro_recap_snapshot)
+	if macro_event_dialog.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected queued Macro Events to wait until Daily Recap closes."
+		}
+	daily_recap_continue_button.emit_signal("pressed")
 	await get_tree().process_frame
+	await get_tree().process_frame
+	var macro_event_title_label: Label = game_root.find_child("MacroEventTitleLabel", true, false) as Label
+	var macro_event_headline_label: Label = game_root.find_child("MacroEventHeadlineLabel", true, false) as Label
+	var macro_event_close_button: Button = game_root.find_child("MacroEventCloseButton", true, false) as Button
+	var expected_macro_headlines: Array = [macro_template_headline, macro_direct_headline, macro_index_headline]
+	for expected_index in range(expected_macro_headlines.size()):
+		macro_event_dialog = game_root.find_child("MacroEventDialog", true, false) as Control
+		macro_event_headline_label = game_root.find_child("MacroEventHeadlineLabel", true, false) as Label
+		if (
+			macro_event_dialog == null or
+			not macro_event_dialog.visible or
+			daily_recap_dialog.visible or
+			macro_event_title_label == null or
+			macro_event_title_label.text != "Macro Events" or
+			macro_event_headline_label == null or
+			macro_event_headline_label.text != str(expected_macro_headlines[expected_index]) or
+			macro_event_close_button == null
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected Macro Events alert %d to show the queued headline after Daily Recap closes." % expected_index
+			}
+		if expected_index == 0:
+			if (
+				macro_event_headline_label.visible_characters < 0 or
+				macro_event_headline_label.visible_characters >= macro_event_headline_label.text.length()
+			):
+				game_root.queue_free()
+				await get_tree().process_frame
+				return {
+					"success": false,
+					"message": "Smoke test expected Macro Events headline text to start partially hidden for typing."
+				}
+			game_root.call("_on_macro_event_confirm_pressed")
+			if (
+				not macro_event_dialog.visible or
+				macro_event_headline_label.visible_characters != macro_event_headline_label.text.length()
+			):
+				game_root.queue_free()
+				await get_tree().process_frame
+				return {
+					"success": false,
+					"message": "Smoke test expected confirming a typing Macro Events headline to complete the text without dismissing it."
+				}
+		else:
+			game_root.call("_on_macro_event_confirm_pressed")
+		game_root.call("_on_macro_event_confirm_pressed")
+		await get_tree().process_frame
+		await get_tree().process_frame
+	if macro_event_dialog != null and macro_event_dialog.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected only market-scope macro events to show, with sector/company scope alerts filtered out."
+		}
 
 	var recap_snapshot: Dictionary = GameManager.get_daily_recap_snapshot()
 	var recap_counts: Dictionary = recap_snapshot.get("activity_counts", {})
@@ -8984,8 +9266,17 @@ func _run_scenario(
 	var opening_statement_snapshot: Dictionary = opening_snapshot.get("financial_statement_snapshot", {})
 	var opening_macro_state: Dictionary = GameManager.get_current_macro_state()
 	var ownership_test_state: Dictionary = RunState.to_save_dict()
+	RunState.active_special_events = [{
+		"scope": "market",
+		"start_day_index": RunState.day_index,
+		"end_day_index": RunState.day_index + 1,
+		"market_bias_shift": 0.0,
+		"volatility_multiplier": 1.0,
+		"sector_biases": {},
+		"shock_profile": {}
+	}]
 	var shares_outstanding: float = float(opening_snapshot.get("shares_outstanding", 0.0))
-	var ownership_test_shares: int = int(ceil(shares_outstanding * 0.051 / float(RunState.LOT_SIZE))) * RunState.LOT_SIZE
+	var ownership_test_shares: int = int(ceil(shares_outstanding * 0.25 / float(RunState.LOT_SIZE))) * RunState.LOT_SIZE
 	if shares_outstanding <= 0.0 or ownership_test_shares <= 0:
 		game_root.queue_free()
 		await get_tree().process_frame

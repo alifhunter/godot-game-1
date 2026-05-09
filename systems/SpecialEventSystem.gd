@@ -4,12 +4,12 @@ const STABLE_RNG = preload("res://systems/StableRng.gd")
 const MIN_TRIGGER_DAY := 8
 
 
-func resolve_day(run_state, trade_date: Dictionary, day_number: int, macro_state: Dictionary) -> Dictionary:
+func resolve_day(run_state, trade_date: Dictionary, day_number: int, macro_state: Dictionary, attention_directives: Dictionary = {}) -> Dictionary:
 	var active_events: Array = _active_events_for_day(run_state.get_active_special_events(), day_number)
 	var started_events: Array = []
 	var history: Array = run_state.get_event_history()
 
-	if _should_start_event(run_state, day_number, active_events):
+	if _should_start_event(run_state, day_number, active_events, attention_directives):
 		var new_event: Dictionary = _build_special_event(run_state, trade_date, day_number, macro_state, history, active_events)
 		if not new_event.is_empty():
 			active_events.append(new_event)
@@ -48,14 +48,21 @@ func _active_events_for_day(stored_events: Array, day_number: int) -> Array:
 	return active_events
 
 
-func _should_start_event(run_state, day_number: int, active_events: Array) -> bool:
-	if day_number < MIN_TRIGGER_DAY:
-		return false
+func _should_start_event(run_state, day_number: int, active_events: Array, attention_directives: Dictionary = {}) -> bool:
 	if not active_events.is_empty():
+		return false
+	if bool(attention_directives.get("force_special_event", false)):
+		return true
+	if bool(attention_directives.get("suppress_special_event", false)):
+		return false
+	if day_number < MIN_TRIGGER_DAY:
 		return false
 
 	var difficulty_config: Dictionary = run_state.get_difficulty_config()
 	var event_interval_days: float = max(float(difficulty_config.get("event_interval_days", 30.0)), 1.0)
+	var probability_multiplier: float = clamp(float(attention_directives.get("special_event_probability_multiplier", 1.0)), 0.0, 4.0)
+	if probability_multiplier <= 0.0:
+		return false
 	var cadence: int = int(clamp(round(event_interval_days * 1.6), 10, 30))
 	var cadence_offset: int = int(STABLE_RNG.seed_from_parts([run_state.run_seed, "special_offset"]) % cadence)
 	var cadence_hit: bool = int(posmod(day_number + cadence_offset, cadence)) == 0
@@ -63,7 +70,7 @@ func _should_start_event(run_state, day_number: int, active_events: Array) -> bo
 		return true
 
 	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_state.run_seed, "special_roll", day_number])
-	var random_threshold: float = 1.0 / max(event_interval_days * 2.8, 14.0)
+	var random_threshold: float = (1.0 / max(event_interval_days * 2.8, 14.0)) * probability_multiplier
 	return rng.randf() < random_threshold
 
 

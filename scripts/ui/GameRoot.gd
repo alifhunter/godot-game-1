@@ -190,6 +190,9 @@ const UI_DAILY_RECAP_REVEAL_SECONDS := 0.22
 const UI_DESKTOP_WINDOW_OPEN_SECONDS := 0.14
 const UI_DESKTOP_WINDOW_FOCUS_SECONDS := 0.10
 const UI_DAILY_RECAP_SCRIM_ALPHA := 0.18
+const UI_MACRO_EVENT_TYPE_SECONDS_PER_CHAR := 0.032
+const UI_MACRO_EVENT_TYPE_MIN_SECONDS := 0.18
+const UI_MACRO_EVENT_TYPE_MAX_SECONDS := 1.65
 const GUIDE_CARD_SIZE := Vector2(520.0, 0.0)
 const GUIDE_CARD_MARGIN := 18.0
 const GUIDE_TARGET_PADDING := 10.0
@@ -477,8 +480,14 @@ var pending_daily_recap_snapshot: Dictionary = {}
 var daily_recap_dialog: Control = null
 var daily_recap_body_label: Label = null
 var daily_recap_continue_button: Button = null
+var pending_macro_event_alerts: Array = []
+var current_macro_event_alert: Dictionary = {}
+var macro_event_dialog: Control = null
+var macro_event_headline_label: Label = null
+var macro_event_close_button: Button = null
 var advance_day_button_tween: Tween = null
 var daily_recap_tween: Tween = null
+var macro_event_tween: Tween = null
 var desktop_window_open_tweens: Dictionary = {}
 var desktop_window_focus_tweens: Dictionary = {}
 var settings_dialog: Control = null
@@ -875,6 +884,7 @@ func _ready() -> void:
 	_ensure_bankruptcy_overlay()
 	_ensure_hospital_overlay()
 	_ensure_daily_recap_dialog()
+	_ensure_macro_event_dialog()
 	_ensure_dashboard_calendar_event_popup()
 	_ensure_dashboard_index_recap_ui()
 	_ensure_dashboard_broker_flow_ui()
@@ -1063,6 +1073,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			_hide_console_overlay()
 			get_viewport().set_input_as_handled()
 			return
+		if macro_event_dialog != null and macro_event_dialog.visible:
+			if key_event.keycode == KEY_ESCAPE:
+				_dismiss_current_macro_event_alert()
+				get_viewport().set_input_as_handled()
+				return
+			if key_event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
+				_on_macro_event_confirm_pressed()
+				get_viewport().set_input_as_handled()
+				return
 		if settings_dialog != null and settings_dialog.visible and key_event.keycode == KEY_ESCAPE:
 			if settings_confirm_overlay != null and settings_confirm_overlay.visible:
 				_hide_settings_confirmation()
@@ -13034,6 +13053,7 @@ func _finish_advance_day_processing() -> void:
 func _show_daily_recap_if_pending() -> void:
 	if pending_daily_recap_snapshot.is_empty() or daily_recap_dialog == null or daily_recap_body_label == null:
 		return
+	_queue_macro_event_alerts_from_recap_snapshot(pending_daily_recap_snapshot)
 	daily_recap_body_label.text = _build_daily_recap_text(pending_daily_recap_snapshot)
 	pending_daily_recap_snapshot = {}
 	daily_recap_dialog.visible = true
@@ -13168,6 +13188,145 @@ func _reset_daily_recap_animation_state() -> void:
 		scrim.color = color
 	var frame: Control = daily_recap_dialog.find_child("DailyRecapFrame", true, false) as Control
 	_reset_control_animation_state(frame)
+
+
+func _queue_macro_event_alerts_from_recap_snapshot(snapshot: Dictionary) -> void:
+	pending_macro_event_alerts = _build_macro_event_alerts_from_recap_snapshot(snapshot)
+	current_macro_event_alert = {}
+
+
+func _build_macro_event_alerts_from_recap_snapshot(snapshot: Dictionary) -> Array:
+	var alerts: Array = []
+	var last_day_results: Dictionary = snapshot.get("last_day_results", {})
+	_append_macro_event_alert_if_market_scope(alerts, last_day_results.get("scheduled_event", {}))
+	for event_value in last_day_results.get("started_special_events", []):
+		if typeof(event_value) == TYPE_DICTIONARY:
+			_append_macro_event_alert_if_market_scope(alerts, event_value)
+	for event_value in last_day_results.get("index_review_events", []):
+		if typeof(event_value) == TYPE_DICTIONARY:
+			_append_macro_event_alert_if_market_scope(alerts, event_value)
+	return alerts
+
+
+func _append_macro_event_alert_if_market_scope(alerts: Array, event_data: Variant) -> void:
+	if typeof(event_data) != TYPE_DICTIONARY:
+		return
+	var event_dictionary: Dictionary = event_data
+	if event_dictionary.is_empty() or str(event_dictionary.get("scope", "")) != "market":
+		return
+	var headline: String = _macro_event_headline_for_event(event_dictionary)
+	if headline.is_empty():
+		return
+	alerts.append({
+		"event_id": str(event_dictionary.get("event_id", "")),
+		"headline": headline
+	})
+
+
+func _macro_event_headline_for_event(event_data: Dictionary) -> String:
+	var headline: String = str(event_data.get("headline", "")).strip_edges()
+	if not headline.is_empty():
+		return headline
+	var event_definition: Dictionary = DataRepository.get_event_definition(str(event_data.get("event_id", "")))
+	headline = str(event_definition.get("headline_template", "")).strip_edges()
+	if not headline.is_empty():
+		return headline
+	headline = str(event_data.get("description", "")).strip_edges()
+	if not headline.is_empty():
+		return headline
+	return str(event_definition.get("description", "")).strip_edges()
+
+
+func _show_next_macro_event_alert() -> void:
+	if macro_event_dialog == null or macro_event_headline_label == null:
+		return
+	if macro_event_dialog.visible:
+		return
+	if pending_macro_event_alerts.is_empty():
+		current_macro_event_alert = {}
+		return
+	var next_alert: Variant = pending_macro_event_alerts.pop_front()
+	if typeof(next_alert) != TYPE_DICTIONARY:
+		call_deferred("_show_next_macro_event_alert")
+		return
+	current_macro_event_alert = next_alert
+	var headline: String = str(current_macro_event_alert.get("headline", "")).strip_edges()
+	if headline.is_empty():
+		call_deferred("_show_next_macro_event_alert")
+		return
+	macro_event_headline_label.text = headline
+	macro_event_headline_label.visible_characters = 0
+	macro_event_dialog.visible = true
+	macro_event_dialog.move_to_front()
+	_play_macro_event_headline_type()
+
+
+func _play_macro_event_headline_type() -> void:
+	if macro_event_headline_label == null:
+		return
+	if macro_event_tween != null:
+		macro_event_tween.kill()
+		macro_event_tween = null
+	var character_count: int = macro_event_headline_label.text.length()
+	if character_count <= 0 or not UI_ANIMATIONS_ENABLED:
+		macro_event_headline_label.visible_characters = character_count
+		return
+	macro_event_headline_label.visible_characters = 0
+	macro_event_tween = _create_ui_tween()
+	macro_event_tween.tween_property(
+		macro_event_headline_label,
+		"visible_characters",
+		character_count,
+		clamp(
+			float(character_count) * UI_MACRO_EVENT_TYPE_SECONDS_PER_CHAR,
+			UI_MACRO_EVENT_TYPE_MIN_SECONDS,
+			UI_MACRO_EVENT_TYPE_MAX_SECONDS
+		)
+	)
+
+
+func _on_macro_event_confirm_pressed() -> void:
+	if macro_event_dialog == null or not macro_event_dialog.visible:
+		return
+	if _macro_event_headline_is_typing():
+		_complete_macro_event_headline_type()
+		return
+	_dismiss_current_macro_event_alert()
+
+
+func _macro_event_headline_is_typing() -> bool:
+	if macro_event_headline_label == null:
+		return false
+	return macro_event_headline_label.visible_characters >= 0 and macro_event_headline_label.visible_characters < macro_event_headline_label.text.length()
+
+
+func _complete_macro_event_headline_type() -> void:
+	if macro_event_tween != null:
+		macro_event_tween.kill()
+		macro_event_tween = null
+	if macro_event_headline_label != null:
+		macro_event_headline_label.visible_characters = macro_event_headline_label.text.length()
+
+
+func _dismiss_current_macro_event_alert(show_next: bool = true) -> void:
+	if macro_event_tween != null:
+		macro_event_tween.kill()
+		macro_event_tween = null
+	if macro_event_dialog != null:
+		macro_event_dialog.visible = false
+	if macro_event_headline_label != null:
+		macro_event_headline_label.visible_characters = macro_event_headline_label.text.length()
+	current_macro_event_alert = {}
+	if show_next and not pending_macro_event_alerts.is_empty():
+		call_deferred("_show_next_macro_event_alert")
+
+
+func _on_macro_event_dialog_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mouse_button: InputEventMouseButton = event
+		if mouse_button.button_index == MOUSE_BUTTON_LEFT and mouse_button.pressed:
+			_on_macro_event_confirm_pressed()
+			get_viewport().set_input_as_handled()
 
 
 func _build_daily_recap_text(snapshot: Dictionary) -> String:
@@ -15805,11 +15964,14 @@ func _ensure_daily_recap_dialog() -> void:
 
 
 func _hide_daily_recap() -> void:
+	var was_visible: bool = daily_recap_dialog != null and daily_recap_dialog.visible
 	if daily_recap_dialog != null:
 		_reset_daily_recap_animation_state()
 		daily_recap_dialog.visible = false
 	_refresh_ftue_progress()
 	_refresh_first_hour_guide_progress()
+	if was_visible:
+		call_deferred("_show_next_macro_event_alert")
 
 
 func _style_daily_recap_dialog() -> void:
@@ -15850,6 +16012,151 @@ func _style_daily_recap_content_panel(panel: PanelContainer) -> void:
 	content_style.set_border_width_all(1)
 	content_style.set_corner_radius_all(0)
 	panel.add_theme_stylebox_override("panel", content_style)
+
+
+func _ensure_macro_event_dialog() -> void:
+	if macro_event_dialog != null:
+		return
+
+	macro_event_dialog = Control.new()
+	macro_event_dialog.name = "MacroEventDialog"
+	macro_event_dialog.visible = false
+	macro_event_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	macro_event_dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(macro_event_dialog)
+
+	var scrim := ColorRect.new()
+	scrim.name = "MacroEventScrim"
+	scrim.color = Color(0.0, 0.0, 0.0, UI_DAILY_RECAP_SCRIM_ALPHA)
+	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scrim.gui_input.connect(_on_macro_event_dialog_gui_input)
+	macro_event_dialog.add_child(scrim)
+
+	var center := CenterContainer.new()
+	center.name = "MacroEventCenter"
+	center.mouse_filter = Control.MOUSE_FILTER_PASS
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	macro_event_dialog.add_child(center)
+
+	var frame := PanelContainer.new()
+	frame.name = "MacroEventFrame"
+	frame.custom_minimum_size = Vector2(540, 184)
+	frame.mouse_filter = Control.MOUSE_FILTER_STOP
+	frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	frame.gui_input.connect(_on_macro_event_dialog_gui_input)
+	center.add_child(frame)
+
+	var frame_vbox := VBoxContainer.new()
+	frame_vbox.name = "MacroEventFrameVBox"
+	frame_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	frame_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	frame_vbox.add_theme_constant_override("separation", 0)
+	frame.add_child(frame_vbox)
+
+	var title_bar := PanelContainer.new()
+	title_bar.name = "MacroEventTitleBar"
+	title_bar.custom_minimum_size = Vector2(0, DESKTOP_WINDOW_TITLE_BAR_HEIGHT)
+	title_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	frame_vbox.add_child(title_bar)
+
+	var title_margin := MarginContainer.new()
+	title_margin.add_theme_constant_override("margin_left", 12)
+	title_margin.add_theme_constant_override("margin_top", 4)
+	title_margin.add_theme_constant_override("margin_right", 8)
+	title_margin.add_theme_constant_override("margin_bottom", 4)
+	title_bar.add_child(title_margin)
+
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 8)
+	title_margin.add_child(title_row)
+
+	var title_label := Label.new()
+	title_label.name = "MacroEventTitleLabel"
+	title_label.text = "Macro Events"
+	title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_label.add_theme_color_override("font_color", COLOR_TEXT)
+	title_row.add_child(title_label)
+
+	macro_event_close_button = Button.new()
+	macro_event_close_button.name = "MacroEventCloseButton"
+	macro_event_close_button.text = "X"
+	macro_event_close_button.custom_minimum_size = Vector2(32, 24)
+	macro_event_close_button.pressed.connect(_dismiss_current_macro_event_alert)
+	title_row.add_child(macro_event_close_button)
+
+	var body_margin := MarginContainer.new()
+	body_margin.name = "MacroEventOuterMargin"
+	body_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body_margin.add_theme_constant_override("margin_left", 16)
+	body_margin.add_theme_constant_override("margin_top", 16)
+	body_margin.add_theme_constant_override("margin_right", 16)
+	body_margin.add_theme_constant_override("margin_bottom", 16)
+	frame_vbox.add_child(body_margin)
+
+	var content_panel := PanelContainer.new()
+	content_panel.name = "MacroEventContentPanel"
+	content_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	content_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content_panel.gui_input.connect(_on_macro_event_dialog_gui_input)
+	body_margin.add_child(content_panel)
+
+	var content_margin := MarginContainer.new()
+	content_margin.name = "MacroEventContentMargin"
+	content_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content_margin.add_theme_constant_override("margin_left", 22)
+	content_margin.add_theme_constant_override("margin_top", 20)
+	content_margin.add_theme_constant_override("margin_right", 22)
+	content_margin.add_theme_constant_override("margin_bottom", 20)
+	content_panel.add_child(content_margin)
+
+	macro_event_headline_label = Label.new()
+	macro_event_headline_label.name = "MacroEventHeadlineLabel"
+	macro_event_headline_label.custom_minimum_size = Vector2(460, 78)
+	macro_event_headline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	macro_event_headline_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	macro_event_headline_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	macro_event_headline_label.text = ""
+	macro_event_headline_label.visible_characters = 0
+	macro_event_headline_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	macro_event_headline_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 2)
+	macro_event_headline_label.add_theme_constant_override("line_spacing", 5)
+	content_margin.add_child(macro_event_headline_label)
+
+	_style_macro_event_dialog()
+
+
+func _style_macro_event_dialog() -> void:
+	if macro_event_dialog == null:
+		return
+	var frame: PanelContainer = macro_event_dialog.get_node_or_null("MacroEventCenter/MacroEventFrame") as PanelContainer
+	if frame != null:
+		var frame_style := StyleBoxFlat.new()
+		frame_style.bg_color = COLOR_DESKTOP_CREAM
+		frame_style.border_color = Color(COLOR_ACADEMY_BROWN.r, COLOR_ACADEMY_BROWN.g, COLOR_ACADEMY_BROWN.b, 0)
+		frame_style.set_border_width_all(0)
+		frame_style.set_corner_radius_all(0)
+		frame.add_theme_stylebox_override("panel", frame_style)
+	var title_bar: PanelContainer = macro_event_dialog.get_node_or_null("MacroEventCenter/MacroEventFrame/MacroEventFrameVBox/MacroEventTitleBar") as PanelContainer
+	if title_bar != null:
+		_style_window_title_bar(title_bar, COLOR_ACADEMY_BROWN)
+	var title_label: Label = macro_event_dialog.find_child("MacroEventTitleLabel", true, false) as Label
+	if title_label != null:
+		title_label.add_theme_color_override("font_color", COLOR_TEXT)
+		title_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	if macro_event_headline_label != null:
+		macro_event_headline_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+		macro_event_headline_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 2)
+	if macro_event_close_button != null:
+		_style_button(macro_event_close_button, Color(0.368627, 0.160784, 0.176471, 1), Color(0.709804, 0.34902, 0.372549, 1), COLOR_TEXT, 0)
+	var content_panel: PanelContainer = macro_event_dialog.find_child("MacroEventContentPanel", true, false) as PanelContainer
+	if content_panel != null:
+		_style_daily_recap_content_panel(content_panel)
 
 
 func _ensure_dashboard_calendar_event_popup() -> void:
@@ -18144,6 +18451,9 @@ func _apply_visual_theme() -> void:
 	if daily_recap_body_label != null:
 		_set_label_tone(daily_recap_body_label, COLOR_WINDOW_TEXT)
 	_style_daily_recap_dialog()
+	if macro_event_headline_label != null:
+		_set_label_tone(macro_event_headline_label, COLOR_WINDOW_TEXT)
+	_style_macro_event_dialog()
 	if console_title_label != null:
 		_set_label_tone(console_title_label, COLOR_TEXT)
 	if console_hint_label != null:

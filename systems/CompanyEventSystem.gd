@@ -98,12 +98,12 @@ func build_arc_start_event(arc: Dictionary, trade_date: Dictionary, day_number: 
 	return _build_arc_start_event(arc, trade_date, day_number)
 
 
-func resolve_day(run_state, trade_date: Dictionary, day_number: int, macro_state: Dictionary) -> Dictionary:
+func resolve_day(run_state, trade_date: Dictionary, day_number: int, macro_state: Dictionary, attention_directives: Dictionary = {}) -> Dictionary:
 	var active_arcs: Array = _active_arcs_for_day(run_state.get_active_company_arcs(), day_number)
 	var started_events: Array = []
 	var phase_events: Array = []
 
-	if _should_start_arc(run_state, day_number, active_arcs):
+	if not bool(attention_directives.get("suppress_company_arc_start", false)) and _should_start_arc(run_state, day_number, active_arcs, attention_directives):
 		var new_arc: Dictionary = _build_company_arc(
 			run_state,
 			trade_date,
@@ -385,7 +385,7 @@ func _build_company_candidates(
 	)
 
 
-func _should_start_arc(run_state, day_number: int, active_arcs: Array) -> bool:
+func _should_start_arc(run_state, day_number: int, active_arcs: Array, attention_directives: Dictionary = {}) -> bool:
 	if day_number < ARC_MIN_TRIGGER_DAY:
 		return false
 
@@ -396,6 +396,8 @@ func _should_start_arc(run_state, day_number: int, active_arcs: Array) -> bool:
 	max_active_arcs = _first_month_arc_cap(str(difficulty_config.get("id", "normal")), day_number, max_active_arcs)
 	if active_arcs.size() >= max_active_arcs:
 		return false
+	if bool(attention_directives.get("force_company_arc_start", false)):
+		return true
 
 	var cadence: int = int(clamp(round(event_interval_days * 0.85), 5, 22))
 	var cadence_offset: int = int(STABLE_RNG.seed_from_parts([run_state.run_seed, "company_arc_offset"]) % cadence)
@@ -403,7 +405,10 @@ func _should_start_arc(run_state, day_number: int, active_arcs: Array) -> bool:
 		return true
 
 	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_state.run_seed, "company_arc_roll", day_number])
-	var random_threshold: float = clamp(1.0 / max(event_interval_days * 1.9, 9.0), 0.03, 0.16)
+	var probability_multiplier: float = clamp(float(attention_directives.get("company_arc_probability_multiplier", 1.0)), 0.0, 4.0)
+	if probability_multiplier <= 0.0:
+		return false
+	var random_threshold: float = clamp((1.0 / max(event_interval_days * 1.9, 9.0)) * probability_multiplier, 0.0, 0.42)
 	return rng.randf() < random_threshold
 
 

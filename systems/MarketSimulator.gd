@@ -11,6 +11,7 @@ var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
 var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
 var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
 var index_review_system = preload("res://systems/IndexReviewSystem.gd").new()
+var attention_director_system = preload("res://systems/AttentionDirectorSystem.gd").new()
 
 
 func simulate_day(run_state, data_repository, broker_flow_system, corporate_action_system) -> Dictionary:
@@ -18,6 +19,12 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 	var trade_date: Dictionary = run_state.get_current_trade_date()
 	var macro_state: Dictionary = run_state.get_current_macro_state()
 	var difficulty_config: Dictionary = run_state.get_difficulty_config()
+	var attention_directives: Dictionary = attention_director_system.resolve_day(
+		run_state,
+		trade_date,
+		day_number,
+		macro_state
+	)
 	var report_events: Array = run_state.get_quarterly_report_events_for_day_number(day_number, trade_date)
 	var corporate_action_resolution: Dictionary = corporate_action_system.resolve_day(
 		run_state,
@@ -31,7 +38,8 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		run_state,
 		trade_date,
 		day_number,
-		macro_state
+		macro_state,
+		attention_directives
 	)
 	var index_review_resolution: Dictionary = index_review_system.resolve_day(
 		run_state,
@@ -47,7 +55,8 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		run_state,
 		trade_date,
 		day_number,
-		macro_state
+		macro_state,
+		attention_directives
 	)
 	var active_special_events: Array = special_event_resolution.get("active_events", []).duplicate(true)
 	var combined_market_volatility: float = (
@@ -84,7 +93,8 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		market_sentiment,
 		day_number,
 		difficulty_config,
-		macro_state
+		macro_state,
+		attention_directives
 	)
 	var companies_result: Dictionary = {}
 
@@ -522,12 +532,16 @@ func _build_daily_event_plan(
 	market_sentiment: float,
 	day_number: int,
 	difficulty_config: Dictionary,
-	macro_state: Dictionary = {}
+	macro_state: Dictionary = {},
+	attention_directives: Dictionary = {}
 ) -> Dictionary:
 	var event_interval_days: float = max(float(difficulty_config.get("event_interval_days", 30.0)), 1.0)
 	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_state.run_seed, "daily_event", day_number])
+	var scheduled_event_probability_multiplier: float = clamp(float(attention_directives.get("scheduled_event_probability_multiplier", 1.0)), 0.0, 4.0)
 
-	if rng.randf() >= (1.0 / event_interval_days):
+	if scheduled_event_probability_multiplier <= 0.0:
+		return {}
+	if rng.randf() >= clamp((1.0 / event_interval_days) * scheduled_event_probability_multiplier, 0.0, 0.85):
 		return {}
 
 	var candidates: Array = []
@@ -577,6 +591,10 @@ func _build_daily_event_plan(
 			market_sentiment
 		)
 	)
+	if bool(attention_directives.get("suppress_market_scheduled_event", false)):
+		candidates = candidates.filter(func(candidate_value: Dictionary) -> bool:
+			return str(candidate_value.get("scope", "company")) != "market"
+		)
 
 	if candidates.is_empty():
 		return {}
