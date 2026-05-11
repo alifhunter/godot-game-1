@@ -234,6 +234,7 @@ func _draw() -> void:
 		return
 	var price_plots: Array = _plots_for_kind(visible_plots, false)
 	var panel_plots: Array = _plots_for_kind(visible_plots, true)
+	var panel_groups: Array = _panel_groups_for_plots(panel_plots)
 	if price_plots.is_empty():
 		return
 
@@ -242,13 +243,13 @@ func _draw() -> void:
 		return
 	var min_value: float = float(bounds.get("min", 0.0))
 	var max_value: float = float(bounds.get("max", 0.0))
-	var layout: Dictionary = _build_chart_layout(plot_rect, visible_bars, not panel_plots.is_empty())
+	var layout: Dictionary = _build_chart_layout(plot_rect, visible_bars, panel_groups.size())
 	var price_rect: Rect2 = layout.get("price_rect", plot_rect)
-	var indicator_rect: Rect2 = layout.get("indicator_rect", Rect2())
+	var indicator_rects: Array = layout.get("indicator_rects", [])
 	var volume_rect: Rect2 = layout.get("volume_rect", Rect2())
 	var x_axis_rect: Rect2 = volume_rect if volume_rect.size.y > 0.0 else price_rect
-	if x_axis_rect == price_rect and indicator_rect.size.y > 0.0:
-		x_axis_rect = indicator_rect
+	if x_axis_rect == price_rect and not indicator_rects.is_empty():
+		x_axis_rect = indicator_rects[indicator_rects.size() - 1]
 	var grid_rect := Rect2(
 		price_rect.position,
 		Vector2(price_rect.size.x, max(x_axis_rect.end.y - price_rect.position.y, price_rect.size.y))
@@ -267,8 +268,11 @@ func _draw() -> void:
 	_draw_x_axis(x_axis_rect, visible_bars, grid_rect)
 	if volume_rect.size.y > 0.0:
 		_draw_volume_bars(visible_bars, volume_rect)
-	if indicator_rect.size.y > 0.0:
-		_draw_indicator_panel(panel_plots, indicator_rect, visible_bars.size())
+	for group_index in range(min(panel_groups.size(), indicator_rects.size())):
+		var group: Dictionary = panel_groups[group_index]
+		var group_rect: Rect2 = indicator_rects[group_index]
+		if group_rect.size.y > 0.0:
+			_draw_indicator_panel(group.get("plots", []), group_rect, visible_bars.size(), group)
 
 	if not is_zero_approx(_baseline_value):
 		var baseline_y: float = _value_to_plot_y(_baseline_value, min_value, max_value, price_rect)
@@ -344,9 +348,9 @@ func _resolve_plot_bounds(plots: Array, bars: Array) -> Dictionary:
 	}
 
 
-func _build_chart_layout(plot_rect: Rect2, visible_bars: Array, has_indicator_panel: bool = false) -> Dictionary:
+func _build_chart_layout(plot_rect: Rect2, visible_bars: Array, indicator_panel_count: int = 0) -> Dictionary:
 	var price_rect: Rect2 = plot_rect
-	var indicator_rect := Rect2()
+	var indicator_rects: Array = []
 	var volume_rect := Rect2()
 	var used_bottom_height: float = 0.0
 	var bottom_cursor: float = plot_rect.end.y
@@ -364,28 +368,36 @@ func _build_chart_layout(plot_rect: Rect2, visible_bars: Array, has_indicator_pa
 		bottom_cursor = volume_rect.position.y - VOLUME_PANEL_GAP
 		used_bottom_height += volume_height + VOLUME_PANEL_GAP
 
-	if has_indicator_panel:
-		var panel_height: float = min(INDICATOR_PANEL_HEIGHT, max(plot_rect.size.y - used_bottom_height - 100.0, 0.0))
+	var safe_panel_count: int = clamp(indicator_panel_count, 0, 3)
+	if safe_panel_count > 0:
+		var available_panel_height: float = max(plot_rect.size.y - used_bottom_height - 110.0, 0.0)
+		var panel_height: float = min(
+			INDICATOR_PANEL_HEIGHT,
+			max((available_panel_height - (INDICATOR_PANEL_GAP * float(max(safe_panel_count - 1, 0)))) / float(safe_panel_count), 0.0)
+		)
 		if panel_height >= 40.0:
-			indicator_rect = Rect2(
-				Vector2(plot_rect.position.x, bottom_cursor - panel_height),
-				Vector2(plot_rect.size.x, panel_height)
-			)
-			bottom_cursor = indicator_rect.position.y - INDICATOR_PANEL_GAP
-			used_bottom_height += panel_height + INDICATOR_PANEL_GAP
+			indicator_rects.resize(safe_panel_count)
+			for panel_index in range(safe_panel_count - 1, -1, -1):
+				var indicator_rect := Rect2(
+					Vector2(plot_rect.position.x, bottom_cursor - panel_height),
+					Vector2(plot_rect.size.x, panel_height)
+				)
+				indicator_rects[panel_index] = indicator_rect
+				bottom_cursor = indicator_rect.position.y - INDICATOR_PANEL_GAP
+				used_bottom_height += panel_height + INDICATOR_PANEL_GAP
 
 	var price_height: float = bottom_cursor - plot_rect.position.y
 	if price_height < 90.0:
 		return {
 			"price_rect": price_rect,
-			"indicator_rect": Rect2(),
+			"indicator_rects": [],
 			"volume_rect": volume_rect
 		}
 
 	price_rect = Rect2(plot_rect.position, Vector2(plot_rect.size.x, price_height))
 	return {
 		"price_rect": price_rect,
-		"indicator_rect": indicator_rect,
+		"indicator_rects": indicator_rects,
 		"volume_rect": volume_rect
 	}
 
@@ -398,6 +410,35 @@ func _has_visible_volume(visible_bars: Array) -> bool:
 		if int(bar.get("volume_shares", 0)) > 0:
 			return true
 	return false
+
+
+func _bar_direction_color(visible_bars: Array, bar_index: int) -> Color:
+	return _direction_color(_bar_day_change_pct(visible_bars, bar_index))
+
+
+func _direction_color(change_pct: float) -> Color:
+	return CANDLE_UP_COLOR if change_pct >= 0.0 else CANDLE_DOWN_COLOR
+
+
+func _bar_day_change_pct(visible_bars: Array, bar_index: int) -> float:
+	if visible_bars.is_empty() or bar_index < 0 or bar_index >= visible_bars.size():
+		return 0.0
+	var bar: Dictionary = visible_bars[bar_index]
+	var close_price: float = float(bar.get("close", 0.0))
+	var reference_price: float = _bar_day_reference_price(visible_bars, bar_index)
+	if is_zero_approx(reference_price):
+		return 0.0
+	return (close_price - reference_price) / reference_price
+
+
+func _bar_day_reference_price(visible_bars: Array, bar_index: int) -> float:
+	if bar_index > 0 and bar_index - 1 < visible_bars.size() and typeof(visible_bars[bar_index - 1]) == TYPE_DICTIONARY:
+		var previous_bar: Dictionary = visible_bars[bar_index - 1]
+		var previous_close: float = float(previous_bar.get("close", 0.0))
+		if previous_close > 0.0:
+			return previous_close
+	var bar: Dictionary = visible_bars[bar_index]
+	return float(bar.get("open", bar.get("close", 0.0)))
 
 
 func _draw_candlesticks(visible_bars: Array, plot_rect: Rect2, min_value: float, max_value: float) -> void:
@@ -418,7 +459,7 @@ func _draw_candlesticks(visible_bars: Array, plot_rect: Rect2, min_value: float,
 		var low_y: float = _value_to_plot_y(low_price, min_value, max_value, plot_rect)
 		var open_y: float = _value_to_plot_y(open_price, min_value, max_value, plot_rect)
 		var close_y: float = _value_to_plot_y(close_price, min_value, max_value, plot_rect)
-		var candle_color: Color = CANDLE_UP_COLOR if close_price >= open_price else CANDLE_DOWN_COLOR
+		var candle_color: Color = _bar_direction_color(visible_bars, bar_index)
 
 		draw_line(
 			Vector2(center_x, high_y),
@@ -475,7 +516,7 @@ func _draw_volume_bars(visible_bars: Array, volume_rect: Rect2) -> void:
 
 		var open_price: float = float(bar.get("open", bar.get("close", 0.0)))
 		var close_price: float = float(bar.get("close", open_price))
-		var base_color: Color = CANDLE_UP_COLOR if close_price >= open_price else CANDLE_DOWN_COLOR
+		var base_color: Color = _bar_direction_color(visible_bars, bar_index)
 		var volume_color := Color(base_color.r, base_color.g, base_color.b, VOLUME_BAR_ALPHA)
 		var volume_ratio: float = clamp(float(volume_shares) / float(max_volume), 0.0, 1.0)
 		var bar_height: float = max(volume_ratio * drawable_height, 1.0)
@@ -487,23 +528,27 @@ func _draw_volume_bars(visible_bars: Array, volume_rect: Rect2) -> void:
 		draw_rect(bar_rect, volume_color, true)
 
 
-func _draw_indicator_panel(panel_plots: Array, panel_rect: Rect2, bar_count: int) -> void:
+func _draw_indicator_panel(panel_plots: Array, panel_rect: Rect2, bar_count: int, panel_group: Dictionary = {}) -> void:
 	if panel_plots.is_empty() or panel_rect.size.y <= 0.0:
 		return
 
+	var bounds: Dictionary = _indicator_panel_bounds(panel_plots, str(panel_group.get("scale_mode", "")))
+	var min_value: float = float(bounds.get("min", 0.0))
+	var max_value: float = float(bounds.get("max", 100.0))
 	draw_rect(panel_rect, Color(CHART_BACKGROUND.r, CHART_BACKGROUND.g, CHART_BACKGROUND.b, 0.55), true)
 	draw_line(panel_rect.position, Vector2(panel_rect.end.x, panel_rect.position.y), AXIS_LINE_COLOR, 1.0)
-	for guide_value in [30.0, 50.0, 70.0]:
-		var guide_y: float = _value_to_plot_y(guide_value, 0.0, 100.0, panel_rect)
-		draw_line(
-			Vector2(panel_rect.position.x, guide_y),
-			Vector2(panel_rect.end.x, guide_y),
-			Color(GRID_COLOR.r, GRID_COLOR.g, GRID_COLOR.b, 0.42),
-			1.0
-		)
+	var guide_values: Array = bounds.get("guides", [])
+	for guide_value in guide_values:
+		if typeof(guide_value) != TYPE_FLOAT and typeof(guide_value) != TYPE_INT:
+			continue
+		var guide_y: float = _value_to_plot_y(float(guide_value), min_value, max_value, panel_rect)
+		var guide_color: Color = Color(GRID_COLOR.r, GRID_COLOR.g, GRID_COLOR.b, 0.42)
+		if is_equal_approx(float(guide_value), 0.0) and str(panel_group.get("scale_mode", "")) == "zero_symmetric":
+			guide_color = Color(AXIS_TEXT_COLOR.r, AXIS_TEXT_COLOR.g, AXIS_TEXT_COLOR.b, 0.52)
+		draw_line(Vector2(panel_rect.position.x, guide_y), Vector2(panel_rect.end.x, guide_y), guide_color, 1.0)
 	for plot_value in panel_plots:
 		var plot: Dictionary = plot_value
-		_draw_plot(plot, panel_rect, 0.0, 100.0, false, bar_count)
+		_draw_plot(plot, panel_rect, min_value, max_value, false, bar_count)
 
 
 func _draw_hover_overlay(
@@ -541,7 +586,7 @@ func _draw_hover_overlay(
 	var hovered_bar: Dictionary = hover_state.get("bar", {})
 	var close_price: float = float(hovered_bar.get("close", 0.0))
 	var close_y: float = _value_to_plot_y(close_price, min_value, max_value, plot_rect)
-	var candle_color: Color = CANDLE_UP_COLOR if close_price >= float(hovered_bar.get("open", close_price)) else CANDLE_DOWN_COLOR
+	var candle_color: Color = _direction_color(float(hover_state.get("change_pct", 0.0)))
 	draw_circle(Vector2(crosshair_x, close_y), 3.5, candle_color)
 
 	if bool(hover_state.get("pointer_in_price", true)):
@@ -561,6 +606,9 @@ func _draw_plot(
 	var values: Array = plot.get("values", []).duplicate()
 	if values.is_empty():
 		return
+	if str(plot.get("style", "line")) == "histogram":
+		_draw_histogram_plot(plot, plot_rect, min_value, max_value, bar_count)
+		return
 
 	var line_color: Color = plot.get("color", Color(0.560784, 0.772549, 1, 1))
 	var line_width: float = float(plot.get("line_width", 2.0))
@@ -576,6 +624,33 @@ func _draw_plot(
 			draw_polyline(segment, line_color, line_width, true)
 		if draw_last_point and segment.size() >= 1:
 			draw_circle(segment[segment.size() - 1], 4.0, line_color)
+
+
+func _draw_histogram_plot(plot: Dictionary, plot_rect: Rect2, min_value: float, max_value: float, bar_count: int = 0) -> void:
+	var values: Array = plot.get("values", []).duplicate()
+	if values.is_empty():
+		return
+	var positive_color: Color = plot.get("positive_color", CANDLE_UP_COLOR)
+	var negative_color: Color = plot.get("negative_color", CANDLE_DOWN_COLOR)
+	var zero_y: float = _value_to_plot_y(0.0, min_value, max_value, plot_rect)
+	var slot_count: int = max(bar_count, values.size(), 1)
+	var slot_width: float = plot_rect.size.x / float(slot_count)
+	var bar_width: float = clamp(slot_width * 0.58, 1.0, 9.0)
+	for index in range(values.size()):
+		var value_variant = values[index]
+		if typeof(value_variant) != TYPE_FLOAT and typeof(value_variant) != TYPE_INT:
+			continue
+		var value: float = float(value_variant)
+		var center_x: float = _bar_center_x(index, bar_count, plot_rect) if bar_count > 0 else plot_rect.position.x + (plot_rect.size.x * float(index) / float(max(values.size() - 1, 1)))
+		var value_y: float = _value_to_plot_y(value, min_value, max_value, plot_rect)
+		var bar_top: float = min(zero_y, value_y)
+		var bar_height: float = max(absf(zero_y - value_y), 1.0)
+		var color: Color = positive_color if value >= 0.0 else negative_color
+		draw_rect(
+			Rect2(Vector2(center_x - (bar_width * 0.5), bar_top), Vector2(bar_width, bar_height)),
+			Color(color.r, color.g, color.b, 0.58),
+			true
+		)
 
 
 func _build_plot_segments(values: Array, plot_rect: Rect2, min_value: float, max_value: float, bar_count: int = 0) -> Array:
@@ -608,6 +683,74 @@ func _plots_for_kind(plots: Array, wants_panel: bool) -> Array:
 	return filtered
 
 
+func _panel_groups_for_plots(panel_plots: Array) -> Array:
+	var grouped: Dictionary = {}
+	var order: Array = []
+	for plot_value in panel_plots:
+		if typeof(plot_value) != TYPE_DICTIONARY:
+			continue
+		var plot: Dictionary = plot_value
+		var group_id: String = str(plot.get("panel_group", "default"))
+		if group_id.is_empty():
+			group_id = "default"
+		if not grouped.has(group_id):
+			grouped[group_id] = {
+				"id": group_id,
+				"scale_mode": str(plot.get("scale_mode", "")),
+				"plots": []
+			}
+			order.append(group_id)
+		grouped[group_id]["plots"].append(plot)
+	var groups: Array = []
+	for group_id_value in order:
+		groups.append(grouped[str(group_id_value)])
+	groups.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return _panel_group_sort(str(a.get("id", ""))) < _panel_group_sort(str(b.get("id", "")))
+	)
+	return groups
+
+
+func _panel_group_sort(group_id: String) -> int:
+	match group_id:
+		"rsi":
+			return 10
+		"macd":
+			return 20
+	return 90
+
+
+func _indicator_panel_bounds(panel_plots: Array, scale_mode: String) -> Dictionary:
+	if scale_mode == "bounded_0_100":
+		return {"min": 0.0, "max": 100.0, "guides": [30.0, 50.0, 70.0]}
+	var has_value: bool = false
+	var max_abs_value: float = 0.0
+	var min_value: float = 0.0
+	var max_value: float = 0.0
+	for plot_value in panel_plots:
+		if typeof(plot_value) != TYPE_DICTIONARY:
+			continue
+		var plot: Dictionary = plot_value
+		for value_variant in plot.get("values", []):
+			if typeof(value_variant) != TYPE_FLOAT and typeof(value_variant) != TYPE_INT:
+				continue
+			var value: float = float(value_variant)
+			if not has_value:
+				has_value = true
+				min_value = value
+				max_value = value
+			else:
+				min_value = min(min_value, value)
+				max_value = max(max_value, value)
+			max_abs_value = max(max_abs_value, absf(value))
+	if not has_value:
+		return {"min": -1.0, "max": 1.0, "guides": [0.0]}
+	if scale_mode == "zero_symmetric":
+		var bound: float = max(max_abs_value * 1.18, 0.001)
+		return {"min": -bound, "max": bound, "guides": [0.0]}
+	var padding: float = max((max_value - min_value) * 0.12, 0.001)
+	return {"min": min_value - padding, "max": max_value + padding, "guides": []}
+
+
 func _build_hover_state(
 	interaction_rect: Rect2,
 	price_rect: Rect2,
@@ -631,6 +774,8 @@ func _build_hover_state(
 	return {
 		"index": bar_index,
 		"bar": hovered_bar,
+		"reference_price": _bar_day_reference_price(visible_bars, bar_index),
+		"change_pct": _bar_day_change_pct(visible_bars, bar_index),
 		"x": crosshair_x,
 		"y": crosshair_y,
 		"pointer_in_price": price_rect.has_point(_hover_position),
@@ -703,10 +848,8 @@ func _draw_hover_info_panel(font: Font, hover_state: Dictionary, plot_rect: Rect
 	draw_rect(info_rect, HOVER_PANEL_BORDER, false, 1.0)
 
 	var date_text: String = _format_hover_date(hovered_bar.get("trade_date", {}))
-	var change_pct: float = 0.0
-	if not is_zero_approx(open_price):
-		change_pct = (close_price - open_price) / open_price
-	var change_color: Color = CANDLE_UP_COLOR if change_pct >= 0.0 else CANDLE_DOWN_COLOR
+	var change_pct: float = float(hover_state.get("change_pct", 0.0))
+	var change_color: Color = _direction_color(change_pct)
 	var line_one: String = "%s  O %s  H %s" % [
 		date_text,
 		_format_axis_price(open_price),

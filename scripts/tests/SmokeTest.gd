@@ -27,12 +27,14 @@ const NEWS_FEED_SYSTEM_SCRIPT = preload("res://systems/NewsFeedSystem.gd")
 const TWOOTER_FEED_SYSTEM_SCRIPT = preload("res://systems/TwooterFeedSystem.gd")
 const INDEX_REVIEW_SYSTEM_SCRIPT = preload("res://systems/IndexReviewSystem.gd")
 const ATTENTION_DIRECTOR_SYSTEM_SCRIPT = preload("res://systems/AttentionDirectorSystem.gd")
+const DIRTY_TIP_SYSTEM_SCRIPT = preload("res://systems/DirtyTipSystem.gd")
 const SPECIAL_EVENT_SYSTEM_SCRIPT = preload("res://systems/SpecialEventSystem.gd")
 const COMPANY_EVENT_SYSTEM_SCRIPT = preload("res://systems/CompanyEventSystem.gd")
 const MARKET_SIMULATOR_SCRIPT = preload("res://systems/MarketSimulator.gd")
 const COMPANY_GENERATOR_SCRIPT = preload("res://systems/CompanyGenerator.gd")
 const CHART_SYSTEM_SCRIPT = preload("res://systems/ChartSystem.gd")
 const CHART_PATTERN_SYSTEM_SCRIPT = preload("res://systems/ChartPatternSystem.gd")
+const PRICE_CHART_CANVAS_SCRIPT = preload("res://scripts/ui/widgets/PriceChartCanvas.gd")
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
 
 var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
@@ -748,6 +750,15 @@ func _validate_structured_chart_generation() -> String:
 	var chart_system = CHART_SYSTEM_SCRIPT.new()
 	var pattern_system = CHART_PATTERN_SYSTEM_SCRIPT.new()
 	var run_seed: int = 135791
+	var technical_signal_validation: String = _validate_technical_signal_detection(chart_system)
+	if not technical_signal_validation.is_empty():
+		return technical_signal_validation
+	var cycle_anchor_validation: String = _validate_hidden_cycle_anchor_generation(generator)
+	if not cycle_anchor_validation.is_empty():
+		return cycle_anchor_validation
+	var microstructure_validation: String = _validate_hidden_microstructure_generation(generator)
+	if not microstructure_validation.is_empty():
+		return microstructure_validation
 	var roster: Array = GameManager.build_company_roster(
 		run_seed,
 		GameManager.get_difficulty_config(GameManager.DEFAULT_DIFFICULTY_ID)
@@ -758,7 +769,7 @@ func _validate_structured_chart_generation() -> String:
 	if roster.size() < 12:
 		return "Smoke test expected the generated roster to include enough companies for chart-profile diversity."
 
-	var required_indicator_ids := ["sma_3", "sma_5", "sma_10", "sma_20", "sma_60", "sma_100", "sma_200"]
+	var required_indicator_ids := ["sma_3", "sma_5", "sma_10", "sma_20", "sma_60", "sma_100", "sma_200", "ema_20", "rsi_14", "macd_12_26_9"]
 	var indicator_catalog: Array = chart_system.get_indicator_catalog()
 	for indicator_id_value in required_indicator_ids:
 		var indicator_id: String = str(indicator_id_value)
@@ -797,6 +808,8 @@ func _validate_structured_chart_generation() -> String:
 	var biases := {}
 	var chart_intents := {}
 	var pattern_variants := {}
+	var saw_hidden_cycle: bool = false
+	var saw_operator_cycle_metadata: bool = false
 	var saw_bullish_history: bool = false
 	var saw_bearish_history: bool = false
 	var saw_sideways_history: bool = false
@@ -828,6 +841,19 @@ func _validate_structured_chart_generation() -> String:
 		var gap_bias: String = str(chart_profile.get("gap_bias", ""))
 		var gap_frequency: String = str(chart_profile.get("gap_frequency", ""))
 		var gap_followthrough: String = str(chart_profile.get("gap_followthrough", ""))
+		var cycle_template: String = str(chart_profile.get("cycle_template", ""))
+		var operator_pressure: float = float(chart_profile.get("operator_pressure", 0.0))
+		var tempo_profile: String = str(chart_profile.get("cycle_tempo_profile", ""))
+		var shakeout_profile: String = str(chart_profile.get("shakeout_profile", ""))
+		var microstructure_intensity: float = float(chart_profile.get("microstructure_intensity", 0.0))
+		var setup_duration_bias: float = float(chart_profile.get("setup_duration_bias", 0.0))
+		var bar_friction_profile: String = str(chart_profile.get("bar_friction_profile", ""))
+		var microleg_frequency_bias: float = float(chart_profile.get("microleg_frequency_bias", 0.0))
+		var wick_noise_intensity: float = float(chart_profile.get("wick_noise_intensity", 0.0))
+		var volume_disagreement_rate: float = float(chart_profile.get("volume_disagreement_rate", 0.0))
+		var tape_regime_profile: String = str(chart_profile.get("tape_regime_profile", ""))
+		var regime_block_intensity: float = float(chart_profile.get("regime_block_intensity", 0.0))
+		var regime_tempo_bias: float = float(chart_profile.get("regime_tempo_bias", 0.0))
 		if not ["investing", "swing_trading", "short_term_trading", "speculative"].has(chart_intent):
 			return "Smoke test expected %s chart_profile to include a valid chart_intent." % company_id
 		if not ["5y", "1y", "6m", "3m", "1m"].has(pattern_timeframe):
@@ -840,6 +866,43 @@ func _validate_structured_chart_generation() -> String:
 			return "Smoke test expected %s chart_profile to include a valid gap_frequency." % company_id
 		if not ["hold", "fade", "fill", "continue"].has(gap_followthrough):
 			return "Smoke test expected %s chart_profile to include a valid gap_followthrough." % company_id
+		if operator_pressure < 0.0 or operator_pressure > 1.0:
+			return "Smoke test expected %s operator pressure to stay normalized." % company_id
+		if not ["slow_setup", "normal_setup", "fast_operator", "failed_setup"].has(tempo_profile):
+			return "Smoke test expected %s chart_profile to include a valid hidden tempo profile." % company_id
+		if not ["none", "healthy_pullback", "hard_shakeout", "dead_cat", "failed_reclaim"].has(shakeout_profile):
+			return "Smoke test expected %s chart_profile to include a valid hidden shakeout profile." % company_id
+		if microstructure_intensity < 0.0 or microstructure_intensity > 1.0:
+			return "Smoke test expected %s microstructure intensity to stay normalized." % company_id
+		if setup_duration_bias < -1.0 or setup_duration_bias > 1.0:
+			return "Smoke test expected %s setup duration bias to stay normalized." % company_id
+		if not ["clean_liquid", "balanced_chop", "operator_dirty", "distribution_chop"].has(bar_friction_profile):
+			return "Smoke test expected %s chart_profile to include a valid hidden bar friction profile." % company_id
+		if microleg_frequency_bias < 0.0 or microleg_frequency_bias > 1.0:
+			return "Smoke test expected %s microleg frequency bias to stay normalized." % company_id
+		if wick_noise_intensity < 0.0 or wick_noise_intensity > 1.0:
+			return "Smoke test expected %s wick noise intensity to stay normalized." % company_id
+		if volume_disagreement_rate < 0.0 or volume_disagreement_rate > 1.0:
+			return "Smoke test expected %s volume disagreement rate to stay normalized." % company_id
+		if not ["clean_trend", "messy_accumulation", "operator_campaign", "distribution_breakdown", "failed_reclaim"].has(tape_regime_profile):
+			return "Smoke test expected %s chart_profile to include a valid hidden tape regime profile." % company_id
+		if regime_block_intensity < 0.0 or regime_block_intensity > 1.0:
+			return "Smoke test expected %s regime block intensity to stay normalized." % company_id
+		if regime_tempo_bias < -1.0 or regime_tempo_bias > 1.0:
+			return "Smoke test expected %s regime tempo bias to stay normalized." % company_id
+		if not cycle_template.is_empty():
+			if not ["markup_clean", "markup_exhaustion", "distribution_clean", "failed_markup", "operator_markup", "operator_rug"].has(cycle_template):
+				return "Smoke test expected %s to use a known hidden cycle template." % company_id
+			if float(chart_profile.get("cycle_strength", 0.0)) <= 0.0:
+				return "Smoke test expected %s hidden cycle to include positive strength." % company_id
+			var fib_ratios_value = chart_profile.get("cycle_fib_ratios", {})
+			if typeof(fib_ratios_value) != TYPE_DICTIONARY or (fib_ratios_value as Dictionary).is_empty():
+				return "Smoke test expected %s hidden cycle to include Fibonacci-like ratios." % company_id
+			if shakeout_profile == "none" or microstructure_intensity <= 0.0:
+				return "Smoke test expected %s hidden cycle to include structured microstructure metadata." % company_id
+			saw_hidden_cycle = true
+			if cycle_template.begins_with("operator"):
+				saw_operator_cycle_metadata = true
 		if chart_intent == "investing" and not ["5y", "1y"].has(pattern_timeframe):
 			return "Smoke test expected investing chart profile %s to focus pattern structure on 1Y/5Y." % company_id
 		if chart_intent in ["short_term_trading", "speculative"] and not ["1m", "3m", "6m"].has(pattern_timeframe):
@@ -880,7 +943,14 @@ func _validate_structured_chart_generation() -> String:
 				return "Smoke test expected missing chart_profile metadata to derive deterministic history for old saves."
 			var snapshot: Dictionary = chart_system.build_chart_snapshot_from_bars(bars, "5y", required_indicator_ids)
 			if snapshot.get("indicator_snapshots", []).size() != required_indicator_ids.size():
-				return "Smoke test expected 5Y chart snapshots to render all upgraded SMA indicators."
+				return "Smoke test expected 5Y chart snapshots to render all upgraded indicators."
+			var macd_snapshot: Dictionary = _chart_smoke_indicator_snapshot(snapshot, "macd_12_26_9")
+			if macd_snapshot.is_empty():
+				return "Smoke test expected chart snapshots to include MACD 12/26/9."
+			if macd_snapshot.get("macd_values", []).size() != int(snapshot.get("display_bar_count", 0)) or macd_snapshot.get("signal_values", []).size() != int(snapshot.get("display_bar_count", 0)) or macd_snapshot.get("histogram_values", []).size() != int(snapshot.get("display_bar_count", 0)):
+				return "Smoke test expected MACD line, signal, and histogram to align with visible chart points."
+			if _chart_smoke_indicator_values(snapshot, "macd_12_26_9").is_empty():
+				return "Smoke test expected MACD histogram values to render through the shared indicator values path."
 			var snapshot_3m: Dictionary = chart_system.build_chart_snapshot_from_bars(bars, "3m", [])
 			if int(snapshot_3m.get("visible_bar_count", 0)) != 63 or int(snapshot_3m.get("display_bar_count", 0)) != 63:
 				return "Smoke test expected 3M chart snapshots to render 63 unaggregated daily bars."
@@ -891,6 +961,11 @@ func _validate_structured_chart_generation() -> String:
 			var sma_20_values: Array = _chart_smoke_indicator_values(snapshot_3m_sma, "sma_20")
 			if sma_20_values.is_empty() or sma_20_values[0] == null:
 				return "Smoke test expected SMA 20 to use warmup history and render from the left edge of 3M charts."
+			var snapshot_3m_momentum: Dictionary = chart_system.build_chart_snapshot_from_bars(bars, "3m", ["rsi_14", "macd_12_26_9"])
+			if not _chart_smoke_has_panel_group(snapshot_3m_momentum, "rsi") or not _chart_smoke_has_panel_group(snapshot_3m_momentum, "macd"):
+				return "Smoke test expected RSI and MACD to render as separate stacked indicator panels."
+			if not snapshot_3m_momentum.has("technical_signals"):
+				return "Smoke test expected chart snapshots to carry hidden technical signals for internal consumers."
 			deterministic_reference = {"company_id": company_id}
 
 		var bias: String = str(chart_profile.get("bias", ""))
@@ -939,6 +1014,10 @@ func _validate_structured_chart_generation() -> String:
 		return "Smoke test expected roster chart profiles to use multiple hidden pattern variants."
 	if chart_intents.size() < 2:
 		return "Smoke test expected roster chart profiles to include multiple hidden chart intents."
+	if not saw_hidden_cycle:
+		return "Smoke test expected structured chart profiles to include at least one hidden tape cycle."
+	if not saw_operator_cycle_metadata:
+		return "Smoke test expected low-float/story-heavy chart profiles to include operator-cycle metadata."
 	if not biases.has("bullish") or not biases.has("bearish") or not biases.has("sideways"):
 		return "Smoke test expected roster chart profiles to include bullish, bearish, and sideways histories."
 	if not saw_bullish_history or not saw_bearish_history or not saw_sideways_history:
@@ -947,6 +1026,573 @@ func _validate_structured_chart_generation() -> String:
 		return "Smoke test expected structured chart histories to include measurable SMA support and resistance examples."
 	if not saw_gap_up or not saw_gap_down:
 		return "Smoke test expected structured chart histories to include both gap-up and gap-down examples."
+	return ""
+
+
+func _validate_technical_signal_detection(chart_system) -> String:
+	var bullish_signals: Array = chart_system.build_technical_signals_from_series(
+		[100.0, 96.0, 104.0, 94.0, 108.0, 106.0],
+		[45.0, 30.0, 48.0, 38.0, 52.0, 50.0],
+		[-0.2, -0.9, 0.1, -0.5, 0.5, 0.3],
+		[]
+	)
+	if not _chart_smoke_has_signal(bullish_signals, "bullish_divergence", "rsi_14") or not _chart_smoke_has_signal(bullish_signals, "bullish_divergence", "macd_12_26_9"):
+		return "Smoke test expected lower price lows with higher RSI/MACD lows to produce hidden bullish divergence."
+	var bearish_signals: Array = chart_system.build_technical_signals_from_series(
+		[100.0, 110.0, 103.0, 115.0, 108.0, 107.0],
+		[45.0, 72.0, 48.0, 63.0, 52.0, 50.0],
+		[0.1, 0.8, -0.1, 0.4, 0.0, -0.2],
+		[]
+	)
+	if not _chart_smoke_has_signal(bearish_signals, "bearish_divergence", "rsi_14") or not _chart_smoke_has_signal(bearish_signals, "bearish_divergence", "macd_12_26_9"):
+		return "Smoke test expected higher price highs with lower RSI/MACD highs to produce hidden bearish divergence."
+	var bullish_convergence: Array = chart_system.build_technical_signals_from_series(
+		[100.0, 106.0, 101.0, 112.0, 105.0, 110.0],
+		[45.0, 58.0, 46.0, 70.0, 55.0, 60.0],
+		[0.1, 0.4, -0.1, 0.8, 0.2, 0.5],
+		[]
+	)
+	if not _chart_smoke_has_signal(bullish_convergence, "bullish_convergence", "rsi_14"):
+		return "Smoke test expected price and RSI higher highs to produce hidden bullish convergence."
+	var bearish_convergence: Array = chart_system.build_technical_signals_from_series(
+		[112.0, 104.0, 108.0, 98.0, 103.0, 101.0],
+		[60.0, 42.0, 55.0, 34.0, 46.0, 40.0],
+		[0.5, -0.2, 0.2, -0.8, -0.1, -0.4],
+		[]
+	)
+	if not _chart_smoke_has_signal(bearish_convergence, "bearish_convergence", "rsi_14"):
+		return "Smoke test expected price and RSI lower lows to produce hidden bearish convergence."
+	return ""
+
+
+func _validate_hidden_cycle_anchor_generation(generator) -> String:
+	var clean_profile: Dictionary = {
+		"cycle_template": "markup_clean",
+		"cycle_strength": 0.75,
+		"operator_pressure": 0.0,
+		"fib_profile_id": "fib_classic",
+		"cycle_fib_ratios": {"wave2": 0.500, "wave3": 1.618, "wave4": 0.382}
+	}
+	var clean_anchors: Array = generator.call("_chart_cycle_shape_anchors", clean_profile)
+	if clean_anchors.size() < 6:
+		return "Smoke test expected hidden clean markup cycle to produce chart anchors."
+	var wave1: float = float(clean_anchors[1].get("m", 1.0))
+	var wave2: float = float(clean_anchors[2].get("m", 1.0))
+	var wave3: float = float(clean_anchors[3].get("m", 1.0))
+	var wave4: float = float(clean_anchors[4].get("m", 1.0))
+	var wave2_pullback: float = (wave1 - wave2) / max(wave1 - 1.0, 0.001)
+	var wave4_pullback: float = (wave3 - wave4) / max(wave3 - wave2, 0.001)
+	if absf(wave2_pullback - 0.500) > 0.06 or absf(wave4_pullback - 0.382) > 0.06:
+		return "Smoke test expected clean hidden cycle anchors to respect Fibonacci pullback zones."
+	var operator_profile: Dictionary = {
+		"cycle_template": "operator_rug",
+		"cycle_strength": 0.82,
+		"operator_pressure": 0.92,
+		"fib_profile_id": "fib_rug",
+		"cycle_fib_ratios": {"wave2": 0.382, "wave3": 1.618, "wave4": 0.618}
+	}
+	var operator_anchors: Array = generator.call("_chart_cycle_shape_anchors", operator_profile)
+	if operator_anchors.size() < 8:
+		return "Smoke test expected hidden operator rug cycle to produce violent chart anchors."
+	var peak_value: float = 0.0
+	var trough_value: float = INF
+	for anchor_value in operator_anchors:
+		if typeof(anchor_value) != TYPE_DICTIONARY:
+			continue
+		var anchor: Dictionary = anchor_value
+		peak_value = max(peak_value, float(anchor.get("m", 0.0)))
+		trough_value = min(trough_value, float(anchor.get("m", 1.0)))
+	if peak_value < 1.25 or trough_value > 0.82:
+		return "Smoke test expected operator cycle anchors to allow oversized markups and rug gaps."
+	return ""
+
+
+func _validate_hidden_microstructure_generation(generator) -> String:
+	var pattern_window: Dictionary = {"start": 0, "end": 100, "count": 101, "timeframe": "3m"}
+	var uptrend_profile: Dictionary = {
+		"cycle_template": "markup_clean",
+		"cycle_tempo_profile": "normal_setup",
+		"microstructure_intensity": 0.72,
+		"operator_pressure": 0.18,
+		"setup_duration_bias": 0.0,
+		"shakeout_profile": "healthy_pullback"
+	}
+	var pullback_context: Dictionary = generator.call("_chart_historical_microstructure_context", uptrend_profile, 0.30, 30, 101, pattern_window, 246810, "MICRO_UP")
+	var reclaim_context: Dictionary = generator.call("_chart_historical_microstructure_context", uptrend_profile, 0.39, 39, 101, pattern_window, 246810, "MICRO_UP")
+	if float(pullback_context.get("price_multiplier", 1.0)) >= 0.995:
+		return "Smoke test expected hidden uptrend microstructure to include a mid-trend pullback."
+	if float(reclaim_context.get("price_multiplier", 1.0)) <= 1.002:
+		return "Smoke test expected hidden uptrend microstructure to include a reclaim leg after pullback."
+
+	var downtrend_profile: Dictionary = {
+		"cycle_template": "distribution_clean",
+		"cycle_tempo_profile": "normal_setup",
+		"microstructure_intensity": 0.74,
+		"operator_pressure": 0.24,
+		"setup_duration_bias": 0.0,
+		"shakeout_profile": "dead_cat"
+	}
+	var dead_cat_context: Dictionary = generator.call("_chart_historical_microstructure_context", downtrend_profile, 0.36, 36, 101, pattern_window, 246810, "MICRO_DOWN")
+	var continuation_context: Dictionary = generator.call("_chart_historical_microstructure_context", downtrend_profile, 0.58, 58, 101, pattern_window, 246810, "MICRO_DOWN")
+	if float(dead_cat_context.get("price_multiplier", 1.0)) <= 1.002:
+		return "Smoke test expected hidden downtrend microstructure to include a dead-cat bounce."
+	if float(continuation_context.get("price_multiplier", 1.0)) >= 0.998:
+		return "Smoke test expected hidden downtrend microstructure to include continuation after the bounce fails."
+
+	var slow_profile: Dictionary = uptrend_profile.duplicate(true)
+	slow_profile["cycle_tempo_profile"] = "slow_setup"
+	slow_profile["setup_duration_bias"] = 0.48
+	var fast_profile: Dictionary = uptrend_profile.duplicate(true)
+	fast_profile["cycle_tempo_profile"] = "fast_operator"
+	fast_profile["setup_duration_bias"] = -0.56
+	var slow_progress: float = float(generator.call("_chart_tempo_adjusted_progress", slow_profile, 0.25))
+	var normal_progress: float = float(generator.call("_chart_tempo_adjusted_progress", uptrend_profile, 0.25))
+	var fast_progress: float = float(generator.call("_chart_tempo_adjusted_progress", fast_profile, 0.25))
+	if not (slow_progress < normal_progress and normal_progress < fast_progress):
+		return "Smoke test expected slow setup profiles to spend more bars in base/setup than fast operator profiles."
+
+	var regime_up_profile: Dictionary = uptrend_profile.duplicate(true)
+	regime_up_profile["tape_regime_profile"] = "messy_accumulation"
+	regime_up_profile["regime_block_intensity"] = 0.68
+	regime_up_profile["regime_tempo_bias"] = 0.10
+	regime_up_profile["bar_friction_profile"] = "balanced_chop"
+	var regime_blocks_a: Array = generator.call("_chart_tape_regime_blocks", regime_up_profile, 101, pattern_window, 246810, "REGIME_UP")
+	var regime_blocks_b: Array = generator.call("_chart_tape_regime_blocks", regime_up_profile, 101, pattern_window, 246810, "REGIME_UP")
+	if regime_blocks_a.size() != regime_blocks_b.size() or regime_blocks_a.is_empty():
+		return "Smoke test expected hidden tape regime scheduling to be deterministic for the same seed/state."
+	for block_index in range(regime_blocks_a.size()):
+		if typeof(regime_blocks_a[block_index]) != TYPE_DICTIONARY or typeof(regime_blocks_b[block_index]) != TYPE_DICTIONARY:
+			return "Smoke test expected hidden tape regime blocks to use dictionary rows."
+		var left_block: Dictionary = regime_blocks_a[block_index]
+		var right_block: Dictionary = regime_blocks_b[block_index]
+		if str(left_block.get("type", "")) != str(right_block.get("type", "")) or absf(float(left_block.get("p0", 0.0)) - float(right_block.get("p0", 0.0))) > 0.0001 or absf(float(left_block.get("p1", 0.0)) - float(right_block.get("p1", 0.0))) > 0.0001:
+			return "Smoke test expected hidden tape regime scheduling to be deterministic for the same seed/state."
+	var saw_regime_base: bool = false
+	var saw_regime_markup: bool = false
+	var saw_regime_channel: bool = false
+	for block_value in regime_blocks_a:
+		if typeof(block_value) != TYPE_DICTIONARY:
+			continue
+		var regime_type: String = str((block_value as Dictionary).get("type", ""))
+		saw_regime_base = saw_regime_base or regime_type == "base"
+		saw_regime_markup = saw_regime_markup or regime_type == "markup"
+		saw_regime_channel = saw_regime_channel or regime_type == "channel"
+	if not saw_regime_base or not saw_regime_markup or not saw_regime_channel:
+		return "Smoke test expected uptrend tape regimes to include base, markup, and channel blocks."
+
+	var regime_distribution_profile: Dictionary = downtrend_profile.duplicate(true)
+	regime_distribution_profile["tape_regime_profile"] = "distribution_breakdown"
+	regime_distribution_profile["regime_block_intensity"] = 0.72
+	regime_distribution_profile["regime_tempo_bias"] = -0.04
+	var distribution_blocks: Array = generator.call("_chart_tape_regime_blocks", regime_distribution_profile, 101, pattern_window, 246810, "REGIME_DOWN")
+	var saw_regime_breakdown: bool = false
+	var saw_regime_dead_cat: bool = false
+	var saw_regime_failed_reclaim: bool = false
+	for block_value in distribution_blocks:
+		if typeof(block_value) != TYPE_DICTIONARY:
+			continue
+		var down_regime_type: String = str((block_value as Dictionary).get("type", ""))
+		saw_regime_breakdown = saw_regime_breakdown or down_regime_type == "breakdown"
+		saw_regime_dead_cat = saw_regime_dead_cat or down_regime_type == "dead_cat"
+		saw_regime_failed_reclaim = saw_regime_failed_reclaim or down_regime_type == "failed_reclaim"
+	if not saw_regime_breakdown or not saw_regime_dead_cat or not saw_regime_failed_reclaim:
+		return "Smoke test expected distribution tape regimes to include breakdown, dead-cat, and failed-reclaim blocks."
+
+	var slow_regime_profile: Dictionary = regime_up_profile.duplicate(true)
+	slow_regime_profile["cycle_tempo_profile"] = "slow_setup"
+	slow_regime_profile["regime_tempo_bias"] = 0.52
+	var fast_regime_profile: Dictionary = regime_up_profile.duplicate(true)
+	fast_regime_profile["tape_regime_profile"] = "operator_campaign"
+	fast_regime_profile["cycle_tempo_profile"] = "fast_operator"
+	fast_regime_profile["regime_tempo_bias"] = -0.58
+	var slow_regime_blocks: Array = generator.call("_chart_tape_regime_blocks", slow_regime_profile, 101, pattern_window, 246810, "REGIME_SLOW")
+	var fast_regime_blocks: Array = generator.call("_chart_tape_regime_blocks", fast_regime_profile, 101, pattern_window, 246810, "REGIME_FAST")
+	var slow_base_span: float = float((slow_regime_blocks[0] as Dictionary).get("p1", 0.0)) - float((slow_regime_blocks[0] as Dictionary).get("p0", 0.0)) if not slow_regime_blocks.is_empty() and typeof(slow_regime_blocks[0]) == TYPE_DICTIONARY else 0.0
+	var fast_base_span: float = float((fast_regime_blocks[0] as Dictionary).get("p1", 0.0)) - float((fast_regime_blocks[0] as Dictionary).get("p0", 0.0)) if not fast_regime_blocks.is_empty() and typeof(fast_regime_blocks[0]) == TYPE_DICTIONARY else 0.0
+	if slow_base_span <= fast_base_span:
+		return "Smoke test expected slow tape regimes to spend more bars in base than fast operator regimes."
+
+	var saw_regime_pullback: bool = false
+	var saw_regime_reclaim: bool = false
+	for bar_index in range(34, 86):
+		var regime_context: Dictionary = generator.call(
+			"_chart_tape_regime_context",
+			regime_up_profile,
+			float(bar_index) / 100.0,
+			bar_index,
+			101,
+			pattern_window,
+			246810,
+			"REGIME_CHANNEL_UP",
+			100.0,
+			102.0,
+			[98.0, 99.0, 100.0]
+		)
+		if str(regime_context.get("phase", "")) == "channel" and float(regime_context.get("price_multiplier", 1.0)) < 0.998:
+			saw_regime_pullback = true
+		if str(regime_context.get("phase", "")) == "channel" and float(regime_context.get("price_multiplier", 1.0)) > 1.001:
+			saw_regime_reclaim = true
+	if not saw_regime_pullback or not saw_regime_reclaim:
+		return "Smoke test expected hidden tape regimes to add a pullback and reclaim inside 3M uptrend channels."
+
+	var saw_regime_bounce: bool = false
+	var saw_regime_drop: bool = false
+	for bar_index in range(24, 88):
+		var down_regime_context: Dictionary = generator.call(
+			"_chart_tape_regime_context",
+			regime_distribution_profile,
+			float(bar_index) / 100.0,
+			bar_index,
+			101,
+			pattern_window,
+			246810,
+			"REGIME_CHANNEL_DOWN",
+			100.0,
+			98.0,
+			[102.0, 101.0, 100.0]
+		)
+		if str(down_regime_context.get("phase", "")) == "dead_cat" and float(down_regime_context.get("price_multiplier", 1.0)) > 1.001:
+			saw_regime_bounce = true
+		if ["breakdown", "markdown", "failed_reclaim"].has(str(down_regime_context.get("phase", ""))) and float(down_regime_context.get("price_multiplier", 1.0)) < 0.998:
+			saw_regime_drop = true
+	if not saw_regime_bounce or not saw_regime_drop:
+		return "Smoke test expected hidden tape regimes to add dead-cat bounces and failed continuation in downtrends."
+
+	var simulator = MARKET_SIMULATOR_SCRIPT.new()
+	var operator_profile: Dictionary = uptrend_profile.duplicate(true)
+	operator_profile["cycle_template"] = "operator_markup"
+	operator_profile["cycle_tempo_profile"] = "fast_operator"
+	operator_profile["microstructure_intensity"] = 0.84
+	operator_profile["operator_pressure"] = 0.88
+	operator_profile["shakeout_profile"] = "hard_shakeout"
+	operator_profile["tape_regime_profile"] = "operator_campaign"
+	operator_profile["regime_block_intensity"] = 0.84
+	operator_profile["regime_tempo_bias"] = -0.48
+	var liquid_profile: Dictionary = uptrend_profile.duplicate(true)
+	liquid_profile["cycle_tempo_profile"] = "slow_setup"
+	liquid_profile["microstructure_intensity"] = 0.24
+	liquid_profile["operator_pressure"] = 0.04
+	liquid_profile["shakeout_profile"] = "healthy_pullback"
+	liquid_profile["tape_regime_profile"] = "clean_trend"
+	liquid_profile["regime_block_intensity"] = 0.28
+	liquid_profile["regime_tempo_bias"] = 0.42
+	var live_bars: Array = _chart_smoke_bars_from_closes([100.0, 101.0, 103.0, 104.0, 105.0, 106.0, 108.0, 109.0, 110.0])
+	var operator_live: Dictionary = simulator.call("_live_microstructure_context", operator_profile, live_bars, 246810, 24, "MICRO_OP")
+	var liquid_live: Dictionary = simulator.call("_live_microstructure_context", liquid_profile, live_bars, 246810, 24, "MICRO_LIQ")
+	if float(operator_live.get("pressure", 0.0)) <= float(liquid_live.get("pressure", 0.0)):
+		return "Smoke test expected low-float/operator chart profiles to carry stronger live microstructure pressure than liquid quality profiles."
+	var operator_live_regime: Dictionary = simulator.call("_live_tape_regime_context", operator_profile, live_bars, 246810, 24, "REGIME_LIVE_OP")
+	var liquid_live_regime: Dictionary = simulator.call("_live_tape_regime_context", liquid_profile, live_bars, 246810, 24, "REGIME_LIVE_LIQ")
+	if float(operator_live_regime.get("pressure", 0.0)) <= float(liquid_live_regime.get("pressure", 0.0)):
+		return "Smoke test expected operator names to receive stronger live tape regime friction than liquid quality names."
+
+	var daily_friction_profile: Dictionary = uptrend_profile.duplicate(true)
+	daily_friction_profile["bar_friction_profile"] = "balanced_chop"
+	daily_friction_profile["microleg_frequency_bias"] = 0.70
+	daily_friction_profile["wick_noise_intensity"] = 0.62
+	daily_friction_profile["volume_disagreement_rate"] = 0.58
+	var saw_nested_pullback: bool = false
+	var saw_nested_reclaim: bool = false
+	for bar_index in range(12, 54):
+		var friction_context: Dictionary = generator.call(
+			"_chart_daily_tape_friction_context",
+			daily_friction_profile,
+			float(bar_index) / 100.0,
+			bar_index,
+			101,
+			pattern_window,
+			246810,
+			"MICRO_DAILY_UP",
+			100.0,
+			101.0,
+			[98.0, 99.0, 100.0]
+		)
+		if float(friction_context.get("price_multiplier", 1.0)) < 0.996:
+			saw_nested_pullback = true
+		if float(friction_context.get("price_multiplier", 1.0)) > 1.001:
+			saw_nested_reclaim = true
+	if not saw_nested_pullback or not saw_nested_reclaim:
+		return "Smoke test expected nested daily tape friction to add pullback and reclaim microlegs inside uptrends."
+
+	var distribution_friction_profile: Dictionary = downtrend_profile.duplicate(true)
+	distribution_friction_profile["bar_friction_profile"] = "distribution_chop"
+	distribution_friction_profile["microleg_frequency_bias"] = 0.72
+	distribution_friction_profile["wick_noise_intensity"] = 0.64
+	distribution_friction_profile["volume_disagreement_rate"] = 0.54
+	var saw_nested_dead_cat: bool = false
+	var saw_nested_failure: bool = false
+	for bar_index in range(12, 54):
+		var down_friction_context: Dictionary = generator.call(
+			"_chart_daily_tape_friction_context",
+			distribution_friction_profile,
+			float(bar_index) / 100.0,
+			bar_index,
+			101,
+			pattern_window,
+			246810,
+			"MICRO_DAILY_DOWN",
+			100.0,
+			99.0,
+			[102.0, 101.0, 100.0]
+		)
+		if float(down_friction_context.get("price_multiplier", 1.0)) > 1.001:
+			saw_nested_dead_cat = true
+		if float(down_friction_context.get("price_multiplier", 1.0)) < 0.998:
+			saw_nested_failure = true
+	if not saw_nested_dead_cat or not saw_nested_failure:
+		return "Smoke test expected nested daily tape friction to add dead-cat and lower-high failure microlegs inside downtrends."
+
+	var run_guard_context: Dictionary = generator.call(
+		"_chart_daily_tape_friction_context",
+		daily_friction_profile,
+		0.50,
+		50,
+		101,
+		pattern_window,
+		246810,
+		"MICRO_RUN_GUARD",
+		106.0,
+		108.0,
+		[100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0]
+	)
+	if float(run_guard_context.get("price_multiplier", 1.0)) >= 1.0 or str(run_guard_context.get("phase", "")) != "run_guard":
+		return "Smoke test expected same-direction daily candle runs to be interrupted by a hidden run guard."
+
+	var operator_friction_profile: Dictionary = operator_profile.duplicate(true)
+	operator_friction_profile["bar_friction_profile"] = "operator_dirty"
+	operator_friction_profile["microleg_frequency_bias"] = 0.86
+	operator_friction_profile["wick_noise_intensity"] = 0.82
+	operator_friction_profile["volume_disagreement_rate"] = 0.70
+	var clean_friction_profile: Dictionary = liquid_profile.duplicate(true)
+	clean_friction_profile["bar_friction_profile"] = "clean_liquid"
+	clean_friction_profile["microleg_frequency_bias"] = 0.22
+	clean_friction_profile["wick_noise_intensity"] = 0.18
+	clean_friction_profile["volume_disagreement_rate"] = 0.16
+	var operator_friction_context: Dictionary = generator.call(
+		"_chart_daily_tape_friction_context",
+		operator_friction_profile,
+		0.34,
+		34,
+		101,
+		pattern_window,
+		246810,
+		"MICRO_OPERATOR_FRICTION",
+		100.0,
+		102.0,
+		[97.0, 98.0, 99.0, 100.0]
+	)
+	var clean_friction_context: Dictionary = generator.call(
+		"_chart_daily_tape_friction_context",
+		clean_friction_profile,
+		0.34,
+		34,
+		101,
+		pattern_window,
+		246810,
+		"MICRO_CLEAN_FRICTION",
+		100.0,
+		102.0,
+		[97.0, 98.0, 99.0, 100.0]
+	)
+	if float(operator_friction_context.get("friction_strength", 0.0)) <= float(clean_friction_context.get("friction_strength", 0.0)):
+		return "Smoke test expected operator daily tape friction to be stronger than liquid quality friction."
+	if int(operator_friction_context.get("run_limit", 6)) >= int(clean_friction_context.get("run_limit", 6)):
+		return "Smoke test expected operator daily tape friction to allow shorter same-color candle runs than liquid profiles."
+	if float(operator_friction_context.get("range_multiplier", 1.0)) > 1.56:
+		return "Smoke test expected daily operator friction to stay below the wild-candle range cap."
+	if float(operator_friction_context.get("lower_wick_bias", 0.0)) > 0.031 or float(operator_friction_context.get("upper_wick_bias", 0.0)) > 0.031:
+		return "Smoke test expected daily operator wick pressure to stay below the comb-wick cap."
+	var clean_range_cap: float = float(generator.call("_chart_daily_range_cap", clean_friction_profile))
+	var balanced_range_cap: float = float(generator.call("_chart_daily_range_cap", daily_friction_profile))
+	var operator_range_cap: float = float(generator.call("_chart_daily_range_cap", operator_friction_profile))
+	if not (clean_range_cap < balanced_range_cap and balanced_range_cap < operator_range_cap):
+		return "Smoke test expected daily range caps to scale from liquid to balanced to operator profiles."
+	if operator_range_cap > 0.047:
+		return "Smoke test expected operator daily range cap to avoid extreme comb-like daily candles."
+	var operator_wick_cap: float = float(generator.call("_chart_clamp_wick_bias_for_daily_profile", operator_friction_profile, 0.20))
+	var clean_wick_cap: float = float(generator.call("_chart_clamp_wick_bias_for_daily_profile", clean_friction_profile, 0.20))
+	if not (clean_wick_cap < operator_wick_cap and operator_wick_cap <= 0.039):
+		return "Smoke test expected wick caps to stay tighter while still allowing operator names to be messier."
+
+	var saw_volume_dryup: bool = false
+	var saw_volume_spike: bool = false
+	for bar_index in range(10, 70):
+		var balanced_volume_context: Dictionary = generator.call(
+			"_chart_daily_tape_friction_context",
+			daily_friction_profile,
+			float(bar_index) / 100.0,
+			bar_index,
+			101,
+			pattern_window,
+			246810,
+			"MICRO_VOLUME_DRYUP",
+			100.0,
+			101.0,
+			[98.0, 99.0, 100.0]
+		)
+		if float(balanced_volume_context.get("volume_multiplier", 1.0)) < 0.95:
+			saw_volume_dryup = true
+		var operator_volume_context: Dictionary = generator.call(
+			"_chart_daily_tape_friction_context",
+			operator_friction_profile,
+			float(bar_index) / 100.0,
+			bar_index,
+			101,
+			pattern_window,
+			246810,
+			"MICRO_VOLUME_SPIKE",
+			100.0,
+			101.0,
+			[98.0, 99.0, 100.0]
+		)
+		if float(operator_volume_context.get("volume_multiplier", 1.0)) > 1.18:
+			saw_volume_spike = true
+	if not saw_volume_dryup or not saw_volume_spike:
+		return "Smoke test expected daily tape friction to create both volume dry-ups and operator-style volume spikes."
+
+	var body_limits: Dictionary = IDX_PRICE_RULES.auto_rejection_limits(100.0, "main")
+	var bullish_body: Dictionary = generator.call(
+		"_chart_reconcile_historical_body_intent",
+		daily_friction_profile,
+		{"phase": "calm"},
+		{"phase": "markup", "regime_block": {"direction": 1}},
+		{"phase": "calm"},
+		100.0,
+		112.0,
+		106.0,
+		128.0,
+		12,
+		body_limits,
+		0.12,
+		42,
+		246810,
+		"BODY_MARKUP",
+		1,
+		3
+	)
+	if float(bullish_body.get("close", 0.0)) < float(bullish_body.get("open", 0.0)):
+		return "Smoke test expected bullish body reconciliation to stop rising markup candles from printing red."
+	var final_bullish_body: Dictionary = generator.call(
+		"_chart_reconcile_historical_body_intent",
+		daily_friction_profile,
+		{"phase": "calm"},
+		{"phase": "markup", "regime_block": {"direction": 1}},
+		{"phase": "calm"},
+		100.0,
+		112.0,
+		106.0,
+		106.0,
+		0,
+		body_limits,
+		0.12,
+		99,
+		246810,
+		"BODY_MARKUP_FINAL",
+		1,
+		3
+	)
+	if float(final_bullish_body.get("close", 0.0)) < float(final_bullish_body.get("open", 0.0)):
+		return "Smoke test expected final-bar body reconciliation to avoid red bodies on rising final candles."
+	var bearish_body: Dictionary = generator.call(
+		"_chart_reconcile_historical_body_intent",
+		distribution_friction_profile,
+		{"phase": "calm"},
+		{"phase": "breakdown", "regime_block": {"direction": -1}},
+		{"phase": "calm"},
+		100.0,
+		91.0,
+		96.0,
+		80.0,
+		12,
+		body_limits,
+		-0.09,
+		43,
+		246810,
+		"BODY_BREAKDOWN",
+		-1,
+		3
+	)
+	if float(bearish_body.get("close", 0.0)) > float(bearish_body.get("open", 0.0)):
+		return "Smoke test expected bearish body reconciliation to stop falling breakdown candles from printing green."
+	var shakeout_intent: int = int(generator.call(
+		"_chart_historical_body_intent_direction",
+		daily_friction_profile,
+		{"phase": "shakeout"},
+		{"phase": "channel", "regime_block": {"direction": 1}},
+		{"phase": "turunin_penumpang"},
+		100.0,
+		98.0
+	))
+	var reclaim_intent: int = int(generator.call(
+		"_chart_historical_body_intent_direction",
+		daily_friction_profile,
+		{"phase": "reclaim"},
+		{"phase": "channel", "regime_block": {"direction": 1}},
+		{"phase": "reclaim"},
+		100.0,
+		104.0
+	))
+	var structural_up_intent: int = int(generator.call(
+		"_chart_historical_body_intent_direction",
+		daily_friction_profile,
+		{"phase": "shakeout"},
+		{"phase": "channel", "regime_block": {"direction": 1}},
+		{"phase": "turunin_penumpang"},
+		100.0,
+		104.0
+	))
+	var failure_intent: int = int(generator.call(
+		"_chart_historical_body_intent_direction",
+		distribution_friction_profile,
+		{"phase": "failed_reclaim"},
+		{"phase": "failed_reclaim", "regime_block": {"direction": -1}},
+		{"phase": "lower_high"},
+		100.0,
+		98.0
+	))
+	if shakeout_intent >= 0 or reclaim_intent <= 0 or failure_intent >= 0 or structural_up_intent <= 0:
+		return "Smoke test expected candle body intent to follow visible daily direction while distinguishing shakeouts, reclaims, and upper-wick failures."
+	var chart_canvas = PRICE_CHART_CANVAS_SCRIPT.new()
+	var day_color_bars: Array = [
+		{"open": 100.0, "close": 100.0},
+		{"open": 112.0, "close": 106.0}
+	]
+	var rendered_day_change_pct: float = float(chart_canvas.call("_bar_day_change_pct", day_color_bars, 1))
+	chart_canvas.free()
+	if rendered_day_change_pct <= 0.0:
+		return "Smoke test expected chart candle color direction to follow close versus previous close."
+	var live_body_up: Dictionary = simulator.call(
+		"_reconcile_live_candle_body_intent",
+		daily_friction_profile,
+		{"accumulation_signal": 0.62, "distribution_signal": 0.12},
+		100.0,
+		110.0,
+		104.0,
+		0.04,
+		0.0,
+		body_limits,
+		246810,
+		44,
+		"LIVE_BODY_UP"
+	)
+	if float(live_body_up.get("close", 0.0)) < float(live_body_up.get("open", 0.0)):
+		return "Smoke test expected live candle reconciliation to stop rising days from printing red bodies."
+	var live_body_down: Dictionary = simulator.call(
+		"_reconcile_live_candle_body_intent",
+		distribution_friction_profile,
+		{"accumulation_signal": 0.10, "distribution_signal": 0.68},
+		100.0,
+		92.0,
+		96.0,
+		-0.04,
+		0.0,
+		body_limits,
+		246810,
+		45,
+		"LIVE_BODY_DOWN"
+	)
+	if float(live_body_down.get("close", 0.0)) > float(live_body_down.get("open", 0.0)):
+		return "Smoke test expected live candle reconciliation to stop falling days from printing green bodies."
 	return ""
 
 
@@ -1193,7 +1839,7 @@ func _validate_structured_chart_upgrade_tiers() -> String:
 		return "Smoke test expected Chart Indicators tier 3 to unlock only SMA 20."
 	if not _chart_smoke_indicator_set_matches(tiers.get("2", {}).get("indicator_ids", []), ["sma_3", "sma_5", "sma_10", "sma_20", "sma_60"]):
 		return "Smoke test expected Chart Indicators tier 2 to unlock SMA 3/5/10/20/60."
-	if not _chart_smoke_indicator_set_matches(tiers.get("1", {}).get("indicator_ids", []), ["sma_3", "sma_5", "sma_10", "sma_20", "sma_60", "sma_100", "sma_200", "ema_20", "rsi_14"]):
+	if not _chart_smoke_indicator_set_matches(tiers.get("1", {}).get("indicator_ids", []), ["sma_3", "sma_5", "sma_10", "sma_20", "sma_60", "sma_100", "sma_200", "ema_20", "rsi_14", "macd_12_26_9"]):
 		return "Smoke test expected Chart Indicators tier 1 to unlock all planned advanced indicators."
 	return ""
 
@@ -1214,6 +1860,39 @@ func _chart_smoke_indicator_values(snapshot: Dictionary, target_id: String) -> A
 			var values: Array = indicator.get("values", [])
 			return values.duplicate()
 	return []
+
+
+func _chart_smoke_indicator_snapshot(snapshot: Dictionary, target_id: String) -> Dictionary:
+	for indicator_value in snapshot.get("indicator_snapshots", []):
+		if typeof(indicator_value) != TYPE_DICTIONARY:
+			continue
+		var indicator: Dictionary = indicator_value
+		if str(indicator.get("id", "")) == target_id:
+			return indicator.duplicate(true)
+	return {}
+
+
+func _chart_smoke_has_panel_group(snapshot: Dictionary, panel_group: String) -> bool:
+	var plot_rows: Array = snapshot.get("panel_plots", [])
+	if plot_rows.is_empty():
+		plot_rows = snapshot.get("plots", [])
+	for plot_value in plot_rows:
+		if typeof(plot_value) != TYPE_DICTIONARY:
+			continue
+		var plot: Dictionary = plot_value
+		if str(plot.get("panel_group", "")) == panel_group:
+			return true
+	return false
+
+
+func _chart_smoke_has_signal(signals: Array, signal_type: String, indicator_id: String) -> bool:
+	for signal_value in signals:
+		if typeof(signal_value) != TYPE_DICTIONARY:
+			continue
+		var signal_row: Dictionary = signal_value
+		if str(signal_row.get("signal_type", "")) == signal_type and str(signal_row.get("indicator_id", "")) == indicator_id:
+			return true
+	return false
 
 
 func _chart_smoke_range_order_matches(catalog: Array, expected_ids: Array) -> bool:
@@ -1238,6 +1917,7 @@ func _chart_smoke_indicator_set_matches(actual: Array, expected: Array) -> bool:
 
 
 func _chart_smoke_bars_are_valid(bars: Array) -> bool:
+	var previous_close: float = 0.0
 	for bar_value in bars:
 		if typeof(bar_value) != TYPE_DICTIONARY:
 			return false
@@ -1250,8 +1930,17 @@ func _chart_smoke_bars_are_valid(bars: Array) -> bool:
 			return false
 		if high_price < max(open_price, close_price) or low_price > min(open_price, close_price):
 			return false
+		if previous_close > 0.0:
+			var ar_limits: Dictionary = IDX_PRICE_RULES.auto_rejection_limits(previous_close, "main")
+			var upper_price: float = float(ar_limits.get("upper_price", previous_close))
+			var lower_price: float = float(ar_limits.get("lower_price", previous_close))
+			for price_value in [open_price, high_price, low_price, close_price]:
+				var price: float = float(price_value)
+				if price > upper_price + 0.0001 or price < lower_price - 0.0001:
+					return false
 		if int(bar.get("volume_shares", 0)) <= 0 or float(bar.get("value", 0.0)) <= 0.0:
 			return false
+		previous_close = close_price
 	return true
 
 
@@ -1276,6 +1965,24 @@ func _chart_smoke_close_at(bars: Array, index: int) -> float:
 	var safe_index: int = clamp(index, 0, bars.size() - 1)
 	var bar: Dictionary = bars[safe_index]
 	return float(bar.get("close", bar.get("open", 0.0)))
+
+
+func _chart_smoke_bars_from_closes(closes: Array) -> Array:
+	var bars: Array = []
+	var previous_close: float = 0.0
+	for index in range(closes.size()):
+		var close_price: float = float(closes[index])
+		var open_price: float = previous_close if previous_close > 0.0 else close_price
+		bars.append({
+			"open": open_price,
+			"high": max(open_price, close_price) * 1.01,
+			"low": min(open_price, close_price) * 0.99,
+			"close": close_price,
+			"volume_shares": 100000 + index * 1000,
+			"value": close_price * float(100000 + index * 1000)
+		})
+		previous_close = close_price
+	return bars
 
 
 func _chart_smoke_has_gap(bars: Array, gap_up: bool) -> bool:
@@ -3778,6 +4485,23 @@ func _run_scenario(
 		}
 	var opening_meeting_id: String = str(opening_meeting_rows[0].get("id", ""))
 	var opening_meeting_detail: Dictionary = GameManager.get_corporate_meeting_detail(opening_meeting_id)
+	if not bool(opening_meeting_detail.get("interactive_v1", false)):
+		game_root._open_corporate_meeting_modal(opening_meeting_id)
+		await get_tree().process_frame
+		var public_meeting_intel_label: Label = game_root.find_child("CorporateMeetingIntelLabel", true, false) as Label
+		if (
+			public_meeting_intel_label == null or
+			public_meeting_intel_label.visible or
+			not public_meeting_intel_label.text.is_empty()
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected public corporate meeting modals to hide private intel/debug chain state."
+			}
+		game_root._close_corporate_meeting_modal()
+		await get_tree().process_frame
 	if bool(opening_meeting_detail.get("requires_shareholder", false)):
 		var blocked_attend_result: Dictionary = GameManager.attend_corporate_meeting(opening_meeting_id)
 		if bool(blocked_attend_result.get("success", false)):
@@ -8094,6 +8818,14 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected Attention Director to reserve player-facing day 6 for the first macro headline."
 		}
+	for director_key in ["selected_lane", "lane_scores", "difficulty_profile_id", "focus_company_ids", "focus_company_weights", "dirty_market_pressure", "market_stress_score", "best_company_attention_score"]:
+		if not day_six_attention_directives.has(director_key):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected Attention Director V2 directives to include internal key %s." % director_key
+			}
 	var attention_director_event_history: Array = RunState.event_history.duplicate(true)
 	RunState.event_history = [{
 		"event_id": "risk_off_headline",
@@ -8166,6 +8898,337 @@ func _run_scenario(
 			"message": "Smoke test expected Attention Director to cool down macro special events after a recent macro beat."
 		}
 	RunState.event_history = attention_director_event_history
+	var saved_difficulty_config: Dictionary = RunState.difficulty_config.duplicate(true)
+	var saved_difficulty_id: String = RunState.difficulty_id
+	var saved_network_contacts: Dictionary = RunState.network_contacts.duplicate(true)
+	RunState.event_history = [{
+		"event_id": "earnings_beat",
+		"scope": "company",
+		"event_family": "company",
+		"category": "company",
+		"day_index": 5
+	}]
+	RunState.difficulty_config = GameManager.get_difficulty_config("normal")
+	RunState.difficulty_id = "normal"
+	var normal_day_seven_directives: Dictionary = attention_director.resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		7,
+		GameManager.get_current_macro_state()
+	)
+	RunState.difficulty_config = GameManager.get_difficulty_config("grind")
+	RunState.difficulty_id = "grind"
+	var grind_day_seven_directives: Dictionary = attention_director.resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		7,
+		GameManager.get_current_macro_state()
+	)
+	RunState.difficulty_config = GameManager.get_difficulty_config("chill")
+	RunState.difficulty_id = "chill"
+	var chill_day_seven_directives: Dictionary = attention_director.resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		7,
+		GameManager.get_current_macro_state()
+	)
+	if (
+		not bool(grind_day_seven_directives.get("force_company_arc_start", false)) or
+		float(grind_day_seven_directives.get("company_arc_probability_multiplier", 0.0)) <= float(normal_day_seven_directives.get("company_arc_probability_multiplier", 0.0)) or
+		bool(chill_day_seven_directives.get("force_company_arc_start", false))
+	):
+		RunState.event_history = attention_director_event_history
+		RunState.difficulty_config = saved_difficulty_config
+		RunState.difficulty_id = saved_difficulty_id
+		RunState.network_contacts = saved_network_contacts
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Grind to raise quiet-pressure pacing earlier than Normal/Chill."
+		}
+	RunState.event_history = [{
+		"event_id": "sector_tailwind",
+		"scope": "market",
+		"event_family": "macro",
+		"category": "macro",
+		"day_index": 8
+	}]
+	RunState.difficulty_config = GameManager.get_difficulty_config("normal")
+	RunState.difficulty_id = "normal"
+	var normal_day_ten_directives: Dictionary = attention_director.resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		10,
+		GameManager.get_current_macro_state()
+	)
+	RunState.difficulty_config = GameManager.get_difficulty_config("chill")
+	RunState.difficulty_id = "chill"
+	var chill_day_ten_directives: Dictionary = attention_director.resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		10,
+		GameManager.get_current_macro_state()
+	)
+	if str(chill_day_ten_directives.get("attention_tier", "")) != "digestion" or str(normal_day_ten_directives.get("attention_tier", "")) == "digestion":
+		RunState.event_history = attention_director_event_history
+		RunState.difficulty_config = saved_difficulty_config
+		RunState.difficulty_id = saved_difficulty_id
+		RunState.network_contacts = saved_network_contacts
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Chill to digest headlines longer than Normal."
+		}
+	RunState.event_history = attention_director_event_history
+	RunState.difficulty_config = saved_difficulty_config
+	RunState.difficulty_id = saved_difficulty_id
+	var deterministic_attention_a: Dictionary = attention_director.resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		12,
+		GameManager.get_current_macro_state()
+	)
+	var deterministic_attention_b: Dictionary = attention_director.resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		12,
+		GameManager.get_current_macro_state()
+	)
+	if (
+		deterministic_attention_a.get("focus_company_ids", []) != deterministic_attention_b.get("focus_company_ids", []) or
+		deterministic_attention_a.get("focus_company_weights", {}) != deterministic_attention_b.get("focus_company_weights", {})
+	):
+		RunState.network_contacts = saved_network_contacts
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Attention Director focus-company weights to be deterministic for the same state."
+		}
+	var focus_company_ids: Array = deterministic_attention_a.get("focus_company_ids", [])
+	if not focus_company_ids.is_empty():
+		var focus_company_id: String = str(focus_company_ids[0])
+		var focused_candidate_directives: Dictionary = {
+			"focus_company_ids": [focus_company_id],
+			"focus_company_weights": {focus_company_id: 2.75}
+		}
+		var focused_candidates: Array = COMPANY_EVENT_SYSTEM_SCRIPT.new().build_company_event_candidates(
+			RunState,
+			RunState.get_current_trade_date(),
+			12,
+			GameManager.get_current_macro_state(),
+			focused_candidate_directives
+		)
+		var focused_candidate_found: bool = false
+		for focused_candidate_value in focused_candidates:
+			if typeof(focused_candidate_value) != TYPE_DICTIONARY:
+				continue
+			var focused_candidate: Dictionary = focused_candidate_value
+			if str(focused_candidate.get("target_company_id", "")) == focus_company_id:
+				focused_candidate_found = true
+				break
+		if not focused_candidate_found:
+			RunState.network_contacts = saved_network_contacts
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected company candidates to include Attention Director focus companies."
+			}
+	var pre_day_twenty_dirty_directives: Dictionary = attention_director.resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		19,
+		GameManager.get_current_macro_state()
+	)
+	if float(pre_day_twenty_dirty_directives.get("dirty_market_pressure", -1.0)) != 0.0:
+		RunState.network_contacts = saved_network_contacts
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected dirty-market pressure to stay zero before day 20."
+		}
+	var low_visibility_difficulty: Dictionary = RunState.get_difficulty_config()
+	low_visibility_difficulty["starting_cash"] = max(RunState.get_total_equity() * 2.0, 1.0)
+	RunState.difficulty_config = low_visibility_difficulty
+	RunState.network_contacts = {}
+	var invisible_dirty_directives: Dictionary = attention_director.resolve_day(
+		RunState,
+		RunState.get_current_trade_date(),
+		25,
+		GameManager.get_current_macro_state()
+	)
+	RunState.difficulty_config = saved_difficulty_config
+	RunState.difficulty_id = saved_difficulty_id
+	RunState.network_contacts = saved_network_contacts
+	if float(invisible_dirty_directives.get("dirty_market_pressure", -1.0)) != 0.0:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected dirty-market pressure to stay zero before equity or recognition eligibility."
+		}
+	var dirty_tip_saved_run: Dictionary = RunState.to_save_dict()
+	var dirty_tip_system = DIRTY_TIP_SYSTEM_SCRIPT.new()
+	var dirty_tip_company_id: String = str(RunState.company_order[0])
+	var dirty_tip_directives: Dictionary = {
+		"selected_lane": "dirty_market",
+		"dirty_market_pressure": 1.0,
+		"focus_company_ids": [dirty_tip_company_id],
+		"focus_company_weights": {dirty_tip_company_id: 2.25}
+	}
+	var pre_day_dirty_offer: Dictionary = dirty_tip_system.resolve_day(
+		RunState,
+		DataRepository,
+		dirty_tip_directives,
+		19,
+		RunState.get_current_trade_date()
+	)
+	if not pre_day_dirty_offer.get("offers", []).is_empty():
+		RunState.load_from_dict(dirty_tip_saved_run)
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Dirty Tip offers to stay disabled before day 20."
+		}
+	RunState.load_from_dict(dirty_tip_saved_run)
+	var dirty_tip_invisible_state: Dictionary = RunState.to_save_dict()
+	RunState.network_contacts = {}
+	RunState.player_portfolio["holdings"] = {}
+	var invisible_offer_difficulty: Dictionary = RunState.get_difficulty_config()
+	invisible_offer_difficulty["starting_cash"] = max(RunState.get_total_equity() * 4.0, 1.0)
+	RunState.difficulty_config = invisible_offer_difficulty
+	var invisible_dirty_offer: Dictionary = dirty_tip_system.resolve_day(
+		RunState,
+		DataRepository,
+		dirty_tip_directives,
+		25,
+		RunState.get_current_trade_date()
+	)
+	if not invisible_dirty_offer.get("offers", []).is_empty():
+		RunState.load_from_dict(dirty_tip_invisible_state)
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Dirty Tip offers to require player visibility."
+		}
+	RunState.load_from_dict(dirty_tip_saved_run)
+	var forced_dirty_offer_result: Dictionary = GameManager.debug_force_dirty_tip_offer(dirty_tip_company_id)
+	var forced_dirty_offers: Array = forced_dirty_offer_result.get("offers", [])
+	if not bool(forced_dirty_offer_result.get("success", false)) or forced_dirty_offers.is_empty():
+		RunState.load_from_dict(dirty_tip_saved_run)
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected debug force Dirty Tip to create an offer."
+		}
+	var forced_dirty_offer: Dictionary = forced_dirty_offers[0]
+	var dirty_tip_dialog: Control = game_root.find_child("DirtyTipDialog", true, false) as Control
+	var dirty_tip_title_label: Label = game_root.find_child("DirtyTipTitleLabel", true, false) as Label
+	var dirty_tip_body_label: Label = game_root.find_child("DirtyTipBodyLabel", true, false) as Label
+	var dirty_tip_accept_button: Button = game_root.find_child("DirtyTipAcceptButton", true, false) as Button
+	var dirty_tip_decline_button: Button = game_root.find_child("DirtyTipDeclineButton", true, false) as Button
+	var dirty_tip_report_button: Button = game_root.find_child("DirtyTipReportButton", true, false) as Button
+	var dirty_tip_close_button: Button = game_root.find_child("DirtyTipCloseButton", true, false) as Button
+	if dirty_tip_dialog == null or dirty_tip_title_label == null or dirty_tip_body_label == null or dirty_tip_accept_button == null or dirty_tip_decline_button == null or dirty_tip_report_button == null or dirty_tip_close_button == null:
+		RunState.load_from_dict(dirty_tip_saved_run)
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Dirty Tip dialog smoke-test node names to exist."
+		}
+	game_root.call("_queue_dirty_tip_alerts_from_recap_snapshot", {
+		"last_day_results": {
+			"dirty_tip_offers": [forced_dirty_offer]
+		}
+	})
+	game_root.call("_show_next_dirty_tip_alert")
+	await get_tree().process_frame
+	if not dirty_tip_dialog.visible or dirty_tip_body_label.text.strip_edges().is_empty():
+		RunState.load_from_dict(dirty_tip_saved_run)
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Dirty Tip popup to render queued post-recap offers."
+		}
+	dirty_tip_accept_button.emit_signal("pressed")
+	await get_tree().process_frame
+	var accepted_dirty_request: Dictionary = RunState.get_network_requests().get(str(forced_dirty_offer.get("id", "")), {})
+	if str(accepted_dirty_request.get("status", "")) != "accepted":
+		RunState.load_from_dict(dirty_tip_saved_run)
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected accepting a Dirty Tip popup to activate the case."
+		}
+	var dirty_market_effect: Dictionary = dirty_tip_system.market_effect_for_company(RunState, dirty_tip_company_id, RunState.day_index + 1)
+	if dirty_market_effect.is_empty() or float(dirty_market_effect.get("volume_multiplier", 1.0)) <= 1.0:
+		RunState.load_from_dict(dirty_tip_saved_run)
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected accepted Dirty Tip cases to create hidden market pressure."
+		}
+	var dirty_requests: Dictionary = RunState.get_network_requests()
+	accepted_dirty_request["debug_force_caught"] = true
+	accepted_dirty_request["due_day_index"] = RunState.day_index
+	accepted_dirty_request["active_until_day_index"] = RunState.day_index
+	dirty_requests[str(accepted_dirty_request.get("id", ""))] = accepted_dirty_request.duplicate(true)
+	RunState.set_network_requests(dirty_requests)
+	var dirty_case_results: Array = dirty_tip_system.process_due_cases(RunState, DataRepository)
+	var legal_state: Dictionary = RunState.get_player_life().get("legal_state", {})
+	if dirty_case_results.is_empty() or str(dirty_case_results[0].get("status", "")) != "caught" or not bool(legal_state.get("active", false)) or int(legal_state.get("days_remaining", 0)) <= 0:
+		RunState.load_from_dict(dirty_tip_saved_run)
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected caught Dirty Tip outcomes to apply a fine and legal hold."
+		}
+	if GameManager.get_life_action_block_reason("buy").is_empty() or not GameManager.get_life_action_block_reason("advance_day").is_empty():
+		RunState.load_from_dict(dirty_tip_saved_run)
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected legal hold to block gameplay actions except Advance Day."
+		}
+	var dirty_network_snapshot: Dictionary = GameManager.get_network_snapshot()
+	var saw_dirty_network_row: bool = false
+	for row_value in dirty_network_snapshot.get("journal", []):
+		if typeof(row_value) == TYPE_DICTIONARY and str(row_value.get("type", "")) == "dirty_tip":
+			saw_dirty_network_row = true
+			break
+	if not saw_dirty_network_row:
+		RunState.load_from_dict(dirty_tip_saved_run)
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Dirty Tip decisions and outcomes to render in Network journal."
+		}
+	var dirty_tip_save_payload: Dictionary = RunState.to_save_dict()
+	if dirty_tip_save_payload.has("dirty_tip_offers") or dirty_tip_save_payload.has("dirty_tip_results"):
+		RunState.load_from_dict(dirty_tip_saved_run)
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Dirty Tip data to stay inside existing save buckets."
+		}
+	RunState.load_from_dict(dirty_tip_saved_run)
+	game_root._refresh_all()
+	await get_tree().process_frame
 	var suppressed_company_arc_resolution: Dictionary = COMPANY_EVENT_SYSTEM_SCRIPT.new().resolve_day(
 		RunState,
 		RunState.get_current_trade_date(),
@@ -8205,6 +9268,15 @@ func _run_scenario(
 			"message": "Smoke test expected Attention Director to suppress market-scope scheduled headlines on the reserved macro day."
 		}
 	var saved_recap_last_day_results: Dictionary = post_recap_saved_run.get("last_day_results", {})
+	var forbidden_director_payload_keys: Array = ["attention_directives", "selected_lane", "lane_scores", "focus_company_weights", "dirty_market_pressure", "market_stress_score", "best_company_attention_score"]
+	for forbidden_director_payload_key in forbidden_director_payload_keys:
+		if RunState.last_day_results.has(forbidden_director_payload_key) or saved_recap_last_day_results.has(forbidden_director_payload_key):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected Attention Director key %s to stay out of the save payload." % forbidden_director_payload_key
+			}
 	if RunState.last_day_results.has("attention_directives") or saved_recap_last_day_results.has("attention_directives"):
 		game_root.queue_free()
 		await get_tree().process_frame
@@ -9330,6 +10402,17 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected a large XL buy to affect market depth, lock ARA, and appear in the broker tape."
 		}
+	var impact_player_buy_value: float = float(impact_player_snapshot.get("buy_value", 0.0))
+	if (
+		_broker_tape_balance_delta(impact_broker_flow) > max(impact_player_buy_value * 0.015, 1000000.0) or
+		_broker_non_player_side_value(impact_broker_flow, "sell", RunState.PLAYER_BROKER_CODE) < impact_player_buy_value * 0.92
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected large XL buys to print with visible counterparty sellers and balanced broker tape."
+		}
 	var impact_sell_result: Dictionary = RunState.sell_company(tracked_company_id, ownership_test_shares)
 	if not bool(impact_sell_result.get("success", false)):
 		game_root.queue_free()
@@ -9356,6 +10439,17 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected a large XL sell to affect market depth, lock ARB, and appear in the broker tape."
+		}
+	var sell_player_sell_value: float = float(sell_impact_player_snapshot.get("sell_value", 0.0))
+	if (
+		_broker_tape_balance_delta(sell_impact_broker_flow) > max(sell_player_sell_value * 0.015, 1000000.0) or
+		_broker_non_player_side_value(sell_impact_broker_flow, "buy", RunState.PLAYER_BROKER_CODE) < sell_player_sell_value * 0.92
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected large XL sells to print with visible counterparty buyers and balanced broker tape."
 		}
 	RunState.load_from_dict(ownership_test_state)
 	game_root._refresh_all()
@@ -12486,6 +13580,31 @@ func _broker_rows_contain_code(rows: Array, broker_code: String) -> bool:
 		if str(row.get("code", "")) == broker_code:
 			return true
 	return false
+
+
+func _broker_non_player_side_value(broker_flow: Dictionary, side: String, player_broker_code: String) -> float:
+	var total: float = 0.0
+	var value_key: String = "buy_value" if side == "buy" else "sell_value"
+	for row_value in broker_flow.get("broker_rows", []):
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		if str(row.get("code", "")) == player_broker_code:
+			continue
+		total += max(float(row.get(value_key, 0.0)), 0.0)
+	return total
+
+
+func _broker_tape_balance_delta(broker_flow: Dictionary) -> float:
+	var buy_total: float = 0.0
+	var sell_total: float = 0.0
+	for row_value in broker_flow.get("broker_rows", []):
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		buy_total += max(float(row.get("buy_value", 0.0)), 0.0)
+		sell_total += max(float(row.get("sell_value", 0.0)), 0.0)
+	return absf(buy_total - sell_total)
 
 
 func _broker_table_rows_use_expanding_halves(header_row: HBoxContainer, rows_vbox: VBoxContainer) -> bool:

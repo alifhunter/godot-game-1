@@ -726,13 +726,19 @@ func _decorate_chart_snapshot(chart_snapshot: Dictionary) -> Dictionary:
 		"sma_100": Color(0.686275, 0.576471, 0.964706, 1),
 		"sma_200": Color(0.854902, 0.576471, 0.964706, 1),
 		"ema_20": Color(0.854902, 0.576471, 0.964706, 1),
-		"rsi_14": COLOR_POSITIVE
+		"rsi_14": COLOR_POSITIVE,
+		"macd_12_26_9": Color(0.113725, 0.631373, 0.94902, 1),
+		"macd_12_26_9_signal": Color(0.941176, 0.717647, 0.239216, 1),
+		"macd_12_26_9_histogram": Color(0.482353, 0.752941, 1, 1)
 	}
 	var decorated_plots: Array = []
 	for plot_value in chart_snapshot.get("plots", []):
 		var plot: Dictionary = plot_value.duplicate(true)
 		var plot_id: String = str(plot.get("id", ""))
 		plot["color"] = plot_palette.get(plot_id, COLOR_ACCENT)
+		if plot_id == "macd_12_26_9_histogram":
+			plot["positive_color"] = COLOR_POSITIVE
+			plot["negative_color"] = COLOR_NEGATIVE
 		decorated_plots.append(plot)
 	decorated_snapshot["plots"] = decorated_plots
 	return decorated_snapshot

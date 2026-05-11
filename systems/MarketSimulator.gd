@@ -6,12 +6,15 @@ const CHART_GAP_STYLES := ["none", "news_gap", "breakout_gap", "exhaustion_gap",
 const CHART_GAP_BIASES := ["up", "down", "mixed"]
 const CHART_GAP_FREQUENCIES := ["rare", "moderate", "active"]
 const CHART_GAP_FOLLOWTHROUGH := ["hold", "fade", "fill", "continue"]
+const CHART_BAR_FRICTION_PROFILES := ["clean_liquid", "balanced_chop", "operator_dirty", "distribution_chop"]
+const CHART_TAPE_REGIME_PROFILES := ["clean_trend", "messy_accumulation", "operator_campaign", "distribution_breakdown", "failed_reclaim"]
 
 var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
 var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
 var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
 var index_review_system = preload("res://systems/IndexReviewSystem.gd").new()
 var attention_director_system = preload("res://systems/AttentionDirectorSystem.gd").new()
+var dirty_tip_system = preload("res://systems/DirtyTipSystem.gd").new()
 
 
 func simulate_day(run_state, data_repository, broker_flow_system, corporate_action_system) -> Dictionary:
@@ -132,6 +135,10 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 			report_events,
 			active_special_events,
 			active_company_arcs
+		)
+		event_context = _apply_dirty_tip_market_effect(
+			event_context,
+			dirty_tip_system.market_effect_for_company(run_state, company_id, day_number)
 		)
 		var market_depth_context: Dictionary = _build_market_depth_context(
 			definition,
@@ -282,6 +289,7 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		"active_company_arcs": active_company_arcs,
 		"started_special_events": special_event_resolution.get("started_events", []).duplicate(true),
 		"active_special_events": active_special_events,
+		"attention_directives": attention_directives.duplicate(true),
 		"active_corporate_action_chains": corporate_action_resolution.get("active_corporate_action_chains", {}).duplicate(true),
 		"corporate_meeting_calendar": corporate_action_resolution.get("corporate_meeting_calendar", {}).duplicate(true),
 		"corporate_action_intel": corporate_action_resolution.get("corporate_action_intel", {}).duplicate(true),
@@ -579,7 +587,7 @@ func _build_daily_event_plan(
 			})
 
 	candidates.append_array(
-		company_event_system.build_company_event_candidates(run_state, trade_date, day_number, macro_state)
+		company_event_system.build_company_event_candidates(run_state, trade_date, day_number, macro_state, attention_directives)
 	)
 	candidates.append_array(
 		person_event_system.build_person_event_candidates(
@@ -591,6 +599,7 @@ func _build_daily_event_plan(
 			market_sentiment
 		)
 	)
+	candidates = _apply_attention_focus_weights(candidates, attention_directives)
 	if bool(attention_directives.get("suppress_market_scheduled_event", false)):
 		candidates = candidates.filter(func(candidate_value: Dictionary) -> bool:
 			return str(candidate_value.get("scope", "company")) != "market"
@@ -600,6 +609,23 @@ func _build_daily_event_plan(
 		return {}
 
 	return _pick_weighted_candidate(rng, candidates)
+
+
+func _apply_attention_focus_weights(candidates: Array, attention_directives: Dictionary) -> Array:
+	var focus_weights: Dictionary = attention_directives.get("focus_company_weights", {})
+	if focus_weights.is_empty():
+		return candidates
+	var weighted_candidates: Array = []
+	for candidate_value in candidates:
+		if typeof(candidate_value) != TYPE_DICTIONARY:
+			continue
+		var candidate: Dictionary = candidate_value.duplicate(true)
+		var company_id: String = str(candidate.get("target_company_id", ""))
+		if not company_id.is_empty():
+			var multiplier: float = clamp(float(focus_weights.get(company_id, 1.0)), 0.25, 3.0)
+			candidate["weight"] = float(candidate.get("weight", 1.0)) * multiplier
+		weighted_candidates.append(candidate)
+	return weighted_candidates
 
 
 func _strongest_sector_signal(sector_sentiments: Dictionary) -> Dictionary:
@@ -707,6 +733,22 @@ func _resolve_event_context(
 		"hidden_story_flags": hidden_story_flags,
 		"sector_id": str(sector_definition.get("id", ""))
 	}
+
+
+func _apply_dirty_tip_market_effect(event_context: Dictionary, dirty_tip_effect: Dictionary) -> Dictionary:
+	if dirty_tip_effect.is_empty():
+		return event_context
+	var context: Dictionary = event_context.duplicate(true)
+	context["event_bias"] = clamp(float(context.get("event_bias", 0.0)) + float(dirty_tip_effect.get("price_bias", 0.0)), -0.08, 0.08)
+	context["passive_flow_pressure"] = clamp(float(context.get("passive_flow_pressure", 0.0)) + float(dirty_tip_effect.get("broker_pressure", 0.0)), -1.0, 1.0)
+	context["volume_activity_multiplier"] = clamp(float(context.get("volume_activity_multiplier", 1.0)) * float(dirty_tip_effect.get("volume_multiplier", 1.0)), 0.35, 3.0)
+	var hidden_flags: Array = context.get("hidden_story_flags", []).duplicate()
+	if not hidden_flags.has("dirty_tip_pressure"):
+		hidden_flags.append("dirty_tip_pressure")
+	context["hidden_story_flags"] = hidden_flags
+	context["dirty_tip_pressure"] = float(dirty_tip_effect.get("pressure", 0.0))
+	context["dirty_tip_offer_id"] = str(dirty_tip_effect.get("offer_id", ""))
+	return context
 
 
 func _append_event_if_applicable(
@@ -1135,6 +1177,7 @@ func _build_volume_activity_context(
 	var narrative_tags: Array = definition.get("narrative_tags", [])
 	var hidden_flags: Array = event_context.get("hidden_story_flags", runtime.get("hidden_story_flags", [])).duplicate()
 	var price_bars: Array = runtime.get("price_bars", [])
+	var chart_profile: Dictionary = _chart_profile_from_definition(definition, run_seed, company_id)
 	var event_bias: float = float(event_context.get("event_bias", 0.0))
 	var event_volatility_multiplier: float = clamp(float(event_context.get("event_volatility_multiplier", 1.0)), 0.55, 2.1)
 	var passive_flow_pressure: float = clamp(float(event_context.get("passive_flow_pressure", 0.0)), -1.0, 1.0)
@@ -1191,12 +1234,25 @@ func _build_volume_activity_context(
 	var has_hidden_accumulation: bool = "smart_money_accumulation" in hidden_flags
 	var has_stealth_interest: bool = "stealth_interest" in hidden_flags
 	var hidden_distribution: bool = "smart_money_distribution" in hidden_flags
+	var operator_pressure: float = _live_operator_pressure(
+		definition,
+		runtime,
+		chart_profile,
+		broker_flow,
+		player_flow,
+		float_tightness,
+		liquidity_profile,
+		story_heat,
+		hidden_flags
+	)
+	var cycle_template: String = str(chart_profile.get("cycle_template", ""))
 	var retail_chase: float = clamp(
 		max(retail_pressure, 0.0) * 0.42 +
 		max(recent_momentum, 0.0) * 5.0 +
 		story_heat * 0.22 +
 		(0.16 if "retail_favorite" in narrative_tags else 0.0) +
-		(0.12 if "narrative_hot" in narrative_tags else 0.0),
+		(0.12 if "narrative_hot" in narrative_tags else 0.0) +
+		operator_pressure * 0.12,
 		0.0,
 		1.0
 	)
@@ -1210,6 +1266,8 @@ func _build_volume_activity_context(
 		float_tightness * 0.14 +
 		(0.34 if has_hidden_accumulation else 0.0) +
 		(0.16 if has_stealth_interest else 0.0) +
+		(operator_pressure * 0.18 if cycle_template == "operator_markup" else 0.0) +
+		(operator_pressure * 0.08 if cycle_template == "markup_clean" else 0.0) +
 		max(-recent_momentum, 0.0) * 1.4,
 		0.0,
 		1.0
@@ -1223,6 +1281,8 @@ func _build_volume_activity_context(
 		max(-market_sentiment, 0.0) * 0.9 +
 		float_tightness * 0.12 +
 		(0.38 if hidden_distribution else 0.0) +
+		(operator_pressure * 0.20 if cycle_template == "operator_rug" else 0.0) +
+		(operator_pressure * 0.10 if cycle_template == "distribution_clean" else 0.0) +
 		retail_chase * 0.18 +
 		max(recent_momentum, 0.0) * 1.2,
 		0.0,
@@ -1245,6 +1305,7 @@ func _build_volume_activity_context(
 		max(player_impact_ratio, 0.0) * 0.10 +
 		float_tightness * 0.12 +
 		story_heat * 0.08 +
+		operator_pressure * 0.18 +
 		max(-smart_money_pressure, 0.0) * 0.22 -
 		max(smart_money_pressure, 0.0) * 0.18,
 		0.0,
@@ -1264,7 +1325,8 @@ func _build_volume_activity_context(
 		player_abs_ratio,
 		run_seed,
 		day_number,
-		company_id
+		company_id,
+		chart_profile
 	)
 
 	var event_multiplier: float = 1.0 + min(absf(event_bias) * 6.0, 1.55) + max(event_volatility_multiplier - 1.0, 0.0) * 0.70
@@ -1273,6 +1335,7 @@ func _build_volume_activity_context(
 	var story_multiplier: float = 1.0 + story_heat * 0.16 + float_tightness * 0.14
 	var memory_multiplier: float = clamp(lerp(0.88, 1.42, clamp((short_activity_ratio - 0.65) / 2.60, 0.0, 1.0)), 0.82, 1.48)
 	var exhaustion_multiplier: float = 1.0 + exhaustion_score * 0.80
+	var operator_multiplier: float = 1.0 + operator_pressure * 0.24
 	var lumpy_noise: float = _sample_lumpy_volume_noise(
 		rng,
 		story_heat,
@@ -1287,6 +1350,7 @@ func _build_volume_activity_context(
 		story_multiplier *
 		memory_multiplier *
 		exhaustion_multiplier *
+		operator_multiplier *
 		float(technical_context.get("volume_multiplier", 1.0)) *
 		passive_volume_multiplier *
 		player_volume_multiplier *
@@ -1315,6 +1379,9 @@ func _build_volume_activity_context(
 		"technical_volume_multiplier": float(technical_context.get("volume_multiplier", 1.0)),
 		"technical_sma_period": int(technical_context.get("sma_period", 0)),
 		"technical_sma_behavior": str(technical_context.get("sma_behavior", "")),
+		"operator_pressure": operator_pressure,
+		"cycle_template": cycle_template,
+		"cycle_phase_bias": str(chart_profile.get("cycle_phase_bias", "")),
 		"player_impact_ratio": player_impact_ratio,
 		"player_abs_ratio": player_abs_ratio,
 		"player_price_bias": player_price_bias,
@@ -1326,6 +1393,499 @@ func _build_volume_activity_context(
 	}
 
 
+func _live_operator_pressure(
+	definition: Dictionary,
+	runtime: Dictionary,
+	chart_profile: Dictionary,
+	broker_flow: Dictionary,
+	player_flow: Dictionary,
+	float_tightness: float,
+	liquidity_profile: float,
+	story_heat: float,
+	hidden_flags: Array
+) -> float:
+	var traits: Dictionary = definition.get("generation_traits", {})
+	var narrative_tags: Array = definition.get("narrative_tags", [])
+	var pressure: float = clamp(float(chart_profile.get("operator_pressure", 0.0)), 0.0, 1.0) * 0.30
+	pressure += float_tightness * 0.22
+	pressure += (1.0 - liquidity_profile) * 0.12
+	pressure += story_heat * 0.10
+	pressure += clamp(absf(float(broker_flow.get("bandar_net", 0.0))) / 100.0, 0.0, 1.0) * 0.12
+	pressure += clamp(absf(float(broker_flow.get("zombie_net", 0.0))) / 100.0, 0.0, 1.0) * 0.08
+	pressure += max(absf(float(broker_flow.get("smart_money_pressure", 0.0))), 0.0) * 0.10
+	pressure += clamp(float(player_flow.get("gross_free_float_pct", 0.0)) * 18.0, 0.0, 1.0) * 0.08
+	pressure += clamp(float(player_flow.get("depth_impact_ratio", 0.0)), 0.0, 1.0) * 0.06
+	pressure += 0.07 if str(chart_profile.get("cycle_template", "")).begins_with("operator") else 0.0
+	pressure += 0.06 if "retail_favorite" in narrative_tags else 0.0
+	pressure += 0.06 if "narrative_hot" in narrative_tags else 0.0
+	pressure += 0.08 if "smart_money_accumulation" in hidden_flags else 0.0
+	pressure += 0.08 if "smart_money_distribution" in hidden_flags else 0.0
+	pressure += 0.06 if bool(traits.get("is_gorengan", false)) else 0.0
+	var depth_context: Dictionary = runtime.get("market_depth_context", {}) if typeof(runtime.get("market_depth_context", {})) == TYPE_DICTIONARY else {}
+	pressure += clamp(1.0 - float(depth_context.get("depth_liquidity_score", liquidity_profile)), 0.0, 1.0) * 0.08
+	return clamp(pressure, 0.0, 1.0)
+
+
+func _live_microstructure_context(
+	chart_profile: Dictionary,
+	price_bars: Array,
+	run_seed: int,
+	day_number: int,
+	company_id: String
+) -> Dictionary:
+	var intensity: float = clamp(float(chart_profile.get("microstructure_intensity", 0.0)), 0.0, 1.0)
+	var shakeout_profile: String = str(chart_profile.get("shakeout_profile", "none"))
+	var cycle_template: String = str(chart_profile.get("cycle_template", ""))
+	var microstructure_active: bool = intensity > 0.0 and shakeout_profile != "none" and not cycle_template.is_empty()
+
+	var operator_pressure: float = clamp(float(chart_profile.get("operator_pressure", 0.0)), 0.0, 1.0)
+	var tempo_profile: String = str(chart_profile.get("cycle_tempo_profile", "normal_setup"))
+	var period: float = 21.0
+	var width: float = 0.070
+	match tempo_profile:
+		"slow_setup":
+			period = 34.0
+			width = 0.088
+		"fast_operator":
+			period = 13.0
+			width = 0.052
+		"failed_setup":
+			period = 18.0
+			width = 0.074
+	var offset: float = _sim_noise(run_seed, company_id, "live_microstructure_phase_offset", 0.0, 1.0, 1)
+	var raw_phase: float = float(day_number) / max(period, 1.0) + offset
+	var phase: float = raw_phase - floor(raw_phase)
+	var pressure: float = clamp(intensity * (0.55 + operator_pressure * 0.45), 0.0, 1.0) if microstructure_active else 0.0
+	var recent_runup: float = max(_recent_price_change_from_bars(price_bars, 8), 0.0)
+	var recent_drawdown: float = max(-_recent_price_change_from_bars(price_bars, 8), 0.0)
+	var price_bias: float = 0.0
+	var volume_boost: float = 0.0
+
+	if microstructure_active and cycle_template in ["markup_clean", "markup_exhaustion", "operator_markup"]:
+		var shake_pulse: float = _live_microstructure_pulse(phase, 0.30, width)
+		var reclaim_pulse: float = _live_microstructure_pulse(phase, 0.40, width * 0.90)
+		var shelf_pulse: float = _live_microstructure_pulse(phase, 0.68, width)
+		var runup_factor: float = clamp(0.42 + recent_runup * 6.0, 0.42, 1.28)
+		var shake_depth: float = 0.0040 * pressure * runup_factor
+		if shakeout_profile == "hard_shakeout":
+			shake_depth *= 1.32
+		price_bias -= shake_pulse * shake_depth
+		price_bias += reclaim_pulse * 0.0028 * pressure
+		price_bias -= shelf_pulse * 0.0021 * pressure
+		volume_boost += (shake_pulse * 0.22 + reclaim_pulse * 0.14 + shelf_pulse * 0.10) * pressure
+	elif microstructure_active and cycle_template in ["distribution_clean", "failed_markup", "operator_rug"]:
+		var bounce_pulse: float = _live_microstructure_pulse(phase, 0.36, width)
+		var failure_pulse: float = _live_microstructure_pulse(phase, 0.50, width)
+		var continuation_pulse: float = _live_microstructure_pulse(phase, 0.63, width * 1.08)
+		var drawdown_factor: float = clamp(0.38 + recent_drawdown * 6.5, 0.38, 1.30)
+		var bounce_size: float = 0.0032 * pressure * drawdown_factor
+		price_bias += bounce_pulse * bounce_size
+		price_bias -= failure_pulse * 0.0024 * pressure
+		price_bias -= continuation_pulse * 0.0034 * pressure
+		if cycle_template == "operator_rug":
+			price_bias -= continuation_pulse * 0.0018 * operator_pressure
+		volume_boost += (bounce_pulse * 0.12 + failure_pulse * 0.16 + continuation_pulse * 0.24) * pressure
+
+	var regime_context: Dictionary = _live_tape_regime_context(chart_profile, price_bars, run_seed, day_number, company_id)
+	price_bias += float(regime_context.get("price_bias", 0.0))
+	volume_boost += float(regime_context.get("volume_boost", 0.0))
+	pressure = max(pressure, float(regime_context.get("pressure", 0.0)))
+
+	var friction_context: Dictionary = _live_daily_tape_friction_context(chart_profile, price_bars, run_seed, day_number, company_id)
+	price_bias += float(friction_context.get("price_bias", 0.0))
+	volume_boost += float(friction_context.get("volume_boost", 0.0))
+	pressure = max(pressure, float(friction_context.get("pressure", 0.0)))
+
+	return {
+		"price_bias": clamp(price_bias, -0.0048, 0.0048),
+		"volume_boost": clamp(volume_boost, -0.16, 0.55),
+		"pressure": pressure,
+		"phase": phase
+	}
+
+
+func _live_tape_regime_context(
+	chart_profile: Dictionary,
+	price_bars: Array,
+	run_seed: int,
+	day_number: int,
+	company_id: String
+) -> Dictionary:
+	var strength: float = clamp(float(chart_profile.get("regime_block_intensity", 0.0)), 0.0, 1.0)
+	if strength <= 0.0:
+		return {"price_bias": 0.0, "volume_boost": 0.0, "pressure": 0.0, "phase": "calm"}
+	var blocks: Array = _live_tape_regime_blocks(chart_profile)
+	if blocks.is_empty():
+		return {"price_bias": 0.0, "volume_boost": 0.0, "pressure": 0.0, "phase": "calm"}
+	var period: float = _live_tape_regime_period(chart_profile)
+	var offset: float = _sim_noise(run_seed, company_id, "live_tape_regime_phase_offset", 0.0, 1.0, 1)
+	var raw_progress: float = float(day_number) / max(period, 1.0) + offset
+	var progress: float = raw_progress - floor(raw_progress)
+	var block: Dictionary = _live_tape_regime_block_at(blocks, progress)
+	if block.is_empty():
+		return {"price_bias": 0.0, "volume_boost": 0.0, "pressure": 0.0, "phase": "calm"}
+	var block_type: String = str(block.get("type", "base"))
+	var block_start: float = float(block.get("p0", 0.0))
+	var block_end: float = float(block.get("p1", 1.0))
+	var block_progress: float = clamp((progress - block_start) / max(block_end - block_start, 0.001), 0.0, 1.0)
+	var operator_pressure: float = clamp(float(chart_profile.get("operator_pressure", 0.0)), 0.0, 1.0)
+	var recent_runup: float = max(_recent_price_change_from_bars(price_bars, 8), 0.0)
+	var recent_drawdown: float = max(-_recent_price_change_from_bars(price_bars, 8), 0.0)
+	var price_bias: float = 0.0
+	var volume_boost: float = 0.0
+	var pulse: float = _live_microstructure_pulse(block_progress, 0.50, 0.38)
+	match block_type:
+		"base", "consolidation":
+			price_bias += _sim_noise(run_seed, company_id, "live_regime_base_bias", -0.0014, 0.0014, day_number) * strength
+			volume_boost -= lerp(0.02, 0.10, strength)
+		"markup":
+			price_bias += lerp(0.0009, 0.0038, strength) * (0.50 + pulse) * (1.0 + operator_pressure * 0.18)
+			volume_boost += lerp(0.04, 0.26, strength) * (0.45 + pulse)
+		"channel":
+			var pullback: float = _live_microstructure_pulse(block_progress, 0.34, 0.18)
+			var reclaim: float = _live_microstructure_pulse(block_progress, 0.55, 0.16)
+			price_bias += lerp(0.0004, 0.0016, strength)
+			price_bias -= pullback * lerp(0.0013, 0.0042, strength) * (1.0 + clamp(recent_runup * 6.0, 0.0, 0.8))
+			price_bias += reclaim * lerp(0.0008, 0.0024, strength)
+			volume_boost += pullback * lerp(0.03, 0.20, strength)
+		"distribution":
+			var top_fail: float = _live_microstructure_pulse(block_progress, 0.58, 0.24)
+			price_bias -= top_fail * lerp(0.0012, 0.0044, strength) * (1.0 + clamp(recent_runup * 5.0, 0.0, 0.8))
+			volume_boost += top_fail * lerp(0.04, 0.28, strength)
+		"breakdown", "markdown", "rug":
+			var drop_pulse: float = _live_microstructure_pulse(block_progress, 0.46, 0.32)
+			price_bias -= lerp(0.0010, 0.0048, strength) * (0.48 + drop_pulse) * (1.0 + operator_pressure * 0.18)
+			volume_boost += lerp(0.04, 0.32, strength) * (0.35 + drop_pulse)
+		"dead_cat":
+			var bounce: float = _live_microstructure_pulse(block_progress, 0.34, 0.20)
+			var fail: float = _live_microstructure_pulse(block_progress, 0.72, 0.22)
+			price_bias += bounce * lerp(0.0012, 0.0036, strength) * (1.0 + clamp(recent_drawdown * 5.5, 0.0, 0.8))
+			price_bias -= fail * lerp(0.0014, 0.0042, strength)
+			volume_boost += fail * lerp(0.04, 0.24, strength)
+		"failed_reclaim":
+			var reclaim_try: float = _live_microstructure_pulse(block_progress, 0.32, 0.20)
+			var reject: float = _live_microstructure_pulse(block_progress, 0.62, 0.24)
+			price_bias += reclaim_try * lerp(0.0009, 0.0030, strength)
+			price_bias -= reject * lerp(0.0015, 0.0046, strength)
+			volume_boost += reject * lerp(0.04, 0.28, strength)
+	return {
+		"price_bias": clamp(price_bias, -0.0044, 0.0044),
+		"volume_boost": clamp(volume_boost, -0.12, 0.38),
+		"pressure": strength,
+		"phase": block_type
+	}
+
+
+func _live_tape_regime_blocks(chart_profile: Dictionary) -> Array:
+	var profile_id: String = str(chart_profile.get("tape_regime_profile", "messy_accumulation"))
+	if not CHART_TAPE_REGIME_PROFILES.has(profile_id):
+		profile_id = "messy_accumulation"
+	var tempo_bias: float = clamp(float(chart_profile.get("regime_tempo_bias", 0.0)), -1.0, 1.0)
+	var base_end: float = _live_tape_regime_base_end(chart_profile, profile_id, tempo_bias)
+	match profile_id:
+		"clean_trend":
+			var impulse_end: float = clamp(base_end + 0.16 - tempo_bias * 0.025, base_end + 0.09, 0.56)
+			return _live_tape_regime_rows([
+				["base", 0.00, base_end, 0],
+				["markup", base_end, impulse_end, 1],
+				["channel", impulse_end, 0.84, 1],
+				["consolidation", 0.84, 1.00, 0]
+			])
+		"operator_campaign":
+			var operator_markup_end: float = clamp(base_end + 0.15, base_end + 0.08, 0.42)
+			var dirty_channel_end: float = clamp(operator_markup_end + 0.24, operator_markup_end + 0.14, 0.70)
+			var distribution_end: float = clamp(dirty_channel_end + 0.13, dirty_channel_end + 0.08, 0.84)
+			var final_type: String = "rug" if str(chart_profile.get("cycle_template", "")) == "operator_rug" else "failed_reclaim"
+			return _live_tape_regime_rows([
+				["base", 0.00, base_end, 0],
+				["markup", base_end, operator_markup_end, 1],
+				["channel", operator_markup_end, dirty_channel_end, 1],
+				["distribution", dirty_channel_end, distribution_end, -1],
+				[final_type, distribution_end, 1.00, -1]
+			])
+		"distribution_breakdown":
+			var distribution_end_1: float = clamp(max(base_end, 0.24), 0.18, 0.36)
+			var breakdown_end: float = clamp(distribution_end_1 + 0.18, distribution_end_1 + 0.10, 0.58)
+			var dead_cat_end: float = clamp(breakdown_end + 0.13, breakdown_end + 0.08, 0.72)
+			return _live_tape_regime_rows([
+				["distribution", 0.00, distribution_end_1, -1],
+				["breakdown", distribution_end_1, breakdown_end, -1],
+				["dead_cat", breakdown_end, dead_cat_end, 1],
+				["markdown", dead_cat_end, 0.86, -1],
+				["failed_reclaim", 0.86, 1.00, -1]
+			])
+		"failed_reclaim":
+			var failed_markup_end: float = clamp(base_end + 0.14, base_end + 0.08, 0.50)
+			var failed_dist_end: float = clamp(failed_markup_end + 0.16, failed_markup_end + 0.08, 0.66)
+			var failed_break_end: float = clamp(failed_dist_end + 0.16, failed_dist_end + 0.08, 0.82)
+			return _live_tape_regime_rows([
+				["base", 0.00, base_end, 0],
+				["markup", base_end, failed_markup_end, 1],
+				["distribution", failed_markup_end, failed_dist_end, -1],
+				["breakdown", failed_dist_end, failed_break_end, -1],
+				["failed_reclaim", failed_break_end, 1.00, -1]
+			])
+	var messy_markup_end: float = clamp(base_end + 0.16, base_end + 0.08, 0.56)
+	var messy_channel_end: float = clamp(messy_markup_end + 0.30, messy_markup_end + 0.16, 0.84)
+	return _live_tape_regime_rows([
+		["base", 0.00, base_end, 0],
+		["markup", base_end, messy_markup_end, 1],
+		["channel", messy_markup_end, messy_channel_end, 1],
+		["distribution", messy_channel_end, 1.00, -1]
+	])
+
+
+func _live_tape_regime_base_end(chart_profile: Dictionary, profile_id: String, tempo_bias: float) -> float:
+	var base_end: float = 0.32
+	match profile_id:
+		"clean_trend":
+			base_end = 0.34
+		"messy_accumulation":
+			base_end = 0.34
+		"operator_campaign":
+			base_end = 0.19
+		"distribution_breakdown":
+			base_end = 0.25
+		"failed_reclaim":
+			base_end = 0.30
+	match str(chart_profile.get("cycle_tempo_profile", "normal_setup")):
+		"slow_setup":
+			base_end += 0.06
+		"fast_operator":
+			base_end -= 0.06
+		"failed_setup":
+			base_end += 0.03
+	base_end += tempo_bias * 0.10
+	return clamp(base_end, 0.12, 0.48)
+
+
+func _live_tape_regime_rows(rows: Array) -> Array:
+	var blocks: Array = []
+	var previous_end: float = 0.0
+	for row_value in rows:
+		if typeof(row_value) != TYPE_ARRAY:
+			continue
+		var row: Array = row_value
+		if row.size() < 4:
+			continue
+		var start_progress: float = clamp(max(float(row[1]), previous_end), 0.0, 1.0)
+		var end_progress: float = clamp(max(float(row[2]), start_progress + 0.015), 0.0, 1.0)
+		if end_progress <= start_progress:
+			continue
+		blocks.append({
+			"type": str(row[0]),
+			"p0": start_progress,
+			"p1": end_progress,
+			"direction": int(row[3])
+		})
+		previous_end = end_progress
+	return blocks
+
+
+func _live_tape_regime_block_at(blocks: Array, progress: float) -> Dictionary:
+	var selected: Dictionary = {}
+	for block_value in blocks:
+		if typeof(block_value) != TYPE_DICTIONARY:
+			continue
+		var block: Dictionary = block_value
+		if progress >= float(block.get("p0", 0.0)) and progress <= float(block.get("p1", 1.0)):
+			return block
+		selected = block
+	return selected
+
+
+func _live_tape_regime_period(chart_profile: Dictionary) -> float:
+	var period: float = 42.0
+	match str(chart_profile.get("tape_regime_profile", "messy_accumulation")):
+		"clean_trend":
+			period = 54.0
+		"operator_campaign":
+			period = 26.0
+		"distribution_breakdown":
+			period = 34.0
+		"failed_reclaim":
+			period = 30.0
+		_:
+			period = 40.0
+	match str(chart_profile.get("cycle_tempo_profile", "normal_setup")):
+		"slow_setup":
+			period += 10.0
+		"fast_operator":
+			period -= 8.0
+		"failed_setup":
+			period -= 4.0
+	return clamp(period + clamp(float(chart_profile.get("regime_tempo_bias", 0.0)), -1.0, 1.0) * 8.0, 18.0, 68.0)
+
+
+func _live_daily_tape_friction_context(
+	chart_profile: Dictionary,
+	price_bars: Array,
+	run_seed: int,
+	day_number: int,
+	company_id: String
+) -> Dictionary:
+	var strength: float = _live_tape_friction_strength(chart_profile)
+	if strength <= 0.0:
+		return {"price_bias": 0.0, "volume_boost": 0.0, "pressure": 0.0, "phase": 0.0}
+	var frequency_bias: float = clamp(float(chart_profile.get("microleg_frequency_bias", 0.55)), 0.0, 1.0)
+	var disagreement_rate: float = clamp(float(chart_profile.get("volume_disagreement_rate", 0.36)), 0.0, 1.0)
+	var wick_intensity: float = clamp(float(chart_profile.get("wick_noise_intensity", 0.42)), 0.0, 1.0)
+	var friction_profile: String = str(chart_profile.get("bar_friction_profile", "balanced_chop"))
+	var period: float = 7.0
+	match friction_profile:
+		"clean_liquid":
+			period = lerp(10.0, 7.0, frequency_bias)
+		"balanced_chop":
+			period = lerp(7.0, 5.0, frequency_bias)
+		"operator_dirty":
+			period = lerp(5.2, 3.4, frequency_bias)
+		"distribution_chop":
+			period = lerp(6.4, 4.2, frequency_bias)
+	var offset: float = _sim_noise(run_seed, company_id, "live_daily_tape_phase_offset", 0.0, 1.0, 1)
+	var raw_phase: float = float(day_number) / max(period, 1.0) + offset
+	var phase: float = raw_phase - floor(raw_phase)
+	var trend_direction: int = _live_tape_trend_direction(chart_profile)
+	var streak_state: Dictionary = _live_tape_direction_streak(price_bars)
+	var streak_direction: int = int(streak_state.get("direction", 0))
+	var streak_count: int = int(streak_state.get("count", 0))
+	var run_limit: int = _live_tape_run_limit(chart_profile)
+	var price_bias: float = 0.0
+	var volume_boost: float = 0.0
+	var counter_size: float = lerp(0.0012, 0.0039, strength)
+
+	if trend_direction > 0:
+		var shake_pulse: float = _live_microstructure_pulse(phase, 0.34, 0.17)
+		var reclaim_pulse: float = _live_microstructure_pulse(phase, 0.54, 0.15)
+		var shelf_pulse: float = _live_microstructure_pulse(phase, 0.78, 0.13)
+		price_bias -= shake_pulse * counter_size
+		price_bias += reclaim_pulse * counter_size * 0.52
+		price_bias -= shelf_pulse * counter_size * 0.28
+		volume_boost += shake_pulse * lerp(0.02, 0.20, strength)
+		volume_boost -= shelf_pulse * lerp(0.02, 0.10, disagreement_rate)
+	elif trend_direction < 0:
+		var bounce_pulse: float = _live_microstructure_pulse(phase, 0.30, 0.16)
+		var fail_pulse: float = _live_microstructure_pulse(phase, 0.52, 0.15)
+		var continuation_pulse: float = _live_microstructure_pulse(phase, 0.72, 0.14)
+		price_bias += bounce_pulse * counter_size * 0.58
+		price_bias -= fail_pulse * counter_size * 0.52
+		price_bias -= continuation_pulse * counter_size * 0.62
+		volume_boost += (fail_pulse + continuation_pulse) * lerp(0.02, 0.18, strength)
+	else:
+		var chop_up: float = _live_microstructure_pulse(phase, 0.28, 0.18)
+		var chop_down: float = _live_microstructure_pulse(phase, 0.62, 0.18)
+		price_bias += chop_up * counter_size * 0.36
+		price_bias -= chop_down * counter_size * 0.36
+		volume_boost -= max(chop_up, chop_down) * lerp(0.02, 0.10, disagreement_rate)
+
+	if streak_direction != 0 and streak_count >= run_limit:
+		var guard_pressure: float = clamp(float(streak_count - run_limit + 1) / 3.0, 0.35, 1.0)
+		price_bias += -float(streak_direction) * max(counter_size * 0.86 * guard_pressure, 0.0010)
+		volume_boost += lerp(0.02, 0.16, strength) * guard_pressure
+
+	var disagreement_roll: float = _sim_noise(run_seed, company_id, "live_daily_tape_volume_disagreement", 0.0, 1.0, day_number)
+	if disagreement_roll < disagreement_rate:
+		volume_boost += lerp(-0.08, 0.10, _sim_noise(run_seed, company_id, "live_daily_tape_disagreement_side", 0.0, 1.0, day_number))
+	var operator_spike_roll: float = _sim_noise(run_seed, company_id, "live_daily_tape_operator_spike", 0.0, 1.0, day_number)
+	if friction_profile == "operator_dirty" and operator_spike_roll > 0.80:
+		volume_boost += lerp(0.10, 0.34, max(strength, wick_intensity))
+
+	return {
+		"price_bias": clamp(price_bias, -0.0038, 0.0038),
+		"volume_boost": clamp(volume_boost, -0.16, 0.42),
+		"pressure": strength,
+		"phase": phase
+	}
+
+
+func _live_tape_friction_strength(chart_profile: Dictionary) -> float:
+	var profile_id: String = str(chart_profile.get("bar_friction_profile", "balanced_chop"))
+	var strength: float = 0.34
+	match profile_id:
+		"clean_liquid":
+			strength = 0.18
+		"balanced_chop":
+			strength = 0.42
+		"operator_dirty":
+			strength = 0.62
+		"distribution_chop":
+			strength = 0.52
+	strength += clamp(float(chart_profile.get("microleg_frequency_bias", 0.55)), 0.0, 1.0) * 0.08
+	strength += clamp(float(chart_profile.get("wick_noise_intensity", 0.42)), 0.0, 1.0) * 0.05
+	strength += clamp(float(chart_profile.get("operator_pressure", 0.0)), 0.0, 1.0) * 0.06
+	return clamp(strength, 0.08, 0.76)
+
+
+func _live_tape_run_limit(chart_profile: Dictionary) -> int:
+	var profile_id: String = str(chart_profile.get("bar_friction_profile", "balanced_chop"))
+	var limit: int = 5
+	match profile_id:
+		"clean_liquid":
+			limit = 6
+		"operator_dirty", "distribution_chop":
+			limit = 4
+		_:
+			limit = 5
+	if str(chart_profile.get("cycle_tempo_profile", "normal_setup")) == "fast_operator":
+		limit -= 1
+	if clamp(float(chart_profile.get("microleg_frequency_bias", 0.55)), 0.0, 1.0) >= 0.78:
+		limit -= 1
+	return int(clamp(limit, 3, 7))
+
+
+func _live_tape_trend_direction(chart_profile: Dictionary) -> int:
+	var cycle_template: String = str(chart_profile.get("cycle_template", ""))
+	if cycle_template in ["markup_clean", "markup_exhaustion", "operator_markup"]:
+		return 1
+	if cycle_template in ["distribution_clean", "failed_markup", "operator_rug"]:
+		return -1
+	var bias: String = str(chart_profile.get("bias", "sideways"))
+	if bias == "bullish":
+		return 1
+	if bias == "bearish":
+		return -1
+	return 0
+
+
+func _live_tape_direction_streak(price_bars: Array) -> Dictionary:
+	if price_bars.size() < 2:
+		return {"direction": 0, "count": 0}
+	var direction: int = 0
+	var count: int = 0
+	for index in range(price_bars.size() - 1, 0, -1):
+		if typeof(price_bars[index]) != TYPE_DICTIONARY or typeof(price_bars[index - 1]) != TYPE_DICTIONARY:
+			break
+		var current_bar: Dictionary = price_bars[index]
+		var previous_bar: Dictionary = price_bars[index - 1]
+		var step_direction: int = _live_tape_direction_for_delta(float(current_bar.get("close", 0.0)) - float(previous_bar.get("close", 0.0)))
+		if step_direction == 0:
+			break
+		if direction == 0:
+			direction = step_direction
+			count = 1
+		elif step_direction == direction:
+			count += 1
+		else:
+			break
+	return {"direction": direction, "count": count}
+
+
+func _live_tape_direction_for_delta(delta: float) -> int:
+	if delta > 0.0001:
+		return 1
+	if delta < -0.0001:
+		return -1
+	return 0
+
+
+func _live_microstructure_pulse(phase: float, center: float, width: float) -> float:
+	var distance: float = absf(phase - center)
+	distance = min(distance, 1.0 - distance)
+	if width <= 0.0 or distance >= width:
+		return 0.0
+	var t: float = 1.0 - distance / width
+	return t * t * (3.0 - 2.0 * t)
+
+
 func _build_technical_structure_context(
 	definition: Dictionary,
 	runtime: Dictionary,
@@ -1335,9 +1895,11 @@ func _build_technical_structure_context(
 	player_abs_ratio: float,
 	run_seed: int,
 	day_number: int,
-	company_id: String
+	company_id: String,
+	chart_profile: Dictionary = {}
 ) -> Dictionary:
-	var chart_profile: Dictionary = _chart_profile_from_definition(definition, run_seed, company_id)
+	if chart_profile.is_empty():
+		chart_profile = _chart_profile_from_definition(definition, run_seed, company_id)
 	var behavior: String = str(chart_profile.get("sma_behavior", "ignored"))
 	var archetype: String = str(chart_profile.get("archetype", "range_bound"))
 	var bias: String = str(chart_profile.get("bias", "sideways"))
@@ -1381,6 +1943,38 @@ func _build_technical_structure_context(
 		volume_multiplier += 0.12
 	elif archetype in ["distribution", "distressed"] and price_bias < 0.0:
 		volume_multiplier += 0.18
+
+	var cycle_template: String = str(chart_profile.get("cycle_template", ""))
+	var cycle_strength: float = clamp(float(chart_profile.get("cycle_strength", 0.0)), 0.0, 1.0)
+	var operator_pressure: float = clamp(float(chart_profile.get("operator_pressure", 0.0)), 0.0, 1.0)
+	if not cycle_template.is_empty() and cycle_strength > 0.0:
+		var recent_runup: float = max(_recent_price_change_from_bars(price_bars, 8), 0.0)
+		match cycle_template:
+			"markup_clean":
+				price_bias += 0.0016 * cycle_strength
+				volume_multiplier += 0.05 * cycle_strength
+			"markup_exhaustion":
+				price_bias += 0.0011 * cycle_strength - clamp(recent_runup * 0.018, 0.0, 0.0045)
+				volume_multiplier += 0.10 * cycle_strength
+			"distribution_clean":
+				price_bias -= 0.0016 * cycle_strength
+				volume_multiplier += 0.08 * cycle_strength
+			"failed_markup":
+				price_bias += 0.0008 * cycle_strength - clamp(recent_runup * 0.022, 0.0, 0.0055)
+				volume_multiplier += 0.12 * cycle_strength
+			"operator_markup":
+				var operator_noise: float = _sim_noise(run_seed, company_id, "operator_markup_technical", -0.0018, 0.0048, day_number)
+				price_bias += (0.0018 * cycle_strength) + operator_noise * operator_pressure
+				volume_multiplier += 0.18 + operator_pressure * 0.26
+			"operator_rug":
+				var rug_noise: float = _sim_noise(run_seed, company_id, "operator_rug_technical", -0.0060, 0.0020, day_number)
+				price_bias += rug_noise * max(operator_pressure, 0.45)
+				price_bias -= clamp(recent_runup * 0.032 * max(operator_pressure, 0.45), 0.0, 0.0090)
+				volume_multiplier += 0.22 + operator_pressure * 0.36
+
+	var micro_context: Dictionary = _live_microstructure_context(chart_profile, price_bars, run_seed, day_number, company_id)
+	price_bias += float(micro_context.get("price_bias", 0.0))
+	volume_multiplier += float(micro_context.get("volume_boost", 0.0))
 
 	var override_drag: float = (
 		absf(event_bias) * 9.0 +
@@ -1466,6 +2060,7 @@ func _chart_profile_with_gap_defaults(
 	var bias: String = str(normalized.get("bias", "sideways"))
 	var story_heat: float = clamp(float(traits.get("story_heat", 0.5)), 0.0, 1.0)
 	var float_tightness: float = clamp(float(traits.get("float_tightness", 0.5)), 0.0, 1.0)
+	var liquidity_profile: float = clamp(float(traits.get("liquidity_profile", 0.5)), 0.0, 1.0)
 	var quality_core: float = clamp(float(traits.get("balance_sheet_strength", 0.5)), 0.0, 1.0)
 	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "chart_profile_gap_sim_defaults", company_id])
 	if not normalized.has("chart_intent") or str(normalized.get("chart_intent", "")).is_empty():
@@ -1480,7 +2075,113 @@ func _chart_profile_with_gap_defaults(
 		normalized["gap_frequency"] = _sim_chart_gap_frequency_for(str(normalized.get("chart_intent", "")), archetype, story_heat, float_tightness)
 	if not normalized.has("gap_followthrough") or not CHART_GAP_FOLLOWTHROUGH.has(str(normalized.get("gap_followthrough", ""))):
 		normalized["gap_followthrough"] = _sim_chart_gap_followthrough_for(str(normalized.get("gap_style", "")), bias, rng)
+	_apply_live_tape_friction_defaults(normalized, archetype, bias, story_heat, float_tightness, liquidity_profile)
 	return normalized
+
+
+func _apply_live_tape_friction_defaults(
+	chart_profile: Dictionary,
+	archetype: String,
+	bias: String,
+	story_heat: float,
+	float_tightness: float,
+	liquidity_profile: float
+) -> void:
+	if not chart_profile.has("bar_friction_profile") or not CHART_BAR_FRICTION_PROFILES.has(str(chart_profile.get("bar_friction_profile", ""))):
+		var operator_pressure: float = clamp(float(chart_profile.get("operator_pressure", 0.0)), 0.0, 1.0)
+		if str(chart_profile.get("cycle_template", "")).begins_with("operator") or archetype == "gorengan" or operator_pressure >= 0.62:
+			chart_profile["bar_friction_profile"] = "operator_dirty"
+		elif bias == "bearish" or archetype in ["distribution", "distressed"]:
+			chart_profile["bar_friction_profile"] = "distribution_chop"
+		elif liquidity_profile >= 0.62 and float_tightness <= 0.40 and story_heat <= 0.56:
+			chart_profile["bar_friction_profile"] = "clean_liquid"
+		else:
+			chart_profile["bar_friction_profile"] = "balanced_chop"
+	var friction_profile: String = str(chart_profile.get("bar_friction_profile", "balanced_chop"))
+	if not chart_profile.has("microleg_frequency_bias"):
+		match friction_profile:
+			"clean_liquid":
+				chart_profile["microleg_frequency_bias"] = 0.26
+			"operator_dirty":
+				chart_profile["microleg_frequency_bias"] = 0.78
+			"distribution_chop":
+				chart_profile["microleg_frequency_bias"] = 0.66
+			_:
+				chart_profile["microleg_frequency_bias"] = 0.56
+	if not chart_profile.has("wick_noise_intensity"):
+		match friction_profile:
+			"clean_liquid":
+				chart_profile["wick_noise_intensity"] = 0.14
+			"operator_dirty":
+				chart_profile["wick_noise_intensity"] = 0.52
+			"distribution_chop":
+				chart_profile["wick_noise_intensity"] = 0.42
+			_:
+				chart_profile["wick_noise_intensity"] = 0.32
+	if not chart_profile.has("volume_disagreement_rate"):
+		match friction_profile:
+			"clean_liquid":
+				chart_profile["volume_disagreement_rate"] = 0.18
+			"operator_dirty":
+				chart_profile["volume_disagreement_rate"] = 0.58
+			"distribution_chop":
+				chart_profile["volume_disagreement_rate"] = 0.48
+			_:
+				chart_profile["volume_disagreement_rate"] = 0.38
+	chart_profile["microleg_frequency_bias"] = clamp(float(chart_profile.get("microleg_frequency_bias", 0.56)), 0.0, 1.0)
+	chart_profile["wick_noise_intensity"] = clamp(float(chart_profile.get("wick_noise_intensity", 0.32)), 0.0, 1.0)
+	chart_profile["volume_disagreement_rate"] = clamp(float(chart_profile.get("volume_disagreement_rate", 0.38)), 0.0, 1.0)
+	_apply_live_tape_regime_defaults(chart_profile, archetype, bias, story_heat, float_tightness, liquidity_profile)
+
+
+func _apply_live_tape_regime_defaults(
+	chart_profile: Dictionary,
+	archetype: String,
+	bias: String,
+	story_heat: float,
+	float_tightness: float,
+	liquidity_profile: float
+) -> void:
+	var operator_pressure: float = clamp(float(chart_profile.get("operator_pressure", 0.0)), 0.0, 1.0)
+	if not chart_profile.has("tape_regime_profile") or not CHART_TAPE_REGIME_PROFILES.has(str(chart_profile.get("tape_regime_profile", ""))):
+		var cycle_template: String = str(chart_profile.get("cycle_template", ""))
+		var friction_profile: String = str(chart_profile.get("bar_friction_profile", "balanced_chop"))
+		if cycle_template == "failed_markup":
+			chart_profile["tape_regime_profile"] = "failed_reclaim"
+		elif cycle_template == "distribution_clean" or bias == "bearish" or archetype in ["distribution", "distressed"]:
+			chart_profile["tape_regime_profile"] = "distribution_breakdown"
+		elif cycle_template.begins_with("operator") or friction_profile == "operator_dirty" or archetype == "gorengan" or operator_pressure >= 0.62:
+			chart_profile["tape_regime_profile"] = "operator_campaign"
+		elif liquidity_profile >= 0.64 and float_tightness <= 0.42 and story_heat <= 0.56 and operator_pressure <= 0.34:
+			chart_profile["tape_regime_profile"] = "clean_trend"
+		else:
+			chart_profile["tape_regime_profile"] = "messy_accumulation"
+	if not chart_profile.has("regime_block_intensity"):
+		match str(chart_profile.get("tape_regime_profile", "messy_accumulation")):
+			"clean_trend":
+				chart_profile["regime_block_intensity"] = 0.26
+			"operator_campaign":
+				chart_profile["regime_block_intensity"] = 0.62
+			"distribution_breakdown":
+				chart_profile["regime_block_intensity"] = 0.54
+			"failed_reclaim":
+				chart_profile["regime_block_intensity"] = 0.56
+			_:
+				chart_profile["regime_block_intensity"] = 0.48
+	if not chart_profile.has("regime_tempo_bias"):
+		var tempo_bias: float = 0.0
+		match str(chart_profile.get("cycle_tempo_profile", "normal_setup")):
+			"slow_setup":
+				tempo_bias = 0.24
+			"fast_operator":
+				tempo_bias = -0.30
+			"failed_setup":
+				tempo_bias = 0.08
+		tempo_bias -= operator_pressure * 0.12
+		tempo_bias += liquidity_profile * 0.08
+		chart_profile["regime_tempo_bias"] = tempo_bias
+	chart_profile["regime_block_intensity"] = clamp(float(chart_profile.get("regime_block_intensity", 0.48)), 0.0, 1.0)
+	chart_profile["regime_tempo_bias"] = clamp(float(chart_profile.get("regime_tempo_bias", 0.0)), -1.0, 1.0)
 
 
 func _sim_chart_intent_for(
@@ -1849,6 +2550,22 @@ func _build_daily_price_bar(
 			float(ar_limits.get("lower_price", 1.0)),
 			float(ar_limits.get("upper_price", previous_close))
 		)
+	if limit_lock.is_empty():
+		var body_context: Dictionary = _reconcile_live_candle_body_intent(
+			chart_profile,
+			volume_context,
+			previous_close,
+			open_price,
+			current_price,
+			daily_change_pct,
+			event_bias,
+			ar_limits,
+			run_seed,
+			day_number,
+			company_id
+		)
+		open_price = float(body_context.get("open", open_price))
+		current_price = float(body_context.get("close", current_price))
 
 	var activity_span_boost: float = clamp(
 		(max(float(volume_context.get("expected_activity_ratio", 1.0)) - 1.0, 0.0) * 0.11) +
@@ -1930,6 +2647,87 @@ func _build_daily_price_bar(
 		bar["ask_depth_value"] = float(market_depth_context.get("ask_depth_value", 0.0))
 		bar["bid_depth_value"] = float(market_depth_context.get("bid_depth_value", 0.0))
 	return bar
+
+
+func _reconcile_live_candle_body_intent(
+	chart_profile: Dictionary,
+	volume_context: Dictionary,
+	previous_close: float,
+	open_price: float,
+	close_price: float,
+	daily_change_pct: float,
+	event_bias: float,
+	ar_limits: Dictionary,
+	run_seed: int,
+	day_number: int,
+	company_id: String
+) -> Dictionary:
+	var intended_direction: int = _live_candle_body_intent_direction(chart_profile, volume_context, daily_change_pct, event_bias)
+	if intended_direction == 0:
+		return {"open": open_price, "close": close_price, "intended_direction": 0}
+	var structural_direction: int = _live_tape_direction_for_delta(close_price - previous_close)
+	if structural_direction != 0:
+		intended_direction = structural_direction
+	var body_direction: int = _live_tape_direction_for_delta(close_price - open_price)
+	if body_direction == intended_direction:
+		return {"open": open_price, "close": close_price, "intended_direction": intended_direction}
+
+	var gap_ratio: float = (open_price - previous_close) / max(previous_close, 1.0)
+
+	var tick_size: float = IDX_PRICE_RULES.tick_size_for_reference_price(previous_close)
+	var lower_price: float = float(ar_limits.get("lower_price", 1.0))
+	var upper_price: float = float(ar_limits.get("upper_price", previous_close))
+	var adjusted_open: float = open_price
+	var adjusted_close: float = close_price
+	if intended_direction > 0:
+		if gap_ratio > 0.0 and adjusted_close >= previous_close:
+			adjusted_open = IDX_PRICE_RULES.snap_price_for_day(min(adjusted_open, max(previous_close, adjusted_close - tick_size)), previous_close)
+		if adjusted_close <= adjusted_open:
+			adjusted_close = IDX_PRICE_RULES.snap_price_for_day(max(adjusted_close, adjusted_open + tick_size), previous_close)
+		if adjusted_close <= adjusted_open:
+			adjusted_open = IDX_PRICE_RULES.snap_price_for_day(min(adjusted_open, adjusted_close - tick_size), previous_close)
+	elif intended_direction < 0:
+		if gap_ratio < 0.0 and adjusted_close <= previous_close:
+			adjusted_open = IDX_PRICE_RULES.snap_price_for_day(max(adjusted_open, min(previous_close, adjusted_close + tick_size)), previous_close)
+		if adjusted_close >= adjusted_open:
+			adjusted_close = IDX_PRICE_RULES.snap_price_for_day(min(adjusted_close, adjusted_open - tick_size), previous_close)
+		if adjusted_close >= adjusted_open:
+			adjusted_open = IDX_PRICE_RULES.snap_price_for_day(max(adjusted_open, adjusted_close + tick_size), previous_close)
+
+	adjusted_open = clamp(IDX_PRICE_RULES.normalize_last_price(adjusted_open), lower_price, upper_price)
+	adjusted_close = clamp(IDX_PRICE_RULES.normalize_last_price(adjusted_close), lower_price, upper_price)
+	return {
+		"open": adjusted_open,
+		"close": adjusted_close,
+		"intended_direction": intended_direction
+	}
+
+
+func _live_candle_body_intent_direction(
+	chart_profile: Dictionary,
+	volume_context: Dictionary,
+	daily_change_pct: float,
+	event_bias: float
+) -> int:
+	if absf(daily_change_pct) >= 0.003:
+		return _live_tape_direction_for_delta(daily_change_pct)
+	if absf(event_bias) >= 0.006:
+		return _live_tape_direction_for_delta(event_bias)
+	var accumulation_signal: float = float(volume_context.get("accumulation_signal", 0.0))
+	var distribution_signal: float = float(volume_context.get("distribution_signal", 0.0))
+	if accumulation_signal - distribution_signal > 0.14:
+		return 1
+	if distribution_signal - accumulation_signal > 0.14:
+		return -1
+	var technical_bias: float = (
+		float(volume_context.get("technical_price_bias", 0.0)) +
+		float(volume_context.get("lead_price_bias", 0.0)) +
+		float(volume_context.get("buying_exhaustion_drag", 0.0)) +
+		float(volume_context.get("distribution_drag", 0.0))
+	)
+	if absf(technical_bias) >= 0.0018:
+		return _live_tape_direction_for_delta(technical_bias)
+	return _live_tape_trend_direction(chart_profile)
 
 
 func _build_candle_profile(

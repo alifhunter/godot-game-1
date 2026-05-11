@@ -461,6 +461,95 @@ func _inject_player_flow_into_broker_rows(broker_rows: Array, player_flow: Dicti
 		target_row["sell_shares"] = float(target_row.get("sell_shares", 0.0)) + max(float(player_flow.get("sell_shares", 0.0)), player_sell_value / max(current_price, 1.0))
 		target_row["sell_lots"] = float(target_row.get("sell_shares", 0.0)) / 100.0
 	target_row["player_flow"] = true
+	if player_buy_value > 0.0:
+		_inject_player_counterparty_flow(broker_rows, broker_code, "sell", player_buy_value, current_price)
+	if player_sell_value > 0.0:
+		_inject_player_counterparty_flow(broker_rows, broker_code, "buy", player_sell_value, current_price)
+
+
+func _inject_player_counterparty_flow(
+	broker_rows: Array,
+	player_broker_code: String,
+	side: String,
+	gross_value: float,
+	current_price: float
+) -> void:
+	if gross_value <= 0.0 or broker_rows.is_empty():
+		return
+	var candidates: Array = []
+	for index in range(broker_rows.size()):
+		var row: Dictionary = broker_rows[index]
+		if str(row.get("code", "")) == player_broker_code or bool(row.get("player_flow", false)):
+			continue
+		var weight: float = _counterparty_weight(row, side)
+		if weight <= 0.0:
+			continue
+		candidates.append({
+			"index": index,
+			"weight": weight
+		})
+	if candidates.is_empty():
+		return
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("weight", 0.0)) > float(b.get("weight", 0.0))
+	)
+	var visible_counterparty_count: int = min(candidates.size(), 8)
+	var weight_total: float = 0.0
+	for candidate_index in range(visible_counterparty_count):
+		weight_total += max(float(candidates[candidate_index].get("weight", 0.0)), 0.0)
+	if weight_total <= 0.0:
+		return
+	var remaining_value: float = gross_value
+	for candidate_index in range(visible_counterparty_count):
+		var candidate: Dictionary = candidates[candidate_index]
+		var chunk_value: float = gross_value * (float(candidate.get("weight", 0.0)) / weight_total)
+		if candidate_index == visible_counterparty_count - 1:
+			chunk_value = remaining_value
+		remaining_value -= chunk_value
+		var row: Dictionary = broker_rows[int(candidate.get("index", 0))]
+		_add_broker_side_value(row, side, max(chunk_value, 0.0), current_price)
+
+
+func _counterparty_weight(broker_row: Dictionary, side: String) -> float:
+	var weight_key: String = "buy_weight" if side == "buy" else "sell_weight"
+	var weight: float = max(float(broker_row.get(weight_key, broker_row.get("activity_score", 1.0))), 0.0)
+	var tags: Array = broker_row.get("personality_tags", [])
+	var broker_type: String = str(broker_row.get("broker_type", ""))
+	if "market_maker" in tags:
+		weight += 2.4
+	if side == "buy":
+		if "quiet_accumulator" in tags:
+			weight += 1.8
+		if "quality_buyer" in tags or "smart_money" in tags:
+			weight += 1.2
+		if broker_type in ["foreign", "institution", "bandar", "zombie"]:
+			weight += 0.9
+	else:
+		if "distributor" in tags or "evil_to_retail" in tags:
+			weight += 1.8
+		if "smart_money" in tags:
+			weight += 1.0
+		if broker_type in ["bandar", "zombie"]:
+			weight += 0.9
+	return max(weight, 0.01)
+
+
+func _add_broker_side_value(broker_row: Dictionary, side: String, added_value: float, current_price: float) -> void:
+	if added_value <= 0.0:
+		return
+	var prefix: String = "buy" if side == "buy" else "sell"
+	var value_key: String = "%s_value" % prefix
+	var avg_key: String = "%s_avg_price" % prefix
+	var shares_key: String = "%s_shares" % prefix
+	var lots_key: String = "%s_lots" % prefix
+	var previous_value: float = max(float(broker_row.get(value_key, 0.0)), 0.0)
+	var previous_avg: float = max(float(broker_row.get(avg_key, current_price)), 1.0)
+	var next_value: float = previous_value + added_value
+	var trade_price: float = max(current_price, 1.0)
+	broker_row[avg_key] = ((previous_avg * previous_value) + (trade_price * added_value)) / max(next_value, 1.0)
+	broker_row[value_key] = next_value
+	broker_row[shares_key] = max(float(broker_row.get(shares_key, 0.0)), 0.0) + (added_value / trade_price)
+	broker_row[lots_key] = float(broker_row.get(shares_key, 0.0)) / 100.0
 
 
 func _build_broker_type_totals(broker_rows: Array) -> Dictionary:
@@ -901,8 +990,8 @@ func _build_broker_net_snapshot(broker_row: Dictionary) -> Dictionary:
 	var net_side: String = "buy" if net_value >= 0.0 else "sell"
 	var display_value: float = absf(net_value)
 	var display_shares: float = absf(net_shares)
-	var display_lots: float = max(display_shares / 100.0, 0.0)
 	var display_avg_price: float = float(broker_row.get("buy_avg_price", 0.0)) if net_side == "buy" else float(broker_row.get("sell_avg_price", 0.0))
+	var display_lots: float = max(display_value / max(display_avg_price, 1.0) / 100.0, display_shares / 100.0)
 	return {
 		"code": str(broker_row.get("code", "")),
 		"company_name": str(broker_row.get("company_name", "")),

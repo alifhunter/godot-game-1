@@ -38,12 +38,12 @@ const MNA_SECTORS := {
 }
 
 
-func build_company_event_candidates(run_state, trade_date: Dictionary, day_number: int, macro_state: Dictionary) -> Array:
-	return _build_ranked_company_candidates(run_state, trade_date, day_number, macro_state, false)
+func build_company_event_candidates(run_state, trade_date: Dictionary, day_number: int, macro_state: Dictionary, attention_directives: Dictionary = {}) -> Array:
+	return _build_ranked_company_candidates(run_state, trade_date, day_number, macro_state, false, attention_directives)
 
 
-func build_company_arc_candidates(run_state, trade_date: Dictionary, day_number: int, macro_state: Dictionary) -> Array:
-	return _build_ranked_company_candidates(run_state, trade_date, day_number, macro_state, true)
+func build_company_arc_candidates(run_state, trade_date: Dictionary, day_number: int, macro_state: Dictionary, attention_directives: Dictionary = {}) -> Array:
+	return _build_ranked_company_candidates(run_state, trade_date, day_number, macro_state, true, attention_directives)
 
 
 func build_debug_company_event(
@@ -110,7 +110,8 @@ func resolve_day(run_state, trade_date: Dictionary, day_number: int, macro_state
 			day_number,
 			macro_state,
 			run_state.get_event_history(),
-			active_arcs
+			active_arcs,
+			attention_directives
 		)
 		if not new_arc.is_empty():
 			active_arcs.append(new_arc)
@@ -143,10 +144,12 @@ func _build_ranked_company_candidates(
 	trade_date: Dictionary,
 	day_number: int,
 	macro_state: Dictionary,
-	arc_backed_only: bool
+	arc_backed_only: bool,
+	attention_directives: Dictionary = {}
 ) -> Array:
 	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_state.run_seed, "company_event", day_number, arc_backed_only])
 	var sampled_company_ids: Array = _sample_company_ids(run_state.company_order, rng)
+	sampled_company_ids = _include_attention_focus_company_ids(sampled_company_ids, run_state.company_order, attention_directives)
 	var candidates: Array = []
 
 	for company_id_value in sampled_company_ids:
@@ -163,6 +166,7 @@ func _build_ranked_company_candidates(
 			macro_state,
 			arc_backed_only
 		)
+		company_candidates = _apply_attention_focus_weights(company_candidates, attention_directives)
 		company_candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 			return float(a.get("weight", 0.0)) > float(b.get("weight", 0.0))
 		)
@@ -199,6 +203,35 @@ func _sample_company_ids(company_order: Array, rng: RandomNumberGenerator) -> Ar
 		remaining_ids.remove_at(picked_index)
 
 	return sampled_ids
+
+
+func _include_attention_focus_company_ids(sampled_ids: Array, company_order: Array, attention_directives: Dictionary) -> Array:
+	var merged_ids: Array = sampled_ids.duplicate()
+	for focus_company_id_value in attention_directives.get("focus_company_ids", []):
+		var focus_company_id: String = str(focus_company_id_value)
+		if focus_company_id.is_empty():
+			continue
+		if not company_order.has(focus_company_id):
+			continue
+		if not merged_ids.has(focus_company_id):
+			merged_ids.append(focus_company_id)
+	return merged_ids
+
+
+func _apply_attention_focus_weights(candidates: Array, attention_directives: Dictionary) -> Array:
+	var focus_weights: Dictionary = attention_directives.get("focus_company_weights", {})
+	if focus_weights.is_empty():
+		return candidates
+	var weighted_candidates: Array = []
+	for candidate_value in candidates:
+		if typeof(candidate_value) != TYPE_DICTIONARY:
+			continue
+		var candidate: Dictionary = candidate_value.duplicate(true)
+		var company_id: String = str(candidate.get("target_company_id", ""))
+		var multiplier: float = clamp(float(focus_weights.get(company_id, 1.0)), 0.25, 3.0)
+		candidate["weight"] = float(candidate.get("weight", 1.0)) * multiplier
+		weighted_candidates.append(candidate)
+	return weighted_candidates
 
 
 func _build_company_candidates(
@@ -424,10 +457,11 @@ func _build_company_arc(
 	day_number: int,
 	macro_state: Dictionary,
 	history: Array,
-	active_arcs: Array
+	active_arcs: Array,
+	attention_directives: Dictionary = {}
 ) -> Dictionary:
 	var candidates: Array = []
-	for candidate_value in build_company_arc_candidates(run_state, trade_date, day_number, macro_state):
+	for candidate_value in build_company_arc_candidates(run_state, trade_date, day_number, macro_state, attention_directives):
 		var candidate: Dictionary = candidate_value
 		if _candidate_is_available(candidate, history, active_arcs, day_number):
 			candidates.append(candidate)

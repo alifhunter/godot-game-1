@@ -106,11 +106,27 @@ const INDICATOR_CATALOG := {
 		"id": "rsi_14",
 		"label": "RSI 14",
 		"plot_kind": "panel",
+		"panel_group": "rsi",
+		"scale_mode": "bounded_0_100",
 		"calculation": "rsi",
 		"lookback": 14,
 		"track_id": "momentum_read",
 		"perk_id": "indicator_rsi_14",
 		"sort_order": 220
+	},
+	"macd_12_26_9": {
+		"id": "macd_12_26_9",
+		"label": "MACD 12/26/9",
+		"plot_kind": "panel",
+		"panel_group": "macd",
+		"scale_mode": "zero_symmetric",
+		"calculation": "macd",
+		"fast_lookback": 12,
+		"slow_lookback": 26,
+		"signal_lookback": 9,
+		"track_id": "momentum_read",
+		"perk_id": "indicator_macd_12_26_9",
+		"sort_order": 230
 	}
 }
 
@@ -185,6 +201,7 @@ func build_chart_snapshot_from_bars(
 
 	var indicator_source_bars: Array = _build_display_bars(full_bars, normalized_range_id)
 	var indicator_snapshots: Array = _build_indicator_snapshots(indicator_source_bars, enabled_indicator_ids, primary_values.size())
+	var technical_signals: Array = _build_technical_signals(display_bars)
 	var latest_bar: Dictionary = display_bars[display_bars.size() - 1]
 	var plots: Array = [{
 		"id": "close",
@@ -197,6 +214,13 @@ func build_chart_snapshot_from_bars(
 	}]
 	for indicator_value in indicator_snapshots:
 		var indicator_snapshot: Dictionary = indicator_value
+		var subplots: Array = indicator_snapshot.get("subplots", [])
+		if not subplots.is_empty():
+			for subplot_value in subplots:
+				if typeof(subplot_value) != TYPE_DICTIONARY:
+					continue
+				plots.append(subplot_value.duplicate(true))
+			continue
 		var plot_kind: String = str(indicator_snapshot.get("plot_kind", "overlay"))
 		if plot_kind != "overlay" and plot_kind != "panel":
 			continue
@@ -204,6 +228,8 @@ func build_chart_snapshot_from_bars(
 			"id": str(indicator_snapshot.get("id", "")),
 			"label": str(indicator_snapshot.get("label", "")),
 			"plot_kind": plot_kind,
+			"panel_group": str(indicator_snapshot.get("panel_group", "")),
+			"scale_mode": str(indicator_snapshot.get("scale_mode", "")),
 			"style": "line",
 			"fill": false,
 			"values": indicator_snapshot.get("values", []).duplicate(),
@@ -218,6 +244,7 @@ func build_chart_snapshot_from_bars(
 		"plots": plots,
 		"indicator_snapshots": indicator_snapshots,
 		"enabled_indicator_ids": _normalize_indicator_ids(enabled_indicator_ids),
+		"technical_signals": technical_signals,
 		"baseline_value": start_price,
 		"start_price": start_price,
 		"end_price": end_price,
@@ -429,10 +456,69 @@ func _build_indicator_snapshots(visible_bars: Array, enabled_indicator_ids: Arra
 			values = _align_indicator_values(_build_ema(close_values, lookback), render_point_count)
 		elif calculation == "rsi":
 			values = _align_indicator_values(_build_rsi(close_values, lookback), render_point_count)
+		elif calculation == "macd":
+			var macd_data: Dictionary = _build_macd(
+				close_values,
+				int(definition.get("fast_lookback", 12)),
+				int(definition.get("slow_lookback", 26)),
+				int(definition.get("signal_lookback", 9))
+			)
+			var macd_values: Array = _align_indicator_values(macd_data.get("macd_values", []), render_point_count)
+			var signal_values: Array = _align_indicator_values(macd_data.get("signal_values", []), render_point_count)
+			var histogram_values: Array = _align_indicator_values(macd_data.get("histogram_values", []), render_point_count)
+			snapshots.append({
+				"id": indicator_id,
+				"label": str(definition.get("label", indicator_id.to_upper())),
+				"plot_kind": str(definition.get("plot_kind", "panel")),
+				"panel_group": str(definition.get("panel_group", "macd")),
+				"scale_mode": str(definition.get("scale_mode", "zero_symmetric")),
+				"values": histogram_values.duplicate(),
+				"macd_values": macd_values,
+				"signal_values": signal_values,
+				"histogram_values": histogram_values,
+				"subplots": [
+					{
+						"id": "macd_12_26_9_histogram",
+						"label": "Histogram",
+						"plot_kind": "panel",
+						"panel_group": "macd",
+						"scale_mode": "zero_symmetric",
+						"style": "histogram",
+						"fill": false,
+						"values": histogram_values,
+						"line_width": 1.0
+					},
+					{
+						"id": "macd_12_26_9",
+						"label": "MACD",
+						"plot_kind": "panel",
+						"panel_group": "macd",
+						"scale_mode": "zero_symmetric",
+						"style": "line",
+						"fill": false,
+						"values": macd_values,
+						"line_width": 1.45
+					},
+					{
+						"id": "macd_12_26_9_signal",
+						"label": "Signal",
+						"plot_kind": "panel",
+						"panel_group": "macd",
+						"scale_mode": "zero_symmetric",
+						"style": "line",
+						"fill": false,
+						"values": signal_values,
+						"line_width": 1.25
+					}
+				]
+			})
+			continue
 		snapshots.append({
 			"id": indicator_id,
 			"label": str(definition.get("label", indicator_id.to_upper())),
 			"plot_kind": str(definition.get("plot_kind", "overlay")),
+			"panel_group": str(definition.get("panel_group", "")),
+			"scale_mode": str(definition.get("scale_mode", "")),
 			"values": values
 		})
 
@@ -492,6 +578,10 @@ func _build_rsi(values: Array, lookback: int) -> Array:
 	var gains: Array = []
 	var losses: Array = []
 	for index in range(1, values.size()):
+		if not _is_numeric(values[index]) or not _is_numeric(values[index - 1]):
+			gains.append(0.0)
+			losses.append(0.0)
+			continue
 		var change: float = float(values[index]) - float(values[index - 1])
 		gains.append(max(change, 0.0))
 		losses.append(absf(min(change, 0.0)))
@@ -513,3 +603,253 @@ func _build_rsi(values: Array, lookback: int) -> Array:
 		var rs: float = average_gain / average_loss
 		output.append(100.0 - (100.0 / (1.0 + rs)))
 	return output
+
+
+func build_technical_signal_summary_from_bars(price_bars: Array, range_id: String = "3m") -> Dictionary:
+	var full_bars: Array = _normalize_bars(price_bars)
+	if full_bars.is_empty():
+		return {"signals": [], "score": 0.0}
+	var normalized_range_id: String = _normalize_range_id(range_id)
+	var visible_bars: Array = _slice_visible_bars(full_bars, normalized_range_id)
+	var display_bars: Array = _build_display_bars(visible_bars, normalized_range_id)
+	var signals: Array = _build_technical_signals(display_bars)
+	return {
+		"signals": signals,
+		"score": _technical_signal_score(signals)
+	}
+
+
+func build_technical_signals_from_series(
+	close_values: Array,
+	rsi_values: Array = [],
+	macd_values: Array = [],
+	trade_dates: Array = []
+) -> Array:
+	var safe_close_values: Array = []
+	for close_value in close_values:
+		if _is_numeric(close_value):
+			safe_close_values.append(float(close_value))
+		else:
+			safe_close_values.append(null)
+	var resolved_rsi_values: Array = rsi_values.duplicate()
+	if resolved_rsi_values.is_empty():
+		resolved_rsi_values = _build_rsi(safe_close_values, 14)
+	var resolved_macd_values: Array = macd_values.duplicate()
+	if resolved_macd_values.is_empty():
+		resolved_macd_values = _build_macd(safe_close_values, 12, 26, 9).get("histogram_values", [])
+
+	var signals: Array = []
+	_append_indicator_structure_signals(signals, safe_close_values, resolved_rsi_values, trade_dates, "rsi_14")
+	_append_indicator_structure_signals(signals, safe_close_values, resolved_macd_values, trade_dates, "macd_12_26_9")
+	signals.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if is_equal_approx(float(a.get("strength", 0.0)), float(b.get("strength", 0.0))):
+			return str(a.get("indicator_id", "")) < str(b.get("indicator_id", ""))
+		return float(a.get("strength", 0.0)) > float(b.get("strength", 0.0))
+	)
+	return signals
+
+
+func _build_technical_signals(display_bars: Array) -> Array:
+	var close_values: Array = []
+	var trade_dates: Array = []
+	for bar_value in display_bars:
+		if typeof(bar_value) != TYPE_DICTIONARY:
+			continue
+		var bar: Dictionary = bar_value
+		close_values.append(float(bar.get("close", 0.0)))
+		trade_dates.append(bar.get("trade_date", {}).duplicate(true))
+	return build_technical_signals_from_series(close_values, [], [], trade_dates)
+
+
+func _build_macd(values: Array, fast_lookback: int, slow_lookback: int, signal_lookback: int) -> Dictionary:
+	var fast_ema_values: Array = _build_ema_raw(values, fast_lookback)
+	var slow_ema_values: Array = _build_ema_raw(values, slow_lookback)
+	var macd_values: Array = []
+	var valid_macd_values: Array = []
+	for index in range(values.size()):
+		if index + 1 < slow_lookback or not _is_numeric(fast_ema_values[index]) or not _is_numeric(slow_ema_values[index]):
+			macd_values.append(null)
+			valid_macd_values.append(null)
+			continue
+		var macd_value: float = float(fast_ema_values[index]) - float(slow_ema_values[index])
+		macd_values.append(macd_value)
+		valid_macd_values.append(macd_value)
+
+	var compact_macd_values: Array = []
+	for macd_value in valid_macd_values:
+		if _is_numeric(macd_value):
+			compact_macd_values.append(float(macd_value))
+	var compact_signal_values: Array = _build_ema_raw(compact_macd_values, signal_lookback)
+	var signal_values: Array = []
+	var histogram_values: Array = []
+	var compact_index: int = 0
+	for index in range(macd_values.size()):
+		if not _is_numeric(macd_values[index]):
+			signal_values.append(null)
+			histogram_values.append(null)
+			continue
+		var signal_value = compact_signal_values[compact_index] if compact_index < compact_signal_values.size() else null
+		compact_index += 1
+		if compact_index < signal_lookback or not _is_numeric(signal_value):
+			signal_values.append(null)
+			histogram_values.append(null)
+			continue
+		signal_values.append(float(signal_value))
+		histogram_values.append(float(macd_values[index]) - float(signal_value))
+	return {
+		"macd_values": macd_values,
+		"signal_values": signal_values,
+		"histogram_values": histogram_values
+	}
+
+
+func _build_ema_raw(values: Array, lookback: int) -> Array:
+	var output: Array = []
+	if values.is_empty() or lookback <= 0:
+		return output
+	var multiplier: float = 2.0 / float(lookback + 1)
+	var ema_value: float = 0.0
+	var has_ema: bool = false
+	for index in range(values.size()):
+		if not _is_numeric(values[index]):
+			output.append(null)
+			continue
+		var value: float = float(values[index])
+		if not has_ema:
+			ema_value = value
+			has_ema = true
+		else:
+			ema_value = ((value - ema_value) * multiplier) + ema_value
+		output.append(ema_value)
+	return output
+
+
+func _append_indicator_structure_signals(
+	signals: Array,
+	close_values: Array,
+	indicator_values: Array,
+	trade_dates: Array,
+	indicator_id: String
+) -> void:
+	var low_pair: Array = _pivot_pair(close_values, indicator_values, true)
+	if low_pair.size() == 2:
+		var first_low_index: int = int(low_pair[0])
+		var second_low_index: int = int(low_pair[1])
+		var first_price_low: float = float(close_values[first_low_index])
+		var second_price_low: float = float(close_values[second_low_index])
+		var first_indicator_low: float = float(indicator_values[first_low_index])
+		var second_indicator_low: float = float(indicator_values[second_low_index])
+		if second_price_low < first_price_low * 0.998 and second_indicator_low > first_indicator_low:
+			signals.append(_technical_signal("bullish_divergence", indicator_id, first_low_index, second_low_index, trade_dates, _signal_strength(first_price_low, second_price_low, first_indicator_low, second_indicator_low)))
+		elif second_price_low < first_price_low * 0.998 and second_indicator_low < first_indicator_low:
+			signals.append(_technical_signal("bearish_convergence", indicator_id, first_low_index, second_low_index, trade_dates, _signal_strength(first_price_low, second_price_low, first_indicator_low, second_indicator_low)))
+
+	var high_pair: Array = _pivot_pair(close_values, indicator_values, false)
+	if high_pair.size() == 2:
+		var first_high_index: int = int(high_pair[0])
+		var second_high_index: int = int(high_pair[1])
+		var first_price_high: float = float(close_values[first_high_index])
+		var second_price_high: float = float(close_values[second_high_index])
+		var first_indicator_high: float = float(indicator_values[first_high_index])
+		var second_indicator_high: float = float(indicator_values[second_high_index])
+		if second_price_high > first_price_high * 1.002 and second_indicator_high < first_indicator_high:
+			signals.append(_technical_signal("bearish_divergence", indicator_id, first_high_index, second_high_index, trade_dates, _signal_strength(first_price_high, second_price_high, first_indicator_high, second_indicator_high)))
+		elif second_price_high > first_price_high * 1.002 and second_indicator_high > first_indicator_high:
+			signals.append(_technical_signal("bullish_convergence", indicator_id, first_high_index, second_high_index, trade_dates, _signal_strength(first_price_high, second_price_high, first_indicator_high, second_indicator_high)))
+
+
+func _pivot_pair(price_values: Array, indicator_values: Array, wants_low: bool) -> Array:
+	var pivots: Array = _swing_indexes(price_values, wants_low)
+	var filtered: Array = []
+	for pivot_value in pivots:
+		var pivot_index: int = int(pivot_value)
+		if pivot_index >= 0 and pivot_index < indicator_values.size() and _is_numeric(indicator_values[pivot_index]):
+			filtered.append(pivot_index)
+	if filtered.size() >= 2:
+		return [filtered[filtered.size() - 2], filtered[filtered.size() - 1]]
+	return _half_extreme_pair(price_values, indicator_values, wants_low)
+
+
+func _swing_indexes(values: Array, wants_low: bool) -> Array:
+	var indexes: Array = []
+	if values.size() < 3:
+		return indexes
+	for index in range(1, values.size() - 1):
+		if not _is_numeric(values[index - 1]) or not _is_numeric(values[index]) or not _is_numeric(values[index + 1]):
+			continue
+		var previous_value: float = float(values[index - 1])
+		var current_value: float = float(values[index])
+		var next_value: float = float(values[index + 1])
+		if wants_low and current_value <= previous_value and current_value <= next_value:
+			indexes.append(index)
+		elif not wants_low and current_value >= previous_value and current_value >= next_value:
+			indexes.append(index)
+	return indexes
+
+
+func _half_extreme_pair(price_values: Array, indicator_values: Array, wants_low: bool) -> Array:
+	if price_values.size() < 6:
+		return []
+	var middle_index: int = int(floor(float(price_values.size()) * 0.5))
+	var first_index: int = _extreme_index(price_values, indicator_values, 0, middle_index, wants_low)
+	var second_index: int = _extreme_index(price_values, indicator_values, middle_index, price_values.size(), wants_low)
+	if first_index < 0 or second_index < 0 or first_index == second_index:
+		return []
+	return [first_index, second_index]
+
+
+func _extreme_index(price_values: Array, indicator_values: Array, start_index: int, end_index: int, wants_low: bool) -> int:
+	var found_index: int = -1
+	var found_value: float = 0.0
+	for index in range(max(start_index, 0), min(end_index, price_values.size())):
+		if index >= indicator_values.size() or not _is_numeric(price_values[index]) or not _is_numeric(indicator_values[index]):
+			continue
+		var value: float = float(price_values[index])
+		if found_index < 0 or (wants_low and value < found_value) or (not wants_low and value > found_value):
+			found_index = index
+			found_value = value
+	return found_index
+
+
+func _technical_signal(
+	signal_type: String,
+	indicator_id: String,
+	start_index: int,
+	end_index: int,
+	trade_dates: Array,
+	strength: float
+) -> Dictionary:
+	return {
+		"signal_type": signal_type,
+		"indicator_id": indicator_id,
+		"strength": snappedf(clamp(strength, 0.0, 1.0), 0.001),
+		"start_bar_index": start_index,
+		"end_bar_index": end_index,
+		"start_date": trade_dates[start_index].duplicate(true) if start_index >= 0 and start_index < trade_dates.size() and typeof(trade_dates[start_index]) == TYPE_DICTIONARY else {},
+		"end_date": trade_dates[end_index].duplicate(true) if end_index >= 0 and end_index < trade_dates.size() and typeof(trade_dates[end_index]) == TYPE_DICTIONARY else {}
+	}
+
+
+func _signal_strength(first_price: float, second_price: float, first_indicator: float, second_indicator: float) -> float:
+	var price_delta: float = absf(second_price - first_price) / max(absf(first_price), 1.0)
+	var indicator_delta: float = absf(second_indicator - first_indicator) / max(absf(first_indicator), 1.0)
+	return clamp((price_delta * 8.0) + (indicator_delta * 1.4), 0.18, 1.0)
+
+
+func _technical_signal_score(signals: Array) -> float:
+	var score: float = 0.0
+	for signal_value in signals:
+		if typeof(signal_value) != TYPE_DICTIONARY:
+			continue
+		var signal_row: Dictionary = signal_value
+		var signal_type: String = str(signal_row.get("signal_type", ""))
+		var strength: float = float(signal_row.get("strength", 0.0))
+		if signal_type.ends_with("divergence"):
+			score = max(score, strength)
+		elif signal_type.ends_with("convergence"):
+			score = max(score, strength * 0.72)
+	return clamp(score, 0.0, 1.0)
+
+
+func _is_numeric(value) -> bool:
+	return typeof(value) == TYPE_FLOAT or typeof(value) == TYPE_INT

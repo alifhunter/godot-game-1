@@ -116,6 +116,14 @@ func count_current_day_activity(run_state) -> int:
 		if typeof(request_value) != TYPE_DICTIONARY:
 			continue
 		var request: Dictionary = request_value
+		if str(request.get("request_type", "")) == "dirty_tip":
+			if int(request.get("created_day_index", -9999)) == target_day_index:
+				count += 1
+			if not str(request.get("decision", "")).is_empty() and int(request.get("decision_day_index", -9999)) == target_day_index:
+				count += 1
+			if int(request.get("resolved_day_index", -9999)) == target_day_index:
+				count += 1
+			continue
 		var status: String = str(request.get("status", "pending"))
 		var request_day_index: int = int(request.get("completed_day_index", request.get("created_day_index", 0))) if status != "pending" else int(request.get("created_day_index", 0))
 		if request_day_index == target_day_index:
@@ -2478,7 +2486,15 @@ func _network_journal_rows(run_state, data_repository, requests: Dictionary, dis
 	for request_value in requests.values():
 		if typeof(request_value) != TYPE_DICTIONARY:
 			continue
-		rows.append(_network_request_journal_row(run_state, data_repository, request_value))
+		var request: Dictionary = request_value
+		if str(request.get("request_type", "")) == "dirty_tip":
+			rows.append(_network_dirty_tip_journal_row(request))
+			if not str(request.get("decision", "")).is_empty():
+				rows.append(_network_dirty_tip_decision_journal_row(request))
+			if int(request.get("resolved_day_index", -1)) >= 0:
+				rows.append(_network_dirty_tip_result_journal_row(request))
+			continue
+		rows.append(_network_request_journal_row(run_state, data_repository, request))
 	for discovery_value in discoveries.values():
 		if typeof(discovery_value) != TYPE_DICTIONARY:
 			continue
@@ -2612,6 +2628,78 @@ func _network_request_journal_row(run_state, data_repository, request: Dictionar
 		"status": status,
 		"title": "Request | %s | %s" % [ticker, status.capitalize()],
 		"detail": "%s | %s" % [contact_name, detail]
+	}
+
+
+func _network_dirty_tip_journal_row(request: Dictionary) -> Dictionary:
+	var day_index: int = int(request.get("created_day_index", 0))
+	var ticker: String = str(request.get("target_ticker", ""))
+	return {
+		"id": "%s:offered" % str(request.get("id", "")),
+		"type": "dirty_tip",
+		"day_index": day_index,
+		"sort_index": day_index * 10 + 2,
+		"contact_id": str(request.get("contact_id", "")),
+		"contact_name": str(request.get("contact_name", "Operator Room")),
+		"target_company_id": str(request.get("target_company_id", "")),
+		"target_ticker": ticker,
+		"status": str(request.get("status", "offered")),
+		"title": "Dirty Tip | %s | Offered" % ticker,
+		"detail": str(request.get("journal_detail", request.get("offer_body", "")))
+	}
+
+
+func _network_dirty_tip_decision_journal_row(request: Dictionary) -> Dictionary:
+	var day_index: int = int(request.get("decision_day_index", request.get("created_day_index", 0)))
+	var ticker: String = str(request.get("target_ticker", ""))
+	var status: String = str(request.get("decision", request.get("status", "")))
+	var detail: String = str(request.get("journal_detail", request.get("outcome_note", "")))
+	if detail.is_empty():
+		match status:
+			"accepted":
+				detail = "You accepted the room approach."
+			"reported":
+				detail = "You reported the approach."
+			_:
+				detail = "You declined the approach."
+	return {
+		"id": "%s:decision" % str(request.get("id", "")),
+		"type": "dirty_tip",
+		"day_index": day_index,
+		"sort_index": day_index * 10 + 5,
+		"contact_id": str(request.get("contact_id", "")),
+		"contact_name": str(request.get("contact_name", "Operator Room")),
+		"target_company_id": str(request.get("target_company_id", "")),
+		"target_ticker": ticker,
+		"status": status,
+		"title": "Dirty Tip | %s | %s" % [ticker, status.capitalize()],
+		"detail": detail
+	}
+
+
+func _network_dirty_tip_result_journal_row(request: Dictionary) -> Dictionary:
+	var day_index: int = int(request.get("resolved_day_index", request.get("completed_day_index", request.get("created_day_index", 0))))
+	var ticker: String = str(request.get("target_ticker", ""))
+	var status: String = str(request.get("status", "resolved_clean"))
+	var detail: String = str(request.get("outcome_note", ""))
+	if status == "caught":
+		detail = "%s Fine: Rp%.0f. Legal hold: %d trading day(s)." % [
+			detail,
+			float(request.get("fine_amount", 0.0)),
+			int(request.get("legal_days", 0))
+		]
+	return {
+		"id": "%s:result" % str(request.get("id", "")),
+		"type": "dirty_tip",
+		"day_index": day_index,
+		"sort_index": day_index * 10 + 8,
+		"contact_id": str(request.get("contact_id", "")),
+		"contact_name": str(request.get("contact_name", "Operator Room")),
+		"target_company_id": str(request.get("target_company_id", "")),
+		"target_ticker": ticker,
+		"status": status,
+		"title": "Dirty Tip | %s | %s" % [ticker, str(request.get("outcome_label", status.capitalize()))],
+		"detail": detail
 	}
 
 

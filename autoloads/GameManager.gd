@@ -446,6 +446,7 @@ var chart_pattern_system = preload("res://systems/ChartPatternSystem.gd").new()
 var news_feed_system = preload("res://systems/NewsFeedSystem.gd").new()
 var twooter_feed_system = preload("res://systems/TwooterFeedSystem.gd").new()
 var contact_network_system = preload("res://systems/ContactNetworkSystem.gd").new()
+var dirty_tip_system = preload("res://systems/DirtyTipSystem.gd").new()
 var corporate_action_system = preload("res://systems/CorporateActionSystem.gd").new()
 var index_review_system = preload("res://systems/IndexReviewSystem.gd").new()
 var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
@@ -680,6 +681,9 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	var life_loan_payment_result: Dictionary = _apply_life_loan_payment_if_due(previous_trade_date, RunState.current_trade_date)
 	_log_advance_perf_elapsed(log_advance_perf, "apply_life_loan_payment", phase_started_at_usec, " amount=%.2f" % float(life_loan_payment_result.get("amount", 0.0)))
 	phase_started_at_usec = Time.get_ticks_usec()
+	var life_legal_result: Dictionary = _apply_life_legal_state_update()
+	_log_advance_perf_elapsed(log_advance_perf, "apply_life_legal", phase_started_at_usec, " remaining=%d" % int(life_legal_result.get("days_remaining", 0)))
+	phase_started_at_usec = Time.get_ticks_usec()
 	var life_wellbeing_result: Dictionary = _apply_life_daily_wellbeing_update()
 	_log_advance_perf_elapsed(log_advance_perf, "apply_life_wellbeing", phase_started_at_usec, " stress=%.2f" % float(life_wellbeing_result.get("stress_value", 0.0)))
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -688,14 +692,33 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	phase_started_at_usec = Time.get_ticks_usec()
 	var network_tip_results: Array = contact_network_system.process_due_tip_memories(RunState, DataRepository)
 	_log_advance_perf_elapsed(log_advance_perf, "process_due_tip_memories", phase_started_at_usec, " count=%d" % network_tip_results.size())
+	phase_started_at_usec = Time.get_ticks_usec()
+	var dirty_tip_results: Array = dirty_tip_system.process_due_cases(RunState, DataRepository)
+	_log_advance_perf_elapsed(log_advance_perf, "process_dirty_tip_cases", phase_started_at_usec, " count=%d" % dirty_tip_results.size())
+	phase_started_at_usec = Time.get_ticks_usec()
+	var dirty_tip_offer_resolution: Dictionary = dirty_tip_system.resolve_day(
+		RunState,
+		DataRepository,
+		day_result.get("attention_directives", {}),
+		RunState.day_index,
+		day_result.get("trade_date", previous_trade_date)
+	)
+	var dirty_tip_offers: Array = dirty_tip_offer_resolution.get("offers", []).duplicate(true)
+	_log_advance_perf_elapsed(log_advance_perf, "resolve_dirty_tip_offer", phase_started_at_usec, " count=%d reason=%s" % [dirty_tip_offers.size(), str(dirty_tip_offer_resolution.get("reason", ""))])
+	if not life_legal_result.is_empty():
+		RunState.last_day_results["life_legal"] = life_legal_result.duplicate(true)
 	if not network_results.is_empty():
 		RunState.last_day_results["network_request_results"] = network_results.duplicate(true)
 	if not network_tip_results.is_empty():
 		RunState.last_day_results["network_tip_results"] = network_tip_results.duplicate(true)
+	if not dirty_tip_results.is_empty():
+		RunState.last_day_results["dirty_tip_results"] = dirty_tip_results.duplicate(true)
+	if not dirty_tip_offers.is_empty():
+		RunState.last_day_results["dirty_tip_offers"] = dirty_tip_offers.duplicate(true)
 	phase_started_at_usec = Time.get_ticks_usec()
 	_rebuild_dashboard_event_snapshot_cache("", log_advance_perf)
 	_log_advance_perf_elapsed(log_advance_perf, "build_dashboard_event_cache", phase_started_at_usec)
-	if (not network_results.is_empty() or not network_tip_results.is_empty()) and emit_runtime_signals:
+	if (not network_results.is_empty() or not network_tip_results.is_empty() or not dirty_tip_results.is_empty() or not dirty_tip_offers.is_empty()) and emit_runtime_signals:
 		phase_started_at_usec = Time.get_ticks_usec()
 		network_changed.emit()
 		_log_advance_perf_elapsed(log_advance_perf, "emit_network_changed", phase_started_at_usec)
@@ -709,7 +732,7 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 		phase_started_at_usec = Time.get_ticks_usec()
 		daily_actions_changed.emit()
 		_log_advance_perf_elapsed(log_advance_perf, "emit_daily_actions_changed", phase_started_at_usec)
-		if not life_obligation_result.is_empty() or not life_loan_payment_result.is_empty() or not life_wellbeing_result.is_empty():
+		if not life_obligation_result.is_empty() or not life_loan_payment_result.is_empty() or not life_legal_result.is_empty() or not life_wellbeing_result.is_empty() or _dirty_tip_results_include_legal(dirty_tip_results):
 			phase_started_at_usec = Time.get_ticks_usec()
 			life_changed.emit()
 			_log_advance_perf_elapsed(log_advance_perf, "emit_life_changed", phase_started_at_usec)
@@ -750,6 +773,16 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 		"day_result": day_result,
 		"summary": summary
 	}
+
+
+func _dirty_tip_results_include_legal(results: Array) -> bool:
+	for result_value in results:
+		if typeof(result_value) != TYPE_DICTIONARY:
+			continue
+		var result: Dictionary = result_value
+		if str(result.get("status", "")) == "caught" or int(result.get("legal_days", 0)) > 0 or float(result.get("fine_amount", 0.0)) > 0.0:
+			return true
+	return false
 
 
 func buy_company(company_id: String, shares: int = 1) -> Dictionary:
@@ -1826,6 +1859,9 @@ func _spend_network_action(action_id: String) -> Dictionary:
 
 
 func _network_action_no_ap_message(action_id: String) -> String:
+	var block_reason: String = get_life_action_block_reason(action_id)
+	if not block_reason.is_empty():
+		return block_reason
 	return "Need %d AP for this Network action." % get_network_action_cost(action_id)
 
 
@@ -2832,6 +2868,14 @@ func get_life_action_block_reason(action_id: String) -> String:
 		return "No active run."
 	var normalized_action: String = action_id.to_lower()
 	var life_state: Dictionary = RunState.get_player_life()
+	var legal_state: Dictionary = life_state.get("legal_state", {}) if typeof(life_state.get("legal_state", {})) == TYPE_DICTIONARY else {}
+	if bool(legal_state.get("active", false)) and int(legal_state.get("days_remaining", 0)) > 0:
+		if normalized_action == "advance_day":
+			return ""
+		return "Legal hold is active. Only Advance Day is available for %d trading day%s." % [
+			int(legal_state.get("days_remaining", 0)),
+			"" if int(legal_state.get("days_remaining", 0)) == 1 else "s"
+		]
 	if int(life_state.get("hospital_days_remaining", 0)) > 0:
 		if normalized_action == "advance_day":
 			return ""
@@ -3333,6 +3377,45 @@ func _apply_life_loan_payment_if_due(previous_trade_date: Dictionary, current_tr
 	if not bool(result.get("success", false)):
 		return {}
 	RunState.last_day_results["life_loan_payment"] = result.duplicate(true)
+	return result
+
+
+func _apply_life_legal_state_update() -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+	var life_state: Dictionary = RunState.get_player_life()
+	var legal_state: Dictionary = life_state.get("legal_state", {}) if typeof(life_state.get("legal_state", {})) == TYPE_DICTIONARY else {}
+	if not bool(legal_state.get("active", false)) or int(legal_state.get("days_remaining", 0)) <= 0:
+		return {}
+	RunState.pause_cash_stress_deadline(1)
+	life_state = RunState.get_player_life()
+	legal_state = life_state.get("legal_state", {}) if typeof(life_state.get("legal_state", {})) == TYPE_DICTIONARY else {}
+	var days_before: int = int(legal_state.get("days_remaining", 0))
+	var days_remaining: int = max(days_before - 1, 0)
+	legal_state["days_remaining"] = days_remaining
+	legal_state["last_legal_trade_date"] = RunState.current_trade_date.duplicate(true)
+	legal_state["updated_day_index"] = RunState.day_index
+	if days_remaining <= 0:
+		legal_state["active"] = false
+		legal_state["status"] = "released"
+		legal_state["released_day_index"] = RunState.day_index
+	else:
+		legal_state["active"] = true
+		legal_state["status"] = "held"
+	life_state["legal_state"] = legal_state
+	RunState.set_player_life(life_state)
+	var result: Dictionary = {
+		"legal_hold_day_completed": true,
+		"legal_hold_active": days_remaining > 0,
+		"days_before": days_before,
+		"days_remaining": days_remaining,
+		"case_id": str(legal_state.get("case_id", "")),
+		"target_company_id": str(legal_state.get("target_company_id", "")),
+		"target_ticker": str(legal_state.get("target_ticker", "")),
+		"status": str(legal_state.get("status", "held")),
+		"trade_date": RunState.current_trade_date.duplicate(true)
+	}
+	RunState.last_day_results["life_legal"] = result.duplicate(true)
 	return result
 
 
@@ -3962,6 +4045,74 @@ func request_contact_tip(contact_id: String, company_id: String = "") -> Diction
 		daily_actions_changed.emit()
 		network_changed.emit()
 	return result
+
+
+func accept_dirty_tip_offer(offer_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var block_reason: String = get_life_action_block_reason("network")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
+	var result: Dictionary = dirty_tip_system.accept_offer(RunState, offer_id)
+	_after_dirty_tip_decision(result, "dirty_tip_accept")
+	return result
+
+
+func decline_dirty_tip_offer(offer_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var result: Dictionary = dirty_tip_system.decline_offer(RunState, offer_id)
+	_after_dirty_tip_decision(result, "dirty_tip_decline")
+	return result
+
+
+func report_dirty_tip_offer(offer_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var result: Dictionary = dirty_tip_system.report_offer(RunState, offer_id)
+	_after_dirty_tip_decision(result, "dirty_tip_report")
+	return result
+
+
+func debug_force_dirty_tip_offer(company_id: String = "") -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var target_company_id: String = company_id.strip_edges()
+	if target_company_id.is_empty() and not RunState.company_order.is_empty():
+		target_company_id = str(RunState.company_order[0])
+	var directives: Dictionary = {
+		"selected_lane": "dirty_market",
+		"dirty_market_pressure": 1.0,
+		"focus_company_ids": [target_company_id],
+		"focus_company_weights": {target_company_id: 2.0}
+	}
+	var result: Dictionary = dirty_tip_system.resolve_day(
+		RunState,
+		DataRepository,
+		directives,
+		max(RunState.day_index, 0),
+		RunState.get_current_trade_date(),
+		target_company_id
+	)
+	var offers: Array = result.get("offers", [])
+	if offers.is_empty():
+		result["success"] = false
+		result["message"] = "Dirty tip could not be forced: %s." % str(result.get("reason", "unknown"))
+		return result
+	result["success"] = true
+	result["message"] = "Dirty tip offer forced."
+	_invalidate_daily_activity_snapshot_cache()
+	_request_autosave("debug_dirty_tip_offer")
+	network_changed.emit()
+	return result
+
+
+func _after_dirty_tip_decision(result: Dictionary, save_reason: String) -> void:
+	if not bool(result.get("success", false)):
+		return
+	_invalidate_daily_activity_snapshot_cache()
+	_request_autosave(save_reason)
+	network_changed.emit()
 
 
 func accept_contact_request(contact_id: String, company_id: String = "") -> Dictionary:

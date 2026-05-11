@@ -485,6 +485,14 @@ var current_macro_event_alert: Dictionary = {}
 var macro_event_dialog: Control = null
 var macro_event_headline_label: Label = null
 var macro_event_close_button: Button = null
+var pending_dirty_tip_alerts: Array = []
+var current_dirty_tip_alert: Dictionary = {}
+var dirty_tip_dialog: Control = null
+var dirty_tip_body_label: Label = null
+var dirty_tip_accept_button: Button = null
+var dirty_tip_decline_button: Button = null
+var dirty_tip_report_button: Button = null
+var dirty_tip_close_button: Button = null
 var advance_day_button_tween: Tween = null
 var daily_recap_tween: Tween = null
 var macro_event_tween: Tween = null
@@ -885,6 +893,7 @@ func _ready() -> void:
 	_ensure_hospital_overlay()
 	_ensure_daily_recap_dialog()
 	_ensure_macro_event_dialog()
+	_ensure_dirty_tip_dialog()
 	_ensure_dashboard_calendar_event_popup()
 	_ensure_dashboard_index_recap_ui()
 	_ensure_dashboard_broker_flow_ui()
@@ -1080,6 +1089,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				return
 			if key_event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
 				_on_macro_event_confirm_pressed()
+				get_viewport().set_input_as_handled()
+				return
+		if dirty_tip_dialog != null and dirty_tip_dialog.visible:
+			if key_event.keycode == KEY_ESCAPE:
+				_decline_current_dirty_tip_alert()
 				get_viewport().set_input_as_handled()
 				return
 		if settings_dialog != null and settings_dialog.visible and key_event.keycode == KEY_ESCAPE:
@@ -6790,6 +6804,22 @@ func _rebuild_network_request_list() -> void:
 
 
 func _network_request_due_label(request: Dictionary) -> String:
+	if str(request.get("request_type", "")) == "dirty_tip":
+		match str(request.get("status", "")):
+			"offered":
+				return "Awaiting decision"
+			"accepted":
+				return "Active until day %d" % int(request.get("active_until_day_index", request.get("due_day_index", 0)))
+			"reported":
+				return "Reported"
+			"declined":
+				return "Declined"
+			"caught":
+				return "Caught"
+			"resolved_clean":
+				return "Resolved"
+			"expired":
+				return "Expired"
 	var due_date_text: String = _network_request_due_date_text(request)
 	if due_date_text.is_empty():
 		return "Due date unknown"
@@ -6915,7 +6945,7 @@ func _network_journal_row_matches_contact(row: Dictionary, contact: Dictionary) 
 
 func _network_journal_group_key(row_type: String) -> String:
 	match row_type:
-		"request":
+		"request", "dirty_tip":
 			return "requests"
 		"referral":
 			return "referrals"
@@ -6956,7 +6986,7 @@ func _show_network_journal_detail(row: Dictionary) -> void:
 		network_journal_detail_label.text = ""
 		return
 	var row_type: String = str(row.get("type", "tip"))
-	var title_prefix: String = "Request" if row_type == "request" else "Journal"
+	var title_prefix: String = "Request" if row_type == "request" else "Market Room" if row_type == "dirty_tip" else "Journal"
 	var lines: Array = [
 		"%s: %s" % [title_prefix, str(row.get("title", "Network note"))],
 		"Day %d  |  %s  |  %s" % [
@@ -6980,6 +7010,29 @@ func _show_network_journal_detail(row: Dictionary) -> void:
 
 
 func _network_request_detail_row(request: Dictionary) -> Dictionary:
+	if str(request.get("request_type", "")) == "dirty_tip":
+		var dirty_ticker: String = str(request.get("target_ticker", _ticker_for_company(str(request.get("target_company_id", "")))))
+		var dirty_status: String = str(request.get("status", "offered"))
+		var dirty_detail: String = str(request.get("offer_body", request.get("journal_detail", "")))
+		if dirty_status in ["accepted", "resolved_clean", "caught", "expired", "reported", "declined"]:
+			dirty_detail = str(request.get("outcome_note", request.get("journal_detail", dirty_detail)))
+		if dirty_status == "accepted":
+			dirty_detail = "Accepted. Active until day %d. %s" % [
+				int(request.get("active_until_day_index", request.get("due_day_index", 0))),
+				str(request.get("offer_body", ""))
+			]
+		return {
+			"id": "%s:dirty_tip_detail" % str(request.get("id", "")),
+			"type": "dirty_tip",
+			"day_index": int(request.get("created_day_index", current_network_snapshot.get("day_index", 0))),
+			"contact_id": str(request.get("contact_id", "")),
+			"contact_name": str(request.get("contact_name", "Operator Room")),
+			"target_company_id": str(request.get("target_company_id", "")),
+			"target_ticker": dirty_ticker,
+			"status": dirty_status,
+			"title": "Dirty Tip | %s | %s" % [dirty_ticker, dirty_status.capitalize()],
+			"detail": "%s | %s" % [str(request.get("contact_name", "Operator Room")), dirty_detail]
+		}
 	var target_company_id: String = str(request.get("target_company_id", ""))
 	var ticker: String = _ticker_for_company(target_company_id)
 	var status: String = str(request.get("status", "pending"))
@@ -12060,11 +12113,9 @@ func _refresh_corporate_meeting_modal() -> void:
 			str(agenda.get("description", ""))
 		])
 	corporate_meeting_agenda_label.text = "Agenda\n%s" % ("\n".join(agenda_lines) if not agenda_lines.is_empty() else "No agenda items published yet.")
-	var intel: Dictionary = detail.get("intel", {})
-	var intel_text: String = "No private intel recorded yet."
-	if not intel.is_empty():
-		intel_text = _format_corporate_intel_text(intel)
-	corporate_meeting_intel_label.text = "Private Intel\n%s" % intel_text
+	if corporate_meeting_intel_label != null:
+		corporate_meeting_intel_label.text = ""
+		corporate_meeting_intel_label.visible = false
 	var attended: bool = bool(detail.get("attended", false))
 	var requires_shareholder: bool = bool(detail.get("requires_shareholder", false))
 	var attendance_eligible: bool = bool(detail.get("attendance_eligible", true))
@@ -12098,26 +12149,6 @@ func _on_corporate_meeting_attend_pressed() -> void:
 	_refresh_corporate_meeting_modal()
 	_refresh_dashboard()
 	_refresh_network()
-
-
-func _format_corporate_intel_text(intel: Dictionary) -> String:
-	var lines: Array = []
-	var family_id: String = str(intel.get("family", ""))
-	if not family_id.is_empty():
-		lines.append("Family: %s" % family_id.replace("_", " ").capitalize())
-	var truth_level: String = str(intel.get("best_known_truth_level", intel.get("truth_level", "")))
-	if not truth_level.is_empty():
-		lines.append("Truth: %s" % truth_level)
-	var state: String = str(intel.get("best_known_current_timeline_state", intel.get("current_timeline_state", "")))
-	if not state.is_empty():
-		lines.append("State: %s" % state.replace("_", " "))
-	var stance: String = str(intel.get("best_known_management_stance", intel.get("management_stance", "")))
-	if not stance.is_empty():
-		lines.append("Management: %s" % stance)
-	var next_step: String = str(intel.get("best_known_next_expected_step", intel.get("next_expected_step", "")))
-	if not next_step.is_empty():
-		lines.append("Next: %s" % next_step)
-	return "\n".join(lines)
 
 
 func _meet_contact_from_context(contact_id: String, source_context: Dictionary) -> void:
@@ -13054,6 +13085,7 @@ func _show_daily_recap_if_pending() -> void:
 	if pending_daily_recap_snapshot.is_empty() or daily_recap_dialog == null or daily_recap_body_label == null:
 		return
 	_queue_macro_event_alerts_from_recap_snapshot(pending_daily_recap_snapshot)
+	_queue_dirty_tip_alerts_from_recap_snapshot(pending_daily_recap_snapshot)
 	daily_recap_body_label.text = _build_daily_recap_text(pending_daily_recap_snapshot)
 	pending_daily_recap_snapshot = {}
 	daily_recap_dialog.visible = true
@@ -13244,6 +13276,7 @@ func _show_next_macro_event_alert() -> void:
 		return
 	if pending_macro_event_alerts.is_empty():
 		current_macro_event_alert = {}
+		call_deferred("_show_next_dirty_tip_alert")
 		return
 	var next_alert: Variant = pending_macro_event_alerts.pop_front()
 	if typeof(next_alert) != TYPE_DICTIONARY:
@@ -13317,8 +13350,11 @@ func _dismiss_current_macro_event_alert(show_next: bool = true) -> void:
 	if macro_event_headline_label != null:
 		macro_event_headline_label.visible_characters = macro_event_headline_label.text.length()
 	current_macro_event_alert = {}
-	if show_next and not pending_macro_event_alerts.is_empty():
-		call_deferred("_show_next_macro_event_alert")
+	if show_next:
+		if not pending_macro_event_alerts.is_empty():
+			call_deferred("_show_next_macro_event_alert")
+		else:
+			call_deferred("_show_next_dirty_tip_alert")
 
 
 func _on_macro_event_dialog_gui_input(event: InputEvent) -> void:
@@ -13327,6 +13363,95 @@ func _on_macro_event_dialog_gui_input(event: InputEvent) -> void:
 		if mouse_button.button_index == MOUSE_BUTTON_LEFT and mouse_button.pressed:
 			_on_macro_event_confirm_pressed()
 			get_viewport().set_input_as_handled()
+
+
+func _queue_dirty_tip_alerts_from_recap_snapshot(snapshot: Dictionary) -> void:
+	pending_dirty_tip_alerts.clear()
+	current_dirty_tip_alert = {}
+	var last_day_results: Dictionary = snapshot.get("last_day_results", {})
+	for offer_value in last_day_results.get("dirty_tip_offers", []):
+		if typeof(offer_value) != TYPE_DICTIONARY:
+			continue
+		var offer: Dictionary = offer_value
+		if str(offer.get("request_type", "")) != "dirty_tip":
+			continue
+		if str(offer.get("status", "")) != "offered":
+			continue
+		pending_dirty_tip_alerts.append(offer.duplicate(true))
+
+
+func _show_next_dirty_tip_alert() -> void:
+	if dirty_tip_dialog == null or dirty_tip_body_label == null:
+		return
+	if dirty_tip_dialog.visible:
+		return
+	if pending_dirty_tip_alerts.is_empty():
+		current_dirty_tip_alert = {}
+		return
+	var next_alert: Variant = pending_dirty_tip_alerts.pop_front()
+	if typeof(next_alert) != TYPE_DICTIONARY:
+		call_deferred("_show_next_dirty_tip_alert")
+		return
+	current_dirty_tip_alert = next_alert
+	dirty_tip_body_label.text = _dirty_tip_body_text(current_dirty_tip_alert)
+	dirty_tip_dialog.visible = true
+	dirty_tip_dialog.move_to_front()
+
+
+func _dirty_tip_body_text(offer: Dictionary) -> String:
+	var headline: String = str(offer.get("offer_headline", "A dirty market offer appears.")).strip_edges()
+	var body: String = str(offer.get("offer_body", "")).strip_edges()
+	var ticker: String = str(offer.get("target_ticker", "")).strip_edges()
+	var duration: int = int(offer.get("case_days", 0))
+	var lines: Array[String] = [headline]
+	if not body.is_empty():
+		lines.append("")
+		lines.append(body)
+	if not ticker.is_empty() and duration > 0:
+		lines.append("")
+		lines.append("The room says the window is only %d trading day%s. Getting involved may leave a trail." % [
+			duration,
+			"" if duration == 1 else "s"
+		])
+	return "\n".join(lines)
+
+
+func _accept_current_dirty_tip_alert() -> void:
+	_resolve_current_dirty_tip_alert("accept")
+
+
+func _decline_current_dirty_tip_alert() -> void:
+	_resolve_current_dirty_tip_alert("decline")
+
+
+func _report_current_dirty_tip_alert() -> void:
+	_resolve_current_dirty_tip_alert("report")
+
+
+func _resolve_current_dirty_tip_alert(action_id: String) -> void:
+	if current_dirty_tip_alert.is_empty():
+		if dirty_tip_dialog != null:
+			dirty_tip_dialog.visible = false
+		return
+	var offer_id: String = str(current_dirty_tip_alert.get("id", ""))
+	var result: Dictionary = {}
+	match action_id:
+		"accept":
+			result = GameManager.accept_dirty_tip_offer(offer_id)
+		"report":
+			result = GameManager.report_dirty_tip_offer(offer_id)
+		_:
+			result = GameManager.decline_dirty_tip_offer(offer_id)
+	if dirty_tip_dialog != null:
+		dirty_tip_dialog.visible = false
+	current_dirty_tip_alert = {}
+	if not result.is_empty():
+		_show_toast(str(result.get("message", "Dirty tip updated.")), bool(result.get("success", false)))
+	_refresh_desktop()
+	if _is_desktop_app_window_open(APP_ID_NETWORK):
+		_refresh_network()
+	if not pending_dirty_tip_alerts.is_empty():
+		call_deferred("_show_next_dirty_tip_alert")
 
 
 func _build_daily_recap_text(snapshot: Dictionary) -> String:
@@ -16159,6 +16284,182 @@ func _style_macro_event_dialog() -> void:
 		_style_daily_recap_content_panel(content_panel)
 
 
+func _ensure_dirty_tip_dialog() -> void:
+	if dirty_tip_dialog != null:
+		return
+
+	dirty_tip_dialog = Control.new()
+	dirty_tip_dialog.name = "DirtyTipDialog"
+	dirty_tip_dialog.visible = false
+	dirty_tip_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	dirty_tip_dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(dirty_tip_dialog)
+
+	var scrim := ColorRect.new()
+	scrim.name = "DirtyTipScrim"
+	scrim.color = Color(0.0, 0.0, 0.0, UI_DAILY_RECAP_SCRIM_ALPHA)
+	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dirty_tip_dialog.add_child(scrim)
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+
+	var center := CenterContainer.new()
+	center.name = "DirtyTipCenter"
+	center.mouse_filter = Control.MOUSE_FILTER_PASS
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dirty_tip_dialog.add_child(center)
+
+	var frame := PanelContainer.new()
+	frame.name = "DirtyTipFrame"
+	frame.custom_minimum_size = Vector2(560, 300)
+	frame.mouse_filter = Control.MOUSE_FILTER_STOP
+	frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	center.add_child(frame)
+
+	var frame_vbox := VBoxContainer.new()
+	frame_vbox.name = "DirtyTipFrameVBox"
+	frame_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	frame_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	frame_vbox.add_theme_constant_override("separation", 0)
+	frame.add_child(frame_vbox)
+
+	var title_bar := PanelContainer.new()
+	title_bar.name = "DirtyTipTitleBar"
+	title_bar.custom_minimum_size = Vector2(0, DESKTOP_WINDOW_TITLE_BAR_HEIGHT)
+	title_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	frame_vbox.add_child(title_bar)
+
+	var title_margin := MarginContainer.new()
+	title_margin.add_theme_constant_override("margin_left", 12)
+	title_margin.add_theme_constant_override("margin_top", 4)
+	title_margin.add_theme_constant_override("margin_right", 8)
+	title_margin.add_theme_constant_override("margin_bottom", 4)
+	title_bar.add_child(title_margin)
+
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 8)
+	title_margin.add_child(title_row)
+
+	var title_label := Label.new()
+	title_label.name = "DirtyTipTitleLabel"
+	title_label.text = "Market Room"
+	title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(title_label)
+
+	dirty_tip_close_button = Button.new()
+	dirty_tip_close_button.name = "DirtyTipCloseButton"
+	dirty_tip_close_button.text = "X"
+	dirty_tip_close_button.custom_minimum_size = Vector2(32, 24)
+	dirty_tip_close_button.pressed.connect(_decline_current_dirty_tip_alert)
+	title_row.add_child(dirty_tip_close_button)
+
+	var body_margin := MarginContainer.new()
+	body_margin.name = "DirtyTipOuterMargin"
+	body_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body_margin.add_theme_constant_override("margin_left", 16)
+	body_margin.add_theme_constant_override("margin_top", 16)
+	body_margin.add_theme_constant_override("margin_right", 16)
+	body_margin.add_theme_constant_override("margin_bottom", 14)
+	frame_vbox.add_child(body_margin)
+
+	var body_vbox := VBoxContainer.new()
+	body_vbox.name = "DirtyTipBodyVBox"
+	body_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body_vbox.add_theme_constant_override("separation", 14)
+	body_margin.add_child(body_vbox)
+
+	var content_panel := PanelContainer.new()
+	content_panel.name = "DirtyTipContentPanel"
+	content_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body_vbox.add_child(content_panel)
+
+	var content_margin := MarginContainer.new()
+	content_margin.name = "DirtyTipContentMargin"
+	content_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content_margin.add_theme_constant_override("margin_left", 22)
+	content_margin.add_theme_constant_override("margin_top", 18)
+	content_margin.add_theme_constant_override("margin_right", 22)
+	content_margin.add_theme_constant_override("margin_bottom", 18)
+	content_panel.add_child(content_margin)
+
+	dirty_tip_body_label = Label.new()
+	dirty_tip_body_label.name = "DirtyTipBodyLabel"
+	dirty_tip_body_label.custom_minimum_size = Vector2(500, 140)
+	dirty_tip_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dirty_tip_body_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	dirty_tip_body_label.text = ""
+	dirty_tip_body_label.add_theme_constant_override("line_spacing", 5)
+	content_margin.add_child(dirty_tip_body_label)
+
+	var action_row := HBoxContainer.new()
+	action_row.name = "DirtyTipActionRow"
+	action_row.alignment = BoxContainer.ALIGNMENT_END
+	action_row.add_theme_constant_override("separation", 8)
+	body_vbox.add_child(action_row)
+
+	dirty_tip_report_button = Button.new()
+	dirty_tip_report_button.name = "DirtyTipReportButton"
+	dirty_tip_report_button.text = "Report"
+	dirty_tip_report_button.custom_minimum_size = Vector2(92, 36)
+	dirty_tip_report_button.pressed.connect(_report_current_dirty_tip_alert)
+	action_row.add_child(dirty_tip_report_button)
+
+	dirty_tip_decline_button = Button.new()
+	dirty_tip_decline_button.name = "DirtyTipDeclineButton"
+	dirty_tip_decline_button.text = "Decline"
+	dirty_tip_decline_button.custom_minimum_size = Vector2(92, 36)
+	dirty_tip_decline_button.pressed.connect(_decline_current_dirty_tip_alert)
+	action_row.add_child(dirty_tip_decline_button)
+
+	dirty_tip_accept_button = Button.new()
+	dirty_tip_accept_button.name = "DirtyTipAcceptButton"
+	dirty_tip_accept_button.text = "Accept"
+	dirty_tip_accept_button.custom_minimum_size = Vector2(92, 36)
+	dirty_tip_accept_button.pressed.connect(_accept_current_dirty_tip_alert)
+	action_row.add_child(dirty_tip_accept_button)
+
+	_style_dirty_tip_dialog()
+
+
+func _style_dirty_tip_dialog() -> void:
+	if dirty_tip_dialog == null:
+		return
+	var frame: PanelContainer = dirty_tip_dialog.get_node_or_null("DirtyTipCenter/DirtyTipFrame") as PanelContainer
+	if frame != null:
+		var frame_style := StyleBoxFlat.new()
+		frame_style.bg_color = COLOR_DESKTOP_CREAM
+		frame_style.border_color = Color(COLOR_ACADEMY_BROWN.r, COLOR_ACADEMY_BROWN.g, COLOR_ACADEMY_BROWN.b, 0)
+		frame_style.set_border_width_all(0)
+		frame_style.set_corner_radius_all(0)
+		frame.add_theme_stylebox_override("panel", frame_style)
+	var title_bar: PanelContainer = dirty_tip_dialog.get_node_or_null("DirtyTipCenter/DirtyTipFrame/DirtyTipFrameVBox/DirtyTipTitleBar") as PanelContainer
+	if title_bar != null:
+		_style_window_title_bar(title_bar, COLOR_ACADEMY_BROWN)
+	var title_label: Label = dirty_tip_dialog.find_child("DirtyTipTitleLabel", true, false) as Label
+	if title_label != null:
+		title_label.add_theme_color_override("font_color", COLOR_TEXT)
+		title_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	if dirty_tip_body_label != null:
+		dirty_tip_body_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+		dirty_tip_body_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	if dirty_tip_close_button != null:
+		_style_button(dirty_tip_close_button, Color(0.368627, 0.160784, 0.176471, 1), Color(0.709804, 0.34902, 0.372549, 1), COLOR_TEXT, 0)
+	if dirty_tip_report_button != null:
+		_style_button(dirty_tip_report_button, COLOR_DESKTOP_PANEL, COLOR_DESKTOP_FRAME, COLOR_DESKTOP_TEXT, 0)
+	if dirty_tip_decline_button != null:
+		_style_button(dirty_tip_decline_button, COLOR_DESKTOP_PANEL, COLOR_DESKTOP_FRAME, COLOR_DESKTOP_TEXT, 0)
+	if dirty_tip_accept_button != null:
+		_style_button(dirty_tip_accept_button, COLOR_ACADEMY_BROWN, COLOR_ACADEMY_BORDER, COLOR_TEXT, 0)
+	var content_panel: PanelContainer = dirty_tip_dialog.find_child("DirtyTipContentPanel", true, false) as PanelContainer
+	if content_panel != null:
+		_style_daily_recap_content_panel(content_panel)
+
+
 func _ensure_dashboard_calendar_event_popup() -> void:
 	if dashboard_calendar_event_popup != null:
 		return
@@ -16663,6 +16964,7 @@ func _ensure_corporate_action_ui() -> void:
 	corporate_meeting_intel_label = Label.new()
 	corporate_meeting_intel_label.name = "CorporateMeetingIntelLabel"
 	corporate_meeting_intel_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	corporate_meeting_intel_label.visible = false
 	panel_vbox.add_child(corporate_meeting_intel_label)
 
 	corporate_meeting_attendance_label = Label.new()
@@ -18454,6 +18756,9 @@ func _apply_visual_theme() -> void:
 	if macro_event_headline_label != null:
 		_set_label_tone(macro_event_headline_label, COLOR_WINDOW_TEXT)
 	_style_macro_event_dialog()
+	if dirty_tip_body_label != null:
+		_set_label_tone(dirty_tip_body_label, COLOR_WINDOW_TEXT)
+	_style_dirty_tip_dialog()
 	if console_title_label != null:
 		_set_label_tone(console_title_label, COLOR_TEXT)
 	if console_hint_label != null:

@@ -146,6 +146,7 @@ const LIFE_DEFAULT_STRESS_VALUE := 20.0
 const LIFE_DEFAULT_HAPPINESS_VALUE := 65.0
 const LIFE_BURNOUT_WARNING_TRADING_DAYS := 2
 const LIFE_HOSPITAL_TRADING_DAYS := 2
+const LIFE_LEGAL_HOLD_MAX_TRADING_DAYS := 5
 const LIFE_HOSPITAL_RECOVERY_STRESS := 45.0
 const LIFE_HOSPITAL_RECOVERY_HAPPINESS := 45.0
 
@@ -814,9 +815,12 @@ func _build_last_day_results_save_payload(source_results: Variant) -> Dictionary
 		"started_special_events": source.get("started_special_events", []).duplicate(true),
 		"life_obligation": source.get("life_obligation", {}).duplicate(true),
 		"life_loan_payment": source.get("life_loan_payment", {}).duplicate(true),
+		"life_legal": source.get("life_legal", {}).duplicate(true),
 		"bankruptcy": source.get("bankruptcy", {}).duplicate(true),
 		"network_request_results": source.get("network_request_results", []).duplicate(true),
-		"network_tip_results": source.get("network_tip_results", []).duplicate(true)
+		"network_tip_results": source.get("network_tip_results", []).duplicate(true),
+		"dirty_tip_offers": source.get("dirty_tip_offers", []).duplicate(true),
+		"dirty_tip_results": source.get("dirty_tip_results", []).duplicate(true)
 	}
 	return save_results
 
@@ -2888,11 +2892,28 @@ func _default_life_state() -> Dictionary:
 		"hospital_days_remaining": 0,
 		"hospital_started_day_index": -1,
 		"last_hospital_trade_date": {},
+		"legal_state": _default_life_legal_state(),
 		"updated_day_index": day_index,
 		"last_obligation_period": "",
 		"last_obligation_day_index": -1,
 		"last_obligation_amount": 0.0,
 		"finance": _default_life_finance_state()
+}
+
+
+func _default_life_legal_state() -> Dictionary:
+	return {
+		"active": false,
+		"status": "clear",
+		"days_remaining": 0,
+		"case_id": "",
+		"target_company_id": "",
+		"target_ticker": "",
+		"started_day_index": -1,
+		"release_day_index": -1,
+		"released_day_index": -1,
+		"fine_amount": 0.0,
+		"reason": ""
 	}
 
 
@@ -2955,7 +2976,35 @@ func _normalize_life_state(source_life: Variant) -> Dictionary:
 		normalized["last_obligation_trade_date"] = source.get("last_obligation_trade_date", {}).duplicate(true)
 	if source.has("last_hospital_trade_date") and typeof(source.get("last_hospital_trade_date")) == TYPE_DICTIONARY:
 		normalized["last_hospital_trade_date"] = source.get("last_hospital_trade_date", {}).duplicate(true)
+	normalized["legal_state"] = _normalize_life_legal_state(source.get("legal_state", {}))
 	normalized["finance"] = _normalize_life_finance_state(source.get("finance", {}))
+	return normalized
+
+
+func _normalize_life_legal_state(source_legal: Variant) -> Dictionary:
+	var normalized: Dictionary = _default_life_legal_state()
+	if typeof(source_legal) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_legal
+	normalized["active"] = bool(source.get("active", false))
+	normalized["status"] = str(source.get("status", "held" if normalized.get("active", false) else "clear"))
+	normalized["days_remaining"] = clampi(int(source.get("days_remaining", 0)), 0, LIFE_LEGAL_HOLD_MAX_TRADING_DAYS)
+	normalized["case_id"] = str(source.get("case_id", ""))
+	normalized["target_company_id"] = str(source.get("target_company_id", ""))
+	normalized["target_ticker"] = str(source.get("target_ticker", ""))
+	normalized["started_day_index"] = int(source.get("started_day_index", -1))
+	normalized["release_day_index"] = int(source.get("release_day_index", -1))
+	normalized["released_day_index"] = int(source.get("released_day_index", -1))
+	normalized["fine_amount"] = max(float(source.get("fine_amount", 0.0)), 0.0)
+	normalized["reason"] = str(source.get("reason", ""))
+	if int(normalized.get("days_remaining", 0)) <= 0:
+		normalized["active"] = false
+		if str(normalized.get("status", "")) == "held":
+			normalized["status"] = "released"
+	else:
+		normalized["active"] = true
+		if str(normalized.get("status", "")).is_empty() or str(normalized.get("status", "")) == "clear":
+			normalized["status"] = "held"
 	return normalized
 
 
