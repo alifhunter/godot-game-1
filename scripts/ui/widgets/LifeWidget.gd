@@ -600,6 +600,8 @@ func _on_emergency_loan_pressed() -> void:
 
 
 func _on_life_changed() -> void:
+	if not is_visible_in_tree():
+		return
 	refresh()
 
 

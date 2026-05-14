@@ -1,25 +1,28 @@
 extends RefCounted
 
 
-func build_daily_summary(run_state, _data_repository, log_phase_details: bool = false) -> Dictionary:
+func build_daily_summary(run_state, _data_repository, log_phase_details: bool = false, company_rows: Array = []) -> Dictionary:
 	var phase_started_at_usec: int = Time.get_ticks_usec()
 	var rows: Array = []
 
-	for company_id in run_state.company_order:
-		var definition: Dictionary = run_state.get_effective_company_definition(str(company_id))
-		var runtime: Dictionary = run_state.get_company(str(company_id))
-		if definition.is_empty() or runtime.is_empty():
-			continue
+	if not company_rows.is_empty():
+		rows = _build_rows_from_company_rows(company_rows)
+	else:
+		for company_id in run_state.company_order:
+			var definition: Dictionary = run_state.get_effective_company_definition(str(company_id))
+			var runtime: Dictionary = run_state.get_company(str(company_id))
+			if definition.is_empty() or runtime.is_empty():
+				continue
 
-		rows.append({
-			"company_id": company_id,
-			"ticker": definition.get("ticker", str(company_id).to_upper()),
-			"name": definition.get("name", ""),
-			"change_pct": float(runtime.get("daily_change_pct", 0.0)),
-			"current_price": float(runtime.get("current_price", 0.0)),
-			"event_tags": runtime.get("active_event_tags", []).duplicate(),
-			"broker_flow": runtime.get("broker_flow", {}).duplicate(true)
-		})
+			rows.append({
+				"company_id": company_id,
+				"ticker": definition.get("ticker", str(company_id).to_upper()),
+				"name": definition.get("name", ""),
+				"change_pct": float(runtime.get("daily_change_pct", 0.0)),
+				"current_price": float(runtime.get("current_price", 0.0)),
+				"event_tags": runtime.get("active_event_tags", []).duplicate(),
+				"broker_flow": runtime.get("broker_flow", {}).duplicate(true)
+			})
 
 	_log_perf_elapsed(log_phase_details, "build_daily_summary:rows", phase_started_at_usec, " count=%d" % rows.size())
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -84,6 +87,27 @@ func build_daily_summary(run_state, _data_repository, log_phase_details: bool = 
 
 func _sort_by_change_descending(left: Dictionary, right: Dictionary) -> bool:
 	return float(left.get("change_pct", 0.0)) > float(right.get("change_pct", 0.0))
+
+
+func _build_rows_from_company_rows(company_rows: Array) -> Array:
+	var rows: Array = []
+	for row_value in company_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var company_row: Dictionary = row_value
+		var company_id: String = str(company_row.get("id", company_row.get("company_id", "")))
+		if company_id.is_empty():
+			continue
+		rows.append({
+			"company_id": company_id,
+			"ticker": str(company_row.get("ticker", company_id.to_upper())),
+			"name": str(company_row.get("name", "")),
+			"change_pct": float(company_row.get("daily_change_pct", company_row.get("change_pct", 0.0))),
+			"current_price": float(company_row.get("current_price", 0.0)),
+			"event_tags": company_row.get("event_tags", []).duplicate(),
+			"broker_flow": company_row.get("broker_flow", {}).duplicate(true)
+		})
+	return rows
 
 
 func _find_extreme_by_pressure(rows: Array, highest: bool) -> Dictionary:

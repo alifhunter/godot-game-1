@@ -456,6 +456,7 @@ var academy_system = preload("res://systems/AcademySystem.gd").new()
 var thesis_report_system = preload("res://systems/ThesisReportSystem.gd").new()
 var background_company_detail_hydration_running: bool = false
 var loading_detail_log_lines: Array = []
+var company_market_rows_cache: Dictionary = {}
 var dashboard_event_snapshot_cache: Dictionary = {}
 var daily_activity_snapshot_cache: Dictionary = {}
 
@@ -502,6 +503,7 @@ func start_new_run(run_seed: int = 0, difficulty_id: String = DEFAULT_DIFFICULTY
 	var company_definitions: Array = build_company_roster(run_seed, difficulty_config)
 	RunState.setup_new_run(run_seed, company_definitions, difficulty_config, tutorial_enabled)
 	background_company_detail_hydration_running = false
+	_invalidate_company_market_rows_cache()
 	_invalidate_dashboard_event_snapshot_cache()
 	_invalidate_daily_activity_snapshot_cache()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
@@ -546,6 +548,7 @@ func start_new_run_with_loading(
 		Callable(self, "_on_new_run_financial_batch_detail")
 	)
 	_log_startup_perf_elapsed("new_run_financials_total", financials_started_at_usec, " companies=%d" % company_definitions.size())
+	_invalidate_company_market_rows_cache()
 	_invalidate_dashboard_event_snapshot_cache()
 	_invalidate_daily_activity_snapshot_cache()
 	_emit_run_loading_step(3)
@@ -584,6 +587,7 @@ func load_run_from_save(slot_id: String = "") -> bool:
 
 	RunState.load_from_dict(saved_run)
 	background_company_detail_hydration_running = false
+	_invalidate_company_market_rows_cache()
 	_invalidate_dashboard_event_snapshot_cache()
 	_invalidate_daily_activity_snapshot_cache()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
@@ -609,6 +613,7 @@ func load_run_from_save_with_loading(slot_id: String = "") -> bool:
 	RunState.load_from_dict(saved_run)
 	_log_startup_perf_elapsed("load_run_restore_state", restore_started_at_usec)
 	background_company_detail_hydration_running = false
+	_invalidate_company_market_rows_cache()
 	_invalidate_dashboard_event_snapshot_cache()
 	_invalidate_daily_activity_snapshot_cache()
 	_emit_load_run_loading_step(2)
@@ -675,6 +680,9 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	RunState.apply_day_result(day_result)
 	_log_advance_perf_elapsed(log_advance_perf, "apply_day_result", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
+	var company_market_rows: Array = get_company_market_rows(true)
+	_log_advance_perf_elapsed(log_advance_perf, "build_company_market_rows", phase_started_at_usec, " count=%d" % company_market_rows.size())
+	phase_started_at_usec = Time.get_ticks_usec()
 	var life_obligation_result: Dictionary = _apply_life_monthly_obligation_if_due(previous_trade_date, RunState.current_trade_date)
 	_log_advance_perf_elapsed(log_advance_perf, "apply_life_obligation", phase_started_at_usec, " amount=%.2f" % float(life_obligation_result.get("amount", 0.0)))
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -738,13 +746,13 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 			_log_advance_perf_elapsed(log_advance_perf, "emit_life_changed", phase_started_at_usec)
 
 	phase_started_at_usec = Time.get_ticks_usec()
-	var summary: Dictionary = summary_system.build_daily_summary(RunState, DataRepository, log_advance_perf)
+	var summary: Dictionary = summary_system.build_daily_summary(RunState, DataRepository, log_advance_perf, company_market_rows)
 	_log_advance_perf_elapsed(log_advance_perf, "build_daily_summary", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	RunState.set_daily_summary(summary)
 	_log_advance_perf_elapsed(log_advance_perf, "set_daily_summary", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
-	var feed_context: Dictionary = _build_news_feed_context(log_advance_perf)
+	var feed_context: Dictionary = _build_news_feed_context(log_advance_perf, company_market_rows)
 	var news_snapshot: Dictionary = _build_news_snapshot(-1, log_advance_perf, feed_context)
 	_log_advance_perf_elapsed(log_advance_perf, "build_news_snapshot", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -1958,6 +1966,23 @@ func get_company_rows() -> Array:
 	return rows
 
 
+func get_company_market_rows(force_refresh: bool = false) -> Array:
+	if not RunState.has_active_run():
+		company_market_rows_cache = {}
+		return []
+	var cache_key: String = _company_market_rows_cache_key()
+	if (
+		force_refresh or
+		company_market_rows_cache.is_empty() or
+		str(company_market_rows_cache.get("cache_key", "")) != cache_key
+	):
+		company_market_rows_cache = {
+			"cache_key": cache_key,
+			"rows": _build_company_market_rows()
+		}
+	return company_market_rows_cache.get("rows", []).duplicate(true)
+
+
 func get_report_calendar_snapshot(year_value: int = 0, month_value: int = 0) -> Dictionary:
 	var trade_date: Dictionary = RunState.get_current_trade_date()
 	var resolved_year: int = int(trade_date.get("year", 2020)) if year_value <= 0 else year_value
@@ -2043,6 +2068,10 @@ func _rebuild_dashboard_event_snapshot_cache(cache_key: String = "", log_phase_d
 
 func _invalidate_dashboard_event_snapshot_cache() -> void:
 	dashboard_event_snapshot_cache = {}
+
+
+func _invalidate_company_market_rows_cache() -> void:
+	company_market_rows_cache = {}
 
 
 func _empty_dashboard_event_snapshot() -> Dictionary:
@@ -2676,6 +2705,87 @@ func _build_broker_flow_view(broker_flow: Dictionary, include_rows: bool) -> Dic
 	return broker_flow_view
 
 
+func _company_market_rows_cache_key() -> String:
+	var trade_date: Dictionary = RunState.get_current_trade_date()
+	return "%d|%d|%d|%d|%d|%d|%d" % [
+		RunState.run_seed,
+		RunState.day_index,
+		int(trade_date.get("year", 0)),
+		int(trade_date.get("month", 0)),
+		int(trade_date.get("day", 0)),
+		RunState.company_order.size(),
+		RunState.event_history.size()
+	]
+
+
+func _build_company_market_rows() -> Array:
+	var rows: Array = []
+	var sector_name_cache: Dictionary = {}
+	for company_id_value in RunState.company_order:
+		var company_id: String = str(company_id_value)
+		var runtime: Dictionary = RunState.get_company(company_id)
+		if runtime.is_empty():
+			continue
+		var definition: Dictionary = RunState.company_definitions.get(company_id, {})
+		if definition.is_empty():
+			definition = DataRepository.get_company_archetype(company_id)
+		if definition.is_empty():
+			continue
+		var company_profile: Dictionary = runtime.get("company_profile", {}) if typeof(runtime.get("company_profile", {})) == TYPE_DICTIONARY else {}
+		var sector_id: String = str(company_profile.get("sector_id", definition.get("sector_id", "")))
+		var sector_name: String = str(sector_name_cache.get(sector_id, ""))
+		if sector_name.is_empty():
+			var sector_definition: Dictionary = DataRepository.get_sector_definition(sector_id)
+			sector_name = str(sector_definition.get("name", sector_id.capitalize()))
+			sector_name_cache[sector_id] = sector_name
+		var current_price: float = float(runtime.get("current_price", definition.get("base_price", 0.0)))
+		var previous_close: float = float(runtime.get("previous_close", current_price))
+		var daily_change_pct: float = float(runtime.get("daily_change_pct", 0.0))
+		if is_zero_approx(daily_change_pct) and not is_zero_approx(previous_close):
+			daily_change_pct = (current_price - previous_close) / previous_close
+		rows.append({
+			"id": company_id,
+			"ticker": str(definition.get("ticker", company_id.to_upper())),
+			"name": str(company_profile.get("name", definition.get("name", ""))),
+			"sector_id": sector_id,
+			"sector_name": sector_name,
+			"current_price": current_price,
+			"previous_close": previous_close,
+			"daily_change_pct": daily_change_pct,
+			"event_tags": runtime.get("active_event_tags", []).duplicate(),
+			"listing_status": str(company_profile.get("listing_status", "listed")),
+			"listing_status_label": str(company_profile.get("listing_status_label", "Listed")),
+			"trade_disabled": bool(company_profile.get("trade_disabled", false)),
+			"broker_flow": _build_compact_broker_flow_view(runtime.get("broker_flow", {}))
+		})
+	return rows
+
+
+func _build_compact_broker_flow_view(broker_flow: Dictionary) -> Dictionary:
+	if broker_flow.is_empty():
+		return {}
+	var compact_view: Dictionary = {}
+	var keys: Array = [
+		"net_pressure",
+		"flow_tag",
+		"dominant_buyer",
+		"dominant_seller",
+		"dominant_buy_broker_code",
+		"dominant_sell_broker_code",
+		"dominant_buy_broker_name",
+		"dominant_sell_broker_name",
+		"dominant_buy_broker_type",
+		"dominant_sell_broker_type",
+		"action_meter_score",
+		"action_meter_label"
+	]
+	for key_value in keys:
+		var key: String = str(key_value)
+		if broker_flow.has(key):
+			compact_view[key] = broker_flow.get(key)
+	return compact_view
+
+
 func get_company_chart_snapshot(company_id: String, range_id: String = "1m", enabled_indicator_ids: Array = []) -> Dictionary:
 	var chart_bars: Array = RunState.get_company_chart_bars(company_id)
 	if chart_bars.is_empty():
@@ -2729,6 +2839,17 @@ func get_portfolio_snapshot() -> Dictionary:
 		"unrealized_pnl_pct": unrealized_pnl_pct_total,
 		"equity": RunState.get_total_equity(),
 		"holdings": holdings_rows
+	}
+
+
+func _get_portfolio_totals_snapshot() -> Dictionary:
+	var cash: float = float(RunState.player_portfolio.get("cash", 0.0))
+	var market_value: float = RunState.get_portfolio_market_value()
+	return {
+		"cash": cash,
+		"realized_pnl": float(RunState.player_portfolio.get("realized_pnl", 0.0)),
+		"market_value": market_value,
+		"equity": cash + market_value
 	}
 
 
@@ -3039,6 +3160,58 @@ func get_life_snapshot() -> Dictionary:
 		"hospitalized": int(life_state.get("hospital_days_remaining", 0)) > 0,
 		"dividend_rows": dividend_projection.get("rows", []).duplicate(true),
 		"note": "Monthly costs and loan payments deduct cash on the first trading day of each new month. Dividends only count after corporate actions are declared."
+	}
+
+
+func _build_daily_recap_life_snapshot(portfolio_totals: Dictionary) -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+	var life_state: Dictionary = RunState.get_player_life()
+	var monthly_outflow: float = _life_monthly_outflow_for_state(life_state)
+	var cash: float = float(portfolio_totals.get("cash", RunState.player_portfolio.get("cash", 0.0)))
+	var market_value: float = float(portfolio_totals.get("market_value", 0.0))
+	var equity: float = float(portfolio_totals.get("equity", cash + market_value))
+	var runway_months: float = 999.0
+	if monthly_outflow > 0.0:
+		runway_months = cash / monthly_outflow
+	var finance_status: Dictionary = RunState.refresh_cash_stress_state()
+	var active_loan: Dictionary = finance_status.get("active_loan", {})
+	finance_status["loan_payment_risky"] = (
+		not active_loan.is_empty() and
+		cash < float(active_loan.get("monthly_payment", 0.0)) - 0.0001
+	)
+	return {
+		"cash": cash,
+		"equity": equity,
+		"market_value": market_value,
+		"monthly_outflow": monthly_outflow,
+		"next_life_payment": _build_next_life_payment_snapshot(monthly_outflow),
+		"runway_months": runway_months,
+		"finance": finance_status
+	}
+
+
+func _build_daily_recap_first_month_snapshot(portfolio_totals: Dictionary, life_snapshot: Dictionary, daily_action: Dictionary) -> Dictionary:
+	var cash: float = float(portfolio_totals.get("cash", RunState.player_portfolio.get("cash", 0.0)))
+	var market_value: float = float(portfolio_totals.get("market_value", 0.0))
+	var equity: float = float(portfolio_totals.get("equity", cash + market_value))
+	var monthly_outflow: float = max(float(life_snapshot.get("monthly_outflow", 0.0)), 0.0)
+	var runway_months: float = 999.0
+	if monthly_outflow > 0.0:
+		runway_months = cash / monthly_outflow
+	return {
+		"day_index": RunState.day_index,
+		"trading_day_number": max(RunState.day_index + 1, 1),
+		"trade_date": get_current_trade_date(),
+		"cash": cash,
+		"equity": equity,
+		"monthly_outflow": monthly_outflow,
+		"runway_months": runway_months,
+		"next_life_payment": life_snapshot.get("next_life_payment", {}).duplicate(true),
+		"daily_action": daily_action.duplicate(true),
+		"ap_used": int(daily_action.get("used", 0)),
+		"ap_remaining": int(daily_action.get("remaining", 0)),
+		"ap_limit": int(daily_action.get("limit", 0))
 	}
 
 
@@ -3739,20 +3912,23 @@ func get_daily_recap_snapshot() -> Dictionary:
 	var dashboard_event_snapshot: Dictionary = get_dashboard_event_snapshot()
 	var daily_activity_snapshot: Dictionary = get_daily_activity_snapshot()
 	var activity_counts: Dictionary = daily_activity_snapshot.get("activity_counts", {}).duplicate(true)
-	var first_month_balance_snapshot: Dictionary = get_first_month_balance_snapshot()
+	var portfolio_totals: Dictionary = _get_portfolio_totals_snapshot()
+	var daily_action: Dictionary = get_daily_action_snapshot()
+	var life_snapshot: Dictionary = _build_daily_recap_life_snapshot(portfolio_totals)
+	var first_month_balance_snapshot: Dictionary = _build_daily_recap_first_month_snapshot(portfolio_totals, life_snapshot, daily_action)
 	return {
 		"day_index": RunState.day_index,
 		"trade_date": get_current_trade_date(),
 		"summary": summary,
 		"market_sentiment": RunState.market_sentiment,
-		"portfolio": get_portfolio_snapshot(),
-		"life": get_life_snapshot(),
+		"portfolio": portfolio_totals,
+		"life": life_snapshot,
 		"last_day_results": RunState.last_day_results.duplicate(true),
 		"dashboard_events": dashboard_event_snapshot,
 		"first_month_balance": first_month_balance_snapshot,
 		"activity_counts": activity_counts,
 		"badges": get_desktop_app_badge_snapshot(activity_counts),
-		"daily_action": get_daily_action_snapshot()
+		"daily_action": daily_action
 	}
 
 
@@ -4307,14 +4483,16 @@ func debug_generate_event(event_id: String) -> Dictionary:
 	}
 
 
-func _build_news_feed_context(log_phase_details: bool = false) -> Dictionary:
+func _build_news_feed_context(log_phase_details: bool = false, company_rows: Array = []) -> Dictionary:
 	var phase_started_at_usec: int = Time.get_ticks_usec()
 	var news_trade_date: Dictionary = get_current_trade_date()
 	news_trade_date["day_index"] = RunState.day_index
 	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:trade_date", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
-	var company_rows: Array = get_company_rows()
-	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:company_rows", phase_started_at_usec, " count=%d" % company_rows.size())
+	var resolved_company_rows: Array = company_rows
+	if resolved_company_rows.is_empty():
+		resolved_company_rows = get_company_market_rows()
+	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:company_rows", phase_started_at_usec, " count=%d" % resolved_company_rows.size())
 	phase_started_at_usec = Time.get_ticks_usec()
 	var market_history: Array = get_market_history()
 	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:market_history", phase_started_at_usec, " count=%d" % market_history.size())
@@ -4329,7 +4507,7 @@ func _build_news_feed_context(log_phase_details: bool = false) -> Dictionary:
 	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:company_arcs", phase_started_at_usec, " count=%d" % active_company_arcs.size())
 	return {
 		"trade_date": news_trade_date,
-		"company_rows": company_rows,
+		"company_rows": resolved_company_rows,
 		"market_history": market_history,
 		"event_history": event_history,
 		"active_special_events": active_special_events,
