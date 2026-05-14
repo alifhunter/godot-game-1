@@ -5,6 +5,7 @@ signal price_formed(day_index)
 signal portfolio_changed
 signal watchlist_changed
 signal network_changed
+signal social_changed
 signal upgrades_changed
 signal daily_actions_changed
 signal academy_changed
@@ -445,6 +446,7 @@ var chart_system = preload("res://systems/ChartSystem.gd").new()
 var chart_pattern_system = preload("res://systems/ChartPatternSystem.gd").new()
 var news_feed_system = preload("res://systems/NewsFeedSystem.gd").new()
 var twooter_feed_system = preload("res://systems/TwooterFeedSystem.gd").new()
+var twooter_interaction_system = preload("res://systems/TwooterInteractionSystem.gd").new()
 var contact_network_system = preload("res://systems/ContactNetworkSystem.gd").new()
 var dirty_tip_system = preload("res://systems/DirtyTipSystem.gd").new()
 var corporate_action_system = preload("res://systems/CorporateActionSystem.gd").new()
@@ -1801,7 +1803,7 @@ func get_unlocked_news_intel_level() -> int:
 
 
 func get_unlocked_twooter_access_tier() -> int:
-	return _content_level_for_upgrade("twooter_content")
+	return 4
 
 
 func get_unlocked_chart_indicator_ids() -> Array:
@@ -4021,11 +4023,14 @@ func _daily_activity_snapshot_cache_key() -> String:
 	if not RunState.has_active_run():
 		return ""
 	var trade_date: Dictionary = RunState.get_current_trade_date()
-	return "%d|%s|news:%d|social:%d|events:%d|tips:%d|requests:%d|discoveries:%d|contacts:%d" % [
+	var twooter_state: Dictionary = RunState.get_twooter_social_state()
+	return "%d|%s|news:%d|social:%d|twooter_posts:%d|twooter_messages:%d|events:%d|tips:%d|requests:%d|discoveries:%d|contacts:%d" % [
 		RunState.day_index,
 		trading_calendar.to_key(trade_date),
 		get_unlocked_news_intel_level(),
 		get_unlocked_twooter_access_tier(),
+		twooter_state.get("post_interactions", {}).size(),
+		twooter_state.get("messages", {}).size(),
 		RunState.event_history.size(),
 		RunState.network_tip_journal.size(),
 		RunState.network_requests.size(),
@@ -4093,7 +4098,7 @@ func _count_twooter_current_day_activity(feed_context: Dictionary = {}) -> int:
 		company_rows = feed_context.get("company_rows", [])
 	else:
 		company_rows = get_company_rows()
-	return twooter_feed_system.count_social_posts(
+	var count: int = twooter_feed_system.count_social_posts(
 		DataRepository.get_twooter_feed_data(),
 		market_history,
 		event_history,
@@ -4103,6 +4108,27 @@ func _count_twooter_current_day_activity(feed_context: Dictionary = {}) -> int:
 		get_unlocked_twooter_access_tier(),
 		company_rows
 	)
+	return count + _count_twooter_current_day_interactions()
+
+
+func _count_twooter_current_day_interactions() -> int:
+	var count: int = 0
+	var social_state: Dictionary = RunState.get_twooter_social_state()
+	for interaction_value in social_state.get("post_interactions", {}).values():
+		if typeof(interaction_value) != TYPE_DICTIONARY:
+			continue
+		var interaction: Dictionary = interaction_value
+		for reply_value in interaction.get("replies", []):
+			if typeof(reply_value) == TYPE_DICTIONARY and int(reply_value.get("day_index", -9999)) == RunState.day_index:
+				count += 1
+	for thread_value in social_state.get("messages", {}).values():
+		if typeof(thread_value) != TYPE_DICTIONARY:
+			continue
+		var thread: Dictionary = thread_value
+		for row_value in thread.get("rows", []):
+			if typeof(row_value) == TYPE_DICTIONARY and str(row_value.get("sender", "")) == "player" and int(row_value.get("day_index", -9999)) == RunState.day_index:
+				count += 1
+	return count
 
 
 func _count_network_current_day_activity(network_snapshot: Dictionary) -> int:
@@ -4579,11 +4605,122 @@ func get_twooter_snapshot(unlocked_access_tier: int = -1) -> Dictionary:
 	if not RunState.has_active_run():
 		return {
 			"access_tier": max(unlocked_access_tier, 1),
-			"tier_label": "Tier 1",
+			"tier_label": "Public chatter",
 			"accounts": [],
-			"posts": []
+			"posts": [],
+			"message_threads": [],
+			"shareable_theses": [],
+			"trending_rows": [],
+			"who_to_follow": []
 		}
 
+	var snapshot: Dictionary = _build_twooter_base_snapshot(unlocked_access_tier)
+	return twooter_interaction_system.enhance_snapshot(
+		snapshot,
+		RunState.get_twooter_social_state(),
+		DataRepository.get_twooter_feed_data(),
+		RunState.get_player_theses(),
+		RunState.get_daily_action_snapshot(),
+		RunState.day_index
+	)
+
+
+func interact_with_twooter_post(post_id: String, action_id: String, thesis_id: String = "", player_reply_text: String = "") -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "Start a run before using Twooter."}
+	var snapshot: Dictionary = get_twooter_snapshot()
+	var validation: Dictionary = twooter_interaction_system.validate_post_interaction(RunState, snapshot, post_id, action_id, thesis_id)
+	if not bool(validation.get("success", false)):
+		return validation
+	var spent_ap: bool = false
+	var spend_result: Dictionary = {}
+	if twooter_interaction_system.is_private_action(action_id):
+		var block_reason: String = get_life_action_block_reason("twooter_%s" % action_id)
+		if not block_reason.is_empty():
+			return {"success": false, "message": block_reason, "snapshot": RunState.get_daily_action_snapshot()}
+		if not RunState.can_spend_daily_action(1):
+			return {"success": false, "message": "Need 1 AP for that Twooter message.", "snapshot": RunState.get_daily_action_snapshot()}
+		spend_result = RunState.spend_daily_action(1)
+		if not bool(spend_result.get("success", false)):
+			return spend_result
+		spent_ap = true
+	var result: Dictionary = twooter_interaction_system.apply_post_interaction(
+		RunState,
+		DataRepository.get_twooter_feed_data(),
+		snapshot,
+		post_id,
+		action_id,
+		thesis_id,
+		player_reply_text
+	)
+	if not bool(result.get("success", false)):
+		return result
+	_after_twooter_interaction(spent_ap, bool(result.get("network_changed", false)), "twooter_post_interaction")
+	result["snapshot"] = get_twooter_snapshot()
+	return result
+
+
+func send_twooter_message(account_id: String, action_id: String, thesis_id: String = "", player_message_text: String = "") -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "Start a run before using Twooter."}
+	var snapshot: Dictionary = get_twooter_snapshot()
+	var validation: Dictionary = twooter_interaction_system.validate_account_action(snapshot, account_id, action_id, thesis_id)
+	if not bool(validation.get("success", false)):
+		return validation
+	if not twooter_interaction_system.is_private_action(action_id):
+		return {"success": false, "message": "Use public Twooter actions from the Home feed."}
+	var block_reason: String = get_life_action_block_reason("twooter_%s" % action_id)
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason, "snapshot": RunState.get_daily_action_snapshot()}
+	if not RunState.can_spend_daily_action(1):
+		return {"success": false, "message": "Need 1 AP for that Twooter message.", "snapshot": RunState.get_daily_action_snapshot()}
+	var spend_result: Dictionary = RunState.spend_daily_action(1)
+	if not bool(spend_result.get("success", false)):
+		return spend_result
+	var result: Dictionary = twooter_interaction_system.apply_message_action(
+		RunState,
+		DataRepository.get_twooter_feed_data(),
+		snapshot,
+		account_id,
+		action_id,
+		thesis_id,
+		player_message_text
+	)
+	if not bool(result.get("success", false)):
+		return result
+	_after_twooter_interaction(true, bool(result.get("network_changed", false)), "twooter_message")
+	result["snapshot"] = get_twooter_snapshot()
+	return result
+
+
+func follow_twooter_account(account_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "Start a run before using Twooter."}
+	var result: Dictionary = twooter_interaction_system.apply_follow_account(RunState, get_twooter_snapshot(), account_id)
+	if bool(result.get("success", false)):
+		_after_twooter_interaction(false, bool(result.get("network_changed", false)), "twooter_follow")
+		result["snapshot"] = get_twooter_snapshot()
+	return result
+
+
+func get_twooter_message_thread(account_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"account": {}, "rows": []}
+	var snapshot: Dictionary = get_twooter_snapshot()
+	return twooter_interaction_system.get_message_thread(
+		RunState.get_twooter_social_state(),
+		snapshot.get("accounts", []),
+		account_id,
+		RunState.day_index,
+		snapshot.get("shareable_theses", []),
+		DataRepository.get_twooter_feed_data(),
+		RunState.get_daily_action_snapshot()
+	)
+
+
+func _build_twooter_base_snapshot(unlocked_access_tier: int = -1) -> Dictionary:
+	if unlocked_access_tier < 1:
+		unlocked_access_tier = get_unlocked_twooter_access_tier()
 	var social_trade_date: Dictionary = get_current_trade_date()
 	social_trade_date["day_index"] = RunState.day_index
 
@@ -4598,6 +4735,16 @@ func get_twooter_snapshot(unlocked_access_tier: int = -1) -> Dictionary:
 		social_trade_date,
 		unlocked_access_tier
 	)
+
+
+func _after_twooter_interaction(spent_ap: bool, changed_network: bool, autosave_reason: String) -> void:
+	_invalidate_daily_activity_snapshot_cache()
+	_request_autosave(autosave_reason)
+	social_changed.emit()
+	if spent_ap:
+		daily_actions_changed.emit()
+	if changed_network:
+		network_changed.emit()
 
 
 func get_thesis_board_snapshot() -> Dictionary:

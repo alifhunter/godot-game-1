@@ -57,11 +57,11 @@ func build_snapshot(run_state, data_repository) -> Dictionary:
 	var generated_contact_ids := {}
 	for contact_id_value in contacts.keys():
 		var contact_id: String = str(contact_id_value)
-		if contact_id.begins_with("insider_"):
+		if contact_id.begins_with("insider_") or contact_id.begins_with("social_"):
 			generated_contact_ids[contact_id] = true
 	for contact_id_value in discoveries.keys():
 		var contact_id: String = str(contact_id_value)
-		if contact_id.begins_with("insider_"):
+		if contact_id.begins_with("insider_") or contact_id.begins_with("social_"):
 			generated_contact_ids[contact_id] = true
 	for generated_contact_id_value in generated_contact_ids.keys():
 		var generated_contact_id: String = str(generated_contact_id_value)
@@ -2300,6 +2300,7 @@ func _all_contact_definitions(run_state, data_repository) -> Array:
 		var contact: Dictionary = contact_value
 		definitions.append(contact.duplicate(true))
 	definitions.append_array(_generated_insider_definitions(run_state))
+	definitions.append_array(_generated_social_contact_definitions(run_state))
 	return definitions
 
 
@@ -2309,6 +2310,16 @@ func _generated_insider_definitions(run_state) -> Array:
 		var company_id: String = str(company_id_value)
 		insiders.append_array(_management_roster_for_company(run_state, company_id))
 	return insiders
+
+
+func _generated_social_contact_definitions(run_state) -> Array:
+	var rows: Array = []
+	var social_state: Dictionary = run_state.get_twooter_social_state()
+	for definition_value in social_state.get("network_contact_definitions", {}).values():
+		if typeof(definition_value) != TYPE_DICTIONARY:
+			continue
+		rows.append(definition_value.duplicate(true))
+	return rows
 
 
 func _management_roster_for_company(run_state, company_id: String) -> Array:
@@ -2372,6 +2383,10 @@ func _contact_definition(run_state, data_repository, contact_id: String) -> Dict
 		var insider: Dictionary = insider_value
 		if str(insider.get("id", insider.get("contact_id", ""))) == contact_id:
 			return insider.duplicate(true)
+	for social_value in _generated_social_contact_definitions(run_state):
+		var social_contact: Dictionary = social_value
+		if str(social_contact.get("id", social_contact.get("contact_id", ""))) == contact_id:
+			return social_contact.duplicate(true)
 	return {}
 
 
@@ -2476,6 +2491,9 @@ func _network_journal_rows(run_state, data_repository, requests: Dictionary, dis
 		if typeof(tip_value) != TYPE_DICTIONARY:
 			continue
 		var tip: Dictionary = tip_value
+		if str(tip.get("journal_type", "")) == "twooter_social":
+			rows.append(_network_twooter_journal_row(tip))
+			continue
 		rows.append(_network_tip_journal_row(tip))
 		if str(tip.get("status", "pending")) != "pending":
 			rows.append(_network_tip_resolution_journal_row(tip))
@@ -2503,6 +2521,8 @@ func _network_journal_rows(run_state, data_repository, requests: Dictionary, dis
 			rows.append(_network_referral_journal_row(run_state, data_repository, discovery))
 		if str(discovery.get("source_type", "")) == MEETING_LEAD_SOURCE_TYPE:
 			rows.append(_network_meeting_lead_journal_row(run_state, data_repository, discovery))
+		if str(discovery.get("source_type", "")) == "twooter":
+			rows.append(_network_twooter_discovery_journal_row(run_state, data_repository, discovery))
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var a_sort: int = int(a.get("sort_index", int(a.get("day_index", 0)) * 10))
 		var b_sort: int = int(b.get("sort_index", int(b.get("day_index", 0)) * 10))
@@ -2513,6 +2533,25 @@ func _network_journal_rows(run_state, data_repository, requests: Dictionary, dis
 	if rows.size() > MAX_NETWORK_JOURNAL_ROWS:
 		rows = rows.slice(0, MAX_NETWORK_JOURNAL_ROWS)
 	return rows
+
+
+func _network_twooter_journal_row(tip: Dictionary) -> Dictionary:
+	var day_index: int = int(tip.get("created_day_index", 0))
+	var ticker: String = str(tip.get("target_ticker", ""))
+	var action_label: String = str(tip.get("truth_label", "Twooter"))
+	return {
+		"id": "%s:twooter" % str(tip.get("id", "")),
+		"type": "twooter",
+		"day_index": day_index,
+		"sort_index": day_index * 10 + 3,
+		"contact_id": str(tip.get("contact_id", "")),
+		"contact_name": str(tip.get("contact_name", "Twooter contact")),
+		"target_company_id": str(tip.get("target_company_id", "")),
+		"target_ticker": ticker,
+		"status": str(tip.get("status", "recorded")),
+		"title": "Twooter | %s%s" % [action_label, " | %s" % ticker if not ticker.is_empty() else ""],
+		"detail": str(tip.get("tip_read", ""))
+	}
 
 
 func _network_tip_journal_row(tip: Dictionary) -> Dictionary:
@@ -2757,6 +2796,25 @@ func _network_meeting_lead_journal_row(run_state, data_repository, discovery: Di
 		"status": "met",
 		"title": "RUPSLB Lead | %s" % contact_name,
 		"detail": "Met during the %s meeting room." % ticker
+	}
+
+
+func _network_twooter_discovery_journal_row(run_state, data_repository, discovery: Dictionary) -> Dictionary:
+	var contact_id: String = str(discovery.get("contact_id", ""))
+	var day_index: int = int(discovery.get("day_index", 0))
+	var ticker: String = str(discovery.get("target_ticker", ""))
+	return {
+		"id": "%s:twooter_discovery" % contact_id,
+		"type": "twooter_discovery",
+		"day_index": day_index,
+		"sort_index": day_index * 10 + 2,
+		"contact_id": contact_id,
+		"contact_name": _contact_display_name(run_state, data_repository, contact_id),
+		"target_company_id": str(discovery.get("target_company_id", "")),
+		"target_ticker": ticker,
+		"status": "discovered",
+		"title": "Twooter Contact%s" % (" | %s" % ticker if not ticker.is_empty() else ""),
+		"detail": "A public Twooter exchange became a tracked Network contact."
 	}
 
 

@@ -27,7 +27,6 @@ RUNTIME_PATH = PROJECT_ROOT / "data" / "upgrades" / "upgrade_catalog.json"
 REQUIRED_TRACK_IDS = [
     "trading_fee",
     "news_content",
-    "twooter_content",
     "chart_indicators",
     "daily_action_points",
 ]
@@ -266,7 +265,7 @@ def validate_track(track: dict, errors: list[str], warnings: list[str]) -> None:
     validate_cost_curve(track_id, tiers, warnings)
     if track_id == "trading_fee":
         validate_trading_fee_track(tiers, errors, warnings)
-    elif track_id in ["news_content", "twooter_content"]:
+    elif track_id == "news_content":
         validate_content_track(track_id, tiers, errors, warnings)
     elif track_id == "chart_indicators":
         validate_chart_track(tiers, errors, warnings)

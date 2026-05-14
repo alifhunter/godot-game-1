@@ -12,6 +12,8 @@ steam_appid.txt
 .DS_Store
 Thumbs.db
 ~*
+__pycache__/
+*.py[cod]
 
 # Accidental local Windows PowerShell cache
 /Microsoft/

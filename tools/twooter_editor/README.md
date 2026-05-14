@@ -1,4 +1,4 @@
-# Twooter Content Editor
+# Twooter Feed Editor
 
 Dev-only local editor for `Twooter` content. It uses only Python stdlib and is not part of the player build.
 
@@ -21,15 +21,16 @@ http://127.0.0.1:8767
 - `Load` reads `tools/twooter_editor/twooter_source.json`.
 - If the source has no catalog yet, the editor imports `data/social/twooter_feed_data.json`.
 - `Save Source` saves editable source data only.
-- `Validate` checks account ids, handles, tier labels, voice references, thread preference coverage, template pools, fallback pools, and template tokens.
+- `Validate` checks account ids, handles, tier labels, voice references, social profile fields, thread preference coverage, template pools, fallback pools, and template tokens.
 - `Export Runtime JSON` writes `data/social/twooter_feed_data.json`.
 
 ## Edited Data
 
 The tool edits the template catalog used by `systems/TwooterFeedSystem.gd`:
 
-- access tier labels and post limit
-- account metadata, handles, access tier, verification, persona ids, and thread preference
+- compatibility access labels and post limit
+- account metadata, handles, internal access tier, verification, persona ids, social profile hints, and thread preference
+- interaction response pools for public replies, DMs, source checks, thesis sharing, clean tip asks, invite scaffolds, and suspicious-request responses
 - voice post template pools
 - optional thread template pools
 - continuity templates

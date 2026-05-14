@@ -1,7 +1,7 @@
 extends Node
 
 const STABLE_RNG = preload("res://systems/StableRng.gd")
-const SAVE_SCHEMA_VERSION := 5
+const SAVE_SCHEMA_VERSION := 6
 const SAVE_FORMAT_ID := "daytrader_single_run"
 const LOT_SIZE := 100
 const PLAYER_BROKER_CODE := "XL"
@@ -14,7 +14,6 @@ const DEFAULT_UPGRADE_TIER := 4
 const UPGRADE_TRACK_IDS := [
 	"trading_fee",
 	"news_content",
-	"twooter_content",
 	"chart_indicators",
 	"daily_action_points"
 ]
@@ -183,6 +182,7 @@ var network_contacts = {}
 var network_discoveries = {}
 var network_requests = {}
 var network_tip_journal = {}
+var twooter_social_state = {}
 var player_theses = {}
 var player_life = {}
 var upgrade_tiers = {}
@@ -262,6 +262,7 @@ func reset() -> void:
 	network_discoveries = {}
 	network_requests = {}
 	network_tip_journal = {}
+	twooter_social_state = _default_twooter_social_state()
 	player_theses = {}
 	player_life = _default_life_state()
 	upgrade_tiers = _default_upgrade_tiers()
@@ -505,6 +506,7 @@ func load_from_dict(data: Dictionary) -> void:
 	network_discoveries = data.get("network_discoveries", {}).duplicate(true)
 	network_requests = data.get("network_requests", {}).duplicate(true)
 	network_tip_journal = data.get("network_tip_journal", {}).duplicate(true)
+	twooter_social_state = _normalize_twooter_social_state(data.get("twooter_social_state", {}))
 	player_theses = _normalize_player_theses(data.get("player_theses", {}))
 	player_life = _normalize_life_state(data.get("player_life", {}))
 	upgrade_tiers = _normalize_upgrade_tiers(data.get("upgrade_tiers", {}))
@@ -609,6 +611,7 @@ func to_save_dict() -> Dictionary:
 		"network_discoveries": network_discoveries.duplicate(true),
 		"network_requests": network_requests.duplicate(true),
 		"network_tip_journal": network_tip_journal.duplicate(true),
+		"twooter_social_state": get_twooter_social_state(),
 		"player_theses": _normalize_player_theses(player_theses),
 		"player_life": get_player_life(),
 		"upgrade_tiers": get_upgrade_tiers(),
@@ -1621,6 +1624,15 @@ func get_network_tip_journal() -> Dictionary:
 
 func set_network_tip_journal(next_tip_journal: Dictionary) -> void:
 	network_tip_journal = next_tip_journal.duplicate(true)
+
+
+func get_twooter_social_state() -> Dictionary:
+	twooter_social_state = _normalize_twooter_social_state(twooter_social_state)
+	return twooter_social_state.duplicate(true)
+
+
+func set_twooter_social_state(next_state: Dictionary) -> void:
+	twooter_social_state = _normalize_twooter_social_state(next_state)
 
 
 func get_player_theses() -> Dictionary:
@@ -3091,6 +3103,167 @@ func _append_life_finance_history(finance: Dictionary, row: Dictionary) -> void:
 	if history.size() > MAX_LIFE_FINANCE_HISTORY:
 		history = history.slice(history.size() - MAX_LIFE_FINANCE_HISTORY, history.size())
 	finance["finance_history"] = history
+
+
+func _default_twooter_social_state() -> Dictionary:
+	return {
+		"account_states": {},
+		"post_interactions": {},
+		"messages": {},
+		"network_contact_definitions": {},
+		"dialog_state": {
+			"accounts": {},
+			"posts": {}
+		},
+		"daily_public_interactions": {
+			"day_index": day_index,
+			"account_action_counts": {}
+		}
+	}
+
+
+func _normalize_twooter_social_state(source_state: Variant) -> Dictionary:
+	var source: Dictionary = source_state if typeof(source_state) == TYPE_DICTIONARY else {}
+	var normalized: Dictionary = _default_twooter_social_state()
+	var account_states: Dictionary = source.get("account_states", {}) if typeof(source.get("account_states", {})) == TYPE_DICTIONARY else {}
+	for account_id_value in account_states.keys():
+		var account_id: String = str(account_id_value)
+		if account_id.is_empty() or typeof(account_states.get(account_id_value)) != TYPE_DICTIONARY:
+			continue
+		normalized["account_states"][account_id] = _normalize_twooter_account_state(account_states.get(account_id_value, {}))
+	var post_interactions: Dictionary = source.get("post_interactions", {}) if typeof(source.get("post_interactions", {})) == TYPE_DICTIONARY else {}
+	for post_id_value in post_interactions.keys():
+		var post_id: String = str(post_id_value)
+		if post_id.is_empty() or typeof(post_interactions.get(post_id_value)) != TYPE_DICTIONARY:
+			continue
+		normalized["post_interactions"][post_id] = _normalize_twooter_post_interaction(post_interactions.get(post_id_value, {}))
+	var messages: Dictionary = source.get("messages", {}) if typeof(source.get("messages", {})) == TYPE_DICTIONARY else {}
+	for account_id_value in messages.keys():
+		var account_id: String = str(account_id_value)
+		if account_id.is_empty() or typeof(messages.get(account_id_value)) != TYPE_DICTIONARY:
+			continue
+		normalized["messages"][account_id] = _normalize_twooter_message_thread(messages.get(account_id_value, {}))
+	var dialog_source: Dictionary = source.get("dialog_state", {}) if typeof(source.get("dialog_state", {})) == TYPE_DICTIONARY else {}
+	var normalized_dialog: Dictionary = {"accounts": {}, "posts": {}}
+	for scope_id in ["accounts", "posts"]:
+		var scope_rows: Dictionary = dialog_source.get(scope_id, {}) if typeof(dialog_source.get(scope_id, {})) == TYPE_DICTIONARY else {}
+		for key_value in scope_rows.keys():
+			var key_id: String = str(key_value)
+			if key_id.is_empty() or typeof(scope_rows.get(key_value)) != TYPE_DICTIONARY:
+				continue
+			normalized_dialog[scope_id][key_id] = _normalize_twooter_dialog_branch(scope_rows.get(key_value, {}))
+	normalized["dialog_state"] = normalized_dialog
+	var definitions: Dictionary = source.get("network_contact_definitions", {}) if typeof(source.get("network_contact_definitions", {})) == TYPE_DICTIONARY else {}
+	for contact_id_value in definitions.keys():
+		var contact_id: String = str(contact_id_value)
+		if contact_id.is_empty() or typeof(definitions.get(contact_id_value)) != TYPE_DICTIONARY:
+			continue
+		normalized["network_contact_definitions"][contact_id] = definitions.get(contact_id_value, {}).duplicate(true)
+	var daily: Dictionary = source.get("daily_public_interactions", {}) if typeof(source.get("daily_public_interactions", {})) == TYPE_DICTIONARY else {}
+	if int(daily.get("day_index", day_index)) == day_index:
+		normalized["daily_public_interactions"] = {
+			"day_index": day_index,
+			"account_action_counts": daily.get("account_action_counts", {}).duplicate(true) if typeof(daily.get("account_action_counts", {})) == TYPE_DICTIONARY else {}
+		}
+	return normalized
+
+
+func _normalize_twooter_account_state(source_state: Variant) -> Dictionary:
+	var source: Dictionary = source_state if typeof(source_state) == TYPE_DICTIONARY else {}
+	var normalized: Dictionary = {
+		"relationship": clampi(int(source.get("relationship", 0)), 0, 100),
+		"exposure": clampi(int(source.get("exposure", 0)), 0, 100),
+		"credibility": clampi(int(source.get("credibility", 0)), 0, 100),
+		"importance": clampi(int(source.get("importance", 0)), 0, 100),
+		"following": bool(source.get("following", false)),
+		"last_interaction_day_index": int(source.get("last_interaction_day_index", -1)),
+		"interaction_count": max(int(source.get("interaction_count", 0)), 0),
+		"relationship_stage": str(source.get("relationship_stage", "stranger")),
+		"timeline": []
+	}
+	for timeline_value in source.get("timeline", []):
+		if typeof(timeline_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = timeline_value
+		normalized["timeline"].append({
+			"day_index": int(row.get("day_index", 0)),
+			"action_id": str(row.get("action_id", "")),
+			"text": str(row.get("text", "")),
+			"post_id": str(row.get("post_id", ""))
+		})
+	if normalized["timeline"].size() > 12:
+		normalized["timeline"] = normalized["timeline"].slice(normalized["timeline"].size() - 12, normalized["timeline"].size())
+	return normalized
+
+
+func _normalize_twooter_post_interaction(source_interaction: Variant) -> Dictionary:
+	var source: Dictionary = source_interaction if typeof(source_interaction) == TYPE_DICTIONARY else {}
+	var replies: Array = []
+	for reply_value in source.get("replies", []):
+		if typeof(reply_value) != TYPE_DICTIONARY:
+			continue
+		var reply: Dictionary = reply_value
+		replies.append({
+			"account_id": str(reply.get("account_id", "")),
+			"action_id": str(reply.get("action_id", "")),
+			"player_text": str(reply.get("player_text", "")),
+			"reply_text": str(reply.get("reply_text", "")),
+			"day_index": int(reply.get("day_index", 0)),
+			"relationship_delta": int(reply.get("relationship_delta", 0)),
+			"exposure_delta": int(reply.get("exposure_delta", 0)),
+			"credibility_delta": int(reply.get("credibility_delta", 0))
+		})
+	if replies.size() > 6:
+		replies = replies.slice(replies.size() - 6, replies.size())
+	return {
+		"replies": replies,
+		"interaction_count": max(int(source.get("interaction_count", 0)), 0),
+		"last_day_index": int(source.get("last_day_index", -1)),
+		"conversation_step": max(int(source.get("conversation_step", 0)), 0),
+		"concluded": bool(source.get("concluded", false)),
+		"conclusion_reason": str(source.get("conclusion_reason", "")),
+		"followup_unlocked": bool(source.get("followup_unlocked", false))
+	}
+
+
+func _normalize_twooter_message_thread(source_thread: Variant) -> Dictionary:
+	var source: Dictionary = source_thread if typeof(source_thread) == TYPE_DICTIONARY else {}
+	var rows: Array = []
+	for message_value in source.get("rows", []):
+		if typeof(message_value) != TYPE_DICTIONARY:
+			continue
+		var message: Dictionary = message_value
+		rows.append({
+			"sender": str(message.get("sender", "")),
+			"action_id": str(message.get("action_id", "")),
+			"text": str(message.get("text", "")),
+			"day_index": int(message.get("day_index", 0))
+		})
+	if rows.size() > 24:
+		rows = rows.slice(rows.size() - 24, rows.size())
+	return {
+		"account_id": str(source.get("account_id", "")),
+		"account_name": str(source.get("account_name", "")),
+		"account_handle": str(source.get("account_handle", "")),
+		"last_day_index": int(source.get("last_day_index", 0)),
+		"unread_count": max(int(source.get("unread_count", 0)), 0),
+		"rows": rows
+	}
+
+
+func _normalize_twooter_dialog_branch(source_branch: Variant) -> Dictionary:
+	var source: Dictionary = source_branch if typeof(source_branch) == TYPE_DICTIONARY else {}
+	return {
+		"tree_id": str(source.get("tree_id", "")),
+		"node_id": str(source.get("node_id", "")),
+		"last_option_id": str(source.get("last_option_id", "")),
+		"last_action_id": str(source.get("last_action_id", "")),
+		"repeat_count": max(int(source.get("repeat_count", 0)), 0),
+		"last_day_index": int(source.get("last_day_index", -1)),
+		"cooldown_until_day": int(source.get("cooldown_until_day", -1)),
+		"cooldown_reason": str(source.get("cooldown_reason", "")),
+		"step_count": max(int(source.get("step_count", 0)), 0)
+	}
 
 
 func _normalize_player_theses(source_theses: Variant) -> Dictionary:

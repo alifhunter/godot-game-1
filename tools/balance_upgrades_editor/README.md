@@ -21,7 +21,7 @@ http://127.0.0.1:8772
 - `Load` reads `tools/balance_upgrades_editor/balance_upgrades_source.json`.
 - If the source is missing or empty, the editor imports `data/upgrades/upgrade_catalog.json`.
 - `Save Source` saves editable source data only.
-- `Validate` checks required upgrade tracks, tier coverage, costs, trading-fee fields, content levels, chart indicator IDs, and Network daily AP limits.
+- `Validate` checks required upgrade tracks, tier coverage, costs, trading-fee fields, News content levels, chart indicator IDs, and Network daily AP limits.
 - `Export Runtime JSON` writes `data/upgrades/upgrade_catalog.json`.
 
 ## Edited Data
@@ -31,7 +31,7 @@ The tool edits the upgrade catalog used by `autoloads/GameManager.gd`, `autoload
 - upgrade track labels and descriptions
 - tier costs and effect labels
 - trading fee rates for buy/sell orders
-- News and Twooter content unlock levels
+- News content unlock levels
 - chart indicator unlock sets
 - Network daily action point limits
 

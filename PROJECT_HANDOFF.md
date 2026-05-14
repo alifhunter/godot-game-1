@@ -3,9 +3,9 @@
 Read this file first in the next session.
 
 ## Project Snapshot
-- Engine target: Godot `4.6.1`; current Mac CLI on PATH is Godot `4.6.2.stable.official.71f334935` via `~/.local/bin/godot` and `~/.local/bin/godot4`
-- Current Mac project path: `/Users/user/Documents/gorengangame/godot-game-1`
-- Original Windows project path: `c:\Users\Alif\Documents\godot game 1\new-game-project`
+- Engine target: Godot `4.6.1`; current active Windows verifier is `C:\Users\Alif\Desktop\Godot_v4.6.1-stable_win64_console.exe`
+- Current active Windows project path: `c:\Users\Alif\Documents\godot game 1\new-game-project`
+- Previous Mac continuation path: `/Users/user/Documents/gorengangame/godot-game-1`; Mac CLI was Godot `4.6.2.stable.official.71f334935` via `~/.local/bin/godot` / `~/.local/bin/godot4`
 - Current milestone: `first playable prototype`
 - Seed date in-game: `Thursday, 2 January 2020`
 - First player-visible session on a fresh run: `Friday, 3 January 2020`
@@ -39,11 +39,43 @@ Read this file first in the next session.
     - `fc14108 Build Key Stats card dashboard`
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
-    - latest checkpoint message: `Add dirty tip and hidden tape systems`
-  - after checkpoint commits, `git status --short` should generally be clean except ignored local `logs/` output; the current Mac continuation has uncommitted local tool/docs/runtime-hook edits, so inspect status before assuming a clean tree
+    - `44c727f Speed up Advance Day recap path`
+    - latest checkpoint message: `Speed up Advance Day recap path`
+  - current Windows worktree is intentionally not clean after the Advance Day performance, Twooter-upgrade removal, and Twooter Social Hub/dialog work; inspect `git status --short` before assuming a clean tree
+  - `systems/TwooterInteractionSystem.gd` is currently an intentional untracked feature file until the next checkpoint commit; Python validator `__pycache__/` folders are disposable local artifacts
   - current local note: formatter locals that previously shadowed Godot's built-in `sign()` are now renamed to `sign_prefix`
 
 ## Latest Session Snapshot
+- 2026-05-14 latest follow-up: Twooter dialog prerequisites are now explicit instead of disappearing. Dialog-tree options can define `requirements` plus `blocked_lines`; missing thesis, trust/stage, relationship, credibility, importance, and daily-AP gates now produce visible disabled options with clear next-step copy such as "Build your thesis first" or "Build more trust first."
+- `share_thesis` options remain visible when the player has no shareable Thesis, but they are disabled with `blocked_reason: "missing_thesis"` and explicit player-facing text. Invite/room options require trusted-stage relationship and say so when blocked. Private Message snapshots now receive daily AP data so no-AP private actions can also explain the AP requirement.
+- `tools/twooter_editor/server.py` now validates dialog option `requirements` and `blocked_lines`, and both `twooter_source.json` and exported `twooter_feed_data.json` carry the new prerequisite copy. Public reply popup buttons and private inline Message options set disabled-state tooltips to the same explicit blocked text.
+- Smoke coverage now asserts that an account with enough relationship to enter thesis discussion but no shareable Thesis sees a disabled `share_thesis` dialog option with `blocked_reason == "missing_thesis"` and thesis-building guidance. Verification after this pass: `git diff --check` passed with only CRLF warnings on exported Twooter JSON, Windows Godot `4.6.1` headless project load exited `0`, `python tools/twooter_editor/server.py --validate` passed, `python tools/content_lint_dashboard/server.py --validate` passed, and quick smoke printed `SMOKE_QUICK_OK normal_equity=94762318.11 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.` Usual post-success RID/ObjectDB cleanup warnings remained non-blocking.
+- Local save reset note: after verification, the current user save slots were intentionally deleted from `%APPDATA%\Godot\app_userdata\Buy High Sell Low Stock Trading Simulator` (`slot_1` through `slot_5`, backups, and `daytrader_save_config.json`) and project-local smoke saves under `logs/saves` were also cleared. Next normal launch should have no loadable local saves unless Steam Cloud or another external source restores them.
+- 2026-05-14 follow-up: Twooter dialog trees are implemented across public replies and private Messages. `twooter_feed_data.json` / `twooter_source.json` now include shared reusable trees for `clean_intro`, `source_check`, `thesis_review`, `market_read`, `trust_building`, `suspicious_boundary`, and `event_invite`; the Twooter editor validates tree entry nodes, option counts, next-node refs, action ids, outcome ids, and account `social_profile.dialog_trees` refs.
+- Compact saved `twooter_social_state` now carries tree progress in `dialog_state.accounts` and `dialog_state.posts`, including active tree/node, last option/action, repeat count, last interaction day, cooldown day/reason, and step count. Old saves without tree state still normalize safely to no active branch and no cooldown.
+- `TwooterInteractionSystem` now resolves public and private dialog options from the active tree node, advances to the next node after a reply, persists player/account text rows, and applies a soft cooldown when the player repeats the same kind of answer too often in one day. Cooldown branches hide normal options and show muted "conversation is circling" copy instead of grinding relationship gains.
+- Tree-driven options now expose `tree_id`, `node_id`, `option_id`, `action_id`, `player_text`, `thesis_id`, `cost_ap`, `enabled`, and `cooldown_reason` through `get_twooter_snapshot()` and `get_twooter_message_thread()`. The public reply popup and private inline composer both carry this metadata, while Network-facing private actions still bridge into contacts, discoveries, and journal rows through the existing systems.
+- Verification for the dialog-tree pass: `git diff --check` passed with only CRLF warnings for the exported Twooter JSON files, Windows Godot `4.6.1` headless project load exited `0`, `python tools/twooter_editor/server.py --validate` passed with `0` errors / `0` warnings, `python tools/content_lint_dashboard/server.py --validate` passed with all 9 tools and all 15 runtime files valid, and quick smoke passed with `SMOKE_QUICK_OK normal_equity=94762318.11 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.` Usual post-success RID/ObjectDB cleanup warnings remained non-blocking.
+- 2026-05-14 follow-up: Twooter reply/message polish is implemented. Public reply bubbles now render clean account response text without visible `Account replies:` / `answers:` / `says:` prefixes, while legacy saved prefixed rows are cleaned at display time. The Twooter response pools in runtime/editor JSON and `TwooterInteractionSystem` defaults were updated to store clean response sentences going forward.
+- Message view now uses a stable DM layout: the thread list is wrapped in `SocialMessageThreadScroll`, message rows are wrapped in `SocialMessageRowsScroll`, the header is fixed above the scroll area, and the bottom `SocialMessageComposer` replaces the old raw vertical action-button stack. Opening an account still starts Message; an empty inbox remains quiet until the player opens an account and presses `Send message`.
+- Private Twooter messages now use three contextual inline dialog options. `GameManager.send_twooter_message(account_id, action_id, thesis_id := "", player_message_text := "")` and `TwooterInteractionSystem.apply_message_action(...)` accept the selected player sentence, while `get_twooter_message_thread()` returns `dialog_options` with `id`, `label`, `player_text`, `thesis_id`, `cost_ap`, and `enabled`. Old/direct callers still fall back to generated player-message text.
+- Verification for this reply/message polish pass: `git diff --check` passed, Windows Godot `4.6.1` headless project load exited `0`, `python tools/twooter_editor/server.py --validate` passed with `0` errors / `0` warnings, and `python tools/content_lint_dashboard/server.py --validate` passed with all 9 tools and all 15 runtime files valid. Quick smoke still could not complete in this shell: launching `SmokeTest.tscn` hung until timeout after the existing Godot signal `11` crash handler reported `Failed to open user://logs/godot2026-05-14T*.log`; two stuck headless Godot processes from that attempt were stopped.
+- 2026-05-14 follow-up: Twooter public post actions now use a reply-composer flow instead of direct `Support` / `Question` / `Ask source` buttons. Each post exposes one `Reply` button, opens a dark `SocialReplyComposerDialog`, offers three full-sentence reply options, typewrites the selected read-only player reply, enables the final `Reply` button after the typewriter completes, then renders the player reply followed by the account reply inline.
+- Twooter public conversations now persist compact chain metadata in `twooter_social_state.post_interactions`: `player_text`, `conversation_step`, `concluded`, `conclusion_reason`, and `followup_unlocked`. Low-stat chains conclude with `needs_more_stats` after the early gate; stronger relationship/credibility/importance can unlock a private `Message` follow-up after the v1 public-chain cap. Old reply rows without `player_text` still render safely as account replies only.
+- Verification for this reply-composer pass: `git diff --check` passed, Windows Godot `4.6.1` headless project load exited `0`, `python tools/twooter_editor/server.py --validate` passed with `0` errors / `0` warnings, and `python tools/content_lint_dashboard/server.py --validate` passed with all 9 tools and all 15 runtime files valid. Quick smoke could not complete in this shell because launching `SmokeTest.tscn` hit the existing Godot signal `11` scene-launch crash; the crash handler again reported `Failed to open user://logs/godot2026-05-14T*.log`.
+- 2026-05-14 follow-up: Twooter UI was tightened after the screenshot pass. The old compact-feed minimum width no longer forces the center column to overrun the left/right rails, feed/card spacing was padded out, post cards no longer show bullish/bearish sentiment bars or green/red tone borders/chips, public post actions no longer create private message threads, Message now starts empty until the player opens an account and presses `Send message`, selected account cards expose `Follow`, `Send message`, and `All accounts`, and following an account adds a `Following` feed tab next to `All`.
+- Verification for this Twooter UI follow-up: `git diff --check` passed, Windows Godot `4.6.1` headless project load exited `0`, `python tools/twooter_editor/server.py --validate` passed, and `python tools/content_lint_dashboard/server.py --validate` passed with all 9 tools and all 15 runtime files valid. Quick smoke could not be completed in this shell: launching `SmokeTest.tscn` now exits with Godot signal `11` and the crash handler reports `Failed to open user://logs/godot2026-05-14T*.log`; plain headless project load still succeeds.
+- 2026-05-14 recheck: the Twooter Social Hub implementation was audited against the written plan after a suspected connection cutoff. The core implementation was present, and this recheck tightened the remaining gaps: added private `ask_source_private`, `accept_invite`, and `respond_suspicious_request` scaffolds; added response-pool content for those actions; exposed private source checks plus conditional invite/suspicious-request buttons in Message view; and expanded smoke coverage for old saves without `twooter_social_state`, repeated same-day public diminishing returns, share-thesis AP/credibility/message behavior, and Network journal/discovery creation.
+- Verification for the recheck: `git diff --check` passed, `python tools/twooter_editor/server.py --validate` passed with `0` errors / `0` warnings, `python tools/content_lint_dashboard/server.py --validate` passed with all 9 tools and all 15 runtime files valid, Windows Godot `4.6.1` headless project load exited `0`, and quick smoke printed `SMOKE_QUICK_OK normal_equity=94762318.11 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.` Usual post-success RID/ObjectDB cleanup warnings remained non-blocking.
+- 2026-05-14 Windows continuation: Twooter Social Hub first pass is implemented. Twooter is now a wide dark social app with a visible left sidebar limited to `Home` and `Message`, a center feed, and a right rail for search/trending/who-to-follow. This replaces the older compact cream/blue feed notes below; the latest UI is intentionally screenshot-inspired and fixes the earlier cutoff/no-sidebar state.
+- New social runtime state lives in compact saved `RunState.twooter_social_state` with schema version `6`. Old saves default safely. Stored data is bounded to account stats, interacted post ids/replies, message rows, unread counts, and recent account timeline entries; generated public posts remain deterministic feed output rather than a large save payload.
+- `systems/TwooterInteractionSystem.gd` owns the mutable interaction layer. Public post actions are free and use diminishing same-day gains; private actions such as connect/message/source/tip/thesis sharing spend existing daily AP through `GameManager`. Account stats now track relationship, exposure, credibility, importance, following, and relationship stages from `stranger` through `inner_circle_candidate`.
+- `GameManager` now exposes `interact_with_twooter_post(post_id, action_id, thesis_id := "")`, `send_twooter_message(account_id, action_id, thesis_id := "")`, `follow_twooter_account(account_id)`, and `get_twooter_message_thread(account_id)`. `get_twooter_snapshot()` enriches posts with interaction options/reply history and adds message-thread, trending, who-to-follow, shareable-thesis, and social-state rows.
+- Twooter outcomes bridge into Network through stable generated contacts like `social_funda_thread`, Network journal rows, discoveries, and request scaffolding. Serious social outcomes such as useful tips, introductions, thesis responses, and suspicious requests are now structurally ready to appear in Network without adding gambling or direct cash loops.
+- Twooter content/editor data now supports `social_profile` hints and `interaction_response_pools` for varied public replies, skeptical replies, source asks, private messages, thesis responses, milestones, and suspicious-request hooks. Validation passes through both the Twooter editor and the aggregate content lint dashboard.
+- Verification for the Twooter Social Hub pass: `git diff --check` passed, Windows Godot `4.6.1` headless project load exited `0`, `python tools/content_lint_dashboard/server.py --validate` passed with all 9 editor validators and all 15 runtime JSON files valid, `python tools/twooter_editor/server.py --validate` passed, and quick smoke printed `SMOKE_QUICK_OK normal_equity=94762318.11 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.` Usual post-success RID/ObjectDB cleanup warnings remained non-blocking.
+- 2026-05-14 Windows continuation: Twooter was removed from the purchasable Upgrades system. `twooter_content` is no longer in the upgrade catalog, balance-upgrades editor source, or `RunState.UPGRADE_TRACK_IDS`; `GameManager.get_unlocked_twooter_access_tier()` now returns full public access tier `4`; legacy saved `upgrade_tiers.twooter_content` entries are ignored by upgrade normalization. Twooter remains available as ambient public market chatter for sentiment, Thesis evidence, Daily Recap activity, and desktop badges.
+- Verification for the Twooter-upgrade removal pass: `git diff --check` passed, content lint validation passed with all 9 editor validators and all 15 runtime JSON files valid, Windows Godot `4.6.1` headless project load exited `0`, and quick smoke printed `SMOKE_QUICK_OK normal_equity=94762318.11 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.` Usual post-success `res://logs` directory and RID/ObjectDB cleanup warnings remained non-blocking.
 - 2026-05-14 Windows continuation: Advance Day performance follow-up is implemented. `GameManager.get_company_market_rows(force_refresh := false)` now builds compact market/company rows without full `get_company_snapshot()` work, guarded `Advance Day` builds that row set once after `RunState.apply_day_result()`, `SummaryInsightSystem.build_daily_summary()` and News feed context reuse it, and Daily Recap now uses recap-specific portfolio/life totals instead of full Portfolio/Life snapshots. No save schema, simulation rewrite, or async/threading rewrite was introduced.
 - Guarded UI refreshes now avoid hidden work until the player can inspect it: `_refresh_all()` skips Dashboard during `advance_day_processing`, `_on_summary_ready()` skips the duplicate Dashboard refresh, phase-label changes no longer repaint Dashboard, hidden debug overlay refresh is skipped, hidden `LifeWidget` ignores direct `life_changed`, and deferred Dashboard/open-app catch-up waits while Daily Recap is visible, then resumes from the recap close path.
 - Latest normal-play perf on Windows Godot `4.6.1`: `NORMAL_PLAY_PERF_OK open_network=45.44ms advance_network_open_recap_ready=454.5ms advance_network_open=688.46ms advance_desktop_only_recap_ready=383.77ms advance_desktop_only=580.09ms open_stock=188.37ms advance_stock_open_recap_ready=398.2ms advance_stock_open=605.07ms open_news=184.19ms open_network_with_news=47.09ms advance_news_network_open_recap_ready=459.94ms advance_news_network_open=699.06ms flush_pending_save=15.78ms local_save_bytes=1603514`. Recap-ready average is about `424ms`; settled average is about `643ms`.
@@ -88,7 +120,7 @@ Read this file first in the next session.
 - Mac Godot verification now passes from PATH with Godot `4.6.2.stable.official.71f334935`: `godot --headless --path . --log-file /private/tmp/gorengan-project-load.log --quit` exited `0`, and `godot --headless --path . --log-file /private/tmp/gorengan-smoke-quick.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` exited `0` with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.` Non-blocking output included Steam not running, the macOS certificate-store warning, and trailing RID/ObjectDB cleanup warnings after smoke success.
 - Recent UI redesign batch is in the current uncommitted worktree: News, Twooter, and Stockbot received visual passes; `Load Run` was converted to a compact custom overlay; and new `assets/icons/` SVGs plus `.import` files are present. Do not assume a clean tree until this batch is committed.
 - News Browser has a Market Papers-inspired newspaper redesign while keeping the existing cream/brown game style. It uses `res://assets/market_papers/grunge/*.png` for subtle folds/smudges/stamps, adds a masthead with issue/date/price framing, source tabs, newspaper story cards, selected `OPEN` stamp treatment, and a fuller article detail pane. Behavior remains the same: outlet/year/month archive flow, article selection, source meetings, and linked meeting actions. The sidebar selected-card scroll jump was fixed so clicking a low card no longer yanks the list upward.
-- Twooter has a cream + blue old-social redesign. The app has a blue outer frame, compact header, live/access tier indicator, filter chips (`All`, `Companies`, `Sectors`, `Trending`), a derived ticker tape, circular avatar initials, tier pills, verified markers, sentiment bars, engagement rows, clickable account filters, and in-place thread expansion. No save/content schema changed.
+- Twooter now has the newer wide dark Social Hub redesign described at the top of this handoff. Older cream/blue feed notes from this UI batch are superseded.
 - Stockbot has a dark trading-dashboard redesign based on the attached reference while preserving the existing three-zone app structure. The shell, stock list, chart workspace, order ticket, chart grid/candles, toolbar buttons, search/tabs, and submit controls now use dark panels with blue trading accents. New SVG icons from `res://assets/icons/` are used by the toolbar/order/list controls; icon strokes were changed to light colors so they remain readable on dark buttons. Inner padding was reduced, watchlist row icons were removed, and watchlist selected-row styling now matches the `All Stock` selected state.
 - Main Menu `Load Run` now uses a custom compact `Control` overlay rather than a tall native `ConfirmationDialog`. The window hugs the save-slot content, keeps `Delete`, `Cancel`, and `Load` visible, uses readable cream/brown styling, and still supports deleting unreadable/current slots through the separate delete confirmation dialog. Smoke now treats `LoadSlotsDialog` as a `Control`.
 - Latest UI-batch validation before this handoff update: `git diff --check` passed; Godot headless project load passed; quick smoke passed with `SMOKE_QUICK_OK normal_equity=94009661.38 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.` Usual post-success Godot RID/resource cleanup warnings remain non-blocking.
@@ -518,7 +550,7 @@ Read this file first in the next session.
   - short-horizon `person-of-interest` sentiment generation
   - multi-day `special` market-regime arcs
 - A first-pass event-reading UX now exists in `News`
-- A first-pass smaller mobile-style social-feed UX now also exists in `Twooter`
+- A first-pass wide Social Hub UX now exists in `Twooter`
 - A first playable `Academy` desktop app now exists
 - A first playable `Thesis Board` desktop app now exists for manual research capture, deterministic report generation, and after-action thesis review
 - A first playable `Life` desktop app now exists for monthly cash-flow planning, housing/lifestyle choices, declared dividend income, runway, emergency loans, and bankruptcy-risk recovery
@@ -532,7 +564,7 @@ Read this file first in the next session.
   - zero-position players can still read simple public meeting notices where applicable, but the attendance action is disabled with shareholder-only reason text
   - zero-position players cannot open interactive `RUPSLB` sessions
   - buying after the record date does not grant eligibility; selling after the record date does not remove already-recorded eligibility
-- Upgrade tiers are bought with player cash and now drive trading fees, News access, Twooter access, chart indicators, and daily Network action points
+- Upgrade tiers are bought with player cash and now drive trading fees, News access, chart indicators, and daily Network action points; Twooter is full public access by default
 - A backtick console-command overlay now exists for cheat/testing commands
 - A `Ctrl+L` debug overlay now also exists for deeper runtime/event testing
 - Every generated company now has a persistent public management roster with generated `CEO`, `CFO`, and `Commissioner` insiders
@@ -600,7 +632,7 @@ Read this file first in the next session.
   - both controls currently just hide the window; there is no separate minimized/taskbar state yet
   - `STOCKBOT` opens the trading platform in the large dark desktop window
   - `News` opens a large beige `News Browser` window
-  - `Twooter` opens a smaller light social-feed window
+  - `Twooter` opens a wide dark social window with `Home` and `Message` navigation
   - `Academy` opens a warm newspaper-module learning window
   - `Thesis Board` opens a warm research-note builder window
   - `Life` opens a warm monthly cash-flow planning window with an `Overview` tab and a `Finance` tab for cash stress, emergency loans, repayment status, and bankruptcy risk
@@ -657,7 +689,7 @@ Read this file first in the next session.
 - The stock-terminal `Advance Day` button was removed; day progression now only lives on the desktop top bar
 - The old top `Focus` read in the navbar has been removed and replaced by `Cash Available`
 - The stock app window intentionally uses a dark trading theme, while the broader desktop, `News`, `Academy`, `Network`, and `Upgrades` content areas stay in the cream/brown visual language
-- `News`, `Academy`, `Network`, and `Upgrades` use shared Academy-style dark-brown desktop-window title chrome; `Twooter` keeps its specialized cream/blue social frame and `STOCKBOT` keeps its specialized dark trading frame
+- `News`, `Academy`, `Network`, and `Upgrades` use shared Academy-style dark-brown desktop-window title chrome; `Twooter` keeps its specialized dark social frame and `STOCKBOT` keeps its specialized dark trading frame
 - Optional UI font files now live in `assets/fonts/`; the UI auto-loads `app_font.ttf`, `app_font.otf`, then `OpenSans-Regular.ttf` for the main menu + game UI font style
 - Money formatting now uses Indonesian Rupiah style like `Rp1.000.000,00`; compact money uses comma decimals, e.g. `Rp1,25B`
 - The stock app is now contained inside a dedicated window container so the trading shell cannot spill outside the desktop window bounds
@@ -1009,16 +1041,18 @@ Read this file first in the next session.
   - builds a lightweight in-snapshot story memory from recent event history and active arcs so related follow-up articles can say things like `This follows yesterday's market talk`
 
 ## Twooter Feed
-- `Twooter` is no longer a blank placeholder
+- `Twooter` is now the player's primary free public social and information-gathering app
 - It still lives in `GameRoot.tscn` and is reparented into the runtime desktop window manager; there is still no separate scene for it
 - Current social model is:
   - the same underlying event systems still remain the source of truth
   - the social layer renders those events into short posts, reactions, and account chatter
-  - unlike `News`, progression here is account-access based rather than outlet-based
-- Current access behavior is upgrade-driven:
-  - fresh runs start at Twooter Content tier `4`, which unlocks account tier `1`
-  - buying Twooter Content upgrades unlocks account tiers `2`, `3`, and `4`
-  - the old temporary hardcoded unlocked access tier of `4` has been removed
+  - unlike `News`, this is public ambient chatter rather than an upgrade-gated information ladder
+  - a new mutable interaction layer stores compact relationship/message/reply state in `RunState.twooter_social_state`
+  - meaningful social outcomes can write Network journal/discovery/request rows through generated `social_<account_id>` contacts
+- Current access behavior:
+  - all authored account tiers are available by default as public market chatter
+  - `get_unlocked_twooter_access_tier()` returns `4`
+  - old saves that still contain `upgrade_tiers.twooter_content` ignore that key during upgrade normalization
 - Current account tiers are:
   - Tier `1`: `Gorengan Hunter`, `Rumor Lokal`, `Market Diary ID`
   - Tier `2`: `Flow Warung`, `Waduh Macro`, `Oil Tape Watch`, `Stockmap Notes`
@@ -1043,23 +1077,33 @@ Read this file first in the next session.
   - `source_chain_id`, `chain_family`, `meeting_id`, and `venue_type` when available from the corporate-action layer
   - target company / ticker / sector / person metadata when available
   - deterministic `likes`, `replies`, and `retwoots`
+  - enriched interaction options, relationship stage, and inline player/account reply history when social state exists
+- Current interaction behavior:
+  - each public post shows one `Reply` button; the popup composer offers three full-sentence dialog options from the active dialog-tree node
+  - public post replies are free and include supportive, skeptical, and source-ask style intents behind the sentence options
+  - the first meaningful same-account public interaction each day can improve relationship/exposure/credibility; repeated same-day interaction mainly adds flavor
+  - private Message uses an inline composer with three full-sentence dialog options; sending spends existing daily AP and can connect, ask for sources, request tips, share thesis evidence, or seed later invitations/bad requests
+  - gated options stay visible but disabled with explicit `blocked_reason` / `blocked_lines` guidance, so missing Thesis/trust/AP requirements tell the player what to build next
+  - account stats track relationship, exposure, credibility, importance, following, and stage (`stranger`, `familiar`, `trusted`, `inner_circle_candidate`)
+  - message threads are saved compactly with recent rows and unread counts
 - Current rendering behavior:
-  - the window is intentionally smaller and centered so it reads more like a phone/social app than a desktop dashboard
-  - the app now uses a cream + blue social frame with a visible blue border, blue active accents, soft blue-tinted panels, and cream/off-white feed surfaces
-  - header shows `Twooter`, live/status copy, access-tier label, and a compact tier progress indicator
-  - feed controls include chips for `All`, `Companies`, `Sectors`, and `Trending`; account-name filtering still works on top of the feed filter and can be cleared with `All accounts`
-  - a ticker tape is derived from visible posts first, then all posts, and shows `$TICKER` markers with tone coloring; there is no ticker click behavior yet
-  - the body is a single scrollable feed
-  - each post renders as a compact card with a circular avatar initial, verified marker when applicable, tier pill, account/handle/date/topic metadata, post text, optional ticker/company/sector chips, sentiment bar, and reactions
+  - the app now uses a wide dark screenshot-inspired social shell rather than the older compact phone-like feed
+  - the left sidebar is visible and intentionally limited to `Home` and `Message`
+  - the center column hosts the Home feed header, live/public status, filters, ticker chips, post cards, inline comment choices, and replies
+  - the right rail hosts search, `Trending`, and `Who to follow`; it hides first on narrow layouts
+  - the Message view shows an inbox/thread list, selected conversation, relationship status, scrollable message rows, and a fixed inline composer
+  - Message starts empty until the player opens an account and presses `Send message`; public post actions no longer create private threads by themselves
+  - feed controls include chips for `All`, `Following`, `Companies`, `Sectors`, and `Trending` when applicable; account-name filtering still works on top of the feed filter and can be cleared with `All accounts`
+  - a ticker tape is derived from visible posts first, then all posts, and shows neutral `$TICKER` markers; there is no ticker click behavior yet
+  - each post renders as a compact card with a circular avatar initial, verified marker when applicable, account/handle/date/topic metadata, post text, optional ticker/company/sector chips, neutral reactions, a single `Reply` affordance, and inline player/account reply bubbles
   - thread-capable posts render a compact `Thread` button; pressing it expands/collapses numbered thread lines in-place without opening a detail view
-  - there are no full profile pages or per-account tab pages in the current UI
-  - there is no separate selected-post detail pane in the current UI
-  - there are still no profile pages, follow buttons, relationship state, or player-reply mechanics in Twooter
+  - full profile pages and per-account tab pages are still future work
 - Current content source is editable:
   - `data/social/twooter_feed_data.json`
-  - this stores tier labels, account definitions, handles, verification flags, post templates, thread templates, and continuity copy
+  - this stores tier labels, account definitions, handles, verification flags, social profile hints, post templates, thread templates, continuity copy, interaction response pools, dialog trees, option requirements, and blocked prerequisite copy
 - Current generator implementation:
   - `systems/TwooterFeedSystem.gd`
+  - `systems/TwooterInteractionSystem.gd`
   - wired through `GameManager.get_twooter_snapshot()`
   - loaded through `DataRepository.gd`
   - builds a lightweight in-snapshot story memory from recent event history and active arcs so related posts can naturally reference prior rumor/denial/filing/meeting beats
@@ -1183,11 +1227,6 @@ Read this file first in the next session.
     - tier `3`: Intel level `2`, cost `Rp750.000`
     - tier `2`: Intel level `3`, cost `Rp2.500.000`
     - tier `1`: Intel level `4`, cost `Rp7.500.000`
-  - `Twooter Content`
-    - tier `4`: Access tier `1`
-    - tier `3`: Access tier `2`, cost `Rp750.000`
-    - tier `2`: Access tier `3`, cost `Rp2.500.000`
-    - tier `1`: Access tier `4`, cost `Rp7.500.000`
   - `Chart Indicators`
     - tier `4`: no indicators
     - tier `3`: `SMA 20`, cost `Rp1.000.000`
@@ -2009,11 +2048,11 @@ Read this file first in the next session.
   - `GameManager.generate_thesis_report(thesis_id)`
   - `GameManager.refresh_thesis_review(thesis_id)`
   - `GameManager.close_thesis(thesis_id)`
-- Upgrade consumers can use:
+- Upgrade and access consumers can use:
   - `GameManager.get_upgrade_shop_snapshot()`
   - `GameManager.purchase_upgrade(track_id)`
   - `GameManager.get_unlocked_news_intel_level()`
-  - `GameManager.get_unlocked_twooter_access_tier()`
+  - `GameManager.get_unlocked_twooter_access_tier()`; this returns public full access tier `4`, not a purchased upgrade state
   - `GameManager.get_unlocked_chart_indicator_ids()`
   - `GameManager.get_daily_action_snapshot()`
   - `GameManager.try_spend_daily_action(action_id, metadata := {})`
@@ -2117,7 +2156,7 @@ Read this file first in the next session.
   - Daily Recap visible text contains `Index Gorengan today` and no longer exposes `Market mood`, accumulation/distribution rows, or broker-style words such as `zombie`
   - News/Twooter/Network badges appear from current-day activity counts, persist through save/load, and clear when the relevant app is opened
   - `News` opens the event-driven desk with outlet buttons and populated stories
-  - `Twooter` opens the simplified mobile-style social feed with populated post cards
+  - `Twooter` opens the dark Social Hub with visible `Home` / `Message` sidebar navigation and populated interactable post cards
   - `Academy` desktop icon opens the Academy window
   - Academy shows the catalog category tabs, including `Mindset`, `Fundamental`, `Corporate Action`, `Technical`, and `Transactional`; Technical exposes eight sections, Mindset exposes fourteen, and Fundamental exposes twenty
   - Academy exposes the reserved lesson banner frame and keeps the selected module/action row inside the visible Academy window
@@ -2162,7 +2201,7 @@ Read this file first in the next session.
   - unaffordable upgrades fail without changing tier
   - Trading Fee upgrades lower buy/sell estimate fee rates
   - News Content upgrades unlock higher intel outlets
-  - Twooter Content upgrades unlock higher account tiers
+  - Twooter starts with full public account access and `twooter_content` is not purchasable
   - Chart Indicators upgrades unlock indicator toggles
   - Daily Action Points upgrades increase AP limit
   - successful Network actions spend daily AP
@@ -2479,12 +2518,12 @@ Read this file first in the next session.
   - there is no recap archive/history yet
   - badge counts are current-day approximate counts, not per-item unread tracking
   - the modal avoids broker/internal readouts by design, so deeper broker-flow diagnostics should stay in debug/dev surfaces rather than the player recap
-- `Twooter` is now a deterministic social feed with enriched fictional account voices and expandable threads, but still limited:
-  - account access is now upgrade-driven by `Twooter Content`, and thread-capable accounts can render numbered expandable thread lines
-  - there is no search / archive / pagination / bookmarking yet
-  - current post/thread text is still template-driven and intentionally editable; future work should tune account voice and coverage before adding relationship mechanics
-  - the simplified mobile feed intentionally drops per-account filters for now
-  - no richer account pages / follow system / custom finfluencer authoring UI yet
+- `Twooter` is now a deterministic social feed plus compact mutable relationship/message layer, but still limited:
+  - all account tiers are available as public market chatter by default, and thread-capable accounts can render numbered expandable thread lines
+  - post actions, follow state, message threads, relationship stages, and Network-facing outcomes exist as a first pass
+  - search UI is visual-only for now; archive, pagination, bookmarking, and richer account profile pages are still future work
+  - current post/reply/thread text is still template-driven and intentionally editable; future work should tune account voice, bespoke milestones, and late-game inner-circle chains
+  - no custom finfluencer authoring UI yet
 - `Network` is now a first playable contact system, but still limited:
   - discovery currently only comes from News, company Profile context, and floater referrals
   - there is now a shared meeting modal for simple venues, an interactive fullscreen `RUPSLB` overlay for supported corporate-action families, and chain-linked intel, but there is still no dedicated venue desktop app

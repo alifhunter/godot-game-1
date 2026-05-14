@@ -9,6 +9,758 @@
       "3": "Tier 3",
       "4": "Tier 4"
     },
+    "interaction_response_pools": {
+      "reply_support": [
+        "Good read. Keep the position sized to the evidence, not the noise.",
+        "Now make the tape prove it."
+      ],
+      "reply_skeptic": [
+        "Fair pushback. A clean thesis survives questions better than hype.",
+        "Skepticism helps. Watch whether {ticker} confirms the setup."
+      ],
+      "ask_source_public": [
+        "Source is public for now. The useful part is the watch item, not the whisper.",
+        "Treat it as a lead. Verify before it becomes conviction."
+      ],
+      "message_check_in": [
+        "DM received. Ask cleanly and I will answer cleanly.",
+        "I can compare notes, but bring a thesis instead of vibes."
+      ],
+      "connect": [
+        "Connected. I will remember how you read the market.",
+        "Alright, connection accepted. Keep the signal clean."
+      ],
+      "ask_source_private": [
+        "Do not treat {ticker} as confirmed until filings or volume line up.",
+        "The clean source is still missing. Track {ticker}, but keep the thesis falsifiable."
+      ],
+      "share_thesis": [
+        "I read {thesis_title}. The structure is useful; now track what would make it wrong.",
+        "Sharing a thesis is better than chasing a post. I will remember this."
+      ],
+      "ask_tip": [
+        "No magic leak. For {ticker}, watch confirmation and volume before trusting the move.",
+        "Clean read only: {ticker} needs follow-through before the story deserves size."
+      ],
+      "accept_invite": [
+        "Invite noted. Come prepared; access only helps if your questions are clean.",
+        "You can join the room, but keep your read disciplined and document what changes."
+      ],
+      "respond_suspicious_request": [
+        "Good. Keep that boundary. Bad requests usually cost more than they promise.",
+        "Clean answer. Walking away from a suspicious ask keeps your reputation useful."
+      ]
+    },
+    "dialog_trees": {
+      "clean_intro": {
+        "entry_node": "open",
+        "nodes": {
+          "open": {
+            "account_replies": [
+              "Good. Start with the part that would prove you wrong.",
+              "Clean reads begin with limits. What would make you step back?"
+            ],
+            "options": [
+              {
+                "id": "define_process",
+                "label": "Process",
+                "private_action_id": "message_check_in",
+                "player_lines": [
+                  "I am trying to separate useful context from noise. What would you check first?",
+                  "I want to build the read properly before I act. Where should I start?"
+                ],
+                "next_node": "evidence"
+              },
+              {
+                "id": "ask_public_evidence",
+                "label": "Evidence",
+                "private_action_id": "ask_source_private",
+                "public_action_id": "ask_source_public",
+                "player_lines": [
+                  "Can you point me to the clean evidence instead of just the chatter?",
+                  "What public evidence would make this worth tracking?"
+                ],
+                "next_node": "evidence",
+                "outcome": "source_check"
+              },
+              {
+                "id": "connect_clean",
+                "label": "Connect",
+                "private_action_id": "connect",
+                "player_lines": [
+                  "Your read is useful. I want to stay connected and keep this evidence-first.",
+                  "Let's connect, but I want the conversation to stay clean."
+                ],
+                "next_node": "trust",
+                "outcome": "contact_discovery"
+              }
+            ]
+          },
+          "evidence": {
+            "account_replies": [
+              "Then watch confirmation, not certainty. The market rarely gives both.",
+              "Better. A clean source only matters if the next tape agrees."
+            ],
+            "options": [
+              {
+                "id": "state_disproof",
+                "label": "Disproof",
+                "private_action_id": "message_check_in",
+                "public_action_id": "reply_skeptic",
+                "player_lines": [
+                  "If volume fades or the filing does not confirm it, I step back.",
+                  "I will treat the idea as wrong if the follow-through disappears."
+                ],
+                "next_node": "trust"
+              },
+              {
+                "id": "ask_clean_read",
+                "label": "Clean read",
+                "private_action_id": "ask_tip",
+                "public_action_id": "reply_support",
+                "player_lines": [
+                  "What would you watch next without turning it into a shortcut?",
+                  "Give me the clean watch item, not a buy signal."
+                ],
+                "next_node": "trust",
+                "outcome": "clean_read"
+              },
+              {
+                "id": "bring_thesis",
+                "label": "Thesis",
+                "private_action_id": "share_thesis",
+                "requirements": {
+                  "shareable_thesis": true
+                },
+                "blocked_lines": [
+                  "Build a thesis first, then I can challenge the weak part.",
+                  "Bring a written thesis first; without it we are only trading vibes."
+                ],
+                "player_lines": [
+                  "I have a thesis ready. Can you challenge the weak part?",
+                  "I want to share my thesis and hear what breaks first."
+                ],
+                "next_node": "trust",
+                "outcome": "thesis_response"
+              }
+            ]
+          },
+          "trust": {
+            "account_replies": [
+              "That is a better way to ask. Keep showing your work.",
+              "Now we are talking process instead of signals."
+            ],
+            "options": [
+              {
+                "id": "close_loop",
+                "label": "Close loop",
+                "private_action_id": "message_check_in",
+                "public_action_id": "reply_support",
+                "player_lines": [
+                  "I will come back after the next tape gives us more information.",
+                  "I will track it and avoid forcing a trade today."
+                ],
+                "next_node": "evidence"
+              },
+              {
+                "id": "ask_next_context",
+                "label": "Next context",
+                "private_action_id": "ask_tip",
+                "player_lines": [
+                  "What context should I bring next time so this is useful?",
+                  "What would make the next conversation more precise?"
+                ],
+                "next_node": "evidence"
+              },
+              {
+                "id": "share_next_thesis",
+                "label": "Share thesis",
+                "private_action_id": "share_thesis",
+                "requirements": {
+                  "shareable_thesis": true
+                },
+                "blocked_lines": [
+                  "Build the thesis first. I need something concrete to review.",
+                  "Write the thesis first; then we can talk about what breaks it."
+                ],
+                "player_lines": [
+                  "I have enough structure now; I want to share the thesis and have you challenge it.",
+                  "I will bring the written thesis next, not just another question."
+                ],
+                "next_node": "evidence",
+                "outcome": "thesis_response"
+              }
+            ]
+          }
+        }
+      },
+      "source_check": {
+        "entry_node": "source",
+        "nodes": {
+          "source": {
+            "account_replies": [
+              "Do not confuse a lead with proof.",
+              "Source first, conviction later."
+            ],
+            "options": [
+              {
+                "id": "ask_origin",
+                "label": "Origin",
+                "private_action_id": "ask_source_private",
+                "public_action_id": "ask_source_public",
+                "player_lines": [
+                  "Where did this read start, and what part is actually public?",
+                  "What source would you trust before treating this seriously?"
+                ],
+                "next_node": "verify",
+                "outcome": "source_check"
+              },
+              {
+                "id": "pushback",
+                "label": "Pushback",
+                "private_action_id": "message_check_in",
+                "public_action_id": "reply_skeptic",
+                "player_lines": [
+                  "If everyone is reading the same clue, I want to know what invalidates it.",
+                  "This could be crowded. What would make you change your mind?"
+                ],
+                "next_node": "verify"
+              },
+              {
+                "id": "watch_only",
+                "label": "Watch",
+                "private_action_id": "ask_tip",
+                "public_action_id": "reply_support",
+                "player_lines": [
+                  "I will keep it as a watch item until evidence catches up.",
+                  "I am watching, not chasing, until confirmation shows up."
+                ],
+                "next_node": "verify",
+                "outcome": "clean_read"
+              }
+            ]
+          },
+          "verify": {
+            "account_replies": [
+              "Good. Verification beats speed when the tape is noisy.",
+              "That is the clean habit: verify, then decide."
+            ],
+            "options": [
+              {
+                "id": "file_check",
+                "label": "Filing",
+                "private_action_id": "ask_source_private",
+                "public_action_id": "ask_source_public",
+                "player_lines": [
+                  "I will check filings and volume before I trust the angle.",
+                  "I want a filing, date, or volume trail before calling this real."
+                ],
+                "next_node": "source",
+                "outcome": "source_check"
+              },
+              {
+                "id": "thesis_check",
+                "label": "Thesis",
+                "private_action_id": "share_thesis",
+                "requirements": {
+                  "shareable_thesis": true
+                },
+                "blocked_lines": [
+                  "Turn it into a thesis first; then I can test the assumptions.",
+                  "Write the thesis first so the idea has a falsifiable shape."
+                ],
+                "player_lines": [
+                  "I can turn this into a thesis and test the assumptions.",
+                  "I will write the thesis first so the idea has a falsifiable shape."
+                ],
+                "next_node": "source",
+                "outcome": "thesis_response"
+              },
+              {
+                "id": "come_back",
+                "label": "Wait",
+                "private_action_id": "message_check_in",
+                "public_action_id": "reply_support",
+                "player_lines": [
+                  "I will wait for new tape before asking again.",
+                  "I will come back when the market gives us more data."
+                ],
+                "next_node": "source"
+              }
+            ]
+          }
+        }
+      },
+      "thesis_review": {
+        "entry_node": "review",
+        "nodes": {
+          "review": {
+            "account_replies": [
+              "A thesis is useful only if it names its own failure point.",
+              "Show me the assumption that hurts if you are wrong."
+            ],
+            "options": [
+              {
+                "id": "share_structure",
+                "label": "Share thesis",
+                "private_action_id": "share_thesis",
+                "requirements": {
+                  "shareable_thesis": true
+                },
+                "blocked_lines": [
+                  "Build your thesis first. I cannot review a direction without structure.",
+                  "Write a thesis first; I need assumptions, not just a ticker."
+                ],
+                "player_lines": [
+                  "I want to share my thesis and have you attack the weakest assumption.",
+                  "Can you review my thesis for structure, not just direction?"
+                ],
+                "next_node": "challenge",
+                "outcome": "thesis_response"
+              },
+              {
+                "id": "ask_weakness",
+                "label": "Weakness",
+                "private_action_id": "message_check_in",
+                "player_lines": [
+                  "The part I am least sure about is the follow-through. How would you test it?",
+                  "I am trying to find what breaks first before I trust it."
+                ],
+                "next_node": "challenge"
+              },
+              {
+                "id": "source_thesis",
+                "label": "Source",
+                "private_action_id": "ask_source_private",
+                "player_lines": [
+                  "What source would make my thesis cleaner or force me to rewrite it?",
+                  "Which evidence should I check before I defend this thesis?"
+                ],
+                "next_node": "challenge",
+                "outcome": "source_check"
+              }
+            ]
+          },
+          "challenge": {
+            "account_replies": [
+              "Better. Now your opinion has a shape the market can test.",
+              "That is the difference between a thesis and a feeling."
+            ],
+            "options": [
+              {
+                "id": "accept_challenge",
+                "label": "Accept",
+                "private_action_id": "message_check_in",
+                "player_lines": [
+                  "I will rewrite it with that failure point in mind.",
+                  "I will update the thesis before I ask for another read."
+                ],
+                "next_node": "review"
+              },
+              {
+                "id": "ask_read",
+                "label": "Clean read",
+                "private_action_id": "ask_tip",
+                "player_lines": [
+                  "What should I watch next to confirm or kill the thesis?",
+                  "What is the cleanest next signal for this thesis?"
+                ],
+                "next_node": "review",
+                "outcome": "clean_read"
+              },
+              {
+                "id": "connect_process",
+                "label": "Connect",
+                "private_action_id": "connect",
+                "player_lines": [
+                  "This is useful. I want to keep comparing thesis work with you.",
+                  "Let's connect; I will bring cleaner work next time."
+                ],
+                "next_node": "review",
+                "outcome": "contact_discovery"
+              }
+            ]
+          }
+        }
+      },
+      "market_read": {
+        "entry_node": "read",
+        "nodes": {
+          "read": {
+            "account_replies": [
+              "The move is only useful if you know what kind of move it is.",
+              "A candle is not a thesis. Context first."
+            ],
+            "options": [
+              {
+                "id": "support_context",
+                "label": "Context",
+                "private_action_id": "ask_tip",
+                "public_action_id": "reply_support",
+                "player_lines": [
+                  "I like the context, but I want the next tape to confirm it.",
+                  "This read helps, but I am not treating one move as proof."
+                ],
+                "next_node": "follow",
+                "outcome": "clean_read"
+              },
+              {
+                "id": "question_flow",
+                "label": "Question",
+                "private_action_id": "message_check_in",
+                "public_action_id": "reply_skeptic",
+                "player_lines": [
+                  "How much of this is real demand versus everyone reacting to the same headline?",
+                  "What would make you say the move is fading instead of building?"
+                ],
+                "next_node": "follow"
+              },
+              {
+                "id": "ask_source",
+                "label": "Source",
+                "private_action_id": "ask_source_private",
+                "public_action_id": "ask_source_public",
+                "player_lines": [
+                  "What clean source should I check before I trust this read?",
+                  "Is there a filing or public clue behind this move?"
+                ],
+                "next_node": "follow",
+                "outcome": "source_check"
+              }
+            ]
+          },
+          "follow": {
+            "account_replies": [
+              "Good. Now wait for the market to answer.",
+              "That is enough for now; new tape matters more than more words."
+            ],
+            "options": [
+              {
+                "id": "wait_next",
+                "label": "Wait",
+                "private_action_id": "message_check_in",
+                "public_action_id": "reply_support",
+                "player_lines": [
+                  "I will wait for the next session before forcing another read.",
+                  "I will watch the follow-through instead of asking for certainty."
+                ],
+                "next_node": "read"
+              },
+              {
+                "id": "ask_watch",
+                "label": "Watch item",
+                "private_action_id": "ask_tip",
+                "player_lines": [
+                  "What single watch item would keep this clean?",
+                  "What should I monitor without treating it as a signal?"
+                ],
+                "next_node": "read",
+                "outcome": "clean_read"
+              },
+              {
+                "id": "source_after",
+                "label": "Verify",
+                "private_action_id": "ask_source_private",
+                "public_action_id": "ask_source_public",
+                "player_lines": [
+                  "If a better source appears, I will verify before acting.",
+                  "I need cleaner evidence before this becomes conviction."
+                ],
+                "next_node": "read",
+                "outcome": "source_check"
+              }
+            ]
+          }
+        }
+      },
+      "trust_building": {
+        "entry_node": "trust",
+        "nodes": {
+          "trust": {
+            "account_replies": [
+              "You are asking better questions now.",
+              "I will spend more time when the questions stay this clean."
+            ],
+            "options": [
+              {
+                "id": "ask_room",
+                "label": "Room",
+                "private_action_id": "accept_invite",
+                "requirements": {
+                  "relationship_stage": "trusted"
+                },
+                "blocked_lines": [
+                  "Build more trust first. Rooms open after your questions prove useful.",
+                  "Not yet. Earn more trust before asking for an invite."
+                ],
+                "player_lines": [
+                  "If there is a room worth joining, I will bring a clean question.",
+                  "I can join, but I want the room to stay evidence-first."
+                ],
+                "next_node": "after",
+                "outcome": "event_invite"
+              },
+              {
+                "id": "share_work",
+                "label": "Share work",
+                "private_action_id": "share_thesis",
+                "requirements": {
+                  "shareable_thesis": true
+                },
+                "blocked_lines": [
+                  "Bring written thesis work first. I cannot judge a blank page.",
+                  "Build the thesis first; then I can judge the process."
+                ],
+                "player_lines": [
+                  "I will share the thesis so you can judge the process.",
+                  "I want you to challenge my written work, not just the trade idea."
+                ],
+                "next_node": "after",
+                "outcome": "thesis_response"
+              },
+              {
+                "id": "ask_next",
+                "label": "Next",
+                "private_action_id": "ask_tip",
+                "public_action_id": "reply_support",
+                "player_lines": [
+                  "What should I bring next time so the conversation is useful?",
+                  "What next context would make this worth revisiting?"
+                ],
+                "next_node": "after",
+                "outcome": "clean_read"
+              }
+            ]
+          },
+          "after": {
+            "account_replies": [
+              "Bring receipts next time. That is how trust compounds.",
+              "Good. Access is only useful when your process improves."
+            ],
+            "options": [
+              {
+                "id": "ack_process",
+                "label": "Process",
+                "private_action_id": "message_check_in",
+                "public_action_id": "reply_support",
+                "player_lines": [
+                  "I will bring evidence next time, not just a hunch.",
+                  "I will keep the process clean and come back with receipts."
+                ],
+                "next_node": "trust"
+              },
+              {
+                "id": "ask_source_again",
+                "label": "Source",
+                "private_action_id": "ask_source_private",
+                "public_action_id": "ask_source_public",
+                "player_lines": [
+                  "I will verify the source before I take the next step.",
+                  "Point me to what is public; I will do the work from there."
+                ],
+                "next_node": "trust",
+                "outcome": "source_check"
+              },
+              {
+                "id": "clean_boundary",
+                "label": "Boundary",
+                "private_action_id": "respond_suspicious_request",
+                "player_lines": [
+                  "If anything crosses a line, I am out.",
+                  "I want access, but not enough to take a dirty request."
+                ],
+                "next_node": "trust",
+                "outcome": "suspicious_boundary"
+              }
+            ]
+          }
+        }
+      },
+      "suspicious_boundary": {
+        "entry_node": "boundary",
+        "nodes": {
+          "boundary": {
+            "account_replies": [
+              "Some doors are not worth opening.",
+              "A bad ask can ruin a good run."
+            ],
+            "options": [
+              {
+                "id": "keep_clean",
+                "label": "Keep clean",
+                "private_action_id": "respond_suspicious_request",
+                "player_lines": [
+                  "If the ask is not public, I am out.",
+                  "I am keeping this clean. No dirty requests."
+                ],
+                "next_node": "safe",
+                "outcome": "suspicious_boundary"
+              },
+              {
+                "id": "ask_public_only",
+                "label": "Public only",
+                "private_action_id": "ask_source_private",
+                "player_lines": [
+                  "Give me only what I can verify publicly.",
+                  "If there is no public trail, I do not want it."
+                ],
+                "next_node": "safe",
+                "outcome": "source_check"
+              },
+              {
+                "id": "walk_away",
+                "label": "Walk away",
+                "private_action_id": "message_check_in",
+                "player_lines": [
+                  "I would rather miss the move than cross that line.",
+                  "I am stepping back until the read is clean."
+                ],
+                "next_node": "safe"
+              }
+            ]
+          },
+          "safe": {
+            "account_replies": [
+              "Good boundary. Reputation lasts longer than a hot tip.",
+              "That answer keeps you in better rooms later."
+            ],
+            "options": [
+              {
+                "id": "ack_boundary",
+                "label": "Acknowledge",
+                "private_action_id": "message_check_in",
+                "player_lines": [
+                  "I will keep that line clear.",
+                  "I want my process to survive the trade."
+                ],
+                "next_node": "boundary"
+              },
+              {
+                "id": "clean_source",
+                "label": "Clean source",
+                "private_action_id": "ask_source_private",
+                "player_lines": [
+                  "If there is a clean source, I will check that instead.",
+                  "Point me only to public evidence."
+                ],
+                "next_node": "boundary",
+                "outcome": "source_check"
+              },
+              {
+                "id": "connect_cleanly",
+                "label": "Connect",
+                "private_action_id": "connect",
+                "player_lines": [
+                  "I will connect only if we keep this clean.",
+                  "Let's stay connected, but with clear boundaries."
+                ],
+                "next_node": "boundary",
+                "outcome": "contact_discovery"
+              }
+            ]
+          }
+        }
+      },
+      "event_invite": {
+        "entry_node": "invite",
+        "nodes": {
+          "invite": {
+            "account_replies": [
+              "There may be a room worth joining, but do not confuse access with truth.",
+              "If you come in, bring one useful question."
+            ],
+            "options": [
+              {
+                "id": "accept_clean",
+                "label": "Accept invite",
+                "private_action_id": "accept_invite",
+                "requirements": {
+                  "relationship_stage": "trusted"
+                },
+                "blocked_lines": [
+                  "Build more trust first. An invite only makes sense when your process is known.",
+                  "Not yet. Keep showing clean work before entering a room."
+                ],
+                "player_lines": [
+                  "I can join, and I will bring one clean question.",
+                  "I will show up prepared and keep the room evidence-first."
+                ],
+                "next_node": "after",
+                "outcome": "event_invite"
+              },
+              {
+                "id": "ask_purpose",
+                "label": "Purpose",
+                "private_action_id": "message_check_in",
+                "player_lines": [
+                  "What is the purpose of the room, and what should I prepare?",
+                  "I want to know what question would actually help there."
+                ],
+                "next_node": "after"
+              },
+              {
+                "id": "share_before",
+                "label": "Share thesis",
+                "private_action_id": "share_thesis",
+                "requirements": {
+                  "shareable_thesis": true
+                },
+                "blocked_lines": [
+                  "Build a thesis first so the room has something concrete.",
+                  "Write the thesis first; do not show up empty."
+                ],
+                "player_lines": [
+                  "I will share my thesis first so the room has something concrete.",
+                  "Let me bring my thesis instead of showing up empty."
+                ],
+                "next_node": "after",
+                "outcome": "thesis_response"
+              }
+            ]
+          },
+          "after": {
+            "account_replies": [
+              "Good. Prepared people get invited back.",
+              "That is the right way to treat access: useful, not magical."
+            ],
+            "options": [
+              {
+                "id": "confirm_prepare",
+                "label": "Prepare",
+                "private_action_id": "message_check_in",
+                "player_lines": [
+                  "I will prepare before I ask for more access.",
+                  "I will bring notes, not guesses."
+                ],
+                "next_node": "invite"
+              },
+              {
+                "id": "ask_source",
+                "label": "Source",
+                "private_action_id": "ask_source_private",
+                "player_lines": [
+                  "What public source should I check before the room?",
+                  "What should I verify before I show up?"
+                ],
+                "next_node": "invite",
+                "outcome": "source_check"
+              },
+              {
+                "id": "clean_boundary",
+                "label": "Boundary",
+                "private_action_id": "respond_suspicious_request",
+                "player_lines": [
+                  "If the room turns dirty, I am leaving.",
+                  "Access is useful only if it stays clean."
+                ],
+                "next_node": "invite",
+                "outcome": "suspicious_boundary"
+              }
+            ]
+          }
+        }
+      }
+    },
     "accounts": [
       {
         "id": "gorengan_hunter",
@@ -16,7 +768,13 @@
         "handle": "@gorenganhunter",
         "tier": 1,
         "verified": false,
-        "voice": "retail_hype"
+        "voice": "retail_hype",
+        "social_profile": {
+          "role": "Retail momentum chatter",
+          "affiliation_role": "retail_chatter",
+          "risk_profile": "noisy",
+          "follow_weight": 42
+        }
       },
       {
         "id": "rumor_lokal",
@@ -24,7 +782,13 @@
         "handle": "@rumorlokal",
         "tier": 1,
         "verified": false,
-        "voice": "rumor_feed"
+        "voice": "rumor_feed",
+        "social_profile": {
+          "role": "Rumor aggregator",
+          "affiliation_role": "rumor_watch",
+          "risk_profile": "suspicious",
+          "follow_weight": 36
+        }
       },
       {
         "id": "market_diary_id",
@@ -33,7 +797,13 @@
         "tier": 1,
         "verified": false,
         "voice": "market_diary",
-        "thread_preference": true
+        "thread_preference": true,
+        "social_profile": {
+          "role": "Market diarist",
+          "affiliation_role": "public_commentary",
+          "risk_profile": "clean",
+          "follow_weight": 62
+        }
       },
       {
         "id": "flow_warung",
@@ -41,7 +811,13 @@
         "handle": "@flowwarung",
         "tier": 2,
         "verified": false,
-        "voice": "flow_watch"
+        "voice": "flow_watch",
+        "social_profile": {
+          "role": "Broker flow watcher",
+          "affiliation_role": "flow_watch",
+          "risk_profile": "clean",
+          "follow_weight": 58
+        }
       },
       {
         "id": "waduh_macro",
@@ -49,7 +825,13 @@
         "handle": "@waduhmacro",
         "tier": 2,
         "verified": true,
-        "voice": "macro_watch"
+        "voice": "macro_watch",
+        "social_profile": {
+          "role": "Macro commentator",
+          "affiliation_role": "macro_watch",
+          "risk_profile": "clean",
+          "follow_weight": 54
+        }
       },
       {
         "id": "oil_tape_watch",
@@ -83,7 +865,13 @@
         "tier": 3,
         "verified": true,
         "voice": "funda_thread",
-        "thread_preference": true
+        "thread_preference": true,
+        "social_profile": {
+          "role": "Fundamental analyst",
+          "affiliation_role": "analyst",
+          "risk_profile": "clean",
+          "follow_weight": 76
+        }
       },
       {
         "id": "emiten_concepts",

@@ -56,7 +56,7 @@ Early game:
 - Meet the first useful contact.
 
 Mid game:
-- Upgrade News, Twooter, Academy, and Network access.
+- Upgrade News, Academy, and Network access while growing Twooter relationships and credibility through public chatter and private messages.
 - Attend the first RUPS or RUPSLB.
 - Use source cross-checks before acting on tips.
 - Build a dividend or growth thesis.
@@ -102,6 +102,13 @@ Possible branches:
 
 ### Social And Meeting Actions
 Keep social play useful, bounded, and transparent.
+
+Twooter should be the player's primary free social and information-gathering surface:
+- Public posts are ambient market chatter that can be replied to for relationship, exposure, and credibility growth.
+- Public interaction should have diminishing same-day gains so it feels social, not farmable.
+- Private actions such as messaging, connecting, asking for sources, requesting tips, or sharing a thesis should spend existing daily AP.
+- Useful outcomes should flow into Network as journal entries, discoveries, invitations, requests, or suspicious approaches.
+- Strong relationships can eventually open late-game inner-circle introductions, but those chains should be market-facing and risk-aware instead of direct payday loops.
 
 Every action should show:
 - AP or time cost

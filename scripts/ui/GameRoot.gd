@@ -250,10 +250,11 @@ const STOCKBOT_WINDOW_CONTENT_BOTTOM_MARGIN := 8
 const DESKTOP_WINDOW_TITLE_BAR_HEIGHT := 40.0
 const DESKTOP_WINDOW_MIN_WIDTH := 360.0
 const DESKTOP_WINDOW_MIN_HEIGHT := 260.0
-const SOCIAL_WINDOW_MAX_WIDTH := 460.0
-const SOCIAL_WINDOW_MAX_HEIGHT := 780.0
-const SOCIAL_WINDOW_MIN_HEIGHT := 520.0
+const SOCIAL_WINDOW_MAX_WIDTH := 1220.0
+const SOCIAL_WINDOW_MAX_HEIGHT := 820.0
+const SOCIAL_WINDOW_MIN_HEIGHT := 560.0
 const SOCIAL_FEED_FILTER_ALL := "all"
+const SOCIAL_FEED_FILTER_FOLLOWING := "following"
 const SOCIAL_FEED_FILTER_COMPANIES := "companies"
 const SOCIAL_FEED_FILTER_SECTORS := "sectors"
 const SOCIAL_FEED_FILTER_TRENDING := "trending"
@@ -264,20 +265,18 @@ const SOCIAL_FEED_FILTERS := [
 	{"id": SOCIAL_FEED_FILTER_TRENDING, "label": "Trending"}
 ]
 const SOCIAL_TICKER_TAPE_LIMIT := 6
-const COLOR_TWOOTER_PAGE := Color(0.968627, 0.964706, 0.898039, 1)
-const COLOR_TWOOTER_SURFACE := Color(0.952941, 0.94902, 0.87451, 1)
-const COLOR_TWOOTER_CARD := Color(0.988235, 0.980392, 0.92549, 1)
-const COLOR_TWOOTER_BLUE := Color(0.113725, 0.431373, 0.709804, 1)
-const COLOR_TWOOTER_BLUE_DARK := Color(0.066667, 0.25098, 0.431373, 1)
-const COLOR_TWOOTER_BLUE_TINT := Color(0.878431, 0.933333, 0.956863, 1)
-const COLOR_TWOOTER_BLUE_EDGE := Color(0.513725, 0.698039, 0.792157, 1)
-const COLOR_TWOOTER_TEXT := Color(0.156863, 0.129412, 0.082353, 1)
-const COLOR_TWOOTER_MUTED := Color(0.423529, 0.356863, 0.235294, 1)
-const COLOR_TWOOTER_FAINT := Color(0.619608, 0.552941, 0.392157, 1)
-const COLOR_TWOOTER_BORDER := Color(0.686275, 0.584314, 0.352941, 1)
-const COLOR_TWOOTER_BULL := Color(0.117647, 0.470588, 0.290196, 1)
-const COLOR_TWOOTER_BEAR := Color(0.635294, 0.098039, 0.164706, 1)
-const COLOR_TWOOTER_BEAR_TINT := Color(0.972549, 0.890196, 0.839216, 1)
+const COLOR_TWOOTER_PAGE := Color(0.0, 0.0, 0.0, 1)
+const COLOR_TWOOTER_SURFACE := Color(0.086275, 0.094118, 0.105882, 1)
+const COLOR_TWOOTER_CARD := Color(0.0, 0.0, 0.0, 1)
+const COLOR_TWOOTER_BLUE := Color(0.113725, 0.631373, 0.94902, 1)
+const COLOR_TWOOTER_BLUE_DARK := Color(0.0, 0.596078, 1.0, 1)
+const COLOR_TWOOTER_BLUE_TINT := Color(0.12549, 0.14902, 0.176471, 1)
+const COLOR_TWOOTER_BLUE_EDGE := Color(0.156863, 0.180392, 0.207843, 1)
+const COLOR_TWOOTER_TEXT := Color(0.937255, 0.94902, 0.960784, 1)
+const COLOR_TWOOTER_MUTED := Color(0.513725, 0.568627, 0.627451, 1)
+const COLOR_TWOOTER_FAINT := Color(0.372549, 0.415686, 0.470588, 1)
+const COLOR_TWOOTER_BORDER := Color(0.176471, 0.196078, 0.223529, 1)
+const COLOR_TWOOTER_LIVE := Color(0.0, 0.792157, 0.533333, 1)
 const DASHBOARD_MOVER_LIMIT := 15
 const DASHBOARD_WEEKDAY_NAMES := ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 const DASHBOARD_MONTH_NAMES := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -430,6 +429,18 @@ var academy_quiz_option_buttons: Dictionary = {}
 var expanded_social_thread_ids: Dictionary = {}
 var selected_social_account_id: String = ""
 var selected_social_feed_filter_id: String = SOCIAL_FEED_FILTER_ALL
+var selected_social_view_id: String = "home"
+var selected_social_message_account_id: String = ""
+var social_reply_dialog: Control = null
+var social_reply_context_label: Label = null
+var social_reply_text_label: Label = null
+var social_reply_option_buttons: Array[Button] = []
+var social_reply_send_button: Button = null
+var social_reply_cancel_button: Button = null
+var social_reply_typing_tween: Tween = null
+var pending_social_reply_post_id: String = ""
+var pending_social_reply_action_id: String = ""
+var pending_social_reply_text: String = ""
 var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 
 @onready var desktop_layer: Control = $DesktopLayer
@@ -593,6 +604,31 @@ var social_filter_chips: HBoxContainer = null
 var social_ticker_tape_panel: PanelContainer = null
 var social_ticker_tape_scroll: ScrollContainer = null
 var social_ticker_tape: HBoxContainer = null
+var social_app_shell: HBoxContainer = null
+var social_left_sidebar: PanelContainer = null
+var social_left_nav_buttons: Dictionary = {}
+var social_center_panel: PanelContainer = null
+var social_right_rail: VBoxContainer = null
+var social_search_input: LineEdit = null
+var social_trending_rows: VBoxContainer = null
+var social_follow_rows: VBoxContainer = null
+var social_message_view: HBoxContainer = null
+var social_message_thread_scroll: ScrollContainer = null
+var social_message_threads: VBoxContainer = null
+var social_message_detail: VBoxContainer = null
+var social_message_header: VBoxContainer = null
+var social_message_rows_scroll: ScrollContainer = null
+var social_message_rows: VBoxContainer = null
+var social_message_actions: VBoxContainer = null
+var social_message_composer: PanelContainer = null
+var social_message_composer_text_label: Label = null
+var social_message_option_buttons: Array[Button] = []
+var social_message_send_button: Button = null
+var social_message_typing_tween: Tween = null
+var pending_social_message_account_id: String = ""
+var pending_social_message_action_id: String = ""
+var pending_social_message_thesis_id: String = ""
+var pending_social_message_text: String = ""
 @onready var network_window: MarginContainer = $NetworkWindow
 @onready var network_window_body: PanelContainer = $NetworkWindow/NetworkWindowBody
 @onready var network_title_label: Label = $NetworkWindow/NetworkWindowBody/NetworkWindowMargin/NetworkWindowVBox/NetworkHeaderRow/NetworkTitleLabel
@@ -993,6 +1029,7 @@ func _ready() -> void:
 	GameManager.portfolio_changed.connect(_on_portfolio_changed)
 	GameManager.watchlist_changed.connect(_on_watchlist_changed)
 	GameManager.network_changed.connect(_on_network_changed)
+	GameManager.social_changed.connect(_refresh_social)
 	GameManager.thesis_changed.connect(_on_thesis_changed)
 	GameManager.upgrades_changed.connect(_on_upgrades_changed)
 	GameManager.life_changed.connect(_on_life_changed)
@@ -1004,7 +1041,7 @@ func _ready() -> void:
 	SaveManager.save_status_changed.connect(_on_save_status_changed)
 	stock_app_button.tooltip_text = "Open STOCKBOT."
 	news_app_button.tooltip_text = "Open the event-driven news desk."
-	social_app_button.tooltip_text = "Open the mobile-style social feed."
+	social_app_button.tooltip_text = "Open Twooter."
 	network_app_button.tooltip_text = "Open the relationship network."
 	if academy_app_button != null:
 		academy_app_button.tooltip_text = "Open Academy lessons." if GameManager.is_academy_available() else GameManager.get_academy_release_message()
@@ -1179,7 +1216,10 @@ func _update_responsive_layout() -> void:
 	all_stocks_scroll.custom_minimum_size = Vector2(0, 300 if content_width < 1320.0 else 420)
 	portfolio_stocks_scroll.custom_minimum_size = Vector2(0, 300 if content_width < 1320.0 else 420)
 	trade_workspace_widget.set_chart_minimum_height(300 if content_width < 1320.0 else 380)
-	social_feed_cards.custom_minimum_size = Vector2(max(min(get_viewport_rect().size.x - 120.0, SOCIAL_WINDOW_MAX_WIDTH - 24.0), 280.0), 0)
+	if social_app_shell != null:
+		social_feed_cards.custom_minimum_size = Vector2(0, 0)
+	else:
+		social_feed_cards.custom_minimum_size = Vector2(max(min(get_viewport_rect().size.x - 120.0, SOCIAL_WINDOW_MAX_WIDTH - 24.0), 280.0), 0)
 	debug_panel.custom_minimum_size = Vector2(
 		max(min(viewport_size.x - 48.0, 1080.0), 560.0),
 		max(min(viewport_size.y - 48.0, 680.0), 460.0)
@@ -2947,7 +2987,7 @@ func _refresh_desktop() -> void:
 		GameManager.get_current_difficulty_label(),
 		_format_currency(RunState.get_total_equity())
 	]
-	desktop_hint_label.text = "STOCKBOT is live. News renders event-driven intel feeds, Twooter shows tiered social chatter, Network tracks contacts, Academy is coming soon, Company unlocks with majority control, and Settings handles save/load."
+	desktop_hint_label.text = "STOCKBOT is live. News renders event-driven intel feeds, Twooter shows public market chatter, Network tracks contacts, Academy is coming soon, Company unlocks with majority control, and Settings handles save/load."
 	taskbar_status_label.text = _append_save_status(_build_taskbar_status_text(focus_snapshot))
 	_refresh_build_number_labels()
 	taskbar_clock_label.text = "DAY %d  |  %s" % [
@@ -3143,7 +3183,7 @@ func _refresh_news_article_list() -> void:
 func _refresh_social() -> void:
 	_ensure_social_feed_ui()
 	current_social_snapshot = {}
-	social_title_label.text = "Twooter"
+	social_title_label.text = "Home" if selected_social_view_id == "home" else "Message"
 	if not RunState.has_active_run():
 		selected_social_account_id = ""
 		selected_social_feed_filter_id = SOCIAL_FEED_FILTER_ALL
@@ -3153,6 +3193,9 @@ func _refresh_social() -> void:
 		_rebuild_social_filter_chips([])
 		_rebuild_social_ticker_tape([], [])
 		_rebuild_social_feed_cards([])
+		_rebuild_social_right_rail({})
+		_rebuild_social_message_view({})
+		_apply_social_view_visibility()
 		_apply_font_overrides_to_subtree(social_feed_cards)
 		return
 
@@ -3164,19 +3207,28 @@ func _refresh_social() -> void:
 	var account_posts: Array = _filtered_social_posts(all_posts)
 	if selected_social_feed_filter_id.is_empty():
 		selected_social_feed_filter_id = SOCIAL_FEED_FILTER_ALL
+	var available_social_filter_ids: Dictionary = {}
+	for filter_value in _social_feed_filters_for_posts(account_posts):
+		if typeof(filter_value) == TYPE_DICTIONARY:
+			available_social_filter_ids[str(filter_value.get("id", ""))] = true
+	if not available_social_filter_ids.has(selected_social_feed_filter_id):
+		selected_social_feed_filter_id = SOCIAL_FEED_FILTER_ALL
 	var posts: Array = _filtered_social_posts_by_feed_filter(account_posts)
-	var tier_label: String = str(current_social_snapshot.get("tier_label", "Tier 1"))
-	social_access_status_label.text = "%s access active" % str(current_social_snapshot.get("tier_label", "Tier 1"))
+	social_title_label.text = "Home" if selected_social_view_id == "home" else "Message"
+	social_access_status_label.text = "Live | Public chatter"
 	var filter_label: String = _social_feed_filter_label(selected_social_feed_filter_id)
 	if selected_social_account_id.is_empty():
-		social_feed_summary_label.text = "%d of %d posts | %s | %s" % [posts.size(), all_posts.size(), filter_label, tier_label]
+		social_feed_summary_label.text = "%d of %d posts | %s | Public feed" % [posts.size(), all_posts.size(), filter_label]
 	else:
-		social_title_label.text = "Twooter / %s" % selected_account_name
+		social_title_label.text = "%s" % selected_account_name if selected_social_view_id == "home" else "Message"
 		social_feed_summary_label.text = "%d of %d posts | %s | %s" % [posts.size(), account_posts.size(), selected_account_name, filter_label]
 	_refresh_social_tier_indicator(int(current_social_snapshot.get("access_tier", current_social_snapshot.get("tier", 1))))
 	_rebuild_social_filter_chips(account_posts)
 	_rebuild_social_ticker_tape(posts, all_posts)
 	_rebuild_social_feed_cards(posts)
+	_rebuild_social_right_rail(current_social_snapshot)
+	_rebuild_social_message_view(current_social_snapshot)
+	_apply_social_view_visibility()
 	_apply_font_overrides_to_subtree(social_feed_cards)
 
 
@@ -4214,7 +4266,7 @@ func _desktop_window_min_size_for_app(app_id: String) -> Vector2:
 		APP_ID_NEWS:
 			return Vector2(820, 560)
 		APP_ID_SOCIAL:
-			return Vector2(380, 520)
+			return Vector2(920, 560)
 		APP_ID_NETWORK:
 			return Vector2(780, 620)
 		APP_ID_ACADEMY:
@@ -4260,12 +4312,9 @@ func _desktop_window_default_rect(app_id: String) -> Rect2:
 			size.y = min(max(work_rect.size.y * 0.84, size.y), work_rect.size.y - 12.0)
 			return Rect2(work_rect.position + Vector2(26, 18), size)
 		APP_ID_SOCIAL:
-			size.x = clamp(work_rect.size.x * 0.34, size.x, min(SOCIAL_WINDOW_MAX_WIDTH + 36.0, work_rect.size.x))
-			size.y = clamp(work_rect.size.y * 0.78, size.y, min(SOCIAL_WINDOW_MAX_HEIGHT + 24.0, work_rect.size.y))
-			return Rect2(
-				Vector2(max(work_rect.position.x + work_rect.size.x - size.x - 18.0, work_rect.position.x), work_rect.position.y + 14.0),
-				size
-			)
+			size.x = min(max(work_rect.size.x * 0.86, size.x), min(SOCIAL_WINDOW_MAX_WIDTH + 36.0, work_rect.size.x - 12.0))
+			size.y = min(max(work_rect.size.y * 0.84, size.y), min(SOCIAL_WINDOW_MAX_HEIGHT + 24.0, work_rect.size.y - 12.0))
+			return Rect2(work_rect.position + Vector2(24, 18), size)
 		APP_ID_NETWORK:
 			size.x = min(max(work_rect.size.x * 0.78, size.x), work_rect.size.x - 12.0)
 			size.y = min(max(work_rect.size.y * 0.88, size.y), work_rect.size.y - 12.0)
@@ -6564,7 +6613,7 @@ func _build_upgrade_card(track: Dictionary) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.name = "UpgradeCard_%s" % str(track.get("id", ""))
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_panel(panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
+	_style_cream_app_panel(panel, COLOR_DESKTOP_CREAM, COLOR_ACADEMY_BORDER, 4, 1)
 
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 12)
@@ -6613,7 +6662,7 @@ func _build_upgrade_card(track: Dictionary) -> PanelContainer:
 		purchase_button.tooltip_text = block_reason if not block_reason.is_empty() else "Next: %s" % str(track.get("next_effect_label", ""))
 		purchase_button.pressed.connect(_on_upgrade_purchase_pressed.bind(str(track.get("id", ""))))
 	row.add_child(purchase_button)
-	_style_button(purchase_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
+	_style_cream_app_button(purchase_button, not purchase_button.disabled)
 	return panel
 
 
@@ -7409,6 +7458,8 @@ func _filtered_social_posts_by_feed_filter(posts: Array) -> Array:
 
 
 func _social_post_matches_feed_filter(post: Dictionary, filter_id: String) -> bool:
+	if filter_id == SOCIAL_FEED_FILTER_FOLLOWING:
+		return _following_social_account_lookup().has(str(post.get("account_id", "")))
 	if filter_id == SOCIAL_FEED_FILTER_COMPANIES:
 		return _social_post_is_company(post)
 	if filter_id == SOCIAL_FEED_FILTER_SECTORS:
@@ -7416,6 +7467,45 @@ func _social_post_matches_feed_filter(post: Dictionary, filter_id: String) -> bo
 	if filter_id == SOCIAL_FEED_FILTER_TRENDING:
 		return float(post.get("priority", 0.0)) >= 2.4 or _social_post_engagement_score(post) >= 500
 	return true
+
+
+func _social_feed_filters_for_posts(_posts: Array) -> Array:
+	var filters: Array = [{"id": SOCIAL_FEED_FILTER_ALL, "label": "All"}]
+	if not _following_social_account_lookup().is_empty():
+		filters.append({"id": SOCIAL_FEED_FILTER_FOLLOWING, "label": "Following"})
+	for filter_value in SOCIAL_FEED_FILTERS:
+		if typeof(filter_value) != TYPE_DICTIONARY:
+			continue
+		var filter: Dictionary = filter_value
+		var filter_id: String = str(filter.get("id", ""))
+		if filter_id == SOCIAL_FEED_FILTER_ALL:
+			continue
+		filters.append(filter.duplicate(true))
+	return filters
+
+
+func _following_social_account_lookup() -> Dictionary:
+	var lookup: Dictionary = {}
+	for account_value in current_social_snapshot.get("accounts", []):
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var account: Dictionary = account_value
+		var account_id: String = str(account.get("id", ""))
+		if not account_id.is_empty() and bool(account.get("following", false)):
+			lookup[account_id] = true
+	return lookup
+
+
+func _social_account_from_snapshot(account_id: String) -> Dictionary:
+	if account_id.is_empty():
+		return {}
+	for account_value in current_social_snapshot.get("accounts", []):
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var account: Dictionary = account_value
+		if str(account.get("id", "")) == account_id:
+			return account
+	return {}
 
 
 func _social_post_is_company(post: Dictionary) -> bool:
@@ -7433,6 +7523,8 @@ func _social_post_engagement_score(post: Dictionary) -> int:
 
 
 func _social_feed_filter_label(filter_id: String) -> String:
+	if filter_id == SOCIAL_FEED_FILTER_FOLLOWING:
+		return "Following"
 	for filter_value in SOCIAL_FEED_FILTERS:
 		var filter: Dictionary = filter_value
 		if str(filter.get("id", "")) == filter_id:
@@ -7469,27 +7561,429 @@ func _selected_social_account_name(posts: Array) -> String:
 	return ""
 
 
-func _refresh_social_tier_indicator(access_tier: int) -> void:
+func _refresh_social_tier_indicator(_access_tier: int) -> void:
 	if social_tier_indicator == null:
 		return
 	for child in social_tier_indicator.get_children():
 		social_tier_indicator.remove_child(child)
 		child.queue_free()
+	social_tier_indicator.visible = false
 
-	var visible_tier: int = clamp(access_tier, 0, 3)
-	for segment_index in range(3):
-		var segment := PanelContainer.new()
-		segment.name = "SocialTierSegment%d" % (segment_index + 1)
-		segment.custom_minimum_size = Vector2(14, 6)
-		segment.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		_style_twooter_panel(
-			segment,
-			COLOR_TWOOTER_BLUE if segment_index < visible_tier else Color(COLOR_TWOOTER_BLUE_TINT.r, COLOR_TWOOTER_BLUE_TINT.g, COLOR_TWOOTER_BLUE_TINT.b, 0.52),
-			COLOR_TWOOTER_BLUE_EDGE,
-			3,
-			1
-		)
-		social_tier_indicator.add_child(segment)
+
+func _on_social_nav_pressed(view_id: String) -> void:
+	if view_id.is_empty() or selected_social_view_id == view_id:
+		return
+	selected_social_view_id = view_id
+	_refresh_social()
+
+
+func _apply_social_view_visibility() -> void:
+	var is_message: bool = selected_social_view_id == "message"
+	if social_filter_scroll != null:
+		social_filter_scroll.visible = not is_message
+	if social_ticker_tape_panel != null:
+		social_ticker_tape_panel.visible = not is_message
+	if social_feed_scroll != null:
+		social_feed_scroll.visible = not is_message
+	if social_message_view != null:
+		social_message_view.visible = is_message
+	if social_feed_summary_label != null:
+		social_feed_summary_label.visible = not is_message
+	for view_id_value in social_left_nav_buttons.keys():
+		var view_id: String = str(view_id_value)
+		var button: Button = social_left_nav_buttons.get(view_id) as Button
+		if button != null:
+			_style_social_nav_button(button, view_id == selected_social_view_id)
+	if social_right_rail != null:
+		social_right_rail.visible = get_viewport_rect().size.x >= 960.0
+
+
+func _rebuild_social_right_rail(snapshot: Dictionary) -> void:
+	_clear_container(social_trending_rows)
+	_clear_container(social_follow_rows)
+	if social_trending_rows != null:
+		var trending_rows: Array = snapshot.get("trending_rows", [])
+		if trending_rows.is_empty():
+			social_trending_rows.add_child(_make_social_rail_body_label("No trend rows yet."))
+		for row_value in trending_rows:
+			if typeof(row_value) == TYPE_DICTIONARY:
+				social_trending_rows.add_child(_build_social_trending_row(row_value))
+	if social_follow_rows != null:
+		var follow_rows: Array = snapshot.get("who_to_follow", [])
+		if follow_rows.is_empty():
+			social_follow_rows.add_child(_make_social_rail_body_label("No follow suggestions."))
+		for row_value in follow_rows:
+			if typeof(row_value) == TYPE_DICTIONARY:
+				social_follow_rows.add_child(_build_social_follow_row(row_value))
+
+
+func _build_social_trending_row(row: Dictionary) -> VBoxContainer:
+	var vbox := VBoxContainer.new()
+	vbox.name = "SocialTrendingRow"
+	vbox.add_theme_constant_override("separation", 3)
+	var category := Label.new()
+	category.text = str(row.get("category", "Market"))
+	category.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
+	_apply_font_override_to_control(category, 12, _get_app_font())
+	vbox.add_child(category)
+	var tag := Label.new()
+	tag.text = str(row.get("tag", "#IDX"))
+	tag.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(tag, DEFAULT_APP_FONT_SIZE + 1, _get_dashboard_title_font())
+	vbox.add_child(tag)
+	var count := Label.new()
+	count.text = "%d posts" % int(row.get("posts", 0))
+	count.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
+	_apply_font_override_to_control(count, 12, _get_app_font())
+	vbox.add_child(count)
+	return vbox
+
+
+func _build_social_follow_row(row: Dictionary) -> HBoxContainer:
+	var hbox := HBoxContainer.new()
+	hbox.name = "SocialFollowRow"
+	hbox.add_theme_constant_override("separation", 10)
+	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var avatar := PanelContainer.new()
+	avatar.custom_minimum_size = Vector2(36, 36)
+	_style_twooter_panel(avatar, _social_avatar_color(str(row.get("account_id", ""))), COLOR_TWOOTER_BORDER, 18, 1)
+	var avatar_label := Label.new()
+	avatar_label.text = str(row.get("display_name", "?")).left(1).to_upper()
+	avatar_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	avatar_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	avatar_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	avatar.add_child(avatar_label)
+	hbox.add_child(avatar)
+	var text_vbox := VBoxContainer.new()
+	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_vbox.add_theme_constant_override("separation", 0)
+	var name := Label.new()
+	name.text = str(row.get("display_name", "Account"))
+	name.clip_text = true
+	name.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(name, 13, _get_dashboard_title_font())
+	text_vbox.add_child(name)
+	var handle := Label.new()
+	handle.text = str(row.get("handle", ""))
+	handle.clip_text = true
+	handle.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
+	_apply_font_override_to_control(handle, 12, _get_app_font())
+	text_vbox.add_child(handle)
+	hbox.add_child(text_vbox)
+	var button := Button.new()
+	button.name = "SocialFollowButton"
+	button.text = "Follow"
+	button.custom_minimum_size = Vector2(72, 32)
+	_style_button(button, COLOR_TWOOTER_TEXT, COLOR_TWOOTER_TEXT, COLOR_TWOOTER_PAGE, 16)
+	button.pressed.connect(_on_social_follow_pressed.bind(str(row.get("account_id", ""))))
+	hbox.add_child(button)
+	return hbox
+
+
+func _on_social_follow_pressed(account_id: String) -> void:
+	var result: Dictionary = GameManager.follow_twooter_account(account_id)
+	if not bool(result.get("success", false)):
+		_show_toast(str(result.get("message", "Could not follow account.")), false)
+		return
+	_show_toast(str(result.get("message", "Following account.")), true)
+	_refresh_social()
+
+
+func _rebuild_social_message_view(snapshot: Dictionary) -> void:
+	_clear_container(social_message_threads)
+	_clear_container(social_message_header)
+	_clear_container(social_message_rows)
+	if social_message_threads == null or social_message_header == null or social_message_rows == null or social_message_actions == null:
+		return
+	_reset_social_message_composer(false)
+	var thread_rows: Array = snapshot.get("message_threads", [])
+	var account_lookup: Dictionary = {}
+	for account_value in snapshot.get("accounts", []):
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var account: Dictionary = account_value
+		var account_id: String = str(account.get("id", ""))
+		if not account_id.is_empty():
+			account_lookup[account_id] = account
+	var listed_accounts: Dictionary = {}
+	var first_thread_account_id := ""
+	for row_value in thread_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var row_account_id: String = str(row.get("account_id", ""))
+		if row_account_id.is_empty():
+			continue
+		if first_thread_account_id.is_empty():
+			first_thread_account_id = row_account_id
+		listed_accounts[row_account_id] = true
+		social_message_threads.add_child(_build_social_message_thread_button(row))
+	if selected_social_message_account_id.is_empty():
+		selected_social_message_account_id = first_thread_account_id
+	elif not account_lookup.has(selected_social_message_account_id) and not listed_accounts.has(selected_social_message_account_id):
+		selected_social_message_account_id = ""
+	for child in social_message_threads.get_children():
+		var thread_button := child as Button
+		if thread_button != null:
+			_style_social_filter_button(thread_button, str(thread_button.get_meta("account_id", "")) == selected_social_message_account_id, true)
+	var selected_account: Dictionary = account_lookup.get(selected_social_message_account_id, {})
+	if not selected_social_message_account_id.is_empty() and not listed_accounts.has(selected_social_message_account_id) and not selected_account.is_empty():
+		social_message_threads.add_child(_build_social_message_thread_button({
+			"account_id": selected_social_message_account_id,
+			"account_name": str(selected_account.get("display_name", "")),
+			"account_handle": str(selected_account.get("handle", "")),
+			"relationship_stage": str(selected_account.get("relationship_stage", "stranger")),
+			"last_text": "Start a message."
+		}))
+	if social_message_threads.get_child_count() == 0:
+		social_message_threads.add_child(_make_social_rail_body_label("No messages yet.\nOpen an account from Home to start one."))
+	if selected_social_message_account_id.is_empty():
+		_add_social_message_header("Messages", "Your inbox is quiet.")
+		social_message_rows.add_child(_make_social_rail_body_label("Your inbox is quiet. Open a Twooter account and press Send message to start a thread."))
+		return
+	var thread: Dictionary = GameManager.get_twooter_message_thread(selected_social_message_account_id)
+	var account_for_thread: Dictionary = thread.get("account", {})
+	if account_for_thread.is_empty() and not selected_account.is_empty():
+		account_for_thread = selected_account
+	var header_meta: String = "%s relationship | %d credibility | %d importance" % [
+		str(account_for_thread.get("relationship_stage", "stranger")).replace("_", " ").capitalize(),
+		int(account_for_thread.get("credibility", 0)),
+		int(account_for_thread.get("importance", 0))
+	]
+	_add_social_message_header(str(account_for_thread.get("display_name", "Choose a thread")), header_meta)
+	for row_value in thread.get("rows", []):
+		if typeof(row_value) == TYPE_DICTIONARY:
+			social_message_rows.add_child(_build_social_message_bubble(row_value))
+	var message_cooldown_reason: String = str(thread.get("cooldown_reason", ""))
+	if not message_cooldown_reason.is_empty():
+		social_message_rows.add_child(_make_social_rail_body_label(_social_dialog_cooldown_text(message_cooldown_reason)))
+	if int(social_message_rows.get_child_count()) <= 0:
+		social_message_rows.add_child(_make_social_rail_body_label("Start with a clean message or share a thesis."))
+	_hydrate_social_message_composer(selected_social_message_account_id, thread.get("dialog_options", []))
+	if social_message_rows_scroll != null:
+		call_deferred("_scroll_social_message_rows_to_bottom")
+
+
+func _add_social_message_header(title_text: String, subtitle_text: String) -> void:
+	if social_message_header == null:
+		return
+	var title := Label.new()
+	title.name = "SocialMessageTitleLabel"
+	title.text = title_text
+	title.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(title, DEFAULT_APP_FONT_SIZE + 5, _get_dashboard_title_font())
+	social_message_header.add_child(title)
+	if not subtitle_text.is_empty():
+		var subtitle := Label.new()
+		subtitle.name = "SocialMessageSubtitleLabel"
+		subtitle.text = subtitle_text
+		subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		subtitle.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
+		_apply_font_override_to_control(subtitle, 12, _get_app_font())
+		social_message_header.add_child(subtitle)
+
+
+func _hydrate_social_message_composer(account_id: String, options: Array) -> void:
+	_reset_social_message_composer(true)
+	pending_social_message_account_id = account_id
+	if social_message_composer == null:
+		return
+	social_message_composer.visible = true
+	for option_index in range(social_message_option_buttons.size()):
+		var button: Button = social_message_option_buttons[option_index]
+		var option: Dictionary = options[option_index] if option_index < options.size() and typeof(options[option_index]) == TYPE_DICTIONARY else {}
+		button.visible = not option.is_empty()
+		button.disabled = option.is_empty() or not bool(option.get("enabled", true))
+		button.text = str(option.get("player_text", option.get("label", "Message")))
+		button.tooltip_text = str(option.get("player_text", "")) if not bool(option.get("enabled", true)) else ""
+		button.set_meta("action_id", str(option.get("id", "")))
+		button.set_meta("tree_id", str(option.get("tree_id", "")))
+		button.set_meta("node_id", str(option.get("node_id", "")))
+		button.set_meta("option_id", str(option.get("option_id", "")))
+		button.set_meta("thesis_id", str(option.get("thesis_id", "")))
+		button.set_meta("player_text", str(option.get("player_text", "")))
+	if options.is_empty() and social_message_composer_text_label != null:
+		social_message_composer_text_label.text = "No clean message options are available right now."
+
+
+func _reset_social_message_composer(show_composer: bool) -> void:
+	if social_message_typing_tween != null:
+		social_message_typing_tween.kill()
+		social_message_typing_tween = null
+	pending_social_message_account_id = ""
+	pending_social_message_action_id = ""
+	pending_social_message_thesis_id = ""
+	pending_social_message_text = ""
+	if social_message_composer != null:
+		social_message_composer.visible = show_composer
+	if social_message_composer_text_label != null:
+		social_message_composer_text_label.text = "Choose a message below."
+		social_message_composer_text_label.visible_characters = social_message_composer_text_label.text.length()
+	for option_button in social_message_option_buttons:
+		option_button.visible = show_composer
+		option_button.disabled = true
+		option_button.text = ""
+		option_button.tooltip_text = ""
+		if option_button.has_meta("action_id"):
+			option_button.remove_meta("action_id")
+		if option_button.has_meta("tree_id"):
+			option_button.remove_meta("tree_id")
+		if option_button.has_meta("node_id"):
+			option_button.remove_meta("node_id")
+		if option_button.has_meta("option_id"):
+			option_button.remove_meta("option_id")
+		if option_button.has_meta("thesis_id"):
+			option_button.remove_meta("thesis_id")
+		if option_button.has_meta("player_text"):
+			option_button.remove_meta("player_text")
+		_style_social_thread_button(option_button)
+	if social_message_send_button != null:
+		social_message_send_button.disabled = true
+
+
+func _on_social_message_option_selected(option_index: int) -> void:
+	if option_index < 0 or option_index >= social_message_option_buttons.size():
+		return
+	var button: Button = social_message_option_buttons[option_index]
+	pending_social_message_action_id = str(button.get_meta("action_id", ""))
+	pending_social_message_thesis_id = str(button.get_meta("thesis_id", ""))
+	pending_social_message_text = str(button.get_meta("player_text", ""))
+	if pending_social_message_account_id.is_empty():
+		pending_social_message_account_id = selected_social_message_account_id
+	if pending_social_message_action_id.is_empty() or pending_social_message_text.is_empty():
+		return
+	for option_button in social_message_option_buttons:
+		_style_social_thread_button(option_button)
+	_style_social_filter_button(button, true, true)
+	_start_social_message_typewriter(pending_social_message_text)
+
+
+func _start_social_message_typewriter(text: String) -> void:
+	if social_message_typing_tween != null:
+		social_message_typing_tween.kill()
+		social_message_typing_tween = null
+	if social_message_send_button != null:
+		social_message_send_button.disabled = true
+	if social_message_composer_text_label == null:
+		return
+	social_message_composer_text_label.text = text
+	social_message_composer_text_label.visible_characters = 0
+	var duration: float = clamp(float(text.length()) * 0.018, 0.28, 1.2)
+	social_message_typing_tween = create_tween()
+	social_message_typing_tween.tween_property(social_message_composer_text_label, "visible_characters", text.length(), duration)
+	social_message_typing_tween.finished.connect(func() -> void:
+		if social_message_composer_text_label != null:
+			social_message_composer_text_label.visible_characters = social_message_composer_text_label.text.length()
+		if social_message_send_button != null:
+			social_message_send_button.disabled = pending_social_message_action_id.is_empty()
+		social_message_typing_tween = null
+	)
+
+
+func _send_social_message_composer() -> void:
+	if pending_social_message_account_id.is_empty() or pending_social_message_action_id.is_empty():
+		return
+	if social_message_typing_tween != null:
+		social_message_typing_tween.kill()
+		social_message_typing_tween = null
+		if social_message_composer_text_label != null:
+			social_message_composer_text_label.visible_characters = social_message_composer_text_label.text.length()
+	var account_id: String = pending_social_message_account_id
+	var action_id: String = pending_social_message_action_id
+	var thesis_id: String = pending_social_message_thesis_id
+	var player_text: String = pending_social_message_text
+	_reset_social_message_composer(true)
+	_on_social_message_action_pressed(account_id, action_id, thesis_id, player_text)
+
+
+func _scroll_social_message_rows_to_bottom() -> void:
+	if social_message_rows_scroll == null:
+		return
+	var scrollbar := social_message_rows_scroll.get_v_scroll_bar()
+	if scrollbar != null:
+		scrollbar.value = scrollbar.max_value
+
+
+func _build_social_message_thread_button(row: Dictionary) -> Button:
+	var button := Button.new()
+	button.name = "SocialMessageThreadButton"
+	button.set_meta("account_id", str(row.get("account_id", "")))
+	button.text = "%s\n%s" % [str(row.get("account_name", "Account")), str(row.get("last_text", ""))]
+	button.custom_minimum_size = Vector2(0, 52)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.clip_text = true
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_style_social_filter_button(button, str(row.get("account_id", "")) == selected_social_message_account_id, true)
+	button.pressed.connect(_on_social_message_thread_pressed.bind(str(row.get("account_id", ""))))
+	return button
+
+
+func _on_social_message_thread_pressed(account_id: String) -> void:
+	selected_social_message_account_id = account_id
+	_refresh_social()
+
+
+func _build_social_message_bubble(row: Dictionary) -> PanelContainer:
+	var bubble := PanelContainer.new()
+	bubble.name = "SocialMessageBubble"
+	var is_player: bool = str(row.get("sender", "")) == "player"
+	_style_twooter_panel(bubble, COLOR_TWOOTER_BLUE if is_player else COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 10, 1)
+	bubble.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 7)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 7)
+	bubble.add_child(margin)
+	var label := Label.new()
+	label.name = "SocialMessagePlayerTextLabel" if is_player else "SocialMessageAccountTextLabel"
+	var body_text: String = str(row.get("text", ""))
+	label.text = body_text if is_player else _clean_social_account_reply_text(body_text)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.add_theme_color_override("font_color", COLOR_TWOOTER_PAGE if is_player else COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(label, 13, _get_app_font())
+	margin.add_child(label)
+	return bubble
+
+
+func _build_social_message_action_button(account_id: String, action_id: String, label: String, thesis_id: String) -> Button:
+	var button := Button.new()
+	button.name = "SocialMessageAction%sButton" % action_id.capitalize()
+	button.text = "%s | 1 AP" % label
+	button.custom_minimum_size = Vector2(0, 34)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_style_button(button, COLOR_TWOOTER_BLUE, COLOR_TWOOTER_BLUE_DARK, COLOR_TWOOTER_PAGE, 8)
+	button.pressed.connect(_on_social_message_action_pressed.bind(account_id, action_id, thesis_id))
+	return button
+
+
+func _on_social_message_action_pressed(account_id: String, action_id: String, thesis_id: String = "", player_message_text: String = "") -> void:
+	var result: Dictionary = GameManager.send_twooter_message(account_id, action_id, thesis_id, player_message_text)
+	if not bool(result.get("success", false)):
+		_show_toast(str(result.get("message", "Twooter action failed.")), false)
+		return
+	_show_toast(str(result.get("reply_text", result.get("message", "Message sent."))), true)
+	_refresh_social()
+	_refresh_network()
+
+
+func _make_social_rail_body_label(text: String) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
+	_apply_font_override_to_control(label, 12, _get_app_font())
+	return label
+
+
+func _clear_container(container: Container) -> void:
+	if container == null:
+		return
+	for child in container.get_children():
+		container.remove_child(child)
+		child.queue_free()
 
 
 func _rebuild_social_filter_chips(posts: Array) -> void:
@@ -7499,7 +7993,7 @@ func _rebuild_social_filter_chips(posts: Array) -> void:
 		social_filter_chips.remove_child(child)
 		child.queue_free()
 
-	for filter_value in SOCIAL_FEED_FILTERS:
+	for filter_value in _social_feed_filters_for_posts(posts):
 		var filter: Dictionary = filter_value
 		var filter_id: String = str(filter.get("id", SOCIAL_FEED_FILTER_ALL))
 		var count: int = _count_social_posts_for_filter(posts, filter_id)
@@ -7591,12 +8085,6 @@ func _build_social_ticker_chip(row: Dictionary) -> PanelContainer:
 	ticker_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
 	_apply_font_override_to_control(ticker_label, 12, _get_dashboard_title_font())
 	row_box.add_child(ticker_label)
-
-	var tone_label := Label.new()
-	tone_label.text = _social_tone_indicator(tone)
-	tone_label.add_theme_color_override("font_color", _social_tone_color(tone))
-	_apply_font_override_to_control(tone_label, 12, _get_app_font())
-	row_box.add_child(tone_label)
 	return chip
 
 
@@ -7607,7 +8095,7 @@ func _rebuild_social_feed_cards(posts: Array) -> void:
 
 	if not selected_social_account_id.is_empty():
 		var all_posts: Array = current_social_snapshot.get("posts", [])
-		social_feed_cards.add_child(_build_social_account_filter_card(_selected_social_account_name(all_posts)))
+		social_feed_cards.add_child(_build_social_account_filter_card(_selected_social_account_name(all_posts), selected_social_account_id))
 
 	if posts.is_empty():
 		social_feed_cards.add_child(_build_social_empty_card())
@@ -7621,17 +8109,17 @@ func _rebuild_social_feed_cards(posts: Array) -> void:
 		social_feed_scroll.get_v_scroll_bar().value = 0.0
 
 
-func _build_social_account_filter_card(account_name: String) -> PanelContainer:
+func _build_social_account_filter_card(account_name: String, account_id: String) -> PanelContainer:
 	var card: PanelContainer = PanelContainer.new()
 	card.name = "SocialAccountFilterCard"
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_social_post_card(card, "mixed")
 
 	var margin: MarginContainer = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 8)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 8)
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_bottom", 10)
 	card.add_child(margin)
 
 	var row: HBoxContainer = HBoxContainer.new()
@@ -7646,6 +8134,26 @@ func _build_social_account_filter_card(account_name: String) -> PanelContainer:
 	label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
 	label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
 	row.add_child(label)
+
+	var account: Dictionary = _social_account_from_snapshot(account_id)
+	var follow_button: Button = Button.new()
+	follow_button.name = "SocialAccountFollowButton"
+	follow_button.text = "Following" if bool(account.get("following", false)) else "Follow"
+	follow_button.tooltip_text = "Follow this account and add it to the Following feed."
+	follow_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	follow_button.disabled = bool(account.get("following", false))
+	_style_social_filter_button(follow_button, bool(account.get("following", false)), true)
+	row.add_child(follow_button)
+	follow_button.pressed.connect(_on_social_follow_pressed.bind(account_id))
+
+	var message_button: Button = Button.new()
+	message_button.name = "SocialStartMessageButton"
+	message_button.text = "Send message"
+	message_button.tooltip_text = "Start a private Twooter message."
+	message_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_style_social_filter_button(message_button, false, true)
+	row.add_child(message_button)
+	message_button.pressed.connect(_on_social_start_message_pressed.bind(account_id))
 
 	var clear_button: Button = Button.new()
 	clear_button.name = "SocialAccountClearButton"
@@ -7688,22 +8196,22 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 	_style_social_post_card(card, str(post.get("tone", "mixed")))
 
 	var margin: MarginContainer = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 11)
-	margin.add_theme_constant_override("margin_top", 11)
-	margin.add_theme_constant_override("margin_right", 11)
-	margin.add_theme_constant_override("margin_bottom", 11)
+	margin.add_theme_constant_override("margin_left", 14)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_right", 14)
+	margin.add_theme_constant_override("margin_bottom", 12)
 	card.add_child(margin)
 
 	var card_row: HBoxContainer = HBoxContainer.new()
 	card_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card_row.add_theme_constant_override("separation", 9)
+	card_row.add_theme_constant_override("separation", 12)
 	margin.add_child(card_row)
 
 	card_row.add_child(_build_social_avatar(post))
 
 	var content: VBoxContainer = VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.add_theme_constant_override("separation", 7)
+	content.add_theme_constant_override("separation", 8)
 	card_row.add_child(content)
 
 	var header_row: HBoxContainer = HBoxContainer.new()
@@ -7737,7 +8245,7 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 		verified_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE)
 		header_row.add_child(verified_label)
 
-	header_row.add_child(_build_social_tier_pill(int(post.get("account_tier", 1))))
+	header_row.add_child(_build_social_public_pill())
 
 	var handle_label: Label = Label.new()
 	handle_label.text = _build_social_card_meta_line(post)
@@ -7756,7 +8264,7 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 	var target_company: String = str(post.get("target_company_name", "")).strip_edges()
 	var sector_name: String = str(post.get("sector_name", "")).strip_edges()
 	if not target_ticker.is_empty():
-		tag_row.add_child(_build_social_tag_chip("$%s" % target_ticker, str(post.get("tone", "mixed"))))
+		tag_row.add_child(_build_social_tag_chip("$%s" % target_ticker, "blue"))
 		has_tags = true
 	if not target_company.is_empty():
 		tag_row.add_child(_build_social_tag_chip(target_company, "mixed"))
@@ -7773,12 +8281,11 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 
 	var body_label: Label = Label.new()
 	body_label.text = str(post.get("post_text", ""))
+	body_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 1)
 	body_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
 	content.add_child(body_label)
-
-	content.add_child(_build_social_sentiment_bar(str(post.get("tone", "mixed"))))
 
 	var thread_lines: Array = post.get("thread_lines", [])
 	if not thread_lines.is_empty():
@@ -7809,6 +8316,38 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 			_on_social_thread_toggled(str(post.get("id", "")), thread_container, thread_button)
 		)
 
+	for reply_value in post.get("player_replies", []):
+		if typeof(reply_value) == TYPE_DICTIONARY:
+			content.add_child(_build_social_reply_row(reply_value))
+	var conclusion_reason: String = str(post.get("conversation_conclusion", ""))
+	if not conclusion_reason.is_empty():
+		content.add_child(_build_social_conclusion_row(post))
+
+	var options: Array = post.get("interaction_options", [])
+	if bool(post.get("followup_unlocked", false)):
+		var followup_button := Button.new()
+		followup_button.name = "SocialPostFollowupButton"
+		followup_button.text = "Message"
+		followup_button.custom_minimum_size = Vector2(94, 30)
+		followup_button.tooltip_text = "Continue this contact through private messages."
+		_style_social_thread_button(followup_button)
+		followup_button.pressed.connect(_on_social_start_message_pressed.bind(str(post.get("account_id", ""))))
+		content.add_child(followup_button)
+	elif bool(post.get("can_reply", true)) and not options.is_empty():
+		var option_row := HBoxContainer.new()
+		option_row.name = "SocialPostActionRow"
+		option_row.add_theme_constant_override("separation", 8)
+		option_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		content.add_child(option_row)
+		var reply_button := Button.new()
+		reply_button.name = "SocialPostActionButton"
+		reply_button.text = "Reply"
+		reply_button.custom_minimum_size = Vector2(86, 30)
+		reply_button.tooltip_text = "Open the reply composer."
+		_style_social_thread_button(reply_button)
+		reply_button.pressed.connect(_open_social_reply_composer.bind(post.duplicate(true)))
+		option_row.add_child(reply_button)
+
 	var reactions_row := HBoxContainer.new()
 	reactions_row.name = "SocialEngagementRow"
 	reactions_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -7830,11 +8369,11 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 	return card
 
 
-func _build_social_tier_pill(tier: int) -> PanelContainer:
+func _build_social_public_pill() -> PanelContainer:
 	var pill := PanelContainer.new()
-	pill.name = "SocialTierPill"
+	pill.name = "SocialPublicPill"
 	pill.size_flags_horizontal = Control.SIZE_SHRINK_END
-	_style_social_tier_pill(pill)
+	_style_social_public_pill(pill)
 
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 6)
@@ -7844,7 +8383,7 @@ func _build_social_tier_pill(tier: int) -> PanelContainer:
 	pill.add_child(margin)
 
 	var label := Label.new()
-	label.text = "T%d" % clamp(tier, 1, 3)
+	label.text = "Public"
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 10)
 	label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
@@ -7873,43 +8412,6 @@ func _build_social_tag_chip(text: String, tone: String) -> PanelContainer:
 	return chip
 
 
-func _build_social_sentiment_bar(tone: String) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.name = "SocialSentimentRow"
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 7)
-
-	var track := HBoxContainer.new()
-	track.name = "SocialSentimentBar"
-	track.custom_minimum_size = Vector2(88, 6)
-	track.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	track.add_theme_constant_override("separation", 0)
-	row.add_child(track)
-
-	var ratio: float = 0.48
-	if tone == "positive":
-		ratio = 0.78
-	elif tone == "negative":
-		ratio = 0.62
-
-	var fill_width: float = clamp(88.0 * ratio, 8.0, 88.0)
-	var fill := ColorRect.new()
-	fill.custom_minimum_size = Vector2(fill_width, 6)
-	fill.color = _social_tone_color(tone)
-	track.add_child(fill)
-	var rest := ColorRect.new()
-	rest.custom_minimum_size = Vector2(max(88.0 - fill_width, 1.0), 6)
-	rest.color = Color(COLOR_TWOOTER_BLUE_EDGE.r, COLOR_TWOOTER_BLUE_EDGE.g, COLOR_TWOOTER_BLUE_EDGE.b, 0.28)
-	track.add_child(rest)
-
-	var label := Label.new()
-	label.text = _social_tone_label(tone)
-	label.add_theme_font_size_override("font_size", 11)
-	label.add_theme_color_override("font_color", _social_tone_color(tone))
-	row.add_child(label)
-	return row
-
-
 func _build_social_engagement_label(label_text: String, value: int) -> Label:
 	var label := Label.new()
 	label.text = "%s %d" % [label_text, value]
@@ -7918,35 +8420,330 @@ func _build_social_engagement_label(label_text: String, value: int) -> Label:
 	return label
 
 
+func _build_social_reply_row(reply: Dictionary) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.name = "SocialReplyRow"
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_twooter_panel(panel, COLOR_TWOOTER_CARD, COLOR_TWOOTER_BORDER, 8, 1)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 7)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 7)
+	panel.add_child(margin)
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", 6)
+	margin.add_child(stack)
+	var player_text: String = str(reply.get("player_text", "")).strip_edges()
+	if not player_text.is_empty():
+		stack.add_child(_build_social_reply_bubble("You", player_text, true))
+	stack.add_child(_build_social_reply_bubble("", str(reply.get("reply_text", "")), false))
+	return panel
+
+
+func _build_social_reply_bubble(sender_label: String, body_text: String, is_player: bool) -> PanelContainer:
+	var bubble := PanelContainer.new()
+	bubble.name = "SocialPlayerReplyBubble" if is_player else "SocialAccountReplyBubble"
+	bubble.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var fill_color: Color = COLOR_TWOOTER_BLUE_TINT if is_player else COLOR_TWOOTER_SURFACE
+	_style_twooter_panel(bubble, fill_color, COLOR_TWOOTER_BORDER, 6, 1)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 7)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 7)
+	bubble.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 3)
+	margin.add_child(vbox)
+	if not sender_label.strip_edges().is_empty():
+		var name_label := Label.new()
+		name_label.text = sender_label
+		name_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE if is_player else COLOR_TWOOTER_MUTED)
+		_apply_font_override_to_control(name_label, 11, _get_dashboard_title_font())
+		vbox.add_child(name_label)
+	var label := Label.new()
+	label.name = "SocialPlayerReplyTextLabel" if is_player else "SocialAccountReplyTextLabel"
+	label.text = body_text if is_player else _clean_social_account_reply_text(body_text)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(label, 13, _get_app_font())
+	vbox.add_child(label)
+	return bubble
+
+
+func _clean_social_account_reply_text(raw_text: String) -> String:
+	var text: String = raw_text.strip_edges()
+	if text.is_empty():
+		return text
+	var colon_index: int = text.find(":")
+	if colon_index > 0 and colon_index < 72:
+		var prefix: String = text.substr(0, colon_index).strip_edges().to_lower()
+		var remainder: String = text.substr(colon_index + 1).strip_edges()
+		if prefix.ends_with(" replies") or prefix.ends_with(" answers") or prefix.ends_with(" says") or remainder.begins_with("\""):
+			text = remainder
+	if text.length() >= 2 and text.begins_with("\"") and text.ends_with("\""):
+		text = text.substr(1, text.length() - 2).strip_edges()
+	return text
+
+
+func _build_social_conclusion_row(post: Dictionary) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.name = "SocialConversationConclusionRow"
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_twooter_panel(panel, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 6, 1)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 7)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 7)
+	panel.add_child(margin)
+	var label := Label.new()
+	if bool(post.get("followup_unlocked", false)):
+		label.text = "The public thread has enough trust to continue privately."
+	elif str(post.get("cooldown_reason", "")).is_empty() == false or str(post.get("conversation_conclusion", "")) == "soft_cooldown":
+		label.text = _social_dialog_cooldown_text(str(post.get("cooldown_reason", "soft_cooldown")))
+	else:
+		label.text = "The thread cools here. Build more relationship, credibility, and importance before pushing further."
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
+	_apply_font_override_to_control(label, 12, _get_app_font())
+	margin.add_child(label)
+	return panel
+
+
+func _social_dialog_cooldown_text(reason: String) -> String:
+	if reason == "soft_cooldown":
+		return "The conversation is circling. Wait for new tape, share a sharper thesis, or bring a cleaner source before pushing again."
+	return "The conversation pauses here. Bring new context before continuing."
+
+
+func _on_social_post_action_pressed(post_id: String, action_id: String, thesis_id: String = "", player_reply_text: String = "") -> void:
+	var result: Dictionary = GameManager.interact_with_twooter_post(post_id, action_id, thesis_id, player_reply_text)
+	if not bool(result.get("success", false)):
+		_show_toast(str(result.get("message", "Twooter action failed.")), false)
+		return
+	_show_toast(str(result.get("reply_text", result.get("message", "Twooter replied."))), true)
+	_refresh_social()
+	_refresh_network()
+
+
+func _ensure_social_reply_composer_dialog() -> void:
+	if social_reply_dialog != null:
+		return
+	social_reply_dialog = Control.new()
+	social_reply_dialog.name = "SocialReplyComposerDialog"
+	social_reply_dialog.visible = false
+	social_reply_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	social_reply_dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(social_reply_dialog)
+
+	var scrim := ColorRect.new()
+	scrim.name = "SocialReplyComposerScrim"
+	scrim.color = Color(0.0, 0.0, 0.0, 0.58)
+	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	social_reply_dialog.add_child(scrim)
+
+	var center := CenterContainer.new()
+	center.name = "SocialReplyComposerCenter"
+	center.mouse_filter = Control.MOUSE_FILTER_PASS
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	social_reply_dialog.add_child(center)
+
+	var frame := PanelContainer.new()
+	frame.name = "SocialReplyComposerFrame"
+	frame.custom_minimum_size = Vector2(620, 360)
+	frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_style_twooter_panel(frame, COLOR_TWOOTER_PAGE, COLOR_TWOOTER_BLUE_EDGE, 10, 1)
+	center.add_child(frame)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	frame.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.name = "SocialReplyComposerVBox"
+	vbox.add_theme_constant_override("separation", 12)
+	margin.add_child(vbox)
+
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(title_row)
+	var title := Label.new()
+	title.name = "SocialReplyComposerTitle"
+	title.text = "Reply"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(title, DEFAULT_APP_FONT_SIZE + 5, _get_dashboard_title_font())
+	title_row.add_child(title)
+	var close_button := Button.new()
+	close_button.name = "SocialReplyComposerCloseButton"
+	close_button.text = "X"
+	close_button.custom_minimum_size = Vector2(32, 26)
+	_style_button(close_button, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, COLOR_TWOOTER_TEXT, 5)
+	close_button.pressed.connect(_hide_social_reply_composer)
+	title_row.add_child(close_button)
+
+	social_reply_context_label = Label.new()
+	social_reply_context_label.name = "SocialReplyComposerContextLabel"
+	social_reply_context_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	social_reply_context_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
+	_apply_font_override_to_control(social_reply_context_label, 12, _get_app_font())
+	vbox.add_child(social_reply_context_label)
+
+	var text_panel := PanelContainer.new()
+	text_panel.name = "SocialReplyComposerTextPanel"
+	text_panel.custom_minimum_size = Vector2(0, 96)
+	text_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_twooter_panel(text_panel, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 7, 1)
+	vbox.add_child(text_panel)
+	var text_margin := MarginContainer.new()
+	text_margin.add_theme_constant_override("margin_left", 12)
+	text_margin.add_theme_constant_override("margin_top", 10)
+	text_margin.add_theme_constant_override("margin_right", 12)
+	text_margin.add_theme_constant_override("margin_bottom", 10)
+	text_panel.add_child(text_margin)
+	social_reply_text_label = Label.new()
+	social_reply_text_label.name = "SocialReplyComposerTextLabel"
+	social_reply_text_label.text = ""
+	social_reply_text_label.visible_characters = 0
+	social_reply_text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	social_reply_text_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	social_reply_text_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(social_reply_text_label, DEFAULT_APP_FONT_SIZE, _get_app_font())
+	text_margin.add_child(social_reply_text_label)
+
+	var options := VBoxContainer.new()
+	options.name = "SocialReplyComposerOptions"
+	options.add_theme_constant_override("separation", 8)
+	vbox.add_child(options)
+	social_reply_option_buttons.clear()
+	for option_index in range(3):
+		var option_button := Button.new()
+		option_button.name = "SocialReplyDialogOptionButton"
+		option_button.custom_minimum_size = Vector2(0, 34)
+		option_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		option_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		_style_social_thread_button(option_button)
+		option_button.pressed.connect(_on_social_reply_option_selected.bind(option_index))
+		options.add_child(option_button)
+		social_reply_option_buttons.append(option_button)
+
+	var action_row := HBoxContainer.new()
+	action_row.name = "SocialReplyComposerActionRow"
+	action_row.alignment = BoxContainer.ALIGNMENT_END
+	action_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(action_row)
+	social_reply_cancel_button = Button.new()
+	social_reply_cancel_button.name = "SocialReplyCancelButton"
+	social_reply_cancel_button.text = "Cancel"
+	social_reply_cancel_button.custom_minimum_size = Vector2(92, 34)
+	_style_button(social_reply_cancel_button, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, COLOR_TWOOTER_TEXT, 6)
+	social_reply_cancel_button.pressed.connect(_hide_social_reply_composer)
+	action_row.add_child(social_reply_cancel_button)
+	social_reply_send_button = Button.new()
+	social_reply_send_button.name = "SocialReplySendButton"
+	social_reply_send_button.text = "Reply"
+	social_reply_send_button.custom_minimum_size = Vector2(92, 34)
+	social_reply_send_button.disabled = true
+	_style_button(social_reply_send_button, COLOR_TWOOTER_BLUE, COLOR_TWOOTER_BLUE_DARK, COLOR_TWOOTER_PAGE, 6)
+	social_reply_send_button.pressed.connect(_send_social_reply_composer)
+	action_row.add_child(social_reply_send_button)
+
+
+func _open_social_reply_composer(post: Dictionary) -> void:
+	_ensure_social_reply_composer_dialog()
+	pending_social_reply_post_id = str(post.get("id", ""))
+	pending_social_reply_action_id = ""
+	pending_social_reply_text = ""
+	social_reply_context_label.text = "%s %s" % [str(post.get("account_name", "Account")), _build_social_card_meta_line(post)]
+	social_reply_text_label.text = "Choose a reply below."
+	social_reply_text_label.visible_characters = social_reply_text_label.text.length()
+	social_reply_send_button.disabled = true
+	var options: Array = post.get("reply_dialog_options", [])
+	for option_index in range(social_reply_option_buttons.size()):
+		var button: Button = social_reply_option_buttons[option_index]
+		var option: Dictionary = options[option_index] if option_index < options.size() and typeof(options[option_index]) == TYPE_DICTIONARY else {}
+		button.visible = not option.is_empty()
+		button.disabled = option.is_empty() or not bool(option.get("enabled", true))
+		button.text = str(option.get("player_text", option.get("label", "Reply")))
+		button.tooltip_text = str(option.get("player_text", "")) if not bool(option.get("enabled", true)) else ""
+		button.set_meta("action_id", str(option.get("id", "")))
+		button.set_meta("tree_id", str(option.get("tree_id", "")))
+		button.set_meta("node_id", str(option.get("node_id", "")))
+		button.set_meta("option_id", str(option.get("option_id", "")))
+		button.set_meta("player_text", str(option.get("player_text", "")))
+	social_reply_dialog.visible = true
+
+
+func _on_social_reply_option_selected(option_index: int) -> void:
+	if option_index < 0 or option_index >= social_reply_option_buttons.size():
+		return
+	var button: Button = social_reply_option_buttons[option_index]
+	pending_social_reply_action_id = str(button.get_meta("action_id", ""))
+	pending_social_reply_text = str(button.get_meta("player_text", ""))
+	if pending_social_reply_action_id.is_empty() or pending_social_reply_text.is_empty():
+		return
+	for option_button in social_reply_option_buttons:
+		_style_social_thread_button(option_button)
+	_style_social_filter_button(button, true, true)
+	_start_social_reply_typewriter(pending_social_reply_text)
+
+
+func _start_social_reply_typewriter(text: String) -> void:
+	if social_reply_typing_tween != null:
+		social_reply_typing_tween.kill()
+		social_reply_typing_tween = null
+	social_reply_send_button.disabled = true
+	social_reply_text_label.text = text
+	social_reply_text_label.visible_characters = 0
+	var duration: float = clamp(float(text.length()) * 0.018, 0.28, 1.2)
+	social_reply_typing_tween = create_tween()
+	social_reply_typing_tween.tween_property(social_reply_text_label, "visible_characters", text.length(), duration)
+	social_reply_typing_tween.finished.connect(func() -> void:
+		if social_reply_text_label != null:
+			social_reply_text_label.visible_characters = social_reply_text_label.text.length()
+		if social_reply_send_button != null:
+			social_reply_send_button.disabled = pending_social_reply_action_id.is_empty()
+		social_reply_typing_tween = null
+	)
+
+
+func _send_social_reply_composer() -> void:
+	if pending_social_reply_post_id.is_empty() or pending_social_reply_action_id.is_empty():
+		return
+	if social_reply_typing_tween != null:
+		social_reply_typing_tween.kill()
+		social_reply_typing_tween = null
+		social_reply_text_label.visible_characters = social_reply_text_label.text.length()
+	var post_id: String = pending_social_reply_post_id
+	var action_id: String = pending_social_reply_action_id
+	var player_text: String = pending_social_reply_text
+	_hide_social_reply_composer()
+	_on_social_post_action_pressed(post_id, action_id, "", player_text)
+
+
+func _hide_social_reply_composer() -> void:
+	if social_reply_typing_tween != null:
+		social_reply_typing_tween.kill()
+		social_reply_typing_tween = null
+	pending_social_reply_post_id = ""
+	pending_social_reply_action_id = ""
+	pending_social_reply_text = ""
+	if social_reply_dialog != null:
+		social_reply_dialog.visible = false
+
+
 func _social_category_label(post: Dictionary) -> String:
 	var category: String = str(post.get("category", "")).strip_edges()
 	if category.is_empty():
 		return ""
 	return category.replace("_", " ").capitalize()
-
-
-func _social_tone_label(tone: String) -> String:
-	if tone == "positive":
-		return "Bullish"
-	if tone == "negative":
-		return "Bearish"
-	return "Mixed"
-
-
-func _social_tone_indicator(tone: String) -> String:
-	if tone == "positive":
-		return "+"
-	if tone == "negative":
-		return "-"
-	return "watch"
-
-
-func _social_tone_color(tone: String) -> Color:
-	if tone == "positive":
-		return COLOR_TWOOTER_BULL
-	if tone == "negative":
-		return COLOR_TWOOTER_BEAR
-	return COLOR_TWOOTER_BLUE
 
 
 func _build_social_avatar(post: Dictionary) -> PanelContainer:
@@ -8050,6 +8847,14 @@ func _on_social_account_filter_cleared() -> void:
 	_refresh_social()
 
 
+func _on_social_start_message_pressed(account_id: String) -> void:
+	if account_id.is_empty():
+		return
+	selected_social_message_account_id = account_id
+	selected_social_view_id = "message"
+	_refresh_social()
+
+
 func _on_social_thread_toggled(post_id: String, thread_container: VBoxContainer, thread_button: Button) -> void:
 	var next_visible: bool = not thread_container.visible
 	thread_container.visible = next_visible
@@ -8059,11 +8864,11 @@ func _on_social_thread_toggled(post_id: String, thread_container: VBoxContainer,
 		_mark_guide_research_interaction()
 
 
-func _style_social_post_card(panel: PanelContainer, tone: String) -> void:
+func _style_social_post_card(panel: PanelContainer, _tone: String) -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = COLOR_TWOOTER_CARD
-	style.border_color = _social_card_border_color(tone)
-	style.border_width_left = 4
+	style.border_color = COLOR_TWOOTER_BORDER
+	style.border_width_left = 1
 	style.border_width_top = 1
 	style.border_width_right = 1
 	style.border_width_bottom = 1
@@ -8074,31 +8879,32 @@ func _style_social_post_card(panel: PanelContainer, tone: String) -> void:
 	panel.add_theme_stylebox_override("panel", style)
 
 
-func _social_card_border_color(tone: String) -> Color:
-	if tone == "positive":
-		return COLOR_TWOOTER_BULL
-	if tone == "negative":
-		return COLOR_TWOOTER_BEAR
-	return COLOR_TWOOTER_BLUE_EDGE
+func _social_card_border_color(_tone: String) -> Color:
+	return COLOR_TWOOTER_BORDER
 
 
 func _style_twooter_ui() -> void:
 	if social_window_body == null:
 		return
 	_style_twooter_panel(social_window_body, COLOR_TWOOTER_PAGE, COLOR_TWOOTER_BLUE_EDGE, 0, 2)
+	if social_center_panel != null:
+		_style_twooter_panel(social_center_panel, COLOR_TWOOTER_PAGE, COLOR_TWOOTER_BORDER, 0, 1)
+	if social_left_sidebar != null:
+		_style_twooter_panel(social_left_sidebar, COLOR_TWOOTER_PAGE, COLOR_TWOOTER_BORDER, 0, 1)
 	if social_ticker_tape_panel != null:
-		_style_twooter_panel(social_ticker_tape_panel, COLOR_TWOOTER_BLUE_TINT, COLOR_TWOOTER_BLUE_EDGE, 6, 1)
+		_style_twooter_panel(social_ticker_tape_panel, COLOR_TWOOTER_BLUE_TINT, COLOR_TWOOTER_BORDER, 0, 1)
 	if social_live_dot != null:
-		_style_twooter_panel(social_live_dot, COLOR_TWOOTER_BLUE, COLOR_TWOOTER_BLUE_DARK, 5, 1)
+		_style_twooter_panel(social_live_dot, COLOR_TWOOTER_LIVE, COLOR_TWOOTER_LIVE, 5, 1)
 	if social_live_label != null:
-		social_live_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
+		social_live_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
 		_apply_font_override_to_control(social_live_label, 11, _get_dashboard_title_font())
-	_set_label_tone(social_title_label, COLOR_TWOOTER_BLUE_DARK)
-	_apply_font_override_to_control(social_title_label, DEFAULT_APP_FONT_SIZE + 4, _get_dashboard_title_font())
+	_set_label_tone(social_title_label, COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(social_title_label, DEFAULT_APP_FONT_SIZE + 8, _get_dashboard_title_font())
 	_set_label_tone(social_access_status_label, COLOR_TWOOTER_MUTED)
 	_apply_font_override_to_control(social_access_status_label, 12, _get_app_font())
 	_set_label_tone(social_feed_summary_label, COLOR_TWOOTER_MUTED)
 	_apply_font_override_to_control(social_feed_summary_label, 12, _get_app_font())
+	_apply_social_view_visibility()
 
 
 func _style_twooter_panel(panel: PanelContainer, fill_color: Color, border_color: Color, radius: int = 6, border_width: int = 1) -> void:
@@ -8115,46 +8921,39 @@ func _style_twooter_panel(panel: PanelContainer, fill_color: Color, border_color
 	panel.add_theme_stylebox_override("panel", style)
 
 
-func _style_social_tier_pill(panel: PanelContainer) -> void:
+func _style_social_public_pill(panel: PanelContainer) -> void:
 	_style_twooter_panel(panel, Color(COLOR_TWOOTER_BLUE_TINT.r, COLOR_TWOOTER_BLUE_TINT.g, COLOR_TWOOTER_BLUE_TINT.b, 0.86), COLOR_TWOOTER_BLUE_EDGE, 5, 1)
 
 
-func _style_social_ticker_chip(panel: PanelContainer, tone: String) -> void:
-	var fill_color: Color = COLOR_TWOOTER_CARD
-	if tone == "positive":
-		fill_color = Color(COLOR_TWOOTER_BULL.r, COLOR_TWOOTER_BULL.g, COLOR_TWOOTER_BULL.b, 0.12)
-	elif tone == "negative":
-		fill_color = COLOR_TWOOTER_BEAR_TINT
-	_style_twooter_panel(panel, fill_color, _social_card_border_color(tone), 5, 1)
+func _style_social_ticker_chip(panel: PanelContainer, _tone: String) -> void:
+	_style_twooter_panel(panel, COLOR_TWOOTER_CARD, COLOR_TWOOTER_BLUE_EDGE, 5, 1)
 
 
 func _style_social_tag_chip(panel: PanelContainer, tone: String) -> void:
 	var fill_color: Color = Color(COLOR_TWOOTER_BLUE_TINT.r, COLOR_TWOOTER_BLUE_TINT.g, COLOR_TWOOTER_BLUE_TINT.b, 0.62)
 	var border_color: Color = COLOR_TWOOTER_BLUE_EDGE
-	if tone == "positive":
-		fill_color = Color(COLOR_TWOOTER_BULL.r, COLOR_TWOOTER_BULL.g, COLOR_TWOOTER_BULL.b, 0.10)
-		border_color = Color(COLOR_TWOOTER_BULL.r, COLOR_TWOOTER_BULL.g, COLOR_TWOOTER_BULL.b, 0.58)
-	elif tone == "negative":
-		fill_color = COLOR_TWOOTER_BEAR_TINT
-		border_color = Color(COLOR_TWOOTER_BEAR.r, COLOR_TWOOTER_BEAR.g, COLOR_TWOOTER_BEAR.b, 0.58)
-	elif tone == "mixed":
+	if tone == "mixed":
 		fill_color = Color(COLOR_TWOOTER_SURFACE.r, COLOR_TWOOTER_SURFACE.g, COLOR_TWOOTER_SURFACE.b, 0.86)
 		border_color = Color(COLOR_TWOOTER_BORDER.r, COLOR_TWOOTER_BORDER.g, COLOR_TWOOTER_BORDER.b, 0.62)
 	_style_twooter_panel(panel, fill_color, border_color, 5, 1)
 
 
 func _social_tag_font_color(tone: String) -> Color:
-	if tone == "positive":
-		return COLOR_TWOOTER_BULL
-	if tone == "negative":
-		return COLOR_TWOOTER_BEAR
 	if tone == "blue":
 		return COLOR_TWOOTER_BLUE_DARK
 	return COLOR_TWOOTER_MUTED
 
 
+func _style_social_nav_button(button: Button, is_selected: bool) -> void:
+	var fill_color: Color = COLOR_TWOOTER_SURFACE if is_selected else COLOR_TWOOTER_PAGE
+	var border_color: Color = COLOR_TWOOTER_SURFACE if is_selected else COLOR_TWOOTER_PAGE
+	var font_color: Color = COLOR_TWOOTER_TEXT if is_selected else COLOR_TWOOTER_MUTED
+	_style_button(button, fill_color, border_color, font_color, 20)
+	_apply_font_override_to_control(button, DEFAULT_APP_FONT_SIZE + 2, _get_dashboard_title_font())
+
+
 func _style_social_thread_button(button: Button) -> void:
-	_style_button(button, COLOR_TWOOTER_BLUE_TINT, COLOR_TWOOTER_BLUE_EDGE, COLOR_TWOOTER_BLUE_DARK, 5)
+	_style_button(button, COLOR_TWOOTER_BLUE_TINT, COLOR_TWOOTER_BORDER, COLOR_TWOOTER_BLUE, 5)
 
 
 func _show_news_article(article: Dictionary) -> void:
@@ -17253,18 +18052,55 @@ func _ensure_social_feed_ui() -> void:
 
 	var window_margin := social_window_body.get_node_or_null("SocialWindowMargin") as MarginContainer
 	if window_margin != null:
-		window_margin.add_theme_constant_override("margin_left", 12)
-		window_margin.add_theme_constant_override("margin_top", 12)
-		window_margin.add_theme_constant_override("margin_right", 12)
-		window_margin.add_theme_constant_override("margin_bottom", 12)
+		window_margin.add_theme_constant_override("margin_left", 0)
+		window_margin.add_theme_constant_override("margin_top", 0)
+		window_margin.add_theme_constant_override("margin_right", 0)
+		window_margin.add_theme_constant_override("margin_bottom", 0)
 
 	var window_vbox := social_feed_summary_label.get_parent() as VBoxContainer
 	if window_vbox != null:
-		window_vbox.add_theme_constant_override("separation", 9)
+		window_vbox.add_theme_constant_override("separation", 8)
+		window_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		window_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+	if window_margin != null and window_vbox != null and social_app_shell == null:
+		social_app_shell = HBoxContainer.new()
+		social_app_shell.name = "SocialAppShell"
+		social_app_shell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		social_app_shell.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		social_app_shell.add_theme_constant_override("separation", 0)
+		window_margin.add_child(social_app_shell)
+
+		social_left_sidebar = _build_social_left_sidebar()
+		social_app_shell.add_child(social_left_sidebar)
+
+		social_center_panel = PanelContainer.new()
+		social_center_panel.name = "SocialCenterPanel"
+		social_center_panel.custom_minimum_size = Vector2(540, 0)
+		social_center_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		social_center_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		social_app_shell.add_child(social_center_panel)
+		var center_margin := MarginContainer.new()
+		center_margin.name = "SocialCenterMargin"
+		center_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		center_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		center_margin.add_theme_constant_override("margin_left", 0)
+		center_margin.add_theme_constant_override("margin_top", 12)
+		center_margin.add_theme_constant_override("margin_right", 8)
+		center_margin.add_theme_constant_override("margin_bottom", 8)
+		social_center_panel.add_child(center_margin)
+		var previous_parent: Node = window_vbox.get_parent()
+		if previous_parent != null:
+			previous_parent.remove_child(window_vbox)
+		center_margin.add_child(window_vbox)
+
+		social_right_rail = _build_social_right_rail()
+		social_app_shell.add_child(social_right_rail)
 
 	var header_row := social_title_label.get_parent() as HBoxContainer
 	if header_row != null:
-		header_row.add_theme_constant_override("separation", 7)
+		header_row.custom_minimum_size = Vector2(0, 40)
+		header_row.add_theme_constant_override("separation", 8)
 		social_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		social_access_status_label.size_flags_horizontal = Control.SIZE_SHRINK_END
 		if social_live_dot == null:
@@ -17295,7 +18131,7 @@ func _ensure_social_feed_ui() -> void:
 	social_feed_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	social_feed_scroll.follow_focus = false
 	social_feed_cards.add_theme_constant_override("separation", 10)
-	social_feed_cards.custom_minimum_size = Vector2(max(min(get_viewport_rect().size.x - 120.0, SOCIAL_WINDOW_MAX_WIDTH - 24.0), 280.0), 0)
+	social_feed_cards.custom_minimum_size = Vector2(0, 0)
 
 	if window_vbox != null and social_filter_scroll == null:
 		social_filter_scroll = ScrollContainer.new()
@@ -17309,13 +18145,13 @@ func _ensure_social_feed_ui() -> void:
 		social_filter_chips = HBoxContainer.new()
 		social_filter_chips.name = "SocialFeedFilterChips"
 		social_filter_chips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_filter_chips.add_theme_constant_override("separation", 6)
+		social_filter_chips.add_theme_constant_override("separation", 10)
 		social_filter_scroll.add_child(social_filter_chips)
 
 	if window_vbox != null and social_ticker_tape_panel == null:
 		social_ticker_tape_panel = PanelContainer.new()
 		social_ticker_tape_panel.name = "SocialTickerTapePanel"
-		social_ticker_tape_panel.custom_minimum_size = Vector2(0, 40)
+		social_ticker_tape_panel.custom_minimum_size = Vector2(0, 36)
 		social_ticker_tape_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		window_vbox.add_child(social_ticker_tape_panel)
 		window_vbox.move_child(social_ticker_tape_panel, window_vbox.get_children().find(social_feed_scroll))
@@ -17340,7 +18176,244 @@ func _ensure_social_feed_ui() -> void:
 		social_ticker_tape.add_theme_constant_override("separation", 6)
 		social_ticker_tape_scroll.add_child(social_ticker_tape)
 
+	if window_vbox != null and social_message_view == null:
+		social_message_view = HBoxContainer.new()
+		social_message_view.name = "SocialMessageView"
+		social_message_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		social_message_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		social_message_view.add_theme_constant_override("separation", 10)
+		window_vbox.add_child(social_message_view)
+
+		var thread_panel := PanelContainer.new()
+		thread_panel.name = "SocialMessageThreadPanel"
+		thread_panel.custom_minimum_size = Vector2(220, 0)
+		thread_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		_style_twooter_panel(thread_panel, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 0, 1)
+		social_message_view.add_child(thread_panel)
+		var thread_margin := MarginContainer.new()
+		thread_margin.add_theme_constant_override("margin_left", 10)
+		thread_margin.add_theme_constant_override("margin_top", 10)
+		thread_margin.add_theme_constant_override("margin_right", 10)
+		thread_margin.add_theme_constant_override("margin_bottom", 10)
+		thread_panel.add_child(thread_margin)
+		social_message_thread_scroll = ScrollContainer.new()
+		social_message_thread_scroll.name = "SocialMessageThreadScroll"
+		social_message_thread_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		social_message_thread_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		social_message_thread_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		thread_margin.add_child(social_message_thread_scroll)
+		social_message_threads = VBoxContainer.new()
+		social_message_threads.name = "SocialMessageThreads"
+		social_message_threads.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		social_message_threads.add_theme_constant_override("separation", 8)
+		social_message_thread_scroll.add_child(social_message_threads)
+
+		var detail_panel := PanelContainer.new()
+		detail_panel.name = "SocialMessageDetailPanel"
+		detail_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		detail_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		_style_twooter_panel(detail_panel, COLOR_TWOOTER_PAGE, COLOR_TWOOTER_BORDER, 0, 1)
+		social_message_view.add_child(detail_panel)
+		var detail_margin := MarginContainer.new()
+		detail_margin.add_theme_constant_override("margin_left", 14)
+		detail_margin.add_theme_constant_override("margin_top", 14)
+		detail_margin.add_theme_constant_override("margin_right", 14)
+		detail_margin.add_theme_constant_override("margin_bottom", 14)
+		detail_panel.add_child(detail_margin)
+		social_message_detail = VBoxContainer.new()
+		social_message_detail.name = "SocialMessageDetail"
+		social_message_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		social_message_detail.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		social_message_detail.add_theme_constant_override("separation", 12)
+		detail_margin.add_child(social_message_detail)
+		social_message_header = VBoxContainer.new()
+		social_message_header.name = "SocialMessageHeader"
+		social_message_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		social_message_header.add_theme_constant_override("separation", 4)
+		social_message_detail.add_child(social_message_header)
+		social_message_rows_scroll = ScrollContainer.new()
+		social_message_rows_scroll.name = "SocialMessageRowsScroll"
+		social_message_rows_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		social_message_rows_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		social_message_rows_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		social_message_detail.add_child(social_message_rows_scroll)
+		social_message_rows = VBoxContainer.new()
+		social_message_rows.name = "SocialMessageRows"
+		social_message_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		social_message_rows.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		social_message_rows.add_theme_constant_override("separation", 8)
+		social_message_rows_scroll.add_child(social_message_rows)
+		social_message_composer = PanelContainer.new()
+		social_message_composer.name = "SocialMessageComposer"
+		social_message_composer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_style_twooter_panel(social_message_composer, COLOR_TWOOTER_CARD, COLOR_TWOOTER_BORDER, 8, 1)
+		social_message_detail.add_child(social_message_composer)
+		var composer_margin := MarginContainer.new()
+		composer_margin.add_theme_constant_override("margin_left", 10)
+		composer_margin.add_theme_constant_override("margin_top", 10)
+		composer_margin.add_theme_constant_override("margin_right", 10)
+		composer_margin.add_theme_constant_override("margin_bottom", 10)
+		social_message_composer.add_child(composer_margin)
+		var composer_vbox := VBoxContainer.new()
+		composer_vbox.name = "SocialMessageComposerVBox"
+		composer_vbox.add_theme_constant_override("separation", 8)
+		composer_margin.add_child(composer_vbox)
+		var composer_text_panel := PanelContainer.new()
+		composer_text_panel.name = "SocialMessageComposerTextPanel"
+		composer_text_panel.custom_minimum_size = Vector2(0, 58)
+		composer_text_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_style_twooter_panel(composer_text_panel, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 6, 1)
+		composer_vbox.add_child(composer_text_panel)
+		var composer_text_margin := MarginContainer.new()
+		composer_text_margin.add_theme_constant_override("margin_left", 10)
+		composer_text_margin.add_theme_constant_override("margin_top", 8)
+		composer_text_margin.add_theme_constant_override("margin_right", 10)
+		composer_text_margin.add_theme_constant_override("margin_bottom", 8)
+		composer_text_panel.add_child(composer_text_margin)
+		social_message_composer_text_label = Label.new()
+		social_message_composer_text_label.name = "SocialMessageComposerTextLabel"
+		social_message_composer_text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		social_message_composer_text_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+		_apply_font_override_to_control(social_message_composer_text_label, DEFAULT_APP_FONT_SIZE, _get_app_font())
+		composer_text_margin.add_child(social_message_composer_text_label)
+		social_message_actions = VBoxContainer.new()
+		social_message_actions.name = "SocialMessageComposerOptions"
+		social_message_actions.add_theme_constant_override("separation", 8)
+		composer_vbox.add_child(social_message_actions)
+		social_message_option_buttons.clear()
+		for option_index in range(3):
+			var option_button := Button.new()
+			option_button.name = "SocialMessageDialogOptionButton"
+			option_button.custom_minimum_size = Vector2(0, 34)
+			option_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			option_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			option_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+			_style_social_thread_button(option_button)
+			option_button.pressed.connect(_on_social_message_option_selected.bind(option_index))
+			social_message_actions.add_child(option_button)
+			social_message_option_buttons.append(option_button)
+		var composer_action_row := HBoxContainer.new()
+		composer_action_row.name = "SocialMessageComposerActionRow"
+		composer_action_row.alignment = BoxContainer.ALIGNMENT_END
+		composer_vbox.add_child(composer_action_row)
+		social_message_send_button = Button.new()
+		social_message_send_button.name = "SocialMessageSendButton"
+		social_message_send_button.text = "Send | 1 AP"
+		social_message_send_button.custom_minimum_size = Vector2(112, 34)
+		social_message_send_button.disabled = true
+		_style_button(social_message_send_button, COLOR_TWOOTER_BLUE, COLOR_TWOOTER_BLUE_DARK, COLOR_TWOOTER_PAGE, 8)
+		social_message_send_button.pressed.connect(_send_social_message_composer)
+		composer_action_row.add_child(social_message_send_button)
+
 	_style_twooter_ui()
+
+
+func _build_social_left_sidebar() -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.name = "SocialLeftSidebar"
+	panel.custom_minimum_size = Vector2(190, 0)
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_style_twooter_panel(panel, COLOR_TWOOTER_PAGE, COLOR_TWOOTER_BORDER, 0, 1)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 16)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	panel.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.name = "SocialLeftSidebarVBox"
+	vbox.add_theme_constant_override("separation", 14)
+	margin.add_child(vbox)
+
+	var logo := Label.new()
+	logo.name = "SocialLogoLabel"
+	logo.text = "Twooter"
+	logo.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(logo, DEFAULT_APP_FONT_SIZE + 7, _get_dashboard_title_font())
+	vbox.add_child(logo)
+
+	social_left_nav_buttons.clear()
+	for row in [
+		{"id": "home", "label": "Home"},
+		{"id": "message", "label": "Message"}
+	]:
+		var button := Button.new()
+		button.name = "SocialNav%sButton" % str(row.get("id", "")).capitalize()
+		button.text = str(row.get("label", ""))
+		button.custom_minimum_size = Vector2(0, 42)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		button.pressed.connect(_on_social_nav_pressed.bind(str(row.get("id", ""))))
+		vbox.add_child(button)
+		social_left_nav_buttons[str(row.get("id", ""))] = button
+	return panel
+
+
+func _build_social_right_rail() -> VBoxContainer:
+	var rail := VBoxContainer.new()
+	rail.name = "SocialRightRail"
+	rail.custom_minimum_size = Vector2(288, 0)
+	rail.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	rail.add_theme_constant_override("separation", 18)
+
+	var search_panel := PanelContainer.new()
+	search_panel.name = "SocialSearchPanel"
+	search_panel.custom_minimum_size = Vector2(0, 50)
+	_style_twooter_panel(search_panel, COLOR_TWOOTER_BLUE_TINT, COLOR_TWOOTER_BLUE_EDGE, 18, 0)
+	rail.add_child(search_panel)
+	var search_margin := MarginContainer.new()
+	search_margin.add_theme_constant_override("margin_left", 14)
+	search_margin.add_theme_constant_override("margin_top", 6)
+	search_margin.add_theme_constant_override("margin_right", 14)
+	search_margin.add_theme_constant_override("margin_bottom", 6)
+	search_panel.add_child(search_margin)
+	social_search_input = LineEdit.new()
+	social_search_input.name = "SocialSearchInput"
+	social_search_input.placeholder_text = "Search Twooter"
+	social_search_input.flat = true
+	social_search_input.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	social_search_input.add_theme_color_override("font_placeholder_color", COLOR_TWOOTER_MUTED)
+	search_margin.add_child(social_search_input)
+
+	var trending_card := _make_social_rail_card("SocialTrendingCard", "Trending")
+	social_trending_rows = trending_card.find_child("SocialRailRows", true, false) as VBoxContainer
+	rail.add_child(trending_card)
+
+	var follow_card := _make_social_rail_card("SocialFollowCard", "Who to follow")
+	social_follow_rows = follow_card.find_child("SocialRailRows", true, false) as VBoxContainer
+	rail.add_child(follow_card)
+	return rail
+
+
+func _make_social_rail_card(node_name: String, title: String) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.name = node_name
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_twooter_panel(card, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 12, 1)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 16)
+	margin.add_theme_constant_override("margin_top", 14)
+	margin.add_theme_constant_override("margin_right", 16)
+	margin.add_theme_constant_override("margin_bottom", 14)
+	card.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.name = "SocialRailVBox"
+	vbox.add_theme_constant_override("separation", 12)
+	margin.add_child(vbox)
+	var label := Label.new()
+	label.name = "SocialRailTitle"
+	label.text = title
+	label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE + 6, _get_dashboard_title_font())
+	vbox.add_child(label)
+	var rows := VBoxContainer.new()
+	rows.name = "SocialRailRows"
+	rows.add_theme_constant_override("separation", 10)
+	vbox.add_child(rows)
+	return card
 
 
 func _order_news_detail_nodes(detail_vbox: VBoxContainer) -> void:
@@ -18000,8 +19073,11 @@ func _apply_window_layout() -> void:
 
 	if active_app_id == APP_ID_SOCIAL:
 		var viewport_size: Vector2 = get_viewport_rect().size
-		var social_width: float = clamp(viewport_size.x - 72.0, 340.0, SOCIAL_WINDOW_MAX_WIDTH)
-		var social_height: float = clamp(viewport_size.y - 96.0, SOCIAL_WINDOW_MIN_HEIGHT, SOCIAL_WINDOW_MAX_HEIGHT)
+		var social_width_max: float = min(max(viewport_size.x - 32.0, 320.0), SOCIAL_WINDOW_MAX_WIDTH)
+		var social_width_min: float = min(760.0, social_width_max)
+		var social_width: float = clamp(viewport_size.x - 72.0, social_width_min, social_width_max)
+		var social_height_max: float = min(max(viewport_size.y - 32.0, 360.0), SOCIAL_WINDOW_MAX_HEIGHT)
+		var social_height: float = clamp(viewport_size.y - 96.0, min(SOCIAL_WINDOW_MIN_HEIGHT, social_height_max), social_height_max)
 		window_margin_left = max(floor((viewport_size.x - social_width) * 0.5), 16.0)
 		window_margin_right = max(viewport_size.x - window_margin_left - social_width, 16.0)
 		window_margin_top = max(floor((viewport_size.y - social_height) * 0.5), 16.0)
@@ -18142,7 +19218,7 @@ func _build_taskbar_status_text(focus_snapshot: Dictionary) -> String:
 	if active_app_id == APP_ID_NEWS:
 		return "News browser open  |  Event-driven intel feed online."
 	if active_app_id == APP_ID_SOCIAL:
-		return "Twooter open  |  Tiered social feed online."
+		return "Twooter open  |  Public market chatter online."
 	if active_app_id == APP_ID_NETWORK:
 		return "Network open  |  Contacts, recognition, and requests online."
 	if active_app_id == APP_ID_ACADEMY:
@@ -18612,13 +19688,13 @@ func _apply_visual_theme() -> void:
 		_style_news_asset_frame(news_detail_hero_frame)
 	_style_news_newspaper_ui()
 	_style_twooter_ui()
-	_style_panel(network_window_body, COLOR_WINDOW_BG, 0, 0, 0, 0, 0)
-	_style_panel(network_list_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
-	_style_panel(network_detail_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
+	_style_cream_app_panel(network_window_body, COLOR_ACADEMY_CREAM, Color(COLOR_ACADEMY_BORDER.r, COLOR_ACADEMY_BORDER.g, COLOR_ACADEMY_BORDER.b, 0.0), 0, 0)
+	_style_cream_app_panel(network_list_panel, COLOR_ACADEMY_PANEL, COLOR_ACADEMY_BORDER, 4, 1)
+	_style_cream_app_panel(network_detail_panel, COLOR_DESKTOP_CREAM, COLOR_ACADEMY_BORDER, 4, 1)
 	if academy_window_body != null:
 		_restyle_academy_controls()
 		_apply_academy_text_theme()
-	_style_panel(upgrade_window_body, COLOR_WINDOW_BG, 0, 0, 0, 0, 0)
+	_style_cream_app_panel(upgrade_window_body, COLOR_ACADEMY_CREAM, Color(COLOR_ACADEMY_BORDER.r, COLOR_ACADEMY_BORDER.g, COLOR_ACADEMY_BORDER.b, 0.0), 0, 0)
 	if console_panel != null:
 		_style_panel(console_panel, Color(0.0588235, 0.0823529, 0.109804, 0.98), 0)
 	_style_ftue_overlay()
@@ -18690,16 +19766,16 @@ func _apply_visual_theme() -> void:
 	if news_open_meeting_button != null:
 		_style_button(news_open_meeting_button, Color(0.866667, 0.807843, 0.635294, 1), Color(0.709804, 0.607843, 0.345098, 1), COLOR_WINDOW_TEXT, 0)
 	_style_button(profile_meet_contact_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
-	_style_button(network_meet_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
-	_style_button(network_tip_button, Color(0.117647, 0.32549, 0.239216, 1), COLOR_ORDER_BUY_BORDER, COLOR_TEXT, 0)
-	_style_button(network_request_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
-	_style_button(network_referral_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
+	_style_cream_app_button(network_meet_button, true)
+	_style_cream_app_button(network_tip_button, true)
+	_style_cream_app_button(network_request_button)
+	_style_cream_app_button(network_referral_button)
 	if network_followup_button != null:
-		_style_button(network_followup_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+		_style_cream_app_button(network_followup_button)
 	if network_source_check_button != null:
-		_style_button(network_source_check_button, Color(0.192157, 0.152941, 0.0823529, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
+		_style_cream_app_button(network_source_check_button, true)
 	if network_open_meeting_button != null:
-		_style_button(network_open_meeting_button, Color(0.866667, 0.807843, 0.635294, 1), Color(0.709804, 0.607843, 0.345098, 1), COLOR_WINDOW_TEXT, 0)
+		_style_cream_app_button(network_open_meeting_button)
 	if corporate_meeting_panel != null:
 		_style_panel(corporate_meeting_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
 	if corporate_meeting_attend_button != null:
@@ -19423,11 +20499,11 @@ func _style_news_command_button(button: Button, is_primary: bool) -> void:
 func _style_social_filter_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
 	var fill_color: Color = COLOR_TWOOTER_CARD if is_unlocked else Color(COLOR_TWOOTER_SURFACE.r, COLOR_TWOOTER_SURFACE.g, COLOR_TWOOTER_SURFACE.b, 0.64)
 	var border_color: Color = COLOR_TWOOTER_BLUE_EDGE
-	var font_color: Color = COLOR_TWOOTER_BLUE_DARK if is_unlocked else COLOR_TWOOTER_FAINT
+	var font_color: Color = COLOR_TWOOTER_BLUE if is_unlocked else COLOR_TWOOTER_FAINT
 	if is_selected:
 		fill_color = COLOR_TWOOTER_BLUE
 		border_color = COLOR_TWOOTER_BLUE_DARK
-		font_color = COLOR_TWOOTER_CARD
+		font_color = COLOR_TWOOTER_PAGE
 	_style_button(button, fill_color, border_color, font_color, 6)
 	_apply_font_override_to_control(button, 12, _get_dashboard_title_font())
 
@@ -19452,7 +20528,7 @@ func _style_social_account_button(button: Button, is_selected: bool) -> void:
 	if is_selected:
 		normal.bg_color = Color(COLOR_TWOOTER_BLUE_TINT.r, COLOR_TWOOTER_BLUE_TINT.g, COLOR_TWOOTER_BLUE_TINT.b, 0.44)
 
-	var font_color: Color = COLOR_TWOOTER_BLUE_DARK
+	var font_color: Color = COLOR_TWOOTER_BLUE
 	button.add_theme_stylebox_override("normal", normal)
 	button.add_theme_stylebox_override("hover", hover)
 	button.add_theme_stylebox_override("pressed", pressed)
@@ -19518,10 +20594,48 @@ func _style_stock_list_row_button(button: Button, is_selected: bool) -> void:
 	button.add_theme_font_size_override("font_size", 12)
 
 
+func _style_cream_app_panel(
+	panel: PanelContainer,
+	fill_color: Color = COLOR_DESKTOP_CREAM,
+	border_color: Color = COLOR_DESKTOP_FRAME,
+	corner_radius: int = 4,
+	border_width: int = 1
+) -> void:
+	if panel == null:
+		return
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = border_color
+	style.set_border_width_all(border_width)
+	style.set_corner_radius_all(corner_radius)
+	panel.add_theme_stylebox_override("panel", style)
+
+
+func _style_cream_app_button(button: Button, primary: bool = false) -> void:
+	if button == null:
+		return
+	UiTheme.style_button(button, "desktop_primary" if primary else "desktop_secondary")
+
+
 func _style_network_journal_filter_button(button: Button, is_selected: bool) -> void:
-	var fill_color: Color = Color(0.835294, 0.764706, 0.529412, 0.82) if is_selected else Color(0.952941, 0.94902, 0.87451, 1)
-	var border_color: Color = Color(0.52549, 0.396078, 0.160784, 1) if is_selected else Color(0.572549, 0.482353, 0.309804, 0.8)
-	_style_button(button, fill_color, border_color, COLOR_WINDOW_TEXT, 0)
+	var fill_color: Color = COLOR_DESKTOP_GOLD if is_selected else COLOR_DESKTOP_CREAM
+	var border_color: Color = COLOR_DESKTOP_BROWN if is_selected else COLOR_DESKTOP_FRAME
+	UiTheme.style_button(
+		button,
+		"custom",
+		{
+			"fill": fill_color,
+			"border": border_color,
+			"font": COLOR_DESKTOP_TEXT,
+			"hover": fill_color.lightened(0.08),
+			"pressed": fill_color.darkened(0.08),
+			"disabled": fill_color,
+			"disabled_font": COLOR_DESKTOP_TEXT,
+			"radius": 4,
+			"border_width": 1,
+			"size_role": "caption"
+		}
+	)
 
 
 func _style_light_item_list(item_list: ItemList) -> void:

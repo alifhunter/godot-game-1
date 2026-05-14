@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dev-only Twooter content editor server.
+"""Dev-only Twooter feed editor server.
 
 Uses only Python stdlib. The editable source lives next to this file and exports
 to the Godot runtime catalog at data/social/twooter_feed_data.json.
@@ -28,6 +28,8 @@ REQUIRED_TOP_LEVEL_KEYS = [
     "prototype_default_access_tier",
     "post_limit",
     "tier_labels",
+    "interaction_response_pools",
+    "dialog_trees",
     "accounts",
     "voice_templates",
     "thread_templates",
@@ -37,6 +39,38 @@ REQUIRED_TOP_LEVEL_KEYS = [
 ]
 REQUIRED_TIER_LABELS = ["1", "2", "3", "4"]
 REQUIRED_FALLBACK_KEYS = ["all"]
+ALLOWED_RISK_PROFILES = {"clean", "noisy", "suspicious"}
+ALLOWED_DIALOG_ACTION_IDS = {
+    "reply_support",
+    "reply_skeptic",
+    "ask_source_public",
+    "message_check_in",
+    "connect",
+    "ask_source_private",
+    "share_thesis",
+    "ask_tip",
+    "accept_invite",
+    "respond_suspicious_request",
+}
+ALLOWED_DIALOG_OUTCOME_IDS = {
+    "",
+    "contact_discovery",
+    "journal_entry",
+    "source_check",
+    "clean_read",
+    "event_invite",
+    "suspicious_boundary",
+    "thesis_response",
+}
+ALLOWED_DIALOG_REQUIREMENT_KEYS = {
+    "shareable_thesis",
+    "min_relationship",
+    "min_credibility",
+    "min_importance",
+    "relationship_stage",
+    "daily_ap",
+}
+ALLOWED_DIALOG_REQUIREMENT_STAGES = {"stranger", "familiar", "trusted", "inner_circle_candidate"}
 KNOWN_TEMPLATE_TOKENS = {
     "target_ticker",
     "target_company_name",
@@ -57,6 +91,13 @@ KNOWN_TEMPLATE_TOKENS = {
     "decliners",
     "biggest_winner",
     "biggest_loser",
+    "account_name",
+    "handle",
+    "ticker",
+    "company",
+    "thesis_title",
+    "stage",
+    "relationship",
 }
 
 
@@ -100,6 +141,8 @@ def normalize_catalog_for_source(catalog: dict) -> dict:
     catalog["prototype_default_access_tier"] = int(catalog.get("prototype_default_access_tier", 1) or 1)
     catalog["post_limit"] = int(catalog.get("post_limit", 18) or 18)
     catalog["tier_labels"] = normalize_string_map(catalog.get("tier_labels", {}))
+    catalog["interaction_response_pools"] = normalize_pool_map(catalog.get("interaction_response_pools", {}))
+    catalog["dialog_trees"] = normalize_dialog_trees(catalog.get("dialog_trees", {}))
     catalog["accounts"] = normalize_accounts(catalog.get("accounts", []))
     catalog["voice_templates"] = normalize_nested_pool_map(catalog.get("voice_templates", {}))
     catalog["thread_templates"] = normalize_nested_pool_map(catalog.get("thread_templates", {}))
@@ -127,6 +170,17 @@ def normalize_accounts(value) -> list[dict]:
             account["thread_preference"] = bool(account.get("thread_preference", False))
         if "person_id" in account:
             account["person_id"] = str(account.get("person_id", "")).strip()
+        if isinstance(account.get("social_profile"), dict):
+            profile = copy.deepcopy(account.get("social_profile", {}))
+            profile["role"] = str(profile.get("role", "")).strip()
+            profile["affiliation_role"] = str(profile.get("affiliation_role", "")).strip()
+            profile["risk_profile"] = str(profile.get("risk_profile", "clean")).strip() or "clean"
+            profile["follow_weight"] = int(profile.get("follow_weight", 50) or 50)
+            if "network_contact_id" in profile:
+                profile["network_contact_id"] = str(profile.get("network_contact_id", "")).strip()
+            if "dialog_trees" in profile:
+                profile["dialog_trees"] = normalize_string_array(profile.get("dialog_trees", []))
+            account["social_profile"] = profile
         accounts.append(account)
     return accounts
 
@@ -167,6 +221,53 @@ def normalize_nested_pool_map(value) -> dict:
     return normalized
 
 
+def normalize_dialog_trees(value) -> dict:
+    if not isinstance(value, dict):
+        return {}
+    normalized: dict = {}
+    for tree_key, tree_value in value.items():
+        tree_id = str(tree_key).strip()
+        if not tree_id or not isinstance(tree_value, dict):
+            continue
+        tree = copy.deepcopy(tree_value)
+        tree["entry_node"] = str(tree.get("entry_node", "")).strip()
+        nodes = tree.get("nodes", {}) if isinstance(tree.get("nodes", {}), dict) else {}
+        normalized_nodes: dict = {}
+        for node_key, node_value in nodes.items():
+            node_id = str(node_key).strip()
+            if not node_id or not isinstance(node_value, dict):
+                continue
+            node = copy.deepcopy(node_value)
+            node["account_replies"] = normalize_string_array(node.get("account_replies", []))
+            node["options"] = normalize_dialog_options(node.get("options", []))
+            normalized_nodes[node_id] = node
+        tree["nodes"] = normalized_nodes
+        normalized[tree_id] = tree
+    return normalized
+
+
+def normalize_dialog_options(value) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    options: list[dict] = []
+    for option_value in value:
+        if not isinstance(option_value, dict):
+            continue
+        option = copy.deepcopy(option_value)
+        option["id"] = str(option.get("id", "")).strip()
+        option["label"] = str(option.get("label", "")).strip()
+        option["player_lines"] = normalize_string_array(option.get("player_lines", []))
+        if "blocked_lines" in option:
+            option["blocked_lines"] = normalize_string_array(option.get("blocked_lines", []))
+        if "requirements" in option and not isinstance(option.get("requirements"), dict):
+            option["requirements"] = {}
+        for key in ["action_id", "public_action_id", "private_action_id", "next_node", "outcome"]:
+            if key in option:
+                option[key] = str(option.get(key, "")).strip()
+        options.append(option)
+    return options
+
+
 def export_runtime_catalog(source: dict) -> dict:
     return normalize_catalog_for_source(source.get("catalog", {}))
 
@@ -180,9 +281,12 @@ def validate_source(source: dict) -> dict:
             errors.append(f"Missing top-level key: {key}.")
 
     validate_tier_labels(catalog.get("tier_labels", {}), errors)
+    validate_pool_map(catalog.get("interaction_response_pools", {}), "interaction_response_pools", errors, warnings)
+    validate_dialog_trees(catalog.get("dialog_trees", {}), errors, warnings)
+    dialog_tree_ids = set(catalog.get("dialog_trees", {}).keys())
     voice_ids = set(catalog.get("voice_templates", {}).keys())
     thread_voice_ids = set(catalog.get("thread_templates", {}).keys())
-    validate_accounts(catalog.get("accounts", []), voice_ids, thread_voice_ids, errors, warnings)
+    validate_accounts(catalog.get("accounts", []), voice_ids, thread_voice_ids, dialog_tree_ids, errors, warnings)
     validate_nested_pool_map(catalog.get("voice_templates", {}), "voice_templates", errors, warnings)
     validate_nested_pool_map(catalog.get("thread_templates", {}), "thread_templates", errors, warnings, allow_empty=True)
     validate_pool_map(catalog.get("continuity_templates", {}), "continuity_templates", errors, warnings)
@@ -215,7 +319,7 @@ def validate_tier_labels(tier_labels: dict, errors: list[str]) -> None:
             errors.append(f"tier_labels.{tier} is required.")
 
 
-def validate_accounts(accounts: list[dict], voice_ids: set[str], thread_voice_ids: set[str], errors: list[str], warnings: list[str]) -> None:
+def validate_accounts(accounts: list[dict], voice_ids: set[str], thread_voice_ids: set[str], dialog_tree_ids: set[str], errors: list[str], warnings: list[str]) -> None:
     if not accounts:
         errors.append("accounts must contain at least one account.")
         return
@@ -249,6 +353,136 @@ def validate_accounts(accounts: list[dict], voice_ids: set[str], thread_voice_id
             errors.append(f"{label}: voice '{voice}' does not exist in voice_templates.")
         if bool(account.get("thread_preference", False)) and voice not in thread_voice_ids:
             warnings.append(f"{label}: thread_preference is enabled but no thread_templates entry exists for voice '{voice}'.")
+        profile = account.get("social_profile")
+        if profile is not None:
+            if not isinstance(profile, dict):
+                errors.append(f"{label}: social_profile must be an object when present.")
+            else:
+                validate_social_profile(profile, label, dialog_tree_ids, errors, warnings)
+
+
+def validate_social_profile(profile: dict, label: str, dialog_tree_ids: set[str], errors: list[str], warnings: list[str]) -> None:
+    role = str(profile.get("role", "")).strip()
+    if not role:
+        warnings.append(f"{label}: social_profile.role is empty.")
+    affiliation_role = str(profile.get("affiliation_role", "")).strip()
+    if not affiliation_role:
+        warnings.append(f"{label}: social_profile.affiliation_role is empty.")
+    risk_profile = str(profile.get("risk_profile", "clean")).strip() or "clean"
+    if risk_profile not in ALLOWED_RISK_PROFILES:
+        errors.append(f"{label}: social_profile.risk_profile must be one of {sorted(ALLOWED_RISK_PROFILES)}.")
+    try:
+        follow_weight = int(profile.get("follow_weight", 50))
+    except (TypeError, ValueError):
+        errors.append(f"{label}: social_profile.follow_weight must be an integer.")
+        follow_weight = 50
+    if follow_weight < 0 or follow_weight > 100:
+        warnings.append(f"{label}: social_profile.follow_weight is usually 0-100.")
+    if "network_contact_id" in profile and not isinstance(profile.get("network_contact_id"), str):
+        errors.append(f"{label}: social_profile.network_contact_id must be text when present.")
+    if "sector_ids" in profile and not isinstance(profile.get("sector_ids"), list):
+        errors.append(f"{label}: social_profile.sector_ids must be an array when present.")
+    if "dialog_trees" in profile:
+        if not isinstance(profile.get("dialog_trees"), list):
+            errors.append(f"{label}: social_profile.dialog_trees must be an array when present.")
+        else:
+            for tree_id in profile.get("dialog_trees", []):
+                if str(tree_id) not in dialog_tree_ids:
+                    errors.append(f"{label}: social_profile.dialog_trees references missing tree '{tree_id}'.")
+
+
+def validate_dialog_trees(dialog_trees: dict, errors: list[str], warnings: list[str]) -> None:
+    if not isinstance(dialog_trees, dict) or not dialog_trees:
+        errors.append("dialog_trees must be a non-empty object.")
+        return
+    for tree_id, tree in dialog_trees.items():
+        label = f"dialog_trees.{tree_id}"
+        if not isinstance(tree, dict):
+            errors.append(f"{label} must be an object.")
+            continue
+        nodes = tree.get("nodes", {})
+        entry_node = str(tree.get("entry_node", "")).strip()
+        if not isinstance(nodes, dict) or not nodes:
+            errors.append(f"{label}.nodes must be a non-empty object.")
+            continue
+        if not entry_node or entry_node not in nodes:
+            errors.append(f"{label}.entry_node must reference an existing node.")
+        for node_id, node in nodes.items():
+            node_label = f"{label}.nodes.{node_id}"
+            if not isinstance(node, dict):
+                errors.append(f"{node_label} must be an object.")
+                continue
+            replies = node.get("account_replies", [])
+            if not isinstance(replies, list) or not [str(row).strip() for row in replies if str(row).strip()]:
+                errors.append(f"{node_label}.account_replies needs at least one line.")
+            else:
+                validate_template_tokens([str(row) for row in replies], f"{node_label}.account_replies", warnings)
+            options = node.get("options", [])
+            if not isinstance(options, list) or len(options) < 1 or len(options) > 3:
+                errors.append(f"{node_label}.options must contain 1-3 options.")
+                continue
+            seen_option_ids: set[str] = set()
+            for option_index, option in enumerate(options):
+                option_label = f"{node_label}.options[{option_index}]"
+                if not isinstance(option, dict):
+                    errors.append(f"{option_label} must be an object.")
+                    continue
+                option_id = str(option.get("id", "")).strip()
+                if not option_id:
+                    errors.append(f"{option_label}.id is required.")
+                elif option_id in seen_option_ids:
+                    errors.append(f"{option_label}.id must be unique within the node.")
+                seen_option_ids.add(option_id)
+                action_ids = [
+                    str(option.get("action_id", "")).strip(),
+                    str(option.get("public_action_id", "")).strip(),
+                    str(option.get("private_action_id", "")).strip(),
+                ]
+                action_ids = [action_id for action_id in action_ids if action_id]
+                if not action_ids:
+                    errors.append(f"{option_label} needs action_id, public_action_id, or private_action_id.")
+                for action_id in action_ids:
+                    if action_id not in ALLOWED_DIALOG_ACTION_IDS:
+                        errors.append(f"{option_label}: action '{action_id}' is not supported.")
+                next_node = str(option.get("next_node", "")).strip()
+                if next_node and next_node not in nodes:
+                    errors.append(f"{option_label}.next_node references missing node '{next_node}'.")
+                outcome = str(option.get("outcome", "")).strip()
+                if outcome not in ALLOWED_DIALOG_OUTCOME_IDS:
+                    errors.append(f"{option_label}.outcome references unsupported outcome '{outcome}'.")
+                player_lines = option.get("player_lines", [])
+                if not isinstance(player_lines, list) or not [str(row).strip() for row in player_lines if str(row).strip()]:
+                    errors.append(f"{option_label}.player_lines needs at least one line.")
+                else:
+                    validate_template_tokens([str(row) for row in player_lines], f"{option_label}.player_lines", warnings)
+                blocked_lines = option.get("blocked_lines", [])
+                if "blocked_lines" in option:
+                    if not isinstance(blocked_lines, list) or not [str(row).strip() for row in blocked_lines if str(row).strip()]:
+                        errors.append(f"{option_label}.blocked_lines must contain at least one line when present.")
+                    else:
+                        validate_template_tokens([str(row) for row in blocked_lines], f"{option_label}.blocked_lines", warnings)
+                requirements = option.get("requirements", {})
+                if "requirements" in option:
+                    if not isinstance(requirements, dict):
+                        errors.append(f"{option_label}.requirements must be an object when present.")
+                    else:
+                        validate_dialog_requirements(requirements, option_label, errors)
+
+
+def validate_dialog_requirements(requirements: dict, label: str, errors: list[str]) -> None:
+    for key, value in requirements.items():
+        if key not in ALLOWED_DIALOG_REQUIREMENT_KEYS:
+            errors.append(f"{label}.requirements.{key} is not supported.")
+            continue
+        if key == "shareable_thesis" and not isinstance(value, bool):
+            errors.append(f"{label}.requirements.shareable_thesis must be true/false.")
+        elif key in {"min_relationship", "min_credibility", "min_importance", "daily_ap"}:
+            try:
+                int(value)
+            except (TypeError, ValueError):
+                errors.append(f"{label}.requirements.{key} must be an integer.")
+        elif key == "relationship_stage" and str(value) not in ALLOWED_DIALOG_REQUIREMENT_STAGES:
+            errors.append(f"{label}.requirements.relationship_stage must be one of {sorted(ALLOWED_DIALOG_REQUIREMENT_STAGES)}.")
 
 
 def validate_pool_map(pool_map: dict, label: str, errors: list[str], warnings: list[str]) -> None:
@@ -396,7 +630,7 @@ def run_server(host: str, port: int) -> None:
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description="Dev-only Twooter content editor")
+    parser = argparse.ArgumentParser(description="Dev-only Twooter feed editor")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8767)
     parser.add_argument("--validate", action="store_true", help="Validate the editable source and exit.")
