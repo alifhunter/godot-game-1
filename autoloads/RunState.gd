@@ -3109,6 +3109,7 @@ func _default_twooter_social_state() -> Dictionary:
 	return {
 		"account_states": {},
 		"post_interactions": {},
+		"liked_posts": {},
 		"messages": {},
 		"network_contact_definitions": {},
 		"dialog_state": {
@@ -3137,6 +3138,12 @@ func _normalize_twooter_social_state(source_state: Variant) -> Dictionary:
 		if post_id.is_empty() or typeof(post_interactions.get(post_id_value)) != TYPE_DICTIONARY:
 			continue
 		normalized["post_interactions"][post_id] = _normalize_twooter_post_interaction(post_interactions.get(post_id_value, {}))
+	var liked_posts: Dictionary = source.get("liked_posts", {}) if typeof(source.get("liked_posts", {})) == TYPE_DICTIONARY else {}
+	for post_id_value in liked_posts.keys():
+		var liked_post_id: String = str(post_id_value)
+		if liked_post_id.is_empty() or typeof(liked_posts.get(post_id_value)) != TYPE_DICTIONARY:
+			continue
+		normalized["liked_posts"][liked_post_id] = _normalize_twooter_liked_post(liked_posts.get(post_id_value, {}))
 	var messages: Dictionary = source.get("messages", {}) if typeof(source.get("messages", {})) == TYPE_DICTIONARY else {}
 	for account_id_value in messages.keys():
 		var account_id: String = str(account_id_value)
@@ -3176,6 +3183,11 @@ func _normalize_twooter_account_state(source_state: Variant) -> Dictionary:
 		"credibility": clampi(int(source.get("credibility", 0)), 0, 100),
 		"importance": clampi(int(source.get("importance", 0)), 0, 100),
 		"following": bool(source.get("following", false)),
+		"likes_given": max(int(source.get("likes_given", 0)), 0),
+		"last_like_day_index": int(source.get("last_like_day_index", -1)),
+		"like_relationship_progress": float(clamp(float(source.get("like_relationship_progress", 0.0)), 0.0, 0.99)),
+		"unfollowed_ask_count": max(int(source.get("unfollowed_ask_count", 0)), 0),
+		"last_unfollowed_ask_day_index": int(source.get("last_unfollowed_ask_day_index", -1)),
 		"last_interaction_day_index": int(source.get("last_interaction_day_index", -1)),
 		"interaction_count": max(int(source.get("interaction_count", 0)), 0),
 		"relationship_stage": str(source.get("relationship_stage", "stranger")),
@@ -3223,6 +3235,14 @@ func _normalize_twooter_post_interaction(source_interaction: Variant) -> Diction
 		"concluded": bool(source.get("concluded", false)),
 		"conclusion_reason": str(source.get("conclusion_reason", "")),
 		"followup_unlocked": bool(source.get("followup_unlocked", false))
+	}
+
+
+func _normalize_twooter_liked_post(source_like: Variant) -> Dictionary:
+	var source: Dictionary = source_like if typeof(source_like) == TYPE_DICTIONARY else {}
+	return {
+		"account_id": str(source.get("account_id", "")),
+		"day_index": int(source.get("day_index", -1))
 	}
 
 

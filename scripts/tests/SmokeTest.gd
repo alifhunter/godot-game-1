@@ -8647,6 +8647,23 @@ func _run_scenario(
 	var forbidden_news_terms: Array = ["source_chain_id", "chain_family", "meeting_id", "venue_type", "progress_label", "tone", "current_timeline_state", "management stance", "hidden_positioning", "formal_agenda_or_filing", "meeting_or_call"]
 	var news_detail_meta_label: Label = game_root.find_child("NewsDetailMetaLabel", true, false) as Label
 	var news_detail_body: RichTextLabel = game_root.find_child("NewsDetailBody", true, false) as RichTextLabel
+	var news_detail_scroll: ScrollContainer = game_root.find_child("NewsDetailScroll", true, false) as ScrollContainer
+	var news_detail_scroll_content: VBoxContainer = game_root.find_child("NewsDetailScrollContent", true, false) as VBoxContainer
+	if (
+		news_detail_scroll == null
+		or news_detail_scroll_content == null
+		or news_detail_body == null
+		or not news_detail_scroll_content.is_ancestor_of(news_detail_body)
+		or news_detail_scroll.size_flags_vertical != Control.SIZE_EXPAND_FILL
+		or not news_detail_body.fit_content
+		or news_detail_body.scroll_active
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the News article detail section to scroll as one full article column."
+		}
 	var visible_news_text: String = "%s\n%s\n%s\n%s" % [
 		str(news_detail_meta_label.text if news_detail_meta_label != null else ""),
 		str(news_detail_byline_label.text),
@@ -8680,11 +8697,17 @@ func _run_scenario(
 
 	var source_leads: Array = GameManager.get_network_snapshot().get("discoveries", [])
 	var has_news_source_lead: bool = false
+	var news_source_lead: Dictionary = {}
+	var news_source_lead_account_ids: Dictionary = {}
 	for lead_value in source_leads:
 		var lead: Dictionary = lead_value
 		if str(lead.get("source_type", "")) == "news" and str(lead.get("source_id", "")) == news_article_id:
 			has_news_source_lead = true
-			break
+			if news_source_lead.is_empty():
+				news_source_lead = lead
+			var lead_account_id: String = str(lead.get("twooter_account_id", ""))
+			if not lead_account_id.is_empty():
+				news_source_lead_account_ids[lead_account_id] = true
 	if not has_news_source_lead:
 		game_root.queue_free()
 		await get_tree().process_frame
@@ -8692,6 +8715,153 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected at least one News article to surface a valid Network source lead."
 		}
+	var news_source_button: Button = game_root.find_child("NewsMeetContactButton", true, false) as Button
+	var news_source_account_id: String = str(news_source_button.get_meta("twooter_account_id", "")) if news_source_button != null else ""
+	var news_source_handle: String = str(news_source_button.get_meta("twooter_handle", "")) if news_source_button != null else ""
+	if (
+		news_source_button == null or
+		not news_source_button.visible or
+		news_source_button.disabled or
+		news_source_account_id.is_empty() or
+		not news_source_account_id.begins_with("network_") or
+		news_source_handle.find("@") != 0 or
+		news_source_button.text.find("Meet Source") != -1 or
+		not news_source_lead_account_ids.has(news_source_account_id)
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected News source leads to expose a Twooter handle button instead of direct Meet Source."
+		}
+	news_source_button.emit_signal("pressed")
+	await get_tree().process_frame
+	await _wait_for_ui_animation_settle()
+	var opened_source_profile_card: PanelContainer = game_root.find_child("SocialAccountProfileCard", true, false) as PanelContainer
+	var opened_source_message_button: Button = game_root.find_child("SocialStartMessageButton", true, false) as Button
+	var source_thread: Dictionary = GameManager.get_twooter_message_thread(news_source_account_id)
+	var source_thread_account: Dictionary = source_thread.get("account", {}) if typeof(source_thread.get("account", {})) == TYPE_DICTIONARY else {}
+	var source_social_profile: Dictionary = source_thread_account.get("social_profile", {}) if typeof(source_thread_account.get("social_profile", {})) == TYPE_DICTIONARY else {}
+	var source_dialog_options: Array = source_thread.get("dialog_options", [])
+	var source_first_option: Dictionary = source_dialog_options[0] if not source_dialog_options.is_empty() and typeof(source_dialog_options[0]) == TYPE_DICTIONARY else {}
+	var source_first_tree_id: String = str(source_first_option.get("tree_id", ""))
+	if (
+		not game_root.is_desktop_app_open("social") or
+		game_root.get_active_desktop_app_id() != "social" or
+		opened_source_profile_card == null or
+		str(opened_source_profile_card.get_meta("social_account_id", "")) != news_source_account_id or
+		opened_source_message_button == null or
+		str(source_social_profile.get("account_origin", "")) != "network_contact" or
+		not source_first_tree_id.begins_with("network_") or
+		str(source_first_option.get("player_text", "")).strip_edges().is_empty()
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the News source handle to open the matching Twooter source profile with contact-specific dialog options."
+		}
+	var source_loop_restore_state: Dictionary = RunState.to_save_dict()
+	RunState.daily_action_day_index = RunState.day_index
+	RunState.daily_actions_used = 0
+	var source_loop_contact_id: String = str(source_social_profile.get("network_contact_id", ""))
+	if source_loop_contact_id.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected News-sourced Twooter accounts to keep contact id context."
+		}
+	var source_follow_result: Dictionary = GameManager.follow_twooter_account(news_source_account_id)
+	var source_loop_thread: Dictionary = GameManager.get_twooter_message_thread(news_source_account_id)
+	var source_loop_option: Dictionary = {}
+	for option_value in source_loop_thread.get("dialog_options", []):
+		if typeof(option_value) != TYPE_DICTIONARY:
+			continue
+		var option_row: Dictionary = option_value
+		var option_action_id: String = str(option_row.get("action_id", option_row.get("id", "")))
+		if option_action_id != "message_check_in" and bool(option_row.get("enabled", true)):
+			source_loop_option = option_row
+			break
+	if source_loop_option.is_empty():
+		var source_warm_state: Dictionary = RunState.get_twooter_social_state()
+		var source_warm_accounts: Dictionary = source_warm_state.get("account_states", {})
+		var source_warm_account_state: Dictionary = source_warm_accounts.get(news_source_account_id, {})
+		source_warm_account_state["relationship"] = max(int(source_warm_account_state.get("relationship", 0)), 12)
+		source_warm_accounts[news_source_account_id] = source_warm_account_state
+		source_warm_state["account_states"] = source_warm_accounts
+		RunState.set_twooter_social_state(source_warm_state)
+		source_loop_thread = GameManager.get_twooter_message_thread(news_source_account_id)
+		for option_value in source_loop_thread.get("dialog_options", []):
+			if typeof(option_value) != TYPE_DICTIONARY:
+				continue
+			var warmed_option_row: Dictionary = option_value
+			var warmed_action_id: String = str(warmed_option_row.get("action_id", warmed_option_row.get("id", "")))
+			if warmed_action_id != "message_check_in" and bool(warmed_option_row.get("enabled", true)):
+				source_loop_option = warmed_option_row
+				break
+	if source_loop_option.is_empty() or _contains_malformed_social_template_text(str(source_loop_option.get("player_text", ""))):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected News-sourced Twooter accounts to expose a usable Network-facing dialog option after enough relationship context."
+		}
+	var source_loop_ap_before: int = int(GameManager.get_daily_action_snapshot().get("used", 0))
+	var source_loop_journal_before: int = RunState.get_network_tip_journal().size()
+	var source_loop_discovery_before: Dictionary = RunState.get_network_discoveries().get(source_loop_contact_id, {}).duplicate(true)
+	var source_loop_result: Dictionary = GameManager.send_twooter_message(
+		news_source_account_id,
+		str(source_loop_option.get("action_id", "ask_source_private")),
+		str(source_loop_option.get("thesis_id", "")),
+		str(source_loop_option.get("player_text", ""))
+	)
+	var source_loop_ap_after: int = int(GameManager.get_daily_action_snapshot().get("used", 0))
+	var source_loop_state_after: Dictionary = RunState.get_twooter_social_state()
+	var source_loop_rows: Array = source_loop_state_after.get("messages", {}).get(news_source_account_id, {}).get("rows", [])
+	var source_loop_account_state: Dictionary = source_loop_state_after.get("account_states", {}).get(news_source_account_id, {})
+	var source_loop_contact_runtime: Dictionary = RunState.get_network_contacts().get(source_loop_contact_id, {})
+	var source_loop_discovery_after: Dictionary = RunState.get_network_discoveries().get(source_loop_contact_id, {})
+	var source_loop_journal_after: int = RunState.get_network_tip_journal().size()
+	var source_loop_row_texts: Array[String] = []
+	for source_loop_row_value in source_loop_rows:
+		if typeof(source_loop_row_value) == TYPE_DICTIONARY:
+			source_loop_row_texts.append(str(source_loop_row_value.get("text", "")))
+	var source_loop_visible_text: String = "%s\n%s\n%s" % [
+		str(source_loop_option.get("player_text", "")),
+		str(source_loop_result.get("reply_text", "")),
+		"\n".join(source_loop_row_texts)
+	]
+	if (
+		not bool(source_follow_result.get("success", false)) or
+		not bool(source_loop_result.get("success", false)) or
+		not bool(source_loop_result.get("network_changed", false)) or
+		source_loop_ap_after <= source_loop_ap_before or
+		source_loop_rows.size() < 2 or
+		str(source_loop_rows[source_loop_rows.size() - 2].get("sender", "")) != "player" or
+		str(source_loop_rows[source_loop_rows.size() - 1].get("sender", "")) != "account" or
+		not bool(source_loop_account_state.get("following", false)) or
+		not bool(source_loop_contact_runtime.get("met", false)) or
+		str(source_loop_discovery_after.get("source_type", "")) != "twooter" or
+		source_loop_journal_after <= source_loop_journal_before or
+		source_loop_discovery_after == source_loop_discovery_before or
+		_contains_malformed_social_template_text(source_loop_visible_text)
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the News -> Twooter handle -> source DM loop to spend AP, write message rows, and promote the source into Network."
+		}
+	RunState.load_from_dict(source_loop_restore_state)
+	game_root.selected_social_account_id = ""
+	game_root.selected_social_message_account_id = ""
+	game_root.selected_social_feed_filter_id = "all"
+	game_root.selected_social_view_id = "home"
+	game_root.close_desktop_app("social")
+	await get_tree().process_frame
+	game_root._set_active_app("news")
+	await get_tree().process_frame
 
 	if news_article_list.item_count > 1:
 		news_article_list.select(1)
@@ -9573,13 +9743,15 @@ func _run_scenario(
 		social_message_button == null or
 		game_root.find_child("SocialNavExploreButton", true, false) != null or
 		game_root.find_child("SocialNavProfileButton", true, false) != null or
+		game_root.find_child("SocialSearchPanel", true, false) != null or
+		game_root.find_child("SocialSearchInput", true, false) != null or
 		social_right_rail == null
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected Twooter to render only Home and Message in the left sidebar plus a right rail."
+			"message": "Smoke test expected Twooter to render only Home and Message in the left sidebar, no search panel, and a right rail."
 		}
 
 	var social_interaction_restore_state: Dictionary = RunState.to_save_dict()
@@ -9687,6 +9859,44 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected Twooter posts to expose one Reply composer button."
 		}
+	var social_like_button: Button = game_root.find_child("SocialPostLikeButton", true, false) as Button
+	var like_state_before: Dictionary = RunState.get_twooter_social_state()
+	var like_account_before: Dictionary = like_state_before.get("account_states", {}).get(social_first_account_id, {})
+	var likes_given_before: int = int(like_account_before.get("likes_given", 0))
+	if social_like_button == null or social_like_button.disabled or not social_like_button.text.begins_with("Like"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Twooter posts to expose a real Like button before the player likes a post."
+		}
+	social_like_button.emit_signal("pressed")
+	await get_tree().process_frame
+	var like_state_after: Dictionary = RunState.get_twooter_social_state()
+	var like_account_after: Dictionary = like_state_after.get("account_states", {}).get(social_first_account_id, {})
+	social_like_button = game_root.find_child("SocialPostLikeButton", true, false) as Button
+	if (
+		not like_state_after.get("liked_posts", {}).has(social_first_post_id)
+		or int(like_account_after.get("likes_given", 0)) <= likes_given_before
+		or float(like_account_after.get("like_relationship_progress", 0.0)) < 0.49
+		or social_like_button == null
+		or not social_like_button.disabled
+		or not social_like_button.text.begins_with("Liked")
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected liking a Twooter post to persist liked post state, update account like count, and disable the Like button."
+		}
+	social_post_action_button = game_root.find_child("SocialPostActionButton", true, false) as Button
+	if social_post_action_button == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Reply button to remain available after liking a post."
+		}
 	social_post_action_button.emit_signal("pressed")
 	await get_tree().process_frame
 	var social_reply_dialog: Control = game_root.find_child("SocialReplyComposerDialog", true, false) as Control
@@ -9770,12 +9980,13 @@ func _run_scenario(
 		not bool(repeated_public_result.get("success", false))
 		or int(repeated_public_result.get("relationship_delta", -1)) >= first_reply_relationship_gain
 		or int(repeated_public_result.get("relationship_delta", -1)) < 0
+		or not str(repeated_public_result.get("reply_text", "")).to_lower().contains("follow")
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected repeated same-day Twooter public interaction to have diminished relationship gains."
+			"message": "Smoke test expected repeated same-day Twooter public interaction to have diminished gains and mention following before deeper asks."
 		}
 	var low_chain_interaction: Dictionary = RunState.get_twooter_social_state().get("post_interactions", {}).get(social_first_post_id, {})
 	if (
@@ -9856,15 +10067,47 @@ func _run_scenario(
 	var filtered_account_id: String = str(social_account_button.get_meta("social_account_id", ""))
 	social_account_button.emit_signal("pressed")
 	await get_tree().process_frame
-	var social_clear_button: Button = game_root.find_child("SocialAccountClearButton", true, false) as Button
-	var social_start_message_button: Button = game_root.find_child("SocialStartMessageButton", true, false) as Button
-	var social_account_follow_button: Button = game_root.find_child("SocialAccountFollowButton", true, false) as Button
-	if social_clear_button == null or social_start_message_button == null or social_account_follow_button == null:
+	var social_account_profile_card: PanelContainer = game_root.find_child("SocialAccountProfileCard", true, false) as PanelContainer
+	var social_account_profile_stats: HFlowContainer = game_root.find_child("SocialAccountProfileStats", true, false) as HFlowContainer
+	var social_account_profile_description_label: Label = game_root.find_child("SocialAccountProfileDescriptionLabel", true, false) as Label
+	var social_account_filter_nav_row: HBoxContainer = game_root.find_child("SocialAccountFilterNavRow", true, false) as HBoxContainer
+	if (
+		social_account_profile_card == null
+		or str(social_account_profile_card.get_meta("social_account_id", "")) != filtered_account_id
+		or social_account_filter_nav_row == null
+		or social_account_profile_stats == null
+		or social_account_profile_stats.get_child_count() < 5
+		or social_account_profile_description_label == null
+		or social_account_profile_description_label.text.strip_edges().is_empty()
+		or game_root.find_child("SocialAccountProfileCaresLabel", true, false) != null
+		or game_root.find_child("SocialAccountProfileNextStepLabel", true, false) != null
+		or game_root.find_child("SocialAccountProfileMemoryLabel", true, false) != null
+	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected clicking a Twooter account name to show account actions and a clearable filter."
+			"message": "Smoke test expected clicking a Twooter account to open a profile card with stats and one account description."
+		}
+	var social_clear_button: Button = game_root.find_child("SocialAccountClearButton", true, false) as Button
+	var social_start_message_button: Button = game_root.find_child("SocialStartMessageButton", true, false) as Button
+	var social_account_follow_button: Button = game_root.find_child("SocialAccountFollowButton", true, false) as Button
+	var social_nav_index: int = social_feed_cards.get_children().find(social_account_filter_nav_row)
+	var social_profile_index: int = social_feed_cards.get_children().find(social_account_profile_card)
+	if (
+		social_clear_button == null
+		or not social_account_filter_nav_row.is_ancestor_of(social_clear_button)
+		or social_nav_index == -1
+		or social_profile_index == -1
+		or social_nav_index >= social_profile_index
+		or social_start_message_button == null
+		or social_account_follow_button == null
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected clicking a Twooter account name to show account actions and an All accounts button above the profile."
 		}
 	social_account_follow_button.emit_signal("pressed")
 	await get_tree().process_frame
@@ -9911,6 +10154,41 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected clearing a Twooter account filter to return to the full feed."
 		}
+	var right_follow_row: HBoxContainer = game_root.find_child("SocialFollowRow", true, false) as HBoxContainer
+	var right_follow_account_button: Button = game_root.find_child("SocialFollowAccountButton", true, false) as Button
+	if (
+		right_follow_row == null
+		or str(right_follow_row.get_meta("social_account_id", "")).is_empty()
+		or right_follow_account_button == null
+		or str(right_follow_account_button.get_meta("social_account_id", "")).is_empty()
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Twooter right rail follow list to expose clickable account rows."
+		}
+	var right_follow_account_id: String = str(right_follow_account_button.get_meta("social_account_id", ""))
+	right_follow_account_button.emit_signal("pressed")
+	await get_tree().process_frame
+	var right_follow_profile_card: PanelContainer = game_root.find_child("SocialAccountProfileCard", true, false) as PanelContainer
+	if right_follow_profile_card == null or str(right_follow_profile_card.get_meta("social_account_id", "")) != right_follow_account_id:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected clicking a right-rail follow row to open that account profile."
+		}
+	social_clear_button = game_root.find_child("SocialAccountClearButton", true, false) as Button
+	if social_clear_button == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected a right-rail account profile to remain clearable."
+		}
+	social_clear_button.emit_signal("pressed")
+	await get_tree().process_frame
 
 	var social_thread_button: Button = game_root.find_child("SocialThreadToggleButton", true, false) as Button
 	var social_thread_lines: VBoxContainer = game_root.find_child("SocialThreadLines", true, false) as VBoxContainer
@@ -9948,6 +10226,7 @@ func _run_scenario(
 	var social_message_composer: PanelContainer = game_root.find_child("SocialMessageComposer", true, false) as PanelContainer
 	var social_message_thread_scroll: ScrollContainer = game_root.find_child("SocialMessageThreadScroll", true, false) as ScrollContainer
 	var social_message_rows_scroll: ScrollContainer = game_root.find_child("SocialMessageRowsScroll", true, false) as ScrollContainer
+	var social_message_detail_panel: PanelContainer = game_root.find_child("SocialMessageDetailPanel", true, false) as PanelContainer
 	if (
 		social_message_view == null or
 		not social_message_view.visible or
@@ -9956,6 +10235,8 @@ func _run_scenario(
 		social_message_composer.visible or
 		social_message_thread_scroll == null or
 		social_message_rows_scroll == null or
+		social_message_detail_panel == null or
+		(social_right_rail != null and social_right_rail.visible) or
 		game_root.find_child("SocialMessageThreadButton", true, false) != null
 	):
 		game_root.queue_free()
@@ -9990,6 +10271,11 @@ func _run_scenario(
 	var social_message_options: VBoxContainer = game_root.find_child("SocialMessageComposerOptions", true, false) as VBoxContainer
 	var social_message_send_button: Button = game_root.find_child("SocialMessageSendButton", true, false) as Button
 	var social_message_composer_text_label: Label = game_root.find_child("SocialMessageComposerTextLabel", true, false) as Label
+	social_message_detail_panel = game_root.find_child("SocialMessageDetailPanel", true, false) as PanelContainer
+	var social_message_rect: Rect2 = social_message_view.get_global_rect() if social_message_view != null else Rect2()
+	var social_detail_rect: Rect2 = social_message_detail_panel.get_global_rect() if social_message_detail_panel != null else Rect2()
+	var social_composer_rect: Rect2 = social_message_composer.get_global_rect() if social_message_composer != null else Rect2()
+	var social_rows_scroll_rect: Rect2 = social_message_rows_scroll.get_global_rect() if social_message_rows_scroll != null else Rect2()
 	if (
 		social_message_view == null or
 		not social_message_view.visible or
@@ -9998,6 +10284,11 @@ func _run_scenario(
 		social_message_send_button == null or
 		not social_message_send_button.disabled or
 		social_message_composer_text_label == null or
+		social_message_detail_panel == null or
+		(social_right_rail != null and social_right_rail.visible) or
+		social_detail_rect.end.x > social_message_rect.end.x + 1.0 or
+		social_composer_rect.end.x > social_detail_rect.end.x + 1.0 or
+		social_rows_scroll_rect.end.x > social_detail_rect.end.x + 1.0 or
 		game_root.find_child("SocialMessageActionConnectButton", true, false) != null
 	):
 		game_root.queue_free()
@@ -14167,6 +14458,16 @@ func _has_approached_meeting_lead(session_snapshot: Dictionary, lead_id: String)
 
 func _contains_unresolved_template_token(text: String) -> bool:
 	return text.find("{") >= 0 or text.find("}") >= 0
+
+
+func _contains_malformed_social_template_text(text: String) -> bool:
+	var lower_text: String = text.to_lower()
+	return (
+		_contains_unresolved_template_token(text) or
+		lower_text.find("for ,") != -1 or
+		lower_text.find("for .") != -1 or
+		lower_text.find("for  ") != -1
+	)
 
 
 func _validate_network_tip_public_payload(tip_result: Dictionary, context_label: String) -> String:

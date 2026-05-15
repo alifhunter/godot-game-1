@@ -582,6 +582,8 @@ var news_masthead_rule_container: VBoxContainer = null
 var news_source_tab_rule: ColorRect = null
 var news_article_cards_scroll: ScrollContainer = null
 var news_article_cards: VBoxContainer = null
+var news_detail_scroll: ScrollContainer = null
+var news_detail_scroll_content: VBoxContainer = null
 var news_detail_hero_frame: PanelContainer = null
 var news_detail_photo_caption_label: Label = null
 var news_detail_byline_label: Label = null
@@ -609,7 +611,6 @@ var social_left_sidebar: PanelContainer = null
 var social_left_nav_buttons: Dictionary = {}
 var social_center_panel: PanelContainer = null
 var social_right_rail: VBoxContainer = null
-var social_search_input: LineEdit = null
 var social_trending_rows: VBoxContainer = null
 var social_follow_rows: VBoxContainer = null
 var social_message_view: HBoxContainer = null
@@ -6853,6 +6854,9 @@ func _rebuild_network_contact_list() -> void:
 		if str(row.get("source_type", "")) == "referral" and not bool(row.get("met", false)):
 			prefix = "Referred Insider"
 		var display_role: String = str(row.get("role", ""))
+		var twooter_handle: String = str(row.get("twooter_handle", "")).strip_edges()
+		if not twooter_handle.is_empty():
+			display_role += " | %s" % twooter_handle
 		var last_tip_label: String = str(row.get("last_tip_label", ""))
 		if not last_tip_label.is_empty():
 			display_role += " | %s" % last_tip_label
@@ -7196,12 +7200,16 @@ func _show_network_contact(contact: Dictionary) -> void:
 		affiliation_label = "Insider at %s" % _ticker_for_company(affiliated_company_id)
 	elif str(contact.get("source_type", "")) == "referral":
 		affiliation_label = "Referred lead"
-	network_contact_meta_label.text = "%s  |  Relationship %d  |  Required recognition %d  |  Source %s" % [
+	var network_meta_parts: Array = [
 		affiliation_label,
-		int(contact.get("relationship", 0)),
-		int(contact.get("recognition_required", 0)),
-		str(contact.get("source_type", "network"))
+		"Relationship %d" % int(contact.get("relationship", 0)),
+		"Required recognition %d" % int(contact.get("recognition_required", 0)),
+		"Source %s" % str(contact.get("source_type", "network"))
 	]
+	var contact_twooter_handle: String = str(contact.get("twooter_handle", "")).strip_edges()
+	if not contact_twooter_handle.is_empty():
+		network_meta_parts.append("Twooter %s" % contact_twooter_handle)
+	network_contact_meta_label.text = "  |  ".join(network_meta_parts)
 	var contact_body_text: String = str(contact.get("intro", ""))
 	var last_tip_note: String = str(contact.get("last_tip_note", ""))
 	if not last_tip_note.is_empty():
@@ -7415,6 +7423,10 @@ func _contact_for_context(source_type: String, source_id: String, company_id: St
 			continue
 		if not source_id.is_empty() and str(row.get("source_id", "")) == source_id and str(row.get("source_type", "")) == source_type:
 			return row
+	for row_value in rows:
+		var row: Dictionary = row_value
+		if bool(row.get("met", false)):
+			continue
 		if not company_id.is_empty() and str(row.get("target_company_id", "")) == company_id:
 			return row
 		if not company_id.is_empty() and company_id in row.get("target_company_ids", []):
@@ -7548,6 +7560,14 @@ func _count_social_posts_for_filter(posts: Array, filter_id: String) -> int:
 func _selected_social_account_name(posts: Array) -> String:
 	if selected_social_account_id.is_empty():
 		return ""
+	var account: Dictionary = _social_account_from_snapshot(selected_social_account_id)
+	if not account.is_empty():
+		var display_name: String = str(account.get("display_name", "")).strip_edges()
+		if not display_name.is_empty():
+			return display_name
+		var handle: String = str(account.get("handle", "")).strip_edges()
+		if not handle.is_empty():
+			return handle
 	for post_value in posts:
 		if typeof(post_value) != TYPE_DICTIONARY:
 			continue
@@ -7595,7 +7615,7 @@ func _apply_social_view_visibility() -> void:
 		if button != null:
 			_style_social_nav_button(button, view_id == selected_social_view_id)
 	if social_right_rail != null:
-		social_right_rail.visible = get_viewport_rect().size.x >= 960.0
+		social_right_rail.visible = false if is_message else get_viewport_rect().size.x >= 960.0
 
 
 func _rebuild_social_right_rail(snapshot: Dictionary) -> void:
@@ -7642,42 +7662,53 @@ func _build_social_trending_row(row: Dictionary) -> VBoxContainer:
 func _build_social_follow_row(row: Dictionary) -> HBoxContainer:
 	var hbox := HBoxContainer.new()
 	hbox.name = "SocialFollowRow"
+	var account_id: String = str(row.get("account_id", ""))
+	hbox.set_meta("social_account_id", account_id)
 	hbox.add_theme_constant_override("separation", 10)
 	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.mouse_filter = Control.MOUSE_FILTER_STOP
+	hbox.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	hbox.gui_input.connect(_on_social_follow_row_gui_input.bind(account_id))
 	var avatar := PanelContainer.new()
 	avatar.custom_minimum_size = Vector2(36, 36)
-	_style_twooter_panel(avatar, _social_avatar_color(str(row.get("account_id", ""))), COLOR_TWOOTER_BORDER, 18, 1)
+	avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_style_twooter_panel(avatar, _social_avatar_color(account_id), COLOR_TWOOTER_BORDER, 18, 1)
 	var avatar_label := Label.new()
+	avatar_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	avatar_label.text = str(row.get("display_name", "?")).left(1).to_upper()
 	avatar_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	avatar_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	avatar_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
 	avatar.add_child(avatar_label)
 	hbox.add_child(avatar)
-	var text_vbox := VBoxContainer.new()
-	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	text_vbox.add_theme_constant_override("separation", 0)
-	var name := Label.new()
-	name.text = str(row.get("display_name", "Account"))
-	name.clip_text = true
-	name.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(name, 13, _get_dashboard_title_font())
-	text_vbox.add_child(name)
-	var handle := Label.new()
-	handle.text = str(row.get("handle", ""))
-	handle.clip_text = true
-	handle.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(handle, 12, _get_app_font())
-	text_vbox.add_child(handle)
-	hbox.add_child(text_vbox)
+	var account_button := Button.new()
+	account_button.name = "SocialFollowAccountButton"
+	account_button.set_meta("social_account_id", account_id)
+	account_button.text = "%s\n%s" % [str(row.get("display_name", "Account")), str(row.get("handle", ""))]
+	account_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	account_button.clip_text = true
+	account_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	account_button.custom_minimum_size = Vector2(0, 42)
+	account_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	account_button.tooltip_text = "Open this account profile."
+	_style_social_thread_button(account_button)
+	account_button.pressed.connect(_on_social_account_pressed.bind(account_id))
+	hbox.add_child(account_button)
 	var button := Button.new()
 	button.name = "SocialFollowButton"
 	button.text = "Follow"
 	button.custom_minimum_size = Vector2(72, 32)
 	_style_button(button, COLOR_TWOOTER_TEXT, COLOR_TWOOTER_TEXT, COLOR_TWOOTER_PAGE, 16)
-	button.pressed.connect(_on_social_follow_pressed.bind(str(row.get("account_id", ""))))
+	button.pressed.connect(_on_social_follow_pressed.bind(account_id))
 	hbox.add_child(button)
 	return hbox
+
+
+func _on_social_follow_row_gui_input(event: InputEvent, account_id: String) -> void:
+	var mouse_event := event as InputEventMouseButton
+	if mouse_event == null or not mouse_event.pressed or mouse_event.button_index != MOUSE_BUTTON_LEFT:
+		return
+	_on_social_account_pressed(account_id)
 
 
 func _on_social_follow_pressed(account_id: String) -> void:
@@ -7794,6 +7825,7 @@ func _hydrate_social_message_composer(account_id: String, options: Array) -> voi
 		var option: Dictionary = options[option_index] if option_index < options.size() and typeof(options[option_index]) == TYPE_DICTIONARY else {}
 		button.visible = not option.is_empty()
 		button.disabled = option.is_empty() or not bool(option.get("enabled", true))
+		button.clip_text = true
 		button.text = str(option.get("player_text", option.get("label", "Message")))
 		button.tooltip_text = str(option.get("player_text", "")) if not bool(option.get("enabled", true)) else ""
 		button.set_meta("action_id", str(option.get("id", "")))
@@ -8095,7 +8127,9 @@ func _rebuild_social_feed_cards(posts: Array) -> void:
 
 	if not selected_social_account_id.is_empty():
 		var all_posts: Array = current_social_snapshot.get("posts", [])
-		social_feed_cards.add_child(_build_social_account_filter_card(_selected_social_account_name(all_posts), selected_social_account_id))
+		var selected_account_name: String = _selected_social_account_name(all_posts)
+		social_feed_cards.add_child(_build_social_account_filter_nav_row())
+		social_feed_cards.add_child(_build_social_account_filter_card(selected_account_name, selected_social_account_id))
 
 	if posts.is_empty():
 		social_feed_cards.add_child(_build_social_empty_card())
@@ -8109,33 +8143,122 @@ func _rebuild_social_feed_cards(posts: Array) -> void:
 		social_feed_scroll.get_v_scroll_bar().value = 0.0
 
 
+func _build_social_account_filter_nav_row() -> HBoxContainer:
+	var row: HBoxContainer = HBoxContainer.new()
+	row.name = "SocialAccountFilterNavRow"
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 8)
+
+	var clear_button: Button = Button.new()
+	clear_button.name = "SocialAccountClearButton"
+	clear_button.text = "All accounts"
+	clear_button.tooltip_text = "Return to the full Twooter feed."
+	clear_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	clear_button.custom_minimum_size = Vector2(112, 32)
+	_style_social_filter_button(clear_button, false, true)
+	row.add_child(clear_button)
+	clear_button.pressed.connect(_on_social_account_filter_cleared)
+
+	var spacer: Control = Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(spacer)
+	return row
+
+
 func _build_social_account_filter_card(account_name: String, account_id: String) -> PanelContainer:
 	var card: PanelContainer = PanelContainer.new()
-	card.name = "SocialAccountFilterCard"
+	card.name = "SocialAccountProfileCard"
+	card.set_meta("social_account_id", account_id)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_social_post_card(card, "mixed")
 
 	var margin: MarginContainer = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 14)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 14)
-	margin.add_theme_constant_override("margin_bottom", 10)
+	margin.add_theme_constant_override("margin_left", 16)
+	margin.add_theme_constant_override("margin_top", 14)
+	margin.add_theme_constant_override("margin_right", 16)
+	margin.add_theme_constant_override("margin_bottom", 14)
 	card.add_child(margin)
 
-	var row: HBoxContainer = HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 8)
-	margin.add_child(row)
-
-	var label: Label = Label.new()
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.text = "Showing %s" % account_name
-	label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-	label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
-	row.add_child(label)
-
 	var account: Dictionary = _social_account_from_snapshot(account_id)
+	if account_name.strip_edges().is_empty():
+		account_name = str(account.get("display_name", account_id))
+	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.name = "SocialAccountProfileVBox"
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 12)
+	margin.add_child(vbox)
+
+	var header_row: HBoxContainer = HBoxContainer.new()
+	header_row.name = "SocialAccountProfileHeader"
+	header_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_row.add_theme_constant_override("separation", 12)
+	vbox.add_child(header_row)
+
+	var avatar := PanelContainer.new()
+	avatar.name = "SocialAccountProfileAvatar"
+	avatar.custom_minimum_size = Vector2(52, 52)
+	_style_twooter_panel(avatar, _social_avatar_color(account_id), COLOR_TWOOTER_BLUE_EDGE, 26, 2)
+	var avatar_label := Label.new()
+	avatar_label.text = account_name.left(1).to_upper()
+	avatar_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	avatar_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	avatar_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(avatar_label, DEFAULT_APP_FONT_SIZE + 6, _get_dashboard_title_font())
+	avatar.add_child(avatar_label)
+	header_row.add_child(avatar)
+
+	var identity_box: VBoxContainer = VBoxContainer.new()
+	identity_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	identity_box.add_theme_constant_override("separation", 4)
+	header_row.add_child(identity_box)
+
+	var title_row := HBoxContainer.new()
+	title_row.name = "SocialAccountProfileTitleRow"
+	title_row.add_theme_constant_override("separation", 6)
+	identity_box.add_child(title_row)
+	var name_label: Label = Label.new()
+	name_label.name = "SocialAccountProfileNameLabel"
+	name_label.text = account_name
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.clip_text = true
+	name_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(name_label, DEFAULT_APP_FONT_SIZE + 4, _get_dashboard_title_font())
+	title_row.add_child(name_label)
+	if bool(account.get("verified", false)):
+		var verified_label := Label.new()
+		verified_label.name = "SocialAccountProfileVerifiedLabel"
+		verified_label.text = "Verified"
+		verified_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		verified_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE)
+		_apply_font_override_to_control(verified_label, 11, _get_dashboard_title_font())
+		title_row.add_child(verified_label)
+
+	var handle_label: Label = Label.new()
+	handle_label.name = "SocialAccountProfileHandleLabel"
+	handle_label.text = "%s  |  %s" % [
+		str(account.get("handle", "")),
+		_social_stage_label(str(account.get("relationship_stage", "stranger")))
+	]
+	handle_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	handle_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
+	_apply_font_override_to_control(handle_label, 12, _get_app_font())
+	identity_box.add_child(handle_label)
+
+	var role_label: Label = Label.new()
+	role_label.name = "SocialAccountProfileRoleLabel"
+	role_label.text = str(profile.get("role", "Public market voice"))
+	role_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	role_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(role_label, 13, _get_app_font())
+	identity_box.add_child(role_label)
+
+	var action_row: HBoxContainer = HBoxContainer.new()
+	action_row.name = "SocialAccountProfileActionRow"
+	action_row.add_theme_constant_override("separation", 8)
+	action_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(action_row)
+
 	var follow_button: Button = Button.new()
 	follow_button.name = "SocialAccountFollowButton"
 	follow_button.text = "Following" if bool(account.get("following", false)) else "Follow"
@@ -8143,7 +8266,7 @@ func _build_social_account_filter_card(account_name: String, account_id: String)
 	follow_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	follow_button.disabled = bool(account.get("following", false))
 	_style_social_filter_button(follow_button, bool(account.get("following", false)), true)
-	row.add_child(follow_button)
+	action_row.add_child(follow_button)
 	follow_button.pressed.connect(_on_social_follow_pressed.bind(account_id))
 
 	var message_button: Button = Button.new()
@@ -8152,18 +8275,144 @@ func _build_social_account_filter_card(account_name: String, account_id: String)
 	message_button.tooltip_text = "Start a private Twooter message."
 	message_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_style_social_filter_button(message_button, false, true)
-	row.add_child(message_button)
+	action_row.add_child(message_button)
 	message_button.pressed.connect(_on_social_start_message_pressed.bind(account_id))
 
-	var clear_button: Button = Button.new()
-	clear_button.name = "SocialAccountClearButton"
-	clear_button.text = "All accounts"
-	clear_button.tooltip_text = "Return to the full Twooter feed."
-	clear_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_style_social_filter_button(clear_button, false, true)
-	row.add_child(clear_button)
-	clear_button.pressed.connect(_on_social_account_filter_cleared)
+	var stats_row := HFlowContainer.new()
+	stats_row.name = "SocialAccountProfileStats"
+	stats_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stats_row.add_theme_constant_override("h_separation", 6)
+	stats_row.add_theme_constant_override("v_separation", 6)
+	vbox.add_child(stats_row)
+	stats_row.add_child(_build_social_profile_stat_chip("Relationship", int(account.get("relationship", 0))))
+	stats_row.add_child(_build_social_profile_stat_chip("Credibility", int(account.get("credibility", 0))))
+	stats_row.add_child(_build_social_profile_stat_chip("Importance", int(account.get("importance", 0))))
+	stats_row.add_child(_build_social_profile_stat_chip("Exposure", int(account.get("exposure", 0))))
+	stats_row.add_child(_build_social_profile_stat_chip("Likes", int(account.get("likes_given", 0))))
+
+	var description_label: Label = _make_social_profile_body_label(_social_account_description_text(account))
+	description_label.name = "SocialAccountProfileDescriptionLabel"
+	vbox.add_child(description_label)
 	return card
+
+
+func _build_social_profile_stat_chip(label_text: String, value: int) -> PanelContainer:
+	var chip := PanelContainer.new()
+	chip.name = "SocialAccountProfileStatChip"
+	chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_style_twooter_panel(chip, COLOR_TWOOTER_BLUE_TINT, COLOR_TWOOTER_BORDER, 6, 1)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 8)
+	margin.add_theme_constant_override("margin_top", 5)
+	margin.add_theme_constant_override("margin_right", 8)
+	margin.add_theme_constant_override("margin_bottom", 5)
+	chip.add_child(margin)
+	var label := Label.new()
+	label.text = "%s %d" % [label_text, value]
+	label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(label, 11, _get_app_font())
+	margin.add_child(label)
+	return chip
+
+
+func _make_social_profile_body_label(text: String) -> Label:
+	var label := Label.new()
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.text = text
+	label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
+	_apply_font_override_to_control(label, 12, _get_app_font())
+	return label
+
+
+func _social_stage_label(stage_id: String) -> String:
+	var clean_stage: String = stage_id.replace("_", " ").strip_edges()
+	if clean_stage.is_empty():
+		clean_stage = "stranger"
+	return "%s relationship" % clean_stage.capitalize()
+
+
+func _social_account_description_text(account: Dictionary) -> String:
+	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
+	var description: String = str(profile.get("description", profile.get("intro", ""))).strip_edges()
+	if not description.is_empty():
+		return description
+	var account_name: String = str(account.get("display_name", "This account")).strip_edges()
+	var role: String = str(profile.get("role", "Public market voice")).strip_edges()
+	var risk_profile: String = str(profile.get("risk_profile", "clean")).replace("_", " ").strip_edges()
+	var voice: String = str(account.get("voice", "")).replace("_", " ").strip_edges()
+	if role.is_empty():
+		role = "public market voice"
+	if risk_profile == "suspicious":
+		return "%s is a %s. Useful for leads and crowd temperature, but treat its posts as starting points until you can verify them." % [account_name, role.to_lower()]
+	if voice.contains("macro"):
+		return "%s is a %s focused on broad market context, sector pressure, and the bigger forces behind daily moves." % [account_name, role.to_lower()]
+	if voice.contains("funda") or voice.contains("quality") or voice.contains("value") or role.to_lower().contains("analyst"):
+		return "%s is a %s who prefers written theses, public sources, and clear failure points before offering deeper feedback." % [account_name, role.to_lower()]
+	return "%s is a %s who can help turn public chatter into cleaner watch items when you ask with evidence and patience." % [account_name, role.to_lower()]
+
+
+func _social_account_next_step_text(account: Dictionary) -> String:
+	var relationship: int = int(account.get("relationship", 0))
+	var credibility: int = int(account.get("credibility", 0))
+	var importance: int = int(account.get("importance", 0))
+	var stage: String = str(account.get("relationship_stage", "stranger"))
+	var has_shareable_thesis: bool = not current_social_snapshot.get("shareable_theses", []).is_empty()
+	if not bool(account.get("following", false)) and int(account.get("interaction_count", 0)) > 0:
+		return "Next: follow this account before asking for deeper reads. Likes and follow history now count as social attention."
+	if relationship >= 5 and credibility < 12 and not has_shareable_thesis:
+		return "Next: build an open Thesis first. Thesis-sharing and deeper review options need something concrete to inspect."
+	if relationship < 5:
+		return "Next: reply with useful context or send a clean intro. Early trust grows through specific, non-pushy questions."
+	if stage == "stranger":
+		return "Next: keep the thread useful until this account becomes familiar. Repeating the same ask will cool the branch."
+	if stage == "familiar" and credibility < 7:
+		return "Next: ask for sources or share a prepared Thesis to build credibility."
+	if stage == "trusted":
+		return "Next: trusted contacts can start surfacing room invites or higher-signal requests through Message."
+	if importance >= 55:
+		return "Next: this account sees you as important. Watch for inner-circle follow-ups and keep boundaries clean."
+	return "Next: keep improving relationship, credibility, and importance through varied replies and private messages."
+
+
+func _social_account_memory_text(account: Dictionary) -> String:
+	var timeline: Array = account.get("timeline", []) if typeof(account.get("timeline", [])) == TYPE_ARRAY else []
+	if timeline.is_empty():
+		return "Recent memory: no direct interaction yet. Reply or send a message to start a trackable relationship."
+	var latest: Dictionary = timeline[timeline.size() - 1] if typeof(timeline[timeline.size() - 1]) == TYPE_DICTIONARY else {}
+	var action_label: String = _social_action_label(str(latest.get("action_id", "")))
+	var body: String = str(latest.get("text", "")).strip_edges()
+	if body.length() > 110:
+		body = "%s..." % body.left(107)
+	if body.is_empty():
+		body = "Interaction recorded."
+	return "Recent memory: %s - %s" % [action_label, body]
+
+
+func _social_action_label(action_id: String) -> String:
+	match action_id:
+		"reply_support":
+			return "Support"
+		"reply_skeptic":
+			return "Question"
+		"ask_source_public", "ask_source_private":
+			return "Source ask"
+		"share_thesis":
+			return "Thesis"
+		"message_check_in":
+			return "Message"
+		"connect":
+			return "Connect"
+		"ask_tip":
+			return "Clean read"
+		"accept_invite":
+			return "Invite"
+		"respond_suspicious_request":
+			return "Boundary"
+		"like_post":
+			return "Like"
+		"follow":
+			return "Follow"
+	return "Interaction"
 
 
 func _build_social_empty_card() -> PanelContainer:
@@ -8228,7 +8477,7 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 		account_name = str(post.get("account_handle", "")).strip_edges()
 	account_button.text = account_name
 	account_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	account_button.tooltip_text = "Show posts from this account."
+	account_button.tooltip_text = "Open this account profile and filter their posts."
 	account_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_style_social_account_button(account_button, str(post.get("account_id", "")) == selected_social_account_id)
 	header_row.add_child(account_button)
@@ -8355,7 +8604,7 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 	content.add_child(reactions_row)
 	reactions_row.add_child(_build_social_engagement_label("Reply", int(post.get("replies", 0))))
 	reactions_row.add_child(_build_social_engagement_label("Retwoot", int(post.get("retwoots", 0))))
-	reactions_row.add_child(_build_social_engagement_label("Like", int(post.get("likes", 0))))
+	reactions_row.add_child(_build_social_like_button(post))
 	var engagement_spacer := Control.new()
 	engagement_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	reactions_row.add_child(engagement_spacer)
@@ -8418,6 +8667,19 @@ func _build_social_engagement_label(label_text: String, value: int) -> Label:
 	label.add_theme_font_size_override("font_size", 11)
 	label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
 	return label
+
+
+func _build_social_like_button(post: Dictionary) -> Button:
+	var button := Button.new()
+	button.name = "SocialPostLikeButton"
+	button.text = "%s %d" % ["Liked" if bool(post.get("liked_by_player", false)) else "Like", int(post.get("likes", 0))]
+	button.tooltip_text = "Like this post. Likes slowly build relationship with the account."
+	button.disabled = bool(post.get("liked_by_player", false))
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	button.custom_minimum_size = Vector2(76, 24)
+	_style_social_thread_button(button)
+	button.pressed.connect(_on_social_post_like_pressed.bind(str(post.get("id", ""))))
+	return button
 
 
 func _build_social_reply_row(reply: Dictionary) -> PanelContainer:
@@ -8526,6 +8788,15 @@ func _on_social_post_action_pressed(post_id: String, action_id: String, thesis_i
 	_show_toast(str(result.get("reply_text", result.get("message", "Twooter replied."))), true)
 	_refresh_social()
 	_refresh_network()
+
+
+func _on_social_post_like_pressed(post_id: String) -> void:
+	var result: Dictionary = GameManager.like_twooter_post(post_id)
+	if not bool(result.get("success", false)):
+		_show_toast(str(result.get("message", "Could not like post.")), false)
+		return
+	_show_toast(str(result.get("message", "Post liked.")), true)
+	_refresh_social()
 
 
 func _ensure_social_reply_composer_dialog() -> void:
@@ -8975,10 +9246,13 @@ func _show_news_article(article: Dictionary) -> void:
 		news_meet_contact_button.visible = false
 		news_meet_contact_button.disabled = true
 		news_meet_contact_button.set_meta("contact_id", "")
+		news_meet_contact_button.set_meta("twooter_account_id", "")
+		news_meet_contact_button.set_meta("twooter_handle", "")
 		if news_open_meeting_button != null:
 			news_open_meeting_button.visible = false
 			news_open_meeting_button.disabled = true
 			news_open_meeting_button.set_meta("meeting_id", "")
+		_reset_news_detail_scroll()
 		return
 
 	var trade_date: Dictionary = article.get("trade_date", {})
@@ -9000,10 +9274,15 @@ func _show_news_article(article: Dictionary) -> void:
 	news_detail_body.text = str(article.get("body", ""))
 	GameManager.discover_network_contacts_from_article(article)
 	var contact: Dictionary = _contact_for_context("news", str(article.get("id", "")), str(article.get("target_company_id", "")))
-	news_meet_contact_button.visible = not contact.is_empty()
-	news_meet_contact_button.disabled = contact.is_empty() or not bool(contact.get("can_meet", false))
-	news_meet_contact_button.text = "Meet Source" if not contact.is_empty() else "Meet Source"
+	var twooter_account_id: String = str(contact.get("twooter_account_id", ""))
+	var twooter_handle: String = str(contact.get("twooter_handle", "")).strip_edges()
+	news_meet_contact_button.visible = not contact.is_empty() and not twooter_account_id.is_empty()
+	news_meet_contact_button.disabled = contact.is_empty() or twooter_account_id.is_empty()
+	news_meet_contact_button.text = "View %s on Twooter" % twooter_handle if not twooter_handle.is_empty() else "View Source on Twooter"
+	news_meet_contact_button.tooltip_text = "Open this source's Twooter profile."
 	news_meet_contact_button.set_meta("contact_id", str(contact.get("id", "")))
+	news_meet_contact_button.set_meta("twooter_account_id", twooter_account_id)
+	news_meet_contact_button.set_meta("twooter_handle", twooter_handle)
 	if news_open_meeting_button != null:
 		var meeting_id: String = str(article.get("meeting_id", ""))
 		var meeting_detail: Dictionary = GameManager.get_corporate_meeting_detail(meeting_id) if not meeting_id.is_empty() else {}
@@ -9014,14 +9293,25 @@ func _show_news_article(article: Dictionary) -> void:
 		news_open_meeting_button.tooltip_text = meeting_blocked_reason if not meeting_blocked_reason.is_empty() else "Open the linked corporate meeting."
 		news_open_meeting_button.set_meta("meeting_id", meeting_id)
 	if not contact.is_empty():
-		news_detail_hint_label.text = "SOURCE LEAD\n%s · %s" % [
+		var handle_label: String = twooter_handle if not twooter_handle.is_empty() else "Twooter handle pending"
+		news_detail_hint_label.text = "TWOOTER SOURCE\n%s · %s" % [
 			str(contact.get("display_name", "")),
-			str(contact.get("role", ""))
+			handle_label
 		]
 		news_detail_hint_label.visible = true
 	else:
 		news_detail_hint_label.text = ""
 		news_detail_hint_label.visible = false
+	_reset_news_detail_scroll()
+
+
+func _reset_news_detail_scroll() -> void:
+	if news_detail_scroll == null:
+		return
+	var scroll_bar := news_detail_scroll.get_v_scroll_bar()
+	if scroll_bar == null:
+		return
+	scroll_bar.value = 0.0
 
 
 func _current_news_archive_article_summaries() -> Array:
@@ -12699,8 +12989,24 @@ func _on_news_article_selected(index: int) -> void:
 
 func _on_news_meet_contact_pressed() -> void:
 	var contact_id: String = str(news_meet_contact_button.get_meta("contact_id", ""))
-	_meet_contact_from_context(contact_id, {"source_type": "news", "source_id": selected_news_article_id})
+	var account_id: String = str(news_meet_contact_button.get_meta("twooter_account_id", ""))
+	_open_social_account_from_news(account_id, contact_id)
 	_mark_guide_research_interaction()
+
+
+func _open_social_account_from_news(account_id: String, contact_id: String = "") -> void:
+	if account_id.is_empty():
+		_show_toast("No Twooter handle is available for that source yet.", false)
+		return
+	selected_social_view_id = "home"
+	selected_social_account_id = account_id
+	selected_social_feed_filter_id = SOCIAL_FEED_FILTER_ALL
+	_set_active_app(APP_ID_SOCIAL)
+	var account: Dictionary = _social_account_from_snapshot(account_id)
+	var handle: String = str(account.get("handle", "")).strip_edges()
+	if handle.is_empty() and not contact_id.is_empty():
+		handle = str(news_meet_contact_button.get_meta("twooter_handle", "")).strip_edges()
+	_show_toast("Opened %s on Twooter." % (handle if not handle.is_empty() else "source"), true)
 
 
 func _on_news_open_meeting_pressed() -> void:
@@ -17869,6 +18175,47 @@ func _ensure_network_detail_scroll() -> void:
 		network_detail_scroll_content.add_child(child)
 
 
+func _ensure_news_detail_scroll() -> void:
+	if news_detail_scroll_content != null and news_detail_body.get_parent() == news_detail_scroll_content:
+		return
+	var detail_vbox: VBoxContainer = news_detail_headline_label.get_parent() as VBoxContainer
+	if detail_vbox == null:
+		return
+
+	news_detail_scroll = ScrollContainer.new()
+	news_detail_scroll.name = "NewsDetailScroll"
+	news_detail_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	news_detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	news_detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	news_detail_scroll.follow_focus = true
+	detail_vbox.add_child(news_detail_scroll)
+	detail_vbox.move_child(news_detail_scroll, 0)
+
+	news_detail_scroll_content = VBoxContainer.new()
+	news_detail_scroll_content.name = "NewsDetailScrollContent"
+	news_detail_scroll_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	news_detail_scroll_content.add_theme_constant_override("separation", 9)
+	news_detail_scroll.add_child(news_detail_scroll_content)
+
+	var children_to_move: Array = []
+	for child_value in detail_vbox.get_children():
+		var child: Node = child_value
+		if child == news_detail_scroll:
+			continue
+		children_to_move.append(child)
+	for child_value in children_to_move:
+		var child: Node = child_value
+		detail_vbox.remove_child(child)
+		news_detail_scroll_content.add_child(child)
+
+	news_detail_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	news_detail_body.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	news_detail_body.custom_minimum_size = Vector2.ZERO
+	news_detail_body.fit_content = true
+	news_detail_body.scroll_active = false
+	news_detail_body.scroll_following = false
+
+
 func _ensure_news_newspaper_ui() -> void:
 	news_title_label.text = "The Market Papers"
 	news_intel_status_label.visible = false
@@ -18042,7 +18389,9 @@ func _ensure_news_newspaper_ui() -> void:
 		news_meet_contact_button.reparent(news_detail_action_row)
 	if news_open_meeting_button != null and news_open_meeting_button.get_parent() != news_detail_action_row:
 		news_open_meeting_button.reparent(news_detail_action_row)
-	_order_news_detail_nodes(detail_vbox)
+	_ensure_news_detail_scroll()
+	var detail_content: VBoxContainer = news_detail_scroll_content if news_detail_scroll_content != null else detail_vbox
+	_order_news_detail_nodes(detail_content)
 	_style_news_newspaper_ui()
 
 
@@ -18179,6 +18528,7 @@ func _ensure_social_feed_ui() -> void:
 	if window_vbox != null and social_message_view == null:
 		social_message_view = HBoxContainer.new()
 		social_message_view.name = "SocialMessageView"
+		social_message_view.custom_minimum_size = Vector2.ZERO
 		social_message_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		social_message_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		social_message_view.add_theme_constant_override("separation", 10)
@@ -18186,7 +18536,8 @@ func _ensure_social_feed_ui() -> void:
 
 		var thread_panel := PanelContainer.new()
 		thread_panel.name = "SocialMessageThreadPanel"
-		thread_panel.custom_minimum_size = Vector2(220, 0)
+		thread_panel.custom_minimum_size = Vector2(208, 0)
+		thread_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		thread_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		_style_twooter_panel(thread_panel, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 0, 1)
 		social_message_view.add_child(thread_panel)
@@ -18210,6 +18561,7 @@ func _ensure_social_feed_ui() -> void:
 
 		var detail_panel := PanelContainer.new()
 		detail_panel.name = "SocialMessageDetailPanel"
+		detail_panel.custom_minimum_size = Vector2.ZERO
 		detail_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		detail_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		_style_twooter_panel(detail_panel, COLOR_TWOOTER_PAGE, COLOR_TWOOTER_BORDER, 0, 1)
@@ -18287,6 +18639,8 @@ func _ensure_social_feed_ui() -> void:
 			option_button.custom_minimum_size = Vector2(0, 34)
 			option_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			option_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			option_button.clip_text = true
+			option_button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 			option_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 			_style_social_thread_button(option_button)
 			option_button.pressed.connect(_on_social_message_option_selected.bind(option_index))
@@ -18358,25 +18712,6 @@ func _build_social_right_rail() -> VBoxContainer:
 	rail.custom_minimum_size = Vector2(288, 0)
 	rail.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	rail.add_theme_constant_override("separation", 18)
-
-	var search_panel := PanelContainer.new()
-	search_panel.name = "SocialSearchPanel"
-	search_panel.custom_minimum_size = Vector2(0, 50)
-	_style_twooter_panel(search_panel, COLOR_TWOOTER_BLUE_TINT, COLOR_TWOOTER_BLUE_EDGE, 18, 0)
-	rail.add_child(search_panel)
-	var search_margin := MarginContainer.new()
-	search_margin.add_theme_constant_override("margin_left", 14)
-	search_margin.add_theme_constant_override("margin_top", 6)
-	search_margin.add_theme_constant_override("margin_right", 14)
-	search_margin.add_theme_constant_override("margin_bottom", 6)
-	search_panel.add_child(search_margin)
-	social_search_input = LineEdit.new()
-	social_search_input.name = "SocialSearchInput"
-	social_search_input.placeholder_text = "Search Twooter"
-	social_search_input.flat = true
-	social_search_input.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	social_search_input.add_theme_color_override("font_placeholder_color", COLOR_TWOOTER_MUTED)
-	search_margin.add_child(social_search_input)
 
 	var trending_card := _make_social_rail_card("SocialTrendingCard", "Trending")
 	social_trending_rows = trending_card.find_child("SocialRailRows", true, false) as VBoxContainer

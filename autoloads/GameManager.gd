@@ -4024,12 +4024,13 @@ func _daily_activity_snapshot_cache_key() -> String:
 		return ""
 	var trade_date: Dictionary = RunState.get_current_trade_date()
 	var twooter_state: Dictionary = RunState.get_twooter_social_state()
-	return "%d|%s|news:%d|social:%d|twooter_posts:%d|twooter_messages:%d|events:%d|tips:%d|requests:%d|discoveries:%d|contacts:%d" % [
+	return "%d|%s|news:%d|social:%d|twooter_posts:%d|twooter_likes:%d|twooter_messages:%d|events:%d|tips:%d|requests:%d|discoveries:%d|contacts:%d" % [
 		RunState.day_index,
 		trading_calendar.to_key(trade_date),
 		get_unlocked_news_intel_level(),
 		get_unlocked_twooter_access_tier(),
 		twooter_state.get("post_interactions", {}).size(),
+		twooter_state.get("liked_posts", {}).size(),
 		twooter_state.get("messages", {}).size(),
 		RunState.event_history.size(),
 		RunState.network_tip_journal.size(),
@@ -4121,6 +4122,9 @@ func _count_twooter_current_day_interactions() -> int:
 		for reply_value in interaction.get("replies", []):
 			if typeof(reply_value) == TYPE_DICTIONARY and int(reply_value.get("day_index", -9999)) == RunState.day_index:
 				count += 1
+	for like_value in social_state.get("liked_posts", {}).values():
+		if typeof(like_value) == TYPE_DICTIONARY and int(like_value.get("day_index", -9999)) == RunState.day_index:
+			count += 1
 	for thread_value in social_state.get("messages", {}).values():
 		if typeof(thread_value) != TYPE_DICTIONARY:
 			continue
@@ -4703,6 +4707,16 @@ func follow_twooter_account(account_id: String) -> Dictionary:
 	return result
 
 
+func like_twooter_post(post_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "Start a run before using Twooter."}
+	var result: Dictionary = twooter_interaction_system.apply_like_post(RunState, get_twooter_snapshot(), post_id)
+	if bool(result.get("success", false)):
+		_after_twooter_interaction(false, bool(result.get("network_changed", false)), "twooter_like")
+		result["snapshot"] = get_twooter_snapshot()
+	return result
+
+
 func get_twooter_message_thread(account_id: String) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"account": {}, "rows": []}
@@ -4724,7 +4738,7 @@ func _build_twooter_base_snapshot(unlocked_access_tier: int = -1) -> Dictionary:
 	var social_trade_date: Dictionary = get_current_trade_date()
 	social_trade_date["day_index"] = RunState.day_index
 
-	return twooter_feed_system.build_social_snapshot(
+	var snapshot: Dictionary = twooter_feed_system.build_social_snapshot(
 		RunState,
 		DataRepository.get_twooter_feed_data(),
 		get_company_rows(),
@@ -4735,6 +4749,33 @@ func _build_twooter_base_snapshot(unlocked_access_tier: int = -1) -> Dictionary:
 		social_trade_date,
 		unlocked_access_tier
 	)
+	snapshot["accounts"] = _merge_network_twooter_accounts(snapshot.get("accounts", []))
+	return snapshot
+
+
+func _merge_network_twooter_accounts(accounts: Array) -> Array:
+	var rows: Array = []
+	var seen: Dictionary = {}
+	for account_value in accounts:
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var account: Dictionary = account_value.duplicate(true)
+		var account_id: String = str(account.get("id", ""))
+		if account_id.is_empty() or seen.has(account_id):
+			continue
+		seen[account_id] = true
+		rows.append(account)
+	for account_value in contact_network_system.build_twooter_accounts(RunState, DataRepository):
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var account: Dictionary = account_value.duplicate(true)
+		var account_id: String = str(account.get("id", ""))
+		if account_id.is_empty() or seen.has(account_id):
+			continue
+		account["unlocked"] = true
+		seen[account_id] = true
+		rows.append(account)
+	return rows
 
 
 func _after_twooter_interaction(spent_ap: bool, changed_network: bool, autosave_reason: String) -> void:

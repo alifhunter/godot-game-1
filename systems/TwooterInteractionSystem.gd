@@ -5,8 +5,50 @@ const MAX_TIMELINE_ROWS_PER_ACCOUNT := 12
 const MAX_PUBLIC_REPLY_ROWS_PER_POST := 6
 const PUBLIC_CHAIN_SOFT_GATE_STEP := 2
 const PUBLIC_CHAIN_MAX_STEP := 3
+const LIKE_RELATIONSHIP_PROGRESS := 0.5
 const PUBLIC_ACTION_IDS := ["reply_support", "reply_skeptic", "ask_source_public"]
 const PRIVATE_ACTION_IDS := ["message_check_in", "connect", "ask_source_private", "share_thesis", "ask_tip", "accept_invite", "respond_suspicious_request"]
+const ATTENTION_ASK_ACTION_IDS := ["reply_support", "reply_skeptic", "ask_source_public", "message_check_in", "ask_source_private", "share_thesis", "ask_tip"]
+const RELATIONSHIP_DIALOG_REPLY_POOLS := {
+	"familiar": [
+		"You are asking with more structure now. For {ticker}, the useful next step is to keep the evidence and the risk in the same sentence.",
+		"I can be a little more specific because you have been showing up cleanly: watch what changes, not only what confirms you.",
+		"This is getting more useful. Bring the source, the failure point, and the reason {ticker} still deserves attention."
+	],
+	"trusted": [
+		"You have earned a more direct read. The setup matters, but the discipline is knowing what would make you cut the idea quickly.",
+		"Since you have been doing the work, here is the better frame: separate the catalyst, the flow, and the invalidation before you add size.",
+		"I trust the way you are asking now. If {ticker} cannot survive the next public check, keep it as context instead of conviction."
+	],
+	"inner_circle_candidate": [
+		"You are close enough to the room for the sharper version: protect your reputation first, then let the thesis compete for capital.",
+		"Better access means better responsibility. Use the read to improve your process, not to skip it.",
+		"You have become useful to the conversation. Bring receipts, keep the boundary clean, and people will keep opening doors."
+	]
+}
+const NETWORK_SOURCE_DIALOG_REPLY_POOLS := {
+	"familiar": [
+		"You are asking more carefully now. For {ticker}, keep the public evidence, timing, and risk in one note.",
+		"This is a better source ask. Start with what can be verified on {company}, then decide how much weight the lead deserves.",
+		"I can be more useful when the question stays this specific. For {ticker}, separate the source trail from the market reaction."
+	],
+	"trusted": [
+		"You have shown enough discipline for the sharper version: verify the public trail first, then compare whether the market reaction is ahead of the evidence.",
+		"Since you have kept the boundary clean, here is the useful frame: ask what would make {ticker} less serious, not only what confirms it.",
+		"This is becoming a proper source relationship. Bring the document, the date, and the failure point, and I can help you read around them."
+	],
+	"inner_circle_candidate": [
+		"You are close enough for better context, but the boundary stays the same: public evidence first, reputation always.",
+		"Better access only helps if your process stays clean. Treat {ticker} as a case file, not a favor.",
+		"You are useful to talk to now. Keep bringing receipts and I will keep the read practical."
+	]
+}
+const UNFOLLOWED_ASK_REPLY_POOL := [
+	"You don't even follow me yet, but you keep asking for reads. Follow first, then bring one clean question.",
+	"You are asking for more context while staying outside the feed. Follow the account first so this feels like a conversation, not a help desk.",
+	"I respect the curiosity, but you keep taking without even following. Start there, then show me the work.",
+	"Follow first, then ask deeper. Attention is part of the relationship too."
+]
 const DEFAULT_RESPONSE_POOLS := {
 	"reply_support": [
 		"Keep receipts and size it like a thesis, not a mood.",
@@ -174,7 +216,7 @@ const DEFAULT_DIALOG_TREES := {
 		"entry_node": "source",
 		"nodes": {
 			"source": {
-				"account_replies": ["Do not confuse a lead with proof.", "Source first, conviction later."],
+				"account_replies": ["I would trust a source you can reopen tomorrow: an IDX filing, company disclosure, dated news, or a clear volume trail.", "Start with the public trail: filings, calendar dates, company disclosures, and whether volume confirms people are acting."],
 				"options": [
 					{"id": "ask_origin", "label": "Origin", "private_action_id": "ask_source_private", "public_action_id": "ask_source_public", "player_lines": ["Where did this read start, and what part is actually public?", "What source would you trust before treating this seriously?"], "next_node": "verify"},
 					{"id": "pushback", "label": "Pushback", "private_action_id": "message_check_in", "public_action_id": "reply_skeptic", "player_lines": ["If everyone is reading the same clue, I want to know what invalidates it.", "This could be crowded. What would make you change your mind?"], "next_node": "verify"},
@@ -310,6 +352,7 @@ func enhance_snapshot(snapshot: Dictionary, social_state: Dictionary, feed_data:
 	var account_states: Dictionary = normalized_state.get("account_states", {})
 	var post_interactions: Dictionary = normalized_state.get("post_interactions", {})
 	var messages: Dictionary = normalized_state.get("messages", {})
+	var liked_posts: Dictionary = normalized_state.get("liked_posts", {})
 	var enriched_accounts: Array = []
 	for account_value in snapshot.get("accounts", []):
 		if typeof(account_value) != TYPE_DICTIONARY:
@@ -331,8 +374,13 @@ func enhance_snapshot(snapshot: Dictionary, social_state: Dictionary, feed_data:
 		var account: Dictionary = account_lookup.get(account_id, {})
 		var account_state: Dictionary = _account_state(account_states, account_id)
 		var interaction: Dictionary = post_interactions.get(post_id, {})
+		var liked_row: Dictionary = liked_posts.get(post_id, {}) if typeof(liked_posts.get(post_id, {})) == TYPE_DICTIONARY else {}
 		var post_branch: Dictionary = _dialog_branch(normalized_state, "posts", post_id, _select_public_tree_id(feed_data, account, account_state, post), feed_data)
 		var cooldown_reason: String = _dialog_cooldown_reason(post_branch, day_index)
+		post["liked_by_player"] = not liked_row.is_empty()
+		post["can_like"] = liked_row.is_empty()
+		if not liked_row.is_empty():
+			post["likes"] = int(post.get("likes", 0)) + 1
 		post["interaction_options"] = _post_interaction_options(post, account_state, daily_action, thesis_rows, day_index, interaction)
 		post["reply_dialog_options"] = _reply_dialog_options(feed_data, post, account, account_state, interaction, post_branch, thesis_rows, daily_action, day_index)
 		post["player_replies"] = interaction.get("replies", []).duplicate(true) if typeof(interaction.get("replies", [])) == TYPE_ARRAY else []
@@ -389,13 +437,15 @@ func apply_message_action(run_state, feed_data: Dictionary, snapshot: Dictionary
 	var account: Dictionary = _account_by_id(snapshot.get("accounts", []), account_id)
 	if account.is_empty():
 		return {"success": false, "message": "That Twooter account is not available."}
+	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
 	var post_stub: Dictionary = {
 		"id": "message|%s|%d|%s" % [account_id, run_state.day_index, action_id],
 		"account_id": account_id,
 		"account_name": str(account.get("display_name", "")),
 		"account_handle": str(account.get("handle", "")),
-		"target_ticker": "",
-		"target_company_name": "",
+		"target_company_id": str(profile.get("target_company_id", "")),
+		"target_ticker": str(profile.get("target_ticker", "")),
+		"target_company_name": str(profile.get("target_company_name", "")),
 		"tone": "mixed",
 		"category": "message"
 	}
@@ -411,15 +461,71 @@ func apply_follow_account(run_state, snapshot: Dictionary, account_id: String) -
 	var account_state: Dictionary = _account_state(account_states, account_id)
 	var was_following: bool = bool(account_state.get("following", false))
 	account_state["following"] = true
+	account_state["unfollowed_ask_count"] = 0
+	var relationship_delta: int = 0 if was_following else 1
+	account_state["relationship"] = clampi(int(account_state.get("relationship", 0)) + relationship_delta, 0, 100)
 	account_state["exposure"] = clampi(int(account_state.get("exposure", 0)) + (0 if was_following else 1), 0, 100)
 	account_state["importance"] = _importance_score(account_state)
+	account_state["relationship_stage"] = _relationship_stage(int(account_state.get("relationship", 0)), int(account_state.get("credibility", 0)), int(account_state.get("importance", 0)))
 	account_states[account_id] = account_state
 	state["account_states"] = account_states
+	if not was_following:
+		_record_timeline_row(state, account_id, "follow", "Followed the account.", "", run_state.day_index)
 	run_state.set_twooter_social_state(state)
 	return {
 		"success": true,
 		"message": "Following %s." % str(account.get("display_name", "account")),
 		"account_state": account_state.duplicate(true),
+		"relationship_delta": relationship_delta,
+		"network_changed": false
+	}
+
+
+func apply_like_post(run_state, snapshot: Dictionary, post_id: String) -> Dictionary:
+	var post: Dictionary = _post_by_id(snapshot.get("posts", []), post_id)
+	if post.is_empty():
+		return {"success": false, "message": "That Twooter post is no longer visible."}
+	var account_id: String = str(post.get("account_id", ""))
+	var account: Dictionary = _account_by_id(snapshot.get("accounts", []), account_id)
+	if account.is_empty():
+		return {"success": false, "message": "That Twooter account is not available."}
+	var state: Dictionary = normalize_social_state(run_state.get_twooter_social_state(), run_state.day_index)
+	var liked_posts: Dictionary = state.get("liked_posts", {})
+	if liked_posts.has(post_id):
+		return {
+			"success": false,
+			"message": "You already liked that Twooter post.",
+			"already_liked": true
+		}
+	var account_states: Dictionary = state.get("account_states", {})
+	var account_state: Dictionary = _account_state(account_states, account_id)
+	liked_posts[post_id] = {
+		"account_id": account_id,
+		"day_index": run_state.day_index
+	}
+	state["liked_posts"] = liked_posts
+	account_state["likes_given"] = max(int(account_state.get("likes_given", 0)) + 1, 0)
+	account_state["last_like_day_index"] = run_state.day_index
+	var progress: float = float(clamp(float(account_state.get("like_relationship_progress", 0.0)) + LIKE_RELATIONSHIP_PROGRESS, 0.0, 8.0))
+	var relationship_delta: int = int(floor(progress))
+	progress -= float(relationship_delta)
+	account_state["like_relationship_progress"] = progress
+	account_state["relationship"] = clampi(int(account_state.get("relationship", 0)) + relationship_delta, 0, 100)
+	account_state["exposure"] = clampi(int(account_state.get("exposure", 0)) + _like_exposure_delta(state, account_id, run_state.day_index), 0, 100)
+	account_state["importance"] = _importance_score(account_state)
+	account_state["relationship_stage"] = _relationship_stage(int(account_state.get("relationship", 0)), int(account_state.get("credibility", 0)), int(account_state.get("importance", 0)))
+	account_states[account_id] = account_state
+	state["account_states"] = account_states
+	_increment_public_daily_count(state, account_id, "like", run_state.day_index)
+	_record_timeline_row(state, account_id, "like_post", _liked_post_memory_text(post), post_id, run_state.day_index)
+	run_state.set_twooter_social_state(state)
+	return {
+		"success": true,
+		"message": "Liked %s's post." % str(account.get("display_name", "the account")),
+		"account_state": account_state.duplicate(true),
+		"relationship_delta": relationship_delta,
+		"relationship_progress": progress,
+		"likes_given": int(account_state.get("likes_given", 0)),
 		"network_changed": false
 	}
 
@@ -448,6 +554,7 @@ func normalize_social_state(source_state: Variant, day_index: int = 0) -> Dictio
 	var normalized: Dictionary = {
 		"account_states": {},
 		"post_interactions": {},
+		"liked_posts": {},
 		"messages": {},
 		"network_contact_definitions": {},
 		"dialog_state": {
@@ -469,6 +576,12 @@ func normalize_social_state(source_state: Variant, day_index: int = 0) -> Dictio
 		if post_id.is_empty() or typeof(source.get("post_interactions", {}).get(post_id_value)) != TYPE_DICTIONARY:
 			continue
 		normalized["post_interactions"][post_id] = _normalize_post_interaction(source.get("post_interactions", {}).get(post_id_value, {}))
+	var liked_source: Dictionary = source.get("liked_posts", {}) if typeof(source.get("liked_posts", {})) == TYPE_DICTIONARY else {}
+	for post_id_value in liked_source.keys():
+		var liked_post_id: String = str(post_id_value)
+		if liked_post_id.is_empty() or typeof(liked_source.get(post_id_value)) != TYPE_DICTIONARY:
+			continue
+		normalized["liked_posts"][liked_post_id] = _normalize_liked_post(liked_source.get(post_id_value, {}))
 	for account_id_value in source.get("messages", {}).keys():
 		var account_id: String = str(account_id_value)
 		if account_id.is_empty() or typeof(source.get("messages", {}).get(account_id_value)) != TYPE_DICTIONARY:
@@ -545,6 +658,13 @@ func _apply_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, 
 	var credibility_delta: int = int(round(float(action_def.get("credibility_delta", 0)) * gain_multiplier))
 	if action_id == "share_thesis" and not thesis.is_empty() and not soft_cooldown:
 		credibility_delta += _thesis_credibility_bonus(thesis)
+	var unfollowed_attention_nudge: bool = false
+	if _is_attention_ask_action(action_id) and not bool(account_state.get("following", false)):
+		account_state["unfollowed_ask_count"] = max(int(account_state.get("unfollowed_ask_count", 0)) + 1, 0)
+		account_state["last_unfollowed_ask_day_index"] = run_state.day_index
+		unfollowed_attention_nudge = int(account_state.get("unfollowed_ask_count", 0)) >= 2
+	elif bool(account_state.get("following", false)):
+		account_state["unfollowed_ask_count"] = 0
 	account_state["relationship"] = clampi(int(account_state.get("relationship", 0)) + relationship_delta, 0, 100)
 	account_state["exposure"] = clampi(int(account_state.get("exposure", 0)) + exposure_delta, 0, 100)
 	account_state["credibility"] = clampi(int(account_state.get("credibility", 0)) + credibility_delta, 0, 100)
@@ -555,7 +675,13 @@ func _apply_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, 
 	account_states[account_id] = account_state
 	state["account_states"] = account_states
 
-	var reply_text: String = _dialog_cooldown_reply_text(account, dialog_selection, run_state.day_index) if soft_cooldown else _dialog_reply_text(feed_data, account, post, account_state, thesis, dialog_selection, run_state.day_index)
+	var reply_text: String = ""
+	if unfollowed_attention_nudge:
+		reply_text = _unfollowed_ask_reply_text(account, post, thesis, account_state, dialog_selection, run_state.day_index)
+	elif soft_cooldown:
+		reply_text = _dialog_cooldown_reply_text(account, dialog_selection, run_state.day_index)
+	else:
+		reply_text = _dialog_reply_text(feed_data, account, post, account_state, thesis, dialog_selection, run_state.day_index)
 	if reply_text.is_empty():
 		reply_text = _reply_text(feed_data, account, post, account_state, action_id, thesis, run_state.day_index, gain_multiplier)
 	if not post_id.is_empty():
@@ -590,8 +716,12 @@ func _apply_account_social_fields(account: Dictionary, account_state: Dictionary
 	account["credibility"] = int(account_state.get("credibility", 0))
 	account["importance"] = int(account_state.get("importance", 0))
 	account["following"] = bool(account_state.get("following", false))
+	account["likes_given"] = int(account_state.get("likes_given", 0))
+	account["like_relationship_progress"] = float(account_state.get("like_relationship_progress", 0.0))
+	account["unfollowed_ask_count"] = int(account_state.get("unfollowed_ask_count", 0))
 	account["relationship_stage"] = _relationship_stage(int(account_state.get("relationship", 0)), int(account_state.get("credibility", 0)), int(account_state.get("importance", 0)))
 	account["interaction_count"] = int(account_state.get("interaction_count", 0))
+	account["timeline"] = account_state.get("timeline", []).duplicate(true) if typeof(account_state.get("timeline", [])) == TYPE_ARRAY else []
 	account["unread_count"] = int(message_thread.get("unread_count", 0)) if typeof(message_thread) == TYPE_DICTIONARY else 0
 	account["social_contact_id"] = _social_contact_id(account)
 
@@ -645,11 +775,9 @@ func _dialog_cooldown_reason(branch: Dictionary, day_index: int) -> String:
 
 func _select_public_tree_id(feed_data: Dictionary, account: Dictionary, account_state: Dictionary, post: Dictionary) -> String:
 	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
-	var trees: Array = profile.get("dialog_trees", []) if typeof(profile.get("dialog_trees", [])) == TYPE_ARRAY else []
-	for tree_value in trees:
-		var tree_id: String = str(tree_value)
-		if _tree_has_surface(feed_data, tree_id, false):
-			return tree_id
+	var preferred_tree_id: String = _profile_preferred_tree_id(feed_data, profile, false)
+	if not preferred_tree_id.is_empty():
+		return preferred_tree_id
 	var category: String = str(post.get("category", "")).to_lower()
 	if category.contains("source") or category.contains("rumor") or category.contains("corporate"):
 		return "source_check"
@@ -660,6 +788,11 @@ func _select_public_tree_id(feed_data: Dictionary, account: Dictionary, account_
 
 func _select_message_tree_id(feed_data: Dictionary, account: Dictionary, account_state: Dictionary, thread: Dictionary, shareable_theses: Array) -> String:
 	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
+	var is_network_source: bool = bool(profile.get("network_source", false)) or str(profile.get("account_origin", "")) == "network_contact"
+	if is_network_source:
+		var preferred_network_tree_id: String = _profile_preferred_tree_id(feed_data, profile, true)
+		if not preferred_network_tree_id.is_empty():
+			return preferred_network_tree_id
 	if str(profile.get("risk_profile", "")) == "suspicious":
 		return "suspicious_boundary"
 	var stage: String = _relationship_stage(int(account_state.get("relationship", 0)), int(account_state.get("credibility", 0)), int(account_state.get("importance", 0)))
@@ -674,12 +807,19 @@ func _select_message_tree_id(feed_data: Dictionary, account: Dictionary, account
 		return "trust_building"
 	if int(account_state.get("credibility", 0)) < 8:
 		return "source_check"
+	var preferred_tree_id: String = _profile_preferred_tree_id(feed_data, profile, true)
+	if not preferred_tree_id.is_empty():
+		return preferred_tree_id
+	return "clean_intro"
+
+
+func _profile_preferred_tree_id(feed_data: Dictionary, profile: Dictionary, is_private: bool) -> String:
 	var trees: Array = profile.get("dialog_trees", []) if typeof(profile.get("dialog_trees", [])) == TYPE_ARRAY else []
 	for tree_value in trees:
 		var tree_id: String = str(tree_value)
-		if _tree_has_surface(feed_data, tree_id, true):
+		if _tree_has_surface(feed_data, tree_id, is_private):
 			return tree_id
-	return "clean_intro"
+	return ""
 
 
 func _tree_has_surface(feed_data: Dictionary, tree_id: String, is_private: bool) -> bool:
@@ -899,6 +1039,7 @@ func _dialog_reply_text(feed_data: Dictionary, account: Dictionary, post: Dictio
 	if not bool(selection.get("found", false)):
 		return ""
 	var pool: Array = selection.get("account_replies", []) if typeof(selection.get("account_replies", [])) == TYPE_ARRAY else []
+	pool = _relationship_dialog_reply_pool(pool, account, account_state)
 	var context: Dictionary = _dialog_context(account, account_state, post, thesis)
 	var seed: String = "%s|%s|%s|%s|%d|%d" % [
 		str(account.get("id", "")),
@@ -909,6 +1050,44 @@ func _dialog_reply_text(feed_data: Dictionary, account: Dictionary, post: Dictio
 		int(account_state.get("interaction_count", 0))
 	]
 	return _render_dialog_pool(pool, context, seed)
+
+
+func _relationship_dialog_reply_pool(base_pool: Array, account: Dictionary, account_state: Dictionary) -> Array:
+	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
+	var relationship: int = int(account_state.get("relationship", 0))
+	var stage: String = _relationship_stage(relationship, int(account_state.get("credibility", 0)), int(account_state.get("importance", 0)))
+	var tuned_pool: Array = base_pool.duplicate()
+	if bool(profile.get("network_source", false)) or str(profile.get("account_origin", "")) == "network_contact":
+		if relationship >= 8:
+			tuned_pool.append_array(NETWORK_SOURCE_DIALOG_REPLY_POOLS.get("familiar", []))
+		if stage in ["trusted", "inner_circle_candidate"]:
+			tuned_pool.append_array(NETWORK_SOURCE_DIALOG_REPLY_POOLS.get("trusted", []))
+		if stage == "inner_circle_candidate":
+			tuned_pool.append_array(NETWORK_SOURCE_DIALOG_REPLY_POOLS.get("inner_circle_candidate", []))
+		return tuned_pool
+	if relationship >= 8:
+		tuned_pool.append_array(RELATIONSHIP_DIALOG_REPLY_POOLS.get("familiar", []))
+	if stage in ["trusted", "inner_circle_candidate"]:
+		tuned_pool.append_array(RELATIONSHIP_DIALOG_REPLY_POOLS.get("trusted", []))
+	if stage == "inner_circle_candidate":
+		tuned_pool.append_array(RELATIONSHIP_DIALOG_REPLY_POOLS.get("inner_circle_candidate", []))
+	return tuned_pool
+
+
+func _is_attention_ask_action(action_id: String) -> bool:
+	return ATTENTION_ASK_ACTION_IDS.has(action_id)
+
+
+func _unfollowed_ask_reply_text(account: Dictionary, post: Dictionary, thesis: Dictionary, account_state: Dictionary, selection: Dictionary, day_index: int) -> String:
+	var context: Dictionary = _dialog_context(account, account_state, post, thesis)
+	var seed: String = "%s|%s|%s|unfollowed|%d|%d" % [
+		str(account.get("id", "")),
+		str(selection.get("tree_id", "")),
+		str(selection.get("option_id", "")),
+		day_index,
+		int(account_state.get("unfollowed_ask_count", 0))
+	]
+	return _render_dialog_pool(UNFOLLOWED_ASK_REPLY_POOL, context, seed)
 
 
 func _dialog_cooldown_reply_text(account: Dictionary, selection: Dictionary, day_index: int) -> String:
@@ -951,14 +1130,31 @@ func _record_dialog_branch_progress(state: Dictionary, scope: String, key_id: St
 
 
 func _dialog_context(account: Dictionary, account_state: Dictionary, post: Dictionary, thesis: Dictionary) -> Dictionary:
+	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
+	var is_network_source: bool = bool(profile.get("network_source", false)) or str(profile.get("account_origin", "")) == "network_contact"
+	var ticker: String = str(post.get("target_ticker", "")).strip_edges().to_upper()
+	if ticker.is_empty():
+		ticker = str(thesis.get("ticker", "")).strip_edges().to_upper()
+	if ticker.is_empty():
+		ticker = str(profile.get("target_ticker", "")).strip_edges().to_upper()
+	if ticker.is_empty():
+		ticker = "this lead" if is_network_source else "the setup"
+	var company: String = str(post.get("target_company_name", "")).strip_edges()
+	if company.is_empty():
+		company = str(thesis.get("company_name", "")).strip_edges()
+	if company.is_empty():
+		company = str(profile.get("target_company_name", "")).strip_edges()
+	if company.is_empty():
+		company = ticker
 	return {
 		"account_name": str(account.get("display_name", "Account")),
 		"handle": str(account.get("handle", "")),
-		"ticker": str(post.get("target_ticker", thesis.get("ticker", "the setup"))),
-		"company": str(post.get("target_company_name", thesis.get("company_name", "the company"))),
+		"ticker": ticker,
+		"company": company,
 		"thesis_title": str(thesis.get("title", "my thesis")),
 		"stage": str(account_state.get("relationship_stage", "stranger")),
-		"relationship": str(account_state.get("relationship", 0))
+		"relationship": str(account_state.get("relationship", 0)),
+		"likes_given": str(account_state.get("likes_given", 0))
 	}
 
 
@@ -1021,6 +1217,14 @@ func _public_gain_multiplier(state: Dictionary, account_id: String, action_id: S
 	return 0.0
 
 
+func _like_exposure_delta(state: Dictionary, account_id: String, day_index: int) -> int:
+	var daily: Dictionary = state.get("daily_public_interactions", {})
+	if int(daily.get("day_index", day_index)) != day_index:
+		return 1
+	var counts: Dictionary = daily.get("account_action_counts", {}) if typeof(daily.get("account_action_counts", {})) == TYPE_DICTIONARY else {}
+	return 1 if int(counts.get("%s|like" % account_id, 0)) <= 0 else 0
+
+
 func _increment_public_daily_count(state: Dictionary, account_id: String, action_id: String, day_index: int) -> void:
 	var daily: Dictionary = state.get("daily_public_interactions", {})
 	if int(daily.get("day_index", day_index)) != day_index:
@@ -1030,6 +1234,16 @@ func _increment_public_daily_count(state: Dictionary, account_id: String, action
 	counts[key] = int(counts.get(key, 0)) + 1
 	daily["account_action_counts"] = counts
 	state["daily_public_interactions"] = daily
+
+
+func _liked_post_memory_text(post: Dictionary) -> String:
+	var ticker: String = str(post.get("target_ticker", "")).strip_edges().to_upper()
+	if not ticker.is_empty():
+		return "Liked a post about $%s." % ticker
+	var topic: String = _public_topic_text(post)
+	if not topic.is_empty():
+		return "Liked a post about %s." % topic
+	return "Liked a Twooter post."
 
 
 func _record_post_reply(state: Dictionary, post_id: String, account_id: String, action_id: String, player_text: String, reply_text: String, day_index: int, relationship_delta: int, exposure_delta: int, credibility_delta: int, account_state: Dictionary) -> void:
@@ -1161,7 +1375,12 @@ func _record_network_journal(run_state, account: Dictionary, contact_id: String,
 		run_state.day_index,
 		journal.size()
 	]
-	var ticker: String = str(post.get("target_ticker", thesis.get("ticker", "")))
+	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
+	var ticker: String = str(post.get("target_ticker", "")).strip_edges().to_upper()
+	if ticker.is_empty():
+		ticker = str(thesis.get("ticker", "")).strip_edges().to_upper()
+	if ticker.is_empty():
+		ticker = str(profile.get("target_ticker", "")).strip_edges().to_upper()
 	journal[journal_id] = {
 		"id": journal_id,
 		"journal_type": "twooter_social",
@@ -1220,15 +1439,7 @@ func _ensure_social_contact_definition(state: Dictionary, account: Dictionary, p
 
 
 func _reply_text(feed_data: Dictionary, account: Dictionary, post: Dictionary, account_state: Dictionary, action_id: String, thesis: Dictionary, day_index: int, gain_multiplier: float) -> String:
-	var context: Dictionary = {
-		"account_name": str(account.get("display_name", "Account")),
-		"handle": str(account.get("handle", "")),
-		"ticker": str(post.get("target_ticker", thesis.get("ticker", "the stock"))),
-		"company": str(post.get("target_company_name", thesis.get("company_name", "the company"))),
-		"thesis_title": str(thesis.get("title", "your thesis")),
-		"stage": str(account_state.get("relationship_stage", "stranger")),
-		"relationship": str(account_state.get("relationship", 0))
-	}
+	var context: Dictionary = _dialog_context(account, account_state, post, thesis)
 	var pool: Array = _response_pool(feed_data, account, action_id, str(account_state.get("relationship_stage", "stranger")))
 	var seed: String = "%s|%s|%s|%d|%d" % [
 		str(account.get("id", "")),
@@ -1272,7 +1483,29 @@ func _render_template(template: String, context: Dictionary) -> String:
 	for key_value in context.keys():
 		var key: String = str(key_value)
 		rendered = rendered.replace("{%s}" % key, str(context.get(key_value, "")))
-	return rendered
+	return _clean_rendered_template_text(rendered, context)
+
+
+func _clean_rendered_template_text(text: String, context: Dictionary) -> String:
+	var rendered: String = text.strip_edges()
+	for fallback_key in ["ticker", "company", "target_ticker", "target_company_name"]:
+		var fallback_value: String = str(context.get(fallback_key, "")).strip_edges()
+		if fallback_value.is_empty():
+			continue
+		rendered = rendered.replace("{%s}" % fallback_key, fallback_value)
+	for token in ["ticker", "company", "target_ticker", "target_company_name", "account_name", "handle", "thesis_title", "stage", "relationship", "likes_given"]:
+		rendered = rendered.replace("{%s}" % token, "")
+	for _pass_index in range(4):
+		rendered = rendered.replace("For ,", "For this lead,")
+		rendered = rendered.replace("for ,", "for this lead,")
+		rendered = rendered.replace("For .", "For this lead.")
+		rendered = rendered.replace("for .", "for this lead.")
+		rendered = rendered.replace("  ", " ")
+		rendered = rendered.replace(" ,", ",")
+		rendered = rendered.replace(" .", ".")
+		rendered = rendered.replace("( ", "(")
+		rendered = rendered.replace(" )", ")")
+	return rendered.strip_edges()
 
 
 func _player_public_reply_text(account: Dictionary, post: Dictionary, action_id: String, conversation_step: int, day_index: int) -> String:
@@ -1659,6 +1892,11 @@ func _normalize_account_state(source: Variant) -> Dictionary:
 		"credibility": clampi(int(row.get("credibility", 0)), 0, 100),
 		"importance": clampi(int(row.get("importance", 0)), 0, 100),
 		"following": bool(row.get("following", false)),
+		"likes_given": max(int(row.get("likes_given", 0)), 0),
+		"last_like_day_index": int(row.get("last_like_day_index", -1)),
+		"like_relationship_progress": float(clamp(float(row.get("like_relationship_progress", 0.0)), 0.0, 0.99)),
+		"unfollowed_ask_count": max(int(row.get("unfollowed_ask_count", 0)), 0),
+		"last_unfollowed_ask_day_index": int(row.get("last_unfollowed_ask_day_index", -1)),
 		"last_interaction_day_index": int(row.get("last_interaction_day_index", -1)),
 		"interaction_count": max(int(row.get("interaction_count", 0)), 0),
 		"timeline": []
@@ -1708,6 +1946,14 @@ func _normalize_post_interaction(source: Variant) -> Dictionary:
 		"concluded": bool(row.get("concluded", false)),
 		"conclusion_reason": str(row.get("conclusion_reason", "")),
 		"followup_unlocked": bool(row.get("followup_unlocked", false))
+	}
+
+
+func _normalize_liked_post(source: Variant) -> Dictionary:
+	var row: Dictionary = source if typeof(source) == TYPE_DICTIONARY else {}
+	return {
+		"account_id": str(row.get("account_id", "")),
+		"day_index": int(row.get("day_index", -1))
 	}
 
 
