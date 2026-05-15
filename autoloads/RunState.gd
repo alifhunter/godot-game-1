@@ -2040,6 +2040,17 @@ func spend_daily_action(cost: int = 1) -> Dictionary:
 	}
 
 
+func refund_daily_action(cost: int = 1) -> Dictionary:
+	_sync_daily_action_day()
+	var resolved_cost: int = max(cost, 0)
+	daily_actions_used = max(daily_actions_used - resolved_cost, 0)
+	return {
+		"success": true,
+		"message": "Daily action refunded.",
+		"snapshot": get_daily_action_snapshot()
+	}
+
+
 func add_network_company_arc(arc_data: Dictionary) -> void:
 	if arc_data.is_empty():
 		return
@@ -3183,6 +3194,7 @@ func _normalize_twooter_account_state(source_state: Variant) -> Dictionary:
 		"credibility": clampi(int(source.get("credibility", 0)), 0, 100),
 		"importance": clampi(int(source.get("importance", 0)), 0, 100),
 		"following": bool(source.get("following", false)),
+		"connected": bool(source.get("connected", false)),
 		"likes_given": max(int(source.get("likes_given", 0)), 0),
 		"last_like_day_index": int(source.get("last_like_day_index", -1)),
 		"like_relationship_progress": float(clamp(float(source.get("like_relationship_progress", 0.0)), 0.0, 0.99)),

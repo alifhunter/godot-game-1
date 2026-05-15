@@ -41,6 +41,7 @@ func _ready() -> void:
 	if str(thread.get("cooldown_reason", "")).is_empty() or not thread.get("dialog_options", []).is_empty():
 		_fail("Twooter cooldown regression expected cooled-down message threads to expose no dialog options.")
 		return
+	var direct_send_ap_before: int = int(GameManager.get_daily_action_snapshot().get("used", 0))
 	var direct_send: Dictionary = GameManager.send_twooter_message(
 		account_id,
 		"message_check_in",
@@ -50,6 +51,24 @@ func _ready() -> void:
 	if bool(direct_send.get("success", false)):
 		_fail("Twooter cooldown regression expected direct sends to be rejected while cooled down.")
 		return
+	if int(GameManager.get_daily_action_snapshot().get("used", 0)) != direct_send_ap_before:
+		_fail("Twooter cooldown regression expected rejected direct sends to refund the spent AP.")
+		return
+
+	var like_pair: Array = _first_same_account_post_pair(posts)
+	if like_pair.size() >= 2:
+		var first_like_post: Dictionary = like_pair[0]
+		var second_like_post: Dictionary = like_pair[1]
+		var first_like: Dictionary = GameManager.like_twooter_post(str(first_like_post.get("id", "")))
+		var second_like: Dictionary = GameManager.like_twooter_post(str(second_like_post.get("id", "")))
+		if (
+			not bool(first_like.get("success", false)) or
+			not bool(second_like.get("success", false)) or
+			float(first_like.get("relationship_progress_added", 0.0)) < 0.49 or
+			float(second_like.get("relationship_progress_added", 0.0)) > 0.26
+		):
+			_fail("Twooter loop balance expected same-day likes after the first one to help less.")
+			return
 
 	var game_root: Node = load("res://scenes/game/GameRoot.tscn").instantiate()
 	add_child(game_root)
@@ -124,6 +143,18 @@ func _ready() -> void:
 	):
 		_fail("Twooter self-awareness regression expected zero-post accounts to correct praise about their posts.")
 		return
+	var no_post_network_result: Dictionary = no_post_result.get("network_result", {}) if typeof(no_post_result.get("network_result", {})) == TYPE_DICTIONARY else {}
+	var no_post_contact_id: String = str(no_post_network_result.get("contact_id", ""))
+	var no_post_discovery: Dictionary = RunState.get_network_discoveries().get(no_post_contact_id, {}) if not no_post_contact_id.is_empty() else {}
+	if (
+		not bool(no_post_result.get("network_changed", false)) or
+		str(no_post_discovery.get("source_type", "")) != "twooter" or
+		str(no_post_discovery.get("source_label", "")).strip_edges().is_empty() or
+		str(no_post_discovery.get("source_note", "")).strip_edges().is_empty() or
+		not bool(no_post_discovery.get("source_only", false))
+	):
+		_fail("Twooter Network integration expected source-only DMs to create a provenance-rich Network discovery.")
+		return
 
 	game_root.set("selected_social_message_account_id", account_id)
 	game_root.set("selected_social_view_id", "message")
@@ -162,6 +193,24 @@ func _visible_message_option_count(root: Node) -> int:
 		if button != null and button.visible:
 			count += 1
 	return count
+
+
+func _first_same_account_post_pair(posts: Array) -> Array:
+	var by_account: Dictionary = {}
+	for post_value in posts:
+		if typeof(post_value) != TYPE_DICTIONARY:
+			continue
+		var post: Dictionary = post_value
+		var post_id: String = str(post.get("id", ""))
+		var account_id: String = str(post.get("account_id", ""))
+		if post_id.is_empty() or account_id.is_empty():
+			continue
+		var rows: Array = by_account.get(account_id, [])
+		rows.append(post)
+		if rows.size() >= 2:
+			return [rows[0], rows[1]]
+		by_account[account_id] = rows
+	return []
 
 
 func _fail(message: String) -> void:

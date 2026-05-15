@@ -81,6 +81,52 @@
         "Keep saying no to dirty shortcuts. It protects future access."
       ]
     },
+    "relationship_reply_pools": {
+      "familiar": [
+        "You are getting easier to answer because your questions are specific now.",
+        "This is more useful than the early asks. Keep naming what would change your mind.",
+        "I can see the process improving. Bring the source, the risk, and the next check together.",
+        "Good, that is less about getting a signal and more about learning how to read the setup.",
+        "You are showing enough care that I can answer with more context."
+      ],
+      "trusted": [
+        "You have earned the sharper answer: separate what is known, what is inferred, and what is still just market noise.",
+        "At this point, I care less about whether you agree and more about whether you can update cleanly.",
+        "This is the better conversation. Bring the strongest evidence and the strongest objection at the same time.",
+        "You are not asking like a tourist anymore. Keep the question narrow and I can be more direct.",
+        "Good. Now the real work is deciding what would make you reduce conviction before the crowd notices."
+      ],
+      "inner_circle_candidate": [
+        "If I open a door for you, protect the relationship by arriving prepared and asking one clean question.",
+        "Better rooms do not reward louder asks. They reward people who can carry context responsibly.",
+        "You are close to better access now. Keep your thesis written, your sources public, and your boundaries boring.",
+        "The deeper version is not a secret tip. It is a cleaner map of what matters and what can still go wrong.",
+        "People are more willing to introduce you when your questions make them look careful, not reckless."
+      ]
+    },
+    "network_source_reply_pools": {
+      "familiar": [
+        "You are handling the source lead better now. Keep the public trail and the market reaction separate.",
+        "Good. Treat the handle as context, not authority, until your own checks support it.",
+        "This is a cleaner ask. Start with what can be reopened tomorrow and ignore the rest for now.",
+        "If you found me through a lead, the useful next step is still public verification.",
+        "You are asking carefully enough that I can point you toward process instead of just warning you off."
+      ],
+      "trusted": [
+        "You have kept the boundary clean, so I can be clearer: the source trail matters only if it survives public checks.",
+        "This is closer to a real source relationship. Bring the document, the date, and the failure point before you ask for a read.",
+        "You have earned a better answer, but not a shortcut. Use the context to sharpen your thesis, not replace it.",
+        "Good. The question now is whether the market is ahead of the evidence or the evidence is ahead of the market.",
+        "I can help more when the ask is this narrow. Keep the claim, source, and risk in separate boxes."
+      ],
+      "inner_circle_candidate": [
+        "If I introduce you, your process represents me too. Prepare the thesis before you use the door.",
+        "You can get better context now, but the rule does not change: public proof first, reputation always.",
+        "The room version is simple: ask less, listen harder, and write down what would make the lead weaker.",
+        "I can point you closer when the question is narrow and the boundary is clean.",
+        "You are useful to talk to now. Do not spend that trust on a vague ask."
+      ]
+    },
     "dialog_trees": {
       "network_source_followup": {
         "entry_node": "open",

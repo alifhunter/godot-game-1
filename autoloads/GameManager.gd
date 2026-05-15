@@ -4658,6 +4658,9 @@ func interact_with_twooter_post(post_id: String, action_id: String, thesis_id: S
 		player_reply_text
 	)
 	if not bool(result.get("success", false)):
+		if spent_ap:
+			RunState.refund_daily_action(1)
+			daily_actions_changed.emit()
 		return result
 	_after_twooter_interaction(spent_ap, bool(result.get("network_changed", false)), "twooter_post_interaction")
 	result["snapshot"] = get_twooter_snapshot()
@@ -4691,6 +4694,8 @@ func send_twooter_message(account_id: String, action_id: String, thesis_id: Stri
 		player_message_text
 	)
 	if not bool(result.get("success", false)):
+		RunState.refund_daily_action(1)
+		daily_actions_changed.emit()
 		return result
 	_after_twooter_interaction(true, bool(result.get("network_changed", false)), "twooter_message")
 	result["snapshot"] = get_twooter_snapshot()

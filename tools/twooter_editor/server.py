@@ -142,6 +142,8 @@ def normalize_catalog_for_source(catalog: dict) -> dict:
     catalog["post_limit"] = int(catalog.get("post_limit", 18) or 18)
     catalog["tier_labels"] = normalize_string_map(catalog.get("tier_labels", {}))
     catalog["interaction_response_pools"] = normalize_pool_map(catalog.get("interaction_response_pools", {}))
+    catalog["relationship_reply_pools"] = normalize_pool_map(catalog.get("relationship_reply_pools", {}))
+    catalog["network_source_reply_pools"] = normalize_pool_map(catalog.get("network_source_reply_pools", {}))
     catalog["dialog_trees"] = normalize_dialog_trees(catalog.get("dialog_trees", {}))
     catalog["accounts"] = normalize_accounts(catalog.get("accounts", []))
     catalog["voice_templates"] = normalize_nested_pool_map(catalog.get("voice_templates", {}))
@@ -282,6 +284,10 @@ def validate_source(source: dict) -> dict:
 
     validate_tier_labels(catalog.get("tier_labels", {}), errors)
     validate_pool_map(catalog.get("interaction_response_pools", {}), "interaction_response_pools", errors, warnings)
+    if catalog.get("relationship_reply_pools", {}):
+        validate_pool_map(catalog.get("relationship_reply_pools", {}), "relationship_reply_pools", errors, warnings)
+    if catalog.get("network_source_reply_pools", {}):
+        validate_pool_map(catalog.get("network_source_reply_pools", {}), "network_source_reply_pools", errors, warnings)
     validate_dialog_trees(catalog.get("dialog_trees", {}), errors, warnings)
     dialog_tree_ids = set(catalog.get("dialog_trees", {}).keys())
     voice_ids = set(catalog.get("voice_templates", {}).keys())

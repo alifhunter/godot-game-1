@@ -2441,6 +2441,10 @@ func _contact_row(contact: Dictionary, runtime: Dictionary, discovery: Dictionar
 		"recognition_required": int(contact.get("recognition_required", 0)),
 		"source_type": str(discovery.get("source_type", "")),
 		"source_id": str(discovery.get("source_id", "")),
+		"source_label": str(discovery.get("source_label", contact.get("source_label", ""))),
+		"source_note": str(discovery.get("source_note", contact.get("source_note", ""))),
+		"twooter_origin": str(discovery.get("twooter_origin", contact.get("twooter_origin", ""))),
+		"source_only": bool(discovery.get("source_only", contact.get("source_only", false))),
 		"referred_by_contact_id": str(discovery.get("referred_by_contact_id", "")),
 		"connection_score": int(discovery.get("connection_score", 0)),
 		"target_company_id": primary_target_company_id,
@@ -2750,6 +2754,13 @@ func _network_twooter_journal_row(tip: Dictionary) -> Dictionary:
 	var day_index: int = int(tip.get("created_day_index", 0))
 	var ticker: String = str(tip.get("target_ticker", ""))
 	var action_label: String = str(tip.get("truth_label", "Twooter"))
+	var source_label: String = str(tip.get("source_label", "Twooter")).strip_edges()
+	var source_note: String = str(tip.get("source_note", "")).strip_edges()
+	var detail: String = str(tip.get("tip_read", ""))
+	if not source_note.is_empty():
+		detail = "%s %s" % [source_note, detail]
+	elif not source_label.is_empty():
+		detail = "%s. %s" % [source_label, detail]
 	return {
 		"id": "%s:twooter" % str(tip.get("id", "")),
 		"type": "twooter",
@@ -2761,7 +2772,7 @@ func _network_twooter_journal_row(tip: Dictionary) -> Dictionary:
 		"target_ticker": ticker,
 		"status": str(tip.get("status", "recorded")),
 		"title": "Twooter | %s%s" % [action_label, " | %s" % ticker if not ticker.is_empty() else ""],
-		"detail": str(tip.get("tip_read", ""))
+		"detail": detail.strip_edges()
 	}
 
 
@@ -3014,6 +3025,10 @@ func _network_twooter_discovery_journal_row(run_state, data_repository, discover
 	var contact_id: String = str(discovery.get("contact_id", ""))
 	var day_index: int = int(discovery.get("day_index", 0))
 	var ticker: String = str(discovery.get("target_ticker", ""))
+	var source_label: String = str(discovery.get("source_label", "Twooter Contact")).strip_edges()
+	var source_note: String = str(discovery.get("source_note", "")).strip_edges()
+	if source_note.is_empty():
+		source_note = "A Twooter exchange became a tracked Network contact."
 	return {
 		"id": "%s:twooter_discovery" % contact_id,
 		"type": "twooter_discovery",
@@ -3024,8 +3039,8 @@ func _network_twooter_discovery_journal_row(run_state, data_repository, discover
 		"target_company_id": str(discovery.get("target_company_id", "")),
 		"target_ticker": ticker,
 		"status": "discovered",
-		"title": "Twooter Contact%s" % (" | %s" % ticker if not ticker.is_empty() else ""),
-		"detail": "A public Twooter exchange became a tracked Network contact."
+		"title": "%s%s" % [source_label, " | %s" % ticker if not ticker.is_empty() else ""],
+		"detail": source_note
 	}
 
 

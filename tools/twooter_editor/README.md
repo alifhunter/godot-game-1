@@ -31,6 +31,7 @@ The tool edits the template catalog used by `systems/TwooterFeedSystem.gd`:
 - compatibility access labels and post limit
 - account metadata, handles, internal access tier, verification, persona ids, social profile hints, and thread preference
 - interaction response pools for public replies, DMs, source checks, thesis sharing, clean tip asks, invite scaffolds, and suspicious-request responses
+- relationship-stage reply pools for familiar, trusted, and inner-circle Twooter conversations
 - voice post template pools
 - optional thread template pools
 - continuity templates
