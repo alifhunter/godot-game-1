@@ -9767,6 +9767,108 @@ func _run_scenario(
 	var social_first_post: Dictionary = social_interaction_posts[0]
 	var social_first_post_id: String = str(social_first_post.get("id", ""))
 	var social_first_account_id: String = str(social_first_post.get("account_id", ""))
+	var social_account_search_input: LineEdit = game_root.find_child("SocialAccountSearchInput", true, false) as LineEdit
+	var search_account_id: String = ""
+	var search_account_name: String = ""
+	var search_handle_query: String = "@not_an_account_name"
+	for account_value in pre_interaction_social_snapshot.get("accounts", []):
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var search_account: Dictionary = account_value
+		var candidate_name: String = str(search_account.get("display_name", "")).strip_edges()
+		if candidate_name.is_empty():
+			continue
+		if search_account_id.is_empty():
+			search_account_id = str(search_account.get("id", ""))
+			search_account_name = candidate_name
+		var candidate_handle: String = str(search_account.get("handle", "")).strip_edges()
+		if not candidate_handle.is_empty() and not candidate_name.to_lower().contains(candidate_handle.to_lower()):
+			search_handle_query = candidate_handle
+	if social_account_search_input == null or search_account_id.is_empty() or search_account_name.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Twooter right rail to expose an account-name search input."
+		}
+	social_account_search_input.text = search_handle_query
+	social_account_search_input.emit_signal("text_changed", search_handle_query)
+	await get_tree().process_frame
+	if game_root.find_child("SocialAccountSearchResultButton", true, false) != null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Twooter account search to match account names only, not handles."
+		}
+	social_account_search_input.text = search_account_name
+	social_account_search_input.emit_signal("text_changed", search_account_name)
+	await get_tree().process_frame
+	var social_account_search_result: Button = game_root.find_child("SocialAccountSearchResultButton", true, false) as Button
+	if social_account_search_result == null or str(social_account_search_result.get_meta("social_account_id", "")) != search_account_id:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Twooter account search to find accounts by display name."
+		}
+	social_account_search_input.text = ""
+	social_account_search_input.emit_signal("text_changed", "")
+	await get_tree().process_frame
+	var silent_account_id: String = ""
+	for account_value in pre_interaction_social_snapshot.get("accounts", []):
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var silent_account: Dictionary = account_value
+		if int(silent_account.get("public_post_count", 0)) <= 0 and not str(silent_account.get("id", "")).is_empty():
+			silent_account_id = str(silent_account.get("id", ""))
+			break
+	if silent_account_id.is_empty():
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected at least one Twooter account with zero visible posts for self-awareness coverage."
+		}
+	var self_awareness_restore_state: Dictionary = RunState.to_save_dict()
+	var silent_thread: Dictionary = GameManager.get_twooter_message_thread(silent_account_id)
+	for option_value in silent_thread.get("dialog_options", []):
+		if typeof(option_value) != TYPE_DICTIONARY:
+			continue
+		if str(option_value.get("player_text", "")).to_lower().contains("your posts"):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected zero-post Twooter accounts to avoid player options praising their posts."
+			}
+	RunState.daily_action_day_index = RunState.day_index
+	RunState.daily_actions_used = 0
+	var no_post_reply_result: Dictionary = GameManager.send_twooter_message(
+		silent_account_id,
+		"message_check_in",
+		"",
+		"Your posts are useful. I would like to compare notes without turning this into a shortcut."
+	)
+	var no_post_reply_text: String = str(no_post_reply_result.get("reply_text", no_post_reply_result.get("message", ""))).to_lower()
+	if (
+		not bool(no_post_reply_result.get("success", false)) or
+		(
+			not no_post_reply_text.contains("not posted") and
+			not no_post_reply_text.contains("zero public posts") and
+			not no_post_reply_text.contains("no public posts") and
+			not no_post_reply_text.contains("imaginary posts")
+		)
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected zero-post Twooter accounts to correct messages praising posts they have not made."
+		}
+	RunState.load_from_dict(self_awareness_restore_state)
+	game_root._refresh_social()
+	await get_tree().process_frame
 	var missing_thesis_account_id: String = social_first_account_id
 	for account_value in pre_interaction_social_snapshot.get("accounts", []):
 		if typeof(account_value) != TYPE_DICTIONARY:
@@ -10360,6 +10462,59 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected private Twooter send to write player/account message rows in order."
 		}
+	var private_cooldown_restore_state: Dictionary = RunState.to_save_dict()
+	var private_cooldown_social_state: Dictionary = RunState.get_twooter_social_state()
+	var private_cooldown_dialog_state: Dictionary = private_cooldown_social_state.get("dialog_state", {}) if typeof(private_cooldown_social_state.get("dialog_state", {})) == TYPE_DICTIONARY else {}
+	var private_cooldown_accounts: Dictionary = private_cooldown_dialog_state.get("accounts", {}) if typeof(private_cooldown_dialog_state.get("accounts", {})) == TYPE_DICTIONARY else {}
+	private_cooldown_accounts[social_first_account_id] = {
+		"tree_id": "clean_intro",
+		"node_id": "open",
+		"last_option_id": "define_process",
+		"last_action_id": "message_check_in",
+		"repeat_count": 2,
+		"last_day_index": RunState.day_index,
+		"step_count": 3,
+		"cooldown_until_day": RunState.day_index,
+		"cooldown_reason": "soft_cooldown"
+	}
+	private_cooldown_dialog_state["accounts"] = private_cooldown_accounts
+	private_cooldown_social_state["dialog_state"] = private_cooldown_dialog_state
+	RunState.set_twooter_social_state(private_cooldown_social_state)
+	var private_cooldown_thread: Dictionary = GameManager.get_twooter_message_thread(social_first_account_id)
+	var private_cooldown_send_result: Dictionary = GameManager.send_twooter_message(
+		social_first_account_id,
+		"message_check_in",
+		"",
+		"I am trying to reopen the same thread without new context."
+	)
+	game_root.selected_social_message_account_id = social_first_account_id
+	social_home_button.emit_signal("pressed")
+	await get_tree().process_frame
+	social_message_button.emit_signal("pressed")
+	await get_tree().process_frame
+	var cooldown_message_options: VBoxContainer = game_root.find_child("SocialMessageComposerOptions", true, false) as VBoxContainer
+	var visible_cooldown_option_count: int = 0
+	if cooldown_message_options != null:
+		for cooldown_option_child in cooldown_message_options.get_children():
+			var cooldown_option_button: Button = cooldown_option_child as Button
+			if cooldown_option_button != null and cooldown_option_button.visible:
+				visible_cooldown_option_count += 1
+	if (
+		not private_cooldown_thread.get("dialog_options", []).is_empty() or
+		bool(private_cooldown_send_result.get("success", false)) or
+		visible_cooldown_option_count > 0
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected a cooled-down Twooter Message branch to stay paused after Home/Message navigation and reject direct sends."
+		}
+	RunState.load_from_dict(private_cooldown_restore_state)
+	game_root.selected_social_message_account_id = social_first_account_id
+	game_root.selected_social_view_id = "message"
+	game_root._refresh_social()
+	await get_tree().process_frame
 	social_message_options = game_root.find_child("SocialMessageComposerOptions", true, false) as VBoxContainer
 	var private_option_texts_after: Array[String] = []
 	var share_thesis_button: Button = null

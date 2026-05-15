@@ -611,6 +611,8 @@ var social_left_sidebar: PanelContainer = null
 var social_left_nav_buttons: Dictionary = {}
 var social_center_panel: PanelContainer = null
 var social_right_rail: VBoxContainer = null
+var social_account_search_input: LineEdit = null
+var social_account_search_results: VBoxContainer = null
 var social_trending_rows: VBoxContainer = null
 var social_follow_rows: VBoxContainer = null
 var social_message_view: HBoxContainer = null
@@ -7619,6 +7621,7 @@ func _apply_social_view_visibility() -> void:
 
 
 func _rebuild_social_right_rail(snapshot: Dictionary) -> void:
+	_rebuild_social_account_search_results(snapshot)
 	_clear_container(social_trending_rows)
 	_clear_container(social_follow_rows)
 	if social_trending_rows != null:
@@ -7635,6 +7638,77 @@ func _rebuild_social_right_rail(snapshot: Dictionary) -> void:
 		for row_value in follow_rows:
 			if typeof(row_value) == TYPE_DICTIONARY:
 				social_follow_rows.add_child(_build_social_follow_row(row_value))
+
+
+func _rebuild_social_account_search_results(snapshot: Dictionary) -> void:
+	_clear_container(social_account_search_results)
+	if social_account_search_input == null or social_account_search_results == null:
+		return
+	var query: String = social_account_search_input.text.strip_edges().to_lower()
+	if query.is_empty():
+		social_account_search_results.visible = false
+		return
+	social_account_search_results.visible = true
+	var match_count: int = 0
+	for account_value in snapshot.get("accounts", []):
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var account: Dictionary = account_value
+		if not _social_account_matches_name_search(account, query):
+			continue
+		social_account_search_results.add_child(_build_social_account_search_result(account))
+		match_count += 1
+		if match_count >= 5:
+			break
+	if match_count <= 0:
+		var empty_label: Label = _make_social_rail_body_label("No account names match.")
+		empty_label.name = "SocialAccountSearchEmptyLabel"
+		social_account_search_results.add_child(empty_label)
+
+
+func _social_account_matches_name_search(account: Dictionary, query: String) -> bool:
+	if query.is_empty():
+		return false
+	var display_name: String = str(account.get("display_name", "")).strip_edges().to_lower()
+	return not display_name.is_empty() and display_name.find(query) != -1
+
+
+func _build_social_account_search_result(account: Dictionary) -> Button:
+	var account_id: String = str(account.get("id", ""))
+	var button := Button.new()
+	button.name = "SocialAccountSearchResultButton"
+	button.set_meta("social_account_id", account_id)
+	button.text = "%s\n%s" % [
+		str(account.get("display_name", "Account")),
+		str(account.get("handle", ""))
+	]
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.clip_text = true
+	button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	button.custom_minimum_size = Vector2(0, 42)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	button.tooltip_text = "Open this account profile."
+	_style_social_thread_button(button)
+	button.pressed.connect(_on_social_account_pressed.bind(account_id))
+	return button
+
+
+func _on_social_account_search_changed(_new_text: String) -> void:
+	_rebuild_social_account_search_results(current_social_snapshot)
+
+
+func _on_social_account_search_submitted(_new_text: String) -> void:
+	var query: String = social_account_search_input.text.strip_edges().to_lower() if social_account_search_input != null else ""
+	if query.is_empty():
+		return
+	for account_value in current_social_snapshot.get("accounts", []):
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var account: Dictionary = account_value
+		if _social_account_matches_name_search(account, query):
+			_on_social_account_pressed(str(account.get("id", "")))
+			return
 
 
 func _build_social_trending_row(row: Dictionary) -> VBoxContainer:
@@ -8289,6 +8363,7 @@ func _build_social_account_filter_card(account_name: String, account_id: String)
 	stats_row.add_child(_build_social_profile_stat_chip("Importance", int(account.get("importance", 0))))
 	stats_row.add_child(_build_social_profile_stat_chip("Exposure", int(account.get("exposure", 0))))
 	stats_row.add_child(_build_social_profile_stat_chip("Likes", int(account.get("likes_given", 0))))
+	stats_row.add_child(_build_social_profile_stat_chip("Posts", int(account.get("public_post_count", 0))))
 
 	var description_label: Label = _make_social_profile_body_label(_social_account_description_text(account))
 	description_label.name = "SocialAccountProfileDescriptionLabel"
@@ -9225,6 +9300,30 @@ func _style_social_nav_button(button: Button, is_selected: bool) -> void:
 
 func _style_social_thread_button(button: Button) -> void:
 	_style_button(button, COLOR_TWOOTER_BLUE_TINT, COLOR_TWOOTER_BORDER, COLOR_TWOOTER_BLUE, 5)
+
+
+func _style_social_search_input(line_edit: LineEdit) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = COLOR_TWOOTER_BLUE_TINT
+	normal.border_color = COLOR_TWOOTER_BORDER
+	normal.set_border_width_all(1)
+	normal.corner_radius_top_left = 14
+	normal.corner_radius_top_right = 14
+	normal.corner_radius_bottom_right = 14
+	normal.corner_radius_bottom_left = 14
+	normal.content_margin_left = 14
+	normal.content_margin_right = 14
+	normal.content_margin_top = 8
+	normal.content_margin_bottom = 8
+	var focus: StyleBoxFlat = normal.duplicate()
+	focus.border_color = COLOR_TWOOTER_BLUE
+	line_edit.add_theme_stylebox_override("normal", normal)
+	line_edit.add_theme_stylebox_override("focus", focus)
+	line_edit.add_theme_stylebox_override("read_only", normal)
+	line_edit.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
+	line_edit.add_theme_color_override("font_placeholder_color", COLOR_TWOOTER_MUTED)
+	line_edit.add_theme_color_override("font_uneditable_color", COLOR_TWOOTER_TEXT)
+	_apply_font_override_to_control(line_edit, DEFAULT_APP_FONT_SIZE, _get_app_font())
 
 
 func _show_news_article(article: Dictionary) -> void:
@@ -18713,6 +18812,9 @@ func _build_social_right_rail() -> VBoxContainer:
 	rail.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	rail.add_theme_constant_override("separation", 18)
 
+	var search_card := _make_social_account_search_card()
+	rail.add_child(search_card)
+
 	var trending_card := _make_social_rail_card("SocialTrendingCard", "Trending")
 	social_trending_rows = trending_card.find_child("SocialRailRows", true, false) as VBoxContainer
 	rail.add_child(trending_card)
@@ -18721,6 +18823,38 @@ func _build_social_right_rail() -> VBoxContainer:
 	social_follow_rows = follow_card.find_child("SocialRailRows", true, false) as VBoxContainer
 	rail.add_child(follow_card)
 	return rail
+
+
+func _make_social_account_search_card() -> PanelContainer:
+	var card := PanelContainer.new()
+	card.name = "SocialAccountSearchCard"
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_twooter_panel(card, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 12, 1)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	card.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.name = "SocialAccountSearchVBox"
+	vbox.add_theme_constant_override("separation", 8)
+	margin.add_child(vbox)
+	social_account_search_input = LineEdit.new()
+	social_account_search_input.name = "SocialAccountSearchInput"
+	social_account_search_input.placeholder_text = "Search account names"
+	social_account_search_input.clear_button_enabled = true
+	social_account_search_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_social_search_input(social_account_search_input)
+	social_account_search_input.text_changed.connect(_on_social_account_search_changed)
+	social_account_search_input.text_submitted.connect(_on_social_account_search_submitted)
+	vbox.add_child(social_account_search_input)
+	social_account_search_results = VBoxContainer.new()
+	social_account_search_results.name = "SocialAccountSearchResults"
+	social_account_search_results.add_theme_constant_override("separation", 6)
+	social_account_search_results.visible = false
+	vbox.add_child(social_account_search_results)
+	return card
 
 
 func _make_social_rail_card(node_name: String, title: String) -> PanelContainer:

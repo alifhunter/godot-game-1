@@ -645,6 +645,10 @@ func _apply_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, 
 			"message": str(dialog_selection.get("message", "That conversation needs another step first.")),
 			"blocked_reason": str(dialog_selection.get("blocked_reason", ""))
 		}
+	var selected_dialog_row: Dictionary = dialog_selection.get("row", {}) if typeof(dialog_selection.get("row", {})) == TYPE_DICTIONARY else {}
+	var resolved_player_text: String = player_reply_text.strip_edges()
+	if resolved_player_text.is_empty() and not selected_dialog_row.is_empty():
+		resolved_player_text = str(selected_dialog_row.get("player_text", "")).strip_edges()
 	var next_repeat_count: int = _dialog_next_repeat_count(dialog_branch, str(dialog_selection.get("option_id", action_id)), action_id, run_state.day_index)
 	var soft_cooldown: bool = next_repeat_count >= 2
 	var gain_multiplier: float = 1.0
@@ -676,17 +680,18 @@ func _apply_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, 
 	state["account_states"] = account_states
 
 	var reply_text: String = ""
-	if unfollowed_attention_nudge:
-		reply_text = _unfollowed_ask_reply_text(account, post, thesis, account_state, dialog_selection, run_state.day_index)
-	elif soft_cooldown:
+	if soft_cooldown:
 		reply_text = _dialog_cooldown_reply_text(account, dialog_selection, run_state.day_index)
+	elif _should_correct_no_post_reference(account, resolved_player_text):
+		reply_text = _no_post_self_aware_reply_text(account, post, thesis, account_state, dialog_selection, run_state.day_index)
+	elif unfollowed_attention_nudge:
+		reply_text = _unfollowed_ask_reply_text(account, post, thesis, account_state, dialog_selection, run_state.day_index)
 	else:
 		reply_text = _dialog_reply_text(feed_data, account, post, account_state, thesis, dialog_selection, run_state.day_index)
 	if reply_text.is_empty():
 		reply_text = _reply_text(feed_data, account, post, account_state, action_id, thesis, run_state.day_index, gain_multiplier)
 	if not post_id.is_empty():
 		_record_post_reply(state, post_id, account_id, action_id, player_reply_text, reply_text, run_state.day_index, relationship_delta, exposure_delta, credibility_delta, account_state)
-	var resolved_player_text: String = player_reply_text.strip_edges()
 	if is_private:
 		if resolved_player_text.is_empty():
 			resolved_player_text = _player_message_text(action_id, thesis, post)
@@ -862,6 +867,7 @@ func _tree_dialog_options(feed_data: Dictionary, account: Dictionary, account_st
 			player_text = _render_dialog_pool(player_lines, context, "%s|%s|%s|%d" % [str(account.get("id", "")), tree_id, str(option.get("id", "")), day_index])
 		else:
 			player_text = _dialog_option_blocked_text(option, action_id, block_reason, context, "%s|%s|%s|blocked|%d" % [str(account.get("id", "")), tree_id, str(option.get("id", "")), day_index])
+		player_text = _self_aware_player_text(account, player_text, "%s|%s|%s|self-aware|%d" % [str(account.get("id", "")), tree_id, str(option.get("id", "")), day_index])
 		rows.append({
 			"id": action_id,
 			"label": str(option.get("label", ACTION_DEFINITIONS.get(action_id, {}).get("label", action_id.capitalize()))),
@@ -967,6 +973,16 @@ func _dialog_option_action_id(option: Dictionary, is_private: bool) -> String:
 
 
 func _resolve_dialog_selection(feed_data: Dictionary, account: Dictionary, account_state: Dictionary, post: Dictionary, thesis_rows: Array, branch: Dictionary, is_private: bool, action_id: String, thesis_id: String, player_text: String, day_index: int) -> Dictionary:
+	var cooldown_reason: String = _dialog_cooldown_reason(branch, day_index)
+	if not cooldown_reason.is_empty():
+		return {
+			"found": false,
+			"blocked_reason": cooldown_reason,
+			"message": _dialog_cooldown_reply_text(account, {"option_id": action_id}, day_index),
+			"option_id": action_id,
+			"next_node": "",
+			"account_replies": []
+		}
 	var rows: Array = _tree_dialog_options(feed_data, account, account_state, post, thesis_rows, branch, is_private, day_index)
 	var selected_row: Dictionary = {}
 	var blocked_row: Dictionary = {}
@@ -1100,6 +1116,22 @@ func _dialog_cooldown_reply_text(account: Dictionary, selection: Dictionary, day
 	return _render_dialog_pool(pool, context, "%s|%s|%d" % [str(account.get("id", "")), str(selection.get("option_id", "")), day_index])
 
 
+func _no_post_self_aware_reply_text(account: Dictionary, post: Dictionary, thesis: Dictionary, account_state: Dictionary, selection: Dictionary, day_index: int) -> String:
+	var pool: Array = [
+		"I have not posted anything here yet, so do not praise imaginary posts. Ask me about the lead or bring a source.",
+		"Zero public posts from me so far. If you want a useful read, start with the actual lead.",
+		"I have not posted a public note here. Useful conversation starts with the source in front of us.",
+		"Odd compliment. I have no public posts here yet, so keep the question tied to what you can verify."
+	]
+	var context: Dictionary = _dialog_context(account, account_state, post, thesis)
+	return _render_dialog_pool(pool, context, "%s|%s|no_posts|%d|%d" % [
+		str(account.get("id", "")),
+		str(selection.get("option_id", "")),
+		day_index,
+		int(account_state.get("interaction_count", 0))
+	])
+
+
 func _record_dialog_branch_progress(state: Dictionary, scope: String, key_id: String, branch: Dictionary, selection: Dictionary, repeat_count: int, soft_cooldown: bool, day_index: int) -> void:
 	if key_id.is_empty() or not bool(selection.get("found", false)):
 		return
@@ -1154,7 +1186,8 @@ func _dialog_context(account: Dictionary, account_state: Dictionary, post: Dicti
 		"thesis_title": str(thesis.get("title", "my thesis")),
 		"stage": str(account_state.get("relationship_stage", "stranger")),
 		"relationship": str(account_state.get("relationship", 0)),
-		"likes_given": str(account_state.get("likes_given", 0))
+		"likes_given": str(account_state.get("likes_given", 0)),
+		"public_post_count": str(_account_public_post_count(account))
 	}
 
 
@@ -1163,6 +1196,38 @@ func _render_dialog_pool(pool: Array, context: Dictionary, seed: String) -> Stri
 	if clean_pool.is_empty():
 		return "I want to keep this clean and evidence-first."
 	return _render_template(str(clean_pool[int(abs(hash(seed))) % clean_pool.size()]), context)
+
+
+func _self_aware_player_text(account: Dictionary, player_text: String, seed: String) -> String:
+	if not _should_correct_no_post_reference(account, player_text):
+		return player_text
+	var pool: Array = [
+		"I found you through this lead, not through your posts. Can we compare notes without turning it into a shortcut?",
+		"You do not have public posts here yet, so I want to ask about the lead directly and keep it evidence-first.",
+		"I have not seen public posts from you here. Can we start with what can actually be verified?"
+	]
+	return _render_dialog_pool(pool, _dialog_context(account, {}, {}, {}), seed)
+
+
+func _should_correct_no_post_reference(account: Dictionary, text: String) -> bool:
+	if _account_public_post_count(account) > 0:
+		return false
+	return _text_references_account_posts(text)
+
+
+func _text_references_account_posts(text: String) -> bool:
+	var clean_text: String = text.strip_edges().to_lower()
+	if clean_text.is_empty():
+		return false
+	return clean_text.contains("your posts") or clean_text.contains("your post") or clean_text.contains("your twoots") or clean_text.contains("your twoot")
+
+
+func _account_public_post_count(account: Dictionary) -> int:
+	if account.has("public_post_count"):
+		return max(int(account.get("public_post_count", 0)), 0)
+	if bool(account.get("has_public_posts", false)):
+		return 1
+	return 0
 
 
 func _post_interaction_options(post: Dictionary, _account_state: Dictionary, _daily_action: Dictionary, _thesis_rows: Array, day_index: int, interaction: Dictionary) -> Array:
@@ -1183,6 +1248,8 @@ func _post_interaction_options(post: Dictionary, _account_state: Dictionary, _da
 
 func _reply_dialog_options(feed_data: Dictionary, post: Dictionary, account: Dictionary, account_state: Dictionary, interaction: Dictionary, branch: Dictionary, thesis_rows: Array, daily_action: Dictionary, day_index: int) -> Array:
 	if bool(interaction.get("concluded", false)) or int(interaction.get("conversation_step", 0)) >= PUBLIC_CHAIN_MAX_STEP:
+		return []
+	if not _dialog_cooldown_reason(branch, day_index).is_empty():
 		return []
 	var tree_rows: Array = _tree_dialog_options(feed_data, account, account_state, post, thesis_rows, branch, false, day_index, daily_action)
 	if not tree_rows.is_empty():
@@ -1556,6 +1623,8 @@ func _public_topic_text(post: Dictionary) -> String:
 
 
 func _message_dialog_options(feed_data: Dictionary, account: Dictionary, account_state: Dictionary, thread: Dictionary, branch: Dictionary, shareable_theses: Array, daily_action: Dictionary, day_index: int) -> Array:
+	if not _dialog_cooldown_reason(branch, day_index).is_empty():
+		return []
 	var tree_rows: Array = _tree_dialog_options(feed_data, account, account_state, {}, shareable_theses, branch, true, day_index, daily_action)
 	if not tree_rows.is_empty():
 		return tree_rows
@@ -1593,10 +1662,12 @@ func _message_dialog_options(feed_data: Dictionary, account: Dictionary, account
 		if action_def.is_empty():
 			continue
 		var candidate_thesis: Dictionary = thesis if action_id == "share_thesis" else {}
+		var player_text: String = _player_private_message_text(account, action_id, candidate_thesis, thread_rows.size(), day_index)
+		player_text = _self_aware_player_text(account, player_text, "%s|%s|fallback|%d|%d" % [str(account.get("id", "")), action_id, thread_rows.size(), day_index])
 		rows.append({
 			"id": action_id,
 			"label": str(action_def.get("label", action_id.capitalize())),
-			"player_text": _player_private_message_text(account, action_id, candidate_thesis, thread_rows.size(), day_index),
+			"player_text": player_text,
 			"thesis_id": str(candidate.get("thesis_id", "")),
 			"cost_ap": 1,
 			"enabled": true

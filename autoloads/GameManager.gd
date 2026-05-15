@@ -4750,6 +4750,7 @@ func _build_twooter_base_snapshot(unlocked_access_tier: int = -1) -> Dictionary:
 		unlocked_access_tier
 	)
 	snapshot["accounts"] = _merge_network_twooter_accounts(snapshot.get("accounts", []))
+	_annotate_twooter_account_post_counts(snapshot)
 	return snapshot
 
 
@@ -4776,6 +4777,28 @@ func _merge_network_twooter_accounts(accounts: Array) -> Array:
 		seen[account_id] = true
 		rows.append(account)
 	return rows
+
+
+func _annotate_twooter_account_post_counts(snapshot: Dictionary) -> void:
+	var post_counts: Dictionary = {}
+	for post_value in snapshot.get("posts", []):
+		if typeof(post_value) != TYPE_DICTIONARY:
+			continue
+		var account_id: String = str(post_value.get("account_id", ""))
+		if account_id.is_empty():
+			continue
+		post_counts[account_id] = int(post_counts.get(account_id, 0)) + 1
+	var accounts: Array = []
+	for account_value in snapshot.get("accounts", []):
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var account: Dictionary = account_value.duplicate(true)
+		var account_id: String = str(account.get("id", ""))
+		var post_count: int = int(post_counts.get(account_id, 0))
+		account["public_post_count"] = post_count
+		account["has_public_posts"] = post_count > 0
+		accounts.append(account)
+	snapshot["accounts"] = accounts
 
 
 func _after_twooter_interaction(spent_ap: bool, changed_network: bool, autosave_reason: String) -> void:
