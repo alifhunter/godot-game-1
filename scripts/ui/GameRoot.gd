@@ -3139,7 +3139,7 @@ func _refresh_desktop() -> void:
 		desktop_title_label.text = "Gorengan OS"
 		desktop_date_label.text = "No active run"
 		desktop_subtitle_label.text = "Boot a run from the main menu to bring the terminal online."
-		desktop_hint_label.text = "Desktop icons launch apps. STOCKBOT trades, News reads the event tape, Twooter surfaces chatter, Network manages contacts, Academy is coming soon, and Settings handles save/load."
+		desktop_hint_label.text = "Desktop icons launch apps. STOCKBOT trades, News reads the event tape, Twooter surfaces chatter, Network manages contacts, Academy teaches concepts, and Settings handles save/load."
 		taskbar_status_label.text = "No active run loaded."
 		_refresh_build_number_labels()
 		taskbar_clock_label.text = "MENU"
@@ -3159,7 +3159,7 @@ func _refresh_desktop() -> void:
 		GameManager.get_current_difficulty_label(),
 		_format_currency(RunState.get_total_equity())
 	]
-	desktop_hint_label.text = "STOCKBOT is live. News renders event-driven intel feeds, Twooter shows public market chatter, Network tracks contacts, Academy is coming soon, Company unlocks with majority control, and Settings handles save/load."
+	desktop_hint_label.text = "STOCKBOT is live. News renders event-driven intel feeds, Twooter shows public market chatter, Network tracks contacts, Academy teaches concepts, Company unlocks with majority control, and Settings handles save/load."
 	taskbar_status_label.text = _append_save_status(_build_taskbar_status_text(focus_snapshot))
 	_refresh_build_number_labels()
 	taskbar_clock_label.text = "DAY %d  |  %s" % [
@@ -16318,14 +16318,18 @@ func _guide_step_completed(snapshot: Dictionary) -> bool:
 					return active_app_id == APP_ID_STOCK and _current_work_tab_title() == "Chart" and guide_technical_tool_action_seen
 		RunState.GUIDE_FLOW_SYSTEM.FLOW_THESIS:
 			match step_id:
+				"capture_evidence":
+					return _guide_research_tray_count() > 0
 				"open_thesis":
-					return active_app_id == APP_ID_THESIS and (guide_thesis_subject_chosen or _guide_any_open_thesis())
+					return active_app_id == APP_ID_THESIS
 				"create_thesis":
+					return guide_thesis_create_action_seen
+				"save_thesis":
 					return _guide_any_open_thesis()
 				"add_evidence":
-					return _guide_any_thesis_evidence_count() >= 2
+					return _guide_any_thesis_evidence_count() >= 1
 				"generate_or_defer":
-					return _guide_any_thesis_evidence_count() >= 2
+					return _guide_any_thesis_evidence_count() >= 1
 		RunState.GUIDE_FLOW_SYSTEM.FLOW_LIFE_FINANCE:
 			match step_id:
 				"open_life":
@@ -16415,7 +16419,7 @@ func _ftue_step_copy(step_id: String) -> Dictionary:
 			return {
 				"title": "Your Next Loop",
 				"objective": "Choose the next tool when you are ready.",
-				"body": "Portfolio audits fills, Thesis records your reason, Life tracks runway, and Network grows through News, referrals, and RUPSLB room leads. Academy is coming soon."
+				"body": "Portfolio audits fills, Thesis records your reason, Life tracks runway, Network grows through News, referrals, and RUPSLB room leads, and Academy explains concepts when you need them."
 			}
 	return {
 		"title": "Guided Start",
@@ -16501,6 +16505,8 @@ func _guide_required_app_for_step(flow_id: String, step_id: String) -> String:
 		RunState.GUIDE_FLOW_SYSTEM.FLOW_FUNDAMENTAL, RunState.GUIDE_FLOW_SYSTEM.FLOW_TECHNICAL:
 			return APP_ID_STOCK
 		RunState.GUIDE_FLOW_SYSTEM.FLOW_THESIS:
+			if step_id == "capture_evidence":
+				return APP_ID_STOCK
 			return APP_ID_THESIS
 		RunState.GUIDE_FLOW_SYSTEM.FLOW_LIFE_FINANCE:
 			return APP_ID_LIFE
@@ -16576,14 +16582,27 @@ func _guide_target_for_step(flow_id: String, step_id: String) -> Control:
 				return pattern_button if pattern_button != null else work_tabs
 			return work_tabs
 		RunState.GUIDE_FLOW_SYSTEM.FLOW_THESIS:
+			if step_id == "capture_evidence":
+				if active_app_id != APP_ID_STOCK:
+					return stock_app_button
+				if active_section_id != "markets":
+					return markets_button
+				if _current_work_tab_title() != "Key Stats":
+					return work_tabs
+				return work_tabs
 			if active_app_id != APP_ID_THESIS:
 				return thesis_app_button
 			if step_id == "open_thesis":
-				return _guide_thesis_subject_target()
+				return thesis_window
 			if step_id == "create_thesis":
+				return thesis_window.find_child("ThesisCreateButton", true, false) as Control
+			if step_id == "save_thesis":
 				var save_button: Control = thesis_window.find_child("ThesisUpdateButton", true, false) as Control
 				return save_button if save_button != null and save_button.is_visible_in_tree() else thesis_window.find_child("ThesisCreateButton", true, false) as Control
 			if step_id == "add_evidence":
+				var attached_scroll: Control = thesis_window.find_child("ThesisAttachedEvidenceScroll", true, false) as Control
+				if attached_scroll != null and attached_scroll.is_visible_in_tree():
+					return attached_scroll
 				return thesis_window.find_child("ThesisEvidenceCardGrid", true, false) as Control
 			if step_id == "generate_or_defer":
 				return thesis_window.find_child("ThesisGenerateReportButton", true, false) as Control
@@ -16895,6 +16914,10 @@ func _guide_any_open_thesis() -> bool:
 		if str(thesis.get("status", "open")) != "closed":
 			return true
 	return false
+
+
+func _guide_research_tray_count() -> int:
+	return GameManager.get_research_tray_snapshot().get("rows", []).size()
 
 
 func _guide_any_thesis_evidence_count() -> int:
@@ -17298,13 +17321,13 @@ func _first_hour_guide_step_copy(step_id: String, snapshot: Dictionary) -> Dicti
 		"create_thesis":
 			var thesis_status: String = ""
 			if active_app_id != APP_ID_THESIS:
-				thesis_status = "Open Thesis, then fill a short title and press Create."
+				thesis_status = "Capture one useful fact first if the tray is empty, then open Thesis Board."
 			else:
-				thesis_status = "Fill a short title and press Create; the report can wait."
+				thesis_status = "Press Create Thesis, pick the stock, stance, and timeframe, then save the draft. The generated thesis can wait."
 			return {
 				"title": "Loop Guide: Thesis",
-				"objective": "Create a simple thesis for %s." % ticker_text,
-				"body": "A thesis is just your reason for holding. Create one now; the full 7 AP report is optional and can wait.",
+				"objective": "Turn captured evidence into a simple thesis for %s." % ticker_text,
+				"body": "The new thesis flow starts from Research Tray evidence. Capture a real stat, chart read, article, or flow row, then arrange it in Thesis Board.",
 				"status": thesis_status
 			}
 		"add_watchlist":
@@ -17356,7 +17379,7 @@ func _first_hour_guide_step_copy(step_id: String, snapshot: Dictionary) -> Dicti
 			return {
 				"title": "Loop Guide Complete",
 				"objective": "Choose your next longer-term goal.",
-				"body": "Useful goals: build a 3-stock watchlist, survive the first month, generate a thesis report, attend another RUPSLB, or grow portfolio value. Academy is coming soon."
+				"body": "Useful goals: build a 3-stock watchlist, capture stronger thesis evidence, generate a thesis, read one Academy lesson, attend another RUPSLB, or grow portfolio value."
 			}
 	return {
 		"title": "Loop Guide",
@@ -19888,7 +19911,7 @@ func _build_tutorial_text() -> String:
 
 
 func _build_help_text() -> String:
-	return "OVERVIEW\nThe desktop is your trading desk. Apps can be opened, moved, and revisited as the market changes.\n\nOBJECTIVE\nFind one readable setup, size lightly, advance the day, then learn from the recap.\n\nSECTIONS\n%s\n\n%s\n\n%s\n\nFIRST LOOP\n1. Open STOCKBOT from the desktop.\n2. Pick one stock to study.\n3. Use Key Stats, Financials, Broker, or Profile before buying.\n4. Buy a small starter lot from the order ticket.\n5. Press Advance Day and read the Daily Recap.\n6. Use Portfolio, Thesis, Life, and Network for the next decision. Academy is coming soon.\n\nGUIDED FIRST WEEK\nAfter the first loop, the Loop Guide nudges you to review Portfolio, create a Thesis, keep a Watchlist, read market context, attend a low-stakes RUPSLB, and approach one room lead.\n\nNOTES\nUse sector context to decide whether a stock is moving with its group or fighting it.\nNewest fills appear first in Trade History so you can audit lots, fees, cash impact, and realized P/L.\n\nCURRENT DIFFICULTY\n%s" % [
+	return "OVERVIEW\nThe desktop is your trading desk. Apps can be opened, moved, and revisited as the market changes.\n\nOBJECTIVE\nFind one readable setup, size lightly, advance the day, then learn from the recap.\n\nSECTIONS\n%s\n\n%s\n\n%s\n\nFIRST LOOP\n1. Open STOCKBOT from the desktop.\n2. Pick one stock to study.\n3. Use Key Stats, Financials, Broker, or Profile before buying.\n4. Buy a small starter lot from the order ticket.\n5. Press Advance Day and read the Daily Recap.\n6. Use Portfolio, Thesis, Life, Network, and Academy for the next decision.\n\nGUIDED FIRST WEEK\nAfter the first loop, the Loop Guide nudges you to review Portfolio, create a Thesis, keep a Watchlist, read market context, attend a low-stakes RUPSLB, and approach one room lead.\n\nNOTES\nUse sector context to decide whether a stock is moving with its group or fighting it.\nNewest fills appear first in Trade History so you can audit lots, fees, cash impact, and realized P/L.\n\nCURRENT DIFFICULTY\n%s" % [
 		_sidebar_hint_for_section("dashboard"),
 		_sidebar_hint_for_section("markets"),
 		_sidebar_hint_for_section("portfolio"),
@@ -20561,7 +20584,7 @@ func _build_taskbar_status_text(focus_snapshot: Dictionary) -> String:
 		return "Company open  |  Majority-control agenda tools online."
 	if active_app_id == APP_ID_UPGRADES:
 		return "Upgrades open  |  Spend cash to improve your desk."
-	return "Desktop ready  |  Open STOCKBOT, News, Twooter, Network, Thesis, Life, Company, Shop, or Settings. Academy is coming soon."
+	return "Desktop ready  |  Open STOCKBOT, News, Twooter, Network, Academy, Thesis, Life, Company, Shop, or Settings."
 
 
 func _section_label(section_id: String) -> String:

@@ -4530,14 +4530,6 @@
           "feedback_wrong": "A plan needs entry, invalidation, target, and position size."
         }
       ]
-    },
-    {
-      "id": "transactional",
-      "label": "Transactional",
-      "status": "coming_soon",
-      "summary": "Practice order execution, sizing, scaling, exits, and post-trade review.",
-      "coming_soon_copy": "Coming soon. This academy track will cover transaction planning, sizing, execution discipline, and review.",
-      "sections": []
     }
   ],
   "glossary": [

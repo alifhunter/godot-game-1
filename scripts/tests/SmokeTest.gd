@@ -2987,17 +2987,36 @@ func _validate_progressive_guide_flow() -> Dictionary:
 	guide_state = game_root.call("get_guide_smoke_state")
 	if str(guide_state.get("current_flow_id", "")) != "thesis_flow":
 		return await _guide_smoke_fail(game_root, "Smoke test expected opening Thesis Board to prompt thesis_flow, got %s." % str(guide_state))
-	if str(guide_state.get("current_step_id", "")) != "open_thesis" or str(guide_state.get("progress", "")).find("Step 1 of 5") < 0:
-		return await _guide_smoke_fail(game_root, "Smoke test expected opening Thesis Board to start at Step 1 until a company is chosen, got %s." % str(guide_state))
+	if str(guide_state.get("current_step_id", "")) != "capture_evidence" or str(guide_state.get("progress", "")).find("Step 1 of 7") < 0:
+		return await _guide_smoke_fail(game_root, "Smoke test expected the new thesis_flow to start by asking for captured Research Tray evidence, got %s." % str(guide_state))
+	var guide_capture_result: Dictionary = GameManager.capture_research_evidence({
+		"source_type": "key_stats",
+		"company_id": guide_company_id,
+		"label": "Guide captured metric",
+		"value": "Improving",
+		"detail": "Guide smoke captured evidence.",
+		"source_id": "guide_ftue_metric",
+		"category": "profitability"
+	})
+	if not bool(guide_capture_result.get("success", false)):
+		return await _guide_smoke_fail(game_root, "Smoke test expected thesis_flow setup to capture one Research Tray item.")
+	await _guide_smoke_wait(10)
+	guide_state = game_root.call("get_guide_smoke_state")
+	if str(guide_state.get("current_step_id", "")) == "open_thesis":
+		thesis_app_button.emit_signal("pressed")
+		await _guide_smoke_wait(8)
+		guide_state = game_root.call("get_guide_smoke_state")
+	if str(guide_state.get("current_step_id", "")) != "create_thesis" or str(guide_state.get("progress", "")).find("Step 3 of 7") < 0:
+		return await _guide_smoke_fail(game_root, "Smoke test expected captured evidence plus open Thesis Board to advance to the draft step, got %s." % str(guide_state))
 	var thesis_create_intro_button: Button = game_root.find_child("ThesisCreateButton", true, false) as Button
 	if thesis_create_intro_button == null:
-		return await _guide_smoke_fail(game_root, "Smoke test expected thesis_flow Step 1 to expose the Create Thesis button, got %s." % str(guide_state))
+		return await _guide_smoke_fail(game_root, "Smoke test expected thesis_flow draft step to expose the Create Thesis button, got %s." % str(guide_state))
 	thesis_create_intro_button.emit_signal("pressed")
 	await _guide_smoke_wait(6)
 	guide_state = game_root.call("get_guide_smoke_state")
 	thesis_company_option = game_root.find_child("ThesisCompanyOption", true, false) as OptionButton
 	if thesis_company_option == null or not thesis_company_option.is_visible_in_tree():
-		return await _guide_smoke_fail(game_root, "Smoke test expected thesis_flow Step 1 to show the company selector after opening the builder, got %s." % str(guide_state))
+		return await _guide_smoke_fail(game_root, "Smoke test expected thesis_flow to show the company selector after opening the builder, got %s." % str(guide_state))
 	if thesis_company_option != null and thesis_company_option.item_count > 0:
 		thesis_company_option.select(0)
 		thesis_company_option.emit_signal("item_selected", 0)
@@ -3005,19 +3024,20 @@ func _validate_progressive_guide_flow() -> Dictionary:
 		game_root.call("_mark_guide_thesis_subject_chosen")
 	await _guide_smoke_wait(6)
 	guide_state = game_root.call("get_guide_smoke_state")
-	if str(guide_state.get("current_step_id", "")) != "create_thesis" or str(guide_state.get("progress", "")).find("Step 2 of 5") < 0:
-		return await _guide_smoke_fail(game_root, "Smoke test expected choosing a Thesis company to move to Step 2, got %s." % str(guide_state))
+	if str(guide_state.get("current_step_id", "")) != "save_thesis" or str(guide_state.get("progress", "")).find("Step 4 of 7") < 0:
+		return await _guide_smoke_fail(game_root, "Smoke test expected starting a Thesis draft to move to the save-frame step, got %s." % str(guide_state))
 	var thesis_result: Dictionary = GameManager.create_thesis(guide_company_id, "bullish", "swing", "Guide Smoke Thesis")
 	if not bool(thesis_result.get("success", false)):
 		return await _guide_smoke_fail(game_root, "Smoke test expected thesis_flow to create a thesis for the guide company.")
 	await _guide_smoke_wait(6)
 	guide_state = game_root.call("get_guide_smoke_state")
 	var thesis_completed_steps: Array = guide_state.get("completed_step_ids", {}).get("thesis_flow", [])
-	if str(guide_state.get("current_step_id", "")) != "add_evidence" or not thesis_completed_steps.has("create_thesis"):
-		return await _guide_smoke_fail(game_root, "Smoke test expected creating a thesis to advance thesis_flow to evidence, got %s." % str(guide_state))
+	if str(guide_state.get("current_step_id", "")) != "add_evidence" or not thesis_completed_steps.has("save_thesis"):
+		return await _guide_smoke_fail(game_root, "Smoke test expected saving a thesis frame to advance thesis_flow to evidence, got %s." % str(guide_state))
 	var thesis_id: String = str(thesis_result.get("thesis", {}).get("id", ""))
-	GameManager.add_thesis_evidence(thesis_id, {"category": "fundamental", "category_label": "Fundamental", "label": "Profitability", "value": "Improving", "detail": "Guide smoke evidence.", "source_label": "Key Stats", "impact": "positive"})
-	GameManager.add_thesis_evidence(thesis_id, {"category": "price_action", "category_label": "Price Action", "label": "Trend", "value": "Constructive", "detail": "Guide smoke chart evidence.", "source_label": "Chart", "impact": "positive"})
+	var guide_attach_result: Dictionary = GameManager.attach_research_evidence_to_thesis(thesis_id, str(guide_capture_result.get("evidence", {}).get("id", "")), "support")
+	if not bool(guide_attach_result.get("success", false)):
+		return await _guide_smoke_fail(game_root, "Smoke test expected thesis_flow to attach captured Research Tray evidence.")
 	game_root.call("_refresh_ftue_progress")
 	await _guide_smoke_wait(8)
 	handoff_ok = await _guide_smoke_press_handoff(game_root)
@@ -3059,8 +3079,10 @@ func _validate_progressive_guide_flow() -> Dictionary:
 	academy_app_button.emit_signal("pressed")
 	await _guide_smoke_wait(4)
 	guide_state = game_root.call("get_guide_smoke_state")
-	if game_root.call("is_desktop_app_open", "academy") or str(guide_state.get("current_flow_id", "")) == "academy_flow":
-		return await _guide_smoke_fail(game_root, "Smoke test expected Academy to be release-locked instead of opening or prompting academy_flow, got %s." % str(guide_state))
+	if not game_root.call("is_desktop_app_open", "academy") or game_root.get_active_desktop_app_id() != "academy":
+		return await _guide_smoke_fail(game_root, "Smoke test expected Academy to reopen from the desktop shortcut, got %s." % str(guide_state))
+	game_root.close_desktop_app("academy")
+	await _guide_smoke_wait(3)
 
 	GameManager.start_guide_flow("corporate_event_flow")
 	game_root.call("_refresh_ftue_progress")
@@ -3075,8 +3097,8 @@ func _validate_progressive_guide_flow() -> Dictionary:
 	await _guide_smoke_wait(3)
 	var academy_flow_token: String = str(game_root.call("_node_token", "academy_flow"))
 	var academy_flow_button: Button = game_root.find_child("GuideHubStart%sButton" % academy_flow_token, true, false) as Button
-	if academy_flow_button == null or academy_flow_button.text != "Soon" or not academy_flow_button.disabled:
-		return await _guide_smoke_fail(game_root, "Smoke test expected Guide Hub to show Academy as a disabled coming-soon guide.")
+	if academy_flow_button == null or academy_flow_button.text != "Start" or academy_flow_button.disabled:
+		return await _guide_smoke_fail(game_root, "Smoke test expected Guide Hub to show Academy as an available guide.")
 	var research_flow_token: String = str(game_root.call("_node_token", "research_flow"))
 	var restart_research_button: Button = game_root.find_child("GuideHubStart%sButton" % research_flow_token, true, false) as Button
 	if restart_research_button == null or restart_research_button.text != "Restart":
@@ -7746,19 +7768,19 @@ func _run_scenario(
 	var academy_label_text: String = str(academy_app_label.text if academy_app_label != null else "<missing>")
 	var academy_tooltip_text: String = str(academy_app_button.tooltip_text if academy_app_button != null else "<missing>")
 	if (
-		academy_available or
+		not academy_available or
 		academy_window_missing or
-		academy_window_visible or
-		academy_app_open or
-		academy_active_app == "academy" or
+		not academy_window_visible or
+		not academy_app_open or
+		academy_active_app != "academy" or
 		academy_app_label == null or
-		academy_label_text.find("COMING SOON") < 0
+		academy_label_text.find("COMING SOON") != -1
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the Academy icon to stay visible but release-locked as Coming Soon. available=%s window_null=%s window_visible=%s app_open=%s active=%s label=%s tooltip=%s" % [
+			"message": "Smoke test expected the Academy icon to open the Academy window. available=%s window_null=%s window_visible=%s app_open=%s active=%s label=%s tooltip=%s" % [
 				str(academy_available),
 				str(academy_window_missing),
 				str(academy_window_visible),
@@ -7849,13 +7871,19 @@ func _run_scenario(
 			"message": "Smoke test expected Academy quiz dropdowns and submit buttons to use readable contrast."
 		}
 
-	var coming_soon_snapshot: Dictionary = GameManager.get_academy_snapshot("transactional", "")
-	if not bool(coming_soon_snapshot.get("coming_soon", false)):
+	var transactional_category_found: bool = false
+	for category_value in DataRepository.get_academy_catalog().get("categories", []):
+		if typeof(category_value) != TYPE_DICTIONARY:
+			continue
+		var category_row: Dictionary = category_value
+		if str(category_row.get("id", "")) == "transactional":
+			transactional_category_found = true
+	if transactional_category_found:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected unavailable Academy categories to show coming-soon states."
+			"message": "Smoke test expected the removed Transactional Academy tab to stay out of the catalog."
 		}
 
 	var mindset_academy_snapshot: Dictionary = GameManager.get_academy_snapshot("mindset", "")

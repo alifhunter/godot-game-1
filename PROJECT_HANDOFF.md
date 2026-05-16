@@ -3,7 +3,7 @@
 Read this file first in the next session.
 
 ## Project Snapshot
-- Engine target: Godot `4.6.1`; current active Windows verifier is `C:\Users\Alif\Desktop\Godot_v4.6.1-stable_win64_console.exe`
+- Engine target: Godot `4.6.x`; current active Windows verifier is `C:\Users\Alif\Desktop\Godot_v4.6.2-stable_win64_console.exe` (`4.6.1` Desktop verifier path was not present in the latest Windows session)
 - Current active Windows project path: `c:\Users\Alif\Documents\godot game 1\new-game-project`
 - Previous Mac continuation path: `/Users/user/Documents/gorengangame/godot-game-1`; Mac CLI was Godot `4.6.2.stable.official.71f334935` via `~/.local/bin/godot` / `~/.local/bin/godot4`
 - Current milestone: `first playable prototype`
@@ -44,12 +44,17 @@ Read this file first in the next session.
     - `7fafa87 Harden Twooter source messaging loop`
     - `03f118e Polish Twooter account interactions`
     - `6367067 Expand Twooter social progression`
-    - latest checkpoint message: `Expand Twooter social progression`
-  - `6367067` was the last pushed clean checkpoint, but the current Windows worktree now contains uncommitted Thesis/Research Tray, Network, and Twooter follow-up work; run `git status --short` before editing and do not assume a clean tree
+    - `cf841ae Build Research Tray thesis workflow`
+    - latest checkpoint message after this cleanup batch: `Reopen Academy and update Thesis FTUE`
+  - `cf841ae` was the last pushed clean checkpoint before the Academy/FTUE cleanup batch; run `git status --short` before editing and preserve any user work if the tree is dirty
   - `systems/TwooterInteractionSystem.gd` is tracked and owns the mutable Twooter relationship/message/dialogue layer; Python validator `__pycache__/` folders are disposable local artifacts
   - current local note: formatter locals that previously shadowed Godot's built-in `sign()` are now renamed to `sign_prefix`
 
 ## Latest Session Snapshot
+- 2026-05-16 Academy/FTUE cleanup batch: Academy is reopened by clearing `GuideFlowSystem.RELEASE_LOCKED_FLOW_IDS`; the desktop icon opens the Academy window again, Guide Hub shows Academy as `Start`, and stale `Academy is coming soon` desktop/help/guide copy was replaced with normal Academy wording. `GameManager.get_academy_release_message()` now only acts as future fallback copy.
+- The Academy `Transactional` category was removed from `data/academy/academy_catalog.json`; the active Academy category set is now `mindset`, `fundamental`, `corporate_action`, and `technical`. Smoke expectations now assert the removed `transactional` tab stays out of the catalog instead of expecting it as a coming-soon category.
+- Thesis FTUE/Guide Flow now matches the Research Tray redesign. `thesis_flow` starts with `capture_evidence`, then `open_thesis`, `create_thesis`, `save_thesis`, `add_evidence`, `generate_or_defer`, and `handoff`. The guide asks players to capture a real metric/chart/article/flow row first, then open Thesis Board, start a draft, save stock/stance/timeframe, attach captured evidence, and generate or defer the thesis. Fundamental and Technical guide handoff copy now explicitly points useful rows/patterns toward Research Tray capture.
+- Verification for the Academy/FTUE cleanup batch: `git diff --check` passed, Academy catalog JSON parsed through PowerShell `ConvertFrom-Json`, Windows Godot `4.6.2` headless project load exited `0`, and a quick-smoke attempt got past the updated Thesis FTUE path before hitting the local 180s shell timeout deep later in the suite. The usual non-blocking `res://logs` directory warning still appears when using `--log-file res://logs/...`.
 - 2026-05-16 Thesis/Research Tray redesign pass: Thesis is now a player-captured evidence workflow rather than a generated evidence browser. `RunState.thesis_research_tray` stores compact captured evidence rows, `systems/ThesisEvidenceCaptureSystem.gd` normalizes captures with duplicate-safe `dedupe_key` values, and `GameManager` exposes `get_research_tray_snapshot()`, `capture_research_evidence()`, `attach_research_evidence_to_thesis()`, and `update_thesis_evidence_interpretation()`.
 - Current capture surfaces include Key Stats, broader Financials rows, Company Profile description/free-float/management rows, STOCKBOT chart-pattern claims, Broker Summary rows, STOCKBOT trade/quote panel rows, News headline/article/source-lead captures, Twooter public posts and DMs, and sector/macro context. Capture should feel like inspecting real data: rows use hover/click context menus such as `Add to Research Tray`; duplicate captures return `Already in Research Tray.` instead of adding another row.
 - Thesis Board UI is now simplified: the initial right panel shows step-by-step instruction copy plus `Create Thesis`; after creation the builder asks for stock, stance, timeframe, and title at the top. Evidence selection is a two-column flow with captured Research Tray cards on the left and arranged thesis evidence on the right; dragged/attached evidence defaults to `watch` and can be reclassified as `support`, `risk`, `contradiction`, `watch`, or `invalidation`. Bottom controls stay visible as `Generate Thesis`, `View Thesis`, `Refresh Review`, and `Close Thesis`. After at least one thesis exists, a `Create Thesis` button also appears in the left sidebar above the thesis list so players can start another thesis.
@@ -1155,10 +1160,9 @@ Read this file first in the next session.
   - `Fundamental`
   - `Corporate Action`
   - `Technical`
-  - `Transactional`
 - Current module status:
   - `Mindset`, `Fundamental`, `Corporate Action`, and `Technical` are fully playable modules
-  - `Transactional` is visible but still `Coming soon`
+  - `Transactional` was removed from the catalog and should not appear as a coming-soon tab
 - Current Academy layout:
   - desktop wrapper/title bar is unchanged, but the content area was rebuilt into a course-dashboard shell
   - top category tabs use dark-brown active state and warm bordered inactive tabs
@@ -2196,7 +2200,7 @@ Read this file first in the next session.
   - `News` opens the event-driven desk with outlet buttons and populated stories
   - `Twooter` opens the dark Social Hub with visible `Home` / `Message` sidebar navigation and populated interactable post cards
   - `Academy` desktop icon opens the Academy window
-  - Academy shows the catalog category tabs, including `Mindset`, `Fundamental`, `Corporate Action`, `Technical`, and `Transactional`; Technical exposes eight sections, Mindset exposes fourteen, and Fundamental exposes twenty
+  - Academy shows the catalog category tabs `Mindset`, `Fundamental`, `Corporate Action`, and `Technical`; `Transactional` should stay absent; Technical exposes eight sections, Mindset exposes fourteen, and Fundamental exposes twenty
   - Academy exposes the reserved lesson banner frame and keeps the selected module/action row inside the visible Academy window
   - Academy quiz starts locked and unlocks after the required reading sections are marked read
   - `Thesis Board` desktop icon opens/focuses/closes the Thesis window and settles animation state
@@ -2690,7 +2694,7 @@ Read this file first in the next session.
 - Academy content pipeline:
   - keep `tools/academy_editor/academy_source.json` as the authoring source and export to `data/academy/academy_catalog.json`
   - use `content_blocks` for new lessons; keep legacy `pages` as export compatibility only
-  - build out `Transactional` next if the goal is more teaching content
+  - `Transactional` is intentionally removed for now; if execution/sizing teaching returns, add it deliberately through the editor source or fold the lessons into existing Technical/Fundamental/Corporate Action tracks
   - add real lesson images under `assets/academy/lessons/` only when the layout/content is stable
   - consider a small source/runtime sync check so future edits do not accidentally bypass the editor source
 - Daily loop and desktop UX:

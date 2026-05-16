@@ -1955,7 +1955,7 @@ func is_academy_available() -> bool:
 
 
 func get_academy_release_message() -> String:
-	return "Academy is coming soon for this release while lesson content is being reviewed."
+	return "Open Academy lessons from the desktop."
 
 
 func get_watchlist_company_ids() -> Array:

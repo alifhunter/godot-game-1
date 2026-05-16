@@ -22,9 +22,7 @@ const FLOW_ORDER := [
 	FLOW_ACADEMY
 ]
 
-const RELEASE_LOCKED_FLOW_IDS := {
-	FLOW_ACADEMY: true
-}
+const RELEASE_LOCKED_FLOW_IDS := {}
 
 const CONTEXT_FLOW_IDS := {
 	"watchlist": FLOW_WATCHLIST,
@@ -231,7 +229,7 @@ const FLOW_CATALOG := {
 				"id": "handoff",
 				"title": "Use Evidence",
 				"objective": "Keep or discard the company based on what changed your view.",
-				"body": "If you have a thesis open, add the useful metric as evidence. If not, simply let it guide the next trade decision.",
+				"body": "If the metric matters, click the row and add it to the Research Tray. Thesis Board uses captured facts, not generated evidence lists.",
 				"target_key": "",
 				"action_hint": "Apply the evidence."
 			}
@@ -257,7 +255,7 @@ const FLOW_CATALOG := {
 				"id": "handoff",
 				"title": "Chart Read Complete",
 				"objective": "Use the chart as supporting evidence, not as the whole decision.",
-				"body": "If a thesis exists, add the chart note. Otherwise, combine this read with fundamentals or news before sizing up.",
+				"body": "Capture the pattern into the Research Tray if it changes the story. A thesis gets stronger when chart reads are arranged beside fundamentals, news, and flow.",
 				"target_key": "",
 				"action_hint": "Use the chart read when ready."
 			}
@@ -267,41 +265,59 @@ const FLOW_CATALOG := {
 		"id": FLOW_THESIS,
 		"label": "Thesis Flow",
 		"short_label": "Thesis",
-		"description": "Create a thesis, attach evidence, and decide whether to generate the report now or later.",
+		"description": "Capture evidence from real app surfaces, arrange it in Thesis Board, and decide whether to generate the thesis now or later.",
 		"context_id": "thesis",
 		"steps": [
 			{
+				"id": "capture_evidence",
+				"title": "Capture One Fact",
+				"objective": "Add one real metric, chart read, article, or flow row to the Research Tray.",
+				"body": "The new thesis flow starts outside the board. Inspect a stock in STOCKBOT, then click a useful row or chart claim and choose Add to Research Tray.",
+				"target_key": "research_capture",
+				"required_app": "stock",
+				"action_hint": "Capture one Research Tray item."
+			},
+			{
 				"id": "open_thesis",
-				"title": "Set The Subject",
-				"objective": "Choose the company this thesis is about.",
-				"body": "A thesis starts with a specific name, not a general market feeling.",
-				"target_key": "thesis_company_option",
+				"title": "Open Thesis Board",
+				"objective": "Open Thesis Board after capturing evidence.",
+				"body": "Thesis Board is where captured facts become a memo. It should not be the first place you learn the stock.",
+				"target_key": "thesis_app",
 				"required_app": "thesis",
-				"action_hint": "Choose or load a company."
+				"action_hint": "Open Thesis Board."
 			},
 			{
 				"id": "create_thesis",
-				"title": "Create One Thesis",
-				"objective": "Create a short thesis for the selected or watchlisted company.",
-				"body": "Keep it simple: direction, horizon, and the one reason you care.",
+				"title": "Start A Draft",
+				"objective": "Press Create Thesis to open the builder.",
+				"body": "Start a draft only after something from the market made you curious enough to save it.",
 				"target_key": "thesis_create_button",
 				"required_app": "thesis",
-				"action_hint": "Create a thesis."
+				"action_hint": "Start a thesis draft."
+			},
+			{
+				"id": "save_thesis",
+				"title": "Set The Frame",
+				"objective": "Pick stock, stance, and timeframe, then save the thesis.",
+				"body": "The frame tells the memo what question it is answering: which company, what stance, and over what horizon.",
+				"target_key": "thesis_save_button",
+				"required_app": "thesis",
+				"action_hint": "Save the thesis frame."
 			},
 			{
 				"id": "add_evidence",
-				"title": "Add Evidence",
-				"objective": "Attach at least two evidence items.",
-				"body": "A thesis gets useful when evidence can challenge it later.",
+				"title": "Arrange Evidence",
+				"objective": "Attach at least one captured evidence item.",
+				"body": "Move captured evidence into the thesis board and classify what it means: support, risk, contradiction, watch, or invalidation.",
 				"target_key": "thesis_evidence_grid",
 				"required_app": "thesis",
-				"action_hint": "Add two evidence items."
+				"action_hint": "Attach captured evidence."
 			},
 			{
 				"id": "generate_or_defer",
 				"title": "Report Or Defer",
 				"objective": "Generate the report if it matters now, or defer it for a later day.",
-				"body": "Reports cost attention. It is fine to defer if the thesis only needs a quick note today.",
+				"body": "Generate Thesis spends AP and turns your attached evidence into a memo. It is fine to defer until the board has enough facts.",
 				"target_key": "thesis_report_button",
 				"required_app": "thesis",
 				"action_hint": "Generate or defer the report."
