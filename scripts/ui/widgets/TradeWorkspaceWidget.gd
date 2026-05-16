@@ -452,7 +452,7 @@ func _ensure_pattern_claim_panel() -> void:
 	pattern_feedback_label.custom_minimum_size = Vector2(0, 88)
 	vbox.add_child(pattern_feedback_label)
 
-	var thesis_label: Label = _make_pattern_panel_label("Destination Thesis", COLOR_TEXT, 13)
+	var thesis_label: Label = _make_pattern_panel_label("Research Destination", COLOR_TEXT, 13)
 	vbox.add_child(thesis_label)
 
 	pattern_thesis_option = OptionButton.new()
@@ -464,7 +464,7 @@ func _ensure_pattern_claim_panel() -> void:
 
 	pattern_add_to_thesis_button = Button.new()
 	pattern_add_to_thesis_button.name = "ChartPatternAddToThesisButton"
-	pattern_add_to_thesis_button.text = "Add to Thesis"
+	pattern_add_to_thesis_button.text = "Capture to Research Tray"
 	pattern_add_to_thesis_button.custom_minimum_size = Vector2(0, 36)
 	pattern_add_to_thesis_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pattern_add_to_thesis_button.pressed.connect(_on_add_pattern_to_thesis_pressed)
@@ -538,40 +538,27 @@ func _refresh_pattern_destination_controls(has_claim: bool) -> void:
 		pattern_thesis_option.disabled = true
 		pattern_add_to_thesis_button.disabled = true
 		return
-	_pattern_thesis_rows = GameManager.get_open_theses_for_company(company_id)
-	if _pattern_thesis_rows.is_empty():
-		pattern_thesis_option.add_item("No open thesis")
-		pattern_thesis_option.disabled = true
-		pattern_add_to_thesis_button.disabled = true
-		pattern_add_to_thesis_button.tooltip_text = "Create a thesis for this stock in Thesis Board first."
-		if has_claim:
-			pattern_status_label.text = "Create a thesis for this stock in Thesis Board first."
-		return
-	for thesis_value in _pattern_thesis_rows:
-		if typeof(thesis_value) != TYPE_DICTIONARY:
-			continue
-		var thesis: Dictionary = thesis_value
-		var index: int = pattern_thesis_option.item_count
-		pattern_thesis_option.add_item("%s  |  %s" % [str(thesis.get("title", "Thesis")), str(thesis.get("stance", "")).capitalize()])
-		pattern_thesis_option.set_item_metadata(index, str(thesis.get("id", "")))
-	pattern_thesis_option.disabled = _pattern_thesis_rows.size() <= 1
+	pattern_thesis_option.add_item("Thesis Research Tray")
+	pattern_thesis_option.set_item_metadata(0, "research_tray")
+	pattern_thesis_option.disabled = true
 	pattern_add_to_thesis_button.disabled = not has_claim
-	pattern_add_to_thesis_button.tooltip_text = "" if has_claim else "Mark a pattern region before adding evidence."
+	pattern_add_to_thesis_button.tooltip_text = "" if has_claim else "Mark a pattern region before capturing evidence."
 
 
 func _on_add_pattern_to_thesis_pressed() -> void:
 	if _last_pattern_claim.is_empty() or not bool(_last_pattern_claim.get("success", false)):
 		_set_pattern_feedback("Complete a pattern claim first.", COLOR_WARNING)
 		return
-	var thesis_id: String = _selected_pattern_thesis_id()
-	if thesis_id.is_empty():
-		_set_pattern_feedback("Create a thesis for this stock in Thesis Board first.", COLOR_WARNING)
-		return
-	var result: Dictionary = GameManager.add_chart_pattern_evidence_to_thesis(thesis_id, _last_pattern_claim)
+	var evidence: Dictionary = _last_pattern_claim.duplicate(true)
+	evidence["source_type"] = "chart_pattern"
+	evidence["category"] = "price_action"
+	evidence["category_label"] = "Price Action"
+	evidence["source_label"] = "STOCKBOT Chart"
+	var result: Dictionary = GameManager.capture_research_evidence(evidence)
 	if bool(result.get("success", false)):
-		_set_pattern_feedback("Added to Thesis as Price Action evidence.", COLOR_POSITIVE)
+		_set_pattern_feedback("Captured to Thesis Research Tray.", COLOR_POSITIVE)
 	else:
-		_set_pattern_feedback(str(result.get("message", "Could not add pattern evidence.")), COLOR_WARNING)
+		_set_pattern_feedback(str(result.get("message", "Could not capture pattern evidence.")), COLOR_WARNING)
 	_refresh_pattern_destination_controls(bool(_last_pattern_claim.get("success", false)))
 
 

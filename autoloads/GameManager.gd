@@ -456,6 +456,7 @@ var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
 var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
 var academy_system = preload("res://systems/AcademySystem.gd").new()
 var thesis_report_system = preload("res://systems/ThesisReportSystem.gd").new()
+var thesis_evidence_capture_system = preload("res://systems/ThesisEvidenceCaptureSystem.gd").new()
 var background_company_detail_hydration_running: bool = false
 var loading_detail_log_lines: Array = []
 var company_market_rows_cache: Dictionary = {}
@@ -4130,7 +4131,12 @@ func _count_twooter_current_day_interactions() -> int:
 			continue
 		var thread: Dictionary = thread_value
 		for row_value in thread.get("rows", []):
-			if typeof(row_value) == TYPE_DICTIONARY and str(row_value.get("sender", "")) == "player" and int(row_value.get("day_index", -9999)) == RunState.day_index:
+			if typeof(row_value) != TYPE_DICTIONARY:
+				continue
+			var row: Dictionary = row_value
+			if int(row.get("day_index", -9999)) != RunState.day_index:
+				continue
+			if str(row.get("sender", "")) == "player" or str(row.get("action_id", "")) == "network_followup_reaction":
 				count += 1
 	return count
 
@@ -4818,7 +4824,7 @@ func _after_twooter_interaction(spent_ap: bool, changed_network: bool, autosave_
 
 func get_thesis_board_snapshot() -> Dictionary:
 	if not RunState.has_active_run():
-		return {"theses": [], "companies": []}
+		return {"theses": [], "companies": [], "research_tray": {"rows": []}}
 	var theses: Array = []
 	for thesis_value in RunState.get_player_theses().values():
 		if typeof(thesis_value) != TYPE_DICTIONARY:
@@ -4836,8 +4842,201 @@ func get_thesis_board_snapshot() -> Dictionary:
 		"day_index": RunState.day_index,
 		"trade_date": get_current_trade_date(),
 		"theses": theses,
-		"companies": _thesis_company_options()
+		"companies": _thesis_company_options(),
+		"research_tray": get_research_tray_snapshot()
 	}
+
+
+func get_research_tray_snapshot(company_id: String = "") -> Dictionary:
+	if not RunState.has_active_run():
+		return {"day_index": 0, "trade_date": {}, "company_id": str(company_id), "rows": []}
+	var normalized_company_id: String = str(company_id)
+	var selected_sector_id: String = ""
+	if not normalized_company_id.is_empty():
+		var selected_company: Dictionary = RunState.get_company(normalized_company_id)
+		selected_sector_id = str(selected_company.get("sector_id", "")).strip_edges()
+		if selected_sector_id.is_empty() and typeof(selected_company.get("company_profile", {})) == TYPE_DICTIONARY:
+			selected_sector_id = str(selected_company.get("company_profile", {}).get("sector_id", "")).strip_edges()
+		if selected_sector_id.is_empty():
+			selected_sector_id = str(RunState.company_definitions.get(normalized_company_id, {}).get("sector_id", "")).strip_edges()
+	var rows: Array = []
+	for row_value in RunState.get_thesis_research_tray().values():
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value.duplicate(true)
+		if not normalized_company_id.is_empty():
+			var row_company_id: String = str(row.get("company_id", "")).strip_edges()
+			var row_category: String = str(row.get("category", "")).to_lower()
+			var row_sector_id: String = str(row.get("sector_id", "")).strip_edges()
+			var sector_context_match: bool = (
+				row_company_id.is_empty() and
+				row_category == "sector_macro" and
+				(row_sector_id.is_empty() or row_sector_id == selected_sector_id)
+			)
+			if row_company_id != normalized_company_id and not sector_context_match:
+				continue
+		rows.append(row)
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a.get("captured_day_index", 0)) == int(b.get("captured_day_index", 0)):
+			return str(a.get("label", "")) < str(b.get("label", ""))
+		return int(a.get("captured_day_index", 0)) > int(b.get("captured_day_index", 0))
+	)
+	return {
+		"day_index": RunState.day_index,
+		"trade_date": get_current_trade_date(),
+		"company_id": normalized_company_id,
+		"rows": rows
+	}
+
+
+func capture_research_evidence(payload: Dictionary) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var company_id: String = str(payload.get("company_id", "")).strip_edges()
+	var company: Dictionary = {}
+	if not company_id.is_empty():
+		company = get_company_snapshot(company_id, false, false, false)
+		if company.is_empty():
+			return {"success": false, "message": "Unknown company for research evidence."}
+	var row: Dictionary = thesis_evidence_capture_system.normalize_capture(payload, {
+		"company": company,
+		"day_index": RunState.day_index,
+		"trade_date": get_current_trade_date()
+	})
+	if str(row.get("company_id", "")).is_empty():
+		row["company_id"] = company_id
+	if str(row.get("ticker", "")).is_empty() and not company.is_empty():
+		row["ticker"] = str(company.get("ticker", ""))
+	if str(row.get("company_name", "")).is_empty() and not company.is_empty():
+		row["company_name"] = str(company.get("name", ""))
+	if str(row.get("category", "")).is_empty() or str(row.get("label", "")).is_empty():
+		return {"success": false, "message": "Pick a valid evidence row first."}
+	var tray: Dictionary = RunState.get_thesis_research_tray()
+	var dedupe_key: String = _research_evidence_dedupe_key(row)
+	row["dedupe_key"] = dedupe_key
+	for existing_value in tray.values():
+		if typeof(existing_value) != TYPE_DICTIONARY:
+			continue
+		var existing: Dictionary = existing_value
+		var existing_key: String = str(existing.get("dedupe_key", ""))
+		if existing_key.is_empty():
+			existing_key = _research_evidence_dedupe_key(existing)
+		if not dedupe_key.is_empty() and existing_key == dedupe_key:
+			return {
+				"success": true,
+				"message": "Already in Research Tray.",
+				"evidence": existing.duplicate(true),
+				"snapshot": get_research_tray_snapshot(str(existing.get("company_id", "")))
+			}
+	var evidence_id: String = _next_research_evidence_id(tray)
+	row["id"] = evidence_id
+	row["captured_day_index"] = RunState.day_index
+	row["day_index"] = RunState.day_index
+	row["captured_trade_date"] = get_current_trade_date()
+	row["status"] = "active"
+	tray[evidence_id] = row
+	RunState.set_thesis_research_tray(tray)
+	_request_autosave("thesis_capture_research")
+	thesis_changed.emit()
+	return {"success": true, "message": "Added to Research Tray.", "evidence": row, "snapshot": get_research_tray_snapshot(str(row.get("company_id", "")))}
+
+
+func _research_evidence_dedupe_key(row: Dictionary) -> String:
+	var parts: Array = [
+		_research_dedupe_segment(str(row.get("source_type", "manual"))),
+		_research_dedupe_segment(str(row.get("company_id", ""))),
+		_research_dedupe_segment(str(row.get("sector_id", ""))),
+		_research_dedupe_segment(str(row.get("source_id", ""))),
+		_research_dedupe_segment(str(row.get("label", ""))),
+		_research_dedupe_segment(str(row.get("value", ""))),
+		_research_dedupe_segment(str(row.get("pattern_id", ""))),
+		_research_dedupe_segment(str(row.get("chart_range", row.get("range_id", "")))),
+		_research_dedupe_segment(str(row.get("region_label", "")))
+	]
+	return "|".join(parts)
+
+
+func _research_dedupe_segment(value: String) -> String:
+	return value.strip_edges().to_lower().replace("\n", " ").replace("\t", " ")
+
+
+func attach_research_evidence_to_thesis(thesis_id: String, evidence_id: String, interpretation: String = "watch", note: String = "") -> Dictionary:
+	var block_reason: String = get_life_action_block_reason("thesis")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
+	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
+	if thesis.is_empty():
+		return {"success": false, "message": "Unknown thesis."}
+	if str(thesis.get("status", "open")) == "closed":
+		return {"success": false, "message": "This thesis is closed."}
+	var research_row: Dictionary = RunState.get_research_evidence(evidence_id)
+	if research_row.is_empty():
+		return {"success": false, "message": "This research item is no longer available."}
+	var research_company_id: String = str(research_row.get("company_id", "")).strip_edges()
+	var thesis_company_id: String = str(thesis.get("company_id", "")).strip_edges()
+	if research_company_id != thesis_company_id:
+		var thesis_company: Dictionary = RunState.get_company(thesis_company_id)
+		var thesis_sector_id: String = str(thesis_company.get("sector_id", "")).strip_edges()
+		if thesis_sector_id.is_empty() and typeof(thesis_company.get("company_profile", {})) == TYPE_DICTIONARY:
+			thesis_sector_id = str(thesis_company.get("company_profile", {}).get("sector_id", "")).strip_edges()
+		if thesis_sector_id.is_empty():
+			thesis_sector_id = str(RunState.company_definitions.get(thesis_company_id, {}).get("sector_id", "")).strip_edges()
+		var research_sector_id: String = str(research_row.get("sector_id", "")).strip_edges()
+		var sector_context_match: bool = (
+			research_company_id.is_empty() and
+			str(research_row.get("category", "")).to_lower() == "sector_macro" and
+			(research_sector_id.is_empty() or research_sector_id == thesis_sector_id)
+		)
+		if not sector_context_match:
+			return {"success": false, "message": "This research belongs to a different stock."}
+	for evidence_value in thesis.get("evidence", []):
+		if typeof(evidence_value) == TYPE_DICTIONARY and str(evidence_value.get("source_evidence_id", "")) == evidence_id:
+			return {"success": false, "message": "Research item is already attached."}
+	var evidence_rows: Array = thesis.get("evidence", [])
+	var attached: Dictionary = thesis_evidence_capture_system.normalize_attached_evidence(research_row, interpretation, note)
+	attached["id"] = _next_thesis_evidence_id(evidence_rows)
+	attached["source_evidence_id"] = evidence_id
+	attached["day_index"] = RunState.day_index
+	attached["impact"] = thesis_evidence_capture_system.impact_for_interpretation(str(attached.get("interpretation", interpretation)))
+	evidence_rows.append(attached)
+	thesis["evidence"] = evidence_rows
+	thesis["updated_day_index"] = RunState.day_index
+	RunState.set_player_thesis(thesis)
+	_request_autosave("thesis_attach_research")
+	thesis_changed.emit()
+	return {"success": true, "message": "Research attached as %s." % str(attached.get("interpretation_label", "evidence")), "thesis": thesis, "evidence": attached}
+
+
+func update_thesis_evidence_interpretation(thesis_id: String, evidence_id: String, fields: Dictionary = {}) -> Dictionary:
+	var block_reason: String = get_life_action_block_reason("thesis")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
+	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
+	if thesis.is_empty():
+		return {"success": false, "message": "Unknown thesis."}
+	var rows: Array = []
+	var updated_row: Dictionary = {}
+	for evidence_value in thesis.get("evidence", []):
+		if typeof(evidence_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = evidence_value.duplicate(true)
+		if str(row.get("id", "")) == evidence_id:
+			if fields.has("interpretation"):
+				row["interpretation"] = thesis_evidence_capture_system.normalize_interpretation(str(fields.get("interpretation", row.get("interpretation", "watch"))))
+				row["interpretation_label"] = thesis_evidence_capture_system.interpretation_label(str(row.get("interpretation", "watch")))
+				row["impact"] = thesis_evidence_capture_system.impact_for_interpretation(str(row.get("interpretation", "watch")))
+			if fields.has("note") or fields.has("player_note"):
+				row["player_note"] = str(fields.get("player_note", fields.get("note", ""))).strip_edges()
+			updated_row = row.duplicate(true)
+		rows.append(row)
+	if updated_row.is_empty():
+		return {"success": false, "message": "Unknown evidence row."}
+	thesis["evidence"] = rows
+	thesis["updated_day_index"] = RunState.day_index
+	RunState.set_player_thesis(thesis)
+	_request_autosave("thesis_update_evidence")
+	thesis_changed.emit()
+	return {"success": true, "message": "Evidence interpretation updated.", "thesis": thesis, "evidence": updated_row}
 
 
 func get_thesis_evidence_options(company_id: String) -> Dictionary:
@@ -4944,8 +5143,13 @@ func add_chart_pattern_evidence_to_thesis(thesis_id: String, claim: Dictionary) 
 	var evidence: Dictionary = claim.duplicate(true)
 	evidence["category"] = "price_action"
 	evidence["category_label"] = "Price Action"
+	evidence["source_type"] = "chart_pattern"
 	evidence["source_label"] = "STOCKBOT Chart"
-	return add_thesis_evidence(thesis_id, evidence)
+	var capture_result: Dictionary = capture_research_evidence(evidence)
+	if not bool(capture_result.get("success", false)):
+		return capture_result
+	var captured_id: String = str(capture_result.get("evidence", {}).get("id", ""))
+	return attach_research_evidence_to_thesis(thesis_id, captured_id, "watch")
 
 
 func create_thesis(company_id: String, stance: String, horizon: String, title: String = "") -> Dictionary:
@@ -5028,6 +5232,13 @@ func add_thesis_evidence(thesis_id: String, evidence: Dictionary) -> Dictionary:
 		"impact": str(evidence.get("impact", "mixed")),
 		"day_index": RunState.day_index
 	}
+	for key_value in ["source_type", "source_id", "source_evidence_id", "interpretation", "interpretation_label", "player_note"]:
+		var key: String = str(key_value)
+		if evidence.has(key):
+			compact_evidence[key] = str(evidence.get(key, ""))
+	if str(compact_evidence.get("interpretation", "")).is_empty():
+		compact_evidence["interpretation"] = thesis_evidence_capture_system.normalize_interpretation(str(evidence.get("interpretation", "watch")))
+		compact_evidence["interpretation_label"] = thesis_evidence_capture_system.interpretation_label(str(compact_evidence.get("interpretation", "watch")))
 	_copy_optional_thesis_evidence_fields(compact_evidence, evidence)
 	if str(compact_evidence.get("category", "")).is_empty() or str(compact_evidence.get("label", "")).is_empty():
 		return {"success": false, "message": "Pick a valid evidence row first."}
@@ -5387,7 +5598,7 @@ func _copy_optional_thesis_evidence_fields(target: Dictionary, source: Dictionar
 		var key: String = str(key_value)
 		if source.has(key):
 			target[key] = float(source.get(key, 0.0))
-	for key_value in ["start_anchor", "end_anchor", "start_date", "end_date", "report_date"]:
+	for key_value in ["start_anchor", "end_anchor", "start_date", "end_date", "report_date", "captured_trade_date"]:
 		var key: String = str(key_value)
 		if typeof(source.get(key, {})) == TYPE_DICTIONARY:
 			target[key] = source.get(key, {}).duplicate(true)
@@ -5401,6 +5612,7 @@ func _thesis_category_label(category: String) -> String:
 		"price_action": "Price Action",
 		"broker_flow": "Broker Flow",
 		"ownership": "Ownership",
+		"management": "Management",
 		"sector_macro": "Sector / Macro",
 		"news": "News",
 		"twooter": "Twooter",
@@ -5434,6 +5646,16 @@ func _next_thesis_evidence_id(evidence_rows: Array) -> String:
 			return evidence_id
 		index += 1
 	return "evidence_%03d" % index
+
+
+func _next_research_evidence_id(tray: Dictionary) -> String:
+	var index: int = tray.size() + 1
+	while true:
+		var evidence_id: String = "research_%03d" % index
+		if not tray.has(evidence_id):
+			return evidence_id
+		index += 1
+	return "research_%03d" % index
 
 
 func _normalize_thesis_stance(stance: String) -> String:

@@ -2989,8 +2989,15 @@ func _validate_progressive_guide_flow() -> Dictionary:
 		return await _guide_smoke_fail(game_root, "Smoke test expected opening Thesis Board to prompt thesis_flow, got %s." % str(guide_state))
 	if str(guide_state.get("current_step_id", "")) != "open_thesis" or str(guide_state.get("progress", "")).find("Step 1 of 5") < 0:
 		return await _guide_smoke_fail(game_root, "Smoke test expected opening Thesis Board to start at Step 1 until a company is chosen, got %s." % str(guide_state))
-	if not bool(guide_state.get("highlight_visible", false)) or str(guide_state.get("highlight_target_name", "")) != "ThesisCompanyOption":
-		return await _guide_smoke_fail(game_root, "Smoke test expected thesis_flow Step 1 to highlight the company selector, got %s." % str(guide_state))
+	var thesis_create_intro_button: Button = game_root.find_child("ThesisCreateButton", true, false) as Button
+	if thesis_create_intro_button == null:
+		return await _guide_smoke_fail(game_root, "Smoke test expected thesis_flow Step 1 to expose the Create Thesis button, got %s." % str(guide_state))
+	thesis_create_intro_button.emit_signal("pressed")
+	await _guide_smoke_wait(6)
+	guide_state = game_root.call("get_guide_smoke_state")
+	thesis_company_option = game_root.find_child("ThesisCompanyOption", true, false) as OptionButton
+	if thesis_company_option == null or not thesis_company_option.is_visible_in_tree():
+		return await _guide_smoke_fail(game_root, "Smoke test expected thesis_flow Step 1 to show the company selector after opening the builder, got %s." % str(guide_state))
 	if thesis_company_option != null and thesis_company_option.item_count > 0:
 		thesis_company_option.select(0)
 		thesis_company_option.emit_signal("item_selected", 0)
@@ -13139,6 +13146,133 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 	RunState.load_from_dict(baseline_state)
 	game_root._refresh_all()
 	await get_tree().process_frame
+
+	var research_smoke_company_id: String = str(RunState.company_order[0])
+	game_root._on_all_stock_selected(research_smoke_company_id)
+	await get_tree().process_frame
+
+	var research_smoke_capture_ap_before: int = int(GameManager.get_daily_action_snapshot().get("used", 0))
+	var research_smoke_capture: Dictionary = GameManager.capture_research_evidence({
+		"source_type": "key_stats",
+		"company_id": research_smoke_company_id,
+		"label": "Market Cap",
+		"value": "Rp1.00T",
+		"detail": "Smoke test captured this directly from Key Stats.",
+		"source_id": "smoke_market_cap"
+	})
+	if not bool(research_smoke_capture.get("success", false)):
+		return "Smoke test expected Key Stats evidence to capture into the Thesis Research Tray."
+	if int(GameManager.get_daily_action_snapshot().get("used", 0)) != research_smoke_capture_ap_before:
+		return "Smoke test expected capturing Thesis research to spend no AP."
+
+	thesis_app_button.emit_signal("pressed")
+	await get_tree().process_frame
+	await _wait_for_ui_animation_settle()
+	var research_smoke_window: Control = game_root.find_child("ThesisWindow", true, false) as Control
+	var research_smoke_intro_panel: Control = game_root.find_child("ThesisBuilderIntroPanel", true, false) as Control
+	var research_smoke_builder_panel: Control = game_root.find_child("ThesisBuilderWorkPanel", true, false) as Control
+	var research_smoke_card_grid: VBoxContainer = game_root.find_child("ThesisEvidenceCardGrid", true, false) as VBoxContainer
+	var research_smoke_available_scroll: ScrollContainer = game_root.find_child("ThesisAvailableEvidenceScroll", true, false) as ScrollContainer
+	var research_smoke_attached_scroll: ScrollContainer = game_root.find_child("ThesisAttachedEvidenceScroll", true, false) as ScrollContainer
+	var research_smoke_columns: HBoxContainer = game_root.find_child("ThesisEvidenceColumnsRow", true, false) as HBoxContainer
+	var research_smoke_create_button: Button = game_root.find_child("ThesisCreateButton", true, false) as Button
+	var research_smoke_generate_button: Button = game_root.find_child("ThesisGenerateReportButton", true, false) as Button
+	var research_smoke_view_button: Button = game_root.find_child("ThesisViewPaperButton", true, false) as Button
+	var research_smoke_sections: VBoxContainer = game_root.find_child("ThesisWhitePaperSections", true, false) as VBoxContainer
+	var research_smoke_report_text: RichTextLabel = game_root.find_child("ThesisReportText", true, false) as RichTextLabel
+	var research_smoke_step_flow: HBoxContainer = game_root.find_child("ThesisStepFlowRow", true, false) as HBoxContainer
+	var research_smoke_discipline_label: Label = game_root.find_child("ThesisEvidenceDisciplineLabel", true, false) as Label
+	if (
+		research_smoke_window == null or
+		not research_smoke_window.visible or
+		research_smoke_intro_panel == null or
+		not research_smoke_intro_panel.visible or
+		research_smoke_builder_panel == null or
+		research_smoke_builder_panel.visible or
+		research_smoke_create_button == null or
+		research_smoke_card_grid == null or
+		research_smoke_available_scroll == null or
+		research_smoke_attached_scroll == null or
+		research_smoke_columns == null or
+		research_smoke_generate_button == null or
+		research_smoke_view_button == null or
+		research_smoke_sections == null or
+		research_smoke_report_text == null
+	):
+		return "Smoke test expected Thesis Board to start on the simple intro screen and include the two-column builder UI."
+	if research_smoke_step_flow != null or research_smoke_discipline_label != null:
+		return "Smoke test expected Thesis Board to hide the old step cards and evidence discipline meter."
+	if research_smoke_generate_button.text.find("Generate Thesis") == -1 or research_smoke_view_button.text.find("View Thesis") == -1:
+		return "Smoke test expected Thesis Board buttons to use thesis wording."
+	research_smoke_create_button.emit_signal("pressed")
+	await get_tree().process_frame
+	var research_smoke_save_button: Button = game_root.find_child("ThesisUpdateButton", true, false) as Button
+	if research_smoke_intro_panel.visible or not research_smoke_builder_panel.visible or research_smoke_save_button == null or research_smoke_save_button.text.find("Save") == -1:
+		return "Smoke test expected Create Thesis to open the draft builder with a Save Thesis action."
+	if not research_smoke_columns.visible or not research_smoke_available_scroll.visible or not research_smoke_attached_scroll.visible:
+		return "Smoke test expected the Thesis draft builder to show the two scrollable evidence columns when captured evidence exists."
+
+	var research_smoke_thesis_result: Dictionary = GameManager.create_thesis(research_smoke_company_id, "bullish", "swing", "Smoke Research Thesis")
+	if not bool(research_smoke_thesis_result.get("success", false)):
+		return "Smoke test expected creating a Thesis Board memo to succeed."
+	var research_smoke_thesis_id: String = str(research_smoke_thesis_result.get("thesis", {}).get("id", ""))
+	var research_smoke_evidence_id: String = str(research_smoke_capture.get("evidence", {}).get("id", ""))
+	var research_smoke_attach: Dictionary = GameManager.attach_research_evidence_to_thesis(research_smoke_thesis_id, research_smoke_evidence_id, "support")
+	if not bool(research_smoke_attach.get("success", false)):
+		return "Smoke test expected captured research to attach to the active thesis."
+	var research_smoke_chart: Dictionary = GameManager.add_chart_pattern_evidence_to_thesis(research_smoke_thesis_id, {
+		"success": true,
+		"company_id": research_smoke_company_id,
+		"pattern_id": "breakout",
+		"pattern_label": "Breakout",
+		"feedback_state": "Plausible, needs confirmation",
+		"feedback_reason": "smoke chart structure is readable",
+		"value": "Plausible, needs confirmation"
+	})
+	if not bool(research_smoke_chart.get("success", false)):
+		return "Smoke test expected chart-pattern compatibility API to route through captured research."
+
+	if not SaveManager.has_pending_save():
+		return "Smoke test expected Thesis capture and attach actions to queue an autosave."
+	var research_smoke_saved_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(research_smoke_saved_state)
+	if RunState.get_thesis_research_tray().is_empty() or RunState.get_player_thesis(research_smoke_thesis_id).get("evidence", []).size() < 2:
+		return "Smoke test expected Thesis Research Tray and attached evidence to survive save/load."
+
+	var research_smoke_cost: int = GameManager.get_thesis_report_action_cost()
+	RunState.daily_actions_used = max(RunState.get_daily_action_limit() - research_smoke_cost + 1, 0)
+	var research_smoke_no_ap_report: Dictionary = GameManager.generate_thesis_report(research_smoke_thesis_id)
+	if bool(research_smoke_no_ap_report.get("success", false)):
+		return "Smoke test expected Thesis memo generation to keep the 7 AP cost."
+	RunState.daily_actions_used = 0
+	var research_smoke_report_result: Dictionary = GameManager.generate_thesis_report(research_smoke_thesis_id)
+	if not bool(research_smoke_report_result.get("success", false)):
+		return "Smoke test expected Thesis memo report generation to succeed with enough AP."
+	var research_smoke_report: Dictionary = research_smoke_report_result.get("report", {})
+	var research_smoke_titles: Array = []
+	var research_smoke_text: String = ""
+	for research_smoke_section_value in research_smoke_report.get("sections", []):
+		if typeof(research_smoke_section_value) != TYPE_DICTIONARY:
+			continue
+		var research_smoke_section: Dictionary = research_smoke_section_value
+		research_smoke_titles.append(str(research_smoke_section.get("title", "")))
+		research_smoke_text += " %s %s" % [str(research_smoke_section.get("title", "")), str(research_smoke_section.get("body", ""))]
+		for research_smoke_bullet_value in research_smoke_section.get("bullets", []):
+			if typeof(research_smoke_bullet_value) == TYPE_DICTIONARY:
+				research_smoke_text += " %s %s" % [str(research_smoke_bullet_value.get("claim", "")), str(research_smoke_bullet_value.get("body", ""))]
+	for research_smoke_required_title in ["Evidence Summary", "Supporting Evidence", "Risks And Contradictions", "Invalidation", "Next Research Questions"]:
+		if not research_smoke_titles.has(str(research_smoke_required_title)):
+			return "Smoke test expected Thesis memo reports to include %s." % str(research_smoke_required_title)
+	var research_smoke_lower_text: String = research_smoke_text.to_lower()
+	if research_smoke_lower_text.find("recommendation") != -1 or research_smoke_lower_text.find("target area") != -1 or research_smoke_lower_text.find("implied move") != -1:
+		return "Smoke test expected Thesis memo reports to avoid old recommendation, target, and implied-move language."
+
+	RunState.load_from_dict(baseline_state)
+	SaveManager.save_run(RunState.to_save_dict())
+	SaveManager.flush_pending_save()
+	game_root._refresh_all()
+	await get_tree().process_frame
+	return ""
 
 	var thesis_company_id: String = str(RunState.company_order[0])
 	game_root._on_all_stock_selected(thesis_company_id)

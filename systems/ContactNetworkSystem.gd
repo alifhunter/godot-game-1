@@ -14,7 +14,9 @@ const MEETING_LEAD_SOURCE_TYPE := "meeting_lead"
 const TIP_MEMORY_RESOLVE_DAYS := 3
 const MAX_TIP_MEMORY_ROWS := 96
 const MAX_NETWORK_JOURNAL_ROWS := 18
+const MAX_SOCIAL_MESSAGE_ROWS_PER_THREAD := 24
 const NETWORK_TWOOTER_ACCOUNT_PREFIX := "network_"
+const NETWORK_REACTION_ACTION_ID := "network_followup_reaction"
 const MEETING_LEAD_TIER_ORDER := {
 	"open": 0,
 	"low": 1,
@@ -33,6 +35,7 @@ func build_snapshot(run_state, data_repository) -> Dictionary:
 	var recognition: Dictionary = build_recognition_snapshot(run_state)
 	var last_tip_notes: Dictionary = _last_tip_notes_by_contact(run_state)
 	var tip_histories: Dictionary = _tip_histories_by_contact(run_state)
+	var reaction_notes: Dictionary = _latest_reaction_notes_by_contact(run_state)
 	var cross_checks: Dictionary = _cross_contact_reads_by_contact(run_state)
 	var contact_rows: Array = []
 	var discovered_rows: Array = []
@@ -49,6 +52,7 @@ func build_snapshot(run_state, data_repository) -> Dictionary:
 		var row: Dictionary = _contact_row(contact, runtime, discovery, recognition)
 		_apply_last_tip_note(row, last_tip_notes)
 		_apply_tip_history(row, tip_histories)
+		_apply_latest_reaction(row, reaction_notes)
 		_apply_cross_contact_read(row, cross_checks)
 		if bool(runtime.get("met", false)):
 			contact_rows.append(row)
@@ -74,6 +78,7 @@ func build_snapshot(run_state, data_repository) -> Dictionary:
 		var row: Dictionary = _contact_row(generated_contact, runtime, discovery, recognition)
 		_apply_last_tip_note(row, last_tip_notes)
 		_apply_tip_history(row, tip_histories)
+		_apply_latest_reaction(row, reaction_notes)
 		_apply_cross_contact_read(row, cross_checks)
 		if bool(runtime.get("met", false)):
 			contact_rows.append(row)
@@ -670,29 +675,42 @@ func process_due_tip_memories(run_state, data_repository) -> Array:
 	for tip_id_value in journal.keys():
 		var tip_id: String = str(tip_id_value)
 		var tip: Dictionary = journal.get(tip_id, {})
-		if str(tip.get("status", "pending")) != "pending":
+		if str(tip.get("journal_type", "")) == "twooter_social":
+			if _network_reaction_is_due(tip, run_state.day_index):
+				var social_reaction: Dictionary = _apply_network_followup_reaction(run_state, data_repository, tip)
+				tip = social_reaction.get("tip", tip)
+				journal[tip_id] = tip
+				changed = true
+				results.append(tip.duplicate(true))
 			continue
-		if int(tip.get("resolve_day_index", 0)) > run_state.day_index:
-			continue
-		var outcome: Dictionary = _resolve_tip_memory(run_state, data_repository, tip)
-		tip["status"] = str(outcome.get("status", "resolved"))
-		tip["outcome_label"] = str(outcome.get("outcome_label", "Still pending"))
-		tip["outcome_note"] = str(outcome.get("outcome_note", "The read is still unresolved."))
-		tip["player_action_label"] = str(outcome.get("player_action_label", "No action"))
-		tip["player_action_note"] = str(outcome.get("player_action_note", ""))
-		tip["player_action_alignment"] = str(outcome.get("player_action_alignment", "neutral"))
-		tip["player_net_shares"] = int(outcome.get("player_net_shares", 0))
-		tip["relationship_delta"] = int(outcome.get("relationship_delta", 0))
-		tip["resolved_day_index"] = run_state.day_index
-		tip["resolved_price"] = float(outcome.get("resolved_price", 0.0))
-		tip["resolved_change_pct"] = float(outcome.get("change_pct", 0.0))
-		journal[tip_id] = tip
-		changed = true
-		results.append(tip.duplicate(true))
-		var relationship_delta: int = int(outcome.get("relationship_delta", 0))
-		if relationship_delta != 0:
-			_adjust_relationship(run_state, str(tip.get("contact_id", "")), relationship_delta)
-		_store_contact_tip_note(run_state, tip)
+		if str(tip.get("status", "pending")) == "pending":
+			if int(tip.get("resolve_day_index", 0)) > run_state.day_index:
+				continue
+			var outcome: Dictionary = _resolve_tip_memory(run_state, data_repository, tip)
+			tip["status"] = str(outcome.get("status", "resolved"))
+			tip["outcome_label"] = str(outcome.get("outcome_label", "Still pending"))
+			tip["outcome_note"] = str(outcome.get("outcome_note", "The read is still unresolved."))
+			tip["player_action_label"] = str(outcome.get("player_action_label", "No action"))
+			tip["player_action_note"] = str(outcome.get("player_action_note", ""))
+			tip["player_action_alignment"] = str(outcome.get("player_action_alignment", "neutral"))
+			tip["player_net_shares"] = int(outcome.get("player_net_shares", 0))
+			tip["relationship_delta"] = int(outcome.get("relationship_delta", 0))
+			tip["resolved_day_index"] = run_state.day_index
+			tip["resolved_price"] = float(outcome.get("resolved_price", 0.0))
+			tip["resolved_change_pct"] = float(outcome.get("change_pct", 0.0))
+			var relationship_delta: int = int(outcome.get("relationship_delta", 0))
+			if relationship_delta != 0:
+				_adjust_relationship(run_state, str(tip.get("contact_id", "")), relationship_delta)
+			_store_contact_tip_note(run_state, tip)
+			journal[tip_id] = tip
+			changed = true
+			results.append(tip.duplicate(true))
+		if _network_reaction_is_due(tip, run_state.day_index):
+			var reaction: Dictionary = _apply_network_followup_reaction(run_state, data_repository, tip)
+			tip = reaction.get("tip", tip)
+			journal[tip_id] = tip
+			changed = true
+			results.append(tip.duplicate(true))
 	if changed:
 		run_state.set_network_tip_journal(_pruned_tip_journal(journal))
 	return results
@@ -1004,7 +1022,15 @@ func _record_tip_memory(run_state, contact: Dictionary, company_id: String, tip_
 		"confidence_label": str(tip_result.get("public_confidence_label", "Soft read")),
 		"source_role": str(tip_result.get("tip_source_role", "market contact")),
 		"tip_read": str(tip_result.get("public_tip_read", "")),
-		"status": "pending"
+		"status": "pending",
+		"reaction_due_day_index": run_state.day_index + TIP_MEMORY_RESOLVE_DAYS,
+		"reaction_sent": false,
+		"reaction_label": "",
+		"reaction_note": "",
+		"reaction_relationship_delta": 0,
+		"reaction_reliability_delta": 0,
+		"reaction_twooter_account_id": _contact_twooter_account_id(contact),
+		"reaction_twooter_handle": _contact_twooter_handle(contact)
 	}
 	run_state.set_network_tip_journal(_pruned_tip_journal(journal))
 
@@ -1243,6 +1269,244 @@ func _store_contact_tip_followup(run_state, tip: Dictionary) -> void:
 	runtime["last_tip_followup_day_index"] = int(tip.get("followup_day_index", run_state.day_index))
 	contacts[contact_id] = runtime
 	run_state.set_network_contacts(contacts)
+
+
+func _network_reaction_is_due(tip: Dictionary, day_index: int) -> bool:
+	if not tip.has("reaction_due_day_index"):
+		return false
+	if bool(tip.get("reaction_sent", false)):
+		return false
+	var contact_id: String = str(tip.get("contact_id", ""))
+	if contact_id.is_empty():
+		return false
+	var due_day_index: int = int(tip.get("reaction_due_day_index", tip.get("resolve_day_index", int(tip.get("created_day_index", 0)) + TIP_MEMORY_RESOLVE_DAYS)))
+	return due_day_index <= day_index
+
+
+func _apply_network_followup_reaction(run_state, data_repository, source_tip: Dictionary) -> Dictionary:
+	var tip: Dictionary = source_tip.duplicate(true)
+	var contact_id: String = str(tip.get("contact_id", ""))
+	var contact: Dictionary = _contact_definition(run_state, data_repository, contact_id)
+	if contact.is_empty():
+		contact = {
+			"id": contact_id,
+			"display_name": str(tip.get("contact_name", "Contact")),
+			"role": "Network contact",
+			"affiliation_type": "floater"
+		}
+	var reaction: Dictionary = _build_network_followup_reaction(run_state, contact, tip)
+	var relationship_delta: int = int(reaction.get("relationship_delta", 0))
+	if relationship_delta != 0:
+		_adjust_relationship(run_state, contact_id, relationship_delta)
+	var account: Dictionary = _reaction_twooter_account(run_state, contact, tip)
+	var account_id: String = str(account.get("id", tip.get("twooter_account_id", "")))
+	var handle: String = str(account.get("handle", tip.get("twooter_handle", "")))
+	if not account_id.is_empty():
+		_append_twooter_account_message(
+			run_state,
+			account,
+			NETWORK_REACTION_ACTION_ID,
+			str(reaction.get("note", "")),
+			run_state.day_index
+		)
+	tip["reaction_sent"] = true
+	tip["reaction_day_index"] = run_state.day_index
+	tip["reaction_label"] = str(reaction.get("label", "Follow-up"))
+	tip["reaction_note"] = str(reaction.get("note", ""))
+	tip["reaction_relationship_delta"] = relationship_delta
+	tip["reaction_reliability_delta"] = int(reaction.get("reliability_delta", 0))
+	tip["reaction_twooter_account_id"] = account_id
+	tip["reaction_twooter_handle"] = handle
+	_store_contact_reaction(run_state, tip)
+	return {
+		"success": true,
+		"tip": tip,
+		"reaction": reaction,
+		"twooter_account_id": account_id
+	}
+
+
+func _build_network_followup_reaction(run_state, contact: Dictionary, tip: Dictionary) -> Dictionary:
+	if bool(tip.get("source_only", false)) or str(tip.get("journal_type", "")) == "twooter_social":
+		return _build_source_only_reaction(run_state, contact, tip)
+	var ticker: String = str(tip.get("target_ticker", tip.get("target_company_id", ""))).strip_edges().to_upper()
+	if ticker.is_empty():
+		ticker = "the read"
+	var outcome_label: String = str(tip.get("outcome_label", "Still pending"))
+	var player_alignment: String = str(tip.get("player_action_alignment", "neutral"))
+	var player_action_label: String = str(tip.get("player_action_label", "No action"))
+	var read_was_good: bool = outcome_label in ["Useful read", "Useful warning", "Useful timing read", "Early, not wrong"]
+	var read_was_bad: bool = outcome_label == "Missed badly"
+	if read_was_good and player_alignment == "followed":
+		return {
+			"label": "Good follow-through",
+			"note": "Follow-up on %s: the read aged well, and you handled it with discipline. Keep the next position tied to confirmation, not excitement." % ticker,
+			"relationship_delta": 1,
+			"reliability_delta": 1
+		}
+	if read_was_good and player_alignment == "ignored":
+		return {
+			"label": "Useful read missed",
+			"note": "Follow-up on %s: the signal worked, but you left it alone. That is not a failure; next time decide what confirmation would make you act." % ticker,
+			"relationship_delta": 0,
+			"reliability_delta": 1
+		}
+	if read_was_bad and player_alignment == "followed":
+		return {
+			"label": "Read aged poorly",
+			"note": "Follow-up on %s: that read aged poorly, and following it too closely cost trust in the setup. Size smaller when the evidence is still soft." % ticker,
+			"relationship_delta": -1,
+			"reliability_delta": -1
+		}
+	if read_was_bad and player_alignment in ["ignored", "against"]:
+		return {
+			"label": "Good restraint",
+			"note": "Follow-up on %s: restraint was the right call. The source was noisy, and waiting for confirmation protected you." % ticker,
+			"relationship_delta": 1,
+			"reliability_delta": -1
+		}
+	return {
+		"label": "Still developing",
+		"note": "Follow-up on %s: the read is still not clean enough to score. Your action was %s; keep watching the next filing, volume, or date catalyst." % [ticker, player_action_label.to_lower()],
+		"relationship_delta": 0,
+		"reliability_delta": 0
+	}
+
+
+func _build_source_only_reaction(run_state, contact: Dictionary, tip: Dictionary) -> Dictionary:
+	var contact_id: String = str(tip.get("contact_id", contact.get("id", "")))
+	var action_id: String = str(tip.get("twooter_action_id", "message_check_in"))
+	var handle: String = str(tip.get("twooter_handle", _contact_twooter_handle(contact))).strip_edges()
+	var target: String = str(tip.get("target_ticker", "")).strip_edges().to_upper()
+	var target_text: String = " on $%s" % target if not target.is_empty() else ""
+	var is_met: bool = bool(run_state.get_network_contacts().get(contact_id, {}).get("met", false))
+	match action_id:
+		"connect":
+			return {
+				"label": "Connection warmed",
+				"note": "%s follow-up%s: clean boundary, clean channel. I can keep this line open if the next ask comes with evidence." % [handle if not handle.is_empty() else "Source", target_text],
+				"relationship_delta": 1,
+				"reliability_delta": 0
+			}
+		"ask_tip":
+			return {
+				"label": "Read requested",
+				"note": "%s follow-up%s: the read is useful only if you keep it public and sized properly. Bring a thesis next time, not just urgency." % [handle if not handle.is_empty() else "Source", target_text],
+				"relationship_delta": 0,
+				"reliability_delta": 0
+			}
+		"respond_suspicious_request":
+			return {
+				"label": "Clean boundary",
+				"note": "%s follow-up%s: good refusal. Clean players are remembered because they do not make every source a liability." % [handle if not handle.is_empty() else "Source", target_text],
+				"relationship_delta": 2,
+				"reliability_delta": 1
+			}
+		_:
+			var relationship_delta: int = 1 if not is_met else 0
+			return {
+				"label": "Source noted",
+				"note": "%s follow-up%s: good first check-in. You kept the ask narrow; build the public trail before pushing for more." % [handle if not handle.is_empty() else "Source", target_text],
+				"relationship_delta": relationship_delta,
+				"reliability_delta": 0
+			}
+
+
+func _reaction_twooter_account(run_state, contact: Dictionary, tip: Dictionary) -> Dictionary:
+	var discovery: Dictionary = run_state.get_network_discoveries().get(str(tip.get("contact_id", "")), {})
+	if discovery.is_empty():
+		discovery = {
+			"target_company_id": str(tip.get("target_company_id", "")),
+			"target_ticker": str(tip.get("target_ticker", ""))
+		}
+	var account: Dictionary = _contact_twooter_account(contact, discovery, run_state)
+	if str(account.get("id", "")).is_empty() and not str(tip.get("twooter_account_id", "")).is_empty():
+		account = {
+			"id": str(tip.get("twooter_account_id", "")),
+			"display_name": str(tip.get("contact_name", "Contact")),
+			"handle": str(tip.get("twooter_handle", "")),
+			"social_profile": {
+				"network_contact_id": str(tip.get("contact_id", "")),
+				"account_origin": "network_contact"
+			}
+		}
+	return account
+
+
+func _append_twooter_account_message(run_state, account: Dictionary, action_id: String, text: String, day_index: int) -> void:
+	var account_id: String = str(account.get("id", ""))
+	if account_id.is_empty() or text.strip_edges().is_empty():
+		return
+	var social_state: Dictionary = run_state.get_twooter_social_state()
+	var messages: Dictionary = social_state.get("messages", {}) if typeof(social_state.get("messages", {})) == TYPE_DICTIONARY else {}
+	var thread: Dictionary = messages.get(account_id, {}) if typeof(messages.get(account_id, {})) == TYPE_DICTIONARY else {}
+	var rows: Array = thread.get("rows", []) if typeof(thread.get("rows", [])) == TYPE_ARRAY else []
+	rows.append({
+		"sender": "account",
+		"action_id": action_id,
+		"text": text,
+		"day_index": day_index
+	})
+	if rows.size() > MAX_SOCIAL_MESSAGE_ROWS_PER_THREAD:
+		rows = rows.slice(rows.size() - MAX_SOCIAL_MESSAGE_ROWS_PER_THREAD, rows.size())
+	thread["account_id"] = account_id
+	thread["account_name"] = str(account.get("display_name", thread.get("account_name", "Contact")))
+	thread["account_handle"] = str(account.get("handle", thread.get("account_handle", "")))
+	thread["rows"] = rows
+	thread["last_day_index"] = day_index
+	thread["unread_count"] = int(thread.get("unread_count", 0)) + 1
+	messages[account_id] = thread
+	social_state["messages"] = messages
+	run_state.set_twooter_social_state(social_state)
+
+
+func _store_contact_reaction(run_state, tip: Dictionary) -> void:
+	var contact_id: String = str(tip.get("contact_id", ""))
+	if contact_id.is_empty():
+		return
+	var contacts: Dictionary = run_state.get_network_contacts()
+	var runtime: Dictionary = contacts.get(contact_id, {})
+	runtime["last_reaction_label"] = str(tip.get("reaction_label", ""))
+	runtime["last_reaction_note"] = str(tip.get("reaction_note", ""))
+	runtime["last_reaction_day_index"] = int(tip.get("reaction_day_index", run_state.day_index))
+	runtime["last_reaction_twooter_account_id"] = str(tip.get("reaction_twooter_account_id", ""))
+	runtime["last_reaction_twooter_handle"] = str(tip.get("reaction_twooter_handle", ""))
+	contacts[contact_id] = runtime
+	run_state.set_network_contacts(contacts)
+
+
+func _latest_reaction_notes_by_contact(run_state) -> Dictionary:
+	var notes: Dictionary = {}
+	for tip_value in run_state.get_network_tip_journal().values():
+		if typeof(tip_value) != TYPE_DICTIONARY:
+			continue
+		var tip: Dictionary = tip_value
+		if not bool(tip.get("reaction_sent", false)):
+			continue
+		var contact_id: String = str(tip.get("contact_id", ""))
+		if contact_id.is_empty():
+			continue
+		var existing: Dictionary = notes.get(contact_id, {})
+		if existing.is_empty() or int(tip.get("reaction_day_index", 0)) >= int(existing.get("reaction_day_index", 0)):
+			notes[contact_id] = tip.duplicate(true)
+	return notes
+
+
+func _apply_latest_reaction(row: Dictionary, reaction_notes: Dictionary) -> void:
+	var contact_id: String = str(row.get("id", ""))
+	var reaction: Dictionary = reaction_notes.get(contact_id, {}) if not contact_id.is_empty() else {}
+	if reaction.is_empty():
+		row["last_reaction_label"] = ""
+		row["last_reaction_note"] = ""
+		row["last_reaction_day_index"] = 0
+		row["last_reaction_twooter_account_id"] = ""
+		row["last_reaction_twooter_handle"] = ""
+		return
+	row["last_reaction_label"] = str(reaction.get("reaction_label", ""))
+	row["last_reaction_note"] = str(reaction.get("reaction_note", ""))
+	row["last_reaction_day_index"] = int(reaction.get("reaction_day_index", 0))
+	row["last_reaction_twooter_account_id"] = str(reaction.get("reaction_twooter_account_id", ""))
+	row["last_reaction_twooter_handle"] = str(reaction.get("reaction_twooter_handle", ""))
 
 
 func _last_tip_notes_by_contact(run_state) -> Dictionary:
@@ -2469,6 +2733,11 @@ func _contact_row(contact: Dictionary, runtime: Dictionary, discovery: Dictionar
 		"last_tip_followup_id": str(runtime.get("last_tip_followup_id", "")),
 		"last_tip_followup_label": str(runtime.get("last_tip_followup_label", "")),
 		"last_tip_followup_note": str(runtime.get("last_tip_followup_note", "")),
+		"last_reaction_label": str(runtime.get("last_reaction_label", "")),
+		"last_reaction_note": str(runtime.get("last_reaction_note", "")),
+		"last_reaction_day_index": int(runtime.get("last_reaction_day_index", 0)),
+		"last_reaction_twooter_account_id": str(runtime.get("last_reaction_twooter_account_id", "")),
+		"last_reaction_twooter_handle": str(runtime.get("last_reaction_twooter_handle", "")),
 		"can_follow_up_tip": false,
 		"tip_followup_options": [],
 		"tip_history": [],
@@ -2708,6 +2977,8 @@ func _network_journal_rows(run_state, data_repository, requests: Dictionary, dis
 		var tip: Dictionary = tip_value
 		if str(tip.get("journal_type", "")) == "twooter_social":
 			rows.append(_network_twooter_journal_row(tip))
+			if bool(tip.get("reaction_sent", false)):
+				rows.append(_network_social_reaction_journal_row(tip))
 			continue
 		rows.append(_network_tip_journal_row(tip))
 		if str(tip.get("status", "pending")) != "pending":
@@ -2716,6 +2987,8 @@ func _network_journal_rows(run_state, data_repository, requests: Dictionary, dis
 			rows.append(_network_tip_followup_journal_row(tip))
 		if not str(tip.get("source_check_note", "")).is_empty():
 			rows.append(_network_source_check_journal_row(tip))
+		if bool(tip.get("reaction_sent", false)):
+			rows.append(_network_social_reaction_journal_row(tip))
 	for request_value in requests.values():
 		if typeof(request_value) != TYPE_DICTIONARY:
 			continue
@@ -2859,6 +3132,29 @@ func _network_source_check_journal_row(tip: Dictionary) -> Dictionary:
 			str(tip.get("source_check_peer_contact_name", "conflict"))
 		],
 		"detail": str(tip.get("source_check_note", ""))
+	}
+
+
+func _network_social_reaction_journal_row(tip: Dictionary) -> Dictionary:
+	var day_index: int = int(tip.get("reaction_day_index", tip.get("resolved_day_index", tip.get("created_day_index", 0))))
+	var ticker: String = str(tip.get("target_ticker", ""))
+	var title_suffix: String = " | %s" % ticker if not ticker.is_empty() else ""
+	var handle: String = str(tip.get("reaction_twooter_handle", tip.get("twooter_handle", ""))).strip_edges()
+	var detail: String = str(tip.get("reaction_note", ""))
+	if not handle.is_empty():
+		detail = "%s: %s" % [handle, detail]
+	return {
+		"id": "%s:social_reaction" % str(tip.get("id", "")),
+		"type": "social_reaction",
+		"day_index": day_index,
+		"sort_index": day_index * 10 + 9,
+		"contact_id": str(tip.get("contact_id", "")),
+		"contact_name": str(tip.get("contact_name", "Contact")),
+		"target_company_id": str(tip.get("target_company_id", "")),
+		"target_ticker": ticker,
+		"status": "recorded",
+		"title": "Follow-up DM%s | %s" % [title_suffix, str(tip.get("reaction_label", "Reaction"))],
+		"detail": detail.strip_edges()
 	}
 
 

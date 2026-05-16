@@ -184,6 +184,7 @@ var network_requests = {}
 var network_tip_journal = {}
 var twooter_social_state = {}
 var player_theses = {}
+var thesis_research_tray = {}
 var player_life = {}
 var upgrade_tiers = {}
 var daily_action_day_index = 0
@@ -264,6 +265,7 @@ func reset() -> void:
 	network_tip_journal = {}
 	twooter_social_state = _default_twooter_social_state()
 	player_theses = {}
+	thesis_research_tray = {}
 	player_life = _default_life_state()
 	upgrade_tiers = _default_upgrade_tiers()
 	daily_action_day_index = 0
@@ -508,6 +510,7 @@ func load_from_dict(data: Dictionary) -> void:
 	network_tip_journal = data.get("network_tip_journal", {}).duplicate(true)
 	twooter_social_state = _normalize_twooter_social_state(data.get("twooter_social_state", {}))
 	player_theses = _normalize_player_theses(data.get("player_theses", {}))
+	thesis_research_tray = _normalize_thesis_research_tray(data.get("thesis_research_tray", {}))
 	player_life = _normalize_life_state(data.get("player_life", {}))
 	upgrade_tiers = _normalize_upgrade_tiers(data.get("upgrade_tiers", {}))
 	daily_action_day_index = int(data.get("daily_action_day_index", day_index))
@@ -613,6 +616,7 @@ func to_save_dict() -> Dictionary:
 		"network_tip_journal": network_tip_journal.duplicate(true),
 		"twooter_social_state": get_twooter_social_state(),
 		"player_theses": _normalize_player_theses(player_theses),
+		"thesis_research_tray": _normalize_thesis_research_tray(thesis_research_tray),
 		"player_life": get_player_life(),
 		"upgrade_tiers": get_upgrade_tiers(),
 		"daily_action_day_index": daily_action_day_index,
@@ -1657,6 +1661,22 @@ func set_player_thesis(thesis: Dictionary) -> void:
 
 func set_player_theses(next_theses: Dictionary) -> void:
 	player_theses = _normalize_player_theses(next_theses)
+
+
+func get_thesis_research_tray() -> Dictionary:
+	thesis_research_tray = _normalize_thesis_research_tray(thesis_research_tray)
+	return thesis_research_tray.duplicate(true)
+
+
+func set_thesis_research_tray(next_tray: Dictionary) -> void:
+	thesis_research_tray = _normalize_thesis_research_tray(next_tray)
+
+
+func get_research_evidence(evidence_id: String) -> Dictionary:
+	thesis_research_tray = _normalize_thesis_research_tray(thesis_research_tray)
+	if evidence_id.is_empty() or not thesis_research_tray.has(evidence_id):
+		return {}
+	return thesis_research_tray[evidence_id].duplicate(true)
 
 
 func get_player_life() -> Dictionary:
@@ -3314,6 +3334,116 @@ func _normalize_player_theses(source_theses: Variant) -> Dictionary:
 	return normalized
 
 
+func _normalize_thesis_research_tray(source_tray: Variant) -> Dictionary:
+	var normalized: Dictionary = {}
+	if typeof(source_tray) == TYPE_ARRAY:
+		for row_value in source_tray:
+			if typeof(row_value) != TYPE_DICTIONARY:
+				continue
+			var row: Dictionary = _normalize_research_evidence_row(row_value)
+			var row_id: String = str(row.get("id", ""))
+			if not row_id.is_empty():
+				normalized[row_id] = row
+		return normalized
+	if typeof(source_tray) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_tray
+	for row_id_value in source.keys():
+		if typeof(source.get(row_id_value)) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = _normalize_research_evidence_row(source.get(row_id_value, {}))
+		var row_id: String = str(row.get("id", ""))
+		if row_id.is_empty():
+			row_id = str(row_id_value)
+			row["id"] = row_id
+		if not row_id.is_empty():
+			normalized[row_id] = row
+	return normalized
+
+
+func _normalize_research_evidence_row(source_row: Variant) -> Dictionary:
+	var source: Dictionary = source_row if typeof(source_row) == TYPE_DICTIONARY else {}
+	var row_id: String = str(source.get("id", ""))
+	var category: String = str(source.get("category", ""))
+	var interpretation: String = str(source.get("interpretation", ""))
+	var normalized: Dictionary = {
+		"id": row_id,
+		"company_id": str(source.get("company_id", "")),
+		"ticker": str(source.get("ticker", "")),
+		"company_name": str(source.get("company_name", "")),
+		"sector_id": str(source.get("sector_id", "")),
+		"sector_name": str(source.get("sector_name", "")),
+		"category": category,
+		"category_label": str(source.get("category_label", category.capitalize())),
+		"label": str(source.get("label", "")),
+		"value": str(source.get("value", "")),
+		"detail": str(source.get("detail", "")),
+		"source_type": str(source.get("source_type", "manual")),
+		"source_label": str(source.get("source_label", "")),
+		"source_id": str(source.get("source_id", "")),
+		"dedupe_key": str(source.get("dedupe_key", "")),
+		"impact": str(source.get("impact", "mixed")),
+		"captured_day_index": int(source.get("captured_day_index", source.get("day_index", day_index))),
+		"day_index": int(source.get("day_index", source.get("captured_day_index", day_index))),
+		"status": str(source.get("status", "active"))
+	}
+	if str(normalized.get("dedupe_key", "")).is_empty():
+		normalized["dedupe_key"] = _research_evidence_dedupe_key(normalized)
+	if not interpretation.is_empty():
+		normalized["interpretation"] = interpretation
+		normalized["interpretation_label"] = str(source.get("interpretation_label", interpretation.capitalize()))
+	if source.has("player_note"):
+		normalized["player_note"] = str(source.get("player_note", ""))
+	if source.has("source_evidence_id"):
+		normalized["source_evidence_id"] = str(source.get("source_evidence_id", ""))
+	if typeof(source.get("captured_trade_date", {})) == TYPE_DICTIONARY:
+		normalized["captured_trade_date"] = source.get("captured_trade_date", {}).duplicate(true)
+	if typeof(source.get("created_trade_date", {})) == TYPE_DICTIONARY:
+		normalized["created_trade_date"] = source.get("created_trade_date", {}).duplicate(true)
+	for key_value in [
+		"pattern_id",
+		"pattern_label",
+		"feedback_state",
+		"feedback_reason",
+		"invalidation",
+		"next_check",
+		"chart_range",
+		"chart_range_label",
+		"region_label"
+	]:
+		var key: String = str(key_value)
+		if source.has(key):
+			normalized[key] = str(source.get(key, ""))
+	for key_value in ["start_price", "end_price", "current_price", "raw_value"]:
+		var key: String = str(key_value)
+		if source.has(key):
+			normalized[key] = float(source.get(key, 0.0))
+	for key_value in ["start_anchor", "end_anchor", "start_date", "end_date", "report_date"]:
+		var key: String = str(key_value)
+		if typeof(source.get(key, {})) == TYPE_DICTIONARY:
+			normalized[key] = source.get(key, {}).duplicate(true)
+	return normalized
+
+
+func _research_evidence_dedupe_key(row: Dictionary) -> String:
+	var parts: Array = [
+		_research_dedupe_segment(str(row.get("source_type", "manual"))),
+		_research_dedupe_segment(str(row.get("company_id", ""))),
+		_research_dedupe_segment(str(row.get("sector_id", ""))),
+		_research_dedupe_segment(str(row.get("source_id", ""))),
+		_research_dedupe_segment(str(row.get("label", ""))),
+		_research_dedupe_segment(str(row.get("value", ""))),
+		_research_dedupe_segment(str(row.get("pattern_id", ""))),
+		_research_dedupe_segment(str(row.get("chart_range", row.get("range_id", "")))),
+		_research_dedupe_segment(str(row.get("region_label", "")))
+	]
+	return "|".join(parts)
+
+
+func _research_dedupe_segment(value: String) -> String:
+	return value.strip_edges().to_lower().replace("\n", " ").replace("\t", " ")
+
+
 func _normalize_player_thesis(source_thesis: Variant) -> Dictionary:
 	var source: Dictionary = source_thesis if typeof(source_thesis) == TYPE_DICTIONARY else {}
 	var thesis_id: String = str(source.get("id", ""))
@@ -3336,6 +3466,10 @@ func _normalize_player_thesis(source_thesis: Variant) -> Dictionary:
 			"impact": str(row.get("impact", "mixed")),
 			"day_index": int(row.get("day_index", day_index))
 		}
+		for key_value in ["source_type", "source_id", "source_evidence_id", "interpretation", "interpretation_label", "player_note"]:
+			var key: String = str(key_value)
+			if row.has(key):
+				normalized_row[key] = str(row.get(key, ""))
 		for key_value in [
 			"company_id",
 			"ticker",
@@ -3356,7 +3490,7 @@ func _normalize_player_thesis(source_thesis: Variant) -> Dictionary:
 			var key: String = str(key_value)
 			if row.has(key):
 				normalized_row[key] = float(row.get(key, 0.0))
-		for key_value in ["start_anchor", "end_anchor", "start_date", "end_date", "report_date"]:
+		for key_value in ["start_anchor", "end_anchor", "start_date", "end_date", "report_date", "captured_trade_date"]:
 			var key: String = str(key_value)
 			if typeof(row.get(key, {})) == TYPE_DICTIONARY:
 				normalized_row[key] = row.get(key, {}).duplicate(true)

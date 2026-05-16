@@ -22,11 +22,11 @@ const COLOR_REPORT_CREAM_ALT := Color(0.929412, 0.894118, 0.8, 1)
 const REPORT_PREPARE_STEP_SECONDS := 0.34
 const REPORT_PREPARE_LINES := [
 	"Reviewing selected evidence...",
-	"Checking valuation, tape, and risk...",
-	"Formatting research note..."
+	"Writing the thesis...",
+	"Formatting the thesis view..."
 ]
 const EVIDENCE_DISCIPLINE_PILLARS := [
-	{"id": "anchor", "label": "Anchor", "categories": ["fundamentals", "financials", "valuation"], "focus_category": "fundamentals"},
+	{"id": "anchor", "label": "Anchor", "categories": ["fundamentals", "financials", "valuation", "ownership", "management"], "focus_category": "fundamentals"},
 	{"id": "price", "label": "Price", "categories": ["price_action"], "focus_category": "price_action"},
 	{"id": "tape", "label": "Tape", "categories": ["broker_flow"], "focus_category": "broker_flow"},
 	{"id": "catalyst", "label": "Catalyst", "categories": ["sector_macro", "news", "twooter", "network_intel", "corporate_events"], "focus_category": "sector_macro"},
@@ -45,16 +45,47 @@ const HORIZON_OPTIONS := [
 	{"id": "event", "label": "Event"}
 ]
 const EVIDENCE_TABS := [
-	{"id": "fundamental", "label": "Fundamental", "categories": ["fundamentals", "financials", "valuation", "ownership", "risk_invalidation"]},
-	{"id": "technical", "label": "Technical", "categories": ["price_action", "broker_flow", "sector_macro"]},
-	{"id": "news", "label": "News", "categories": ["news", "corporate_events", "network_intel"]},
-	{"id": "social", "label": "Social", "categories": ["twooter"]}
+	{"id": "support", "label": "Support"},
+	{"id": "risk", "label": "Risk"},
+	{"id": "contradiction", "label": "Contradict"},
+	{"id": "watch", "label": "Watch"},
+	{"id": "invalidation", "label": "Invalidation"}
 ]
+
+class EvidenceDragButton:
+	extends Button
+	var drag_payload: Dictionary = {}
+
+	func _get_drag_data(_at_position: Vector2) -> Variant:
+		if drag_payload.is_empty():
+			return null
+		var preview := Label.new()
+		preview.text = str(drag_payload.get("label", "Evidence"))
+		preview.add_theme_font_size_override("font_size", 12)
+		set_drag_preview(preview)
+		return drag_payload.duplicate(true)
+
+
+class EvidenceDropZone:
+	extends PanelContainer
+	var owner_widget: Node = null
+
+	func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
+		if owner_widget == null or typeof(data) != TYPE_DICTIONARY:
+			return false
+		var payload: Dictionary = data
+		return str(payload.get("kind", "")) == "thesis_research_evidence"
+
+	func _drop_data(_at_position: Vector2, data: Variant) -> void:
+		if owner_widget != null and typeof(data) == TYPE_DICTIONARY:
+			var payload: Dictionary = data
+			owner_widget._attach_research_evidence_from_drop(str(payload.get("evidence_id", "")))
 
 var selected_external_company_id: String = ""
 var selected_thesis_id: String = ""
+var thesis_draft_active: bool = false
 var selected_stance_id: String = "bullish"
-var selected_evidence_tab_id: String = "fundamental"
+var selected_evidence_tab_id: String = "support"
 var board_snapshot: Dictionary = {}
 var evidence_snapshot: Dictionary = {}
 var suppress_thesis_changed_refresh: bool = false
@@ -74,12 +105,21 @@ var title_edit: LineEdit = null
 var stance_option: OptionButton = null
 var horizon_option: OptionButton = null
 var create_button: Button = null
+var sidebar_create_button: Button = null
 var update_button: Button = null
+var builder_intro_panel: Control = null
+var builder_panel: Control = null
+var builder_empty_label: Label = null
+var available_evidence_scroll: ScrollContainer = null
+var attached_evidence_scroll: ScrollContainer = null
+var evidence_columns_row: HBoxContainer = null
+var attached_evidence_drop_zone: EvidenceDropZone = null
 var evidence_category_option: OptionButton = null
 var evidence_option: OptionButton = null
 var evidence_detail_label: Label = null
 var evidence_discipline_label: Label = null
-var evidence_card_grid: HFlowContainer = null
+var evidence_card_grid: VBoxContainer = null
+var attached_evidence_column: VBoxContainer = null
 var evidence_chip_flow: HFlowContainer = null
 var add_evidence_button: Button = null
 var selected_evidence_list: ItemList = null
@@ -179,7 +219,7 @@ func _build_ui() -> void:
 	status_label = Label.new()
 	status_label.name = "ThesisStatusLabel"
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_label.text = "Create a thesis, add evidence, then generate a research note."
+	status_label.text = "Capture evidence from the market apps, arrange it here, then generate a thesis."
 	_style_label(status_label, COLOR_MUTED, 12)
 	left_vbox.add_child(status_label)
 
@@ -212,6 +252,14 @@ func _build_ui() -> void:
 	_style_label(sidebar_next_gap_label, COLOR_MUTED, 12)
 	left_vbox.add_child(sidebar_next_gap_label)
 
+	sidebar_create_button = Button.new()
+	sidebar_create_button.name = "ThesisSidebarCreateButton"
+	sidebar_create_button.text = "Create Thesis"
+	sidebar_create_button.visible = false
+	sidebar_create_button.custom_minimum_size = Vector2(0, 34)
+	sidebar_create_button.pressed.connect(_on_create_thesis_pressed)
+	left_vbox.add_child(sidebar_create_button)
+
 	thesis_list = ItemList.new()
 	thesis_list.name = "ThesisList"
 	thesis_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -229,34 +277,57 @@ func _build_ui() -> void:
 	center_margin.add_theme_constant_override("margin_right", 12)
 	center_margin.add_theme_constant_override("margin_bottom", 12)
 	center_panel.add_child(center_margin)
-	var center_scroll := ScrollContainer.new()
-	center_scroll.name = "ThesisBuilderScroll"
-	center_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	center_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	center_margin.add_child(center_scroll)
 	var center_vbox := VBoxContainer.new()
 	center_vbox.name = "ThesisBuilderVBox"
 	center_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center_vbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	center_vbox.add_theme_constant_override("separation", 8)
-	center_scroll.add_child(center_vbox)
-	center_vbox.add_child(_make_step_flow_row())
-	center_vbox.add_child(_make_title("1 Build"))
+	center_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	center_vbox.add_theme_constant_override("separation", 10)
+	center_margin.add_child(center_vbox)
+
+	builder_intro_panel = _make_panel("ThesisBuilderIntroPanel")
+	builder_intro_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	builder_intro_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	center_vbox.add_child(builder_intro_panel)
+	var intro_vbox := _panel_vbox(builder_intro_panel as PanelContainer, "ThesisBuilderIntroVBox")
+	intro_vbox.add_child(_make_title("Build A Thesis"))
+	var intro_copy := Label.new()
+	intro_copy.name = "ThesisBuilderIntroCopy"
+	intro_copy.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	intro_copy.text = "Capture evidence from Key Stats or Chart, then create a thesis. Pick the stock, stance, and timeframe, drag evidence into the board, classify what each item means, and generate the thesis when the evidence tells a coherent story."
+	_style_label(intro_copy, COLOR_MUTED, 13)
+	intro_vbox.add_child(intro_copy)
+	var intro_spacer := Control.new()
+	intro_spacer.custom_minimum_size = Vector2(0, 12)
+	intro_vbox.add_child(intro_spacer)
+	create_button = Button.new()
+	create_button.name = "ThesisCreateButton"
+	create_button.text = "Create Thesis"
+	create_button.custom_minimum_size = Vector2(160, 38)
+	create_button.pressed.connect(_on_create_thesis_pressed)
+	intro_vbox.add_child(create_button)
+
+	builder_panel = VBoxContainer.new()
+	builder_panel.name = "ThesisBuilderWorkPanel"
+	builder_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	builder_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	builder_panel.add_theme_constant_override("separation", 8)
+	center_vbox.add_child(builder_panel)
+	builder_panel.add_child(_make_title("1 Build"))
 
 	company_option = OptionButton.new()
 	company_option.name = "ThesisCompanyOption"
-	center_vbox.add_child(company_option)
+	company_option.item_selected.connect(_on_company_option_selected)
+	builder_panel.add_child(company_option)
 
 	title_edit = LineEdit.new()
 	title_edit.name = "ThesisTitleEdit"
 	title_edit.placeholder_text = "Thesis title"
-	center_vbox.add_child(title_edit)
+	builder_panel.add_child(title_edit)
 
 	var meta_row := HBoxContainer.new()
 	meta_row.name = "ThesisMetaRow"
 	meta_row.add_theme_constant_override("separation", 8)
-	center_vbox.add_child(meta_row)
+	builder_panel.add_child(meta_row)
 	stance_option = OptionButton.new()
 	stance_option.name = "ThesisStanceOption"
 	stance_option.visible = false
@@ -281,71 +352,90 @@ func _build_ui() -> void:
 	create_row.name = "ThesisCreateRow"
 	create_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	create_row.add_theme_constant_override("separation", 8)
-	center_vbox.add_child(create_row)
-	create_button = Button.new()
-	create_button.name = "ThesisCreateButton"
-	create_button.text = "Create"
-	create_button.custom_minimum_size = Vector2(96, 34)
-	create_button.pressed.connect(_on_create_thesis_pressed)
-	create_row.add_child(create_button)
+	builder_panel.add_child(create_row)
 	update_button = Button.new()
 	update_button.name = "ThesisUpdateButton"
-	update_button.text = "Update"
-	update_button.custom_minimum_size = Vector2(96, 34)
+	update_button.text = "Save Thesis"
+	update_button.custom_minimum_size = Vector2(126, 34)
 	update_button.pressed.connect(_on_update_thesis_pressed)
 	create_row.add_child(update_button)
 
-	center_vbox.add_child(_make_title("2 Add Evidence"))
-	evidence_discipline_label = Label.new()
-	evidence_discipline_label.name = "ThesisEvidenceDisciplineLabel"
-	evidence_discipline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	evidence_discipline_label.custom_minimum_size = Vector2(0, 58)
-	evidence_discipline_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_label(evidence_discipline_label, COLOR_MUTED, 12)
-	center_vbox.add_child(evidence_discipline_label)
+	builder_panel.add_child(_make_title("2 Research Tray"))
 
-	var evidence_tab_row := HBoxContainer.new()
-	evidence_tab_row.name = "ThesisEvidenceTabRow"
-	evidence_tab_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	evidence_tab_row.add_theme_constant_override("separation", 12)
-	center_vbox.add_child(evidence_tab_row)
-	for tab_value in EVIDENCE_TABS:
-		var tab: Dictionary = tab_value
-		var tab_button: Button = _make_evidence_tab_button(str(tab.get("id", "")), str(tab.get("label", "")))
-		evidence_tab_row.add_child(tab_button)
-		evidence_tab_buttons[str(tab.get("id", ""))] = tab_button
+	builder_empty_label = Label.new()
+	builder_empty_label.name = "ThesisBuilderEmptyLabel"
+	builder_empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	builder_empty_label.custom_minimum_size = Vector2(0, 42)
+	_style_label(builder_empty_label, COLOR_MUTED, 12)
+	builder_panel.add_child(builder_empty_label)
 
-	evidence_card_grid = HFlowContainer.new()
+	evidence_columns_row = HBoxContainer.new()
+	evidence_columns_row.name = "ThesisEvidenceColumnsRow"
+	evidence_columns_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	evidence_columns_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	evidence_columns_row.add_theme_constant_override("separation", 10)
+	builder_panel.add_child(evidence_columns_row)
+
+	var available_panel := _make_panel("ThesisAvailableEvidencePanel")
+	available_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	available_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	evidence_columns_row.add_child(available_panel)
+	var available_vbox := _panel_vbox(available_panel, "ThesisAvailableEvidenceVBox")
+	available_vbox.add_child(_make_title("Captured Evidence"))
+	available_evidence_scroll = ScrollContainer.new()
+	available_evidence_scroll.name = "ThesisAvailableEvidenceScroll"
+	available_evidence_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	available_evidence_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	available_evidence_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	available_vbox.add_child(available_evidence_scroll)
+	evidence_card_grid = VBoxContainer.new()
 	evidence_card_grid.name = "ThesisEvidenceCardGrid"
 	evidence_card_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	evidence_card_grid.add_theme_constant_override("h_separation", 8)
-	evidence_card_grid.add_theme_constant_override("v_separation", 8)
-	center_vbox.add_child(evidence_card_grid)
+	evidence_card_grid.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	evidence_card_grid.add_theme_constant_override("separation", 8)
+	available_evidence_scroll.add_child(evidence_card_grid)
 
-	var chip_title := Label.new()
-	chip_title.name = "ThesisEvidenceChipTitle"
-	chip_title.text = "Board Chips"
-	_style_label(chip_title, COLOR_BROWN, 14)
-	center_vbox.add_child(chip_title)
+	attached_evidence_drop_zone = EvidenceDropZone.new()
+	attached_evidence_drop_zone.name = "ThesisAttachedEvidencePanel"
+	attached_evidence_drop_zone.owner_widget = self
+	attached_evidence_drop_zone.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	attached_evidence_drop_zone.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	attached_evidence_drop_zone.add_theme_stylebox_override("panel", _make_stylebox(COLOR_PANEL, COLOR_BORDER, 1))
+	evidence_columns_row.add_child(attached_evidence_drop_zone)
+	var attached_vbox := _panel_vbox(attached_evidence_drop_zone, "ThesisAttachedEvidenceVBox")
+	attached_vbox.add_child(_make_title("Thesis Evidence"))
+	attached_evidence_scroll = ScrollContainer.new()
+	attached_evidence_scroll.name = "ThesisAttachedEvidenceScroll"
+	attached_evidence_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	attached_evidence_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	attached_evidence_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	attached_vbox.add_child(attached_evidence_scroll)
+	attached_evidence_column = VBoxContainer.new()
+	attached_evidence_column.name = "ThesisAttachedEvidenceColumn"
+	attached_evidence_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	attached_evidence_column.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	attached_evidence_column.add_theme_constant_override("separation", 8)
+	attached_evidence_scroll.add_child(attached_evidence_column)
 
 	evidence_chip_flow = HFlowContainer.new()
 	evidence_chip_flow.name = "ThesisEvidenceChipFlow"
+	evidence_chip_flow.visible = false
 	evidence_chip_flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	evidence_chip_flow.add_theme_constant_override("h_separation", 6)
 	evidence_chip_flow.add_theme_constant_override("v_separation", 6)
-	center_vbox.add_child(evidence_chip_flow)
+	builder_panel.add_child(evidence_chip_flow)
 
 	evidence_category_option = OptionButton.new()
 	evidence_category_option.name = "ThesisEvidenceCategoryOption"
 	evidence_category_option.visible = false
 	evidence_category_option.item_selected.connect(_on_evidence_category_selected)
-	center_vbox.add_child(evidence_category_option)
+	builder_panel.add_child(evidence_category_option)
 
 	evidence_option = OptionButton.new()
 	evidence_option.name = "ThesisEvidenceOption"
 	evidence_option.visible = false
 	evidence_option.item_selected.connect(_on_evidence_option_selected)
-	center_vbox.add_child(evidence_option)
+	builder_panel.add_child(evidence_option)
 
 	evidence_detail_label = Label.new()
 	evidence_detail_label.name = "ThesisEvidenceDetailLabel"
@@ -353,53 +443,53 @@ func _build_ui() -> void:
 	evidence_detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	evidence_detail_label.custom_minimum_size = Vector2(0, 60)
 	_style_label(evidence_detail_label, COLOR_MUTED, 12)
-	center_vbox.add_child(evidence_detail_label)
+	builder_panel.add_child(evidence_detail_label)
 
 	add_evidence_button = Button.new()
 	add_evidence_button.name = "ThesisAddEvidenceButton"
 	add_evidence_button.text = "Add Evidence"
 	add_evidence_button.visible = false
 	add_evidence_button.pressed.connect(_on_add_evidence_pressed)
-	center_vbox.add_child(add_evidence_button)
+	builder_panel.add_child(add_evidence_button)
 
 	selected_evidence_list = ItemList.new()
 	selected_evidence_list.name = "ThesisEvidenceList"
 	selected_evidence_list.visible = false
 	selected_evidence_list.custom_minimum_size = Vector2(0, 150)
 	selected_evidence_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	center_vbox.add_child(selected_evidence_list)
+	builder_panel.add_child(selected_evidence_list)
 
 	var evidence_actions := HBoxContainer.new()
 	evidence_actions.name = "ThesisEvidenceActions"
 	evidence_actions.visible = false
 	evidence_actions.add_theme_constant_override("separation", 8)
-	center_vbox.add_child(evidence_actions)
+	builder_panel.add_child(evidence_actions)
 	remove_evidence_button = Button.new()
 	remove_evidence_button.name = "ThesisRemoveEvidenceButton"
 	remove_evidence_button.text = "Remove Selected"
 	remove_evidence_button.pressed.connect(_on_remove_evidence_pressed)
 	evidence_actions.add_child(remove_evidence_button)
 
-	center_vbox.add_child(_make_title("3 Review"))
+	builder_panel.add_child(_make_title("3 Thesis"))
 	review_state_label = Label.new()
 	review_state_label.name = "ThesisReviewStateLabel"
 	review_state_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	review_state_label.custom_minimum_size = Vector2(0, 54)
 	_style_label(review_state_label, COLOR_MUTED, 12)
-	center_vbox.add_child(review_state_label)
+	builder_panel.add_child(review_state_label)
 
 	var report_actions := HBoxContainer.new()
-	report_actions.name = "ThesisReportActions"
+	report_actions.name = "ThesisBuilderActionRow"
 	report_actions.add_theme_constant_override("separation", 8)
-	center_vbox.add_child(report_actions)
+	builder_panel.add_child(report_actions)
 	generate_report_button = Button.new()
 	generate_report_button.name = "ThesisGenerateReportButton"
-	generate_report_button.text = "Generate Report (%d AP)" % GameManager.get_thesis_report_action_cost()
+	generate_report_button.text = "Generate Thesis (%d AP)" % GameManager.get_thesis_report_action_cost()
 	generate_report_button.pressed.connect(_on_generate_report_pressed)
 	report_actions.add_child(generate_report_button)
 	view_paper_button = Button.new()
 	view_paper_button.name = "ThesisViewPaperButton"
-	view_paper_button.text = "View Paper"
+	view_paper_button.text = "View Thesis"
 	view_paper_button.pressed.connect(_on_view_paper_pressed)
 	report_actions.add_child(view_paper_button)
 	refresh_review_button = Button.new()
@@ -487,13 +577,20 @@ func _build_report_overlay() -> void:
 	thesis_white_paper_panel.add_theme_stylebox_override("panel", _make_stylebox(_theme_color("desktop.cream", COLOR_REPORT_CREAM), _theme_color("desktop.frame", Color(0.70, 0.63, 0.46, 1)), 1))
 	center.add_child(thesis_white_paper_panel)
 
+	var paper_shell := VBoxContainer.new()
+	paper_shell.name = "ThesisWhitePaperShell"
+	paper_shell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	paper_shell.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	paper_shell.add_theme_constant_override("separation", 0)
+	thesis_white_paper_panel.add_child(paper_shell)
+
 	var page_scroll := ScrollContainer.new()
 	page_scroll.name = "ThesisWhitePaperPageScroll"
 	page_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	page_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	page_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	page_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	thesis_white_paper_panel.add_child(page_scroll)
+	paper_shell.add_child(page_scroll)
 
 	var paper_vbox := VBoxContainer.new()
 	paper_vbox.name = "ThesisWhitePaperVBox"
@@ -531,12 +628,12 @@ func _build_report_overlay() -> void:
 	mast_top_row.add_child(mast_copy)
 	report_badge_label = Label.new()
 	report_badge_label.name = "ThesisWhitePaperBadgeLabel"
-	report_badge_label.text = "GENERATED RESEARCH NOTE"
+	report_badge_label.text = "GENERATED THESIS"
 	_style_label(report_badge_label, Color(0.78, 0.63, 0.25, 0.72), 9)
 	mast_copy.add_child(report_badge_label)
 	var mast_type_label := Label.new()
 	mast_type_label.name = "ThesisWhitePaperTypeLabel"
-	mast_type_label.text = "WHITE PAPER"
+	mast_type_label.text = "THESIS"
 	_style_label(mast_type_label, COLOR_REPORT_GOLD.lightened(0.12), 12)
 	mast_copy.add_child(mast_type_label)
 
@@ -554,7 +651,7 @@ func _build_report_overlay() -> void:
 	overlay_actions.add_child(report_refresh_review_button)
 	report_regenerate_button = Button.new()
 	report_regenerate_button.name = "ThesisReportRegenerateButton"
-	report_regenerate_button.text = "Regenerate (%d AP)" % GameManager.get_thesis_report_action_cost()
+	report_regenerate_button.text = "Regenerate Thesis (%d AP)" % GameManager.get_thesis_report_action_cost()
 	report_regenerate_button.custom_minimum_size = Vector2(142, 34)
 	report_regenerate_button.set_meta("skip_thesis_style", true)
 	report_regenerate_button.pressed.connect(_on_regenerate_report_pressed)
@@ -626,10 +723,11 @@ func _build_report_overlay() -> void:
 
 	var summary_row := HBoxContainer.new()
 	summary_row.name = "ThesisWhitePaperSummaryRow"
+	summary_row.visible = false
 	summary_row.custom_minimum_size = Vector2(0, 112)
 	summary_row.add_theme_constant_override("separation", 0)
 	paper_vbox.add_child(summary_row)
-	var recommendation_cell_wrap := _make_report_summary_cell("Recommendation")
+	var recommendation_cell_wrap := _make_report_summary_cell("Thesis State")
 	summary_row.add_child(recommendation_cell_wrap)
 	var recommendation_cell := recommendation_cell_wrap.get_node("Inner") as VBoxContainer
 	report_recommendation_badge = PanelContainer.new()
@@ -679,7 +777,7 @@ func _build_report_overlay() -> void:
 	_style_label(report_grade_sub_label, COLOR_MUTED, 11)
 	grade_copy.add_child(report_grade_sub_label)
 
-	var implied_cell_wrap := _make_report_summary_cell("Implied Move")
+	var implied_cell_wrap := _make_report_summary_cell("Evidence Count")
 	summary_row.add_child(implied_cell_wrap)
 	var implied_cell := implied_cell_wrap.get_node("Inner") as VBoxContainer
 	report_implied_label = Label.new()
@@ -694,6 +792,7 @@ func _build_report_overlay() -> void:
 
 	var price_panel := PanelContainer.new()
 	price_panel.name = "ThesisWhitePaperPricePanel"
+	price_panel.visible = false
 	price_panel.add_theme_stylebox_override("panel", _make_stylebox(_theme_color("desktop.panel", COLOR_REPORT_CREAM_ALT), _theme_color("desktop.frame", Color(0.78, 0.70, 0.52, 1)), 0))
 	paper_vbox.add_child(price_panel)
 	var price_margin := MarginContainer.new()
@@ -705,7 +804,7 @@ func _build_report_overlay() -> void:
 	var price_vbox := VBoxContainer.new()
 	price_vbox.add_theme_constant_override("separation", 10)
 	price_margin.add_child(price_vbox)
-	var price_title := _make_report_caption_label("Price Target Range")
+	var price_title := _make_report_caption_label("Reference Price")
 	price_vbox.add_child(price_title)
 	var price_row := HBoxContainer.new()
 	price_row.add_theme_constant_override("separation", 12)
@@ -718,7 +817,7 @@ func _build_report_overlay() -> void:
 	report_price_current_label.custom_minimum_size = Vector2(88, 0)
 	_style_label(report_price_current_label, COLOR_TEXT, 15)
 	price_row.add_child(report_price_current_label)
-	price_row.add_child(_make_report_badge_label("Report Price", COLOR_POSITIVE))
+	price_row.add_child(_make_report_badge_label("Memo Snapshot", COLOR_POSITIVE))
 	var range_cards := HBoxContainer.new()
 	range_cards.name = "ThesisWhitePaperRangeCards"
 	range_cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -758,16 +857,32 @@ func _build_report_overlay() -> void:
 	body_margin.add_theme_constant_override("margin_right", 18)
 	body_margin.add_theme_constant_override("margin_bottom", 16)
 	paper_vbox.add_child(body_margin)
+	var body_vbox := VBoxContainer.new()
+	body_vbox.name = "ThesisWhitePaperBodyVBox"
+	body_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_vbox.add_theme_constant_override("separation", 12)
+	body_margin.add_child(body_vbox)
 	report_sections_container = VBoxContainer.new()
 	report_sections_container.name = "ThesisWhitePaperSections"
+	report_sections_container.visible = false
 	report_sections_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	report_sections_container.add_theme_constant_override("separation", 0)
-	body_margin.add_child(report_sections_container)
+	body_vbox.add_child(report_sections_container)
+
+	report_text = RichTextLabel.new()
+	report_text.name = "ThesisReportText"
+	report_text.fit_content = true
+	report_text.scroll_active = false
+	report_text.selection_enabled = true
+	report_text.bbcode_enabled = true
+	_style_rich_text(report_text)
+	body_vbox.add_child(report_text)
 
 	var footer_panel := PanelContainer.new()
 	footer_panel.name = "ThesisWhitePaperFooterPanel"
+	footer_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	footer_panel.add_theme_stylebox_override("panel", _make_stylebox(COLOR_REPORT_CREAM_ALT, COLOR_REPORT_MAROON, 2))
-	paper_vbox.add_child(footer_panel)
+	paper_shell.add_child(footer_panel)
 	var footer_margin := MarginContainer.new()
 	footer_margin.add_theme_constant_override("margin_left", 18)
 	footer_margin.add_theme_constant_override("margin_top", 9)
@@ -779,16 +894,6 @@ func _build_report_overlay() -> void:
 	report_footer_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_style_label(report_footer_label, COLOR_MUTED, 11)
 	footer_margin.add_child(report_footer_label)
-
-	report_text = RichTextLabel.new()
-	report_text.name = "ThesisReportText"
-	report_text.visible = false
-	report_text.fit_content = true
-	report_text.scroll_active = false
-	report_text.selection_enabled = true
-	report_text.bbcode_enabled = true
-	_style_rich_text(report_text)
-	paper_vbox.add_child(report_text)
 
 
 func _refresh_company_options() -> void:
@@ -810,32 +915,47 @@ func _refresh_company_options() -> void:
 func _refresh_thesis_list() -> void:
 	var previous_id: String = selected_thesis_id
 	thesis_list.clear()
+	var thesis_count: int = 0
 	for thesis_value in board_snapshot.get("theses", []):
 		if typeof(thesis_value) != TYPE_DICTIONARY:
 			continue
 		var thesis: Dictionary = thesis_value
+		thesis_count += 1
 		var index: int = thesis_list.item_count
 		var status_suffix: String = "closed" if str(thesis.get("status", "open")) == "closed" else "%d evidence" % int(thesis.get("evidence_count", 0))
 		thesis_list.add_item("%s\n%s | %s" % [str(thesis.get("title", "Untitled thesis")), str(thesis.get("ticker", "")), status_suffix])
 		thesis_list.set_item_metadata(index, str(thesis.get("id", "")))
 		if str(thesis.get("id", "")) == previous_id:
 			thesis_list.select(index)
-	if selected_thesis_id.is_empty() and thesis_list.item_count > 0:
-		thesis_list.select(0)
-		selected_thesis_id = str(thesis_list.get_item_metadata(0))
+	if sidebar_create_button != null:
+		sidebar_create_button.visible = thesis_count > 0
 
 
 func _refresh_selected_thesis() -> void:
 	var thesis: Dictionary = _selected_thesis()
 	var has_thesis: bool = not thesis.is_empty()
+	var has_builder: bool = has_thesis or thesis_draft_active
 	var has_report: bool = has_thesis and not thesis.get("report", {}).is_empty()
 	var report_action_cost: int = GameManager.get_thesis_report_action_cost()
 	var remaining_ap: int = int(GameManager.get_daily_action_snapshot().get("remaining", 0))
 	var can_generate_report: bool = has_thesis and not report_generation_running and remaining_ap >= report_action_cost
+	if builder_intro_panel != null:
+		builder_intro_panel.visible = not has_builder
+	if builder_panel != null:
+		builder_panel.visible = has_builder
+	if company_option != null:
+		company_option.disabled = has_thesis or report_generation_running
+		company_option.tooltip_text = "Create a new thesis to choose a different stock." if has_thesis else "Pick the stock this memo is about."
+	if sidebar_create_button != null:
+		sidebar_create_button.disabled = thesis_draft_active or report_generation_running
+		sidebar_create_button.tooltip_text = "Finish or cancel the current draft first." if thesis_draft_active else "Start a new thesis draft."
 	update_button.disabled = not has_thesis or report_generation_running
+	if thesis_draft_active:
+		update_button.disabled = report_generation_running or _selected_company_id().is_empty()
+	update_button.text = "Update" if has_thesis else "Save Thesis"
 	add_evidence_button.disabled = not has_thesis or report_generation_running
 	remove_evidence_button.disabled = not has_thesis or report_generation_running
-	generate_report_button.text = "Generate Report (%d AP)" % report_action_cost
+	generate_report_button.text = "Generate Thesis (%d AP)" % report_action_cost
 	generate_report_button.disabled = not can_generate_report
 	generate_report_button.tooltip_text = "Need %d AP to generate a Thesis report." % report_action_cost if remaining_ap < report_action_cost else "Generate a frozen research note."
 	view_paper_button.disabled = not has_report or report_generation_running
@@ -844,12 +964,12 @@ func _refresh_selected_thesis() -> void:
 	if report_refresh_review_button != null:
 		report_refresh_review_button.disabled = not has_report or report_generation_running
 	if report_regenerate_button != null:
-		report_regenerate_button.text = "Regenerate (%d AP)" % report_action_cost
+		report_regenerate_button.text = "Regenerate Thesis (%d AP)" % report_action_cost
 		report_regenerate_button.disabled = not can_generate_report
 		report_regenerate_button.tooltip_text = "Need %d AP to regenerate this Thesis report." % report_action_cost if remaining_ap < report_action_cost else "Regenerate the frozen report with current evidence."
 	if report_close_button != null:
 		report_close_button.disabled = report_generation_running
-	if not has_thesis:
+	if not has_builder:
 		if report_text != null:
 			report_text.text = ""
 		review_state_label.text = "No active review."
@@ -865,6 +985,18 @@ func _refresh_selected_thesis() -> void:
 		_refresh_evidence_tab_buttons()
 		if report_overlay != null and report_overlay.visible and not report_generation_running:
 			_hide_report_overlay()
+		return
+	if thesis_draft_active and not has_thesis:
+		if selected_external_company_id.is_empty() and _selected_company_id().is_empty() and company_option.item_count > 0:
+			company_option.select(0)
+		_refresh_evidence_options(_selected_company_id())
+		title_edit.text = title_edit.text
+		_refresh_stance_buttons()
+		_refresh_evidence_cards({})
+		_refresh_evidence_chips({})
+		_refresh_live_sidebar({})
+		_refresh_evidence_discipline({})
+		_refresh_report({})
 		return
 
 	selected_thesis_id = str(thesis.get("id", ""))
@@ -895,15 +1027,10 @@ func _refresh_selected_thesis() -> void:
 
 
 func _refresh_evidence_options(company_id: String) -> void:
-	evidence_snapshot = GameManager.get_thesis_evidence_options(company_id)
+	evidence_snapshot = GameManager.get_research_tray_snapshot(company_id)
 	evidence_category_option.clear()
-	for category_value in evidence_snapshot.get("categories", []):
-		if typeof(category_value) != TYPE_DICTIONARY:
-			continue
-		var category: Dictionary = category_value
-		var index: int = evidence_category_option.item_count
-		evidence_category_option.add_item(str(category.get("label", category.get("id", ""))))
-		evidence_category_option.set_item_metadata(index, category.duplicate(true))
+	evidence_category_option.add_item("Research Tray")
+	evidence_category_option.set_item_metadata(0, {"id": "research_tray", "label": "Research Tray", "options": evidence_snapshot.get("rows", [])})
 	_refresh_evidence_option_picker()
 	_refresh_evidence_tab_buttons()
 
@@ -924,7 +1051,7 @@ func _refresh_evidence_option_picker() -> void:
 func _refresh_evidence_detail() -> void:
 	var option: Dictionary = _selected_evidence_option()
 	if option.is_empty():
-		evidence_detail_label.text = "No evidence option available."
+		evidence_detail_label.text = "Capture evidence from Key Stats, Chart, News, Twooter, or Network first."
 		return
 	evidence_detail_label.text = "%s\nImpact: %s" % [
 		str(option.get("detail", "")),
@@ -947,23 +1074,57 @@ func _refresh_evidence_cards(thesis: Dictionary) -> void:
 	if evidence_card_grid == null:
 		return
 	_clear_children(evidence_card_grid)
+	if attached_evidence_column != null:
+		_clear_children(attached_evidence_column)
 	rendered_evidence_cards.clear()
-	if thesis.is_empty():
-		evidence_card_grid.add_child(_make_empty_evidence_label("Create a thesis first, then browse evidence cards here."))
+	var has_saved_thesis: bool = not thesis.is_empty()
+	var rows: Array = evidence_snapshot.get("rows", [])
+	if builder_empty_label != null:
+		builder_empty_label.visible = rows.is_empty()
+		builder_empty_label.text = "No captured research for this stock yet. Inspect Key Stats or mark a chart pattern, then add it to the Research Tray." if rows.is_empty() else ""
+	if evidence_columns_row != null:
+		evidence_columns_row.visible = not rows.is_empty()
+	if rows.is_empty():
+		evidence_card_grid.add_child(_make_empty_evidence_label("No captured evidence yet. Capture a metric or chart pattern first."))
+		if attached_evidence_column != null:
+			attached_evidence_column.add_child(_make_empty_evidence_label("Memo board is waiting for evidence."))
 		return
-	var options: Array = _flatten_evidence_options_for_tab(selected_evidence_tab_id)
-	if options.is_empty():
-		evidence_card_grid.add_child(_make_empty_evidence_label("No current data in this evidence tab."))
+	var attached_lookup: Dictionary = {}
+	for evidence_value in thesis.get("evidence", []):
+		if typeof(evidence_value) != TYPE_DICTIONARY:
+			continue
+		var attached_row: Dictionary = evidence_value
+		attached_lookup[str(attached_row.get("source_evidence_id", attached_row.get("id", "")))] = true
+	if not has_saved_thesis:
+		evidence_card_grid.add_child(_make_empty_evidence_label("Save the thesis first, then drag captured evidence into the memo board."))
+	else:
+		var added_available: bool = false
+		for option_value in rows:
+			if typeof(option_value) != TYPE_DICTIONARY:
+				continue
+			var option: Dictionary = option_value
+			var option_key: String = _evidence_option_key(option)
+			if option_key.is_empty() or attached_lookup.has(str(option.get("id", option_key))):
+				continue
+			rendered_evidence_cards[option_key] = option.duplicate(true)
+			evidence_card_grid.add_child(_build_evidence_card(option, thesis))
+			added_available = true
+		if not added_available:
+			evidence_card_grid.add_child(_make_empty_evidence_label("All captured evidence for this stock is already on the memo board."))
+	if attached_evidence_column == null:
 		return
-	for option_value in options:
+	if not has_saved_thesis:
+		attached_evidence_column.add_child(_make_empty_evidence_label("Save the thesis before arranging evidence here."))
+		return
+	var attached_rows: Array = thesis.get("evidence", [])
+	if attached_rows.is_empty():
+		attached_evidence_column.add_child(_make_empty_evidence_label("Drag evidence here. Classify each card after it lands."))
+		return
+	for option_value in attached_rows:
 		if typeof(option_value) != TYPE_DICTIONARY:
 			continue
 		var option: Dictionary = option_value
-		var option_key: String = _evidence_option_key(option)
-		if option_key.is_empty():
-			continue
-		rendered_evidence_cards[option_key] = option.duplicate(true)
-		evidence_card_grid.add_child(_build_evidence_card(option, thesis))
+		attached_evidence_column.add_child(_build_attached_evidence_card(option))
 
 
 func _refresh_evidence_chips(thesis: Dictionary) -> void:
@@ -1093,7 +1254,7 @@ func _refresh_evidence_discipline(thesis: Dictionary) -> void:
 func _refresh_report(thesis: Dictionary) -> void:
 	var review: Dictionary = thesis.get("review", {})
 	if review.is_empty():
-		review_state_label.text = "Review: generate a report first.\nThe white paper will freeze the current evidence, price, and date."
+		review_state_label.text = "Review: generate a thesis first.\nThe thesis will freeze the attached evidence, price, and date."
 	else:
 		review_state_label.text = "Review: %s\n%s" % [str(review.get("state", "Needs Review")), str(review.get("summary", ""))]
 	if thesis_white_paper_panel != null and thesis_white_paper_panel.visible:
@@ -1180,7 +1341,7 @@ func _populate_white_paper(thesis: Dictionary) -> void:
 	if report_meta_label != null:
 		report_meta_label.text = "%s - %s" % [str(report.get("company_name", "")), str(report.get("sector_name", ""))]
 	if report_badge_label != null:
-		report_badge_label.text = "GENERATED RESEARCH NOTE"
+		report_badge_label.text = "GENERATED THESIS"
 	if report_date_label != null:
 		report_date_label.text = "%s // DAY %d" % [str(report.get("generated_date_label", "")).to_upper(), int(report.get("generated_day_index", 0)) + 1]
 	if report_horizon_tag_label != null:
@@ -1204,32 +1365,36 @@ func _populate_white_paper(thesis: Dictionary) -> void:
 	if report_grade_sub_label != null:
 		report_grade_sub_label.text = _report_grade_subcopy(str(report.get("reasoning_grade", "")))
 	if report_implied_label != null:
-		report_implied_label.text = _format_percent(implied_move)
-		_style_label(report_implied_label, _report_move_color(implied_move), 22)
+		report_implied_label.text = "%d items" % int(report.get("evidence_count", 0))
+		_style_label(report_implied_label, COLOR_TEXT, 22)
 	if report_implied_sub_label != null:
-		report_implied_sub_label.text = "Report price %s" % _format_currency(float(report.get("report_price", 0.0)))
+		report_implied_sub_label.text = "Support %d | Risk %d | Watch %d" % [
+			int(report.get("support_count", 0)),
+			int(report.get("risk_count", 0)) + int(report.get("contradiction_count", 0)),
+			int(report.get("watch_count", 0))
+		]
 	if report_price_current_label != null:
 		report_price_current_label.text = _format_currency(float(report.get("report_price", 0.0)))
-	var target: Dictionary = report.get("target", {})
 	if report_target_low_label != null:
-		report_target_low_label.text = "REPORT PRICE\n%s" % _format_currency(float(report.get("report_price", 0.0)))
+		report_target_low_label.text = "MEMO PRICE\n%s" % _format_currency(float(report.get("report_price", 0.0)))
 		report_target_low_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_style_report_range_card_label(report_target_low_label, COLOR_MUTED)
 	if report_target_mid_label != null:
-		report_target_mid_label.text = "LOW TARGET\n%s" % _format_currency(float(target.get("low", 0.0)))
+		report_target_mid_label.text = "SUPPORT\n%d" % int(report.get("support_count", 0))
 		report_target_mid_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_style_report_range_card_label(report_target_mid_label, _report_move_color(implied_move))
+		_style_report_range_card_label(report_target_mid_label, COLOR_POSITIVE)
 	if report_target_high_label != null:
-		report_target_high_label.text = "HIGH TARGET\n%s" % _format_currency(float(target.get("high", 0.0)))
+		report_target_high_label.text = "RISKS\n%d" % (int(report.get("risk_count", 0)) + int(report.get("contradiction_count", 0)))
 		report_target_high_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_style_report_range_card_label(report_target_high_label, _report_move_color(implied_move))
+		_style_report_range_card_label(report_target_high_label, COLOR_NEGATIVE)
 	if report_investment_summary_label != null:
 		report_investment_summary_label.text = _investment_summary_for_report(report)
 	_populate_white_paper_sections(report)
 	if report_text != null:
+		report_text.visible = true
 		report_text.text = _format_report_text(thesis)
 	if report_footer_label != null:
-		report_footer_label.text = "THESIS BOARD // %s // FROZEN %s\nReport price %s - Day %d snapshot" % [
+		report_footer_label.text = "THESIS BOARD // %s // FROZEN %s\nReference price %s - Day %d snapshot" % [
 			str(report.get("ticker", "")),
 			str(report.get("generated_date_label", "")),
 			_format_currency(float(report.get("report_price", 0.0))),
@@ -1241,6 +1406,7 @@ func _populate_white_paper_sections(report: Dictionary) -> void:
 	if report_sections_container == null:
 		return
 	_clear_children(report_sections_container)
+	report_sections_container.visible = false
 	for section_value in report.get("sections", []):
 		if typeof(section_value) != TYPE_DICTIONARY:
 			continue
@@ -1338,16 +1504,14 @@ func _report_pills_for_text(key: String, body: String, report: Dictionary) -> Ar
 	var rows: Array = []
 	var key_lower: String = key.to_lower()
 	var body_lower: String = body.to_lower()
-	if key_lower.find("valuation") != -1 or body_lower.find("target") != -1 or body_lower.find("implied") != -1:
-		rows.append({"text": _format_percent(float(report.get("implied_upside_pct", 0.0))), "tone": _report_tone_for_move(float(report.get("implied_upside_pct", 0.0)))})
 	if body_lower.find("avoid") != -1 or body_lower.find("risk") != -1 or body_lower.find("negative") != -1 or body_lower.find("downside") != -1 or body_lower.find("distribution") != -1:
 		rows.append({"text": "Risk Check", "tone": "negative"})
 	elif body_lower.find("support") != -1 or body_lower.find("confirmed") != -1 or body_lower.find("complete") != -1 or body_lower.find("buy") != -1 or body_lower.find("accumulate") != -1:
 		rows.append({"text": "Support", "tone": "positive"})
 	else:
 		rows.append({"text": "Monitor", "tone": "neutral"})
-	if key_lower.find("recommendation") != -1 or body_lower.find(str(report.get("rating", "")).to_lower()) != -1:
-		rows.append({"text": str(report.get("rating", "")), "tone": _report_tone_for_rating(str(report.get("rating", "")), float(report.get("implied_upside_pct", 0.0)))})
+	if key_lower.find("memo") != -1 or body_lower.find(str(report.get("memo_state", report.get("rating", ""))).to_lower()) != -1:
+		rows.append({"text": str(report.get("memo_state", report.get("rating", ""))), "tone": "neutral"})
 	return rows
 
 
@@ -1505,45 +1669,24 @@ func _style_report_action_button(button: Button, variant: String) -> void:
 
 
 func _report_recommendation_subcopy(report: Dictionary) -> String:
-	var rating: String = str(report.get("rating", ""))
-	var implied: float = float(report.get("implied_upside_pct", 0.0))
-	match rating:
-		"Buy":
-			return "Conviction supports buying now."
-		"Accumulate":
-			return "Build gradually; avoid chasing spikes."
-		"Hold":
-			return "Existing holders can monitor risk."
-		"Watchlist":
-			return "No buy yet; wait for a cleaner setup."
-		"Trade Only":
-			return "Short-term setup only; keep size tight."
-		"Dividend Hold":
-			return "Income case can be held with risk checks."
-		"Avoid":
-			return "Downside or evidence risk outweighs entry."
-	if implied < 0.0:
-		return "Target sits below report price."
-	return "Monitor for entry signal."
+	var missing: Array = report.get("missing_notes", [])
+	if missing.is_empty():
+		return "Evidence base is ready for review."
+	return "Next: %s" % str(missing[0])
 
 
 func _investment_summary_for_report(report: Dictionary) -> String:
-	var target: Dictionary = report.get("target", {})
-	var rating: String = str(report.get("rating", ""))
 	var stance: String = str(report.get("stance", "")).capitalize()
 	var horizon: String = str(report.get("horizon", "")).capitalize()
-	var implied: float = float(report.get("implied_upside_pct", 0.0))
-	var setup_note := _report_recommendation_subcopy(report)
-	return "Investment summary: %s is a %s thesis over a %s horizon. Recommendation is %s, with a report price of %s, target range of %s - %s, and implied midpoint move of %s. %s" % [
+	return "Thesis summary: %s is a %s thesis over a %s horizon. It uses %s: %d support, %d risk/contradiction, and %d watch. %s" % [
 		str(report.get("ticker", "")),
 		stance,
 		horizon,
-		rating,
-		_format_currency(float(report.get("report_price", 0.0))),
-		_format_currency(float(target.get("low", 0.0))),
-		_format_currency(float(target.get("high", 0.0))),
-		_format_percent(implied),
-		setup_note
+		_count_phrase(int(report.get("evidence_count", 0)), "piece of evidence", "pieces of evidence"),
+		int(report.get("support_count", 0)),
+		int(report.get("risk_count", 0)) + int(report.get("contradiction_count", 0)),
+		int(report.get("watch_count", 0)),
+		_report_recommendation_subcopy(report)
 	]
 
 
@@ -1598,9 +1741,9 @@ func _report_tone_for_move(value: float) -> String:
 
 func _report_tone_for_rating(rating: String, implied: float) -> String:
 	match rating:
-		"Buy", "Accumulate", "Dividend Hold":
+		"Well Supported Memo":
 			return "positive"
-		"Avoid":
+		"Evidence Needed":
 			return "negative"
 		_:
 			return _report_tone_for_move(implied)
@@ -1626,36 +1769,867 @@ func _hide_report_overlay() -> void:
 func _format_report_text(thesis: Dictionary) -> String:
 	var report: Dictionary = thesis.get("report", {})
 	if report.is_empty():
-		return "No generated report yet.\n\nAdd evidence, then press Generate Report. The report will freeze the current price, date, evidence, and recommendation."
-	var lines: Array = []
-	lines.append("[b]%s - %s[/b]" % [_bbcode_escape(str(report.get("ticker", ""))), _bbcode_escape(str(report.get("company_name", "")))])
-	lines.append("[color=#665f4d]%s | %s | %s[/color]" % [_bbcode_escape(str(report.get("generated_date_label", ""))), _bbcode_escape(str(report.get("sector_name", ""))), _bbcode_escape(str(report.get("horizon", "")).capitalize())])
-	lines.append("")
-	lines.append("[b]Recommendation:[/b] %s" % _bbcode_escape(str(report.get("rating", ""))))
-	lines.append("[b]Thesis Quality Grade:[/b] %s" % _bbcode_escape(str(report.get("reasoning_grade", ""))))
-	lines.append("[b]Report Price:[/b] %s" % _bbcode_escape(_format_currency(float(report.get("report_price", 0.0)))))
-	lines.append("[b]Target Area:[/b] %s" % _bbcode_escape(str(report.get("target", {}).get("label", ""))))
-	lines.append("[b]Implied Move:[/b] %s" % _bbcode_escape(_format_percent(float(report.get("implied_upside_pct", 0.0)))))
-	lines.append("")
-	for section_value in report.get("sections", []):
-		if typeof(section_value) != TYPE_DICTIONARY:
+		return "No generated thesis yet.\n\nCapture evidence, attach it to the thesis, then press Generate Thesis. The thesis will freeze the selected evidence, price, and date."
+	var paragraphs: Array = []
+	var ticker: String = str(report.get("ticker", "")).strip_edges()
+	var company_name: String = str(report.get("company_name", "")).strip_edges()
+	var stance: String = str(report.get("stance", thesis.get("stance", "watch"))).to_lower()
+	var horizon: String = str(report.get("horizon", thesis.get("horizon", "swing"))).to_lower()
+	var evidence_rows: Array = thesis.get("evidence", [])
+	var subject: String = ticker
+	if not company_name.is_empty() and not ticker.is_empty():
+		subject = "%s (%s)" % [company_name, ticker]
+	elif not company_name.is_empty():
+		subject = company_name
+	var opening: String = "%s is a %s %s thesis at a reference price of %s." % [
+		subject,
+		stance,
+		horizon,
+		_format_reference_price(float(report.get("report_price", 0.0)))
+	]
+	if evidence_rows.is_empty():
+		opening += " There is not enough captured evidence yet, so this thesis should stay exploratory."
+	else:
+		opening += " The evidence is %s." % _thesis_evidence_quality_phrase(evidence_rows, report)
+	paragraphs.append(opening)
+
+	var profile_paragraph: String = _thesis_profile_summary(evidence_rows, stance)
+	if not profile_paragraph.is_empty():
+		paragraphs.append(profile_paragraph)
+	var price_context_paragraph: String = _thesis_price_context_summary(evidence_rows, stance)
+	if not price_context_paragraph.is_empty():
+		paragraphs.append(price_context_paragraph)
+	var business_paragraph: String = _thesis_business_summary(evidence_rows, stance)
+	if not business_paragraph.is_empty():
+		paragraphs.append(business_paragraph)
+	var ownership_paragraph: String = _thesis_ownership_summary(evidence_rows, stance)
+	if not ownership_paragraph.is_empty():
+		paragraphs.append(ownership_paragraph)
+	var management_paragraph: String = _thesis_management_summary(evidence_rows, stance)
+	if not management_paragraph.is_empty():
+		paragraphs.append(management_paragraph)
+	var social_paragraph: String = _thesis_social_summary(evidence_rows, stance)
+	if not social_paragraph.is_empty():
+		paragraphs.append(social_paragraph)
+	var news_paragraph: String = _thesis_news_summary(evidence_rows, stance)
+	if not news_paragraph.is_empty():
+		paragraphs.append(news_paragraph)
+	var macro_paragraph: String = _thesis_macro_summary(evidence_rows, stance)
+	if not macro_paragraph.is_empty():
+		paragraphs.append(macro_paragraph)
+	var tape_paragraph: String = _thesis_tape_summary(evidence_rows, stance)
+	if not tape_paragraph.is_empty():
+		paragraphs.append(tape_paragraph)
+	var flow_paragraph: String = _thesis_flow_summary(evidence_rows, stance)
+	if not flow_paragraph.is_empty():
+		paragraphs.append(flow_paragraph)
+	var next_paragraph: String = _thesis_next_research_summary(evidence_rows, report, stance)
+	if not next_paragraph.is_empty():
+		paragraphs.append(next_paragraph)
+	var escaped: Array = []
+	for paragraph_value in paragraphs:
+		var paragraph: String = str(paragraph_value).strip_edges()
+		if not paragraph.is_empty():
+			escaped.append(_bbcode_escape(paragraph))
+	return "\n\n".join(escaped)
+
+
+func _thesis_sentences_for_interpretations(evidence_rows: Array, interpretations: Array, limit: int) -> Array:
+	var sentences: Array = []
+	for evidence_value in evidence_rows:
+		if typeof(evidence_value) != TYPE_DICTIONARY:
 			continue
-		var section: Dictionary = section_value
-		lines.append("[u][b]%s[/b][/u]" % _bbcode_escape(str(section.get("title", "")).to_upper()))
-		var bullets: Array = section.get("bullets", [])
-		if not bullets.is_empty():
-			for bullet_value in bullets:
-				if typeof(bullet_value) != TYPE_DICTIONARY:
-					continue
-				var bullet: Dictionary = bullet_value
-				lines.append("- [b]%s.[/b] %s" % [
-					_bbcode_escape(str(bullet.get("claim", ""))),
-					_bbcode_escape(str(bullet.get("body", "")))
-				])
+		var row: Dictionary = evidence_value
+		if not interpretations.has(str(row.get("interpretation", "watch"))):
+			continue
+		sentences.append(_thesis_sentence_for_evidence(row))
+		if sentences.size() >= limit:
+			break
+	return sentences
+
+
+func _thesis_evidence_quality_phrase(evidence_rows: Array, report: Dictionary) -> String:
+	var risk_count: int = int(report.get("risk_count", 0)) + int(report.get("contradiction_count", 0))
+	var support_count: int = int(report.get("support_count", 0))
+	var has_chart_risk: bool = not _thesis_rows_matching(evidence_rows, ["chart_pattern"], [], ["risk", "contradiction", "invalidation"]).is_empty()
+	if evidence_rows.size() <= 1:
+		return "still thin, so this should be treated as an early note rather than a finished thesis"
+	if risk_count > 0 and support_count <= 0:
+		return "useful but cautious, because the captured risk is doing more work than the supporting case"
+	if has_chart_risk and support_count > 0:
+		return "mixed: the business case has something to work with, but price action has not confirmed it yet"
+	if support_count > risk_count:
+		return "leaning constructive, but it still needs fresh confirmation before conviction rises"
+	return "early and incomplete, so the thesis should stay tied to the captured facts"
+
+
+func _thesis_profile_summary(evidence_rows: Array, _stance: String) -> String:
+	var profile_rows: Array = _thesis_rows_matching(evidence_rows, ["company_profile"], ["fundamentals"], [])
+	for row_value in profile_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var label: String = str(row.get("label", "")).to_lower()
+		if label.find("business description") == -1 and label.find("company background") == -1:
+			continue
+		var detail: String = _short_thesis_detail(str(row.get("detail", "")).strip_edges(), 260)
+		if detail.is_empty():
+			detail = _short_thesis_detail(str(row.get("value", "")).strip_edges(), 180)
+		if detail.is_empty():
+			continue
+		return _ensure_sentence(_sentence_case(_sentence_fragment(detail)))
+	return ""
+
+
+func _thesis_business_summary(evidence_rows: Array, stance: String) -> String:
+	var business_rows: Array = _thesis_rows_matching(evidence_rows, [], ["fundamentals", "financials"], [])
+	var valuation_rows: Array = _thesis_rows_matching(evidence_rows, [], ["valuation"], [])
+	var support_rows: Array = _thesis_rows_matching(evidence_rows, [], [], ["support"])
+	if business_rows.is_empty() and valuation_rows.is_empty() and support_rows.is_empty():
+		return ""
+	var sentences: Array = []
+	var revenue_row: Dictionary = _first_row_label_contains(business_rows, ["revenue"])
+	var net_income_row: Dictionary = _first_row_label_contains(business_rows, ["net income", "profit"])
+	var eps_row: Dictionary = _first_row_label_contains(business_rows, ["eps"])
+	var cash_flow_row: Dictionary = _first_row_label_contains(business_rows + valuation_rows, ["free cash flow", "free cashflow", "cashflow"])
+	var market_cap_row: Dictionary = _first_row_label_contains(business_rows + valuation_rows, ["market cap"])
+	var valuation_row: Dictionary = _first_row_label_contains(valuation_rows, ["price to free cash", "price to free cashflow", "pe ratio", "current pe", "price to book"])
+	var gross_profit_row: Dictionary = _first_row_label_contains(business_rows, ["gross profit"])
+	var operating_income_row: Dictionary = _first_row_label_contains(business_rows, ["operating income", "operating profit", "ebit"])
+	var investing_cash_flow_row: Dictionary = _first_row_label_contains(business_rows, ["cash from investing", "investing cash flow"])
+	var balance_sheet_row: Dictionary = _first_row_label_contains(business_rows, ["working capital", "total liabilities", "total equity", "total assets", "cash"])
+	if not revenue_row.is_empty():
+		sentences.append("revenue gives the thesis a business-size anchor at %s" % _clean_evidence_value(str(revenue_row.get("value", ""))))
+	elif not net_income_row.is_empty():
+		sentences.append("net income gives the thesis a profitability anchor at %s" % _clean_evidence_value(str(net_income_row.get("value", ""))))
+	elif not eps_row.is_empty():
+		sentences.append("EPS gives the thesis a per-share earnings anchor at %s" % _clean_evidence_value(str(eps_row.get("value", ""))))
+	elif not market_cap_row.is_empty():
+		sentences.append("market cap frames how large the story already is at %s" % _clean_evidence_value(str(market_cap_row.get("value", ""))))
+	if not gross_profit_row.is_empty() and gross_profit_row != revenue_row:
+		sentences.append("gross profit at %s helps check whether revenue is turning into usable margin" % _clean_evidence_value(str(gross_profit_row.get("value", ""))))
+	elif not operating_income_row.is_empty() and operating_income_row != net_income_row:
+		sentences.append("operating income at %s checks whether the core business is doing the work before below-the-line noise" % _clean_evidence_value(str(operating_income_row.get("value", ""))))
+	if not valuation_row.is_empty():
+		sentences.append(_valuation_read_sentence(valuation_row))
+	elif not cash_flow_row.is_empty():
+		sentences.append("cash-flow evidence is present, which is useful because price needs to be checked against actual cash generation")
+	if not investing_cash_flow_row.is_empty():
+		sentences.append(_sentence_fragment(_thesis_sentence_for_financial_statement_evidence(investing_cash_flow_row)))
+	if not balance_sheet_row.is_empty():
+		if investing_cash_flow_row.is_empty() or balance_sheet_row != investing_cash_flow_row:
+			sentences.append(_sentence_fragment(_thesis_sentence_for_financial_statement_evidence(balance_sheet_row)))
+	if sentences.is_empty():
+		for row in support_rows.slice(0, 2):
+			if typeof(row) == TYPE_DICTIONARY:
+				sentences.append(_sentence_fragment(_thesis_sentence_for_evidence(row)))
+	if sentences.is_empty():
+		return ""
+	var prefix: String = ""
+	if stance == "bullish":
+		prefix = "For the bullish case, "
+	elif stance == "bearish":
+		prefix = "For the bearish case, "
+	elif stance == "income":
+		prefix = "For the income case, "
+	return "%s%s." % [prefix, _join_sentence_parts(sentences)]
+
+
+func _thesis_ownership_summary(evidence_rows: Array, _stance: String) -> String:
+	var ownership_rows: Array = _thesis_rows_matching(evidence_rows, [], ["ownership"], [])
+	if ownership_rows.is_empty():
+		return ""
+	var sentences: Array = []
+	for row in ownership_rows.slice(0, 2):
+		if typeof(row) == TYPE_DICTIONARY:
+			sentences.append(_sentence_fragment(_thesis_sentence_for_ownership_evidence(row)))
+	if sentences.is_empty():
+		return ""
+	return "%s." % _sentence_case(_join_sentence_parts(sentences))
+
+
+func _thesis_management_summary(evidence_rows: Array, _stance: String) -> String:
+	var management_rows: Array = _thesis_rows_matching(evidence_rows, [], ["management"], [])
+	if management_rows.is_empty():
+		return ""
+	var sentences: Array = []
+	for row in management_rows.slice(0, 2):
+		if typeof(row) == TYPE_DICTIONARY:
+			sentences.append(_sentence_fragment(_thesis_sentence_for_management_evidence(row)))
+	if sentences.is_empty():
+		return ""
+	return "%s." % _sentence_case(_join_sentence_parts(sentences))
+
+
+func _thesis_social_summary(evidence_rows: Array, _stance: String) -> String:
+	var social_rows: Array = _thesis_rows_matching(evidence_rows, ["twooter_post", "twooter_dm"], ["twooter"], [])
+	if social_rows.is_empty():
+		return ""
+	var sentences: Array = []
+	for row in social_rows.slice(0, 2):
+		if typeof(row) == TYPE_DICTIONARY:
+			sentences.append(_sentence_fragment(_thesis_sentence_for_twooter_evidence(row)))
+	if sentences.is_empty():
+		return ""
+	return "%s." % _sentence_case(_join_sentence_parts(sentences))
+
+
+func _thesis_flow_summary(evidence_rows: Array, stance: String) -> String:
+	var flow_rows: Array = _thesis_rows_matching(evidence_rows, ["broker_summary", "broker_flow"], ["broker_flow"], [])
+	if flow_rows.is_empty():
+		return ""
+	var sentences: Array = []
+	for row in flow_rows.slice(0, 2):
+		if typeof(row) == TYPE_DICTIONARY:
+			sentences.append(_sentence_fragment(_thesis_sentence_for_flow_evidence(row, stance)))
+	if sentences.is_empty():
+		return ""
+	return "%s." % _sentence_case(_join_sentence_parts(sentences))
+
+
+func _thesis_price_context_summary(evidence_rows: Array, _stance: String) -> String:
+	var quote_rows: Array = _thesis_rows_matching(evidence_rows, ["trade_quote"], ["price_action"], [])
+	var rows: Array = []
+	for row_value in quote_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		if str(row.get("source_type", "")).to_lower() == "chart_pattern":
+			continue
+		rows.append(row)
+	if rows.is_empty():
+		return ""
+	var sentences: Array = []
+	for row in rows.slice(0, 2):
+		if typeof(row) == TYPE_DICTIONARY:
+			sentences.append(_sentence_fragment(_thesis_sentence_for_trade_quote_evidence(row)))
+	if sentences.is_empty():
+		return ""
+	return "%s." % _sentence_case(_join_sentence_parts(sentences))
+
+
+func _thesis_news_summary(evidence_rows: Array, stance: String) -> String:
+	var news_rows: Array = _thesis_rows_matching(evidence_rows, ["news", "news_article", "corporate_event", "corporate_events"], ["news", "corporate_events"], [])
+	if news_rows.is_empty():
+		return ""
+	var sentences: Array = []
+	for row in news_rows.slice(0, 2):
+		if typeof(row) == TYPE_DICTIONARY:
+			sentences.append(_sentence_fragment(_thesis_sentence_for_news_evidence(row, stance)))
+	if sentences.is_empty():
+		return ""
+	return "%s." % _sentence_case(_join_sentence_parts(sentences))
+
+
+func _thesis_macro_summary(evidence_rows: Array, stance: String) -> String:
+	var macro_rows: Array = _thesis_rows_matching(evidence_rows, ["macro", "macro_indicator", "sector_macro"], ["sector_macro"], [])
+	if macro_rows.is_empty():
+		return ""
+	var sentences: Array = []
+	for row in macro_rows.slice(0, 2):
+		if typeof(row) == TYPE_DICTIONARY:
+			sentences.append(_sentence_fragment(_thesis_sentence_for_macro_evidence(row, stance)))
+	if sentences.is_empty():
+		return ""
+	return "%s." % _sentence_case(_join_sentence_parts(sentences))
+
+
+func _thesis_tape_summary(evidence_rows: Array, stance: String) -> String:
+	var chart_rows: Array = _thesis_rows_matching(evidence_rows, ["chart_pattern"], ["price_action"], [])
+	var explicit_risks: Array = _thesis_rows_matching(evidence_rows, ["trade_quote"], ["price_action"], ["risk", "contradiction", "invalidation"])
+	if chart_rows.is_empty() and explicit_risks.is_empty():
+		return "The missing piece is a clear risk or invalidation. Without it, the thesis can describe what looks interesting, but it cannot yet say what would prove the idea wrong."
+	var sentences: Array = []
+	for row in chart_rows.slice(0, 2):
+		if typeof(row) != TYPE_DICTIONARY:
+			continue
+		var chart_sentence: String = _sentence_fragment(_thesis_sentence_for_chart_evidence(row))
+		if stance == "bullish" and _row_is_negative(row):
+			chart_sentence += ", so the bullish case needs confirmation instead of a chase"
+		elif stance == "bearish" and not _row_is_negative(row):
+			chart_sentence += ", so the bearish case needs more pressure before it is convincing"
+		sentences.append(chart_sentence)
+	for row in explicit_risks.slice(0, 2):
+		if typeof(row) != TYPE_DICTIONARY or chart_rows.has(row):
+			continue
+		sentences.append(_sentence_fragment(_thesis_sentence_for_evidence(row)))
+	if sentences.is_empty():
+		return ""
+	return "%s." % _sentence_case(_join_sentence_parts(sentences))
+
+
+func _thesis_next_research_summary(evidence_rows: Array, report: Dictionary, stance: String) -> String:
+	var catalyst_rows: Array = _thesis_rows_matching(evidence_rows, [], ["news", "twooter", "network_intel", "corporate_events", "sector_macro"], [])
+	var flow_rows: Array = _thesis_rows_matching(evidence_rows, ["broker_summary", "broker_flow"], ["broker_flow"], [])
+	var has_chart_risk: bool = not _thesis_rows_matching(evidence_rows, ["chart_pattern"], [], ["risk", "contradiction", "invalidation"]).is_empty()
+	if catalyst_rows.is_empty() and stance == "bullish" and has_chart_risk:
+		return "Next, find a catalyst or source read that explains why buyers would return despite the weak chart. A good follow-up would be a News item, a Twooter source, or a Network contact that gives a concrete reason for demand to improve."
+	if catalyst_rows.is_empty() and flow_rows.is_empty():
+		return "Next, capture a catalyst, money-flow item, or market-context item. The thesis has facts, but it still needs a reason why the market should care now and whether money is confirming it."
+	if catalyst_rows.is_empty():
+		return "Next, capture a catalyst, source read, or macro context item. Money flow can confirm attention, but it does not explain the story by itself."
+	if flow_rows.is_empty():
+		return "Next, capture a money-flow item. The thesis has context, but it still needs a money-pressure check before conviction rises."
+	var missing_notes: Array = report.get("missing_notes", [])
+	if not missing_notes.is_empty():
+		return "Next, tighten the thesis by asking one specific question: %s" % str(missing_notes[0]).strip_edges()
+	return "Next, wait for new evidence rather than rewriting the thesis from price alone. If the story changes, capture the new fact and regenerate the thesis."
+
+
+func _thesis_rows_matching(evidence_rows: Array, source_types: Array, categories: Array, interpretations: Array) -> Array:
+	var rows: Array = []
+	for evidence_value in evidence_rows:
+		if typeof(evidence_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = evidence_value
+		var source_type: String = str(row.get("source_type", "")).to_lower()
+		var category: String = str(row.get("category", "")).to_lower()
+		var interpretation: String = str(row.get("interpretation", "watch")).to_lower()
+		var source_or_category_match: bool = source_types.is_empty() and categories.is_empty()
+		for source_value in source_types:
+			if source_type == str(source_value).to_lower():
+				source_or_category_match = true
+				break
+		if not source_or_category_match:
+			for category_value in categories:
+				if category == str(category_value).to_lower():
+					source_or_category_match = true
+					break
+		var interpretation_match: bool = interpretations.is_empty()
+		for interpretation_value in interpretations:
+			if interpretation == str(interpretation_value).to_lower():
+				interpretation_match = true
+				break
+		if source_or_category_match and interpretation_match:
+			rows.append(row)
+	return rows
+
+
+func _first_row_label_contains(rows: Array, needles: Array) -> Dictionary:
+	for row_value in rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var label: String = str(row.get("label", "")).to_lower()
+		for needle_value in needles:
+			if label.find(str(needle_value).to_lower()) != -1:
+				return row
+	return {}
+
+
+func _valuation_read_sentence(row: Dictionary) -> String:
+	var label: String = str(row.get("label", "")).to_lower()
+	var value_text: String = _clean_evidence_value(str(row.get("value", "")))
+	var number: float = _extract_first_number(value_text)
+	if label.find("price to free cash") != -1 or label.find("price to free cashflow") != -1:
+		if number >= 25.0:
+			return "the price-to-free-cash-flow ratio at %s is not obviously cheap, so the case needs proof that cash flow can hold up" % value_text
+		if number > 0.0 and number <= 12.0:
+			return "the price-to-free-cash-flow ratio at %s gives the idea a valuation angle if cash generation is durable" % value_text
+		return "the price-to-free-cash-flow ratio at %s is useful, but it needs a cash-flow trend to mean much" % value_text
+	if label.find("pe") != -1:
+		if number >= 25.0:
+			return "the PE ratio at %s means the market is already paying for quality or growth" % value_text
+		if number > 0.0 and number <= 12.0:
+			return "the PE ratio at %s suggests valuation may be reasonable if earnings are not temporary" % value_text
+		return "the PE ratio at %s gives a valuation anchor but not a full answer by itself" % value_text
+	if label.find("price to book") != -1 or label.find("pbv") != -1:
+		return "the price-to-book evidence at %s helps frame whether the market is paying up for the balance sheet" % value_text
+	return "%s is %s" % [_humanize_thesis_metric_label(str(row.get("label", "valuation"))), value_text]
+
+
+func _extract_first_number(value: String) -> float:
+	var buffer: String = ""
+	var found_digit: bool = false
+	for index in range(value.length()):
+		var character: String = value.substr(index, 1)
+		if character.is_valid_int() or character in [".", ",", "-"]:
+			buffer += character
+			if character.is_valid_int():
+				found_digit = true
+		elif found_digit:
+			break
+	if buffer.is_empty():
+		return 0.0
+	if buffer.find(",") != -1 and buffer.find(".") == -1:
+		buffer = buffer.replace(",", ".")
+	else:
+		buffer = buffer.replace(",", "")
+	return float(buffer)
+
+
+func _row_is_negative(row: Dictionary) -> bool:
+	var interpretation: String = str(row.get("interpretation", "watch")).to_lower()
+	if ["risk", "contradiction", "invalidation"].has(interpretation):
+		return true
+	var impact: String = str(row.get("impact", "")).to_lower()
+	if impact == "negative":
+		return true
+	var combined: String = _row_text(row)
+	for key in ["breakdown", "below support", "distribution", "failed", "weak", "resistance", "outflow", "net sell", "foreign sell", "sell pressure", "headwind", "miss", "contraction", "cut", "downgrade"]:
+		if combined.find(key) != -1:
+			return true
+	return false
+
+
+func _row_is_positive(row: Dictionary) -> bool:
+	var interpretation: String = str(row.get("interpretation", "watch")).to_lower()
+	if interpretation == "support":
+		return true
+	var impact: String = str(row.get("impact", "")).to_lower()
+	if impact == "positive":
+		return true
+	var combined: String = _row_text(row)
+	for key in ["accumulation", "breakout", "above resistance", "net buy", "foreign buy", "inflow", "strong", "improving", "beat", "tailwind", "support held", "demand"]:
+		if combined.find(key) != -1:
+			return true
+	return false
+
+
+func _row_text(row: Dictionary) -> String:
+	return ("%s %s %s %s %s %s" % [
+		str(row.get("label", "")),
+		str(row.get("value", "")),
+		str(row.get("pattern_label", "")),
+		str(row.get("feedback_reason", "")),
+		str(row.get("detail", "")),
+		str(row.get("player_note", ""))
+	]).to_lower()
+
+
+func _join_sentence_parts(parts: Array) -> String:
+	var clean_parts: Array = []
+	for part_value in parts:
+		var part: String = str(part_value).strip_edges()
+		if not part.is_empty():
+			clean_parts.append(part)
+	if clean_parts.is_empty():
+		return ""
+	if clean_parts.size() == 1:
+		return str(clean_parts[0])
+	if clean_parts.size() == 2:
+		return "%s, while %s" % [str(clean_parts[0]), str(clean_parts[1])]
+	var last: String = str(clean_parts.pop_back())
+	return "%s, and %s" % ["; ".join(clean_parts), last]
+
+
+func _thesis_sentence_for_evidence(row: Dictionary) -> String:
+	var source_type: String = str(row.get("source_type", "")).to_lower()
+	var category: String = str(row.get("category", "")).to_lower()
+	if source_type == "chart_pattern":
+		return _thesis_sentence_for_chart_evidence(row)
+	if ["broker_summary", "broker_flow"].has(source_type) or category == "broker_flow":
+		return _thesis_sentence_for_flow_evidence(row, "")
+	if ["news", "news_article", "corporate_event", "corporate_events"].has(source_type) or ["news", "corporate_events"].has(category):
+		return _thesis_sentence_for_news_evidence(row, "")
+	if ["macro", "macro_indicator", "sector_macro"].has(source_type) or category == "sector_macro":
+		return _thesis_sentence_for_macro_evidence(row, "")
+	if ["twooter_post", "twooter_dm"].has(source_type) or category == "twooter":
+		return _thesis_sentence_for_twooter_evidence(row)
+	if source_type == "trade_quote":
+		return _thesis_sentence_for_trade_quote_evidence(row)
+	if source_type == "financial_statement":
+		return _thesis_sentence_for_financial_statement_evidence(row)
+	if category == "ownership":
+		return _thesis_sentence_for_ownership_evidence(row)
+	if category == "management":
+		return _thesis_sentence_for_management_evidence(row)
+	if source_type == "company_profile":
+		return _thesis_sentence_for_profile_evidence(row)
+	var label: String = str(row.get("label", "Evidence")).strip_edges()
+	var value: String = _clean_evidence_value(str(row.get("value", "")).strip_edges())
+	var detail: String = str(row.get("detail", "")).strip_edges()
+	var source: String = str(row.get("source_label", "")).strip_edges()
+	var human_label: String = _humanize_thesis_metric_label(label)
+	var sentence: String = _sentence_case(human_label)
+	if not value.is_empty():
+		sentence += " is %s" % value
+	if not detail.is_empty():
+		var detail_sentence: String = detail.substr(0, 1).to_lower() + detail.substr(1)
+		sentence += ", which matters because %s" % detail_sentence
+	return _ensure_sentence(sentence)
+
+
+func _thesis_sentence_for_profile_evidence(_row: Dictionary) -> String:
+	return ""
+
+
+func _thesis_sentence_for_financial_statement_evidence(row: Dictionary) -> String:
+	var label: String = _humanize_thesis_metric_label(str(row.get("label", "financial line"))).to_lower()
+	var value: String = _clean_evidence_value(str(row.get("value", "")))
+	var sentence: String = "%s was captured" % label
+	if not value.is_empty():
+		sentence = "%s was %s" % [label, value]
+	var lower_label: String = str(row.get("label", "")).to_lower()
+	if lower_label.find("cash from investing") != -1 or lower_label.find("investing cash flow") != -1:
+		if _evidence_value_is_negative(row):
+			sentence += ", which usually means the company is spending more cash on long-term assets like equipment, property, or acquisitions than it is getting from asset sales; that can point to expansion or heavy capital investment"
 		else:
-			lines.append(_bbcode_escape(str(section.get("body", ""))))
-		lines.append("")
-	return "\n".join(lines)
+			sentence += ", which checks whether investment activity is adding to or releasing cash from the asset base"
+	elif lower_label.find("liabilit") != -1 or lower_label.find("debt") != -1:
+		sentence += ", which checks how much balance-sheet pressure the thesis must absorb"
+	elif lower_label.find("cash") != -1 or lower_label.find("working capital") != -1:
+		sentence += ", which checks the company's room to handle timing gaps"
+	elif lower_label.find("gross profit") != -1 or lower_label.find("operating") != -1:
+		sentence += ", which checks whether sales are converting into operating quality"
+	elif lower_label.find("equity") != -1 or lower_label.find("asset") != -1:
+		sentence += ", which frames the asset base behind the story"
+	return _ensure_sentence(_sentence_case(sentence))
+
+
+func _thesis_sentence_for_ownership_evidence(row: Dictionary) -> String:
+	var label: String = _humanize_thesis_metric_label(str(row.get("label", "ownership"))).to_lower()
+	var value: String = _clean_evidence_value(str(row.get("value", "")))
+	var detail: String = str(row.get("detail", "")).strip_edges()
+	var sentence: String = "ownership shows %s" % label
+	if not value.is_empty():
+		sentence += " at %s" % value
+	var ownership_number: float = _extract_first_number(value)
+	if label.find("free float") != -1:
+		if ownership_number > 0.0 and ownership_number <= 25.0:
+			sentence += ", meaning liquidity may be tight and price can move sharply when attention arrives"
+		elif ownership_number >= 50.0:
+			sentence += ", meaning the stock may need broader demand before price pressure becomes durable"
+		else:
+			sentence += ", which gives a liquidity context for position sizing"
+	else:
+		sentence += ", which helps identify who can influence control and float"
+	return _ensure_sentence(_sentence_case(sentence))
+
+
+func _thesis_sentence_for_management_evidence(row: Dictionary) -> String:
+	var label: String = str(row.get("label", "management")).strip_edges()
+	var value: String = _clean_evidence_value(str(row.get("value", "")))
+	var sentence: String = "management evidence highlights %s" % label
+	if not value.is_empty() and label.to_lower().find(value.to_lower()) == -1:
+		sentence += " as %s" % value
+	sentence += ", which is governance context rather than proof by itself"
+	return _ensure_sentence(_sentence_case(sentence))
+
+
+func _thesis_sentence_for_twooter_evidence(row: Dictionary) -> String:
+	var source_type: String = str(row.get("source_type", "")).to_lower()
+	var label: String = str(row.get("label", "Twooter")).strip_edges()
+	var value: String = _clean_evidence_value(str(row.get("value", "")))
+	var detail: String = str(row.get("detail", "")).strip_edges()
+	var sentence: String = "Twooter"
+	if source_type == "twooter_dm":
+		sentence += " DM"
+	if not value.is_empty() and value.to_lower() != "public chatter":
+		sentence += " around %s" % value
+	if not label.is_empty():
+		sentence += " adds %s" % label.to_lower()
+	if not detail.is_empty():
+		sentence += ": %s" % _sentence_fragment(detail)
+	return _ensure_sentence(_sentence_case(sentence))
+
+
+func _thesis_sentence_for_trade_quote_evidence(row: Dictionary) -> String:
+	var label: String = _humanize_thesis_metric_label(str(row.get("label", "quote item"))).to_lower()
+	var value: String = _clean_evidence_value(str(row.get("value", "")))
+	var sentence: String = "%s was captured" % label
+	if label.find("foreign buy") != -1:
+		sentence = "foreign buying was %s" % value
+	elif label.find("foreign sell") != -1:
+		sentence = "foreign selling was %s" % value
+	elif label.find("visible depth") != -1:
+		sentence = "visible depth was %s" % value
+	elif not value.is_empty():
+		sentence = "%s was %s" % [label, value]
+	if _row_is_negative(row):
+		sentence += ", which adds near-term pressure"
+	elif _row_is_positive(row):
+		sentence += ", which adds near-term support"
+	else:
+		sentence += ", which fixes the thesis to the current market tape"
+	return _ensure_sentence(_sentence_case(sentence))
+
+
+func _thesis_sentence_for_chart_evidence(row: Dictionary) -> String:
+	var pattern_label: String = str(row.get("pattern_label", row.get("label", "chart pattern"))).strip_edges()
+	if pattern_label.is_empty():
+		pattern_label = "chart pattern"
+	var pattern_text: String = _with_indefinite_article(_humanize_thesis_metric_label(pattern_label).to_lower())
+	var detail: String = str(row.get("feedback_reason", row.get("detail", ""))).strip_edges()
+	if detail.is_empty():
+		detail = _clean_evidence_value(str(row.get("value", "")))
+	var sentence: String = "The chart gives tape context through %s" % pattern_text
+	if _row_is_negative(row):
+		sentence = "The chart is warning through %s" % pattern_text
+	elif _row_is_positive(row):
+		sentence = "The chart is confirming through %s" % pattern_text
+	if not detail.is_empty():
+		sentence += ": %s" % _sentence_fragment(detail)
+	return _ensure_sentence(sentence)
+
+
+func _thesis_sentence_for_flow_evidence(row: Dictionary, stance: String) -> String:
+	var label: String = _humanize_thesis_metric_label(str(row.get("label", "broker flow"))).to_lower()
+	var value: String = _clean_evidence_value(str(row.get("value", "")))
+	var sentence: String = "%s was captured" % label
+	if label.find("buy-side broker") != -1:
+		sentence = "buy-side money flow was led by %s" % _broker_code_from_label(str(row.get("label", "")))
+		if not value.is_empty():
+			sentence += " at %s" % value
+	elif label.find("sell-side broker") != -1:
+		sentence = "sell-side money flow was led by %s" % _broker_code_from_label(str(row.get("label", "")))
+		if not value.is_empty():
+			sentence += " at %s" % value
+	elif label.find("foreign") != -1 and label.find("net") != -1:
+		sentence = "foreign net flow was %s" % value
+	elif label.find("broker") != -1:
+		sentence = "%s was %s" % [label.replace("broker", "money"), value] if not value.is_empty() else "%s was captured" % label.replace("broker", "money")
+	elif not value.is_empty():
+		sentence = "%s was %s" % [label, value]
+	if _row_is_negative(row):
+		sentence += ", which warns that money pressure is fighting the thesis"
+	elif _row_is_positive(row):
+		sentence += ", which means money pressure is helping the thesis"
+	else:
+		sentence += ", so it should confirm the thesis rather than replace the business case"
+	if stance == "bullish" and _row_is_negative(row):
+		sentence += "; for a bullish setup, that should keep sizing cautious"
+	elif stance == "bearish" and _row_is_positive(row):
+		sentence += "; for a bearish setup, that makes the short read less clean"
+	return _ensure_sentence(_sentence_case(sentence))
+
+
+func _broker_code_from_label(label: String) -> String:
+	var text: String = label.strip_edges()
+	var lower: String = text.to_lower()
+	for prefix_value in ["buy-side broker", "sell-side broker"]:
+		var prefix: String = str(prefix_value)
+		if lower.begins_with(prefix):
+			var code: String = text.substr(prefix.length()).strip_edges()
+			if not code.is_empty():
+				return code.to_upper()
+	return _humanize_thesis_metric_label(label).to_lower()
+
+
+func _evidence_value_is_negative(row: Dictionary) -> bool:
+	if row.has("raw_value"):
+		return float(row.get("raw_value", 0.0)) < 0.0
+	var value: String = str(row.get("value", "")).strip_edges()
+	return value.find("-") != -1 or (value.find("(") != -1 and value.find(")") != -1) or _extract_first_number(value) < 0.0
+
+
+func _thesis_sentence_for_news_evidence(row: Dictionary, stance: String) -> String:
+	var headline: String = str(row.get("label", "news item")).strip_edges()
+	if headline.is_empty():
+		headline = "news item"
+	var value: String = _clean_evidence_value(str(row.get("value", "")))
+	var detail: String = str(row.get("detail", "")).strip_edges()
+	var sentence: String = "news adds %s" % _with_indefinite_article(headline.to_lower())
+	if not value.is_empty() and headline.to_lower().find(value.to_lower()) == -1:
+		sentence += " with %s" % value
+	if _row_is_negative(row):
+		sentence += ", which is a risk to the current thesis"
+	elif _row_is_positive(row):
+		sentence += ", which gives the market a concrete reason to care"
+	else:
+		sentence += ", which is useful context but still needs confirmation"
+	if not detail.is_empty():
+		sentence += " because %s" % _sentence_fragment(detail)
+	if stance == "income" and _row_is_negative(row):
+		sentence += "; for an income thesis, watch whether it threatens payout durability"
+	return _ensure_sentence(_sentence_case(sentence))
+
+
+func _thesis_sentence_for_macro_evidence(row: Dictionary, stance: String) -> String:
+	var label: String = _humanize_thesis_metric_label(str(row.get("label", "macro backdrop"))).to_lower()
+	var value: String = _clean_evidence_value(str(row.get("value", "")))
+	var detail: String = str(row.get("detail", "")).strip_edges()
+	var sentence: String = "macro context frames %s" % label
+	if not value.is_empty():
+		sentence += " as %s" % value
+	if _row_is_negative(row):
+		sentence += ", which makes the thesis harder because the backdrop is not helping"
+	elif _row_is_positive(row):
+		sentence += ", which gives the thesis a tailwind if company evidence agrees"
+	else:
+		sentence += ", so the stock read should be checked against the wider market"
+	if not detail.is_empty():
+		sentence += " because %s" % _sentence_fragment(detail)
+	if stance == "bullish" and _row_is_negative(row):
+		sentence += "; the bullish case needs stronger company-specific proof"
+	elif stance == "bearish" and _row_is_positive(row):
+		sentence += "; the bearish case needs proof the company is weaker than the backdrop"
+	return _ensure_sentence(_sentence_case(sentence))
+
+
+func _humanize_thesis_metric_label(label: String) -> String:
+	var normalized: String = label.strip_edges()
+	var lower: String = normalized.to_lower()
+	if lower.find("price to free cash") != -1 or lower.find("price to free cashflow") != -1:
+		return "price-to-free-cash-flow ratio"
+	if lower.find("revenue") != -1 and lower.find("ttm") != -1:
+		return "trailing revenue"
+	if lower.find("net income") != -1 and lower.find("ttm") != -1:
+		return "trailing net income"
+	if lower.find("gross profit") != -1:
+		return "gross profit"
+	if lower.find("operating income") != -1 or lower.find("operating profit") != -1:
+		return "operating income"
+	if lower.find("market cap") != -1:
+		return "market cap"
+	if lower.find("pe ratio") != -1 or lower == "current pe":
+		return "PE ratio"
+	if lower.find("free cash flow") != -1 or lower.find("free cashflow") != -1:
+		return "free cash flow"
+	if lower.find("cash from operations") != -1 or lower.find("cash from operating") != -1:
+		return "operating cash flow"
+	if lower.find("cash from investing") != -1:
+		return "investing cash flow"
+	if lower.find("cash from financing") != -1:
+		return "financing cash flow"
+	if lower.find("capital expenditure") != -1 or lower == "capex":
+		return "capital expenditure"
+	if lower.find("debt to equity") != -1:
+		return "debt-to-equity"
+	if lower.find("total assets") != -1:
+		return "total assets"
+	if lower.find("total liabilities") != -1:
+		return "total liabilities"
+	if lower.find("working capital") != -1:
+		return "working capital"
+	if lower.find("total equity") != -1 or lower.find("common equity") != -1:
+		return "equity"
+	if lower.find("free float") != -1:
+		return "free float"
+	if lower.find("business description") != -1 or lower.find("company background") != -1:
+		return "business description"
+	if lower.find("current price") != -1:
+		return "current price"
+	if lower.find("daily change") != -1:
+		return "daily change"
+	if lower.find("open price") != -1:
+		return "open price"
+	if lower.find("day high") != -1:
+		return "day high"
+	if lower.find("day low") != -1:
+		return "day low"
+	if lower.find("previous close") != -1:
+		return "previous close"
+	if lower.find("average trade price") != -1:
+		return "average trade price"
+	if lower.find("traded lot") != -1:
+		return "traded volume"
+	if lower.find("traded value") != -1:
+		return "traded value"
+	if lower.find("foreign buy") != -1:
+		return "foreign buy value"
+	if lower.find("foreign sell") != -1:
+		return "foreign sell value"
+	if lower.find("visible depth") != -1:
+		return "visible depth"
+	if lower.find("ceo") != -1:
+		return "CEO"
+	if lower.find("cfo") != -1:
+		return "CFO"
+	if lower.find("director") != -1:
+		return "director"
+	if lower.find("net pressure") != -1:
+		return "net broker pressure"
+	if lower.find("foreign") != -1 and lower.find("net") != -1:
+		return "foreign net flow"
+	if lower.find("institution") != -1 and lower.find("net") != -1:
+		return "institutional net flow"
+	if lower.find("retail") != -1 and lower.find("net") != -1:
+		return "retail net flow"
+	if lower.find("flow tag") != -1:
+		return "flow tag"
+	if lower.find("risk appetite") != -1:
+		return "market risk appetite"
+	if lower.find("market bias") != -1:
+		return "market bias"
+	if lower.find("volatility") != -1:
+		return "market volatility"
+	if lower.find("rate") != -1 or lower.find("interest") != -1:
+		return "rate backdrop"
+	if lower.find("inflation") != -1:
+		return "inflation backdrop"
+	return normalized.replace("Current ", "").replace(" To ", " to ")
+
+
+func _clean_evidence_value(value: String) -> String:
+	var trimmed: String = value.strip_edges()
+	var lower: String = trimmed.to_lower()
+	if ["good read", "plausible", "plausible, needs confirmation", "pattern marked"].has(lower):
+		return ""
+	return trimmed
+
+
+func _short_thesis_detail(value: String, max_length: int) -> String:
+	var text: String = value.strip_edges().replace("\n", " ")
+	while text.find("  ") != -1:
+		text = text.replace("  ", " ")
+	if text.is_empty() or text.length() <= max_length:
+		return text
+	var first_sentence_end: int = text.find(".")
+	if first_sentence_end > 30 and first_sentence_end <= max_length:
+		return text.substr(0, first_sentence_end + 1).strip_edges()
+	var shortened: String = text.substr(0, max(max_length - 1, 0)).strip_edges()
+	var last_space: int = shortened.rfind(" ")
+	if last_space > 80:
+		shortened = shortened.substr(0, last_space).strip_edges()
+	return "%s..." % shortened
+
+
+func _sentence_fragment(value: String) -> String:
+	var fragment: String = value.strip_edges()
+	while fragment.ends_with(".") or fragment.ends_with("!") or fragment.ends_with("?"):
+		fragment = fragment.substr(0, fragment.length() - 1).strip_edges()
+	if fragment.is_empty():
+		return fragment
+	return fragment.substr(0, 1).to_lower() + fragment.substr(1)
+
+
+func _sentence_case(value: String) -> String:
+	var text: String = value.strip_edges()
+	if text.is_empty():
+		return text
+	return text.substr(0, 1).to_upper() + text.substr(1)
+
+
+func _ensure_sentence(value: String) -> String:
+	var sentence: String = value.strip_edges()
+	if sentence.is_empty():
+		return sentence
+	while sentence.ends_with(".") or sentence.ends_with("!") or sentence.ends_with("?"):
+		sentence = sentence.substr(0, sentence.length() - 1).strip_edges()
+	return "%s." % sentence
+
+
+func _with_indefinite_article(value: String) -> String:
+	var text: String = value.strip_edges()
+	if text.is_empty() or text.begins_with("a ") or text.begins_with("an "):
+		return text
+	var first: String = text.substr(0, 1).to_lower()
+	return "%s %s" % ["an" if ["a", "e", "i", "o", "u"].has(first) else "a", text]
+
+
+func _count_phrase(count: int, singular: String, plural: String) -> String:
+	if count == 1:
+		return "one %s" % singular
+	return "%d %s" % [count, plural]
+
+
+func _format_reference_price(value: float) -> String:
+	var sign_prefix: String = "-" if value < 0.0 else ""
+	var whole: int = int(round(abs(value)))
+	return "%sRp%s" % [sign_prefix, _format_integer_with_commas(whole)]
+
+
+func _format_integer_with_commas(value: int) -> String:
+	var digits: String = str(value)
+	var result: String = ""
+	var count: int = 0
+	for index in range(digits.length() - 1, -1, -1):
+		if count > 0 and count % 3 == 0:
+			result = ",%s" % result
+		result = "%s%s" % [digits.substr(index, 1), result]
+		count += 1
+	return result
 
 
 func _bbcode_escape(value: String) -> String:
@@ -1669,35 +2643,52 @@ func _on_thesis_changed() -> void:
 
 
 func _on_thesis_selected(index: int) -> void:
+	thesis_draft_active = false
 	selected_thesis_id = str(thesis_list.get_item_metadata(index))
 	_refresh_selected_thesis()
 
 
 func _on_create_thesis_pressed() -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	suppress_thesis_changed_refresh = true
-	var result: Dictionary = GameManager.create_thesis(_selected_company_id(), selected_stance_id, _selected_option_id(horizon_option), title_edit.text)
-	suppress_thesis_changed_refresh = false
-	_set_status(str(result.get("message", "")))
-	if bool(result.get("success", false)):
-		selected_thesis_id = str(result.get("thesis", {}).get("id", ""))
-		refresh()
-	_log_perf_elapsed("_on_create_thesis_pressed", started_at_usec)
+	thesis_draft_active = true
+	selected_thesis_id = ""
+	if thesis_list != null:
+		thesis_list.deselect_all()
+	if title_edit != null:
+		title_edit.text = ""
+	selected_stance_id = "bullish"
+	_select_option_by_id(stance_option, selected_stance_id)
+	_select_option_by_id(horizon_option, "swing")
+	if not selected_external_company_id.is_empty():
+		_select_company_option(selected_external_company_id)
+	_set_status("Pick a stock, stance, and timeframe, then save the thesis.")
+	_refresh_selected_thesis()
 
 
 func _on_update_thesis_pressed() -> void:
-	if selected_thesis_id.is_empty():
-		return
+	var started_at_usec: int = Time.get_ticks_usec()
 	suppress_thesis_changed_refresh = true
-	var result: Dictionary = GameManager.update_thesis_meta(selected_thesis_id, {
-		"title": title_edit.text,
-		"stance": selected_stance_id,
-		"horizon": _selected_option_id(horizon_option)
-	})
+	var result: Dictionary = {}
+	if selected_thesis_id.is_empty() and thesis_draft_active:
+		result = GameManager.create_thesis(_selected_company_id(), selected_stance_id, _selected_option_id(horizon_option), title_edit.text)
+	else:
+		result = GameManager.update_thesis_meta(selected_thesis_id, {
+			"title": title_edit.text,
+			"stance": selected_stance_id,
+			"horizon": _selected_option_id(horizon_option)
+		})
 	suppress_thesis_changed_refresh = false
 	_set_status(str(result.get("message", "")))
 	if bool(result.get("success", false)):
+		thesis_draft_active = false
+		selected_thesis_id = str(result.get("thesis", {}).get("id", selected_thesis_id))
 		refresh()
+	_log_perf_elapsed("_on_update_thesis_pressed", started_at_usec)
+
+
+func _on_company_option_selected(_index: int) -> void:
+	if selected_thesis_id.is_empty() and thesis_draft_active:
+		_refresh_evidence_options(_selected_company_id())
+		_refresh_evidence_cards({})
 
 
 func _on_evidence_category_selected(_index: int) -> void:
@@ -1879,8 +2870,8 @@ func _make_step_flow_row() -> HBoxContainer:
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 8)
 	row.add_child(_make_step_card("1", "Build", "Pick stock, stance, and timeframe."))
-	row.add_child(_make_step_card("2", "Add Evidence", "Choose cards that support or challenge the idea."))
-	row.add_child(_make_step_card("3", "Review", "Generate and revisit the paper."))
+	row.add_child(_make_step_card("2", "Capture", "Attach Research Tray items and classify what they mean."))
+	row.add_child(_make_step_card("3", "Memo", "Generate and revisit the evidence memo."))
 	return row
 
 
@@ -1961,19 +2952,20 @@ func _make_empty_evidence_label(text: String) -> Label:
 
 func _build_evidence_card(option: Dictionary, thesis: Dictionary) -> Button:
 	var option_key: String = _evidence_option_key(option)
-	var selected_row: Dictionary = _selected_evidence_for_option(thesis, option)
-	var is_selected: bool = not selected_row.is_empty()
 	var impact: String = str(option.get("impact", "mixed"))
-	var button := Button.new()
+	var button := EvidenceDragButton.new()
 	button.name = "ThesisEvidenceCard%s" % _node_token(option_key)
 	button.text = ""
-	button.toggle_mode = true
-	button.button_pressed = is_selected
-	button.custom_minimum_size = Vector2(258, 142)
+	button.drag_payload = {
+		"kind": "thesis_research_evidence",
+		"evidence_id": str(option.get("id", "")),
+		"label": str(option.get("label", "Evidence"))
+	}
+	button.custom_minimum_size = Vector2(260, 132)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.set_meta("skip_thesis_style", true)
 	button.pressed.connect(_on_evidence_card_pressed.bind(option_key))
-	_style_evidence_card_button(button, is_selected, impact)
+	_style_evidence_card_button(button, false, impact)
 
 	var margin := MarginContainer.new()
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1990,7 +2982,11 @@ func _build_evidence_card(option: Dictionary, thesis: Dictionary) -> Button:
 
 	var source_label := Label.new()
 	source_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	source_label.text = str(option.get("source_label", option.get("category_label", option.get("category", "Evidence")))).to_upper()
+	var source_text: String = "%s | %s" % [
+		str(option.get("source_label", option.get("source_type", "Research"))),
+		str(option.get("category_label", option.get("category", "Evidence")))
+	]
+	source_label.text = source_text.to_upper()
 	source_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_style_label(source_label, COLOR_MUTED, 10)
 	vbox.add_child(source_label)
@@ -2020,7 +3016,7 @@ func _build_evidence_card(option: Dictionary, thesis: Dictionary) -> Button:
 	value_row.add_child(impact_badge)
 	var impact_label := Label.new()
 	impact_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	impact_label.text = impact.capitalize()
+	impact_label.text = "Tray"
 	impact_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	impact_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_style_label(impact_label, COLOR_BG, 10)
@@ -2029,10 +3025,75 @@ func _build_evidence_card(option: Dictionary, thesis: Dictionary) -> Button:
 	var detail_label := Label.new()
 	detail_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	detail_label.text = str(option.get("detail", "No current context."))
+	var detail: String = str(option.get("detail", "No current context."))
+	detail_label.text = detail
 	_style_label(detail_label, COLOR_MUTED, 11)
 	vbox.add_child(detail_label)
 	return button
+
+
+func _build_attached_evidence_card(row: Dictionary) -> PanelContainer:
+	var evidence_id: String = str(row.get("id", ""))
+	var impact: String = str(row.get("impact", "mixed"))
+	var panel := PanelContainer.new()
+	panel.name = "ThesisAttachedEvidenceCard%s" % _node_token(evidence_id)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_theme_stylebox_override("panel", _make_rounded_stylebox(COLOR_MARKET_PAPER_CARD, _impact_color(impact), 1, 4))
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 9)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 9)
+	panel.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(vbox)
+	var title_row := HBoxContainer.new()
+	title_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(title_row)
+	var title_box := VBoxContainer.new()
+	title_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_box.add_theme_constant_override("separation", 2)
+	title_row.add_child(title_box)
+	var source_label := Label.new()
+	source_label.text = "%s | %s" % [
+		str(row.get("source_label", row.get("source_type", "Research"))).to_upper(),
+		str(row.get("category_label", row.get("category", "Evidence"))).to_upper()
+	]
+	source_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_style_label(source_label, COLOR_MUTED, 10)
+	title_box.add_child(source_label)
+	var label := Label.new()
+	label.text = str(row.get("label", "Evidence"))
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_style_label(label, COLOR_TEXT, 14)
+	title_box.add_child(label)
+	var remove_button := Button.new()
+	remove_button.name = "ThesisAttachedEvidenceRemove%sButton" % _node_token(evidence_id)
+	remove_button.text = "x"
+	remove_button.custom_minimum_size = Vector2(30, 28)
+	remove_button.set_meta("skip_thesis_style", true)
+	remove_button.pressed.connect(_on_evidence_chip_remove_pressed.bind(evidence_id))
+	_style_chip_button(remove_button, "negative")
+	title_row.add_child(remove_button)
+	var value_label := Label.new()
+	value_label.text = str(row.get("value", "No current data"))
+	value_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_style_label(value_label, _impact_color(impact), 13)
+	vbox.add_child(value_label)
+	var detail_label := Label.new()
+	detail_label.text = str(row.get("detail", "No current context."))
+	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_style_label(detail_label, COLOR_MUTED, 11)
+	vbox.add_child(detail_label)
+	var interpretation_option := OptionButton.new()
+	interpretation_option.name = "ThesisEvidenceInterpretation%sOption" % _node_token(evidence_id)
+	_add_option_items(interpretation_option, EVIDENCE_TABS)
+	_select_option_by_id(interpretation_option, str(row.get("interpretation", "watch")))
+	interpretation_option.item_selected.connect(_on_attached_evidence_interpretation_selected.bind(evidence_id, interpretation_option))
+	vbox.add_child(interpretation_option)
+	return panel
 
 
 func _build_evidence_chip(row: Dictionary) -> Button:
@@ -2040,7 +3101,7 @@ func _build_evidence_chip(row: Dictionary) -> Button:
 	var impact: String = str(row.get("impact", "mixed"))
 	var chip := Button.new()
 	chip.name = "ThesisEvidenceChip%s" % _node_token(evidence_id)
-	chip.text = "%s: %s  x" % [str(row.get("category_label", row.get("category", "Evidence"))), str(row.get("label", ""))]
+	chip.text = "%s: %s  x" % [str(row.get("interpretation_label", row.get("category_label", "Evidence"))), str(row.get("label", ""))]
 	chip.tooltip_text = str(row.get("detail", "Click to remove this evidence."))
 	chip.custom_minimum_size = Vector2(0, 28)
 	chip.set_meta("skip_thesis_style", true)
@@ -2065,7 +3126,7 @@ func _on_evidence_tab_pressed(tab_id: String) -> void:
 
 func _on_evidence_card_pressed(option_key: String) -> void:
 	if selected_thesis_id.is_empty():
-		_set_status("Create a thesis before adding evidence.")
+		_set_status("Save the thesis before arranging evidence.")
 		_refresh_evidence_cards({})
 		return
 	var option: Dictionary = rendered_evidence_cards.get(option_key, {})
@@ -2073,20 +3134,38 @@ func _on_evidence_card_pressed(option_key: String) -> void:
 		_set_status("This evidence card is no longer available.")
 		_refresh_evidence_cards(_selected_thesis())
 		return
-	var thesis: Dictionary = _selected_thesis()
-	var selected_row: Dictionary = _selected_evidence_for_option(thesis, option)
-	var result: Dictionary = {}
+	_attach_research_evidence_from_drop(str(option.get("id", "")))
+
+
+func _attach_research_evidence_from_drop(evidence_id: String) -> void:
+	if selected_thesis_id.is_empty():
+		_set_status("Save the thesis before arranging evidence.")
+		return
+	if evidence_id.is_empty():
+		_set_status("This evidence card is no longer available.")
+		return
 	suppress_thesis_changed_refresh = true
-	if selected_row.is_empty():
-		result = GameManager.add_thesis_evidence(selected_thesis_id, option)
-	else:
-		result = GameManager.remove_thesis_evidence(selected_thesis_id, str(selected_row.get("id", "")))
+	var result: Dictionary = GameManager.attach_research_evidence_to_thesis(selected_thesis_id, evidence_id, "watch")
 	suppress_thesis_changed_refresh = false
 	_set_status(str(result.get("message", "")))
 	if bool(result.get("success", false)):
 		refresh()
 	else:
 		_refresh_evidence_cards(_selected_thesis())
+
+
+func _on_attached_evidence_interpretation_selected(_index: int, evidence_id: String, option: OptionButton) -> void:
+	if selected_thesis_id.is_empty() or evidence_id.is_empty():
+		return
+	var interpretation: String = _selected_option_id(option)
+	suppress_thesis_changed_refresh = true
+	var result: Dictionary = GameManager.update_thesis_evidence_interpretation(selected_thesis_id, evidence_id, {
+		"interpretation": interpretation
+	})
+	suppress_thesis_changed_refresh = false
+	_set_status(str(result.get("message", "")))
+	if bool(result.get("success", false)):
+		refresh()
 
 
 func _on_evidence_chip_remove_pressed(evidence_id: String) -> void:
@@ -2101,33 +3180,17 @@ func _on_evidence_chip_remove_pressed(evidence_id: String) -> void:
 
 
 func _flatten_evidence_options_for_tab(tab_id: String) -> Array:
-	var category_ids: Array = _categories_for_evidence_tab(tab_id)
 	var rows: Array = []
-	for category_value in evidence_snapshot.get("categories", []):
-		if typeof(category_value) != TYPE_DICTIONARY:
+	for row_value in evidence_snapshot.get("rows", []):
+		if typeof(row_value) != TYPE_DICTIONARY:
 			continue
-		var category: Dictionary = category_value
-		var category_id: String = str(category.get("id", ""))
-		for option_value in category.get("options", []):
-			if typeof(option_value) != TYPE_DICTIONARY:
-				continue
-			var option: Dictionary = option_value
-			var option_category: String = str(option.get("category", category_id))
-			if category_ids.has(category_id) or category_ids.has(option_category):
-				var normalized_option: Dictionary = option.duplicate(true)
-				if str(normalized_option.get("category_label", "")).is_empty():
-					normalized_option["category_label"] = str(category.get("label", option_category.capitalize()))
-				rows.append(normalized_option)
+		var row: Dictionary = row_value.duplicate(true)
+		row["pending_interpretation"] = tab_id
+		rows.append(row)
 	return rows
 
 
 func _categories_for_evidence_tab(tab_id: String) -> Array:
-	for tab_value in EVIDENCE_TABS:
-		if typeof(tab_value) != TYPE_DICTIONARY:
-			continue
-		var tab: Dictionary = tab_value
-		if str(tab.get("id", "")) == tab_id:
-			return tab.get("categories", [])
 	return []
 
 
@@ -2137,12 +3200,20 @@ func _selected_evidence_for_option(thesis: Dictionary, option: Dictionary) -> Di
 		if typeof(evidence_value) != TYPE_DICTIONARY:
 			continue
 		var row: Dictionary = evidence_value
+		if not str(option.get("id", "")).is_empty() and str(row.get("source_evidence_id", "")) == str(option.get("id", "")):
+			return row
 		if _evidence_option_key(row) == option_key:
 			return row
 	return {}
 
 
 func _evidence_option_key(row: Dictionary) -> String:
+	var research_id: String = str(row.get("id", ""))
+	if not research_id.is_empty() and research_id.begins_with("research_"):
+		return research_id
+	var source_evidence_id: String = str(row.get("source_evidence_id", ""))
+	if not source_evidence_id.is_empty():
+		return source_evidence_id
 	var category: String = str(row.get("category", ""))
 	var label: String = str(row.get("label", ""))
 	if category.is_empty() or label.is_empty():
@@ -2175,6 +3246,30 @@ func _impact_color(impact: String) -> Color:
 			return COLOR_NEGATIVE
 		_:
 			return COLOR_WARNING
+
+
+func _interpretation_label(interpretation: String) -> String:
+	match interpretation:
+		"support":
+			return "Supporting Evidence"
+		"risk":
+			return "Risk"
+		"contradiction":
+			return "Contradiction"
+		"invalidation":
+			return "Invalidation"
+		_:
+			return "Watch Item"
+
+
+func _impact_for_interpretation(interpretation: String) -> String:
+	match interpretation:
+		"support":
+			return "positive"
+		"risk", "contradiction", "invalidation":
+			return "negative"
+		_:
+			return "mixed"
 
 
 func _style_segment_button(button: Button, accent: Color, selected: bool) -> void:

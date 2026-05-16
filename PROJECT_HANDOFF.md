@@ -40,12 +40,34 @@ Read this file first in the next session.
     - `54033bf Hide helper text and tidy dashboard calendar`
     - `4bc42c0 Gate Network contacts and add calendar event popup`
     - `44c727f Speed up Advance Day recap path`
-    - latest checkpoint message: `Speed up Advance Day recap path`
-  - current Windows worktree is intentionally not clean after the Advance Day performance, Twooter-upgrade removal, and Twooter Social Hub/dialog work; inspect `git status --short` before assuming a clean tree
-  - `systems/TwooterInteractionSystem.gd` is currently an intentional untracked feature file until the next checkpoint commit; Python validator `__pycache__/` folders are disposable local artifacts
+    - `4cd085d Build Twooter social hub`
+    - `7fafa87 Harden Twooter source messaging loop`
+    - `03f118e Polish Twooter account interactions`
+    - `6367067 Expand Twooter social progression`
+    - latest checkpoint message: `Expand Twooter social progression`
+  - `6367067` was the last pushed clean checkpoint, but the current Windows worktree now contains uncommitted Thesis/Research Tray, Network, and Twooter follow-up work; run `git status --short` before editing and do not assume a clean tree
+  - `systems/TwooterInteractionSystem.gd` is tracked and owns the mutable Twooter relationship/message/dialogue layer; Python validator `__pycache__/` folders are disposable local artifacts
   - current local note: formatter locals that previously shadowed Godot's built-in `sign()` are now renamed to `sign_prefix`
 
 ## Latest Session Snapshot
+- 2026-05-16 Thesis/Research Tray redesign pass: Thesis is now a player-captured evidence workflow rather than a generated evidence browser. `RunState.thesis_research_tray` stores compact captured evidence rows, `systems/ThesisEvidenceCaptureSystem.gd` normalizes captures with duplicate-safe `dedupe_key` values, and `GameManager` exposes `get_research_tray_snapshot()`, `capture_research_evidence()`, `attach_research_evidence_to_thesis()`, and `update_thesis_evidence_interpretation()`.
+- Current capture surfaces include Key Stats, broader Financials rows, Company Profile description/free-float/management rows, STOCKBOT chart-pattern claims, Broker Summary rows, STOCKBOT trade/quote panel rows, News headline/article/source-lead captures, Twooter public posts and DMs, and sector/macro context. Capture should feel like inspecting real data: rows use hover/click context menus such as `Add to Research Tray`; duplicate captures return `Already in Research Tray.` instead of adding another row.
+- Thesis Board UI is now simplified: the initial right panel shows step-by-step instruction copy plus `Create Thesis`; after creation the builder asks for stock, stance, timeframe, and title at the top. Evidence selection is a two-column flow with captured Research Tray cards on the left and arranged thesis evidence on the right; dragged/attached evidence defaults to `watch` and can be reclassified as `support`, `risk`, `contradiction`, `watch`, or `invalidation`. Bottom controls stay visible as `Generate Thesis`, `View Thesis`, `Refresh Review`, and `Close Thesis`. After at least one thesis exists, a `Create Thesis` button also appears in the left sidebar above the thesis list so players can start another thesis.
+- Thesis report/view copy is now memo-style paragraphs instead of old recommendation/target sections. The current summary order is: company description, current price/tradebook context, fundamentals, technical/chart context, then money flow. The memo deliberately avoids raw UI/source phrasing such as `Company Profile`, `STOCKBOT Broker`, `trade panel`, and old labeled-read sections. Negative investing cash flow now explains that spending more cash on long-term assets than asset sales usually points to expansion or heavy capital investment.
+- Focused Thesis regression coverage now lives in `scenes/tests/ThesisResearchTrayTest.tscn` / `scripts/tests/ThesisResearchTrayTest.gd`. It covers empty tray defaults, duplicate capture, save/load dedupe-key normalization, Key Stats/Financials/Profile/Trade/News/Twooter/Broker/Macro/Chart capture normalization, memo-only report output, summary wording/order, and the negative investing-cash-flow explanation. Verification for the latest Thesis pass: `git diff --check` passed, Windows Godot `4.6.1` headless project load exited `0`, and `ThesisResearchTrayTest.tscn` printed `THESIS_RESEARCH_TRAY_OK`; the usual non-blocking `res://logs` directory warning still appears.
+- 2026-05-16 Network v2 follow-up consequences pass: regular Network tips and Twooter/News source memories now schedule compact follow-up reactions during Advance Day. `ContactNetworkSystem.process_due_tip_memories()` resolves due rows once, writes coaching-style reaction fields (`reaction_due_day_index`, `reaction_sent`, `reaction_label`, `reaction_note`, relationship/reliability deltas, and Twooter account/handle metadata), and appends inbound account-only Twooter DMs with action id `network_followup_reaction`.
+- Twooter is now the emotional delivery surface for Network consequence feedback: inbound reaction DMs cost no AP, mark the thread unread, count toward same-day Twooter activity/badges, and never create fake player messages. Network remains the summary/history surface through `social_reaction` journal rows plus `last_reaction_*` fields on contact/discovery rows; Network contact detail now shows the latest DM note.
+- Save compatibility note: only rows that explicitly carry `reaction_due_day_index` are eligible for the new reaction path. Older save rows without reaction fields stay quiet instead of backfilling surprise DMs.
+- Focused Network consequence regression added: `scenes/tests/NetworkConsequenceFollowupTest.tscn` creates one News/Twooter source memory and one regular Network tip memory, save/loads pending state, advances to due reactions, verifies one inbound account-only DM per memory, checks zero AP spend, checks Network row/journal summaries, checks modest deltas, confirms sent state persists, and asserts a legacy no-reaction-field row does not fire.
+- Verification for the Network v2 pass: `git diff --check` passed, Windows Godot `4.6.1` headless project load exited `0`, `python tools/twooter_editor/server.py --validate` passed, `python tools/content_lint_dashboard/server.py --validate` passed with all 9 tools and 15 runtime files valid, focused `NetworkConsequenceFollowupTest.tscn` printed `NETWORK_CONSEQUENCE_FOLLOWUP_OK source=budi_supply_chain network=hendra_equity_research`, focused `TwooterNetworkLoopTest.tscn` printed `TWOOTER_NETWORK_LOOP_OK contact=hendra_equity_research account=network_hendra_equity_research action=ask_tip`, and focused `TwooterMessageCooldownTest.tscn` printed `TWOOTER_MESSAGE_COOLDOWN_OK` with only the usual non-blocking ObjectDB cleanup warning. A quick-smoke attempt with explicit `--log-file res://logs/smoke_quick_network_v2.log` did not print the final OK line before the 180s shell timeout; the leftover Godot process was stopped.
+- 2026-05-16 checkpoint: committed and pushed `6367067 Expand Twooter social progression` to `origin/main`. The worktree was clean immediately after the push.
+- 2026-05-16 Twooter loop-balance pass: same-account likes now give diminishing daily relationship progress (`0.5` on the first like, `0.25` on the second, then `0.0` for later likes that day). Private DM actions now also have same-day diminishing gains per account: the first private action gives full progress, a second different action gives reduced progress, and repeated/third-plus private actions give flavor without farming relationship/credibility/importance.
+- Cooldown and duplicate-action hardening: direct attempts to send into a cooled-down private branch now fail cleanly and refund AP through `RunState.refund_daily_action()`. Duplicate `connect` pings produce already-connected copy instead of writing another Network discovery/journal row or granting more progress.
+- Network integration pass: source-only / News-handle DMs can create provenance-rich Network discovery and journal rows without marking the contact met too early. Network contact rows now carry `source_label`, `source_note`, `twooter_origin`, `twooter_account_id`, `twooter_handle`, `twooter_action_id`, and `source_only` metadata so later UI can explain how the lead entered the player's network.
+- Higher-relationship dialogue pass: `relationship_reply_pools` and `network_source_reply_pools` are now authored in `tools/twooter_editor/twooter_source.json`, exported to `data/social/twooter_feed_data.json`, validated by the Twooter editor server, and consumed by `TwooterInteractionSystem` by relationship stage (`familiar`, `trusted`, `inner_circle_candidate`) with hardcoded fallback pools. Higher relationship accounts should answer with warmer, more specific guidance instead of the same early guarded replies.
+- Focused Twooter-Network regression added: `scenes/tests/TwooterNetworkLoopTest.tscn` runs the direct News source lead -> generated `network_...` Twooter account -> source-only DM -> provenance-rich Network discovery/journal -> follow-up DM promotion loop. It asserts generated account context, network-specific dialog trees, AP spending, message rows, `source_only` provenance, Network snapshot discovery/journal rows, met-contact promotion, and malformed-template guards.
+- Verification after adding the focused test: `git diff --check` passed, and Windows Godot `4.6.1` with explicit `--log-file res://logs/twooter_network_loop.log` printed `TWOOTER_NETWORK_LOOP_OK contact=hendra_equity_research account=network_hendra_equity_research action=ask_tip`. A repeat launch without explicit `--log-file` hit the known Windows/Godot `user://logs/godot...log` signal `11` crash path; prefer explicit log-file for this scene on the current machine.
+- Verification for the 2026-05-16 checkpoint: `git diff --check` passed with only CRLF warnings on exported Twooter JSON, `python tools/twooter_editor/server.py --validate` passed, `python tools/content_lint_dashboard/server.py --validate` passed, Windows Godot `4.6.1` headless project load exited `0`, and focused `TwooterMessageCooldownTest.tscn` printed `TWOOTER_MESSAGE_COOLDOWN_OK`. A full quick smoke was not rerun to completion for this exact checkpoint; the earlier quick-smoke attempt in this area timed out/hung without a visible assertion failure, while the focused regression passed.
 - 2026-05-15 Twooter News-source loop hardening: quick smoke now fully automates the News -> Twooter handle -> source DM -> Network promotion loop. It asserts the News article source button opens the exact generated `network_...` Twooter account, the account uses a `network_` dialog tree, following plus a source DM spends AP, writes player/account message rows, marks the real Network contact met, changes discovery source to `twooter`, and writes Network journal/discovery state. The test now also rejects malformed social template output such as `For ,` or unresolved `{ticker}` tokens in the player option, account reply, or saved DM rows.
 - 2026-05-15 Twooter Message layout hardening: Message view now hides the right rail entirely so private threads use the full social window instead of fighting Trending/Who-to-follow for width. DM option buttons trim overflow with ellipsis, and smoke asserts the message view has scroll containers, no legacy action stack, no visible right rail, and composer/row panels staying inside the Message detail panel.
 - 2026-05-15 Network-source dialog polish: network-contact accounts now get relationship-aware source-specific reply pools instead of generic social warmth. Familiar/trusted/inner-circle source replies become more helpful while still emphasizing public evidence, source boundaries, and reputation. The authored `network_source_followup`, `network_relationship_probe`, `network_insider_boundary`, and `network_guarded_source` trees gained additional human, friendly, source-specific copy; runtime `data/social/twooter_feed_data.json` was re-exported.
@@ -363,71 +385,58 @@ Read this file first in the next session.
 - Thesis Board status:
   - `Thesis Board` is now a first playable desktop app registered as app id `thesis`.
   - Desktop shortcut/nav SVGs live in `assets/ui/desktop/thesis_shortcut.svg` and `assets/ui/desktop/thesis_nav.svg`.
-  - Runtime UI is built by `scripts/ui/widgets/ThesisBoardWidget.gd` and now opens as a two-column research workflow:
-    - left thesis list
-    - right company/meta/evidence builder, selected evidence, review state, and compact report actions
+  - Runtime UI is built by `scripts/ui/widgets/ThesisBoardWidget.gd`.
+  - The old generated evidence browser and old recommendation-style white-paper flow have been replaced by a player-captured Research Tray workflow:
+    - initial state shows only step-by-step guidance plus `Create Thesis`
+    - after draft creation, the top setup area asks for stock, stance, timeframe, and title
+    - the builder shows two scrollable columns: captured Research Tray cards on the left and arranged thesis evidence on the right
+    - dragging/clicking evidence attaches it with default interpretation `watch`; attached cards can be reclassified as `support`, `risk`, `contradiction`, `watch`, or `invalidation`
+    - bottom controls stay visible as `Generate Thesis`, `View Thesis`, `Refresh Review`, and `Close Thesis`
+    - after the player has at least one saved thesis, the left sidebar shows a `Create Thesis` button above the thesis list for starting another thesis
   - The old always-visible right `Research Note` panel has been removed.
-  - Generated reports now live in a modal white-paper overlay inside the Thesis Board window:
-    - `Generate Report` shows staged copy such as `Reviewing selected evidence...`, `Checking valuation, tape, and risk...`, and `Formatting research note...`
-    - after the short staged flow, a centered white document surface appears over the board with report header, badge, scrollable body, footer/meta line, and `Close`, `Regenerate`, and `Refresh Review` actions
-    - `View Paper` reopens the frozen report without regenerating
-    - `Regenerate` reruns the staged flow and replaces the frozen report snapshot
-    - the overlay blocks underlying Thesis Board input while visible, and `Esc` / `Close` only hide the final paper or error state
-  - The Thesis builder column is now vertically scrollable inside the desktop window, so Evidence/Report controls are reachable at smaller window heights.
-  - `Generate Report` / `Regenerate` now costs `7 AP` through `GameManager.generate_thesis_report()`, and the UI disables those actions when the player lacks enough daily AP.
+  - Generated thesis output now lives in a modal Thesis view overlay inside the Thesis Board window:
+    - `Generate Thesis` shows staged copy such as `Reviewing selected evidence...`, `Writing the thesis...`, and `Formatting the thesis view...`
+    - after the short staged flow, a centered cream document surface appears over the board with memo text and a fixed bottom meta footer
+    - `View Thesis` reopens the frozen memo without regenerating
+    - `Regenerate Thesis` reruns the staged flow and replaces the frozen report snapshot
+    - the overlay blocks underlying Thesis Board input while visible, and `Esc` / `Close` only hide the final memo or error state
+  - `Generate Thesis` / `Regenerate Thesis` currently costs `7 AP` through `GameManager.generate_thesis_report()`, and the UI disables those actions when the player lacks enough daily AP.
   - `RunState.player_theses` persists compact thesis artifacts only:
     - thesis metadata
     - selected evidence summaries
     - frozen report snapshot
     - basic review snapshot
-  - Thesis saves do not embed full News, Twooter, Network, company, chart, or financial snapshots; evidence rows store only compact player-selected summaries and optional chart-pattern metadata.
-  - `systems/ThesisReportSystem.gd` deterministically generates offline analyst-style research notes, with no LLM/API/network dependency.
-  - Report output includes verdicts such as `Buy`, `Accumulate`, `Hold/Watch`, `Trade Only`, `Avoid`, and `Dividend Hold`, plus an `A-D` reasoning grade and missing-evidence notes.
-  - Generated report sections now use claim-led analyst bullets instead of generic summary paragraphs:
-    - `Investment Thesis`
-    - `Valuation & Recommendation`
-    - `Investment Risks`
-    - `Catalysts / Checks`
-    - `Tape / Broker Flow`
-    - `Learning Note`
-  - The white-paper report renders those bullets with bold lead-ins through `RichTextLabel` BBCode, so each point reads like `FRAGILE BUSINESS QUALITY. ...` followed by a short evidence-based explanation.
-  - The report remains evidence-bound: selected evidence drives the bullets, missing evidence becomes an explicit gap, and the system should not invent external facts or fake precision.
-  - Report copy and Thesis evidence options translate hidden quality/growth/risk scores into player-facing bands:
-    - quality: `excellent`, `strong`, `average`, `weak`, `fragile`
-    - growth: `accelerating`, `healthy`, `steady`, `uneven`, `stalling`
-    - risk: `low`, `manageable`, `moderate`, `elevated`, `high`
-    - the raw `quality 29 / growth 46 / risk 48` style wording is intentionally not used in generated report prose
-  - Generated reports freeze report date, report price, selected evidence, verdict, target area, and written sections; later market movement only updates the review panel until the player regenerates.
-  - Report scoring is now discipline-aware:
-    - the core checklist is `Anchor`, `Price`, `Tape`, `Catalyst`, and `Invalidation`
-    - missing pillars cap reasoning quality and make target ranges less defensible
-    - `Buy` / `Accumulate` ratings now require a stronger mix of anchor, price, invalidation, and non-contradicted pattern evidence
-    - weak or contradicted chart-pattern claims add explicit report notes instead of quietly counting as confirmation
-  - Evidence picker V1 is manual inside the Thesis app:
-    - Fundamentals / Key Stats
-    - Financials
-    - Price Action
-    - Broker Flow
-    - Ownership
-    - Sector / Macro
-    - News
-    - Twooter
-    - Network Intel
-    - Corporate Events
-    - Risk / Invalidation
-  - The Thesis app now shows an `Evidence discipline` strip for the selected thesis:
-    - summarizes the five core pillars as ready/missing
-    - the strip is passive guidance only; the earlier `Focus Gap` shortcut was removed because it steered the evidence picker too strongly
-    - this is meant to reduce confusion while keeping the player-led evidence loop intact
-  - STOCKBOT chart pattern evidence is now player-led:
+  - `RunState.thesis_research_tray` persists compact captured evidence rows independent of any thesis. Old saves default to an empty tray and old tray rows derive missing `dedupe_key` values during normalization.
+  - `systems/ThesisEvidenceCaptureSystem.gd` normalizes captured evidence and blocks duplicate facts with stable `dedupe_key` values.
+  - Current Research Tray capture adapters include:
+    - `key_stats`
+    - `financial_statement`
+    - `company_profile` rows for business description, ownership/free float, and management
+    - `chart_pattern`
+    - `broker_summary` / `broker_flow`
+    - `trade_quote`
+    - `news_article`
+    - `twooter_post` / `twooter_dm`
+    - `network_journal`
+    - `macro_indicator` / `sector_macro`
+  - Player-facing capture is context-menu driven where possible: real data rows are hoverable/clickable and expose `Add to Research Tray`; duplicate capture shows `Already in Research Tray.`
+  - STOCKBOT chart pattern evidence is still player-led:
     - the chart toolbar has a `Pattern` tool beside select/horizontal/trend tools
     - V1 pattern choices are `Range / Consolidation`, `Breakout`, `Failed Breakout`, `Pullback to Support`, `Higher Lows`, `Lower Highs`, and `Volume Confirmation`
     - the player chooses a pattern type and marks two chart anchors; the chart draws the selected region with a distinct blue accent
     - `systems/ChartPatternSystem.gd` evaluates the marked region and returns coaching states: `Good read`, `Plausible, needs confirmation`, `Weak read`, or `Contradicted`
     - coaching is non-blocking: weak/contradicted reads can still be added to Thesis, but carry warning copy and invalidation notes
-    - `Add to Thesis` is disabled until an open thesis exists for the same stock; one open thesis is used directly, multiple open theses show a destination picker, and V1 never auto-creates a thesis
+    - chart-pattern claims now capture into Research Tray first, while old direct-add APIs remain compatibility wrappers
     - saved chart-pattern evidence remains compact: pattern label, coaching state, region dates/prices, reason, next-check hint, invalidation hint, chart range, current price/date, and source label `STOCKBOT Chart`
-    - the generated white paper explicitly says the player marked the pattern and includes the system coaching read plus next-check language, instead of pretending the system auto-discovered the setup
+  - Thesis memo output is deterministic/offline and remains evidence-bound: selected evidence drives the memo, missing evidence becomes an explicit next research task, and the system should not invent external facts or fake precision.
+  - Memo text intentionally avoids old buy/sell/target-price emphasis and raw source/UI labels. Current paragraph order is:
+    - company description
+    - current price / tradebook context
+    - fundamentals
+    - technical/chart context
+    - money flow
+    - next research task
+  - Financial statement handling now includes a specific negative investing cash flow explanation: spending more cash on long-term assets than asset sales can point to expansion or heavy capital investment.
   - Review state compares the frozen report against current price, held position, broker flow, and updated context and returns `Strengthening`, `Weakening`, `Unchanged`, or `Needs Review`.
   - Thesis review work is not part of the Advance Day recap-critical path; it runs on demand/app refresh and through Thesis APIs.
 - Life status:
@@ -535,13 +544,12 @@ Read this file first in the next session.
   - Current backend Advance Day logs show `build_company_market_rows` around `0.8-1.5ms`, `build_dashboard_event_cache` around `30-35ms`, `build_daily_activity_cache` around `2-4ms`, `build_daily_summary` around `0.7-1.1ms`, `build_news_snapshot` around `30-62ms` depending generated article volume, `emit_price_formed` around `2.8-4.4ms` in guarded paths where Dashboard/open apps are deferred, and `_on_summary_ready:daily_recap_snapshot` around `2.1-4.4ms`.
   - Broader app-open timings are still noisy in headless perf runs; `News` can still be heavier than `Network` because it renders article content and can trigger article-source discovery.
   - UI-button recap readiness is now mostly dominated by market simulation, dashboard-event cache preparation, News feed rendering/recording, and save-request bookkeeping; save serialization and full app/Dashboard catch-up are shifted until after the recap is visible or dismissed.
-- Last successful verification in this session:
+- Latest focused verification after the Thesis/Research Tray pass:
   - `git diff --check`
-  - Windows Godot `4.6.1` project-load check with `--log-file res://logs/project_load.log --quit`
-  - normal-play perf with `--log-file res://logs/normal_play_perf.log --scene res://scenes/tests/NormalPlayPerfTest.tscn -- --smoke-local-io`, which printed `NORMAL_PLAY_PERF_OK open_network=45.44ms advance_network_open_recap_ready=454.5ms advance_network_open=688.46ms advance_desktop_only_recap_ready=383.77ms advance_desktop_only=580.09ms open_stock=188.37ms advance_stock_open_recap_ready=398.2ms advance_stock_open=605.07ms open_news=184.19ms open_network_with_news=47.09ms advance_news_network_open_recap_ready=459.94ms advance_news_network_open=699.06ms flush_pending_save=15.78ms local_save_bytes=1603514`
-  - quick smoke with `--log-file res://logs/smoke_quick.log --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, which printed `SMOKE_QUICK_OK normal_equity=94012318.11 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.`
+  - Windows Godot `4.6.1` project-load check with explicit `--log-file`, exited `0`
+  - focused Thesis Research Tray test with `--scene res://scenes/tests/ThesisResearchTrayTest.tscn`, which printed `THESIS_RESEARCH_TRAY_OK`
   - existing quick-smoke coverage still asserts old-save Life backfill, Life desktop open/close behavior, settled window animation state, populated housing/lifestyle selectors, monthly budget rows, runway summary, Life plan autosave/save-load persistence, and flushed `player_life` persistence to disk
-  - the quick smoke also still asserts old-save Thesis backfill, Thesis desktop open/focus/close behavior, settled window animation state, two-column Thesis Board layout, hidden report overlay at startup, staged report preparation, white-paper reveal, thesis create/save/load persistence, populated evidence options, passive Evidence discipline strip text, absence of the removed `Focus Gap` shortcut, add/remove evidence autosaves, generated report verdict/grade/discipline rows/target/claim-led sections, report copy avoiding raw system/debug wording, no raw `quality/growth/risk + number` report phrasing, evidence-discipline and chart-pattern next-check report copy, frozen reports after `Advance Day`, review refresh after at least one simulated day, Pattern chart tool existence, deterministic Good/Plausible/Weak/Contradicted pattern fixture states, disabled Add-to-Thesis without a matching open thesis, single/multiple thesis destination flow, compact chart-pattern evidence persistence, and player-led chart-pattern report copy
+  - focused Thesis coverage now asserts fresh empty Research Tray state, duplicate capture handling, old-save missing `dedupe_key` normalization, save/load preservation, multiple capture adapters, memo-only generated report shape, clean summary wording, paragraph order, negative investing cash flow interpretation, and compact chart-pattern compatibility wrappers
   - existing quick-smoke coverage still asserts the Key Stats dashboard cards, populated row groups, `Net Income` / `EPS` / `Revenue` pill switching, the separate `Financials` tab rows/navigation, hidden Financials/Broker helper labels, uniform Dashboard calendar grid shape, Dashboard calendar event popup/buttons, Dashboard sector card-to-stock-list navigation, Dashboard section title styling, the new `Index Gorengan` recap values, the real sparkline point count, and hidden old index grid/hint/date nodes
   - note: the quick smoke may print RID/ObjectDB cleanup warnings after `SMOKE_QUICK_OK` on Windows; treat them as non-blocking Godot shutdown noise unless they appear before smoke output or hide a failing exit code
 
@@ -582,7 +590,7 @@ Read this file first in the next session.
 - A first-pass event-reading UX now exists in `News`
 - A first-pass wide Social Hub UX now exists in `Twooter`
 - A first playable `Academy` desktop app now exists
-- A first playable `Thesis Board` desktop app now exists for manual research capture, deterministic report generation, and after-action thesis review
+- A first playable `Thesis Board` desktop app now exists for player-captured Research Tray evidence, drag/arrange thesis building, memo-style thesis generation, and after-action thesis review
 - A first playable `Life` desktop app now exists for monthly cash-flow planning, housing/lifestyle choices, declared dividend income, runway, emergency loans, and bankruptcy-risk recovery
 - A first playable contact/recognition UX now exists in `Network`
 - A first playable `Upgrades` shop app now exists on the desktop
@@ -2648,6 +2656,7 @@ Read this file first in the next session.
 
 ## Recommended Next Steps (Confirm user first)
 - Keep the checkpoint clean:
+  - current known clean checkpoint is `6367067 Expand Twooter social progression`
   - run `git status --short` before starting a new pass and preserve ignored local `logs/` output as disposable test data
   - treat a trailing `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` as non-blocking Windows/Godot noise
 - Wealth progression / Life direction:
@@ -2690,11 +2699,11 @@ Read this file first in the next session.
   - add a recap archive only if players ask to review past days
   - add a fishbowl accessibility toggle/strength slider if the global screen effect feels tiring
 - Thesis Board planning:
-  - playtest whether the manual evidence picker plus player-led chart pattern flow feels like learning or busywork
-  - tune report wording, verdict thresholds, target-range defensibility, and missing-evidence notes after a few real play examples
+  - playtest whether the Research Tray capture loop feels like discovery or busywork: Key Stats/Financials/Profile/Broker/Trade/News/Twooter captures should be useful but not mandatory chores
+  - tune memo wording after a few real play examples, especially the company-description -> price -> fundamentals -> technical -> money-flow order and whether the memo is concise enough
   - tune chart-pattern coaching thresholds and invalidation copy after seeing real player-marked regions
-  - add contextual `Add to Thesis` capture from News, Twooter, Network, Dashboard, and STOCKBOT non-chart rows only after the manual app + Pattern tool loop feels solid
-  - consider a richer report export/view mode only if players want to read thesis notes as standalone analyst-style documents
+  - add or polish capture affordances for remaining surfaces only if players naturally want them; the current first-pass set already includes Key Stats, Financials, Profile, Chart Pattern, Broker Summary, Trade Quote, News, Twooter, Network Journal, and Sector/Macro
+  - consider a richer memo export/view mode only if players want to read thesis notes as standalone analyst-style documents
   - keep thesis review out of the Advance Day recap-critical path unless future UX explicitly needs automatic daily thesis alerts
 - Life app planning:
   - playtest whether the current housing/lifestyle costs and emergency-loan terms create useful pressure on `Normal` and `Grind` without feeling punitive
@@ -2704,6 +2713,8 @@ Read this file first in the next session.
   - connect the system to Academy's money-management/mindset themes so urgency comes from financial planning, not artificial pressure
   - consider housing/cars/status upgrades after the monthly cash-flow loop is working and readable
 - Network and corporate-action planning:
+  - next likely Twooter/Network slice: surface the new Twooter provenance fields (`source_label`, `source_note`, `twooter_origin`, `twooter_handle`, `source_only`) more clearly in Network contact details and journal rows so News-source leads feel traceable instead of magically discovered
+  - keep `TwooterNetworkLoopTest.tscn` and `TwooterMessageCooldownTest.tscn` current if the next pass touches source-only contacts, contact promotion, Network journal rendering, cooldown/AP refunds, diminishing likes, self-aware no-post replies, search, or provenance-rich source discovery
   - deepen the shared corporate-action chain object that `News`, `Twooter`, `Network`, market reaction, `earnings_call`, `annual_rups`, and `rupslb` already read/write
   - tune annual cash-dividend eligibility, stock-dividend distribution ratios, rights issue ratios/exercise pricing, private-placement issuance discounts, stock-buyback sizing/price support, and market reaction once longer playtests show whether income/dilution/capital returns are too rare or too generous
   - redesign how players approach leads before reintroducing selected-stock contact reads; the old STOCKBOT `Contact Intel` order-ticket loop is hidden for now

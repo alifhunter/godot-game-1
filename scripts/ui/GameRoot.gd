@@ -370,6 +370,22 @@ var status_message: String = "Ready."
 var selected_financial_statement_index: int = -1
 var selected_financial_statement_company_id: String = ""
 var selected_key_stats_metric: String = KEY_STATS_METRIC_NET_INCOME
+var key_stats_capture_menu: PopupMenu = null
+var pending_key_stats_capture_payload: Dictionary = {}
+var dashboard_sector_capture_menu: PopupMenu = null
+var pending_dashboard_sector_capture_payload: Dictionary = {}
+var broker_capture_menu: PopupMenu = null
+var pending_broker_capture_payload: Dictionary = {}
+var news_capture_menu: PopupMenu = null
+var pending_news_capture_article: Dictionary = {}
+var profile_capture_menu: PopupMenu = null
+var pending_profile_capture_payload: Dictionary = {}
+var financial_statement_capture_menu: PopupMenu = null
+var pending_financial_statement_capture_payload: Dictionary = {}
+var social_capture_menu: PopupMenu = null
+var pending_social_capture_payload: Dictionary = {}
+var trade_quote_capture_menu: PopupMenu = null
+var pending_trade_quote_capture_payload: Dictionary = {}
 var current_trade_snapshot: Dictionary = {}
 var cached_company_rows: Array = []
 var cached_company_row_lookup: Dictionary = {}
@@ -1004,6 +1020,18 @@ func _ready() -> void:
 	company_list.item_selected.connect(_on_company_selected)
 	news_article_list.item_selected.connect(_on_news_article_selected)
 	news_meet_contact_button.pressed.connect(_on_news_meet_contact_pressed)
+	news_detail_headline_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	news_detail_headline_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	news_detail_headline_label.tooltip_text = "Right-click to capture this headline."
+	news_detail_headline_label.gui_input.connect(_on_news_headline_gui_input)
+	news_detail_body.mouse_filter = Control.MOUSE_FILTER_STOP
+	news_detail_body.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	news_detail_body.tooltip_text = "Right-click to capture article evidence."
+	news_detail_body.gui_input.connect(_on_news_body_gui_input)
+	news_detail_hint_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	news_detail_hint_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	news_detail_hint_label.tooltip_text = "Right-click to capture this source lead."
+	news_detail_hint_label.gui_input.connect(_on_news_source_hint_gui_input)
 	news_archive_year_option.item_selected.connect(_on_news_archive_year_selected)
 	news_archive_month_option.item_selected.connect(_on_news_archive_month_selected)
 	network_contacts_list.item_selected.connect(_on_network_contact_selected)
@@ -1714,7 +1742,8 @@ func _refresh_key_stats_rows_in_container(container: VBoxContainer, rows: Array)
 		container.add_child(_build_key_stats_value_row(
 			str(row.get("label", "")),
 			str(row.get("value", "-")),
-			row.get("color", COLOR_TEXT)
+			row.get("color", COLOR_TEXT),
+			row
 		))
 
 
@@ -1724,12 +1753,18 @@ func _clear_key_stats_container(container: VBoxContainer) -> void:
 		child.queue_free()
 
 
-func _build_key_stats_value_row(label_text: String, value_text: String, value_color: Color = COLOR_TEXT) -> Control:
+func _build_key_stats_value_row(label_text: String, value_text: String, value_color: Color = COLOR_TEXT, source_row: Dictionary = {}) -> Control:
 	var row := HBoxContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 8)
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	var capturable: bool = _key_stats_row_is_capturable(label_text, value_text)
+	row.tooltip_text = "Click to open research actions." if capturable else ""
+	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if capturable else Control.CURSOR_ARROW
+	row.gui_input.connect(_on_key_stats_value_row_gui_input.bind(source_row.duplicate(true), label_text, value_text))
 
 	var label := Label.new()
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.text = label_text
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -1739,6 +1774,7 @@ func _build_key_stats_value_row(label_text: String, value_text: String, value_co
 	row.add_child(label)
 
 	var value := Label.new()
+	value.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	value.text = value_text
 	value.custom_minimum_size = Vector2(KEY_STATS_ROW_VALUE_WIDTH, 0)
 	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -1748,6 +1784,66 @@ func _build_key_stats_value_row(label_text: String, value_text: String, value_co
 	_apply_font_override_to_control(value, DEFAULT_APP_FONT_SIZE, _get_app_font())
 	row.add_child(value)
 	return row
+
+
+func _on_key_stats_value_row_gui_input(event: InputEvent, source_row: Dictionary, label_text: String, value_text: String) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mouse_event := event as InputEventMouseButton
+	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
+		return
+	if not _key_stats_row_is_capturable(label_text, value_text):
+		return
+	if selected_company_id.is_empty():
+		_show_toast("Pick a stock before capturing research.", false)
+		return
+	pending_key_stats_capture_payload = {
+		"source_type": "key_stats",
+		"company_id": selected_company_id,
+		"label": label_text,
+		"value": value_text,
+		"detail": str(source_row.get("detail", "")),
+		"source_id": _node_token(label_text)
+	}
+	if source_row.has("category"):
+		pending_key_stats_capture_payload["category"] = str(source_row.get("category", ""))
+	if source_row.has("raw_value"):
+		pending_key_stats_capture_payload["raw_value"] = float(source_row.get("raw_value", 0.0))
+	_show_key_stats_capture_menu(mouse_event.global_position)
+
+
+func _show_key_stats_capture_menu(global_position: Vector2) -> void:
+	if key_stats_capture_menu == null:
+		key_stats_capture_menu = PopupMenu.new()
+		key_stats_capture_menu.name = "KeyStatsCaptureContextMenu"
+		key_stats_capture_menu.id_pressed.connect(_on_key_stats_capture_menu_id_pressed)
+		add_child(key_stats_capture_menu)
+	key_stats_capture_menu.clear()
+	key_stats_capture_menu.add_item("Add to Research Tray", 1)
+	key_stats_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	key_stats_capture_menu.popup()
+
+
+func _on_key_stats_capture_menu_id_pressed(id: int) -> void:
+	if id != 1 or pending_key_stats_capture_payload.is_empty():
+		return
+	var result: Dictionary = GameManager.capture_research_evidence(pending_key_stats_capture_payload.duplicate(true))
+	pending_key_stats_capture_payload.clear()
+	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
+
+
+func _key_stats_row_is_capturable(label_text: String, value_text: String) -> bool:
+	if selected_company_id.is_empty():
+		return false
+	var label_lower: String = label_text.to_lower()
+	if label_lower in ["status", "period"] or label_lower.begins_with("q"):
+		return false
+	var value_clean: String = value_text.strip_edges()
+	if value_clean.is_empty() or value_clean == "-" or value_clean.to_lower() in ["n/a", "na"]:
+		return false
+	if label_lower.find("record / pay") != -1:
+		return false
+	return true
 
 
 func _build_key_stats_context(snapshot: Dictionary) -> Dictionary:
@@ -2046,15 +2142,27 @@ func _refresh_key_stats_metric_table(snapshot: Dictionary, context: Dictionary) 
 	for quarter in range(1, 5):
 		key_stats_metric_table_rows.add_child(_build_key_stats_metric_row(
 			"Q%d" % quarter,
-			_key_stats_metric_values_for_quarter(financial_statement_snapshot, selected_key_stats_metric, years, quarter)
+			_key_stats_metric_values_for_quarter(financial_statement_snapshot, selected_key_stats_metric, years, quarter),
+			COLOR_MUTED,
+			COLOR_TEXT,
+			selected_key_stats_metric,
+			years
 		))
 	key_stats_metric_table_rows.add_child(_build_key_stats_metric_row(
 		"Annualised",
-		_key_stats_metric_values_for_annual(financial_statement_snapshot, financial_history, selected_key_stats_metric, years)
+		_key_stats_metric_values_for_annual(financial_statement_snapshot, financial_history, selected_key_stats_metric, years),
+		COLOR_MUTED,
+		COLOR_TEXT,
+		selected_key_stats_metric,
+		years
 	))
 	key_stats_metric_table_rows.add_child(_build_key_stats_metric_row(
 		"TTM",
-		_key_stats_metric_values_for_ttm(financial_statement_snapshot, financial_history, selected_key_stats_metric, years)
+		_key_stats_metric_values_for_ttm(financial_statement_snapshot, financial_history, selected_key_stats_metric, years),
+		COLOR_MUTED,
+		COLOR_TEXT,
+		selected_key_stats_metric,
+		years
 	))
 
 	key_stats_metric_footer_rows.add_child(_build_key_stats_value_row("Market Cap", _format_compact_currency(float(context.get("market_cap", 0.0)))))
@@ -2068,7 +2176,9 @@ func _build_key_stats_metric_row(
 	label_text: String,
 	values: Array,
 	label_color: Color = COLOR_MUTED,
-	value_color: Color = COLOR_TEXT
+	value_color: Color = COLOR_TEXT,
+	metric_id: String = "",
+	years: Array = []
 ) -> Control:
 	var row := HBoxContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2082,7 +2192,8 @@ func _build_key_stats_metric_row(
 	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE, _get_app_font())
 	row.add_child(label)
 
-	for value_text in values:
+	for value_index in range(values.size()):
+		var value_text = values[value_index]
 		var value := Label.new()
 		value.text = str(value_text)
 		value.custom_minimum_size = Vector2(KEY_STATS_METRIC_VALUE_WIDTH, 0)
@@ -2092,8 +2203,66 @@ func _build_key_stats_metric_row(
 		value.clip_text = true
 		value.add_theme_color_override("font_color", value_color)
 		_apply_font_override_to_control(value, DEFAULT_APP_FONT_SIZE, _get_app_font())
+		var payload: Dictionary = _key_stats_metric_capture_payload(metric_id, label_text, value.text, years, value_index)
+		if not payload.is_empty():
+			value.mouse_filter = Control.MOUSE_FILTER_STOP
+			value.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+			value.tooltip_text = "Click to add this metric value to the Research Tray."
+			value.gui_input.connect(_on_key_stats_metric_value_gui_input.bind(payload))
 		row.add_child(value)
 	return row
+
+
+func _key_stats_metric_capture_payload(metric_id: String, row_label: String, value_text: String, years: Array, value_index: int) -> Dictionary:
+	if selected_company_id.is_empty() or metric_id.is_empty():
+		return {}
+	var clean_value: String = value_text.strip_edges()
+	if clean_value.is_empty() or clean_value == "-":
+		return {}
+	var year_label: String = ""
+	if value_index >= 0 and value_index < years.size():
+		year_label = str(int(years[value_index]))
+	var metric_label: String = _key_stats_metric_display_label(metric_id)
+	var label_parts: Array = [metric_label, row_label]
+	if not year_label.is_empty():
+		label_parts.append(year_label)
+	var label_text: String = " ".join(label_parts)
+	return {
+		"source_type": "key_stats",
+		"category": "financials",
+		"company_id": selected_company_id,
+		"label": label_text,
+		"value": clean_value,
+		"detail": "%s captured from the Key Stats metric table." % label_text,
+		"source_id": "key_stats_metric_%s_%s_%s_%s" % [
+			selected_company_id,
+			metric_id,
+			_node_token(row_label),
+			_node_token(year_label)
+		]
+	}
+
+
+func _key_stats_metric_display_label(metric_id: String) -> String:
+	match metric_id:
+		KEY_STATS_METRIC_EPS:
+			return "EPS"
+		KEY_STATS_METRIC_REVENUE:
+			return "Revenue"
+		_:
+			return "Net Income"
+
+
+func _on_key_stats_metric_value_gui_input(event: InputEvent, capture_payload: Dictionary) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mouse_event := event as InputEventMouseButton
+	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
+		return
+	if capture_payload.is_empty():
+		return
+	pending_key_stats_capture_payload = capture_payload.duplicate(true)
+	_show_key_stats_capture_menu(mouse_event.global_position)
 
 
 func _key_stats_year_labels(years: Array) -> Array:
@@ -6706,6 +6875,30 @@ func _cache_order_market_summary_labels() -> void:
 		"f_sell": find_child("FSellLabel", true, false) as Label,
 		"depth": find_child("DepthLabel", true, false) as Label
 	}
+	_bind_order_market_capture_labels()
+
+
+func _bind_order_market_capture_labels() -> void:
+	for key_value in order_market_value_labels.keys():
+		var key: String = str(key_value)
+		var label: Label = order_market_value_labels.get(key, null) as Label
+		if label == null:
+			continue
+		label.mouse_filter = Control.MOUSE_FILTER_STOP
+		label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		label.tooltip_text = "Click to add this quote item to the Research Tray."
+		label.gui_input.connect(_on_trade_quote_label_gui_input.bind(key))
+	for header_label_value in [order_price_value_label, order_price_change_label]:
+		var header_label: Label = header_label_value as Label
+		if header_label == null:
+			continue
+		header_label.mouse_filter = Control.MOUSE_FILTER_STOP
+		header_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		header_label.tooltip_text = "Click to add this quote item to the Research Tray."
+	if order_price_value_label != null:
+		order_price_value_label.gui_input.connect(_on_trade_quote_label_gui_input.bind("current_price"))
+	if order_price_change_label != null:
+		order_price_change_label.gui_input.connect(_on_trade_quote_label_gui_input.bind("daily_change"))
 
 
 func _style_order_market_summary_labels() -> void:
@@ -6791,6 +6984,124 @@ func _set_order_market_value(key: String, text: String, tone: Color) -> void:
 		return
 	value_label.text = text
 	_set_label_tone(value_label, tone)
+
+
+func _on_trade_quote_label_gui_input(event: InputEvent, quote_key: String) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mouse_event := event as InputEventMouseButton
+	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
+		return
+	if selected_company_id.is_empty() or current_trade_snapshot.is_empty():
+		_show_toast("Pick a stock before capturing research.", false)
+		return
+	var payload: Dictionary = _trade_quote_capture_payload(quote_key)
+	if payload.is_empty():
+		_show_toast("This quote item is not ready yet.", false)
+		return
+	pending_trade_quote_capture_payload = payload
+	_show_trade_quote_capture_menu(mouse_event.global_position)
+
+
+func _trade_quote_capture_payload(quote_key: String) -> Dictionary:
+	var key: String = quote_key.strip_edges().to_lower()
+	var label_text: String = _trade_quote_label(key)
+	if label_text.is_empty():
+		return {}
+	var value_text: String = ""
+	if key == "current_price":
+		value_text = str(order_price_value_label.text).strip_edges() if order_price_value_label != null else ""
+	elif key == "daily_change":
+		value_text = str(order_price_change_label.text).strip_edges() if order_price_change_label != null else ""
+	else:
+		var value_label: Label = order_market_value_labels.get(key, null) as Label
+		value_text = str(value_label.text).strip_edges() if value_label != null else ""
+	if value_text.is_empty() or value_text == "-":
+		return {}
+	var category: String = "broker_flow" if ["f_buy", "f_sell"].has(key) else "price_action"
+	var detail: String = "%s captured from the STOCKBOT trade panel for %s." % [
+		label_text,
+		str(current_trade_snapshot.get("ticker", selected_company_id)).to_upper()
+	]
+	return {
+		"source_type": "trade_quote",
+		"source_label": "STOCKBOT Quote",
+		"category": category,
+		"company_id": selected_company_id,
+		"label": label_text,
+		"value": value_text,
+		"detail": detail,
+		"source_id": "trade_quote_%s_%s" % [selected_company_id, key],
+		"impact": _trade_quote_impact(key, value_text)
+	}
+
+
+func _trade_quote_label(quote_key: String) -> String:
+	match quote_key:
+		"current_price":
+			return "Current price"
+		"daily_change":
+			return "Daily change"
+		"open":
+			return "Open price"
+		"high":
+			return "Day high"
+		"low":
+			return "Day low"
+		"prev":
+			return "Previous close"
+		"ara":
+			return "ARA limit"
+		"arb":
+			return "ARB limit"
+		"lot":
+			return "Traded lot"
+		"val":
+			return "Traded value"
+		"avg":
+			return "Average trade price"
+		"f_buy":
+			return "Foreign buy value"
+		"f_sell":
+			return "Foreign sell value"
+		"depth":
+			return "Visible depth"
+	return quote_key.replace("_", " ").capitalize()
+
+
+func _trade_quote_impact(quote_key: String, value_text: String) -> String:
+	var key: String = quote_key.to_lower()
+	var lower_value: String = value_text.to_lower()
+	if key == "f_buy":
+		return "positive"
+	if key == "f_sell":
+		return "negative"
+	if key == "daily_change":
+		if lower_value.find("-") != -1:
+			return "negative"
+		if lower_value.find("+") != -1:
+			return "positive"
+	return "mixed"
+
+
+func _show_trade_quote_capture_menu(global_position: Vector2) -> void:
+	if trade_quote_capture_menu == null:
+		trade_quote_capture_menu = PopupMenu.new()
+		trade_quote_capture_menu.name = "TradeQuoteCaptureContextMenu"
+		trade_quote_capture_menu.id_pressed.connect(_on_trade_quote_capture_menu_id_pressed)
+		add_child(trade_quote_capture_menu)
+	trade_quote_capture_menu.clear()
+	trade_quote_capture_menu.add_item("Add to Research Tray", 1)
+	trade_quote_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	trade_quote_capture_menu.popup()
+
+
+func _on_trade_quote_capture_menu_id_pressed(id: int) -> void:
+	if id != 1 or pending_trade_quote_capture_payload.is_empty():
+		return
+	var result: Dictionary = GameManager.capture_research_evidence(pending_trade_quote_capture_payload.duplicate(true))
+	pending_trade_quote_capture_payload.clear()
+	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
 
 
 func _broker_type_side_value(broker_flow: Dictionary, broker_type: String, side: String) -> float:
@@ -7216,6 +7527,9 @@ func _show_network_contact(contact: Dictionary) -> void:
 	var last_tip_note: String = str(contact.get("last_tip_note", ""))
 	if not last_tip_note.is_empty():
 		contact_body_text += "\n\n%s" % last_tip_note
+	var reaction_note: String = str(contact.get("last_reaction_note", ""))
+	if not reaction_note.is_empty():
+		contact_body_text += "\n\nLatest DM: %s" % reaction_note
 	var followup_note: String = str(contact.get("last_tip_followup_note", ""))
 	if not followup_note.is_empty():
 		contact_body_text += "\n%s" % followup_note
@@ -8036,6 +8350,10 @@ func _build_social_message_bubble(row: Dictionary) -> PanelContainer:
 	var is_player: bool = str(row.get("sender", "")) == "player"
 	_style_twooter_panel(bubble, COLOR_TWOOTER_BLUE if is_player else COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 10, 1)
 	bubble.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bubble.mouse_filter = Control.MOUSE_FILTER_STOP
+	bubble.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	bubble.tooltip_text = "Click to add this DM to the Research Tray."
+	bubble.gui_input.connect(_on_social_dm_capture_gui_input.bind(row.duplicate(true), selected_social_message_account_id))
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 10)
 	margin.add_theme_constant_override("margin_top", 7)
@@ -8073,6 +8391,165 @@ func _on_social_message_action_pressed(account_id: String, action_id: String, th
 	_show_toast(str(result.get("reply_text", result.get("message", "Message sent."))), true)
 	_refresh_social()
 	_refresh_network()
+
+
+func _on_social_post_capture_gui_input(event: InputEvent, post: Dictionary) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mouse_event := event as InputEventMouseButton
+	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
+		return
+	var payload: Dictionary = _social_post_capture_payload(post)
+	if payload.is_empty():
+		_show_toast("This Twooter post is not ready to capture.", false)
+		return
+	pending_social_capture_payload = payload
+	_show_social_capture_menu(mouse_event.global_position)
+
+
+func _on_social_dm_capture_gui_input(event: InputEvent, row: Dictionary, account_id: String) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mouse_event := event as InputEventMouseButton
+	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
+		return
+	var payload: Dictionary = _social_dm_capture_payload(row, account_id)
+	if payload.is_empty():
+		_show_toast("This Twooter DM is not ready to capture.", false)
+		return
+	pending_social_capture_payload = payload
+	_show_social_capture_menu(mouse_event.global_position)
+
+
+func _social_post_capture_payload(post: Dictionary) -> Dictionary:
+	var body_text: String = str(post.get("post_text", "")).strip_edges()
+	if body_text.is_empty():
+		return {}
+	var account_name: String = str(post.get("account_name", post.get("account_handle", "Twooter account"))).strip_edges()
+	var target_ticker: String = str(post.get("target_ticker", "")).strip_edges().to_upper()
+	var target_company_id: String = _social_target_company_id(post, str(post.get("account_id", "")))
+	var detail_parts: Array = [body_text]
+	var thread_lines: Array = post.get("thread_lines", []) if typeof(post.get("thread_lines", [])) == TYPE_ARRAY else []
+	for line_value in thread_lines.slice(0, 3):
+		var line_text: String = str(line_value).strip_edges()
+		if not line_text.is_empty():
+			detail_parts.append(line_text)
+	var label_text: String = "Twooter post: %s" % account_name
+	var value_text: String = "$%s" % target_ticker if not target_ticker.is_empty() else "Public chatter"
+	return {
+		"source_type": "twooter_post",
+		"source_label": "Twooter",
+		"category": "twooter",
+		"company_id": target_company_id,
+		"ticker": target_ticker,
+		"label": label_text,
+		"value": value_text,
+		"detail": " ".join(detail_parts),
+		"source_id": "twooter_post_%s" % str(post.get("id", _node_token(body_text.left(48)))),
+		"impact": _social_tone_to_impact(str(post.get("tone", "mixed")))
+	}
+
+
+func _social_dm_capture_payload(row: Dictionary, account_id: String) -> Dictionary:
+	var account: Dictionary = _social_account_for_id(account_id)
+	var body_text: String = str(row.get("text", "")).strip_edges()
+	if body_text.is_empty():
+		return {}
+	if str(row.get("sender", "")) != "player":
+		body_text = _clean_social_account_reply_text(body_text)
+	var account_name: String = str(account.get("display_name", "Twooter DM")).strip_edges()
+	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
+	var target_ticker: String = str(profile.get("target_ticker", "")).strip_edges().to_upper()
+	var target_company_id: String = _social_target_company_id(profile, account_id)
+	var sender_label: String = "You" if str(row.get("sender", "")) == "player" else account_name
+	return {
+		"source_type": "twooter_dm",
+		"source_label": "Twooter DM",
+		"category": "twooter",
+		"company_id": target_company_id,
+		"ticker": target_ticker,
+		"label": "Twooter DM: %s" % account_name,
+		"value": sender_label,
+		"detail": body_text,
+		"source_id": "twooter_dm_%s_%d_%s_%s" % [
+			account_id,
+			int(row.get("day_index", RunState.day_index)),
+			str(row.get("action_id", "message")),
+			_node_token(body_text.left(48))
+		],
+		"impact": "mixed"
+	}
+
+
+func _social_target_company_id(source: Dictionary, account_id: String = "") -> String:
+	var company_id: String = str(source.get("target_company_id", source.get("company_id", ""))).strip_edges()
+	if not company_id.is_empty():
+		return company_id
+	var ticker: String = str(source.get("target_ticker", "")).strip_edges()
+	if ticker.is_empty() and not account_id.is_empty():
+		var account: Dictionary = _social_account_for_id(account_id)
+		var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
+		ticker = str(profile.get("target_ticker", "")).strip_edges()
+		company_id = str(profile.get("target_company_id", "")).strip_edges()
+		if not company_id.is_empty():
+			return company_id
+	return _company_id_for_ticker(ticker)
+
+
+func _social_account_for_id(account_id: String) -> Dictionary:
+	if account_id.is_empty() or current_social_snapshot.is_empty():
+		return {}
+	for account_value in current_social_snapshot.get("accounts", []):
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var account: Dictionary = account_value
+		if str(account.get("id", "")) == account_id:
+			return account
+	return {}
+
+
+func _social_tone_to_impact(tone: String) -> String:
+	match tone.to_lower():
+		"bullish", "positive", "constructive":
+			return "positive"
+		"bearish", "negative", "warning", "risk":
+			return "negative"
+	return "mixed"
+
+
+func _company_id_for_ticker(ticker: String) -> String:
+	var normalized_ticker: String = ticker.strip_edges().to_upper()
+	if normalized_ticker.begins_with("$"):
+		normalized_ticker = normalized_ticker.substr(1)
+	if normalized_ticker.is_empty():
+		return ""
+	for row_value in _get_company_rows_cached():
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		if str(row.get("ticker", "")).strip_edges().to_upper() == normalized_ticker:
+			return str(row.get("id", ""))
+	return ""
+
+
+func _show_social_capture_menu(global_position: Vector2) -> void:
+	if social_capture_menu == null:
+		social_capture_menu = PopupMenu.new()
+		social_capture_menu.name = "SocialCaptureContextMenu"
+		social_capture_menu.id_pressed.connect(_on_social_capture_menu_id_pressed)
+		add_child(social_capture_menu)
+	social_capture_menu.clear()
+	social_capture_menu.add_item("Add to Research Tray", 1)
+	social_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	social_capture_menu.popup()
+
+
+func _on_social_capture_menu_id_pressed(id: int) -> void:
+	if id != 1 or pending_social_capture_payload.is_empty():
+		return
+	var result: Dictionary = GameManager.capture_research_evidence(pending_social_capture_payload.duplicate(true))
+	pending_social_capture_payload.clear()
+	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
 
 
 func _make_social_rail_body_label(text: String) -> Label:
@@ -8607,6 +9084,10 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 	body_label.text = str(post.get("post_text", ""))
 	body_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	body_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	body_label.tooltip_text = "Click to add this post to the Research Tray."
+	body_label.gui_input.connect(_on_social_post_capture_gui_input.bind(post.duplicate(true)))
 	body_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 1)
 	body_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
 	content.add_child(body_label)
@@ -9413,6 +9894,180 @@ func _reset_news_detail_scroll() -> void:
 	scroll_bar.value = 0.0
 
 
+func _on_news_headline_gui_input(event: InputEvent) -> void:
+	_open_news_capture_menu_from_event(event, "headline")
+
+
+func _on_news_body_gui_input(event: InputEvent) -> void:
+	_open_news_capture_menu_from_event(event, "article")
+
+
+func _on_news_source_hint_gui_input(event: InputEvent) -> void:
+	_open_news_capture_menu_from_event(event, "source")
+
+
+func _open_news_capture_menu_from_event(event: InputEvent, context: String) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mouse_event := event as InputEventMouseButton
+	if not mouse_event.pressed or mouse_event.button_index != MOUSE_BUTTON_RIGHT:
+		return
+	var article: Dictionary = GameManager.get_news_archive_article(selected_news_article_id)
+	if article.is_empty():
+		return
+	pending_news_capture_article = article.duplicate(true)
+	_show_news_capture_menu(mouse_event.global_position, context)
+	get_viewport().set_input_as_handled()
+
+
+func _show_news_capture_menu(global_position: Vector2, context: String) -> void:
+	if news_capture_menu == null:
+		news_capture_menu = PopupMenu.new()
+		news_capture_menu.name = "NewsCaptureContextMenu"
+		news_capture_menu.id_pressed.connect(_on_news_capture_menu_id_pressed)
+		add_child(news_capture_menu)
+	news_capture_menu.clear()
+	match context:
+		"headline":
+			news_capture_menu.add_item("Add Headline to Research Tray", 1)
+			news_capture_menu.add_item("Add Headline + Article to Research Tray", 3)
+		"article":
+			news_capture_menu.add_item("Add Article to Research Tray", 2)
+			news_capture_menu.add_item("Add Headline + Article to Research Tray", 3)
+		"source":
+			news_capture_menu.add_item("Add Source Lead to Research Tray", 4)
+		_:
+			news_capture_menu.add_item("Add Headline to Research Tray", 1)
+			news_capture_menu.add_item("Add Article to Research Tray", 2)
+			news_capture_menu.add_item("Add Source Lead to Research Tray", 4)
+	news_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	news_capture_menu.popup()
+
+
+func _on_news_capture_menu_id_pressed(id: int) -> void:
+	if pending_news_capture_article.is_empty():
+		return
+	var kind: String = ""
+	match id:
+		1:
+			kind = "headline"
+		2:
+			kind = "article"
+		3:
+			kind = "headline_article"
+		4:
+			kind = "source_lead"
+		_:
+			return
+	var payload: Dictionary = _build_news_capture_payload(pending_news_capture_article, kind)
+	pending_news_capture_article.clear()
+	if payload.is_empty():
+		_show_toast("Nothing to capture from this article.", false)
+		return
+	var result: Dictionary = GameManager.capture_research_evidence(payload)
+	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
+
+
+func _build_news_capture_payload(article: Dictionary, kind: String) -> Dictionary:
+	var article_id: String = str(article.get("id", selected_news_article_id)).strip_edges()
+	var headline: String = str(article.get("headline", "News article")).strip_edges()
+	var deck: String = str(article.get("deck", "")).strip_edges()
+	var body: String = str(article.get("body", "")).strip_edges()
+	var target_company_id: String = str(article.get("target_company_id", "")).strip_edges()
+	var target_ticker: String = str(article.get("target_ticker", "")).strip_edges()
+	var source_id: String = "news_%s_%s" % [kind, _node_token(article_id)]
+	var impact: String = _impact_from_news_article(article)
+	var source_label: String = str(article.get("outlet_label", "News")).strip_edges()
+	if source_label.is_empty():
+		source_label = "News"
+	match kind:
+		"headline":
+			return {
+				"source_type": "news_article",
+				"category": "news",
+				"category_label": "News",
+				"source_label": "%s Headline" % source_label,
+				"source_id": source_id,
+				"company_id": target_company_id,
+				"label": "Headline: %s" % headline,
+				"value": headline,
+				"detail": deck if not deck.is_empty() else _news_article_status_line(article),
+				"impact": impact
+			}
+		"article":
+			return {
+				"source_type": "news_article",
+				"category": "news",
+				"category_label": "News",
+				"source_label": "%s Article" % source_label,
+				"source_id": source_id,
+				"company_id": target_company_id,
+				"label": "Article: %s" % headline,
+				"value": deck if not deck.is_empty() else headline,
+				"detail": _news_capture_excerpt(body),
+				"impact": impact
+			}
+		"headline_article":
+			var combined_detail: String = deck
+			var body_excerpt: String = _news_capture_excerpt(body)
+			if not body_excerpt.is_empty():
+				combined_detail = "%s %s" % [combined_detail, body_excerpt] if not combined_detail.is_empty() else body_excerpt
+			return {
+				"source_type": "news_article",
+				"category": "news",
+				"category_label": "News",
+				"source_label": "%s Headline + Article" % source_label,
+				"source_id": source_id,
+				"company_id": target_company_id,
+				"ticker": target_ticker,
+				"label": "Headline + article: %s" % headline,
+				"value": headline,
+				"detail": combined_detail,
+				"impact": impact
+			}
+		"source_lead":
+			var contact: Dictionary = _contact_for_context("news", article_id, target_company_id)
+			var handle: String = str(contact.get("twooter_handle", "")).strip_edges()
+			var display_name: String = str(contact.get("display_name", "")).strip_edges()
+			if display_name.is_empty():
+				display_name = str(article.get("author_name", "News source")).strip_edges()
+			if display_name.is_empty():
+				display_name = "News source"
+			var value_text: String = handle if not handle.is_empty() else _news_byline_text(article)
+			return {
+				"source_type": "network_journal",
+				"category": "network_intel",
+				"category_label": "Network Intel",
+				"source_label": "News Source Lead",
+				"source_id": source_id,
+				"company_id": target_company_id,
+				"ticker": target_ticker,
+				"label": "Source lead: %s" % display_name,
+				"value": value_text,
+				"detail": "This source is connected to the article \"%s\"." % headline,
+				"impact": "mixed"
+			}
+	return {}
+
+
+func _news_capture_excerpt(body: String) -> String:
+	var text: String = body.strip_edges().replace("\n", " ")
+	while text.find("  ") != -1:
+		text = text.replace("  ", " ")
+	if text.length() > 280:
+		text = "%s..." % text.left(277).strip_edges()
+	return text
+
+
+func _impact_from_news_article(article: Dictionary) -> String:
+	var tone: String = str(article.get("tone", article.get("public_status_label", ""))).to_lower()
+	if tone.find("positive") != -1 or tone.find("bull") != -1 or tone.find("constructive") != -1 or tone.find("tailwind") != -1:
+		return "positive"
+	if tone.find("negative") != -1 or tone.find("bear") != -1 or tone.find("risk") != -1 or tone.find("headwind") != -1:
+		return "negative"
+	return "mixed"
+
+
 func _current_news_archive_article_summaries() -> Array:
 	if selected_news_outlet_id.is_empty() or selected_news_archive_year <= 0 or selected_news_archive_month <= 0:
 		return []
@@ -10070,7 +10725,9 @@ func _build_dashboard_sector_card(row: Dictionary) -> Control:
 		str(row.get("strongest_ticker", "n/a")),
 		_format_change(float(row.get("strongest_change_pct", 0.0)))
 	]
-	panel.gui_input.connect(_on_dashboard_sector_card_gui_input.bind(sector_id))
+	panel.tooltip_text += "\nRight-click to capture sector context."
+	panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	panel.gui_input.connect(_on_dashboard_sector_card_gui_input.bind(sector_id, row.duplicate(true)))
 	_style_dashboard_sector_card(panel, float(row.get("average_change_pct", 0.0)))
 
 	var margin := MarginContainer.new()
@@ -10191,13 +10848,68 @@ func _build_dashboard_sector_stock_row(stock: Dictionary) -> Control:
 	return row
 
 
-func _on_dashboard_sector_card_gui_input(event: InputEvent, sector_id: String) -> void:
+func _on_dashboard_sector_card_gui_input(event: InputEvent, sector_id: String, row: Dictionary = {}) -> void:
 	if event is InputEventMouseButton:
 		var mouse_button: InputEventMouseButton = event
 		if mouse_button.button_index == MOUSE_BUTTON_LEFT and mouse_button.pressed:
 			selected_dashboard_sector_id = sector_id
 			_refresh_dashboard_sector_panel(_get_company_rows_cached())
 			get_viewport().set_input_as_handled()
+		elif mouse_button.button_index == MOUSE_BUTTON_RIGHT and mouse_button.pressed:
+			_prepare_dashboard_sector_capture(row)
+			_show_dashboard_sector_capture_menu(mouse_button.global_position)
+			get_viewport().set_input_as_handled()
+
+
+func _prepare_dashboard_sector_capture(row: Dictionary) -> void:
+	var sector_id: String = str(row.get("id", "")).strip_edges()
+	var sector_name: String = str(row.get("name", "Sector")).strip_edges()
+	var average_change: float = float(row.get("average_change_pct", 0.0))
+	var impact: String = "mixed"
+	if average_change > 0.0005:
+		impact = "positive"
+	elif average_change < -0.0005:
+		impact = "negative"
+	var detail: String = "%d of %d stocks advanced and %d declined; loudest tape is %s %s." % [
+		int(row.get("advancers", 0)),
+		int(row.get("company_count", 0)),
+		int(row.get("decliners", 0)),
+		str(row.get("strongest_ticker", "n/a")),
+		_format_change(float(row.get("strongest_change_pct", 0.0)))
+	]
+	pending_dashboard_sector_capture_payload = {
+		"source_type": "sector_macro",
+		"category": "sector_macro",
+		"category_label": "Sector / Macro",
+		"source_label": "Stockboard Sector",
+		"source_id": "stockboard_sector_%s_day_%d" % [_node_token(sector_id), RunState.day_index],
+		"sector_id": sector_id,
+		"sector_name": sector_name,
+		"label": "%s sector breadth" % sector_name,
+		"value": _format_change(average_change),
+		"detail": detail,
+		"impact": impact
+	}
+
+
+func _show_dashboard_sector_capture_menu(global_position: Vector2) -> void:
+	if dashboard_sector_capture_menu == null:
+		dashboard_sector_capture_menu = PopupMenu.new()
+		dashboard_sector_capture_menu.name = "DashboardSectorCaptureContextMenu"
+		dashboard_sector_capture_menu.id_pressed.connect(_on_dashboard_sector_capture_menu_id_pressed)
+		add_child(dashboard_sector_capture_menu)
+	dashboard_sector_capture_menu.clear()
+	dashboard_sector_capture_menu.add_item("Add to Research Tray", 1)
+	dashboard_sector_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	dashboard_sector_capture_menu.popup()
+
+
+func _on_dashboard_sector_capture_menu_id_pressed(id: int) -> void:
+	if id != 1 or pending_dashboard_sector_capture_payload.is_empty():
+		return
+	var result: Dictionary = GameManager.capture_research_evidence(pending_dashboard_sector_capture_payload.duplicate(true))
+	pending_dashboard_sector_capture_payload.clear()
+	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
 
 
 func _on_dashboard_sector_back_pressed() -> void:
@@ -12250,6 +12962,10 @@ func _ensure_profile_company_layout() -> void:
 	background_vbox.add_child(profile_background_meta_label)
 	profile_background_body_label = _build_profile_body_label("", COLOR_TEXT)
 	profile_background_body_label.name = "ProfileBackgroundBodyLabel"
+	profile_background_body_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	profile_background_body_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	profile_background_body_label.tooltip_text = "Click to open research actions."
+	profile_background_body_label.gui_input.connect(_on_profile_background_gui_input)
 	background_vbox.add_child(profile_background_body_label)
 	profile_tags_flow = HFlowContainer.new()
 	profile_tags_flow.name = "ProfileTagsFlow"
@@ -12362,6 +13078,7 @@ func _refresh_profile_company_layout(snapshot: Dictionary, detail_ready: bool) -
 		profile_background_title_label.text = "Company Background"
 		profile_background_meta_label.text = "Select a company to view public background, tags, shareholders, and management."
 		profile_background_body_label.text = ""
+		profile_background_body_label.tooltip_text = ""
 		_refresh_profile_tags([])
 		_refresh_profile_shareholder_table({})
 		_refresh_profile_management_table({})
@@ -12380,6 +13097,7 @@ func _refresh_profile_company_layout(snapshot: Dictionary, detail_ready: bool) -
 		meta_parts.append(index_summary)
 	profile_background_meta_label.text = " | ".join(meta_parts)
 	profile_background_body_label.text = _build_profile_background_text(snapshot, detail_ready)
+	profile_background_body_label.tooltip_text = "Click to add this company background to the Research Tray." if detail_ready else ""
 	var profile_tags: Array = snapshot.get("profile_tags", []).duplicate() if detail_ready else []
 	for membership_label_value in index_snapshot.get("membership_labels", []):
 		var membership_label: String = str(membership_label_value).strip_edges()
@@ -12454,7 +13172,8 @@ func _refresh_profile_shareholder_table(snapshot: Dictionary) -> void:
 			],
 			[240.0, 136.0, 92.0],
 			false,
-			[1, 2]
+			[1, 2],
+			_profile_shareholder_capture_payload(row, ownership_pct, shares_outstanding)
 		))
 		added_count += 1
 	if added_count == 0:
@@ -12492,14 +13211,26 @@ func _refresh_profile_management_table(snapshot: Dictionary) -> void:
 			],
 			[140.0, 220.0, 130.0],
 			false,
-			[]
+			[],
+			_profile_management_capture_payload(management, _network_state_for_contact(network_snapshot, contact_id))
 		))
 
 
-func _build_profile_table_row(cells: Array, widths: Array, header: bool, right_aligned_columns: Array = []) -> Control:
+func _build_profile_table_row(
+	cells: Array,
+	widths: Array,
+	header: bool,
+	right_aligned_columns: Array = [],
+	capture_payload: Dictionary = {}
+) -> Control:
 	var row_wrap := VBoxContainer.new()
 	row_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row_wrap.add_theme_constant_override("separation", 0)
+	if not capture_payload.is_empty():
+		row_wrap.mouse_filter = Control.MOUSE_FILTER_STOP
+		row_wrap.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		row_wrap.tooltip_text = "Click to open research actions."
+		row_wrap.gui_input.connect(_on_profile_capture_row_gui_input.bind(capture_payload.duplicate(true)))
 	var row := HBoxContainer.new()
 	row.name = "ProfileTableHeaderRow" if header else "ProfileTableRow"
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -12509,11 +13240,137 @@ func _build_profile_table_row(cells: Array, widths: Array, header: bool, right_a
 		var alignment: HorizontalAlignment = HORIZONTAL_ALIGNMENT_RIGHT if right_aligned_columns.has(index) else HORIZONTAL_ALIGNMENT_LEFT
 		var color: Color = COLOR_TEXT if header else (COLOR_POSITIVE if index == 0 else COLOR_TEXT)
 		var expand: bool = index == 0
-		row.add_child(_build_table_cell(str(cells[index]), width, color, expand, alignment))
+		var cell: Label = _build_table_cell(str(cells[index]), width, color, expand, alignment)
+		if not capture_payload.is_empty():
+			cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(cell)
 	row_wrap.add_child(row)
 	var separator := HSeparator.new()
 	row_wrap.add_child(separator)
 	return row_wrap
+
+
+func _on_profile_background_gui_input(event: InputEvent) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mouse_event := event as InputEventMouseButton
+	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
+		return
+	if selected_company_id.is_empty() or current_trade_snapshot.is_empty():
+		_show_toast("Pick a stock before capturing research.", false)
+		return
+	var body: String = str(profile_background_body_label.text).strip_edges() if profile_background_body_label != null else ""
+	if body.is_empty() or body.to_lower().begins_with("preparing"):
+		_show_toast("Company background is not ready yet.", false)
+		return
+	var ticker: String = str(current_trade_snapshot.get("ticker", selected_company_id)).strip_edges()
+	pending_profile_capture_payload = {
+		"source_type": "company_profile",
+		"category": "fundamentals",
+		"company_id": selected_company_id,
+		"label": "Business description",
+		"value": ticker,
+		"detail": body,
+		"source_id": "profile_description_%s" % selected_company_id
+	}
+	_show_profile_capture_menu(mouse_event.global_position)
+
+
+func _profile_shareholder_capture_payload(row: Dictionary, ownership_pct: float, shares_outstanding: float) -> Dictionary:
+	if selected_company_id.is_empty():
+		return {}
+	var holder_name: String = str(row.get("name", "")).strip_edges()
+	if holder_name.is_empty():
+		return {}
+	var label: String = "Free float" if holder_name.to_lower().find("public float") != -1 else "%s ownership" % holder_name
+	var percent_text: String = _format_percent_value(ownership_pct * 100.0)
+	var shares_text: String = _format_grouped_integer(int(round(shares_outstanding * ownership_pct)))
+	var role: String = str(row.get("role", "shareholder")).strip_edges()
+	var detail: String = "%s holds %s of shares outstanding (%s share(s))." % [
+		holder_name,
+		percent_text,
+		shares_text
+	]
+	if not role.is_empty():
+		detail += " Public role: %s." % role
+	if holder_name.to_lower().find("public float") != -1:
+		detail += " Free float shapes liquidity, crowding, and how easily larger orders can move the tape."
+	return {
+		"source_type": "company_profile",
+		"category": "ownership",
+		"company_id": selected_company_id,
+		"label": label,
+		"value": percent_text,
+		"detail": detail,
+		"source_id": "profile_shareholder_%s_%s" % [selected_company_id, _node_token(holder_name)]
+	}
+
+
+func _profile_management_capture_payload(management: Dictionary, network_state: String) -> Dictionary:
+	if selected_company_id.is_empty():
+		return {}
+	var display_name: String = str(management.get("display_name", "")).strip_edges()
+	if display_name.is_empty():
+		return {}
+	var role_label: String = str(management.get("role_label", management.get("role", "Management"))).strip_edges()
+	if role_label.is_empty():
+		role_label = "Management"
+	var intro: String = str(management.get("intro", "")).strip_edges()
+	var tone: String = str(management.get("tone", "")).strip_edges()
+	var reliability: float = float(management.get("reliability", 0.0))
+	var detail_parts: Array = []
+	if not intro.is_empty():
+		detail_parts.append(intro)
+	if not tone.is_empty():
+		detail_parts.append("Public tone: %s." % tone)
+	if reliability > 0.0:
+		detail_parts.append("Reliability read: %d%%." % int(round(reliability * 100.0)))
+	if not network_state.strip_edges().is_empty():
+		detail_parts.append("Network state: %s." % network_state.capitalize())
+	return {
+		"source_type": "company_profile",
+		"category": "management",
+		"company_id": selected_company_id,
+		"label": "%s: %s" % [role_label, display_name],
+		"value": role_label,
+		"detail": " ".join(detail_parts),
+		"source_id": "profile_management_%s_%s" % [
+			selected_company_id,
+			_node_token(str(management.get("id", management.get("contact_id", display_name))))
+		]
+	}
+
+
+func _on_profile_capture_row_gui_input(event: InputEvent, capture_payload: Dictionary) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mouse_event := event as InputEventMouseButton
+	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
+		return
+	if capture_payload.is_empty():
+		return
+	pending_profile_capture_payload = capture_payload.duplicate(true)
+	_show_profile_capture_menu(mouse_event.global_position)
+
+
+func _show_profile_capture_menu(global_position: Vector2) -> void:
+	if profile_capture_menu == null:
+		profile_capture_menu = PopupMenu.new()
+		profile_capture_menu.name = "ProfileCaptureContextMenu"
+		profile_capture_menu.id_pressed.connect(_on_profile_capture_menu_id_pressed)
+		add_child(profile_capture_menu)
+	profile_capture_menu.clear()
+	profile_capture_menu.add_item("Add to Research Tray", 1)
+	profile_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	profile_capture_menu.popup()
+
+
+func _on_profile_capture_menu_id_pressed(id: int) -> void:
+	if id != 1 or pending_profile_capture_payload.is_empty():
+		return
+	var result: Dictionary = GameManager.capture_research_evidence(pending_profile_capture_payload.duplicate(true))
+	pending_profile_capture_payload.clear()
+	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
 
 
 func _build_profile_empty_row(message: String) -> Control:
@@ -15724,7 +16581,8 @@ func _guide_target_for_step(flow_id: String, step_id: String) -> Control:
 			if step_id == "open_thesis":
 				return _guide_thesis_subject_target()
 			if step_id == "create_thesis":
-				return thesis_window.find_child("ThesisCreateButton", true, false) as Control
+				var save_button: Control = thesis_window.find_child("ThesisUpdateButton", true, false) as Control
+				return save_button if save_button != null and save_button.is_visible_in_tree() else thesis_window.find_child("ThesisCreateButton", true, false) as Control
 			if step_id == "add_evidence":
 				return thesis_window.find_child("ThesisEvidenceCardGrid", true, false) as Control
 			if step_id == "generate_or_defer":
@@ -15773,6 +16631,9 @@ func _guide_thesis_subject_target() -> Control:
 	var company_option: Control = thesis_window.find_child("ThesisCompanyOption", true, false) as Control
 	if _guide_target_inside_named_parent(company_option, "ThesisBuilderPanel"):
 		return company_option
+	var create_button: Control = thesis_window.find_child("ThesisCreateButton", true, false) as Control
+	if create_button != null and create_button.is_visible_in_tree():
+		return create_button
 	var builder_panel: Control = thesis_window.find_child("ThesisBuilderPanel", true, false) as Control
 	return builder_panel if builder_panel != null else thesis_window
 
@@ -21454,27 +22315,104 @@ func _build_broker_table_row(buy_row: Dictionary, sell_row: Dictionary) -> Contr
 	row.add_theme_constant_override("separation", 8)
 	row_wrap.add_child(row)
 
-	_add_broker_table_side(
-		row,
-		str(buy_row.get("code", "-")),
-		_format_compact_currency(float(buy_row.get("value", 0.0))) if not buy_row.is_empty() else "-",
-		_format_compact_lots(float(buy_row.get("lots", 0.0))) if not buy_row.is_empty() else "-",
-		_format_last_price(float(buy_row.get("avg_price", 0.0))) if not buy_row.is_empty() else "-",
-		COLOR_POSITIVE if not buy_row.is_empty() else COLOR_MUTED
-	)
+	var buy_side := _build_broker_table_side_control(buy_row, "buy")
+	row.add_child(buy_side)
 	row.add_child(_build_broker_side_divider())
-	_add_broker_table_side(
-		row,
-		str(sell_row.get("code", "-")),
-		_format_compact_currency(float(sell_row.get("value", 0.0))) if not sell_row.is_empty() else "-",
-		_format_compact_lots(float(sell_row.get("lots", 0.0))) if not sell_row.is_empty() else "-",
-		_format_last_price(float(sell_row.get("avg_price", 0.0))) if not sell_row.is_empty() else "-",
-		COLOR_NEGATIVE if not sell_row.is_empty() else COLOR_MUTED
-	)
+	var sell_side := _build_broker_table_side_control(sell_row, "sell")
+	row.add_child(sell_side)
 
 	var separator: HSeparator = HSeparator.new()
 	row_wrap.add_child(separator)
 	return row_wrap
+
+
+func _build_broker_table_side_control(broker_row: Dictionary, side: String) -> HBoxContainer:
+	var side_row := HBoxContainer.new()
+	side_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	side_row.size_flags_stretch_ratio = 1.0
+	side_row.add_theme_constant_override("separation", 8)
+	side_row.mouse_filter = Control.MOUSE_FILTER_STOP
+	var has_broker: bool = not broker_row.is_empty()
+	var is_buy_side: bool = str(side).to_lower() == "buy"
+	side_row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if has_broker else Control.CURSOR_ARROW
+	side_row.tooltip_text = "Right-click to capture this %s-side broker row." % ("buy" if is_buy_side else "sell") if has_broker else ""
+	if has_broker:
+		side_row.gui_input.connect(_on_broker_table_side_gui_input.bind(broker_row.duplicate(true), "buy" if is_buy_side else "sell"))
+	_add_broker_table_side(
+		side_row,
+		str(broker_row.get("code", "-")),
+		_format_compact_currency(float(broker_row.get("value", 0.0))) if has_broker else "-",
+		_format_compact_lots(float(broker_row.get("lots", 0.0))) if has_broker else "-",
+		_format_last_price(float(broker_row.get("avg_price", 0.0))) if has_broker else "-",
+		COLOR_POSITIVE if has_broker and is_buy_side else (COLOR_NEGATIVE if has_broker else COLOR_MUTED)
+	)
+	return side_row
+
+
+func _on_broker_table_side_gui_input(event: InputEvent, broker_row: Dictionary, side: String) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mouse_event := event as InputEventMouseButton
+	if not mouse_event.pressed or mouse_event.button_index != MOUSE_BUTTON_RIGHT:
+		return
+	if selected_company_id.is_empty():
+		_show_toast("Pick a stock before capturing broker research.", false)
+		return
+	_prepare_broker_capture(broker_row, side)
+	_show_broker_capture_menu(mouse_event.global_position)
+	get_viewport().set_input_as_handled()
+
+
+func _prepare_broker_capture(broker_row: Dictionary, side: String) -> void:
+	var normalized_side: String = "sell" if str(side).to_lower() == "sell" else "buy"
+	var broker_code: String = str(broker_row.get("code", "")).strip_edges()
+	var broker_name: String = str(broker_row.get("company_name", broker_row.get("name", broker_code))).strip_edges()
+	var side_label: String = "Buy-side" if normalized_side == "buy" else "Sell-side"
+	var value_text: String = _format_compact_currency(float(broker_row.get("value", 0.0)))
+	var lots_text: String = _format_compact_lots(float(broker_row.get("lots", 0.0)))
+	var avg_text: String = _format_last_price(float(broker_row.get("avg_price", 0.0)))
+	var impact: String = "positive" if normalized_side == "buy" else "negative"
+	var detail: String = "%s %s printed %s across %s lot(s) at an average price of %s." % [
+		side_label,
+		broker_code,
+		value_text,
+		lots_text,
+		avg_text
+	]
+	if not broker_name.is_empty() and broker_name != broker_code:
+		detail += " Broker name: %s." % broker_name
+	pending_broker_capture_payload = {
+		"source_type": "broker_summary",
+		"category": "broker_flow",
+		"category_label": "Broker Flow",
+		"source_label": "STOCKBOT Broker",
+		"source_id": "stockbot_broker_%s_%s_%s_day_%d" % [selected_company_id, normalized_side, _node_token(broker_code), RunState.day_index],
+		"company_id": selected_company_id,
+		"label": "%s broker %s" % [side_label, broker_code],
+		"value": "%s | %s lot(s) | avg %s" % [value_text, lots_text, avg_text],
+		"detail": detail,
+		"impact": impact
+	}
+
+
+func _show_broker_capture_menu(global_position: Vector2) -> void:
+	if broker_capture_menu == null:
+		broker_capture_menu = PopupMenu.new()
+		broker_capture_menu.name = "BrokerCaptureContextMenu"
+		broker_capture_menu.id_pressed.connect(_on_broker_capture_menu_id_pressed)
+		add_child(broker_capture_menu)
+	broker_capture_menu.clear()
+	broker_capture_menu.add_item("Add to Research Tray", 1)
+	broker_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	broker_capture_menu.popup()
+
+
+func _on_broker_capture_menu_id_pressed(id: int) -> void:
+	if id != 1 or pending_broker_capture_payload.is_empty():
+		return
+	var result: Dictionary = GameManager.capture_research_evidence(pending_broker_capture_payload.duplicate(true))
+	pending_broker_capture_payload.clear()
+	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
 
 
 func _sync_financial_statement_selection(company_id: String, financial_statement_snapshot: Dictionary) -> void:
@@ -21551,30 +22489,47 @@ func _refresh_statement_navigation(financial_statement_snapshot: Dictionary) -> 
 func _refresh_statement_sections(financial_statement_snapshot: Dictionary) -> void:
 	_refresh_statement_navigation(financial_statement_snapshot)
 	if financial_statement_snapshot.is_empty():
-		_refresh_statement_section(income_statement_rows_vbox, income_statement_empty_label, [])
-		_refresh_statement_section(balance_sheet_rows_vbox, balance_sheet_empty_label, [])
-		_refresh_statement_section(cash_flow_rows_vbox, cash_flow_empty_label, [])
+		_refresh_statement_section(income_statement_rows_vbox, income_statement_empty_label, [], "income_statement", "Income Statement", "")
+		_refresh_statement_section(balance_sheet_rows_vbox, balance_sheet_empty_label, [], "balance_sheet", "Balance Sheet", "")
+		_refresh_statement_section(cash_flow_rows_vbox, cash_flow_empty_label, [], "cash_flow", "Cash Flow", "")
 		return
 
 	var selected_period: Dictionary = _selected_statement_period(financial_statement_snapshot)
+	var period_label: String = str(selected_period.get("statement_period_label", selected_period.get("period_label", "latest"))).strip_edges()
 	_refresh_statement_section(
 		income_statement_rows_vbox,
 		income_statement_empty_label,
-		selected_period.get("income_statement", [])
+		selected_period.get("income_statement", []),
+		"income_statement",
+		"Income Statement",
+		period_label
 	)
 	_refresh_statement_section(
 		balance_sheet_rows_vbox,
 		balance_sheet_empty_label,
-		selected_period.get("balance_sheet", [])
+		selected_period.get("balance_sheet", []),
+		"balance_sheet",
+		"Balance Sheet",
+		period_label
 	)
 	_refresh_statement_section(
 		cash_flow_rows_vbox,
 		cash_flow_empty_label,
-		selected_period.get("cash_flow", [])
+		selected_period.get("cash_flow", []),
+		"cash_flow",
+		"Cash Flow",
+		period_label
 	)
 
 
-func _refresh_statement_section(rows_vbox: VBoxContainer, empty_label: Label, lines: Array) -> void:
+func _refresh_statement_section(
+	rows_vbox: VBoxContainer,
+	empty_label: Label,
+	lines: Array,
+	section_id: String = "",
+	section_label: String = "",
+	period_label: String = ""
+) -> void:
 	if rows_vbox == null or empty_label == null:
 		return
 
@@ -21585,34 +22540,121 @@ func _refresh_statement_section(rows_vbox: VBoxContainer, empty_label: Label, li
 
 	for line_value in lines:
 		var line_item: Dictionary = line_value
-		rows_vbox.add_child(_build_statement_row(line_item))
+		rows_vbox.add_child(_build_statement_row(line_item, section_id, section_label, period_label))
 
 
-func _build_statement_row(line_item: Dictionary) -> Control:
+func _build_statement_row(
+	line_item: Dictionary,
+	section_id: String = "",
+	section_label: String = "",
+	period_label: String = ""
+) -> Control:
 	var row_wrap: VBoxContainer = VBoxContainer.new()
 	row_wrap.add_theme_constant_override("separation", 4)
+	var capture_payload: Dictionary = _financial_statement_capture_payload(line_item, section_id, section_label, period_label)
+	if not capture_payload.is_empty():
+		row_wrap.mouse_filter = Control.MOUSE_FILTER_STOP
+		row_wrap.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		row_wrap.tooltip_text = "Click to open research actions."
+		row_wrap.gui_input.connect(_on_financial_statement_row_gui_input.bind(capture_payload.duplicate(true)))
 
 	var row: HBoxContainer = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	row_wrap.add_child(row)
 
-	row.add_child(_build_table_cell(
+	var label_cell: Label = _build_table_cell(
 		str(line_item.get("label", "")),
 		STATEMENT_LABEL_WIDTH,
 		COLOR_TEXT,
 		true
-	))
-	row.add_child(_build_table_cell(
+	)
+	var value_cell: Label = _build_table_cell(
 		_format_statement_value(line_item),
 		STATEMENT_VALUE_WIDTH,
 		COLOR_TEXT,
 		false,
 		HORIZONTAL_ALIGNMENT_RIGHT
-	))
+	)
+	if not capture_payload.is_empty():
+		label_cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		value_cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(label_cell)
+	row.add_child(value_cell)
 
 	var separator: HSeparator = HSeparator.new()
 	row_wrap.add_child(separator)
 	return row_wrap
+
+
+func _financial_statement_capture_payload(
+	line_item: Dictionary,
+	section_id: String,
+	section_label: String,
+	period_label: String
+) -> Dictionary:
+	if selected_company_id.is_empty():
+		return {}
+	var label_text: String = str(line_item.get("label", "")).strip_edges()
+	if label_text.is_empty():
+		return {}
+	var value_text: String = _format_statement_value(line_item)
+	if value_text.strip_edges().is_empty() or value_text.strip_edges() == "-":
+		return {}
+	var resolved_section_id: String = section_id.strip_edges().to_lower()
+	if resolved_section_id == "cash flow":
+		resolved_section_id = "cash_flow"
+	var resolved_section_label: String = section_label.strip_edges()
+	if resolved_section_label.is_empty():
+		resolved_section_label = resolved_section_id.replace("_", " ").capitalize()
+	var resolved_period: String = period_label.strip_edges()
+	if resolved_period.is_empty():
+		resolved_period = "latest"
+	var detail: String = "%s line from %s (%s)." % [label_text, resolved_section_label, resolved_period]
+	return {
+		"source_type": "financial_statement",
+		"category": "financials",
+		"company_id": selected_company_id,
+		"label": label_text,
+		"value": value_text,
+		"detail": detail,
+		"source_id": "financial_statement_%s_%s_%s_%s" % [
+			selected_company_id,
+			resolved_section_id,
+			_node_token(resolved_period),
+			_node_token(label_text)
+		],
+		"raw_value": float(line_item.get("value", 0.0))
+	}
+
+
+func _on_financial_statement_row_gui_input(event: InputEvent, capture_payload: Dictionary) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var mouse_event := event as InputEventMouseButton
+	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
+		return
+	pending_financial_statement_capture_payload = capture_payload.duplicate(true)
+	_show_financial_statement_capture_menu(mouse_event.global_position)
+
+
+func _show_financial_statement_capture_menu(global_position: Vector2) -> void:
+	if financial_statement_capture_menu == null:
+		financial_statement_capture_menu = PopupMenu.new()
+		financial_statement_capture_menu.name = "FinancialStatementCaptureContextMenu"
+		financial_statement_capture_menu.id_pressed.connect(_on_financial_statement_capture_menu_id_pressed)
+		add_child(financial_statement_capture_menu)
+	financial_statement_capture_menu.clear()
+	financial_statement_capture_menu.add_item("Add to Research Tray", 1)
+	financial_statement_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	financial_statement_capture_menu.popup()
+
+
+func _on_financial_statement_capture_menu_id_pressed(id: int) -> void:
+	if id != 1 or pending_financial_statement_capture_payload.is_empty():
+		return
+	var result: Dictionary = GameManager.capture_research_evidence(pending_financial_statement_capture_payload.duplicate(true))
+	pending_financial_statement_capture_payload.clear()
+	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
 
 
 func _format_statement_value(line_item: Dictionary) -> String:
