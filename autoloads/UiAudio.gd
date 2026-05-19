@@ -6,7 +6,7 @@ const CLICK_VOLUME_DB := -8.0
 
 var click_players: Array[AudioStreamPlayer] = []
 var next_click_player_index: int = 0
-var click_sound: AudioStreamMP3 = null
+var click_sound: AudioStream = null
 
 
 func _ready() -> void:
@@ -38,7 +38,10 @@ func _build_click_players() -> void:
 		click_players.append(player)
 
 
-func _load_click_sound() -> AudioStreamMP3:
+func _load_click_sound() -> AudioStream:
+	var imported_stream: AudioStream = load(CLICK_SOUND_PATH) as AudioStream
+	if imported_stream != null:
+		return imported_stream
 	if not FileAccess.file_exists(CLICK_SOUND_PATH):
 		push_warning("UI click sound missing: %s" % CLICK_SOUND_PATH)
 		return null
