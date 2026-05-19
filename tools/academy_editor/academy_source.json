@@ -34,12 +34,12 @@
             "label": "01 Survival",
             "title": "01 Your First Goal Is Survival",
             "kind": "lesson",
-            "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+            "completion_signal": "You can apply this mindset rule during an in-game market decision.",
             "pages": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand that the first goal in the market is not maximum profit, but survival. Without survival, players cannot learn, compound, or recover from mistakes."
+                "heading": "What You'll Learn",
+                "body": "You learn that the first goal in the market is not maximum profit, but survival. Without survival, you cannot learn, compound, or recover from mistakes."
               },
               {
                 "type": "text",
@@ -69,19 +69,19 @@
                     "id": "wrong_1",
                     "label": "Go all-in because the trend is already moving.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_2",
                     "label": "Ignore the safety buffer and decide after the trade.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_3",
                     "label": "Trade every day until the account doubles.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   }
                 ]
               }
@@ -89,8 +89,8 @@
             "content_blocks": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand that the first goal in the market is not maximum profit, but survival. Without survival, players cannot learn, compound, or recover from mistakes."
+                "heading": "What You'll Learn",
+                "body": "You learn that the first goal in the market is not maximum profit, but survival. Without survival, you cannot learn, compound, or recover from mistakes."
               },
               {
                 "type": "text",
@@ -125,12 +125,12 @@
             "label": "02 Cold Money",
             "title": "02 Money Readiness: Is This Money Ready for the Market?",
             "kind": "lesson",
-            "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+            "completion_signal": "You can apply this mindset rule during an in-game market decision.",
             "pages": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand that not all money is investable. Money for daily needs, debt, rent, or emergencies should not be treated the same as cold money."
+                "heading": "What You'll Learn",
+                "body": "You learn that not all money is investable. Money for daily needs, debt, rent, or emergencies should not be treated the same as cold money."
               },
               {
                 "type": "text",
@@ -160,19 +160,19 @@
                     "id": "wrong_1",
                     "label": "Use the whole Rp10,000,000 because the stock is trending.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_2",
                     "label": "Borrow more money to avoid missing the move.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_3",
                     "label": "Treat the emergency buffer as spare trading cash.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   }
                 ]
               }
@@ -180,8 +180,8 @@
             "content_blocks": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand that not all money is investable. Money for daily needs, debt, rent, or emergencies should not be treated the same as cold money."
+                "heading": "What You'll Learn",
+                "body": "You learn that not all money is investable. Money for daily needs, debt, rent, or emergencies should not be treated the same as cold money."
               },
               {
                 "type": "text",
@@ -216,12 +216,12 @@
             "label": "03 Goals",
             "title": "03 Why Invest: Future Self, Inflation, and Compounding",
             "kind": "lesson",
-            "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+            "completion_signal": "You can apply this mindset rule during an in-game market decision.",
             "pages": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand the purpose of investing: growing wealth, preparing for the future, earning passive income, and protecting purchasing power."
+                "heading": "What You'll Learn",
+                "body": "You learn the purpose of investing: growing wealth, preparing for the future, earning passive income, and protecting purchasing power."
               },
               {
                 "type": "text",
@@ -251,19 +251,19 @@
                     "id": "wrong_1",
                     "label": "Skip the goal and follow the highest daily mover.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_2",
                     "label": "Choose the riskiest stock because compounding needs speed.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_3",
                     "label": "Change the goal every time the portfolio turns red.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   }
                 ]
               }
@@ -271,8 +271,8 @@
             "content_blocks": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand the purpose of investing: growing wealth, preparing for the future, earning passive income, and protecting purchasing power."
+                "heading": "What You'll Learn",
+                "body": "You learn the purpose of investing: growing wealth, preparing for the future, earning passive income, and protecting purchasing power."
               },
               {
                 "type": "text",
@@ -307,12 +307,12 @@
             "label": "04 Ownership",
             "title": "04 Stock Is Business Ownership",
             "kind": "lesson",
-            "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+            "completion_signal": "You can apply this mindset rule during an in-game market decision.",
             "pages": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand that buying a stock means owning a piece of a business, not just buying a moving ticker."
+                "heading": "What You'll Learn",
+                "body": "You learn that buying a stock means owning a piece of a business, not just buying a moving ticker."
               },
               {
                 "type": "text",
@@ -342,19 +342,19 @@
                     "id": "wrong_1",
                     "label": "Buy Stock A immediately because price is already up.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_2",
                     "label": "Buy Stock C because rumor can move faster than facts.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_3",
                     "label": "Ignore business quality and choose the greenest candle.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   }
                 ]
               }
@@ -362,8 +362,8 @@
             "content_blocks": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand that buying a stock means owning a piece of a business, not just buying a moving ticker."
+                "heading": "What You'll Learn",
+                "body": "You learn that buying a stock means owning a piece of a business, not just buying a moving ticker."
               },
               {
                 "type": "text",
@@ -398,12 +398,12 @@
             "label": "05 Price Drivers",
             "title": "05 How Stock Prices Move: Business Growth vs Sentiment",
             "kind": "lesson",
-            "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+            "completion_signal": "You can apply this mindset rule during an in-game market decision.",
             "pages": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand that stock prices can move because of real business growth or because of sentiment, hype, rumors, macro changes, or corporate actions."
+                "heading": "What You'll Learn",
+                "body": "You learn that stock prices can move because of real business growth or because of sentiment, hype, rumors, macro changes, or corporate actions."
               },
               {
                 "type": "text",
@@ -433,19 +433,19 @@
                     "id": "wrong_1",
                     "label": "Buy automatically because revenue growth is strong.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_2",
                     "label": "Sell automatically because net profit fell.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_3",
                     "label": "Ignore the business data because the crowd is excited.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   }
                 ]
               }
@@ -453,8 +453,8 @@
             "content_blocks": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand that stock prices can move because of real business growth or because of sentiment, hype, rumors, macro changes, or corporate actions."
+                "heading": "What You'll Learn",
+                "body": "You learn that stock prices can move because of real business growth or because of sentiment, hype, rumors, macro changes, or corporate actions."
               },
               {
                 "type": "text",
@@ -489,11 +489,11 @@
             "label": "06 Identity",
             "title": "06 Investor, Trader, or Speculator?",
             "kind": "lesson",
-            "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+            "completion_signal": "You can apply this mindset rule during an in-game market decision.",
             "pages": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
+                "heading": "What You'll Learn",
                 "body": "Players can distinguish investor, trader, and speculator behavior."
               },
               {
@@ -524,19 +524,19 @@
                     "id": "wrong_1",
                     "label": "Enter as a trader, then become an investor if the trade fails.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_2",
                     "label": "Buy first and choose the playstyle later.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_3",
                     "label": "Treat rumor, business quality, and technical setup as identical signals.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   }
                 ]
               }
@@ -544,7 +544,7 @@
             "content_blocks": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
+                "heading": "What You'll Learn",
                 "body": "Players can distinguish investor, trader, and speculator behavior."
               },
               {
@@ -580,12 +580,12 @@
             "label": "07 Toolkit",
             "title": "07 Analysis Toolkit: Fundamental, Technical, Money Flow, and Value",
             "kind": "lesson",
-            "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+            "completion_signal": "You can apply this mindset rule during an in-game market decision.",
             "pages": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand the main analysis approaches and when each is useful."
+                "heading": "What You'll Learn",
+                "body": "You learn the main analysis approaches and when each is useful."
               },
               {
                 "type": "text",
@@ -615,19 +615,19 @@
                     "id": "wrong_1",
                     "label": "Use only rumors for every task.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_2",
                     "label": "Use technical analysis to judge all business quality.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_3",
                     "label": "Use one tool blindly because it worked once.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   }
                 ]
               }
@@ -635,8 +635,8 @@
             "content_blocks": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand the main analysis approaches and when each is useful."
+                "heading": "What You'll Learn",
+                "body": "You learn the main analysis approaches and when each is useful."
               },
               {
                 "type": "text",
@@ -672,12 +672,12 @@
             "label": "08 Anti-FOMO",
             "title": "08 Framework: The Anti-FOMO Checklist",
             "kind": "lesson",
-            "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+            "completion_signal": "You can apply this mindset rule during an in-game market decision.",
             "pages": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand why they need a decision framework to avoid FOMO, overtrading, inconsistency, and impatience."
+                "heading": "What You'll Learn",
+                "body": "You learn why you need a decision framework to avoid FOMO, overtrading, inconsistency, and impatience."
               },
               {
                 "type": "text",
@@ -707,19 +707,19 @@
                     "id": "wrong_1",
                     "label": "Will I miss it if I wait?",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_2",
                     "label": "Who is shouting the loudest?",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_3",
                     "label": "Can I use all my cash before the price moves again?",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   }
                 ]
               }
@@ -727,8 +727,8 @@
             "content_blocks": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand why they need a decision framework to avoid FOMO, overtrading, inconsistency, and impatience."
+                "heading": "What You'll Learn",
+                "body": "You learn why you need a decision framework to avoid FOMO, overtrading, inconsistency, and impatience."
               },
               {
                 "type": "text",
@@ -768,12 +768,12 @@
             "label": "09 Risk",
             "title": "09 Risk Is Part of the Game",
             "kind": "lesson",
-            "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+            "completion_signal": "You can apply this mindset rule during an in-game market decision.",
             "pages": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand different types of risk and how to respond to them."
+                "heading": "What You'll Learn",
+                "body": "You learn the main types of risk and how to respond to them."
               },
               {
                 "type": "text",
@@ -803,19 +803,19 @@
                     "id": "wrong_1",
                     "label": "Panic sell automatically because red means danger.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_2",
                     "label": "Buy more blindly because the sector is still strong.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_3",
                     "label": "Ignore the news and blame the market.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   }
                 ]
               }
@@ -823,8 +823,8 @@
             "content_blocks": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand different types of risk and how to respond to them."
+                "heading": "What You'll Learn",
+                "body": "You learn the main types of risk and how to respond to them."
               },
               {
                 "type": "text",
@@ -859,12 +859,12 @@
             "label": "10 Value",
             "title": "10 Price vs Value and Margin of Safety",
             "kind": "lesson",
-            "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+            "completion_signal": "You can apply this mindset rule during an in-game market decision.",
             "pages": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand that cheap price is not always good value, and high price is not automatically bad value."
+                "heading": "What You'll Learn",
+                "body": "You learn that cheap price is not always good value, and high price is not automatically bad value."
               },
               {
                 "type": "text",
@@ -894,19 +894,19 @@
                     "id": "wrong_1",
                     "label": "Choose Stock A automatically because low price means cheap value.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_2",
                     "label": "Buy Stock B immediately without a value range.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_3",
                     "label": "Avoid analysis because price and value are always identical.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   }
                 ]
               }
@@ -914,8 +914,8 @@
             "content_blocks": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand that cheap price is not always good value, and high price is not automatically bad value."
+                "heading": "What You'll Learn",
+                "body": "You learn that cheap price is not always good value, and high price is not automatically bad value."
               },
               {
                 "type": "text",
@@ -950,11 +950,11 @@
             "label": "11 Thesis",
             "title": "11 Build a Thesis Before You Buy",
             "kind": "lesson",
-            "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+            "completion_signal": "You can apply this mindset rule during an in-game market decision.",
             "pages": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
+                "heading": "What You'll Learn",
                 "body": "Players learn to write a simple investment or trade thesis before taking a position."
               },
               {
@@ -985,19 +985,19 @@
                     "id": "wrong_1",
                     "label": "Buy first and invent the thesis after price moves.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_2",
                     "label": "Copy only a target price from chat.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_3",
                     "label": "Use a green chart screenshot as the whole thesis.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   }
                 ]
               }
@@ -1005,7 +1005,7 @@
             "content_blocks": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
+                "heading": "What You'll Learn",
                 "body": "Players learn to write a simple investment or trade thesis before taking a position."
               },
               {
@@ -1046,12 +1046,12 @@
             "label": "12 Portfolio",
             "title": "12 Portfolio Management: Sizing, Diversification, and Avoiding All-In",
             "kind": "lesson",
-            "completion_signal": "You can apply this mindset rule in a player-facing market decision.",
+            "completion_signal": "You can apply this mindset rule during an in-game market decision.",
             "pages": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand that portfolio success depends not only on choosing stocks, but also on sizing and risk distribution."
+                "heading": "What You'll Learn",
+                "body": "You learn that portfolio success depends not only on choosing stocks, but also on sizing and risk distribution."
               },
               {
                 "type": "text",
@@ -1081,19 +1081,19 @@
                     "id": "wrong_1",
                     "label": "Allocate 100% because the idea looks strong.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_2",
                     "label": "Ignore sizing because good ideas cannot fail.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   },
                   {
                     "id": "wrong_3",
                     "label": "Chase every trending stock so no opportunity is missed.",
                     "correct": false,
-                    "feedback": "Not quite. The PDF mindset framework favors survival, evidence, sizing, and process before action."
+                    "feedback": "Not quite. The mindset framework favors survival, evidence, sizing, and process before action."
                   }
                 ]
               }
@@ -1101,8 +1101,8 @@
             "content_blocks": [
               {
                 "type": "text",
-                "heading": "Learning Objective",
-                "body": "Players understand that portfolio success depends not only on choosing stocks, but also on sizing and risk distribution."
+                "heading": "What You'll Learn",
+                "body": "You learn that portfolio success depends not only on choosing stocks, but also on sizing and risk distribution."
               },
               {
                 "type": "text",
@@ -1411,7 +1411,7 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
+                "heading": "What You'll Learn",
                 "body": "By the end of this lesson, players should be able to:\n\n- Explain why investors should read financial statements before buying stocks.\n- Understand the difference between auditor perspective and investor perspective.\n- Identify the three main financial statements and what each one answers."
               },
               {
@@ -1485,8 +1485,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Identify the function of Income Statement, Balance Sheet, and Cash Flow Statement.\n- Understand why profit, assets, and cash are different.\n- Recognize that \"profitable\" does not always mean \"financially healthy.\""
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Identify the function of Income Statement, Balance Sheet, and Cash Flow Statement.\n- Understand why profit, assets, and cash are different.\n- Recognize that \"profitable\" does not always mean \"financially healthy.\""
               },
               {
                 "type": "text",
@@ -1559,8 +1559,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Read the basic structure of an Income Statement.\n- Understand revenue, COGS, gross profit, OPEX, operating profit, interest expense, tax, and net profit.\n- Explain why the journey from revenue to net profit matters."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Read the basic structure of an Income Statement.\n- Understand revenue, COGS, gross profit, OPEX, operating profit, interest expense, tax, and net profit.\n- Explain why the journey from revenue to net profit matters."
               },
               {
                 "type": "text",
@@ -1629,12 +1629,12 @@
               {
                 "type": "text",
                 "heading": "Core Concept",
-                "body": "Revenue growth is not automatically good. Players must ask whether growth is consistent, sustainable, organic, and profitable."
+                "body": "Revenue growth is not automatically good. Ask whether growth is consistent, sustainable, organic, and profitable."
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Calculate revenue growth.\n- Distinguish sustainable growth from one-time growth.\n- Understand that historical growth does not guarantee future growth.\n- Identify whether growth comes from volume, price, new market, acquisition, or commodity cycle."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Calculate revenue growth.\n- Distinguish sustainable growth from one-time growth.\n- Understand that historical growth does not guarantee future growth.\n- Identify whether growth comes from volume, price, new market, acquisition, or commodity cycle."
               },
               {
                 "type": "text",
@@ -1650,7 +1650,7 @@
                 "type": "key_insights",
                 "title": "Lesson recap",
                 "bullets": [
-                  "Revenue growth is not automatically good. Players must ask whether growth is consistent, sustainable, organic, and profitable.",
+                  "Revenue growth is not automatically good. Ask whether growth is consistent, sustainable, organic, and profitable.",
                   "Revenue Growth = Ending Revenue / Beginning Revenue - 1",
                   "Use the scenario to turn financial statement evidence into an action plan."
                 ]
@@ -1718,8 +1718,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Calculate gross profit margin.\n- Understand why margin differs by industry.\n- Recognize when rising revenue hides weakening production economics."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Calculate gross profit margin.\n- Understand why margin differs by industry.\n- Recognize when rising revenue hides weakening production economics."
               },
               {
                 "type": "text",
@@ -1798,8 +1798,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Distinguish gross profit, operating profit, and net profit.\n- Understand how OPEX, interest, and tax affect final profit.\n- Identify whether profit is scalable or cost-heavy."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Distinguish gross profit, operating profit, and net profit.\n- Understand how OPEX, interest, and tax affect final profit.\n- Identify whether profit is scalable or cost-heavy."
               },
               {
                 "type": "text",
@@ -1878,8 +1878,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Identify non-recurring income/loss.\n- Separate core profit from one-time profit.\n- Evaluate whether debt interest is manageable."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Identify non-recurring income/loss.\n- Separate core profit from one-time profit.\n- Evaluate whether debt interest is manageable."
               },
               {
                 "type": "text",
@@ -1949,7 +1949,7 @@
               {
                 "type": "text",
                 "heading": "Core Concept",
-                "body": "Profit is not enough. Players must know how efficiently the company uses capital, how much profit belongs to each share, and how management uses profit."
+                "body": "Profit is not enough. You need to know how efficiently the company uses capital, how much profit belongs to each share, and how management uses profit."
               },
               {
                 "type": "text",
@@ -1958,8 +1958,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Understand ROE as return on shareholder capital.\n- Understand ROA as return on all assets.\n- Understand EPS as profit per share.\n- Evaluate whether retained earnings are used productively.\n- Understand trade-offs between dividends, reinvestment, debt repayment, and buyback."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Understand ROE as return on shareholder capital.\n- Understand ROA as return on all assets.\n- Understand EPS as profit per share.\n- Evaluate whether retained earnings are used productively.\n- Understand trade-offs between dividends, reinvestment, debt repayment, and buyback."
               },
               {
                 "type": "text",
@@ -1970,7 +1970,7 @@
                 "type": "key_insights",
                 "title": "Lesson recap",
                 "bullets": [
-                  "Profit is not enough. Players must know how efficiently the company uses capital, how much profit belongs to each share, and how management uses profit.",
+                  "Profit is not enough. You need to know how efficiently the company uses capital, how much profit belongs to each share, and how management uses profit.",
                   "ROE = Net Profit / Equity",
                   "Use the scenario to turn financial statement evidence into an action plan."
                 ]
@@ -2038,8 +2038,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Identify assets, liabilities, and equity.\n- Distinguish current and non-current assets/liabilities.\n- Understand equity as net worth of the company.\n- Recognize retained earnings as accumulated profit kept in the business."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Identify assets, liabilities, and equity.\n- Distinguish current and non-current assets/liabilities.\n- Understand equity as net worth of the company.\n- Recognize retained earnings as accumulated profit kept in the business."
               },
               {
                 "type": "text",
@@ -2109,7 +2109,7 @@
               {
                 "type": "text",
                 "heading": "Core Concept",
-                "body": "Debt can help companies grow, but too much debt can make them fragile. Players must understand whether a company looks rich because of real equity growth or because it borrows aggressively."
+                "body": "Debt can help companies grow, but too much debt can make them fragile. You need to tell whether a company looks rich because of real equity growth or because it borrows aggressively."
               },
               {
                 "type": "text",
@@ -2118,8 +2118,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Calculate DER and gearing ratio.\n- Understand difference between total liabilities and interest-bearing debt.\n- Interpret leverage based on industry context.\n- Compare equity growth versus liability growth."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Calculate DER and gearing ratio.\n- Understand difference between total liabilities and interest-bearing debt.\n- Interpret leverage based on industry context.\n- Compare equity growth versus liability growth."
               },
               {
                 "type": "text",
@@ -2130,7 +2130,7 @@
                 "type": "key_insights",
                 "title": "Lesson recap",
                 "bullets": [
-                  "Debt can help companies grow, but too much debt can make them fragile. Players must understand whether a company looks rich because of real equity growth or because it borrows aggressively.",
+                  "Debt can help companies grow, but too much debt can make them fragile. You need to tell whether a company looks rich because of real equity growth or because it borrows aggressively.",
                   "Debt to Equity Ratio = Total Liabilities / Equity",
                   "Use the scenario to turn financial statement evidence into an action plan."
                 ]
@@ -2203,8 +2203,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Calculate current ratio and cash ratio.\n- Understand the difference between liquid and illiquid assets.\n- Recognize short-term debt risk.\n- Understand why large assets do not always mean easy payment ability."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Calculate current ratio and cash ratio.\n- Understand the difference between liquid and illiquid assets.\n- Recognize short-term debt risk.\n- Understand why large assets do not always mean easy payment ability."
               },
               {
                 "type": "key_insights",
@@ -2278,8 +2278,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Understand DSO, DIO, DPO, and cash conversion cycle conceptually.\n- Detect receivables growing faster than revenue.\n- Detect inventory piling up.\n- Understand supplier payment flexibility and risk."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Understand DSO, DIO, DPO, and cash conversion cycle conceptually.\n- Detect receivables growing faster than revenue.\n- Detect inventory piling up.\n- Understand supplier payment flexibility and risk."
               },
               {
                 "type": "text",
@@ -2353,8 +2353,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Understand why large goodwill can be risky.\n- Identify inventory and receivables red flags.\n- Understand related-party transaction risk.\n- Learn when to check footnotes."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Understand why large goodwill can be risky.\n- Identify inventory and receivables red flags.\n- Understand related-party transaction risk.\n- Learn when to check footnotes."
               },
               {
                 "type": "text",
@@ -2427,8 +2427,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Understand operating, investing, and financing cash flow.\n- Recognize why operating cash flow is critical.\n- Understand when investing cash flow is healthy or dangerous.\n- Interpret financing cash flow as money from/to lenders and shareholders."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Understand operating, investing, and financing cash flow.\n- Recognize why operating cash flow is critical.\n- Understand when investing cash flow is healthy or dangerous.\n- Interpret financing cash flow as money from/to lenders and shareholders."
               },
               {
                 "type": "text",
@@ -2497,12 +2497,12 @@
               {
                 "type": "text",
                 "heading": "Core Concept",
-                "body": "Profit is accounting. Cash is survival. Players must compare net profit with OCF to judge quality."
+                "body": "Profit is accounting. Cash is survival. Compare net profit with OCF to judge quality."
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Compare net profit and OCF.\n- Detect red flags when profit is high but cash is low.\n- Understand cases where net profit is low but OCF is still healthy."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Compare net profit and OCF.\n- Detect red flags when profit is high but cash is low.\n- Understand cases where net profit is low but OCF is still healthy."
               },
               {
                 "type": "text",
@@ -2513,7 +2513,7 @@
                 "type": "key_insights",
                 "title": "Lesson recap",
                 "bullets": [
-                  "Profit is accounting. Cash is survival. Players must compare net profit with OCF to judge quality.",
+                  "Profit is accounting. Cash is survival. Compare net profit with OCF to judge quality.",
                   "Use the scenario to turn financial statement evidence into an action plan."
                 ]
               }
@@ -2575,8 +2575,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Understand why footnotes/CALK matter.\n- Identify key information inside notes: revenue breakdown, COGS, OPEX, receivables aging, segments, backlog, related parties, commitments.\n- Use footnotes to validate or challenge the headline numbers."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Understand why footnotes/CALK matter.\n- Identify key information inside notes: revenue breakdown, COGS, OPEX, receivables aging, segments, backlog, related parties, commitments.\n- Use footnotes to validate or challenge the headline numbers."
               },
               {
                 "type": "text",
@@ -2649,8 +2649,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Define backlog.\n- Understand why backlog matters in project-based businesses.\n- Identify dominant segments, segment margins, sunrise segments, and sunset segments.\n- Understand concentration risk by segment, project, or customer."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Define backlog.\n- Understand why backlog matters in project-based businesses.\n- Identify dominant segments, segment margins, sunrise segments, and sunset segments.\n- Understand concentration risk by segment, project, or customer."
               },
               {
                 "type": "text",
@@ -2723,8 +2723,8 @@
               },
               {
                 "type": "text",
-                "heading": "Learning Objectives",
-                "body": "Players should be able to:\n\n- Combine Income Statement, Balance Sheet, Cash Flow Statement, and Footnotes.\n- Identify green flags and red flags.\n- Build an action plan: Buy, Watchlist, Avoid, or Investigate Further.\n- Understand tolerance: not every weakness is fatal, but every weakness must be priced and understood."
+                "heading": "What You'll Learn",
+                "body": "By the end, you can:\n\n- Combine Income Statement, Balance Sheet, Cash Flow Statement, and Footnotes.\n- Identify green flags and red flags.\n- Build an action plan: Buy, Watchlist, Avoid, or Investigate Further.\n- Understand tolerance: not every weakness is fatal, but every weakness must be priced and understood."
               },
               {
                 "type": "text",
@@ -3595,7 +3595,7 @@
               {
                 "type": "text",
                 "heading": "TA vs Fundamental: how they work together",
-                "body": "Fundamental analysis tells you whether a company is worth buying. Technical analysis tells you when to buy it. It is wise to combine both, use TA for execution discipline. Never use TA alone without understanding what the business does. ",
+                "body": "Fundamental analysis helps you judge business quality and valuation. Technical analysis helps you plan timing, invalidation, and review. Combine both for execution discipline, and do not use TA alone without understanding what the business does.",
                 "infoboxes": []
               },
               {

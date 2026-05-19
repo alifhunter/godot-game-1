@@ -1,6 +1,8 @@
 # Steam Stats And Achievement IDs
 
-Status: implemented in-game, pending Steamworks stat/achievement setup for App ID `4739020`.
+Status: implemented as local save-backed progress tracking, but **disabled for the public Early Access launch**.
+
+Public EA decision: ship without Steam achievements/stats for App ID `4739020`. Keep the runtime code and catalog as a future-ready draft, but do not publish the Steamworks achievement/stat backend until icons and unlock QA are ready.
 
 Source data: `data/steam/achievement_catalog.json`
 Runtime integration: `autoloads/SteamProgressManager.gd`
@@ -78,16 +80,18 @@ Official reference:
 ## Runtime Notes
 
 - Gameplay code records events through `SteamProgressManager`; it keeps a local mirror in the save under `steam_progress`.
-- The manager syncs local stats to Steam with `requestCurrentStats`, `setStatInt`, `setAchievement`, and `storeStats` when Steam is available.
-- `steam/progress/store_enabled=true` controls Steam writes. Tests can disable this while still validating local progress.
+- For public EA, Steam writes are disabled with `steam/progress/store_enabled=false` in `project.godot`.
+- When re-enabled later, the manager syncs local stats to Steam with `requestCurrentStats`, `setStatInt`, `setAchievement`, and `storeStats` when Steam is available.
+- Tests can still validate local progress while Steam writes are disabled.
 - Old saves backfill durable totals where possible: days survived, current watchlist size, thesis count, research tray count, upgrades, Academy progress, contacts met, RUPSLB attendance, and Life assets.
 
 ## Steamworks Setup Notes
 
+- Do not advertise or publish Steam achievements for the first public EA build.
 - Create stats first, then achievements that use progress stats.
 - Use `Client` as the setter for this first pass.
 - Use exact API names from `data/steam/achievement_catalog.json`; random/generated ticker names should never be Steam stat IDs.
-- Icons are still needed before public release:
+- Icons are still needed before enabling Steam achievements:
   - achieved icon
   - unachieved icon
-- After Steamworks setup is published, run `SteamProgressManagerTest.tscn` locally and then a real Steam branch smoke to confirm unlocks and stats appear.
+- Before enabling later, set `steam/progress/store_enabled=true`, publish the Steamworks backend, run `SteamProgressManagerTest.tscn`, and then run a real Steam branch smoke to confirm unlocks and stats appear.

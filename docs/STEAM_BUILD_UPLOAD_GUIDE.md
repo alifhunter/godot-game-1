@@ -20,11 +20,15 @@ Do not copy the full Steamworks SDK into this repo. Keep SDK tooling outside the
 2. Use the `Windows Desktop` export preset.
 3. Export into a clean temporary folder.
 4. Confirm the export contains the game executable and Steam runtime DLLs.
+5. For public release candidates, review `docs/RELEASE_LICENSE_AUDIT.md` and include required third-party notices in the shipped folder or an in-game credits/licenses screen.
 
-Current successful Steam upload contained:
+Public release or release-candidate uploads should contain:
 
 ```text
 BHSL.exe
+EULA.txt
+THIRD_PARTY_NOTICES.txt
+GODOT_COPYRIGHT.txt
 libgodotsteam.windows.template_release.x86_64.dll
 steam_api64.dll
 ```
@@ -33,7 +37,7 @@ The current export preset embeds the PCK into the executable. If that changes, i
 
 ## 2. Copy Build Files Into ContentBuilder
 
-Copy the exported Windows files into:
+Copy the exported Windows files plus root release paperwork files into:
 
 ```text
 C:\Users\Alif\Documents\SteamworksSDK\steamworks_sdk_164\sdk\tools\ContentBuilder\content\windows
@@ -47,6 +51,9 @@ ContentBuilder
 +-- content
 |   +-- windows
 |       +-- BHSL.exe
+|       +-- EULA.txt
+|       +-- THIRD_PARTY_NOTICES.txt
+|       +-- GODOT_COPYRIGHT.txt
 |       +-- libgodotsteam.windows.template_release.x86_64.dll
 |       +-- steam_api64.dll
 +-- output

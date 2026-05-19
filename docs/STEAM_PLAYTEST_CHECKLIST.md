@@ -2,7 +2,7 @@
 
 Status: Steam platform release-candidate checklist for build `0.1.0-ea / 2026.05.17.1`.
 
-Run this pass from Steam unless a developer explicitly asks for an editor or headless verification. The current project Steam App ID is `4739020`; Cloud is verified, and achievement/stat runtime code is implemented, but the Steamworks stats/achievements must be created and published before live unlock verification.
+Run this pass from Steam unless a developer explicitly asks for an editor or headless verification. The current project Steam App ID is `4739020`; Cloud is verified. Public Early Access intentionally ships without Steam achievements/stats enabled, even though local progress tracking code exists for a later update.
 
 ## Before Starting
 
@@ -39,11 +39,12 @@ Windows save folder:
 
 ## Steam Stats And Achievements
 
-1. Confirm the Steamworks backend has the exact stat and achievement API names from `docs/STEAM_ACHIEVEMENT_IDS.md`.
-2. Start a fresh run from Steam.
-3. Place one trade, add one watchlist item, read one News article, and open Stockbot `Key Stats`.
-4. Confirm Steam records the matching first-action achievements once the backend is published.
-5. Save, reload, and confirm already-earned achievements do not duplicate or regress.
+Public EA skip:
+
+1. Confirm Steamworks achievements/stats are not advertised for this build.
+2. Confirm `project.godot` keeps `steam/progress/store_enabled=false`.
+3. Do not fail the playtest if no Steam achievement popup appears.
+4. For a later achievement update, use `docs/STEAM_ACHIEVEMENT_IDS.md` as the API-name draft and run the unlock verification then.
 
 ## Performance Watch
 
@@ -78,3 +79,4 @@ This checklist passes when:
 - save, exit, and load works from Steam launch
 - no crash, soft-lock, blank critical screen, or save loss occurs
 - generated player-facing copy stays in-world and avoids system/debug wording
+- no Steam achievement unlocks are expected in the public EA build

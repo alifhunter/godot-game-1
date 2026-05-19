@@ -1,0 +1,115 @@
+BUY HIGH SELL LOW STOCK TRADING SIMULATOR
+END USER LICENSE AGREEMENT
+
+Last updated: 2026-05-19
+
+This End User License Agreement ("Agreement") applies to Buy High Sell Low
+Stock Trading Simulator, including the game executable, game content, art,
+audio, text, data, systems, updates, and related materials (the "Game").
+
+Publisher: Banyakarya
+
+This is a plain-language release document for Early Access distribution. It is
+not legal advice. If the publisher name or legal entity changes before public
+release, update this file before shipping.
+
+1. License To Play
+
+Banyakarya grants you a limited, personal, non-exclusive, non-transferable,
+revocable license to install and play the Game for personal entertainment use
+through Steam or another authorized distribution platform.
+
+The Game is licensed, not sold. Except for the limited license above,
+Banyakarya keeps all rights, title, and interest in the Game.
+
+2. Ownership
+
+The Game, including its code, original assets, fictional companies, generated
+market systems, user interface, logos, names, writing, and design, is owned by
+Banyakarya or its licensors. All rights not expressly granted in this Agreement
+are reserved.
+
+Third-party software and assets remain owned by their respective owners and are
+covered by their own licenses. See THIRD_PARTY_NOTICES.txt.
+
+3. Things You May Do
+
+You may:
+
+- install and play the Game on computers you control, as allowed by Steam;
+- stream, record, screenshot, review, and discuss gameplay;
+- monetize videos or livestreams that show normal gameplay;
+- keep personal backup copies of your save files where technically possible.
+
+4. Things You May Not Do
+
+You may not:
+
+- sell, rent, sublicense, or redistribute the Game or its files;
+- extract and reuse game assets, logos, sounds, generated content systems, or
+  data files as standalone products;
+- reverse engineer, decompile, disassemble, or modify the Game except where
+  allowed by applicable law;
+- remove copyright, trademark, or license notices;
+- use the Game or its assets to imply endorsement, partnership, or official
+  affiliation with Banyakarya unless you have written permission;
+- use the Game for unlawful, abusive, or platform-violating activity.
+
+5. Early Access Notice
+
+The Game may change during Early Access. Features, balance, user interface,
+save formats, progression, generated content, and Steam integration may be
+modified, reset, removed, or replaced before final release.
+
+Banyakarya will try to preserve saves where reasonable, but save compatibility
+is not guaranteed during Early Access.
+
+6. Fictional Market And Financial Disclaimer
+
+The Game is a fictional stock-trading simulation. It is designed for
+entertainment and learning. It is not financial, investment, tax, legal, or
+professional advice.
+
+Companies, tickers, events, prices, news, social posts, financial statements,
+and market outcomes in the Game are fictional or procedurally generated unless
+explicitly stated otherwise. Do not make real financial decisions based on the
+Game.
+
+7. Online Services, Steam, And Cloud Saves
+
+The Game may use Steam features such as Steam Cloud, overlay, branch delivery,
+or platform services. Those services are operated by Valve and are subject to
+Steam's own agreements and policies.
+
+Cloud save availability, synchronization timing, account access, and platform
+features are not guaranteed by Banyakarya.
+
+8. Feedback
+
+If you send feedback, bug reports, ideas, balance suggestions, or other
+comments about the Game, you grant Banyakarya permission to use them to improve,
+market, and support the Game without payment or obligation to you.
+
+9. Warranty Disclaimer
+
+To the maximum extent permitted by applicable law, the Game is provided "as is"
+and "as available", without warranties of any kind, whether express, implied,
+or statutory, including warranties of merchantability, fitness for a particular
+purpose, title, and non-infringement.
+
+10. Limitation Of Liability
+
+To the maximum extent permitted by applicable law, Banyakarya will not be liable
+for indirect, incidental, special, consequential, punitive, or exemplary
+damages, including loss of data, lost profits, business interruption, or loss
+of goodwill arising from or related to the Game.
+
+11. Termination
+
+This license ends automatically if you materially breach this Agreement. After
+termination, you must stop using the Game and delete any unauthorized copies.
+
+12. Changes To This Agreement
+
+Banyakarya may update this Agreement for future versions of the Game. Continued
+use of the Game after an update means you accept the updated terms.

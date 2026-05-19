@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "catalog_status": "implemented_pending_steamworks_publish",
-  "notes": "Create these API names in Steamworks for App ID 4739020 before public testing. Keep API names stable once published.",
+  "catalog_status": "implemented_local_tracking_public_ea_disabled",
+  "notes": "Public Early Access launches without Steam achievements/stats enabled. Keep these API names as the future Steamworks draft and keep them stable once published.",
   "stats": [
     {
       "api_name": "STAT_TRADES_PLACED",

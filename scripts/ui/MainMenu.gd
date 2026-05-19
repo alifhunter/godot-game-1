@@ -13,6 +13,10 @@ const DIFFICULTY_PLAN_CARD_HEIGHT := 230.0
 const LOAD_SLOTS_DIALOG_WIDTH := 760.0
 const LOAD_SLOTS_LIST_HEIGHT := 160.0
 const LOAD_SLOT_DELETE_DIALOG_SIZE := Vector2i(540, 230)
+const DISCLAIMER_SPLASH_TEXT := "The Game is a fictional stock-trading simulation. It is designed for\nentertainment and learning. It is not financial, investment, tax, legal, or\nprofessional advice.\n\nCompanies, tickers, events, prices, news, social posts, financial statements,\nand market outcomes in the Game are fictional or procedurally generated unless\nexplicitly stated otherwise. Do not make real financial decisions based on the\nGame."
+const DISCLAIMER_TYPE_DURATION := 3.2
+const DISCLAIMER_HOLD_DURATION := 2.0
+const DISCLAIMER_FADE_DURATION := 0.35
 const COLOR_DESKTOP_BG := Color(0.909804, 0.909804, 0.803922, 1)
 const COLOR_DESKTOP_PANEL := Color(0.945098, 0.909804, 0.803922, 1)
 const COLOR_DESKTOP_CREAM := Color(1.0, 0.976471, 0.929412, 1)
@@ -63,6 +67,9 @@ var has_checked_app_font: bool = false
 @onready var loading_step_label: Label = $Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox/LoadingStepLabel
 @onready var loading_subprogress_label: Label = $Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox/LoadingSubprogressLabel
 @onready var loading_note_label: Label = $Margin/ScreenRoot/LoadingScreen/CenterContent/LoadingCard/LoadingMargin/LoadingVBox/LoadingNoteLabel
+@onready var disclaimer_splash_overlay: Control = $DisclaimerSplashOverlay
+@onready var disclaimer_splash_vbox: VBoxContainer = $DisclaimerSplashOverlay/DisclaimerMargin/DisclaimerCenter/DisclaimerVBox
+@onready var disclaimer_splash_label: Label = $DisclaimerSplashOverlay/DisclaimerMargin/DisclaimerCenter/DisclaimerVBox/DisclaimerTextLabel
 
 var difficulty_button_group := ButtonGroup.new()
 var difficulty_card_buttons: Dictionary = {}
@@ -95,6 +102,7 @@ func _ready() -> void:
 	GameManager.run_loading_detail_updated.connect(_on_run_loading_detail_updated)
 	GameManager.run_loading_finished.connect(_on_run_loading_finished)
 	get_viewport().size_changed.connect(_update_difficulty_selector_size)
+	get_viewport().size_changed.connect(_update_disclaimer_splash_size)
 	_ensure_load_slots_dialog()
 	_populate_difficulty_cards()
 	tutorial_checkbox.button_pressed = true
@@ -104,6 +112,8 @@ func _ready() -> void:
 	_apply_global_font_size_overrides()
 	_apply_desktop_startup_style()
 	_update_difficulty_selector_size()
+	_update_disclaimer_splash_size()
+	_start_disclaimer_splash()
 
 
 func _refresh_load_state() -> void:
@@ -771,6 +781,59 @@ func _on_run_loading_finished() -> void:
 		return
 
 	loading_progress_bar.value = 100.0
+
+
+func _start_disclaimer_splash() -> void:
+	if disclaimer_splash_overlay == null or disclaimer_splash_label == null:
+		return
+	disclaimer_splash_overlay.visible = true
+	disclaimer_splash_overlay.modulate = Color.WHITE
+	disclaimer_splash_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	disclaimer_splash_label.text = DISCLAIMER_SPLASH_TEXT
+	disclaimer_splash_label.visible_characters = 0
+	_play_disclaimer_splash()
+
+
+func _play_disclaimer_splash() -> void:
+	await get_tree().process_frame
+	if disclaimer_splash_overlay == null or disclaimer_splash_label == null:
+		return
+
+	var typing_tween := create_tween()
+	typing_tween.tween_property(
+		disclaimer_splash_label,
+		"visible_characters",
+		DISCLAIMER_SPLASH_TEXT.length(),
+		DISCLAIMER_TYPE_DURATION
+	)
+	await typing_tween.finished
+	if disclaimer_splash_overlay == null or disclaimer_splash_label == null:
+		return
+
+	disclaimer_splash_label.visible_characters = -1
+	await get_tree().create_timer(DISCLAIMER_HOLD_DURATION).timeout
+	if disclaimer_splash_overlay == null:
+		return
+
+	var fade_tween := create_tween()
+	fade_tween.tween_property(disclaimer_splash_overlay, "modulate:a", 0.0, DISCLAIMER_FADE_DURATION)
+	await fade_tween.finished
+	if disclaimer_splash_overlay == null:
+		return
+
+	disclaimer_splash_overlay.queue_free()
+	disclaimer_splash_overlay = null
+	disclaimer_splash_vbox = null
+	disclaimer_splash_label = null
+
+
+func _update_disclaimer_splash_size() -> void:
+	if disclaimer_splash_vbox == null or disclaimer_splash_label == null:
+		return
+	var viewport_width: float = get_viewport_rect().size.x
+	var text_width: float = clamp(viewport_width - 192.0, 320.0, 1040.0)
+	disclaimer_splash_vbox.custom_minimum_size.x = text_width
+	disclaimer_splash_label.add_theme_font_size_override("font_size", 18 if text_width < 640.0 else 22)
 
 
 func _set_screen(screen_id: String) -> void:
