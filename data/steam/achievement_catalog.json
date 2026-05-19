@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "catalog_status": "steamworks_prep",
-  "notes": "Create these API names in Steamworks after the real App ID exists. Keep API names stable once published.",
+  "catalog_status": "implemented_pending_steamworks_publish",
+  "notes": "Create these API names in Steamworks for App ID 4739020 before public testing. Keep API names stable once published.",
   "stats": [
     {
       "api_name": "STAT_TRADES_PLACED",
@@ -62,6 +62,120 @@
       "type": "INT",
       "display_name": "Chart Patterns Claimed",
       "description": "Player-marked chart pattern claims."
+    },
+    {
+      "api_name": "STAT_BUY_ORDERS",
+      "type": "INT",
+      "display_name": "Buy Orders",
+      "description": "Completed buy orders."
+    },
+    {
+      "api_name": "STAT_SELL_ORDERS",
+      "type": "INT",
+      "display_name": "Sell Orders",
+      "description": "Completed sell orders."
+    },
+    {
+      "api_name": "STAT_LOTS_TRADED",
+      "type": "INT",
+      "display_name": "Lots Traded",
+      "description": "Total exchange lots traded through buy and sell orders."
+    },
+    {
+      "api_name": "STAT_WATCHLIST_ADDS",
+      "type": "INT",
+      "display_name": "Watchlist Adds",
+      "description": "Stocks added to the watchlist."
+    },
+    {
+      "api_name": "STAT_NEWS_ARTICLES_READ",
+      "type": "INT",
+      "display_name": "News Articles Read",
+      "description": "News articles opened by the player."
+    },
+    {
+      "api_name": "STAT_STOCKBOT_TAB_VIEWS",
+      "type": "INT",
+      "display_name": "Stockbot Tab Views",
+      "description": "Research tabs opened in Stockbot."
+    },
+    {
+      "api_name": "STAT_KEY_STATS_INSPECTED",
+      "type": "INT",
+      "display_name": "Key Stats Inspected",
+      "description": "Company Key Stats tabs opened."
+    },
+    {
+      "api_name": "STAT_FINANCIALS_INSPECTED",
+      "type": "INT",
+      "display_name": "Financials Inspected",
+      "description": "Company Financials tabs opened."
+    },
+    {
+      "api_name": "STAT_BROKER_FLOW_INSPECTED",
+      "type": "INT",
+      "display_name": "Broker Flow Inspected",
+      "description": "Company Broker tabs opened."
+    },
+    {
+      "api_name": "STAT_CORP_ACTION_INSPECTED",
+      "type": "INT",
+      "display_name": "Corp Action Inspected",
+      "description": "Company corporate-action tabs opened."
+    },
+    {
+      "api_name": "STAT_PROFILE_INSPECTED",
+      "type": "INT",
+      "display_name": "Profiles Inspected",
+      "description": "Company Profile tabs opened."
+    },
+    {
+      "api_name": "STAT_RESEARCH_EVIDENCE_CAPTURED",
+      "type": "INT",
+      "display_name": "Research Evidence Captured",
+      "description": "Research rows captured into the Thesis tray."
+    },
+    {
+      "api_name": "STAT_RESEARCH_EVIDENCE_ATTACHED",
+      "type": "INT",
+      "display_name": "Research Evidence Attached",
+      "description": "Research rows attached to a thesis."
+    },
+    {
+      "api_name": "STAT_NETWORK_TIPS_REQUESTED",
+      "type": "INT",
+      "display_name": "Network Tips Requested",
+      "description": "Tips requested from Network contacts."
+    },
+    {
+      "api_name": "STAT_CORPORATE_MEETING_VOTES",
+      "type": "INT",
+      "display_name": "Corporate Meeting Votes",
+      "description": "Votes submitted in corporate meetings."
+    },
+    {
+      "api_name": "STAT_ACADEMY_QUIZZES_PASSED",
+      "type": "INT",
+      "display_name": "Academy Quizzes Passed",
+      "description": "Academy module quizzes passed."
+    },
+    {
+      "api_name": "STAT_LIFE_PROPERTIES_PURCHASED",
+      "type": "INT",
+      "display_name": "Life Properties Purchased",
+      "description": "Properties purchased in Life."
+    },
+    {
+      "api_name": "STAT_LIFE_CARS_PURCHASED",
+      "type": "INT",
+      "display_name": "Life Cars Purchased",
+      "description": "Cars purchased in Life."
+    },
+    {
+      "api_name": "STAT_EMERGENCY_LOANS_TAKEN",
+      "type": "INT",
+      "display_name": "Emergency Loans Taken",
+      "description": "Emergency loans taken from Life Finance."
     }
   ],
   "achievements": [
@@ -91,8 +205,8 @@
       "description": "Add your first stock to the watchlist.",
       "category": "research",
       "hidden": false,
-      "progress_stat": "",
-      "unlock_value": 0,
+      "progress_stat": "STAT_WATCHLIST_ADDS",
+      "unlock_value": 1,
       "trigger_note": "Unlock when a watchlist add succeeds."
     },
     {
@@ -101,8 +215,8 @@
       "description": "Open your first News article.",
       "category": "research",
       "hidden": false,
-      "progress_stat": "",
-      "unlock_value": 0,
+      "progress_stat": "STAT_NEWS_ARTICLES_READ",
+      "unlock_value": 1,
       "trigger_note": "Unlock when the player opens a News article detail."
     },
     {
@@ -111,8 +225,8 @@
       "description": "Inspect a company's Key Stats.",
       "category": "fundamentals",
       "hidden": false,
-      "progress_stat": "",
-      "unlock_value": 0,
+      "progress_stat": "STAT_KEY_STATS_INSPECTED",
+      "unlock_value": 1,
       "trigger_note": "Unlock when the player opens the Key Stats tab for any stock."
     },
     {
@@ -161,8 +275,8 @@
       "description": "Receive your first Network tip.",
       "category": "network",
       "hidden": false,
-      "progress_stat": "",
-      "unlock_value": 0,
+      "progress_stat": "STAT_NETWORK_TIPS_REQUESTED",
+      "unlock_value": 1,
       "trigger_note": "Unlock when a Network tip is created for the player."
     },
     {
@@ -221,8 +335,8 @@
       "description": "Complete the first technical-analysis lesson path.",
       "category": "academy",
       "hidden": false,
-      "progress_stat": "",
-      "unlock_value": 0,
+      "progress_stat": "STAT_ACADEMY_QUIZZES_PASSED",
+      "unlock_value": 1,
       "trigger_note": "Unlock when the technical Academy category completion flag is set."
     },
     {

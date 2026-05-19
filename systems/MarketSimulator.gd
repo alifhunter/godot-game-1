@@ -10,6 +10,7 @@ const CHART_BAR_FRICTION_PROFILES := ["clean_liquid", "balanced_chop", "operator
 const CHART_TAPE_REGIME_PROFILES := ["clean_trend", "messy_accumulation", "operator_campaign", "distribution_breakdown", "failed_reclaim"]
 
 var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
+var company_roadmap_system = preload("res://systems/CompanyRoadmapSystem.gd").new()
 var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
 var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
 var index_review_system = preload("res://systems/IndexReviewSystem.gd").new()
@@ -37,12 +38,33 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		macro_state,
 		report_events
 	)
+	var company_roadmap_resolution: Dictionary = company_roadmap_system.resolve_day(
+		run_state,
+		data_repository,
+		corporate_action_system,
+		trade_date,
+		day_number,
+		macro_state,
+		corporate_action_resolution
+	)
+	if company_roadmap_resolution.has("active_corporate_action_chains"):
+		corporate_action_resolution["active_corporate_action_chains"] = company_roadmap_resolution.get("active_corporate_action_chains", {}).duplicate(true)
+	if company_roadmap_resolution.has("corporate_meeting_calendar"):
+		corporate_action_resolution["corporate_meeting_calendar"] = company_roadmap_resolution.get("corporate_meeting_calendar", {}).duplicate(true)
+	var company_attention_directives: Dictionary = attention_directives.duplicate(true)
+	var blocked_company_ids: Array = []
+	for blocked_company_id_value in company_roadmap_resolution.get("blocked_company_ids", []):
+		var blocked_company_id: String = str(blocked_company_id_value)
+		if not blocked_company_id.is_empty() and not blocked_company_ids.has(blocked_company_id):
+			blocked_company_ids.append(blocked_company_id)
+	if not blocked_company_ids.is_empty():
+		company_attention_directives["blocked_company_ids"] = blocked_company_ids
 	var company_arc_resolution: Dictionary = company_event_system.resolve_day(
 		run_state,
 		trade_date,
 		day_number,
 		macro_state,
-		attention_directives
+		company_attention_directives
 	)
 	var index_review_resolution: Dictionary = index_review_system.resolve_day(
 		run_state,
@@ -51,7 +73,8 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		day_number,
 		macro_state
 	)
-	var active_company_arcs: Array = company_arc_resolution.get("active_arcs", []).duplicate(true)
+	var active_company_arcs: Array = company_roadmap_resolution.get("active_company_arcs", []).duplicate(true)
+	active_company_arcs.append_array(company_arc_resolution.get("active_arcs", []).duplicate(true))
 	active_company_arcs.append_array(corporate_action_resolution.get("active_company_arcs", []).duplicate(true))
 	active_company_arcs.append_array(index_review_resolution.get("active_company_arcs", []).duplicate(true))
 	var special_event_resolution: Dictionary = special_event_system.resolve_day(
@@ -283,7 +306,12 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		"report_events": report_events.duplicate(true),
 		"started_company_arcs": company_arc_resolution.get("started_events", []).duplicate(true),
 		"company_arc_phase_events": company_arc_resolution.get("phase_events", []).duplicate(true),
-		"corporate_action_events": corporate_action_resolution.get("corporate_action_events", []).duplicate(true),
+		"company_roadmap_events": company_roadmap_resolution.get("started_events", []).duplicate(true),
+		"company_roadmap_state": company_roadmap_resolution.get("company_roadmap_state", run_state.get_company_roadmap_state()).duplicate(true),
+		"corporate_action_events": _combined_arrays(
+			corporate_action_resolution.get("corporate_action_events", []),
+			company_roadmap_resolution.get("corporate_action_events", [])
+		),
 		"index_review_events": index_review_resolution.get("index_review_events", []).duplicate(true),
 		"index_review_state": index_review_resolution.get("index_review_state", {}).duplicate(true),
 		"active_company_arcs": active_company_arcs,
@@ -645,6 +673,15 @@ func _strongest_sector_signal(sector_sentiments: Dictionary) -> Dictionary:
 		"sector_id": strongest_sector_id,
 		"sentiment": float(sector_sentiments[strongest_sector_id])
 	}
+
+
+func _combined_arrays(first_value: Variant, second_value: Variant) -> Array:
+	var rows: Array = []
+	if typeof(first_value) == TYPE_ARRAY:
+		rows.append_array(first_value)
+	if typeof(second_value) == TYPE_ARRAY:
+		rows.append_array(second_value)
+	return rows
 
 
 func _resolve_event_context(

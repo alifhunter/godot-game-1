@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/LifeLifestyleAssetTest.gd" id="1_lifelifestyle"]
+
+[node name="LifeLifestyleAssetTest" type="Node"]
+script = ExtResource("1_lifelifestyle")

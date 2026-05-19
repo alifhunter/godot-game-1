@@ -660,6 +660,9 @@ func _build_article_record(
 
 	return {
 		"id": article_id,
+		"outlet_id": str(outlet.get("id", "")),
+		"outlet_label": str(outlet.get("label", "News")),
+		"intel_level": int(outlet.get("intel_level", 1)),
 		"headline": _compose_headline(outlet, voice_profile, headline, "%s|prefix" % voice_seed),
 		"deck": deck,
 		"body": _build_article_body(feed_data, voice_profile, source_data, context, stage_key, voice_seed),
@@ -692,6 +695,10 @@ func _build_article_record(
 		"public_story_angle": public_story_angle,
 		"public_confidence_label": public_confidence_label,
 		"public_continuity_phrase": public_continuity_phrase,
+		"property_development_location_id": str(source_data.get("property_development_location_id", "")),
+		"property_development_location_label": str(source_data.get("property_development_location_label", "")),
+		"property_development_theme": str(source_data.get("property_development_theme", "")),
+		"property_development_theme_label": str(source_data.get("property_development_theme_label", "")),
 		"priority": priority
 	}
 
@@ -815,9 +822,9 @@ func _build_story_context(
 	var detail_hint: String = _public_detail_hint(source_data, phase_phrase)
 	var whisper_phrase: String = _pick_reference_signal(feed_data, "whisper_hedges", "%s|whisper" % seed_key)
 	var desk_watch: String = _pick_reference_signal(feed_data, "desk_watch", "%s|desk" % seed_key)
-	var formal_phrase: String = _pick_reference_signal(feed_data, "formal_markers", "%s|formal" % seed_key)
+	var formal_phrase: String = _pick_formal_phrase(feed_data, source_data, stage_key, "%s|formal" % seed_key)
 	var analysis_phrase: String = _pick_reference_signal(feed_data, "analysis_markers", "%s|analysis" % seed_key)
-	var reaction_phrase: String = _pick_reference_signal(feed_data, "reaction_markers", "%s|reaction" % seed_key)
+	var reaction_phrase: String = _pick_reaction_phrase(feed_data, source_data, tone, stage_key, "%s|reaction" % seed_key)
 	var market_jargon: String = _pick_reference_signal(feed_data, "market_jargon", "%s|jargon" % seed_key)
 	var driver_phrase: String = _pick_driver_phrase(feed_data, source_data, tone, "%s|driver" % seed_key)
 	var watch_phrase: String = _pick_watch_phrase(feed_data, stage_key, "%s|watch" % seed_key)
@@ -1040,7 +1047,7 @@ func _public_detail_hint(source_data: Dictionary, phase_phrase: String) -> Strin
 	if category == "corporate_action_rumor":
 		return "early corporate-action talk is starting to show up in public trading activity"
 	if category == "corporate_action_speculation":
-		return "public speculation is turning a quiet setup into a louder market story"
+		return "public speculation is getting loud enough for traders to price in a possible transaction"
 	if category == "corporate_action_denial":
 		return "the company response has made timing less certain without fully ending the story"
 	if category == "corporate_action_clarification":
@@ -1055,6 +1062,8 @@ func _public_detail_hint(source_data: Dictionary, phase_phrase: String) -> Strin
 		return "the story is shifting from approval into execution"
 	if category == "corporate_action_cancellation":
 		return "the setup has lost momentum and the market is resetting expectations"
+	if category.begins_with("roadmap_"):
+		return "public business signals are making the company's expansion plans easier to follow"
 	if category == "index_inclusion":
 		return "the review list points to potential passive buying around the effective date"
 	if category == "index_exclusion":
@@ -1070,9 +1079,28 @@ func _looks_like_system_summary(value: String) -> bool:
 	var lowered_value: String = value.to_lower()
 	return (
 		lowered_value.contains("management stance") or
+		lowered_value.contains("vague public hint") or
+		lowered_value.contains("source reliability") or
+		lowered_value.contains("current read") or
+		lowered_value.contains("unclear location") or
+		lowered_value.contains("development lead") or
+		lowered_value.contains("intel level") or
+		lowered_value.contains("source trail") or
+		lowered_value.contains("source article") or
+		lowered_value.contains("source story") or
+		lowered_value.contains("working read") or
+		lowered_value.contains("raw statement") or
+		lowered_value.contains("system metadata") or
+		lowered_value.contains("price-bias read") or
+		lowered_value.contains("funding_gate") or
+		lowered_value.contains("funding readiness") or
+		lowered_value.contains("roadmap_id") or
+		lowered_value.contains("participant_role") or
+		lowered_value.contains("milestone_state") or
+		lowered_value.contains("company_roadmap") or
 		lowered_value.contains("current_timeline_state") or
 		lowered_value.contains("source_chain_id") or
-		lowered_value.contains(" stage of a ")
+		lowered_value.contains("stage of a")
 	)
 
 
@@ -1095,6 +1123,46 @@ func _pick_voice_template(voice_profile: Dictionary, section_key: String, stage_
 func _pick_reference_signal(feed_data: Dictionary, signal_key: String, seed_key: String) -> String:
 	var reference_signals: Dictionary = feed_data.get("reference_signals", {})
 	return str(_pick_from_pool(reference_signals.get(signal_key, []), seed_key))
+
+
+func _pick_formal_phrase(feed_data: Dictionary, source_data: Dictionary, stage_key: String, seed_key: String) -> String:
+	if stage_key == "public_brief":
+		var public_pool: Array = [
+			"By the close",
+			"On public screens",
+			"In regular market trade",
+			"From the market tape"
+		]
+		return str(_pick_from_pool(public_pool, seed_key))
+	return _pick_reference_signal(feed_data, "formal_markers", seed_key)
+
+
+func _pick_reaction_phrase(feed_data: Dictionary, source_data: Dictionary, tone: String, stage_key: String, seed_key: String) -> String:
+	if tone == "positive":
+		var positive_pool: Array = [
+			"tracking follow-through instead of chasing blindly",
+			"keeping the stronger names on watchlists",
+			"waiting to see whether buyers return next session",
+			"watching confirmation before adding size"
+		]
+		return str(_pick_from_pool(positive_pool, "%s|positive|%s" % [seed_key, stage_key]))
+	if tone == "negative":
+		var negative_pool: Array = [
+			"cutting risk",
+			"moving toward safer names",
+			"selling weaker positions",
+			"waiting before making bigger bets"
+		]
+		return str(_pick_from_pool(negative_pool, "%s|negative|%s" % [seed_key, stage_key]))
+	var mixed_pool: Array = [
+		"waiting before making bigger bets",
+		"watching for cleaner confirmation",
+		"keeping position sizes smaller",
+		"checking whether the move spreads"
+	]
+	if stage_key == "public_brief" and str(source_data.get("category", "")) == "public_mover":
+		return str(_pick_from_pool(mixed_pool, "%s|mixed_public" % seed_key))
+	return _pick_reference_signal(feed_data, "reaction_markers", seed_key)
 
 
 func _pick_driver_phrase(feed_data: Dictionary, source_data: Dictionary, tone: String, seed_key: String) -> String:
@@ -1207,7 +1275,7 @@ func _category_family_key(source_data: Dictionary) -> String:
 func _public_confidence_label(stage_key: String, source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
 	if category == "index_inclusion" or category == "index_exclusion":
-		return "Effective flow" if str(source_data.get("review_stage", "")) == "effective" else "Review list"
+		return "Effective flow" if str(source_data.get("review_stage", "")) == "effective" else "Index review"
 	if category == "index_watch":
 		return "Review watch"
 	if category == "corporate_action_filing" or category == "corporate_action_resolution" or category == "corporate_action_execution":
@@ -1216,15 +1284,17 @@ func _public_confidence_label(stage_key: String, source_data: Dictionary) -> Str
 		return "Calendar watch"
 	if category == "corporate_action_denial" or category == "corporate_action_clarification":
 		return "Company response"
+	if category.begins_with("roadmap_"):
+		return "Public signals"
 	match stage_key:
 		"whisper":
-			return "Early read"
+			return "Early report"
 		"confirmation":
 			return "Confirmed"
 		"analysis":
 			return "Follow-up"
 		"market_wrap":
-			return "Close read"
+			return "Market close"
 		_:
 			return "Public recap"
 
@@ -1235,6 +1305,8 @@ func _public_story_angle(source_data: Dictionary, stage_key: String, tone: Strin
 		return "Index review"
 	if category.begins_with("corporate_action"):
 		return "Corporate action"
+	if category.begins_with("roadmap_"):
+		return "Company roadmap"
 	if category == "corporate_meeting":
 		return "Boardroom calendar"
 	if category == "earnings":
@@ -1315,6 +1387,8 @@ func _public_section_label(source_data: Dictionary, context: Dictionary) -> Stri
 		return "Index Review"
 	if category.begins_with("corporate_action") or category == "corporate_meeting":
 		return "Boardroom"
+	if category.begins_with("roadmap_"):
+		return "Company Roadmap"
 	if event_family == "market" or category == "market_wrap":
 		return "Market Brief"
 	if category == "earnings":
@@ -1334,6 +1408,8 @@ func _image_slot_for_article(source_data: Dictionary, context: Dictionary, stage
 		return "market"
 	if category.begins_with("corporate_action") or category == "corporate_meeting":
 		return "boardroom"
+	if category.begins_with("roadmap_"):
+		return "brief"
 	if stage_key == "market_wrap" or str(context.get("scope", "")) == "market":
 		return "market"
 	if not str(context.get("target_company_id", "")).is_empty():

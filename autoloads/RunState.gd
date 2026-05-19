@@ -1,7 +1,7 @@
 extends Node
 
 const STABLE_RNG = preload("res://systems/StableRng.gd")
-const SAVE_SCHEMA_VERSION := 6
+const SAVE_SCHEMA_VERSION := 7
 const SAVE_FORMAT_ID := "daytrader_single_run"
 const LOT_SIZE := 100
 const PLAYER_BROKER_CODE := "XL"
@@ -97,6 +97,8 @@ const COMPANY_PROFILE_KEYS := [
 	"profile_description",
 	"profile_tags",
 	"management_roster",
+	"location_profile",
+	"roadmap_profile",
 	"post_deal_identity"
 ]
 const DEFAULT_DIFFICULTY_CONFIG := {
@@ -148,6 +150,7 @@ const LIFE_HOSPITAL_TRADING_DAYS := 2
 const LIFE_LEGAL_HOLD_MAX_TRADING_DAYS := 5
 const LIFE_HOSPITAL_RECOVERY_STRESS := 45.0
 const LIFE_HOSPITAL_RECOVERY_HAPPINESS := 45.0
+const LEGACY_BODETABEK_LIFE_LOCATION_IDS := ["bogor", "depok", "tangerang", "bekasi", "karawang"]
 
 var run_seed = 0
 var day_index = 0
@@ -166,6 +169,7 @@ var event_history = []
 var market_history = []
 var active_company_arcs = []
 var active_special_events = []
+var company_roadmap_state = {}
 var active_corporate_action_chains = {}
 var corporate_meeting_calendar = {}
 var corporate_action_intel = {}
@@ -190,6 +194,7 @@ var upgrade_tiers = {}
 var daily_action_day_index = 0
 var daily_actions_used = 0
 var academy_progress = {}
+var steam_progress = {}
 var quarterly_report_calendar = {}
 var yearly_macro_states = {}
 var historical_chart_bar_cache = {}
@@ -247,6 +252,7 @@ func reset() -> void:
 	market_history = []
 	active_company_arcs = []
 	active_special_events = []
+	company_roadmap_state = _default_company_roadmap_state()
 	active_corporate_action_chains = {}
 	corporate_meeting_calendar = {}
 	corporate_action_intel = {}
@@ -271,6 +277,7 @@ func reset() -> void:
 	daily_action_day_index = 0
 	daily_actions_used = 0
 	academy_progress = _default_academy_progress()
+	steam_progress = _default_steam_progress()
 	quarterly_report_calendar = {}
 	yearly_macro_states = {}
 	historical_chart_bar_cache = {}
@@ -492,6 +499,7 @@ func load_from_dict(data: Dictionary) -> void:
 	market_history = data.get("market_history", []).duplicate(true)
 	active_company_arcs = data.get("active_company_arcs", []).duplicate(true)
 	active_special_events = data.get("active_special_events", []).duplicate(true)
+	company_roadmap_state = _normalize_company_roadmap_state(data.get("company_roadmap_state", {}))
 	active_corporate_action_chains = data.get("active_corporate_action_chains", {}).duplicate(true)
 	corporate_meeting_calendar = data.get("corporate_meeting_calendar", {}).duplicate(true)
 	corporate_action_intel = data.get("corporate_action_intel", {}).duplicate(true)
@@ -517,6 +525,7 @@ func load_from_dict(data: Dictionary) -> void:
 	daily_actions_used = max(int(data.get("daily_actions_used", 0)), 0)
 	_sync_daily_action_day()
 	academy_progress = _normalize_academy_progress(data.get("academy_progress", {}))
+	steam_progress = _normalize_steam_progress(data.get("steam_progress", {}))
 	quarterly_report_calendar = data.get("quarterly_report_calendar", {}).duplicate(true)
 	yearly_macro_states = data.get("yearly_macro_states", {}).duplicate(true)
 	difficulty_id = str(data.get("difficulty_id", "normal"))
@@ -556,6 +565,7 @@ func load_from_dict(data: Dictionary) -> void:
 
 	for company_id in data.get("companies", {}).keys():
 		companies[str(company_id)] = _normalize_company_runtime(data["companies"][company_id].duplicate(true))
+	_ensure_company_roadmap_profiles()
 	_log_startup_perf_elapsed("load_from_dict:companies", phase_started_at_usec, " companies=%d" % companies.size())
 	phase_started_at_usec = Time.get_ticks_usec()
 
@@ -598,6 +608,7 @@ func to_save_dict() -> Dictionary:
 		"market_history": market_history.duplicate(true),
 		"active_company_arcs": active_company_arcs.duplicate(true),
 		"active_special_events": active_special_events.duplicate(true),
+		"company_roadmap_state": _normalize_company_roadmap_state(company_roadmap_state),
 		"active_corporate_action_chains": active_corporate_action_chains.duplicate(true),
 		"corporate_meeting_calendar": corporate_meeting_calendar.duplicate(true),
 		"corporate_action_intel": corporate_action_intel.duplicate(true),
@@ -622,6 +633,7 @@ func to_save_dict() -> Dictionary:
 		"daily_action_day_index": daily_action_day_index,
 		"daily_actions_used": daily_actions_used,
 		"academy_progress": get_academy_progress(),
+		"steam_progress": get_steam_progress(),
 		"quarterly_report_calendar": quarterly_report_calendar.duplicate(true),
 		"yearly_macro_states": yearly_macro_states.duplicate(true),
 		"difficulty_id": difficulty_id,
@@ -814,6 +826,7 @@ func _build_last_day_results_save_payload(source_results: Variant) -> Dictionary
 		"report_events": source.get("report_events", []).duplicate(true),
 		"started_company_arcs": source.get("started_company_arcs", []).duplicate(true),
 		"company_arc_phase_events": source.get("company_arc_phase_events", []).duplicate(true),
+		"company_roadmap_events": source.get("company_roadmap_events", []).duplicate(true),
 		"corporate_action_events": source.get("corporate_action_events", []).duplicate(true),
 		"index_review_events": source.get("index_review_events", []).duplicate(true),
 		"dividend_payments": source.get("dividend_payments", []).duplicate(true),
@@ -1204,6 +1217,8 @@ func apply_day_result(day_result: Dictionary) -> void:
 		_record_event(company_arc_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	for company_arc_phase_value in day_result.get("company_arc_phase_events", []):
 		_record_event(company_arc_phase_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
+	for company_roadmap_event_value in day_result.get("company_roadmap_events", []):
+		_record_event(company_roadmap_event_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	for special_event_value in day_result.get("started_special_events", []):
 		_record_event(special_event_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	for corporate_event_value in day_result.get("corporate_action_events", []):
@@ -1214,6 +1229,7 @@ func apply_day_result(day_result: Dictionary) -> void:
 	phase_started_at_usec = Time.get_ticks_usec()
 	active_company_arcs = day_result.get("active_company_arcs", []).duplicate(true)
 	active_special_events = day_result.get("active_special_events", []).duplicate(true)
+	company_roadmap_state = _normalize_company_roadmap_state(day_result.get("company_roadmap_state", company_roadmap_state))
 	active_corporate_action_chains = day_result.get("active_corporate_action_chains", {}).duplicate(true)
 	corporate_meeting_calendar = day_result.get("corporate_meeting_calendar", {}).duplicate(true)
 	corporate_action_intel = day_result.get("corporate_action_intel", {}).duplicate(true)
@@ -1455,6 +1471,46 @@ func apply_cash_obligation(obligation_id: String, amount: float, detail: Diction
 	}
 
 
+func apply_cash_inflow(inflow_id: String, amount: float, detail: Dictionary = {}) -> Dictionary:
+	var normalized_amount: float = max(amount, 0.0)
+	if normalized_amount <= 0.0:
+		return {"success": false, "message": "No cash inflow to apply."}
+
+	var cash_before: float = float(player_portfolio.get("cash", 0.0))
+	var cash_after: float = cash_before + normalized_amount
+	player_portfolio["cash"] = cash_after
+	var company_id: String = str(detail.get("company_id", "life"))
+	var side: String = str(detail.get("side", inflow_id))
+	_record_trade(
+		company_id,
+		side,
+		{
+			"lots": 0,
+			"shares": 0,
+			"price_per_share": 0.0,
+			"gross_value": normalized_amount,
+			"fee_rate": 0.0,
+			"fee": 0.0
+		},
+		0.0,
+		normalized_amount,
+		cash_after
+	)
+	var finance: Dictionary = refresh_cash_stress_state()
+
+	return {
+		"success": true,
+		"inflow_id": inflow_id,
+		"amount": normalized_amount,
+		"cash_before": cash_before,
+		"cash_after": cash_after,
+		"finance": finance,
+		"day_index": day_index,
+		"trade_date": current_trade_date.duplicate(true),
+		"detail": detail.duplicate(true)
+	}
+
+
 func get_player_market_flow_context(company_id: String, target_day_index: int) -> Dictionary:
 	_prune_player_market_flows(target_day_index)
 	var flow_entries: Array = player_market_flows.get(company_id, [])
@@ -1531,6 +1587,15 @@ func get_active_company_arcs() -> Array:
 
 func get_active_special_events() -> Array:
 	return active_special_events.duplicate(true)
+
+
+func get_company_roadmap_state() -> Dictionary:
+	company_roadmap_state = _normalize_company_roadmap_state(company_roadmap_state)
+	return company_roadmap_state.duplicate(true)
+
+
+func set_company_roadmap_state(next_state: Dictionary) -> void:
+	company_roadmap_state = _normalize_company_roadmap_state(next_state)
 
 
 func get_active_corporate_action_chains() -> Dictionary:
@@ -1961,6 +2026,15 @@ func set_academy_progress(next_progress: Dictionary) -> void:
 	academy_progress = _normalize_academy_progress(next_progress)
 
 
+func get_steam_progress() -> Dictionary:
+	steam_progress = _normalize_steam_progress(steam_progress)
+	return steam_progress.duplicate(true)
+
+
+func set_steam_progress(next_progress: Dictionary) -> void:
+	steam_progress = _normalize_steam_progress(next_progress)
+
+
 func get_upgrade_tiers() -> Dictionary:
 	upgrade_tiers = _normalize_upgrade_tiers(upgrade_tiers)
 	return upgrade_tiers.duplicate(true)
@@ -2088,13 +2162,19 @@ func record_news_snapshot(snapshot: Dictionary) -> void:
 		outlet_label_lookup[str(outlet.get("id", ""))] = str(outlet.get("label", "News"))
 
 	var feeds: Dictionary = snapshot.get("feeds", {})
+	var touched_archive_months: Dictionary = {}
 	for outlet_id_value in feeds.keys():
 		var outlet_id: String = str(outlet_id_value)
 		var feed: Dictionary = feeds.get(outlet_id, {})
 		var outlet_label: String = str(feed.get("outlet_label", outlet_label_lookup.get(outlet_id, "News")))
 		for article_value in feed.get("articles", []):
 			var article: Dictionary = article_value
-			_upsert_news_archive_article(outlet_id, outlet_label, article)
+			var month_key: String = _upsert_news_archive_article(outlet_id, outlet_label, article)
+			if not month_key.is_empty():
+				touched_archive_months[month_key] = true
+
+	for month_key_value in touched_archive_months.keys():
+		_sort_news_archive_month_articles(str(month_key_value))
 
 
 func get_news_archive_years(outlet_id: String) -> Array:
@@ -2901,6 +2981,67 @@ func _normalize_academy_progress(source_progress: Variant) -> Dictionary:
 	return normalized
 
 
+func _default_steam_progress() -> Dictionary:
+	return {
+		"schema_version": 1,
+		"stats": {},
+		"achievements": {},
+		"event_counts": {},
+		"meta": {
+			"month_key": "",
+			"month_start_equity": 0.0,
+			"last_equity": 0.0,
+			"equity_peak": 0.0,
+			"drawdown_armed": false
+		},
+		"last_synced_unix": 0
+	}
+
+
+func _normalize_steam_progress(source_progress: Variant) -> Dictionary:
+	var normalized: Dictionary = _default_steam_progress()
+	if typeof(source_progress) != TYPE_DICTIONARY:
+		return normalized
+
+	var source: Dictionary = source_progress
+	normalized["schema_version"] = max(int(source.get("schema_version", 1)), 1)
+	if typeof(source.get("stats", {})) == TYPE_DICTIONARY:
+		var stats: Dictionary = {}
+		for stat_key_value in source.get("stats", {}).keys():
+			var stat_key: String = str(stat_key_value).strip_edges()
+			if stat_key.is_empty():
+				continue
+			stats[stat_key] = max(int(source.get("stats", {}).get(stat_key_value, 0)), 0)
+		normalized["stats"] = stats
+	if typeof(source.get("achievements", {})) == TYPE_DICTIONARY:
+		var achievements: Dictionary = {}
+		for achievement_key_value in source.get("achievements", {}).keys():
+			var achievement_key: String = str(achievement_key_value).strip_edges()
+			if achievement_key.is_empty():
+				continue
+			achievements[achievement_key] = bool(source.get("achievements", {}).get(achievement_key_value, false))
+		normalized["achievements"] = achievements
+	if typeof(source.get("event_counts", {})) == TYPE_DICTIONARY:
+		var event_counts: Dictionary = {}
+		for event_key_value in source.get("event_counts", {}).keys():
+			var event_key: String = str(event_key_value).strip_edges()
+			if event_key.is_empty():
+				continue
+			event_counts[event_key] = max(int(source.get("event_counts", {}).get(event_key_value, 0)), 0)
+		normalized["event_counts"] = event_counts
+	if typeof(source.get("meta", {})) == TYPE_DICTIONARY:
+		var source_meta: Dictionary = source.get("meta", {})
+		var meta: Dictionary = normalized.get("meta", {})
+		meta["month_key"] = str(source_meta.get("month_key", ""))
+		meta["month_start_equity"] = max(float(source_meta.get("month_start_equity", 0.0)), 0.0)
+		meta["last_equity"] = max(float(source_meta.get("last_equity", 0.0)), 0.0)
+		meta["equity_peak"] = max(float(source_meta.get("equity_peak", 0.0)), 0.0)
+		meta["drawdown_armed"] = bool(source_meta.get("drawdown_armed", false))
+		normalized["meta"] = meta
+	normalized["last_synced_unix"] = max(int(source.get("last_synced_unix", 0)), 0)
+	return normalized
+
+
 func _normalize_index_review_state(source_state: Variant) -> Dictionary:
 	var normalized: Dictionary = {
 		"schema_version": 1,
@@ -2922,12 +3063,65 @@ func _normalize_index_review_state(source_state: Variant) -> Dictionary:
 	return normalized
 
 
+func _default_company_roadmap_state() -> Dictionary:
+	return {
+		"active_milestones": {},
+		"resolved_milestones": {},
+		"company_cooldowns": {},
+		"last_spawn_day_index": -999
+	}
+
+
+func _normalize_company_roadmap_state(source_state: Variant) -> Dictionary:
+	var normalized: Dictionary = _default_company_roadmap_state()
+	if typeof(source_state) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_state
+	for bucket_key in ["active_milestones", "resolved_milestones"]:
+		var source_bucket = source.get(bucket_key, {})
+		if typeof(source_bucket) != TYPE_DICTIONARY:
+			continue
+		var normalized_bucket: Dictionary = {}
+		for milestone_id_value in source_bucket.keys():
+			var milestone_value = source_bucket.get(milestone_id_value, {})
+			if typeof(milestone_value) != TYPE_DICTIONARY:
+				continue
+			var milestone: Dictionary = milestone_value.duplicate(true)
+			var milestone_id: String = str(milestone.get("id", milestone_id_value))
+			var company_id: String = str(milestone.get("company_id", ""))
+			if milestone_id.is_empty() or company_id.is_empty():
+				continue
+			milestone["id"] = milestone_id
+			milestone["company_id"] = company_id
+			milestone["finance_company_id"] = str(milestone.get("finance_company_id", ""))
+			milestone["location_id"] = _normalize_life_location_id(str(milestone.get("location_id", "")), milestone_id)
+			milestone["location_label"] = _life_location_label_for_normalized_id(str(milestone.get("location_id", "")), str(milestone.get("location_label", "")))
+			milestone["start_day_index"] = int(milestone.get("start_day_index", day_index))
+			milestone["end_day_index"] = int(milestone.get("end_day_index", milestone.get("start_day_index", day_index)))
+			milestone["duration_days"] = max(int(milestone.get("duration_days", 1)), 1)
+			milestone["sentiment_shift"] = float(milestone.get("sentiment_shift", 0.0))
+			milestone["volatility_multiplier"] = max(float(milestone.get("volatility_multiplier", 1.0)), 0.1)
+			normalized_bucket[milestone_id] = milestone
+		normalized[bucket_key] = normalized_bucket
+	var source_cooldowns = source.get("company_cooldowns", {})
+	if typeof(source_cooldowns) == TYPE_DICTIONARY:
+		for company_id_value in source_cooldowns.keys():
+			var company_id: String = str(company_id_value)
+			if not company_id.is_empty():
+				normalized["company_cooldowns"][company_id] = int(source_cooldowns.get(company_id_value, 0))
+	normalized["last_spawn_day_index"] = int(source.get("last_spawn_day_index", -999))
+	return normalized
+
+
 func _default_life_state() -> Dictionary:
 	return {
 		"housing_id": "kost_room",
 		"lifestyle_id": "balanced",
 		"basics_tier_id": LIFE_DEFAULT_BASICS_TIER_ID,
 		"monthly_extra": 0.0,
+		"properties": [],
+		"cars": [],
+		"development_leads": [],
 		"stress_value": LIFE_DEFAULT_STRESS_VALUE,
 		"happiness_value": LIFE_DEFAULT_HAPPINESS_VALUE,
 		"burnout_risk_active": false,
@@ -2996,6 +3190,9 @@ func _normalize_life_state(source_life: Variant) -> Dictionary:
 	normalized["lifestyle_id"] = lifestyle_id
 	normalized["basics_tier_id"] = basics_tier_id
 	normalized["monthly_extra"] = max(float(source.get("monthly_extra", 0.0)), 0.0)
+	normalized["properties"] = _normalize_life_properties(source.get("properties", []))
+	normalized["cars"] = _normalize_life_cars(source.get("cars", []))
+	normalized["development_leads"] = _normalize_life_development_leads(source.get("development_leads", []))
 	normalized["stress_value"] = clamp(float(source.get("stress_value", LIFE_DEFAULT_STRESS_VALUE)), 0.0, 100.0)
 	normalized["happiness_value"] = clamp(float(source.get("happiness_value", LIFE_DEFAULT_HAPPINESS_VALUE)), 0.0, 100.0)
 	normalized["burnout_risk_active"] = bool(source.get("burnout_risk_active", false))
@@ -3022,6 +3219,228 @@ func _normalize_life_state(source_life: Variant) -> Dictionary:
 	normalized["legal_state"] = _normalize_life_legal_state(source.get("legal_state", {}))
 	normalized["finance"] = _normalize_life_finance_state(source.get("finance", {}))
 	return normalized
+
+
+func _normalize_life_location_id(location_id: String, seed_key: String = "") -> String:
+	var normalized_location_id: String = location_id.strip_edges().to_lower()
+	if normalized_location_id == "bodetabek" or normalized_location_id == "jabodetabek":
+		var index: int = int(STABLE_RNG.seed_from_parts([run_seed, "legacy_life_location", seed_key, normalized_location_id]) % LEGACY_BODETABEK_LIFE_LOCATION_IDS.size())
+		return str(LEGACY_BODETABEK_LIFE_LOCATION_IDS[index])
+	if normalized_location_id == "bali":
+		return "denpasar"
+	if normalized_location_id.is_empty():
+		return "jakarta"
+	return normalized_location_id
+
+
+func _life_location_label_for_normalized_id(location_id: String, fallback_label: String = "") -> String:
+	var clean_fallback: String = fallback_label.strip_edges()
+	if clean_fallback.to_lower().find("bodetabek") < 0 and clean_fallback.to_lower().find("jabodetabek") < 0 and not clean_fallback.is_empty():
+		return clean_fallback
+	match location_id:
+		"bogor":
+			return "Bogor"
+		"depok":
+			return "Depok"
+		"tangerang":
+			return "Tangerang"
+		"bekasi":
+			return "Bekasi"
+		"karawang":
+			return "Karawang"
+		"bandung":
+			return "Bandung"
+		"surabaya":
+			return "Surabaya"
+		"bali":
+			return "Bali"
+		"denpasar":
+			return "Denpasar"
+	return "Jakarta" if location_id.is_empty() or location_id == "jakarta" else location_id.replace("_", " ").capitalize()
+
+
+func _sanitize_legacy_life_location_text(text_value: String, location_id: String) -> String:
+	var clean_text: String = text_value.strip_edges()
+	if clean_text.is_empty():
+		return ""
+	var location_label: String = _life_location_label_for_normalized_id(location_id)
+	for legacy_label in ["Jabodetabek", "jabodetabek", "Bodetabek", "bodetabek"]:
+		clean_text = clean_text.replace(str(legacy_label), location_label)
+	return clean_text
+
+
+func _normalize_life_properties(source_properties: Variant) -> Array:
+	var rows: Array = []
+	if typeof(source_properties) != TYPE_ARRAY:
+		return rows
+	var saw_primary: bool = false
+	for property_value in source_properties:
+		if typeof(property_value) != TYPE_DICTIONARY:
+			continue
+		var source: Dictionary = property_value
+		var property_id: String = str(source.get("id", ""))
+		if property_id.is_empty():
+			property_id = "property_%d_%d" % [int(source.get("purchased_day_index", day_index)), rows.size()]
+		var current_value: float = max(float(source.get("current_value", source.get("purchase_price", 0.0))), 0.0)
+		var purchase_price: float = max(float(source.get("purchase_price", current_value)), 0.0)
+		var base_value: float = max(float(source.get("base_value", purchase_price if purchase_price > 0.0 else current_value)), 0.0)
+		var is_primary: bool = bool(source.get("is_primary", false)) and not saw_primary
+		var location_id: String = _normalize_life_location_id(str(source.get("location_id", "jakarta")), property_id)
+		if is_primary:
+			saw_primary = true
+		rows.append({
+			"id": property_id,
+			"catalog_id": str(source.get("catalog_id", "")),
+			"location_id": location_id,
+			"label": str(source.get("label", "")),
+			"location_label": _life_location_label_for_normalized_id(location_id, str(source.get("location_label", ""))),
+			"purchase_price": purchase_price,
+			"base_value": base_value,
+			"current_value": current_value,
+			"monthly_upkeep": max(float(source.get("monthly_upkeep", 0.0)), 0.0),
+			"rent_income": max(float(source.get("rent_income", 0.0)), 0.0),
+			"rented_out": bool(source.get("rented_out", false)) and not is_primary,
+			"is_primary": is_primary,
+			"stress_delta": float(source.get("stress_delta", 0.0)),
+			"happiness_delta": float(source.get("happiness_delta", 0.0)),
+			"status_value": max(float(source.get("status_value", 0.0)), 0.0),
+			"value_events": _normalize_life_property_value_events(source.get("value_events", [])),
+			"priced_in_lead_ids": _normalize_string_array(source.get("priced_in_lead_ids", [])),
+			"purchased_day_index": int(source.get("purchased_day_index", day_index)),
+			"purchased_trade_date": source.get("purchased_trade_date", {}).duplicate(true) if typeof(source.get("purchased_trade_date", {})) == TYPE_DICTIONARY else {}
+		})
+	return rows
+
+
+func _normalize_life_property_value_events(source_events: Variant) -> Array:
+	var rows: Array = []
+	if typeof(source_events) != TYPE_ARRAY:
+		return rows
+	for event_value in source_events:
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var source: Dictionary = event_value
+		var lead_id: String = str(source.get("lead_id", ""))
+		if lead_id.is_empty():
+			continue
+		rows.append({
+			"lead_id": lead_id,
+			"label": str(source.get("label", "")),
+			"theme": str(source.get("theme", "")),
+			"theme_label": str(source.get("theme_label", "")),
+			"source_type": str(source.get("source_type", "")),
+			"outcome": str(source.get("outcome", "")),
+			"multiplier": max(float(source.get("multiplier", 1.0)), 0.0),
+			"old_value": max(float(source.get("old_value", 0.0)), 0.0),
+			"new_value": max(float(source.get("new_value", 0.0)), 0.0),
+			"day_index": int(source.get("day_index", day_index)),
+			"trade_date": source.get("trade_date", {}).duplicate(true) if typeof(source.get("trade_date", {})) == TYPE_DICTIONARY else {}
+		})
+	return rows
+
+
+func _normalize_life_development_leads(source_leads: Variant) -> Array:
+	var rows: Array = []
+	if typeof(source_leads) != TYPE_ARRAY:
+		return rows
+	var seen: Dictionary = {}
+	for lead_value in source_leads:
+		if typeof(lead_value) != TYPE_DICTIONARY:
+			continue
+		var source: Dictionary = lead_value
+		var lead_id: String = str(source.get("id", ""))
+		if lead_id.is_empty():
+			lead_id = "development_%d_%d" % [int(source.get("discovered_day_index", day_index)), rows.size()]
+		if seen.has(lead_id):
+			continue
+		seen[lead_id] = true
+		var stage: String = str(source.get("stage", "rumor"))
+		if not (stage in ["rumor", "permit_watch", "confirmed", "delayed", "cancelled"]):
+			stage = "rumor"
+		var outcome: String = str(source.get("outcome", ""))
+		if outcome.is_empty() and bool(source.get("resolved", false)):
+			outcome = stage
+		var clarity_level: int = clamp(int(source.get("clarity_level", 4 if str(source.get("source_type", "")) == "network" else 1)), 1, 4)
+		var location_id: String = _normalize_life_location_id(str(source.get("location_id", "jakarta")), lead_id)
+		rows.append({
+			"id": lead_id,
+			"dedupe_key": str(source.get("dedupe_key", "")),
+			"location_id": location_id,
+			"location_label": _life_location_label_for_normalized_id(location_id, str(source.get("location_label", ""))),
+			"theme": str(source.get("theme", "modern_city")),
+			"theme_label": str(source.get("theme_label", "")),
+			"source_type": str(source.get("source_type", "")),
+			"source_id": str(source.get("source_id", "")),
+			"source_label": _sanitize_legacy_life_location_text(str(source.get("source_label", "")), location_id),
+			"source_note": _sanitize_legacy_life_location_text(str(source.get("source_note", "")), location_id),
+			"contact_id": str(source.get("contact_id", "")),
+			"contact_name": str(source.get("contact_name", "")),
+			"discovered_day_index": int(source.get("discovered_day_index", day_index)),
+			"discovered_trade_date": source.get("discovered_trade_date", {}).duplicate(true) if typeof(source.get("discovered_trade_date", {})) == TYPE_DICTIONARY else {},
+			"stage": stage,
+			"reliability": clamp(float(source.get("reliability", 50.0)), 0.0, 100.0),
+			"clarity_level": clarity_level,
+			"clarity_label": str(source.get("clarity_label", "")),
+			"display_location_label": _sanitize_legacy_life_location_text(str(source.get("display_location_label", "")), location_id),
+			"display_theme_label": str(source.get("display_theme_label", "")),
+			"impact_tier": str(source.get("impact_tier", "moderate")),
+			"due_day_index": int(source.get("due_day_index", int(source.get("discovered_day_index", day_index)) + 5)),
+			"resolved": bool(source.get("resolved", false)),
+			"outcome": outcome,
+			"value_multiplier": max(float(source.get("value_multiplier", 1.0)), 0.0),
+			"public_confirmed": bool(source.get("public_confirmed", false)),
+			"applied_property_ids": _normalize_string_array(source.get("applied_property_ids", [])),
+			"delay_count": max(int(source.get("delay_count", 0)), 0),
+			"outcome_override": str(source.get("outcome_override", ""))
+		})
+	return rows
+
+
+func _normalize_string_array(source_values: Variant) -> Array:
+	var rows: Array = []
+	if typeof(source_values) != TYPE_ARRAY:
+		return rows
+	var seen: Dictionary = {}
+	for value in source_values:
+		var text: String = str(value).strip_edges()
+		if text.is_empty() or seen.has(text):
+			continue
+		seen[text] = true
+		rows.append(text)
+	return rows
+
+
+func _normalize_life_cars(source_cars: Variant) -> Array:
+	var rows: Array = []
+	if typeof(source_cars) != TYPE_ARRAY:
+		return rows
+	var saw_active: bool = false
+	for car_value in source_cars:
+		if typeof(car_value) != TYPE_DICTIONARY:
+			continue
+		var source: Dictionary = car_value
+		var car_id: String = str(source.get("id", ""))
+		if car_id.is_empty():
+			car_id = "car_%d_%d" % [int(source.get("purchased_day_index", day_index)), rows.size()]
+		var current_value: float = max(float(source.get("current_value", source.get("purchase_price", 0.0))), 0.0)
+		var is_active: bool = bool(source.get("is_active", false)) and not saw_active
+		if is_active:
+			saw_active = true
+		rows.append({
+			"id": car_id,
+			"catalog_id": str(source.get("catalog_id", "")),
+			"label": str(source.get("label", "")),
+			"purchase_price": max(float(source.get("purchase_price", current_value)), 0.0),
+			"current_value": current_value,
+			"monthly_upkeep": max(float(source.get("monthly_upkeep", 0.0)), 0.0),
+			"status_value": max(float(source.get("status_value", 0.0)), 0.0),
+			"stress_delta": float(source.get("stress_delta", 0.0)),
+			"happiness_delta": float(source.get("happiness_delta", 0.0)),
+			"is_active": is_active,
+			"purchased_day_index": int(source.get("purchased_day_index", day_index)),
+			"purchased_trade_date": source.get("purchased_trade_date", {}).duplicate(true) if typeof(source.get("purchased_trade_date", {})) == TYPE_DICTIONARY else {}
+		})
+	return rows
 
 
 func _normalize_life_legal_state(source_legal: Variant) -> Dictionary:
@@ -5678,15 +6097,15 @@ func _record_market_history(summary: Dictionary) -> void:
 		market_history = market_history.slice(market_history.size() - MAX_MARKET_HISTORY, market_history.size())
 
 
-func _upsert_news_archive_article(outlet_id: String, outlet_label: String, article: Dictionary) -> void:
+func _upsert_news_archive_article(outlet_id: String, outlet_label: String, article: Dictionary) -> String:
 	if article.is_empty():
-		return
+		return ""
 
 	var trade_date: Dictionary = article.get("trade_date", {}).duplicate(true)
 	var year_number: int = int(trade_date.get("year", 0))
 	var month_number: int = int(trade_date.get("month", 0))
 	if year_number <= 0 or month_number <= 0:
-		return
+		return ""
 
 	var source_article_id: String = str(article.get("id", ""))
 	var archive_article_id: String = "%s|%d|%s" % [
@@ -5699,6 +6118,7 @@ func _upsert_news_archive_article(outlet_id: String, outlet_label: String, artic
 		"source_article_id": source_article_id,
 		"outlet_id": outlet_id,
 		"outlet_label": outlet_label,
+		"intel_level": int(article.get("intel_level", 1)),
 		"headline": str(article.get("headline", "")),
 		"deck": str(article.get("deck", "")),
 		"body": str(article.get("body", "")),
@@ -5713,6 +6133,13 @@ func _upsert_news_archive_article(outlet_id: String, outlet_label: String, artic
 		"event_family": str(article.get("event_family", "")),
 		"source_chain_id": str(article.get("source_chain_id", "")),
 		"chain_family": str(article.get("chain_family", "")),
+		"is_property_development_story": bool(article.get("is_property_development_story", false)),
+		"property_development_source_article_id": str(article.get("property_development_source_article_id", "")),
+		"property_development_clarity": int(article.get("property_development_clarity", 0)),
+		"property_development_location_id": str(article.get("property_development_location_id", "")),
+		"property_development_theme": str(article.get("property_development_theme", "")),
+		"property_development_location_label": str(article.get("property_development_location_label", "")),
+		"property_development_theme_label": str(article.get("property_development_theme_label", "")),
 		"meeting_id": str(article.get("meeting_id", "")),
 		"venue_type": str(article.get("venue_type", "")),
 		"author_id": str(article.get("author_id", "")),
@@ -5742,6 +6169,14 @@ func _upsert_news_archive_article(outlet_id: String, outlet_label: String, artic
 		"target_company_id": str(article_record.get("target_company_id", "")),
 		"target_ticker": str(article_record.get("target_ticker", "")),
 		"chain_family": str(article_record.get("chain_family", "")),
+		"is_property_development_story": bool(article_record.get("is_property_development_story", false)),
+		"property_development_source_article_id": str(article_record.get("property_development_source_article_id", "")),
+		"intel_level": int(article_record.get("intel_level", 1)),
+		"property_development_clarity": int(article_record.get("property_development_clarity", 0)),
+		"property_development_location_id": str(article_record.get("property_development_location_id", "")),
+		"property_development_theme": str(article_record.get("property_development_theme", "")),
+		"property_development_location_label": str(article_record.get("property_development_location_label", "")),
+		"property_development_theme_label": str(article_record.get("property_development_theme_label", "")),
 		"author_name": str(article_record.get("author_name", "")),
 		"author_role": str(article_record.get("author_role", "")),
 		"public_section_label": str(article_record.get("public_section_label", "")),
@@ -5753,27 +6188,39 @@ func _upsert_news_archive_article(outlet_id: String, outlet_label: String, artic
 		"public_continuity_phrase": str(article_record.get("public_continuity_phrase", ""))
 	}
 
-	var outlet_bucket: Dictionary = news_archive_index.get(outlet_id, {
-		"outlet_label": outlet_label,
-		"years": {}
-	}).duplicate(true)
+	if not news_archive_index.has(outlet_id):
+		news_archive_index[outlet_id] = {
+			"outlet_label": outlet_label,
+			"years": {}
+		}
+	var outlet_bucket: Dictionary = news_archive_index.get(outlet_id, {})
 	outlet_bucket["outlet_label"] = outlet_label
 
-	var years_bucket: Dictionary = outlet_bucket.get("years", {}).duplicate(true)
+	if not outlet_bucket.has("years") or not (outlet_bucket.get("years", {}) is Dictionary):
+		outlet_bucket["years"] = {}
+	var years_bucket: Dictionary = outlet_bucket.get("years", {})
 	var year_key: String = str(year_number)
-	var year_bucket: Dictionary = years_bucket.get(year_key, {
-		"year": year_number,
-		"months": {}
-	}).duplicate(true)
+	if not years_bucket.has(year_key):
+		years_bucket[year_key] = {
+			"year": year_number,
+			"months": {}
+		}
+	var year_bucket: Dictionary = years_bucket.get(year_key, {})
 
-	var months_bucket: Dictionary = year_bucket.get("months", {}).duplicate(true)
+	if not year_bucket.has("months") or not (year_bucket.get("months", {}) is Dictionary):
+		year_bucket["months"] = {}
+	var months_bucket: Dictionary = year_bucket.get("months", {})
 	var month_key: String = str(month_number)
-	var month_bucket: Dictionary = months_bucket.get(month_key, {
-		"month": month_number,
-		"articles": []
-	}).duplicate(true)
+	if not months_bucket.has(month_key):
+		months_bucket[month_key] = {
+			"month": month_number,
+			"articles": []
+		}
+	var month_bucket: Dictionary = months_bucket.get(month_key, {})
 
-	var article_summaries: Array = month_bucket.get("articles", []).duplicate(true)
+	if not month_bucket.has("articles") or not (month_bucket.get("articles", []) is Array):
+		month_bucket["articles"] = []
+	var article_summaries: Array = month_bucket.get("articles", [])
 	var replaced: bool = false
 	for article_index in range(article_summaries.size()):
 		var existing_summary: Dictionary = article_summaries[article_index]
@@ -5783,6 +6230,36 @@ func _upsert_news_archive_article(outlet_id: String, outlet_label: String, artic
 			break
 	if not replaced:
 		article_summaries.append(summary_entry)
+
+	month_bucket["articles"] = article_summaries
+	months_bucket[month_key] = month_bucket
+	year_bucket["months"] = months_bucket
+	years_bucket[year_key] = year_bucket
+	outlet_bucket["years"] = years_bucket
+	news_archive_index[outlet_id] = outlet_bucket
+	return _news_archive_month_sort_key(outlet_id, year_key, month_key)
+
+
+func _news_archive_month_sort_key(outlet_id: String, year_key: String, month_key: String) -> String:
+	return "%s|%s|%s" % [outlet_id, year_key, month_key]
+
+
+func _sort_news_archive_month_articles(sort_key: String) -> void:
+	var key_parts: PackedStringArray = sort_key.split("|")
+	if key_parts.size() != 3:
+		return
+
+	var outlet_id: String = str(key_parts[0])
+	var year_key: String = str(key_parts[1])
+	var month_key: String = str(key_parts[2])
+	var outlet_bucket: Dictionary = news_archive_index.get(outlet_id, {})
+	var years_bucket: Dictionary = outlet_bucket.get("years", {})
+	var year_bucket: Dictionary = years_bucket.get(year_key, {})
+	var months_bucket: Dictionary = year_bucket.get("months", {})
+	var month_bucket: Dictionary = months_bucket.get(month_key, {})
+	var article_summaries: Array = month_bucket.get("articles", [])
+	if article_summaries.size() <= 1:
+		return
 
 	article_summaries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if int(a.get("day_index", -1)) == int(b.get("day_index", -1)):
@@ -6110,6 +6587,12 @@ func _normalize_company_profile(company_profile: Dictionary) -> Dictionary:
 	normalized_profile["company_size_label"] = str(normalized_profile.get("company_size_label", ""))
 	normalized_profile["profile_revenue_unit"] = str(normalized_profile.get("profile_revenue_unit", ""))
 	normalized_profile["profile_description"] = str(normalized_profile.get("profile_description", ""))
+	if normalized_profile.has("location_profile"):
+		var location_profile_value = normalized_profile.get("location_profile", {})
+		normalized_profile["location_profile"] = location_profile_value.duplicate(true) if typeof(location_profile_value) == TYPE_DICTIONARY else {}
+	if normalized_profile.has("roadmap_profile"):
+		var roadmap_profile_value = normalized_profile.get("roadmap_profile", {})
+		normalized_profile["roadmap_profile"] = roadmap_profile_value.duplicate(true) if typeof(roadmap_profile_value) == TYPE_DICTIONARY else {}
 	var profile_tags: Array = []
 	for tag_value in normalized_profile.get("profile_tags", []):
 		var tag: String = str(tag_value).strip_edges()
@@ -6310,6 +6793,29 @@ func _ensure_company_profiles() -> void:
 	for company_id_value in company_order:
 		var company_id: String = str(company_id_value)
 		ensure_company_core_profile(company_id)
+
+
+func _ensure_company_roadmap_profiles() -> void:
+	for company_id_value in company_order:
+		var company_id: String = str(company_id_value)
+		if company_id.is_empty() or not companies.has(company_id):
+			continue
+		var runtime: Dictionary = companies.get(company_id, {}).duplicate(true)
+		var company_profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
+		if company_profile.is_empty():
+			continue
+		var base_definition: Dictionary = _get_base_company_definition(company_id)
+		if base_definition.is_empty():
+			continue
+		var sector_definition: Dictionary = DataRepository.get_sector_definition(str(base_definition.get("sector_id", company_profile.get("sector_id", ""))))
+		var ensured_profile: Dictionary = company_generator.ensure_company_life_profile(
+			company_profile,
+			base_definition,
+			sector_definition,
+			run_seed
+		)
+		runtime["company_profile"] = _normalize_company_profile(ensured_profile)
+		companies[company_id] = runtime
 
 
 func _get_base_company_definition(company_id: String) -> Dictionary:

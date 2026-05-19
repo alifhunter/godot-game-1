@@ -105,9 +105,11 @@ If you want to inspect the latest implementation status first, read [`PROJECT_HA
 
 For Steam Early Access testing prep:
 
+- [`docs/STEAM_BUILD_UPLOAD_GUIDE.md`](./docs/STEAM_BUILD_UPLOAD_GUIDE.md) is the repeatable Godot export, SteamPipe upload, branch, launch-option, and Cloud verification guide.
+- [`docs/STEAM_PLAYTEST_CHECKLIST.md`](./docs/STEAM_PLAYTEST_CHECKLIST.md) is the Steam-launch platform checklist for testers.
 - [`docs/KNOWN_ISSUES.md`](./docs/KNOWN_ISSUES.md) tracks current player-facing issues and workarounds.
 - [`docs/BUG_REPORT_TEMPLATE.md`](./docs/BUG_REPORT_TEMPLATE.md) is the tester bug-report format.
-- [`docs/STEAM_ACHIEVEMENT_IDS.md`](./docs/STEAM_ACHIEVEMENT_IDS.md) lists planned Steam achievement/stat API names.
+- [`docs/STEAM_ACHIEVEMENT_IDS.md`](./docs/STEAM_ACHIEVEMENT_IDS.md) lists implemented Steam achievement/stat API names and setup notes.
 - [`docs/STEAM_CLOUD_SAVE_PATHS.md`](./docs/STEAM_CLOUD_SAVE_PATHS.md) maps the current save files to Steam Auto-Cloud setup.
 
 ## Project Structure

@@ -70,6 +70,63 @@ func ensure_initialized(run_state, data_repository) -> void:
 		run_state.set_shareholder_registry(shareholder_registry)
 
 
+func schedule_roadmap_chain(
+	run_state,
+	data_repository,
+	company_id: String,
+	family_id: String,
+	day_number: int,
+	trade_date: Dictionary,
+	roadmap_context: Dictionary = {},
+	chains_override: Dictionary = {},
+	calendar_override: Dictionary = {}
+) -> Dictionary:
+	var catalog: Dictionary = data_repository.get_corporate_action_catalog()
+	if catalog.is_empty() or company_id.is_empty() or family_id.is_empty():
+		return {"success": false, "reason": "missing_context"}
+	var chains: Dictionary = chains_override.duplicate(true) if not chains_override.is_empty() else run_state.get_active_corporate_action_chains()
+	var calendar: Dictionary = calendar_override.duplicate(true) if not calendar_override.is_empty() else run_state.get_corporate_meeting_calendar()
+	if _company_has_live_chain(chains, company_id):
+		return {"success": false, "reason": "company_has_live_chain"}
+	if not V1_FAMILY_IDS.has(family_id):
+		return {"success": false, "reason": "unsupported_family"}
+	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, family_id, day_number)
+	if chain.is_empty():
+		return {"success": false, "reason": "chain_build_failed"}
+	var roadmap_chain_id: String = "ca|roadmap|%s|%s|%d" % [family_id, company_id, day_number]
+	chain["chain_id"] = roadmap_chain_id
+	chain["request_source"] = "company_roadmap"
+	chain["roadmap_context"] = roadmap_context.duplicate(true)
+	chain["next_expected_step"] = "Watch for funding paperwork or a meeting notice."
+	if str(chain.get("expected_meeting_type", "")) == "annual_rups":
+		_attach_chain_to_existing_annual_meeting(run_state, chain, calendar)
+	chains[roadmap_chain_id] = chain
+	var project_label: String = str(roadmap_context.get("project_label", roadmap_context.get("roadmap_family_label", "roadmap project")))
+	var event: Dictionary = _build_public_event(
+		catalog,
+		chain,
+		trade_date,
+		day_number,
+		"corporate_action_rumor",
+		"%s funding route watched for %s" % [
+			str(chain.get("target_ticker", "")),
+			project_label
+		],
+		"%s is being watched for a possible %s tied to its %s plan." % [
+			str(chain.get("target_company_name", "")),
+			_family_label(family_id).to_lower(),
+			project_label
+		]
+	)
+	return {
+		"success": true,
+		"chain": chain,
+		"events": [event] if not event.is_empty() else [],
+		"active_corporate_action_chains": chains,
+		"corporate_meeting_calendar": calendar
+	}
+
+
 func _corporate_action_year_window(run_state, catalog: Dictionary) -> Dictionary:
 	var annual_config: Dictionary = catalog.get("annual_rups", {})
 	var configured_start_year: int = int(annual_config.get("start_year", 2020))
@@ -489,6 +546,127 @@ func get_company_snapshot(run_state, company_id: String) -> Dictionary:
 	}
 
 
+func get_company_timeline_snapshot(run_state, company_id: String) -> Dictionary:
+	if company_id.is_empty():
+		return {"company_id": company_id, "rows": []}
+	var rows: Array = []
+	var current_day_number: int = int(run_state.day_index) + 1
+	var chains: Dictionary = run_state.get_active_corporate_action_chains()
+	for chain_value in _company_chains(chains, company_id):
+		if typeof(chain_value) != TYPE_DICTIONARY:
+			continue
+		var chain: Dictionary = chain_value
+		var chain_id: String = str(chain.get("chain_id", ""))
+		rows.append({
+			"id": "chain_%s" % chain_id,
+			"source_id": chain_id,
+			"company_id": company_id,
+			"ticker": str(chain.get("target_ticker", "")),
+			"row_type": "chain",
+			"filter": "events",
+			"type_label": _family_label(str(chain.get("family", ""))),
+			"title": "%s in progress" % _family_label(str(chain.get("family", ""))),
+			"summary": _meeting_public_summary(chain),
+			"status_label": _timeline_state_label(str(chain.get("current_timeline_state", chain.get("stage", "")))),
+			"sort_day": int(chain.get("last_advanced_day_index", chain.get("started_day_index", current_day_number))),
+			"current_day_number": current_day_number,
+			"trade_date": trading_calendar.trade_date_for_index(max(int(chain.get("last_advanced_day_index", chain.get("started_day_index", current_day_number))), 1)),
+			"fields": [
+				{"label": "Stage", "value": str(chain.get("stage", "")).replace("_", " ").capitalize()},
+				{"label": "Management", "value": _management_stance_label(str(chain.get("management_stance", "")))},
+				{"label": "Next", "value": str(chain.get("next_expected_step", "Watch the next filing or meeting."))}
+			]
+		})
+	for meeting_value in _company_meetings(run_state.get_corporate_meeting_calendar(), company_id):
+		if typeof(meeting_value) != TYPE_DICTIONARY:
+			continue
+		var meeting: Dictionary = meeting_value
+		if not _meeting_is_player_visible(meeting):
+			continue
+		var meeting_row: Dictionary = _meeting_row(meeting, run_state)
+		rows.append({
+			"id": "meeting_%s" % str(meeting_row.get("id", "")),
+			"source_id": str(meeting_row.get("id", "")),
+			"meeting_id": str(meeting_row.get("id", "")),
+			"company_id": str(meeting_row.get("company_id", company_id)),
+			"company_name": str(meeting_row.get("company_name", "")),
+			"ticker": str(meeting_row.get("ticker", "")),
+			"row_type": "meeting",
+			"filter": "meetings",
+			"type_label": str(meeting_row.get("meeting_label", "Meeting")),
+			"title": str(meeting_row.get("meeting_label", "Meeting")),
+			"summary": str(meeting_row.get("public_summary", "")),
+			"status_label": "Attended" if bool(meeting_row.get("attended", false)) else str(meeting_row.get("status", "scheduled")).replace("_", " ").capitalize(),
+			"sort_day": int(meeting_row.get("trading_day_number", 0)),
+			"current_day_number": current_day_number,
+			"trade_date": meeting_row.get("trade_date", {}).duplicate(true),
+			"attended": bool(meeting_row.get("attended", false)),
+			"requires_shareholder": bool(meeting_row.get("requires_shareholder", false)),
+			"attendance_eligible": bool(meeting_row.get("attendance_eligible", true)),
+			"attendance_blocked_reason": str(meeting_row.get("attendance_blocked_reason", "")),
+			"player_shares_owned": int(meeting_row.get("player_shares_owned", 0)),
+			"current_shares_owned": int(meeting_row.get("current_shares_owned", 0)),
+			"record_day_number": int(meeting_row.get("record_day_number", 0)),
+			"record_trade_date": meeting_row.get("record_trade_date", {}).duplicate(true),
+			"shareholder_recorded": bool(meeting_row.get("shareholder_recorded", false)),
+			"shareholder_record_pending": bool(meeting_row.get("shareholder_record_pending", false)),
+			"fields": [
+				{"label": "Event Date", "date": meeting_row.get("trade_date", {}).duplicate(true)},
+				{"label": "Record Date", "date": meeting_row.get("record_trade_date", {}).duplicate(true)},
+				{"label": "Eligibility", "value": "Eligible" if bool(meeting_row.get("attendance_eligible", true)) else "Shares required"},
+				{"label": "Venue", "value": _meeting_venue_label(str(meeting_row.get("meeting_type", "")))}
+			]
+		})
+	for dividend_value in get_dividend_snapshot(run_state, company_id).get("rows", []):
+		if typeof(dividend_value) != TYPE_DICTIONARY:
+			continue
+		var dividend: Dictionary = dividend_value
+		var dividend_row: Dictionary = _timeline_row_from_dividend(dividend)
+		dividend_row["current_day_number"] = current_day_number
+		rows.append(dividend_row)
+	for event_value in run_state.get_event_history():
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event: Dictionary = event_value
+		if str(event.get("event_family", "")) != "corporate_action":
+			continue
+		if str(event.get("target_company_id", "")) != company_id:
+			continue
+		rows.append({
+			"id": "event_%s_%d_%s" % [str(event.get("event_id", "corporate")), int(event.get("day_index", 0)), str(event.get("category", ""))],
+			"source_id": str(event.get("event_id", "")),
+			"company_id": company_id,
+			"ticker": str(event.get("target_ticker", "")),
+			"row_type": "event",
+			"filter": "events",
+			"type_label": _corporate_event_category_label(str(event.get("category", ""))),
+			"title": str(event.get("headline", _corporate_event_category_label(str(event.get("category", ""))))),
+			"summary": str(event.get("summary", event.get("description", ""))),
+			"status_label": str(event.get("tone", "mixed")).capitalize(),
+			"sort_day": int(event.get("day_index", 0)) + 1,
+			"current_day_number": current_day_number,
+			"trade_date": event.get("trade_date", {}).duplicate(true),
+			"category": str(event.get("category", "")),
+			"impact": str(event.get("tone", "mixed")),
+			"fields": [
+				{"label": "Category", "value": _corporate_event_category_label(str(event.get("category", "")))},
+				{"label": "Tone", "value": str(event.get("tone", "mixed")).capitalize()}
+			]
+		})
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a.get("sort_day", 0)) == int(b.get("sort_day", 0)):
+			return str(a.get("type_label", "")) < str(b.get("type_label", ""))
+		return int(a.get("sort_day", 0)) > int(b.get("sort_day", 0))
+	)
+	if rows.size() > 80:
+		rows = rows.slice(0, 80)
+	return {
+		"company_id": company_id,
+		"day_index": run_state.day_index,
+		"rows": rows
+	}
+
+
 func get_dividend_snapshot(run_state, company_id: String = "") -> Dictionary:
 	var calendar: Dictionary = run_state.get_corporate_dividend_calendar()
 	var rows: Array = []
@@ -525,6 +703,103 @@ func get_dividend_snapshot(run_state, company_id: String = "") -> Dictionary:
 		"declared_rows": declared_rows,
 		"paid_rows": paid_rows
 	}
+
+
+func _timeline_row_from_dividend(dividend: Dictionary) -> Dictionary:
+	var action_type: String = str(dividend.get("action_type", "cash_dividend"))
+	var stock_dividend: bool = action_type == "stock_dividend"
+	var amount_text: String = _format_distribution_percent(float(dividend.get("stock_dividend_ratio", 0.0))) if stock_dividend else _format_rupiah_per_share(float(dividend.get("amount_per_share", 0.0)))
+	var type_label: String = "Stock Dividend" if stock_dividend else "Dividend"
+	var ex_day_number: int = int(dividend.get("ex_day_number", 0))
+	var cum_trade_date: Dictionary = dividend.get("approval_trade_date", {}).duplicate(true)
+	if ex_day_number > 1:
+		cum_trade_date = trading_calendar.trade_date_for_index(ex_day_number - 1)
+	var payment_status: String = str(dividend.get("payment_status", "pending"))
+	var status_label: String = "Paid" if payment_status == "paid" or str(dividend.get("status", "")) == "paid" else str(dividend.get("status", "scheduled")).replace("_", " ").capitalize()
+	return {
+		"id": "dividend_%s" % str(dividend.get("id", "")),
+		"source_id": str(dividend.get("id", "")),
+		"dividend_id": str(dividend.get("id", "")),
+		"company_id": str(dividend.get("company_id", "")),
+		"company_name": str(dividend.get("company_name", "")),
+		"ticker": str(dividend.get("ticker", "")),
+		"row_type": "dividend",
+		"filter": "dividends",
+		"type_label": type_label,
+		"title": "%s %s" % [type_label, amount_text],
+		"summary": "%s timetable for %s." % [type_label, str(dividend.get("ticker", ""))],
+		"status_label": status_label,
+		"sort_day": int(dividend.get("payment_day_number", dividend.get("approval_day_number", 0))),
+		"trade_date": dividend.get("payment_trade_date", dividend.get("approval_trade_date", {})).duplicate(true),
+		"action_type": action_type,
+		"amount_text": amount_text,
+		"amount_per_share": float(dividend.get("amount_per_share", 0.0)),
+		"stock_dividend_ratio": float(dividend.get("stock_dividend_ratio", 0.0)),
+		"current_shares_owned": int(dividend.get("current_shares_owned", 0)),
+		"eligible_shares": int(dividend.get("eligible_shares", 0)),
+		"projected_amount": float(dividend.get("projected_amount", 0.0)),
+		"projected_bonus_shares": int(dividend.get("projected_bonus_shares", 0)),
+		"shareholder_recorded": bool(dividend.get("shareholder_recorded", false)),
+		"shareholder_record_pending": bool(dividend.get("shareholder_record_pending", false)),
+		"approval_day_number": int(dividend.get("approval_day_number", 0)),
+		"ex_day_number": int(dividend.get("ex_day_number", 0)),
+		"record_day_number": int(dividend.get("record_day_number", 0)),
+		"payment_day_number": int(dividend.get("payment_day_number", 0)),
+		"payment_status": payment_status,
+		"approval_trade_date": dividend.get("approval_trade_date", {}).duplicate(true),
+		"ex_trade_date": dividend.get("ex_trade_date", {}).duplicate(true),
+		"record_trade_date": dividend.get("record_trade_date", {}).duplicate(true),
+		"payment_trade_date": dividend.get("payment_trade_date", {}).duplicate(true),
+		"fields": [
+			{"label": type_label, "value": amount_text},
+			{"label": "Cum Date", "date": cum_trade_date},
+			{"label": "Ex Date", "date": dividend.get("ex_trade_date", {}).duplicate(true)},
+			{"label": "Recording Date", "date": dividend.get("record_trade_date", {}).duplicate(true)},
+			{"label": "Payment Date", "date": dividend.get("payment_trade_date", {}).duplicate(true)}
+		]
+	}
+
+
+func _format_rupiah_per_share(value: float) -> String:
+	if is_equal_approx(value, round(value)):
+		return "Rp %d" % int(round(value))
+	return "Rp %s" % String.num(value, 2)
+
+
+func _meeting_venue_label(meeting_type: String) -> String:
+	match meeting_type:
+		"annual_rups":
+			return "Annual RUPS notice"
+		"rupslb":
+			return "Extraordinary shareholder meeting"
+		"earnings_call":
+			return "Public earnings call"
+		_:
+			return _meeting_type_label(meeting_type)
+
+
+func _corporate_event_category_label(category: String) -> String:
+	match category:
+		"corporate_action_rumor":
+			return "Rumor"
+		"corporate_action_speculation":
+			return "Speculation"
+		"corporate_action_clarification":
+			return "Clarification"
+		"corporate_action_filing":
+			return "Filing"
+		"corporate_action_resolution":
+			return "Resolution"
+		"corporate_action_execution":
+			return "Execution"
+		"corporate_action_denial":
+			return "Denial"
+		"corporate_action_cancellation":
+			return "Cancellation"
+		"corporate_meeting":
+			return "Meeting"
+		_:
+			return category.replace("_", " ").capitalize()
 
 
 func attend_meeting(run_state, meeting_id: String) -> Dictionary:
@@ -1417,7 +1692,7 @@ func _maybe_spawn_chain(
 			str(chain.get("target_ticker", "")),
 			_family_label(family_id)
 		],
-		"%s is starting to attract quiet positioning around a possible %s storyline." % [
+		"%s is starting to attract quiet positioning around a possible %s proposal." % [
 			str(chain.get("target_company_name", "")),
 			_family_label(family_id).to_lower()
 		]
@@ -3090,7 +3365,7 @@ func _advance_chain(
 							str(chain.get("target_ticker", "")),
 							_meeting_type_label(str(chain.get("expected_meeting_type", "")))
 						],
-						"%s now has a formal %s on the calendar tied to its %s storyline." % [
+						"%s now has a formal %s on the calendar tied to its %s proposal." % [
 							str(chain.get("target_company_name", "")),
 							_meeting_type_label(str(chain.get("expected_meeting_type", ""))).to_lower(),
 							_family_label(str(chain.get("family", ""))).to_lower()
@@ -4613,7 +4888,7 @@ func _build_meeting_event(chain: Dictionary, trade_date: Dictionary, day_number:
 			str(chain.get("target_ticker", "")),
 			_meeting_type_label(str(chain.get("expected_meeting_type", "")))
 		],
-		"summary": "%s is holding a %s tied to its %s storyline." % [
+		"summary": "%s is holding a %s tied to its %s proposal." % [
 			str(chain.get("target_company_name", "")),
 			_meeting_type_label(str(chain.get("expected_meeting_type", ""))).to_lower(),
 			_family_label(str(chain.get("family", ""))).to_lower()
@@ -6594,6 +6869,32 @@ func _management_stance_for_stage(chain: Dictionary, _stage_template_data: Dicti
 			return str(chain.get("management_stance", "silent"))
 
 
+func _public_stage_label(stage_id: String) -> String:
+	match stage_id:
+		"hidden_positioning":
+			return "quiet positioning"
+		"unusual_activity":
+			return "unusual trading"
+		"rumor_leak":
+			return "market speculation"
+		"public_speculation":
+			return "public speculation"
+		"management_response":
+			return "management response"
+		"formal_agenda_or_filing":
+			return "formal notice"
+		"meeting_or_call":
+			return "meeting notice"
+		"resolution":
+			return "resolution watch"
+		"execution":
+			return "execution"
+		"aftermath":
+			return "aftermath"
+		_:
+			return stage_id.replace("_", " ")
+
+
 func _meeting_type_label(meeting_type: String) -> String:
 	match meeting_type:
 		"earnings_call":
@@ -6631,29 +6932,30 @@ func _next_step_hint(stage_id: String, chain: Dictionary) -> String:
 
 
 func _meeting_public_summary(chain: Dictionary) -> String:
+	var stage_label: String = _public_stage_label(str(chain.get("stage", "")))
 	if str(chain.get("family", "")) == "rights_issue":
 		var rights_terms: Dictionary = chain.get("rights_terms", {})
 		if not rights_terms.is_empty():
 			if bool(rights_terms.get("linked_backdoor_listing", false)):
-				return "%s is in the %s stage of a backdoor-linked rights issue, with a 1-for-%d entitlement at Rp%s per share to fund %s." % [
+				return "%s has a backdoor-linked rights issue in %s, with a 1-for-%d entitlement at Rp%s per share to fund %s." % [
 					str(chain.get("target_company_name", "")),
-					str(chain.get("stage", "")).replace("_", " "),
+					stage_label,
 					int(rights_terms.get("ratio_denominator", 1)),
 					String.num(float(rights_terms.get("exercise_price", 0.0)), 2),
 					str(rights_terms.get("funding_purpose", "growth capex"))
 				]
-			return "%s is in the %s stage of a rights issue mandate, with a 1-for-%d entitlement at Rp%s per share." % [
+			return "%s has a rights issue mandate in %s, with a 1-for-%d entitlement at Rp%s per share." % [
 				str(chain.get("target_company_name", "")),
-				str(chain.get("stage", "")).replace("_", " "),
+				stage_label,
 				int(rights_terms.get("ratio_denominator", 1)),
 				String.num(float(rights_terms.get("exercise_price", 0.0)), 2)
 			]
 	if str(chain.get("family", "")) == "stock_buyback":
 		var terms: Dictionary = chain.get("buyback_terms", {})
 		if not terms.is_empty():
-			return "%s is in the %s stage of a stock buyback mandate, with up to %d shares authorized and %d shares expected to be retired." % [
+			return "%s has a stock buyback mandate in %s, with up to %d shares authorized and %d shares expected to be retired." % [
 				str(chain.get("target_company_name", "")),
-				str(chain.get("stage", "")).replace("_", " "),
+				stage_label,
 				int(terms.get("authorized_shares", 0)),
 				int(terms.get("executed_shares", 0))
 			]
@@ -6661,10 +6963,10 @@ func _meeting_public_summary(chain: Dictionary) -> String:
 		var terms: Dictionary = chain.get("split_terms", {})
 		if not terms.is_empty():
 			var action_label: String = "reverse stock split" if str(terms.get("split_type", "split")) == "reverse_split" else "stock split"
-			return "%s is in the %s stage of a %s mandate, with a %d-for-%d ratio and an ex-split reference price near Rp%s." % [
+			return "%s has a %s mandate in %s, with a %d-for-%d ratio and an ex-split reference price near Rp%s." % [
 				str(chain.get("target_company_name", "")),
-				str(chain.get("stage", "")).replace("_", " "),
 				action_label,
+				stage_label,
 				int(terms.get("ratio_numerator", 1)),
 				int(terms.get("ratio_denominator", 1)),
 				String.num(float(terms.get("theoretical_ex_split_price", 0.0)), 2)
@@ -6672,9 +6974,9 @@ func _meeting_public_summary(chain: Dictionary) -> String:
 	if str(chain.get("family", "")) == "tender_offer":
 		var terms: Dictionary = chain.get("tender_terms", {})
 		if not terms.is_empty():
-			return "%s is in the %s stage of a tender offer, with %s offering Rp%s for up to %d shares." % [
+			return "%s has a tender offer in %s, with %s offering Rp%s for up to %d shares." % [
 				str(chain.get("target_company_name", "")),
-				str(chain.get("stage", "")).replace("_", " "),
+				stage_label,
 				str(terms.get("offeror_label", "strategic acquirer")),
 				String.num(float(terms.get("offer_price", 0.0)), 2),
 				int(terms.get("offer_shares", 0))
@@ -6682,19 +6984,19 @@ func _meeting_public_summary(chain: Dictionary) -> String:
 	if str(chain.get("family", "")) == "strategic_merger_acquisition":
 		var terms: Dictionary = chain.get("mna_terms", {})
 		if not terms.is_empty():
-			return "%s is in the %s stage of a strategic acquisition, with %s offering Rp%s per share." % [
+			return "%s has a strategic acquisition proposal in %s, with %s offering Rp%s per share." % [
 				str(chain.get("target_company_name", "")),
-				str(chain.get("stage", "")).replace("_", " "),
+				stage_label,
 				str(terms.get("acquirer_label", "strategic acquirer")),
 				String.num(float(terms.get("cashout_price", 0.0)), 2)
 			]
 	if str(chain.get("family", "")) == "restructuring":
 		var terms: Dictionary = chain.get("restructuring_terms", {})
 		if not terms.is_empty():
-			return "%s is in the %s stage of a %s, with %.1f%% debt relief, %.1f%% creditor-share conversion, and a %.1f%% price-bias read." % [
+			return "%s has a %s in %s, with %.1f%% debt relief, %.1f%% creditor-share conversion, and a %.1f%% indicative price impact." % [
 				str(chain.get("target_company_name", "")),
-				str(chain.get("stage", "")).replace("_", " "),
 				str(terms.get("plan_label", "restructuring plan")).to_lower(),
+				stage_label,
 				float(terms.get("debt_reduction_pct", 0.0)) * 100.0,
 				float(terms.get("debt_conversion_pct", 0.0)) * 100.0,
 				float(terms.get("price_adjustment_pct", 0.0)) * 100.0
@@ -6703,9 +7005,9 @@ func _meeting_public_summary(chain: Dictionary) -> String:
 		var terms: Dictionary = chain.get("backdoor_terms", {})
 		if not terms.is_empty():
 			var rights_hint: String = " Follow-on rights issue risk is on the board for %s." % str(terms.get("follow_on_rights_purpose", "growth capex")) if bool(terms.get("follow_on_rights_hint", false)) else ""
-			return "%s is in the %s stage of a control-change and asset-injection proposal, with %s injecting a %s for %.0f%% post-deal control and a proposed reset toward %s.%s" % [
+			return "%s has a control-change and asset-injection proposal in %s, with %s injecting a %s for %.0f%% post-deal control and a proposed reset toward %s.%s" % [
 				str(chain.get("target_company_name", "")),
-				str(chain.get("stage", "")).replace("_", " "),
+				stage_label,
 				str(terms.get("sponsor_label", "private operating company")),
 				str(terms.get("incoming_asset_label", "private operating business")),
 				float(terms.get("incoming_control_pct", 0.0)) * 100.0,
@@ -6715,18 +7017,18 @@ func _meeting_public_summary(chain: Dictionary) -> String:
 	if str(chain.get("family", "")) == "ceo_change":
 		var terms: Dictionary = chain.get("ceo_terms", {})
 		if not terms.is_empty():
-			return "%s is in the %s stage of a CEO-change proposal, with %s nominated for a %s mandate focused on %s." % [
+			return "%s has a CEO-change proposal in %s, with %s nominated for a %s mandate focused on %s." % [
 				str(chain.get("target_company_name", "")),
-				str(chain.get("stage", "")).replace("_", " "),
+				stage_label,
 				str(terms.get("new_ceo_name", "the incoming CEO")),
 				str(terms.get("incoming_profile_label", "turnaround")),
 				str(terms.get("mandate", "execution reset"))
 			]
-	return "%s is now in the %s stage of a %s storyline, with management stance at %s." % [
+	return "%s has a possible %s in %s. Management tone: %s." % [
 		str(chain.get("target_company_name", "")),
-		str(chain.get("stage", "")).replace("_", " "),
 		_family_label(str(chain.get("family", ""))).to_lower(),
-		str(chain.get("management_stance", "silent"))
+		stage_label,
+		_management_stance_label(str(chain.get("management_stance", "silent"))).to_lower()
 	]
 
 

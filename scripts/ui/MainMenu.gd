@@ -338,7 +338,7 @@ func _prepare_loading_screen(difficulty_id: String) -> void:
 
 
 func _prepare_load_screen(slot_id: String = "") -> void:
-	var save_info: Dictionary = SaveManager.get_save_file_info(slot_id)
+	var save_info: Dictionary = SaveManager.get_save_file_info(slot_id, false)
 	loading_title_label.text = "Loading saved run"
 	loading_stage_label.text = "Reading save file"
 	loading_body_label.text = "Restoring Day %d (%s), portfolio, watchlist, and current trading day." % [
@@ -648,7 +648,7 @@ func _build_load_slot_delete_text(slot: Dictionary) -> String:
 
 
 func _first_visible_save_info() -> Dictionary:
-	var active_info: Dictionary = SaveManager.get_save_file_info()
+	var active_info: Dictionary = SaveManager.get_save_file_info("", false)
 	if bool(active_info.get("loadable", false)):
 		return active_info
 	for slot_value in SaveManager.get_save_slots():

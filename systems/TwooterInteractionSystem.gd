@@ -23,7 +23,7 @@ const RELATIONSHIP_DIALOG_REPLY_POOLS := {
 		"You are past surface questions now. Put the strongest evidence and the cleanest objection beside each other before you decide.",
 		"This is the kind of question people keep answering. You are not asking for certainty; you are asking how to stay honest.",
 		"At this point I will be more direct: the edge is not knowing earlier, it is updating faster when the evidence changes.",
-		"If you bring the source trail and the failure point, I can help sharpen the read instead of just warning you to slow down."
+		"If you bring the public evidence and the failure point, I can help sharpen the read instead of just warning you to slow down."
 	],
 	"inner_circle_candidate": [
 		"You are close enough to the room for the sharper version: protect your reputation first, then let the thesis compete for capital.",
@@ -39,7 +39,7 @@ const NETWORK_SOURCE_DIALOG_REPLY_POOLS := {
 	"familiar": [
 		"You are asking more carefully now. For {ticker}, keep the public evidence, timing, and risk in one note.",
 		"This is a better source ask. Start with what can be verified on {company}, then decide how much weight the lead deserves.",
-		"I can be more useful when the question stays this specific. For {ticker}, separate the source trail from the market reaction."
+		"I can be more useful when the question stays this specific. For {ticker}, separate the public evidence from the market reaction."
 	],
 	"trusted": [
 		"You have shown enough discipline for the sharper version: verify the public trail first, then compare whether the market reaction is ahead of the evidence.",
@@ -2006,6 +2006,8 @@ func _message_thread_summaries(messages: Dictionary, account_lookup: Dictionary,
 	for account_id_value in messages.keys():
 		var account_id: String = str(account_id_value)
 		var thread: Dictionary = _normalize_message_thread(messages.get(account_id, {}))
+		if thread.get("rows", []).is_empty():
+			continue
 		var account: Dictionary = account_lookup.get(account_id, {})
 		var account_state: Dictionary = _account_state(account_states, account_id)
 		rows.append({
@@ -2036,6 +2038,7 @@ func _state_summary(account_states: Dictionary, messages: Dictionary) -> Diction
 	var relationship_total: int = 0
 	var credibility_total: int = 0
 	var inner_candidates: int = 0
+	var message_thread_count: int = 0
 	for state_value in account_states.values():
 		if typeof(state_value) != TYPE_DICTIONARY:
 			continue
@@ -2044,9 +2047,12 @@ func _state_summary(account_states: Dictionary, messages: Dictionary) -> Diction
 		credibility_total += int(state.get("credibility", 0))
 		if str(state.get("relationship_stage", "")) == "inner_circle_candidate":
 			inner_candidates += 1
+	for thread_value in messages.values():
+		if typeof(thread_value) == TYPE_DICTIONARY and not _normalize_message_thread(thread_value).get("rows", []).is_empty():
+			message_thread_count += 1
 	return {
 		"account_count": account_states.size(),
-		"message_thread_count": messages.size(),
+		"message_thread_count": message_thread_count,
 		"relationship_total": relationship_total,
 		"credibility_total": credibility_total,
 		"inner_circle_candidates": inner_candidates

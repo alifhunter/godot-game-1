@@ -154,6 +154,8 @@ func _build_ranked_company_candidates(
 
 	for company_id_value in sampled_company_ids:
 		var company_id: String = str(company_id_value)
+		if company_id in attention_directives.get("blocked_company_ids", []):
+			continue
 		var definition: Dictionary = run_state.get_effective_company_definition(company_id)
 		var runtime: Dictionary = run_state.get_company(company_id)
 		if definition.is_empty() or runtime.is_empty():
@@ -629,7 +631,7 @@ func _active_arcs_for_day(stored_arcs: Array, day_number: int) -> Array:
 	var active_arcs: Array = []
 	for arc_value in stored_arcs:
 		var arc_data: Dictionary = arc_value.duplicate(true)
-		if str(arc_data.get("source_system", "")) in ["corporate_action", "index_review"]:
+		if str(arc_data.get("source_system", "")) in ["corporate_action", "index_review", "company_roadmap"]:
 			continue
 		if int(arc_data.get("end_day_index", 0)) >= day_number:
 			active_arcs.append(arc_data)

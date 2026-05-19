@@ -36,6 +36,7 @@ func build_snapshot(run_state, data_repository) -> Dictionary:
 	var last_tip_notes: Dictionary = _last_tip_notes_by_contact(run_state)
 	var tip_histories: Dictionary = _tip_histories_by_contact(run_state)
 	var reaction_notes: Dictionary = _latest_reaction_notes_by_contact(run_state)
+	var development_lead_notes: Dictionary = _latest_development_leads_by_contact(run_state)
 	var cross_checks: Dictionary = _cross_contact_reads_by_contact(run_state)
 	var contact_rows: Array = []
 	var discovered_rows: Array = []
@@ -53,6 +54,7 @@ func build_snapshot(run_state, data_repository) -> Dictionary:
 		_apply_last_tip_note(row, last_tip_notes)
 		_apply_tip_history(row, tip_histories)
 		_apply_latest_reaction(row, reaction_notes)
+		_apply_latest_development_lead(row, development_lead_notes)
 		_apply_cross_contact_read(row, cross_checks)
 		if bool(runtime.get("met", false)):
 			contact_rows.append(row)
@@ -79,6 +81,7 @@ func build_snapshot(run_state, data_repository) -> Dictionary:
 		_apply_last_tip_note(row, last_tip_notes)
 		_apply_tip_history(row, tip_histories)
 		_apply_latest_reaction(row, reaction_notes)
+		_apply_latest_development_lead(row, development_lead_notes)
 		_apply_cross_contact_read(row, cross_checks)
 		if bool(runtime.get("met", false)):
 			contact_rows.append(row)
@@ -1509,6 +1512,45 @@ func _apply_latest_reaction(row: Dictionary, reaction_notes: Dictionary) -> void
 	row["last_reaction_twooter_handle"] = str(reaction.get("reaction_twooter_handle", ""))
 
 
+func _latest_development_leads_by_contact(run_state) -> Dictionary:
+	var notes: Dictionary = {}
+	var life_state: Dictionary = run_state.get_player_life()
+	for lead_value in life_state.get("development_leads", []):
+		if typeof(lead_value) != TYPE_DICTIONARY:
+			continue
+		var lead: Dictionary = lead_value
+		var contact_id: String = str(lead.get("contact_id", ""))
+		if contact_id.is_empty():
+			continue
+		var existing: Dictionary = notes.get(contact_id, {})
+		if existing.is_empty() or int(lead.get("discovered_day_index", 0)) >= int(existing.get("discovered_day_index", 0)):
+			notes[contact_id] = lead.duplicate(true)
+	return notes
+
+
+func _apply_latest_development_lead(row: Dictionary, development_lead_notes: Dictionary) -> void:
+	var contact_id: String = str(row.get("id", ""))
+	var lead: Dictionary = development_lead_notes.get(contact_id, {}) if not contact_id.is_empty() else {}
+	if lead.is_empty():
+		row["last_development_lead_id"] = ""
+		row["last_development_lead_label"] = ""
+		row["last_development_lead_note"] = ""
+		row["last_development_lead_location"] = ""
+		row["last_development_lead_day_index"] = 0
+		return
+	var theme_label: String = str(lead.get("display_theme_label", lead.get("theme_label", lead.get("theme", "Development")))).capitalize()
+	var location_label: String = str(lead.get("display_location_label", lead.get("location_label", lead.get("location_id", ""))))
+	row["last_development_lead_id"] = str(lead.get("id", ""))
+	row["last_development_lead_label"] = "%s | %s" % [location_label, theme_label]
+	var clarity_label: String = str(lead.get("clarity_label", "")).strip_edges()
+	row["last_development_lead_note"] = "%s%s" % [
+		"%s. " % clarity_label if not clarity_label.is_empty() else "",
+		str(lead.get("source_note", ""))
+	]
+	row["last_development_lead_location"] = location_label
+	row["last_development_lead_day_index"] = int(lead.get("discovered_day_index", 0))
+
+
 func _last_tip_notes_by_contact(run_state) -> Dictionary:
 	var notes: Dictionary = {}
 	for tip_value in run_state.get_network_tip_journal().values():
@@ -2738,6 +2780,11 @@ func _contact_row(contact: Dictionary, runtime: Dictionary, discovery: Dictionar
 		"last_reaction_day_index": int(runtime.get("last_reaction_day_index", 0)),
 		"last_reaction_twooter_account_id": str(runtime.get("last_reaction_twooter_account_id", "")),
 		"last_reaction_twooter_handle": str(runtime.get("last_reaction_twooter_handle", "")),
+		"last_development_lead_id": "",
+		"last_development_lead_label": "",
+		"last_development_lead_note": "",
+		"last_development_lead_location": "",
+		"last_development_lead_day_index": 0,
 		"can_follow_up_tip": false,
 		"tip_followup_options": [],
 		"tip_history": [],
@@ -3011,6 +3058,10 @@ func _network_journal_rows(run_state, data_repository, requests: Dictionary, dis
 			rows.append(_network_meeting_lead_journal_row(run_state, data_repository, discovery))
 		if str(discovery.get("source_type", "")) == "twooter":
 			rows.append(_network_twooter_discovery_journal_row(run_state, data_repository, discovery))
+	var life_state: Dictionary = run_state.get_player_life()
+	for lead_value in life_state.get("development_leads", []):
+		if typeof(lead_value) == TYPE_DICTIONARY:
+			rows.append(_network_property_development_lead_journal_row(lead_value))
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var a_sort: int = int(a.get("sort_index", int(a.get("day_index", 0)) * 10))
 		var b_sort: int = int(b.get("sort_index", int(b.get("day_index", 0)) * 10))
@@ -3155,6 +3206,35 @@ func _network_social_reaction_journal_row(tip: Dictionary) -> Dictionary:
 		"status": "recorded",
 		"title": "Follow-up DM%s | %s" % [title_suffix, str(tip.get("reaction_label", "Reaction"))],
 		"detail": detail.strip_edges()
+	}
+
+
+func _network_property_development_lead_journal_row(lead: Dictionary) -> Dictionary:
+	var day_index: int = int(lead.get("discovered_day_index", 0))
+	var location_label: String = str(lead.get("display_location_label", lead.get("location_label", lead.get("location_id", "Location"))))
+	var theme_label: String = str(lead.get("display_theme_label", lead.get("theme_label", lead.get("theme", "Development")))).capitalize()
+	var stage: String = str(lead.get("stage", "rumor"))
+	var status_text: String = stage.capitalize()
+	if bool(lead.get("resolved", false)):
+		status_text = str(lead.get("outcome", stage)).capitalize()
+	var detail: String = str(lead.get("source_note", "")).strip_edges()
+	if detail.is_empty():
+		detail = "%s development intel is being tracked for %s." % [theme_label, location_label]
+	var clarity_label: String = str(lead.get("clarity_label", "")).strip_edges()
+	if not clarity_label.is_empty():
+		detail = "%s %s" % [clarity_label + ".", detail]
+	return {
+		"id": "%s:property_development" % str(lead.get("id", "")),
+		"type": "property_development_lead",
+		"day_index": day_index,
+		"sort_index": day_index * 10 + 8,
+		"contact_id": str(lead.get("contact_id", "")),
+		"contact_name": str(lead.get("contact_name", "")),
+		"target_company_id": "",
+		"target_ticker": "",
+		"status": status_text.to_lower(),
+		"title": "Property Intel | %s | %s" % [location_label, status_text],
+		"detail": detail
 	}
 
 

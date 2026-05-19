@@ -12,6 +12,8 @@ config_version=5
 
 config/name="Buy High Sell Low Stock Trading Simulator"
 run/main_scene="res://scenes/main_menu/MainMenu.tscn"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Buy High Sell Low Stock Trading Simulator"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
 
@@ -22,6 +24,7 @@ UiTheme="*res://autoloads/UiTheme.gd"
 SteamManager="*res://autoloads/SteamManager.gd"
 GameManager="*res://autoloads/GameManager.gd"
 RunState="*res://autoloads/RunState.gd"
+SteamProgressManager="*res://autoloads/SteamProgressManager.gd"
 DataRepository="*res://autoloads/DataRepository.gd"
 SaveManager="*res://autoloads/SaveManager.gd"
 FishbowlOverlay="*res://autoloads/FishbowlOverlay.gd"
@@ -55,7 +58,8 @@ renderer/rendering_method.mobile="gl_compatibility"
 
 [steam]
 
-initialization/app_id=480
+initialization/app_id=4739020
 initialization/initialize_on_startup=true
 initialization/embed_callbacks=false
 multiplayer_peer/max_channels=4
+progress/store_enabled=true

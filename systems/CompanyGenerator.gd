@@ -4,6 +4,7 @@ const HISTORY_START_YEAR := 2010
 const HISTORY_END_YEAR := 2019
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
 const COMPANY_NARRATIVE_GENERATOR = preload("res://systems/CompanyNarrativeGenerator.gd")
+const COMPANY_ROADMAP_SYSTEM = preload("res://systems/CompanyRoadmapSystem.gd")
 const STABLE_RNG = preload("res://systems/StableRng.gd")
 const DEFAULT_SECTOR_PROFILE := {
 	"scale": 0.50,
@@ -61,6 +62,7 @@ const GORENGAN_CHART_PATTERNS := [
 ]
 
 var company_narrative_generator = COMPANY_NARRATIVE_GENERATOR.new()
+var company_roadmap_system = COMPANY_ROADMAP_SYSTEM.new()
 const SECTOR_ALIASES := {
 	"industry": "industrial"
 }
@@ -215,6 +217,21 @@ func generate_company_profile_core(template: Dictionary, sector_definition: Dict
 	var risk_score: int = _derive_risk_score(traits, financials)
 	var base_volatility: float = _derive_base_volatility(traits, risk_score)
 	var generated_base_price: float = IDX_PRICE_RULES.normalize_last_price(float(latest_year.get("implied_share_price", target_price)))
+	var location_profile: Dictionary = company_roadmap_system.build_location_profile(
+		template,
+		sector_definition,
+		traits,
+		financials,
+		run_seed
+	)
+	var roadmap_profile: Dictionary = company_roadmap_system.build_roadmap_profile(
+		template,
+		sector_definition,
+		traits,
+		financials,
+		location_profile,
+		run_seed
+	)
 	return {
 		"base_price": generated_base_price,
 		"quality_score": quality_score,
@@ -224,6 +241,8 @@ func generate_company_profile_core(template: Dictionary, sector_definition: Dict
 		"financials": financials,
 		"generation_traits": traits,
 		"shares_outstanding": shares_outstanding,
+		"location_profile": location_profile,
+		"roadmap_profile": roadmap_profile,
 		"detail_status": "cold"
 	}
 
@@ -279,6 +298,20 @@ func hydrate_company_profile_detail(
 	)
 	generated_profile["detail_status"] = "ready"
 	return generated_profile
+
+
+func ensure_company_life_profile(
+	company_profile: Dictionary,
+	template: Dictionary,
+	sector_definition: Dictionary,
+	run_seed: int
+) -> Dictionary:
+	return company_roadmap_system.ensure_company_life_profile(
+		company_profile,
+		template,
+		sector_definition,
+		run_seed
+	)
 
 
 func build_management_roster(template: Dictionary, sector_definition: Dictionary, run_seed: int) -> Array:

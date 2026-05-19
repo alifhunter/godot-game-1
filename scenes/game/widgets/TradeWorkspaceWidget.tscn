@@ -391,6 +391,48 @@ text = "Visible inputs:"
 autowrap_mode = 3
 text = "Recent closes:"
 
+[node name="CorporateActions" type="ScrollContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="CorporateActionsPanel" type="PanelContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/CorporateActions"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="CorporateActionsMargin" type="MarginContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/CorporateActions/CorporateActionsPanel"]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+
+[node name="CorporateActionsVBox" type="VBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/CorporateActions/CorporateActionsPanel/CorporateActionsMargin"]
+theme_override_constants/separation = 10
+
+[node name="CorporateActionsTitle" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/CorporateActions/CorporateActionsPanel/CorporateActionsMargin/CorporateActionsVBox"]
+text = "CORP. ACTION"
+
+[node name="CorporateActionsFilterRow" type="HBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/CorporateActions/CorporateActionsPanel/CorporateActionsMargin/CorporateActionsVBox"]
+theme_override_constants/separation = 8
+
+[node name="CorporateActionsFilterOption" type="OptionButton" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/CorporateActions/CorporateActionsPanel/CorporateActionsMargin/CorporateActionsVBox/CorporateActionsFilterRow"]
+custom_minimum_size = Vector2(160, 0)
+
+[node name="CorporateActionsFilterSpacer" type="Control" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/CorporateActions/CorporateActionsPanel/CorporateActionsMargin/CorporateActionsVBox/CorporateActionsFilterRow"]
+size_flags_horizontal = 3
+
+[node name="CorporateActionsSummaryLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/CorporateActions/CorporateActionsPanel/CorporateActionsMargin/CorporateActionsVBox"]
+autowrap_mode = 3
+text = "Corporate action timeline appears here."
+
+[node name="CorporateActionsRows" type="VBoxContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/CorporateActions/CorporateActionsPanel/CorporateActionsMargin/CorporateActionsVBox"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="CorporateActionsEmptyLabel" type="Label" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs/CorporateActions/CorporateActionsPanel/CorporateActionsMargin/CorporateActionsVBox/CorporateActionsRows"]
+autowrap_mode = 3
+text = "No corporate action timeline yet."
+
 [node name="Profile" type="ScrollContainer" parent="WorkAreaMargin/WorkAreaVBox/WorkTabs"]
 size_flags_horizontal = 3
 size_flags_vertical = 3

@@ -113,7 +113,7 @@
         "You are asking carefully enough that I can point you toward process instead of just warning you off."
       ],
       "trusted": [
-        "You have kept the boundary clean, so I can be clearer: the source trail matters only if it survives public checks.",
+        "You have kept the boundary clean, so I can be clearer: the evidence matters only if it survives public checks.",
         "This is closer to a real source relationship. Bring the document, the date, and the failure point before you ask for a read.",
         "You have earned a better answer, but not a shortcut. Use the context to sharpen your thesis, not replace it.",
         "Good. The question now is whether the market is ahead of the evidence or the evidence is ahead of the market.",
@@ -221,7 +221,7 @@
                 "player_lines": [
                   "I have a written thesis now. Can you challenge what sounds too convenient?",
                   "I wrote the case and the failure point. Can you tell me what still sounds unverified?",
-                  "I want to share the thesis so you can push back on the source trail."
+                  "I want to share the thesis so you can push back on the evidence trail."
                 ],
                 "next_node": "guarded_trust",
                 "outcome": "thesis_response"

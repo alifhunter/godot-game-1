@@ -1033,7 +1033,7 @@ theme_override_constants/separation = 8
 
 [node name="GeneratorsHintLabel" type="Label" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generators/GeneratorsMargin/GeneratorsVBox"]
 autowrap_mode = 3
-text = "Use these buttons to inject event definitions or selected-stock corporate actions directly into the current run for debugging."
+text = "Use these buttons to inject generated events, selected-stock corporate actions, roadmap milestones, index reviews, or Life property intel directly into the current run for debugging."
 
 [node name="GeneratorsScroll" type="ScrollContainer" parent="DebugOverlay/DebugCenter/DebugPanel/DebugMargin/DebugVBox/DebugTabs/Generators/GeneratorsMargin/GeneratorsVBox"]
 size_flags_horizontal = 3

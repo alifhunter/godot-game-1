@@ -101,7 +101,8 @@ func _ready() -> void:
 	work_tabs.set_tab_title(2, "Financials")
 	work_tabs.set_tab_title(3, "Broker")
 	work_tabs.set_tab_title(4, "Analyzer")
-	work_tabs.set_tab_title(5, "Profile")
+	work_tabs.set_tab_title(5, "Corp. Action")
+	work_tabs.set_tab_title(6, "Profile")
 	work_tabs.set_tab_hidden(4, true)
 	_bind_chart_range_button(range_1d_button, "1d")
 	_bind_chart_range_button(range_1w_button, "1w")
@@ -177,7 +178,7 @@ func _ready() -> void:
 	_refresh_pattern_panel()
 
 
-func set_company_snapshot(snapshot: Dictionary) -> void:
+func set_company_snapshot(snapshot: Dictionary, refresh_chart: bool = true) -> void:
 	var previous_company_id: String = str(_company_snapshot.get("id", ""))
 	var next_company_id: String = str(snapshot.get("id", ""))
 	_company_snapshot = snapshot
@@ -188,8 +189,9 @@ func set_company_snapshot(snapshot: Dictionary) -> void:
 		_cached_chart_snapshot = {}
 		_last_pattern_claim.clear()
 		chart_canvas.clear_pattern_claim_region()
-	_refresh_chart()
-	_refresh_pattern_panel()
+	if refresh_chart:
+		_refresh_chart()
+		_refresh_pattern_panel()
 
 
 func set_active_indicator_ids(indicator_ids: Array) -> void:

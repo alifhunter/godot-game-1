@@ -552,7 +552,7 @@ func _build_market_wrap_post(
 	}
 	context["tone"] = _tone_from_change(float(latest_entry.get("average_change_pct", 0.0)))
 	context["public_topic_label"] = "Market breadth"
-	context["public_confidence_label"] = "Closing read"
+	context["public_confidence_label"] = "Market close"
 	context["public_continuity_phrase"] = ""
 	context["public_context_hint"] = ""
 	var post_text: String = _pick_voice_text(
@@ -788,6 +788,8 @@ func _template_lookup_keys(source_data: Dictionary, context: Dictionary) -> Arra
 		keys.append("corporate_action")
 	if category == "corporate_meeting":
 		keys.append("corporate_meeting")
+	if category.begins_with("roadmap_"):
+		keys.append("company_roadmap")
 	if scope == "market":
 		keys.append("market_%s" % tone)
 		keys.append("market_wrap")
@@ -807,6 +809,8 @@ func _category_family_key(source_data: Dictionary) -> String:
 		return "corporate_action"
 	if category == "corporate_meeting":
 		return "corporate_meeting"
+	if category.begins_with("roadmap_"):
+		return "company_roadmap"
 	if category in ["earnings", "management", "market_wrap"]:
 		return category
 	if category.contains("commodity"):
@@ -824,6 +828,8 @@ func _public_topic_label(source_data: Dictionary) -> String:
 		return "Corporate action"
 	if category == "corporate_meeting":
 		return "RUPSLB watch"
+	if category.begins_with("roadmap_"):
+		return "Company roadmap"
 	if category == "earnings":
 		return "Earnings"
 	if category == "management":
@@ -840,20 +846,22 @@ func _public_topic_label(source_data: Dictionary) -> String:
 func _public_confidence_label(source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
 	if category == "index_inclusion" or category == "index_exclusion":
-		return "Review list"
+		return "Index review"
 	if category == "index_watch":
-		return "Watchlist"
+		return "Review watch"
 	if category in ["corporate_action_filing", "corporate_action_resolution", "corporate_action_execution"]:
-		return "Paperwork"
+		return "Filed paperwork"
 	if category == "corporate_meeting":
-		return "Calendar"
+		return "Meeting calendar"
 	if category == "corporate_action_rumor":
-		return "Rumor"
+		return "Market talk"
 	if category == "corporate_action_denial" or category == "corporate_action_clarification":
 		return "Company response"
+	if category.begins_with("roadmap_"):
+		return "Public signals"
 	if category == "market_wrap":
-		return "Close read"
-	return "Feed read"
+		return "Closing tape"
+	return "Public chatter"
 
 
 func _public_context_hint(source_data: Dictionary, continuity_phrase: String) -> String:
@@ -874,6 +882,26 @@ func _looks_like_system_summary(value: String) -> bool:
 		lowered_value.contains("venue_type") or
 		lowered_value.contains("current_timeline_state") or
 		lowered_value.contains("management stance") or
+		lowered_value.contains("vague public hint") or
+		lowered_value.contains("source reliability") or
+		lowered_value.contains("current read") or
+		lowered_value.contains("unclear location") or
+		lowered_value.contains("development lead") or
+		lowered_value.contains("intel level") or
+		lowered_value.contains("source trail") or
+		lowered_value.contains("source article") or
+		lowered_value.contains("source story") or
+		lowered_value.contains("working read") or
+		lowered_value.contains("raw statement") or
+		lowered_value.contains("system metadata") or
+		lowered_value.contains("stage of a") or
+		lowered_value.contains("price-bias read") or
+		lowered_value.contains("funding_gate") or
+		lowered_value.contains("funding readiness") or
+		lowered_value.contains("roadmap_id") or
+		lowered_value.contains("company_roadmap") or
+		lowered_value.contains("participant_role") or
+		lowered_value.contains("milestone_state") or
 		lowered_value.contains("hidden_positioning") or
 		lowered_value.contains("formal_agenda_or_filing") or
 		lowered_value.contains("meeting_or_call")

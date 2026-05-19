@@ -219,7 +219,7 @@ const FLOW_CATALOG := {
 			{
 				"id": "open_financials",
 				"title": "Cross-Check Financials",
-				"objective": "Open Financials and compare the setup against the raw statement view.",
+				"objective": "Open Financials and compare the setup against the statements.",
 				"body": "Financials are useful when they confirm, contradict, or sharpen the story you saw in Key Stats.",
 				"target_key": "work_tabs",
 				"required_app": "stock",
@@ -435,8 +435,8 @@ const FLOW_CATALOG := {
 			{
 				"id": "handoff",
 				"title": "Concept Saved",
-				"objective": "Return to the system that raised the question.",
-				"body": "When a concept clicks, go back to the company, chart, thesis, or portfolio decision that made it relevant.",
+				"objective": "Return to the question that sent you here.",
+				"body": "When a concept clicks, go back to the company, chart, thesis, or portfolio choice that made it relevant.",
 				"target_key": "",
 				"action_hint": "Return when ready."
 			}

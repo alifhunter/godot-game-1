@@ -11,7 +11,7 @@ const SMOKE_BACKUP_PATH := "res://logs/daytrader_smoke_save.backup.json"
 const SMOKE_SAVE_DIRECTORY_PATH := "res://logs/saves"
 const SMOKE_SAVE_CONFIG_PATH := "res://logs/daytrader_save_config.json"
 const SMOKE_LOCAL_IO_ARG := "--smoke-local-io"
-const DEFAULT_REQUEST_DELAY_SECONDS := 0.35
+const DEFAULT_REQUEST_DELAY_SECONDS := 0.75
 const PERF_LOG_PREFIX := "[perf][save]"
 const TEMP_SAVE_SUFFIX := ".tmp"
 const SAVE_SLOT_COUNT := 5
@@ -30,6 +30,7 @@ var _has_unsaved_changes: bool = false
 var _unsaved_reason: String = ""
 var _unsaved_since_unix: int = 0
 var _save_file_info_cache: Dictionary = {}
+var _save_config_text_cache: String = ""
 func _ready() -> void:
 	_ensure_save_timer()
 	_load_save_config()
@@ -40,9 +41,8 @@ func has_save(slot_id: String = "") -> bool:
 
 
 func has_any_save() -> bool:
-	for slot_value in get_save_slots():
-		var slot: Dictionary = slot_value
-		if bool(slot.get("exists", false)) or bool(slot.get("backup_exists", false)):
+	for index in range(1, SAVE_SLOT_COUNT + 1):
+		if has_save("slot_%d" % index):
 			return true
 	return false
 
@@ -50,7 +50,7 @@ func has_any_save() -> bool:
 func has_loadable_save(slot_id: String = "") -> bool:
 	if slot_id.is_empty():
 		return has_any_loadable_save()
-	return bool(get_save_file_info(slot_id).get("loadable", false))
+	return bool(get_save_file_info(slot_id, false).get("loadable", false))
 
 
 func has_any_loadable_save() -> bool:
@@ -78,7 +78,7 @@ func set_active_slot_id(slot_id: String) -> void:
 func prepare_slot_for_new_run() -> String:
 	for index in range(1, SAVE_SLOT_COUNT + 1):
 		var slot_id: String = "slot_%d" % index
-		if not bool(get_save_file_info(slot_id).get("loadable", false)):
+		if not bool(get_save_file_info(slot_id, false).get("loadable", false)):
 			set_active_slot_id(slot_id)
 			return slot_id
 	return _active_slot_id
@@ -225,13 +225,15 @@ func request_save(reason: String, delay_seconds: float = DEFAULT_REQUEST_DELAY_S
 		save_status_changed.emit()
 		_log_elapsed("request_save:autosave_disabled:%s" % reason.strip_edges(), started_at_usec)
 		return
+	var was_pending: bool = has_pending_save()
 	_pending_reason = reason.strip_edges()
 	if _pending_reason.is_empty():
 		_pending_reason = "unspecified"
 	_save_timer.wait_time = max(delay_seconds, 0.001)
 	_save_timer.stop()
 	_save_timer.start()
-	save_status_changed.emit()
+	if not was_pending:
+		save_status_changed.emit()
 	_log_elapsed("request_save:%s" % _pending_reason, started_at_usec)
 
 
@@ -243,7 +245,6 @@ func flush_pending_save() -> bool:
 	var flush_reason: String = _pending_reason
 	_save_timer.stop()
 	_pending_reason = ""
-	save_status_changed.emit()
 	return _save_current_run("flush_pending_save:%s" % flush_reason)
 
 
@@ -270,7 +271,6 @@ func save_current_run_now(reason: String = "manual", slot_id: String = "") -> bo
 	if _save_timer != null:
 		_save_timer.stop()
 	_pending_reason = ""
-	save_status_changed.emit()
 	return _save_current_run(reason, slot_id)
 
 
@@ -296,9 +296,8 @@ func save_run(run_state: Dictionary, slot_id: String = "") -> bool:
 	_log_elapsed("save_run:serialize", serialize_started_at_usec)
 	var write_started_at_usec: int = Time.get_ticks_usec()
 	save_file.store_string(save_text)
-	save_file.flush()
-	_log_elapsed("save_run:write", write_started_at_usec)
 	save_file = null
+	_log_elapsed("save_run:write", write_started_at_usec)
 
 	var absolute_save_path: String = ProjectSettings.globalize_path(save_path)
 	var absolute_temp_path: String = ProjectSettings.globalize_path(temp_path)
@@ -511,6 +510,7 @@ func _load_save_config() -> void:
 		_invalidate_save_file_info_cache()
 		return
 	var raw_text: String = FileAccess.get_file_as_string(config_path)
+	_save_config_text_cache = raw_text
 	var json := JSON.new()
 	if json.parse(raw_text) != OK or typeof(json.data) != TYPE_DICTIONARY:
 		_invalidate_save_file_info_cache()
@@ -524,14 +524,18 @@ func _load_save_config() -> void:
 func _save_save_config() -> void:
 	var config_path: String = _config_path()
 	_ensure_save_parent_dir_for_path(config_path)
+	var config_text: String = JSON.stringify({
+		"active_slot_id": _active_slot_id,
+		"autosave_enabled": _autosave_enabled
+	})
+	if _save_config_text_cache == config_text and FileAccess.file_exists(config_path):
+		return
 	var config_file = FileAccess.open(config_path, FileAccess.WRITE)
 	if config_file == null:
 		return
-	config_file.store_string(JSON.stringify({
-		"active_slot_id": _active_slot_id,
-		"autosave_enabled": _autosave_enabled
-	}))
+	config_file.store_string(config_text)
 	config_file = null
+	_save_config_text_cache = config_text
 
 
 func _normalize_slot_id(slot_id: String = "") -> String:

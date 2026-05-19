@@ -1,0 +1,105 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "description": "Compact deterministic company footprint and roadmap catalog."
+  },
+  "legacy_location_redirects": {
+    "bodetabek": ["bogor", "depok", "tangerang", "bekasi", "karawang"],
+    "jabodetabek": ["jakarta", "bogor", "depok", "tangerang", "bekasi", "karawang"]
+  },
+  "locations": [
+    {"id": "jakarta", "label": "Jakarta", "market_factor": 1.0, "tags": ["hq", "finance", "tech", "consumer", "hospital", "transit", "property"]},
+    {"id": "bogor", "label": "Bogor", "market_factor": 0.74, "tags": ["consumer", "noncyclical", "health", "campus", "residential", "logistics"]},
+    {"id": "depok", "label": "Depok", "market_factor": 0.78, "tags": ["campus", "health", "consumer", "transit", "residential", "tech"]},
+    {"id": "tangerang", "label": "Tangerang", "market_factor": 0.86, "tags": ["airport", "logistics", "property", "hospital", "consumer", "industrial"]},
+    {"id": "bekasi", "label": "Bekasi", "market_factor": 0.82, "tags": ["industrial", "logistics", "consumer", "transit", "residential", "utility"]},
+    {"id": "karawang", "label": "Karawang", "market_factor": 0.8, "tags": ["industrial", "logistics", "factory", "warehouse", "automotive", "port_access"]},
+    {"id": "bandung", "label": "Bandung", "market_factor": 0.72, "tags": ["consumer", "tech", "campus", "health", "creative", "transit"]},
+    {"id": "surabaya", "label": "Surabaya", "market_factor": 0.76, "tags": ["port", "logistics", "industrial", "consumer", "hospital", "data_center"]},
+    {"id": "semarang", "label": "Semarang", "market_factor": 0.68, "tags": ["port", "industrial", "consumer", "logistics", "manufacturing"]},
+    {"id": "medan", "label": "Medan", "market_factor": 0.7, "tags": ["consumer", "noncyclical", "plantation", "logistics", "health"]},
+    {"id": "makassar", "label": "Makassar", "market_factor": 0.66, "tags": ["port", "logistics", "consumer", "health", "eastern_indonesia"]},
+    {"id": "batam", "label": "Batam", "market_factor": 0.84, "tags": ["port", "data_center", "industrial", "electronics", "logistics"]},
+    {"id": "balikpapan", "label": "Balikpapan", "market_factor": 0.78, "tags": ["energy", "logistics", "port", "utility", "industrial"]},
+    {"id": "denpasar", "label": "Denpasar", "market_factor": 0.92, "tags": ["tourism", "consumer", "property", "health", "hospitality"]}
+  ],
+  "sector_location_tags": {
+    "consumer": ["consumer", "logistics", "residential"],
+    "industrial": ["industrial", "factory", "warehouse", "logistics"],
+    "energy": ["energy", "utility", "port", "industrial"],
+    "tech": ["tech", "data_center", "campus"],
+    "infra": ["port", "transit", "utility", "logistics"],
+    "transport": ["port", "airport", "logistics", "transit"],
+    "health": ["hospital", "health", "campus", "residential"],
+    "finance": ["finance", "hq", "consumer"],
+    "basicindustry": ["industrial", "factory", "port", "manufacturing"],
+    "property": ["property", "residential", "transit", "industrial"],
+    "noncyclical": ["consumer", "logistics", "factory", "residential"]
+  },
+  "sector_roadmaps": {
+    "health": [
+      {"id": "hospital_wing", "label": "Hospital wing expansion", "priority_label": "Hospital capacity expansion", "project_label": "hospital wing", "physical": true, "property_theme": "hospital_university", "location_tags": ["hospital", "health", "residential"], "funding_scale": "high", "funding_routes": ["self", "loan", "rights_issue"], "positive_bias": 0.14},
+      {"id": "clinic_rollout", "label": "Clinic rollout", "priority_label": "Clinic network rollout", "project_label": "clinic network", "physical": true, "property_theme": "hospital_university", "location_tags": ["health", "consumer"], "funding_scale": "moderate", "funding_routes": ["self", "loan"], "positive_bias": 0.1},
+      {"id": "medical_campus", "label": "Medical campus", "priority_label": "Medical campus plan", "project_label": "medical campus", "physical": true, "property_theme": "hospital_university", "location_tags": ["campus", "hospital"], "funding_scale": "transformational", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.18},
+      {"id": "equipment_upgrade", "label": "Equipment upgrade", "priority_label": "Specialist equipment upgrade", "project_label": "specialist equipment program", "physical": false, "property_theme": "", "location_tags": ["hospital"], "funding_scale": "moderate", "funding_routes": ["self", "loan"], "positive_bias": 0.08}
+    ],
+    "tech": [
+      {"id": "data_center", "label": "Data center expansion", "priority_label": "Data center capacity build-out", "project_label": "data center campus", "physical": true, "property_theme": "industrial_estate", "location_tags": ["data_center", "tech", "industrial"], "funding_scale": "transformational", "funding_routes": ["loan", "private_placement", "rights_issue"], "positive_bias": 0.2},
+      {"id": "fiber_backbone", "label": "Fiber backbone", "priority_label": "Fiber backbone expansion", "project_label": "fiber backbone", "physical": true, "property_theme": "transit_corridor", "location_tags": ["tech", "transit"], "funding_scale": "high", "funding_routes": ["loan", "self"], "positive_bias": 0.13},
+      {"id": "platform_launch", "label": "Platform launch", "priority_label": "Digital platform launch", "project_label": "digital platform", "physical": false, "property_theme": "", "location_tags": ["tech", "consumer"], "funding_scale": "moderate", "funding_routes": ["self", "private_placement"], "positive_bias": 0.12},
+      {"id": "enterprise_contract", "label": "Enterprise contract", "priority_label": "Enterprise contract pipeline", "project_label": "enterprise contract push", "physical": false, "property_theme": "", "location_tags": ["tech", "hq"], "funding_scale": "low", "funding_routes": ["self"], "positive_bias": 0.09}
+    ],
+    "industrial": [
+      {"id": "factory_line", "label": "Factory line", "priority_label": "Factory line expansion", "project_label": "factory line", "physical": true, "property_theme": "industrial_estate", "location_tags": ["industrial", "factory"], "funding_scale": "high", "funding_routes": ["self", "loan", "rights_issue"], "positive_bias": 0.14},
+      {"id": "warehouse", "label": "Warehouse expansion", "priority_label": "Warehouse capacity expansion", "project_label": "warehouse phase", "physical": true, "property_theme": "industrial_estate", "location_tags": ["warehouse", "logistics"], "funding_scale": "moderate", "funding_routes": ["self", "loan"], "positive_bias": 0.1},
+      {"id": "supplier_park", "label": "Supplier park", "priority_label": "Supplier park development", "project_label": "supplier park", "physical": true, "property_theme": "industrial_estate", "location_tags": ["industrial", "automotive"], "funding_scale": "transformational", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.18},
+      {"id": "export_capacity", "label": "Export capacity", "priority_label": "Export capacity upgrade", "project_label": "export capacity program", "physical": false, "property_theme": "", "location_tags": ["port", "logistics"], "funding_scale": "moderate", "funding_routes": ["self", "loan"], "positive_bias": 0.11}
+    ],
+    "infra": [
+      {"id": "toll_access", "label": "Toll access", "priority_label": "Toll access project", "project_label": "toll access project", "physical": true, "property_theme": "toll_exit", "location_tags": ["transit", "logistics"], "funding_scale": "high", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.15},
+      {"id": "port_logistics", "label": "Port logistics", "priority_label": "Port logistics expansion", "project_label": "port logistics expansion", "physical": true, "property_theme": "port_logistics", "location_tags": ["port", "logistics"], "funding_scale": "transformational", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.18},
+      {"id": "water_power_utility", "label": "Water and power utility", "priority_label": "Utility capacity project", "project_label": "utility capacity project", "physical": true, "property_theme": "modern_city", "location_tags": ["utility", "industrial"], "funding_scale": "high", "funding_routes": ["loan", "private_placement"], "positive_bias": 0.12},
+      {"id": "concession", "label": "Concession tender", "priority_label": "Concession tender pipeline", "project_label": "concession tender", "physical": false, "property_theme": "", "location_tags": ["hq", "utility"], "funding_scale": "moderate", "funding_routes": ["self", "loan"], "positive_bias": 0.09}
+    ],
+    "transport": [
+      {"id": "fleet_renewal", "label": "Fleet renewal", "priority_label": "Fleet renewal program", "project_label": "fleet renewal program", "physical": false, "property_theme": "", "location_tags": ["logistics", "port"], "funding_scale": "high", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.11},
+      {"id": "depot", "label": "Depot expansion", "priority_label": "Depot expansion", "project_label": "depot expansion", "physical": true, "property_theme": "transit_corridor", "location_tags": ["logistics", "transit"], "funding_scale": "moderate", "funding_routes": ["self", "loan"], "positive_bias": 0.1},
+      {"id": "route_hub", "label": "Route hub", "priority_label": "Route hub upgrade", "project_label": "route hub", "physical": true, "property_theme": "transit_corridor", "location_tags": ["airport", "port", "transit"], "funding_scale": "moderate", "funding_routes": ["self", "loan"], "positive_bias": 0.1},
+      {"id": "port_airport_link", "label": "Port or airport link", "priority_label": "Port and airport link", "project_label": "port or airport link", "physical": true, "property_theme": "port_logistics", "location_tags": ["port", "airport", "logistics"], "funding_scale": "high", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.13}
+    ],
+    "finance": [
+      {"id": "project_finance", "label": "Project finance", "priority_label": "Project finance pipeline", "project_label": "project finance book", "physical": false, "property_theme": "", "location_tags": ["finance", "hq"], "funding_scale": "low", "funding_routes": ["self"], "positive_bias": 0.08},
+      {"id": "syndicated_loan", "label": "Syndicated loan desk", "priority_label": "Syndicated loan desk", "project_label": "syndicated loan book", "physical": false, "property_theme": "", "location_tags": ["finance", "hq"], "funding_scale": "low", "funding_routes": ["self"], "positive_bias": 0.08},
+      {"id": "leasing_push", "label": "Leasing push", "priority_label": "Leasing book expansion", "project_label": "leasing book", "physical": false, "property_theme": "", "location_tags": ["industrial", "consumer"], "funding_scale": "moderate", "funding_routes": ["self"], "positive_bias": 0.08},
+      {"id": "sme_credit_product", "label": "SME credit product", "priority_label": "SME credit product", "project_label": "SME credit product", "physical": false, "property_theme": "", "location_tags": ["consumer", "finance"], "funding_scale": "moderate", "funding_routes": ["self"], "positive_bias": 0.07}
+    ],
+    "property": [
+      {"id": "township_phase", "label": "Township phase", "priority_label": "Township phase launch", "project_label": "township phase", "physical": true, "property_theme": "modern_city", "location_tags": ["property", "residential"], "funding_scale": "high", "funding_routes": ["self", "loan", "rights_issue"], "positive_bias": 0.16},
+      {"id": "mall_refresh", "label": "Mall refresh", "priority_label": "Mall refresh", "project_label": "mall refresh", "physical": true, "property_theme": "modern_city", "location_tags": ["consumer", "property"], "funding_scale": "moderate", "funding_routes": ["self", "loan"], "positive_bias": 0.1},
+      {"id": "logistics_park", "label": "Logistics park", "priority_label": "Logistics park development", "project_label": "logistics park", "physical": true, "property_theme": "port_logistics", "location_tags": ["logistics", "warehouse"], "funding_scale": "high", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.15},
+      {"id": "industrial_estate", "label": "Industrial estate", "priority_label": "Industrial estate phase", "project_label": "industrial estate phase", "physical": true, "property_theme": "industrial_estate", "location_tags": ["industrial", "factory"], "funding_scale": "transformational", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.18}
+    ],
+    "energy": [
+      {"id": "gas_power_asset", "label": "Gas or power asset", "priority_label": "Gas and power asset", "project_label": "gas and power asset", "physical": true, "property_theme": "industrial_estate", "location_tags": ["energy", "utility"], "funding_scale": "high", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.12},
+      {"id": "renewable_project", "label": "Renewable project", "priority_label": "Renewable project", "project_label": "renewable energy project", "physical": true, "property_theme": "modern_city", "location_tags": ["utility", "industrial"], "funding_scale": "high", "funding_routes": ["loan", "private_placement"], "positive_bias": 0.14},
+      {"id": "downstream_facility", "label": "Downstream facility", "priority_label": "Downstream facility", "project_label": "downstream facility", "physical": true, "property_theme": "industrial_estate", "location_tags": ["industrial", "port"], "funding_scale": "transformational", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.16}
+    ],
+    "basicindustry": [
+      {"id": "smelter", "label": "Smelter project", "priority_label": "Smelter project", "project_label": "smelter project", "physical": true, "property_theme": "industrial_estate", "location_tags": ["industrial", "port"], "funding_scale": "transformational", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.16},
+      {"id": "cement_chemical_plant", "label": "Cement or chemical plant", "priority_label": "Plant capacity expansion", "project_label": "plant capacity expansion", "physical": true, "property_theme": "industrial_estate", "location_tags": ["factory", "industrial"], "funding_scale": "high", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.12},
+      {"id": "mining_support_infra", "label": "Mining support infrastructure", "priority_label": "Mining support infrastructure", "project_label": "mining support infrastructure", "physical": true, "property_theme": "port_logistics", "location_tags": ["port", "industrial"], "funding_scale": "high", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.12}
+    ],
+    "consumer": [
+      {"id": "distribution_center", "label": "Distribution center", "priority_label": "Distribution center", "project_label": "distribution center", "physical": true, "property_theme": "port_logistics", "location_tags": ["logistics", "consumer"], "funding_scale": "moderate", "funding_routes": ["self", "loan"], "positive_bias": 0.1},
+      {"id": "cold_chain", "label": "Cold chain", "priority_label": "Cold chain capacity", "project_label": "cold chain network", "physical": true, "property_theme": "industrial_estate", "location_tags": ["logistics", "factory"], "funding_scale": "high", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.12},
+      {"id": "factory", "label": "Consumer factory", "priority_label": "Factory capacity expansion", "project_label": "factory capacity expansion", "physical": true, "property_theme": "industrial_estate", "location_tags": ["factory", "consumer"], "funding_scale": "high", "funding_routes": ["self", "loan"], "positive_bias": 0.12},
+      {"id": "channel_rollout", "label": "Store and channel rollout", "priority_label": "Channel rollout", "project_label": "store and channel rollout", "physical": false, "property_theme": "", "location_tags": ["consumer", "residential"], "funding_scale": "moderate", "funding_routes": ["self"], "positive_bias": 0.08}
+    ],
+    "noncyclical": [
+      {"id": "distribution_center", "label": "Distribution center", "priority_label": "Distribution center", "project_label": "distribution center", "physical": true, "property_theme": "port_logistics", "location_tags": ["logistics", "consumer"], "funding_scale": "moderate", "funding_routes": ["self", "loan"], "positive_bias": 0.09},
+      {"id": "cold_chain", "label": "Cold chain", "priority_label": "Cold chain capacity", "project_label": "cold chain network", "physical": true, "property_theme": "industrial_estate", "location_tags": ["logistics", "factory"], "funding_scale": "high", "funding_routes": ["loan", "rights_issue"], "positive_bias": 0.11},
+      {"id": "factory", "label": "Staples factory", "priority_label": "Factory capacity expansion", "project_label": "factory capacity expansion", "physical": true, "property_theme": "industrial_estate", "location_tags": ["factory", "consumer"], "funding_scale": "high", "funding_routes": ["self", "loan"], "positive_bias": 0.11},
+      {"id": "channel_rollout", "label": "Channel rollout", "priority_label": "Channel rollout", "project_label": "channel rollout", "physical": false, "property_theme": "", "location_tags": ["consumer", "residential"], "funding_scale": "moderate", "funding_routes": ["self"], "positive_bias": 0.07}
+    ]
+  }
+}

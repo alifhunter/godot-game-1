@@ -41,10 +41,12 @@ var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 var batched_setup_progress_calls := 0
 var batched_setup_progress_done := 0
 var batched_setup_progress_total := 0
+var active_smoke_mode := SMOKE_MODE_FULL
 
 
 func _ready() -> void:
-	var smoke_mode: String = _get_smoke_mode()
+	active_smoke_mode = _get_smoke_mode()
+	var smoke_mode: String = active_smoke_mode
 	DataRepository.reload_all()
 	var release_readiness_validation: String = _validate_release_readiness_assets()
 	if not release_readiness_validation.is_empty():
@@ -420,7 +422,30 @@ func _validate_enriched_news_generation() -> String:
 		"management stance",
 		"hidden_positioning",
 		"formal_agenda_or_filing",
-		"meeting_or_call"
+		"meeting_or_call",
+		"vague public hint",
+		"source reliability",
+		"current read",
+		"unclear location",
+		"intel level",
+		"source trail",
+		"source article",
+		"source story",
+		"separate property angle",
+		"market story",
+		"original headline",
+		"working read",
+		"development lead",
+		"roadmap_id",
+		"funding_gate",
+		"funding readiness",
+		"company_roadmap",
+		"participant_role",
+		"milestone_state",
+		"raw statement",
+		"system metadata",
+		"stage of a",
+		"price-bias read"
 	]
 	var searchable_body: String = body.to_lower()
 	for forbidden_term_value in forbidden_terms:
@@ -683,7 +708,27 @@ func _validate_enriched_social_generation() -> String:
 		"current_timeline_state",
 		"hidden_positioning",
 		"formal_agenda_or_filing",
-		"meeting_or_call"
+		"meeting_or_call",
+		"vague public hint",
+		"source reliability",
+		"current read",
+		"unclear location",
+		"intel level",
+		"source trail",
+		"source article",
+		"source story",
+		"working read",
+		"development lead",
+		"roadmap_id",
+		"funding_gate",
+		"funding readiness",
+		"company_roadmap",
+		"participant_role",
+		"milestone_state",
+		"raw statement",
+		"system metadata",
+		"stage of a",
+		"price-bias read"
 	]
 	var new_account_ids := {
 		"market_diary_id": true,
@@ -2101,6 +2146,10 @@ func _get_smoke_mode() -> String:
 	return SMOKE_MODE_FULL
 
 
+func _is_quick_smoke_mode() -> bool:
+	return active_smoke_mode == SMOKE_MODE_QUICK
+
+
 func _write_smoke_result(smoke_line: String) -> void:
 	var result_path: String = "user://smoke_test_result.txt"
 	if OS.get_cmdline_user_args().has(SMOKE_LOCAL_IO_ARG):
@@ -2720,6 +2769,35 @@ func _guide_smoke_press_handoff(root: Node) -> bool:
 	return true
 
 
+func _validate_ftue_opening_quick_flow() -> Dictionary:
+	var difficulty_config: Dictionary = GameManager.get_difficulty_config(GameManager.DEFAULT_DIFFICULTY_ID)
+	var company_definitions: Array = GameManager.build_company_roster(246810, difficulty_config)
+	RunState.setup_new_run(246810, company_definitions, difficulty_config, true)
+	GameManager.simulate_opening_session(false)
+	var game_root = load("res://scenes/game/GameRoot.tscn").instantiate()
+	add_child(game_root)
+	await _guide_smoke_wait(4)
+
+	if not game_root.has_method("get_guide_smoke_state"):
+		return await _guide_smoke_fail(game_root, "Smoke test expected GameRoot to expose unified guide smoke state.")
+	var guide_state: Dictionary = game_root.call("get_guide_smoke_state")
+	if (
+		not bool(guide_state.get("overlay_exists", false)) or
+		not bool(guide_state.get("visible", false)) or
+		str(guide_state.get("current_flow_id", "")) != "watchlist_flow" or
+		str(guide_state.get("current_step_id", "")) != "open_stockbot" or
+		not bool(guide_state.get("hub_button_exists", false)) or
+		not bool(guide_state.get("taskbar_hub_exists", false)) or
+		not bool(guide_state.get("help_hub_exists", false))
+	):
+		return await _guide_smoke_fail(game_root, "Smoke test expected quick FTUE to start on the watchlist guide with hub controls, got %s." % str(guide_state))
+	if int(guide_state.get("overlay_mouse_filter", -1)) != Control.MOUSE_FILTER_IGNORE or int(guide_state.get("card_mouse_filter", -1)) != Control.MOUSE_FILTER_STOP:
+		return await _guide_smoke_fail(game_root, "Smoke test expected quick FTUE overlay layers to keep the right mouse filters.")
+	game_root.queue_free()
+	await get_tree().process_frame
+	return {"success": true}
+
+
 func _validate_progressive_guide_flow() -> Dictionary:
 	var difficulty_config: Dictionary = GameManager.get_difficulty_config(GameManager.DEFAULT_DIFFICULTY_ID)
 	var company_definitions: Array = GameManager.build_company_roster(246810, difficulty_config)
@@ -3192,6 +3270,8 @@ func _validate_progressive_guide_flow() -> Dictionary:
 
 
 func _validate_ftue_flow() -> Dictionary:
+	if _is_quick_smoke_mode():
+		return await _validate_ftue_opening_quick_flow()
 	return await _validate_progressive_guide_flow()
 	var difficulty_config: Dictionary = GameManager.get_difficulty_config(GameManager.DEFAULT_DIFFICULTY_ID)
 	var company_definitions: Array = GameManager.build_company_roster(246810, difficulty_config)
@@ -4567,7 +4647,7 @@ func _run_scenario(
 			"message": "Smoke test expected attended corporate meetings to persist through save/load."
 		}
 
-	if difficulty_id == GameManager.DEFAULT_DIFFICULTY_ID:
+	if difficulty_id == GameManager.DEFAULT_DIFFICULTY_ID and not _is_quick_smoke_mode():
 		var interactive_test_base_state: Dictionary = RunState.to_save_dict()
 		if (
 			not GameManager.has_method("debug_force_rights_issue_rupslb") or
@@ -5280,6 +5360,16 @@ func _run_scenario(
 			var debug_candidate_company_id: String = str(RunState.company_order[company_index])
 			if bool(GameManager.get_company_corporate_action_snapshot(debug_candidate_company_id).get("has_live_chain", false)):
 				continue
+			var debug_candidate_has_roadmap: bool = false
+			for milestone_value in RunState.get_company_roadmap_state().get("active_milestones", {}).values():
+				if typeof(milestone_value) != TYPE_DICTIONARY:
+					continue
+				var debug_milestone: Dictionary = milestone_value
+				if str(debug_milestone.get("company_id", "")) == debug_candidate_company_id or str(debug_milestone.get("finance_company_id", "")) == debug_candidate_company_id:
+					debug_candidate_has_roadmap = true
+					break
+			if debug_candidate_has_roadmap:
+				continue
 			debug_schedule_candidate_ids.append(debug_candidate_company_id)
 			if debug_schedule_candidate_ids.size() >= 2:
 				break
@@ -5306,8 +5396,13 @@ func _run_scenario(
 		var debug_stock_split_button: Button = game_root.find_child("DebugCorporateActionButtonStockSplitRupslb", true, false) as Button
 		var debug_mscy_inclusion_button: Button = game_root.find_child("DebugIndexReviewButtonMscyInclusion", true, false) as Button
 		var debug_ftsi_exclusion_button: Button = game_root.find_child("DebugIndexReviewButtonFtsiExclusion", true, false) as Button
+		var debug_roadmap_primary_button: Button = game_root.find_child("DebugCompanyRoadmapButtonRoadmapPrimary", true, false) as Button
+		var debug_roadmap_financing_button: Button = game_root.find_child("DebugCompanyRoadmapButtonRoadmapFinancing", true, false) as Button
+		var debug_life_karawang_button: Button = game_root.find_child("DebugLifeDevelopmentButtonLifeKarawangIndustrial", true, false) as Button
 		var debug_start_rupslb_status_label: Label = game_root.find_child("DebugStartRupslbStatusLabel", true, false) as Label
 		var debug_index_review_status_label: Label = game_root.find_child("DebugIndexReviewStatusLabel", true, false) as Label
+		var debug_roadmap_status_label: Label = game_root.find_child("DebugCompanyRoadmapStatusLabel", true, false) as Label
+		var debug_life_status_label: Label = game_root.find_child("DebugLifeDevelopmentStatusLabel", true, false) as Label
 		if (
 			debug_overlay == null or
 			not debug_overlay.visible or
@@ -5316,14 +5411,19 @@ func _run_scenario(
 			debug_stock_split_button == null or
 			debug_mscy_inclusion_button == null or
 			debug_ftsi_exclusion_button == null or
+			debug_roadmap_primary_button == null or
+			debug_roadmap_financing_button == null or
+			debug_life_karawang_button == null or
 			debug_start_rupslb_status_label == null or
-			debug_index_review_status_label == null
+			debug_index_review_status_label == null or
+			debug_roadmap_status_label == null or
+			debug_life_status_label == null
 		):
 			game_root.queue_free()
 			await get_tree().process_frame
 			return {
 				"success": false,
-				"message": "Smoke test expected the debug overlay to expose selected-stock corporate-action and index-review generator controls."
+				"message": "Smoke test expected the debug overlay to expose selected-stock corporate-action, index-review, roadmap, and Life property generator controls."
 			}
 
 		game_root.selected_company_id = ""
@@ -5348,6 +5448,23 @@ func _run_scenario(
 			return {
 				"success": false,
 				"message": "Smoke test expected index-review debug generators to stay disabled until a stock is selected."
+			}
+		if (
+			not debug_roadmap_primary_button.disabled or
+			debug_roadmap_status_label.text.find("Pick a stock first.") == -1
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected roadmap debug generators to stay disabled until a stock is selected."
+			}
+		if debug_life_karawang_button.disabled or debug_life_status_label.text.find("Ready to generate Life property intel.") == -1:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected Life property debug generators to be available for an active run."
 			}
 
 		game_root._on_all_stock_selected(debug_non_owned_company_id)
@@ -5379,6 +5496,17 @@ func _run_scenario(
 			return {
 				"success": false,
 				"message": "Smoke test expected the debug index-review generators to enable for any selected stock."
+			}
+		if (
+			debug_roadmap_primary_button.disabled or
+			debug_roadmap_financing_button.disabled or
+			debug_roadmap_status_label.text.find("Priority:") == -1
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected debug roadmap generators to enable for a selected stock without an active roadmap."
 			}
 
 		var debug_target_buy_result: Dictionary = GameManager.buy_lots(debug_target_company_id, 1)
@@ -8679,7 +8807,7 @@ func _run_scenario(
 			"message": "Smoke test expected newspaper card text and image placeholders to use readable dark colors."
 		}
 
-	var forbidden_news_terms: Array = ["source_chain_id", "chain_family", "meeting_id", "venue_type", "progress_label", "tone", "current_timeline_state", "management stance", "hidden_positioning", "formal_agenda_or_filing", "meeting_or_call"]
+	var forbidden_news_terms: Array = ["source_chain_id", "chain_family", "meeting_id", "venue_type", "progress_label", "tone", "current_timeline_state", "management stance", "hidden_positioning", "formal_agenda_or_filing", "meeting_or_call", "vague public hint", "source reliability", "current read", "unclear location", "intel level", "source trail", "source article", "source story", "separate property angle", "market story", "original headline", "working read", "development lead", "roadmap_id", "funding_gate", "funding readiness", "company_roadmap", "participant_role", "milestone_state", "raw statement", "system metadata", "stage of a", "price-bias read"]
 	var news_detail_meta_label: Label = game_root.find_child("NewsDetailMetaLabel", true, false) as Label
 	var news_detail_body: RichTextLabel = game_root.find_child("NewsDetailBody", true, false) as RichTextLabel
 	var news_detail_scroll: ScrollContainer = game_root.find_child("NewsDetailScroll", true, false) as ScrollContainer
@@ -8699,12 +8827,12 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected the News article detail section to scroll as one full article column."
 		}
-	var visible_news_text: String = "%s\n%s\n%s\n%s" % [
+	var visible_news_text: String = ("%s\n%s\n%s\n%s" % [
 		str(news_detail_meta_label.text if news_detail_meta_label != null else ""),
 		str(news_detail_byline_label.text),
 		str(news_detail_chips_label.text),
 		str(news_detail_body.text if news_detail_body != null else "")
-	]
+	]).to_lower()
 	for forbidden_term in forbidden_news_terms:
 		if visible_news_text.find(str(forbidden_term)) != -1:
 			game_root.queue_free()
@@ -10068,7 +10196,7 @@ func _run_scenario(
 			"message": "Smoke test expected Twooter public reply options to expose dialog tree metadata."
 		}
 	social_reply_option_button.emit_signal("pressed")
-	await get_tree().create_timer(1.35).timeout
+	await _wait_for_button_enabled(social_reply_send_button)
 	if social_reply_send_button.disabled or social_reply_text_label.text.strip_edges().is_empty():
 		game_root.queue_free()
 		await get_tree().process_frame
@@ -10457,7 +10585,7 @@ func _run_scenario(
 			private_tree_metadata_found = true
 		if option_action_id == "share_thesis":
 			share_thesis_option_seen = true
-		if private_network_option_button == null and option_action_id != "message_check_in":
+		if private_network_option_button == null and not (option_action_id in ["message_check_in", "share_thesis"]):
 			private_network_option_button = option_button
 		if option_action_id == "connect":
 			private_network_option_button = option_button
@@ -10469,7 +10597,7 @@ func _run_scenario(
 			"message": "Smoke test expected the private composer to include contextual dialog tree options with a Network-facing action."
 		}
 	private_network_option_button.emit_signal("pressed")
-	await get_tree().create_timer(1.35).timeout
+	await _wait_for_button_enabled(social_message_send_button)
 	if social_message_send_button.disabled or social_message_composer_text_label.text.strip_edges().is_empty():
 		game_root.queue_free()
 		await get_tree().process_frame
@@ -10546,6 +10674,25 @@ func _run_scenario(
 			"message": "Smoke test expected a cooled-down Twooter Message branch to stay paused after Home/Message navigation and reject direct sends."
 		}
 	RunState.load_from_dict(private_cooldown_restore_state)
+	RunState.daily_action_day_index = RunState.day_index
+	RunState.daily_actions_used = 0
+	var share_branch_social_state: Dictionary = RunState.get_twooter_social_state()
+	var share_branch_dialog_state: Dictionary = share_branch_social_state.get("dialog_state", {}) if typeof(share_branch_social_state.get("dialog_state", {})) == TYPE_DICTIONARY else {}
+	var share_branch_accounts: Dictionary = share_branch_dialog_state.get("accounts", {}) if typeof(share_branch_dialog_state.get("accounts", {})) == TYPE_DICTIONARY else {}
+	share_branch_accounts[social_first_account_id] = {
+		"tree_id": "thesis_review",
+		"node_id": "review",
+		"last_option_id": "",
+		"last_action_id": "",
+		"repeat_count": 0,
+		"last_day_index": RunState.day_index - 1,
+		"step_count": 0,
+		"cooldown_until_day": -9999,
+		"cooldown_reason": ""
+	}
+	share_branch_dialog_state["accounts"] = share_branch_accounts
+	share_branch_social_state["dialog_state"] = share_branch_dialog_state
+	RunState.set_twooter_social_state(share_branch_social_state)
 	game_root.selected_social_message_account_id = social_first_account_id
 	game_root.selected_social_view_id = "message"
 	game_root._refresh_social()
@@ -10553,6 +10700,7 @@ func _run_scenario(
 	social_message_options = game_root.find_child("SocialMessageComposerOptions", true, false) as VBoxContainer
 	var private_option_texts_after: Array[String] = []
 	var share_thesis_button: Button = null
+	share_thesis_option_seen = false
 	if social_message_options != null:
 		for action_child in social_message_options.get_children():
 			var action_button: Button = action_child as Button
@@ -10580,10 +10728,35 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected Twooter Message dialog trees to expose a share-thesis action when an open thesis exists."
 		}
+	if share_thesis_button == null or share_thesis_button.disabled:
+		var share_debug: Array[String] = []
+		if social_message_options != null:
+			for share_debug_child in social_message_options.get_children():
+				var share_debug_button: Button = share_debug_child as Button
+				if share_debug_button != null and share_debug_button.visible:
+					share_debug.append("%s:%s:%s:%s" % [
+						str(share_debug_button.get_meta("action_id", "")),
+						str(share_debug_button.get_meta("thesis_id", "")),
+						str(share_debug_button.get_meta("blocked_reason", "")),
+						str(share_debug_button.disabled)
+					])
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the share-thesis dialog option to be enabled when an open thesis exists. Options: %s AP: %s thesis: %s" % [
+				str(share_debug),
+				str(GameManager.get_daily_action_snapshot()),
+				str(thesis_create_result.get("thesis", {}))
+			]
+		}
+	var share_thesis_id: String = str(share_thesis_button.get_meta("thesis_id", str(thesis_create_result.get("thesis", {}).get("id", ""))))
+	var share_player_text: String = str(share_thesis_button.get_meta("player_text", ""))
 	var share_result: Dictionary = GameManager.send_twooter_message(
 		social_first_account_id,
-		"share_thesis",
-		str(thesis_create_result.get("thesis", {}).get("id", ""))
+		str(share_thesis_button.get_meta("action_id", "share_thesis")),
+		share_thesis_id,
+		share_player_text
 	)
 	await get_tree().process_frame
 	var share_state_after: Dictionary = RunState.get_twooter_social_state()
@@ -10729,6 +10902,8 @@ func _run_scenario(
 	var movers_tabs: TabContainer = game_root.find_child("MoversTabs", true, false) as TabContainer
 	var top_broker_flow_rows: VBoxContainer = game_root.find_child("TopBrokerFlowRows", true, false) as VBoxContainer
 	var work_tabs: TabContainer = game_root.find_child("WorkTabs", true, false) as TabContainer
+	var corporate_actions_rows: VBoxContainer = game_root.find_child("CorporateActionsRows", true, false) as VBoxContainer
+	var corporate_actions_filter: OptionButton = game_root.find_child("CorporateActionsFilterOption", true, false) as OptionButton
 	var calendar_week_header: GridContainer = game_root.find_child("CalendarWeekHeader", true, false) as GridContainer
 	var calendar_days_grid: GridContainer = game_root.find_child("CalendarDaysGrid", true, false) as GridContainer
 	var dashboard_sector_cards_grid: GridContainer = game_root.find_child("DashboardSectorCardsGrid", true, false) as GridContainer
@@ -10752,6 +10927,11 @@ func _run_scenario(
 		top_broker_flow_rows == null or
 		work_tabs == null or
 		not work_tabs.is_tab_hidden(4) or
+		work_tabs.get_tab_count() < 7 or
+		work_tabs.get_tab_title(5) != "Corp. Action" or
+		corporate_actions_rows == null or
+		corporate_actions_filter == null or
+		corporate_actions_filter.get_item_count() < 4 or
 		calendar_week_header == null or
 		calendar_week_header.get_child_count() != 7 or
 		calendar_days_grid == null or
@@ -10767,7 +10947,7 @@ func _run_scenario(
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected Dashboard movers with a Broker Flow tab, sector cards, uniform calendar grid, zero dashboard separation, and hidden Analyzer tab."
+			"message": "Smoke test expected Dashboard movers with a Broker Flow tab, sector cards, uniform calendar grid, hidden Analyzer tab, and the STOCKBOT Corp. Action tab."
 		}
 	if top_broker_flow_rows.get_child_count() <= 1:
 		game_root.queue_free()
@@ -11077,6 +11257,17 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected company Profile to hide raw price/score lines and render the new background/shareholder layout."
 		}
+
+	var profile_background_text: String = profile_background_body_label.text.to_lower()
+	for forbidden_profile_term_value in ["employee(s)", "profile revenue", "public roadmap focus", "strategic priority:", "operating exposure"]:
+		var forbidden_profile_term: String = str(forbidden_profile_term_value)
+		if profile_background_text.find(forbidden_profile_term) != -1:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected company Profile background to read naturally and avoid raw wording like %s." % forbidden_profile_term
+			}
 
 	var referral_setup: Dictionary = _first_referral_setup(tracked_company_id)
 	if referral_setup.is_empty():
@@ -12635,11 +12826,23 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 	var life_dividend_rows: VBoxContainer = game_root.find_child("LifeDividendRows", true, false) as VBoxContainer
 	var life_tabs: TabContainer = game_root.find_child("LifeTabs", true, false) as TabContainer
 	var life_overview_tab: Control = game_root.find_child("LifeOverviewTab", true, false) as Control
+	var life_properties_tab: Control = game_root.find_child("LifePropertiesTab", true, false) as Control
+	var life_cars_tab: Control = game_root.find_child("LifeCarsTab", true, false) as Control
 	var life_finance_tab: Control = game_root.find_child("LifeFinanceTab", true, false) as Control
 	var life_finance_status_label: Label = game_root.find_child("LifeFinanceStatusLabel", true, false) as Label
 	var life_emergency_loan_button: Button = game_root.find_child("LifeEmergencyLoanButton", true, false) as Button
 	var life_active_loan_panel: PanelContainer = game_root.find_child("LifeActiveLoanPanel", true, false) as PanelContainer
 	var life_bankruptcy_status_panel: PanelContainer = game_root.find_child("LifeBankruptcyStatusPanel", true, false) as PanelContainer
+	var life_property_rows: VBoxContainer = game_root.find_child("LifePropertyRows", true, false) as VBoxContainer
+	var life_property_catalog_rows: VBoxContainer = game_root.find_child("LifePropertyCatalogRows", true, false) as VBoxContainer
+	var life_property_type_option: OptionButton = game_root.find_child("LifePropertyTypeOption", true, false) as OptionButton
+	var life_property_location_option: OptionButton = game_root.find_child("LifePropertyLocationOption", true, false) as OptionButton
+	var life_property_intel_summary_label: Label = game_root.find_child("LifePropertyIntelSummaryLabel", true, false) as Label
+	var life_development_intel_panel: Control = game_root.find_child("LifeDevelopmentIntelPanel", true, false) as Control
+	var life_development_lead_rows: VBoxContainer = game_root.find_child("LifeDevelopmentLeadRows", true, false) as VBoxContainer
+	var life_car_rows: VBoxContainer = game_root.find_child("LifeCarRows", true, false) as VBoxContainer
+	var life_car_catalog_rows: VBoxContainer = game_root.find_child("LifeCarCatalogRows", true, false) as VBoxContainer
+	var life_public_image_label: Label = game_root.find_child("LifePublicImageLabel", true, false) as Label
 	var stress_meter_panel: Control = game_root.find_child("LifeStressMeterPanel", true, false) as Control
 	var stress_meter_bar: ProgressBar = game_root.find_child("LifeStressMeterBar", true, false) as ProgressBar
 	var stress_meter_title_label: Label = game_root.find_child("LifeStressMeterTitleLabel", true, false) as Label
@@ -12679,11 +12882,28 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 		life_dividend_rows == null or
 		life_tabs == null or
 		life_overview_tab == null or
+		life_properties_tab == null or
+		life_cars_tab == null or
 		life_finance_tab == null or
 		life_finance_status_label == null or
 		life_emergency_loan_button == null or
 		life_active_loan_panel == null or
 		life_bankruptcy_status_panel == null or
+		life_property_rows == null or
+		life_property_catalog_rows == null or
+		life_property_catalog_rows.get_child_count() != 1 or
+		life_property_type_option == null or
+		life_property_type_option.item_count < 3 or
+		life_property_location_option == null or
+		life_property_location_option.item_count < 3 or
+		life_property_intel_summary_label != null or
+		life_development_intel_panel != null or
+		life_development_lead_rows != null or
+		life_car_rows == null or
+		life_car_catalog_rows == null or
+		life_car_catalog_rows.get_child_count() <= 0 or
+		life_public_image_label == null or
+		life_public_image_label.text.is_empty() or
 		stress_meter_panel == null or
 		not stress_meter_panel.visible or
 		stress_meter_panel.get_parent() == null or
@@ -12703,9 +12923,17 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 		not life_snapshot.has("stress_ap_penalty") or
 		float(life_snapshot.get("monthly_outflow", 0.0)) <= 0.0 or
 		not life_snapshot.has("housing_options") or
-		not life_snapshot.has("lifestyle_options")
+		not life_snapshot.has("lifestyle_options") or
+		not life_snapshot.has("properties") or
+		not life_snapshot.has("development_leads") or
+		not life_snapshot.has("property_value_events") or
+		not life_snapshot.has("cars") or
+		not life_snapshot.has("public_image")
 	):
-		return "Smoke test expected the Life icon to open a settled brown-framed cash-flow planning window with populated selectors, basics controls, stress readouts, budget rows, and runway summary."
+		return "Smoke test expected the Life icon to open a settled brown-framed cash-flow planning window with populated selectors, status assets tabs, public image, budget rows, and Finance."
+
+	if _is_quick_smoke_mode():
+		return ""
 
 	var starting_lifestyle_id: String = str(RunState.get_player_life().get("lifestyle_id", ""))
 	var starting_basics_tier_id: String = str(RunState.get_player_life().get("basics_tier_id", ""))
@@ -12921,7 +13149,10 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 	life_tabs = game_root.find_child("LifeTabs", true, false) as TabContainer
 	if life_tabs == null:
 		return "Smoke test expected the Life tabs to remain available during cash stress."
-	life_tabs.current_tab = 1
+	var life_finance_tab_index: int = _guide_smoke_tab_index(life_tabs, "Finance")
+	if life_finance_tab_index < 0:
+		return "Smoke test expected Life tabs to include Finance."
+	life_tabs.current_tab = life_finance_tab_index
 	await get_tree().process_frame
 	life_finance_status_label = game_root.find_child("LifeFinanceStatusLabel", true, false) as Label
 	life_emergency_loan_button = game_root.find_child("LifeEmergencyLoanButton", true, false) as Button
@@ -13688,7 +13919,7 @@ func _validate_thesis_board_smoke(game_root: Node, thesis_app_button: Button, de
 
 	await get_tree().process_frame
 	var visible_report_text: String = thesis_report_text.text.to_lower()
-	for forbidden_term_value in ["source_chain_id", "chain_family", "hidden_flag", "current_timeline_state", "formal_agenda_or_filing", "meeting_or_call"]:
+	for forbidden_term_value in ["source_chain_id", "chain_family", "hidden_flag", "current_timeline_state", "formal_agenda_or_filing", "meeting_or_call", "roadmap_id", "funding_gate", "funding readiness", "company_roadmap", "participant_role", "milestone_state"]:
 		var forbidden_term: String = str(forbidden_term_value)
 		if visible_report_text.find(forbidden_term) != -1:
 			return "Smoke test expected Thesis report copy to avoid raw system/debug wording like %s." % forbidden_term
@@ -14203,6 +14434,14 @@ func _wait_for_ui_animation_settle() -> void:
 	await get_tree().process_frame
 
 
+func _wait_for_button_enabled(button: Button, max_wait_seconds: float = 1.4) -> void:
+	var elapsed: float = 0.0
+	while button != null and button.disabled and elapsed < max_wait_seconds:
+		await get_tree().create_timer(0.05).timeout
+		elapsed += 0.05
+	await get_tree().process_frame
+
+
 func _control_animation_settled(control: Control) -> bool:
 	if control == null:
 		return false
@@ -14405,8 +14644,8 @@ func _validate_release_readiness_assets() -> String:
 	var steam_manager: Node = get_node_or_null("/root/SteamManager")
 	if steam_manager == null:
 		return "Smoke test expected SteamManager to be registered as a global autoload."
-	if not steam_manager.has_method("get_runtime_info") or not steam_manager.has_method("refresh_runtime_info"):
-		return "Smoke test expected SteamManager to expose Steam runtime info helpers."
+	if not steam_manager.has_method("get_runtime_info") or not steam_manager.has_method("refresh_runtime_info") or not steam_manager.has_method("get_bug_report_context"):
+		return "Smoke test expected SteamManager to expose Steam runtime info and report-context helpers."
 	var steam_runtime_info: Variant = steam_manager.call("get_runtime_info")
 	if typeof(steam_runtime_info) != TYPE_DICTIONARY:
 		return "Smoke test expected SteamManager runtime info to be a dictionary."
@@ -14440,6 +14679,9 @@ func _validate_release_readiness_assets() -> String:
 	var expected_steam_app_id: int = int(ProjectSettings.get_setting("steam/initialization/app_id", 480))
 	if int(steam_info.get("app_id", 0)) != expected_steam_app_id:
 		return "Smoke test expected SteamManager to read the configured Steam app id."
+	var steam_report_context: String = str(steam_manager.call("get_bug_report_context"))
+	if steam_report_context.find("Steam app id") == -1 or steam_report_context.find(str(expected_steam_app_id)) == -1:
+		return "Smoke test expected SteamManager bug-report context to include the configured Steam app id."
 
 	var known_issues_text: String = _read_text_file("res://docs/KNOWN_ISSUES.md")
 	if (
@@ -14454,11 +14696,23 @@ func _validate_release_readiness_assets() -> String:
 	if (
 		bug_template_text.is_empty() or
 		bug_template_text.find(build_number) == -1 or
+		bug_template_text.find("Launched from Steam") == -1 or
+		bug_template_text.find("Steam Cloud status") == -1 or
 		bug_template_text.find("Steps To Reproduce") == -1 or
 		bug_template_text.find("Expected Result") == -1 or
 		bug_template_text.find("Actual Result") == -1
 	):
-		return "Smoke test expected docs/BUG_REPORT_TEMPLATE.md to include build, reproduction, expected-result, and actual-result fields."
+		return "Smoke test expected docs/BUG_REPORT_TEMPLATE.md to include Steam setup, build, reproduction, expected-result, and actual-result fields."
+
+	var playtest_doc_text: String = _read_text_file("res://docs/STEAM_PLAYTEST_CHECKLIST.md")
+	if (
+		playtest_doc_text.is_empty() or
+		playtest_doc_text.find(build_number) == -1 or
+		playtest_doc_text.find("Launch from Steam") == -1 or
+		playtest_doc_text.find("App ID `%d`" % expected_steam_app_id) == -1 or
+		playtest_doc_text.find("Steam overlay") == -1
+	):
+		return "Smoke test expected docs/STEAM_PLAYTEST_CHECKLIST.md to define the Steam-launch platform checklist."
 
 	var achievement_doc_text: String = _read_text_file("res://docs/STEAM_ACHIEVEMENT_IDS.md")
 	if (
@@ -14474,7 +14728,10 @@ func _validate_release_readiness_assets() -> String:
 		cloud_doc_text.is_empty() or
 		cloud_doc_text.find("user://saves/slot_1.json") == -1 or
 		cloud_doc_text.find("daytrader_save_config.json") == -1 or
-		cloud_doc_text.find("WinAppDataRoaming") == -1
+		cloud_doc_text.find("WinAppDataRoaming") == -1 or
+		cloud_doc_text.find("App ID `%d`" % expected_steam_app_id) == -1 or
+		cloud_doc_text.find("testappcloudpaths %d" % expected_steam_app_id) == -1 or
+		cloud_doc_text.find("Launch the Steam build from Steam") == -1
 	):
 		return "Smoke test expected docs/STEAM_CLOUD_SAVE_PATHS.md to document Steam Auto-Cloud save paths."
 
@@ -14721,15 +14978,19 @@ func _broker_table_rows_use_expanding_halves(header_row: HBoxContainer, rows_vbo
 	for child in rows_vbox.get_children():
 		if child is Label:
 			continue
-		var row_wrap: VBoxContainer = child as VBoxContainer
-		if row_wrap == null or row_wrap.get_child_count() <= 0:
-			continue
-		var row: HBoxContainer = row_wrap.get_child(0) as HBoxContainer
+		var row: HBoxContainer = child as HBoxContainer
+		if row == null:
+			var row_wrap: VBoxContainer = child as VBoxContainer
+			if row_wrap == null or row_wrap.get_child_count() <= 0:
+				continue
+			row = row_wrap.get_child(0) as HBoxContainer
 		return row != null and _broker_table_line_uses_expanding_halves(row)
 	return false
 
 
 func _broker_table_line_uses_expanding_halves(row: HBoxContainer) -> bool:
+	if _broker_table_line_uses_nested_expanding_halves(row):
+		return true
 	if row == null or row.get_child_count() != 9:
 		return false
 	if not (row.get_child(4) is VSeparator):
@@ -14738,6 +14999,33 @@ func _broker_table_line_uses_expanding_halves(row: HBoxContainer) -> bool:
 		if child_index == 4:
 			continue
 		var label: Label = row.get_child(child_index) as Label
+		if label == null:
+			return false
+		if label.size_flags_horizontal != Control.SIZE_EXPAND_FILL or label.size_flags_stretch_ratio <= 0.0:
+			return false
+	return true
+
+
+func _broker_table_line_uses_nested_expanding_halves(row: HBoxContainer) -> bool:
+	if row == null or row.get_child_count() != 3:
+		return false
+	var buy_side: HBoxContainer = row.get_child(0) as HBoxContainer
+	var divider: VSeparator = row.get_child(1) as VSeparator
+	var sell_side: HBoxContainer = row.get_child(2) as HBoxContainer
+	if buy_side == null or divider == null or sell_side == null:
+		return false
+	if buy_side.size_flags_horizontal != Control.SIZE_EXPAND_FILL or sell_side.size_flags_horizontal != Control.SIZE_EXPAND_FILL:
+		return false
+	if buy_side.size_flags_stretch_ratio <= 0.0 or sell_side.size_flags_stretch_ratio <= 0.0:
+		return false
+	return _broker_table_side_uses_expanding_cells(buy_side) and _broker_table_side_uses_expanding_cells(sell_side)
+
+
+func _broker_table_side_uses_expanding_cells(side_row: HBoxContainer) -> bool:
+	if side_row == null or side_row.get_child_count() != 4:
+		return false
+	for child in side_row.get_children():
+		var label: Label = child as Label
 		if label == null:
 			return false
 		if label.size_flags_horizontal != Control.SIZE_EXPAND_FILL or label.size_flags_stretch_ratio <= 0.0:
@@ -14812,8 +15100,17 @@ func _validate_network_tip_public_payload(tip_result: Dictionary, context_label:
 		"hidden_positioning",
 		"formal_agenda_or_filing",
 		"meeting_or_call",
+		"raw statement",
+		"system metadata",
+		"stage of a",
 		"created a tip arc",
-		"created a tip"
+		"created a tip",
+		"roadmap_id",
+		"funding_gate",
+		"funding readiness",
+		"company_roadmap",
+		"participant_role",
+		"milestone_state"
 	]
 	for forbidden_term_value in forbidden_terms:
 		var forbidden_term: String = str(forbidden_term_value)

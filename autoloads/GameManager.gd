@@ -273,6 +273,86 @@ const DEBUG_CORPORATE_ACTION_GENERATOR_GROUPS := [
 		]
 	}
 ]
+const DEBUG_COMPANY_ROADMAP_GENERATOR_GROUPS := [
+	{
+		"id": "selected_stock_roadmap",
+		"label": "Selected Stock Roadmap",
+		"generators": [
+			{
+				"id": "roadmap_primary",
+				"label": "Primary Milestone",
+				"full_label": "Primary Roadmap Milestone",
+				"description": "Start the selected stock's generated roadmap priority as a public business event."
+			},
+			{
+				"id": "roadmap_physical",
+				"label": "Physical Project",
+				"full_label": "Physical Roadmap Project",
+				"description": "Start a sector-compatible physical site project and push explicit city/theme metadata into property intel."
+			},
+			{
+				"id": "roadmap_financing",
+				"label": "Financing Arc",
+				"full_label": "Roadmap Financing Arc",
+				"description": "Start a large roadmap milestone that seeks a generated finance-sector partner when one is eligible."
+			},
+			{
+				"id": "roadmap_corporate_funding",
+				"label": "Funding Action",
+				"full_label": "Roadmap Corporate Funding",
+				"description": "Start a large roadmap milestone that requests a corporate-action funding route."
+			}
+		]
+	}
+]
+const DEBUG_LIFE_DEVELOPMENT_GENERATOR_GROUPS := [
+	{
+		"id": "life_property_intel",
+		"label": "Life Property Intel",
+		"generators": [
+			{
+				"id": "life_bekasi_modern_city",
+				"label": "Bekasi Modern City",
+				"location_id": "bekasi",
+				"theme": "modern_city",
+				"impact_tier": "major",
+				"source_type": "network",
+				"outcome_override": "confirmed_big",
+				"description": "Create a high-impact Bekasi property watch that will confirm when processed."
+			},
+			{
+				"id": "life_karawang_industrial",
+				"label": "Karawang Industrial",
+				"location_id": "karawang",
+				"theme": "industrial_estate",
+				"impact_tier": "major",
+				"source_type": "news",
+				"outcome_override": "",
+				"description": "Create a Karawang industrial-estate property watch."
+			},
+			{
+				"id": "life_surabaya_port_delay",
+				"label": "Surabaya Port Delay",
+				"location_id": "surabaya",
+				"theme": "port_logistics",
+				"impact_tier": "major",
+				"source_type": "news",
+				"outcome_override": "delayed",
+				"description": "Create a Surabaya port/logistics property watch that delays on resolution."
+			},
+			{
+				"id": "life_bandung_toll_cancel",
+				"label": "Bandung Toll Cancel",
+				"location_id": "bandung",
+				"theme": "toll_exit",
+				"impact_tier": "moderate",
+				"source_type": "network",
+				"outcome_override": "cancelled",
+				"description": "Create a Bandung toll-exit property watch that cancels on resolution."
+			}
+		]
+	}
+]
 const DEBUG_COMPANY_ARC_EVENT_IDS := {
 	"earnings_beat": true,
 	"earnings_miss": true,
@@ -378,6 +458,208 @@ const LIFE_LIFESTYLE_OPTIONS := [
 		"detail": "Lifestyle inflation. Comfortable, but demanding on cash flow."
 	}
 ]
+const LIFE_ASSET_SELL_MULTIPLIER := 0.95
+const LIFE_PROPERTY_LOCATIONS := [
+	{"id": "jakarta", "label": "Jakarta", "market_factor": 1.0},
+	{"id": "bogor", "label": "Bogor", "market_factor": 0.74},
+	{"id": "depok", "label": "Depok", "market_factor": 0.78},
+	{"id": "tangerang", "label": "Tangerang", "market_factor": 0.9},
+	{"id": "bekasi", "label": "Bekasi", "market_factor": 0.82},
+	{"id": "karawang", "label": "Karawang", "market_factor": 0.8},
+	{"id": "bandung", "label": "Bandung", "market_factor": 0.85},
+	{"id": "surabaya", "label": "Surabaya", "market_factor": 0.88},
+	{"id": "semarang", "label": "Semarang", "market_factor": 0.68},
+	{"id": "medan", "label": "Medan", "market_factor": 0.7},
+	{"id": "makassar", "label": "Makassar", "market_factor": 0.66},
+	{"id": "batam", "label": "Batam", "market_factor": 0.84},
+	{"id": "balikpapan", "label": "Balikpapan", "market_factor": 0.78},
+	{"id": "denpasar", "label": "Bali", "market_factor": 1.08}
+]
+const LIFE_DEVELOPMENT_THEMES := [
+	{"id": "modern_city", "label": "Modern city", "detail": "A master-planned district could pull demand toward the location."},
+	{"id": "toll_exit", "label": "Toll road exit", "detail": "A new toll access point could shorten travel time and lift land value."},
+	{"id": "transit_corridor", "label": "Transit corridor", "detail": "Rail or busway expansion could make the area easier to live and work in."},
+	{"id": "industrial_estate", "label": "Industrial estate", "detail": "Factories and warehouses could create jobs, traffic, and rental demand."},
+	{"id": "hospital_university", "label": "Hospital/university campus", "detail": "A large institution could stabilize local housing and commercial demand."},
+	{"id": "resort_zone", "label": "Resort/tourism zone", "detail": "Tourism investment could lift premium housing and villa values."},
+	{"id": "port_logistics", "label": "Port/logistics expansion", "detail": "Cargo capacity and warehouses could pull workers and suppliers into the area."}
+]
+const LIFE_DEVELOPMENT_IMPACT_TIERS := {
+	"minor": {"label": "Minor", "base_multiplier": 1.08, "big_win_multiplier": 1.18, "resolve_days": 5},
+	"moderate": {"label": "Moderate", "base_multiplier": 1.18, "big_win_multiplier": 1.42, "resolve_days": 7},
+	"major": {"label": "Major", "base_multiplier": 1.35, "big_win_multiplier": 1.95, "resolve_days": 9},
+	"transformational": {"label": "Transformational", "base_multiplier": 1.62, "big_win_multiplier": 2.8, "resolve_days": 12}
+}
+const LIFE_DEVELOPMENT_RELEVANT_SECTORS := {
+	"property": true,
+	"infra": true,
+	"transport": true,
+	"industrial": true,
+	"health": true
+}
+const LIFE_PROPERTY_CATALOG := [
+	{
+		"id": "kost_room",
+		"label": "Kost Room",
+		"price": 350000000.0,
+		"monthly_upkeep": 900000.0,
+		"rent_income": 2400000.0,
+		"status_value": 2.0,
+		"stress_delta": -0.2,
+		"happiness_delta": 0.4,
+		"detail": "Compact rental asset with steady but modest cash flow."
+	},
+	{
+		"id": "kontrakan",
+		"label": "Kontrakan",
+		"price": 650000000.0,
+		"monthly_upkeep": 1400000.0,
+		"rent_income": 4200000.0,
+		"status_value": 4.0,
+		"stress_delta": -0.3,
+		"happiness_delta": 0.5,
+		"detail": "Small landed rental property with better independence than a room."
+	},
+	{
+		"id": "basic_apartment",
+		"label": "Basic Apartment",
+		"price": 950000000.0,
+		"monthly_upkeep": 2600000.0,
+		"rent_income": 6200000.0,
+		"status_value": 7.0,
+		"stress_delta": -0.5,
+		"happiness_delta": 0.8,
+		"detail": "Simple city apartment; useful as a first owned base."
+	},
+	{
+		"id": "comfortable_apartment",
+		"label": "Comfortable Apartment",
+		"price": 1800000000.0,
+		"monthly_upkeep": 4600000.0,
+		"rent_income": 10500000.0,
+		"status_value": 12.0,
+		"stress_delta": -0.8,
+		"happiness_delta": 1.1,
+		"detail": "Better privacy, better building services, and a clearer status signal."
+	},
+	{
+		"id": "terraced_house",
+		"label": "Terraced House",
+		"price": 2600000000.0,
+		"monthly_upkeep": 6200000.0,
+		"rent_income": 14000000.0,
+		"status_value": 17.0,
+		"stress_delta": -1.0,
+		"happiness_delta": 1.4,
+		"detail": "A proper rumah tapak step: more space, more upkeep, more identity."
+	},
+	{
+		"id": "cluster_townhouse",
+		"label": "Cluster/Townhouse",
+		"price": 4200000000.0,
+		"monthly_upkeep": 9500000.0,
+		"rent_income": 22000000.0,
+		"status_value": 25.0,
+		"stress_delta": -1.2,
+		"happiness_delta": 1.8,
+		"detail": "Gated comfort that starts changing how people read your standing."
+	},
+	{
+		"id": "villa",
+		"label": "Villa",
+		"price": 8500000000.0,
+		"monthly_upkeep": 18500000.0,
+		"rent_income": 39000000.0,
+		"status_value": 36.0,
+		"stress_delta": -1.4,
+		"happiness_delta": 2.2,
+		"detail": "High-comfort retreat with strong lifestyle value and chunky burn."
+	},
+	{
+		"id": "luxury_condo",
+		"label": "Luxury Condo",
+		"price": 12500000000.0,
+		"monthly_upkeep": 26000000.0,
+		"rent_income": 56000000.0,
+		"status_value": 46.0,
+		"stress_delta": -1.6,
+		"happiness_delta": 2.5,
+		"detail": "Visible city status with building fees that never sleep."
+	},
+	{
+		"id": "mansion",
+		"label": "Mansion",
+		"price": 100000000000.0,
+		"monthly_upkeep": 220000000.0,
+		"rent_income": 0.0,
+		"status_value": 95.0,
+		"stress_delta": -2.4,
+		"happiness_delta": 3.6,
+		"detail": "Ultra-luxury trophy home pricing with maintenance bills to match."
+	}
+]
+const LIFE_CAR_CATALOG := [
+	{
+		"id": "used_car",
+		"label": "Practical Used Car",
+		"price": 90000000.0,
+		"monthly_upkeep": 1200000.0,
+		"status_value": 2.0,
+		"stress_delta": -0.2,
+		"happiness_delta": 0.4,
+		"detail": "Reliable enough to stop every trip feeling improvised."
+	},
+	{
+		"id": "city_car",
+		"label": "City Car",
+		"price": 180000000.0,
+		"monthly_upkeep": 1800000.0,
+		"status_value": 4.0,
+		"stress_delta": -0.3,
+		"happiness_delta": 0.6,
+		"detail": "Easy daily mobility with manageable burn."
+	},
+	{
+		"id": "family_mpv",
+		"label": "Family MPV",
+		"price": 320000000.0,
+		"monthly_upkeep": 2600000.0,
+		"status_value": 7.0,
+		"stress_delta": -0.4,
+		"happiness_delta": 0.8,
+		"detail": "Comfortable, ordinary, and quietly useful."
+	},
+	{
+		"id": "sedan",
+		"label": "Executive Sedan",
+		"price": 650000000.0,
+		"monthly_upkeep": 4600000.0,
+		"status_value": 13.0,
+		"stress_delta": -0.5,
+		"happiness_delta": 1.0,
+		"detail": "A cleaner arrival signal for meetings and dinners."
+	},
+	{
+		"id": "luxury_suv",
+		"label": "Luxury Sedan/SUV",
+		"price": 1650000000.0,
+		"monthly_upkeep": 10500000.0,
+		"status_value": 28.0,
+		"stress_delta": -0.7,
+		"happiness_delta": 1.5,
+		"detail": "Status on wheels, with maintenance bills to match."
+	},
+	{
+		"id": "sports_luxury",
+		"label": "Sports/Luxury Starter",
+		"price": 4200000000.0,
+		"monthly_upkeep": 24000000.0,
+		"status_value": 48.0,
+		"stress_delta": -0.8,
+		"happiness_delta": 2.0,
+		"detail": "Pure dopamine and public attention. Also pure monthly burn."
+	}
+]
 const LOAD_RUN_LOADING_STEPS := [
 	{"id": "load_save", "label": "Reading save file"},
 	{"id": "restore_state", "label": "Restoring run state"},
@@ -451,6 +733,7 @@ var contact_network_system = preload("res://systems/ContactNetworkSystem.gd").ne
 var dirty_tip_system = preload("res://systems/DirtyTipSystem.gd").new()
 var corporate_action_system = preload("res://systems/CorporateActionSystem.gd").new()
 var index_review_system = preload("res://systems/IndexReviewSystem.gd").new()
+var company_roadmap_system = preload("res://systems/CompanyRoadmapSystem.gd").new()
 var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
 var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
 var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
@@ -460,6 +743,7 @@ var thesis_evidence_capture_system = preload("res://systems/ThesisEvidenceCaptur
 var background_company_detail_hydration_running: bool = false
 var loading_detail_log_lines: Array = []
 var company_market_rows_cache: Dictionary = {}
+var news_snapshot_cache: Dictionary = {}
 var dashboard_event_snapshot_cache: Dictionary = {}
 var daily_activity_snapshot_cache: Dictionary = {}
 
@@ -505,6 +789,7 @@ func start_new_run(run_seed: int = 0, difficulty_id: String = DEFAULT_DIFFICULTY
 	var difficulty_config: Dictionary = get_difficulty_config(difficulty_id)
 	var company_definitions: Array = build_company_roster(run_seed, difficulty_config)
 	RunState.setup_new_run(run_seed, company_definitions, difficulty_config, tutorial_enabled)
+	_reset_steam_progress_for_active_run()
 	background_company_detail_hydration_running = false
 	_invalidate_company_market_rows_cache()
 	_invalidate_dashboard_event_snapshot_cache()
@@ -550,6 +835,7 @@ func start_new_run_with_loading(
 		5,
 		Callable(self, "_on_new_run_financial_batch_detail")
 	)
+	_reset_steam_progress_for_active_run()
 	_log_startup_perf_elapsed("new_run_financials_total", financials_started_at_usec, " companies=%d" % company_definitions.size())
 	_invalidate_company_market_rows_cache()
 	_invalidate_dashboard_event_snapshot_cache()
@@ -589,6 +875,7 @@ func load_run_from_save(slot_id: String = "") -> bool:
 		return false
 
 	RunState.load_from_dict(saved_run)
+	_sync_steam_progress_from_run_state()
 	background_company_detail_hydration_running = false
 	_invalidate_company_market_rows_cache()
 	_invalidate_dashboard_event_snapshot_cache()
@@ -614,6 +901,7 @@ func load_run_from_save_with_loading(slot_id: String = "") -> bool:
 	_emit_load_run_loading_step(1)
 	var restore_started_at_usec: int = Time.get_ticks_usec()
 	RunState.load_from_dict(saved_run)
+	_sync_steam_progress_from_run_state()
 	_log_startup_perf_elapsed("load_run_restore_state", restore_started_at_usec)
 	background_company_detail_hydration_running = false
 	_invalidate_company_market_rows_cache()
@@ -704,6 +992,9 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	var network_tip_results: Array = contact_network_system.process_due_tip_memories(RunState, DataRepository)
 	_log_advance_perf_elapsed(log_advance_perf, "process_due_tip_memories", phase_started_at_usec, " count=%d" % network_tip_results.size())
 	phase_started_at_usec = Time.get_ticks_usec()
+	var life_development_results: Array = process_life_development_leads()
+	_log_advance_perf_elapsed(log_advance_perf, "process_life_development_leads", phase_started_at_usec, " count=%d" % life_development_results.size())
+	phase_started_at_usec = Time.get_ticks_usec()
 	var dirty_tip_results: Array = dirty_tip_system.process_due_cases(RunState, DataRepository)
 	_log_advance_perf_elapsed(log_advance_perf, "process_dirty_tip_cases", phase_started_at_usec, " count=%d" % dirty_tip_results.size())
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -722,6 +1013,8 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 		RunState.last_day_results["network_request_results"] = network_results.duplicate(true)
 	if not network_tip_results.is_empty():
 		RunState.last_day_results["network_tip_results"] = network_tip_results.duplicate(true)
+	if not life_development_results.is_empty():
+		RunState.last_day_results["life_development_results"] = life_development_results.duplicate(true)
 	if not dirty_tip_results.is_empty():
 		RunState.last_day_results["dirty_tip_results"] = dirty_tip_results.duplicate(true)
 	if not dirty_tip_offers.is_empty():
@@ -729,7 +1022,7 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	phase_started_at_usec = Time.get_ticks_usec()
 	_rebuild_dashboard_event_snapshot_cache("", log_advance_perf)
 	_log_advance_perf_elapsed(log_advance_perf, "build_dashboard_event_cache", phase_started_at_usec)
-	if (not network_results.is_empty() or not network_tip_results.is_empty() or not dirty_tip_results.is_empty() or not dirty_tip_offers.is_empty()) and emit_runtime_signals:
+	if (not network_results.is_empty() or not network_tip_results.is_empty() or not life_development_results.is_empty() or not dirty_tip_results.is_empty() or not dirty_tip_offers.is_empty()) and emit_runtime_signals:
 		phase_started_at_usec = Time.get_ticks_usec()
 		network_changed.emit()
 		_log_advance_perf_elapsed(log_advance_perf, "emit_network_changed", phase_started_at_usec)
@@ -743,7 +1036,7 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 		phase_started_at_usec = Time.get_ticks_usec()
 		daily_actions_changed.emit()
 		_log_advance_perf_elapsed(log_advance_perf, "emit_daily_actions_changed", phase_started_at_usec)
-		if not life_obligation_result.is_empty() or not life_loan_payment_result.is_empty() or not life_legal_result.is_empty() or not life_wellbeing_result.is_empty() or _dirty_tip_results_include_legal(dirty_tip_results):
+		if not life_obligation_result.is_empty() or not life_loan_payment_result.is_empty() or not life_legal_result.is_empty() or not life_wellbeing_result.is_empty() or not life_development_results.is_empty() or _dirty_tip_results_include_legal(dirty_tip_results):
 			phase_started_at_usec = Time.get_ticks_usec()
 			life_changed.emit()
 			_log_advance_perf_elapsed(log_advance_perf, "emit_life_changed", phase_started_at_usec)
@@ -759,11 +1052,13 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	var news_snapshot: Dictionary = _build_news_snapshot(-1, log_advance_perf, feed_context)
 	_log_advance_perf_elapsed(log_advance_perf, "build_news_snapshot", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
+	_cache_news_snapshot(news_snapshot, get_unlocked_news_intel_level())
 	RunState.record_news_snapshot(news_snapshot)
 	_log_advance_perf_elapsed(log_advance_perf, "record_news_snapshot", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	_rebuild_daily_activity_snapshot_cache(news_snapshot, "", log_advance_perf, feed_context)
 	_log_advance_perf_elapsed(log_advance_perf, "build_daily_activity_cache", phase_started_at_usec)
+	_record_steam_day_advanced()
 	if save_after:
 		phase_started_at_usec = Time.get_ticks_usec()
 		if flush_save_immediately:
@@ -802,6 +1097,7 @@ func buy_company(company_id: String, shares: int = 1) -> Dictionary:
 		return {"success": false, "message": block_reason}
 	var result: Dictionary = RunState.buy_company(company_id, shares)
 	if result.get("success", false):
+		_record_steam_trade_progress(company_id, "buy")
 		_invalidate_dashboard_event_snapshot_cache()
 		_request_autosave("buy_company")
 		portfolio_changed.emit()
@@ -814,6 +1110,7 @@ func sell_company(company_id: String, shares: int = 1) -> Dictionary:
 		return {"success": false, "message": block_reason}
 	var result: Dictionary = RunState.sell_company(company_id, shares)
 	if result.get("success", false):
+		_record_steam_trade_progress(company_id, "sell")
 		_invalidate_dashboard_event_snapshot_cache()
 		_request_autosave("sell_company")
 		portfolio_changed.emit()
@@ -839,6 +1136,7 @@ func estimate_sell_lots(company_id: String, lots: int = 1) -> Dictionary:
 func add_company_to_watchlist(company_id: String) -> Dictionary:
 	var result: Dictionary = RunState.add_to_watchlist(company_id)
 	if result.get("success", false):
+		_record_steam_progress_event("watchlist_added", {"company_id": company_id})
 		_request_autosave("watchlist_add")
 		watchlist_changed.emit()
 	return result
@@ -920,6 +1218,7 @@ func purchase_upgrade(track_id: String) -> Dictionary:
 	RunState.refresh_cash_stress_state()
 	RunState.set_upgrade_tier(normalized_track_id, next_tier)
 	_invalidate_daily_activity_snapshot_cache()
+	_record_steam_progress_event("upgrade_purchased", {"track_id": normalized_track_id, "tier": next_tier})
 	_request_autosave("purchase_upgrade")
 	upgrades_changed.emit()
 	portfolio_changed.emit()
@@ -1039,6 +1338,107 @@ func debug_generate_index_review(generator_id: String, company_id: String) -> Di
 		"generator_label": str(generator.get("label", "Index Review")),
 		"event": event.duplicate(true),
 		"action": result.get("action", {}).duplicate(true)
+	}
+
+
+func get_debug_company_roadmap_generator_catalog() -> Array:
+	var groups: Array = []
+	for group_value in DEBUG_COMPANY_ROADMAP_GENERATOR_GROUPS:
+		if typeof(group_value) == TYPE_DICTIONARY:
+			groups.append(group_value.duplicate(true))
+	return groups
+
+
+func debug_generate_company_roadmap(generator_id: String, company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var generator: Dictionary = _debug_company_roadmap_generator_by_id(generator_id)
+	if generator.is_empty():
+		return {"success": false, "message": "Unknown roadmap generator."}
+	if company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	var result: Dictionary = company_roadmap_system.debug_force_milestone(
+		RunState,
+		DataRepository,
+		corporate_action_system,
+		company_id,
+		generator_id,
+		get_current_trade_date(),
+		max(int(RunState.day_index), 1)
+	)
+	if not bool(result.get("success", false)):
+		return result
+	RunState.set_company_roadmap_state(result.get("company_roadmap_state", {}))
+	if result.has("active_corporate_action_chains"):
+		RunState.set_active_corporate_action_chains(result.get("active_corporate_action_chains", {}))
+	if result.has("corporate_meeting_calendar"):
+		RunState.set_corporate_meeting_calendar(result.get("corporate_meeting_calendar", {}))
+	var start_event: Dictionary = result.get("started_event", {})
+	var first_arc: bool = true
+	for arc_value in result.get("active_company_arcs", []):
+		if typeof(arc_value) != TYPE_DICTIONARY:
+			continue
+		var arc: Dictionary = arc_value
+		RunState.debug_add_company_arc(arc, start_event if first_arc else {})
+		first_arc = false
+	for event_value in result.get("corporate_action_events", []):
+		if typeof(event_value) == TYPE_DICTIONARY:
+			RunState.debug_add_recorded_event(event_value)
+	_invalidate_dashboard_event_snapshot_cache()
+	_invalidate_daily_activity_snapshot_cache()
+	_invalidate_news_snapshot_cache()
+	_request_autosave("debug_generate_company_roadmap")
+	var milestone: Dictionary = result.get("milestone", {})
+	var ticker: String = str(milestone.get("ticker", company_id.to_upper()))
+	var funding_label: String = str(milestone.get("funding_outcome", "started")).replace("_", " ")
+	return {
+		"success": true,
+		"message": "Generated %s for %s (%s)." % [
+			str(generator.get("full_label", generator.get("label", "roadmap milestone"))),
+			ticker,
+			funding_label
+		],
+		"generator_id": generator_id,
+		"generator_label": str(generator.get("full_label", generator.get("label", "Roadmap"))),
+		"milestone": milestone.duplicate(true),
+		"event": start_event.duplicate(true)
+	}
+
+
+func get_debug_life_development_generator_catalog() -> Array:
+	var groups: Array = []
+	for group_value in DEBUG_LIFE_DEVELOPMENT_GENERATOR_GROUPS:
+		if typeof(group_value) == TYPE_DICTIONARY:
+			groups.append(group_value.duplicate(true))
+	return groups
+
+
+func debug_generate_life_development(generator_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var generator: Dictionary = _debug_life_development_generator_by_id(generator_id)
+	if generator.is_empty():
+		return {"success": false, "message": "Unknown Life property-intel generator."}
+	var result: Dictionary = debug_force_life_development_lead(
+		str(generator.get("location_id", "jakarta")),
+		str(generator.get("theme", "modern_city")),
+		str(generator.get("impact_tier", "major")),
+		str(generator.get("source_type", "network")),
+		str(generator.get("outcome_override", ""))
+	)
+	if not bool(result.get("success", false)):
+		return result
+	var lead: Dictionary = result.get("lead", {})
+	return {
+		"success": true,
+		"message": "Generated property watch: %s / %s." % [
+			str(lead.get("location_label", str(generator.get("location_id", "Jakarta")).capitalize())),
+			str(lead.get("theme_label", str(generator.get("theme", "modern_city")).replace("_", " ").capitalize()))
+		],
+		"generator_id": generator_id,
+		"generator_label": str(generator.get("label", "Life property intel")),
+		"lead": lead.duplicate(true)
 	}
 
 
@@ -1592,6 +1992,34 @@ func _debug_index_review_generator_by_id(generator_id: String) -> Dictionary:
 	return {}
 
 
+func _debug_company_roadmap_generator_by_id(generator_id: String) -> Dictionary:
+	for group_value in DEBUG_COMPANY_ROADMAP_GENERATOR_GROUPS:
+		if typeof(group_value) != TYPE_DICTIONARY:
+			continue
+		var group: Dictionary = group_value
+		for generator_value in group.get("generators", []):
+			if typeof(generator_value) != TYPE_DICTIONARY:
+				continue
+			var generator: Dictionary = generator_value
+			if str(generator.get("id", "")) == generator_id:
+				return generator.duplicate(true)
+	return {}
+
+
+func _debug_life_development_generator_by_id(generator_id: String) -> Dictionary:
+	for group_value in DEBUG_LIFE_DEVELOPMENT_GENERATOR_GROUPS:
+		if typeof(group_value) != TYPE_DICTIONARY:
+			continue
+		var group: Dictionary = group_value
+		for generator_value in group.get("generators", []):
+			if typeof(generator_value) != TYPE_DICTIONARY:
+				continue
+			var generator: Dictionary = generator_value
+			if str(generator.get("id", "")) == generator_id:
+				return generator.duplicate(true)
+	return {}
+
+
 func _stock_contact_tip_relevance(contact: Dictionary, company_id: String, sector_id: String) -> Dictionary:
 	var score: int = int(contact.get("relationship", 0))
 	var group: int = 90
@@ -1894,6 +2322,7 @@ func get_academy_snapshot(category_id: String = "technical", section_id: String 
 func mark_academy_section_read(category_id: String, section_id: String) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
+	var was_read: bool = _academy_section_was_read(category_id, section_id)
 	var result: Dictionary = academy_system.mark_section_read(
 		DataRepository.get_academy_catalog(),
 		RunState.get_academy_progress(),
@@ -1902,6 +2331,11 @@ func mark_academy_section_read(category_id: String, section_id: String) -> Dicti
 	)
 	if bool(result.get("success", false)):
 		RunState.set_academy_progress(result.get("progress", {}))
+		if not was_read:
+			_record_steam_progress_event("academy_lesson_completed", {
+				"category_id": category_id,
+				"section_id": section_id
+			})
 		_request_autosave("academy_mark_read")
 		academy_changed.emit()
 	return result
@@ -1933,6 +2367,7 @@ func submit_academy_inline_check(
 func submit_academy_quiz(category_id: String, answers: Dictionary) -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
+	var had_passed: bool = bool(RunState.get_academy_progress().get("quiz_passed", {}).get(category_id, false))
 	var result: Dictionary = academy_system.submit_quiz(
 		DataRepository.get_academy_catalog(),
 		RunState.get_academy_progress(),
@@ -1941,6 +2376,11 @@ func submit_academy_quiz(category_id: String, answers: Dictionary) -> Dictionary
 	)
 	if bool(result.get("success", false)):
 		RunState.set_academy_progress(result.get("progress", {}))
+		if bool(result.get("passed", false)) and not had_passed:
+			_record_steam_progress_event("academy_quiz_passed", {
+				"category_id": category_id,
+				"score_percent": int(result.get("score_percent", 0))
+			})
 		_request_autosave("academy_quiz")
 		academy_changed.emit()
 	return result
@@ -2227,6 +2667,13 @@ func get_company_corporate_action_snapshot(company_id: String) -> Dictionary:
 	return corporate_action_system.get_company_snapshot(RunState, company_id)
 
 
+func get_company_corporate_action_timeline(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {}
+	corporate_action_system.ensure_initialized(RunState, DataRepository)
+	return corporate_action_system.get_company_timeline_snapshot(RunState, company_id)
+
+
 func get_index_review_snapshot() -> Dictionary:
 	if not RunState.has_active_run():
 		return {"day_index": 0, "trade_date": {}, "upcoming_rows": [], "providers": []}
@@ -2254,6 +2701,7 @@ func attend_corporate_meeting(meeting_id: String) -> Dictionary:
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	var result: Dictionary = corporate_action_system.attend_meeting(RunState, meeting_id)
 	if bool(result.get("success", false)):
+		_record_steam_progress_event("rupslb_attended", {"meeting_id": meeting_id})
 		_invalidate_dashboard_event_snapshot_cache()
 		_request_autosave("corporate_meeting_attend")
 		network_changed.emit()
@@ -2325,6 +2773,11 @@ func submit_corporate_meeting_vote(meeting_id: String, agenda_id: String, vote_c
 	)
 	if bool(result.get("success", false)):
 		result["session"] = _decorate_corporate_meeting_session_snapshot(result.get("session", {}))
+		_record_steam_progress_event("corporate_vote_submitted", {
+			"meeting_id": meeting_id,
+			"agenda_id": agenda_id,
+			"vote_choice": vote_choice
+		})
 		_invalidate_dashboard_event_snapshot_cache()
 		_request_autosave("corporate_meeting_vote")
 		network_changed.emit()
@@ -2509,6 +2962,8 @@ func get_company_snapshot(
 		"profile_description": str(definition.get("profile_description", "")),
 		"profile_tags": definition.get("profile_tags", []).duplicate(),
 		"management_roster": definition.get("management_roster", []).duplicate(true),
+		"location_profile": definition.get("location_profile", {}).duplicate(true),
+		"roadmap_profile": definition.get("roadmap_profile", {}).duplicate(true),
 		"current_price": current_price,
 		"previous_close": previous_close,
 		"daily_change_pct": daily_change_pct,
@@ -3084,6 +3539,10 @@ func take_emergency_loan() -> Dictionary:
 		"monthly_payment": monthly_payment
 	})
 	if bool(result.get("success", false)):
+		_record_steam_progress_event("emergency_loan_taken", {
+			"principal": principal,
+			"monthly_payment": monthly_payment
+		})
 		_request_autosave("life_emergency_loan")
 		life_changed.emit()
 		portfolio_changed.emit()
@@ -3098,11 +3557,12 @@ func get_life_snapshot() -> Dictionary:
 	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, str(life_state.get("housing_id", "")))
 	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, str(life_state.get("lifestyle_id", "")))
 	var basics_tier: Dictionary = _life_basics_tier_by_id(str(life_state.get("basics_tier_id", RunState.LIFE_DEFAULT_BASICS_TIER_ID)))
+	var asset_summary: Dictionary = _build_life_asset_summary(life_state)
+	var development_leads: Array = _build_life_development_lead_rows(life_state)
+	var property_value_events: Array = _build_life_property_value_event_rows(asset_summary.get("properties", []))
 	var portfolio: Dictionary = get_portfolio_snapshot()
 	var dividend_projection: Dictionary = _build_life_dividend_projection()
-	var housing_cost: float = float(housing.get("monthly_cost", 0.0))
 	var basics_cost: float = float(basics_tier.get("monthly_cost", LIFE_BASIC_EXPENSES_MONTHLY))
-	var lifestyle_cost: float = float(lifestyle.get("monthly_cost", 0.0))
 	var monthly_extra: float = max(float(life_state.get("monthly_extra", 0.0)), 0.0)
 	var monthly_outflow: float = _life_monthly_outflow_for_state(life_state)
 	var estimated_monthly_dividends: float = float(dividend_projection.get("estimated_monthly_dividends", 0.0))
@@ -3115,6 +3575,7 @@ func get_life_snapshot() -> Dictionary:
 	var status_label: String = "Comfortable runway"
 	var finance_status: Dictionary = get_finance_status_snapshot()
 	var stress_stage: Dictionary = RunState.get_life_stress_stage(life_state)
+	var public_image: Dictionary = _build_life_public_image_snapshot(portfolio, asset_summary)
 	if bool(finance_status.get("bankrupt", false)):
 		status_label = "Bankrupt"
 	elif int(life_state.get("hospital_days_remaining", 0)) > 0:
@@ -3142,6 +3603,27 @@ func get_life_snapshot() -> Dictionary:
 		"housing_options": LIFE_HOUSING_OPTIONS.duplicate(true),
 		"basics_tiers": LIFE_BASICS_TIERS.duplicate(true),
 		"lifestyle_options": LIFE_LIFESTYLE_OPTIONS.duplicate(true),
+		"property_catalog": _build_life_property_catalog_rows(),
+		"car_catalog": LIFE_CAR_CATALOG.duplicate(true),
+		"property_locations": _build_life_property_location_rows(),
+		"properties": asset_summary.get("properties", []).duplicate(true),
+		"cars": asset_summary.get("cars", []).duplicate(true),
+		"development_leads": development_leads,
+		"property_value_events": property_value_events,
+		"primary_property": asset_summary.get("primary_property", {}).duplicate(true),
+		"active_car": asset_summary.get("active_car", {}).duplicate(true),
+		"public_image": public_image,
+		"lifestyle_asset_value": float(asset_summary.get("asset_value", 0.0)),
+		"property_value": float(asset_summary.get("property_value", 0.0)),
+		"car_value": float(asset_summary.get("car_value", 0.0)),
+		"rental_income": float(asset_summary.get("rental_income", 0.0)),
+		"asset_upkeep": float(asset_summary.get("asset_upkeep", 0.0)),
+		"property_upkeep": float(asset_summary.get("property_upkeep", 0.0)),
+		"non_primary_property_upkeep": float(asset_summary.get("non_primary_property_upkeep", 0.0)),
+		"car_upkeep": float(asset_summary.get("car_upkeep", 0.0)),
+		"housing_cost_monthly": float(asset_summary.get("primary_residence_cost", 0.0)) if bool(asset_summary.get("owned_primary_residence", false)) else float(housing.get("monthly_cost", 0.0)),
+		"net_lifestyle_cashflow": float(asset_summary.get("net_lifestyle_cashflow", 0.0)),
+		"owned_primary_residence": bool(asset_summary.get("owned_primary_residence", false)),
 		"basic_expenses_monthly": basics_cost,
 		"monthly_extra": monthly_extra,
 		"monthly_outflow": monthly_outflow,
@@ -3384,7 +3866,7 @@ func _build_first_month_next_five_rows(life: Dictionary, dashboard_events: Dicti
 			"label": "%s corporate action" % str(chain.get("ticker", "")),
 			"detail": "%s is in %s." % [
 				str(chain.get("family_label", "Corporate action")),
-				str(chain.get("stage", "review")).replace("_", " ")
+				_public_corporate_stage_label(str(chain.get("stage", "review")))
 			]
 		})
 
@@ -3396,6 +3878,24 @@ func _build_first_month_next_five_rows(life: Dictionary, dashboard_events: Dicti
 	if rows.size() > 8:
 		rows = rows.slice(0, 8)
 	return rows
+
+
+func _public_corporate_stage_label(stage_id: String) -> String:
+	match stage_id:
+		"hidden_positioning":
+			return "quiet positioning"
+		"unusual_activity":
+			return "unusual trading"
+		"rumor_leak":
+			return "market speculation"
+		"formal_agenda_or_filing":
+			return "formal notice"
+		"meeting_or_call":
+			return "meeting notice"
+		"resolution":
+			return "resolution watch"
+		_:
+			return stage_id.replace("_", " ")
 
 
 func _build_first_month_warning_rows(
@@ -3482,6 +3982,488 @@ func set_life_plan(housing_id: String, lifestyle_id: String, basics_tier_id: Str
 	return {
 		"success": true,
 		"message": "Life plan updated.",
+		"snapshot": get_life_snapshot()
+	}
+
+
+func process_life_development_leads() -> Array:
+	if not RunState.has_active_run():
+		return []
+	var life_state: Dictionary = RunState.get_player_life()
+	var leads: Array = life_state.get("development_leads", []).duplicate(true)
+	if leads.is_empty():
+		return []
+	var properties: Array = life_state.get("properties", []).duplicate(true)
+	var results: Array = []
+	var changed: bool = false
+	for lead_index in range(leads.size()):
+		if typeof(leads[lead_index]) != TYPE_DICTIONARY:
+			continue
+		var lead: Dictionary = leads[lead_index]
+		if bool(lead.get("resolved", false)):
+			continue
+		if RunState.day_index < int(lead.get("due_day_index", RunState.day_index + 1)):
+			continue
+		var resolution: Dictionary = _resolve_life_development_lead(lead)
+		var outcome: String = str(resolution.get("outcome", "cancelled"))
+		var result: Dictionary = {
+			"lead_id": str(lead.get("id", "")),
+			"location_id": str(lead.get("location_id", "")),
+			"location_label": _life_location_label(str(lead.get("location_id", ""))),
+			"theme": str(lead.get("theme", "")),
+			"theme_label": _life_development_theme_label(str(lead.get("theme", ""))),
+			"source_type": str(lead.get("source_type", "")),
+			"contact_id": str(lead.get("contact_id", "")),
+			"stage": outcome,
+			"outcome": outcome,
+			"applied_property_ids": []
+		}
+		if outcome == "delayed":
+			var delay_days: int = int(resolution.get("delay_days", 4))
+			lead["stage"] = "delayed"
+			lead["due_day_index"] = RunState.day_index + max(delay_days, 1)
+			lead["delay_count"] = int(lead.get("delay_count", 0)) + 1
+			lead["source_note"] = "The lead is still alive, but permits and land work are taking longer than expected."
+			result["due_day_index"] = int(lead.get("due_day_index", 0))
+			results.append(result)
+			leads[lead_index] = lead
+			changed = true
+			continue
+		lead["resolved"] = true
+		lead["outcome"] = outcome
+		lead["public_confirmed"] = outcome == "confirmed"
+		lead["stage"] = "confirmed" if outcome == "confirmed" else "cancelled"
+		lead["display_location_label"] = _life_location_label(str(lead.get("location_id", "")))
+		lead["display_theme_label"] = _life_development_theme_label(str(lead.get("theme", "")))
+		if outcome == "confirmed":
+			var value_multiplier: float = max(float(resolution.get("value_multiplier", 1.0)), 1.0)
+			lead["value_multiplier"] = value_multiplier
+			var applied_property_ids: Array = []
+			for property_index in range(properties.size()):
+				if typeof(properties[property_index]) != TYPE_DICTIONARY:
+					continue
+				var property_row: Dictionary = properties[property_index]
+				if str(property_row.get("location_id", "")) != str(lead.get("location_id", "")):
+					continue
+				if _life_property_has_value_event(property_row, str(lead.get("id", ""))):
+					continue
+				var old_value: float = max(float(property_row.get("current_value", property_row.get("purchase_price", 0.0))), 0.0)
+				var new_value: float = old_value * value_multiplier
+				var event: Dictionary = {
+					"lead_id": str(lead.get("id", "")),
+					"label": "%s confirmed in %s" % [_life_development_theme_label(str(lead.get("theme", ""))), _life_location_label(str(lead.get("location_id", "")))],
+					"theme": str(lead.get("theme", "")),
+					"theme_label": _life_development_theme_label(str(lead.get("theme", ""))),
+					"source_type": str(lead.get("source_type", "")),
+					"outcome": "confirmed",
+					"multiplier": value_multiplier,
+					"old_value": old_value,
+					"new_value": new_value,
+					"day_index": RunState.day_index,
+					"trade_date": get_current_trade_date()
+				}
+				var value_events: Array = property_row.get("value_events", []).duplicate(true)
+				value_events.append(event)
+				property_row["value_events"] = value_events
+				property_row["current_value"] = new_value
+				properties[property_index] = property_row
+				applied_property_ids.append(str(property_row.get("id", "")))
+			lead["applied_property_ids"] = applied_property_ids
+			result["value_multiplier"] = value_multiplier
+			result["applied_property_ids"] = applied_property_ids
+			result["stage"] = "confirmed"
+		else:
+			lead["value_multiplier"] = 1.0
+			lead["source_note"] = "The lead did not survive public confirmation. No property value uplift was applied."
+			result["stage"] = "cancelled"
+			result["value_multiplier"] = 1.0
+		results.append(result)
+		leads[lead_index] = lead
+		changed = true
+	if changed:
+		life_state["development_leads"] = leads
+		life_state["properties"] = properties
+		life_state["updated_day_index"] = RunState.day_index
+		life_state["updated_trade_date"] = get_current_trade_date()
+		RunState.set_player_life(life_state)
+	return results
+
+
+func debug_force_life_development_lead(location_id: String, theme: String = "modern_city", impact_tier: String = "major", source_type: String = "network", outcome_override: String = "") -> Dictionary:
+	var result: Dictionary = _create_life_development_lead(
+		location_id,
+		theme,
+		impact_tier,
+		source_type,
+		"debug_%s_%s_%d" % [location_id, theme, RunState.day_index],
+		"",
+		88.0,
+		"Forced property report",
+		"",
+		outcome_override,
+		4
+	)
+	if bool(result.get("success", false)):
+		_request_autosave("life_development_debug")
+		life_changed.emit()
+		network_changed.emit()
+	return result
+
+
+func discover_life_development_lead_from_article(article: Dictionary) -> Dictionary:
+	var result: Dictionary = _maybe_create_life_development_lead_from_news_article(article)
+	if bool(result.get("success", false)) and not bool(result.get("duplicate", false)):
+		_request_autosave("life_development_news")
+		life_changed.emit()
+		network_changed.emit()
+	return result
+
+
+func get_life_development_lead_for_article(article: Dictionary) -> Dictionary:
+	if not RunState.has_active_run() or article.is_empty():
+		return {}
+	var source_id: String = _life_development_news_source_id(article)
+	if source_id.is_empty():
+		return {}
+	var life_state: Dictionary = RunState.get_player_life()
+	for lead_value in life_state.get("development_leads", []):
+		if typeof(lead_value) != TYPE_DICTIONARY:
+			continue
+		var lead: Dictionary = lead_value
+		if str(lead.get("source_type", "")) == "news" and str(lead.get("source_id", "")) == source_id:
+			return lead.duplicate(true)
+	return {}
+
+
+func purchase_life_property(catalog_id: String, location_id: String = "", make_primary: bool = false) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var block_reason: String = get_life_action_block_reason("buy")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
+	var catalog: Dictionary = _life_property_catalog_by_id(catalog_id)
+	if catalog.is_empty():
+		return {"success": false, "message": "Unknown property."}
+	var location: Dictionary = _life_location_by_id(location_id)
+	var base_price: float = _life_property_base_price_for_location(catalog, location)
+	var price: float = _life_property_price_for_location(catalog, location)
+	var cash: float = float(get_portfolio_snapshot().get("cash", 0.0))
+	if cash + 0.0001 < price:
+		return {
+			"success": false,
+			"reason": "insufficient_cash",
+			"message": "Not enough cash for this property.",
+			"required_cash": price,
+			"available_cash": cash
+		}
+	var life_state: Dictionary = RunState.get_player_life()
+	var properties: Array = life_state.get("properties", []).duplicate(true)
+	var property_id: String = _life_next_asset_id("property", properties)
+	if make_primary:
+		for index in range(properties.size()):
+			if typeof(properties[index]) == TYPE_DICTIONARY:
+				var existing_property: Dictionary = properties[index]
+				existing_property["is_primary"] = false
+				properties[index] = existing_property
+	var property_row: Dictionary = {
+		"id": property_id,
+		"catalog_id": str(catalog.get("id", "")),
+		"location_id": str(location.get("id", "jakarta")),
+		"label": str(catalog.get("label", "")),
+		"location_label": str(location.get("label", "Jakarta")),
+		"purchase_price": price,
+		"base_value": base_price,
+		"current_value": price,
+		"monthly_upkeep": _life_property_monthly_upkeep_for_location(catalog, location),
+		"rent_income": _life_property_rent_for_location(catalog, location),
+		"rented_out": false,
+		"is_primary": make_primary,
+		"stress_delta": float(catalog.get("stress_delta", 0.0)),
+		"happiness_delta": float(catalog.get("happiness_delta", 0.0)),
+		"status_value": float(catalog.get("status_value", 0.0)),
+		"value_events": [],
+		"priced_in_lead_ids": _life_public_confirmed_lead_ids_for_location(str(location.get("id", "jakarta"))),
+		"purchased_day_index": RunState.day_index,
+		"purchased_trade_date": get_current_trade_date()
+	}
+	properties.append(property_row)
+	life_state["properties"] = properties
+	life_state["updated_day_index"] = RunState.day_index
+	life_state["updated_trade_date"] = get_current_trade_date()
+	RunState.set_player_life(life_state)
+	var payment: Dictionary = RunState.apply_cash_obligation("life_property_purchase", price, {
+		"company_id": "life",
+		"side": "life_property_purchase",
+		"asset_id": property_id,
+		"asset_label": str(catalog.get("label", "")),
+		"location_label": str(location.get("label", "Jakarta"))
+	})
+	if not bool(payment.get("success", false)):
+		return payment
+	_record_steam_progress_event("life_property_purchased", {
+		"catalog_id": catalog_id,
+		"location_id": str(location.get("id", "jakarta")),
+		"price": price
+	})
+	_request_autosave("life_property_purchase")
+	life_changed.emit()
+	portfolio_changed.emit()
+	return {
+		"success": true,
+		"message": "%s purchased." % str(catalog.get("label", "Property")),
+		"property": property_row.duplicate(true),
+		"snapshot": get_life_snapshot()
+	}
+
+
+func set_primary_residence(property_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var block_reason: String = get_life_action_block_reason("life_plan")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
+	var life_state: Dictionary = RunState.get_player_life()
+	var properties: Array = life_state.get("properties", []).duplicate(true)
+	var found: bool = false
+	for index in range(properties.size()):
+		if typeof(properties[index]) != TYPE_DICTIONARY:
+			continue
+		var property_row: Dictionary = properties[index]
+		var is_target: bool = str(property_row.get("id", "")) == property_id
+		property_row["is_primary"] = is_target
+		if is_target:
+			property_row["rented_out"] = false
+			found = true
+		properties[index] = property_row
+	if not found:
+		return {"success": false, "message": "Property not found."}
+	life_state["properties"] = properties
+	life_state["updated_day_index"] = RunState.day_index
+	life_state["updated_trade_date"] = get_current_trade_date()
+	RunState.set_player_life(life_state)
+	_request_autosave("life_primary_residence")
+	life_changed.emit()
+	return {"success": true, "message": "Primary residence updated.", "snapshot": get_life_snapshot()}
+
+
+func set_property_rental(property_id: String, rented_out: bool) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var block_reason: String = get_life_action_block_reason("life_plan")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
+	var life_state: Dictionary = RunState.get_player_life()
+	var properties: Array = life_state.get("properties", []).duplicate(true)
+	var found: bool = false
+	for index in range(properties.size()):
+		if typeof(properties[index]) != TYPE_DICTIONARY:
+			continue
+		var property_row: Dictionary = properties[index]
+		if str(property_row.get("id", "")) != property_id:
+			continue
+		if bool(property_row.get("is_primary", false)) and rented_out:
+			return {"success": false, "message": "Primary residence cannot be rented out."}
+		property_row["rented_out"] = rented_out
+		properties[index] = property_row
+		found = true
+		break
+	if not found:
+		return {"success": false, "message": "Property not found."}
+	life_state["properties"] = properties
+	life_state["updated_day_index"] = RunState.day_index
+	life_state["updated_trade_date"] = get_current_trade_date()
+	RunState.set_player_life(life_state)
+	_request_autosave("life_property_rental")
+	life_changed.emit()
+	return {
+		"success": true,
+		"message": "Property rental updated." if rented_out else "Property rental stopped.",
+		"snapshot": get_life_snapshot()
+	}
+
+
+func sell_life_property(property_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var block_reason: String = get_life_action_block_reason("life_plan")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
+	var life_state: Dictionary = RunState.get_player_life()
+	var properties: Array = life_state.get("properties", []).duplicate(true)
+	var sold_property: Dictionary = {}
+	var next_properties: Array = []
+	for property_value in properties:
+		if typeof(property_value) != TYPE_DICTIONARY:
+			continue
+		var property_row: Dictionary = property_value
+		if str(property_row.get("id", "")) == property_id:
+			sold_property = property_row
+			continue
+		next_properties.append(property_row)
+	if sold_property.is_empty():
+		return {"success": false, "message": "Property not found."}
+	var proceeds: float = max(float(sold_property.get("current_value", sold_property.get("purchase_price", 0.0))) * LIFE_ASSET_SELL_MULTIPLIER, 0.0)
+	life_state["properties"] = next_properties
+	life_state["updated_day_index"] = RunState.day_index
+	life_state["updated_trade_date"] = get_current_trade_date()
+	RunState.set_player_life(life_state)
+	var inflow: Dictionary = RunState.apply_cash_inflow("life_property_sale", proceeds, {
+		"company_id": "life",
+		"side": "life_property_sale",
+		"asset_id": property_id,
+		"asset_label": str(sold_property.get("label", "Property"))
+	})
+	if not bool(inflow.get("success", false)):
+		return inflow
+	_request_autosave("life_property_sale")
+	life_changed.emit()
+	portfolio_changed.emit()
+	return {
+		"success": true,
+		"message": "%s sold." % str(sold_property.get("label", "Property")),
+		"proceeds": proceeds,
+		"snapshot": get_life_snapshot()
+	}
+
+
+func purchase_life_car(catalog_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var block_reason: String = get_life_action_block_reason("buy")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
+	var catalog: Dictionary = _life_car_catalog_by_id(catalog_id)
+	if catalog.is_empty():
+		return {"success": false, "message": "Unknown car."}
+	var price: float = max(float(catalog.get("price", 0.0)), 0.0)
+	var cash: float = float(get_portfolio_snapshot().get("cash", 0.0))
+	if cash + 0.0001 < price:
+		return {
+			"success": false,
+			"reason": "insufficient_cash",
+			"message": "Not enough cash for this car.",
+			"required_cash": price,
+			"available_cash": cash
+		}
+	var life_state: Dictionary = RunState.get_player_life()
+	var cars: Array = life_state.get("cars", []).duplicate(true)
+	var car_id: String = _life_next_asset_id("car", cars)
+	var first_car: bool = cars.is_empty()
+	var car_row: Dictionary = {
+		"id": car_id,
+		"catalog_id": str(catalog.get("id", "")),
+		"label": str(catalog.get("label", "")),
+		"purchase_price": price,
+		"current_value": price,
+		"monthly_upkeep": max(float(catalog.get("monthly_upkeep", 0.0)), 0.0),
+		"status_value": float(catalog.get("status_value", 0.0)),
+		"stress_delta": float(catalog.get("stress_delta", 0.0)),
+		"happiness_delta": float(catalog.get("happiness_delta", 0.0)),
+		"is_active": first_car,
+		"purchased_day_index": RunState.day_index,
+		"purchased_trade_date": get_current_trade_date()
+	}
+	cars.append(car_row)
+	life_state["cars"] = cars
+	life_state["updated_day_index"] = RunState.day_index
+	life_state["updated_trade_date"] = get_current_trade_date()
+	RunState.set_player_life(life_state)
+	var payment: Dictionary = RunState.apply_cash_obligation("life_car_purchase", price, {
+		"company_id": "life",
+		"side": "life_car_purchase",
+		"asset_id": car_id,
+		"asset_label": str(catalog.get("label", "Car"))
+	})
+	if not bool(payment.get("success", false)):
+		return payment
+	_record_steam_progress_event("life_car_purchased", {
+		"catalog_id": catalog_id,
+		"price": price
+	})
+	_request_autosave("life_car_purchase")
+	life_changed.emit()
+	portfolio_changed.emit()
+	return {
+		"success": true,
+		"message": "%s purchased." % str(catalog.get("label", "Car")),
+		"car": car_row.duplicate(true),
+		"snapshot": get_life_snapshot()
+	}
+
+
+func set_active_life_car(car_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var block_reason: String = get_life_action_block_reason("life_plan")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
+	var life_state: Dictionary = RunState.get_player_life()
+	var cars: Array = life_state.get("cars", []).duplicate(true)
+	var found: bool = false
+	for index in range(cars.size()):
+		if typeof(cars[index]) != TYPE_DICTIONARY:
+			continue
+		var car_row: Dictionary = cars[index]
+		var is_target: bool = str(car_row.get("id", "")) == car_id
+		car_row["is_active"] = is_target
+		if is_target:
+			found = true
+		cars[index] = car_row
+	if not found:
+		return {"success": false, "message": "Car not found."}
+	life_state["cars"] = cars
+	life_state["updated_day_index"] = RunState.day_index
+	life_state["updated_trade_date"] = get_current_trade_date()
+	RunState.set_player_life(life_state)
+	_request_autosave("life_active_car")
+	life_changed.emit()
+	return {"success": true, "message": "Active car updated.", "snapshot": get_life_snapshot()}
+
+
+func sell_life_car(car_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var block_reason: String = get_life_action_block_reason("life_plan")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
+	var life_state: Dictionary = RunState.get_player_life()
+	var cars: Array = life_state.get("cars", []).duplicate(true)
+	var sold_car: Dictionary = {}
+	var next_cars: Array = []
+	for car_value in cars:
+		if typeof(car_value) != TYPE_DICTIONARY:
+			continue
+		var car_row: Dictionary = car_value
+		if str(car_row.get("id", "")) == car_id:
+			sold_car = car_row
+			continue
+		next_cars.append(car_row)
+	if sold_car.is_empty():
+		return {"success": false, "message": "Car not found."}
+	if bool(sold_car.get("is_active", false)) and not next_cars.is_empty() and typeof(next_cars[0]) == TYPE_DICTIONARY:
+		var next_active: Dictionary = next_cars[0]
+		next_active["is_active"] = true
+		next_cars[0] = next_active
+	var proceeds: float = max(float(sold_car.get("current_value", sold_car.get("purchase_price", 0.0))) * LIFE_ASSET_SELL_MULTIPLIER, 0.0)
+	life_state["cars"] = next_cars
+	life_state["updated_day_index"] = RunState.day_index
+	life_state["updated_trade_date"] = get_current_trade_date()
+	RunState.set_player_life(life_state)
+	var inflow: Dictionary = RunState.apply_cash_inflow("life_car_sale", proceeds, {
+		"company_id": "life",
+		"side": "life_car_sale",
+		"asset_id": car_id,
+		"asset_label": str(sold_car.get("label", "Car"))
+	})
+	if not bool(inflow.get("success", false)):
+		return inflow
+	_request_autosave("life_car_sale")
+	life_changed.emit()
+	portfolio_changed.emit()
+	return {
+		"success": true,
+		"message": "%s sold." % str(sold_car.get("label", "Car")),
+		"proceeds": proceeds,
 		"snapshot": get_life_snapshot()
 	}
 
@@ -3635,6 +4617,9 @@ func _apply_life_daily_wellbeing_update() -> Dictionary:
 		"status":
 			stress_delta -= 1.0
 			happiness_delta += 1.0
+	var asset_summary: Dictionary = _build_life_asset_summary(life_state)
+	stress_delta += float(asset_summary.get("stress_delta", 0.0))
+	happiness_delta += float(asset_summary.get("happiness_delta", 0.0))
 	var finance_status: Dictionary = get_finance_status_snapshot()
 	var runway_months: float = float(finance_status.get("runway_months", 999.0))
 	if bool(finance_status.get("cash_stress_active", false)):
@@ -3703,11 +4688,19 @@ func _build_life_monthly_obligation() -> Dictionary:
 	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, str(life_state.get("housing_id", "")))
 	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, str(life_state.get("lifestyle_id", "")))
 	var basics_tier: Dictionary = _life_basics_tier_by_id(str(life_state.get("basics_tier_id", RunState.LIFE_DEFAULT_BASICS_TIER_ID)))
-	var housing_cost: float = max(float(housing.get("monthly_cost", 0.0)), 0.0)
+	var asset_summary: Dictionary = _build_life_asset_summary(life_state)
+	var owned_primary: bool = bool(asset_summary.get("owned_primary_residence", false))
+	var housing_cost: float = max(float(asset_summary.get("primary_residence_cost", housing.get("monthly_cost", 0.0) if not owned_primary else 0.0)), 0.0)
+	if not owned_primary:
+		housing_cost = max(float(housing.get("monthly_cost", 0.0)), 0.0)
 	var basics_cost: float = max(float(basics_tier.get("monthly_cost", LIFE_BASIC_EXPENSES_MONTHLY)), 0.0)
 	var lifestyle_cost: float = max(float(lifestyle.get("monthly_cost", 0.0)), 0.0)
 	var monthly_extra: float = max(float(life_state.get("monthly_extra", 0.0)), 0.0)
-	var amount: float = housing_cost + basics_cost + lifestyle_cost + monthly_extra
+	var non_primary_property_upkeep: float = max(float(asset_summary.get("non_primary_property_upkeep", 0.0)), 0.0)
+	var car_upkeep: float = max(float(asset_summary.get("car_upkeep", 0.0)), 0.0)
+	var rental_income: float = max(float(asset_summary.get("rental_income", 0.0)), 0.0)
+	var gross_outflow: float = housing_cost + basics_cost + lifestyle_cost + monthly_extra + non_primary_property_upkeep + car_upkeep
+	var amount: float = max(gross_outflow - rental_income, 0.0)
 	return {
 		"company_id": "life",
 		"side": "life_obligation",
@@ -3715,13 +4708,21 @@ func _build_life_monthly_obligation() -> Dictionary:
 		"housing_id": str(housing.get("id", "")),
 		"housing_label": str(housing.get("label", "")),
 		"housing_cost": housing_cost,
+		"owned_primary_residence": owned_primary,
+		"primary_property_id": str(asset_summary.get("primary_property", {}).get("id", "")),
 		"basics_tier_id": str(basics_tier.get("id", "")),
 		"basics_tier_label": str(basics_tier.get("label", "")),
 		"basic_expenses": basics_cost,
 		"lifestyle_id": str(lifestyle.get("id", "")),
 		"lifestyle_label": str(lifestyle.get("label", "")),
 		"lifestyle_cost": lifestyle_cost,
-		"monthly_extra": monthly_extra
+		"monthly_extra": monthly_extra,
+		"non_primary_property_upkeep": non_primary_property_upkeep,
+		"car_upkeep": car_upkeep,
+		"asset_upkeep": float(asset_summary.get("asset_upkeep", 0.0)),
+		"rental_income": rental_income,
+		"gross_outflow": gross_outflow,
+		"net_lifestyle_cashflow": float(asset_summary.get("net_lifestyle_cashflow", 0.0))
 	}
 
 
@@ -3729,12 +4730,18 @@ func _life_monthly_outflow_for_state(life_state: Dictionary) -> float:
 	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, str(life_state.get("housing_id", "")))
 	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, str(life_state.get("lifestyle_id", "")))
 	var basics_tier: Dictionary = _life_basics_tier_by_id(str(life_state.get("basics_tier_id", RunState.LIFE_DEFAULT_BASICS_TIER_ID)))
-	return (
-		max(float(housing.get("monthly_cost", 0.0)), 0.0) +
+	var asset_summary: Dictionary = _build_life_asset_summary(life_state)
+	var owned_primary: bool = bool(asset_summary.get("owned_primary_residence", false))
+	var housing_cost: float = max(float(asset_summary.get("primary_residence_cost", 0.0)), 0.0) if owned_primary else max(float(housing.get("monthly_cost", 0.0)), 0.0)
+	var gross_outflow: float = (
+		housing_cost +
 		max(float(basics_tier.get("monthly_cost", LIFE_BASIC_EXPENSES_MONTHLY)), 0.0) +
 		max(float(lifestyle.get("monthly_cost", 0.0)), 0.0) +
-		max(float(life_state.get("monthly_extra", 0.0)), 0.0)
+		max(float(life_state.get("monthly_extra", 0.0)), 0.0) +
+		max(float(asset_summary.get("non_primary_property_upkeep", 0.0)), 0.0) +
+		max(float(asset_summary.get("car_upkeep", 0.0)), 0.0)
 	)
+	return max(gross_outflow - max(float(asset_summary.get("rental_income", 0.0)), 0.0), 0.0)
 
 
 func _life_monthly_outflow_for_options(housing_id: String, lifestyle_id: String, basics_tier_id: String = "", monthly_extra: float = 0.0) -> float:
@@ -3760,6 +4767,882 @@ func _estimate_sellable_holdings_value() -> float:
 		if bool(estimate.get("success", false)):
 			total += max(float(estimate.get("net_proceeds", 0.0)), 0.0)
 	return total
+
+
+func _build_life_property_catalog_rows() -> Array:
+	var rows: Array = []
+	for catalog_value in LIFE_PROPERTY_CATALOG:
+		if typeof(catalog_value) != TYPE_DICTIONARY:
+			continue
+		var catalog: Dictionary = catalog_value
+		for location_value in LIFE_PROPERTY_LOCATIONS:
+			if typeof(location_value) != TYPE_DICTIONARY:
+				continue
+			var location: Dictionary = location_value
+			var location_id: String = str(location.get("id", "jakarta"))
+			var public_uplift: float = _life_location_public_uplift_multiplier(location_id)
+			var row: Dictionary = catalog.duplicate(true)
+			row["id"] = "%s_%s" % [str(catalog.get("id", "")), location_id]
+			row["catalog_id"] = str(catalog.get("id", ""))
+			row["location_id"] = location_id
+			row["location_label"] = str(location.get("label", "Jakarta"))
+			row["base_price"] = _life_property_base_price_for_location(catalog, location)
+			row["price"] = _life_property_price_for_location(catalog, location)
+			row["monthly_upkeep"] = _life_property_monthly_upkeep_for_location(catalog, location)
+			row["rent_income"] = _life_property_rent_for_location(catalog, location)
+			row["public_uplift_multiplier"] = public_uplift
+			row["public_uplift_label"] = _life_public_uplift_label(public_uplift)
+			row["priced_in_lead_ids"] = _life_public_confirmed_lead_ids_for_location(location_id)
+			rows.append(row)
+	return rows
+
+
+func _build_life_asset_summary(life_state: Dictionary) -> Dictionary:
+	var properties: Array = life_state.get("properties", []).duplicate(true)
+	var cars: Array = life_state.get("cars", []).duplicate(true)
+	var property_value: float = 0.0
+	var car_value: float = 0.0
+	var property_upkeep: float = 0.0
+	var non_primary_property_upkeep: float = 0.0
+	var car_upkeep: float = 0.0
+	var rental_income: float = 0.0
+	var status_value: float = 0.0
+	var stress_delta: float = 0.0
+	var happiness_delta: float = 0.0
+	var primary_property: Dictionary = {}
+	var active_car: Dictionary = {}
+	for property_value_variant in properties:
+		if typeof(property_value_variant) != TYPE_DICTIONARY:
+			continue
+		var property_row: Dictionary = property_value_variant
+		var current_value: float = max(float(property_row.get("current_value", property_row.get("purchase_price", 0.0))), 0.0)
+		var monthly_upkeep: float = max(float(property_row.get("monthly_upkeep", 0.0)), 0.0)
+		property_value += current_value
+		property_upkeep += monthly_upkeep
+		status_value += max(float(property_row.get("status_value", 0.0)), 0.0)
+		if bool(property_row.get("is_primary", false)) and primary_property.is_empty():
+			primary_property = property_row.duplicate(true)
+			stress_delta += float(property_row.get("stress_delta", 0.0))
+			happiness_delta += float(property_row.get("happiness_delta", 0.0))
+		else:
+			non_primary_property_upkeep += monthly_upkeep
+			if bool(property_row.get("rented_out", false)):
+				rental_income += max(float(property_row.get("rent_income", 0.0)), 0.0)
+	for car_value_variant in cars:
+		if typeof(car_value_variant) != TYPE_DICTIONARY:
+			continue
+		var car_row: Dictionary = car_value_variant
+		car_value += max(float(car_row.get("current_value", car_row.get("purchase_price", 0.0))), 0.0)
+		car_upkeep += max(float(car_row.get("monthly_upkeep", 0.0)), 0.0)
+		status_value += max(float(car_row.get("status_value", 0.0)), 0.0)
+		if bool(car_row.get("is_active", false)) and active_car.is_empty():
+			active_car = car_row.duplicate(true)
+			stress_delta += float(car_row.get("stress_delta", 0.0))
+			happiness_delta += float(car_row.get("happiness_delta", 0.0))
+	var primary_residence_cost: float = max(float(primary_property.get("monthly_upkeep", 0.0)), 0.0) if not primary_property.is_empty() else 0.0
+	var asset_upkeep: float = property_upkeep + car_upkeep
+	return {
+		"properties": properties,
+		"cars": cars,
+		"primary_property": primary_property,
+		"active_car": active_car,
+		"owned_primary_residence": not primary_property.is_empty(),
+		"primary_residence_cost": primary_residence_cost,
+		"property_value": property_value,
+		"car_value": car_value,
+		"asset_value": property_value + car_value,
+		"property_upkeep": property_upkeep,
+		"non_primary_property_upkeep": non_primary_property_upkeep,
+		"car_upkeep": car_upkeep,
+		"asset_upkeep": asset_upkeep,
+		"rental_income": rental_income,
+		"net_lifestyle_cashflow": rental_income - asset_upkeep,
+		"status_value": status_value,
+		"stress_delta": stress_delta,
+		"happiness_delta": happiness_delta
+	}
+
+
+func _build_life_public_image_snapshot(portfolio: Dictionary, asset_summary: Dictionary) -> Dictionary:
+	var cash: float = max(float(portfolio.get("cash", 0.0)), 0.0)
+	var market_value: float = max(float(portfolio.get("market_value", 0.0)), 0.0)
+	var asset_value: float = max(float(asset_summary.get("asset_value", 0.0)), 0.0)
+	var score: float = 0.0
+	score += min(cash / 250000000.0, 20.0)
+	score += min(market_value / 500000000.0, 25.0)
+	score += min(asset_value / 750000000.0, 35.0)
+	score += min(float(asset_summary.get("status_value", 0.0)), 35.0)
+	score += _life_thesis_public_image_score()
+	score += _life_twooter_reputation_score()
+	score += _life_network_reputation_score()
+	score = clamp(score, 0.0, 100.0)
+	var title: String = "Unknown Retail"
+	var next_title: String = "Emerging Operator"
+	var next_score: int = 18
+	if score >= 78.0:
+		title = "Market Patron"
+		next_title = "Peak standing"
+		next_score = 100
+	elif score >= 58.0:
+		title = "Public Figure"
+		next_title = "Market Patron"
+		next_score = 78
+	elif score >= 38.0:
+		title = "Established Investor"
+		next_title = "Public Figure"
+		next_score = 58
+	elif score >= 18.0:
+		title = "Emerging Operator"
+		next_title = "Established Investor"
+		next_score = 38
+	return {
+		"score": score,
+		"title": title,
+		"next_title": next_title,
+		"next_score": next_score,
+		"detail": "Derived from cash, portfolio, owned properties, cars, thesis work, and social reputation."
+	}
+
+
+func _life_thesis_public_image_score() -> float:
+	var score: float = 0.0
+	for thesis_value in RunState.get_player_theses().values():
+		if typeof(thesis_value) != TYPE_DICTIONARY:
+			continue
+		var thesis: Dictionary = thesis_value
+		if str(thesis.get("status", "open")) != "open":
+			continue
+		score += min(float(thesis.get("evidence", []).size()), 5.0) * 0.7
+		if not thesis.get("report", {}).is_empty():
+			score += 1.5
+	return min(score, 8.0)
+
+
+func _life_twooter_reputation_score() -> float:
+	var score: float = 0.0
+	var social_state: Dictionary = RunState.get_twooter_social_state()
+	var account_states: Dictionary = social_state.get("account_states", {}) if typeof(social_state.get("account_states", {})) == TYPE_DICTIONARY else {}
+	for account_state_value in account_states.values():
+		if typeof(account_state_value) != TYPE_DICTIONARY:
+			continue
+		var account_state: Dictionary = account_state_value
+		score += min(max(float(account_state.get("relationship", 0.0)), 0.0) / 20.0, 1.5)
+		score += min(max(float(account_state.get("credibility", 0.0)), 0.0) / 15.0, 1.0)
+	return min(score, 7.0)
+
+
+func _life_network_reputation_score() -> float:
+	var score: float = 0.0
+	for contact_value in RunState.get_network_contacts().values():
+		if typeof(contact_value) != TYPE_DICTIONARY:
+			continue
+		var contact: Dictionary = contact_value
+		if not bool(contact.get("met", false)):
+			continue
+		score += min(max(float(contact.get("relationship", 0.0)), 0.0) / 35.0, 1.3)
+	return min(score, 7.0)
+
+
+func _life_property_catalog_by_id(catalog_id: String) -> Dictionary:
+	for catalog_value in LIFE_PROPERTY_CATALOG:
+		if typeof(catalog_value) != TYPE_DICTIONARY:
+			continue
+		var catalog: Dictionary = catalog_value
+		if str(catalog.get("id", "")) == catalog_id:
+			return catalog.duplicate(true)
+	return {}
+
+
+func _life_car_catalog_by_id(catalog_id: String) -> Dictionary:
+	for catalog_value in LIFE_CAR_CATALOG:
+		if typeof(catalog_value) != TYPE_DICTIONARY:
+			continue
+		var catalog: Dictionary = catalog_value
+		if str(catalog.get("id", "")) == catalog_id:
+			return catalog.duplicate(true)
+	return {}
+
+
+func _life_location_by_id(location_id: String) -> Dictionary:
+	var normalized_location_id: String = _normalize_life_location_id(location_id)
+	for location_value in LIFE_PROPERTY_LOCATIONS:
+		if typeof(location_value) != TYPE_DICTIONARY:
+			continue
+		var location: Dictionary = location_value
+		if str(location.get("id", "")) == normalized_location_id:
+			return location.duplicate(true)
+	for location_value in LIFE_PROPERTY_LOCATIONS:
+		if typeof(location_value) == TYPE_DICTIONARY:
+			return location_value.duplicate(true)
+	return {"id": "jakarta", "label": "Jakarta", "market_factor": 1.0}
+
+
+func _normalize_life_location_id(location_id: String) -> String:
+	var normalized_location_id: String = location_id.strip_edges().to_lower()
+	if normalized_location_id == "bodetabek" or normalized_location_id == "jabodetabek":
+		var redirects: Array = ["bogor", "depok", "tangerang", "bekasi", "karawang"]
+		var index: int = int(STABLE_RNG.seed_from_parts([RunState.run_seed, "legacy_life_location", normalized_location_id]) % redirects.size())
+		return str(redirects[index])
+	if normalized_location_id == "bali":
+		return "denpasar"
+	if normalized_location_id.is_empty():
+		return "jakarta"
+	return normalized_location_id
+
+
+func _life_property_price_for_location(catalog: Dictionary, location: Dictionary) -> float:
+	return _life_property_base_price_for_location(catalog, location) * _life_location_public_uplift_multiplier(str(location.get("id", "jakarta")))
+
+
+func _life_property_base_price_for_location(catalog: Dictionary, location: Dictionary) -> float:
+	return max(float(catalog.get("price", 0.0)) * max(float(location.get("market_factor", 1.0)), 0.1), 0.0)
+
+
+func _life_property_monthly_upkeep_for_location(catalog: Dictionary, location: Dictionary) -> float:
+	return max(float(catalog.get("monthly_upkeep", 0.0)) * max(float(location.get("market_factor", 1.0)), 0.1), 0.0)
+
+
+func _life_property_rent_for_location(catalog: Dictionary, location: Dictionary) -> float:
+	return max(float(catalog.get("rent_income", 0.0)) * max(float(location.get("market_factor", 1.0)), 0.1), 0.0)
+
+
+func _build_life_property_location_rows() -> Array:
+	var rows: Array = []
+	for location_value in LIFE_PROPERTY_LOCATIONS:
+		if typeof(location_value) != TYPE_DICTIONARY:
+			continue
+		var location: Dictionary = location_value.duplicate(true)
+		var location_id: String = str(location.get("id", ""))
+		var public_uplift: float = _life_location_public_uplift_multiplier(location_id)
+		location["public_uplift_multiplier"] = public_uplift
+		location["public_uplift_label"] = _life_public_uplift_label(public_uplift)
+		location["confirmed_lead_ids"] = _life_public_confirmed_lead_ids_for_location(location_id)
+		rows.append(location)
+	return rows
+
+
+func _build_life_development_lead_rows(life_state: Dictionary) -> Array:
+	var rows: Array = []
+	for lead_value in life_state.get("development_leads", []):
+		if typeof(lead_value) != TYPE_DICTIONARY:
+			continue
+		var lead: Dictionary = lead_value.duplicate(true)
+		var location_id: String = str(lead.get("location_id", "jakarta"))
+		var theme: String = str(lead.get("theme", "modern_city"))
+		lead["location_label"] = _life_location_label(location_id)
+		lead["theme_label"] = _life_development_theme_label(theme)
+		lead["clarity_level"] = clamp(int(lead.get("clarity_level", 4 if str(lead.get("source_type", "")) == "network" else 1)), 1, 4)
+		lead["clarity_label"] = _life_development_clarity_label(int(lead.get("clarity_level", 1)))
+		lead["display_location_label"] = _life_development_display_location_label(lead)
+		lead["display_theme_label"] = _life_development_display_theme_label(lead)
+		lead["impact_label"] = _life_development_impact_label(str(lead.get("impact_tier", "moderate")))
+		lead["stage_label"] = _life_development_stage_label(str(lead.get("stage", "rumor")))
+		lead["timing_label"] = _life_development_timing_label(lead)
+		rows.append(lead)
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_resolved: bool = bool(a.get("resolved", false))
+		var b_resolved: bool = bool(b.get("resolved", false))
+		if a_resolved != b_resolved:
+			return not a_resolved
+		return int(a.get("due_day_index", 0)) < int(b.get("due_day_index", 0))
+	)
+	return rows
+
+
+func _build_life_property_value_event_rows(properties: Array) -> Array:
+	var rows: Array = []
+	for property_value in properties:
+		if typeof(property_value) != TYPE_DICTIONARY:
+			continue
+		var property_row: Dictionary = property_value
+		for event_value in property_row.get("value_events", []):
+			if typeof(event_value) != TYPE_DICTIONARY:
+				continue
+			var event: Dictionary = event_value.duplicate(true)
+			event["property_id"] = str(property_row.get("id", ""))
+			event["property_label"] = str(property_row.get("label", "Property"))
+			event["location_id"] = str(property_row.get("location_id", ""))
+			event["location_label"] = str(property_row.get("location_label", ""))
+			rows.append(event)
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("day_index", 0)) > int(b.get("day_index", 0))
+	)
+	return rows
+
+
+func _life_location_public_uplift_multiplier(location_id: String) -> float:
+	var best_multiplier: float = 1.0
+	if not RunState.has_active_run():
+		return best_multiplier
+	var life_state: Dictionary = RunState.get_player_life()
+	for lead_value in life_state.get("development_leads", []):
+		if typeof(lead_value) != TYPE_DICTIONARY:
+			continue
+		var lead: Dictionary = lead_value
+		if str(lead.get("location_id", "")) != location_id:
+			continue
+		if not bool(lead.get("public_confirmed", false)) or str(lead.get("outcome", "")) != "confirmed":
+			continue
+		best_multiplier = max(best_multiplier, float(lead.get("value_multiplier", 1.0)))
+	return best_multiplier
+
+
+func _life_public_confirmed_lead_ids_for_location(location_id: String) -> Array:
+	var rows: Array = []
+	if not RunState.has_active_run():
+		return rows
+	var life_state: Dictionary = RunState.get_player_life()
+	for lead_value in life_state.get("development_leads", []):
+		if typeof(lead_value) != TYPE_DICTIONARY:
+			continue
+		var lead: Dictionary = lead_value
+		if str(lead.get("location_id", "")) == location_id and bool(lead.get("public_confirmed", false)):
+			rows.append(str(lead.get("id", "")))
+	return rows
+
+
+func _life_public_uplift_label(multiplier: float) -> String:
+	if multiplier <= 1.001:
+		return ""
+	return "Public uplift x%.2f" % multiplier
+
+
+func _life_property_has_value_event(property_row: Dictionary, lead_id: String) -> bool:
+	for event_value in property_row.get("value_events", []):
+		if typeof(event_value) == TYPE_DICTIONARY and str(event_value.get("lead_id", "")) == lead_id:
+			return true
+	return false
+
+
+func _resolve_life_development_lead(lead: Dictionary) -> Dictionary:
+	var outcome_override: String = str(lead.get("outcome_override", "")).strip_edges()
+	if not outcome_override.is_empty():
+		if outcome_override == "delayed":
+			return {"outcome": "delayed", "delay_days": 4}
+		if outcome_override == "cancelled":
+			return {"outcome": "cancelled"}
+		if outcome_override == "confirmed_big":
+			return {"outcome": "confirmed", "value_multiplier": _life_development_multiplier(lead, true)}
+		return {"outcome": "confirmed", "value_multiplier": _life_development_multiplier(lead, false)}
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([
+		RunState.run_seed,
+		"life_development_resolve",
+		str(lead.get("id", "")),
+		int(lead.get("due_day_index", 0)),
+		int(lead.get("delay_count", 0))
+	])
+	var reliability: float = clamp(float(lead.get("reliability", 50.0)), 0.0, 100.0) / 100.0
+	var roll: float = rng.randf()
+	var delay_count: int = int(lead.get("delay_count", 0))
+	if delay_count < 2 and roll > reliability and roll <= reliability + 0.18:
+		return {"outcome": "delayed", "delay_days": 3 + int(rng.randi_range(0, 4))}
+	if roll > reliability + 0.18:
+		return {"outcome": "cancelled"}
+	var big_win_chance: float = 0.08
+	match str(lead.get("impact_tier", "moderate")):
+		"minor":
+			big_win_chance = 0.05
+		"moderate":
+			big_win_chance = 0.10
+		"major":
+			big_win_chance = 0.16
+		"transformational":
+			big_win_chance = 0.22
+	var big_win: bool = rng.randf() < big_win_chance
+	return {"outcome": "confirmed", "value_multiplier": _life_development_multiplier(lead, big_win)}
+
+
+func _life_development_multiplier(lead: Dictionary, big_win: bool) -> float:
+	var tier: Dictionary = LIFE_DEVELOPMENT_IMPACT_TIERS.get(str(lead.get("impact_tier", "moderate")), LIFE_DEVELOPMENT_IMPACT_TIERS.get("moderate", {}))
+	var multiplier: float = float(tier.get("big_win_multiplier" if big_win else "base_multiplier", 1.18))
+	var reliability: float = clamp(float(lead.get("reliability", 50.0)), 0.0, 100.0)
+	if not big_win:
+		multiplier += clamp((reliability - 50.0) / 400.0, -0.04, 0.08)
+	return max(multiplier, 1.0)
+
+
+func _create_life_development_lead(
+	location_id: String,
+	theme: String,
+	impact_tier: String,
+	source_type: String,
+	source_id: String,
+	contact_id: String,
+	reliability: float,
+	source_label: String = "",
+	source_note: String = "",
+	outcome_override: String = "",
+	clarity_level: int = 1
+) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var location: Dictionary = _life_location_by_id(location_id)
+	var resolved_location_id: String = str(location.get("id", "jakarta"))
+	var resolved_theme: String = _life_development_theme_id(theme)
+	var resolved_impact_tier: String = _life_development_impact_tier_id(impact_tier)
+	var dedupe_key: String = "%s|%s|%s|%s" % [resolved_location_id, resolved_theme, source_type, source_id]
+	var life_state: Dictionary = RunState.get_player_life()
+	var leads: Array = life_state.get("development_leads", []).duplicate(true)
+	for lead_value in leads:
+		if typeof(lead_value) != TYPE_DICTIONARY:
+			continue
+		var existing: Dictionary = lead_value
+		if str(existing.get("dedupe_key", "")) == dedupe_key:
+			var incoming_clarity: int = clamp(clarity_level, 1, 4)
+			if incoming_clarity > int(existing.get("clarity_level", 1)):
+				var existing_index: int = leads.find(lead_value)
+				existing["clarity_level"] = incoming_clarity
+				existing["clarity_label"] = _life_development_clarity_label(incoming_clarity)
+				existing["source_label"] = source_label
+				existing["source_note"] = source_note
+				existing["reliability"] = max(float(existing.get("reliability", 0.0)), clamp(reliability, 0.0, 100.0))
+				existing["stage"] = "permit_watch" if float(existing.get("reliability", 0.0)) >= 72.0 else str(existing.get("stage", "rumor"))
+				existing["display_location_label"] = _life_location_label(str(existing.get("location_id", resolved_location_id))) if source_type != "news" or incoming_clarity >= 2 else "Location not named"
+				existing["display_theme_label"] = _life_development_theme_label(str(existing.get("theme", resolved_theme))) if source_type != "news" or incoming_clarity >= 3 else "Project not named"
+				if existing_index >= 0:
+					leads[existing_index] = existing
+					life_state["development_leads"] = leads
+					life_state["updated_day_index"] = RunState.day_index
+					life_state["updated_trade_date"] = get_current_trade_date()
+					RunState.set_player_life(life_state)
+					_invalidate_news_snapshot_cache()
+			return {"success": true, "duplicate": true, "message": "Property watch already tracked.", "lead": existing.duplicate(true)}
+	var tier: Dictionary = LIFE_DEVELOPMENT_IMPACT_TIERS.get(resolved_impact_tier, LIFE_DEVELOPMENT_IMPACT_TIERS.get("moderate", {}))
+	var resolve_days: int = int(tier.get("resolve_days", 7))
+	if source_type == "network":
+		resolve_days = max(resolve_days - 2, 2)
+	elif source_type == "news":
+		resolve_days += 1
+	var lead_seed: int = int(STABLE_RNG.seed_from_parts([RunState.run_seed, "life_development_lead", dedupe_key, RunState.day_index]) % 100000)
+	var contact_name: String = ""
+	if not contact_id.is_empty():
+		contact_name = _network_contact_display_name(contact_id)
+	var resolved_clarity_level: int = clamp(clarity_level, 1, 4)
+	var location_label: String = str(location.get("label", "Jakarta"))
+	var theme_label: String = _life_development_theme_label(resolved_theme)
+	var lead: Dictionary = {
+		"id": "dev_%s_%s_%d_%05d" % [resolved_location_id, resolved_theme, RunState.day_index, lead_seed],
+		"dedupe_key": dedupe_key,
+		"location_id": resolved_location_id,
+		"location_label": location_label,
+		"theme": resolved_theme,
+		"theme_label": theme_label,
+		"source_type": source_type,
+		"source_id": source_id,
+		"source_label": source_label,
+		"source_note": source_note,
+		"contact_id": contact_id,
+		"contact_name": contact_name,
+		"discovered_day_index": RunState.day_index,
+		"discovered_trade_date": get_current_trade_date(),
+		"stage": "permit_watch" if reliability >= 72.0 else "rumor",
+		"reliability": clamp(reliability, 0.0, 100.0),
+		"clarity_level": resolved_clarity_level,
+		"clarity_label": _life_development_clarity_label(resolved_clarity_level),
+		"display_location_label": location_label if source_type != "news" or resolved_clarity_level >= 2 else "Location not named",
+		"display_theme_label": theme_label if source_type != "news" or resolved_clarity_level >= 3 else "Project not named",
+		"impact_tier": resolved_impact_tier,
+		"due_day_index": RunState.day_index + resolve_days,
+		"resolved": false,
+		"outcome": "",
+		"value_multiplier": 1.0,
+		"public_confirmed": false,
+		"applied_property_ids": [],
+		"delay_count": 0,
+		"outcome_override": outcome_override
+	}
+	leads.append(lead)
+	life_state["development_leads"] = leads
+	life_state["updated_day_index"] = RunState.day_index
+	life_state["updated_trade_date"] = get_current_trade_date()
+	RunState.set_player_life(life_state)
+	_invalidate_news_snapshot_cache()
+	return {"success": true, "message": "Property watch tracked.", "lead": lead.duplicate(true)}
+
+
+func _maybe_create_life_development_lead_from_news_article(article: Dictionary) -> Dictionary:
+	if article.is_empty():
+		return {"success": false, "message": "No article."}
+	if not _is_life_development_story_article(article) and not _article_can_seed_life_development(article):
+		return {"success": false, "message": "Article is not tied to a property report."}
+	var article_id: String = _life_development_news_source_id(article)
+	var seed: String = "%s|%s|%s" % [article_id, str(article.get("headline", "")), str(article.get("target_sector_id", ""))]
+	var location_id: String = _life_development_location_for_article(article, seed)
+	var theme: String = _life_development_theme_for_article(article, seed)
+	var news_intel_level: int = clamp(int(article.get("intel_level", 1)), 1, 4)
+	var big_development: bool = _text_mentions_big_development(str(article.get("headline", "")) + " " + str(article.get("body", "")))
+	var impact_tier: String = "major" if big_development else "moderate"
+	if news_intel_level <= 1 and impact_tier == "major":
+		impact_tier = "moderate"
+	elif news_intel_level >= 4 and big_development and _text_mentions_transformational_development(str(article.get("headline", "")) + " " + str(article.get("body", ""))):
+		impact_tier = "transformational"
+	var reliability_by_level: Array = [0.0, 46.0, 56.0, 66.0, 76.0]
+	var reliability: float = float(reliability_by_level[news_intel_level])
+	return _create_life_development_lead(
+		location_id,
+		theme,
+		impact_tier,
+		"news",
+		article_id,
+		str(article.get("author_contact_id", "")),
+		reliability,
+		_life_development_news_source_label(article, news_intel_level),
+		_life_development_news_source_note(article, location_id, theme, news_intel_level),
+		"",
+		news_intel_level
+	)
+
+
+func _maybe_create_life_development_lead_from_network_tip(contact_id: String, tip_result: Dictionary) -> Dictionary:
+	var contact: Dictionary = _network_contact_definition_by_id(contact_id)
+	if contact.is_empty() or not _contact_can_seed_life_development(contact):
+		return {}
+	var runtime: Dictionary = RunState.get_network_contacts().get(contact_id, {})
+	var relationship: float = float(runtime.get("relationship", 0.0))
+	var seed: String = "%s|%s|%d" % [contact_id, str(tip_result.get("target_company_id", "")), RunState.day_index]
+	var location_id: String = _life_development_location_for_seed(seed)
+	var haystack: String = "%s %s %s" % [str(contact.get("role", "")), str(contact.get("intro", "")), str(tip_result.get("tip_read", ""))]
+	var theme: String = _life_development_theme_for_text(haystack, seed)
+	var impact_tier: String = "major" if relationship >= 35.0 else "moderate"
+	var reliability: float = clamp(58.0 + relationship * 0.45, 45.0, 84.0)
+	return _create_life_development_lead(
+		location_id,
+		theme,
+		impact_tier,
+		"network",
+		"%s_%d" % [contact_id, RunState.day_index],
+		contact_id,
+		reliability,
+		"%s location read" % str(contact.get("display_name", "Network contact")),
+		"%s mentioned a possible %s around %s." % [
+			str(contact.get("display_name", "A contact")),
+			_life_development_theme_label(theme).to_lower(),
+			_life_location_label(location_id)
+		],
+		"",
+		4
+	)
+
+
+func _is_life_development_story_article(article: Dictionary) -> bool:
+	return bool(article.get("is_property_development_story", false)) or str(article.get("category", "")) == "property_development"
+
+
+func _life_development_news_source_id(article: Dictionary) -> String:
+	var source_id: String = str(article.get("property_development_source_article_id", "")).strip_edges()
+	if source_id.is_empty():
+		source_id = str(article.get("source_article_id", "")).strip_edges()
+	if source_id.is_empty():
+		source_id = str(article.get("id", "")).strip_edges()
+	if source_id.is_empty():
+		source_id = "news_%d" % RunState.day_index
+	return source_id
+
+
+func _life_development_news_source_label(article: Dictionary, intel_level: int) -> String:
+	var outlet_label: String = str(article.get("outlet_label", "News")).strip_edges()
+	if outlet_label.is_empty():
+		outlet_label = "News"
+	match clamp(intel_level, 1, 4):
+		1:
+			return "%s property follow-up" % outlet_label
+		2:
+			return "%s location follow-up" % outlet_label
+		3:
+			return "%s project follow-up" % outlet_label
+		_:
+			return "%s property file" % outlet_label
+
+
+func _life_development_news_source_note(article: Dictionary, location_id: String, theme: String, intel_level: int) -> String:
+	var location_label: String = _life_location_label(location_id)
+	var theme_label: String = _life_development_theme_label(theme).to_lower()
+	var source_name: String = _life_development_source_name(article)
+	match clamp(intel_level, 1, 4):
+		1:
+			return "%s is drawing property-desk attention because its reported business move could affect future site demand. The city and sponsor have not been publicly named." % source_name
+		2:
+			return "Reporters are now watching %s for signs of a defined project. The sponsor, project name, and official filings have not surfaced." % location_label
+		3:
+			return "Reporting now points to a possible %s around %s. Public confirmation is still pending." % [theme_label, location_label]
+		_:
+			return "Several public signals now point to a possible %s around %s. Reporters are watching for formal filings or official confirmation." % [theme_label, location_label]
+
+
+func _life_development_source_name(article: Dictionary) -> String:
+	var ticker: String = str(article.get("target_ticker", "")).strip_edges()
+	if not ticker.is_empty():
+		return ticker
+	var company_name: String = str(article.get("target_company_name", "")).strip_edges()
+	if not company_name.is_empty():
+		return company_name
+	var sector_name: String = str(article.get("sector_name", "")).strip_edges()
+	if not sector_name.is_empty():
+		return sector_name
+	return "The original report"
+
+
+func _life_development_low_clarity_theme_label(article: Dictionary, theme: String) -> String:
+	var sector_id: String = str(article.get("target_sector_id", ""))
+	if sector_id == "health":
+		return "Hospital site watch"
+	if sector_id == "transport":
+		return "Transit site watch"
+	if sector_id == "industrial":
+		return "Industrial site watch"
+	if sector_id == "infra":
+		return "Infrastructure site watch"
+	if theme == "hospital_university":
+		return "Campus site watch"
+	return "Site-demand watch"
+
+
+func _life_development_sector_angle(article: Dictionary, theme: String) -> String:
+	match str(article.get("target_sector_id", "")):
+		"health":
+			return "For healthcare names, the property signal is not their stock move by itself; it is the chance that a hospital, clinic, or medical-campus expansion pulls demand into a specific area."
+		"transport":
+			return "For transport names, the property signal usually comes from route access, stations, depots, or passenger-flow changes."
+		"industrial":
+			return "For industrial names, the property signal usually comes from factory, warehouse, supplier, or worker-housing demand around a site."
+		"infra":
+			return "For infrastructure names, the property signal usually comes from new access, utilities, concessions, or construction corridors."
+	if theme == "hospital_university":
+		return "The property signal is tied to a possible institutional campus rather than ordinary share-price chatter."
+	return "The property signal is tied to possible site demand rather than the stock move alone."
+
+
+func _article_can_seed_life_development(article: Dictionary) -> bool:
+	if _is_life_development_story_article(article):
+		return false
+	if (
+		not str(article.get("property_development_location_id", "")).strip_edges().is_empty() and
+		not str(article.get("property_development_theme", "")).strip_edges().is_empty()
+	):
+		return true
+	var sector_id: String = str(article.get("target_sector_id", ""))
+	var text: String = ("%s %s %s %s %s" % [
+		str(article.get("category", "")),
+		str(article.get("event_family", "")),
+		str(article.get("headline", "")),
+		str(article.get("deck", "")),
+		str(article.get("body", ""))
+	]).to_lower()
+	if sector_id == "health":
+		return _text_mentions_health_development(text)
+	if LIFE_DEVELOPMENT_RELEVANT_SECTORS.has(sector_id):
+		return true
+	for keyword in ["property", "infrastructure", "construction", "toll", "transit", "industrial estate", "port", "logistics", "hospital", "university", "resort", "tourism"]:
+		if text.find(keyword) >= 0:
+			return true
+	return false
+
+
+func _contact_can_seed_life_development(contact: Dictionary) -> bool:
+	var text: String = ("%s %s" % [str(contact.get("role", "")), str(contact.get("intro", ""))]).to_lower()
+	for sector_value in contact.get("sector_ids", []):
+		var sector_id: String = str(sector_value)
+		if sector_id == "health":
+			if _text_mentions_health_development(text):
+				return true
+			continue
+		if LIFE_DEVELOPMENT_RELEVANT_SECTORS.has(sector_id):
+			return true
+	for keyword in ["construction", "infrastructure", "property", "port", "logistics", "hospital", "campus", "planning", "concession", "industrial"]:
+		if text.find(keyword) >= 0:
+			return true
+	return false
+
+
+func _life_development_location_for_seed(seed: String) -> String:
+	if LIFE_PROPERTY_LOCATIONS.is_empty():
+		return "jakarta"
+	var index: int = int(STABLE_RNG.seed_from_parts([RunState.run_seed, "life_development_location", seed]) % LIFE_PROPERTY_LOCATIONS.size())
+	var location: Dictionary = LIFE_PROPERTY_LOCATIONS[index]
+	return str(location.get("id", "jakarta"))
+
+
+func _life_development_location_for_article(article: Dictionary, seed: String) -> String:
+	var explicit_location_raw: String = str(article.get("property_development_location_id", "")).strip_edges()
+	if not explicit_location_raw.is_empty():
+		return _normalize_life_location_id(explicit_location_raw)
+	return _life_development_location_for_seed(seed)
+
+
+func _life_development_theme_for_article(article: Dictionary, seed: String) -> String:
+	var explicit_theme: String = str(article.get("property_development_theme", "")).strip_edges()
+	if not explicit_theme.is_empty():
+		return explicit_theme
+	var sector_id: String = str(article.get("target_sector_id", ""))
+	if sector_id == "health":
+		return "hospital_university"
+	if sector_id == "transport":
+		return "transit_corridor"
+	if sector_id == "industrial":
+		return "industrial_estate"
+	if sector_id == "infra":
+		var infra_text: String = ("%s %s %s" % [str(article.get("headline", "")), str(article.get("deck", "")), str(article.get("body", ""))]).to_lower()
+		if infra_text.find("port") >= 0 or infra_text.find("logistics") >= 0:
+			return "port_logistics"
+		if infra_text.find("transit") >= 0 or infra_text.find("rail") >= 0 or infra_text.find("busway") >= 0:
+			return "transit_corridor"
+		return "toll_exit"
+	return _life_development_theme_for_text("%s %s %s" % [
+		str(article.get("headline", "")),
+		str(article.get("deck", "")),
+		str(article.get("body", ""))
+	], seed)
+
+
+func _life_development_theme_for_text(text: String, seed: String) -> String:
+	var lower_text: String = text.to_lower()
+	if lower_text.find("toll") >= 0:
+		return "toll_exit"
+	if lower_text.find("transit") >= 0 or lower_text.find("rail") >= 0 or lower_text.find("busway") >= 0:
+		return "transit_corridor"
+	if lower_text.find("industrial") >= 0 or lower_text.find("warehouse") >= 0:
+		return "industrial_estate"
+	if lower_text.find("hospital") >= 0 or lower_text.find("university") >= 0 or lower_text.find("campus") >= 0:
+		return "hospital_university"
+	if lower_text.find("resort") >= 0 or lower_text.find("tourism") >= 0:
+		return "resort_zone"
+	if lower_text.find("port") >= 0 or lower_text.find("logistics") >= 0:
+		return "port_logistics"
+	var index: int = int(STABLE_RNG.seed_from_parts([RunState.run_seed, "life_development_theme", seed]) % LIFE_DEVELOPMENT_THEMES.size())
+	return str(LIFE_DEVELOPMENT_THEMES[index].get("id", "modern_city"))
+
+
+func _text_mentions_health_development(text: String) -> bool:
+	var lower_text: String = text.to_lower()
+	for keyword in ["hospital", "clinic", "medical campus", "campus", "healthcare complex", "new wing", "beds", "facility", "facilities", "land acquisition", "site", "expansion", "build", "construction", "permit"]:
+		if lower_text.find(keyword) >= 0:
+			return true
+	return false
+
+
+func _text_mentions_big_development(text: String) -> bool:
+	var lower_text: String = text.to_lower()
+	for keyword in ["modern city", "new city", "toll road", "port expansion", "industrial estate", "transit corridor"]:
+		if lower_text.find(keyword) >= 0:
+			return true
+	return false
+
+
+func _text_mentions_transformational_development(text: String) -> bool:
+	var lower_text: String = text.to_lower()
+	for keyword in ["modern city", "new city", "master-planned", "mega project", "port expansion", "industrial estate"]:
+		if lower_text.find(keyword) >= 0:
+			return true
+	return false
+
+
+func _life_development_clarity_label(clarity_level: int) -> String:
+	match clamp(clarity_level, 1, 4):
+		1:
+			return "Developing report"
+		2:
+			return "Area reported"
+		3:
+			return "Project reported"
+		_:
+			return "Public signals"
+
+
+func _life_development_display_location_label(lead: Dictionary) -> String:
+	if bool(lead.get("public_confirmed", false)) or str(lead.get("source_type", "")) != "news":
+		return str(lead.get("location_label", _life_location_label(str(lead.get("location_id", "")))))
+	if int(lead.get("clarity_level", 1)) >= 2:
+		return str(lead.get("location_label", _life_location_label(str(lead.get("location_id", "")))))
+	return "Location not named"
+
+
+func _life_development_display_theme_label(lead: Dictionary) -> String:
+	if bool(lead.get("public_confirmed", false)) or str(lead.get("source_type", "")) != "news":
+		return str(lead.get("theme_label", _life_development_theme_label(str(lead.get("theme", "")))))
+	if int(lead.get("clarity_level", 1)) >= 3:
+		return str(lead.get("theme_label", _life_development_theme_label(str(lead.get("theme", "")))))
+	return "Project not named"
+
+
+func _life_development_theme_id(theme: String) -> String:
+	for theme_value in LIFE_DEVELOPMENT_THEMES:
+		if typeof(theme_value) == TYPE_DICTIONARY and str(theme_value.get("id", "")) == theme:
+			return theme
+	return "modern_city"
+
+
+func _life_development_impact_tier_id(impact_tier: String) -> String:
+	if LIFE_DEVELOPMENT_IMPACT_TIERS.has(impact_tier):
+		return impact_tier
+	return "moderate"
+
+
+func _life_location_label(location_id: String) -> String:
+	return str(_life_location_by_id(location_id).get("label", "Jakarta"))
+
+
+func _life_development_theme_label(theme: String) -> String:
+	for theme_value in LIFE_DEVELOPMENT_THEMES:
+		if typeof(theme_value) == TYPE_DICTIONARY and str(theme_value.get("id", "")) == theme:
+			return str(theme_value.get("label", theme.capitalize()))
+	return theme.capitalize()
+
+
+func _life_development_impact_label(impact_tier: String) -> String:
+	var tier: Dictionary = LIFE_DEVELOPMENT_IMPACT_TIERS.get(impact_tier, LIFE_DEVELOPMENT_IMPACT_TIERS.get("moderate", {}))
+	return str(tier.get("label", impact_tier.capitalize()))
+
+
+func _life_development_stage_label(stage: String) -> String:
+	match stage:
+		"permit_watch":
+			return "Permit watch"
+		"confirmed":
+			return "Confirmed"
+		"delayed":
+			return "Delayed"
+		"cancelled":
+			return "Cancelled"
+		_:
+			return "Rumor"
+
+
+func _life_development_timing_label(lead: Dictionary) -> String:
+	if bool(lead.get("resolved", false)):
+		return str(lead.get("outcome", "resolved")).capitalize()
+	var days: int = int(lead.get("due_day_index", RunState.day_index)) - RunState.day_index
+	if days <= 0:
+		return "Due now"
+	return "About %d trading day%s" % [days, "" if days == 1 else "s"]
+
+
+func _network_contact_definition_by_id(contact_id: String) -> Dictionary:
+	for contact_value in DataRepository.get_contact_network_data().get("contacts", []):
+		if typeof(contact_value) != TYPE_DICTIONARY:
+			continue
+		var contact: Dictionary = contact_value
+		if str(contact.get("id", "")) == contact_id:
+			return contact.duplicate(true)
+	return {}
+
+
+func _network_contact_display_name(contact_id: String) -> String:
+	var contact: Dictionary = _network_contact_definition_by_id(contact_id)
+	return str(contact.get("display_name", contact_id))
+
+
+func _life_next_asset_id(prefix: String, existing_rows: Array) -> String:
+	var used: Dictionary = {}
+	for row_value in existing_rows:
+		if typeof(row_value) == TYPE_DICTIONARY:
+			used[str(row_value.get("id", ""))] = true
+	var attempt: int = existing_rows.size() + 1
+	while attempt < 10000:
+		var candidate: String = "%s_%d_%03d" % [prefix, RunState.day_index, attempt]
+		if not used.has(candidate):
+			return candidate
+		attempt += 1
+	return "%s_%d_%d" % [prefix, RunState.day_index, Time.get_ticks_msec()]
 
 
 func _life_option_by_id(options: Array, option_id: String) -> Dictionary:
@@ -3999,6 +5882,41 @@ func _invalidate_daily_activity_snapshot_cache() -> void:
 	daily_activity_snapshot_cache = {}
 
 
+func _cache_news_snapshot(snapshot: Dictionary, unlocked_intel_level: int = -1) -> void:
+	if not RunState.has_active_run() or snapshot.is_empty():
+		news_snapshot_cache = {}
+		return
+	var resolved_intel_level: int = unlocked_intel_level
+	if resolved_intel_level < 1:
+		resolved_intel_level = get_unlocked_news_intel_level()
+	news_snapshot_cache = {
+		"cache_key": _news_snapshot_cache_key(resolved_intel_level),
+		"snapshot": snapshot.duplicate(true)
+	}
+
+
+func _invalidate_news_snapshot_cache() -> void:
+	news_snapshot_cache = {}
+
+
+func _news_snapshot_cache_key(unlocked_intel_level: int) -> String:
+	if not RunState.has_active_run():
+		return ""
+	var trade_date: Dictionary = RunState.get_current_trade_date()
+	var life_state: Dictionary = RunState.get_player_life()
+	return "%d|%s|news:%d|companies:%d|market:%d|events:%d|special:%d|arcs:%d|development:%d" % [
+		RunState.day_index,
+		trading_calendar.to_key(trade_date),
+		unlocked_intel_level,
+		RunState.company_order.size(),
+		RunState.market_history.size(),
+		RunState.event_history.size(),
+		RunState.active_special_events.size(),
+		RunState.active_company_arcs.size(),
+		life_state.get("development_leads", []).size()
+	]
+
+
 func _empty_daily_activity_snapshot() -> Dictionary:
 	return {
 		"cache_key": "",
@@ -4210,7 +6128,11 @@ func discover_network_contacts_from_article(article: Dictionary) -> Array:
 	if not RunState.has_active_run() or article.is_empty():
 		return []
 	var discovered: Array = contact_network_system.discover_from_article(RunState, DataRepository, article)
-	if not discovered.is_empty():
+	var development_lead: Dictionary = _maybe_create_life_development_lead_from_news_article(article) if _is_life_development_story_article(article) else {}
+	if bool(development_lead.get("success", false)) and not bool(development_lead.get("duplicate", false)):
+		life_changed.emit()
+		network_changed.emit()
+	if not discovered.is_empty() or bool(development_lead.get("success", false)):
 		_invalidate_daily_activity_snapshot_cache()
 		_request_autosave("discover_network_from_article")
 	return discovered
@@ -4235,6 +6157,10 @@ func meet_contact(contact_id: String, source_context: Dictionary = {}) -> Dictio
 	if bool(result.get("success", false)):
 		_spend_network_action("meet")
 		result["action_cost"] = get_network_action_cost("meet")
+		_record_steam_progress_event("network_contact_met", {
+			"contact_id": contact_id,
+			"source_context": source_context.duplicate(true)
+		})
 		_invalidate_daily_activity_snapshot_cache()
 		_request_autosave("network_meet")
 		daily_actions_changed.emit()
@@ -4250,11 +6176,20 @@ func request_contact_tip(contact_id: String, company_id: String = "") -> Diction
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	var result: Dictionary = contact_network_system.request_tip(RunState, DataRepository, corporate_action_system, contact_id, company_id)
 	if bool(result.get("success", false)):
+		var development_lead: Dictionary = _maybe_create_life_development_lead_from_network_tip(contact_id, result)
+		if bool(development_lead.get("success", false)):
+			result["development_lead"] = development_lead.get("lead", {}).duplicate(true)
 		_spend_network_action("tip")
 		result["action_cost"] = get_network_action_cost("tip")
+		_record_steam_progress_event("network_tip_requested", {
+			"contact_id": contact_id,
+			"company_id": company_id
+		})
 		_invalidate_daily_activity_snapshot_cache()
 		_request_autosave("network_tip")
 		daily_actions_changed.emit()
+		if result.has("development_lead"):
+			life_changed.emit()
 		network_changed.emit()
 	return result
 
@@ -4581,6 +6516,7 @@ func _build_news_snapshot(unlocked_intel_level: int = -1, log_phase_details: boo
 		resolved_feed_context.get("trade_date", {}),
 		unlocked_intel_level
 	)
+	news_snapshot = _with_life_development_news_articles(news_snapshot)
 	_log_advance_perf_elapsed(log_phase_details, "build_news_snapshot:feed_system", phase_started_at_usec)
 	return news_snapshot
 
@@ -4588,7 +6524,15 @@ func _build_news_snapshot(unlocked_intel_level: int = -1, log_phase_details: boo
 func get_news_snapshot(unlocked_intel_level: int = -1) -> Dictionary:
 	if unlocked_intel_level < 1:
 		unlocked_intel_level = get_unlocked_news_intel_level()
+	var cache_key: String = _news_snapshot_cache_key(unlocked_intel_level)
+	if (
+		not news_snapshot_cache.is_empty()
+		and str(news_snapshot_cache.get("cache_key", "")) == cache_key
+		and news_snapshot_cache.has("snapshot")
+	):
+		return news_snapshot_cache.get("snapshot", {}).duplicate(true)
 	var snapshot: Dictionary = _build_news_snapshot(unlocked_intel_level)
+	_cache_news_snapshot(snapshot, unlocked_intel_level)
 	RunState.record_news_snapshot(snapshot)
 	return snapshot
 
@@ -4607,6 +6551,205 @@ func get_news_archive_article_summaries(outlet_id: String, year: int, month: int
 
 func get_news_archive_article(article_id: String) -> Dictionary:
 	return RunState.get_news_archive_article(article_id)
+
+
+func _with_life_development_news_articles(snapshot: Dictionary) -> Dictionary:
+	if not RunState.has_active_run() or snapshot.is_empty():
+		return snapshot
+	var feeds: Dictionary = snapshot.get("feeds", {}).duplicate(true)
+	if feeds.is_empty():
+		return snapshot
+	for outlet_id_value in feeds.keys():
+		var outlet_id: String = str(outlet_id_value)
+		var feed: Dictionary = feeds.get(outlet_id, {}).duplicate(true)
+		var articles: Array = feed.get("articles", []).duplicate(true)
+		var additions: Array = _build_life_development_news_articles_for_feed(outlet_id, feed, articles)
+		if additions.is_empty():
+			continue
+		articles.append_array(additions)
+		articles.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			if float(a.get("priority", 0.0)) == float(b.get("priority", 0.0)):
+				if int(a.get("day_index", -1)) == int(b.get("day_index", -1)):
+					return str(a.get("headline", "")) < str(b.get("headline", ""))
+				return int(a.get("day_index", -1)) > int(b.get("day_index", -1))
+			return float(a.get("priority", 0.0)) > float(b.get("priority", 0.0))
+		)
+		feed["articles"] = articles
+		feeds[outlet_id] = feed
+	snapshot["feeds"] = feeds
+	return snapshot
+
+
+func _build_life_development_news_articles_for_feed(outlet_id: String, feed: Dictionary, source_articles: Array) -> Array:
+	var additions: Array = []
+	var seen_ids: Dictionary = {}
+	for article_value in source_articles:
+		if typeof(article_value) != TYPE_DICTIONARY:
+			continue
+		var article: Dictionary = article_value
+		seen_ids[str(article.get("id", ""))] = true
+
+	var outlet_level: int = clamp(int(feed.get("intel_level", 1)), 1, 4)
+	var outlet_label: String = str(feed.get("outlet_label", "News"))
+	for article_value in source_articles:
+		if additions.size() >= 2 or typeof(article_value) != TYPE_DICTIONARY:
+			continue
+		var source_article: Dictionary = article_value
+		if not _article_can_seed_life_development(source_article):
+			continue
+		var property_article: Dictionary = _build_life_development_news_article(outlet_id, outlet_label, outlet_level, source_article)
+		var property_article_id: String = str(property_article.get("id", ""))
+		if property_article_id.is_empty() or seen_ids.has(property_article_id):
+			continue
+		seen_ids[property_article_id] = true
+		additions.append(property_article)
+	return additions
+
+
+func _build_life_development_news_article(outlet_id: String, outlet_label: String, outlet_level: int, source_article: Dictionary) -> Dictionary:
+	var source_id: String = _life_development_news_source_id(source_article)
+	var seed: String = "%s|%s|%s" % [
+		source_id,
+		str(source_article.get("headline", "")),
+		str(source_article.get("target_sector_id", ""))
+	]
+	var location_id: String = _life_development_location_for_article(source_article, seed)
+	var theme: String = _life_development_theme_for_article(source_article, seed)
+	var intel_level: int = clamp(int(source_article.get("intel_level", outlet_level)), 1, 4)
+	var reliability_by_level: Array = [0.0, 46.0, 56.0, 66.0, 76.0]
+	var reliability: float = float(reliability_by_level[intel_level])
+	var location_label: String = _life_location_label(location_id)
+	var theme_label: String = _life_development_theme_label(theme)
+	var visible_location_label: String = location_label if intel_level >= 2 else "Location not named"
+	var visible_theme_label: String = theme_label if intel_level >= 3 else _life_development_low_clarity_theme_label(source_article, theme)
+	var trade_date: Dictionary = source_article.get("trade_date", get_current_trade_date()).duplicate(true)
+	var day_index: int = int(source_article.get("day_index", RunState.day_index))
+	var article_id: String = "property_development|%s|%s|%d" % [
+		outlet_id,
+		_life_development_article_token(source_id),
+		day_index
+	]
+	return {
+		"id": article_id,
+		"source_article_id": article_id,
+		"property_development_source_article_id": source_id,
+		"is_property_development_story": true,
+		"outlet_id": outlet_id,
+		"outlet_label": outlet_label,
+		"intel_level": intel_level,
+		"headline": _life_development_news_headline(intel_level, visible_location_label, visible_theme_label),
+		"deck": _life_development_news_deck(intel_level, visible_location_label, visible_theme_label),
+		"body": _life_development_news_body(source_article, location_id, theme, intel_level, reliability),
+		"day_index": day_index,
+		"trade_date": trade_date,
+		"progress_label": "Developing",
+		"category": "property_development",
+		"tone": "mixed",
+		"target_company_id": "",
+		"target_ticker": "",
+		"target_company_name": "",
+		"target_sector_id": "property",
+		"sector_name": "Property",
+		"person_name": "",
+		"event_family": "life_development",
+		"source_chain_id": "",
+		"chain_family": "",
+		"meeting_id": "",
+		"venue_type": "",
+		"author_id": "property_desk",
+		"author_name": "%s Property Desk" % outlet_label,
+		"author_role": "Property Watch",
+		"author_contact_id": str(source_article.get("author_contact_id", "")),
+		"public_section_label": "Property Watch",
+		"public_status_label": _life_development_clarity_label(intel_level),
+		"outlet_logo_asset": str(source_article.get("outlet_logo_asset", "")),
+		"author_portrait_asset": str(source_article.get("author_portrait_asset", "")),
+		"article_image_asset": str(source_article.get("article_image_asset", "")),
+		"image_slot": "brief",
+		"public_story_angle": "Property development",
+		"public_confidence_label": _life_development_news_confidence_label(reliability),
+		"public_continuity_phrase": "Follow-up to earlier market coverage",
+		"property_development_clarity": intel_level,
+		"property_development_location_id": location_id,
+		"property_development_theme": theme,
+		"property_development_location_label": visible_location_label,
+		"property_development_theme_label": visible_theme_label,
+		"priority": 3.05 + (float(intel_level) * 0.08)
+	}
+
+
+func _life_development_news_headline(intel_level: int, location_label: String, theme_label: String) -> String:
+	match clamp(intel_level, 1, 4):
+		1:
+			return "Property watch opens on possible site-demand catalyst"
+		2:
+			return "Property desk narrows site-demand watch to %s" % location_label
+		3:
+			return "%s property watch centers on %s" % [location_label, theme_label.to_lower()]
+		_:
+			return "%s development signals point to %s" % [theme_label, location_label]
+
+
+func _life_development_news_deck(intel_level: int, location_label: String, theme_label: String) -> String:
+	match clamp(intel_level, 1, 4):
+		1:
+			return "Early reporting points to possible site demand, but no city or sponsor has been confirmed."
+		2:
+			return "The likely area is clearer, while the sponsor and project scope still need confirmation."
+		3:
+			return "The article now points toward %s, with public confirmation still pending." % theme_label.to_lower()
+		_:
+			return "Public signals now link the development theme to %s, though formal filings still matter." % location_label
+
+
+func _life_development_news_body(source_article: Dictionary, location_id: String, theme: String, intel_level: int, reliability: float) -> String:
+	var note: String = _life_development_news_source_note(source_article, location_id, theme, intel_level)
+	var location_label: String = _life_location_label(location_id)
+	var theme_label: String = _life_development_theme_label(theme).to_lower()
+	var sector_angle: String = _life_development_sector_angle(source_article, theme)
+	var paragraphs: Array = [note]
+	if intel_level <= 1:
+		paragraphs.append("%s The location is not confirmed yet, but the possible %s angle could matter for nearby land, rentals, and small commercial space if it becomes public." % [sector_angle, theme_label])
+	elif intel_level == 2:
+		paragraphs.append("%s The working area is %s, but the market still needs a project name, sponsor, and filing trail before treating it as investable property news." % [sector_angle, location_label])
+	else:
+		paragraphs.append("%s The reported angle is a possible %s around %s. Confirmation would matter most to properties with direct exposure to that location." % [sector_angle, theme_label, location_label])
+	paragraphs.append(_life_development_news_reliability_sentence(reliability))
+	return "\n\n".join(paragraphs)
+
+
+func _life_development_news_confidence_label(reliability: float) -> String:
+	if reliability >= 70.0:
+		return "Public signals building"
+	if reliability >= 56.0:
+		return "Reporting active"
+	return "Early report"
+
+
+func _life_development_news_reliability_sentence(reliability: float) -> String:
+	if reliability >= 70.0:
+		return "The story will matter more if it is followed by permits, land filings, or an official announcement."
+	if reliability >= 56.0:
+		return "The next useful proof would be a named sponsor, a clearer site, or formal paperwork."
+	return "For now, this is a reported story rather than a confirmed development."
+
+
+func _life_development_article_token(value: String) -> String:
+	var token: String = value.to_lower()
+	var cleaned: String = ""
+	for index in range(token.length()):
+		var character: String = token.substr(index, 1)
+		var code: int = character.unicode_at(0)
+		if (code >= 48 and code <= 57) or (code >= 97 and code <= 122):
+			cleaned += character
+		else:
+			cleaned += "_"
+	while cleaned.contains("__"):
+		cleaned = cleaned.replace("__", "_")
+	cleaned = cleaned.strip_edges().trim_prefix("_").trim_suffix("_")
+	if cleaned.is_empty():
+		cleaned = "article"
+	return cleaned.left(64)
 
 
 func get_twooter_snapshot(unlocked_access_tier: int = -1) -> Dictionary:
@@ -4936,6 +7079,11 @@ func capture_research_evidence(payload: Dictionary) -> Dictionary:
 	row["status"] = "active"
 	tray[evidence_id] = row
 	RunState.set_thesis_research_tray(tray)
+	_record_steam_progress_event("research_evidence_captured", {
+		"source_type": str(row.get("source_type", "")),
+		"company_id": str(row.get("company_id", "")),
+		"category": str(row.get("category", ""))
+	})
 	_request_autosave("thesis_capture_research")
 	thesis_changed.emit()
 	return {"success": true, "message": "Added to Research Tray.", "evidence": row, "snapshot": get_research_tray_snapshot(str(row.get("company_id", "")))}
@@ -5002,6 +7150,11 @@ func attach_research_evidence_to_thesis(thesis_id: String, evidence_id: String, 
 	thesis["evidence"] = evidence_rows
 	thesis["updated_day_index"] = RunState.day_index
 	RunState.set_player_thesis(thesis)
+	_record_steam_progress_event("research_evidence_attached", {
+		"thesis_id": thesis_id,
+		"evidence_id": evidence_id,
+		"source_type": str(attached.get("source_type", ""))
+	})
 	_request_autosave("thesis_attach_research")
 	thesis_changed.emit()
 	return {"success": true, "message": "Research attached as %s." % str(attached.get("interpretation_label", "evidence")), "thesis": thesis, "evidence": attached}
@@ -5115,7 +7268,7 @@ func evaluate_chart_pattern_claim(
 	var chart_snapshot: Dictionary = get_company_chart_snapshot(company_id, range_id, [])
 	if chart_snapshot.is_empty():
 		return {"success": false, "message": "Chart history is not ready yet."}
-	return chart_pattern_system.evaluate_pattern_claim({
+	var result: Dictionary = chart_pattern_system.evaluate_pattern_claim({
 		"company_id": str(company_id),
 		"ticker": str(company.get("ticker", company_id.to_upper())),
 		"range_id": str(chart_snapshot.get("range_id", range_id)),
@@ -5127,6 +7280,13 @@ func evaluate_chart_pattern_claim(
 		"current_price": float(company.get("current_price", 0.0)),
 		"trade_date": get_current_trade_date()
 	})
+	if bool(result.get("success", false)):
+		_record_steam_progress_event("chart_pattern_claimed", {
+			"company_id": company_id,
+			"range_id": range_id,
+			"pattern_id": pattern_id
+		})
+	return result
 
 
 func add_chart_pattern_evidence_to_thesis(thesis_id: String, claim: Dictionary) -> Dictionary:
@@ -5184,6 +7344,11 @@ func create_thesis(company_id: String, stance: String, horizon: String, title: S
 		"review": {}
 	}
 	RunState.set_player_thesis(thesis)
+	_record_steam_progress_event("thesis_created", {
+		"company_id": company_id,
+		"stance": normalized_stance,
+		"horizon": normalized_horizon
+	})
 	_request_autosave("thesis_create")
 	thesis_changed.emit()
 	return {"success": true, "message": "Thesis created.", "thesis": thesis}
@@ -6388,6 +8553,52 @@ func _on_new_run_financial_batch_progress(done_count: int, total_count: int) -> 
 		_emit_run_loading_step_with_progress(2, 1.0)
 		return
 	_emit_run_loading_step_with_progress(2, float(done_count) / float(total_count))
+
+
+func _steam_progress_manager() -> Node:
+	return get_node_or_null("/root/SteamProgressManager")
+
+
+func _reset_steam_progress_for_active_run() -> void:
+	var progress_manager: Node = _steam_progress_manager()
+	if progress_manager != null and progress_manager.has_method("reset_for_active_run"):
+		progress_manager.call("reset_for_active_run")
+
+
+func _sync_steam_progress_from_run_state() -> void:
+	var progress_manager: Node = _steam_progress_manager()
+	if progress_manager != null and progress_manager.has_method("sync_from_run_state"):
+		progress_manager.call("sync_from_run_state", true, true)
+
+
+func _record_steam_progress_event(event_id: String, payload: Dictionary = {}, count: int = 1) -> void:
+	var progress_manager: Node = _steam_progress_manager()
+	if progress_manager != null and progress_manager.has_method("record_event"):
+		progress_manager.call("record_event", event_id, payload, count)
+
+
+func _record_steam_trade_progress(company_id: String, side: String) -> void:
+	var progress_manager: Node = _steam_progress_manager()
+	if progress_manager == null or not progress_manager.has_method("record_trade"):
+		return
+	if RunState.trade_history.is_empty():
+		return
+	var latest_trade: Dictionary = RunState.trade_history[RunState.trade_history.size() - 1]
+	if str(latest_trade.get("company_id", "")) != company_id or str(latest_trade.get("side", "")) != side:
+		return
+	progress_manager.call("record_trade", latest_trade.duplicate(true), get_company_ownership_snapshot(company_id))
+
+
+func _record_steam_day_advanced() -> void:
+	var progress_manager: Node = _steam_progress_manager()
+	if progress_manager != null and progress_manager.has_method("record_day_advanced"):
+		progress_manager.call("record_day_advanced", {})
+
+
+func _academy_section_was_read(category_id: String, section_id: String) -> bool:
+	var read_sections: Dictionary = RunState.get_academy_progress().get("read_sections", {})
+	var read_list: Array = read_sections.get(category_id, [])
+	return read_list.has(section_id)
 
 
 func _on_new_run_financial_batch_detail(done_count: int, total_count: int, batch_company_ids: Array) -> void:

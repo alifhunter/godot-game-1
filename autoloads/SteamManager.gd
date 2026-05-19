@@ -133,6 +133,22 @@ func get_steam_api() -> Object:
 	return steam_api
 
 
+func has_steam_method(method_name: String) -> bool:
+	return steam_api != null and steam_api.has_method(method_name)
+
+
+func call_steam_method(method_name: String, arguments: Array = [], fallback: Variant = null) -> Variant:
+	return _call_steam(method_name, arguments, fallback)
+
+
+func call_first_available(method_names: Array, arguments: Array = [], fallback: Variant = null) -> Variant:
+	for method_value in method_names:
+		var method_name: String = str(method_value)
+		if has_steam_method(method_name):
+			return _call_steam(method_name, arguments, fallback)
+	return fallback
+
+
 func get_configured_app_id() -> int:
 	return int(ProjectSettings.get_setting(APP_ID_SETTING, DEFAULT_TEST_APP_ID))
 
@@ -165,6 +181,27 @@ func get_status_summary() -> String:
 	if steam_username.strip_edges().is_empty():
 		return "Steam ready"
 	return "Steam ready: %s" % steam_username
+
+
+func get_bug_report_context() -> String:
+	var init_text: String = str(initialization_result.get("verbal", "")).strip_edges()
+	if init_text.is_empty():
+		init_text = "Initialized" if steam_initialized else "Not initialized"
+	return "Steam status: %s\nSteam available: %s\nSteam initialized: %s\nSteam app id: %d\nSteam build id: %d\nSteam online: %s\nSteam owned: %s\nSteam Deck: %s\nSteam UI language: %s\nGame language: %s\nGodotSteam: %s\nLaunch command: %s\nInit result: %s" % [
+		get_status_summary(),
+		_bool_report_label(steam_available),
+		_bool_report_label(steam_initialized),
+		app_id,
+		steam_app_build_id,
+		_bool_report_label(is_online),
+		_bool_report_label(is_owned),
+		_bool_report_label(is_on_steam_deck),
+		ui_language,
+		game_language,
+		godotsteam_version,
+		launch_command_line,
+		init_text
+	]
 
 
 func _get_steam_singleton() -> Object:
@@ -214,6 +251,10 @@ func _as_dictionary(value: Variant) -> Dictionary:
 	if typeof(value) == TYPE_DICTIONARY:
 		return value
 	return {}
+
+
+func _bool_report_label(value: bool) -> String:
+	return "Yes" if value else "No"
 
 
 func _clear_runtime_values() -> void:

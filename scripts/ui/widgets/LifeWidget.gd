@@ -27,6 +27,11 @@ var runway_label: Label = null
 var stress_label: Label = null
 var happiness_label: Label = null
 var ap_penalty_label: Label = null
+var public_image_label: Label = null
+var asset_value_label: Label = null
+var rental_income_label: Label = null
+var asset_upkeep_label: Label = null
+var property_intel_summary_label: Label = null
 var next_payment_label: Label = null
 var housing_option: OptionButton = null
 var lifestyle_option: OptionButton = null
@@ -34,6 +39,7 @@ var basics_slider: HSlider = null
 var basics_detail_label: Label = null
 var wellbeing_detail_label: Label = null
 var housing_detail_label: Label = null
+var manage_properties_button: Button = null
 var lifestyle_detail_label: Label = null
 var update_plan_button: Button = null
 var budget_rows: VBoxContainer = null
@@ -47,6 +53,19 @@ var active_loan_panel: PanelContainer = null
 var active_loan_label: Label = null
 var bankruptcy_status_panel: PanelContainer = null
 var bankruptcy_status_label: Label = null
+var primary_property_label: Label = null
+var development_intel_panel: PanelContainer = null
+var development_lead_rows: VBoxContainer = null
+var property_rows: VBoxContainer = null
+var property_catalog_rows: VBoxContainer = null
+var property_type_option: OptionButton = null
+var property_location_option: OptionButton = null
+var selected_property_catalog_id: String = ""
+var selected_property_location_id: String = ""
+var active_car_label: Label = null
+var car_rows: VBoxContainer = null
+var car_catalog_rows: VBoxContainer = null
+var insufficient_cash_dialog: AcceptDialog = null
 
 
 func _ready() -> void:
@@ -85,6 +104,15 @@ func refresh() -> void:
 	happiness_label.text = "%d / 100" % int(round(float(snapshot.get("happiness_value", 0.0))))
 	var ap_penalty: int = int(snapshot.get("stress_ap_penalty", 0))
 	ap_penalty_label.text = "-%d AP" % ap_penalty if ap_penalty > 0 else "No penalty"
+	var public_image: Dictionary = snapshot.get("public_image", {})
+	if public_image_label != null:
+		public_image_label.text = "%s (%d)" % [str(public_image.get("title", "Unknown Retail")), int(round(float(public_image.get("score", 0.0))))]
+	if asset_value_label != null:
+		asset_value_label.text = _format_currency(float(snapshot.get("lifestyle_asset_value", 0.0)))
+	if rental_income_label != null:
+		rental_income_label.text = _format_currency(float(snapshot.get("rental_income", 0.0)))
+	if asset_upkeep_label != null:
+		asset_upkeep_label.text = _format_currency(float(snapshot.get("asset_upkeep", 0.0)))
 	summary_label.text = "Monthly outflow %s | Declared dividend avg %s | Net %s" % [
 		_format_currency(float(snapshot.get("monthly_outflow", 0.0))),
 		_format_currency(float(snapshot.get("estimated_monthly_dividends", 0.0))),
@@ -105,6 +133,8 @@ func refresh() -> void:
 	_refresh_option_details()
 	_refresh_budget_rows()
 	_refresh_dividend_rows()
+	_refresh_properties_tab()
+	_refresh_cars_tab()
 	_refresh_finance_tab()
 
 
@@ -164,6 +194,33 @@ func _build_ui() -> void:
 	life_tabs.add_child(overview_tab)
 	life_tabs.set_tab_title(life_tabs.get_tab_count() - 1, "Overview")
 
+	var overview_scroll := ScrollContainer.new()
+	overview_scroll.name = "LifeOverviewScroll"
+	overview_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	overview_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	overview_tab.add_child(overview_scroll)
+	var overview_content := VBoxContainer.new()
+	overview_content.name = "LifeOverviewContent"
+	overview_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	overview_content.add_theme_constant_override("separation", 10)
+	overview_scroll.add_child(overview_content)
+
+	var properties_tab := VBoxContainer.new()
+	properties_tab.name = "LifePropertiesTab"
+	properties_tab.add_theme_constant_override("separation", 10)
+	properties_tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	properties_tab.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	life_tabs.add_child(properties_tab)
+	life_tabs.set_tab_title(life_tabs.get_tab_count() - 1, "Properties")
+
+	var cars_tab := VBoxContainer.new()
+	cars_tab.name = "LifeCarsTab"
+	cars_tab.add_theme_constant_override("separation", 10)
+	cars_tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cars_tab.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	life_tabs.add_child(cars_tab)
+	life_tabs.set_tab_title(life_tabs.get_tab_count() - 1, "Cars")
+
 	var finance_tab := VBoxContainer.new()
 	finance_tab.name = "LifeFinanceTab"
 	finance_tab.add_theme_constant_override("separation", 10)
@@ -174,10 +231,11 @@ func _build_ui() -> void:
 
 	var stat_grid := GridContainer.new()
 	stat_grid.name = "LifeStatGrid"
-	stat_grid.columns = 3
+	stat_grid.columns = 4
 	stat_grid.add_theme_constant_override("h_separation", 8)
 	stat_grid.add_theme_constant_override("v_separation", 8)
-	overview_tab.add_child(stat_grid)
+	stat_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	overview_content.add_child(stat_grid)
 	cash_label = _add_stat_card(stat_grid, "Cash", "LifeCashLabel")
 	equity_label = _add_stat_card(stat_grid, "Equity", "LifeEquityLabel")
 	runway_label = _add_stat_card(stat_grid, "Runway", "LifeRunwayLabel")
@@ -187,19 +245,23 @@ func _build_ui() -> void:
 	stress_label = _add_stat_card(stat_grid, "Stress", "LifeStressLabel")
 	happiness_label = _add_stat_card(stat_grid, "Happiness", "LifeHappinessLabel")
 	ap_penalty_label = _add_stat_card(stat_grid, "AP pressure", "LifeStressApPenaltyLabel")
+	public_image_label = _add_stat_card(stat_grid, "Public image", "LifePublicImageLabel")
+	asset_value_label = _add_stat_card(stat_grid, "Lifestyle assets", "LifeAssetValueLabel")
+	rental_income_label = _add_stat_card(stat_grid, "Rental income", "LifeRentalIncomeLabel")
+	asset_upkeep_label = _add_stat_card(stat_grid, "Asset upkeep", "LifeAssetUpkeepLabel")
 
 	var split := HBoxContainer.new()
 	split.name = "LifeContentSplit"
 	split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	split.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	split.add_theme_constant_override("separation", 10)
-	overview_tab.add_child(split)
+	overview_content.add_child(split)
 
 	var plan_panel := _make_panel("LifePlanPanel")
 	plan_panel.custom_minimum_size = Vector2(280, 0)
 	split.add_child(plan_panel)
 	var plan_vbox := _panel_vbox(plan_panel, "LifePlanVBox")
-	plan_vbox.add_child(_make_title("Plan"))
+	plan_vbox.add_child(_make_title("Monthly Living Budget"))
 	housing_option = OptionButton.new()
 	housing_option.name = "LifeHousingOption"
 	housing_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -207,6 +269,12 @@ func _build_ui() -> void:
 	plan_vbox.add_child(housing_option)
 	housing_detail_label = _make_body_label("LifeHousingDetailLabel")
 	plan_vbox.add_child(housing_detail_label)
+	manage_properties_button = Button.new()
+	manage_properties_button.name = "LifeManagePropertiesButton"
+	manage_properties_button.text = "Manage in Properties"
+	manage_properties_button.visible = false
+	manage_properties_button.pressed.connect(_on_manage_properties_pressed)
+	plan_vbox.add_child(manage_properties_button)
 	var basics_title := _make_body_label("LifeBasicsTitleLabel")
 	basics_title.text = "Basics"
 	_style_label(basics_title, COLOR_TEXT, 12)
@@ -234,7 +302,7 @@ func _build_ui() -> void:
 	plan_vbox.add_child(wellbeing_detail_label)
 	update_plan_button = Button.new()
 	update_plan_button.name = "LifeUpdatePlanButton"
-	update_plan_button.text = "Update Plan"
+	update_plan_button.text = "Update Budget"
 	update_plan_button.pressed.connect(_on_update_plan_pressed)
 	plan_vbox.add_child(update_plan_button)
 	note_label = _make_body_label("LifeNoteLabel")
@@ -262,6 +330,8 @@ func _build_ui() -> void:
 	dividend_rows.add_theme_constant_override("separation", 6)
 	dividend_scroll.add_child(dividend_rows)
 
+	_build_properties_tab(properties_tab)
+	_build_cars_tab(cars_tab)
 	_build_finance_tab(finance_tab)
 	_style_buttons(self)
 
@@ -269,7 +339,7 @@ func _build_ui() -> void:
 func _set_empty_state() -> void:
 	status_label.text = "No active run"
 	summary_label.text = "Start or load a run to use Life."
-	for value_label in [cash_label, equity_label, outflow_label, dividend_label, net_monthly_label, runway_label, stress_label, happiness_label, ap_penalty_label]:
+	for value_label in [cash_label, equity_label, outflow_label, dividend_label, net_monthly_label, runway_label, stress_label, happiness_label, ap_penalty_label, public_image_label, asset_value_label, rental_income_label, asset_upkeep_label]:
 		if value_label != null:
 			value_label.text = "-"
 	if next_payment_label != null:
@@ -278,8 +348,137 @@ func _set_empty_state() -> void:
 		finance_status_label.text = "Start or load a run to use Finance."
 	if emergency_loan_button != null:
 		emergency_loan_button.disabled = true
+	if manage_properties_button != null:
+		manage_properties_button.visible = false
+	if property_intel_summary_label != null:
+		property_intel_summary_label.visible = false
+	if development_intel_panel != null:
+		development_intel_panel.visible = false
+	if property_type_option != null:
+		property_type_option.clear()
+	if property_location_option != null:
+		property_location_option.clear()
 	_clear_rows(budget_rows)
 	_clear_rows(dividend_rows)
+	_clear_rows(development_lead_rows)
+	_clear_rows(property_rows)
+	_clear_rows(property_catalog_rows)
+	_clear_rows(car_rows)
+	_clear_rows(car_catalog_rows)
+
+
+func _build_properties_tab(properties_tab: VBoxContainer) -> void:
+	var scroll := ScrollContainer.new()
+	scroll.name = "LifePropertiesScroll"
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	properties_tab.add_child(scroll)
+	var root := VBoxContainer.new()
+	root.name = "LifePropertiesRoot"
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 10)
+	scroll.add_child(root)
+
+	var primary_panel := _make_panel("LifePrimaryResidencePanel")
+	primary_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	root.add_child(primary_panel)
+	var primary_vbox := _panel_vbox(primary_panel, "LifePrimaryResidenceVBox")
+	primary_vbox.add_child(_make_title("Main Residence"))
+	primary_property_label = _make_body_label("LifePrimaryResidenceLabel")
+	primary_vbox.add_child(primary_property_label)
+
+	var columns := HBoxContainer.new()
+	columns.name = "LifePropertyColumns"
+	columns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	columns.add_theme_constant_override("separation", 10)
+	root.add_child(columns)
+
+	var owned_panel := _make_panel("LifeOwnedPropertiesPanel")
+	owned_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	owned_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	owned_panel.size_flags_stretch_ratio = 0.42
+	columns.add_child(owned_panel)
+	var owned_vbox := _panel_vbox(owned_panel, "LifeOwnedPropertiesVBox")
+	owned_vbox.add_child(_make_title("Owned Properties"))
+	property_rows = VBoxContainer.new()
+	property_rows.name = "LifePropertyRows"
+	property_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	property_rows.add_theme_constant_override("separation", 8)
+	owned_vbox.add_child(property_rows)
+
+	var catalog_panel := _make_panel("LifePropertyCatalogPanel")
+	catalog_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	catalog_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	catalog_panel.size_flags_stretch_ratio = 0.58
+	columns.add_child(catalog_panel)
+	var catalog_vbox := _panel_vbox(catalog_panel, "LifePropertyCatalogVBox")
+	catalog_vbox.add_child(_make_title("Buy Property"))
+	var catalog_filter_row := HBoxContainer.new()
+	catalog_filter_row.name = "LifePropertyCatalogFilterRow"
+	catalog_filter_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	catalog_filter_row.add_theme_constant_override("separation", 8)
+	catalog_vbox.add_child(catalog_filter_row)
+	property_type_option = OptionButton.new()
+	property_type_option.name = "LifePropertyTypeOption"
+	property_type_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	property_type_option.item_selected.connect(_on_property_filter_changed)
+	catalog_filter_row.add_child(property_type_option)
+	property_location_option = OptionButton.new()
+	property_location_option.name = "LifePropertyLocationOption"
+	property_location_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	property_location_option.item_selected.connect(_on_property_filter_changed)
+	catalog_filter_row.add_child(property_location_option)
+	property_catalog_rows = VBoxContainer.new()
+	property_catalog_rows.name = "LifePropertyCatalogRows"
+	property_catalog_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	property_catalog_rows.add_theme_constant_override("separation", 8)
+	catalog_vbox.add_child(property_catalog_rows)
+
+
+func _build_cars_tab(cars_tab: VBoxContainer) -> void:
+	var scroll := ScrollContainer.new()
+	scroll.name = "LifeCarsScroll"
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	cars_tab.add_child(scroll)
+	var root := VBoxContainer.new()
+	root.name = "LifeCarsRoot"
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 10)
+	scroll.add_child(root)
+
+	var active_panel := _make_panel("LifeActiveCarPanel")
+	active_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	root.add_child(active_panel)
+	var active_vbox := _panel_vbox(active_panel, "LifeActiveCarVBox")
+	active_vbox.add_child(_make_title("Active Car"))
+	active_car_label = _make_body_label("LifeActiveCarLabel")
+	active_vbox.add_child(active_car_label)
+
+	var owned_panel := _make_panel("LifeOwnedCarsPanel")
+	owned_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	root.add_child(owned_panel)
+	var owned_vbox := _panel_vbox(owned_panel, "LifeOwnedCarsVBox")
+	owned_vbox.add_child(_make_title("Owned Cars"))
+	car_rows = VBoxContainer.new()
+	car_rows.name = "LifeCarRows"
+	car_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	car_rows.add_theme_constant_override("separation", 8)
+	owned_vbox.add_child(car_rows)
+
+	var catalog_panel := _make_panel("LifeCarCatalogPanel")
+	catalog_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	root.add_child(catalog_panel)
+	var catalog_vbox := _panel_vbox(catalog_panel, "LifeCarCatalogVBox")
+	catalog_vbox.add_child(_make_title("Buy Car"))
+	var catalog_note := _make_body_label("LifeCarCatalogNoteLabel")
+	catalog_note.text = "Cars add comfort and public image, but every owned car adds monthly upkeep."
+	catalog_vbox.add_child(catalog_note)
+	car_catalog_rows = VBoxContainer.new()
+	car_catalog_rows.name = "LifeCarCatalogRows"
+	car_catalog_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	car_catalog_rows.add_theme_constant_override("separation", 8)
+	catalog_vbox.add_child(car_catalog_rows)
 
 
 func _build_finance_tab(finance_tab: VBoxContainer) -> void:
@@ -439,14 +638,123 @@ func _populate_basics_slider(selected_id: String) -> void:
 	basics_slider.set_value_no_signal(max(selected_index, 0))
 
 
+func _populate_property_purchase_filters(catalog_rows: Array) -> void:
+	if property_type_option == null or property_location_option == null:
+		return
+	var desired_catalog_id: String = _selected_option_id(property_type_option)
+	if desired_catalog_id.is_empty():
+		desired_catalog_id = selected_property_catalog_id
+	var desired_location_id: String = _selected_option_id(property_location_option)
+	if desired_location_id.is_empty():
+		desired_location_id = selected_property_location_id
+	var type_rows: Array = _property_type_filter_rows(catalog_rows)
+	var location_rows: Array = _property_location_filter_rows(catalog_rows)
+	if desired_catalog_id.is_empty() and not type_rows.is_empty():
+		desired_catalog_id = str(type_rows[0].get("id", ""))
+	if desired_location_id.is_empty() and not location_rows.is_empty():
+		desired_location_id = str(location_rows[0].get("id", ""))
+	suppress_option_refresh = true
+	_populate_option(property_type_option, type_rows, desired_catalog_id)
+	_populate_option(property_location_option, location_rows, desired_location_id)
+	suppress_option_refresh = false
+	selected_property_catalog_id = _selected_option_id(property_type_option)
+	selected_property_location_id = _selected_option_id(property_location_option)
+
+
+func _property_type_filter_rows(catalog_rows: Array) -> Array:
+	var rows: Array = []
+	var seen: Dictionary = {}
+	for catalog_value in catalog_rows:
+		if typeof(catalog_value) != TYPE_DICTIONARY:
+			continue
+		var catalog_row: Dictionary = catalog_value
+		var catalog_id: String = str(catalog_row.get("catalog_id", catalog_row.get("id", "")))
+		if catalog_id.is_empty() or seen.has(catalog_id):
+			continue
+		seen[catalog_id] = true
+		rows.append({
+			"id": catalog_id,
+			"label": str(catalog_row.get("label", "Property"))
+		})
+	return rows
+
+
+func _property_location_filter_rows(catalog_rows: Array) -> Array:
+	var rows: Array = []
+	var seen: Dictionary = {}
+	for location_value in snapshot.get("property_locations", []):
+		if typeof(location_value) != TYPE_DICTIONARY:
+			continue
+		var location: Dictionary = location_value
+		var location_id: String = str(location.get("id", ""))
+		if location_id.is_empty() or seen.has(location_id):
+			continue
+		seen[location_id] = true
+		rows.append({
+			"id": location_id,
+			"label": str(location.get("label", "Location"))
+		})
+	if not rows.is_empty():
+		return rows
+	for catalog_value in catalog_rows:
+		if typeof(catalog_value) != TYPE_DICTIONARY:
+			continue
+		var catalog_row: Dictionary = catalog_value
+		var location_id: String = str(catalog_row.get("location_id", ""))
+		if location_id.is_empty() or seen.has(location_id):
+			continue
+		seen[location_id] = true
+		rows.append({
+			"id": location_id,
+			"label": str(catalog_row.get("location_label", "Location"))
+		})
+	return rows
+
+
+func _selected_property_catalog_row(catalog_rows: Array) -> Dictionary:
+	var catalog_id: String = selected_property_catalog_id
+	if catalog_id.is_empty():
+		catalog_id = _selected_option_id(property_type_option)
+	var location_id: String = selected_property_location_id
+	if location_id.is_empty():
+		location_id = _selected_option_id(property_location_option)
+	for catalog_value in catalog_rows:
+		if typeof(catalog_value) != TYPE_DICTIONARY:
+			continue
+		var catalog_row: Dictionary = catalog_value
+		if (
+			str(catalog_row.get("catalog_id", catalog_row.get("id", ""))) == catalog_id
+			and str(catalog_row.get("location_id", "")) == location_id
+		):
+			return catalog_row
+	for catalog_value in catalog_rows:
+		if typeof(catalog_value) == TYPE_DICTIONARY:
+			return catalog_value
+	return {}
+
+
 func _refresh_option_details() -> void:
 	var housing: Dictionary = _selected_option_data(snapshot.get("housing_options", []), _selected_option_id(housing_option))
 	var lifestyle: Dictionary = _selected_option_data(snapshot.get("lifestyle_options", []), _selected_option_id(lifestyle_option))
 	var basics_tier: Dictionary = _selected_basics_tier_data()
-	housing_detail_label.text = "%s / month. %s" % [
-		_format_currency(float(housing.get("monthly_cost", 0.0))),
-		str(housing.get("detail", ""))
-	]
+	var owns_primary_residence: bool = bool(snapshot.get("owned_primary_residence", false))
+	if housing_option != null:
+		housing_option.visible = not owns_primary_residence
+	if manage_properties_button != null:
+		manage_properties_button.visible = owns_primary_residence
+	if housing_detail_label != null:
+		if owns_primary_residence:
+			var primary_property: Dictionary = snapshot.get("primary_property", {})
+			housing_detail_label.text = "Primary residence: %s in %s. Upkeep %s / month." % [
+				str(primary_property.get("label", "Owned residence")),
+				str(primary_property.get("location_label", "Jakarta")),
+				_format_currency(float(primary_property.get("monthly_upkeep", snapshot.get("housing_cost_monthly", 0.0))))
+			]
+		else:
+			housing_detail_label.text = "Rental housing: %s / month. %s" % [
+				_format_currency(float(housing.get("monthly_cost", 0.0))),
+				str(housing.get("detail", ""))
+			]
 	if basics_detail_label != null:
 		basics_detail_label.text = "%s: %s / month. Stress %+d/day | Happiness %+d/day. %s" % [
 			str(basics_tier.get("label", "Stable")),
@@ -485,9 +793,18 @@ func _refresh_budget_rows() -> void:
 	var housing: Dictionary = snapshot.get("housing", {})
 	var basics_tier: Dictionary = snapshot.get("basics_tier", {})
 	var lifestyle: Dictionary = snapshot.get("lifestyle", {})
-	_add_budget_row("Housing", str(housing.get("label", "")), float(housing.get("monthly_cost", 0.0)), false)
+	var housing_detail: String = str(housing.get("label", ""))
+	if bool(snapshot.get("owned_primary_residence", false)):
+		var primary_property: Dictionary = snapshot.get("primary_property", {})
+		housing_detail = "%s upkeep" % str(primary_property.get("label", "Owned residence"))
+	_add_budget_row("Housing", housing_detail, float(snapshot.get("housing_cost_monthly", housing.get("monthly_cost", 0.0))), false)
 	_add_budget_row("Basics", str(basics_tier.get("label", "Stable")), float(snapshot.get("basic_expenses_monthly", 0.0)), false)
 	_add_budget_row("Lifestyle", str(lifestyle.get("label", "")), float(lifestyle.get("monthly_cost", 0.0)), false)
+	var extra_asset_upkeep: float = float(snapshot.get("non_primary_property_upkeep", 0.0)) + float(snapshot.get("car_upkeep", 0.0))
+	if extra_asset_upkeep > 0.0:
+		_add_budget_row("Assets", "Investment properties and cars upkeep", extra_asset_upkeep, false)
+	if float(snapshot.get("rental_income", 0.0)) > 0.0:
+		_add_budget_row("Rent", "Rented properties", float(snapshot.get("rental_income", 0.0)), true)
 	if float(snapshot.get("monthly_extra", 0.0)) > 0.0:
 		_add_budget_row("Extra", "Manual buffer", float(snapshot.get("monthly_extra", 0.0)), false)
 	_add_budget_row("Dividends", "Declared average from corporate actions", float(snapshot.get("estimated_monthly_dividends", 0.0)), true)
@@ -517,6 +834,248 @@ func _refresh_dividend_rows() -> void:
 		shown_count += 1
 		if shown_count >= 6:
 			break
+
+
+func _refresh_properties_tab() -> void:
+	if primary_property_label == null:
+		return
+	_clear_rows(property_rows)
+	_clear_rows(property_catalog_rows)
+	var primary_property: Dictionary = snapshot.get("primary_property", {})
+	if primary_property.is_empty():
+		var housing: Dictionary = snapshot.get("housing", {})
+		primary_property_label.text = "No owned primary residence. Current housing plan: %s at %s / month." % [
+			str(housing.get("label", "Housing")),
+			_format_currency(float(housing.get("monthly_cost", 0.0)))
+		]
+	else:
+		primary_property_label.text = "%s in %s. Upkeep %s / month. Status %+d." % [
+			str(primary_property.get("label", "Owned residence")),
+			str(primary_property.get("location_label", "Jakarta")),
+			_format_currency(float(primary_property.get("monthly_upkeep", 0.0))),
+			int(round(float(primary_property.get("status_value", 0.0))))
+		]
+	var properties: Array = snapshot.get("properties", [])
+	if properties.is_empty():
+		_add_empty_asset_label(property_rows, "No owned properties yet.")
+	else:
+		for property_value in properties:
+			if typeof(property_value) == TYPE_DICTIONARY:
+				_add_owned_property_row(property_value)
+	var catalog_rows: Array = snapshot.get("property_catalog", [])
+	_populate_property_purchase_filters(catalog_rows)
+	var selected_catalog_row: Dictionary = _selected_property_catalog_row(catalog_rows)
+	if selected_catalog_row.is_empty():
+		_add_empty_asset_label(property_catalog_rows, "No property options available.")
+	else:
+		_add_property_catalog_row(selected_catalog_row)
+
+
+func _refresh_cars_tab() -> void:
+	if active_car_label == null:
+		return
+	_clear_rows(car_rows)
+	_clear_rows(car_catalog_rows)
+	var active_car: Dictionary = snapshot.get("active_car", {})
+	if active_car.is_empty():
+		active_car_label.text = "No active car. You can still operate without one, but cars add comfort and public image."
+	else:
+		active_car_label.text = "%s. Upkeep %s / month. Status %+d." % [
+			str(active_car.get("label", "Active car")),
+			_format_currency(float(active_car.get("monthly_upkeep", 0.0))),
+			int(round(float(active_car.get("status_value", 0.0))))
+		]
+	var cars: Array = snapshot.get("cars", [])
+	if cars.is_empty():
+		_add_empty_asset_label(car_rows, "No owned cars yet.")
+	else:
+		for car_value in cars:
+			if typeof(car_value) == TYPE_DICTIONARY:
+				_add_owned_car_row(car_value)
+	var catalog_rows: Array = snapshot.get("car_catalog", [])
+	for catalog_value in catalog_rows:
+		if typeof(catalog_value) == TYPE_DICTIONARY:
+			_add_car_catalog_row(catalog_value)
+
+
+func _add_development_lead_row(lead: Dictionary) -> void:
+	if development_lead_rows == null:
+		return
+	var row := _make_asset_row(development_lead_rows, "LifeDevelopmentLeadRow%s" % str(lead.get("id", "")).replace(" ", ""))
+	var status_text: String = str(lead.get("stage_label", lead.get("stage", "Rumor")))
+	var clarity_text: String = str(lead.get("clarity_label", "")).strip_edges()
+	var reporting_text: String = clarity_text if not clarity_text.is_empty() else "Property report"
+	var multiplier_text: String = ""
+	if bool(lead.get("public_confirmed", false)) and float(lead.get("value_multiplier", 1.0)) > 1.0:
+		multiplier_text = " | public uplift x%.2f" % float(lead.get("value_multiplier", 1.0))
+	var detail := _make_asset_detail_label(
+		"%s | %s" % [
+			str(lead.get("display_location_label", lead.get("location_label", "Location"))),
+			str(lead.get("display_theme_label", lead.get("theme_label", "Development")))
+		],
+		"%s | %s | %s%s. %s" % [
+			status_text,
+			reporting_text,
+			str(lead.get("timing_label", "")),
+			multiplier_text,
+			str(lead.get("source_note", lead.get("source_label", "")))
+		]
+	)
+	row.add_child(detail)
+
+
+func _add_owned_property_row(property_row: Dictionary) -> void:
+	if property_rows == null:
+		return
+	var row := _make_asset_row(property_rows, "LifeOwnedPropertyRow%s" % str(property_row.get("id", "")).replace(" ", ""))
+	var value_event_text: String = _property_value_event_text(property_row)
+	var detail := _make_asset_detail_label(
+		"%s%s" % [str(property_row.get("label", "Property")), " (Primary)" if bool(property_row.get("is_primary", false)) else ""],
+		"%s | value %s | upkeep %s | rent %s%s%s" % [
+			str(property_row.get("location_label", "Jakarta")),
+			_format_currency(float(property_row.get("current_value", 0.0))),
+			_format_currency(float(property_row.get("monthly_upkeep", 0.0))),
+			_format_currency(float(property_row.get("rent_income", 0.0))),
+			" | rented" if bool(property_row.get("rented_out", false)) else "",
+			value_event_text
+		]
+	)
+	row.add_child(detail)
+	var set_primary_button := _make_asset_button("Set Primary")
+	set_primary_button.disabled = bool(property_row.get("is_primary", false))
+	set_primary_button.pressed.connect(_on_set_primary_property_pressed.bind(str(property_row.get("id", ""))))
+	row.add_child(set_primary_button)
+	var rent_button := _make_asset_button("Stop Rent" if bool(property_row.get("rented_out", false)) else "Rent Out")
+	rent_button.disabled = bool(property_row.get("is_primary", false)) or float(property_row.get("rent_income", 0.0)) <= 0.0
+	rent_button.pressed.connect(_on_toggle_property_rental_pressed.bind(str(property_row.get("id", "")), not bool(property_row.get("rented_out", false))))
+	row.add_child(rent_button)
+	var sell_button := _make_asset_button("Sell")
+	sell_button.pressed.connect(_on_sell_property_pressed.bind(str(property_row.get("id", ""))))
+	row.add_child(sell_button)
+
+
+func _add_property_catalog_row(catalog_row: Dictionary) -> void:
+	if property_catalog_rows == null:
+		return
+	var row := _make_asset_row(property_catalog_rows, "LifePropertyCatalogRow%s" % str(catalog_row.get("id", "")).replace(" ", ""))
+	var uplift_text: String = ""
+	if float(catalog_row.get("public_uplift_multiplier", 1.0)) > 1.001:
+		uplift_text = " | %s" % str(catalog_row.get("public_uplift_label", "public uplift"))
+	var detail := _make_asset_detail_label(
+		"%s | %s" % [str(catalog_row.get("label", "Property")), str(catalog_row.get("location_label", "Jakarta"))],
+		"Price %s | upkeep %s/mo | rent %s/mo | status %+d%s. %s" % [
+			_format_currency(float(catalog_row.get("price", 0.0))),
+			_format_currency(float(catalog_row.get("monthly_upkeep", 0.0))),
+			_format_currency(float(catalog_row.get("rent_income", 0.0))),
+			int(round(float(catalog_row.get("status_value", 0.0)))),
+			uplift_text,
+			str(catalog_row.get("detail", ""))
+		]
+	)
+	row.add_child(detail)
+	var buy_button := _make_asset_button("Buy")
+	buy_button.pressed.connect(_on_buy_property_pressed.bind(str(catalog_row.get("catalog_id", catalog_row.get("id", ""))), str(catalog_row.get("location_id", "jakarta")), false))
+	row.add_child(buy_button)
+	var home_button := _make_asset_button("Buy as Home")
+	home_button.pressed.connect(_on_buy_property_pressed.bind(str(catalog_row.get("catalog_id", catalog_row.get("id", ""))), str(catalog_row.get("location_id", "jakarta")), true))
+	row.add_child(home_button)
+
+
+func _add_owned_car_row(car_row: Dictionary) -> void:
+	if car_rows == null:
+		return
+	var row := _make_asset_row(car_rows, "LifeOwnedCarRow%s" % str(car_row.get("id", "")).replace(" ", ""))
+	var detail := _make_asset_detail_label(
+		"%s%s" % [str(car_row.get("label", "Car")), " (Active)" if bool(car_row.get("is_active", false)) else ""],
+		"value %s | upkeep %s/mo | status %+d" % [
+			_format_currency(float(car_row.get("current_value", 0.0))),
+			_format_currency(float(car_row.get("monthly_upkeep", 0.0))),
+			int(round(float(car_row.get("status_value", 0.0))))
+		]
+	)
+	row.add_child(detail)
+	var active_button := _make_asset_button("Set Active")
+	active_button.disabled = bool(car_row.get("is_active", false))
+	active_button.pressed.connect(_on_set_active_car_pressed.bind(str(car_row.get("id", ""))))
+	row.add_child(active_button)
+	var sell_button := _make_asset_button("Sell")
+	sell_button.pressed.connect(_on_sell_car_pressed.bind(str(car_row.get("id", ""))))
+	row.add_child(sell_button)
+
+
+func _add_car_catalog_row(catalog_row: Dictionary) -> void:
+	if car_catalog_rows == null:
+		return
+	var row := _make_asset_row(car_catalog_rows, "LifeCarCatalogRow%s" % str(catalog_row.get("id", "")).replace(" ", ""))
+	var detail := _make_asset_detail_label(
+		str(catalog_row.get("label", "Car")),
+		"Price %s | upkeep %s/mo | status %+d. %s" % [
+			_format_currency(float(catalog_row.get("price", 0.0))),
+			_format_currency(float(catalog_row.get("monthly_upkeep", 0.0))),
+			int(round(float(catalog_row.get("status_value", 0.0)))),
+			str(catalog_row.get("detail", ""))
+		]
+	)
+	row.add_child(detail)
+	var buy_button := _make_asset_button("Buy")
+	buy_button.pressed.connect(_on_buy_car_pressed.bind(str(catalog_row.get("id", ""))))
+	row.add_child(buy_button)
+
+
+func _add_empty_asset_label(container: VBoxContainer, text: String) -> void:
+	if container == null:
+		return
+	var label := _make_body_label("%sEmptyLabel" % container.name)
+	label.text = text
+	container.add_child(label)
+
+
+func _property_value_event_text(property_row: Dictionary) -> String:
+	var events: Array = property_row.get("value_events", [])
+	if events.is_empty():
+		return ""
+	var latest: Dictionary = events[events.size() - 1] if typeof(events[events.size() - 1]) == TYPE_DICTIONARY else {}
+	if latest.is_empty():
+		return ""
+	return " | %s x%.2f" % [
+		str(latest.get("theme_label", latest.get("label", "development"))),
+		float(latest.get("multiplier", 1.0))
+	]
+
+
+func _make_asset_row(container: VBoxContainer, row_name: String) -> HBoxContainer:
+	var panel := _make_panel("%sPanel" % row_name)
+	panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	container.add_child(panel)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 10)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_bottom", 8)
+	panel.add_child(margin)
+	var row := HBoxContainer.new()
+	row.name = row_name
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 8)
+	margin.add_child(row)
+	return row
+
+
+func _make_asset_detail_label(title: String, detail: String) -> Label:
+	var label := Label.new()
+	label.text = "%s\n%s" % [title, detail]
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_style_label(label, COLOR_TEXT, 12)
+	return label
+
+
+func _make_asset_button(text: String) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.custom_minimum_size = Vector2(92, 30)
+	_style_button(button)
+	return button
 
 
 func _add_budget_row(label_text: String, detail_text: String, value: float, income_row: bool) -> void:
@@ -573,6 +1132,15 @@ func _add_dividend_row(ticker: String, eligible_shares: int, amount_per_share: f
 	row.add_child(income_label)
 
 
+func _on_manage_properties_pressed() -> void:
+	if life_tabs == null:
+		return
+	for index in range(life_tabs.get_tab_count()):
+		if life_tabs.get_tab_title(index) == "Properties":
+			life_tabs.current_tab = index
+			return
+
+
 func _on_option_changed(_index: int) -> void:
 	if suppress_option_refresh:
 		return
@@ -586,6 +1154,14 @@ func _on_basics_slider_changed(_value: float) -> void:
 	_on_option_changed(0)
 
 
+func _on_property_filter_changed(_index: int) -> void:
+	if suppress_option_refresh:
+		return
+	selected_property_catalog_id = _selected_option_id(property_type_option)
+	selected_property_location_id = _selected_option_id(property_location_option)
+	_refresh_properties_tab()
+
+
 func _on_update_plan_pressed() -> void:
 	var result: Dictionary = GameManager.set_life_plan(_selected_option_id(housing_option), _selected_option_id(lifestyle_option), _selected_basics_tier_id())
 	status_label.text = str(result.get("message", "Life plan updated."))
@@ -597,6 +1173,98 @@ func _on_emergency_loan_pressed() -> void:
 	var result: Dictionary = GameManager.take_emergency_loan()
 	status_label.text = str(result.get("message", "Finance updated."))
 	refresh()
+
+
+func _on_buy_property_pressed(catalog_id: String, location_id: String, make_primary: bool) -> void:
+	var result: Dictionary = GameManager.purchase_life_property(catalog_id, location_id, make_primary)
+	status_label.text = str(result.get("message", "Property action finished."))
+	if _result_is_insufficient_cash(result):
+		_show_insufficient_cash_dialog(result, "property")
+	refresh()
+
+
+func _on_set_primary_property_pressed(property_id: String) -> void:
+	var result: Dictionary = GameManager.set_primary_residence(property_id)
+	status_label.text = str(result.get("message", "Primary residence updated."))
+	refresh()
+
+
+func _on_toggle_property_rental_pressed(property_id: String, rented_out: bool) -> void:
+	var result: Dictionary = GameManager.set_property_rental(property_id, rented_out)
+	status_label.text = str(result.get("message", "Property rental updated."))
+	refresh()
+
+
+func _on_sell_property_pressed(property_id: String) -> void:
+	var result: Dictionary = GameManager.sell_life_property(property_id)
+	status_label.text = str(result.get("message", "Property sale finished."))
+	refresh()
+
+
+func _on_buy_car_pressed(catalog_id: String) -> void:
+	var result: Dictionary = GameManager.purchase_life_car(catalog_id)
+	status_label.text = str(result.get("message", "Car action finished."))
+	if _result_is_insufficient_cash(result):
+		_show_insufficient_cash_dialog(result, "car")
+	refresh()
+
+
+func _on_set_active_car_pressed(car_id: String) -> void:
+	var result: Dictionary = GameManager.set_active_life_car(car_id)
+	status_label.text = str(result.get("message", "Active car updated."))
+	refresh()
+
+
+func _on_sell_car_pressed(car_id: String) -> void:
+	var result: Dictionary = GameManager.sell_life_car(car_id)
+	status_label.text = str(result.get("message", "Car sale finished."))
+	refresh()
+
+
+func _result_is_insufficient_cash(result: Dictionary) -> bool:
+	return (
+		not bool(result.get("success", false))
+		and (
+			str(result.get("reason", "")) == "insufficient_cash"
+			or str(result.get("message", "")).to_lower().find("not enough cash") >= 0
+		)
+	)
+
+
+func _show_insufficient_cash_dialog(result: Dictionary, asset_type: String) -> void:
+	_ensure_insufficient_cash_dialog()
+	if insufficient_cash_dialog == null:
+		return
+	var message: String = str(result.get("message", "Not enough cash."))
+	var required_cash: float = float(result.get("required_cash", 0.0))
+	var available_cash: float = float(result.get("available_cash", snapshot.get("cash", 0.0)))
+	var lines: Array = [message]
+	if required_cash > 0.0:
+		lines.append("Needed: %s" % _format_currency(required_cash))
+	if available_cash >= 0.0:
+		lines.append("Available: %s" % _format_currency(available_cash))
+	lines.append("Sell assets, free up cash, or choose a cheaper %s." % asset_type)
+	insufficient_cash_dialog.dialog_text = "\n".join(lines)
+	insufficient_cash_dialog.popup_centered(Vector2i(420, 170))
+
+
+func _ensure_insufficient_cash_dialog() -> void:
+	if insufficient_cash_dialog != null:
+		return
+	insufficient_cash_dialog = AcceptDialog.new()
+	insufficient_cash_dialog.name = "LifeInsufficientCashDialog"
+	insufficient_cash_dialog.title = "Not Enough Cash"
+	insufficient_cash_dialog.dialog_text = "Not enough cash."
+	insufficient_cash_dialog.unresizable = true
+	add_child(insufficient_cash_dialog)
+	insufficient_cash_dialog.add_theme_stylebox_override("panel", _make_stylebox(COLOR_PANEL, COLOR_BORDER, 1))
+	insufficient_cash_dialog.add_theme_color_override("font_color", COLOR_TEXT)
+	insufficient_cash_dialog.add_theme_color_override("title_color", COLOR_BROWN)
+	insufficient_cash_dialog.add_theme_font_size_override("font_size", 13)
+	var ok_button: Button = insufficient_cash_dialog.get_ok_button()
+	if ok_button != null:
+		ok_button.text = "OK"
+		_style_button(ok_button)
 
 
 func _on_life_changed() -> void:
