@@ -2304,13 +2304,13 @@ func _network_action_no_ap_message(action_id: String) -> String:
 	return "Need %d AP for this Network action." % get_network_action_cost(action_id)
 
 
-func get_academy_snapshot(category_id: String = "technical", section_id: String = "") -> Dictionary:
+func get_academy_snapshot(category_id: String = "mindset", section_id: String = "") -> Dictionary:
 	var requested_category_id: String = category_id
 	if requested_category_id.is_empty():
-		requested_category_id = str(RunState.get_academy_progress().get("last_category_id", "technical"))
+		requested_category_id = str(RunState.get_academy_progress().get("last_category_id", "mindset"))
 	var requested_section_id: String = section_id
 	if requested_section_id.is_empty():
-		requested_section_id = str(RunState.get_academy_progress().get("last_section_id", "intro"))
+		requested_section_id = str(RunState.get_academy_progress().get("last_section_id", "survival_mindset"))
 	return academy_system.build_snapshot(
 		DataRepository.get_academy_catalog(),
 		RunState.get_academy_progress(),

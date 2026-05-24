@@ -35,17 +35,14 @@
           "completion_signal": "You can apply this mindset rule during an in-game market decision.",
           "pages": [
             {
-              "type": "text",
               "heading": "What You'll Learn",
               "body": "You learn that the first goal in the market is not maximum profit, but survival. Without survival, you cannot learn, compound, or recover from mistakes."
             },
             {
-              "type": "text",
               "heading": "Key Concept",
               "body": "The market rewards players who stay in the game long enough to improve their process."
             },
             {
-              "type": "text",
               "heading": "Knowledge Card",
               "body": "Before thinking about profit, protect your ability to keep playing. A player who loses all capital because of one emotional decision does not get to benefit from future opportunities."
             }
@@ -88,17 +85,23 @@
             {
               "type": "text",
               "heading": "What You'll Learn",
-              "body": "You learn that the first goal in the market is not maximum profit, but survival. Without survival, you cannot learn, compound, or recover from mistakes."
+              "body": "You learn that the first goal in the market is not maximum profit, but survival. Without survival, you cannot learn, compound, or recover from mistakes.",
+              "images": [],
+              "infoboxes": []
             },
             {
               "type": "text",
               "heading": "Key Concept",
-              "body": "The market rewards players who stay in the game long enough to improve their process."
+              "body": "The market rewards players who stay in the game long enough to improve their process.",
+              "images": [],
+              "infoboxes": []
             },
             {
               "type": "text",
               "heading": "Knowledge Card",
-              "body": "Before thinking about profit, protect your ability to keep playing. A player who loses all capital because of one emotional decision does not get to benefit from future opportunities."
+              "body": "Before thinking about profit, protect your ability to keep playing. A player who loses all capital because of one emotional decision does not get to benefit from future opportunities.",
+              "images": [],
+              "infoboxes": []
             },
             {
               "type": "key_insights",
@@ -126,17 +129,14 @@
           "completion_signal": "You can apply this mindset rule during an in-game market decision.",
           "pages": [
             {
-              "type": "text",
               "heading": "What You'll Learn",
               "body": "You learn that not all money is investable. Money for daily needs, debt, rent, or emergencies should not be treated the same as cold money."
             },
             {
-              "type": "text",
               "heading": "Key Concept",
               "body": "Investing becomes emotionally dangerous when the money has a near-term survival purpose."
             },
             {
-              "type": "text",
               "heading": "Knowledge Card",
               "body": "Before investing, the player should have basic income, covered living needs, and an emergency buffer. Money with urgent real-life purpose often leads to panic decisions when prices fall."
             }
@@ -217,17 +217,14 @@
           "completion_signal": "You can apply this mindset rule during an in-game market decision.",
           "pages": [
             {
-              "type": "text",
               "heading": "What You'll Learn",
               "body": "You learn the purpose of investing: growing wealth, preparing for the future, earning passive income, and protecting purchasing power."
             },
             {
-              "type": "text",
               "heading": "Key Concept",
               "body": "Investing is not only about short-term profit. It is a tool to serve future goals."
             },
             {
-              "type": "text",
               "heading": "Knowledge Card",
               "body": "A good player connects market decisions to a long-term goal: education, home, retirement, passive income, inflation protection, or wealth growth."
             }
@@ -308,17 +305,14 @@
           "completion_signal": "You can apply this mindset rule during an in-game market decision.",
           "pages": [
             {
-              "type": "text",
               "heading": "What You'll Learn",
               "body": "You learn that buying a stock means owning a piece of a business, not just buying a moving ticker."
             },
             {
-              "type": "text",
               "heading": "Key Concept",
               "body": "A stock price is easier to understand when the player asks: What business am I buying?"
             },
             {
-              "type": "text",
               "heading": "Knowledge Card",
               "body": "Behind every stock is a company with assets, products, management, cash flow, debt, and future profit potential. Price movement matters, but business quality matters too."
             }
@@ -399,17 +393,14 @@
           "completion_signal": "You can apply this mindset rule during an in-game market decision.",
           "pages": [
             {
-              "type": "text",
               "heading": "What You'll Learn",
               "body": "You learn that stock prices can move because of real business growth or because of sentiment, hype, rumors, macro changes, or corporate actions."
             },
             {
-              "type": "text",
               "heading": "Key Concept",
               "body": "Not every price increase means the business improved."
             },
             {
-              "type": "text",
               "heading": "Knowledge Card",
               "body": "A stock can rise because profits improve, assets grow, the sector becomes attractive, or management executes well. It can also rise because of hype, rumor, or temporary sentiment. The player must learn to separate signal from noise."
             }
@@ -490,17 +481,14 @@
           "completion_signal": "You can apply this mindset rule during an in-game market decision.",
           "pages": [
             {
-              "type": "text",
               "heading": "What You'll Learn",
               "body": "Players can distinguish investor, trader, and speculator behavior."
             },
             {
-              "type": "text",
               "heading": "Key Concept",
               "body": "Different playstyles are valid, but mixing them without awareness creates confusion and risk."
             },
             {
-              "type": "text",
               "heading": "Knowledge Card",
               "body": "Investors focus on business quality and long-term value. Traders focus on shorter-term price movement and technical setups. Speculators chase rumor or hype without enough analysis."
             }
@@ -581,17 +569,14 @@
           "completion_signal": "You can apply this mindset rule during an in-game market decision.",
           "pages": [
             {
-              "type": "text",
               "heading": "What You'll Learn",
               "body": "You learn the main analysis approaches and when each is useful."
             },
             {
-              "type": "text",
               "heading": "Key Concept",
               "body": "Different tools answer different questions."
             },
             {
-              "type": "text",
               "heading": "Knowledge Card",
               "body": "Fundamental analysis asks whether the business is healthy. Technical analysis studies historical price and volume patterns. Money flow analysis looks at large fund movement. Value investing compares current price to estimated business value."
             }
@@ -673,19 +658,20 @@
           "completion_signal": "You can apply this mindset rule during an in-game market decision.",
           "pages": [
             {
-              "type": "text",
               "heading": "What You'll Learn",
               "body": "You learn why you need a decision framework to avoid FOMO, overtrading, inconsistency, and impatience."
             },
             {
-              "type": "text",
               "heading": "Key Concept",
               "body": "A framework acts like a compass when the market is noisy."
             },
             {
-              "type": "text",
               "heading": "Knowledge Card",
               "body": "Without a framework, players can buy because of hype, trade too often, switch strategies randomly, or sell too early because of fear. A good framework slows down impulsive decisions."
+            },
+            {
+              "heading": "Recommended checklist",
+              "body": "Before buying, ask:\n1. Why is the stock moving?\n2. Is the reason fundamental, technical, sentiment, or rumor?\n3. What is the risk?\n4. What would make the thesis wrong?\n5. How much capital is appropriate?\n6. What is the exit plan?"
             }
           ],
           "checks": [
@@ -769,17 +755,14 @@
           "completion_signal": "You can apply this mindset rule during an in-game market decision.",
           "pages": [
             {
-              "type": "text",
               "heading": "What You'll Learn",
               "body": "You learn the main types of risk and how to respond to them."
             },
             {
-              "type": "text",
               "heading": "Key Concept",
               "body": "Risk cannot be eliminated. It must be recognized, sized, and managed."
             },
             {
-              "type": "text",
               "heading": "Knowledge Card",
               "body": "Risks include price volatility, company risk, low liquidity, macroeconomic risk, geopolitical risk, regulation, and rumor. A good player does not panic at every red candle; they ask whether the original reason for owning is still valid."
             }
@@ -860,17 +843,14 @@
           "completion_signal": "You can apply this mindset rule during an in-game market decision.",
           "pages": [
             {
-              "type": "text",
               "heading": "What You'll Learn",
               "body": "You learn that cheap price is not always good value, and high price is not automatically bad value."
             },
             {
-              "type": "text",
               "heading": "Key Concept",
               "body": "Value is what the player gets. Price is what the player pays. Margin of safety gives room for error."
             },
             {
-              "type": "text",
               "heading": "Knowledge Card",
               "body": "A stock can look cheap but be a bad business. Another stock can look expensive but still be valuable if growth, quality, and future cash flow justify it. The player should buy with a margin of safety, not blind optimism."
             }
@@ -951,19 +931,20 @@
           "completion_signal": "You can apply this mindset rule during an in-game market decision.",
           "pages": [
             {
-              "type": "text",
               "heading": "What You'll Learn",
               "body": "Players learn to write a simple investment or trade thesis before taking a position."
             },
             {
-              "type": "text",
               "heading": "Key Concept",
               "body": "Without a thesis, the player is borrowing someone else's conviction."
             },
             {
-              "type": "text",
               "heading": "Knowledge Card",
               "body": "A thesis explains why the player owns a stock, what must happen for the idea to work, what could go wrong, how long they plan to hold, and what would make them exit."
+            },
+            {
+              "heading": "In-game thesis template",
+              "body": "Before buying, ask:\n1. What does the company do?\n2. Why might the price or business improve?\n3. What is the catalyst?\n4. What are the biggest risks?\n5. What would prove me wrong?\n6. What is my time horizon?\n7. What position size is reasonable?"
             }
           ],
           "checks": [
@@ -1047,17 +1028,14 @@
           "completion_signal": "You can apply this mindset rule during an in-game market decision.",
           "pages": [
             {
-              "type": "text",
               "heading": "What You'll Learn",
               "body": "You learn that portfolio success depends not only on choosing stocks, but also on sizing and risk distribution."
             },
             {
-              "type": "text",
               "heading": "Key Concept",
               "body": "A good idea can become a bad portfolio decision if position size is reckless."
             },
             {
-              "type": "text",
               "heading": "Knowledge Card",
               "body": "Portfolio management protects the player from being destroyed by one wrong idea. Diversification spreads risk. Position sizing controls emotional pressure. Avoiding all-in keeps the player flexible."
             }
@@ -1366,7 +1344,20 @@
           "title": "01 Why Financial Statements Matter",
           "kind": "lesson",
           "completion_signal": "You can use why financial statements matter in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "Financial statements are the map and compass of a business. Price can move because of market emotion, but financial statements help players see whether a company is genuinely healthy, fragile, growing, or only cosmetically attractive."
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end of this lesson, players should be able to:\n\n- Explain why investors should read financial statements before buying stocks.\n- Understand the difference between auditor perspective and investor perspective.\n- Identify the three main financial statements and what each one answers."
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "Auditors focus on whether the report follows accounting standards and is fairly presented. Investors use the audited report as raw material to judge future prospects, risk, growth, and business quality.\n\nThe three main statements answer different questions:\n\n| Statement | Main Question |\n|---|---|\n| Income Statement | Is the company making money? |\n| Balance Sheet | What does the company own, owe, and keep for shareholders? |\n| Cash Flow Statement | Is real cash coming in or going out? |"
+            }
+          ],
           "checks": [
             {
               "id": "why_financial_statements_matter_scenario_check",
@@ -1440,7 +1431,20 @@
           "title": "02 The Three Financial Statement Pillars",
           "kind": "lesson",
           "completion_signal": "You can use the three financial statement pillars in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "The three financial statements must be read together. Alone, each one can mislead. Together, they form a more complete picture."
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Identify the function of Income Statement, Balance Sheet, and Cash Flow Statement.\n- Understand why profit, assets, and cash are different.\n- Recognize that \"profitable\" does not always mean \"financially healthy.\""
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "| Pillar | What It Shows | Investor Question |\n|---|---|---|\n| Income Statement | Business performance | Is the business profitable? |\n| Balance Sheet | Financial position | Is the company financially strong? |\n| Cash Flow Statement | Real cash movement | Does the business generate cash? |\n\nA company can report profit but have weak cash flow. A company can own many assets but fund them with too much debt. A company can have high revenue but poor margins. That is why players must connect the puzzle pieces."
+            }
+          ],
           "checks": [
             {
               "id": "three_financial_statement_pillars_scenario_check",
@@ -1514,7 +1518,20 @@
           "title": "03 Income Statement: From Revenue to Net Profit",
           "kind": "lesson",
           "completion_signal": "You can use income statement: from revenue to net profit in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "The Income Statement tells the story of how money enters the business and how much remains after each layer of cost."
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Read the basic structure of an Income Statement.\n- Understand revenue, COGS, gross profit, OPEX, operating profit, interest expense, tax, and net profit.\n- Explain why the journey from revenue to net profit matters."
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "Basic Income Statement flow:\n\nRevenue\n- Cost of Goods Sold\n= Gross Profit\n- Operating Expenses\n+/- Other Income/Expenses\n= Operating Profit\n- Interest Expense\n+ Income/Loss from Associates or JV\n= Earnings Before Tax\n- Taxes\n= Net Profit\n\nEach line tells a different part of the business story:\n\n| Line Item | Meaning |\n|---|---|\n| Revenue | Money earned from selling products/services |\n| COGS | Direct cost to produce goods/services |\n| Gross Profit | Profit after direct production costs |\n| OPEX | Cost to run the business daily |\n| Operating Profit | Profit from core operations |\n| Interest Expense | Cost of debt |\n| Net Profit | Final profit after costs, interest, and tax |"
+            }
+          ],
           "checks": [
             {
               "id": "income_statement_from_revenue_to_net_profit_scenario_check",
@@ -1588,7 +1605,24 @@
           "title": "04 Revenue Growth: Real Growth or One-Time Spike?",
           "kind": "lesson",
           "completion_signal": "You can use revenue growth: real growth or one-time spike? in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "Revenue growth is not automatically good. Ask whether growth is consistent, sustainable, organic, and profitable."
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Calculate revenue growth.\n- Distinguish sustainable growth from one-time growth.\n- Understand that historical growth does not guarantee future growth.\n- Identify whether growth comes from volume, price, new market, acquisition, or commodity cycle."
+            },
+            {
+              "heading": "Formula",
+              "body": "Revenue Growth = Ending Revenue / Beginning Revenue - 1"
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "Revenue can grow because:\n\n- More units are sold\n- Selling prices increase\n- Company enters a new market\n- Company launches a new product\n- Company acquires another business\n- Commodity price temporarily rises\n\nPlayers should ask:\n\n| Question | Why It Matters |\n|---|---|\n| Is growth consistent? | Shows demand stability |\n| Is growth organic or from acquisition? | Organic growth may be more repeatable |\n| Is growth caused by commodity price? | Commodity growth can reverse quickly |\n| Does growth create profit and cash? | Revenue without profit/cash is weak quality |"
+            }
+          ],
           "checks": [
             {
               "id": "revenue_growth_real_or_one_time_scenario_check",
@@ -1668,7 +1702,24 @@
           "title": "05 Gross Profit Margin: Pricing Power and Production Efficiency",
           "kind": "lesson",
           "completion_signal": "You can use gross profit margin: pricing power and production efficiency in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "Gross Profit Margin shows how much profit remains after paying direct production costs. It helps players understand pricing power, supplier pressure, and production efficiency."
+            },
+            {
+              "heading": "Formula",
+              "body": "Gross Profit Margin = Gross Profit / Revenue"
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Calculate gross profit margin.\n- Understand why margin differs by industry.\n- Recognize when rising revenue hides weakening production economics."
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "Gross margin is affected by:\n\n- Selling price\n- Raw material cost\n- Production efficiency\n- Supplier bargaining power\n- Customer bargaining power\n- Competition\n- Brand strength\n- Commodity exposure\n\nHigh margin can mean strong brand, pricing power, efficient production, or low competition. Low margin is not always bad, but it usually means the company must rely on high volume, efficiency, or scale."
+            }
+          ],
           "checks": [
             {
               "id": "gross_profit_margin_scenario_check",
@@ -1748,7 +1799,24 @@
           "title": "06 Operating Profit Margin and Net Profit Margin",
           "kind": "lesson",
           "completion_signal": "You can use operating profit margin and net profit margin in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "Gross profit is not the final story. A business can have good gross margin but still weak operating or net margin if operating expenses, interest, tax, or other costs are too high."
+            },
+            {
+              "heading": "Formulas",
+              "body": "Operating Profit Margin = Operating Profit / Revenue\nNet Profit Margin = Net Profit / Revenue"
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Distinguish gross profit, operating profit, and net profit.\n- Understand how OPEX, interest, and tax affect final profit.\n- Identify whether profit is scalable or cost-heavy."
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "Operating margin answers:\n\n\"After running the business day-to-day, how much profit remains?\"\n\nNet margin answers:\n\n\"After all costs, interest, and taxes, how much of revenue becomes final profit?\"\n\nA company with high gross margin but low operating margin may have heavy rent, salary, marketing, logistics, or admin costs. A company with high operating margin but low net margin may have large interest expenses or tax burden."
+            }
+          ],
           "checks": [
             {
               "id": "operating_profit_margin_and_net_profit_margin_scenario_check",
@@ -1828,7 +1896,24 @@
           "title": "07 Non-Recurring Items and Interest Coverage",
           "kind": "lesson",
           "completion_signal": "You can use non-recurring items and interest coverage in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "Not all profit is created equal. One-time gains can make a company look better than it really is. Interest coverage shows whether operating profit can cover debt interest."
+            },
+            {
+              "heading": "Formulas",
+              "body": "Interest Coverage Ratio = EBIT / Interest Expense\n\nGeneral guide:\n\n| ICR | Interpretation |\n|---:|---|\n| < 1x | Danger zone |\n| 1x-2x | Caution zone |\n| Around 3x or higher | More comfortable, depending on industry |"
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Identify non-recurring income/loss.\n- Separate core profit from one-time profit.\n- Evaluate whether debt interest is manageable."
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "Non-recurring items include:\n\n- Gain from selling assets or subsidiaries\n- Unrealized gain from investment revaluation\n- Forex gain/loss\n- Debt restructuring gain\n- One-time M&A gain\n- Impairment loss\n\nA large one-time gain can make net profit jump, but it may not happen again. Players should normalize earnings by focusing on recurring operating performance."
+            }
+          ],
           "checks": [
             {
               "id": "non_recurring_items_and_interest_coverage_scenario_check",
@@ -1908,7 +1993,24 @@
           "title": "08 ROE, ROA, EPS, and Profit Allocation",
           "kind": "lesson",
           "completion_signal": "You can use roe, roa, eps, and profit allocation in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "Profit is not enough. You need to know how efficiently the company uses capital, how much profit belongs to each share, and how management uses profit."
+            },
+            {
+              "heading": "Formulas",
+              "body": "ROE = Net Profit / Equity\nROA = Net Profit / Total Assets\nEPS = Net Profit Attributable to Parent / Number of Shares\nDividend Payout Ratio = DPS / EPS"
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Understand ROE as return on shareholder capital.\n- Understand ROA as return on all assets.\n- Understand EPS as profit per share.\n- Evaluate whether retained earnings are used productively.\n- Understand trade-offs between dividends, reinvestment, debt repayment, and buyback."
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "ROE helps players compare business returns against safer instruments. If a business earns lower returns than low-risk alternatives, players should question why they should take equity risk.\n\nHowever, ROE can be distorted by high debt, low equity, one-time profit, or accounting effects. Always connect ROE to balance sheet and cash flow.\n\nProfit can be used for:\n\n- Dividend\n- Reinvestment / expansion\n- Debt repayment\n- Buyback\n- Cash reserve\n\nThe ideal use depends on company opportunities and capital discipline."
+            }
+          ],
           "checks": [
             {
               "id": "roe_roa_eps_and_profit_allocation_scenario_check",
@@ -1988,7 +2090,24 @@
           "title": "09 Balance Sheet Basics: Assets, Liabilities, Equity",
           "kind": "lesson",
           "completion_signal": "You can use balance sheet basics: assets, liabilities, equity in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "The Balance Sheet shows what the company owns, owes, and what belongs to shareholders."
+            },
+            {
+              "heading": "Core Equation",
+              "body": "Assets = Liabilities + Equity"
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Identify assets, liabilities, and equity.\n- Distinguish current and non-current assets/liabilities.\n- Understand equity as net worth of the company.\n- Recognize retained earnings as accumulated profit kept in the business."
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "| Category | Meaning | Examples |\n|---|---|---|\n| Current Assets | Assets expected to become cash/useful within one year | Cash, receivables, inventory |\n| Non-Current Assets | Long-term assets | Fixed assets, investments, mining assets, property |\n| Current Liabilities | Obligations due within one year | Trade payables, short-term bank debt, taxes payable |\n| Non-Current Liabilities | Obligations due after one year | Bonds, long-term bank loans |\n| Equity | Owner's residual claim | Paid-in capital, retained earnings |"
+            }
+          ],
           "checks": [
             {
               "id": "balance_sheet_basics_scenario_check",
@@ -2068,7 +2187,24 @@
           "title": "10 Leverage, DER, Gearing, and Capital Structure",
           "kind": "lesson",
           "completion_signal": "You can use leverage, der, gearing, and capital structure in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "Debt can help companies grow, but too much debt can make them fragile. You need to tell whether a company looks rich because of real equity growth or because it borrows aggressively."
+            },
+            {
+              "heading": "Formulas",
+              "body": "Debt to Equity Ratio = Total Liabilities / Equity\nGearing Ratio = Interest-Bearing Debt / Shareholder Equity"
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Calculate DER and gearing ratio.\n- Understand difference between total liabilities and interest-bearing debt.\n- Interpret leverage based on industry context.\n- Compare equity growth versus liability growth."
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "Debt is not always bad. Some industries use more leverage because they have long-term contracts, predictable cash flow, or asset-heavy expansion. But excessive leverage becomes dangerous when:\n\n- Revenue falls\n- Operating profit weakens\n- Interest expense rises\n- Cash flow turns negative\n- Debt matures when business is weak"
+            }
+          ],
           "checks": [
             {
               "id": "leverage_der_gearing_and_capital_structure_scenario_check",
@@ -2148,7 +2284,24 @@
           "title": "11 Liquidity: Current Ratio and Cash Ratio",
           "kind": "lesson",
           "completion_signal": "You can use liquidity: current ratio and cash ratio in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "Liquidity measures whether a company can pay near-term obligations. A profitable company can still be in trouble if it cannot pay bills when due."
+            },
+            {
+              "heading": "Formulas",
+              "body": "Current Ratio = Current Assets / Current Liabilities\nCash Ratio = Cash and Cash Equivalents / Current Liabilities"
+            },
+            {
+              "heading": "General Guide",
+              "body": "| Ratio | Interpretation |\n|---:|---|\n| Current Ratio < 1 | Potential liquidity problem |\n| Current Ratio > 1 | Generally safer |\n| Current Ratio > 3 | May indicate idle assets, depending on business |\n| Cash Ratio very low | Needs receivables/inventory conversion or refinancing |\n| Cash Ratio very high | Safe, but may be inefficient if cash is idle |"
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Calculate current ratio and cash ratio.\n- Understand the difference between liquid and illiquid assets.\n- Recognize short-term debt risk.\n- Understand why large assets do not always mean easy payment ability."
+            }
+          ],
           "checks": [
             {
               "id": "liquidity_current_ratio_and_cash_ratio_scenario_check",
@@ -2228,7 +2381,24 @@
           "title": "12 Working Capital: Receivables, Inventory, Payables, and CCC",
           "kind": "lesson",
           "completion_signal": "You can use working capital: receivables, inventory, payables, and ccc in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "Working capital tells players whether money gets stuck in customers, inventory, or suppliers. A company can show revenue growth but fail to collect cash."
+            },
+            {
+              "heading": "Key Metrics",
+              "body": "| Metric | Meaning |\n|---|---|\n| DSO | How long customers take to pay |\n| DIO | How long inventory stays before sold |\n| DPO | How long company takes to pay suppliers |\n| Cash Conversion Cycle | Time from cash going out to cash coming back |"
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Understand DSO, DIO, DPO, and cash conversion cycle conceptually.\n- Detect receivables growing faster than revenue.\n- Detect inventory piling up.\n- Understand supplier payment flexibility and risk."
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "Red flags include:\n\n- Receivables growing much faster than revenue\n- Large receivables from related parties\n- Receivables with unclear aging or weak collectability\n- Inventory growing while sales slow down\n- Payables stretched too far, damaging supplier relationships"
+            }
+          ],
           "checks": [
             {
               "id": "working_capital_and_cash_conversion_cycle_scenario_check",
@@ -2308,7 +2478,20 @@
           "title": "13 Balance Sheet Red Flags: Goodwill, Receivables, Inventory, Related Parties",
           "kind": "lesson",
           "completion_signal": "You can use balance sheet red flags: goodwill, receivables, inventory, related parties in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "Some Balance Sheet items require extra skepticism. Big numbers are not always strong assets. They can hide risk."
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Understand why large goodwill can be risky.\n- Identify inventory and receivables red flags.\n- Understand related-party transaction risk.\n- Learn when to check footnotes."
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "| Red Flag | Why It Matters |\n|---|---|\n| Large goodwill | Acquisition may fail and cause impairment loss |\n| Inventory rising faster than sales | Products may not sell or may need discounting |\n| Receivables rising faster than sales | Company may not collect cash |\n| Related-party receivables | Money may be stuck within group entities |\n| Unclear footnotes | Harder to judge asset quality |\n\nGoodwill appears when a company buys another company above its net asset value. If expected synergy fails, goodwill may be impaired, reducing profit and equity."
+            }
+          ],
           "checks": [
             {
               "id": "balance_sheet_red_flags_scenario_check",
@@ -2382,7 +2565,20 @@
           "title": "14 Cash Flow Statement: OCF, ICF, and FCF",
           "kind": "lesson",
           "completion_signal": "You can use cash flow statement: ocf, icf, and fcf in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "Cash flow reveals whether the business generates real money. Accounting profit can look good, but cash flow shows whether money actually comes in."
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Understand operating, investing, and financing cash flow.\n- Recognize why operating cash flow is critical.\n- Understand when investing cash flow is healthy or dangerous.\n- Interpret financing cash flow as money from/to lenders and shareholders."
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "| Cash Flow Section | Meaning | Investor Question |\n|---|---|---|\n| Operating Cash Flow | Cash from core business | Does the business generate real cash? |\n| Investing Cash Flow | Cash used for or received from long-term assets | Is the company expanding productively or selling assets? |\n| Financing Cash Flow | Cash from debt/equity or paid to lenders/shareholders | Is growth self-funded or dependent on external money? |\n\nIdeal early pattern for a healthy growing company:\n\nOCF positive\nICF negative due to expansion\nFinancing depends on funding needs\n\nBut the source of expansion matters. If OCF is weak and ICF is huge, the company may depend on debt or equity issuance."
+            }
+          ],
           "checks": [
             {
               "id": "cash_flow_statement_ocf_icf_and_fcf_scenario_check",
@@ -2456,7 +2652,20 @@
           "title": "15 Net Profit vs Operating Cash Flow",
           "kind": "lesson",
           "completion_signal": "You can use net profit vs operating cash flow in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "Profit is accounting. Cash is survival. Compare net profit with OCF to judge quality."
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Compare net profit and OCF.\n- Detect red flags when profit is high but cash is low.\n- Understand cases where net profit is low but OCF is still healthy."
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "| Situation | Interpretation |\n|---|---|\n| Net profit high, OCF low/negative | Possible receivables, inventory, non-cash gain, or weak collection risk |\n| Net profit low/negative, OCF positive | May be due to non-cash expense like depreciation; investigate further |\n| Net profit and OCF both positive | Stronger profit quality |\n| Net profit negative and OCF negative | High-risk unless early-stage turnaround or special context |"
+            }
+          ],
           "checks": [
             {
               "id": "net_profit_vs_operating_cash_flow_scenario_check",
@@ -2530,7 +2739,20 @@
           "title": "16 Notes to Financial Statements: The Business Kitchen",
           "kind": "lesson",
           "completion_signal": "You can use notes to financial statements: the business kitchen in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "The main statements show big numbers. The Notes to Financial Statements explain what is inside those numbers."
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Understand why footnotes/CALK matter.\n- Identify key information inside notes: revenue breakdown, COGS, OPEX, receivables aging, segments, backlog, related parties, commitments.\n- Use footnotes to validate or challenge the headline numbers."
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "Key items to check:\n\n| Footnote Area | Why It Matters |\n|---|---|\n| Revenue breakdown | Shows product, customer, or geographic source of sales |\n| COGS breakdown | Shows biggest cost drivers |\n| OPEX breakdown | Shows whether expenses are controlled |\n| Receivables aging | Shows collectability risk |\n| Related parties | Shows governance and cash-stuck risk |\n| Operating segments | Shows which business line creates profit |\n| Backlog | Shows future revenue visibility |\n| Commitments | Shows future obligations |"
+            }
+          ],
           "checks": [
             {
               "id": "notes_to_financial_statements_scenario_check",
@@ -2604,7 +2826,20 @@
           "title": "17 Backlog and Operating Segments",
           "kind": "lesson",
           "completion_signal": "You can use backlog and operating segments in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "Backlog and segment information help players understand future revenue visibility and which parts of the business actually create value."
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Define backlog.\n- Understand why backlog matters in project-based businesses.\n- Identify dominant segments, segment margins, sunrise segments, and sunset segments.\n- Understand concentration risk by segment, project, or customer."
+            },
+            {
+              "heading": "Key Explanation",
+              "body": "Backlog is work or contracts already obtained but not yet recognized as revenue. It is especially useful in sectors like construction, manufacturing, services, technology, or project-based businesses.\n\nBacklog checklist:\n\n- Backlog compared with annual revenue\n- New order book trend\n- Contract duration\n- Recurring vs one-off contracts\n- Client quality\n- Client concentration\n- Segment breakdown\n\nOperating segments reveal:\n\n- Which segment generates revenue\n- Which segment generates profit\n- Which segment is growing fastest\n- Which segment is dragging performance\n- Whether company risk is diversified or concentrated"
+            }
+          ],
           "checks": [
             {
               "id": "backlog_and_operating_segments_scenario_check",
@@ -2678,7 +2913,24 @@
           "title": "18 Integrated Fundamental Analysis and Action Plan",
           "kind": "lesson",
           "completion_signal": "You can use integrated fundamental analysis and action plan in a basic business-quality read.",
-          "pages": [],
+          "pages": [
+            {
+              "heading": "Core Concept",
+              "body": "No company is perfect. Fundamental analysis is about judging whether the strengths are enough to compensate for the weaknesses at the right price."
+            },
+            {
+              "heading": "What You'll Learn",
+              "body": "By the end, you can:\n\n- Combine Income Statement, Balance Sheet, Cash Flow Statement, and Footnotes.\n- Identify green flags and red flags.\n- Build an action plan: Buy, Watchlist, Avoid, or Investigate Further.\n- Understand tolerance: not every weakness is fatal, but every weakness must be priced and understood."
+            },
+            {
+              "heading": "Integrated Framework",
+              "body": "| Area | Green Flag | Red Flag |\n|---|---|---|\n| Revenue | Stable or sustainable growth | One-time spike, declining trend |\n| Gross Margin | Stable/improving, pricing power | Margin squeezed, COGS rising faster |\n| Operating Margin | Efficient OPEX | OPEX grows faster than revenue |\n| Net Profit | Recurring and supported by OCF | Boosted by one-time gain |\n| ROE/ROA | Strong and consistent | High due to leverage or one-time profit |\n| Debt | Manageable, covered by profit/cash | High DER + weak ICR + weak OCF |\n| Liquidity | Current ratio healthy, cash adequate | Current ratio <1, cash ratio weak |\n| Working Capital | Receivables/inventory controlled | Receivables/inventory ballooning |\n| Cash Flow | OCF positive and consistent | CFO negative repeatedly |\n| Footnotes | Transparent segment/backlog/customer info | Related-party risks, unclear details |"
+            },
+            {
+              "heading": "Action Plan Rules",
+              "body": "| Result | Suggested Game Action |\n|---|---|\n| Strong fundamentals + reasonable price | Candidate for buy/research deeper |\n| Strong business but expensive | Watchlist |\n| Mixed fundamentals + clear catalyst | Small position or deeper investigation |\n| Weak fundamentals + high hype | Avoid or speculative-only with strict sizing |\n| Red flags unresolved | Avoid until clarified |"
+            }
+          ],
           "checks": [
             {
               "id": "integrated_fundamental_analysis_and_action_plan_scenario_check",
@@ -3070,63 +3322,63 @@
       "id": "corporate_action",
       "label": "Corporate Action",
       "status": "playable",
-      "summary": "Learn how company meetings, dividends, capital actions, control deals, and leadership resets change a stock.",
+      "summary": "Learn how dividends, splits, capital raises, buybacks, placements, M&A, and shareholder meetings change a stock.",
       "quiz_passing_score": 0.8,
       "quiz_required_section_ids": [
         "corporate_action_overview",
         "dividends",
-        "capital_structure_actions",
-        "control_turnaround_actions"
+        "stock_splits",
+        "rights_issue_hmetd",
+        "buybacks",
+        "private_placement",
+        "mergers_acquisitions",
+        "corporate_action_framework"
       ],
       "badge": {
         "id": "corporate_action_basics",
         "label": "Corporate Action Basics",
-        "description": "Passed the Corporate Action Academy foundation quiz."
+        "description": "Understands how corporate actions change cash, shares, control, and market reaction."
       },
       "sections": [
         {
           "id": "corporate_action_overview",
           "order": 0,
           "label": "01 Overview",
-          "title": "01 Reading Corporate Actions",
+          "title": "01 Corporate Actions and Why They Matter",
           "kind": "lesson",
-          "completion_signal": "You can identify whether an event is a meeting, information session, cash/share distribution, financing action, control deal, or governance reset.",
+          "completion_signal": "You can explain why corporate actions can change ownership, cash flow, share count, valuation, and market mood.",
           "pages": [
             {
-              "heading": "What is a corporate action?",
-              "body": "A corporate action is a company-originated event that changes investor rights, cash flows, share count, ownership, listing status, or leadership expectations. In the game these events come from companies, boards, controllers, offerors, or creditors. A normal player can react to them, research them, attend eligible meetings, vote with record-date shares, or ask contacts for a read."
+              "heading": "What changes",
+              "body": "Corporate actions matter because they can alter the map that investors use to value a stock. Some actions distribute value, such as a cash dividend. Some change the share structure, such as a split, rights issue, private placement, or buyback. Others change control, strategy, or even the listed company identity through mergers, acquisitions, tender offers, or backdoor-style restructurings."
             },
             {
-              "heading": "Meetings and calls",
-              "body": "Annual RUPS is the routine yearly shareholder meeting. RUPSLB is an extraordinary shareholder meeting for a specific agenda such as financing, buybacks, control changes, restructuring, or leadership. Earnings calls are information sessions tied to reported results and do not give the player agenda control."
-            },
-            {
-              "heading": "Player agency",
-              "body": "The key rule is ownership. Buying shares can give attendance, voting, dividend, tender, or rights eligibility depending on the record date. It does not let the player directly steer company strategy unless a future system gives the player majority or control ownership."
+              "heading": "Game lens",
+              "body": "Read the event in layers: who initiated it, what asset or cash moves, whether existing holders are diluted or rewarded, and what the market has already priced in. RUPS means the annual shareholder meeting; RUPSLB means an extraordinary meeting for a specific agenda. The player usually reacts as an investor, while company-side control decides the action."
             }
           ],
           "checks": [
             {
-              "id": "corporate_action_origin",
-              "question": "Who normally initiates corporate-action direction in this game?",
+              "id": "overview_first_read",
+              "question": "What is the best first read on any corporate-action headline?",
               "options": [
                 {
-                  "id": "company_side",
-                  "label": "Company, board, controller, offeror, or creditor",
+                  "id": "purpose_terms_impact",
+                  "label": "Purpose, terms, holder impact, and market reaction",
                   "correct": true,
-                  "feedback": "Correct. The player reads and reacts unless ownership control gives stronger influence later."
+                  "feedback": "Correct. The label alone is not enough; the terms and context do the work."
                 },
                 {
-                  "id": "any_player",
-                  "label": "Any player from the order ticket",
+                  "id": "headline_only",
+                  "label": "Only whether the headline sounds positive",
                   "correct": false,
-                  "feedback": "No. Normal players cannot directly schedule company-direction meetings."
+                  "feedback": "No. A friendly headline can still hide dilution or weak use of funds."
                 },
                 {
-                  "id": "price_chart",
-                  "label": "The price chart by itself",
+                  "id": "chart_only",
+                  "label": "Only the last candle on the chart",
                   "correct": false,
-                  "feedback": "Charts can reveal reaction, but the action itself comes from the company-side event chain."
+                  "feedback": "The chart shows reaction, but the terms explain what changed."
                 }
               ]
             }
@@ -3134,17 +3386,26 @@
           "content_blocks": [
             {
               "type": "key_insights",
-              "title": "Implemented event venues",
+              "title": "Core read",
               "bullets": [
-                "Annual RUPS: routine shareholder meeting, often used for dividend and governance agenda items.",
-                "RUPSLB: extraordinary shareholder meeting for specific corporate-action proposals.",
-                "Earnings call: management explains reported results and outlook without giving voting control."
+                "A corporate action is a board or shareholder-level decision that changes the company, the shares, or the rights attached to those shares.",
+                "The same headline can be bullish, bearish, or neutral depending on purpose, funding, timing, and management credibility.",
+                "In the game, corporate actions arrive through meetings, filings, offers, event popups, and market reactions instead of the normal buy/sell ticket."
               ]
             },
             {
               "type": "text",
-              "heading": "Record date discipline",
-              "body": "Eligibility depends on the snapshot date attached to the action. Selling after the record date does not erase captured rights, while buying after the record date does not create them."
+              "heading": "What changes",
+              "body": "Corporate actions matter because they can alter the map that investors use to value a stock. Some actions distribute value, such as a cash dividend. Some change the share structure, such as a split, rights issue, private placement, or buyback. Others change control, strategy, or even the listed company identity through mergers, acquisitions, tender offers, or backdoor-style restructurings.",
+              "infoboxes": [],
+              "images": []
+            },
+            {
+              "type": "text",
+              "heading": "Game lens",
+              "body": "Read the event in layers: who initiated it, what asset or cash moves, whether existing holders are diluted or rewarded, and what the market has already priced in. RUPS means the annual shareholder meeting; RUPSLB means an extraordinary meeting for a specific agenda. The player usually reacts as an investor, while company-side control decides the action.",
+              "infoboxes": [],
+              "images": []
             }
           ]
         },
@@ -3152,45 +3413,41 @@
           "id": "dividends",
           "order": 1,
           "label": "02 Dividends",
-          "title": "02 Cash and Stock Dividends",
+          "title": "02 Dividends: Cash, Stock, and Eligibility",
           "kind": "lesson",
-          "completion_signal": "You can explain how cash dividends and stock dividends affect cash, share count, reference price, and record-date eligibility.",
+          "completion_signal": "You can separate cash dividends from stock dividends and explain why record date matters.",
           "pages": [
             {
-              "heading": "Cash dividend",
-              "body": "A cash dividend pays money to eligible shareholders. In the game it moves through approval, ex-date, record, and payment timing. The stock can adjust when it goes ex-dividend because the cash claim has separated from the share."
+              "heading": "Cash versus stock dividends",
+              "body": "A cash dividend is a distribution of profit to shareholders. It can signal a mature, cash-generating business, but it also means cash leaves the company. A stock dividend pays in additional shares instead of cash. The investor owns more shares, but the market usually adjusts the reference price because the business itself did not magically become larger overnight."
             },
             {
-              "heading": "Stock dividend",
-              "body": "A stock dividend grants bonus shares instead of cash. The player's eligible share count receives additional shares on payment, while company share count and historical reference prices adjust to keep the economics consistent."
-            },
-            {
-              "heading": "How to read the setup",
-              "body": "Check payout size, yield, timetable, and whether you held shares on the record date. A high dividend is not automatically bullish if the business is weak or the payout is unsustainable."
+              "heading": "Game lens",
+              "body": "When a dividend event appears, check the record date and payment date. If your shares are captured on the record date, the later payment belongs to you even if the market price moves before then. Do not treat every large yield as free money; price adjustment and business quality still matter."
             }
           ],
           "checks": [
             {
               "id": "dividend_record_date",
-              "question": "What matters most for dividend eligibility?",
+              "question": "What determines dividend eligibility in the Academy and game model?",
               "options": [
                 {
-                  "id": "record_date_holding",
+                  "id": "record_date",
                   "label": "Shares captured on the record date",
                   "correct": true,
-                  "feedback": "Correct. Eligibility follows the record-date registry."
+                  "feedback": "Correct. Record date is the eligibility snapshot."
                 },
                 {
-                  "id": "today_buy",
-                  "label": "Buying any time before payment",
+                  "id": "payment_date",
+                  "label": "Only the shares held on payment day",
                   "correct": false,
-                  "feedback": "Payment comes later, but eligibility is already captured by the record date."
+                  "feedback": "Payment day is when cash or shares arrive, not the eligibility snapshot."
                 },
                 {
                   "id": "highest_price",
-                  "label": "The highest price paid",
+                  "label": "The highest price paid for the shares",
                   "correct": false,
-                  "feedback": "Your cost basis does not decide eligibility."
+                  "feedback": "Cost basis does not determine eligibility."
                 }
               ]
             }
@@ -3198,61 +3455,72 @@
           "content_blocks": [
             {
               "type": "key_insights",
-              "title": "Implemented dividend actions",
+              "title": "Dividend map",
               "bullets": [
-                "Cash dividend: eligible holders receive cash on the payment date.",
-                "Stock dividend: eligible holders receive bonus shares and the reference price/share count adjusts."
+                "Cash dividends send cash to eligible holders and reduce company cash after payment.",
+                "Stock dividends send bonus shares, increasing share count while adjusting the reference price.",
+                "Eligibility follows the record date, not the day a player notices the headline."
               ]
+            },
+            {
+              "type": "text",
+              "heading": "Cash versus stock dividends",
+              "body": "A cash dividend is a distribution of profit to shareholders. It can signal a mature, cash-generating business, but it also means cash leaves the company. A stock dividend pays in additional shares instead of cash. The investor owns more shares, but the market usually adjusts the reference price because the business itself did not magically become larger overnight.",
+              "infoboxes": [],
+              "images": []
+            },
+            {
+              "type": "text",
+              "heading": "Game lens",
+              "body": "When a dividend event appears, check the record date and payment date. If your shares are captured on the record date, the later payment belongs to you even if the market price moves before then. Do not treat every large yield as free money; price adjustment and business quality still matter.",
+              "infoboxes": [],
+              "images": []
             }
           ]
         },
         {
-          "id": "capital_structure_actions",
+          "id": "stock_splits",
           "order": 2,
-          "label": "03 Capital Structure",
-          "title": "03 Financing, Buybacks, and Splits",
+          "label": "03 Splits",
+          "title": "03 Stock Splits and Reverse Splits",
           "kind": "lesson",
-          "completion_signal": "You can separate dilution, float absorption, and cosmetic share-count changes.",
+          "completion_signal": "You can explain why splits change share count and reference price without creating business value by themselves.",
           "pages": [
-            {
-              "heading": "Rights issue",
-              "body": "A rights issue offers new shares to existing holders, usually at a discount. Eligible holders receive an entitlement. If they exercise, they add shares and spend cash; if they cannot or do not exercise, their ownership can be diluted."
-            },
-            {
-              "heading": "Private placement",
-              "body": "A private placement sells new shares to a targeted investor. It can raise cash faster than a rights issue, but it can dilute existing holders and may reduce free float if the new investor is locked or strategic."
-            },
-            {
-              "heading": "Stock buyback",
-              "body": "A stock buyback authorizes the company to buy and retire shares. Execution can reduce free float and support price, but it also spends corporate cash and can be questioned if the business needs funding."
-            },
             {
               "heading": "Stock split",
-              "body": "A stock split changes the number of shares and reference price. A normal split can improve trading accessibility; a reverse split can reset a very low nominal price. By itself, a split does not create business value."
+              "body": "A stock split makes each share cheaper on the screen and gives holders more shares at a proportional ratio. The usual argument is liquidity: a lower price can invite more retail participation and make the stock easier to trade. It is like breaking one large note into smaller notes; the pieces change, but the total value should start the same."
+            },
+            {
+              "heading": "Reverse split",
+              "body": "A reverse split combines multiple shares into fewer shares at a higher reference price. This can help a stock escape a very low quoted price or meet listing optics, but it is often read cautiously if the company is using it to hide a damaged chart or avoid market embarrassment."
+            },
+            {
+              "heading": "Game lens",
+              "body": "After a split event, focus on adjusted holdings and reference price. A split can create a sentiment pop, while a reverse split can create suspicion. The trade question is whether liquidity and perception improve, not whether value appeared from thin air."
             }
           ],
           "checks": [
             {
-              "id": "capital_structure_dilution",
-              "question": "Which action most directly creates new shares for financing?",
+              "id": "split_value_read",
+              "question": "What does a split change immediately?",
               "options": [
                 {
-                  "id": "rights_or_placement",
-                  "label": "Rights issue or private placement",
+                  "id": "share_count_reference",
+                  "label": "Share count and reference price",
                   "correct": true,
-                  "feedback": "Correct. Both are new-share financing paths."
+                  "feedback": "Correct. The ownership value starts proportionally adjusted."
                 },
                 {
-                  "id": "buyback",
-                  "label": "Stock buyback",
+                  "id": "factory_output",
+                  "label": "Factory output and revenue",
                   "correct": false,
-                  "feedback": "A buyback usually retires or absorbs shares rather than issuing new ones."
+                  "feedback": "A split does not change operations by itself."
                 },
                 {
-                  "id": "earnings_call",
-                  "label": "Earnings call",
+                  "id": "dividend_cash",
+                  "label": "Cash dividend already owed to every player",
                   "correct": false,
-                  "feedback": "An earnings call explains results; it does not issue shares."
+                  "feedback": "Dividend eligibility is a different corporate action."
                 }
               ]
             }
@@ -3260,63 +3528,79 @@
           "content_blocks": [
             {
               "type": "key_insights",
-              "title": "Implemented capital-structure actions",
+              "title": "Split read",
               "bullets": [
-                "Rights issue: shareholder entitlement, exercise price, dilution, and TERP-style adjustment.",
-                "Private placement: targeted investor issuance, dilution, proceeds, and free-float effect.",
-                "Stock buyback: authorization, execution ratio, retired shares, float reduction, and price support.",
-                "Stock split: split or reverse-split ratio, holding adjustment, share-count adjustment, and reference-price reset."
+                "A stock split increases share count and lowers price per share proportionally.",
+                "A reverse split reduces share count and raises price per share proportionally.",
+                "Neither action fixes the business by itself; the signal comes from why management needs the new trading shape."
               ]
+            },
+            {
+              "type": "text",
+              "heading": "Stock split",
+              "body": "A stock split makes each share cheaper on the screen and gives holders more shares at a proportional ratio. The usual argument is liquidity: a lower price can invite more retail participation and make the stock easier to trade. It is like breaking one large note into smaller notes; the pieces change, but the total value should start the same.",
+              "infoboxes": [],
+              "images": []
+            },
+            {
+              "type": "text",
+              "heading": "Reverse split",
+              "body": "A reverse split combines multiple shares into fewer shares at a higher reference price. This can help a stock escape a very low quoted price or meet listing optics, but it is often read cautiously if the company is using it to hide a damaged chart or avoid market embarrassment.",
+              "infoboxes": [],
+              "images": []
+            },
+            {
+              "type": "text",
+              "heading": "Game lens",
+              "body": "After a split event, focus on adjusted holdings and reference price. A split can create a sentiment pop, while a reverse split can create suspicion. The trade question is whether liquidity and perception improve, not whether value appeared from thin air.",
+              "infoboxes": [],
+              "images": []
             }
           ]
         },
         {
-          "id": "control_turnaround_actions",
+          "id": "rights_issue_hmetd",
           "order": 3,
-          "label": "04 Control and Turnaround",
-          "title": "04 Control Deals, Rescues, and Leadership",
+          "label": "04 Rights Issue",
+          "title": "04 Rights Issue / HMETD",
           "kind": "lesson",
-          "completion_signal": "You can read whether a corporate action is changing control, rescuing the balance sheet, transforming the listing, or resetting leadership.",
+          "completion_signal": "You can read a rights issue through dilution, exercise price, use of proceeds, and controller participation.",
           "pages": [
             {
-              "heading": "Tender offer",
-              "body": "A tender offer lets holders choose whether to sell into an offer. In interactive meetings the player can tender, hold, or observe if eligible. A successful offer can shrink float, create public-float warnings, or eventually cash out remaining holders in a go-private branch."
+              "heading": "How it works",
+              "body": "A rights issue raises equity by offering new shares to existing holders. The offer usually states a ratio and an exercise price. If the exercise price is attractive and the funding purpose is credible, the event can support growth. If the proceeds merely patch old losses or vague debts, the same event can feel like shareholders are being asked to rescue the balance sheet again."
             },
             {
-              "heading": "Strategic merger or acquisition",
-              "body": "A strategic M&A deal can cash out the target at an acquisition price, disable public trading for the acquired listing, and turn the question into premium versus closing risk."
+              "heading": "Red flags",
+              "body": "Watch for repeated rights issues, unclear use of proceeds, weak controller participation, and terms that dilute old holders without a convincing future payoff. A rare, well-explained raise for expansion is very different from a company that keeps returning to holders because operations cannot fund themselves."
             },
             {
-              "heading": "Backdoor listing",
-              "body": "A backdoor listing changes control and injects a new business into an existing listed shell. It can rewrite company identity, dilute old holders, create sponsor lock-up risk, and spawn follow-on financing or milestone events."
-            },
-            {
-              "heading": "Restructuring and CEO change",
-              "body": "Restructuring is a rescue package around debt relief, asset sales, debt conversion, and liquidity penalties. CEO change is a leadership reset that can shift execution traits and market confidence while preserving the listing."
+              "heading": "Game lens",
+              "body": "The game models rights entitlement, exercise price, dilution, and TERP-style adjustment. When this appears, compare the exercise cost with your cash, the company purpose, and the likely market read after the record date."
             }
           ],
           "checks": [
             {
-              "id": "control_action_read",
-              "question": "What is the best first read on a backdoor listing?",
+              "id": "rights_main_risk",
+              "question": "What is the main risk if an eligible holder ignores a rights issue?",
               "options": [
                 {
-                  "id": "control_and_asset",
-                  "label": "Control change plus injected asset quality",
+                  "id": "dilution",
+                  "label": "Their ownership percentage can be diluted",
                   "correct": true,
-                  "feedback": "Correct. The sponsor, asset quality, dilution, and post-deal milestones matter together."
+                  "feedback": "Correct. New shares increase the denominator."
                 },
                 {
-                  "id": "only_ticker",
-                  "label": "Only whether the ticker survives",
+                  "id": "automatic_cash",
+                  "label": "They automatically receive extra cash",
                   "correct": false,
-                  "feedback": "Ticker survival matters, but the economic change comes from control, dilution, and the injected asset."
+                  "feedback": "Rights are an entitlement, not an automatic cash dividend."
                 },
                 {
-                  "id": "only_vote_button",
-                  "label": "Only the meeting vote button",
+                  "id": "reverse_split",
+                  "label": "The company must reverse split first",
                   "correct": false,
-                  "feedback": "The vote matters, but the terms and aftermath determine the trade read."
+                  "feedback": "A reverse split is separate from a rights issue."
                 }
               ]
             }
@@ -3324,29 +3608,346 @@
           "content_blocks": [
             {
               "type": "key_insights",
-              "title": "Implemented control and turnaround actions",
+              "title": "Rights issue read",
               "bullets": [
-                "Tender offer: shareholder election, offer premium, float absorption, public-float warning, and go-private branch.",
-                "Strategic merger / acquisition: cash-out premium, target acquisition, delisting/trading block, and final holder treatment.",
-                "Backdoor listing: control change, asset injection, identity rewrite, dilution, sponsor lock-up, follow-on rights, and milestones.",
-                "Restructuring: debt relief, asset sale, debt-to-equity conversion, liquidity penalty, dilution, and stress overhang.",
-                "CEO change: leadership slate, CEO replacement, execution/story trait nudge, and market reaction."
+                "HMETD gives existing shareholders a priority right to buy new shares before outside investors.",
+                "Exercising can maintain ownership; ignoring the right can dilute ownership.",
+                "The market cares most about why the company is raising funds and whether controllers participate."
               ]
+            },
+            {
+              "type": "text",
+              "heading": "How it works",
+              "body": "A rights issue raises equity by offering new shares to existing holders. The offer usually states a ratio and an exercise price. If the exercise price is attractive and the funding purpose is credible, the event can support growth. If the proceeds merely patch old losses or vague debts, the same event can feel like shareholders are being asked to rescue the balance sheet again.",
+              "infoboxes": [],
+              "images": []
+            },
+            {
+              "type": "text",
+              "heading": "Red flags",
+              "body": "Watch for repeated rights issues, unclear use of proceeds, weak controller participation, and terms that dilute old holders without a convincing future payoff. A rare, well-explained raise for expansion is very different from a company that keeps returning to holders because operations cannot fund themselves.",
+              "infoboxes": [],
+              "images": []
+            },
+            {
+              "type": "text",
+              "heading": "Game lens",
+              "body": "The game models rights entitlement, exercise price, dilution, and TERP-style adjustment. When this appears, compare the exercise cost with your cash, the company purpose, and the likely market read after the record date.",
+              "infoboxes": [],
+              "images": []
+            }
+          ]
+        },
+        {
+          "id": "buybacks",
+          "order": 4,
+          "label": "05 Buybacks",
+          "title": "05 Buybacks and Treasury Shares",
+          "kind": "lesson",
+          "completion_signal": "You can read whether a buyback is confidence, price support, or cosmetic financial engineering.",
+          "pages": [
+            {
+              "heading": "Why companies buy back shares",
+              "body": "A company may buy back shares to signal confidence, support a falling price, return value to holders, or improve per-share metrics. The action can be shareholder-friendly when management has surplus cash and few better uses for it. It can be weaker when the company sacrifices flexibility just to dress up EPS or calm a nervous market."
+            },
+            {
+              "heading": "Game lens",
+              "body": "In the game, buybacks can reduce float, retire shares, support price, and alter valuation ratios. Read the authorization size and execution ratio. An announced buyback is not always the same as a fully executed buyback."
+            }
+          ],
+          "checks": [
+            {
+              "id": "buyback_tradeoff",
+              "question": "What is the core buyback tradeoff?",
+              "options": [
+                {
+                  "id": "fewer_shares_less_cash",
+                  "label": "Fewer shares outstanding, but less company cash",
+                  "correct": true,
+                  "feedback": "Correct. Per-share metrics can improve while the balance sheet gives up cash."
+                },
+                {
+                  "id": "more_new_shares",
+                  "label": "More new shares and automatic dilution",
+                  "correct": false,
+                  "feedback": "That describes issuance, not a buyback."
+                },
+                {
+                  "id": "no_market_signal",
+                  "label": "No possible market signal",
+                  "correct": false,
+                  "feedback": "Buybacks often send a signal, but the signal still needs context."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "key_insights",
+              "title": "Buyback read",
+              "bullets": [
+                "A buyback uses company cash to repurchase shares from the market.",
+                "Reducing shares outstanding can lift EPS mechanically, but cash also leaves the balance sheet.",
+                "The strongest buyback read appears when the company has excess cash and the stock is plausibly undervalued."
+              ]
+            },
+            {
+              "type": "text",
+              "heading": "Why companies buy back shares",
+              "body": "A company may buy back shares to signal confidence, support a falling price, return value to holders, or improve per-share metrics. The action can be shareholder-friendly when management has surplus cash and few better uses for it. It can be weaker when the company sacrifices flexibility just to dress up EPS or calm a nervous market.",
+              "infoboxes": [],
+              "images": []
+            },
+            {
+              "type": "text",
+              "heading": "Game lens",
+              "body": "In the game, buybacks can reduce float, retire shares, support price, and alter valuation ratios. Read the authorization size and execution ratio. An announced buyback is not always the same as a fully executed buyback.",
+              "infoboxes": [],
+              "images": []
+            }
+          ]
+        },
+        {
+          "id": "private_placement",
+          "order": 5,
+          "label": "06 Placement",
+          "title": "06 Private Placement",
+          "kind": "lesson",
+          "completion_signal": "You can explain why targeted issuance can be fast and strategic, but also dilutive for holders outside the deal.",
+          "pages": [
+            {
+              "heading": "Why it happens",
+              "body": "A company may choose private placement because it is faster than a public raise and can target investors who bring more than money. A strong strategic investor can add distribution, technology, credibility, or industry access. The cost is fairness tension: not every existing holder gets the same chance to buy."
+            },
+            {
+              "heading": "Game lens",
+              "body": "When private placement appears, inspect who enters, the implied price, the dilution, and whether free float improves or control gets tighter. A famous strategic partner is useful only if the deal terms still make sense for minority holders."
+            }
+          ],
+          "checks": [
+            {
+              "id": "placement_difference",
+              "question": "How is private placement different from a rights issue?",
+              "options": [
+                {
+                  "id": "selected_investors",
+                  "label": "It is sold to selected investors, not offered to all eligible holders",
+                  "correct": true,
+                  "feedback": "Correct. That speed and selectivity are the point of the structure."
+                },
+                {
+                  "id": "always_cash_dividend",
+                  "label": "It always pays cash to every shareholder",
+                  "correct": false,
+                  "feedback": "That describes a dividend, not placement."
+                },
+                {
+                  "id": "no_new_shares",
+                  "label": "It never creates new shares",
+                  "correct": false,
+                  "feedback": "Private placement commonly creates new shares or securities."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "key_insights",
+              "title": "Placement read",
+              "bullets": [
+                "Private placement sells new shares or securities to selected investors instead of all holders.",
+                "It can bring fast funding, a strategic partner, or stronger institutional ownership.",
+                "Existing holders who are not invited can be diluted without receiving rights to maintain ownership."
+              ]
+            },
+            {
+              "type": "text",
+              "heading": "Why it happens",
+              "body": "A company may choose private placement because it is faster than a public raise and can target investors who bring more than money. A strong strategic investor can add distribution, technology, credibility, or industry access. The cost is fairness tension: not every existing holder gets the same chance to buy.",
+              "infoboxes": [],
+              "images": []
+            },
+            {
+              "type": "text",
+              "heading": "Game lens",
+              "body": "When private placement appears, inspect who enters, the implied price, the dilution, and whether free float improves or control gets tighter. A famous strategic partner is useful only if the deal terms still make sense for minority holders.",
+              "infoboxes": [],
+              "images": []
+            }
+          ]
+        },
+        {
+          "id": "mergers_acquisitions",
+          "order": 6,
+          "label": "07 M&A",
+          "title": "07 Mergers and Acquisitions",
+          "kind": "lesson",
+          "completion_signal": "You can read M&A through strategic fit, price paid, financing, integration risk, and minority-holder treatment.",
+          "pages": [
+            {
+              "heading": "Why companies do it",
+              "body": "M&A can expand market share, add products, create cost savings, enter new regions, or rescue a struggling asset. The headline can sound powerful because it promises scale. The harder question is whether the buyer is paying a fair price and whether the combined business can actually operate better than the separate pieces."
+            },
+            {
+              "heading": "What to watch",
+              "body": "Check strategic fit, valuation, funding structure, integration cost, culture risk, and conflicts of interest. If a company borrows too much or issues too many new shares to buy a weak target, the deal may transfer risk to existing holders instead of creating value."
+            },
+            {
+              "heading": "Game lens",
+              "body": "The game can express M&A through tender offers, cash-out premiums, target acquisition, trading blocks, control changes, and final holder treatment. A deal premium can be attractive, but the aftermath matters if you remain invested in the surviving company."
+            }
+          ],
+          "checks": [
+            {
+              "id": "mna_best_read",
+              "question": "What makes an M&A headline more credible?",
+              "options": [
+                {
+                  "id": "fit_price_funding",
+                  "label": "Strategic fit, fair price, and sensible funding",
+                  "correct": true,
+                  "feedback": "Correct. The deal needs business logic and financial discipline."
+                },
+                {
+                  "id": "bigger_only",
+                  "label": "Only that the combined company is bigger",
+                  "correct": false,
+                  "feedback": "Bigger can also mean slower, more indebted, or less focused."
+                },
+                {
+                  "id": "rumor_count",
+                  "label": "The number of social-media rumors",
+                  "correct": false,
+                  "feedback": "Noise is not the same as deal quality."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "key_insights",
+              "title": "M&A read",
+              "bullets": [
+                "A merger combines companies into a larger structure; an acquisition gives one side control over another business.",
+                "Good M&A has strategic fit and believable synergy; bad M&A buys complexity at an expensive price.",
+                "Integration, culture, debt, goodwill, and dilution can turn a pretty presentation into a messy investment."
+              ]
+            },
+            {
+              "type": "text",
+              "heading": "Why companies do it",
+              "body": "M&A can expand market share, add products, create cost savings, enter new regions, or rescue a struggling asset. The headline can sound powerful because it promises scale. The harder question is whether the buyer is paying a fair price and whether the combined business can actually operate better than the separate pieces.",
+              "infoboxes": [],
+              "images": []
+            },
+            {
+              "type": "text",
+              "heading": "What to watch",
+              "body": "Check strategic fit, valuation, funding structure, integration cost, culture risk, and conflicts of interest. If a company borrows too much or issues too many new shares to buy a weak target, the deal may transfer risk to existing holders instead of creating value.",
+              "infoboxes": [],
+              "images": []
+            },
+            {
+              "type": "text",
+              "heading": "Game lens",
+              "body": "The game can express M&A through tender offers, cash-out premiums, target acquisition, trading blocks, control changes, and final holder treatment. A deal premium can be attractive, but the aftermath matters if you remain invested in the surviving company.",
+              "infoboxes": [],
+              "images": []
+            }
+          ]
+        },
+        {
+          "id": "corporate_action_framework",
+          "order": 7,
+          "label": "08 Framework",
+          "title": "08 Corporate Action Analysis Framework",
+          "kind": "lesson",
+          "completion_signal": "You can apply a repeatable checklist before reacting to corporate-action noise.",
+          "pages": [
+            {
+              "heading": "Purpose and participation",
+              "body": "First ask why the action exists. Growth-oriented actions fund expansion, useful assets, or durable competitive advantages. Survival-oriented actions plug losses, refinance pressure, or rescue weak subsidiaries. Then ask whether controllers or insiders participate on the same terms. Their behavior can be a useful signal because they usually know the company better than outside holders."
+            },
+            {
+              "heading": "Frequency and transparency",
+              "body": "Rare, strategic actions are easier to defend than repeated funding requests. A company that constantly asks the market for new money may have an operating problem. Transparent terms, clear use of proceeds, realistic targets, and boringly specific tables are healthier than vague promises."
+            },
+            {
+              "heading": "Game lens",
+              "body": "Use the same checklist after a popup, news article, or Twooter storm: purpose, terms, dilution, cash movement, controller signal, time horizon, and whether the market reaction is ahead of the facts. Funny market noise can be tradable, but the durable edge is reading what actually changed."
+            }
+          ],
+          "checks": [
+            {
+              "id": "framework_red_flag",
+              "question": "Which pattern is the clearest red flag?",
+              "options": [
+                {
+                  "id": "repeat_unclear_raise",
+                  "label": "Repeated capital raises with unclear use of proceeds",
+                  "correct": true,
+                  "feedback": "Correct. That often signals a weak operating engine or poor capital discipline."
+                },
+                {
+                  "id": "clear_growth_project",
+                  "label": "A rare raise for a clear growth project",
+                  "correct": false,
+                  "feedback": "That can still need analysis, but it is not the clearest red flag."
+                },
+                {
+                  "id": "record_date_notice",
+                  "label": "A record date shown in the notice",
+                  "correct": false,
+                  "feedback": "Record dates are normal scheduling mechanics."
+                }
+              ]
+            }
+          ],
+          "content_blocks": [
+            {
+              "type": "key_insights",
+              "title": "Framework",
+              "bullets": [
+                "Start with purpose: growth, balance-sheet repair, control change, liquidity, or optics.",
+                "Then check participation, frequency, use of proceeds, long-term value, and red flags.",
+                "A corporate action is a tool. Management quality decides whether that tool builds value or hides damage."
+              ]
+            },
+            {
+              "type": "text",
+              "heading": "Purpose and participation",
+              "body": "First ask why the action exists. Growth-oriented actions fund expansion, useful assets, or durable competitive advantages. Survival-oriented actions plug losses, refinance pressure, or rescue weak subsidiaries. Then ask whether controllers or insiders participate on the same terms. Their behavior can be a useful signal because they usually know the company better than outside holders.",
+              "infoboxes": [],
+              "images": []
+            },
+            {
+              "type": "text",
+              "heading": "Frequency and transparency",
+              "body": "Rare, strategic actions are easier to defend than repeated funding requests. A company that constantly asks the market for new money may have an operating problem. Transparent terms, clear use of proceeds, realistic targets, and boringly specific tables are healthier than vague promises.",
+              "infoboxes": [],
+              "images": []
+            },
+            {
+              "type": "text",
+              "heading": "Game lens",
+              "body": "Use the same checklist after a popup, news article, or Twooter storm: purpose, terms, dilution, cash movement, controller signal, time horizon, and whether the market reaction is ahead of the facts. Funny market noise can be tradable, but the durable edge is reading what actually changed.",
+              "infoboxes": [],
+              "images": []
             }
           ]
         },
         {
           "id": "quiz",
-          "order": 4,
-          "label": "05 Quiz",
+          "order": 8,
+          "label": "09 Quiz",
           "title": "Corporate Action Basics Quiz",
           "kind": "quiz",
           "completion_signal": "Score 80 percent or better to earn Corporate Action Basics."
         },
         {
           "id": "glossary",
-          "order": 5,
-          "label": "06 Glossary",
+          "order": 9,
+          "label": "10 Glossary",
           "title": "Glossary",
           "kind": "glossary",
           "completion_signal": "Use this any time you need a quick definition."
@@ -3354,32 +3955,32 @@
       ],
       "quiz_questions": [
         {
-          "id": "ca_q1_origin",
-            "prompt": "Why can a normal player ask Network contacts for information, but not directly request RUPSLB direction?",
+          "id": "ca_q1_purpose",
+          "prompt": "Why is the name of a corporate action not enough to judge it?",
           "options": [
             {
-              "id": "info_not_control",
-              "label": "Contacts provide information; company direction comes from company-side control.",
+              "id": "terms_context",
+              "label": "The purpose, terms, funding, and holder impact decide the read.",
               "correct": true
             },
             {
-              "id": "skip_record_date",
-              "label": "Contacts erase record-date rules.",
+              "id": "always_good",
+              "label": "Every corporate action is automatically bullish.",
               "correct": false
             },
             {
-              "id": "force_vote",
-              "label": "Contacts force all shareholders to vote with the player.",
+              "id": "always_bad",
+              "label": "Every corporate action is automatically bearish.",
               "correct": false
             }
           ],
-          "correct_answer_id": "info_not_control",
-          "feedback_correct": "Right. Contacts improve reads; they do not hand the player corporate control.",
-          "feedback_wrong": "Review the overview. The player can research and react, but normal corporate direction is not an order-ticket command."
+          "correct_answer_id": "terms_context",
+          "feedback_correct": "Correct. The same action type can help or hurt depending on why and how it is done.",
+          "feedback_wrong": "Review the overview. Corporate actions need context, not just a label."
         },
         {
           "id": "ca_q2_record_date",
-          "prompt": "A dividend or meeting says eligibility is based on record-date shares. What does that mean?",
+          "prompt": "A dividend notice says eligibility is based on record-date shares. What does that mean?",
           "options": [
             {
               "id": "snapshot",
@@ -3398,80 +3999,200 @@
             }
           ],
           "correct_answer_id": "snapshot",
-          "feedback_correct": "Correct. Record-date snapshots drive eligibility.",
-          "feedback_wrong": "Record date is the eligibility snapshot, separate from later payment or meeting timing."
+          "feedback_correct": "Correct. Record date is the eligibility snapshot.",
+          "feedback_wrong": "Record date is separate from later payment timing."
         },
         {
-          "id": "ca_q3_dilution",
-          "prompt": "Which pair should make you think about dilution first?",
+          "id": "ca_q3_stock_split",
+          "prompt": "What does a normal stock split immediately change?",
           "options": [
             {
-              "id": "rights_private",
-              "label": "Rights issue and private placement",
+              "id": "count_price",
+              "label": "Share count and reference price.",
               "correct": true
             },
             {
-              "id": "buyback_split",
-              "label": "Stock buyback and stock split",
+              "id": "profit",
+              "label": "The company profit for the year.",
               "correct": false
-            },
-            {
-              "id": "earnings_rups",
-              "label": "Earnings call and Annual RUPS",
-              "correct": false
-            }
-          ],
-          "correct_answer_id": "rights_private",
-          "feedback_correct": "Correct. Both create new shares for financing.",
-          "feedback_wrong": "Look for new-share issuance when you are checking dilution risk."
-        },
-        {
-          "id": "ca_q4_control",
-          "prompt": "Which action can rewrite the listed company's identity while keeping the ticker alive?",
-          "options": [
-            {
-              "id": "backdoor_listing",
-              "label": "Backdoor listing",
-              "correct": true
             },
             {
               "id": "cash_dividend",
-              "label": "Cash dividend",
-              "correct": false
-            },
-            {
-              "id": "earnings_call",
-              "label": "Earnings call",
+              "label": "Cash dividend eligibility.",
               "correct": false
             }
           ],
-          "correct_answer_id": "backdoor_listing",
-          "feedback_correct": "Right. Backdoor listings model control change, asset injection, and identity rewrite.",
-          "feedback_wrong": "Review the control and turnaround lesson. Identity rewrite belongs to backdoor listings."
+          "correct_answer_id": "count_price",
+          "feedback_correct": "Correct. A split changes the denomination of ownership.",
+          "feedback_wrong": "A split does not create business value by itself."
         },
         {
-          "id": "ca_q5_tender",
-          "prompt": "What is the player's main decision in an eligible tender-offer meeting?",
+          "id": "ca_q4_rights_issue",
+          "prompt": "Which rights issue detail should make you check dilution first?",
           "options": [
             {
-              "id": "tender_hold_observe",
-              "label": "Tender shares, hold shares, or observe",
+              "id": "new_shares",
+              "label": "The company is issuing new shares.",
               "correct": true
             },
             {
-              "id": "set_company_name",
-              "label": "Set the company's new name",
+              "id": "old_meeting",
+              "label": "The company held an annual meeting last year.",
               "correct": false
             },
             {
-              "id": "create_dividend",
-              "label": "Create a dividend timetable",
+              "id": "sector_name",
+              "label": "The company belongs to a popular sector.",
               "correct": false
             }
           ],
-          "correct_answer_id": "tender_hold_observe",
-          "feedback_correct": "Correct. Tender offers are shareholder elections around an offer.",
-          "feedback_wrong": "Tender offers ask holders whether to sell into the offer, hold, or observe."
+          "correct_answer_id": "new_shares",
+          "feedback_correct": "Correct. New shares increase the denominator unless holders maintain their stake.",
+          "feedback_wrong": "Look for new-share issuance and whether eligible holders can maintain ownership."
+        },
+        {
+          "id": "ca_q5_use_of_proceeds",
+          "prompt": "Which use of proceeds is usually healthier?",
+          "options": [
+            {
+              "id": "clear_growth",
+              "label": "A clear expansion project with measurable business logic.",
+              "correct": true
+            },
+            {
+              "id": "vague_general",
+              "label": "Vague general purposes with no details.",
+              "correct": false
+            },
+            {
+              "id": "repeat_hole",
+              "label": "Repeatedly covering old operating losses.",
+              "correct": false
+            }
+          ],
+          "correct_answer_id": "clear_growth",
+          "feedback_correct": "Correct. Clear, strategic use of funds is easier to underwrite.",
+          "feedback_wrong": "Vague or repeated rescue funding is a corporate-action red flag."
+        },
+        {
+          "id": "ca_q6_buyback",
+          "prompt": "What is the main balance-sheet tradeoff in a buyback?",
+          "options": [
+            {
+              "id": "cash_for_shares",
+              "label": "Company cash is used to reduce or absorb shares.",
+              "correct": true
+            },
+            {
+              "id": "free_cash",
+              "label": "The company receives free cash from shareholders.",
+              "correct": false
+            },
+            {
+              "id": "automatic_merger",
+              "label": "The company must merge with another issuer.",
+              "correct": false
+            }
+          ],
+          "correct_answer_id": "cash_for_shares",
+          "feedback_correct": "Correct. Buybacks can improve per-share metrics but spend cash.",
+          "feedback_wrong": "A buyback uses company cash; it is not a financing raise."
+        },
+        {
+          "id": "ca_q7_private_placement",
+          "prompt": "What makes private placement different from a rights issue?",
+          "options": [
+            {
+              "id": "selected_investors",
+              "label": "It is sold to selected investors instead of all eligible holders.",
+              "correct": true
+            },
+            {
+              "id": "always_no_dilution",
+              "label": "It can never dilute existing holders.",
+              "correct": false
+            },
+            {
+              "id": "always_dividend",
+              "label": "It always pays a dividend first.",
+              "correct": false
+            }
+          ],
+          "correct_answer_id": "selected_investors",
+          "feedback_correct": "Correct. Private placement is targeted and can be fast, but minority dilution still matters.",
+          "feedback_wrong": "Private placement is selective issuance, not a broad holder entitlement."
+        },
+        {
+          "id": "ca_q8_mna",
+          "prompt": "Which M&A read is strongest?",
+          "options": [
+            {
+              "id": "fit_price_funding",
+              "label": "Strategic fit, fair price, sensible funding, and manageable integration risk.",
+              "correct": true
+            },
+            {
+              "id": "big_only",
+              "label": "The combined company is simply bigger.",
+              "correct": false
+            },
+            {
+              "id": "rumor_only",
+              "label": "The deal has the loudest rumor thread.",
+              "correct": false
+            }
+          ],
+          "correct_answer_id": "fit_price_funding",
+          "feedback_correct": "Correct. M&A needs economics, not just scale.",
+          "feedback_wrong": "Bigger and louder do not guarantee value creation."
+        },
+        {
+          "id": "ca_q9_controller_participation",
+          "prompt": "Why does controller participation matter in a capital raise?",
+          "options": [
+            {
+              "id": "signal_commitment",
+              "label": "It can signal commitment and confidence in the terms.",
+              "correct": true
+            },
+            {
+              "id": "erase_dilution",
+              "label": "It automatically erases all dilution for everyone.",
+              "correct": false
+            },
+            {
+              "id": "force_price",
+              "label": "It forces the market price to rise.",
+              "correct": false
+            }
+          ],
+          "correct_answer_id": "signal_commitment",
+          "feedback_correct": "Correct. Controllers participating on the same terms can be a useful signal.",
+          "feedback_wrong": "Participation is a signal, not a magic protection against bad terms."
+        },
+        {
+          "id": "ca_q10_framework",
+          "prompt": "What should you do after a noisy corporate-action popup?",
+          "options": [
+            {
+              "id": "framework",
+              "label": "Check purpose, terms, dilution or cash movement, controller signal, and time horizon.",
+              "correct": true
+            },
+            {
+              "id": "instant_all_in",
+              "label": "Go all in because event popups always mean upside.",
+              "correct": false
+            },
+            {
+              "id": "ignore_terms",
+              "label": "Ignore the terms and trade only the funniest Twooter post.",
+              "correct": false
+            }
+          ],
+          "correct_answer_id": "framework",
+          "feedback_correct": "Correct. The framework keeps market noise from driving the whole decision.",
+          "feedback_wrong": "Use the framework. Noise can matter, but terms decide the durable read."
         }
       ]
     },
@@ -3575,25 +4296,42 @@
               "type": "text",
               "heading": "What is technical analysis?",
               "body": "Technical analysis evaluates securities by analyzing statistical data generated by market activity, primarily price and volume. Unlike fundamental analysis (which reads financial statements), TA focuses on chart patterns and price behavior to anticipate future price direction.",
-              "infoboxes": []
+              "infoboxes": [
+                {
+                  "title": "Markets discount everything ",
+                  "body": "All known information is already priced in."
+                },
+                {
+                  "title": "Price moves in trends",
+                  "body": "Trends persist until a reversal signal appears.\n"
+                },
+                {
+                  "title": "History repeats",
+                  "body": "Market psychology is consistent, patterns recur.\n"
+                }
+              ],
+              "images": []
             },
             {
               "type": "text",
               "heading": "TA vs Fundamental: how they work together",
               "body": "Fundamental analysis helps you judge business quality and valuation. Technical analysis helps you plan timing, invalidation, and review. Combine both for execution discipline, and do not use TA alone without understanding what the business does.",
-              "infoboxes": []
+              "infoboxes": [],
+              "images": []
             },
             {
               "type": "text",
               "heading": "IDX context",
               "body": "IDX (Bursa Efek Indonesia) has over 900 listed companies and a rapidly growing retail investor base. Short-term price moves are heavily sentiment-driven, making TA especially relevant. The most significant price moves tend to occur in the first and last 30 minutes of each trading session. IDX trading hours: pre-opening 08:45–09:00 WIB, session I 09:00–12:00, session II 13:30–16:00.",
-              "infoboxes": []
+              "infoboxes": [],
+              "images": []
             },
             {
               "type": "text",
               "heading": "Common Mistake",
               "body": "Do not add indicators before reading price action. Indicators can confirm a view, but they should not replace structure.",
-              "infoboxes": []
+              "infoboxes": [],
+              "images": []
             },
             {
               "type": "key_insights",
@@ -3608,7 +4346,7 @@
           "id": "market_structure",
           "order": 2,
           "label": "02 Market Structure",
-          "title": "Market Structure",
+          "title": "02 Market Structure",
           "kind": "lesson",
           "completion_signal": "You can identify whether a chart is trending, ranging, broken, or worth deeper analysis.",
           "pages": [
@@ -3689,22 +4427,26 @@
             {
               "type": "text",
               "heading": "Concept",
-              "body": "Structure is the market's skeleton. Bullish structure often makes higher highs and higher lows. Bearish structure often makes lower highs and lower lows. Sideways structure moves inside a range."
+              "body": "Structure is the market's skeleton. Bullish structure often makes higher highs and higher lows. Bearish structure often makes lower highs and lower lows. Sideways structure moves inside a range.",
+              "infoboxes": []
             },
             {
               "type": "text",
               "heading": "Chart Cue",
-              "body": "Mark support and resistance as areas, not exact magic lines. Look for bases, trendline breaks, accumulation, distribution, and whether the bigger timeframe agrees."
+              "body": "Mark support and resistance as areas, not exact magic lines. Look for bases, trendline breaks, accumulation, distribution, and whether the bigger timeframe agrees.",
+              "infoboxes": []
             },
             {
               "type": "text",
               "heading": "How To Read It",
-              "body": "Begin from the bigger timeframe. If daily structure is healthy, a lower timeframe can help with precision. If daily structure is broken, a lower timeframe bounce may still be only noise."
+              "body": "Begin from the bigger timeframe. If daily structure is healthy, a lower timeframe can help with precision. If daily structure is broken, a lower timeframe bounce may still be only noise.",
+              "infoboxes": []
             },
             {
               "type": "text",
               "heading": "Common Mistake",
-              "body": "Avoid calling every dip a support and every green candle a breakout. Structure needs location, follow-through, and volume context."
+              "body": "Avoid calling every dip a support and every green candle a breakout. Structure needs location, follow-through, and volume context.",
+              "infoboxes": []
             }
           ]
         },
@@ -3712,13 +4454,13 @@
           "id": "candlesticks",
           "order": 3,
           "label": "03 Candlesticks",
-          "title": "Candlesticks",
+          "title": "03 Candlesticks",
           "kind": "lesson",
           "completion_signal": "You can read OHLC, body, wick, timeframe context, and confirmation before acting on candles.",
           "pages": [
             {
-              "heading": "Concept",
-              "body": "A candle compresses open, high, low, and close into one visual. The body shows the open-close fight. The wick shows rejected prices."
+              "heading": "Anatomy",
+              "body": "Each candle records four prices per period: Open, High, Low, Close (OHLC). The body spans Open to Close, and it shows who won the session. Wicks show how far each side pushed before losing. Longer wicks = stronger rejection of those price levels."
             },
             {
               "heading": "Chart Cue",
@@ -3810,23 +4552,27 @@
           "content_blocks": [
             {
               "type": "text",
-              "heading": "Concept",
-              "body": "A candle compresses open, high, low, and close into one visual. The body shows the open-close fight. The wick shows rejected prices."
+              "heading": "Anatomy",
+              "body": "Each candle records four prices per period: Open, High, Low, Close (OHLC). The body spans Open to Close, and it shows who won the session. Wicks show how far each side pushed before losing. Longer wicks = stronger rejection of those price levels.",
+              "infoboxes": []
             },
             {
               "type": "text",
               "heading": "Chart Cue",
-              "body": "Single-candle patterns include doji variants, shooting star, hammer, inverted hammer, marubozu, and spinning top. Multi-candle patterns include engulfing, harami, morning star, evening star, three white soldiers, and three black crows."
+              "body": "Single-candle patterns include doji variants, shooting star, hammer, inverted hammer, marubozu, and spinning top. Multi-candle patterns include engulfing, harami, morning star, evening star, three white soldiers, and three black crows.",
+              "infoboxes": []
             },
             {
               "type": "text",
               "heading": "How To Read It",
-              "body": "A candle pattern matters more at a key area than in the middle of nowhere. Confirmation can come from the next candle, structure, volume, or a broader setup."
+              "body": "A candle pattern matters more at a key area than in the middle of nowhere. Confirmation can come from the next candle, structure, volume, or a broader setup.",
+              "infoboxes": []
             },
             {
               "type": "text",
               "heading": "Common Mistake",
-              "body": "Do not buy every hammer or sell every doji. A candle is a clue, not a full trade plan."
+              "body": "Do not buy every hammer or sell every doji. A candle is a clue, not a full trade plan.",
+              "infoboxes": []
             }
           ]
         },
@@ -4890,7 +5636,7 @@
     },
     {
       "term": "RUPSLB",
-      "definition": "An extraordinary shareholder meeting for a specific agenda such as financing, buybacks, control deals, restructuring, or leadership changes."
+      "definition": "Rapat Umum Pemegang Saham Luar Biasa: an extraordinary shareholder meeting for a specific corporate-action agenda."
     },
     {
       "term": "Segment",
@@ -4925,7 +5671,7 @@
     },
     {
       "term": "Stock Split",
-      "definition": "A share-structure action that changes share count and reference price without creating business value by itself."
+      "definition": "A share-structure action that increases share count and lowers reference price proportionally without creating business value by itself."
     },
     {
       "term": "Strategic M&A",
@@ -4997,6 +5743,66 @@
     {
       "term": "WMA",
       "definition": "Weighted moving average, a moving average that gives chosen periods more influence."
+    },
+    {
+      "term": "Corporate Action",
+      "definition": "A company decision that changes shareholder rights, cash distribution, share count, ownership, control, or market perception."
+    },
+    {
+      "term": "Reverse Stock Split",
+      "definition": "A share-structure action that combines shares, reduces share count, and raises reference price proportionally."
+    },
+    {
+      "term": "HMETD",
+      "definition": "Hak Memesan Efek Terlebih Dahulu: the Indonesian term for a pre-emptive right to buy new securities before outside investors."
+    },
+    {
+      "term": "Dilution",
+      "definition": "A reduction in ownership percentage or per-share claim caused by an increase in shares outstanding."
+    },
+    {
+      "term": "Exercise Price",
+      "definition": "The fixed price an eligible holder must pay to use a right, warrant, or similar entitlement."
+    },
+    {
+      "term": "Buyback",
+      "definition": "A company repurchase of its own shares, usually using cash from the balance sheet."
+    },
+    {
+      "term": "Treasury Shares",
+      "definition": "Shares repurchased by the company and held by the company instead of circulating freely in the market."
+    },
+    {
+      "term": "Strategic Investor",
+      "definition": "An investor expected to bring business value beyond capital, such as distribution, technology, industry access, or credibility."
+    },
+    {
+      "term": "Merger",
+      "definition": "A transaction where companies combine into a larger structure or new entity."
+    },
+    {
+      "term": "Acquisition",
+      "definition": "A transaction where one company gains control of another company or asset."
+    },
+    {
+      "term": "Synergy",
+      "definition": "The expected value created when combined businesses operate better together than separately."
+    },
+    {
+      "term": "Controller Participation",
+      "definition": "Whether the controlling shareholder or affiliated insiders take part in a capital raise, often read as a confidence signal."
+    },
+    {
+      "term": "Use of Proceeds",
+      "definition": "The stated plan for how a company will spend money raised from a corporate action."
+    },
+    {
+      "term": "Red Flag",
+      "definition": "A warning sign that an action may protect weak fundamentals, dilute holders unfairly, or hide poor capital discipline."
+    },
+    {
+      "term": "RUPS",
+      "definition": "Rapat Umum Pemegang Saham: the annual shareholder meeting where routine governance and shareholder agenda items are handled."
     }
   ]
 }

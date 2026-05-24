@@ -164,6 +164,7 @@ const COLOR_MARKET_PAPER_MUTED := Color(0.352941, 0.309804, 0.203922, 1)
 const COLOR_MARKET_PAPER_RED := Color(0.545098, 0.101961, 0.101961, 1)
 const NEWS_ARTICLE_CARD_LIMIT := 8
 const NEWS_ARTICLE_INITIAL_CARD_LIMIT := 3
+const SHOW_NEWS_IMAGE_PLACEHOLDERS := false
 const MARKET_PAPER_GRUNGE_TEXTURES := {
 	"coffee": "res://assets/market_papers/grunge/coffee_stain.png",
 	"fold_horizontal": "res://assets/market_papers/grunge/fold_horizontal.png",
@@ -181,6 +182,7 @@ const COLOR_ACADEMY_RAIL := Color(0.917647, 0.878431, 0.721569, 1)
 const COLOR_ACADEMY_BROWN := Color(0.509804, 0.231373, 0.0941176, 1)
 const COLOR_ACADEMY_BORDER := Color(0.52549, 0.396078, 0.160784, 1)
 const COLOR_ACADEMY_GREEN := Color(0.811765, 0.886275, 0.529412, 1)
+const SHOW_ACADEMY_IMAGE_PLACEHOLDERS := false
 const COLOR_NAV_FILL := Color(0.126, 0.188, 0.251, 1)
 const COLOR_NAV_ACTIVE_FILL := Color(0.219608, 0.439216, 0.65098, 1)
 const COLOR_NAV_ACTIVE_BORDER := Color(0.690196, 0.87451, 1, 1)
@@ -456,8 +458,8 @@ var trade_workspace_statement_cache_key: String = ""
 var selected_network_contact_id: String = ""
 var selected_network_journal_id: String = ""
 var selected_network_journal_filter: String = "all"
-var selected_academy_category_id: String = "technical"
-var selected_academy_section_id: String = "intro"
+var selected_academy_category_id: String = "mindset"
+var selected_academy_section_id: String = "survival_mindset"
 var academy_quiz_option_buttons: Dictionary = {}
 var expanded_social_thread_ids: Dictionary = {}
 var selected_social_account_id: String = ""
@@ -1648,7 +1650,7 @@ func _build_key_stats_metric_card(parent_node: Node) -> void:
 		var button := Button.new()
 		button.name = str(metric.get("name", ""))
 		button.text = str(metric.get("label", ""))
-		button.custom_minimum_size = Vector2(72, 30)
+		button.custom_minimum_size = Vector2(72, 32)
 		button.pressed.connect(_on_key_stats_metric_button_pressed.bind(str(metric.get("id", ""))))
 		button_row.add_child(button)
 		key_stats_metric_buttons[str(metric.get("id", ""))] = button
@@ -1721,10 +1723,7 @@ func _refresh_key_stats_metric_button_styles() -> void:
 		var button: Button = key_stats_metric_buttons.get(metric_id, null) as Button
 		if button == null:
 			continue
-		if metric_id == selected_key_stats_metric:
-			_style_stockbot_button(button, COLOR_STOCKBOT_BLUE_TINT, COLOR_STOCKBOT_BLUE_EDGE, COLOR_STOCKBOT_TEXT, 0, true)
-		else:
-			_style_stockbot_button(button, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_MUTED, 0)
+		UiTheme.style_tab_button(button, "terminal_tab", metric_id == selected_key_stats_metric, {"radius": 0})
 
 
 func _refresh_key_stats_dashboard(snapshot: Dictionary) -> void:
@@ -5544,6 +5543,7 @@ func _ensure_academy_ui() -> void:
 	academy_lesson_banner_frame.name = "AcademyLessonBannerFrame"
 	academy_lesson_banner_frame.custom_minimum_size = Vector2(0, 150)
 	academy_lesson_banner_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	academy_lesson_banner_frame.visible = SHOW_ACADEMY_IMAGE_PLACEHOLDERS
 	lesson_scroll_vbox.add_child(academy_lesson_banner_frame)
 	_style_academy_banner_frame(academy_lesson_banner_frame)
 	var banner_center := CenterContainer.new()
@@ -10248,6 +10248,11 @@ func _news_image_slot_label(image_slot: String) -> String:
 func _set_news_detail_hero_slot(image_slot: String) -> void:
 	if news_detail_hero_frame == null:
 		return
+	news_detail_hero_frame.visible = SHOW_NEWS_IMAGE_PLACEHOLDERS
+	if news_detail_photo_caption_label != null:
+		news_detail_photo_caption_label.visible = SHOW_NEWS_IMAGE_PLACEHOLDERS
+	if not SHOW_NEWS_IMAGE_PLACEHOLDERS:
+		return
 	var placeholder: Label = news_detail_hero_frame.get_node_or_null("NewsDetailHeroPlaceholder") as Label
 	if placeholder != null:
 		placeholder.text = _news_image_slot_label(image_slot)
@@ -10421,6 +10426,7 @@ func _build_news_article_card(article: Dictionary) -> PanelContainer:
 	image_frame.name = "NewsArticleCardImageFrame"
 	image_frame.custom_minimum_size = Vector2(112, 82)
 	image_frame.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	image_frame.visible = SHOW_NEWS_IMAGE_PLACEHOLDERS
 	_style_news_asset_frame(image_frame)
 	top_row.add_child(image_frame)
 	var image_label := Label.new()
@@ -20178,6 +20184,7 @@ func _ensure_news_newspaper_ui() -> void:
 		news_detail_hero_frame.name = "NewsDetailHeroFrame"
 		news_detail_hero_frame.custom_minimum_size = Vector2(0, 138)
 		news_detail_hero_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		news_detail_hero_frame.visible = SHOW_NEWS_IMAGE_PLACEHOLDERS
 		detail_vbox.add_child(news_detail_hero_frame)
 		var hero_label := Label.new()
 		hero_label.name = "NewsDetailHeroPlaceholder"
@@ -20188,6 +20195,7 @@ func _ensure_news_newspaper_ui() -> void:
 	if news_detail_photo_caption_label == null:
 		news_detail_photo_caption_label = Label.new()
 		news_detail_photo_caption_label.name = "NewsDetailPhotoCaptionLabel"
+		news_detail_photo_caption_label.visible = SHOW_NEWS_IMAGE_PLACEHOLDERS
 		news_detail_photo_caption_label.text = "Photo: Bursa archive · trading floor activity."
 		news_detail_photo_caption_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		detail_vbox.add_child(news_detail_photo_caption_label)

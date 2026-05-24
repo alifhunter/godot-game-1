@@ -3007,8 +3007,8 @@ func _default_academy_progress() -> Dictionary:
 		"quiz_passed": {},
 		"badges": [],
 		"completed_modules": [],
-		"last_category_id": "technical",
-		"last_section_id": "intro"
+		"last_category_id": "mindset",
+		"last_section_id": "survival_mindset"
 	}
 
 
@@ -3035,8 +3035,8 @@ func _normalize_academy_progress(source_progress: Variant) -> Dictionary:
 		normalized["quiz_passed"] = quiz_passed.duplicate(true)
 	normalized["badges"] = _normalize_unique_string_array(source.get("badges", []))
 	normalized["completed_modules"] = _normalize_unique_string_array(source.get("completed_modules", []))
-	normalized["last_category_id"] = str(source.get("last_category_id", "technical"))
-	normalized["last_section_id"] = str(source.get("last_section_id", "intro"))
+	normalized["last_category_id"] = str(source.get("last_category_id", "mindset"))
+	normalized["last_section_id"] = str(source.get("last_section_id", "survival_mindset"))
 	return normalized
 
 

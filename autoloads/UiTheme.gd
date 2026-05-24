@@ -406,20 +406,23 @@ func style_tab_button(button: Button, variant: String, selected: bool, options: 
 		"desktop_tab":
 			style_button(button, "desktop_nav", forwarded_options)
 		"terminal_tab":
-			if selected:
-				style_button(
-					button,
-					"custom",
-					{
-						"fill": color("terminal.nav_active_fill"),
-						"border": color("terminal.nav_active_border"),
-						"font": color("terminal.text"),
-						"radius": int(options.get("radius", 4)),
-						"border_width": 2
-					}
-				)
-			else:
-				style_button(button, "terminal_button", {"radius": int(options.get("radius", 4))})
+			var tab_fill := color("terminal.nav_active_fill") if selected else color("terminal.nav_fill")
+			var tab_border := color("terminal.nav_active_border") if selected else color("terminal.border")
+			var tab_font := color("terminal.text") if selected else color("terminal.muted")
+			style_button(
+				button,
+				"custom",
+				{
+					"fill": tab_fill,
+					"border": tab_border,
+					"font": tab_font,
+					"hover": tab_fill.lightened(0.08),
+					"pressed": tab_fill.darkened(0.08),
+					"radius": int(options.get("radius", 4)),
+					"border_width": 1,
+					"margins": options.get("margins", {"left": 12, "right": 12, "top": 6, "bottom": 6})
+				}
+			)
 		"filter_chip":
 			var fill_color := color("desktop.gold") if selected else color("desktop.cream")
 			var border_color := color("desktop.brown") if selected else color("desktop.frame")
@@ -575,21 +578,31 @@ func style_tab_container(tab_container: TabContainer, variant: String = "termina
 	var tab_normal: StyleBoxFlat
 	var tab_selected: StyleBoxFlat
 	var tab_hover: StyleBoxFlat
+	var tab_disabled: StyleBoxFlat
+	var tab_focus: StyleBoxFlat
+	var tab_margins := {"left": 12, "right": 12, "top": 6, "bottom": 6}
 	if variant == "desktop":
 		panel_style = make_stylebox(color("state.transparent"), color("state.transparent"), 0, 0)
-		tab_normal = make_stylebox(color("desktop.cream"), color("desktop.frame"), 1, corner_radius, {"left": 12, "right": 12, "top": 6, "bottom": 6})
-		tab_selected = make_stylebox(color("desktop.card_fill"), color("desktop.brown"), 2, corner_radius, {"left": 12, "right": 12, "top": 6, "bottom": 6})
+		tab_normal = make_stylebox(color("desktop.cream"), color("desktop.frame"), 1, corner_radius, tab_margins)
+		tab_selected = make_stylebox(color("desktop.card_fill"), color("desktop.brown"), 1, corner_radius, tab_margins)
 		tab_hover = tab_normal.duplicate()
 		tab_hover.bg_color = color("desktop.shortcut_hover")
+		tab_disabled = tab_normal.duplicate()
+		tab_disabled.bg_color = color("state.disabled_fill")
+		tab_focus = tab_selected.duplicate()
 		tab_container.add_theme_color_override("font_selected_color", color("desktop.text"))
 		tab_container.add_theme_color_override("font_unselected_color", color("desktop.muted"))
 		tab_container.add_theme_color_override("font_hovered_color", color("desktop.text"))
 	else:
 		panel_style = make_stylebox(Color(0.0588235, 0.0823529, 0.109804, 0.35), color("state.transparent"), 0, 0)
-		tab_normal = make_stylebox(Color(0.0823529, 0.117647, 0.156863, 0.9), color("terminal.border"), 1, corner_radius, {"left": 12, "right": 12, "top": 6, "bottom": 6})
-		tab_selected = make_stylebox(Color(0.184314, 0.247059, 0.309804, 0.98), color("terminal.accent"), 2, corner_radius, {"left": 12, "right": 12, "top": 6, "bottom": 6})
+		tab_normal = make_stylebox(color("terminal.nav_fill"), color("terminal.border"), 1, corner_radius, tab_margins)
+		tab_selected = make_stylebox(color("terminal.nav_active_fill"), color("terminal.nav_active_border"), 1, corner_radius, tab_margins)
 		tab_hover = tab_normal.duplicate()
-		tab_hover.bg_color = Color(0.117647, 0.168627, 0.223529, 1)
+		tab_hover.bg_color = color("terminal.nav_fill").lightened(0.08)
+		tab_disabled = tab_normal.duplicate()
+		tab_disabled.bg_color = Color(0.137255, 0.176471, 0.211765, 1)
+		tab_disabled.border_color = Color(color("terminal.border").r, color("terminal.border").g, color("terminal.border").b, 0.42)
+		tab_focus = tab_selected.duplicate()
 		tab_container.add_theme_color_override("font_selected_color", color("terminal.text"))
 		tab_container.add_theme_color_override("font_unselected_color", color("terminal.muted"))
 		tab_container.add_theme_color_override("font_hovered_color", color("terminal.text"))
@@ -597,6 +610,10 @@ func style_tab_container(tab_container: TabContainer, variant: String = "termina
 	tab_container.add_theme_stylebox_override("tab_unselected", tab_normal)
 	tab_container.add_theme_stylebox_override("tab_selected", tab_selected)
 	tab_container.add_theme_stylebox_override("tab_hovered", tab_hover)
+	tab_container.add_theme_stylebox_override("tab_disabled", tab_disabled)
+	tab_container.add_theme_stylebox_override("tab_focus", tab_focus)
+	tab_container.add_theme_constant_override("side_margin", 0)
+	tab_container.add_theme_constant_override("icon_separation", 6)
 	tab_container.add_theme_font_override("font", font("semibold"))
 	tab_container.add_theme_font_size_override("font_size", font_size("button"))
 

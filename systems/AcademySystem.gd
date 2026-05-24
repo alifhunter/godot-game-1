@@ -1,7 +1,7 @@
 extends RefCounted
 
-const DEFAULT_CATEGORY_ID := "technical"
-const DEFAULT_SECTION_ID := "intro"
+const DEFAULT_CATEGORY_ID := "mindset"
+const DEFAULT_SECTION_ID := "survival_mindset"
 const QUIZ_SECTION_ID := "quiz"
 const GLOSSARY_SECTION_ID := "glossary"
 

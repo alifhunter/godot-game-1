@@ -4934,6 +4934,7 @@ func _run_scenario(
 	var news_detail_byline_label: Label = game_root.find_child("NewsDetailBylineLabel", true, false) as Label
 	var news_detail_chips_label: Label = game_root.find_child("NewsDetailChipsLabel", true, false) as Label
 	var news_detail_hero_frame: PanelContainer = game_root.find_child("NewsDetailHeroFrame", true, false) as PanelContainer
+	var news_detail_photo_caption_label: Label = game_root.find_child("NewsDetailPhotoCaptionLabel", true, false) as Label
 	var social_window: Control = game_root.find_child("SocialWindow", true, false) as Control
 	var social_feed_cards: VBoxContainer = game_root.find_child("SocialFeedCards", true, false) as VBoxContainer
 	var network_window: Control = game_root.find_child("NetworkWindow", true, false) as Control
@@ -8379,6 +8380,28 @@ func _run_scenario(
 			]
 		}
 
+	var academy_mindset_tab_button: Button = game_root.find_child("AcademyCategoryButton_mindset", true, false) as Button
+	var academy_technical_tab_button: Button = game_root.find_child("AcademyCategoryButton_technical", true, false) as Button
+	if (
+		academy_mindset_tab_button == null or
+		not academy_mindset_tab_button.button_pressed or
+		(academy_technical_tab_button != null and academy_technical_tab_button.button_pressed)
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Academy to open on the Mindset category by default."
+		}
+
+	if academy_banner_frame == null or academy_banner_frame.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the temporary Academy lesson image banner placeholder to stay hidden."
+		}
+
 	var academy_text_block: PanelContainer = game_root._build_academy_content_block({
 		"type": "text",
 		"heading": "Smoke Content Block",
@@ -8839,14 +8862,14 @@ func _run_scenario(
 	var corporate_academy_snapshot: Dictionary = GameManager.get_academy_snapshot("corporate_action", "")
 	if (
 		bool(corporate_academy_snapshot.get("coming_soon", true)) or
-		corporate_academy_snapshot.get("sections", []).size() != 6 or
-		int(corporate_academy_snapshot.get("quiz", {}).get("question_count", 0)) != 5
+		corporate_academy_snapshot.get("sections", []).size() != 10 or
+		int(corporate_academy_snapshot.get("quiz", {}).get("question_count", 0)) != 10
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected Corporate Action Academy to be playable with four lessons, quiz, glossary, and five quiz questions."
+			"message": "Smoke test expected Corporate Action Academy to be playable with eight lessons, quiz, glossary, and ten quiz questions."
 		}
 
 	var locked_corporate_quiz_result: Dictionary = GameManager.submit_academy_quiz("corporate_action", {})
@@ -8865,12 +8888,12 @@ func _run_scenario(
 			continue
 		for required_id_value in category.get("quiz_required_section_ids", []):
 			corporate_required_section_ids.append(str(required_id_value))
-	if corporate_required_section_ids.size() != 4:
+	if corporate_required_section_ids.size() != 8:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected Corporate Action Academy to require four lesson sections before quiz unlock."
+			"message": "Smoke test expected Corporate Action Academy to require eight lesson sections before quiz unlock."
 		}
 	for required_section_id in corporate_required_section_ids:
 		var read_corporate_result: Dictionary = GameManager.mark_academy_section_read("corporate_action", str(required_section_id))
@@ -8905,7 +8928,7 @@ func _run_scenario(
 			"message": "Smoke test expected passing the Corporate Action quiz to grant the Corporate Action Basics badge."
 		}
 
-	for corporate_glossary_query in ["rupslb", "rights issue", "tender offer"]:
+	for corporate_glossary_query in ["rupslb", "rights issue", "hmetd", "reverse stock split", "use of proceeds"]:
 		if GameManager.search_academy_glossary(str(corporate_glossary_query)).is_empty():
 			game_root.queue_free()
 			await get_tree().process_frame
@@ -9216,6 +9239,7 @@ func _run_scenario(
 		news_detail_byline_label == null or
 		news_detail_chips_label == null or
 		news_detail_hero_frame == null or
+		news_detail_photo_caption_label == null or
 		news_outlet_buttons.get_child_count() < 4 or
 		news_article_list.item_count <= 0 or
 		news_article_cards.get_child_count() <= 0
@@ -9224,7 +9248,7 @@ func _run_scenario(
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the News icon to open the brown-framed newspaper-style News app with outlet buttons, story cards, byline, and image frame."
+			"message": "Smoke test expected the News icon to open the brown-framed newspaper-style News app with outlet buttons, story cards, and byline metadata."
 		}
 
 	var news_article_summary: Dictionary = news_article_list.get_item_metadata(0)
@@ -9251,20 +9275,21 @@ func _run_scenario(
 		}
 
 	var card_headline_label: Label = game_root.find_child("NewsArticleCardHeadlineLabel", true, false) as Label
-	var card_image_label: Label = game_root.find_child("NewsArticleCardImagePlaceholder", true, false) as Label
+	var card_image_frame: PanelContainer = game_root.find_child("NewsArticleCardImageFrame", true, false) as PanelContainer
 	var card_headline_color: Color = card_headline_label.get_theme_color("font_color") if card_headline_label != null else Color.WHITE
-	var card_image_color: Color = card_image_label.get_theme_color("font_color") if card_image_label != null else Color.WHITE
 	if (
 		card_headline_label == null or
-		card_image_label == null or
-		((card_headline_color.r + card_headline_color.g + card_headline_color.b) / 3.0) > 0.72 or
-		((card_image_color.r + card_image_color.g + card_image_color.b) / 3.0) > 0.72
+		card_image_frame == null or
+		card_image_frame.visible or
+		news_detail_hero_frame.visible or
+		news_detail_photo_caption_label.visible or
+		((card_headline_color.r + card_headline_color.g + card_headline_color.b) / 3.0) > 0.72
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected newspaper card text and image placeholders to use readable dark colors."
+			"message": "Smoke test expected newspaper card text to stay readable while temporary News image placeholders remain hidden."
 		}
 
 	var forbidden_news_terms: Array = ["source_chain_id", "chain_family", "meeting_id", "venue_type", "progress_label", "tone", "current_timeline_state", "management stance", "hidden_positioning", "formal_agenda_or_filing", "meeting_or_call", "vague public hint", "source reliability", "current read", "unclear location", "intel level", "source trail", "source article", "source story", "separate property angle", "market story", "original headline", "working read", "development lead", "roadmap_id", "funding_gate", "funding readiness", "company_roadmap", "participant_role", "milestone_state", "raw statement", "system metadata", "stage of a", "price-bias read"]
@@ -15052,6 +15077,22 @@ func _validate_design_system_assets() -> String:
 	var terminal_unselected_style: StyleBoxFlat = terminal_tab_unselected.get_theme_stylebox("normal") as StyleBoxFlat
 	if terminal_selected_style == null or terminal_unselected_style == null or _color_close(terminal_selected_style.bg_color, terminal_unselected_style.bg_color):
 		return "Smoke test expected terminal_tab selected and unselected styles to be visually distinct."
+	if terminal_selected_style.border_width_left != terminal_unselected_style.border_width_left:
+		return "Smoke test expected terminal_tab selected and unselected buttons to keep matching border widths."
+
+	var terminal_tab_container := TabContainer.new()
+	UiTheme.style_tab_container(terminal_tab_container, "terminal", 0)
+	var terminal_container_selected: StyleBoxFlat = terminal_tab_container.get_theme_stylebox("tab_selected") as StyleBoxFlat
+	var terminal_container_unselected: StyleBoxFlat = terminal_tab_container.get_theme_stylebox("tab_unselected") as StyleBoxFlat
+	if terminal_container_selected == null or terminal_container_unselected == null:
+		return "Smoke test expected terminal TabContainer styles to include selected and unselected styleboxes."
+	if (
+		terminal_container_selected.border_width_left != terminal_selected_style.border_width_left or
+		terminal_container_unselected.border_width_left != terminal_unselected_style.border_width_left or
+		not _color_close(terminal_container_selected.bg_color, terminal_selected_style.bg_color) or
+		not _color_close(terminal_container_unselected.bg_color, terminal_unselected_style.bg_color)
+	):
+		return "Smoke test expected terminal button tabs and TabContainer tabs to share the same selected/unselected treatment."
 
 	var desktop_window := PanelContainer.new()
 	UiTheme.style_panel(desktop_window, "desktop_window")
