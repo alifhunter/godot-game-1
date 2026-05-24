@@ -66,10 +66,10 @@ func build_person_event_candidates(
 		var deal_sentiment: float = float(sector_sentiments.get(deal_sector_id, 0.0))
 		var deal_sector_name: String = _sector_name(deal_sector_id)
 		var deal_weight: float = (
-			0.18 +
-			max(gdp_growth - 4.7, 0.0) * 0.05 +
-			max(risk_appetite - 0.48, 0.0) * 0.54 +
-			max(deal_sentiment, 0.0) * 3.4
+			0.25 +
+			max(gdp_growth - 4.6, 0.0) * 0.06 +
+			max(risk_appetite - 0.45, 0.0) * 0.72 +
+			max(deal_sentiment, 0.0) * 3.9
 		)
 		candidates.append(_build_sector_candidate(
 			"trump_deal_optimism",
@@ -198,10 +198,10 @@ func build_debug_person_event(
 			var deal_sentiment: float = float(sector_sentiments.get(deal_sector_id, 0.0))
 			var deal_sector_name: String = _sector_name(deal_sector_id)
 			var deal_weight: float = (
-				0.18 +
-				max(gdp_growth - 4.7, 0.0) * 0.05 +
-				max(risk_appetite - 0.48, 0.0) * 0.54 +
-				max(deal_sentiment, 0.0) * 3.4
+				0.25 +
+				max(gdp_growth - 4.6, 0.0) * 0.06 +
+				max(risk_appetite - 0.45, 0.0) * 0.72 +
+				max(deal_sentiment, 0.0) * 3.9
 			)
 			var deal_candidate: Dictionary = _build_sector_candidate(
 				event_id,

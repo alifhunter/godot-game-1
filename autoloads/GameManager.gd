@@ -6446,6 +6446,7 @@ func debug_generate_event(event_id: String) -> Dictionary:
 		return {"success": false, "message": "No debug generator is defined for that event family."}
 
 	_invalidate_daily_activity_snapshot_cache()
+	_invalidate_news_snapshot_cache()
 	_request_autosave("debug_generate_event")
 	return {
 		"success": true,

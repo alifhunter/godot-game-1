@@ -59,11 +59,11 @@ func build_social_snapshot(
 			_append_unique_post(posts, seen_ids, fallback_post)
 
 	posts.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		if float(a.get("priority", 0.0)) == float(b.get("priority", 0.0)):
-			if int(a.get("day_index", -1)) == int(b.get("day_index", -1)):
+		if int(a.get("day_index", -1)) == int(b.get("day_index", -1)):
+			if float(a.get("priority", 0.0)) == float(b.get("priority", 0.0)):
 				return str(a.get("account_handle", "")) < str(b.get("account_handle", ""))
-			return int(a.get("day_index", -1)) > int(b.get("day_index", -1))
-		return float(a.get("priority", 0.0)) > float(b.get("priority", 0.0))
+			return float(a.get("priority", 0.0)) > float(b.get("priority", 0.0))
+		return int(a.get("day_index", -1)) > int(b.get("day_index", -1))
 	)
 	var post_limit: int = int(feed_data.get("post_limit", 18))
 	if posts.size() > post_limit:
@@ -159,6 +159,18 @@ func _build_active_special_posts(
 		var duration_days: int = max(int(event_data.get("duration_days", 1)), 1)
 		var elapsed_days: int = max(current_day_index - start_day_index + 1, 1)
 		var progress_ratio: float = clamp(float(elapsed_days) / float(duration_days), 0.0, 1.0)
+		if _is_policy_parody_source(event_data):
+			for post_value in _build_policy_parody_account_posts(
+				feed_data,
+				unlocked_accounts,
+				event_data,
+				current_trade_date,
+				story_memory,
+				progress_ratio,
+				start_day_index
+			):
+				posts.append(post_value)
+			continue
 		var minimum_tier: int = _required_tier_for_progress(progress_ratio)
 		var account: Dictionary = _pick_generic_account(unlocked_accounts, minimum_tier, "special|%s|%s" % [str(event_data.get("event_id", "")), start_day_index])
 		if account.is_empty():
@@ -185,6 +197,55 @@ func _build_active_special_posts(
 			3.2 + (1.0 - progress_ratio)
 		))
 
+	return posts
+
+
+func _build_policy_parody_account_posts(
+	feed_data: Dictionary,
+	unlocked_accounts: Array,
+	event_data: Dictionary,
+	current_trade_date: Dictionary,
+	story_memory: Dictionary,
+	progress_ratio: float,
+	start_day_index: int
+) -> Array:
+	var posts: Array = []
+	var sorted_accounts: Array = unlocked_accounts.duplicate(true)
+	sorted_accounts.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a.get("tier", 1)) == int(b.get("tier", 1)):
+			return str(a.get("id", "")) < str(b.get("id", ""))
+		return int(a.get("tier", 1)) < int(b.get("tier", 1))
+	)
+	var context: Dictionary = _build_context(feed_data, event_data, {}, current_trade_date, story_memory)
+	var text_key: String = _policy_parody_template_key(event_data)
+	var account_index: int = 0
+	for account_value in sorted_accounts:
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var account: Dictionary = account_value
+		var account_id: String = str(account.get("id", ""))
+		if account_id.is_empty():
+			continue
+		var seed_key: String = "policy|%s|%s|%s" % [str(event_data.get("event_id", "")), start_day_index, account_id]
+		var post_text: String = _pick_voice_text(
+			feed_data,
+			str(account.get("voice", "")),
+			text_key,
+			seed_key,
+			context
+		)
+		posts.append(_build_post(
+			feed_data,
+			account,
+			"active_special|%s|%s|%s" % [str(event_data.get("event_id", "")), start_day_index, account_id],
+			post_text,
+			event_data,
+			current_trade_date,
+			context,
+			_progress_label_for_ratio(progress_ratio),
+			4.7 + (1.0 - progress_ratio) - (float(account_index) * 0.01)
+		))
+		account_index += 1
 	return posts
 
 
@@ -780,8 +841,14 @@ func _template_lookup_keys(source_data: Dictionary, context: Dictionary) -> Arra
 	var tone: String = str(source_data.get("tone", context.get("tone", "mixed")))
 	var scope: String = str(source_data.get("scope", "company"))
 	var keys: Array = []
+	var event_id: String = str(source_data.get("event_id", ""))
+	if event_id.begins_with("policy_"):
+		keys.append(event_id)
 	if not category.is_empty():
 		keys.append(category)
+	if _is_policy_parody_source(source_data):
+		keys.append("policy_parody")
+		return keys
 	if category.begins_with("index_") or str(source_data.get("event_family", "")) == "index_review":
 		keys.append("index_review")
 	if category.begins_with("corporate_action"):
@@ -811,6 +878,8 @@ func _category_family_key(source_data: Dictionary) -> String:
 		return "corporate_meeting"
 	if category.begins_with("roadmap_"):
 		return "company_roadmap"
+	if _is_policy_parody_source(source_data):
+		return "policy_parody"
 	if category in ["earnings", "management", "market_wrap"]:
 		return category
 	if category.contains("commodity"):
@@ -834,6 +903,8 @@ func _public_topic_label(source_data: Dictionary) -> String:
 		return "Earnings"
 	if category == "management":
 		return "Management"
+	if _is_policy_parody_source(source_data):
+		return _policy_parody_topic_label(category)
 	if category.contains("commodity"):
 		return "Commodity"
 	if str(source_data.get("scope", "")) == "market" or category == "market_wrap":
@@ -859,6 +930,8 @@ func _public_confidence_label(source_data: Dictionary) -> String:
 		return "Company response"
 	if category.begins_with("roadmap_"):
 		return "Public signals"
+	if _is_policy_parody_source(source_data):
+		return "Policy shock"
 	if category == "market_wrap":
 		return "Closing tape"
 	return "Public chatter"
@@ -948,6 +1021,9 @@ func _pick_generic_account(unlocked_accounts: Array, minimum_tier: int, seed_key
 func _preferred_voice_for_seed(seed_key: String) -> String:
 	if seed_key == "market_wrap" or seed_key.begins_with("fallback"):
 		return "market_diary"
+	if seed_key.contains("policy_parody") or seed_key.contains("policy_"):
+		var policy_voices: Array = ["macro_watch", "market_diary", "retail_hype", "rumor_feed"]
+		return str(policy_voices[int(abs(hash("%s|voice" % seed_key))) % policy_voices.size()])
 	if seed_key.contains("index_review") or seed_key.contains("index_"):
 		return "funda_thread"
 	if seed_key.contains("market_mood") or seed_key.contains("watching_tomorrow"):
@@ -964,6 +1040,8 @@ func _preferred_voice_for_seed(seed_key: String) -> String:
 func _voice_key_for_event(event_data: Dictionary) -> String:
 	var event_family: String = str(event_data.get("event_family", ""))
 	var category: String = str(event_data.get("category", ""))
+	if _is_policy_parody_source(event_data):
+		return _policy_parody_template_key(event_data)
 	if event_family == "index_review" and not category.is_empty():
 		return category
 	if event_family == "corporate_action" and not category.is_empty():
@@ -980,6 +1058,8 @@ func _voice_key_for_event(event_data: Dictionary) -> String:
 func _scope_voice_key(event_data: Dictionary) -> String:
 	var event_family: String = str(event_data.get("event_family", ""))
 	var category: String = str(event_data.get("category", ""))
+	if _is_policy_parody_source(event_data):
+		return _policy_parody_template_key(event_data)
 	if event_family == "index_review" and not category.is_empty():
 		return category
 	if event_family == "corporate_action" and not category.is_empty():
@@ -995,7 +1075,13 @@ func _scope_voice_key(event_data: Dictionary) -> String:
 
 func _pick_voice_text(feed_data: Dictionary, voice_id: String, text_key: String, seed_key: String, context: Dictionary) -> String:
 	var voice_templates: Dictionary = feed_data.get("voice_templates", {})
+	var fallback_templates: Dictionary = feed_data.get("fallback_templates", {})
 	var voice_pool: Array = voice_templates.get(voice_id, {}).get(text_key, [])
+	var is_policy_key: bool = text_key.begins_with("policy_")
+	if voice_pool.is_empty() and is_policy_key:
+		voice_pool = fallback_templates.get(text_key, [])
+	if voice_pool.is_empty() and is_policy_key:
+		voice_pool = voice_templates.get(voice_id, {}).get("policy_parody", [])
 	var is_index_key: bool = text_key.begins_with("index_") or text_key == "index_review"
 	if voice_pool.is_empty() and is_index_key:
 		voice_pool = voice_templates.get(voice_id, {}).get("index_review", [])
@@ -1016,9 +1102,9 @@ func _pick_voice_text(feed_data: Dictionary, voice_id: String, text_key: String,
 			if voice_pool.is_empty():
 				voice_pool = voice_templates.get(voice_id, {}).get("company_positive", [])
 	if voice_pool.is_empty():
-		var fallback_templates: Dictionary = feed_data.get("fallback_templates", {})
 		var fallback_keys: Array = [
 			text_key,
+			"policy_parody" if is_policy_key else "",
 			_category_family_key({"category": str(context.get("category", text_key)), "scope": str(context.get("scope", ""))}),
 			"company_%s" % str(context.get("tone", "mixed")),
 			"company",
@@ -1032,6 +1118,41 @@ func _pick_voice_text(feed_data: Dictionary, voice_id: String, text_key: String,
 		if voice_pool.is_empty():
 			return ""
 	return _render_template(_pick_from_pool(voice_pool, seed_key), context)
+
+
+func _is_policy_parody_source(source_data: Dictionary) -> bool:
+	return (
+		str(source_data.get("shock_class", "")) == "policy_parody" or
+		str(source_data.get("category", "")).begins_with("policy_") or
+		str(source_data.get("event_id", "")).begins_with("policy_") or
+		str(source_data.get("id", "")).begins_with("active_special|policy_")
+	)
+
+
+func _policy_parody_template_key(source_data: Dictionary) -> String:
+	var event_id: String = str(source_data.get("event_id", ""))
+	if event_id.begins_with("policy_"):
+		return event_id
+	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("policy_"):
+		return category
+	return "policy_parody"
+
+
+func _policy_parody_topic_label(category: String) -> String:
+	match category:
+		"policy_fiscal_shock":
+			return "Fiscal shock"
+		"policy_commodity_gate":
+			return "Commodity rule"
+		"policy_fx_comment":
+			return "FX comment"
+		"policy_market_speech":
+			return "Policy shock"
+		"policy_free_meal":
+			return "Policy shock"
+		_:
+			return "Policy shock"
 
 
 func _pick_from_pool(pool: Array, seed_key: String) -> String:

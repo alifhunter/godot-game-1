@@ -221,6 +221,231 @@
       "description": "A fresh Melon Tusk controversy post turns a crowded story stock shaky again."
     },
     {
+      "id": "policy_free_lunch_budget_balloon",
+      "scope": "market",
+      "event_family": "special",
+      "category": "policy_free_meal",
+      "shock_class": "policy_parody",
+      "allows_overlap": true,
+      "tone": "mixed",
+      "duration_days": 3,
+      "duration_days_min": 2,
+      "duration_days_max": 4,
+      "once_per_run": true,
+      "min_year": 2020,
+      "sentiment_shift": -0.002,
+      "market_bias_shift": -0.003,
+      "volatility_multiplier": 1.08,
+      "broker_bias": "retail",
+      "shock_profile": {
+        "apply_bias_sign": "negative",
+        "limit_side": "lower",
+        "limit_ratio": 0.18,
+        "shock_days": 1
+      },
+      "sector_biases": {
+        "consumer": 0.008,
+        "noncyclical": 0.007,
+        "finance": -0.006,
+        "infra": -0.004
+      },
+      "headline_template": "Administration nutrition bill gives the board indigestion",
+      "headline_detail_template": "A free nutrition meal push arrives with a bigger budget number, and traders reprice consumer winners against fiscal nerves.",
+      "description": "A fictional policy shock about a larger free nutrition meal budget creates a fast market argument over stimulus and fiscal discipline.",
+      "contextual_effects": {
+        "supportive": {
+          "sentiment_shift": 0.001,
+          "market_bias_shift": 0.001,
+          "volatility_multiplier": 1.05,
+          "shock_profile": {
+            "apply_bias_sign": "negative",
+            "limit_side": "lower",
+            "limit_ratio": 0.12,
+            "shock_days": 1
+          },
+          "sector_biases": {
+            "consumer": 0.01,
+            "noncyclical": 0.008,
+            "finance": -0.002,
+            "infra": -0.001
+          }
+        },
+        "balanced": {
+          "sentiment_shift": -0.002,
+          "market_bias_shift": -0.003,
+          "volatility_multiplier": 1.08,
+          "shock_profile": {
+            "apply_bias_sign": "negative",
+            "limit_side": "lower",
+            "limit_ratio": 0.18,
+            "shock_days": 1
+          },
+          "sector_biases": {
+            "consumer": 0.008,
+            "noncyclical": 0.007,
+            "finance": -0.006,
+            "infra": -0.004
+          }
+        },
+        "fragile": {
+          "sentiment_shift": -0.007,
+          "market_bias_shift": -0.011,
+          "volatility_multiplier": 1.18,
+          "shock_profile": {
+            "apply_bias_sign": "negative",
+            "limit_side": "lower",
+            "limit_ratio": 0.28,
+            "shock_days": 1
+          },
+          "sector_biases": {
+            "consumer": 0.004,
+            "noncyclical": 0.003,
+            "finance": -0.013,
+            "infra": -0.01,
+            "property": -0.006
+          }
+        }
+      },
+      "summary": "An administration-backed meal program gets a bigger budget number, turning consumer names lively while fiscal-sensitive sectors wobble."
+    },
+    {
+      "id": "policy_fiscal_guardian_swap",
+      "scope": "market",
+      "event_family": "special",
+      "category": "policy_fiscal_shock",
+      "shock_class": "policy_parody",
+      "allows_overlap": true,
+      "tone": "negative",
+      "duration_days": 4,
+      "duration_days_min": 3,
+      "duration_days_max": 5,
+      "once_per_run": true,
+      "min_year": 2020,
+      "sentiment_shift": -0.004,
+      "market_bias_shift": -0.006,
+      "volatility_multiplier": 1.12,
+      "broker_bias": "foreign",
+      "shock_profile": {
+        "apply_bias_sign": "negative",
+        "limit_side": "lower",
+        "limit_ratio": 0.25,
+        "shock_days": 1
+      },
+      "sector_biases": {
+        "finance": -0.011,
+        "property": -0.007,
+        "infra": -0.006,
+        "consumer": 0.003
+      },
+      "headline_template": "Budget desk changes driver mid-route",
+      "headline_detail_template": "A respected fiscal guardian exits and a louder budget chief promises speed, leaving finance names jumpy.",
+      "description": "A fictional fiscal-team reshuffle raises questions about budget discipline and pushes risk-sensitive sectors around.",
+      "summary": "A cabinet-level budget reshuffle turns the market cautious as traders debate speed, discipline, and bond-market patience."
+    },
+    {
+      "id": "policy_market_speech_jolt",
+      "scope": "market",
+      "event_family": "special",
+      "category": "policy_market_speech",
+      "shock_class": "policy_parody",
+      "allows_overlap": true,
+      "tone": "negative",
+      "duration_days": 2,
+      "duration_days_min": 2,
+      "duration_days_max": 3,
+      "once_per_run": true,
+      "min_year": 2020,
+      "sentiment_shift": -0.003,
+      "market_bias_shift": -0.004,
+      "volatility_multiplier": 1.1,
+      "broker_bias": "retail",
+      "shock_profile": {
+        "apply_bias_sign": "negative",
+        "limit_side": "lower",
+        "limit_ratio": 0.2,
+        "shock_days": 1
+      },
+      "sector_biases": {
+        "tech": -0.01,
+        "property": -0.006,
+        "finance": -0.004,
+        "noncyclical": 0.002
+      },
+      "headline_template": "Administration market speech sends traders into group chat",
+      "headline_detail_template": "A senior official compares frantic stock chasing to casino tables, and speculative names wobble first.",
+      "description": "A fictional market speech jolts sentiment after a senior official takes aim at speculative trading behavior.",
+      "summary": "A public speech frames speculative stock chasing as too casino-like, making retail favorites and high-beta names shake."
+    },
+    {
+      "id": "policy_village_fx_comment",
+      "scope": "market",
+      "event_family": "special",
+      "category": "policy_fx_comment",
+      "shock_class": "policy_parody",
+      "allows_overlap": true,
+      "tone": "mixed",
+      "duration_days": 2,
+      "duration_days_min": 2,
+      "duration_days_max": 4,
+      "once_per_run": true,
+      "min_year": 2020,
+      "sentiment_shift": -0.002,
+      "market_bias_shift": -0.003,
+      "volatility_multiplier": 1.09,
+      "broker_bias": "foreign",
+      "shock_profile": {
+        "apply_bias_sign": "negative",
+        "limit_side": "lower",
+        "limit_ratio": 0.18,
+        "shock_days": 1
+      },
+      "sector_biases": {
+        "finance": -0.005,
+        "transport": -0.007,
+        "consumer": -0.005,
+        "energy": 0.006,
+        "basicindustry": 0.004
+      },
+      "headline_template": "Currency comment turns into market homework",
+      "headline_detail_template": "A cabinet-room line downplays foreign-currency worries, and traders immediately sort exporters from importers.",
+      "description": "A fictional FX-comment shock makes rupiah-sensitive sectors wobble while exporters get a small narrative cushion.",
+      "summary": "A sudden official FX comment turns social-media jokes into market filters for importers, exporters, and banks."
+    },
+    {
+      "id": "policy_commodity_export_gate",
+      "scope": "market",
+      "event_family": "special",
+      "category": "policy_commodity_gate",
+      "shock_class": "policy_parody",
+      "allows_overlap": true,
+      "tone": "mixed",
+      "duration_days": 3,
+      "duration_days_min": 2,
+      "duration_days_max": 5,
+      "once_per_run": true,
+      "min_year": 2020,
+      "sentiment_shift": 0.0,
+      "market_bias_shift": -0.002,
+      "volatility_multiplier": 1.11,
+      "broker_bias": "institution",
+      "shock_profile": {
+        "apply_bias_sign": "all",
+        "limit_side": "upper",
+        "limit_ratio": 0.16,
+        "shock_days": 1
+      },
+      "sector_biases": {
+        "energy": 0.008,
+        "basicindustry": 0.006,
+        "transport": -0.006,
+        "consumer": -0.003
+      },
+      "headline_template": "One-gate export rule turns commodities into a queue",
+      "headline_detail_template": "A centralized export rule makes producers lively while processors and logistics names argue about bottlenecks.",
+      "description": "A fictional commodity export rule creates winners, losers, and plenty of confusion around shipment timing.",
+      "summary": "A one-gate commodity export rule gives producers a simple story while downstream and logistics names price bottleneck risk."
+    },
+    {
       "id": "covid_wave",
       "scope": "market",
       "event_family": "special",

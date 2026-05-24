@@ -307,15 +307,78 @@ func _build_company_candidates(
 		"%s misses %s earnings expectations and resets confidence." % [company_name, quarter_label]
 	))
 
+	var coverage_weight: float = (
+		0.16 +
+		max((quality - 50.0) / 115.0, 0.0) +
+		max((growth - 50.0) / 130.0, 0.0) * 0.38 +
+		max(margin - 6.0, 0.0) * 0.010 +
+		max(risk_appetite - 0.44, 0.0) * 0.26 +
+		max(-recent_sentiment, 0.0) * 0.60
+	)
+	if "institution_quality" in narrative_tags:
+		coverage_weight += 0.12
+	if "foreign_watchlist" in narrative_tags:
+		coverage_weight += 0.10
+	candidates.append(_build_candidate(
+		"favorable_coverage",
+		coverage_weight,
+		definition,
+		trade_date,
+		"%s gets constructive coverage" % ticker,
+		"%s draws a constructive desk note that puts fundamentals back on the screen." % company_name
+	))
+
+	var positive_rumor_weight: float = (
+		0.11 +
+		story_heat * 0.34 +
+		max(growth - 55.0, 0.0) / 140.0 +
+		max(risk_appetite - 0.48, 0.0) * 0.30 +
+		max(-recent_sentiment, 0.0) * 0.85
+	)
+	if "narrative_hot" in narrative_tags:
+		positive_rumor_weight += 0.14
+	if "retail_favorite" in narrative_tags:
+		positive_rumor_weight += 0.10
+	candidates.append(_build_candidate(
+		"rumor_wave_positive",
+		positive_rumor_weight,
+		definition,
+		trade_date,
+		"%s rumor wave lights up retail screens" % ticker,
+		"%s becomes the latest fast-money rumor target as chatty accounts chase the story." % company_name
+	))
+
+	var negative_rumor_weight: float = (
+		0.10 +
+		story_heat * 0.24 +
+		max((risk - 52.0) / 120.0, 0.0) +
+		max(0.52 - execution_consistency, 0.0) * 0.34 +
+		max(0.48 - risk_appetite, 0.0) * 0.34 +
+		max(recent_sentiment, 0.0) * 0.95
+	)
+	if "narrative_hot" in narrative_tags:
+		negative_rumor_weight += 0.10
+	if "retail_favorite" in narrative_tags:
+		negative_rumor_weight += 0.08
+	candidates.append(_build_candidate(
+		"rumor_wave_negative",
+		negative_rumor_weight,
+		definition,
+		trade_date,
+		"%s hit by shaky rumor flow" % ticker,
+		"%s trades heavy as a messy rumor wave makes fast money de-risk first." % company_name
+	))
+
 	if MNA_SECTORS.has(sector_id):
 		var acquisition_weight: float = (
-			0.14 +
-			max(balance_sheet_strength - 0.55, 0.0) * 0.52 +
-			max(scale - 0.50, 0.0) * 0.36 +
-			max(risk_appetite - 0.50, 0.0) * 0.38
+			0.20 +
+			max(balance_sheet_strength - 0.52, 0.0) * 0.62 +
+			max(scale - 0.46, 0.0) * 0.44 +
+			max(risk_appetite - 0.46, 0.0) * 0.46 +
+			story_heat * 0.08
 		)
 		if "capex_cycle" in narrative_tags or "foreign_watchlist" in narrative_tags:
-			acquisition_weight += 0.10
+			acquisition_weight += 0.14
 		candidates.append(_build_candidate(
 			"strategic_acquisition",
 			acquisition_weight,
@@ -326,11 +389,12 @@ func _build_company_candidates(
 		))
 
 		var integration_weight: float = (
-			0.08 +
-			max((risk - quality) / 100.0, 0.0) +
-			max(debt_to_equity - 0.85, 0.0) * 0.18 +
-			max(0.50 - risk_appetite, 0.0) * 0.24 +
-			max(0.52 - execution_consistency, 0.0) * 0.24
+			0.16 +
+			max((risk - quality) / 95.0, 0.0) +
+			max(debt_to_equity - 0.78, 0.0) * 0.24 +
+			max(0.52 - risk_appetite, 0.0) * 0.32 +
+			max(0.56 - execution_consistency, 0.0) * 0.34 +
+			story_heat * 0.05
 		)
 		candidates.append(_build_candidate(
 			"integration_overhang",
@@ -361,10 +425,10 @@ func _build_company_candidates(
 
 	if RECALL_SECTORS.has(sector_id):
 		var recall_weight: float = (
-			0.07 +
-			max((risk - 54.0) / 92.0, 0.0) +
-			max(0.56 - execution_consistency, 0.0) * 0.74 +
-			max(recent_sentiment, 0.0) * 0.20
+			0.11 +
+			max((risk - 52.0) / 88.0, 0.0) +
+			max(0.58 - execution_consistency, 0.0) * 0.84 +
+			max(recent_sentiment, 0.0) * 0.26
 		)
 		candidates.append(_build_candidate(
 			"product_recall",
@@ -376,13 +440,13 @@ func _build_company_candidates(
 		))
 
 	var upgrade_weight: float = (
-		0.09 +
-		max((quality - 56.0) / 115.0, 0.0) +
-		max(0.62 - execution_consistency, 0.0) * 0.28 +
-		max(0.44 - balance_sheet_strength, 0.0) * 0.12
+		0.13 +
+		max((quality - 52.0) / 110.0, 0.0) +
+		max(0.64 - execution_consistency, 0.0) * 0.34 +
+		max(0.46 - balance_sheet_strength, 0.0) * 0.14
 	)
 	if "institution_quality" in narrative_tags:
-		upgrade_weight += 0.08
+		upgrade_weight += 0.10
 	candidates.append(_build_candidate(
 		"management_upgrade",
 		upgrade_weight,
@@ -393,14 +457,14 @@ func _build_company_candidates(
 	))
 
 	var exit_weight: float = (
-		0.06 +
-		max((risk - 56.0) / 102.0, 0.0) +
-		max(0.50 - execution_consistency, 0.0) * 0.36 +
-		max(recent_sentiment, 0.0) * 0.26 +
+		0.11 +
+		max((risk - 52.0) / 96.0, 0.0) +
+		max(0.54 - execution_consistency, 0.0) * 0.42 +
+		max(recent_sentiment, 0.0) * 0.34 +
 		max(policy_action_bps, 0) / 100.0 * 0.06
 	)
 	if "narrative_hot" in narrative_tags or "retail_favorite" in narrative_tags:
-		exit_weight += 0.08
+		exit_weight += 0.10
 	candidates.append(_build_candidate(
 		"management_exit",
 		exit_weight,
@@ -608,7 +672,7 @@ func _pick_debug_company_candidate(
 func _candidate_is_available(candidate: Dictionary, history: Array, active_arcs: Array, day_number: int) -> bool:
 	var company_id: String = str(candidate.get("target_company_id", ""))
 	var event_id: String = str(candidate.get("event_id", ""))
-	var cooldown_days: int = 70 if event_id in ["strategic_acquisition", "integration_overhang"] else 28
+	var cooldown_days: int = 48 if event_id in ["strategic_acquisition", "integration_overhang"] else 28
 
 	for active_arc_value in active_arcs:
 		var active_arc: Dictionary = active_arc_value

@@ -15,11 +15,10 @@ run/main_scene="res://scenes/main_menu/MainMenu.tscn"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="Buy High Sell Low Stock Trading Simulator"
 config/features=PackedStringArray("4.6", "GL Compatibility")
-config/icon="res://assets/icons/icon.ico"
 boot_splash/bg_color=Color(0.909804, 0.909804, 0.803922, 1)
+boot_splash/stretch_mode=0
 boot_splash/image="res://assets/logo/logobhsl.png"
-boot_splash/fullsize=false
-boot_splash/use_filter=true
+config/icon="res://assets/icons/icon.ico"
 
 [autoload]
 
@@ -41,7 +40,7 @@ file_logging/enable_file_logging=true
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
-window/size/mode=3
+window/size/mode=2
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 

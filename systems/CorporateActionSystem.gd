@@ -1674,7 +1674,9 @@ func _maybe_spawn_chain(
 	var candidates: Array = _build_spawn_candidates(run_state, catalog, macro_state, chains)
 	if candidates.is_empty():
 		return {}
-	var picked: Dictionary = candidates[0]
+	var picked: Dictionary = _pick_spawn_candidate(run_state.run_seed, day_number, candidates)
+	if picked.is_empty():
+		return {}
 	var company_id: String = str(picked.get("company_id", ""))
 	var family_id: String = str(picked.get("family", ""))
 	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, family_id, day_number)
@@ -1754,7 +1756,8 @@ func _build_spawn_candidates(run_state, catalog: Dictionary, macro_state: Dictio
 			if _family_conflicts(chains, company_id, family_id, family):
 				continue
 			var score: float = _score_family_for_company(run_state, definition, runtime, macro_state, family)
-			if score < 0.45:
+			var minimum_score: float = 0.43 if family_id == "private_placement" else 0.45
+			if score < minimum_score:
 				continue
 			candidates.append({
 				"company_id": company_id,
@@ -1767,6 +1770,30 @@ func _build_spawn_candidates(run_state, catalog: Dictionary, macro_state: Dictio
 	if candidates.size() > 8:
 		candidates = candidates.slice(0, 8)
 	return candidates
+
+
+func _pick_spawn_candidate(run_seed: int, day_number: int, candidates: Array) -> Dictionary:
+	if candidates.is_empty():
+		return {}
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "corporate_action_spawn_pick", day_number])
+	var total_weight: float = 0.0
+	for candidate_value in candidates:
+		if typeof(candidate_value) != TYPE_DICTIONARY:
+			continue
+		var candidate: Dictionary = candidate_value
+		total_weight += pow(max(float(candidate.get("score", 0.0)) - 0.30, 0.03), 1.35)
+	if total_weight <= 0.0:
+		return candidates[0].duplicate(true)
+	var roll: float = rng.randf_range(0.0, total_weight)
+	var cumulative_weight: float = 0.0
+	for candidate_value in candidates:
+		if typeof(candidate_value) != TYPE_DICTIONARY:
+			continue
+		var candidate: Dictionary = candidate_value
+		cumulative_weight += pow(max(float(candidate.get("score", 0.0)) - 0.30, 0.03), 1.35)
+		if roll <= cumulative_weight:
+			return candidate.duplicate(true)
+	return candidates[candidates.size() - 1].duplicate(true)
 
 
 func _score_family_for_company(_run_state, definition: Dictionary, runtime: Dictionary, macro_state: Dictionary, family: Dictionary) -> float:

@@ -13,10 +13,9 @@ const DIFFICULTY_PLAN_CARD_HEIGHT := 230.0
 const LOAD_SLOTS_DIALOG_WIDTH := 760.0
 const LOAD_SLOTS_LIST_HEIGHT := 160.0
 const LOAD_SLOT_DELETE_DIALOG_SIZE := Vector2i(540, 230)
+const DISCLAIMER_SPLASH_ENABLED := true
 const DISCLAIMER_SPLASH_TEXT := "The Game is a fictional stock-trading simulation. It is designed for\nentertainment and learning. It is not financial, investment, tax, legal, or\nprofessional advice.\n\nCompanies, tickers, events, prices, news, social posts, financial statements,\nand market outcomes in the Game are fictional or procedurally generated unless\nexplicitly stated otherwise. Do not make real financial decisions based on the\nGame."
-const DISCLAIMER_TYPE_DURATION := 3.2
-const DISCLAIMER_HOLD_DURATION := 2.0
-const DISCLAIMER_FADE_DURATION := 0.35
+const DISCLAIMER_STATIC_HOLD_DURATION := 4.5
 const COLOR_DESKTOP_BG := Color(0.909804, 0.909804, 0.803922, 1)
 const COLOR_DESKTOP_PANEL := Color(0.945098, 0.909804, 0.803922, 1)
 const COLOR_DESKTOP_CREAM := Color(1.0, 0.976471, 0.929412, 1)
@@ -33,6 +32,8 @@ const APP_FONT_CANDIDATE_PATHS := [
 	"res://assets/fonts/app_font.otf",
 	"res://assets/fonts/OpenSans-Regular.ttf"
 ]
+
+static var disclaimer_splash_shown_this_boot := false
 
 var cached_app_font: Font = null
 var has_checked_app_font: bool = false
@@ -113,7 +114,11 @@ func _ready() -> void:
 	_apply_desktop_startup_style()
 	_update_difficulty_selector_size()
 	_update_disclaimer_splash_size()
-	_start_disclaimer_splash()
+	_maybe_start_disclaimer_splash()
+
+
+func _exit_tree() -> void:
+	_set_fishbowl_disclaimer_splash_active(false)
 
 
 func _refresh_load_state() -> void:
@@ -783,41 +788,36 @@ func _on_run_loading_finished() -> void:
 	loading_progress_bar.value = 100.0
 
 
+func _maybe_start_disclaimer_splash() -> void:
+	if not DISCLAIMER_SPLASH_ENABLED:
+		_discard_disclaimer_splash()
+		return
+	if disclaimer_splash_shown_this_boot:
+		_discard_disclaimer_splash()
+		return
+	disclaimer_splash_shown_this_boot = true
+	_start_disclaimer_splash()
+
+
 func _start_disclaimer_splash() -> void:
 	if disclaimer_splash_overlay == null or disclaimer_splash_label == null:
 		return
+	_set_fishbowl_disclaimer_splash_active(true)
 	disclaimer_splash_overlay.visible = true
 	disclaimer_splash_overlay.modulate = Color.WHITE
 	disclaimer_splash_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	disclaimer_splash_label.text = DISCLAIMER_SPLASH_TEXT
-	disclaimer_splash_label.visible_characters = 0
-	_play_disclaimer_splash()
+	disclaimer_splash_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	disclaimer_splash_label.visible_characters = -1
+	_show_static_disclaimer_splash()
 
 
-func _play_disclaimer_splash() -> void:
+func _show_static_disclaimer_splash() -> void:
 	await get_tree().process_frame
 	if disclaimer_splash_overlay == null or disclaimer_splash_label == null:
 		return
 
-	var typing_tween := create_tween()
-	typing_tween.tween_property(
-		disclaimer_splash_label,
-		"visible_characters",
-		DISCLAIMER_SPLASH_TEXT.length(),
-		DISCLAIMER_TYPE_DURATION
-	)
-	await typing_tween.finished
-	if disclaimer_splash_overlay == null or disclaimer_splash_label == null:
-		return
-
-	disclaimer_splash_label.visible_characters = -1
-	await get_tree().create_timer(DISCLAIMER_HOLD_DURATION).timeout
-	if disclaimer_splash_overlay == null:
-		return
-
-	var fade_tween := create_tween()
-	fade_tween.tween_property(disclaimer_splash_overlay, "modulate:a", 0.0, DISCLAIMER_FADE_DURATION)
-	await fade_tween.finished
+	await get_tree().create_timer(DISCLAIMER_STATIC_HOLD_DURATION).timeout
 	if disclaimer_splash_overlay == null:
 		return
 
@@ -825,6 +825,16 @@ func _play_disclaimer_splash() -> void:
 	disclaimer_splash_overlay = null
 	disclaimer_splash_vbox = null
 	disclaimer_splash_label = null
+	_set_fishbowl_disclaimer_splash_active(false)
+
+
+func _discard_disclaimer_splash() -> void:
+	if disclaimer_splash_overlay != null:
+		disclaimer_splash_overlay.queue_free()
+	disclaimer_splash_overlay = null
+	disclaimer_splash_vbox = null
+	disclaimer_splash_label = null
+	_set_fishbowl_disclaimer_splash_active(false)
 
 
 func _update_disclaimer_splash_size() -> void:
@@ -834,6 +844,12 @@ func _update_disclaimer_splash_size() -> void:
 	var text_width: float = clamp(viewport_width - 192.0, 320.0, 1040.0)
 	disclaimer_splash_vbox.custom_minimum_size.x = text_width
 	disclaimer_splash_label.add_theme_font_size_override("font_size", 18 if text_width < 640.0 else 22)
+
+
+func _set_fishbowl_disclaimer_splash_active(active: bool) -> void:
+	var fishbowl_overlay: Node = get_node_or_null("/root/FishbowlOverlay")
+	if fishbowl_overlay != null and fishbowl_overlay.has_method("set_disclaimer_splash_active"):
+		fishbowl_overlay.call("set_disclaimer_splash_active", active)
 
 
 func _set_screen(screen_id: String) -> void:

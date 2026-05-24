@@ -15,6 +15,31 @@ const SPECIAL_EVENT_IDS := {
 	"geopolitical_turmoil": true,
 	"commodity_price_shock": true
 }
+const POLICY_PARODY_EVENT_IDS := {
+	"policy_free_lunch_budget_balloon": true,
+	"policy_fiscal_guardian_swap": true,
+	"policy_market_speech_jolt": true,
+	"policy_village_fx_comment": true,
+	"policy_commodity_export_gate": true
+}
+const POLICY_PARODY_FORBIDDEN_VISIBLE_TERMS := [
+	"prabowo",
+	"teddy",
+	"palace",
+	"sri mulyani",
+	"purbaya",
+	"jokowi",
+	"joko widodo",
+	"kidnap",
+	"kidnapped",
+	"kidnapping",
+	"stock is gambling",
+	"stocks are gambling",
+	"don't use dollar",
+	"dont use dollar",
+	"do not use dollar",
+	"do not use dollars"
+]
 const SMOKE_MODE_FULL := "full"
 const SMOKE_MODE_QUICK := "quick"
 const NORMAL_FULL_DAYS := 10
@@ -81,6 +106,12 @@ func _ready() -> void:
 	var enriched_social_validation: String = _validate_enriched_social_generation()
 	if not enriched_social_validation.is_empty():
 		push_error(enriched_social_validation)
+		get_tree().quit(1)
+		return
+
+	var policy_parody_validation: String = _validate_policy_parody_events()
+	if not policy_parody_validation.is_empty():
+		push_error(policy_parody_validation)
 		get_tree().quit(1)
 		return
 
@@ -178,14 +209,18 @@ func _ready() -> void:
 func _validate_fishbowl_overlay() -> String:
 	var overlay: CanvasLayer = get_node_or_null("/root/FishbowlOverlay") as CanvasLayer
 	if overlay == null:
-		return "Smoke test expected the global FishbowlOverlay autoload to exist."
+		return ""
 	var rect: ColorRect = overlay.get_node_or_null("FishbowlScreenOverlay") as ColorRect
 	if rect == null:
 		return "Smoke test expected FishbowlOverlay to create a fullscreen ColorRect."
 	if rect.mouse_filter != Control.MOUSE_FILTER_IGNORE:
 		return "Smoke test expected FishbowlOverlay to ignore mouse input."
+	if overlay.has_method("is_enabled") and not bool(overlay.call("is_enabled")):
+		if rect.visible:
+			return "Smoke test expected disabled FishbowlOverlay to stay hidden."
+		return ""
 	if not (rect.material is ShaderMaterial):
-		return "Smoke test expected FishbowlOverlay to use a ShaderMaterial."
+		return "Smoke test expected enabled FishbowlOverlay to use a ShaderMaterial."
 	return ""
 
 
@@ -478,6 +513,13 @@ func _validate_enriched_news_generation() -> String:
 	)
 	var level_one_feed: Dictionary = level_one_snapshot.get("feeds", {}).get("gorengan_daily", {})
 	var level_one_articles: Array = level_one_feed.get("articles", [])
+	var previous_article_day: int = 999999
+	for article_value in level_one_articles:
+		var article: Dictionary = article_value
+		var article_day: int = int(article.get("day_index", -1))
+		if article_day > previous_article_day:
+			return "Smoke test expected News feeds to sort latest articles before older articles."
+		previous_article_day = article_day
 	var has_current_day_article: bool = false
 	var has_current_day_non_market_wrap: bool = false
 	for article_value in level_one_articles:
@@ -633,6 +675,13 @@ func _validate_enriched_social_generation() -> String:
 		4
 	)
 	var posts: Array = first_snapshot.get("posts", [])
+	var previous_post_day: int = 999999
+	for post_value in posts:
+		var post: Dictionary = post_value
+		var post_day: int = int(post.get("day_index", -1))
+		if post_day > previous_post_day:
+			return "Smoke test expected Twooter timelines to sort latest posts before older posts."
+		previous_post_day = post_day
 	var has_thread_post: bool = false
 	var has_continuity_post: bool = false
 	var has_new_fictional_account_post: bool = false
@@ -787,6 +836,417 @@ func _validate_enriched_social_generation() -> String:
 			first_post.get("thread", []) != post.get("thread_lines", [])
 			):
 			return "Smoke test expected enriched Twooter copy to be deterministic for post %s." % post_id
+	return ""
+
+
+func _validate_policy_parody_events() -> String:
+	var policy_event_ids: Array = POLICY_PARODY_EVENT_IDS.keys()
+	policy_event_ids.sort()
+	if policy_event_ids.size() != 5:
+		return "Smoke test expected exactly five policy-parody events for v1."
+
+	var debug_catalog_seen: Dictionary = {}
+	for group_value in GameManager.get_debug_event_generator_catalog():
+		if typeof(group_value) != TYPE_DICTIONARY:
+			continue
+		var group: Dictionary = group_value
+		if str(group.get("id", "")) != "special":
+			continue
+		for event_value in group.get("events", []):
+			if typeof(event_value) == TYPE_DICTIONARY:
+				debug_catalog_seen[str(event_value.get("event_id", ""))] = true
+
+	var trade_date: Dictionary = {
+		"weekday": 3,
+		"day": 15,
+		"month": 1,
+		"year": 2020,
+		"day_index": 14
+	}
+	var macro_state: Dictionary = {
+		"risk_appetite": 0.48,
+		"inflation_yoy": 4.2
+	}
+	var special_system = SPECIAL_EVENT_SYSTEM_SCRIPT.new()
+	for event_id_value in policy_event_ids:
+		var event_id: String = str(event_id_value)
+		var event_definition: Dictionary = DataRepository.get_event_definition(event_id)
+		if event_definition.is_empty():
+			return "Smoke test expected policy-parody event %s to exist." % event_id
+		if str(event_definition.get("event_family", "")) != "special" or str(event_definition.get("scope", "")) != "market":
+			return "Smoke test expected policy-parody event %s to stay in the market special pipeline." % event_id
+		if str(event_definition.get("shock_class", "")) != "policy_parody" or not bool(event_definition.get("allows_overlap", false)):
+			return "Smoke test expected policy-parody event %s to declare the overlap-safe policy subtype." % event_id
+		if not bool(event_definition.get("once_per_run", false)):
+			return "Smoke test expected policy-parody event %s to be once-per-run for v1 balance." % event_id
+		if not debug_catalog_seen.has(event_id):
+			return "Smoke test expected policy-parody event %s to appear in the debug special-event catalog." % event_id
+
+		var definition_text: String = "%s\n%s\n%s\n%s" % [
+			str(event_definition.get("headline_template", "")),
+			str(event_definition.get("headline_detail_template", "")),
+			str(event_definition.get("summary", "")),
+			str(event_definition.get("description", ""))
+		]
+		var definition_guardrail_error: String = _policy_parody_visible_guardrail_violation(definition_text, event_id)
+		if not definition_guardrail_error.is_empty():
+			return definition_guardrail_error
+
+		var generated_event: Dictionary = special_system.build_debug_special_event(RunState, trade_date, 14, macro_state, event_id)
+		if generated_event.is_empty():
+			return "Smoke test expected policy-parody event %s to be debug-generatable." % event_id
+		if str(generated_event.get("shock_class", "")) != "policy_parody" or not bool(generated_event.get("allows_overlap", false)):
+			return "Smoke test expected generated policy-parody event %s to preserve subtype metadata." % event_id
+		var generated_text: String = "%s\n%s\n%s\n%s" % [
+			str(generated_event.get("headline", "")),
+			str(generated_event.get("headline_detail", "")),
+			str(generated_event.get("summary", "")),
+			str(generated_event.get("description", ""))
+		]
+		var generated_guardrail_error: String = _policy_parody_visible_guardrail_violation(generated_text, "%s generated event" % event_id)
+		if not generated_guardrail_error.is_empty():
+			return generated_guardrail_error
+
+	var coexistence_validation: String = _validate_policy_parody_coexistence(str(policy_event_ids[0]), trade_date, macro_state)
+	if not coexistence_validation.is_empty():
+		return coexistence_validation
+	var debug_surface_validation: String = _validate_policy_parody_debug_surface(str(policy_event_ids[0]), trade_date, macro_state)
+	if not debug_surface_validation.is_empty():
+		return debug_surface_validation
+	var attention_validation: String = _validate_policy_parody_attention_directives(str(policy_event_ids[0]), trade_date, macro_state)
+	if not attention_validation.is_empty():
+		return attention_validation
+	var contextual_effect_validation: String = _validate_policy_free_meal_contextual_effects(trade_date)
+	if not contextual_effect_validation.is_empty():
+		return contextual_effect_validation
+	for event_id_value in policy_event_ids:
+		var feed_validation: String = _validate_policy_parody_feed_generation(str(event_id_value), trade_date, macro_state)
+		if not feed_validation.is_empty():
+			return feed_validation
+	return ""
+
+
+func _validate_policy_parody_coexistence(_event_id: String, trade_date: Dictionary, macro_state: Dictionary) -> String:
+	var special_system = SPECIAL_EVENT_SYSTEM_SCRIPT.new()
+	var saved_active_special_events: Array = RunState.active_special_events.duplicate(true)
+	var saved_event_history: Array = RunState.event_history.duplicate(true)
+	var existing_macro_event: Dictionary = special_system.build_debug_special_event(RunState, trade_date, 12, macro_state, "geopolitical_turmoil")
+	existing_macro_event["start_day_index"] = 12
+	existing_macro_event["end_day_index"] = 18
+	RunState.active_special_events = [existing_macro_event]
+	RunState.event_history = []
+	var resolution: Dictionary = special_system.resolve_day(
+		RunState,
+		trade_date,
+		14,
+		macro_state,
+		{
+			"suppress_special_event": true,
+			"special_event_probability_multiplier": 0.0,
+			"force_policy_parody_event": true,
+			"suppress_policy_parody_event": false,
+			"policy_parody_probability_multiplier": 4.0,
+			"policy_parody_min_spacing_days": 1
+		}
+	)
+	RunState.active_special_events = saved_active_special_events
+	RunState.event_history = saved_event_history
+
+	var saw_existing_macro: bool = false
+	var saw_policy_parody: bool = false
+	for event_value in resolution.get("active_events", []):
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event_data: Dictionary = event_value
+		if str(event_data.get("event_id", "")) == "geopolitical_turmoil":
+			saw_existing_macro = true
+		if POLICY_PARODY_EVENT_IDS.has(str(event_data.get("event_id", ""))) and str(event_data.get("shock_class", "")) == "policy_parody":
+			saw_policy_parody = true
+	if not saw_existing_macro or not saw_policy_parody:
+		return "Smoke test expected policy-parody events to coexist with an active macro special event."
+	return ""
+
+
+func _validate_policy_parody_debug_surface(event_id: String, trade_date: Dictionary, macro_state: Dictionary) -> String:
+	var special_system = SPECIAL_EVENT_SYSTEM_SCRIPT.new()
+	var generated_event: Dictionary = special_system.build_debug_special_event(RunState, trade_date, 14, macro_state, event_id)
+	if generated_event.is_empty():
+		return "Smoke test expected policy-parody debug surface validation to build an event."
+
+	var saved_active_special_events: Array = RunState.active_special_events.duplicate(true)
+	var saved_event_history: Array = RunState.event_history.duplicate(true)
+	RunState.debug_add_special_event(generated_event)
+	var debug_active_event: Dictionary = {}
+	for event_value in RunState.active_special_events:
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event_data: Dictionary = event_value
+		if str(event_data.get("event_id", "")) == event_id:
+			debug_active_event = event_data.duplicate(true)
+			break
+	RunState.active_special_events = saved_active_special_events
+	RunState.event_history = saved_event_history
+
+	if debug_active_event.is_empty() or not bool(debug_active_event.get("debug_pending_start_alert", false)):
+		return "Smoke test expected debug-generated special events to carry a one-shot pending popup marker."
+	var pending_events: Array = RunState.call("_pending_debug_started_special_events", [debug_active_event])
+	if pending_events.is_empty() or str(pending_events[0].get("event_id", "")) != event_id or pending_events[0].has("debug_pending_start_alert"):
+		return "Smoke test expected pending debug special events to be convertible into started-special recap alerts."
+	var cleared_events: Array = RunState.call("_clear_debug_pending_special_alerts", [debug_active_event])
+	if cleared_events.is_empty() or cleared_events[0].has("debug_pending_start_alert"):
+		return "Smoke test expected debug special popup markers to clear after one day-result pass."
+	return ""
+
+
+func _validate_policy_parody_attention_directives(event_id: String, trade_date: Dictionary, macro_state: Dictionary) -> String:
+	var attention_director = ATTENTION_DIRECTOR_SYSTEM_SCRIPT.new()
+	var saved_event_history: Array = RunState.event_history.duplicate(true)
+	RunState.event_history = []
+	var day_six_directives: Dictionary = attention_director.resolve_day(RunState, trade_date, 5, macro_state)
+	if (
+		not bool(day_six_directives.get("suppress_policy_parody_event", false)) or
+		float(day_six_directives.get("policy_parody_probability_multiplier", 1.0)) != 0.0
+	):
+		RunState.event_history = saved_event_history
+		return "Smoke test expected policy-parody events to stay suppressed during the reserved day-6 macro beat."
+	var quiet_directives: Dictionary = attention_director.resolve_day(RunState, trade_date, 12, macro_state)
+	if (
+		bool(quiet_directives.get("suppress_policy_parody_event", true)) or
+		float(quiet_directives.get("policy_parody_probability_multiplier", 0.0)) <= 0.0 or
+		float(quiet_directives.get("policy_parody_attention_score", 0.0)) <= 0.0
+	):
+		RunState.event_history = saved_event_history
+		return "Smoke test expected Attention Director to make policy-parody events eligible after a quiet stretch."
+	RunState.event_history = [{
+		"event_id": event_id,
+		"scope": "market",
+		"event_family": "special",
+		"category": "policy_free_meal",
+		"shock_class": "policy_parody",
+		"allows_overlap": true,
+		"day_index": 11
+	}]
+	var cooldown_directives: Dictionary = attention_director.resolve_day(RunState, trade_date, 12, macro_state)
+	RunState.event_history = saved_event_history
+	if (
+		not bool(cooldown_directives.get("suppress_policy_parody_event", false)) or
+		float(cooldown_directives.get("policy_parody_probability_multiplier", 1.0)) != 0.0
+	):
+		return "Smoke test expected Attention Director to cool down policy-parody spam independently from macro events."
+	return ""
+
+
+func _validate_policy_free_meal_contextual_effects(trade_date: Dictionary) -> String:
+	var special_system = SPECIAL_EVENT_SYSTEM_SCRIPT.new()
+	var saved_market_history: Array = RunState.market_history.duplicate(true)
+	var neutral_macro_state: Dictionary = {
+		"risk_appetite": 0.5,
+		"market_bias": 0.0,
+		"gdp_growth": 4.8,
+		"inflation_yoy": 3.5,
+		"volatility_multiplier": 1.0,
+		"policy_action_bps": 0
+	}
+	RunState.market_history = [
+		{"day_index": 11, "average_change_pct": 0.012, "advancers": 24, "decliners": 6},
+		{"day_index": 12, "average_change_pct": 0.013, "advancers": 23, "decliners": 7},
+		{"day_index": 13, "average_change_pct": 0.011, "advancers": 22, "decliners": 8}
+	]
+	var supportive_event: Dictionary = special_system.build_debug_special_event(
+		RunState,
+		trade_date,
+		14,
+		neutral_macro_state,
+		"policy_free_lunch_budget_balloon"
+	)
+	RunState.market_history = [
+		{"day_index": 11, "average_change_pct": -0.012, "advancers": 7, "decliners": 23},
+		{"day_index": 12, "average_change_pct": -0.013, "advancers": 6, "decliners": 24},
+		{"day_index": 13, "average_change_pct": -0.011, "advancers": 8, "decliners": 22}
+	]
+	var fragile_event: Dictionary = special_system.build_debug_special_event(
+		RunState,
+		trade_date,
+		14,
+		neutral_macro_state,
+		"policy_free_lunch_budget_balloon"
+	)
+	RunState.market_history = saved_market_history
+
+	if str(supportive_event.get("policy_context", "")) != "supportive":
+		return "Smoke test expected free-meal policy shock to be absorbed by a healthy recent tape."
+	if str(fragile_event.get("policy_context", "")) != "fragile":
+		return "Smoke test expected free-meal policy shock to worsen when recent tape is already fragile."
+	if float(fragile_event.get("market_bias_shift", 0.0)) >= float(supportive_event.get("market_bias_shift", 0.0)):
+		return "Smoke test expected fragile free-meal context to apply a worse market bias than supportive context."
+	if float(fragile_event.get("volatility_multiplier", 1.0)) <= float(supportive_event.get("volatility_multiplier", 1.0)):
+		return "Smoke test expected fragile free-meal context to apply higher volatility than supportive context."
+	var supportive_sector_biases: Dictionary = supportive_event.get("sector_biases", {})
+	var fragile_sector_biases: Dictionary = fragile_event.get("sector_biases", {})
+	if float(fragile_sector_biases.get("finance", 0.0)) >= float(supportive_sector_biases.get("finance", 0.0)):
+		return "Smoke test expected fragile free-meal context to hit finance harder than supportive context."
+	return ""
+
+
+func _validate_policy_parody_feed_generation(event_id: String, trade_date: Dictionary, macro_state: Dictionary) -> String:
+	var special_system = SPECIAL_EVENT_SYSTEM_SCRIPT.new()
+	var policy_event: Dictionary = special_system.build_debug_special_event(RunState, trade_date, 14, macro_state, event_id)
+	if policy_event.is_empty():
+		return "Smoke test expected a policy-parody event for feed validation."
+	var market_history: Array = [{
+		"day_index": 14,
+		"trade_date": trade_date.duplicate(true),
+		"average_change_pct": -0.006,
+		"advancers": 9,
+		"decliners": 21,
+		"biggest_winner": {"ticker": "FOOD"},
+		"biggest_loser": {"ticker": "BANK"}
+	}]
+
+	var news_snapshot: Dictionary = NEWS_FEED_SYSTEM_SCRIPT.new().build_news_snapshot(
+		null,
+		DataRepository.get_news_feed_data(),
+		[],
+		market_history,
+		[],
+		[policy_event],
+		[],
+		trade_date,
+		1
+	)
+	var saw_policy_article: bool = false
+	var combined_policy_article_text: String = ""
+	var public_feed: Dictionary = news_snapshot.get("feeds", {}).get("gorengan_daily", {})
+	for article_value in public_feed.get("articles", []):
+		if typeof(article_value) != TYPE_DICTIONARY:
+			continue
+		var article: Dictionary = article_value
+		if not str(article.get("category", "")).begins_with("policy_"):
+			continue
+		saw_policy_article = true
+		var article_text: String = "%s\n%s\n%s\n%s\n%s" % [
+			str(article.get("headline", "")),
+			str(article.get("deck", "")),
+			str(article.get("body", "")),
+			str(article.get("public_story_angle", "")),
+			str(article.get("public_confidence_label", ""))
+		]
+		combined_policy_article_text = "%s\n%s" % [combined_policy_article_text, article_text]
+		var article_guardrail_error: String = _policy_parody_visible_guardrail_violation(article_text, "policy-parody News article")
+		if not article_guardrail_error.is_empty():
+			return article_guardrail_error
+	if not saw_policy_article:
+		return "Smoke test expected policy-parody active special events to create a public News article."
+	var article_specificity_error: String = _policy_parody_expected_terms_missing(combined_policy_article_text, event_id, "policy-parody News article")
+	if not article_specificity_error.is_empty():
+		return article_specificity_error
+
+	var social_snapshot: Dictionary = TWOOTER_FEED_SYSTEM_SCRIPT.new().build_social_snapshot(
+		null,
+		DataRepository.get_twooter_feed_data(),
+		[],
+		market_history,
+		[],
+		[policy_event],
+		[],
+		trade_date,
+		4
+	)
+	var allowed_policy_topic_labels := {
+		"Policy shock": true,
+		"Fiscal shock": true,
+		"Commodity rule": true,
+		"FX comment": true
+	}
+	var expected_policy_account_ids := {}
+	for account_value in DataRepository.get_twooter_feed_data().get("accounts", []):
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var account: Dictionary = account_value
+		expected_policy_account_ids[str(account.get("id", ""))] = true
+	var saw_policy_account_ids := {}
+	var saw_policy_post: bool = false
+	var combined_policy_post_text: String = ""
+	for post_value in social_snapshot.get("posts", []):
+		if typeof(post_value) != TYPE_DICTIONARY:
+			continue
+		var post: Dictionary = post_value
+		if not str(post.get("category", "")).begins_with("policy_"):
+			continue
+		saw_policy_post = true
+		if not allowed_policy_topic_labels.has(str(post.get("public_topic_label", ""))):
+			return "Smoke test expected policy-parody Twooter posts to use a policy-specific topic label."
+		var account_id: String = str(post.get("account_id", ""))
+		if not expected_policy_account_ids.has(account_id):
+			return "Smoke test expected policy-parody Twooter posts to come from known accounts, got %s." % account_id
+		saw_policy_account_ids[account_id] = true
+		var post_text: String = "%s\n%s\n%s\n%s" % [
+			str(post.get("post_text", "")),
+			"\n".join(post.get("thread_lines", [])),
+			str(post.get("context_hint", "")),
+			str(post.get("public_topic_label", ""))
+		]
+		combined_policy_post_text = "%s\n%s" % [combined_policy_post_text, post_text]
+		var post_guardrail_error: String = _policy_parody_visible_guardrail_violation(post_text, "policy-parody Twooter post")
+		if not post_guardrail_error.is_empty():
+			return post_guardrail_error
+	if not saw_policy_post:
+		return "Smoke test expected policy-parody active special events to create Twooter chatter."
+	for expected_account_id_value in expected_policy_account_ids.keys():
+		var expected_account_id: String = str(expected_account_id_value)
+		if expected_account_id.is_empty():
+			continue
+		if not saw_policy_account_ids.has(expected_account_id):
+			return "Smoke test expected policy-parody shock chatter to include every Twooter account, missing %s." % expected_account_id
+	var post_specificity_error: String = _policy_parody_expected_terms_missing(combined_policy_post_text, event_id, "policy-parody Twooter chatter")
+	if not post_specificity_error.is_empty():
+		return post_specificity_error
+	return ""
+
+
+func _policy_parody_expected_terms_missing(visible_text: String, event_id: String, context_label: String) -> String:
+	var searchable_text: String = visible_text.to_lower()
+	for expected_group_value in _policy_parody_expected_terms(event_id):
+		var expected_group: Array = expected_group_value if typeof(expected_group_value) == TYPE_ARRAY else [expected_group_value]
+		var group_matched := false
+		var readable_terms: Array = []
+		for expected_term_value in expected_group:
+			var expected_term: String = str(expected_term_value).to_lower()
+			if expected_term.is_empty():
+				continue
+			readable_terms.append(expected_term)
+			if searchable_text.find(expected_term) != -1:
+				group_matched = true
+				break
+		if not group_matched:
+			return "Smoke test expected %s for %s to include event-specific wording like %s." % [context_label, event_id, "/".join(readable_terms)]
+	return ""
+
+
+func _policy_parody_expected_terms(event_id: String) -> Array:
+	match event_id:
+		"policy_free_lunch_budget_balloon":
+			return [["free-meal", "free-lunch", "free meal", "free lunch", "meal", "lunch", "budget"]]
+		"policy_fiscal_guardian_swap":
+			return [["budget", "fiscal", "guardian", "guardrail", "reshuffle"]]
+		"policy_market_speech_jolt":
+			return [["speech", "casino-like", "speculative", "high-beta"]]
+		"policy_village_fx_comment":
+			return [["fx", "rupiah", "currency", "foreign-currency"]]
+		"policy_commodity_export_gate":
+			return [["one-gate", "export", "commodity", "shipment", "queue"]]
+		_:
+			return [["policy"]]
+
+
+func _policy_parody_visible_guardrail_violation(visible_text: String, context_label: String) -> String:
+	var searchable_text: String = visible_text.to_lower()
+	for forbidden_term_value in POLICY_PARODY_FORBIDDEN_VISIBLE_TERMS:
+		var forbidden_term: String = str(forbidden_term_value)
+		if searchable_text.find(forbidden_term) != -1:
+			return "Smoke test expected %s to avoid real-name or unsafe policy-parody wording like %s." % [context_label, forbidden_term]
+	if searchable_text.find("{") != -1 or searchable_text.find("}") != -1:
+		return "Smoke test expected %s to avoid unresolved template tokens: %s" % [context_label, visible_text.left(220)]
 	return ""
 
 
@@ -9631,7 +10091,7 @@ func _run_scenario(
 			"message": "Smoke test expected Attention Director to suppress market-scope scheduled headlines on the reserved macro day."
 		}
 	var saved_recap_last_day_results: Dictionary = post_recap_saved_run.get("last_day_results", {})
-	var forbidden_director_payload_keys: Array = ["attention_directives", "selected_lane", "lane_scores", "focus_company_weights", "dirty_market_pressure", "market_stress_score", "best_company_attention_score"]
+	var forbidden_director_payload_keys: Array = ["attention_directives", "selected_lane", "lane_scores", "focus_company_weights", "dirty_market_pressure", "market_stress_score", "best_company_attention_score", "policy_parody_probability_multiplier", "policy_parody_attention_score"]
 	for forbidden_director_payload_key in forbidden_director_payload_keys:
 		if RunState.last_day_results.has(forbidden_director_payload_key) or saved_recap_last_day_results.has(forbidden_director_payload_key):
 			game_root.queue_free()
@@ -9685,12 +10145,14 @@ func _run_scenario(
 		}
 	var macro_template_headline: String = str(DataRepository.get_event_definition("covid_wave").get("headline_template", ""))
 	var macro_direct_headline := "Custom geopolitical headline"
+	var macro_policy_headline: String = str(DataRepository.get_event_definition("policy_free_lunch_budget_balloon").get("headline_template", ""))
 	var macro_index_headline := "Index desk no changes"
 	var macro_recap_snapshot: Dictionary = {
 		"last_day_results": {
 			"scheduled_event": {"event_id": "covid_wave", "scope": "market"},
 			"started_special_events": [
 				{"event_id": "geopolitical_turmoil", "scope": "market", "headline": macro_direct_headline},
+				{"event_id": "policy_free_lunch_budget_balloon", "scope": "market", "headline": macro_policy_headline, "shock_class": "policy_parody"},
 				{"event_id": "sector_tailwind", "scope": "sector", "headline": "Sector alert should not show"}
 			],
 			"index_review_events": [
@@ -9713,7 +10175,7 @@ func _run_scenario(
 	var macro_event_title_label: Label = game_root.find_child("MacroEventTitleLabel", true, false) as Label
 	var macro_event_headline_label: Label = game_root.find_child("MacroEventHeadlineLabel", true, false) as Label
 	var macro_event_close_button: Button = game_root.find_child("MacroEventCloseButton", true, false) as Button
-	var expected_macro_headlines: Array = [macro_template_headline, macro_direct_headline, macro_index_headline]
+	var expected_macro_headlines: Array = [macro_template_headline, macro_direct_headline, macro_policy_headline, macro_index_headline]
 	for expected_index in range(expected_macro_headlines.size()):
 		macro_event_dialog = game_root.find_child("MacroEventDialog", true, false) as Control
 		macro_event_headline_label = game_root.find_child("MacroEventHeadlineLabel", true, false) as Label

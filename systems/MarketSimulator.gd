@@ -583,18 +583,41 @@ func _build_daily_event_plan(
 	var candidates: Array = []
 	var macro_market_bias: float = float(macro_state.get("market_bias", 0.0))
 	var policy_action_bps: int = int(macro_state.get("policy_action_bps", 0))
-	if market_sentiment < -0.015:
-		candidates.append({
+	var risk_appetite: float = float(macro_state.get("risk_appetite", 0.5))
+	var risk_off_candidate_added: bool = false
+	var risk_off_candidate: Dictionary = {}
+	var risk_off_priority_chance: float = 0.0
+	if market_sentiment < -0.010:
+		risk_off_candidate = {
 			"event_id": "risk_off_headline",
 			"scope": "market",
-			"weight": 1.0 + clamp(abs(market_sentiment) * 8.0, 0.0, 0.45) + clamp(abs(macro_market_bias) * 10.0, 0.0, 0.35)
-		})
-	elif macro_market_bias < -0.008 and policy_action_bps > 0:
-		candidates.append({
+			"weight": 1.65 + clamp(abs(market_sentiment) * 12.0, 0.0, 0.65) + clamp(abs(macro_market_bias) * 10.0, 0.0, 0.35)
+		}
+		candidates.append(risk_off_candidate)
+		risk_off_candidate_added = true
+		risk_off_priority_chance = 0.34
+	elif market_sentiment < -0.004 or macro_market_bias < -0.004 or risk_appetite < 0.46 or (macro_market_bias < -0.003 and policy_action_bps > 0):
+		risk_off_candidate = {
 			"event_id": "risk_off_headline",
 			"scope": "market",
-			"weight": 0.75 + clamp(abs(macro_market_bias) * 8.0, 0.0, 0.3)
-		})
+			"weight": 1.15 + clamp(abs(market_sentiment) * 8.0, 0.0, 0.28) + clamp(abs(macro_market_bias) * 9.0, 0.0, 0.34) + clamp(0.50 - risk_appetite, 0.0, 0.26)
+		}
+		candidates.append(risk_off_candidate)
+		risk_off_candidate_added = true
+		risk_off_priority_chance = 0.24
+	if not risk_off_candidate_added and day_number >= 35:
+		risk_off_candidate = {
+			"event_id": "risk_off_headline",
+			"scope": "market",
+			"weight": 0.92 + clamp(0.52 - risk_appetite, 0.0, 0.20) + clamp(-market_sentiment, 0.0, 0.16)
+		}
+		candidates.append(risk_off_candidate)
+		risk_off_priority_chance = 0.13
+
+	if not risk_off_candidate.is_empty() and rng.randf() < risk_off_priority_chance:
+		var priority_candidate: Dictionary = risk_off_candidate.duplicate(true)
+		priority_candidate.erase("weight")
+		return priority_candidate
 
 	var strongest_sector: Dictionary = _strongest_sector_signal(sector_sentiments)
 	if not strongest_sector.is_empty():
@@ -606,12 +629,12 @@ func _build_daily_event_plan(
 				"target_sector_id": str(strongest_sector.get("sector_id", "")),
 				"weight": 0.8 + clamp(strongest_sector_sentiment * 6.0, 0.0, 0.35)
 			})
-		elif strongest_sector_sentiment < -0.012:
+		elif strongest_sector_sentiment < -0.006:
 			candidates.append({
 				"event_id": "sector_headwind",
 				"scope": "sector",
 				"target_sector_id": str(strongest_sector.get("sector_id", "")),
-				"weight": 0.95 + clamp(abs(strongest_sector_sentiment) * 7.0, 0.0, 0.4)
+				"weight": 1.18 + clamp(abs(strongest_sector_sentiment) * 9.0, 0.0, 0.48)
 			})
 
 	candidates.append_array(

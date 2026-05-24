@@ -11,49 +11,50 @@ Read this file first in the next session.
 - First player-visible session on a fresh run: `Friday, 3 January 2020`
 - Fresh runs simulate the first trading session immediately before handing control to the player, so the market already has a previous close, current price move, and chart-ready early history
 - Current shell: `desktop-first`
-- A global fishbowl display effect now runs as an autoloaded screen-space overlay across the whole game, including Main Menu and GameRoot
-  - `autoloads/FishbowlOverlay.gd` creates a top-layer mouse-transparent `ColorRect`
-  - `assets/shaders/fishbowl_screen.gdshader` applies very subtle curvature with neutral zoom and a visible black vignette
+- A global fishbowl display effect is registered as an autoloaded screen-space overlay after flicker QA confirmed fullscreen mode, not fishbowl, was the culprit
+  - `autoloads/FishbowlOverlay.gd` creates `/root/FishbowlOverlay` with a top-layer mouse-transparent `ColorRect`
+  - it can be toggled in script with `FishbowlOverlay.set_enabled(true/false)`, and defaults enabled
+  - `assets/shaders/fishbowl_screen.gdshader` uses non-mipmapped linear screen sampling and a two-pixel edge guard for the screen-warp path
   - current tuned defaults: `curvature = 0.01`, `zoom_compensation = 1.0`, `vignette_strength = 0.22`
-  - this is a visual-only overlay, so input is not remapped through the curve; curvature is intentionally low to avoid noticeable cursor drift
+  - this is a visual-only overlay, so input is not remapped through the curve; curvature stays intentionally subtle to avoid noticeable cursor drift
   - current pass has no in-game toggle/slider yet; tune shader uniforms directly if the effect needs another pass
 - Version control:
   - local Git repo initialized on branch `main`
   - GitHub remote configured as `origin`
   - remote URL: `https://github.com/alifhunter/godot-game-1.git`
+  - current branch tracks `origin/main`
+  - latest pushed clean checkpoint at handoff refresh: `b3592ea Prepare release polish`
   - recent committed checkpoints include:
-    - `615a415 Add Network tip memory and source checks`
-    - `b857ab8 Make Network source conflicts actionable`
-    - `16330c6 Polish Network conflicts and add fishbowl display`
-    - `cbeb722 Add normal play performance baseline`
-    - `dd88e18 Add Academy editor and daily loop polish`
-    - `96fd0b4 Trim last day save payload`
-    - `c61a289 Instrument Advance Day performance`
-    - `39d1388 Cache Dashboard event snapshots`
-    - `61d3865 Cache Daily Recap activity counts`
-    - `0941b56 Defer Advance Day save flush`
-    - `c996b5c Slim Dashboard event cache`
-    - `d6a2a35 Count Twooter activity without feed rebuild`
-    - `1485334 Add snappy UI animation polish`
-    - `4275c7a Smooth Daily Recap reveal`
-    - `fc14108 Build Key Stats card dashboard`
-    - `54033bf Hide helper text and tidy dashboard calendar`
-    - `4bc42c0 Gate Network contacts and add calendar event popup`
-    - `44c727f Speed up Advance Day recap path`
-    - `4cd085d Build Twooter social hub`
-    - `7fafa87 Harden Twooter source messaging loop`
-    - `03f118e Polish Twooter account interactions`
-    - `6367067 Expand Twooter social progression`
+    - `b3592ea Prepare release polish`
+    - `1bbc185 Load UI click sound from imported resource`
+    - `7549e66 Prepare Steam EA systems and roadmap layer`
+    - `abd74e4 Reopen Academy and update Thesis FTUE`
     - `cf841ae Build Research Tray thesis workflow`
-    - latest checkpoint message after this cleanup batch: `Reopen Academy and update Thesis FTUE`
-  - `cf841ae` was the last pushed clean checkpoint before the Academy/FTUE cleanup batch; run `git status --short` before editing and preserve any user work if the tree is dirty
+    - `6367067 Expand Twooter social progression`
+    - `03f118e Polish Twooter account interactions`
+    - `7fafa87 Harden Twooter source messaging loop`
+  - run `git status --short` before editing and preserve any user work if the tree is dirty
   - `systems/TwooterInteractionSystem.gd` is tracked and owns the mutable Twooter relationship/message/dialogue layer; Python validator `__pycache__/` folders are disposable local artifacts
   - current local note: formatter locals that previously shadowed Godot's built-in `sign()` are now renamed to `sign_prefix`
 
 ## Latest Session Snapshot
+- 2026-05-23 policy-shock parody pass: added five role-based fictional policy events under the existing market `special` pipeline: free-lunch budget balloon, fiscal guardian swap, market-speech jolt, village/FX comment, and one-gate commodity export rule. They use `shock_class="policy_parody"` and `allows_overlap=true`, avoid real personal names, and keep effects conservative but visible through market volatility, market bias, and sector biases.
+- `SpecialEventSystem` now treats policy parody as an overlap-safe sublane: normal macro specials still block each other, but active policy parody does not block major macro specials, and policy parody can start while a normal macro special is active. `AttentionDirectorSystem` now emits independent policy-parody probability/cooldown directives, suppresses the policy lane during the reserved day-6 macro beat, and keeps policy parody out of the main macro headline cooldown logic.
+- News and Twooter routing now understand policy parody. News gets policy-specific driver/body/closing copy and public story angles (`Policy shock`, `Fiscal shock`, `Commodity rule`, `FX comment`); Twooter policy shocks are tier-1 visible and prefer macro, market-diary, retail, and rumor voices so the feed gets noisy immediately.
+- 2026-05-23 policy feed specificity follow-up: News and Twooter feeds now sort latest day first, then priority inside the same date, so older high-priority stories no longer sit above newer posts/articles. Policy-shock News now uses event-specific five-paragraph `JAKARTA - ...` style parody bodies for each of the five events instead of the generic special-event article builder. Twooter policy shocks now fan out across every unlocked account with event-specific fallback chatter, including person-style accounts, so forced/debug policy shocks feel noisy on the timeline.
+- 2026-05-23 policy copy/tuning follow-up: the policy-shock articles were sharpened into more Indonesian-market-style financial press parody while staying fictionalized: no real personal names, no real institution/platform names like MBG/Bank Indonesia/OJK/Stockbit/Telegram/Bloomberg/MOST/Senayan, and no exact quote reproduction. Twooter fallback chatter for all five policy shocks is now much more meme/sarcastic. The free nutrition meal budget shock is now context-sensitive: supportive macro/recent market tape gets `policy_context="supportive"` with mild volatility and consumer/noncyclical beneficiaries, while fragile recent tape gets `policy_context="fragile"` with higher volatility, worse market bias, and harder finance/infra/property pressure. Runtime data and the corresponding News/Twooter/Event Content editor source JSON were updated so future editor exports keep the targeted policy content.
+- 2026-05-23 policy debug follow-up: debug-generated special events now carry a one-shot `debug_pending_start_alert` marker so the next `Advance Day` copies them into `last_day_results.started_special_events` for the post-Daily Recap macro popup, then clears the marker to prevent repeat alerts. Debug event generation also invalidates the News cache immediately, and policy-parody active-special News articles are public at intel tier 1.
+- Policy-parody identification is now based on `shock_class="policy_parody"` or `policy_` event/category ids. `allows_overlap` remains a behavior flag only, so future overlap-safe specials do not accidentally inherit policy-parody News/Twooter/Attention routing.
+- Smoke guardrails now validate the five policy events are debug-catalogued/debug-generatable, coexist with active macro specials, create News and Twooter content, use policy-specific public labels/copy, sort News and Twooter snapshots latest-first, include every Twooter account for policy shocks, assert the free nutrition meal shock changes severity between healthy and fragile recent market tape, and reject real-name/unsafe/exact-quote-adjacent wording such as `prabowo`, `teddy`, `sri mulyani`, `purbaya`, `kidnap`, and exact dollar/gambling quote forms.
+- Verification for the policy-shock pass: `git diff --check` passed with existing CRLF warnings on `data/social/twooter_feed_data.json` / `tools/twooter_editor/twooter_source.json`; policy runtime/source JSON parsed via PowerShell `ConvertFrom-Json`; content lint dashboard plus event/news/twooter validators and their dry-run exports passed with `0` errors / `0` warnings; guardrail scan found no forbidden real-name/institution/platform/quote terms in the policy runtime/source files; Windows Godot `4.6.2` headless project load exited `0`. Latest quick smoke with `logs\smoke-policy-mbg-context.log` passed the policy-parody guardrails, latest-first feed checks, and MBG/free-meal context check, then stopped at the broader existing Academy/Mindset lesson assertion (`Smoke test expected Mindset lessons to come from the PDF...`), with no policy-parody failure remaining.
+- 2026-05-23 event-generation audit/tuning follow-up: the missed one-year event audit was fixed enough for the current bar. `CompanyEventSystem` now actually generates `favorable_coverage`, `rumor_wave_positive`, and `rumor_wave_negative`; M&A/company arc odds were tuned so `strategic_acquisition` and `integration_overhang` surface more often; `IndexReviewSystem` now emits visible `mscy_index_watch` / `ftsi_index_watch` events from review watch plans; `CorporateActionSystem` now uses weighted spawn selection so `private_placement` is not buried behind deterministic top-score families; `MarketSimulator` now gives `risk_off_headline` and sector headwinds better access to bad-tape days; and `PersonEventSystem` slightly raises `trump_deal_optimism` odds in favorable macro/sector setups.
+- Long-run audit status is now considered acceptable rather than perfect. The current full-year event audit command was `Godot_v4.6.2-stable_win64_console.exe --headless --path . --log-file logs\event-generation-audit-fix-targetedguard-252.log --scene res://scenes/tests/EventGenerationAuditTest.tscn -- --event-audit-days=252 --smoke-local-io`; it passed with `EVENT_AUDIT_OK scenarios=6 days_each=252 total_days=1512 definitions_seen=34/37 policy_seen=5/5`. That is about `92%` definition coverage, and all originally questioned missed events appeared: `favorable_coverage`, `ftsi_index_watch`, `integration_overhang`, `mscy_index_watch`, `private_placement`, `risk_off_headline`, `rumor_wave_negative`, `rumor_wave_positive`, `strategic_acquisition`, and `trump_deal_optimism`. Remaining rare misses in that run were `management_upgrade`, `musk_ai_hype`, and `product_recall`; leave them alone unless playtesting shows they matter.
+- The event audit/stability pass also added a reusable audit scene/script at `scenes/tests/EventGenerationAuditTest.tscn` and `scripts/tests/EventGenerationAuditTest.gd`. `RunState` now has a targeted post-close price guard for companies touched by corporate-action applications or stock-dividend distributions, because the first risk-off tuning run exposed one same-day ARA/ARB edge case. Final targeted-guard verification: `LongRunStabilityTest.tscn -- --long-run-days=120 --smoke-local-io` passed with `LONG_RUN_STABILITY_OK scenarios=6 days_each=120 total_days=720 corporate_apps=42 split_rebases=2`, and `git diff --check` passed with only the existing CRLF warnings on Twooter runtime/source JSON.
+- 2026-05-23 gameplay flicker follow-up: screen flicker persisted after the splash-specific disclaimer guard and after hardening/disabling/removing the fishbowl overlay, then disappeared once `project.godot` was changed to launch maximized windowed (`window/size/mode=2`) instead of fullscreen. User restart confirmed the fullscreen display path was the likely cause. After that confirmation, the global fishbowl overlay was re-registered as an autoload with subtle curvature enabled (`curvature = 0.01`), and the legal disclaimer after the engine splash was restored as static centered text (`DISCLAIMER_SPLASH_ENABLED=true`, `visible_characters=-1`, centered label alignment).
+- 2026-05-22 handoff refresh: local `main` tracks `origin/main` at `b3592ea Prepare release polish`. Pre-existing uncommitted changes before this handoff edit were `export_presets.cfg` clearing `application/console_wrapper_icon`, `application/file_version`, and `application/product_version`, plus `scripts/ui/MainMenu.gd` adding a boot-once guard so the splash disclaimer only plays once per app boot and is discarded on later Main Menu instances. Treat the export metadata clearing as release-sensitive and review before the next Windows export.
 - 2026-05-19 Academy release-copy polish: `data/academy/academy_catalog.json` and `tools/academy_editor/academy_source.json` were cleaned so player-facing lesson cards now say `What You'll Learn`, `You learn...`, and `By the end, you can...` instead of curriculum/source wording like `Learning Objective`, `Players understand...`, `Players should be able to...`, or `The PDF mindset framework...`. Academy validation and dry-run export passed after the polish.
-- 2026-05-19 splash disclaimer pass: Main Menu now opens with a black, white-text fictional-market disclaimer that types in, holds briefly, fades out, and frees itself before normal menu interaction. This is implemented in `scripts/ui/MainMenu.gd` / `scenes/main_menu/MainMenu.tscn` and keeps the release disclaimer visible without adding another click-through screen.
-- 2026-05-19 release-license paperwork pass: added root `EULA.txt` as the proprietary Banyakarya game license, `THIRD_PARTY_NOTICES.txt` for Godot/GodotSteam/Steamworks/Open Sans/Tabler notices, and `GODOT_COPYRIGHT.txt` from Godot Engine's official copyright file. `docs/STEAM_BUILD_UPLOAD_GUIDE.md` now lists all three files beside `BHSL.exe` in the SteamPipe content folder, `README.md` links them, `docs/RELEASE_LICENSE_AUDIT.md` tracks them, and Windows export metadata now has file/product versions plus `(c) 2026 Banyakarya. All rights reserved.`
+- 2026-05-19 splash disclaimer pass: Main Menu gained a black, white-text fictional-market disclaimer before normal menu interaction. It was originally typewritten/faded, then simplified to static centered text after flicker diagnosis confirmed fullscreen mode as the issue. This is implemented in `scripts/ui/MainMenu.gd` / `scenes/main_menu/MainMenu.tscn`.
+- 2026-05-19 release-license paperwork pass: added root `EULA.txt` as the proprietary Banyakarya game license, `THIRD_PARTY_NOTICES.txt` for Godot/GodotSteam/Steamworks/Open Sans/Tabler notices, and `GODOT_COPYRIGHT.txt` from Godot Engine's official copyright file. `docs/STEAM_BUILD_UPLOAD_GUIDE.md` now lists all three files beside `BHSL.exe` in the SteamPipe content folder, `README.md` links them, `docs/RELEASE_LICENSE_AUDIT.md` tracks them, and the committed release-polish checkpoint set Windows export metadata with file/product versions plus `(c) 2026 Banyakarya. All rights reserved.` Current uncommitted `export_presets.cfg` edits clear the version fields; resolve that before exporting a tester build.
 - 2026-05-19 public EA achievement decision: Steam achievement/stat writes are disabled for launch by setting `steam/progress/store_enabled=false`. `SteamProgressManager` and `data/steam/achievement_catalog.json` stay in the repo as local save-backed tracking and future Steamworks API-name draft, but the first public EA build should not advertise Steam achievements and should not fail QA when no unlock popups appear. `docs/STEAM_ACHIEVEMENT_IDS.md`, `docs/STEAM_PLAYTEST_CHECKLIST.md`, and `README.md` now document that achievements are postponed until icons/backend/unlock QA are ready.
 - 2026-05-18 Life property UX/pricing and generated-copy follow-up: `Life > Buy Property` now uses property-type and location dropdowns instead of rendering the full long city/type list, so players choose one row and buy from there. The player-facing `Development Intel` panel was removed from Life; underlying property leads still exist for systems/news, but Life no longer spoon-feeds hidden lead summaries.
 - Property pricing was retuned toward Indonesian luxury anchors. `Mansion` now starts around `Rp100B` in Jakarta, `Rp90B` in Tangerang/BSD-style pricing, `Rp108B` in Bali, `Rp85B` in Bandung, and `Rp88B` in Surabaya, with upkeep/status/rent derived from that larger asset scale. `LifeLifestyleAssetTest` now asserts those regional anchor prices.
@@ -2588,7 +2589,7 @@ Read this file first in the next session.
   - there is no export / comparison UI yet
 - No deeper onboarding beyond the current tutorial popup
 - No player-custom widget layout yet
-- The global fishbowl display effect is currently always on and tuned through shader uniforms only; there is no player-facing accessibility toggle, strength slider, per-scene override, or input-coordinate remap yet
+- The global fishbowl display effect is registered as an autoload again after flicker QA isolated fullscreen mode as the culprit, but there is no player-facing accessibility toggle, strength slider, per-scene override, or input-coordinate remap yet
 - `2027-2030` holiday rows are projected simulation data and may differ from future official IDX calendars
 - `News` is now a deterministic newspaper desk with enriched article bodies, but still limited:
   - outlet access is now upgrade-driven by `News Content`, and article bodies now render as fuller 5-6 paragraph stories
@@ -2699,7 +2700,8 @@ Read this file first in the next session.
 
 ## Recommended Next Steps (Confirm user first)
 - Keep the checkpoint clean:
-  - current working tree is intentionally dirty with the Steam, roadmap, generated-copy, and Life/property release-readiness batch; run `git status --short` before starting a new pass and preserve unrelated user edits
+  - current checked state before this handoff refresh: `main` tracked `origin/main` at `b3592ea Prepare release polish`; the working tree is intentionally dirty with the policy-shock content, flicker/fishbowl/disclaimer changes, event-generation audit/tuning pass, and this handoff update
+  - untracked `EventGenerationAuditTest` scene/script files are intentional coverage from the event-generation audit pass; either add them with the event-generation work or keep them as local test artifacts, but do not delete them accidentally
   - preserve ignored local `logs/` output as disposable test data
   - treat a trailing `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` as non-blocking Windows/Godot noise
 - Release-readiness next pass:

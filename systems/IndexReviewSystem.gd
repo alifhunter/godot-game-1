@@ -332,9 +332,10 @@ func _resolve_scheduled_reviews(
 			if review.is_empty():
 				continue
 			if day_number >= int(review.get("watch_day_number", 0)) and not bool(review.get("watch_created", false)):
-				var watch_result: Dictionary = _create_watch_plan(provider_state, review, catalog, run_state, macro_state, day_number)
+				var watch_result: Dictionary = _create_watch_plan(provider_state, review, catalog, run_state, macro_state, trade_date, day_number)
 				provider_state = watch_result.get("provider_state", provider_state).duplicate(true)
 				review = watch_result.get("review", review).duplicate(true)
+				events.append_array(watch_result.get("events", []))
 				active_arcs.append_array(watch_result.get("arcs", []))
 			if day_number >= int(review.get("announcement_day_number", 0)) and not bool(review.get("announcement_emitted", false)):
 				var announcement_result: Dictionary = _emit_review_announcement(provider_state, review, catalog, run_state, trade_date, day_number)
@@ -360,6 +361,7 @@ func _create_watch_plan(
 	catalog: Dictionary,
 	run_state,
 	macro_state: Dictionary,
+	trade_date: Dictionary,
 	day_number: int
 ) -> Dictionary:
 	var resolved_provider_state: Dictionary = provider_state.duplicate(true)
@@ -385,6 +387,7 @@ func _create_watch_plan(
 	return {
 		"provider_state": resolved_provider_state,
 		"review": resolved_review,
+		"events": _build_watch_events(resolved_provider_state, resolved_review, plan, catalog, trade_date, day_number),
 		"arcs": arcs
 	}
 
@@ -402,7 +405,7 @@ func _emit_review_announcement(
 	var plan: Dictionary = resolved_review.get("review_plan", {}).duplicate(true)
 	var arcs: Array = []
 	if plan.is_empty():
-		var watch_result: Dictionary = _create_watch_plan(resolved_provider_state, resolved_review, catalog, run_state, {}, day_number)
+		var watch_result: Dictionary = _create_watch_plan(resolved_provider_state, resolved_review, catalog, run_state, {}, trade_date, day_number)
 		resolved_provider_state = watch_result.get("provider_state", resolved_provider_state).duplicate(true)
 		resolved_review = watch_result.get("review", resolved_review).duplicate(true)
 		plan = resolved_review.get("review_plan", {}).duplicate(true)
@@ -817,6 +820,95 @@ func _build_no_change_event(provider_state: Dictionary, review: Dictionary, trad
 	}
 
 
+func _build_watch_events(
+	provider_state: Dictionary,
+	review: Dictionary,
+	plan: Dictionary,
+	catalog: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Array:
+	var rows: Array = plan.get("candidate_watch", []).duplicate(true)
+	if rows.is_empty():
+		return []
+	var max_rows: int = max(int(catalog.get("candidate_watch_count", DEFAULT_CANDIDATE_WATCH_COUNT)), 1)
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a.get("rank", 9999)) == int(b.get("rank", 9999)):
+			return str(a.get("ticker", "")) < str(b.get("ticker", ""))
+		return int(a.get("rank", 9999)) < int(b.get("rank", 9999))
+	)
+	var events: Array = []
+	var seen_keys: Dictionary = {}
+	for row_value in rows:
+		if events.size() >= max_rows:
+			break
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var key: String = "%s|%s|%s" % [
+			str(row.get("provider_id", "")),
+			str(row.get("company_id", "")),
+			str(row.get("review_id", ""))
+		]
+		if seen_keys.has(key):
+			continue
+		seen_keys[key] = true
+		var event: Dictionary = _build_watch_event(provider_state, review, row, trade_date, day_number)
+		if not event.is_empty():
+			events.append(event)
+	return events
+
+
+func _build_watch_event(
+	provider_state: Dictionary,
+	review: Dictionary,
+	watch_row: Dictionary,
+	trade_date: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var provider_id: String = str(watch_row.get("provider_id", provider_state.get("id", "")))
+	var provider_label: String = str(watch_row.get("provider_label", provider_state.get("label", provider_id.to_upper())))
+	var event_id: String = "%s_index_watch" % provider_id
+	var event_definition: Dictionary = DataRepository.get_event_definition(event_id)
+	var ticker: String = str(watch_row.get("ticker", ""))
+	var side: String = str(watch_row.get("side", "watch"))
+	var side_text: String = "near the review cutoff"
+	if side == "include":
+		side_text = "near an inclusion path"
+	elif side == "exclude":
+		side_text = "near an exclusion risk"
+	var detail: String = "%s review watch puts %s %s before the announcement date." % [
+		provider_label,
+		ticker,
+		side_text
+	]
+	return {
+		"event_id": event_id,
+		"event_family": str(event_definition.get("event_family", "index_review")),
+		"category": "index_watch",
+		"scope": "company",
+		"tone": str(event_definition.get("tone", "mixed")),
+		"duration_days": int(event_definition.get("duration_days", 4)),
+		"target_company_id": str(watch_row.get("company_id", "")),
+		"target_sector_id": str(watch_row.get("target_sector_id", "")),
+		"target_ticker": ticker,
+		"target_company_name": str(watch_row.get("company_name", ticker)),
+		"provider_id": provider_id,
+		"provider_label": provider_label,
+		"provider_full_label": str(provider_state.get("full_label", provider_label)),
+		"review_id": str(review.get("id", watch_row.get("review_id", ""))),
+		"review_stage": "watch",
+		"index_side": side,
+		"headline": "%s review watch flags %s" % [provider_label, ticker],
+		"summary": detail,
+		"headline_detail": detail,
+		"description": detail,
+		"sentiment_shift": float(event_definition.get("sentiment_shift", 0.0)),
+		"trade_date": trade_date.duplicate(true),
+		"day_index": day_number
+	}
+
+
 func _action_description(action: Dictionary, stage: String) -> String:
 	var provider_label: String = str(action.get("provider_label", "Index"))
 	var ticker: String = str(action.get("ticker", ""))
@@ -1097,6 +1189,8 @@ func _candidate_watch_row(action: Dictionary) -> Dictionary:
 		"provider_label": provider_label,
 		"company_id": str(action.get("company_id", "")),
 		"ticker": str(action.get("ticker", "")),
+		"company_name": str(action.get("company_name", action.get("ticker", ""))),
+		"target_sector_id": str(action.get("target_sector_id", "")),
 		"side": side,
 		"category": str(action.get("category", "index_watch")),
 		"label": "%s %s" % [provider_label, side_label],

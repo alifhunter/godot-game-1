@@ -845,6 +845,56 @@ func _build_last_day_results_save_payload(source_results: Variant) -> Dictionary
 	return save_results
 
 
+func _append_debug_started_special_events_to_last_results(day_result: Dictionary) -> void:
+	var debug_started_events: Array = _pending_debug_started_special_events(day_result.get("active_special_events", []))
+	if debug_started_events.is_empty():
+		return
+
+	var started_events: Array = last_day_results.get("started_special_events", []).duplicate(true)
+	var seen_ids: Dictionary = {}
+	for started_event_value in started_events:
+		if typeof(started_event_value) != TYPE_DICTIONARY:
+			continue
+		var started_event: Dictionary = started_event_value
+		seen_ids[str(started_event.get("event_id", ""))] = true
+	for debug_event_value in debug_started_events:
+		var debug_event: Dictionary = debug_event_value
+		var event_id: String = str(debug_event.get("event_id", ""))
+		if event_id.is_empty() or seen_ids.has(event_id):
+			continue
+		started_events.append(debug_event.duplicate(true))
+		seen_ids[event_id] = true
+	last_day_results["started_special_events"] = started_events
+
+
+func _pending_debug_started_special_events(active_events_value: Variant) -> Array:
+	var active_events: Array = active_events_value if typeof(active_events_value) == TYPE_ARRAY else []
+	var pending_events: Array = []
+	for event_value in active_events:
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event_data: Dictionary = event_value
+		if not bool(event_data.get("debug_pending_start_alert", false)):
+			continue
+		var pending_event: Dictionary = event_data.duplicate(true)
+		pending_event.erase("debug_pending_start_alert")
+		pending_event["debug_generated"] = true
+		pending_events.append(pending_event)
+	return pending_events
+
+
+func _clear_debug_pending_special_alerts(active_events_value: Variant) -> Array:
+	var active_events: Array = active_events_value if typeof(active_events_value) == TYPE_ARRAY else []
+	var cleared_events: Array = []
+	for event_value in active_events:
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event_data: Dictionary = event_value.duplicate(true)
+		event_data.erase("debug_pending_start_alert")
+		cleared_events.append(event_data)
+	return cleared_events
+
+
 func queue_company_detail_hydration(company_id: String, priority: bool = false) -> void:
 	if company_id.is_empty() or not companies.has(company_id):
 		return
@@ -1207,6 +1257,7 @@ func apply_day_result(day_result: Dictionary) -> void:
 	daily_actions_used = 0
 	market_sentiment = float(day_result.get("market_sentiment", market_sentiment))
 	last_day_results = _build_last_day_results_save_payload(day_result)
+	_append_debug_started_special_events_to_last_results(day_result)
 	_log_apply_day_perf_elapsed(log_apply_perf, "basic_state", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	var previous_trade_date: Dictionary = current_trade_date.duplicate(true)
@@ -1228,7 +1279,7 @@ func apply_day_result(day_result: Dictionary) -> void:
 	_log_apply_day_perf_elapsed(log_apply_perf, "record_events", phase_started_at_usec, " events=%d" % event_history.size())
 	phase_started_at_usec = Time.get_ticks_usec()
 	active_company_arcs = day_result.get("active_company_arcs", []).duplicate(true)
-	active_special_events = day_result.get("active_special_events", []).duplicate(true)
+	active_special_events = _clear_debug_pending_special_alerts(day_result.get("active_special_events", []))
 	company_roadmap_state = _normalize_company_roadmap_state(day_result.get("company_roadmap_state", company_roadmap_state))
 	active_corporate_action_chains = day_result.get("active_corporate_action_chains", {}).duplicate(true)
 	corporate_meeting_calendar = day_result.get("corporate_meeting_calendar", {}).duplicate(true)
@@ -1246,8 +1297,13 @@ func apply_day_result(day_result: Dictionary) -> void:
 	for company_id in day_result.get("companies", {}).keys():
 		companies[str(company_id)] = _normalize_day_result_company_runtime(day_result["companies"][company_id])
 		applied_company_count += 1
-	_apply_corporate_action_applications(day_result.get("corporate_action_applications", []))
-	_apply_stock_dividend_distributions(day_result.get("stock_dividend_distributions", []))
+	var corporate_action_applications: Array = day_result.get("corporate_action_applications", [])
+	var stock_dividend_distributions: Array = day_result.get("stock_dividend_distributions", [])
+	_apply_corporate_action_applications(corporate_action_applications)
+	_apply_stock_dividend_distributions(stock_dividend_distributions)
+	_enforce_current_day_price_bounds_for_company_ids(
+		_company_ids_from_post_close_adjustments(corporate_action_applications, stock_dividend_distributions)
+	)
 	_log_apply_day_perf_elapsed(log_apply_perf, "normalize_companies", phase_started_at_usec, " companies=%d" % applied_company_count)
 
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -2225,11 +2281,14 @@ func debug_add_special_event(event_data: Dictionary) -> void:
 	if event_data.is_empty():
 		return
 
-	active_special_events.append(event_data.duplicate(true))
+	var debug_event: Dictionary = event_data.duplicate(true)
+	debug_event["debug_generated"] = true
+	debug_event["debug_pending_start_alert"] = true
+	active_special_events.append(debug_event.duplicate(true))
 	var resolved_trade_date: Dictionary = current_trade_date.duplicate(true)
 	var resolved_day_index: int = max(day_index, 1)
-	_record_event(event_data, resolved_trade_date, resolved_day_index)
-	_append_event_to_companies(event_data)
+	_record_event(debug_event, resolved_trade_date, resolved_day_index)
+	_append_event_to_companies(debug_event)
 
 
 func debug_add_company_arc(arc_data: Dictionary, start_event: Dictionary) -> void:
@@ -5700,7 +5759,8 @@ func _rewrite_current_day_price_bar(
 	current_price: float,
 	previous_close: float,
 	ar_limits: Dictionary,
-	limit_lock: String
+	limit_lock: String,
+	limit_source: String = "corporate_action_adjustment"
 ) -> Variant:
 	if typeof(bar_value) != TYPE_DICTIONARY:
 		return bar_value
@@ -5736,7 +5796,7 @@ func _rewrite_current_day_price_bar(
 		bar["value"] = close_price * float(bar.get("volume_shares", 0.0))
 	if not limit_lock.is_empty():
 		bar["limit_lock"] = limit_lock
-		bar["limit_source"] = "corporate_action_adjustment"
+		bar["limit_source"] = limit_source
 		bar["locked_through_day"] = true
 		bar["impact_side"] = "buy" if limit_lock == "ara" else "sell"
 	else:
@@ -5749,6 +5809,73 @@ func _rewrite_current_day_price_bar(
 
 func _snap_and_clamp_current_day_bar_price(raw_price: float, previous_close: float, lower_price: float, upper_price: float) -> float:
 	return clamp(IDX_PRICE_RULES.snap_price_for_day(raw_price, previous_close), lower_price, upper_price)
+
+
+func _company_ids_from_post_close_adjustments(applications: Array, stock_distributions: Array) -> Array:
+	var company_ids: Array = []
+	var seen_ids: Dictionary = {}
+	for application_value in applications:
+		if typeof(application_value) != TYPE_DICTIONARY:
+			continue
+		var company_id: String = str(application_value.get("company_id", ""))
+		if not company_id.is_empty() and not seen_ids.has(company_id):
+			seen_ids[company_id] = true
+			company_ids.append(company_id)
+	for distribution_value in stock_distributions:
+		if typeof(distribution_value) != TYPE_DICTIONARY:
+			continue
+		var company_id: String = str(distribution_value.get("company_id", ""))
+		if not company_id.is_empty() and not seen_ids.has(company_id):
+			seen_ids[company_id] = true
+			company_ids.append(company_id)
+	return company_ids
+
+
+func _enforce_current_day_price_bounds_for_company_ids(company_ids: Array) -> void:
+	for company_id_value in company_ids:
+		_enforce_current_day_price_bounds(str(company_id_value))
+
+
+func _enforce_current_day_price_bounds(company_id: String) -> void:
+	if company_id.is_empty() or not companies.has(company_id):
+		return
+	var runtime: Dictionary = companies[company_id].duplicate(true)
+	var current_price: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("current_price", 0.0)))
+	var current_day_bounds: Dictionary = _current_day_price_bounds(company_id, runtime, current_price)
+	var bounded_price: float = float(current_day_bounds.get("price", current_price))
+	var ar_limits: Dictionary = current_day_bounds.get("ar_limits", {}).duplicate(true)
+	var previous_close: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("previous_close", bounded_price)))
+	var daily_change_pct: float = 0.0
+	if not is_zero_approx(previous_close):
+		daily_change_pct = (bounded_price - previous_close) / previous_close
+
+	runtime["current_price"] = bounded_price
+	runtime["previous_close"] = previous_close
+	runtime["daily_change_pct"] = daily_change_pct
+	runtime["sentiment"] = daily_change_pct
+	runtime["ar_limits"] = ar_limits.duplicate(true)
+
+	var price_history: Array = runtime.get("price_history", []).duplicate()
+	if not price_history.is_empty():
+		price_history[price_history.size() - 1] = bounded_price
+	runtime["price_history"] = price_history
+
+	var price_bars: Array = runtime.get("price_bars", []).duplicate(true)
+	if not price_bars.is_empty():
+		var previous_bar_source: String = ""
+		if typeof(price_bars[price_bars.size() - 1]) == TYPE_DICTIONARY:
+			previous_bar_source = str(price_bars[price_bars.size() - 1].get("limit_source", ""))
+		var limit_source: String = "post_close_price_guard" if not is_equal_approx(current_price, bounded_price) else previous_bar_source
+		price_bars[price_bars.size() - 1] = _rewrite_current_day_price_bar(
+			price_bars[price_bars.size() - 1],
+			bounded_price,
+			previous_close,
+			ar_limits,
+			str(current_day_bounds.get("limit_lock", "")),
+			limit_source
+		)
+	runtime["price_bars"] = price_bars
+	companies[company_id] = runtime
 
 
 func _scale_price_bar(bar_value: Variant, price_factor: float) -> Variant:

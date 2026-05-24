@@ -2,6 +2,7 @@ extends RefCounted
 
 const CHART_SYSTEM_SCRIPT = preload("res://systems/ChartSystem.gd")
 const PLAYER_FACING_DAY_SIX_TRIGGER_DAY := 5
+const POLICY_PARODY_MIN_TRIGGER_DAY := 10
 const NO_RECENT_EVENT_DAYS := 9999
 const FOCUS_COMPANY_LIMIT := 5
 const DIRTY_MARKET_MIN_DAY := 20
@@ -15,6 +16,11 @@ const DIFFICULTY_PROFILES := {
 		"special_due_days": 44,
 		"special_ready_multiplier": 1.05,
 		"special_due_multiplier": 1.55,
+		"policy_parody_min_spacing_days": 18,
+		"policy_parody_due_days": 34,
+		"policy_parody_quiet_days": 5,
+		"policy_parody_ready_multiplier": 1.05,
+		"policy_parody_due_multiplier": 1.45,
 		"company_clue_multiplier": 1.45,
 		"scheduled_clue_multiplier": 1.12,
 		"company_lane_multiplier": 1.15,
@@ -30,6 +36,11 @@ const DIFFICULTY_PROFILES := {
 		"special_due_days": 35,
 		"special_ready_multiplier": 1.15,
 		"special_due_multiplier": 2.0,
+		"policy_parody_min_spacing_days": 14,
+		"policy_parody_due_days": 25,
+		"policy_parody_quiet_days": 3,
+		"policy_parody_ready_multiplier": 1.2,
+		"policy_parody_due_multiplier": 1.9,
 		"company_clue_multiplier": 2.2,
 		"scheduled_clue_multiplier": 1.35,
 		"company_lane_multiplier": 1.45,
@@ -45,6 +56,11 @@ const DIFFICULTY_PROFILES := {
 		"special_due_days": 28,
 		"special_ready_multiplier": 1.28,
 		"special_due_multiplier": 2.45,
+		"policy_parody_min_spacing_days": 10,
+		"policy_parody_due_days": 18,
+		"policy_parody_quiet_days": 2,
+		"policy_parody_ready_multiplier": 1.35,
+		"policy_parody_due_multiplier": 2.25,
 		"company_clue_multiplier": 2.75,
 		"scheduled_clue_multiplier": 1.65,
 		"company_lane_multiplier": 1.85,
@@ -67,6 +83,7 @@ func resolve_day(run_state, trade_date: Dictionary, day_number: int, macro_state
 		history_metrics
 	)
 	var days_since_special_macro: int = int(history_metrics.get("days_since_special_macro", NO_RECENT_EVENT_DAYS))
+	var days_since_policy_parody: int = int(history_metrics.get("days_since_policy_parody", NO_RECENT_EVENT_DAYS))
 	var days_since_headline: int = int(history_metrics.get("days_since_headline", NO_RECENT_EVENT_DAYS))
 	var days_since_attention_beat: int = int(history_metrics.get("days_since_attention_beat", NO_RECENT_EVENT_DAYS))
 	var special_event_started: bool = days_since_special_macro < NO_RECENT_EVENT_DAYS
@@ -94,6 +111,15 @@ func resolve_day(run_state, trade_date: Dictionary, day_number: int, macro_state
 		lane_scores,
 		difficulty_profile,
 		attention_snapshot
+	)
+	_apply_policy_parody_debug_context(
+		debug_context,
+		day_number,
+		days_since_policy_parody,
+		days_since_headline,
+		days_since_attention_beat,
+		difficulty_profile,
+		lane_scores
 	)
 
 	if force_special_event:
@@ -275,6 +301,11 @@ func _build_directives(
 		"days_since_headline": days_since_headline,
 		"days_since_attention_beat": days_since_attention_beat,
 		"days_since_special_macro": days_since_special_macro,
+		"days_since_policy_parody": int(debug_context.get("days_since_policy_parody", NO_RECENT_EVENT_DAYS)),
+		"suppress_policy_parody_event": bool(debug_context.get("suppress_policy_parody_event", true)),
+		"policy_parody_probability_multiplier": float(debug_context.get("policy_parody_probability_multiplier", 0.0)),
+		"policy_parody_min_spacing_days": int(debug_context.get("policy_parody_min_spacing_days", 14)),
+		"policy_parody_attention_score": float(debug_context.get("policy_parody_attention_score", 0.0)),
 		"selected_lane": str(debug_context.get("selected_lane", attention_tier)),
 		"lane_scores": debug_context.get("lane_scores", {}).duplicate(true),
 		"difficulty_profile_id": str(debug_context.get("difficulty_profile_id", "normal")),
@@ -315,10 +346,12 @@ func _difficulty_profile(run_state) -> Dictionary:
 
 func _build_history_metrics(run_state, day_number: int) -> Dictionary:
 	var days_since_special_macro: int = _days_since_recent_event(run_state, day_number, Callable(self, "_is_special_macro_event"))
+	var days_since_policy_parody: int = _days_since_recent_event(run_state, day_number, Callable(self, "_is_policy_parody_event"))
 	var days_since_headline: int = _days_since_recent_event(run_state, day_number, Callable(self, "_is_headline_event"))
 	var days_since_attention_beat: int = _days_since_recent_event(run_state, day_number, Callable(self, "_is_attention_beat"))
 	return {
 		"days_since_special_macro": days_since_special_macro,
+		"days_since_policy_parody": days_since_policy_parody,
 		"days_since_headline": days_since_headline,
 		"days_since_attention_beat": days_since_attention_beat
 	}
@@ -354,6 +387,7 @@ func _build_attention_snapshot(
 
 	return {
 		"days_since_special_macro": int(history_metrics.get("days_since_special_macro", NO_RECENT_EVENT_DAYS)),
+		"days_since_policy_parody": int(history_metrics.get("days_since_policy_parody", NO_RECENT_EVENT_DAYS)),
 		"days_since_headline": int(history_metrics.get("days_since_headline", NO_RECENT_EVENT_DAYS)),
 		"days_since_attention_beat": int(history_metrics.get("days_since_attention_beat", NO_RECENT_EVENT_DAYS)),
 		"market_stress_score": _market_stress_score(macro_state, run_state.get_active_special_events()),
@@ -373,8 +407,14 @@ func _build_lane_scores(
 	quiet_pressure: bool
 ) -> Dictionary:
 	var days_since_special_macro: int = int(attention_snapshot.get("days_since_special_macro", NO_RECENT_EVENT_DAYS))
+	var days_since_policy_parody: int = int(attention_snapshot.get("days_since_policy_parody", NO_RECENT_EVENT_DAYS))
+	var days_since_attention_beat: int = int(attention_snapshot.get("days_since_attention_beat", NO_RECENT_EVENT_DAYS))
 	var special_due_days: float = max(float(difficulty_profile.get("special_due_days", 35)), 1.0)
 	var special_due_score: float = clamp(float(days_since_special_macro) / special_due_days, 0.0, 1.0)
+	var policy_due_days: float = max(float(difficulty_profile.get("policy_parody_due_days", 25)), 1.0)
+	var policy_due_score: float = clamp(float(days_since_policy_parody) / policy_due_days, 0.0, 1.0)
+	var policy_quiet_days: float = max(float(difficulty_profile.get("policy_parody_quiet_days", 3)), 1.0)
+	var policy_quiet_score: float = clamp(float(days_since_attention_beat) / policy_quiet_days, 0.0, 1.0)
 	var market_stress_score: float = float(attention_snapshot.get("market_stress_score", 0.0))
 	var best_company_score: float = float(attention_snapshot.get("best_company_attention_score", 0.0))
 	var dirty_market_pressure: float = float(attention_snapshot.get("dirty_market_pressure", 0.0))
@@ -398,12 +438,21 @@ func _build_lane_scores(
 		1.0
 	)
 	var dirty_score: float = clamp(dirty_market_pressure, 0.0, 1.0)
+	var policy_parody_score: float = clamp(
+		0.12 +
+		(policy_due_score * 0.48) +
+		(policy_quiet_score * 0.30) -
+		(market_stress_score * 0.10),
+		0.0,
+		1.0
+	)
 
 	return {
 		"macro": snappedf(macro_score, 0.001),
 		"company": snappedf(company_score, 0.001),
 		"scheduled": snappedf(scheduled_score, 0.001),
 		"dirty_market": snappedf(dirty_score, 0.001),
+		"policy_parody": snappedf(policy_parody_score, 0.001),
 		"digestion": 0.0
 	}
 
@@ -429,6 +478,55 @@ func _special_event_multiplier(days_since_special_macro: int, difficulty_profile
 	if days_since_special_macro >= NO_RECENT_EVENT_DAYS:
 		return 1.0
 	return 0.0
+
+
+func _apply_policy_parody_debug_context(
+	debug_context: Dictionary,
+	day_number: int,
+	days_since_policy_parody: int,
+	days_since_headline: int,
+	days_since_attention_beat: int,
+	difficulty_profile: Dictionary,
+	lane_scores: Dictionary
+) -> void:
+	var min_spacing_days: int = int(difficulty_profile.get("policy_parody_min_spacing_days", 14))
+	var probability_multiplier: float = _policy_parody_event_multiplier(
+		day_number,
+		days_since_policy_parody,
+		days_since_headline,
+		days_since_attention_beat,
+		difficulty_profile
+	)
+	debug_context["days_since_policy_parody"] = days_since_policy_parody
+	debug_context["suppress_policy_parody_event"] = probability_multiplier <= 0.0
+	debug_context["policy_parody_probability_multiplier"] = probability_multiplier
+	debug_context["policy_parody_min_spacing_days"] = min_spacing_days
+	debug_context["policy_parody_attention_score"] = float(lane_scores.get("policy_parody", 0.0))
+
+
+func _policy_parody_event_multiplier(
+	day_number: int,
+	days_since_policy_parody: int,
+	days_since_headline: int,
+	days_since_attention_beat: int,
+	difficulty_profile: Dictionary
+) -> float:
+	if day_number < POLICY_PARODY_MIN_TRIGGER_DAY:
+		return 0.0
+	if days_since_policy_parody < int(difficulty_profile.get("policy_parody_min_spacing_days", 14)):
+		return 0.0
+
+	var multiplier: float = 0.85
+	if days_since_policy_parody >= int(difficulty_profile.get("policy_parody_due_days", 25)):
+		multiplier = float(difficulty_profile.get("policy_parody_due_multiplier", 1.9))
+	elif days_since_policy_parody >= int(difficulty_profile.get("policy_parody_min_spacing_days", 14)):
+		multiplier = float(difficulty_profile.get("policy_parody_ready_multiplier", 1.2))
+
+	if days_since_attention_beat >= int(difficulty_profile.get("policy_parody_quiet_days", 3)):
+		multiplier *= 1.2
+	if days_since_headline <= int(difficulty_profile.get("digestion_days", 1)):
+		multiplier *= 0.65
+	return clamp(multiplier, 0.0, 3.0)
 
 
 func _build_company_attention_rows(run_state, day_number: int, difficulty_profile: Dictionary) -> Array:
@@ -826,6 +924,8 @@ func _is_headline_event(event_value: Variant) -> bool:
 	var event_family: String = str(event_data.get("event_family", ""))
 	var scope: String = str(event_data.get("scope", ""))
 	var category: String = str(event_data.get("category", ""))
+	if _is_policy_parody_event(event_data):
+		return false
 	return (
 		_is_special_macro_event(event_data) or
 		event_family in ["corporate_action", "index_review"] or
@@ -848,5 +948,17 @@ func _is_special_macro_event(event_value: Variant) -> bool:
 	var event_data: Dictionary = event_value
 	return (
 		str(event_data.get("scope", "")) == "market" and
-		str(event_data.get("event_family", "")) == "special"
+		str(event_data.get("event_family", "")) == "special" and
+		not _is_policy_parody_event(event_data)
+	)
+
+
+func _is_policy_parody_event(event_value: Variant) -> bool:
+	if typeof(event_value) != TYPE_DICTIONARY:
+		return false
+	var event_data: Dictionary = event_value
+	return (
+		str(event_data.get("shock_class", "")) == "policy_parody" or
+		str(event_data.get("category", "")).begins_with("policy_") or
+		str(event_data.get("event_id", "")).begins_with("policy_")
 	)

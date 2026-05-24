@@ -309,6 +309,14 @@
       "policy headlines are making the market more careful",
       "policy uncertainty is making investors wait for cleaner rules"
     ],
+    "policy_parody_mixed": [
+      "a sudden administration policy signal is making traders re-map winners and losers",
+      "policy surprise is turning into a fast argument across market desks"
+    ],
+    "policy_parody_negative": [
+      "a sudden administration policy signal is making traders cut risk first",
+      "policy uncertainty is pushing investors to demand a wider margin of safety"
+    ],
     "deal_post_positive": [
       "policy optimism is lifting interest in the more aggressive names",
       "the policy angle is giving speculative names a fresh reason to move"
@@ -415,6 +423,10 @@
         "Macro-style stories rarely hit every stock the same way. The first filter is who has exposure, and the second is who already had weak holders.",
         "The wider market is reacting first and asking questions later, which makes breadth and sector leadership more important than the index move alone."
       ],
+      "policy_parody": [
+        "Policy shocks can look like comedy for five minutes and still move money for the whole session. The first filter is who benefits directly, and the second is who is only riding the meme.",
+        "The market is treating the administration signal as both a joke and a risk input. That mix can make the first move loud while the cleaner sector read takes longer."
+      ],
       "company": [
         "The company-specific price action is still the useful clue. {focus_label} is {price_action_label}, and {flow_label}.",
         "For a single-name story, traders are less interested in perfect wording and more interested in whether the bid survives the first reaction."
@@ -460,6 +472,10 @@
       "special": [
         "Dealers are watching positioning rather than only headlines. Crowded names can move harder than clean names when a broad story hits.",
         "The source read is cautious: the first move can be emotional, but the second move usually tells which sectors truly benefit."
+      ],
+      "policy_parody": [
+        "Desk chatter is focused on the transmission path: budget, currency, commodity rules, or retail mood. The joke matters less than which balance sheets feel it.",
+        "One broker-side read was practical: if the policy line becomes paperwork, the rotation can last longer than the meme."
       ],
       "company": [
         "The name now has a reason to stay on watchlists, but conviction still depends on whether volume and price action agree.",
@@ -519,6 +535,10 @@
         "The wider story is still moving, so the next session should be read through sector leadership rather than only the index.",
         "For market watchers, the useful clue is who keeps moving after the first shock has faded."
       ],
+      "policy_parody": [
+        "The next useful clue is whether the policy line turns into paperwork or stays as a one-day administration thunderclap.",
+        "For market watchers, the joke is only the first layer. The real read is whether affected sectors keep moving after the headline cools."
+      ],
       "company": [
         "The next session should show whether this becomes a real setup or just another headline that briefly moved the price.",
         "The story has earned attention. Keeping that attention will depend on cleaner follow-through."
@@ -528,6 +548,43 @@
         "For now, the best read is to keep the headline in context and let the next session confirm or reject it."
       ]
     }
+  },
+  "policy_event_article_templates": {
+    "policy_free_lunch_budget_balloon": [
+      "JAKARTA - A ballooning free nutrition meal budget figure became the session's loudest policy item, with traders immediately mapping which listed suppliers could land the contracts and which names would carry the fiscal risk.",
+      "Consumer and staples counters drew the first round of interest because the program channels money into packaged food, logistics, distribution, and household basics. The bid was not clean across the board, but the theme was simple enough for fast money to read within minutes.",
+      "The other side of the trade sat in banks, infrastructure, and rate-sensitive names. Dealers said the issue was not about the rice or the side dish; it was whether this budget path would narrow room for the bond market later, and how patient the central bank would be willing to stay.",
+      "Several desks framed the move as a classic Jakarta pattern: one sentence out of the policy corridor becomes a sector map before the budget paperwork is visible. That is why the first reaction could feel like stimulus in one group and a fiscal caution signal in another.",
+      "The next test is whether the administration line turns into a clear procurement route, a published budget table, or just another round of retail-forum memes. Until that appears, the clean read stays the same: beneficiaries first, funding questions second."
+    ],
+    "policy_fiscal_guardian_swap": [
+      "JAKARTA - A cabinet reshuffle at the finance post put fiscal discipline back at the center of market conversation, after a figure known for caution was replaced by a louder budget chief promising faster execution.",
+      "Financial, property, and infrastructure names moved first because those groups are most sensitive to the market's trust in budget control, funding costs, and bond appetite. Traders were not pricing one person; they were pricing the change in style.",
+      "The early desk read was straightforward: speed can be bullish for project flow, but speed without a convincing guardrail will make risk managers cut exposure first. That tension made the headline feel bigger than a normal personnel rotation.",
+      "Local brokers described the flow as cautious rather than panicked. Foreign-sensitive names looked jumpier, while a few consumer names held better on hopes that state spending would reach the real economy faster.",
+      "The next useful clue is the new budget office's tone: disciplined targets, clear financing, and boring numbers would calm the market. Big promises without a clean table will keep volatility alive."
+    ],
+    "policy_market_speech_jolt": [
+      "JAKARTA - A senior official's remarks comparing frantic stock chasing to casino-like behavior hit speculative counters immediately, sparking a fast argument on trading desks between whether this was a joke or a genuine warning.",
+      "High-beta names, technology counters, and the most crowded names on retail forums wobbled first. Traders said the statement did not change any company's fundamental value, but it changed the mood around the most packed trades.",
+      "Retail desks saw the headline travel faster than the index move. Some players treated it as a joke, while others reduced exposure because an official's tone can move sentiment even when no new market-regulator rule has been signed.",
+      "The cleaner distinction sits between speculation and investment. Quality names with visible earnings were less affected, while stocks that live mostly off chat-group excitement had to prove there were buyers still willing to carry that risk.",
+      "The next session will show whether the speech becomes a one-day meme or a real risk filter. If speculative names keep fading after the joke cools down, the market will treat the comment as more than entertainment."
+    ],
+    "policy_village_fx_comment": [
+      "JAKARTA - A village-and-rupiah comment became the day's foreign-exchange talking point, after a cabinet-room line implied that ordinary people outside trading desks are not living their daily lives through foreign-currency screens.",
+      "Currency-sensitive counters moved first. Import-dependent consumers, transportation names, and financials looked softer, while energy and basic-industry exporters found a small narrative cushion from rupiah volatility.",
+      "Dealers said the market was not debating village life. What was being debated was whether officials were downplaying currency pressure at the exact moment traders wanted a clearer signal on rupiah stability from the central bank.",
+      "The headline also created the usual split: on social media, the phrase became meme material. On terminal screens and broker apps, it became a quick filter for who loses margin when the rupiah gets jumpy.",
+      "The next useful clue is whether any real action sits behind the comment, especially from the FX desk. Without that, the remark stays noise. With it, the market will keep rotating through exporters, importers, and banks."
+    ],
+    "policy_commodity_export_gate": [
+      "JAKARTA - A single-gate commodity export rule pulled producers, processors, and logistics names into the same argument, as traders tried to price who benefits from an administration-style centralized shipment queue.",
+      "Energy and basic-industry producers found support first because a tighter export channel can make supply feel more controlled. Downstream processors, transport names, and consumer-linked import users looked less comfortable with the bottleneck risk.",
+      "The headline carried a familiar policy-market pattern: traders do not wait for every rule detail before building a winners-and-losers list. The first move went to names with the simplest story.",
+      "Commodity desks said the key question is control over timing. If the single gate speeds up documentation and raises shipment discipline, producers benefit. If it slows shipments down, working capital and logistics margins become the problem.",
+      "The next check is in the technical rules. A clear operational guideline would make the rotation more durable, while a vague queue would keep the market noisy and make every shipment rumor feel tradeable."
+    ]
   },
   "voice_profiles": {
     "gorengan_daily": {

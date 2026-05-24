@@ -136,11 +136,11 @@ func _build_outlet_feed(
 		_append_unique_article(articles, seen_ids, market_wrap)
 
 	articles.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		if float(a.get("priority", 0.0)) == float(b.get("priority", 0.0)):
-			if int(a.get("day_index", -1)) == int(b.get("day_index", -1)):
+		if int(a.get("day_index", -1)) == int(b.get("day_index", -1)):
+			if float(a.get("priority", 0.0)) == float(b.get("priority", 0.0)):
 				return str(a.get("headline", "")) < str(b.get("headline", ""))
-			return int(a.get("day_index", -1)) > int(b.get("day_index", -1))
-		return float(a.get("priority", 0.0)) > float(b.get("priority", 0.0))
+			return float(a.get("priority", 0.0)) > float(b.get("priority", 0.0))
+		return int(a.get("day_index", -1)) > int(b.get("day_index", -1))
 	)
 	if articles.size() > article_limit:
 		articles = articles.slice(0, article_limit)
@@ -224,6 +224,8 @@ func _build_active_special_articles(
 		var elapsed_days: int = max(current_day_index - start_day_index + 1, 1)
 		var progress_ratio: float = clamp(float(elapsed_days) / float(duration_days), 0.0, 1.0)
 		var required_level: int = _intel_requirement_for_progress(progress_ratio)
+		if _is_policy_parody_source(event_data):
+			required_level = 1
 		if outlet_level < required_level:
 			continue
 
@@ -646,6 +648,9 @@ func _build_article_record(
 	var deck_template: String = _pick_voice_template(voice_profile, "deck_templates", stage_key, "%s|deck" % voice_seed)
 	var headline: String = _render_template(headline_template, context)
 	var deck: String = _render_template(deck_template, context)
+	if _is_policy_parody_source(source_data):
+		headline = str(source_data.get("headline", context.get("focus_label", "Policy shock"))).strip_edges()
+		deck = str(source_data.get("headline_detail", source_data.get("summary", context.get("detail_blend", "")))).strip_edges()
 	if headline.is_empty():
 		headline = str(source_data.get("headline", context.get("focus_label", "Market note")))
 	if deck.is_empty():
@@ -663,7 +668,7 @@ func _build_article_record(
 		"outlet_id": str(outlet.get("id", "")),
 		"outlet_label": str(outlet.get("label", "News")),
 		"intel_level": int(outlet.get("intel_level", 1)),
-		"headline": _compose_headline(outlet, voice_profile, headline, "%s|prefix" % voice_seed),
+		"headline": headline if _is_policy_parody_source(source_data) else _compose_headline(outlet, voice_profile, headline, "%s|prefix" % voice_seed),
 		"deck": deck,
 		"body": _build_article_body(feed_data, voice_profile, source_data, context, stage_key, voice_seed),
 		"day_index": day_index,
@@ -711,6 +716,11 @@ func _build_article_body(
 	stage_key: String,
 	seed_key: String
 ) -> String:
+	if _is_policy_parody_source(source_data):
+		var policy_body: String = _build_policy_parody_article_body(feed_data, source_data, context, seed_key)
+		if not policy_body.is_empty():
+			return policy_body
+
 	var lead_template: String = _pick_voice_template(voice_profile, "lead_templates", stage_key, "%s|lead" % seed_key)
 	var context_template: String = str(_pick_from_pool(voice_profile.get("context_templates", []), "%s|context" % seed_key))
 	var impact_template: String = str(_pick_from_pool(voice_profile.get("impact_templates", []), "%s|impact" % seed_key))
@@ -742,6 +752,27 @@ func _build_article_body(
 		paragraphs.append(impact_paragraph)
 	if not closing_paragraph.is_empty():
 		paragraphs.append(closing_paragraph)
+	return _join_paragraphs(paragraphs)
+
+
+func _build_policy_parody_article_body(feed_data: Dictionary, source_data: Dictionary, context: Dictionary, seed_key: String) -> String:
+	var article_templates: Dictionary = feed_data.get("policy_event_article_templates", {})
+	var template_keys: Array = _policy_parody_template_keys(source_data)
+	template_keys.append("policy_parody")
+	var templates: Array = []
+	for key_value in template_keys:
+		var key: String = str(key_value)
+		templates = article_templates.get(key, [])
+		if not templates.is_empty():
+			break
+	if templates.is_empty():
+		return ""
+
+	var paragraphs: Array = []
+	for template_value in templates:
+		var rendered_paragraph: String = _join_sentences([_render_template(str(template_value), context)])
+		if not rendered_paragraph.is_empty():
+			paragraphs.append(rendered_paragraph)
 	return _join_paragraphs(paragraphs)
 
 
@@ -840,6 +871,7 @@ func _build_story_context(
 		"sector_name": sector_name,
 		"person_name": person_name,
 		"provider_label": provider_label,
+		"event_id": str(source_data.get("event_id", "")),
 		"scope": scope,
 		"tone": tone,
 		"focus_label": focus_label,
@@ -1171,6 +1203,13 @@ func _pick_driver_phrase(feed_data: Dictionary, source_data: Dictionary, tone: S
 	var event_family: String = str(source_data.get("event_family", ""))
 	var scope: String = str(source_data.get("scope", ""))
 	var keys: Array = []
+	if _is_policy_parody_source(source_data):
+		for policy_key_value in _policy_parody_template_keys(source_data):
+			var policy_key: String = str(policy_key_value)
+			keys.append("%s_%s" % [policy_key, tone])
+			keys.append(policy_key)
+		keys.append("policy_parody_%s" % tone)
+		keys.append("policy_parody")
 	if category == "market_wrap":
 		keys.append("market_wrap")
 	if category.begins_with("index_"):
@@ -1225,6 +1264,15 @@ func _body_template_keys(source_data: Dictionary) -> Array:
 	var event_family: String = str(source_data.get("event_family", ""))
 	var scope: String = str(source_data.get("scope", ""))
 	var keys: Array = []
+	if _is_policy_parody_source(source_data):
+		for policy_key_value in _policy_parody_template_keys(source_data):
+			var policy_key: String = str(policy_key_value)
+			if not tone.is_empty():
+				keys.append("%s_%s" % [policy_key, tone])
+			keys.append(policy_key)
+		if not tone.is_empty():
+			keys.append("policy_parody_%s" % tone)
+		keys.append("policy_parody")
 	if not category.is_empty() and not tone.is_empty():
 		keys.append("%s_%s" % [category, tone])
 	if not category.is_empty():
@@ -1260,6 +1308,8 @@ func _category_family_key(source_data: Dictionary) -> String:
 		return "corporate_meeting"
 	if category.contains("rumor"):
 		return "rumor"
+	if _is_policy_parody_source(source_data):
+		return "policy_parody"
 	if category in ["earnings", "sector_rotation", "management", "market_wrap"]:
 		return category
 	var event_family: String = str(source_data.get("event_family", ""))
@@ -1286,6 +1336,8 @@ func _public_confidence_label(stage_key: String, source_data: Dictionary) -> Str
 		return "Company response"
 	if category.begins_with("roadmap_"):
 		return "Public signals"
+	if _is_policy_parody_source(source_data):
+		return "Policy shock"
 	match stage_key:
 		"whisper":
 			return "Early report"
@@ -1315,6 +1367,8 @@ func _public_story_angle(source_data: Dictionary, stage_key: String, tone: Strin
 		return "Sector rotation"
 	if category == "management":
 		return "Management change"
+	if _is_policy_parody_source(source_data):
+		return _policy_parody_story_angle(category)
 	if category == "market_wrap" or stage_key == "market_wrap" or scope == "market":
 		return "Market breadth"
 	if category.contains("rumor"):
@@ -1324,6 +1378,42 @@ func _public_story_angle(source_data: Dictionary, stage_key: String, tone: Strin
 	if tone == "positive":
 		return "Momentum watch"
 	return "Developing story"
+
+
+func _is_policy_parody_source(source_data: Dictionary) -> bool:
+	return (
+		str(source_data.get("shock_class", "")) == "policy_parody" or
+		str(source_data.get("category", "")).begins_with("policy_") or
+		str(source_data.get("event_id", "")).begins_with("policy_") or
+		str(source_data.get("id", "")).begins_with("active_special|policy_")
+	)
+
+
+func _policy_parody_template_keys(source_data: Dictionary) -> Array:
+	var keys: Array = []
+	var event_id: String = str(source_data.get("event_id", ""))
+	if event_id.begins_with("policy_"):
+		keys.append(event_id)
+	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("policy_"):
+		keys.append(category)
+	return keys
+
+
+func _policy_parody_story_angle(category: String) -> String:
+	match category:
+		"policy_fiscal_shock":
+			return "Fiscal shock"
+		"policy_commodity_gate":
+			return "Commodity rule"
+		"policy_fx_comment":
+			return "FX comment"
+		"policy_market_speech":
+			return "Market speech"
+		"policy_free_meal":
+			return "Policy shock"
+		_:
+			return "Policy shock"
 
 
 func _author_for_article(feed_data: Dictionary, outlet: Dictionary, source_data: Dictionary, context: Dictionary, article_id: String) -> Dictionary:
