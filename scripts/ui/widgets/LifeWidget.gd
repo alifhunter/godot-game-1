@@ -334,6 +334,7 @@ func _build_ui() -> void:
 	_build_cars_tab(cars_tab)
 	_build_finance_tab(finance_tab)
 	_style_buttons(self)
+	_style_primary_buttons()
 
 
 func _set_empty_state() -> void:
@@ -973,10 +974,10 @@ func _add_property_catalog_row(catalog_row: Dictionary) -> void:
 		]
 	)
 	row.add_child(detail)
-	var buy_button := _make_asset_button("Buy")
+	var buy_button := _make_asset_button("Buy", true)
 	buy_button.pressed.connect(_on_buy_property_pressed.bind(str(catalog_row.get("catalog_id", catalog_row.get("id", ""))), str(catalog_row.get("location_id", "jakarta")), false))
 	row.add_child(buy_button)
-	var home_button := _make_asset_button("Buy as Home")
+	var home_button := _make_asset_button("Buy as Home", true)
 	home_button.pressed.connect(_on_buy_property_pressed.bind(str(catalog_row.get("catalog_id", catalog_row.get("id", ""))), str(catalog_row.get("location_id", "jakarta")), true))
 	row.add_child(home_button)
 
@@ -1017,7 +1018,7 @@ func _add_car_catalog_row(catalog_row: Dictionary) -> void:
 		]
 	)
 	row.add_child(detail)
-	var buy_button := _make_asset_button("Buy")
+	var buy_button := _make_asset_button("Buy", true)
 	buy_button.pressed.connect(_on_buy_car_pressed.bind(str(catalog_row.get("id", ""))))
 	row.add_child(buy_button)
 
@@ -1070,11 +1071,14 @@ func _make_asset_detail_label(title: String, detail: String) -> Label:
 	return label
 
 
-func _make_asset_button(text: String) -> Button:
+func _make_asset_button(text: String, primary: bool = false) -> Button:
 	var button := Button.new()
 	button.text = text
 	button.custom_minimum_size = Vector2(92, 30)
-	_style_button(button)
+	if primary:
+		_style_primary_button(button)
+	else:
+		_style_button(button)
 	return button
 
 
@@ -1420,6 +1424,16 @@ func _style_button(button: Button) -> void:
 	button.add_theme_color_override("font_color", COLOR_BG)
 	button.add_theme_color_override("font_hover_color", COLOR_BG)
 	button.add_theme_color_override("font_pressed_color", COLOR_BG)
+
+
+func _style_primary_buttons() -> void:
+	_style_primary_button(update_plan_button)
+
+
+func _style_primary_button(button: Button) -> void:
+	if button == null:
+		return
+	UiTheme.style_button(button, "desktop_primary")
 
 
 func _clear_rows(container: Node) -> void:

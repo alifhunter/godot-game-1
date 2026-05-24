@@ -505,6 +505,7 @@ func _build_ui() -> void:
 
 	_build_report_overlay()
 	_style_buttons(self)
+	_style_primary_buttons()
 
 
 func _build_report_overlay() -> void:
@@ -1651,9 +1652,8 @@ func _style_report_action_button(button: Button, variant: String) -> void:
 	var border: Color = Color(gold.r, gold.g, gold.b, 0.62)
 	var font: Color = cream
 	if variant == "gold":
-		bg = gold
-		border = gold
-		font = text_color
+		UiTheme.style_button(button, "desktop_primary")
+		return
 	elif variant == "quiet":
 		border = Color(gold.r, gold.g, gold.b, 0.36)
 		font = cream
@@ -3495,6 +3495,26 @@ func _style_button(button: Button) -> void:
 	button.add_theme_color_override("font_pressed_color", COLOR_BG)
 	button.add_theme_color_override("font_disabled_color", Color(COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, 0.60))
 	button.add_theme_font_size_override("font_size", _theme_font_size("button", 14))
+
+
+func _style_primary_buttons() -> void:
+	for button_value in [
+		sidebar_create_button,
+		create_button,
+		update_button,
+		add_evidence_button,
+		generate_report_button,
+		view_paper_button,
+		report_regenerate_button
+	]:
+		var button: Button = button_value as Button
+		_style_primary_button(button)
+
+
+func _style_primary_button(button: Button) -> void:
+	if button == null:
+		return
+	UiTheme.style_button(button, "desktop_primary")
 
 
 func _format_currency(value: float) -> String:

@@ -5607,7 +5607,7 @@ func _ensure_academy_ui() -> void:
 	side_vbox.add_child(academy_glossary_list)
 	_apply_academy_text_theme()
 	_style_academy_primary_button(academy_mark_read_button)
-	_style_button(academy_next_button, Color(0.894118, 0.85098, 0.678431, 1), COLOR_ACADEMY_BORDER, COLOR_WINDOW_TEXT, 0)
+	_style_academy_primary_button(academy_next_button)
 	_apply_academy_button_padding(academy_mark_read_button, 14)
 	_apply_academy_button_padding(academy_next_button, 14)
 	_restyle_academy_controls()
@@ -5752,14 +5752,9 @@ func _apply_academy_button_padding(button: Button, padding: int = 24) -> void:
 
 
 func _style_academy_primary_button(button: Button) -> void:
-	_style_button(button, COLOR_ACADEMY_BROWN, COLOR_ACADEMY_BROWN.darkened(0.22), COLOR_TEXT, 0)
-	var normal_style: StyleBoxFlat = button.get_theme_stylebox("normal") as StyleBoxFlat
-	if normal_style != null:
-		var disabled_style: StyleBoxFlat = normal_style.duplicate()
-		disabled_style.bg_color = COLOR_ACADEMY_BROWN.lightened(0.24)
-		disabled_style.border_color = COLOR_ACADEMY_BROWN.darkened(0.12)
-		button.add_theme_stylebox_override("disabled", disabled_style)
-	button.add_theme_color_override("font_disabled_color", Color(1.0, 0.976471, 0.929412, 0.78))
+	if button == null:
+		return
+	UiTheme.style_button(button, "desktop_primary")
 
 
 func _style_academy_selection_chip(label: Label) -> void:
@@ -5904,13 +5899,8 @@ func _style_academy_quiz_option_button(option_button: OptionButton) -> void:
 
 
 func _style_academy_quiz_submit_button(button: Button) -> void:
-	_style_button(button, COLOR_ACADEMY_BROWN, COLOR_ACADEMY_BROWN.darkened(0.24), Color(1.0, 0.976471, 0.929412, 1), 0)
+	UiTheme.style_button(button, "desktop_primary")
 	_apply_academy_button_padding(button, 18)
-	button.add_theme_color_override("font_color", Color(1.0, 0.976471, 0.929412, 1))
-	button.add_theme_color_override("font_hover_color", Color(1.0, 0.976471, 0.929412, 1))
-	button.add_theme_color_override("font_pressed_color", Color(1.0, 0.976471, 0.929412, 1))
-	button.add_theme_color_override("font_focus_color", Color(1.0, 0.976471, 0.929412, 1))
-	button.add_theme_color_override("font_disabled_color", Color(1.0, 0.976471, 0.929412, 0.72))
 
 
 func _restyle_academy_controls() -> void:
@@ -5945,7 +5935,7 @@ func _restyle_academy_controls() -> void:
 		_style_academy_primary_button(academy_mark_read_button)
 		_apply_academy_button_padding(academy_mark_read_button, 14)
 	if academy_next_button != null:
-		_style_button(academy_next_button, Color(0.894118, 0.85098, 0.678431, 1), COLOR_ACADEMY_BORDER, COLOR_WINDOW_TEXT, 0)
+		_style_academy_primary_button(academy_next_button)
 		_apply_academy_button_padding(academy_next_button, 14)
 	if academy_lesson_content_vbox != null:
 		_restyle_academy_content_nodes(academy_lesson_content_vbox)
@@ -21964,20 +21954,20 @@ func _apply_visual_theme() -> void:
 	_style_button(financials_previous_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(financials_next_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
 	_style_button(debug_close_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
-	_style_button(news_meet_contact_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
+	_style_cream_app_button(news_meet_contact_button, true)
 	if news_open_meeting_button != null:
-		_style_button(news_open_meeting_button, Color(0.866667, 0.807843, 0.635294, 1), Color(0.709804, 0.607843, 0.345098, 1), COLOR_WINDOW_TEXT, 0)
+		_style_cream_app_button(news_open_meeting_button, true)
 	_style_button(profile_meet_contact_button, Color(0.27451, 0.219608, 0.0980392, 1), Color(0.819608, 0.631373, 0.254902, 1), COLOR_TEXT, 0)
 	_style_cream_app_button(network_meet_button, true)
 	_style_cream_app_button(network_tip_button, true)
-	_style_cream_app_button(network_request_button)
-	_style_cream_app_button(network_referral_button)
+	_style_cream_app_button(network_request_button, true)
+	_style_cream_app_button(network_referral_button, true)
 	if network_followup_button != null:
-		_style_cream_app_button(network_followup_button)
+		_style_cream_app_button(network_followup_button, true)
 	if network_source_check_button != null:
 		_style_cream_app_button(network_source_check_button, true)
 	if network_open_meeting_button != null:
-		_style_cream_app_button(network_open_meeting_button)
+		_style_cream_app_button(network_open_meeting_button, true)
 	if corporate_meeting_panel != null:
 		_style_panel(corporate_meeting_panel, Color(0.968627, 0.964706, 0.898039, 1), 0)
 	if corporate_meeting_attend_button != null:
@@ -22752,7 +22742,7 @@ func _style_news_newspaper_ui() -> void:
 	if news_meet_contact_button != null:
 		_style_news_command_button(news_meet_contact_button, true)
 	if news_open_meeting_button != null:
-		_style_news_command_button(news_open_meeting_button, false)
+		_style_news_command_button(news_open_meeting_button, true)
 
 
 func _style_news_label(label: Label, color: Color, font_size: int, font_resource: Font = null) -> void:
@@ -22853,36 +22843,7 @@ func _style_news_outlet_button(button: Button, is_selected: bool, is_unlocked: b
 func _style_news_command_button(button: Button, is_primary: bool) -> void:
 	if button == null:
 		return
-	var fill_color: Color = COLOR_MARKET_PAPER_RED if is_primary else COLOR_MARKET_PAPER_RAIL
-	var border_color: Color = COLOR_WINDOW_TEXT if is_primary else COLOR_MARKET_PAPER_BORDER
-	var font_color: Color = COLOR_MARKET_PAPER_CARD if is_primary else COLOR_WINDOW_TEXT
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = fill_color
-	normal.border_color = border_color
-	normal.set_border_width_all(1)
-	normal.corner_radius_top_left = 0
-	normal.corner_radius_top_right = 0
-	normal.corner_radius_bottom_right = 0
-	normal.corner_radius_bottom_left = 0
-	normal.content_margin_left = 12
-	normal.content_margin_right = 12
-	normal.content_margin_top = 9
-	normal.content_margin_bottom = 9
-	var hover := normal.duplicate()
-	hover.bg_color = fill_color.lightened(0.06)
-	var pressed := normal.duplicate()
-	pressed.bg_color = fill_color.darkened(0.07)
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", normal)
-	button.add_theme_stylebox_override("disabled", normal)
-	button.add_theme_color_override("font_color", font_color)
-	button.add_theme_color_override("font_hover_color", font_color)
-	button.add_theme_color_override("font_pressed_color", font_color)
-	button.add_theme_color_override("font_focus_color", font_color)
-	button.add_theme_color_override("font_disabled_color", Color(font_color.r, font_color.g, font_color.b, 0.52))
-	_apply_font_override_to_control(button, 13, _get_dashboard_title_font())
+	UiTheme.style_button(button, "desktop_primary" if is_primary else "desktop_secondary")
 
 
 func _style_social_filter_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
