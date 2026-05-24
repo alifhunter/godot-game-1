@@ -108,7 +108,7 @@ size_flags_vertical = 3
 
 [node name="MainMenuBuildLabel" type="Label" parent="Margin/ScreenRoot/HomeScreen/CenterContent/MainRow/ActionCard/ActionMargin/ActionVBox"]
 horizontal_alignment = 1
-text = "Build 2026.05.03.1"
+text = "Build 2026.05.24.1"
 
 [node name="DifficultyScreen" type="Control" parent="Margin/ScreenRoot"]
 visible = false

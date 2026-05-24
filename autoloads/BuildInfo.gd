@@ -2,9 +2,9 @@ extends Node
 
 const PRODUCT_NAME := "Buy High Sell Low Stock Trading Simulator"
 const VERSION := "0.1.0-ea"
-const BUILD_NUMBER := "2026.05.17.1"
+const BUILD_NUMBER := "2026.05.24.1"
 const BUILD_CHANNEL := "Steam Platform RC"
-const BUILD_DATE := "2026-05-17"
+const BUILD_DATE := "2026-05-24"
 
 
 func get_product_name() -> String:
