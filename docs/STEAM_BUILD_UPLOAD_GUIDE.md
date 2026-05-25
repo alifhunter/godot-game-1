@@ -35,6 +35,12 @@ steam_api64.dll
 
 The current export preset embeds the PCK into the executable. If that changes, include the exported `.pck` beside the executable too.
 
+Icon sanity check:
+
+- `project.godot` `config/icon` controls the runtime window/taskbar icon and should point to an imported image such as `res://assets/logo/logobhsl.png`.
+- `export_presets.cfg` `application/icon` controls the Windows executable resource and should point to `res://assets/icons/icon.ico`.
+- After changing either icon, re-export the Windows executable before copying files into ContentBuilder. Windows and Steam may cache old taskbar icons for the same executable path; restart Steam or clear the shortcut/taskbar cache if the new build still displays an old icon.
+
 ## 2. Copy Build Files Into ContentBuilder
 
 Copy the exported Windows files plus root release paperwork files into:

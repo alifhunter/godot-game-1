@@ -4307,8 +4307,9 @@ func _validate_ftue_flow() -> Dictionary:
 			"success": false,
 			"message": "Smoke test expected the guided RUPSLB to include an approachable room lead. Leads: %s" % str(guided_lead_debug_rows)
 		}
-	var guided_marker_row: int = int(guided_lead_index / 5)
-	var guided_marker_column: int = guided_lead_index % 5
+	var guided_marker_index: int = _rupslb_marker_index_for_lead_index(guided_lead_index)
+	var guided_marker_row: int = int(guided_marker_index / 5)
+	var guided_marker_column: int = guided_marker_index % 5
 	var guided_lead_marker: Button = game_root.find_child("RupslbAttendeeMarker_%d_%d" % [guided_marker_row, guided_marker_column], true, false) as Button
 	if guided_lead_marker == null:
 		game_root.queue_free()
@@ -5423,12 +5424,27 @@ func _run_scenario(
 		var rupslb_agree_button: Button = game_root.find_child("RupslbAgreeButton", true, false) as Button
 		var rupslb_close_button: Button = game_root.find_child("RupslbCloseButton", true, false) as Button
 		var rupslb_result_label: Label = game_root.find_child("RupslbResultLabel", true, false) as Label
+		var rupslb_main_panel: PanelContainer = game_root.find_child("RupslbMainPanel", true, false) as PanelContainer
+		var rupslb_stage_panel: PanelContainer = game_root.find_child("RupslbStagePanel", true, false) as PanelContainer
+		var rupslb_info_panel: PanelContainer = game_root.find_child("RupslbInfoPanel", true, false) as PanelContainer
+		var rupslb_arrival_chip: PanelContainer = game_root.find_child("RupslbStageChip_arrival", true, false) as PanelContainer
+		var rupslb_action_stack: VBoxContainer = game_root.find_child("RupslbActionStack", true, false) as VBoxContainer
+		var rupslb_attendee_stage: Control = game_root.find_child("RupslbAttendeeStage", true, false) as Control
+		var rupslb_podium_panel: PanelContainer = game_root.find_child("RupslbPodiumPanel", true, false) as PanelContainer
+		var rupslb_description_vbox: VBoxContainer = game_root.find_child("RupslbDescriptionVBox", true, false) as VBoxContainer
 		if (
 			rupslb_overlay == null or
 			rupslb_continue_button == null or
 			rupslb_agree_button == null or
 			rupslb_close_button == null or
 			rupslb_result_label == null or
+			rupslb_main_panel == null or
+			rupslb_stage_panel == null or
+			rupslb_arrival_chip == null or
+			rupslb_action_stack == null or
+			rupslb_attendee_stage == null or
+			rupslb_podium_panel == null or
+			rupslb_description_vbox == null or
 			not rupslb_overlay.visible or
 			not game_root.is_rupslb_meeting_overlay_visible() or
 			game_root.get_rupslb_meeting_stage_id() != "arrival"
@@ -5438,6 +5454,31 @@ func _run_scenario(
 			return {
 				"success": false,
 				"message": "Smoke test expected opening an interactive RUPSLB meeting to enter the dedicated fullscreen overlay at the Arrival stage."
+			}
+
+		var rupslb_overlay_rect: Rect2 = rupslb_overlay.get_global_rect()
+		var rupslb_panel_rect: Rect2 = rupslb_main_panel.get_global_rect()
+		var rupslb_continue_rect: Rect2 = rupslb_continue_button.get_global_rect()
+		var rupslb_close_rect: Rect2 = rupslb_close_button.get_global_rect()
+		var arrival_chip_style: StyleBoxFlat = rupslb_arrival_chip.get_theme_stylebox("panel") as StyleBoxFlat
+		if (
+			absf((rupslb_panel_rect.position.x + rupslb_panel_rect.size.x * 0.5) - (rupslb_overlay_rect.position.x + rupslb_overlay_rect.size.x * 0.5)) > 10.0 or
+			absf((rupslb_panel_rect.position.y + rupslb_panel_rect.size.y * 0.5) - (rupslb_overlay_rect.position.y + rupslb_overlay_rect.size.y * 0.5)) > 10.0 or
+			(rupslb_overlay_rect.size.x > 1000.0 and rupslb_panel_rect.size.x > 940.0) or
+			rupslb_info_panel != null or
+			not rupslb_stage_panel.visible or
+			arrival_chip_style == null or
+			arrival_chip_style.bg_color.b <= arrival_chip_style.bg_color.r or
+			arrival_chip_style.bg_color.b < 0.45 or
+			rupslb_continue_button.get_parent() != rupslb_action_stack or
+			rupslb_close_button.get_parent() != rupslb_action_stack or
+			rupslb_close_rect.position.y <= rupslb_continue_rect.position.y
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the RUPSLB overlay to use a centered vertical card, blue active stepper, one preview panel, and stacked actions."
 			}
 
 		var opening_session_snapshot: Dictionary = GameManager.get_corporate_meeting_session_snapshot(eligible_meeting_id)
@@ -5495,20 +5536,189 @@ func _run_scenario(
 					"message": "Smoke test expected the interactive RUPSLB flow to progress through %s in order." % expected_stage_id
 				}
 			if expected_stage_id == "seating":
-				var lead_marker_row: int = int(approachable_lead_index / 5)
-				var lead_marker_column: int = approachable_lead_index % 5
+				var lead_marker_index: int = _rupslb_marker_index_for_lead_index(approachable_lead_index)
+				var lead_marker_row: int = int(lead_marker_index / 5)
+				var lead_marker_column: int = lead_marker_index % 5
 				var lead_marker: Button = game_root.find_child("RupslbAttendeeMarker_%d_%d" % [lead_marker_row, lead_marker_column], true, false) as Button
 				var lead_bubble: PanelContainer = game_root.find_child("RupslbLeadBubble_%d_%d" % [lead_marker_row, lead_marker_column], true, false) as PanelContainer
 				var lead_bubble_layer: Control = game_root.find_child("RupslbBubbleLayer", true, false) as Control
-				if lead_marker == null or lead_bubble == null or lead_bubble_layer == null or lead_bubble.get_parent() != lead_bubble_layer or not lead_bubble.visible:
+				if lead_marker == null or lead_bubble == null or lead_bubble_layer == null or lead_bubble.get_parent() != lead_bubble_layer:
 					game_root.queue_free()
 					await get_tree().process_frame
 					return {
 						"success": false,
-						"message": "Smoke test expected RUPSLB meeting leads to render clickable attendee markers and top-layer speech bubbles at Seating."
+						"message": "Smoke test expected RUPSLB meeting leads to render clickable attendee markers and top-layer speech bubbles."
+					}
+				await get_tree().create_timer(1.1).timeout
+				var attendee_stage_rect: Rect2 = rupslb_attendee_stage.get_global_rect()
+				var description_rect: Rect2 = rupslb_description_vbox.get_global_rect()
+				var visible_bubble_indices: Array = _visible_rupslb_lead_bubble_indices(game_root, opening_leads.size())
+				if visible_bubble_indices.size() != 1:
+					game_root.queue_free()
+					await get_tree().process_frame
+					return {
+						"success": false,
+						"message": "Smoke test expected the RUPSLB bubble carousel to show exactly one lead bubble at a time."
+					}
+				var first_visible_bubble_index: int = int(visible_bubble_indices[0])
+				var first_visible_bubble: PanelContainer = game_root.find_child("RupslbLeadBubble_%d_%d" % [int(first_visible_bubble_index / 5), first_visible_bubble_index % 5], true, false) as PanelContainer
+				var first_visible_marker: Button = game_root.find_child("RupslbAttendeeMarker_%d_%d" % [int(first_visible_bubble_index / 5), first_visible_bubble_index % 5], true, false) as Button
+				if (
+					first_visible_bubble == null or
+					first_visible_marker == null or
+					not _rupslb_bubble_rect_is_safe(first_visible_bubble.get_global_rect(), attendee_stage_rect, description_rect) or
+					first_visible_bubble_index >= 5
+				):
+					game_root.queue_free()
+					await get_tree().process_frame
+					return {
+						"success": false,
+						"message": "Smoke test expected the RUPSLB bubble carousel to start with a safe top-row bubble."
+					}
+				var podium_rect: Rect2 = rupslb_podium_panel.get_global_rect()
+				var row_centers: Array = [[], [], []]
+				var column_centers: Array = [[], [], [], [], []]
+				var expected_marker_size: Vector2 = Vector2.ZERO
+				for attendee_marker_index in range(15):
+					var attendee_marker_row: int = int(attendee_marker_index / 5)
+					var attendee_marker_column: int = attendee_marker_index % 5
+					var attendee_marker: Button = game_root.find_child("RupslbAttendeeMarker_%d_%d" % [attendee_marker_row, attendee_marker_column], true, false) as Button
+					if attendee_marker == null:
+						game_root.queue_free()
+						await get_tree().process_frame
+						return {
+							"success": false,
+							"message": "Smoke test expected every RUPSLB attendee marker to remain available in the redesigned meeting room."
+						}
+					var attendee_marker_rect: Rect2 = attendee_marker.get_global_rect()
+					if expected_marker_size == Vector2.ZERO:
+						expected_marker_size = attendee_marker_rect.size
+					elif absf(attendee_marker_rect.size.x - expected_marker_size.x) > 1.0 or absf(attendee_marker_rect.size.y - expected_marker_size.y) > 1.0:
+						game_root.queue_free()
+						await get_tree().process_frame
+						return {
+							"success": false,
+							"message": "Smoke test expected all RUPSLB attendee markers to use the same visual size."
+						}
+					if (
+						attendee_marker_rect.position.x < attendee_stage_rect.position.x - 0.5 or
+						attendee_marker_rect.position.y < attendee_stage_rect.position.y - 0.5 or
+						attendee_marker_rect.end.x > attendee_stage_rect.end.x + 0.5 or
+						attendee_marker_rect.end.y > attendee_stage_rect.end.y + 0.5
+					):
+						game_root.queue_free()
+						await get_tree().process_frame
+						return {
+							"success": false,
+							"message": "Smoke test expected RUPSLB attendee markers to stay inside the host/people preview area."
+						}
+					if attendee_marker_rect.intersects(podium_rect):
+						game_root.queue_free()
+						await get_tree().process_frame
+						return {
+							"success": false,
+							"message": "Smoke test expected RUPSLB attendee markers not to overlap the podium."
+						}
+					row_centers[attendee_marker_row].append(attendee_marker_rect.position.y + attendee_marker_rect.size.y * 0.5)
+					column_centers[attendee_marker_column].append(attendee_marker_rect.position.x + attendee_marker_rect.size.x * 0.5)
+				for row_index in range(3):
+					var row_values: Array = row_centers[row_index]
+					for row_center_value in row_values:
+						if absf(float(row_center_value) - float(row_values[0])) > 8.0:
+							game_root.queue_free()
+							await get_tree().process_frame
+							return {
+								"success": false,
+								"message": "Smoke test expected RUPSLB attendees to align into three clean seating rows."
+							}
+					if row_index > 0 and float(row_centers[row_index][0]) <= float(row_centers[row_index - 1][0]) + 20.0:
+						game_root.queue_free()
+						await get_tree().process_frame
+						return {
+							"success": false,
+							"message": "Smoke test expected RUPSLB seating rows to be vertically separated."
+						}
+				for column_index in range(5):
+					var column_values: Array = column_centers[column_index]
+					for column_center_value in column_values:
+						if absf(float(column_center_value) - float(column_values[0])) > 8.0:
+							game_root.queue_free()
+							await get_tree().process_frame
+							return {
+								"success": false,
+								"message": "Smoke test expected RUPSLB attendees to align into five clean seating columns."
+							}
+					if column_index > 0 and float(column_centers[column_index][0]) <= float(column_centers[column_index - 1][0]) + 20.0:
+						game_root.queue_free()
+						await get_tree().process_frame
+						return {
+							"success": false,
+							"message": "Smoke test expected RUPSLB seating columns to be horizontally separated."
+						}
+				for lead_index in range(opening_leads.size()):
+					var lead_slot_index: int = _rupslb_marker_index_for_lead_index(lead_index)
+					var lead_slot_row: int = int(lead_slot_index / 5)
+					var lead_slot_column: int = lead_slot_index % 5
+					var lead_slot_marker: Button = game_root.find_child("RupslbAttendeeMarker_%d_%d" % [lead_slot_row, lead_slot_column], true, false) as Button
+					if lead_slot_marker == null or lead_slot_marker.disabled:
+						game_root.queue_free()
+						await get_tree().process_frame
+						return {
+							"success": false,
+							"message": "Smoke test expected RUPSLB lead slots to remain clickable inside the 3x5 seating grid."
+						}
+					var lead_slot_rect: Rect2 = lead_slot_marker.get_global_rect()
+					var lead_slot_center_x: float = lead_slot_rect.position.x + lead_slot_rect.size.x * 0.5
+					if attendee_stage_rect.size.x >= 600.0 and (lead_slot_center_x < attendee_stage_rect.position.x + attendee_stage_rect.size.x * 0.16 or lead_slot_center_x > attendee_stage_rect.end.x - attendee_stage_rect.size.x * 0.16):
+						game_root.queue_free()
+						await get_tree().process_frame
+						return {
+							"success": false,
+							"message": "Smoke test expected RUPSLB lead markers to sit in balanced grid seats, not at the stage edges."
+						}
+				await get_tree().create_timer(4.8).timeout
+				var second_visible_bubble_indices: Array = _visible_rupslb_lead_bubble_indices(game_root, opening_leads.size())
+				if second_visible_bubble_indices.size() != 1 or int(second_visible_bubble_indices[0]) == first_visible_bubble_index:
+					game_root.queue_free()
+					await get_tree().process_frame
+					return {
+						"success": false,
+						"message": "Smoke test expected the RUPSLB bubble carousel to advance to the next lead bubble."
+					}
+				await get_tree().create_timer(4.8).timeout
+				var lower_visible_bubble_indices: Array = _visible_rupslb_lead_bubble_indices(game_root, opening_leads.size())
+				if lower_visible_bubble_indices.size() != 1:
+					game_root.queue_free()
+					await get_tree().process_frame
+					return {
+						"success": false,
+						"message": "Smoke test expected the RUPSLB bubble carousel to keep showing one bubble after looping."
+					}
+				var lower_visible_bubble_index: int = int(lower_visible_bubble_indices[0])
+				var lower_visible_bubble: PanelContainer = game_root.find_child("RupslbLeadBubble_%d_%d" % [int(lower_visible_bubble_index / 5), lower_visible_bubble_index % 5], true, false) as PanelContainer
+				var lower_visible_marker: Button = game_root.find_child("RupslbAttendeeMarker_%d_%d" % [int(lower_visible_bubble_index / 5), lower_visible_bubble_index % 5], true, false) as Button
+				if (
+					lower_visible_bubble == null or
+					lower_visible_marker == null or
+					not _rupslb_bubble_rect_is_safe(lower_visible_bubble.get_global_rect(), attendee_stage_rect, description_rect) or
+					lower_visible_bubble_index < 10
+				):
+					game_root.queue_free()
+					await get_tree().process_frame
+					return {
+						"success": false,
+						"message": "Smoke test expected the RUPSLB bubble carousel to reach a safe lower-row bubble."
 					}
 				lead_marker.emit_signal("pressed")
 				await get_tree().process_frame
+				var clicked_visible_bubble_indices: Array = _visible_rupslb_lead_bubble_indices(game_root, opening_leads.size())
+				if clicked_visible_bubble_indices.size() != 1 or int(clicked_visible_bubble_indices[0]) != lead_marker_index:
+					game_root.queue_free()
+					await get_tree().process_frame
+					return {
+						"success": false,
+						"message": "Smoke test expected clicking a RUPSLB attendee to prioritize that attendee's speech bubble."
+					}
 				var lead_card: PanelContainer = game_root.find_child("RupslbLeadCard", true, false) as PanelContainer
 				var lead_title_label: Label = game_root.find_child("RupslbLeadTitleLabel", true, false) as Label
 				var lead_approach_button: Button = game_root.find_child("RupslbLeadApproachButton", true, false) as Button
@@ -5528,7 +5738,7 @@ func _run_scenario(
 					return {
 						"success": false,
 						"message": "Smoke test expected the selected approachable RUPSLB lead to be available in the session snapshot."
-				}
+					}
 				var first_lead: Dictionary = seating_leads[approachable_lead_index]
 				seating_bubble_text = str(first_lead.get("speech_bubble", ""))
 				approached_lead_id = str(first_lead.get("lead_id", ""))
@@ -15319,12 +15529,18 @@ func _validate_contact_network_data() -> String:
 			return "Smoke test expected meeting lead profile %s to define category filters." % profile_id
 		if profile.get("speech_bubbles", []).is_empty():
 			return "Smoke test expected meeting lead profile %s to define speech bubbles." % profile_id
+		for speech_value in profile.get("speech_bubbles", []):
+			if str(speech_value).length() > 96:
+				return "Smoke test expected meeting lead profile %s speech bubbles to stay short enough for the RUPSLB carousel." % profile_id
 		var stage_speech_bubbles = profile.get("stage_speech_bubbles", {})
 		if typeof(stage_speech_bubbles) != TYPE_DICTIONARY:
 			return "Smoke test expected meeting lead profile %s to define stage speech bubbles." % profile_id
 		for stage_id in ["seating", "host_intro", "agenda_reveal", "vote"]:
 			if not stage_speech_bubbles.has(stage_id) or stage_speech_bubbles.get(stage_id, []).is_empty():
 				return "Smoke test expected meeting lead profile %s to define %s stage speech bubbles." % [profile_id, stage_id]
+			for stage_speech_value in stage_speech_bubbles.get(stage_id, []):
+				if str(stage_speech_value).length() > 96:
+					return "Smoke test expected meeting lead profile %s %s speech bubbles to stay short enough for the RUPSLB carousel." % [profile_id, stage_id]
 		if str(profile.get("approach_prompt", "")).strip_edges().is_empty():
 			return "Smoke test expected meeting lead profile %s to define an approach prompt." % profile_id
 		if profile.get("success_responses", []).is_empty():
@@ -15562,6 +15778,34 @@ func _has_approached_meeting_lead(session_snapshot: Dictionary, lead_id: String)
 		if str(lead.get("lead_id", "")) == lead_id:
 			return bool(lead.get("approached", false)) and not str(lead.get("response_text", "")).is_empty()
 	return false
+
+
+func _rupslb_marker_index_for_lead_index(lead_index: int) -> int:
+	var lead_marker_slots: Array = [1, 3, 11, 13]
+	if lead_index >= 0 and lead_index < lead_marker_slots.size():
+		return int(lead_marker_slots[lead_index])
+	return lead_index
+
+
+func _visible_rupslb_lead_bubble_indices(game_root: Node, _lead_count: int) -> Array:
+	var visible_indices: Array = []
+	for marker_index in range(15):
+		var lead_row: int = int(marker_index / 5)
+		var lead_column: int = marker_index % 5
+		var lead_bubble: PanelContainer = game_root.find_child("RupslbLeadBubble_%d_%d" % [lead_row, lead_column], true, false) as PanelContainer
+		if lead_bubble != null and lead_bubble.visible:
+			visible_indices.append(marker_index)
+	return visible_indices
+
+
+func _rupslb_bubble_rect_is_safe(bubble_rect: Rect2, attendee_stage_rect: Rect2, description_rect: Rect2) -> bool:
+	return (
+		bubble_rect.position.x >= attendee_stage_rect.position.x - 0.5 and
+		bubble_rect.position.y >= attendee_stage_rect.position.y - 0.5 and
+		bubble_rect.end.x <= attendee_stage_rect.end.x + 0.5 and
+		bubble_rect.end.y <= attendee_stage_rect.end.y + 0.5 and
+		not bubble_rect.intersects(description_rect)
+	)
 
 
 func _contains_unresolved_template_token(text: String) -> bool:

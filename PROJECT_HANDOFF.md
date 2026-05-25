@@ -23,8 +23,12 @@ Read this file first in the next session.
   - GitHub remote configured as `origin`
   - remote URL: `https://github.com/alifhunter/godot-game-1.git`
   - current branch tracks `origin/main`
-  - latest pushed clean checkpoint at handoff refresh: `b3592ea Prepare release polish`
+  - latest pushed clean checkpoint at handoff refresh: `0a7cdbf Bump build version`
   - recent committed checkpoints include:
+    - `0a7cdbf Bump build version`
+    - `8189ffa Expand Corporate Action Academy`
+    - `9ce7bd3 Add policy shocks and event audit coverage`
+    - `acf197c Unify app primary buttons`
     - `b3592ea Prepare release polish`
     - `1bbc185 Load UI click sound from imported resource`
     - `7549e66 Prepare Steam EA systems and roadmap layer`
@@ -38,6 +42,11 @@ Read this file first in the next session.
   - current local note: formatter locals that previously shadowed Godot's built-in `sign()` are now renamed to `sign_prefix`
 
 ## Latest Session Snapshot
+- 2026-05-25 RUPSLB overlay polish: the interactive `RUPSLB` venue now uses a centered vertical meeting card instead of the old wide split layout. The card stacks company/meta, blue active stepper, agenda title, one host/people preview, description/details, and vertical action buttons. The arrival stage no longer shows a separate blank info rectangle.
+- The RUPSLB people preview now uses a clean `3 x 5` seating grid with uniform marker size. Four interactive room leads are mapped into fixed balanced seats (`top row seats 2/4`, `bottom row seats 2/4`), while the remaining seats are ambient non-clickable attendees. Lead prominence comes from the existing `!` / `?` styling, not marker size.
+- RUPSLB speech bubbles now run as a one-at-a-time carousel instead of appearing simultaneously. The carousel walks lead bubbles in grid order, loops until the player advances/closes/votes, and clicking an attendee immediately prioritizes that attendee's bubble for one cycle. Bubble bounds remain clamped to the people preview so they do not cover the description/action area.
+- `data/network/contact_network_data.json` meeting lead chatter was rewritten to be shorter and more concrete for `seating`, `host_intro`, `agenda_reveal`, and `vote` stages. Smoke coverage now checks the 15-seat grid, uniform marker sizing, row/column alignment, no podium overlap, lead clickability, one-visible-bubble carousel behavior, click-priority, bubble safety, and short meeting-lead speech text.
+- Verification for the current RUPSLB polish: `git diff --check` passed with the existing CRLF/LF warning for `data/network/contact_network_data.json`; that JSON parsed with PowerShell `ConvertFrom-Json`. Local `godot` / `godot4` commands are not on PATH in this shell, so Godot smoke was not rerun here.
 - 2026-05-23 policy-shock parody pass: added five role-based fictional policy events under the existing market `special` pipeline: free-lunch budget balloon, fiscal guardian swap, market-speech jolt, village/FX comment, and one-gate commodity export rule. They use `shock_class="policy_parody"` and `allows_overlap=true`, avoid real personal names, and keep effects conservative but visible through market volatility, market bias, and sector biases.
 - `SpecialEventSystem` now treats policy parody as an overlap-safe sublane: normal macro specials still block each other, but active policy parody does not block major macro specials, and policy parody can start while a normal macro special is active. `AttentionDirectorSystem` now emits independent policy-parody probability/cooldown directives, suppresses the policy lane during the reserved day-6 macro beat, and keeps policy parody out of the main macro headline cooldown logic.
 - News and Twooter routing now understand policy parody. News gets policy-specific driver/body/closing copy and public story angles (`Policy shock`, `Fiscal shock`, `Commodity rule`, `FX comment`); Twooter policy shocks are tier-1 visible and prefer macro, market-diary, retail, and rumor voices so the feed gets noisy immediately.
@@ -1719,6 +1728,8 @@ Read this file first in the next session.
     - player-known private intel
     - attendance state
   - `GameRoot.gd` also owns a dedicated fullscreen `RUPSLB` overlay for interactive supported families:
+    - the overlay is now a centered vertical meeting card inside the fullscreen scrim, not a wide two-panel split
+    - the card order is company/meta, blue active stepper, agenda title, host/people preview, description/details, and stacked actions
     - step order is currently:
       - `arrival`
       - `seating`
@@ -1727,9 +1738,12 @@ Read this file first in the next session.
       - `vote`
       - `result`
     - the scene uses lightweight UI animation rather than full characters:
-      - abstract attendee markers move into seats
+      - abstract attendee markers move into a uniform `3 x 5` seating grid
+      - four interactive room leads occupy fixed balanced seats while the rest are ambient attendees
+      - all attendee markers use the same visual size; lead state is shown through style/text
       - the podium/host area animates into focus
       - the agenda card and result board reveal in stages
+      - lead speech bubbles appear one at a time through a looping carousel and clicking a lead prioritizes that lead's bubble
     - the vote step supports:
       - `Agree`
       - `Disagree`
@@ -2321,6 +2335,7 @@ Read this file first in the next session.
   - queued next-day debug `rights_issue` `rupslb` meetings appear in the Dashboard meeting strip after one `Advance Day` and still open through the fullscreen interactive overlay
   - zero-position `RUPS` / `RUPSLB` attendance is rejected, and zero-position interactive `RUPSLB` overlay entry stays closed
   - shareholder meeting flow progresses through `arrival`, `seating`, `host_intro`, `agenda_reveal`, `vote`, and `result`
+  - interactive `RUPSLB` overlay layout asserts the centered vertical card, blue active stepper, stacked actions, one host/people preview panel, `3 x 5` uniform attendee grid, no podium overlap, fixed lead slots, and one-at-a-time speech-bubble carousel
   - interactive `rupslb` session stage/result persists through save/load and reopens at the saved step
   - submitting an interactive `rights_issue` vote stores the meeting result without re-simulating the same day
   - the next simulated day consumes the stored meeting result and advances the linked chain out of `meeting_or_call`
@@ -2700,8 +2715,8 @@ Read this file first in the next session.
 
 ## Recommended Next Steps (Confirm user first)
 - Keep the checkpoint clean:
-  - current checked state before this handoff refresh: `main` tracked `origin/main` at `b3592ea Prepare release polish`; the working tree is intentionally dirty with the policy-shock content, flicker/fishbowl/disclaimer changes, event-generation audit/tuning pass, and this handoff update
-  - untracked `EventGenerationAuditTest` scene/script files are intentional coverage from the event-generation audit pass; either add them with the event-generation work or keep them as local test artifacts, but do not delete them accidentally
+  - current checked state before this handoff refresh: `main` tracks `origin/main` at `0a7cdbf Bump build version`
+  - current working tree is intentionally dirty with the RUPSLB overlay/seating/bubble polish, refreshed meeting-lead chatter, Steam build guide/icon-related local edits, and this handoff update
   - preserve ignored local `logs/` output as disposable test data
   - treat a trailing `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` as non-blocking Windows/Godot noise
 - Release-readiness next pass:

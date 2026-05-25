@@ -101,26 +101,26 @@
                                                            "corporate_action"
                                                        ],
                                       "speech_bubbles":  [
-                                                             "Retail holders are still arguing about who benefits from {agenda}.",
-                                                             "Everyone keeps saying dilution on {ticker}, but nobody explains the trade-off.",
-                                                             "The room sounds more tense than the {company} filing did."
+                                                             "Small holders want the plain version of {agenda}.",
+                                                             "Does {agenda} dilute holders or protect them?",
+                                                             "The room wants numbers, not a confident speech."
                                                          ],
                                       "stage_speech_bubbles":  {
                                                                    "seating":  [
-                                                                                   "Retail holders are still arguing about who benefits from {agenda}.",
-                                                                                   "Everyone keeps saying dilution on {ticker}, but nobody explains the trade-off."
+                                                                                   "Small holders are asking what {agenda} changes for them.",
+                                                                                   "Nobody wants a surprise after the vote."
                                                                                ],
                                                                    "host_intro":  [
-                                                                                      "Management sounds calm about {ticker}, but the room is still doing the math.",
-                                                                                      "That intro avoided the part minority holders care about most."
+                                                                                      "Management sounds calm, but retail wants the fine print.",
+                                                                                      "That intro skipped the minority-holder question."
                                                                                   ],
                                                                    "agenda_reveal":  [
-                                                                                         "Now people are checking whether {agenda} matches the rumor.",
-                                                                                         "The headline is clear; the minority impact is still the hard part."
+                                                                                         "Now the question is price, dilution, and use of funds.",
+                                                                                         "{agenda} needs a clear benefit for existing holders."
                                                                                      ],
                                                                    "vote":  [
-                                                                                "The vote may pass, but retail holders want to know what {agenda} means after today.",
-                                                                                "People are voting with tiny stakes, but big emotions."
+                                                                                "Even if it passes, people will watch the next filing.",
+                                                                                "Retail votes are small, but the reaction can get loud."
                                                                             ]
                                                                },
                                       "approach_prompt":  "Ask what the retail crowd is worried about on {ticker}.",
@@ -143,26 +143,26 @@
                                                            "corporate_meeting"
                                                        ],
                                       "speech_bubbles":  [
-                                                             "Payment timing around {company} is becoming a theme here.",
-                                                             "The {ticker} operational story sounds cleaner on slides than it does in the hallway.",
-                                                             "Suppliers are watching the cash plan more than {agenda}."
+                                                             "Suppliers care whether cash moves faster after this.",
+                                                             "{company} needs a funding plan that reaches operations.",
+                                                             "This meeting matters if payment discipline improves."
                                                          ],
                                       "stage_speech_bubbles":  {
                                                                    "seating":  [
-                                                                                   "Payment timing around {company} is becoming a theme here.",
-                                                                                   "Suppliers are watching the cash plan more than {agenda}."
+                                                                                   "Suppliers are listening for cash timing, not slogans.",
+                                                                                   "The worry is simple: will {company} pay faster?"
                                                                                ],
                                                                    "host_intro":  [
-                                                                                      "The {ticker} slide deck is smoother than the actual payment cycle.",
-                                                                                      "Management keeps saying stabilization; vendors hear cash discipline."
+                                                                                      "{ticker} sounds organized on stage. Vendors want proof.",
+                                                                                      "Management says stability; suppliers hear payment terms."
                                                                                   ],
                                                                    "agenda_reveal":  [
-                                                                                         "If {agenda} changes funding, suppliers will feel it before analysts do.",
-                                                                                         "{agenda} only matters if working capital actually loosens."
+                                                                                         "If {agenda} improves funding, operations may breathe.",
+                                                                                         "The useful detail is where the new cash goes."
                                                                                      ],
                                                                    "vote":  [
                                                                                 "A yes vote still has to turn into paid invoices.",
-                                                                                "The cleanest answer is whether {ticker} cash moves faster after today."
+                                                                                "Watch working capital after this, not just the result."
                                                                             ]
                                                                },
                                       "approach_prompt":  "Ask for an operational read on {ticker} from the hallway.",
@@ -186,26 +186,26 @@
                                                            "sector_rotation"
                                                        ],
                                       "speech_bubbles":  [
-                                                             "The {agenda} vote is obvious; the valuation consequence is less obvious.",
-                                                             "This only works if the post-agenda {ticker} capital structure makes sense.",
-                                                             "Minority holders need more than a confident {company} board deck."
+                                                             "Minority funds care about dilution and control.",
+                                                             "{agenda} only works if returns improve after the deal.",
+                                                             "Confidence is nice. Protection is better."
                                                          ],
                                       "stage_speech_bubbles":  {
                                                                    "seating":  [
-                                                                                   "Minority holders need more than a confident {company} board deck.",
-                                                                                   "This only works if the post-agenda {ticker} capital structure makes sense."
+                                                                                   "Funds are checking who gets diluted and who gains control.",
+                                                                                   "The vote may pass; minority treatment still matters."
                                                                                ],
                                                                    "host_intro":  [
-                                                                                      "That confidence is not the same thing as minority protection.",
-                                                                                      "The board is selling certainty; the valuation still needs proof."
+                                                                                      "The board sounds sure. Investors still need safeguards.",
+                                                                                      "A calm speech does not replace fair terms."
                                                                                   ],
                                                                    "agenda_reveal":  [
-                                                                                         "Now the real question is dilution, control, and {ticker} returns.",
-                                                                                         "{agenda} is investable only if the new structure improves ROE."
+                                                                                         "Now it is price, dilution, control, and returns.",
+                                                                                         "{agenda} needs to improve ROE, not just size."
                                                                                      ],
                                                                    "vote":  [
-                                                                                "The {agenda} vote is obvious; the valuation consequence is less obvious.",
-                                                                                "Passing the item is easy. Pricing the new {company} is harder."
+                                                                                "Passing is one thing. Pricing the new {company} is harder.",
+                                                                                "After the vote, watch whether minorities stay interested."
                                                                             ]
                                                                },
                                       "approach_prompt":  "Ask how a minority holder should frame {agenda}.",
@@ -229,26 +229,26 @@
                                                            "market_wrap"
                                                        ],
                                       "speech_bubbles":  [
-                                                             "The loudest {ticker} flow is not always the real sponsor.",
-                                                             "Some desks came here to listen to {agenda}, not vote.",
-                                                             "The room and the {ticker} tape are telling slightly different stories."
+                                                             "Broker desks want to see if flow confirms the room.",
+                                                             "The speech is noise if {ticker} buyers disappear.",
+                                                             "Watch the tape after the meeting."
                                                          ],
                                       "stage_speech_bubbles":  {
                                                                    "seating":  [
-                                                                                  "Some desks came here to listen, not vote.",
-                                                                                   "The room and the {ticker} tape are telling slightly different stories."
+                                                                                  "Some desks came to read the room before trading {ticker}.",
+                                                                                   "The room is cautious. The tape will tell the rest."
                                                                                ],
                                                                    "host_intro":  [
-                                                                                      "The speech matters less than who keeps bidding {ticker} after it.",
-                                                                                      "Listen to the room, then check whether the tape agrees."
+                                                                                      "The speech matters less than who keeps bidding later.",
+                                                                                      "If buyers vanish after this, the room was just theater."
                                                                                   ],
                                                                    "agenda_reveal":  [
-                                                                                         "This is where {ticker} sponsor flow either confirms the story or disappears.",
-                                                                                         "{agenda} gives the excuse; broker flow gives the signal."
+                                                                                         "{agenda} gives traders a reason. Flow gives the signal.",
+                                                                                         "Now desks can map the headline to supply and demand."
                                                                                      ],
                                                                    "vote":  [
-                                                                                "The loudest {ticker} flow is not always the real sponsor.",
-                                                                                "If foreign desks stay active after this, the room was not just theater."
+                                                                                "After the result, watch volume and who is still active.",
+                                                                                "The real tell is whether {ticker} holds after the vote."
                                                                             ]
                                                                },
                                       "approach_prompt":  "Ask which desk behavior matters after the {ticker} meeting.",
