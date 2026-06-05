@@ -1,8 +1,9 @@
 extends MarginContainer
 
-const COLOR_BG := Color(0.909804, 0.909804, 0.803922, 1)
-const COLOR_PANEL := Color(0.972549, 0.94902, 0.847059, 1)
-const COLOR_PANEL_ALT := Color(0.952941, 0.94902, 0.87451, 1)
+const THESIS_FONT_SIZE := 14
+const COLOR_BG := Color(0.988235, 0.960784, 0.854902, 1)
+const COLOR_PANEL := Color(1.0, 0.976471, 0.929412, 1)
+const COLOR_PANEL_ALT := Color(0.972549, 0.94902, 0.847059, 1)
 const COLOR_BROWN := Color(0.509804, 0.231373, 0.0941176, 1)
 const COLOR_TEXT := Color(0.184314, 0.172549, 0.109804, 1)
 const COLOR_MUTED := Color(0.403922, 0.380392, 0.301961, 1)
@@ -61,7 +62,7 @@ class EvidenceDragButton:
 			return null
 		var preview := Label.new()
 		preview.text = str(drag_payload.get("label", "Evidence"))
-		preview.add_theme_font_size_override("font_size", 12)
+		preview.add_theme_font_size_override("font_size", 14)
 		set_drag_preview(preview)
 		return drag_payload.duplicate(true)
 
@@ -264,6 +265,7 @@ func _build_ui() -> void:
 	thesis_list.name = "ThesisList"
 	thesis_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	thesis_list.item_selected.connect(_on_thesis_selected)
+	_style_item_list(thesis_list)
 	left_vbox.add_child(thesis_list)
 
 	var center_panel := _make_panel("ThesisBuilderPanel")
@@ -457,6 +459,7 @@ func _build_ui() -> void:
 	selected_evidence_list.visible = false
 	selected_evidence_list.custom_minimum_size = Vector2(0, 150)
 	selected_evidence_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_style_item_list(selected_evidence_list)
 	builder_panel.add_child(selected_evidence_list)
 
 	var evidence_actions := HBoxContainer.new()
@@ -505,6 +508,7 @@ func _build_ui() -> void:
 
 	_build_report_overlay()
 	_style_buttons(self)
+	_style_form_controls()
 	_style_primary_buttons()
 
 
@@ -3092,6 +3096,7 @@ func _build_attached_evidence_card(row: Dictionary) -> PanelContainer:
 	_add_option_items(interpretation_option, EVIDENCE_TABS)
 	_select_option_by_id(interpretation_option, str(row.get("interpretation", "watch")))
 	interpretation_option.item_selected.connect(_on_attached_evidence_interpretation_selected.bind(evidence_id, interpretation_option))
+	_style_option_button(interpretation_option)
 	vbox.add_child(interpretation_option)
 	return panel
 
@@ -3284,6 +3289,7 @@ func _style_segment_button(button: Button, accent: Color, selected: bool) -> voi
 	button.add_theme_color_override("font_hover_color", COLOR_BG if selected else accent)
 	button.add_theme_color_override("font_pressed_color", COLOR_BG)
 	button.add_theme_color_override("font_disabled_color", COLOR_MUTED)
+	button.add_theme_font_size_override("font_size", THESIS_FONT_SIZE)
 
 
 func _style_evidence_tab_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
@@ -3338,7 +3344,7 @@ func _style_chip_button(chip: Button, impact: String) -> void:
 	chip.add_theme_color_override("font_color", COLOR_TEXT)
 	chip.add_theme_color_override("font_hover_color", COLOR_TEXT)
 	chip.add_theme_color_override("font_pressed_color", COLOR_BG)
-	chip.add_theme_font_size_override("font_size", 11)
+	chip.add_theme_font_size_override("font_size", THESIS_FONT_SIZE)
 
 
 func _make_rounded_stylebox(bg_color: Color, border_color: Color, border_width: int = 1, radius: int = 4) -> StyleBoxFlat:
@@ -3452,14 +3458,32 @@ func _make_title(text: String) -> Label:
 
 func _style_label(label: Label, color: Color, size: int) -> void:
 	label.add_theme_color_override("font_color", color)
-	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_font_size_override("font_size", maxi(size, THESIS_FONT_SIZE))
 
 
 func _style_rich_text(text_node: RichTextLabel) -> void:
+	var font_size: int = maxi(_theme_font_size("body", THESIS_FONT_SIZE), THESIS_FONT_SIZE)
 	text_node.add_theme_color_override("default_color", COLOR_TEXT)
-	text_node.add_theme_font_size_override("normal_font_size", 12)
+	text_node.add_theme_font_size_override("normal_font_size", font_size)
+	text_node.add_theme_font_size_override("bold_font_size", font_size)
+	text_node.add_theme_font_size_override("italics_font_size", font_size)
+	text_node.add_theme_font_size_override("mono_font_size", font_size)
 	text_node.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text_node.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+
+func _style_form_controls() -> void:
+	_style_line_edit(title_edit)
+	for option_value in [
+		company_option,
+		stance_option,
+		horizon_option,
+		evidence_category_option,
+		evidence_option
+	]:
+		_style_option_button(option_value as OptionButton)
+	_style_item_list(thesis_list)
+	_style_item_list(selected_evidence_list)
 
 
 func _style_buttons(root: Node) -> void:
@@ -3470,31 +3494,44 @@ func _style_buttons(root: Node) -> void:
 
 
 func _style_button(button: Button) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = COLOR_BROWN
-	style.border_color = COLOR_BORDER
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(0)
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 7
-	style.content_margin_bottom = 7
-	var hover := style.duplicate()
-	hover.bg_color = COLOR_BROWN.lightened(0.06)
-	var pressed := style.duplicate()
-	pressed.bg_color = COLOR_BROWN.darkened(0.07)
-	var disabled := style.duplicate()
-	disabled.bg_color = Color(COLOR_BROWN.r, COLOR_BROWN.g, COLOR_BROWN.b, 0.28)
-	disabled.border_color = Color(COLOR_BORDER.r, COLOR_BORDER.g, COLOR_BORDER.b, 0.38)
-	button.add_theme_stylebox_override("normal", style)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("disabled", disabled)
-	button.add_theme_color_override("font_color", COLOR_BG)
-	button.add_theme_color_override("font_hover_color", COLOR_BG)
-	button.add_theme_color_override("font_pressed_color", COLOR_BG)
-	button.add_theme_color_override("font_disabled_color", Color(COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, 0.60))
-	button.add_theme_font_size_override("font_size", _theme_font_size("button", 14))
+	if button is OptionButton:
+		_style_option_button(button as OptionButton)
+		return
+	UiTheme.style_button(button, "desktop_secondary")
+
+
+func _style_option_button(option: OptionButton) -> void:
+	if option == null:
+		return
+	UiTheme.style_option_button(option, "desktop")
+
+
+func _style_item_list(item_list: ItemList) -> void:
+	if item_list == null:
+		return
+	UiTheme.style_item_list(item_list, "light")
+
+
+func _style_line_edit(line_edit: LineEdit) -> void:
+	if line_edit == null:
+		return
+	var normal := _make_stylebox(COLOR_PANEL, COLOR_BORDER, 1)
+	normal.content_margin_left = 10
+	normal.content_margin_right = 10
+	normal.content_margin_top = 7
+	normal.content_margin_bottom = 7
+	var focus := normal.duplicate()
+	focus.border_color = COLOR_BROWN
+	focus.set_border_width_all(2)
+	var read_only := normal.duplicate()
+	read_only.bg_color = COLOR_PANEL_ALT
+	line_edit.add_theme_stylebox_override("normal", normal)
+	line_edit.add_theme_stylebox_override("focus", focus)
+	line_edit.add_theme_stylebox_override("read_only", read_only)
+	line_edit.add_theme_color_override("font_color", COLOR_TEXT)
+	line_edit.add_theme_color_override("font_placeholder_color", COLOR_MUTED)
+	line_edit.add_theme_color_override("font_uneditable_color", COLOR_MUTED)
+	line_edit.add_theme_font_size_override("font_size", THESIS_FONT_SIZE)
 
 
 func _style_primary_buttons() -> void:

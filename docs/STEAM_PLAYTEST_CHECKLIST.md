@@ -1,6 +1,6 @@
 # Steam Playtest Checklist
 
-Status: Steam platform release-candidate checklist for build `0.1.0-ea / 2026.05.24.1`.
+Status: Steam platform release-candidate checklist for build `0.1.0-ea / 2026.06.05.1`.
 
 Run this pass from Steam unless a developer explicitly asks for an editor or headless verification. The current project Steam App ID is `4739020`; Cloud is verified. Public Early Access intentionally ships without Steam achievements/stats enabled, even though local progress tracking code exists for a later update.
 
@@ -8,7 +8,7 @@ Run this pass from Steam unless a developer explicitly asks for an editor or hea
 
 1. Install or update the current Steam build.
 2. Launch from Steam.
-3. Confirm the main menu build label shows `Build 2026.05.24.1`.
+3. Confirm the main menu build label shows `0.1.0-ea / Build 2026.06.05.1`.
 4. Open the Steam overlay with Shift+Tab.
 5. Start a fresh `Normal` run in a 16:9 window or fullscreen.
 

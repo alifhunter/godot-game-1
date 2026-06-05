@@ -12,7 +12,7 @@ Severity: `Crash / Soft-lock / Progression blocker / Gameplay bug / Visual/UI / 
 
 ## Build And Steam Setup
 
-Build: `0.1.0-ea / 2026.05.24.1`
+Build: `0.1.0-ea / 2026.06.05.1`
 
 Launched from Steam: `Yes / No`
 

@@ -12159,13 +12159,15 @@ func _run_scenario(
 			"message": "Smoke test could not find the Help navigation button in the game shell."
 		}
 
+	var help_title_label: Label = game_root.find_child("HelpTitle", true, false) as Label
 	var help_text_label: RichTextLabel = game_root.find_child("HelpTextLabel", true, false) as RichTextLabel
-	if help_text_label == null or not help_text_label.text.contains("FIRST LOOP"):
+	var help_guide_hub_button: Button = game_root.find_child("HelpGuideHubButton", true, false) as Button
+	if help_title_label == null or help_title_label.visible or not help_title_label.text.is_empty() or help_text_label == null or help_text_label.visible or not help_text_label.text.is_empty() or help_guide_hub_button == null:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the Help menu to expose the FTUE first-loop copy."
+			"message": "Smoke test expected the Help menu to hide text and expose only the Guide Hub button."
 		}
 
 	var company_count: int = RunState.company_order.size()

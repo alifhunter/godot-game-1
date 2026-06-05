@@ -23,8 +23,9 @@ Read this file first in the next session.
   - GitHub remote configured as `origin`
   - remote URL: `https://github.com/alifhunter/godot-game-1.git`
   - current branch tracks `origin/main`
-  - latest pushed clean checkpoint at handoff refresh: `1c8619e Polish RUPSLB meeting overlay`
+  - latest pushed clean checkpoint at handoff refresh: `02c2421 Polish app UI and Company debug controls`
   - recent committed checkpoints include:
+    - `02c2421 Polish app UI and Company debug controls`
     - `1c8619e Polish RUPSLB meeting overlay`
     - `0a7cdbf Bump build version`
     - `8189ffa Expand Corporate Action Academy`
@@ -42,12 +43,11 @@ Read this file first in the next session.
   - current local note: formatter locals that previously shadowed Godot's built-in `sign()` are now renamed to `sign_prefix`
 
 ## Latest Session Snapshot
-- 2026-06-05 app UI/debug polish: Twooter received the requested layout pass. The left menu and right rail now have real post-divider margins, the center feed has side padding, follow/send/show-thread style controls have larger padding/min-heights, Twooter text was bumped up, and feed clutter was reduced by removing the post score label plus the visible `Verified` / `Public` tags.
-- Academy, Life, and News tab styling now share the News newspaper-tab treatment. Life was moved off the brown content background onto the Academy-style cream surface while keeping section borders, narrowed from its too-wide desktop window sizing, and bumped to `14px` base text through `scripts/ui/widgets/LifeWidget.gd`.
-- Company debug support now exists in the Ctrl+L debug Generators tab as `Company App Control`. `Own Selected Company` uses the selected STOCKBOT stock, calls `GameManager.debug_grant_company_control(...)`, grants only the missing shares needed for majority control without spending cash, refreshes the portfolio/company surfaces, and opens the Company app focused on that stock. If the selected company is already controlled, the same control becomes `Open Company App`.
-- Company app button styling follow-up: the in-app `Set Agenda` button now uses a full-width paper/red action-button style with clearer enabled/disabled states instead of the old flat brown button. This is local to the Company app action button; the desktop Company icon was left in the normal OS shortcut style.
-- Current dirty implementation files for this UI/debug batch are `autoloads/GameManager.gd`, `scripts/ui/GameRoot.gd`, and `scripts/ui/widgets/LifeWidget.gd`, plus this handoff file. Preserve these local edits unless the user explicitly asks to revert or commit them.
-- Verification for the current UI/debug batch: `git diff --check -- autoloads/GameManager.gd scripts/ui/GameRoot.gd` passed after adding the Company debug-control path; `git diff --check -- scripts/ui/GameRoot.gd scripts/ui/widgets/LifeWidget.gd` passed during the Twooter/Life work; `git diff --check -- scripts/ui/GameRoot.gd` passed after the Company button style pass; Windows Godot `4.6.2` headless project load passed using `C:\Users\Alif\Desktop\Godot_v4.6.2-stable_win64_console.exe --headless --path . --log-file logs\debug-company-control-load.log --quit`. The load still prints the usual non-blocking trailing `ObjectDB instances leaked at exit` warning. Full smoke was not rerun for these UI-only/debug-tool changes.
+- 2026-06-05 follow-up UI/build polish: the difficulty-selection screen no longer shows the selected-run detail blurb (`Cash`, company count, volatility, event pace) after choosing a mode. Home now shows visible version/build text as `0.1.0-ea / Build 2026.06.05.1`, with `BuildInfo` and tester-facing Steam docs moved to build `2026.06.05.1` / date `2026-06-05`.
+- Thesis Board now follows the newer cream app treatment used by Life/Network: cream backing for Thesis window gaps, warmer panel colors, `14px` minimum label/chip/rich-text scale, light item-list styling, shared desktop button/dropdown styling, and styled thesis title input.
+- Stockbot Help now intentionally hides all old help copy and the `HELP` title. The Help view should show only the `Open Guide Hub` button; `SmokeTest.gd` was updated to assert the hidden title/body plus the `HelpGuideHubButton`.
+- Current dirty implementation files for this follow-up batch are `autoloads/BuildInfo.gd`, `docs/BUG_REPORT_TEMPLATE.md`, `docs/KNOWN_ISSUES.md`, `docs/STEAM_PLAYTEST_CHECKLIST.md`, `scenes/game/views/HelpView.tscn`, `scripts/tests/SmokeTest.gd`, `scripts/ui/GameRoot.gd`, `scripts/ui/MainMenu.gd`, `scripts/ui/widgets/ThesisBoardWidget.gd`, plus this handoff file. Preserve these local edits unless the user explicitly asks to revert, commit, or split them.
+- Verification for this follow-up batch: `git diff --check` passed for the MainMenu/BuildInfo/doc updates, Thesis styling changes, and Help/SmokeTest changes. Windows Godot `4.6.2` headless project load passed using `C:\Users\Alif\Desktop\Godot_v4.6.2-stable_win64_console.exe --headless --path . --log-file logs\debug-company-control-load.log --quit` after the UI edits; it still prints the usual non-blocking trailing `ObjectDB instances leaked at exit` warning. Full smoke was not rerun for these UI-only changes.
 - 2026-05-25 RUPSLB overlay polish: the interactive `RUPSLB` venue now uses a centered vertical meeting card instead of the old wide split layout. The card stacks company/meta, blue active stepper, agenda title, one host/people preview, description/details, and vertical action buttons. The arrival stage no longer shows a separate blank info rectangle.
 - The RUPSLB people preview now uses a clean `3 x 5` seating grid with uniform marker size. Four interactive room leads are mapped into fixed balanced seats (`top row seats 2/4`, `bottom row seats 2/4`), while the remaining seats are ambient non-clickable attendees. Lead prominence comes from the existing `!` / `?` styling, not marker size.
 - RUPSLB speech bubbles now run as a one-at-a-time carousel instead of appearing simultaneously. The carousel walks lead bubbles in grid order, loops until the player advances/closes/votes, and clicking an attendee immediately prioritizes that attendee's bubble for one cycle. Bubble bounds remain clamped to the people preview so they do not cover the description/action area.
@@ -2721,8 +2721,8 @@ Read this file first in the next session.
 
 ## Recommended Next Steps (Confirm user first)
 - Keep the checkpoint clean:
-  - current checked state before this handoff refresh: `main` tracks `origin/main` at `1c8619e Polish RUPSLB meeting overlay`
-  - current working tree is intentionally dirty with the latest UI/debug batch: `PROJECT_HANDOFF.md`, `autoloads/GameManager.gd`, `scripts/ui/GameRoot.gd`, and `scripts/ui/widgets/LifeWidget.gd`
+  - current checked state before this handoff refresh: `main` tracks `origin/main` at `02c2421 Polish app UI and Company debug controls`
+  - current working tree is intentionally dirty with the latest follow-up UI/build batch: `PROJECT_HANDOFF.md`, `autoloads/BuildInfo.gd`, `docs/BUG_REPORT_TEMPLATE.md`, `docs/KNOWN_ISSUES.md`, `docs/STEAM_PLAYTEST_CHECKLIST.md`, `scenes/game/views/HelpView.tscn`, `scripts/tests/SmokeTest.gd`, `scripts/ui/GameRoot.gd`, `scripts/ui/MainMenu.gd`, and `scripts/ui/widgets/ThesisBoardWidget.gd`
   - preserve ignored local `logs/` output as disposable test data
   - treat a trailing `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` as non-blocking Windows/Godot noise
 - Release-readiness next pass:

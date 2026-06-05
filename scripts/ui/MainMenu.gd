@@ -312,15 +312,8 @@ func _update_selection_detail() -> void:
 		continue_button.disabled = true
 		return
 
-	var difficulty_config: Dictionary = GameManager.get_difficulty_config(selected_difficulty_id)
-	selection_detail_label.visible = true
-	selection_detail_label.text = "%s run selected.\nCash: %s  |  Companies: %d  |  Volatility: %s  |  Event pace: about once every %d day(s)." % [
-		str(difficulty_config.get("label", "Normal")),
-		_format_currency(float(difficulty_config.get("starting_cash", 0.0))),
-		int(difficulty_config.get("company_count", 0)),
-		str(difficulty_config.get("volatility_label", "Normal")),
-		int(difficulty_config.get("event_interval_days", 30.0))
-	]
+	selection_detail_label.text = ""
+	selection_detail_label.visible = false
 	continue_button.disabled = false
 
 
@@ -867,7 +860,7 @@ func _apply_desktop_startup_style() -> void:
 		home_logo_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	action_title_label.text = "GORENGAN: STOCK TRADING SIMULATOR"
 	action_title_label.visible = false
-	main_menu_build_label.text = BuildInfo.get_short_display_string()
+	main_menu_build_label.text = "%s / Build %s" % [BuildInfo.get_version_string(), BuildInfo.get_build_number()]
 	main_menu_build_label.tooltip_text = BuildInfo.get_bug_report_context()
 	flow_title_label.text = "SESSION"
 	flow_title_label.visible = false

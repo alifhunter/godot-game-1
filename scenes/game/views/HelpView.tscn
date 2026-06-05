@@ -33,12 +33,14 @@ grow_vertical = 2
 theme_override_constants/separation = 10
 
 [node name="HelpTitle" type="Label" parent="HelpPanel/HelpMargin/HelpVBox"]
-text = "HELP"
+visible = false
+text = ""
 
 [node name="HelpTextLabel" type="RichTextLabel" parent="HelpPanel/HelpMargin/HelpVBox"]
-custom_minimum_size = Vector2(0, 420)
+visible = false
+custom_minimum_size = Vector2(0, 0)
 size_flags_vertical = 3
 fit_content = false
 scroll_active = true
 selection_enabled = true
-text = "Help content will appear here."
+text = ""

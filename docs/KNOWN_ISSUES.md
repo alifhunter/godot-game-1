@@ -1,6 +1,6 @@
 # Known Issues
 
-Build: `0.1.0-ea` / `2026.05.24.1`
+Build: `0.1.0-ea` / `2026.06.05.1`
 
 Use this list for Steam Early Access tester notes. Keep entries short, player-facing, and tied to a workaround when one exists.
 

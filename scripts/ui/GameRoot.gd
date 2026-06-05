@@ -903,6 +903,7 @@ var dashboard_top_broker_flow_empty_label: Label = null
 @onready var trade_history_empty_label: Label = %PortfolioView/Scroll/ContentVBox/ContentGrid/TradeHistoryPanel/TradeHistoryMargin/TradeHistoryVBox/TradeHistoryScroll/TradeHistoryTableVBox/TradeHistoryRowsVBox/TradeHistoryEmptyLabel
 
 @onready var help_panel: PanelContainer = %HelpView/HelpPanel
+@onready var help_title_label: Label = %HelpView/HelpPanel/HelpMargin/HelpVBox/HelpTitle
 @onready var help_text_label: RichTextLabel = %HelpView/HelpPanel/HelpMargin/HelpVBox/HelpTextLabel
 @onready var debug_overlay: Control = $DebugOverlay
 @onready var debug_panel: PanelContainer = $DebugOverlay/DebugCenter/DebugPanel
@@ -4874,7 +4875,7 @@ func _clamp_desktop_window_to_viewport(app_id: String) -> void:
 func _window_fill_color_for_app(app_id: String) -> Color:
 	if app_id == APP_ID_STOCK:
 		return COLOR_STOCK_WINDOW_BG
-	if app_id == APP_ID_LIFE:
+	if app_id == APP_ID_THESIS or app_id == APP_ID_LIFE:
 		return COLOR_ACADEMY_CREAM
 	if _uses_academy_window_chrome(app_id):
 		return COLOR_ACADEMY_BROWN
@@ -11961,7 +11962,13 @@ func _refresh_portfolio() -> void:
 
 
 func _refresh_help() -> void:
-	help_text_label.text = _build_help_text()
+	if help_title_label != null:
+		help_title_label.text = ""
+		help_title_label.visible = false
+	if help_text_label != null:
+		help_text_label.text = ""
+		help_text_label.visible = false
+		help_text_label.custom_minimum_size = Vector2.ZERO
 
 
 func _refresh_debug_overlay() -> void:
@@ -20902,15 +20909,6 @@ func _populate_watchlist_picker() -> void:
 
 func _build_tutorial_text() -> String:
 	return "Open the STOCKBOT app from the desktop, then pick one stock first.\n\nUse the Chart, Key Stats, Financials, Broker, Corp. Action, or Profile tabs to inspect the setup, size the order from the right-side ticket, then use the navbar to advance the day.\n\nDashboard is now overview-only, while Portfolio keeps your holdings and trade history together.\n\nDifficulty: %s." % GameManager.get_current_difficulty_label()
-
-
-func _build_help_text() -> String:
-	return "OVERVIEW\nThe desktop is your trading desk. Apps can be opened, moved, and revisited as the market changes.\n\nOBJECTIVE\nFind one readable setup, size lightly, advance the day, then learn from the recap.\n\nSECTIONS\n%s\n\n%s\n\n%s\n\nFIRST LOOP\n1. Open STOCKBOT from the desktop.\n2. Pick one stock to study.\n3. Use Key Stats, Financials, Broker, Corp. Action, or Profile before buying.\n4. Buy a small starter lot from the order ticket.\n5. Press Advance Day and read the Daily Recap.\n6. Use Portfolio, Thesis, Life, Network, and Academy for the next decision.\n\nGUIDED FIRST WEEK\nAfter the first loop, the Loop Guide nudges you to review Portfolio, create a Thesis, keep a Watchlist, read market context, attend a low-stakes RUPSLB, and approach one room lead.\n\nNOTES\nUse sector context to decide whether a stock is moving with its group or fighting it.\nNewest fills appear first in Trade History so you can audit lots, fees, cash impact, and realized P/L.\n\nCURRENT DIFFICULTY\n%s" % [
-		_sidebar_hint_for_section("dashboard"),
-		_sidebar_hint_for_section("markets"),
-		_sidebar_hint_for_section("portfolio"),
-		GameManager.get_current_difficulty_label()
-	]
 
 
 func _build_debug_upcoming_events_text() -> String:
