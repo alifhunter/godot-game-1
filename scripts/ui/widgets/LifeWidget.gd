@@ -1,8 +1,9 @@
 extends MarginContainer
 
-const COLOR_BG := Color(0.909804, 0.909804, 0.803922, 1)
-const COLOR_PANEL := Color(0.972549, 0.94902, 0.847059, 1)
-const COLOR_PANEL_ALT := Color(0.952941, 0.94902, 0.87451, 1)
+const LIFE_FONT_SIZE := 14
+const COLOR_BG := Color(0.988235, 0.960784, 0.854902, 1)
+const COLOR_PANEL := Color(1.0, 0.976471, 0.929412, 1)
+const COLOR_PANEL_ALT := Color(0.972549, 0.94902, 0.847059, 1)
 const COLOR_BROWN := Color(0.509804, 0.231373, 0.0941176, 1)
 const COLOR_TEXT := Color(0.184314, 0.172549, 0.109804, 1)
 const COLOR_MUTED := Color(0.403922, 0.380392, 0.301961, 1)
@@ -1402,7 +1403,7 @@ func _make_body_label(label_name: String) -> Label:
 
 func _style_label(label: Label, color: Color, size: int) -> void:
 	label.add_theme_color_override("font_color", color)
-	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_font_size_override("font_size", maxi(size, LIFE_FONT_SIZE))
 
 
 func _style_buttons(root: Node) -> void:
@@ -1414,16 +1415,17 @@ func _style_buttons(root: Node) -> void:
 
 func _style_button(button: Button) -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = COLOR_BROWN
+	style.bg_color = COLOR_PANEL_ALT
 	style.border_color = COLOR_BORDER
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(0)
 	button.add_theme_stylebox_override("normal", style)
 	button.add_theme_stylebox_override("hover", style)
 	button.add_theme_stylebox_override("pressed", style)
-	button.add_theme_color_override("font_color", COLOR_BG)
-	button.add_theme_color_override("font_hover_color", COLOR_BG)
-	button.add_theme_color_override("font_pressed_color", COLOR_BG)
+	button.add_theme_color_override("font_color", COLOR_TEXT)
+	button.add_theme_color_override("font_hover_color", COLOR_TEXT)
+	button.add_theme_color_override("font_pressed_color", COLOR_TEXT)
+	button.add_theme_font_size_override("font_size", LIFE_FONT_SIZE)
 
 
 func _style_primary_buttons() -> void:

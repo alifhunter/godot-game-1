@@ -1272,6 +1272,77 @@ func execute_console_command(command_text: String) -> Dictionary:
 	}
 
 
+func debug_grant_company_control(company_id: String) -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var normalized_company_id: String = company_id.strip_edges().to_lower()
+	if normalized_company_id.is_empty():
+		return {"success": false, "message": "Pick a stock first."}
+	var definition: Dictionary = RunState.get_effective_company_definition(normalized_company_id, false, false)
+	if definition.is_empty():
+		return {"success": false, "message": "Pick a valid stock first."}
+	var ownership: Dictionary = get_company_ownership_snapshot(normalized_company_id)
+	var control_required_shares: int = int(ownership.get("control_required_shares", 0))
+	if control_required_shares <= 0:
+		return {"success": false, "message": "That company has no usable share structure."}
+	var ticker: String = str(definition.get("ticker", normalized_company_id.to_upper()))
+	if bool(ownership.get("is_control_shareholder", false)):
+		return {
+			"success": true,
+			"message": "%s is already under player control." % ticker,
+			"company_id": normalized_company_id,
+			"ticker": ticker,
+			"shares_granted": 0,
+			"shares_owned": int(ownership.get("shares_owned", 0)),
+			"control_required_shares": control_required_shares,
+			"ownership_pct": float(ownership.get("ownership_pct", 0.0)),
+			"already_controlled": true
+		}
+
+	var current_shares: int = max(int(ownership.get("shares_owned", 0)), 0)
+	var shares_to_grant: int = max(control_required_shares - current_shares, 0)
+	if shares_to_grant <= 0:
+		return {"success": false, "message": "%s could not calculate missing control shares." % ticker}
+	var runtime: Dictionary = RunState.get_company(normalized_company_id)
+	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 0.0))), 0.0)
+	var holdings: Dictionary = RunState.player_portfolio.get("holdings", {})
+	var holding: Dictionary = holdings.get(normalized_company_id, {
+		"company_id": normalized_company_id,
+		"shares": 0,
+		"average_price": current_price
+	}).duplicate(true)
+	var holding_shares: int = max(int(holding.get("shares", 0)), 0)
+	var current_average: float = float(holding.get("average_price", current_price))
+	var new_share_total: int = holding_shares + shares_to_grant
+	var new_average: float = current_price
+	if new_share_total > 0:
+		new_average = ((current_average * float(holding_shares)) + (current_price * float(shares_to_grant))) / float(new_share_total)
+	holding["company_id"] = normalized_company_id
+	holding["shares"] = new_share_total
+	holding["average_price"] = new_average
+	holdings[normalized_company_id] = holding
+	RunState.player_portfolio["holdings"] = holdings
+
+	var updated_ownership: Dictionary = get_company_ownership_snapshot(normalized_company_id)
+	_request_autosave("debug_grant_company_control")
+	portfolio_changed.emit()
+	return {
+		"success": true,
+		"message": "Debug control: granted %s share(s) of %s. Player now owns %.2f%%." % [
+			_format_grouped_integer(shares_to_grant),
+			ticker,
+			float(updated_ownership.get("ownership_pct", 0.0)) * 100.0
+		],
+		"company_id": normalized_company_id,
+		"ticker": ticker,
+		"shares_granted": shares_to_grant,
+		"shares_owned": int(updated_ownership.get("shares_owned", new_share_total)),
+		"control_required_shares": int(updated_ownership.get("control_required_shares", control_required_shares)),
+		"ownership_pct": float(updated_ownership.get("ownership_pct", 0.0)),
+		"already_controlled": false
+	}
+
+
 func get_debug_corporate_action_generator_catalog() -> Array:
 	var groups: Array = []
 	for group_value in DEBUG_CORPORATE_ACTION_GENERATOR_GROUPS:

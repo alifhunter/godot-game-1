@@ -257,6 +257,21 @@ const DESKTOP_WINDOW_MIN_HEIGHT := 260.0
 const SOCIAL_WINDOW_MAX_WIDTH := 1220.0
 const SOCIAL_WINDOW_MAX_HEIGHT := 820.0
 const SOCIAL_WINDOW_MIN_HEIGHT := 560.0
+const LIFE_WINDOW_MAX_WIDTH := 1180.0
+const SOCIAL_CENTER_MARGIN_LEFT := 16
+const SOCIAL_CENTER_MARGIN_TOP := 16
+const SOCIAL_CENTER_MARGIN_RIGHT := 16
+const SOCIAL_CENTER_MARGIN_BOTTOM := 12
+const SOCIAL_SIDE_MARGIN_LEFT := 14
+const SOCIAL_SIDE_MARGIN_TOP := 14
+const SOCIAL_SIDE_MARGIN_RIGHT := 14
+const SOCIAL_SIDE_MARGIN_BOTTOM := 14
+const SOCIAL_FONT_SIZE_BUMP := 2
+const SOCIAL_ACTION_BUTTON_MIN_HEIGHT := 38
+const SOCIAL_ACTION_BUTTON_PAD_X := 16
+const SOCIAL_ACTION_BUTTON_PAD_Y := 8
+const SOCIAL_NAV_BUTTON_PAD_X := 16
+const SOCIAL_NAV_BUTTON_PAD_Y := 9
 const SOCIAL_FEED_FILTER_ALL := "all"
 const SOCIAL_FEED_FILTER_FOLLOWING := "following"
 const SOCIAL_FEED_FILTER_COMPANIES := "companies"
@@ -412,6 +427,8 @@ var debug_life_development_buttons: Dictionary = {}
 var debug_start_rupslb_button: Button = null
 var debug_start_rupslb_status_label: Label = null
 var debug_index_review_status_label: Label = null
+var debug_company_control_button: Button = null
+var debug_company_control_status_label: Label = null
 var debug_company_roadmap_status_label: Label = null
 var debug_life_development_status_label: Label = null
 var contact_intel_panel: PanelContainer = null
@@ -2988,6 +3005,9 @@ func _apply_global_font_size_overrides() -> void:
 	_style_dashboard_index_recap_ui()
 	_style_dashboard_section_titles()
 	_style_news_newspaper_ui()
+	if academy_window_body != null:
+		_restyle_academy_controls()
+	_style_life_news_tabs()
 	_style_twooter_ui()
 
 
@@ -4494,7 +4514,7 @@ func _desktop_window_min_size_for_app(app_id: String) -> Vector2:
 		APP_ID_THESIS:
 			return Vector2(920, 620)
 		APP_ID_LIFE:
-			return Vector2(980, 640)
+			return Vector2(860, 640)
 		APP_ID_COMPANY:
 			return Vector2(720, 520)
 		APP_ID_UPGRADES:
@@ -4548,9 +4568,10 @@ func _desktop_window_default_rect(app_id: String) -> Rect2:
 			size.y = min(max(work_rect.size.y * 0.86, size.y), work_rect.size.y - 12.0)
 			return Rect2(work_rect.position + Vector2(32, 22), size)
 		APP_ID_LIFE:
-			size.x = min(max(work_rect.size.x * 0.92, size.x), work_rect.size.x - 12.0)
+			size.x = min(max(work_rect.size.x * 0.72, size.x), min(LIFE_WINDOW_MAX_WIDTH, work_rect.size.x - 12.0))
 			size.y = min(max(work_rect.size.y * 0.88, size.y), work_rect.size.y - 12.0)
-			return Rect2(work_rect.position + Vector2(16, 14), size)
+			var centered_x: float = max(floor((work_rect.size.x - size.x) * 0.5), 16.0)
+			return Rect2(work_rect.position + Vector2(centered_x, 18), size)
 		APP_ID_COMPANY:
 			size.x = min(max(work_rect.size.x * 0.68, size.x), work_rect.size.x - 16.0)
 			size.y = min(max(work_rect.size.y * 0.72, size.y), work_rect.size.y - 16.0)
@@ -4853,6 +4874,8 @@ func _clamp_desktop_window_to_viewport(app_id: String) -> void:
 func _window_fill_color_for_app(app_id: String) -> Color:
 	if app_id == APP_ID_STOCK:
 		return COLOR_STOCK_WINDOW_BG
+	if app_id == APP_ID_LIFE:
+		return COLOR_ACADEMY_CREAM
 	if _uses_academy_window_chrome(app_id):
 		return COLOR_ACADEMY_BROWN
 	if app_id == APP_ID_SOCIAL:
@@ -5113,6 +5136,7 @@ func _ensure_life_ui() -> void:
 	var upgrade_window_node: Node = get_node_or_null("UpgradeWindow")
 	if upgrade_window_node != null:
 		move_child(life_window, upgrade_window_node.get_index())
+	call_deferred("_style_life_news_tabs")
 
 
 func _refresh_life() -> void:
@@ -5120,6 +5144,14 @@ func _refresh_life() -> void:
 		return
 	if life_window.has_method("refresh"):
 		life_window.call("refresh")
+	_style_life_news_tabs()
+
+
+func _style_life_news_tabs() -> void:
+	if life_window == null:
+		return
+	var tabs := life_window.find_child("LifeTabs", true, false) as TabContainer
+	_style_news_tab_container(tabs)
 
 
 func _ensure_company_ui() -> void:
@@ -5230,9 +5262,11 @@ func _ensure_company_ui() -> void:
 	company_request_button = Button.new()
 	company_request_button.name = "CompanyRequestButton"
 	company_request_button.text = "Set Agenda"
+	company_request_button.custom_minimum_size = Vector2(0, 42)
+	company_request_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	company_request_button.tooltip_text = "Use majority ownership to set a company-direction agenda."
 	company_request_button.pressed.connect(_on_company_request_pressed)
-	_style_button(company_request_button, COLOR_DESKTOP_BROWN, COLOR_ACADEMY_BORDER, COLOR_ACADEMY_CREAM, 0)
+	_style_company_action_button(company_request_button, true)
 	vbox.add_child(company_request_button)
 
 	var bottom_spacer := Control.new()
@@ -5251,10 +5285,10 @@ func _refresh_company_app_availability() -> void:
 		company_app_label.modulate = Color.WHITE if unlocked else Color(1, 1, 1, 0.5)
 
 
-func _refresh_company() -> void:
+func _refresh_company(preferred_company_id: String = "") -> void:
 	if company_window == null:
 		return
-	var previous_company_id: String = _selected_company_management_company_id()
+	var previous_company_id: String = preferred_company_id if not preferred_company_id.is_empty() else _selected_company_management_company_id()
 	company_management_snapshot = GameManager.get_company_management_snapshot(previous_company_id)
 	var controlled_rows: Array = company_management_snapshot.get("controlled_rows", [])
 	var candidate_rows: Array = company_management_snapshot.get("candidate_rows", [])
@@ -5309,6 +5343,7 @@ func _refresh_company() -> void:
 		var enabled: bool = bool(selected_options.get("enabled", false)) and company_agenda_option != null and company_agenda_option.get_item_count() > 0
 		company_request_button.disabled = not enabled
 		company_request_button.tooltip_text = str(selected_options.get("tooltip_text", "Use majority ownership to set a company-direction agenda."))
+		_style_company_action_button(company_request_button, enabled)
 	_refresh_company_app_availability()
 
 
@@ -5431,7 +5466,7 @@ func _ensure_academy_ui() -> void:
 
 	academy_category_tabs = HBoxContainer.new()
 	academy_category_tabs.name = "AcademyCategoryTabs"
-	academy_category_tabs.add_theme_constant_override("separation", 0)
+	academy_category_tabs.add_theme_constant_override("separation", 12)
 	academy_category_tabs.custom_minimum_size = Vector2(0, 38)
 	academy_vbox.add_child(academy_category_tabs)
 
@@ -5439,8 +5474,8 @@ func _ensure_academy_ui() -> void:
 	academy_section_tabs.name = "AcademySectionTabs"
 	academy_section_tabs.visible = false
 	academy_section_tabs.columns = 4
-	academy_section_tabs.add_theme_constant_override("h_separation", 8)
-	academy_section_tabs.add_theme_constant_override("v_separation", 8)
+	academy_section_tabs.add_theme_constant_override("h_separation", 12)
+	academy_section_tabs.add_theme_constant_override("v_separation", 12)
 	academy_vbox.add_child(academy_section_tabs)
 
 	academy_summary_label = Label.new()
@@ -5706,36 +5741,7 @@ func _rebuild_academy_category_tabs() -> void:
 
 
 func _style_academy_category_tab(button: Button, selected: bool) -> void:
-	var fill: Color = COLOR_ACADEMY_CREAM
-	var border: Color = COLOR_ACADEMY_BORDER
-	var font_color: Color = COLOR_ACADEMY_BROWN
-	if selected:
-		fill = COLOR_ACADEMY_BROWN
-		border = COLOR_ACADEMY_BROWN.darkened(0.22)
-		font_color = COLOR_TEXT
-	var normal: StyleBoxFlat = StyleBoxFlat.new()
-	normal.bg_color = fill
-	normal.border_color = border
-	normal.set_border_width_all(1)
-	normal.corner_radius_top_left = 0
-	normal.corner_radius_top_right = 0
-	normal.corner_radius_bottom_left = 0
-	normal.corner_radius_bottom_right = 0
-	normal.content_margin_left = 14
-	normal.content_margin_right = 14
-	normal.content_margin_top = 10
-	normal.content_margin_bottom = 10
-	var hover: StyleBoxFlat = normal.duplicate()
-	hover.bg_color = fill.lightened(0.05)
-	var pressed: StyleBoxFlat = normal.duplicate()
-	pressed.bg_color = fill.darkened(0.04)
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", pressed)
-	button.add_theme_color_override("font_color", font_color)
-	button.add_theme_color_override("font_hover_color", font_color)
-	button.add_theme_color_override("font_pressed_color", font_color)
+	_style_news_tab_button(button, selected, true)
 
 
 func _apply_academy_button_padding(button: Button, padding: int = 24) -> void:
@@ -5917,6 +5923,13 @@ func _restyle_academy_controls() -> void:
 				continue
 			var tab_id: String = tab_button.name.trim_prefix("AcademyCategoryButton_")
 			_style_academy_category_tab(tab_button, tab_id == selected_academy_category_id)
+	if academy_section_tabs != null:
+		for child in academy_section_tabs.get_children():
+			var section_tab_button: Button = child as Button
+			if section_tab_button == null:
+				continue
+			var section_tab_id: String = section_tab_button.name.trim_prefix("AcademySectionTab_")
+			_style_academy_section_tab(section_tab_button, section_tab_id == selected_academy_section_id, section_tab_button.disabled)
 	if academy_selection_chip_label != null:
 		_style_academy_selection_chip(academy_selection_chip_label)
 		academy_selection_chip_label.add_theme_font_size_override("font_size", 10)
@@ -6045,39 +6058,7 @@ func _academy_section_tab_label(section: Dictionary, selected: bool = false) -> 
 
 
 func _style_academy_section_tab(button: Button, selected: bool, locked: bool) -> void:
-	var fill: Color = Color(0.968627, 0.964706, 0.898039, 1)
-	var border: Color = COLOR_BORDER
-	if selected:
-		fill = Color(0.811765, 0.858824, 0.65098, 1)
-		border = Color(0.117647, 0.32549, 0.239216, 1)
-	elif locked:
-		fill = Color(0.909804, 0.909804, 0.803922, 0.55)
-		border = Color(0.454902, 0.337255, 0.141176, 0.5)
-	var normal: StyleBoxFlat = StyleBoxFlat.new()
-	normal.bg_color = fill
-	normal.border_color = border
-	normal.set_border_width_all(1 if not selected else 2)
-	normal.corner_radius_top_left = 8
-	normal.corner_radius_top_right = 8
-	normal.corner_radius_bottom_left = 8
-	normal.corner_radius_bottom_right = 8
-	normal.content_margin_left = 24
-	normal.content_margin_right = 24
-	normal.content_margin_top = 24
-	normal.content_margin_bottom = 24
-	var hover: StyleBoxFlat = normal.duplicate()
-	hover.bg_color = fill.lightened(0.06)
-	var pressed: StyleBoxFlat = normal.duplicate()
-	pressed.bg_color = fill.darkened(0.04)
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", pressed)
-	button.add_theme_stylebox_override("disabled", normal)
-	button.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	button.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
-	button.add_theme_color_override("font_pressed_color", COLOR_WINDOW_TEXT)
-	button.add_theme_color_override("font_disabled_color", Color(0.352941, 0.309804, 0.203922, 0.62))
+	_style_news_tab_button(button, selected, not locked)
 
 
 func _refresh_academy_content() -> void:
@@ -8062,6 +8043,10 @@ func _social_account_matches_name_search(account: Dictionary, query: String) -> 
 	return not display_name.is_empty() and display_name.find(query) != -1
 
 
+func _social_font_size(base_size: int) -> int:
+	return base_size + SOCIAL_FONT_SIZE_BUMP
+
+
 func _build_social_account_search_result(account: Dictionary) -> Button:
 	var account_id: String = str(account.get("id", ""))
 	var button := Button.new()
@@ -8107,17 +8092,17 @@ func _build_social_trending_row(row: Dictionary) -> VBoxContainer:
 	var category := Label.new()
 	category.text = str(row.get("category", "Market"))
 	category.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(category, 12, _get_app_font())
+	_apply_font_override_to_control(category, _social_font_size(12), _get_app_font())
 	vbox.add_child(category)
 	var tag := Label.new()
 	tag.text = str(row.get("tag", "#IDX"))
 	tag.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(tag, DEFAULT_APP_FONT_SIZE + 1, _get_dashboard_title_font())
+	_apply_font_override_to_control(tag, _social_font_size(DEFAULT_APP_FONT_SIZE + 1), _get_dashboard_title_font())
 	vbox.add_child(tag)
 	var count := Label.new()
 	count.text = "%d posts" % int(row.get("posts", 0))
 	count.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(count, 12, _get_app_font())
+	_apply_font_override_to_control(count, _social_font_size(12), _get_app_font())
 	vbox.add_child(count)
 	return vbox
 
@@ -8160,8 +8145,8 @@ func _build_social_follow_row(row: Dictionary) -> HBoxContainer:
 	var button := Button.new()
 	button.name = "SocialFollowButton"
 	button.text = "Follow"
-	button.custom_minimum_size = Vector2(72, 32)
-	_style_button(button, COLOR_TWOOTER_TEXT, COLOR_TWOOTER_TEXT, COLOR_TWOOTER_PAGE, 16)
+	button.custom_minimum_size = Vector2(92, SOCIAL_ACTION_BUTTON_MIN_HEIGHT)
+	_style_social_follow_cta_button(button)
 	button.pressed.connect(_on_social_follow_pressed.bind(account_id))
 	hbox.add_child(button)
 	return hbox
@@ -8265,7 +8250,7 @@ func _add_social_message_header(title_text: String, subtitle_text: String) -> vo
 	title.name = "SocialMessageTitleLabel"
 	title.text = title_text
 	title.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(title, DEFAULT_APP_FONT_SIZE + 5, _get_dashboard_title_font())
+	_apply_font_override_to_control(title, _social_font_size(DEFAULT_APP_FONT_SIZE + 5), _get_dashboard_title_font())
 	social_message_header.add_child(title)
 	if not subtitle_text.is_empty():
 		var subtitle := Label.new()
@@ -8273,7 +8258,7 @@ func _add_social_message_header(title_text: String, subtitle_text: String) -> vo
 		subtitle.text = subtitle_text
 		subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		subtitle.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-		_apply_font_override_to_control(subtitle, 12, _get_app_font())
+		_apply_font_override_to_control(subtitle, _social_font_size(12), _get_app_font())
 		social_message_header.add_child(subtitle)
 
 
@@ -8454,7 +8439,7 @@ func _build_social_message_bubble(row: Dictionary) -> PanelContainer:
 	label.text = body_text if is_player else _clean_social_account_reply_text(body_text)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.add_theme_color_override("font_color", COLOR_TWOOTER_PAGE if is_player else COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(label, 13, _get_app_font())
+	_apply_font_override_to_control(label, _social_font_size(13), _get_app_font())
 	margin.add_child(label)
 	return bubble
 
@@ -8466,7 +8451,7 @@ func _build_social_message_action_button(account_id: String, action_id: String, 
 	button.custom_minimum_size = Vector2(0, 34)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_style_button(button, COLOR_TWOOTER_BLUE, COLOR_TWOOTER_BLUE_DARK, COLOR_TWOOTER_PAGE, 8)
+	_style_social_filter_button(button, true, true)
 	button.pressed.connect(_on_social_message_action_pressed.bind(account_id, action_id, thesis_id))
 	return button
 
@@ -8645,7 +8630,7 @@ func _make_social_rail_body_label(text: String) -> Label:
 	label.text = text
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(label, 12, _get_app_font())
+	_apply_font_override_to_control(label, _social_font_size(12), _get_app_font())
 	return label
 
 
@@ -8705,7 +8690,7 @@ func _rebuild_social_ticker_tape(visible_posts: Array, all_posts: Array) -> void
 		empty_label.text = "No ticker chatter yet"
 		empty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		empty_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-		_apply_font_override_to_control(empty_label, 12, _get_app_font())
+		_apply_font_override_to_control(empty_label, _social_font_size(12), _get_app_font())
 		social_ticker_tape.add_child(empty_label)
 		return
 
@@ -8754,7 +8739,7 @@ func _build_social_ticker_chip(row: Dictionary) -> PanelContainer:
 	var ticker_label := Label.new()
 	ticker_label.text = "$%s" % str(row.get("ticker", ""))
 	ticker_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
-	_apply_font_override_to_control(ticker_label, 12, _get_dashboard_title_font())
+	_apply_font_override_to_control(ticker_label, _social_font_size(12), _get_dashboard_title_font())
 	row_box.add_child(ticker_label)
 	return chip
 
@@ -8843,7 +8828,7 @@ func _build_social_account_filter_card(account_name: String, account_id: String)
 	avatar_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	avatar_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	avatar_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(avatar_label, DEFAULT_APP_FONT_SIZE + 6, _get_dashboard_title_font())
+	_apply_font_override_to_control(avatar_label, _social_font_size(DEFAULT_APP_FONT_SIZE + 6), _get_dashboard_title_font())
 	avatar.add_child(avatar_label)
 	header_row.add_child(avatar)
 
@@ -8862,7 +8847,7 @@ func _build_social_account_filter_card(account_name: String, account_id: String)
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.clip_text = true
 	name_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(name_label, DEFAULT_APP_FONT_SIZE + 4, _get_dashboard_title_font())
+	_apply_font_override_to_control(name_label, _social_font_size(DEFAULT_APP_FONT_SIZE + 4), _get_dashboard_title_font())
 	title_row.add_child(name_label)
 	if bool(account.get("verified", false)):
 		var verified_label := Label.new()
@@ -8870,7 +8855,7 @@ func _build_social_account_filter_card(account_name: String, account_id: String)
 		verified_label.text = "Verified"
 		verified_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		verified_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE)
-		_apply_font_override_to_control(verified_label, 11, _get_dashboard_title_font())
+		_apply_font_override_to_control(verified_label, _social_font_size(11), _get_dashboard_title_font())
 		title_row.add_child(verified_label)
 
 	var handle_label: Label = Label.new()
@@ -8881,7 +8866,7 @@ func _build_social_account_filter_card(account_name: String, account_id: String)
 	]
 	handle_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	handle_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(handle_label, 12, _get_app_font())
+	_apply_font_override_to_control(handle_label, _social_font_size(12), _get_app_font())
 	identity_box.add_child(handle_label)
 
 	var role_label: Label = Label.new()
@@ -8889,7 +8874,7 @@ func _build_social_account_filter_card(account_name: String, account_id: String)
 	role_label.text = str(profile.get("role", "Public market voice"))
 	role_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	role_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(role_label, 13, _get_app_font())
+	_apply_font_override_to_control(role_label, _social_font_size(13), _get_app_font())
 	identity_box.add_child(role_label)
 
 	var action_row: HBoxContainer = HBoxContainer.new()
@@ -8903,6 +8888,7 @@ func _build_social_account_filter_card(account_name: String, account_id: String)
 	follow_button.text = "Following" if bool(account.get("following", false)) else "Follow"
 	follow_button.tooltip_text = "Follow this account and add it to the Following feed."
 	follow_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	follow_button.custom_minimum_size = Vector2(112, SOCIAL_ACTION_BUTTON_MIN_HEIGHT)
 	follow_button.disabled = bool(account.get("following", false))
 	_style_social_filter_button(follow_button, bool(account.get("following", false)), true)
 	action_row.add_child(follow_button)
@@ -8913,6 +8899,7 @@ func _build_social_account_filter_card(account_name: String, account_id: String)
 	message_button.text = "Send message"
 	message_button.tooltip_text = "Start a private Twooter message."
 	message_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	message_button.custom_minimum_size = Vector2(148, SOCIAL_ACTION_BUTTON_MIN_HEIGHT)
 	_style_social_filter_button(message_button, false, true)
 	action_row.add_child(message_button)
 	message_button.pressed.connect(_on_social_start_message_pressed.bind(account_id))
@@ -8950,7 +8937,7 @@ func _build_social_profile_stat_chip(label_text: String, value: int) -> PanelCon
 	var label := Label.new()
 	label.text = "%s %d" % [label_text, value]
 	label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(label, 11, _get_app_font())
+	_apply_font_override_to_control(label, _social_font_size(11), _get_app_font())
 	margin.add_child(label)
 	return chip
 
@@ -8960,7 +8947,7 @@ func _make_social_profile_body_label(text: String) -> Label:
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.text = text
 	label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(label, 12, _get_app_font())
+	_apply_font_override_to_control(label, _social_font_size(12), _get_app_font())
 	return label
 
 
@@ -9070,7 +9057,7 @@ func _build_social_empty_card() -> PanelContainer:
 	var body: Label = Label.new()
 	body.text = "No posts yet.\nAdvance the day to generate fresh chatter."
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	body.add_theme_font_size_override("font_size", _social_font_size(DEFAULT_APP_FONT_SIZE))
 	body.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
 	margin.add_child(body)
 	return card
@@ -9125,21 +9112,10 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 		_on_social_account_pressed(str(post.get("account_id", "")))
 	)
 
-	if bool(post.get("account_verified", false)):
-		var verified_label := Label.new()
-		verified_label.name = "SocialVerifiedLabel"
-		verified_label.text = "Verified"
-		verified_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		verified_label.add_theme_font_size_override("font_size", 10)
-		verified_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE)
-		header_row.add_child(verified_label)
-
-	header_row.add_child(_build_social_public_pill())
-
 	var handle_label: Label = Label.new()
 	handle_label.text = _build_social_card_meta_line(post)
 	handle_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	handle_label.add_theme_font_size_override("font_size", 12)
+	handle_label.add_theme_font_size_override("font_size", _social_font_size(12))
 	handle_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
 	content.add_child(handle_label)
 
@@ -9176,7 +9152,7 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 	body_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	body_label.tooltip_text = "Click to add this post to the Research Tray."
 	body_label.gui_input.connect(_on_social_post_capture_gui_input.bind(post.duplicate(true)))
-	body_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 1)
+	body_label.add_theme_font_size_override("font_size", _social_font_size(DEFAULT_APP_FONT_SIZE + 1))
 	body_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
 	content.add_child(body_label)
 
@@ -9202,7 +9178,7 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 			var thread_text: String = str(thread_lines[thread_index])
 			thread_line.text = thread_text if thread_text.begins_with("%d." % (thread_index + 1)) else "%d. %s" % [thread_index + 1, thread_text]
 			thread_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			thread_line.add_theme_font_size_override("font_size", 12)
+			thread_line.add_theme_font_size_override("font_size", _social_font_size(12))
 			thread_line.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
 			thread_container.add_child(thread_line)
 		thread_button.pressed.connect(func() -> void:
@@ -9249,39 +9225,8 @@ func _build_social_post_card(post: Dictionary) -> PanelContainer:
 	reactions_row.add_child(_build_social_engagement_label("Reply", int(post.get("replies", 0))))
 	reactions_row.add_child(_build_social_engagement_label("Retwoot", int(post.get("retwoots", 0))))
 	reactions_row.add_child(_build_social_like_button(post))
-	var engagement_spacer := Control.new()
-	engagement_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	reactions_row.add_child(engagement_spacer)
-	var score_label := Label.new()
-	score_label.text = "%d score" % _social_post_engagement_score(post)
-	score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	score_label.add_theme_font_size_override("font_size", 11)
-	score_label.add_theme_color_override("font_color", COLOR_TWOOTER_FAINT)
-	reactions_row.add_child(score_label)
 
 	return card
-
-
-func _build_social_public_pill() -> PanelContainer:
-	var pill := PanelContainer.new()
-	pill.name = "SocialPublicPill"
-	pill.size_flags_horizontal = Control.SIZE_SHRINK_END
-	_style_social_public_pill(pill)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 6)
-	margin.add_theme_constant_override("margin_top", 2)
-	margin.add_theme_constant_override("margin_right", 6)
-	margin.add_theme_constant_override("margin_bottom", 2)
-	pill.add_child(margin)
-
-	var label := Label.new()
-	label.text = "Public"
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 10)
-	label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
-	margin.add_child(label)
-	return pill
 
 
 func _build_social_tag_chip(text: String, tone: String) -> PanelContainer:
@@ -9299,7 +9244,7 @@ func _build_social_tag_chip(text: String, tone: String) -> PanelContainer:
 
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", 11)
+	label.add_theme_font_size_override("font_size", _social_font_size(11))
 	label.add_theme_color_override("font_color", _social_tag_font_color(tone))
 	margin.add_child(label)
 	return chip
@@ -9308,7 +9253,7 @@ func _build_social_tag_chip(text: String, tone: String) -> PanelContainer:
 func _build_social_engagement_label(label_text: String, value: int) -> Label:
 	var label := Label.new()
 	label.text = "%s %d" % [label_text, value]
-	label.add_theme_font_size_override("font_size", 11)
+	label.add_theme_font_size_override("font_size", _social_font_size(11))
 	label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
 	return label
 
@@ -9366,14 +9311,14 @@ func _build_social_reply_bubble(sender_label: String, body_text: String, is_play
 		var name_label := Label.new()
 		name_label.text = sender_label
 		name_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE if is_player else COLOR_TWOOTER_MUTED)
-		_apply_font_override_to_control(name_label, 11, _get_dashboard_title_font())
+		_apply_font_override_to_control(name_label, _social_font_size(11), _get_dashboard_title_font())
 		vbox.add_child(name_label)
 	var label := Label.new()
 	label.name = "SocialPlayerReplyTextLabel" if is_player else "SocialAccountReplyTextLabel"
 	label.text = body_text if is_player else _clean_social_account_reply_text(body_text)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(label, 13, _get_app_font())
+	_apply_font_override_to_control(label, _social_font_size(13), _get_app_font())
 	vbox.add_child(label)
 	return bubble
 
@@ -9413,7 +9358,7 @@ func _build_social_conclusion_row(post: Dictionary) -> PanelContainer:
 		label.text = "The thread cools here. Build more relationship, credibility, and importance before pushing further."
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(label, 12, _get_app_font())
+	_apply_font_override_to_control(label, _social_font_size(12), _get_app_font())
 	margin.add_child(label)
 	return panel
 
@@ -9494,7 +9439,7 @@ func _ensure_social_reply_composer_dialog() -> void:
 	title.text = "Reply"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(title, DEFAULT_APP_FONT_SIZE + 5, _get_dashboard_title_font())
+	_apply_font_override_to_control(title, _social_font_size(DEFAULT_APP_FONT_SIZE + 5), _get_dashboard_title_font())
 	title_row.add_child(title)
 	var close_button := Button.new()
 	close_button.name = "SocialReplyComposerCloseButton"
@@ -9508,7 +9453,7 @@ func _ensure_social_reply_composer_dialog() -> void:
 	social_reply_context_label.name = "SocialReplyComposerContextLabel"
 	social_reply_context_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	social_reply_context_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(social_reply_context_label, 12, _get_app_font())
+	_apply_font_override_to_control(social_reply_context_label, _social_font_size(12), _get_app_font())
 	vbox.add_child(social_reply_context_label)
 
 	var text_panel := PanelContainer.new()
@@ -9530,7 +9475,7 @@ func _ensure_social_reply_composer_dialog() -> void:
 	social_reply_text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	social_reply_text_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	social_reply_text_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(social_reply_text_label, DEFAULT_APP_FONT_SIZE, _get_app_font())
+	_apply_font_override_to_control(social_reply_text_label, _social_font_size(DEFAULT_APP_FONT_SIZE), _get_app_font())
 	text_margin.add_child(social_reply_text_label)
 
 	var options := VBoxContainer.new()
@@ -9558,7 +9503,7 @@ func _ensure_social_reply_composer_dialog() -> void:
 	social_reply_cancel_button.name = "SocialReplyCancelButton"
 	social_reply_cancel_button.text = "Cancel"
 	social_reply_cancel_button.custom_minimum_size = Vector2(92, 34)
-	_style_button(social_reply_cancel_button, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, COLOR_TWOOTER_TEXT, 6)
+	_style_social_thread_button(social_reply_cancel_button)
 	social_reply_cancel_button.pressed.connect(_hide_social_reply_composer)
 	action_row.add_child(social_reply_cancel_button)
 	social_reply_send_button = Button.new()
@@ -9566,7 +9511,7 @@ func _ensure_social_reply_composer_dialog() -> void:
 	social_reply_send_button.text = "Reply"
 	social_reply_send_button.custom_minimum_size = Vector2(92, 34)
 	social_reply_send_button.disabled = true
-	_style_button(social_reply_send_button, COLOR_TWOOTER_BLUE, COLOR_TWOOTER_BLUE_DARK, COLOR_TWOOTER_PAGE, 6)
+	_style_social_filter_button(social_reply_send_button, true, true)
 	social_reply_send_button.pressed.connect(_send_social_reply_composer)
 	action_row.add_child(social_reply_send_button)
 
@@ -9692,7 +9637,7 @@ func _build_social_avatar(post: Dictionary) -> PanelContainer:
 	initial_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	initial_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	initial_label.text = _social_avatar_initial(post)
-	initial_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 3)
+	initial_label.add_theme_font_size_override("font_size", _social_font_size(DEFAULT_APP_FONT_SIZE + 3))
 	initial_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	avatar.add_child(initial_label)
 	return avatar
@@ -9814,13 +9759,13 @@ func _style_twooter_ui() -> void:
 		_style_twooter_panel(social_live_dot, COLOR_TWOOTER_LIVE, COLOR_TWOOTER_LIVE, 5, 1)
 	if social_live_label != null:
 		social_live_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-		_apply_font_override_to_control(social_live_label, 11, _get_dashboard_title_font())
+		_apply_font_override_to_control(social_live_label, _social_font_size(11), _get_dashboard_title_font())
 	_set_label_tone(social_title_label, COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(social_title_label, DEFAULT_APP_FONT_SIZE + 8, _get_dashboard_title_font())
+	_apply_font_override_to_control(social_title_label, _social_font_size(DEFAULT_APP_FONT_SIZE + 8), _get_dashboard_title_font())
 	_set_label_tone(social_access_status_label, COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(social_access_status_label, 12, _get_app_font())
+	_apply_font_override_to_control(social_access_status_label, _social_font_size(12), _get_app_font())
 	_set_label_tone(social_feed_summary_label, COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(social_feed_summary_label, 12, _get_app_font())
+	_apply_font_override_to_control(social_feed_summary_label, _social_font_size(12), _get_app_font())
 	_apply_social_view_visibility()
 
 
@@ -9836,10 +9781,6 @@ func _style_twooter_panel(panel: PanelContainer, fill_color: Color, border_color
 	style.corner_radius_bottom_right = radius
 	style.corner_radius_bottom_left = radius
 	panel.add_theme_stylebox_override("panel", style)
-
-
-func _style_social_public_pill(panel: PanelContainer) -> void:
-	_style_twooter_panel(panel, Color(COLOR_TWOOTER_BLUE_TINT.r, COLOR_TWOOTER_BLUE_TINT.g, COLOR_TWOOTER_BLUE_TINT.b, 0.86), COLOR_TWOOTER_BLUE_EDGE, 5, 1)
 
 
 func _style_social_ticker_chip(panel: PanelContainer, _tone: String) -> void:
@@ -9865,12 +9806,50 @@ func _style_social_nav_button(button: Button, is_selected: bool) -> void:
 	var fill_color: Color = COLOR_TWOOTER_SURFACE if is_selected else COLOR_TWOOTER_PAGE
 	var border_color: Color = COLOR_TWOOTER_SURFACE if is_selected else COLOR_TWOOTER_PAGE
 	var font_color: Color = COLOR_TWOOTER_TEXT if is_selected else COLOR_TWOOTER_MUTED
-	_style_button(button, fill_color, border_color, font_color, 20)
-	_apply_font_override_to_control(button, DEFAULT_APP_FONT_SIZE + 2, _get_dashboard_title_font())
+	UiTheme.style_button(
+		button,
+		"custom",
+		{
+			"fill": fill_color,
+			"border": border_color,
+			"font": font_color,
+			"radius": 20,
+			"margins": {"left": SOCIAL_NAV_BUTTON_PAD_X, "top": SOCIAL_NAV_BUTTON_PAD_Y, "right": SOCIAL_NAV_BUTTON_PAD_X, "bottom": SOCIAL_NAV_BUTTON_PAD_Y}
+		}
+	)
+	_apply_font_override_to_control(button, _social_font_size(DEFAULT_APP_FONT_SIZE + 2), _get_dashboard_title_font())
 
 
 func _style_social_thread_button(button: Button) -> void:
-	_style_button(button, COLOR_TWOOTER_BLUE_TINT, COLOR_TWOOTER_BORDER, COLOR_TWOOTER_BLUE, 5)
+	UiTheme.style_button(
+		button,
+		"custom",
+		{
+			"fill": COLOR_TWOOTER_BLUE_TINT,
+			"border": COLOR_TWOOTER_BORDER,
+			"font": COLOR_TWOOTER_BLUE,
+			"radius": 7,
+			"margins": {"left": SOCIAL_ACTION_BUTTON_PAD_X, "top": SOCIAL_ACTION_BUTTON_PAD_Y, "right": SOCIAL_ACTION_BUTTON_PAD_X, "bottom": SOCIAL_ACTION_BUTTON_PAD_Y}
+		}
+	)
+	button.custom_minimum_size = Vector2(button.custom_minimum_size.x, max(button.custom_minimum_size.y, float(SOCIAL_ACTION_BUTTON_MIN_HEIGHT)))
+	_apply_font_override_to_control(button, _social_font_size(12), _get_dashboard_title_font())
+
+
+func _style_social_follow_cta_button(button: Button) -> void:
+	UiTheme.style_button(
+		button,
+		"custom",
+		{
+			"fill": COLOR_TWOOTER_TEXT,
+			"border": COLOR_TWOOTER_TEXT,
+			"font": COLOR_TWOOTER_PAGE,
+			"radius": 19,
+			"margins": {"left": SOCIAL_ACTION_BUTTON_PAD_X, "top": SOCIAL_ACTION_BUTTON_PAD_Y, "right": SOCIAL_ACTION_BUTTON_PAD_X, "bottom": SOCIAL_ACTION_BUTTON_PAD_Y}
+		}
+	)
+	button.custom_minimum_size = Vector2(button.custom_minimum_size.x, max(button.custom_minimum_size.y, float(SOCIAL_ACTION_BUTTON_MIN_HEIGHT)))
+	_apply_font_override_to_control(button, _social_font_size(12), _get_dashboard_title_font())
 
 
 func _style_social_search_input(line_edit: LineEdit) -> void:
@@ -9894,7 +9873,7 @@ func _style_social_search_input(line_edit: LineEdit) -> void:
 	line_edit.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
 	line_edit.add_theme_color_override("font_placeholder_color", COLOR_TWOOTER_MUTED)
 	line_edit.add_theme_color_override("font_uneditable_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(line_edit, DEFAULT_APP_FONT_SIZE, _get_app_font())
+	_apply_font_override_to_control(line_edit, _social_font_size(DEFAULT_APP_FONT_SIZE), _get_app_font())
 
 
 func _show_news_article(article: Dictionary, discover_context: bool = true) -> void:
@@ -11987,6 +11966,7 @@ func _refresh_help() -> void:
 
 func _refresh_debug_overlay() -> void:
 	_update_debug_generator_buttons_enabled(RunState.has_active_run())
+	_refresh_debug_company_control_controls()
 	_refresh_debug_corporate_action_controls()
 	_refresh_debug_index_review_controls()
 	_refresh_debug_company_roadmap_controls()
@@ -12088,6 +12068,8 @@ func _build_debug_generator_controls() -> void:
 	debug_start_rupslb_button = null
 	debug_start_rupslb_status_label = null
 	debug_index_review_status_label = null
+	debug_company_control_button = null
+	debug_company_control_status_label = null
 	debug_company_roadmap_status_label = null
 	debug_life_development_status_label = null
 	for child in debug_generator_groups.get_children():
@@ -12128,10 +12110,12 @@ func _build_debug_generator_controls() -> void:
 			debug_generator_buttons[event_id] = generator_button
 
 	_update_debug_generator_buttons_enabled(RunState.has_active_run())
+	_build_debug_company_control_controls()
 	_build_debug_corporate_action_controls()
 	_build_debug_index_review_controls()
 	_build_debug_company_roadmap_controls()
 	_build_debug_life_development_controls()
+	_refresh_debug_company_control_controls()
 	_refresh_debug_corporate_action_controls()
 	_refresh_debug_index_review_controls()
 	_refresh_debug_company_roadmap_controls()
@@ -12164,6 +12148,8 @@ func _update_debug_generator_buttons_enabled(is_enabled: bool) -> void:
 		if life_button == null:
 			continue
 		life_button.disabled = not is_enabled
+	if debug_company_control_button != null:
+		debug_company_control_button.disabled = not is_enabled
 
 
 func _on_debug_generate_event_pressed(event_id: String) -> void:
@@ -12174,6 +12160,151 @@ func _on_debug_generate_event_pressed(event_id: String) -> void:
 	)
 	if bool(result.get("success", false)):
 		_refresh_all()
+
+
+func _build_debug_company_control_controls() -> void:
+	if debug_generator_groups == null:
+		return
+	var group_label := Label.new()
+	group_label.name = "DebugCompanyControlLabel"
+	group_label.text = "Company App Control"
+	group_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	group_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	_set_label_tone(group_label, COLOR_TEXT)
+	debug_generator_groups.add_child(group_label)
+
+	var status_label := Label.new()
+	status_label.name = "DebugCompanyControlStatusLabel"
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_tone(status_label, COLOR_MUTED)
+	debug_generator_groups.add_child(status_label)
+	debug_company_control_status_label = status_label
+
+	var hint_label := Label.new()
+	hint_label.name = "DebugCompanyControlHintLabel"
+	hint_label.text = "Uses the selected STOCKBOT stock. Grants enough shares to unlock majority-control Company tools without spending cash."
+	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hint_label.add_theme_font_size_override("font_size", 11)
+	_set_label_tone(hint_label, COLOR_MUTED)
+	debug_generator_groups.add_child(hint_label)
+
+	var flow := HFlowContainer.new()
+	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	flow.add_theme_constant_override("h_separation", 8)
+	flow.add_theme_constant_override("v_separation", 8)
+	debug_generator_groups.add_child(flow)
+
+	var action_button := Button.new()
+	action_button.name = "DebugCompanyControlButton"
+	action_button.custom_minimum_size = Vector2(190, 34)
+	action_button.text = "Own Selected Company"
+	action_button.tooltip_text = "Grant enough shares to become the controlling shareholder."
+	action_button.pressed.connect(_on_debug_company_control_pressed)
+	_style_button(action_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	flow.add_child(action_button)
+	debug_company_control_button = action_button
+
+
+func _refresh_debug_company_control_controls() -> void:
+	var state: Dictionary = _debug_company_control_status_state()
+	if debug_company_control_status_label != null:
+		debug_company_control_status_label.text = str(state.get("status_text", "Pick a stock first."))
+	if debug_company_control_button != null:
+		debug_company_control_button.disabled = not bool(state.get("enabled", false))
+		debug_company_control_button.text = "Open Company App" if bool(state.get("already_controlled", false)) else "Own Selected Company"
+		debug_company_control_button.tooltip_text = str(state.get("tooltip_text", "Grant enough shares to become the controlling shareholder."))
+
+
+func _debug_company_control_status_state() -> Dictionary:
+	if not RunState.has_active_run():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "No active run. Start or load a run first.",
+			"tooltip_text": "Start or load a run first."
+		}
+	if selected_company_id.is_empty():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "Target: none | Pick a stock first.",
+			"tooltip_text": "Select a stock in STOCKBOT first."
+		}
+	var definition: Dictionary = RunState.get_effective_company_definition(selected_company_id, false, false)
+	if definition.is_empty():
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "Target: none | Pick a valid stock first.",
+			"tooltip_text": "Select a valid stock in STOCKBOT first."
+		}
+	var ticker: String = str(definition.get("ticker", selected_company_id.to_upper()))
+	var ownership: Dictionary = GameManager.get_company_ownership_snapshot(selected_company_id)
+	var shares_owned: int = int(ownership.get("shares_owned", 0))
+	var control_required_shares: int = int(ownership.get("control_required_shares", 0))
+	if control_required_shares <= 0:
+		return {
+			"enabled": false,
+			"company_id": selected_company_id,
+			"ticker": ticker,
+			"status_text": "Target: %s | No share structure available." % ticker,
+			"tooltip_text": "This company cannot calculate majority ownership."
+		}
+	if bool(ownership.get("is_control_shareholder", false)):
+		return {
+			"enabled": true,
+			"company_id": selected_company_id,
+			"ticker": ticker,
+			"already_controlled": true,
+			"status_text": "Target: %s | Already controlled at %.2f%%. Button opens Company." % [
+				ticker,
+				float(ownership.get("ownership_pct", 0.0)) * 100.0
+			],
+			"tooltip_text": "Open the Company app for %s." % ticker
+		}
+	return {
+		"enabled": true,
+		"company_id": selected_company_id,
+		"ticker": ticker,
+		"already_controlled": false,
+		"status_text": "Target: %s | Own %s / need %s shares for control (%s more)." % [
+			ticker,
+			_format_grouped_integer(shares_owned),
+			_format_grouped_integer(control_required_shares),
+			_format_grouped_integer(int(ownership.get("control_shares_needed", max(control_required_shares - shares_owned, 0))))
+		],
+		"tooltip_text": "Grant enough shares of %s to unlock Company majority-control tools." % ticker
+	}
+
+
+func _on_debug_company_control_pressed() -> void:
+	var state: Dictionary = _debug_company_control_status_state()
+	if not bool(state.get("enabled", false)):
+		_show_toast(str(state.get("status_text", "Could not grant company control.")), false)
+		_refresh_debug_company_control_controls()
+		return
+	var company_id: String = str(state.get("company_id", ""))
+	var result: Dictionary = GameManager.debug_grant_company_control(company_id)
+	var success: bool = bool(result.get("success", false))
+	if not success:
+		_show_toast(str(result.get("message", "Could not grant company control.")), false)
+		_refresh_debug_overlay()
+		return
+	_invalidate_company_rows_cache()
+	_refresh_header()
+	_refresh_sidebar()
+	_refresh_company_list([], {}, false, true)
+	_refresh_trade_workspace_holdings_state()
+	_refresh_trade_workspace()
+	_refresh_portfolio()
+	_refresh_company_app_availability()
+	_refresh_company(company_id)
+	_refresh_desktop()
+	_set_active_app(APP_ID_COMPANY)
+	_refresh_company(company_id)
+	_show_toast(str(result.get("message", "Company control updated.")), true)
 
 
 func _build_debug_corporate_action_controls() -> void:
@@ -15192,6 +15323,7 @@ func _on_thesis_guide_company_selected(_index: int) -> void:
 func _bind_life_guide_tabs() -> void:
 	if life_window == null:
 		return
+	_style_life_news_tabs()
 	var tabs: TabContainer = life_window.find_child("LifeTabs", true, false) as TabContainer
 	if tabs != null and not tabs.tab_changed.is_connected(_on_life_guide_tab_changed):
 		tabs.tab_changed.connect(_on_life_guide_tab_changed)
@@ -20249,8 +20381,16 @@ func _ensure_social_feed_ui() -> void:
 		social_app_shell.add_theme_constant_override("separation", 0)
 		window_margin.add_child(social_app_shell)
 
+		var left_sidebar_margin := MarginContainer.new()
+		left_sidebar_margin.name = "SocialLeftSidebarMargin"
+		left_sidebar_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		left_sidebar_margin.add_theme_constant_override("margin_left", SOCIAL_SIDE_MARGIN_LEFT)
+		left_sidebar_margin.add_theme_constant_override("margin_top", SOCIAL_SIDE_MARGIN_TOP)
+		left_sidebar_margin.add_theme_constant_override("margin_right", 0)
+		left_sidebar_margin.add_theme_constant_override("margin_bottom", SOCIAL_SIDE_MARGIN_BOTTOM)
+		social_app_shell.add_child(left_sidebar_margin)
 		social_left_sidebar = _build_social_left_sidebar()
-		social_app_shell.add_child(social_left_sidebar)
+		left_sidebar_margin.add_child(social_left_sidebar)
 
 		social_center_panel = PanelContainer.new()
 		social_center_panel.name = "SocialCenterPanel"
@@ -20262,18 +20402,26 @@ func _ensure_social_feed_ui() -> void:
 		center_margin.name = "SocialCenterMargin"
 		center_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		center_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		center_margin.add_theme_constant_override("margin_left", 0)
-		center_margin.add_theme_constant_override("margin_top", 12)
-		center_margin.add_theme_constant_override("margin_right", 8)
-		center_margin.add_theme_constant_override("margin_bottom", 8)
+		center_margin.add_theme_constant_override("margin_left", SOCIAL_CENTER_MARGIN_LEFT)
+		center_margin.add_theme_constant_override("margin_top", SOCIAL_CENTER_MARGIN_TOP)
+		center_margin.add_theme_constant_override("margin_right", SOCIAL_CENTER_MARGIN_RIGHT)
+		center_margin.add_theme_constant_override("margin_bottom", SOCIAL_CENTER_MARGIN_BOTTOM)
 		social_center_panel.add_child(center_margin)
 		var previous_parent: Node = window_vbox.get_parent()
 		if previous_parent != null:
 			previous_parent.remove_child(window_vbox)
 		center_margin.add_child(window_vbox)
 
+		var right_rail_margin := MarginContainer.new()
+		right_rail_margin.name = "SocialRightRailMargin"
+		right_rail_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		right_rail_margin.add_theme_constant_override("margin_left", SOCIAL_SIDE_MARGIN_LEFT)
+		right_rail_margin.add_theme_constant_override("margin_top", SOCIAL_SIDE_MARGIN_TOP)
+		right_rail_margin.add_theme_constant_override("margin_right", SOCIAL_SIDE_MARGIN_RIGHT)
+		right_rail_margin.add_theme_constant_override("margin_bottom", SOCIAL_SIDE_MARGIN_BOTTOM)
+		social_app_shell.add_child(right_rail_margin)
 		social_right_rail = _build_social_right_rail()
-		social_app_shell.add_child(social_right_rail)
+		right_rail_margin.add_child(social_right_rail)
 
 	var header_row := social_title_label.get_parent() as HBoxContainer
 	if header_row != null:
@@ -20455,7 +20603,7 @@ func _ensure_social_feed_ui() -> void:
 		social_message_composer_text_label.name = "SocialMessageComposerTextLabel"
 		social_message_composer_text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		social_message_composer_text_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-		_apply_font_override_to_control(social_message_composer_text_label, DEFAULT_APP_FONT_SIZE, _get_app_font())
+		_apply_font_override_to_control(social_message_composer_text_label, _social_font_size(DEFAULT_APP_FONT_SIZE), _get_app_font())
 		composer_text_margin.add_child(social_message_composer_text_label)
 		social_message_actions = VBoxContainer.new()
 		social_message_actions.name = "SocialMessageComposerOptions"
@@ -20484,7 +20632,7 @@ func _ensure_social_feed_ui() -> void:
 		social_message_send_button.text = "Send | 1 AP"
 		social_message_send_button.custom_minimum_size = Vector2(112, 34)
 		social_message_send_button.disabled = true
-		_style_button(social_message_send_button, COLOR_TWOOTER_BLUE, COLOR_TWOOTER_BLUE_DARK, COLOR_TWOOTER_PAGE, 8)
+		_style_social_filter_button(social_message_send_button, true, true)
 		social_message_send_button.pressed.connect(_send_social_message_composer)
 		composer_action_row.add_child(social_message_send_button)
 
@@ -20514,7 +20662,7 @@ func _build_social_left_sidebar() -> PanelContainer:
 	logo.name = "SocialLogoLabel"
 	logo.text = "Twooter"
 	logo.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(logo, DEFAULT_APP_FONT_SIZE + 7, _get_dashboard_title_font())
+	_apply_font_override_to_control(logo, _social_font_size(DEFAULT_APP_FONT_SIZE + 7), _get_dashboard_title_font())
 	vbox.add_child(logo)
 
 	social_left_nav_buttons.clear()
@@ -20606,7 +20754,7 @@ func _make_social_rail_card(node_name: String, title: String) -> PanelContainer:
 	label.name = "SocialRailTitle"
 	label.text = title
 	label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE + 6, _get_dashboard_title_font())
+	_apply_font_override_to_control(label, _social_font_size(DEFAULT_APP_FONT_SIZE + 6), _get_dashboard_title_font())
 	vbox.add_child(label)
 	var rows := VBoxContainer.new()
 	rows.name = "SocialRailRows"
@@ -21891,8 +22039,9 @@ func _apply_visual_theme() -> void:
 	_style_cream_app_panel(network_list_panel, COLOR_ACADEMY_PANEL, COLOR_ACADEMY_BORDER, 4, 1)
 	_style_cream_app_panel(network_detail_panel, COLOR_DESKTOP_CREAM, COLOR_ACADEMY_BORDER, 4, 1)
 	if academy_window_body != null:
-		_restyle_academy_controls()
 		_apply_academy_text_theme()
+		_restyle_academy_controls()
+	_style_life_news_tabs()
 	_style_cream_app_panel(upgrade_window_body, COLOR_ACADEMY_CREAM, Color(COLOR_ACADEMY_BORDER.r, COLOR_ACADEMY_BORDER.g, COLOR_ACADEMY_BORDER.b, 0.0), 0, 0)
 	if console_panel != null:
 		_style_panel(console_panel, Color(0.0588235, 0.0823529, 0.109804, 0.98), 0)
@@ -22817,6 +22966,29 @@ func _style_news_article_card(card: PanelContainer, is_selected: bool) -> void:
 
 
 func _style_news_outlet_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
+	_style_news_tab_button(button, is_selected, is_unlocked)
+
+
+func _make_news_tab_stylebox(fill_color: Color, border_color: Color, is_selected: bool) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = border_color
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 5 if is_selected else 1
+	style.border_width_bottom = 0 if is_selected else 1
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 0
+	style.corner_radius_bottom_right = 0
+	style.corner_radius_bottom_left = 0
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 11 if is_selected else 14
+	style.content_margin_bottom = 14
+	return style
+
+
+func _style_news_tab_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
 	var fill_color: Color = COLOR_MARKET_PAPER_RAIL if is_unlocked else Color(0.85098, 0.835294, 0.772549, 1)
 	var border_color: Color = Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.86)
 	var font_color: Color = COLOR_WINDOW_TEXT if is_unlocked else Color(0.541176, 0.494118, 0.396078, 1)
@@ -22824,17 +22996,7 @@ func _style_news_outlet_button(button: Button, is_selected: bool, is_unlocked: b
 		fill_color = COLOR_MARKET_PAPER_CARD
 		border_color = COLOR_MARKET_PAPER_RED
 		font_color = Color(0.184314, 0.14902, 0.0705882, 1)
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = fill_color
-	normal.border_color = border_color
-	normal.border_width_left = 1
-	normal.border_width_right = 1
-	normal.border_width_top = 5 if is_selected else 1
-	normal.border_width_bottom = 0 if is_selected else 1
-	normal.content_margin_left = 10
-	normal.content_margin_right = 10
-	normal.content_margin_top = 11 if is_selected else 14
-	normal.content_margin_bottom = 14
+	var normal := _make_news_tab_stylebox(fill_color, border_color, is_selected)
 	button.add_theme_stylebox_override("normal", normal)
 	button.add_theme_stylebox_override("hover", normal)
 	button.add_theme_stylebox_override("pressed", normal)
@@ -22848,10 +23010,63 @@ func _style_news_outlet_button(button: Button, is_selected: bool, is_unlocked: b
 	_apply_font_override_to_control(button, 15, _get_dashboard_title_font())
 
 
+func _style_news_tab_container(tab_container: TabContainer) -> void:
+	if tab_container == null:
+		return
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(COLOR_MARKET_PAPER_PAGE.r, COLOR_MARKET_PAPER_PAGE.g, COLOR_MARKET_PAPER_PAGE.b, 0.0)
+	panel_style.border_color = Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.0)
+	panel_style.set_border_width_all(0)
+	panel_style.set_corner_radius_all(0)
+	var unselected := _make_news_tab_stylebox(COLOR_MARKET_PAPER_RAIL, Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.86), false)
+	var selected := _make_news_tab_stylebox(COLOR_MARKET_PAPER_CARD, COLOR_MARKET_PAPER_RED, true)
+	var disabled := _make_news_tab_stylebox(Color(0.85098, 0.835294, 0.772549, 1), Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.42), false)
+	tab_container.add_theme_stylebox_override("panel", panel_style)
+	tab_container.add_theme_stylebox_override("tab_unselected", unselected)
+	tab_container.add_theme_stylebox_override("tab_selected", selected)
+	tab_container.add_theme_stylebox_override("tab_hovered", unselected)
+	tab_container.add_theme_stylebox_override("tab_disabled", disabled)
+	tab_container.add_theme_stylebox_override("tab_focus", selected)
+	tab_container.add_theme_color_override("font_selected_color", Color(0.184314, 0.14902, 0.0705882, 1))
+	tab_container.add_theme_color_override("font_unselected_color", COLOR_WINDOW_TEXT)
+	tab_container.add_theme_color_override("font_hovered_color", COLOR_WINDOW_TEXT)
+	tab_container.add_theme_color_override("font_disabled_color", Color(0.541176, 0.494118, 0.396078, 0.54))
+	tab_container.add_theme_constant_override("side_margin", 0)
+	tab_container.add_theme_constant_override("icon_separation", 6)
+	_apply_font_override_to_control(tab_container, 15, _get_dashboard_title_font())
+
+
 func _style_news_command_button(button: Button, is_primary: bool) -> void:
 	if button == null:
 		return
 	UiTheme.style_button(button, "desktop_primary" if is_primary else "desktop_secondary")
+
+
+func _style_company_action_button(button: Button, enabled: bool) -> void:
+	if button == null:
+		return
+	var fill_color: Color = COLOR_MARKET_PAPER_RED if enabled else COLOR_MARKET_PAPER_RAIL
+	var border_color: Color = COLOR_MARKET_PAPER_RED if enabled else Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.42)
+	var font_color: Color = COLOR_MARKET_PAPER_CARD if enabled else Color(COLOR_MARKET_PAPER_MUTED.r, COLOR_MARKET_PAPER_MUTED.g, COLOR_MARKET_PAPER_MUTED.b, 0.68)
+	UiTheme.style_button(
+		button,
+		"custom",
+		{
+			"fill": fill_color,
+			"border": border_color,
+			"font": font_color,
+			"hover": fill_color.lightened(0.08) if enabled else fill_color,
+			"pressed": fill_color.darkened(0.08) if enabled else fill_color,
+			"disabled": fill_color,
+			"disabled_font": font_color,
+			"radius": 4,
+			"border_width": 1,
+			"margins": {"left": 16, "top": 10, "right": 16, "bottom": 10},
+			"size_role": "button"
+		}
+	)
+	button.custom_minimum_size = Vector2(button.custom_minimum_size.x, max(button.custom_minimum_size.y, 42.0))
+	_apply_font_override_to_control(button, DEFAULT_APP_FONT_SIZE, _get_dashboard_title_font())
 
 
 func _style_social_filter_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
@@ -22862,8 +23077,19 @@ func _style_social_filter_button(button: Button, is_selected: bool, is_unlocked:
 		fill_color = COLOR_TWOOTER_BLUE
 		border_color = COLOR_TWOOTER_BLUE_DARK
 		font_color = COLOR_TWOOTER_PAGE
-	_style_button(button, fill_color, border_color, font_color, 6)
-	_apply_font_override_to_control(button, 12, _get_dashboard_title_font())
+	UiTheme.style_button(
+		button,
+		"custom",
+		{
+			"fill": fill_color,
+			"border": border_color,
+			"font": font_color,
+			"radius": 7,
+			"margins": {"left": SOCIAL_ACTION_BUTTON_PAD_X, "top": SOCIAL_ACTION_BUTTON_PAD_Y, "right": SOCIAL_ACTION_BUTTON_PAD_X, "bottom": SOCIAL_ACTION_BUTTON_PAD_Y}
+		}
+	)
+	button.custom_minimum_size = Vector2(button.custom_minimum_size.x, max(button.custom_minimum_size.y, float(SOCIAL_ACTION_BUTTON_MIN_HEIGHT)))
+	_apply_font_override_to_control(button, _social_font_size(12), _get_dashboard_title_font())
 
 
 func _style_social_account_button(button: Button, is_selected: bool) -> void:
@@ -22896,7 +23122,7 @@ func _style_social_account_button(button: Button, is_selected: bool) -> void:
 	button.add_theme_color_override("font_hover_color", COLOR_TWOOTER_BLUE)
 	button.add_theme_color_override("font_pressed_color", font_color)
 	button.add_theme_color_override("font_focus_color", font_color)
-	_apply_font_override_to_control(button, DEFAULT_APP_FONT_SIZE, _get_app_font())
+	_apply_font_override_to_control(button, _social_font_size(DEFAULT_APP_FONT_SIZE), _get_app_font())
 
 
 func _style_line_input(line_edit: LineEdit) -> void:
