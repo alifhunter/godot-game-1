@@ -33,6 +33,9 @@ const MAX_TRADE_HISTORY := 64
 const MAX_EVENT_HISTORY := 160
 const MAX_MARKET_HISTORY := 512
 const MAX_PRICE_BARS_HISTORY := 1600
+const BROKER_HISTORY_BACKFILL_DAYS := 20
+const MAX_BROKER_COMPACT_HISTORY_DAYS := 1260
+const BROKER_HISTORY_TOP_ROW_COUNT := 3
 const CHART_HISTORY_VISIBLE_BARS := 1260
 const REPORT_CALENDAR_END_YEAR := 2030
 const APPLY_DAY_PERF_LOG_PREFIX := "[perf][apply]"
@@ -227,6 +230,7 @@ var current_trade_date = {}
 var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 var company_generator = preload("res://systems/CompanyGenerator.gd").new()
 var macro_state_system = preload("res://systems/MacroStateSystem.gd").new()
+var broker_flow_system = preload("res://systems/BrokerFlowSystem.gd").new()
 
 
 func _ready() -> void:
@@ -421,7 +425,7 @@ func _add_company_to_new_run(definition_value: Dictionary) -> void:
 	var effective_definition: Dictionary = _apply_company_profile_to_definition(base_definition, company_profile)
 	var base_price: float = IDX_PRICE_RULES.normalize_last_price(float(effective_definition.get("base_price", 0.0)))
 	company_order.append(company_id)
-	companies[company_id] = {
+	var runtime: Dictionary = {
 		"company_id": company_id,
 		"current_price": base_price,
 		"previous_close": base_price,
@@ -435,11 +439,13 @@ func _add_company_to_new_run(definition_value: Dictionary) -> void:
 		"active_events": [],
 		"hidden_story_flags": _seed_hidden_story_flags(base_definition),
 		"broker_flow": _empty_broker_flow(),
+		"broker_flow_history": [],
 		"daily_change_pct": 0.0,
 		"market_depth_context": {},
 		"player_market_impact": {},
 		"company_profile": company_profile
 	}
+	companies[company_id] = _seed_initial_broker_flow_history(company_id, effective_definition, runtime)
 
 
 func _finalize_new_run_setup() -> void:
@@ -1299,7 +1305,12 @@ func apply_day_result(day_result: Dictionary) -> void:
 	phase_started_at_usec = Time.get_ticks_usec()
 	var applied_company_count: int = 0
 	for company_id in day_result.get("companies", {}).keys():
-		companies[str(company_id)] = _normalize_day_result_company_runtime(day_result["companies"][company_id])
+		var normalized_runtime: Dictionary = _normalize_day_result_company_runtime(day_result["companies"][company_id])
+		companies[str(company_id)] = _append_broker_flow_history(
+			normalized_runtime,
+			day_result.get("trade_date", {}),
+			int(day_result.get("day_number", day_index))
+		)
 		applied_company_count += 1
 	var corporate_action_applications: Array = day_result.get("corporate_action_applications", [])
 	var stock_dividend_distributions: Array = day_result.get("stock_dividend_distributions", [])
@@ -4050,6 +4061,259 @@ func _empty_broker_flow() -> Dictionary:
 		"net_sell_brokers": [],
 		"broker_rows": []
 	}
+
+
+func _seed_initial_broker_flow_history(company_id: String, definition: Dictionary, runtime: Dictionary) -> Dictionary:
+	var seeded_runtime: Dictionary = runtime.duplicate(true)
+	var base_price: float = IDX_PRICE_RULES.normalize_last_price(float(seeded_runtime.get("current_price", definition.get("base_price", 0.0))))
+	if base_price <= 0.0:
+		return seeded_runtime
+
+	var history_dates: Array = []
+	var cursor_date: Dictionary = current_trade_date.duplicate(true)
+	for _offset in range(BROKER_HISTORY_BACKFILL_DAYS):
+		cursor_date = trading_calendar.previous_trade_date(cursor_date)
+		history_dates.push_front(cursor_date.duplicate(true))
+
+	var history_runtime: Dictionary = seeded_runtime.duplicate(true)
+	var previous_close: float = base_price
+	for history_index in range(history_dates.size()):
+		var trade_date: Dictionary = history_dates[history_index]
+		var history_day_number: int = -history_dates.size() + history_index
+		var rng: RandomNumberGenerator = STABLE_RNG.rng([
+			run_seed,
+			"broker-history-backfill",
+			company_id,
+			history_day_number
+		])
+		var drift: float = rng.randf_range(-0.006, 0.006)
+		var close_price: float = IDX_PRICE_RULES.normalize_last_price(max(previous_close * (1.0 + drift), 1.0))
+		var high_price: float = IDX_PRICE_RULES.normalize_last_price(max(previous_close, close_price) * (1.0 + rng.randf_range(0.002, 0.012)))
+		var low_price: float = IDX_PRICE_RULES.normalize_last_price(max(min(previous_close, close_price) * (1.0 - rng.randf_range(0.002, 0.012)), 1.0))
+		var financials: Dictionary = definition.get("financials", {})
+		var avg_daily_value: float = max(float(financials.get("avg_daily_value", base_price * 250000.0)), base_price * 1000.0)
+		var traded_value: float = max(avg_daily_value * rng.randf_range(0.72, 1.36), close_price * 1000.0)
+		var volume_shares: int = max(int(round(traded_value / max(close_price, 1.0))), LOT_SIZE)
+		var price_bar: Dictionary = {
+			"trade_date": trade_date.duplicate(true),
+			"open": previous_close,
+			"high": max(high_price, previous_close, close_price),
+			"low": min(low_price, previous_close, close_price),
+			"close": close_price,
+			"volume_shares": volume_shares,
+			"volume_lots": int(floor(float(volume_shares) / float(LOT_SIZE))),
+			"value": traded_value
+		}
+		var broker_context: Dictionary = {
+			"recent_momentum": drift,
+			"event_bias": 0.0,
+			"market_sentiment": rng.randf_range(-0.012, 0.012),
+			"sector_sentiment": rng.randf_range(-0.010, 0.010),
+			"run_seed": run_seed,
+			"day_index": history_day_number,
+			"company_id": company_id,
+			"player_flow": {}
+		}
+		var broker_flow: Dictionary = broker_flow_system.generate_day_flow(definition, history_runtime, broker_context, DataRepository)
+		broker_flow = broker_flow_system.finalize_day_flow(
+			definition,
+			history_runtime,
+			broker_context,
+			broker_flow,
+			price_bar,
+			close_price,
+			DataRepository
+		)
+		history_runtime["previous_close"] = previous_close
+		history_runtime["current_price"] = close_price
+		history_runtime["broker_flow"] = broker_flow.duplicate(true)
+		seeded_runtime["broker_flow"] = broker_flow.duplicate(true)
+		seeded_runtime = _append_broker_flow_history(seeded_runtime, trade_date, history_day_number)
+		previous_close = close_price
+
+	return seeded_runtime
+
+
+func _append_broker_flow_history(runtime: Dictionary, trade_date_value: Variant, day_number: int) -> Dictionary:
+	var normalized_runtime: Dictionary = runtime.duplicate()
+	var broker_flow_value = normalized_runtime.get("broker_flow", {})
+	if typeof(broker_flow_value) != TYPE_DICTIONARY:
+		normalized_runtime["broker_flow_history"] = _broker_history_array_for_append(normalized_runtime.get("broker_flow_history", []), MAX_BROKER_COMPACT_HISTORY_DAYS)
+		normalized_runtime.erase("broker_flow_full_history")
+		return normalized_runtime
+	var broker_flow: Dictionary = broker_flow_value
+	if broker_flow.is_empty():
+		normalized_runtime["broker_flow_history"] = _broker_history_array_for_append(normalized_runtime.get("broker_flow_history", []), MAX_BROKER_COMPACT_HISTORY_DAYS)
+		normalized_runtime.erase("broker_flow_full_history")
+		return normalized_runtime
+
+	var trade_date: Dictionary = trade_date_value.duplicate(true) if typeof(trade_date_value) == TYPE_DICTIONARY else {}
+	var compact_history: Array = _broker_history_array_for_append(normalized_runtime.get("broker_flow_history", []), MAX_BROKER_COMPACT_HISTORY_DAYS)
+	var compact_entry: Dictionary = _build_broker_flow_history_entry(broker_flow, trade_date, day_number)
+	if not compact_entry.is_empty():
+		compact_history = _upsert_broker_history_entry(compact_history, compact_entry, MAX_BROKER_COMPACT_HISTORY_DAYS)
+	normalized_runtime["broker_flow_history"] = compact_history
+	normalized_runtime.erase("broker_flow_full_history")
+	return normalized_runtime
+
+
+func _build_broker_flow_history_entry(broker_flow: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
+	var broker_type_totals: Dictionary = broker_flow.get("broker_type_totals", {}).duplicate(true) if typeof(broker_flow.get("broker_type_totals", {})) == TYPE_DICTIONARY else {}
+	var total_buy_value: float = 0.0
+	var total_sell_value: float = 0.0
+	if not broker_type_totals.is_empty():
+		for type_total_value in broker_type_totals.values():
+			if typeof(type_total_value) != TYPE_DICTIONARY:
+				continue
+			var type_total: Dictionary = type_total_value
+			total_buy_value += max(float(type_total.get("buy_value", 0.0)), 0.0)
+			total_sell_value += max(float(type_total.get("sell_value", 0.0)), 0.0)
+	if total_buy_value <= 0.0 and total_sell_value <= 0.0:
+		total_buy_value = _broker_side_rows_value(broker_flow.get("buy_brokers", []))
+		total_sell_value = _broker_side_rows_value(broker_flow.get("sell_brokers", []))
+	return {
+		"day_index": day_number,
+		"trade_date": trade_date.duplicate(true),
+		"flow_tag": str(broker_flow.get("flow_tag", "neutral")),
+		"action_meter_score": clamp(float(broker_flow.get("action_meter_score", 0.0)), -1.0, 1.0),
+		"action_meter_label": str(broker_flow.get("action_meter_label", "")),
+		"net_pressure": clamp(float(broker_flow.get("net_pressure", 0.0)), -1.0, 1.0),
+		"smart_money_pressure": clamp(float(broker_flow.get("smart_money_pressure", 0.0)), -1.0, 1.0),
+		"retail_net": float(broker_flow.get("retail_net", 0.0)),
+		"foreign_net": float(broker_flow.get("foreign_net", 0.0)),
+		"institution_net": float(broker_flow.get("institution_net", 0.0)),
+		"bandar_net": float(broker_flow.get("bandar_net", 0.0)),
+		"zombie_net": float(broker_flow.get("zombie_net", 0.0)),
+		"dominant_buyer": str(broker_flow.get("dominant_buyer", "balanced")),
+		"dominant_seller": str(broker_flow.get("dominant_seller", "balanced")),
+		"dominant_buy_broker_code": str(broker_flow.get("dominant_buy_broker_code", "")),
+		"dominant_sell_broker_code": str(broker_flow.get("dominant_sell_broker_code", "")),
+		"dominant_buy_broker_type": str(broker_flow.get("dominant_buy_broker_type", "")),
+		"dominant_sell_broker_type": str(broker_flow.get("dominant_sell_broker_type", "")),
+		"total_buy_value": total_buy_value,
+		"total_sell_value": total_sell_value,
+		"total_value": max(float(broker_flow.get("broker_trade_value", total_buy_value + total_sell_value)), total_buy_value + total_sell_value),
+		"top_buy_brokers": _compact_broker_side_rows(broker_flow.get("buy_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
+		"top_sell_brokers": _compact_broker_side_rows(broker_flow.get("sell_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
+		"top_net_buy_brokers": _compact_broker_side_rows(broker_flow.get("net_buy_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
+		"top_net_sell_brokers": _compact_broker_side_rows(broker_flow.get("net_sell_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
+		"broker_type_totals": broker_type_totals
+	}
+
+
+func _upsert_broker_history_entry(history: Array, entry: Dictionary, max_entries: int) -> Array:
+	var normalized_history: Array = history.duplicate()
+	var entry_day: int = int(entry.get("day_index", 0))
+	var replaced: bool = false
+	for index in range(normalized_history.size()):
+		if typeof(normalized_history[index]) != TYPE_DICTIONARY:
+			continue
+		if int(normalized_history[index].get("day_index", -999999)) == entry_day:
+			normalized_history[index] = entry.duplicate(true)
+			replaced = true
+			break
+	if not replaced:
+		normalized_history.append(entry.duplicate(true))
+	normalized_history.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("day_index", 0)) < int(b.get("day_index", 0))
+	)
+	if normalized_history.size() > max_entries:
+		normalized_history = normalized_history.slice(normalized_history.size() - max_entries, normalized_history.size())
+	return normalized_history
+
+
+func _broker_history_array_for_append(history_value: Variant, max_entries: int) -> Array:
+	var rows: Array = []
+	if typeof(history_value) != TYPE_ARRAY:
+		return rows
+	for entry_value in history_value:
+		if typeof(entry_value) == TYPE_DICTIONARY:
+			rows.append(entry_value)
+	if rows.size() > max_entries:
+		rows = rows.slice(rows.size() - max_entries, rows.size())
+	return rows
+
+
+func _normalize_broker_flow_history(history_value: Variant) -> Array:
+	var normalized: Array = []
+	if typeof(history_value) != TYPE_ARRAY:
+		return normalized
+	for entry_value in history_value:
+		if typeof(entry_value) != TYPE_DICTIONARY:
+			continue
+		var entry: Dictionary = entry_value
+		var normalized_entry: Dictionary = {
+			"day_index": int(entry.get("day_index", 0)),
+			"trade_date": entry.get("trade_date", {}).duplicate(true) if typeof(entry.get("trade_date", {})) == TYPE_DICTIONARY else {},
+			"flow_tag": str(entry.get("flow_tag", "neutral")),
+			"action_meter_score": clamp(float(entry.get("action_meter_score", 0.0)), -1.0, 1.0),
+			"action_meter_label": str(entry.get("action_meter_label", "")),
+			"net_pressure": clamp(float(entry.get("net_pressure", 0.0)), -1.0, 1.0),
+			"smart_money_pressure": clamp(float(entry.get("smart_money_pressure", 0.0)), -1.0, 1.0),
+			"retail_net": float(entry.get("retail_net", 0.0)),
+			"foreign_net": float(entry.get("foreign_net", 0.0)),
+			"institution_net": float(entry.get("institution_net", 0.0)),
+			"bandar_net": float(entry.get("bandar_net", 0.0)),
+			"zombie_net": float(entry.get("zombie_net", 0.0)),
+			"dominant_buyer": str(entry.get("dominant_buyer", "balanced")),
+			"dominant_seller": str(entry.get("dominant_seller", "balanced")),
+			"dominant_buy_broker_code": str(entry.get("dominant_buy_broker_code", "")),
+			"dominant_sell_broker_code": str(entry.get("dominant_sell_broker_code", "")),
+			"dominant_buy_broker_type": str(entry.get("dominant_buy_broker_type", "")),
+			"dominant_sell_broker_type": str(entry.get("dominant_sell_broker_type", "")),
+			"total_buy_value": max(float(entry.get("total_buy_value", 0.0)), 0.0),
+			"total_sell_value": max(float(entry.get("total_sell_value", 0.0)), 0.0),
+			"total_value": max(float(entry.get("total_value", 0.0)), 0.0),
+			"top_buy_brokers": _compact_broker_side_rows(entry.get("top_buy_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
+			"top_sell_brokers": _compact_broker_side_rows(entry.get("top_sell_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
+			"top_net_buy_brokers": _compact_broker_side_rows(entry.get("top_net_buy_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
+			"top_net_sell_brokers": _compact_broker_side_rows(entry.get("top_net_sell_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
+			"broker_type_totals": entry.get("broker_type_totals", {}).duplicate(true) if typeof(entry.get("broker_type_totals", {})) == TYPE_DICTIONARY else {}
+		}
+		normalized.append(normalized_entry)
+	normalized.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("day_index", 0)) < int(b.get("day_index", 0))
+	)
+	if normalized.size() > MAX_BROKER_COMPACT_HISTORY_DAYS:
+		normalized = normalized.slice(normalized.size() - MAX_BROKER_COMPACT_HISTORY_DAYS, normalized.size())
+	return normalized
+
+
+func _compact_broker_side_rows(rows_value: Variant, limit: int) -> Array:
+	var compact_rows: Array = []
+	if typeof(rows_value) != TYPE_ARRAY:
+		return compact_rows
+	for row_value in rows_value:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var value_amount: float = float(row.get("value", row.get("buy_value", row.get("sell_value", 0.0))))
+		var lot_amount: float = float(row.get("lots", row.get("buy_lots", row.get("sell_lots", 0.0))))
+		var average_price: float = float(row.get("avg_price", row.get("buy_avg_price", row.get("sell_avg_price", 0.0))))
+		compact_rows.append({
+			"code": str(row.get("code", "")),
+			"company_name": str(row.get("company_name", row.get("name", ""))),
+			"broker_type": str(row.get("broker_type", "")),
+			"value": max(value_amount, 0.0),
+			"lots": max(lot_amount, 0.0),
+			"avg_price": max(average_price, 0.0),
+			"net_side": str(row.get("net_side", ""))
+		})
+		if limit > 0 and compact_rows.size() >= limit:
+			break
+	return compact_rows
+
+
+func _broker_side_rows_value(rows_value: Variant) -> float:
+	if typeof(rows_value) != TYPE_ARRAY:
+		return 0.0
+	var total: float = 0.0
+	for row_value in rows_value:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		total += max(float(row.get("value", 0.0)), 0.0)
+	return total
 
 
 func _record_trade(
@@ -7247,6 +7511,8 @@ func _normalize_company_runtime(runtime: Dictionary) -> Dictionary:
 	)
 	if normalized_runtime["price_history"].is_empty() and not normalized_runtime["price_bars"].is_empty():
 		normalized_runtime["price_history"] = _rebuild_price_history_from_bars(normalized_runtime["price_bars"])
+	normalized_runtime["broker_flow_history"] = _normalize_broker_flow_history(normalized_runtime.get("broker_flow_history", []))
+	normalized_runtime.erase("broker_flow_full_history")
 	normalized_runtime["company_profile"] = _normalize_company_profile(normalized_runtime.get("company_profile", {}))
 	normalized_runtime["active_events"] = normalized_runtime.get("active_events", []).duplicate(true)
 	normalized_runtime["market_depth_context"] = normalized_runtime.get("market_depth_context", {}).duplicate(true)
@@ -7268,6 +7534,8 @@ func _normalize_day_result_company_runtime(runtime: Dictionary) -> Dictionary:
 	)
 	if normalized_runtime["price_history"].is_empty() and not normalized_runtime["price_bars"].is_empty():
 		normalized_runtime["price_history"] = _rebuild_price_history_from_bars(normalized_runtime["price_bars"])
+	normalized_runtime["broker_flow_history"] = _broker_history_array_for_append(normalized_runtime.get("broker_flow_history", []), MAX_BROKER_COMPACT_HISTORY_DAYS)
+	normalized_runtime.erase("broker_flow_full_history")
 	var company_profile_value = normalized_runtime.get("company_profile", {})
 	normalized_runtime["company_profile"] = company_profile_value if typeof(company_profile_value) == TYPE_DICTIONARY else {}
 	normalized_runtime["active_event_tags"] = normalized_runtime.get("active_event_tags", []).duplicate()

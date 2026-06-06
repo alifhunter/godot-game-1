@@ -5404,28 +5404,29 @@ func _run_scenario(
 			bool(locked_governance_options.get("enabled", false)) or
 			bool(locked_governance_result.get("success", false)) or
 			bool(locked_company_management.get("unlocked", false)) or
-			not company_app_button.disabled
+			company_app_button.disabled
 		):
 			game_root.queue_free()
 			await get_tree().process_frame
 			return {
 				"success": false,
-				"message": "Smoke test expected the Company app to stay locked below majority ownership."
+				"message": "Smoke test expected Company agenda control to stay locked below majority ownership while the Company app remains openable."
 			}
-		var locked_company_icon_style: StyleBoxFlat = company_app_button.get_theme_stylebox("disabled") as StyleBoxFlat
-		var locked_company_icon_color: Color = company_app_button.get_theme_color("icon_disabled_color")
+		company_app_button.emit_signal("pressed")
+		await get_tree().process_frame
 		if (
-			locked_company_icon_style == null or
-			locked_company_icon_style.bg_color.r < 0.82 or
-			locked_company_icon_style.bg_color.b > 0.76 or
-			locked_company_icon_color.a > 0.6 or
-			not _color_close(Color(locked_company_icon_color.r, locked_company_icon_color.g, locked_company_icon_color.b, 1), UiTheme.color("desktop.brown"))
+			not company_window.visible or
+			not game_root.is_desktop_app_open("company") or
+			company_controlled_option.visible or
+			company_agenda_option.visible or
+			company_request_button.visible or
+			company_status_label.text.find("You have no company") == -1
 		):
 			game_root.queue_free()
 			await get_tree().process_frame
 			return {
 				"success": false,
-				"message": "Smoke test expected the locked Company desktop shortcut to use muted warm desktop disabled colors."
+				"message": "Smoke test expected the Company app to open below majority ownership with a plain no-company empty state."
 			}
 		if game_root.find_child("GovernanceControlButton", true, false) != null:
 			game_root.queue_free()
@@ -9701,6 +9702,20 @@ func _run_scenario(
 			"message": "Smoke test expected newspaper card text to stay readable while temporary News image placeholders remain hidden."
 		}
 
+	var first_news_card: Control = news_article_cards.get_child(0) as Control
+	if (
+		first_news_card == null or
+		first_news_card.mouse_filter == Control.MOUSE_FILTER_IGNORE or
+		first_news_card.mouse_default_cursor_shape != Control.CURSOR_POINTING_HAND or
+		first_news_card.tooltip_text != "Read story."
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the whole News story card surface to be clickable."
+		}
+
 	var forbidden_news_terms: Array = ["source_chain_id", "chain_family", "meeting_id", "venue_type", "progress_label", "tone", "current_timeline_state", "management stance", "hidden_positioning", "formal_agenda_or_filing", "meeting_or_call", "vague public hint", "source reliability", "current read", "unclear location", "intel level", "source trail", "source article", "source story", "separate property angle", "market story", "original headline", "working read", "development lead", "roadmap_id", "funding_gate", "funding readiness", "company_roadmap", "participant_role", "milestone_state", "raw statement", "system metadata", "stage of a", "price-bias read"]
 	var news_detail_meta_label: Label = game_root.find_child("NewsDetailMetaLabel", true, false) as Label
 	var news_detail_body: RichTextLabel = game_root.find_child("NewsDetailBody", true, false) as RichTextLabel
@@ -10027,13 +10042,13 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected one guarded Advance Day press to advance once, re-enable the button, and show a useful daily recap modal."
 		}
-	var post_recap_saved_run: Dictionary = SaveManager.load_run()
-	if SaveManager.has_pending_save() or int(post_recap_saved_run.get("day_index", -1)) != RunState.day_index:
+	var visible_recap_saved_run: Dictionary = SaveManager.load_run()
+	if not SaveManager.has_pending_save() or int(visible_recap_saved_run.get("day_index", -1)) == RunState.day_index:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the deferred Advance Day save to flush after the daily recap appears."
+			"message": "Smoke test expected the deferred Advance Day save to stay pending while the daily recap is visible."
 		}
 	var early_special_events: Array = RunState.last_day_results.get("started_special_events", [])
 	if not early_special_events.is_empty():
@@ -10524,23 +10539,6 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected Attention Director to suppress market-scope scheduled headlines on the reserved macro day."
 		}
-	var saved_recap_last_day_results: Dictionary = post_recap_saved_run.get("last_day_results", {})
-	var forbidden_director_payload_keys: Array = ["attention_directives", "selected_lane", "lane_scores", "focus_company_weights", "dirty_market_pressure", "market_stress_score", "best_company_attention_score", "policy_parody_probability_multiplier", "policy_parody_attention_score"]
-	for forbidden_director_payload_key in forbidden_director_payload_keys:
-		if RunState.last_day_results.has(forbidden_director_payload_key) or saved_recap_last_day_results.has(forbidden_director_payload_key):
-			game_root.queue_free()
-			await get_tree().process_frame
-			return {
-				"success": false,
-				"message": "Smoke test expected Attention Director key %s to stay out of the save payload." % forbidden_director_payload_key
-			}
-	if RunState.last_day_results.has("attention_directives") or saved_recap_last_day_results.has("attention_directives"):
-		game_root.queue_free()
-		await get_tree().process_frame
-		return {
-			"success": false,
-			"message": "Smoke test expected Attention Director directives to stay out of the save payload."
-		}
 	var day_six_special_resolution: Dictionary = SPECIAL_EVENT_SYSTEM_SCRIPT.new().resolve_day(
 		RunState,
 		RunState.get_current_trade_date(),
@@ -10604,8 +10602,33 @@ func _run_scenario(
 			"message": "Smoke test expected queued Macro Events to wait until Daily Recap closes."
 		}
 	daily_recap_continue_button.emit_signal("pressed")
-	await get_tree().process_frame
-	await get_tree().process_frame
+	for _frame in range(6):
+		await get_tree().process_frame
+	var post_recap_saved_run: Dictionary = SaveManager.load_run()
+	if SaveManager.has_pending_save() or int(post_recap_saved_run.get("day_index", -1)) != RunState.day_index:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the deferred Advance Day save to flush after the daily recap closes."
+		}
+	var saved_recap_last_day_results: Dictionary = post_recap_saved_run.get("last_day_results", {})
+	var forbidden_director_payload_keys: Array = ["attention_directives", "selected_lane", "lane_scores", "focus_company_weights", "dirty_market_pressure", "market_stress_score", "best_company_attention_score", "policy_parody_probability_multiplier", "policy_parody_attention_score"]
+	for forbidden_director_payload_key in forbidden_director_payload_keys:
+		if RunState.last_day_results.has(forbidden_director_payload_key) or saved_recap_last_day_results.has(forbidden_director_payload_key):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected Attention Director key %s to stay out of the save payload." % forbidden_director_payload_key
+			}
+	if RunState.last_day_results.has("attention_directives") or saved_recap_last_day_results.has("attention_directives"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Attention Director directives to stay out of the save payload."
+		}
 	var macro_event_title_label: Label = game_root.find_child("MacroEventTitleLabel", true, false) as Label
 	var macro_event_headline_label: Label = game_root.find_child("MacroEventHeadlineLabel", true, false) as Label
 	var macro_event_close_button: Button = game_root.find_child("MacroEventCloseButton", true, false) as Button
@@ -12849,17 +12872,63 @@ func _run_scenario(
 		financials_year_helper_label.visible or
 		not financials_year_helper_label.text.is_empty() or
 		broker_summary_helper_label == null or
-		broker_summary_helper_label.visible or
-		not broker_summary_helper_label.text.is_empty() or
-		broker_meter_helper_label == null or
-		broker_meter_helper_label.visible or
-		not broker_meter_helper_label.text.is_empty()
+		broker_meter_helper_label == null
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected Financials and Broker system helper text labels to stay hidden."
+			"message": "Smoke test expected Financials helper text to stay hidden and Broker summary labels to exist."
+		}
+
+	var broker_range_1d_button: Button = game_root.find_child("BrokerRange1DButton", true, false) as Button
+	var broker_range_5d_button: Button = game_root.find_child("BrokerRange5DButton", true, false) as Button
+	var broker_range_1m_button: Button = game_root.find_child("BrokerRange1MButton", true, false) as Button
+	var opening_broker_rows_vbox: VBoxContainer = game_root.find_child("BrokerRows", true, false) as VBoxContainer
+	if broker_range_1d_button == null or broker_range_5d_button == null or broker_range_1m_button == null or opening_broker_rows_vbox == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Broker range buttons and the Broker row table to exist."
+		}
+
+	var broker_range_snapshot: Dictionary = GameManager.get_company_broker_flow_snapshot(tracked_company_id, "1m")
+	if (
+		int(broker_range_snapshot.get("range_day_count", 0)) < 20 or
+		broker_range_snapshot.get("buy_brokers", []).is_empty() or
+		broker_range_snapshot.get("sell_brokers", []).is_empty()
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the seeded 1M Broker range snapshot to include December broker rows for %s." % tracked_company_id.to_upper()
+		}
+
+	broker_range_1m_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if (
+		not broker_range_1m_button.button_pressed or
+		not broker_summary_helper_label.visible or
+		not broker_summary_helper_label.text.contains("1M") or
+		opening_broker_rows_vbox.get_child_count() <= 1
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Broker 1M range button to rebuild visible aggregate broker rows."
+		}
+
+	broker_range_1d_button.emit_signal("pressed")
+	await get_tree().process_frame
+	if not broker_range_1d_button.button_pressed or not broker_summary_helper_label.text.contains("1D"):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Broker 1D range button to restore the daily broker read."
 		}
 
 	var income_statement_rows: VBoxContainer = game_root.find_child("IncomeStatementRows", true, false) as VBoxContainer
@@ -13124,14 +13193,18 @@ func _run_scenario(
 			"message": "Smoke test expected Broker table header and rows to use the full-width two-sided layout."
 		}
 	if (
-		(broker_summary_helper_label != null and (broker_summary_helper_label.visible or not broker_summary_helper_label.text.is_empty())) or
-		(broker_meter_helper_label != null and (broker_meter_helper_label.visible or not broker_meter_helper_label.text.is_empty()))
+		broker_summary_helper_label == null or
+		not broker_summary_helper_label.visible or
+		not broker_summary_helper_label.text.contains("1D") or
+		broker_meter_helper_label == null or
+		not broker_meter_helper_label.visible or
+		broker_meter_helper_label.text.is_empty()
 	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected Broker helper text to stay hidden after the opening buy refresh."
+			"message": "Smoke test expected Broker range summary and meter text to stay visible after the opening buy refresh."
 		}
 
 	var toast_panel: PanelContainer = game_root.find_child("ToastPanel", true, false) as PanelContainer

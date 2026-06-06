@@ -31,6 +31,16 @@ const CONSOLE_CASH_GRANT_AMOUNT := 999999999999.0
 const PLAYER_MAJOR_SHAREHOLDER_THRESHOLD := 0.05
 const PLAYER_CONTROL_SHAREHOLDER_THRESHOLD := 0.50
 const THESIS_REPORT_ACTION_COST := 7
+const BROKER_RANGE_CATALOG := [
+	{"id": "1d", "label": "1D", "days": 1},
+	{"id": "5d", "label": "5D", "days": 5},
+	{"id": "1m", "label": "1M", "days": 22},
+	{"id": "3m", "label": "3M", "days": 66},
+	{"id": "6m", "label": "6M", "days": 126},
+	{"id": "ytd", "label": "YTD", "days": -1},
+	{"id": "1y", "label": "1Y", "days": 252}
+]
+const BROKER_RANGE_TOP_ROW_COUNT := 10
 const GOVERNANCE_CONTROL_ACTIONS := [
 	{
 		"id": "rights_issue",
@@ -746,6 +756,7 @@ var company_market_rows_cache: Dictionary = {}
 var news_snapshot_cache: Dictionary = {}
 var dashboard_event_snapshot_cache: Dictionary = {}
 var daily_activity_snapshot_cache: Dictionary = {}
+var broker_range_snapshot_cache: Dictionary = {}
 
 
 func _ready() -> void:
@@ -794,6 +805,7 @@ func start_new_run(run_seed: int = 0, difficulty_id: String = DEFAULT_DIFFICULTY
 	_invalidate_company_market_rows_cache()
 	_invalidate_dashboard_event_snapshot_cache()
 	_invalidate_daily_activity_snapshot_cache()
+	_invalidate_broker_range_snapshot_cache()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	index_review_system.ensure_initialized(RunState, DataRepository)
 	simulate_opening_session(false)
@@ -840,6 +852,7 @@ func start_new_run_with_loading(
 	_invalidate_company_market_rows_cache()
 	_invalidate_dashboard_event_snapshot_cache()
 	_invalidate_daily_activity_snapshot_cache()
+	_invalidate_broker_range_snapshot_cache()
 	_emit_run_loading_step(3)
 	var corporate_started_at_usec: int = Time.get_ticks_usec()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
@@ -880,6 +893,7 @@ func load_run_from_save(slot_id: String = "") -> bool:
 	_invalidate_company_market_rows_cache()
 	_invalidate_dashboard_event_snapshot_cache()
 	_invalidate_daily_activity_snapshot_cache()
+	_invalidate_broker_range_snapshot_cache()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	index_review_system.ensure_initialized(RunState, DataRepository)
 	run_loaded.emit()
@@ -907,6 +921,7 @@ func load_run_from_save_with_loading(slot_id: String = "") -> bool:
 	_invalidate_company_market_rows_cache()
 	_invalidate_dashboard_event_snapshot_cache()
 	_invalidate_daily_activity_snapshot_cache()
+	_invalidate_broker_range_snapshot_cache()
 	_emit_load_run_loading_step(2)
 	var corporate_started_at_usec: int = Time.get_ticks_usec()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
@@ -969,6 +984,7 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	phase_started_at_usec = Time.get_ticks_usec()
 	var previous_trade_date: Dictionary = RunState.current_trade_date.duplicate(true)
 	RunState.apply_day_result(day_result)
+	_invalidate_broker_range_snapshot_cache()
 	_log_advance_perf_elapsed(log_advance_perf, "apply_day_result", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	var company_market_rows: Array = get_company_market_rows(true)
@@ -1968,16 +1984,11 @@ func get_company_management_snapshot(selected_company_id: String = "") -> Dictio
 	if resolved_company_id.is_empty() or not controlled_ids.has(resolved_company_id):
 		resolved_company_id = str(controlled_rows[0].get("company_id", "")) if not controlled_rows.is_empty() else ""
 	var selected_options: Dictionary = get_governance_control_options(resolved_company_id)
-	var status_text: String = "Company app locked. Own majority control in a listed company to manage corporate direction."
+	var status_text: String = "You have no company yet."
 	if not controlled_rows.is_empty():
 		status_text = "Manage company direction for %d controlled holding(s)." % controlled_rows.size()
 	elif not candidate_rows.is_empty():
-		var lead: Dictionary = candidate_rows[0]
-		status_text = "Closest holding: %s at %.2f%%. Need %d more share(s) for control." % [
-			str(lead.get("ticker", "")),
-			float(lead.get("ownership_pct", 0.0)) * 100.0,
-			int(lead.get("control_shares_needed", 0))
-		]
+		status_text = "You have no company yet."
 	return {
 		"unlocked": not controlled_rows.is_empty(),
 		"controlled_rows": controlled_rows,
@@ -2588,6 +2599,10 @@ func _invalidate_company_market_rows_cache() -> void:
 	company_market_rows_cache = {}
 
 
+func _invalidate_broker_range_snapshot_cache() -> void:
+	broker_range_snapshot_cache = {}
+
+
 func _empty_dashboard_event_snapshot() -> Dictionary:
 	return {
 		"cache_key": "",
@@ -2996,10 +3011,8 @@ func get_company_snapshot(
 		since_start_pct = (current_price - starting_price) / starting_price
 	if not is_zero_approx(ytd_open_price):
 		ytd_change_pct = (current_price - ytd_open_price) / ytd_open_price
-	var broker_flow_view: Dictionary = _build_broker_flow_view(
-		runtime.get("broker_flow", {}),
-		include_price_history or include_financial_history or include_statement_history
-	)
+	var include_detail_payloads: bool = include_price_history or include_financial_history or include_statement_history
+	var broker_flow_view: Dictionary = _build_broker_flow_view(runtime.get("broker_flow", {}), include_detail_payloads)
 	var index_review_snapshot: Dictionary = get_company_index_review_snapshot(company_id)
 	var market_depth_context: Dictionary = runtime.get("market_depth_context", {}).duplicate(true)
 	var impactability_snapshot: Dictionary = _build_impactability_snapshot(definition, runtime, market_depth_context)
@@ -3091,6 +3104,8 @@ func get_company_snapshot(
 	if include_price_history:
 		snapshot["price_history"] = runtime.get("price_history", []).duplicate()
 		snapshot["price_bars"] = runtime.get("price_bars", []).duplicate(true)
+	if include_detail_payloads:
+		snapshot["broker_flow_history"] = runtime.get("broker_flow_history", []).duplicate(true)
 
 	return snapshot
 
@@ -3232,6 +3247,495 @@ func _build_broker_flow_view(broker_flow: Dictionary, include_rows: bool) -> Dic
 		broker_flow_view.erase("net_sell_brokers")
 		broker_flow_view.erase("broker_rows")
 	return broker_flow_view
+
+
+func get_broker_range_catalog() -> Array:
+	var catalog: Array = []
+	for range_value in BROKER_RANGE_CATALOG:
+		if typeof(range_value) == TYPE_DICTIONARY:
+			catalog.append(range_value.duplicate(true))
+	return catalog
+
+
+func get_company_broker_flow_snapshot(company_id: String, range_id: String = "1d") -> Dictionary:
+	var runtime: Dictionary = RunState.get_company(company_id)
+	if runtime.is_empty():
+		return {}
+	var range_definition: Dictionary = _broker_range_definition(range_id)
+	var selected_compact_rows: Array = _broker_history_rows_for_range(runtime.get("broker_flow_history", []), range_definition)
+	if int(range_definition.get("days", 1)) == 1:
+		var latest_flow: Dictionary = _build_broker_flow_view(runtime.get("broker_flow", {}), true)
+		return _stamp_broker_range_metadata(latest_flow, range_definition, selected_compact_rows, "latest")
+
+	if not selected_compact_rows.is_empty():
+		var cache_key: String = _broker_range_snapshot_cache_key(company_id, range_definition, selected_compact_rows)
+		var cached_snapshot_value = broker_range_snapshot_cache.get(cache_key, {})
+		if typeof(cached_snapshot_value) == TYPE_DICTIONARY:
+			var cached_snapshot: Dictionary = cached_snapshot_value
+			if not cached_snapshot.is_empty():
+				return cached_snapshot.duplicate(true)
+		var range_snapshot: Dictionary = _aggregate_compact_broker_flow_range(selected_compact_rows, range_definition)
+		if not range_snapshot.is_empty():
+			broker_range_snapshot_cache[cache_key] = range_snapshot.duplicate(true)
+		return range_snapshot
+
+	var fallback_flow: Dictionary = _build_broker_flow_view(runtime.get("broker_flow", {}), true)
+	return _stamp_broker_range_metadata(fallback_flow, range_definition, [], "latest")
+
+
+func _broker_range_definition(range_id: String) -> Dictionary:
+	var normalized_id: String = range_id.to_lower()
+	for range_value in BROKER_RANGE_CATALOG:
+		if typeof(range_value) != TYPE_DICTIONARY:
+			continue
+		var range_definition: Dictionary = range_value
+		if str(range_definition.get("id", "")).to_lower() == normalized_id:
+			return range_definition.duplicate(true)
+	return BROKER_RANGE_CATALOG[0].duplicate(true)
+
+
+func _broker_history_rows_for_range(history_value: Variant, range_definition: Dictionary) -> Array:
+	var rows: Array = []
+	if typeof(history_value) != TYPE_ARRAY:
+		return rows
+	for entry_value in history_value:
+		if typeof(entry_value) != TYPE_DICTIONARY:
+			continue
+		rows.append(entry_value)
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("day_index", 0)) < int(b.get("day_index", 0))
+	)
+	if rows.is_empty():
+		return rows
+
+	var range_days: int = int(range_definition.get("days", 1))
+	if range_days > 0:
+		return _duplicate_broker_history_rows(rows.slice(max(rows.size() - range_days, 0), rows.size()))
+
+	var current_year: int = int(RunState.get_current_trade_date().get("year", 0))
+	var ytd_rows: Array = []
+	for row_value in rows:
+		var row: Dictionary = row_value
+		var trade_date: Dictionary = row.get("trade_date", {}) if typeof(row.get("trade_date", {})) == TYPE_DICTIONARY else {}
+		if int(trade_date.get("year", 0)) == current_year:
+			ytd_rows.append(row)
+	if ytd_rows.is_empty():
+		ytd_rows.append(rows.back())
+	return _duplicate_broker_history_rows(ytd_rows)
+
+
+func _duplicate_broker_history_rows(rows: Array) -> Array:
+	var duplicated_rows: Array = []
+	for row_value in rows:
+		if typeof(row_value) == TYPE_DICTIONARY:
+			var row: Dictionary = row_value
+			duplicated_rows.append(row.duplicate(true))
+	return duplicated_rows
+
+
+func _broker_range_snapshot_cache_key(company_id: String, range_definition: Dictionary, history_rows: Array) -> String:
+	var first_day_index: int = RunState.day_index
+	var last_day_index: int = RunState.day_index
+	var last_total_value: float = 0.0
+	if not history_rows.is_empty():
+		var first_row: Dictionary = history_rows.front() if typeof(history_rows.front()) == TYPE_DICTIONARY else {}
+		var last_row: Dictionary = history_rows.back() if typeof(history_rows.back()) == TYPE_DICTIONARY else {}
+		first_day_index = int(first_row.get("day_index", first_day_index))
+		last_day_index = int(last_row.get("day_index", last_day_index))
+		last_total_value = float(last_row.get("total_value", 0.0))
+	return "%s|%s|%d|%d|%d|%d|%.2f" % [
+		company_id,
+		str(range_definition.get("id", "1d")),
+		RunState.day_index,
+		history_rows.size(),
+		first_day_index,
+		last_day_index,
+		last_total_value
+	]
+
+
+func _aggregate_compact_broker_flow_range(history_rows: Array, range_definition: Dictionary) -> Dictionary:
+	var broker_type_totals: Dictionary = {}
+	var score_weighted_total: float = 0.0
+	var net_pressure_weighted_total: float = 0.0
+	var smart_pressure_weighted_total: float = 0.0
+	var entry_weight_total: float = 0.0
+	var retail_weighted_total: float = 0.0
+	var foreign_weighted_total: float = 0.0
+	var institution_weighted_total: float = 0.0
+	var bandar_weighted_total: float = 0.0
+	var zombie_weighted_total: float = 0.0
+	var total_buy_value: float = 0.0
+	var total_sell_value: float = 0.0
+
+	for entry_value in history_rows:
+		if typeof(entry_value) != TYPE_DICTIONARY:
+			continue
+		var entry: Dictionary = entry_value
+		var entry_weight: float = max(float(entry.get("total_value", 0.0)), float(entry.get("total_buy_value", 0.0)), float(entry.get("total_sell_value", 0.0)), 1.0)
+		entry_weight_total += entry_weight
+		score_weighted_total += clamp(float(entry.get("action_meter_score", 0.0)), -1.0, 1.0) * entry_weight
+		net_pressure_weighted_total += clamp(float(entry.get("net_pressure", 0.0)), -1.0, 1.0) * entry_weight
+		smart_pressure_weighted_total += clamp(float(entry.get("smart_money_pressure", 0.0)), -1.0, 1.0) * entry_weight
+		retail_weighted_total += float(entry.get("retail_net", 0.0)) * entry_weight
+		foreign_weighted_total += float(entry.get("foreign_net", 0.0)) * entry_weight
+		institution_weighted_total += float(entry.get("institution_net", 0.0)) * entry_weight
+		bandar_weighted_total += float(entry.get("bandar_net", 0.0)) * entry_weight
+		zombie_weighted_total += float(entry.get("zombie_net", 0.0)) * entry_weight
+		total_buy_value += max(float(entry.get("total_buy_value", 0.0)), 0.0)
+		total_sell_value += max(float(entry.get("total_sell_value", 0.0)), 0.0)
+		_merge_broker_type_totals(broker_type_totals, entry.get("broker_type_totals", {}))
+
+	var buy_brokers: Array = _aggregate_compact_broker_rows(history_rows, "top_buy_brokers", BROKER_RANGE_TOP_ROW_COUNT)
+	var sell_brokers: Array = _aggregate_compact_broker_rows(history_rows, "top_sell_brokers", BROKER_RANGE_TOP_ROW_COUNT)
+	var net_buy_brokers: Array = _aggregate_compact_broker_rows(history_rows, "top_net_buy_brokers", BROKER_RANGE_TOP_ROW_COUNT)
+	var net_sell_brokers: Array = _aggregate_compact_broker_rows(history_rows, "top_net_sell_brokers", BROKER_RANGE_TOP_ROW_COUNT)
+	var action_meter_score: float = clamp(score_weighted_total / max(entry_weight_total, 1.0), -1.0, 1.0)
+	var net_pressure: float = clamp(net_pressure_weighted_total / max(entry_weight_total, 1.0), -1.0, 1.0)
+	var broker_flow: Dictionary = {
+		"net_pressure": net_pressure,
+		"smart_money_pressure": clamp(smart_pressure_weighted_total / max(entry_weight_total, 1.0), -1.0, 1.0),
+		"retail_net": retail_weighted_total / max(entry_weight_total, 1.0),
+		"foreign_net": foreign_weighted_total / max(entry_weight_total, 1.0),
+		"institution_net": institution_weighted_total / max(entry_weight_total, 1.0),
+		"bandar_net": bandar_weighted_total / max(entry_weight_total, 1.0),
+		"zombie_net": zombie_weighted_total / max(entry_weight_total, 1.0),
+		"dominant_buyer": _dominant_broker_actor_from_scores({
+			"retail": retail_weighted_total,
+			"foreign": foreign_weighted_total,
+			"institution": institution_weighted_total,
+			"bandar": bandar_weighted_total,
+			"zombie": zombie_weighted_total
+		}, true),
+		"dominant_seller": _dominant_broker_actor_from_scores({
+			"retail": retail_weighted_total,
+			"foreign": foreign_weighted_total,
+			"institution": institution_weighted_total,
+			"bandar": bandar_weighted_total,
+			"zombie": zombie_weighted_total
+		}, false),
+		"dominant_buy_broker_code": _broker_row_code(buy_brokers),
+		"dominant_buy_broker_name": _broker_row_name(buy_brokers),
+		"dominant_buy_broker_type": _broker_row_type(buy_brokers),
+		"dominant_sell_broker_code": _broker_row_code(sell_brokers),
+		"dominant_sell_broker_name": _broker_row_name(sell_brokers),
+		"dominant_sell_broker_type": _broker_row_type(sell_brokers),
+		"flow_tag": _broker_flow_tag_for_score(net_pressure),
+		"action_meter_score": action_meter_score,
+		"action_meter_label": _broker_meter_label_for_score(action_meter_score),
+		"buy_brokers": buy_brokers,
+		"sell_brokers": sell_brokers,
+		"net_buy_brokers": net_buy_brokers,
+		"net_sell_brokers": net_sell_brokers,
+		"broker_rows": [],
+		"broker_type_totals": broker_type_totals,
+		"broker_trade_value": max(total_buy_value, total_sell_value, (total_buy_value + total_sell_value) * 0.5),
+		"broker_trade_shares": 0.0
+	}
+	return _stamp_broker_range_metadata(broker_flow, range_definition, history_rows, "compact")
+
+
+func _stamp_broker_range_metadata(broker_flow: Dictionary, range_definition: Dictionary, history_rows: Array, history_mode: String) -> Dictionary:
+	if broker_flow.is_empty():
+		return {}
+	var stamped_flow: Dictionary = broker_flow.duplicate(true)
+	var start_date: Dictionary = {}
+	var end_date: Dictionary = {}
+	if not history_rows.is_empty():
+		var first_row: Dictionary = history_rows.front() if typeof(history_rows.front()) == TYPE_DICTIONARY else {}
+		var last_row: Dictionary = history_rows.back() if typeof(history_rows.back()) == TYPE_DICTIONARY else {}
+		start_date = first_row.get("trade_date", {}) if typeof(first_row.get("trade_date", {})) == TYPE_DICTIONARY else {}
+		end_date = last_row.get("trade_date", {}) if typeof(last_row.get("trade_date", {})) == TYPE_DICTIONARY else {}
+	stamped_flow["range_id"] = str(range_definition.get("id", "1d"))
+	stamped_flow["range_label"] = str(range_definition.get("label", "1D"))
+	stamped_flow["range_day_count"] = max(history_rows.size(), 1 if history_mode == "latest" else 0)
+	stamped_flow["history_mode"] = history_mode
+	stamped_flow["history_start_date"] = start_date.duplicate(true)
+	stamped_flow["history_end_date"] = end_date.duplicate(true)
+	return stamped_flow
+
+
+func _ensure_broker_activity_aggregate_row(broker_map: Dictionary, broker_row: Dictionary) -> Dictionary:
+	var code: String = str(broker_row.get("code", ""))
+	var aggregate_row: Dictionary = broker_map.get(code, {})
+	if not aggregate_row.is_empty():
+		return aggregate_row
+	aggregate_row = {
+		"code": code,
+		"company_name": str(broker_row.get("company_name", broker_row.get("name", ""))),
+		"broker_type": str(broker_row.get("broker_type", "")),
+		"personality_tags": [],
+		"buy_value": 0.0,
+		"sell_value": 0.0,
+		"buy_lots": 0.0,
+		"sell_lots": 0.0,
+		"buy_shares": 0.0,
+		"sell_shares": 0.0,
+		"buy_price_weight": 0.0,
+		"sell_price_weight": 0.0
+	}
+	broker_map[code] = aggregate_row
+	return aggregate_row
+
+
+func _finalize_broker_activity_rows(broker_map: Dictionary) -> Array:
+	var rows: Array = []
+	for row_value in broker_map.values():
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value.duplicate(true)
+		row["buy_avg_price"] = float(row.get("buy_price_weight", 0.0)) / max(float(row.get("buy_value", 0.0)), 1.0)
+		row["sell_avg_price"] = float(row.get("sell_price_weight", 0.0)) / max(float(row.get("sell_value", 0.0)), 1.0)
+		row.erase("buy_price_weight")
+		row.erase("sell_price_weight")
+		rows.append(row)
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_value: float = float(a.get("buy_value", 0.0)) + float(a.get("sell_value", 0.0))
+		var b_value: float = float(b.get("buy_value", 0.0)) + float(b.get("sell_value", 0.0))
+		if is_equal_approx(a_value, b_value):
+			return str(a.get("code", "")) < str(b.get("code", ""))
+		return a_value > b_value
+	)
+	return rows
+
+
+func _merge_broker_personality_tags(target_row: Dictionary, tags_value: Variant) -> void:
+	if typeof(tags_value) != TYPE_ARRAY:
+		return
+	var tags: Array = target_row.get("personality_tags", [])
+	for tag_value in tags_value:
+		var tag: String = str(tag_value)
+		if tag.is_empty() or tag in tags:
+			continue
+		tags.append(tag)
+	target_row["personality_tags"] = tags
+
+
+func _broker_side_rows_from_activity(activity_rows: Array, side: String, limit: int) -> Array:
+	var rows: Array = []
+	var value_key: String = "%s_value" % side
+	var lots_key: String = "%s_lots" % side
+	var avg_key: String = "%s_avg_price" % side
+	for row_value in activity_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var value: float = max(float(row.get(value_key, 0.0)), 0.0)
+		if value <= 0.0:
+			continue
+		rows.append({
+			"code": str(row.get("code", "")),
+			"company_name": str(row.get("company_name", "")),
+			"broker_type": str(row.get("broker_type", "")),
+			"personality_tags": row.get("personality_tags", []).duplicate() if typeof(row.get("personality_tags", [])) == TYPE_ARRAY else [],
+			"value": value,
+			"lots": max(float(row.get(lots_key, 0.0)), 0.0),
+			"avg_price": max(float(row.get(avg_key, 0.0)), 0.0)
+		})
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if is_equal_approx(float(a.get("value", 0.0)), float(b.get("value", 0.0))):
+			return str(a.get("code", "")) < str(b.get("code", ""))
+		return float(a.get("value", 0.0)) > float(b.get("value", 0.0))
+	)
+	if limit > 0 and rows.size() > limit:
+		rows = rows.slice(0, limit)
+	return rows
+
+
+func _broker_net_rows_from_activity(activity_rows: Array, side: String, limit: int) -> Array:
+	var rows: Array = []
+	for row_value in activity_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var buy_value: float = max(float(row.get("buy_value", 0.0)), 0.0)
+		var sell_value: float = max(float(row.get("sell_value", 0.0)), 0.0)
+		var net_value: float = buy_value - sell_value
+		if side == "buy" and net_value <= 0.0:
+			continue
+		if side == "sell" and net_value >= 0.0:
+			continue
+		var abs_value: float = abs(net_value)
+		if abs_value <= 0.0:
+			continue
+		rows.append({
+			"code": str(row.get("code", "")),
+			"company_name": str(row.get("company_name", "")),
+			"broker_type": str(row.get("broker_type", "")),
+			"personality_tags": row.get("personality_tags", []).duplicate() if typeof(row.get("personality_tags", [])) == TYPE_ARRAY else [],
+			"value": abs_value,
+			"lots": abs(float(row.get("buy_lots", 0.0)) - float(row.get("sell_lots", 0.0))),
+			"avg_price": max(float(row.get("buy_avg_price", row.get("sell_avg_price", 0.0))) if side == "buy" else float(row.get("sell_avg_price", row.get("buy_avg_price", 0.0))), 0.0),
+			"net_side": side
+		})
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if is_equal_approx(float(a.get("value", 0.0)), float(b.get("value", 0.0))):
+			return str(a.get("code", "")) < str(b.get("code", ""))
+		return float(a.get("value", 0.0)) > float(b.get("value", 0.0))
+	)
+	if limit > 0 and rows.size() > limit:
+		rows = rows.slice(0, limit)
+	return rows
+
+
+func _aggregate_compact_broker_rows(history_rows: Array, rows_key: String, limit: int) -> Array:
+	var broker_map: Dictionary = {}
+	for entry_value in history_rows:
+		if typeof(entry_value) != TYPE_DICTIONARY:
+			continue
+		var entry: Dictionary = entry_value
+		var rows_value: Variant = entry.get(rows_key, [])
+		if typeof(rows_value) != TYPE_ARRAY:
+			continue
+		for row_value in rows_value:
+			if typeof(row_value) != TYPE_DICTIONARY:
+				continue
+			var row: Dictionary = row_value
+			var code: String = str(row.get("code", ""))
+			if code.is_empty():
+				continue
+			var aggregate_row: Dictionary = broker_map.get(code, {
+				"code": code,
+				"company_name": str(row.get("company_name", "")),
+				"broker_type": str(row.get("broker_type", "")),
+				"value": 0.0,
+				"lots": 0.0,
+				"avg_price_weight": 0.0,
+				"net_side": str(row.get("net_side", ""))
+			})
+			var value: float = max(float(row.get("value", 0.0)), 0.0)
+			aggregate_row["value"] = float(aggregate_row.get("value", 0.0)) + value
+			aggregate_row["lots"] = float(aggregate_row.get("lots", 0.0)) + max(float(row.get("lots", 0.0)), 0.0)
+			aggregate_row["avg_price_weight"] = float(aggregate_row.get("avg_price_weight", 0.0)) + (max(float(row.get("avg_price", 0.0)), 0.0) * value)
+			broker_map[code] = aggregate_row
+	var rows: Array = []
+	for aggregate_value in broker_map.values():
+		if typeof(aggregate_value) != TYPE_DICTIONARY:
+			continue
+		var aggregate_row: Dictionary = aggregate_value.duplicate(true)
+		aggregate_row["avg_price"] = float(aggregate_row.get("avg_price_weight", 0.0)) / max(float(aggregate_row.get("value", 0.0)), 1.0)
+		aggregate_row.erase("avg_price_weight")
+		rows.append(aggregate_row)
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if is_equal_approx(float(a.get("value", 0.0)), float(b.get("value", 0.0))):
+			return str(a.get("code", "")) < str(b.get("code", ""))
+		return float(a.get("value", 0.0)) > float(b.get("value", 0.0))
+	)
+	if limit > 0 and rows.size() > limit:
+		rows = rows.slice(0, limit)
+	return rows
+
+
+func _merge_broker_type_totals(target_totals: Dictionary, totals_value: Variant) -> void:
+	if typeof(totals_value) != TYPE_DICTIONARY:
+		return
+	for type_key_value in totals_value.keys():
+		var type_key: String = str(type_key_value)
+		if type_key.is_empty():
+			continue
+		var source_total: Dictionary = totals_value[type_key_value] if typeof(totals_value[type_key_value]) == TYPE_DICTIONARY else {}
+		if source_total.is_empty():
+			continue
+		if not target_totals.has(type_key):
+			target_totals[type_key] = {
+				"buy_value": 0.0,
+				"sell_value": 0.0,
+				"buy_lots": 0.0,
+				"sell_lots": 0.0,
+				"buy_shares": 0.0,
+				"sell_shares": 0.0,
+				"net_value": 0.0,
+				"net_lots": 0.0
+			}
+		var target_total: Dictionary = target_totals[type_key]
+		for numeric_key_value in ["buy_value", "sell_value", "buy_lots", "sell_lots", "buy_shares", "sell_shares"]:
+			var numeric_key: String = str(numeric_key_value)
+			target_total[numeric_key] = float(target_total.get(numeric_key, 0.0)) + max(float(source_total.get(numeric_key, 0.0)), 0.0)
+		target_total["net_value"] = float(target_total.get("buy_value", 0.0)) - float(target_total.get("sell_value", 0.0))
+		target_total["net_lots"] = float(target_total.get("buy_lots", 0.0)) - float(target_total.get("sell_lots", 0.0))
+		target_totals[type_key] = target_total
+
+
+func _broker_type_totals_from_activity_rows(activity_rows: Array) -> Dictionary:
+	var totals: Dictionary = {}
+	for row_value in activity_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var broker_type: String = str(row.get("broker_type", "retail"))
+		if broker_type.is_empty():
+			broker_type = "retail"
+		if not totals.has(broker_type):
+			totals[broker_type] = {
+				"buy_value": 0.0,
+				"sell_value": 0.0,
+				"buy_lots": 0.0,
+				"sell_lots": 0.0,
+				"buy_shares": 0.0,
+				"sell_shares": 0.0,
+				"net_value": 0.0,
+				"net_lots": 0.0
+			}
+		var type_total: Dictionary = totals[broker_type]
+		type_total["buy_value"] = float(type_total.get("buy_value", 0.0)) + max(float(row.get("buy_value", 0.0)), 0.0)
+		type_total["sell_value"] = float(type_total.get("sell_value", 0.0)) + max(float(row.get("sell_value", 0.0)), 0.0)
+		type_total["buy_lots"] = float(type_total.get("buy_lots", 0.0)) + max(float(row.get("buy_lots", 0.0)), 0.0)
+		type_total["sell_lots"] = float(type_total.get("sell_lots", 0.0)) + max(float(row.get("sell_lots", 0.0)), 0.0)
+		type_total["buy_shares"] = float(type_total.get("buy_shares", 0.0)) + max(float(row.get("buy_shares", 0.0)), 0.0)
+		type_total["sell_shares"] = float(type_total.get("sell_shares", 0.0)) + max(float(row.get("sell_shares", 0.0)), 0.0)
+		type_total["net_value"] = float(type_total.get("buy_value", 0.0)) - float(type_total.get("sell_value", 0.0))
+		type_total["net_lots"] = float(type_total.get("buy_lots", 0.0)) - float(type_total.get("sell_lots", 0.0))
+		totals[broker_type] = type_total
+	return totals
+
+
+func _dominant_broker_actor_from_scores(scores: Dictionary, positive_side: bool) -> String:
+	var best_key: String = "balanced"
+	var best_value: float = -INF if positive_side else INF
+	for key_value in scores.keys():
+		var key: String = str(key_value)
+		var value: float = float(scores[key_value])
+		if positive_side:
+			if value > best_value:
+				best_value = value
+				best_key = key
+		else:
+			if value < best_value:
+				best_value = value
+				best_key = key
+	return best_key
+
+
+func _broker_row_code(rows: Array) -> String:
+	return str(rows[0].get("code", "")) if not rows.is_empty() and typeof(rows[0]) == TYPE_DICTIONARY else ""
+
+
+func _broker_row_name(rows: Array) -> String:
+	return str(rows[0].get("company_name", "")) if not rows.is_empty() and typeof(rows[0]) == TYPE_DICTIONARY else ""
+
+
+func _broker_row_type(rows: Array) -> String:
+	return str(rows[0].get("broker_type", "")) if not rows.is_empty() and typeof(rows[0]) == TYPE_DICTIONARY else ""
+
+
+func _broker_flow_tag_for_score(score: float) -> String:
+	if score > 0.18:
+		return "accumulation"
+	if score < -0.18:
+		return "distribution"
+	return "neutral"
+
+
+func _broker_meter_label_for_score(score: float) -> String:
+	if score >= 0.60:
+		return "Big Acc"
+	if score >= 0.18:
+		return "Accumulation"
+	if score <= -0.60:
+		return "Big Dist"
+	if score <= -0.18:
+		return "Distribution"
+	return "Neutral"
 
 
 func _company_market_rows_cache_key() -> String:

@@ -71,8 +71,6 @@ var insufficient_cash_dialog: AcceptDialog = null
 
 func _ready() -> void:
 	_build_ui()
-	if not GameManager.life_changed.is_connected(_on_life_changed):
-		GameManager.life_changed.connect(_on_life_changed)
 	refresh()
 
 
@@ -1270,12 +1268,6 @@ func _ensure_insufficient_cash_dialog() -> void:
 	if ok_button != null:
 		ok_button.text = "OK"
 		_style_button(ok_button)
-
-
-func _on_life_changed() -> void:
-	if not is_visible_in_tree():
-		return
-	refresh()
 
 
 func _selected_option_id(option: OptionButton) -> String:

@@ -164,6 +164,7 @@ const COLOR_MARKET_PAPER_MUTED := Color(0.352941, 0.309804, 0.203922, 1)
 const COLOR_MARKET_PAPER_RED := Color(0.545098, 0.101961, 0.101961, 1)
 const NEWS_ARTICLE_CARD_LIMIT := 8
 const NEWS_ARTICLE_INITIAL_CARD_LIMIT := 3
+const NEWS_ARTICLE_CARD_CLICK_DRAG_THRESHOLD := 10.0
 const SHOW_NEWS_IMAGE_PLACEHOLDERS := false
 const MARKET_PAPER_GRUNGE_TEXTURES := {
 	"coffee": "res://assets/market_papers/grunge/coffee_stain.png",
@@ -447,6 +448,7 @@ var company_window: MarginContainer = null
 var company_status_label: Label = null
 var company_controlled_option: OptionButton = null
 var company_detail_label: Label = null
+var company_agenda_label: Label = null
 var company_agenda_option: OptionButton = null
 var company_request_button: Button = null
 var company_management_snapshot: Dictionary = {}
@@ -464,11 +466,15 @@ var selected_dashboard_sector_id: String = ""
 var active_order_side: String = "buy"
 var order_ticket_collapsed: bool = false
 var broker_net_mode: bool = false
+var selected_broker_range_id: String = "1d"
+var broker_range_buttons: Dictionary = {}
+var broker_range_row: HBoxContainer = null
 var selected_news_outlet_id: String = ""
 var selected_news_archive_year: int = 0
 var selected_news_archive_month: int = 0
 var selected_news_article_id: String = ""
 var news_article_cards_generation: int = 0
+var news_article_card_press_positions: Dictionary = {}
 var trade_workspace_detail_cache_key: String = ""
 var trade_workspace_profile_cache_key: String = ""
 var trade_workspace_financial_history_cache_key: String = ""
@@ -543,6 +549,7 @@ var advance_day_processing: bool = false
 var deferred_open_app_refresh_queue: Array = []
 var deferred_open_app_refresh_scheduled: bool = false
 var deferred_dashboard_refresh_after_recap: bool = false
+var deferred_full_refresh_after_recap: bool = false
 var advance_day_post_recap_save_flush_scheduled: bool = false
 var pending_daily_recap_snapshot: Dictionary = {}
 var daily_recap_dialog: Control = null
@@ -1021,6 +1028,7 @@ func _ready() -> void:
 	_initialize_desktop_app_windows()
 	_initialize_desktop_badge_seen_defaults()
 	_ensure_key_stats_dashboard_ui()
+	_ensure_broker_range_controls()
 	_remove_financial_and_broker_helper_text()
 	_style_dashboard_calendar_grid()
 	_apply_visual_theme()
@@ -1143,6 +1151,7 @@ func _ready() -> void:
 	financials_previous_button.tooltip_text = "View the previous quarter."
 	financials_next_button.tooltip_text = "View the next quarter."
 	broker_net_toggle.tooltip_text = "Toggle net broker flow so each broker appears on only one side."
+	_refresh_broker_range_buttons()
 	buy_button.tooltip_text = "Switch the ticket to buy mode."
 	sell_button.tooltip_text = "Switch the ticket to sell mode."
 	order_ticket_toggle_button.tooltip_text = "Hide the order ticket."
@@ -1325,6 +1334,74 @@ func _remove_financial_and_broker_helper_text() -> void:
 	if broker_meter_label != null:
 		broker_meter_label.text = ""
 		broker_meter_label.visible = false
+
+
+func _ensure_broker_range_controls() -> void:
+	if broker_net_toggle == null:
+		return
+	var controls_row: HBoxContainer = broker_net_toggle.get_parent() as HBoxContainer
+	if controls_row == null:
+		return
+	broker_range_row = controls_row.get_node_or_null("BrokerRangeRow") as HBoxContainer
+	if broker_range_row == null:
+		broker_range_row = HBoxContainer.new()
+		broker_range_row.name = "BrokerRangeRow"
+		broker_range_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		broker_range_row.add_theme_constant_override("separation", 4)
+		controls_row.add_child(broker_range_row)
+		controls_row.move_child(broker_range_row, 0)
+	broker_range_buttons.clear()
+	for range_value in GameManager.get_broker_range_catalog():
+		if typeof(range_value) != TYPE_DICTIONARY:
+			continue
+		var range_definition: Dictionary = range_value
+		var range_id: String = str(range_definition.get("id", ""))
+		if range_id.is_empty():
+			continue
+		var button_name: String = _broker_range_button_name(range_id)
+		var button: Button = broker_range_row.get_node_or_null(button_name) as Button
+		if button == null:
+			button = Button.new()
+			button.name = button_name
+			button.text = str(range_definition.get("label", range_id.to_upper()))
+			button.toggle_mode = true
+			button.custom_minimum_size = Vector2(40, 28)
+			button.focus_mode = Control.FOCUS_NONE
+			button.tooltip_text = "Show %s broker flow." % str(range_definition.get("label", range_id.to_upper()))
+			button.pressed.connect(_on_broker_range_pressed.bind(range_id))
+			broker_range_row.add_child(button)
+		broker_range_buttons[range_id] = button
+	_refresh_broker_range_buttons()
+
+
+func _broker_range_button_name(range_id: String) -> String:
+	return "BrokerRange%sButton" % range_id.to_upper()
+
+
+func _refresh_broker_range_buttons() -> void:
+	for range_id_value in broker_range_buttons.keys():
+		var range_id: String = str(range_id_value)
+		var button: Button = broker_range_buttons.get(range_id, null) as Button
+		if button == null:
+			continue
+		var is_selected: bool = range_id == selected_broker_range_id
+		button.set_pressed_no_signal(is_selected)
+		UiTheme.style_tab_button(button, "terminal_tab", is_selected, {"radius": 0})
+		_apply_font_override_to_control(button, 12, _get_app_font())
+
+
+func _on_broker_range_pressed(range_id: String) -> void:
+	if range_id.is_empty():
+		return
+	selected_broker_range_id = range_id
+	_refresh_broker_range_buttons()
+	if current_trade_snapshot.is_empty():
+		_refresh_broker_table({})
+		trade_workspace_broker_cache_key = ""
+		return
+	var broker_flow: Dictionary = _broker_range_flow_for_snapshot(current_trade_snapshot)
+	_refresh_broker_table(broker_flow)
+	trade_workspace_broker_cache_key = _trade_workspace_broker_snapshot_key(current_trade_snapshot)
 
 
 func _style_dashboard_calendar_grid() -> void:
@@ -2875,6 +2952,24 @@ func _refresh_pending_dashboard_after_guarded_advance() -> void:
 	_log_perf_elapsed("_refresh_pending_dashboard_after_guarded_advance", started_at_usec)
 
 
+func _run_post_daily_recap_work(show_followup_alert: bool = false) -> void:
+	await get_tree().process_frame
+	var started_at_usec: int = Time.get_ticks_usec()
+	if deferred_full_refresh_after_recap:
+		deferred_full_refresh_after_recap = false
+		deferred_dashboard_refresh_after_recap = false
+		_refresh_all(false)
+	else:
+		_refresh_pending_dashboard_after_guarded_advance()
+	_schedule_deferred_open_app_refresh()
+	_schedule_advance_day_post_recap_save_flush()
+	_refresh_ftue_progress()
+	_refresh_first_hour_guide_progress()
+	_log_perf_elapsed("_run_post_daily_recap_work", started_at_usec)
+	if show_followup_alert:
+		call_deferred("_show_next_macro_event_alert")
+
+
 func _is_daily_recap_visible() -> bool:
 	return daily_recap_dialog != null and daily_recap_dialog.visible
 
@@ -2907,6 +3002,8 @@ func _schedule_advance_day_post_recap_save_flush() -> void:
 func _flush_advance_day_save_after_recap() -> void:
 	await get_tree().process_frame
 	advance_day_post_recap_save_flush_scheduled = false
+	if _is_daily_recap_visible() or not pending_daily_recap_snapshot.is_empty():
+		return
 	var started_at_usec: int = Time.get_ticks_usec()
 	GameManager.flush_pending_save_if_needed()
 	_log_perf_elapsed("_flush_advance_day_save_after_recap", started_at_usec)
@@ -5262,12 +5359,12 @@ func _ensure_company_ui() -> void:
 	spacer.custom_minimum_size = Vector2(0, 10)
 	vbox.add_child(spacer)
 
-	var agenda_label := Label.new()
-	agenda_label.name = "CompanyAgendaLabel"
-	agenda_label.text = "RUPSLB agenda"
-	agenda_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-	agenda_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	vbox.add_child(agenda_label)
+	company_agenda_label = Label.new()
+	company_agenda_label.name = "CompanyAgendaLabel"
+	company_agenda_label.text = "RUPSLB agenda"
+	company_agenda_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	company_agenda_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
+	vbox.add_child(company_agenda_label)
 
 	company_agenda_option = OptionButton.new()
 	company_agenda_option.name = "CompanyAgendaOption"
@@ -5295,10 +5392,10 @@ func _refresh_company_app_availability() -> void:
 		return
 	var snapshot: Dictionary = GameManager.get_company_management_snapshot()
 	var unlocked: bool = bool(snapshot.get("unlocked", false))
-	company_app_button.disabled = not unlocked
-	company_app_button.tooltip_text = str(snapshot.get("status_text", "Own majority control to unlock Company."))
+	company_app_button.disabled = false
+	company_app_button.tooltip_text = "Open Company." if unlocked else str(snapshot.get("status_text", "You have no company yet."))
 	if company_app_label != null:
-		company_app_label.modulate = Color.WHITE if unlocked else Color(1, 1, 1, 0.5)
+		company_app_label.modulate = Color.WHITE
 
 
 func _refresh_company(preferred_company_id: String = "") -> void:
@@ -5310,11 +5407,13 @@ func _refresh_company(preferred_company_id: String = "") -> void:
 	var candidate_rows: Array = company_management_snapshot.get("candidate_rows", [])
 	var selected_company_management_id: String = str(company_management_snapshot.get("selected_company_id", ""))
 	var selected_options: Dictionary = company_management_snapshot.get("selected_options", {})
+	var has_company: bool = not controlled_rows.is_empty()
 
 	if company_status_label != null:
-		company_status_label.text = str(company_management_snapshot.get("status_text", "Company app locked."))
+		company_status_label.text = str(company_management_snapshot.get("status_text", "You have no company yet."))
 	if company_controlled_option != null:
 		company_controlled_option.clear()
+		company_controlled_option.visible = has_company
 		var selected_index: int = 0
 		for row_index in range(controlled_rows.size()):
 			if typeof(controlled_rows[row_index]) != TYPE_DICTIONARY:
@@ -5335,10 +5434,13 @@ func _refresh_company(preferred_company_id: String = "") -> void:
 
 	if company_detail_label != null:
 		company_detail_label.text = _company_management_detail_text(controlled_rows, candidate_rows, selected_company_management_id, selected_options)
+	if company_agenda_label != null:
+		company_agenda_label.visible = has_company
 
 	var previous_action_id: String = _selected_company_management_action_id()
 	if company_agenda_option != null:
 		company_agenda_option.clear()
+		company_agenda_option.visible = has_company
 		var rows: Array = selected_options.get("rows", [])
 		var selected_action_index: int = 0
 		for row_index in range(rows.size()):
@@ -5358,6 +5460,7 @@ func _refresh_company(preferred_company_id: String = "") -> void:
 	if company_request_button != null:
 		var enabled: bool = bool(selected_options.get("enabled", false)) and company_agenda_option != null and company_agenda_option.get_item_count() > 0
 		company_request_button.disabled = not enabled
+		company_request_button.visible = has_company
 		company_request_button.tooltip_text = str(selected_options.get("tooltip_text", "Use majority ownership to set a company-direction agenda."))
 		_style_company_action_button(company_request_button, enabled)
 	_refresh_company_app_availability()
@@ -5378,15 +5481,7 @@ func _company_management_detail_text(controlled_rows: Array, candidate_rows: Arr
 			_format_grouped_integer(int(row.get("control_required_shares", 0))),
 			str(selected_options.get("status_text", "Pick an agenda."))
 		]
-	if not candidate_rows.is_empty() and typeof(candidate_rows[0]) == TYPE_DICTIONARY:
-		var lead: Dictionary = candidate_rows[0]
-		return "Company is locked until you control a listed company.\nClosest holding: %s - %s at %.2f%%. Need %s more share(s) for majority control." % [
-			str(lead.get("ticker", "")),
-			str(lead.get("name", "")),
-			float(lead.get("ownership_pct", 0.0)) * 100.0,
-			_format_grouped_integer(int(lead.get("control_shares_needed", 0)))
-		]
-	return "Company is locked until you own majority control in at least one listed company."
+	return "You have no company yet."
 
 
 func _selected_company_management_company_id() -> String:
@@ -10284,6 +10379,7 @@ func _rebuild_news_article_cards(articles: Array, reset_scroll: bool = true) -> 
 	if news_article_cards == null:
 		return
 	news_article_cards_generation += 1
+	news_article_card_press_positions.clear()
 	var generation: int = news_article_cards_generation
 	var previous_scroll_value: float = 0.0
 	if news_article_cards_scroll != null and news_article_cards_scroll.get_v_scroll_bar() != null:
@@ -10486,7 +10582,47 @@ func _build_news_article_card(article: Dictionary) -> PanelContainer:
 	read_button.pressed.connect(_on_news_article_card_pressed.bind(article_id))
 	_style_news_command_button(read_button, is_selected)
 	vbox.add_child(read_button)
+	_make_news_article_card_clickable(card, article_id)
 	return card
+
+
+func _make_news_article_card_clickable(root: Control, article_id: String) -> void:
+	if root == null or article_id.is_empty():
+		return
+	var stack: Array = [root]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if not (node is Control):
+			continue
+		var control: Control = node as Control
+		if control is BaseButton:
+			continue
+		control.mouse_filter = Control.MOUSE_FILTER_PASS
+		control.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		control.tooltip_text = "Read story."
+		control.gui_input.connect(_on_news_article_card_gui_input.bind(article_id))
+		for child in control.get_children():
+			stack.append(child)
+
+
+func _on_news_article_card_gui_input(event: InputEvent, article_id: String) -> void:
+	if article_id.is_empty() or not (event is InputEventMouseButton):
+		return
+	var mouse_event := event as InputEventMouseButton
+	if mouse_event.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if mouse_event.pressed:
+		news_article_card_press_positions[article_id] = mouse_event.position
+		return
+	var start_position: Vector2 = mouse_event.position
+	var stored_position: Variant = news_article_card_press_positions.get(article_id)
+	if stored_position is Vector2:
+		start_position = stored_position
+	news_article_card_press_positions.erase(article_id)
+	if start_position.distance_to(mouse_event.position) > NEWS_ARTICLE_CARD_CLICK_DRAG_THRESHOLD:
+		return
+	_on_news_article_card_pressed(article_id)
+	get_viewport().set_input_as_handled()
 
 
 func _news_article_card_node(article_id: String) -> PanelContainer:
@@ -13882,7 +14018,7 @@ func _apply_trade_workspace_snapshot(snapshot: Dictionary) -> void:
 		_refresh_key_stats_dashboard(snapshot if detail_ready else {})
 	if refresh_broker_panel:
 		trade_workspace_broker_cache_key = next_broker_cache_key
-		_refresh_broker_table(snapshot.get("broker_flow", {}))
+		_refresh_broker_table(_broker_range_flow_for_snapshot(snapshot))
 	if active_tab_name == "CorporateActions":
 		_refresh_trade_workspace_corporate_action_timeline(true)
 	if refresh_statement_panel:
@@ -13945,7 +14081,7 @@ func _refresh_visible_trade_workspace_tab() -> void:
 			var next_broker_cache_key: String = _trade_workspace_broker_snapshot_key(current_trade_snapshot)
 			if next_broker_cache_key != trade_workspace_broker_cache_key:
 				trade_workspace_broker_cache_key = next_broker_cache_key
-				_refresh_broker_table(current_trade_snapshot.get("broker_flow", {}))
+				_refresh_broker_table(_broker_range_flow_for_snapshot(current_trade_snapshot))
 		"CorporateActions":
 			_refresh_trade_workspace_corporate_action_timeline(true)
 		"Profile":
@@ -14679,20 +14815,36 @@ func _trade_workspace_key_stats_snapshot_key(snapshot: Dictionary) -> String:
 	]
 
 
+func _broker_range_flow_for_snapshot(snapshot: Dictionary) -> Dictionary:
+	if snapshot.is_empty():
+		return {}
+	var company_id: String = str(snapshot.get("id", ""))
+	if company_id.is_empty():
+		return {}
+	var range_flow: Dictionary = GameManager.get_company_broker_flow_snapshot(company_id, selected_broker_range_id)
+	if range_flow.is_empty():
+		return snapshot.get("broker_flow", {}).duplicate(true) if typeof(snapshot.get("broker_flow", {})) == TYPE_DICTIONARY else {}
+	return range_flow
+
+
 func _trade_workspace_broker_snapshot_key(snapshot: Dictionary) -> String:
 	if snapshot.is_empty():
 		return ""
-	var broker_flow: Dictionary = snapshot.get("broker_flow", {})
-	return "%s|%d|%s|%s|%s|%s|%s|%s|%s" % [
+	var broker_flow: Dictionary = _broker_range_flow_for_snapshot(snapshot)
+	return "%s|%d|%s|%s|%s|%s|%s|%s|%s|%s|%d|%s|%s" % [
 		str(snapshot.get("id", "")),
 		RunState.day_index,
 		str(broker_net_mode),
+		selected_broker_range_id,
 		str(broker_flow.get("flow_tag", "")),
 		str(broker_flow.get("action_meter_score", "")),
 		str(broker_flow.get("dominant_buy_broker_code", "")),
 		str(broker_flow.get("dominant_sell_broker_code", "")),
 		_broker_rows_signature(broker_flow.get("net_buy_brokers", []) if broker_net_mode else broker_flow.get("buy_brokers", [])),
-		_broker_rows_signature(broker_flow.get("net_sell_brokers", []) if broker_net_mode else broker_flow.get("sell_brokers", []))
+		_broker_rows_signature(broker_flow.get("net_sell_brokers", []) if broker_net_mode else broker_flow.get("sell_brokers", [])),
+		int(broker_flow.get("range_day_count", 0)),
+		str(broker_flow.get("history_mode", "")),
+		str(broker_flow.get("broker_trade_value", ""))
 	]
 
 
@@ -16500,7 +16652,9 @@ func _on_day_progressed(_day_index: int) -> void:
 		selected_news_article_id = ""
 	if advance_day_processing:
 		_queue_deferred_open_app_refresh()
-		_refresh_all(false)
+		deferred_dashboard_refresh_after_recap = true
+		deferred_full_refresh_after_recap = true
+		_invalidate_company_rows_cache()
 	else:
 		_refresh_all()
 	_log_perf_elapsed("_on_day_progressed", started_at_usec)
@@ -19595,12 +19749,7 @@ func _hide_daily_recap() -> void:
 	if daily_recap_dialog != null:
 		_reset_daily_recap_animation_state()
 		daily_recap_dialog.visible = false
-	_refresh_pending_dashboard_after_guarded_advance()
-	_schedule_deferred_open_app_refresh()
-	_refresh_ftue_progress()
-	_refresh_first_hour_guide_progress()
-	if was_visible:
-		call_deferred("_show_next_macro_event_alert")
+	call_deferred("_run_post_daily_recap_work", was_visible)
 
 
 func _style_daily_recap_dialog() -> void:
@@ -23478,6 +23627,7 @@ func _ensure_broker_section_cards() -> void:
 	var broker_vbox: VBoxContainer = broker_panel.get_node_or_null("BrokerMargin/BrokerVBox") as VBoxContainer
 	if broker_vbox == null:
 		return
+	_ensure_broker_range_controls()
 	_set_stockbot_spacing(broker_vbox, 10)
 	var scale_row: Control = null
 	if broker_scale_left_label != null:
@@ -23582,6 +23732,7 @@ func _style_stockbot_app_ui() -> void:
 
 	_style_tab_container(stock_list_tabs, 0)
 	_style_tab_container(work_tabs, 0)
+	_refresh_broker_range_buttons()
 	_style_stockbot_icon_button(add_watchlist_button, "plus", "Watch", "Add the selected stock to your watchlist.", false, COLOR_STOCKBOT_BLUE_TINT, COLOR_STOCKBOT_BLUE_EDGE)
 	_style_stockbot_icon_button(remove_watchlist_button, "trash", "Remove", "Remove the selected stock from your watchlist.", false, COLOR_STOCKBOT_BEAR_TINT, COLOR_STOCKBOT_BEAR_EDGE)
 	_style_stockbot_icon_button(
@@ -24321,10 +24472,12 @@ func _refresh_broker_table(broker_flow: Dictionary) -> void:
 
 	var action_meter_score: float = float(broker_flow.get("action_meter_score", 0.0))
 	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
-	broker_summary_label.text = ""
-	broker_summary_label.visible = false
-	broker_meter_label.text = ""
-	broker_meter_label.visible = false
+	var summary_text: String = _format_broker_range_summary(broker_flow)
+	broker_summary_label.text = summary_text
+	broker_summary_label.visible = not summary_text.is_empty()
+	var meter_text: String = str(broker_flow.get("action_meter_label", "")).strip_edges()
+	broker_meter_label.text = meter_text
+	broker_meter_label.visible = not meter_text.is_empty()
 	broker_meter_bar.value = clamp((action_meter_score + 1.0) * 50.0, 0.0, 100.0)
 	_style_broker_meter(_color_for_flow(flow_tag))
 
@@ -24332,6 +24485,53 @@ func _refresh_broker_table(broker_flow: Dictionary) -> void:
 		var buy_row: Dictionary = buy_brokers[row_index] if row_index < buy_brokers.size() else {}
 		var sell_row: Dictionary = sell_brokers[row_index] if row_index < sell_brokers.size() else {}
 		broker_rows_vbox.add_child(_build_broker_table_row(buy_row, sell_row))
+
+
+func _format_broker_range_summary(broker_flow: Dictionary) -> String:
+	if broker_flow.is_empty():
+		return ""
+	var range_label: String = str(broker_flow.get("range_label", "1D"))
+	var day_count: int = int(broker_flow.get("range_day_count", 1))
+	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral")).capitalize()
+	var traded_value: float = max(float(broker_flow.get("broker_trade_value", 0.0)), 0.0)
+	var date_text: String = _format_broker_range_date_text(
+		broker_flow.get("history_start_date", {}),
+		broker_flow.get("history_end_date", {})
+	)
+	var parts: Array = [
+		range_label,
+		"%d session%s" % [max(day_count, 1), "" if day_count == 1 else "s"],
+		flow_tag
+	]
+	if traded_value > 0.0:
+		parts.append("Value %s" % _format_compact_currency(traded_value))
+	if not date_text.is_empty():
+		parts.append(date_text)
+	return " | ".join(parts)
+
+
+func _format_broker_range_date_text(start_date_value: Variant, end_date_value: Variant) -> String:
+	if typeof(start_date_value) != TYPE_DICTIONARY or typeof(end_date_value) != TYPE_DICTIONARY:
+		return ""
+	var start_date: Dictionary = start_date_value
+	var end_date: Dictionary = end_date_value
+	if start_date.is_empty() or end_date.is_empty():
+		return ""
+	var start_text: String = _format_short_broker_date(start_date)
+	var end_text: String = _format_short_broker_date(end_date)
+	if start_text.is_empty() or end_text.is_empty():
+		return ""
+	if start_text == end_text:
+		return start_text
+	return "%s-%s" % [start_text, end_text]
+
+
+func _format_short_broker_date(date_value: Dictionary) -> String:
+	if date_value.is_empty():
+		return ""
+	var month_names: Array = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+	var month_index: int = clampi(int(date_value.get("month", 1)) - 1, 0, month_names.size() - 1)
+	return "%02d %s" % [int(date_value.get("day", 0)), str(month_names[month_index])]
 
 
 func _populate_corporate_action_filter() -> void:
@@ -24761,7 +24961,7 @@ func _on_broker_net_toggled(toggled_on: bool) -> void:
 	if current_trade_snapshot.is_empty():
 		_refresh_broker_table({})
 	else:
-		_refresh_broker_table(current_trade_snapshot.get("broker_flow", {}))
+		_refresh_broker_table(_broker_range_flow_for_snapshot(current_trade_snapshot))
 		trade_workspace_broker_cache_key = _trade_workspace_broker_snapshot_key(current_trade_snapshot)
 
 
@@ -24856,13 +25056,18 @@ func _prepare_broker_capture(broker_row: Dictionary, side: String) -> void:
 	var value_text: String = _format_compact_currency(float(broker_row.get("value", 0.0)))
 	var lots_text: String = _format_compact_lots(float(broker_row.get("lots", 0.0)))
 	var avg_text: String = _format_last_price(float(broker_row.get("avg_price", 0.0)))
+	var range_label: String = "1D"
+	var broker_flow: Dictionary = _broker_range_flow_for_snapshot(current_trade_snapshot)
+	if not broker_flow.is_empty():
+		range_label = str(broker_flow.get("range_label", range_label))
 	var impact: String = "positive" if normalized_side == "buy" else "negative"
-	var detail: String = "%s %s printed %s across %s lot(s) at an average price of %s." % [
+	var detail: String = "%s %s printed %s across %s lot(s) at an average price of %s in the %s broker range." % [
 		side_label,
 		broker_code,
 		value_text,
 		lots_text,
-		avg_text
+		avg_text,
+		range_label
 	]
 	if not broker_name.is_empty() and broker_name != broker_code:
 		detail += " Broker name: %s." % broker_name
@@ -24871,9 +25076,9 @@ func _prepare_broker_capture(broker_row: Dictionary, side: String) -> void:
 		"category": "broker_flow",
 		"category_label": "Broker Flow",
 		"source_label": "STOCKBOT Broker",
-		"source_id": "stockbot_broker_%s_%s_%s_day_%d" % [selected_company_id, normalized_side, _node_token(broker_code), RunState.day_index],
+		"source_id": "stockbot_broker_%s_%s_%s_%s_day_%d" % [selected_company_id, normalized_side, _node_token(broker_code), _node_token(selected_broker_range_id), RunState.day_index],
 		"company_id": selected_company_id,
-		"label": "%s broker %s" % [side_label, broker_code],
+		"label": "%s broker %s %s" % [side_label, broker_code, range_label],
 		"value": "%s | %s lot(s) | avg %s" % [value_text, lots_text, avg_text],
 		"detail": detail,
 		"impact": impact
