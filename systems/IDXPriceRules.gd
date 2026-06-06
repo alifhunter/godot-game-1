@@ -2,6 +2,7 @@ extends RefCounted
 
 const BOARD_MAIN_GROUP := ["main", "new_economy", "development", "etf", "dire"]
 const BOARD_ACCELERATION_GROUP := ["acceleration", "watchlist"]
+const REGULAR_MARKET_PRICE_FLOOR := 50.0
 
 
 static func tick_size_for_reference_price(last_price: float) -> float:
@@ -21,7 +22,7 @@ static func snap_price_for_day(raw_price: float, reference_price: float) -> floa
 	var safe_reference: float = normalize_last_price(reference_price)
 	var tick_size: float = tick_size_for_reference_price(safe_reference)
 	var snapped_delta: float = snappedf(raw_price - safe_reference, tick_size)
-	return max(1.0, safe_reference + snapped_delta)
+	return max(REGULAR_MARKET_PRICE_FLOOR, safe_reference + snapped_delta)
 
 
 static func auto_rejection_limits(reference_price: float, listing_board: String = "main") -> Dictionary:
@@ -29,17 +30,18 @@ static func auto_rejection_limits(reference_price: float, listing_board: String 
 	var board_key: String = _normalize_board(listing_board)
 	var ar_rule: Dictionary = _auto_rejection_rule_for_price(safe_reference, board_key)
 	var upper_raw: float = _resolve_rule_target(safe_reference, ar_rule, "upper")
-	var lower_raw: float = max(1.0, _resolve_rule_target(safe_reference, ar_rule, "lower"))
+	var lower_raw: float = max(REGULAR_MARKET_PRICE_FLOOR, _resolve_rule_target(safe_reference, ar_rule, "lower"))
 
 	return {
 		"reference_price": safe_reference,
 		"listing_board": board_key,
 		"upper_raw": upper_raw,
 		"lower_raw": lower_raw,
-		"upper_price": snap_down_to_tick_for_day(upper_raw, safe_reference),
+		"upper_price": max(snap_down_to_tick_for_day(upper_raw, safe_reference), REGULAR_MARKET_PRICE_FLOOR),
 		"lower_price": snap_up_to_tick_for_day(lower_raw, safe_reference),
 		"upper_label": str(ar_rule.get("upper_label", "")),
-		"lower_label": str(ar_rule.get("lower_label", ""))
+		"lower_label": str(ar_rule.get("lower_label", "")),
+		"regular_market_floor": REGULAR_MARKET_PRICE_FLOOR
 	}
 
 
@@ -47,18 +49,18 @@ static func snap_down_to_tick_for_day(raw_price: float, reference_price: float) 
 	var safe_reference: float = normalize_last_price(reference_price)
 	var tick_size: float = tick_size_for_reference_price(safe_reference)
 	var steps: float = floor((raw_price - safe_reference) / tick_size)
-	return max(1.0, safe_reference + (steps * tick_size))
+	return max(REGULAR_MARKET_PRICE_FLOOR, safe_reference + (steps * tick_size))
 
 
 static func snap_up_to_tick_for_day(raw_price: float, reference_price: float) -> float:
 	var safe_reference: float = normalize_last_price(reference_price)
 	var tick_size: float = tick_size_for_reference_price(safe_reference)
 	var steps: float = ceil((raw_price - safe_reference) / tick_size)
-	return max(1.0, safe_reference + (steps * tick_size))
+	return max(REGULAR_MARKET_PRICE_FLOOR, safe_reference + (steps * tick_size))
 
 
 static func normalize_last_price(price: float) -> float:
-	return max(1.0, round(price))
+	return max(REGULAR_MARKET_PRICE_FLOOR, round(price))
 
 
 static func _normalize_board(listing_board: String) -> String:

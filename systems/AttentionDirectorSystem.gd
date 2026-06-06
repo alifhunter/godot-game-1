@@ -1,6 +1,7 @@
 extends RefCounted
 
 const CHART_SYSTEM_SCRIPT = preload("res://systems/ChartSystem.gd")
+const GORENGAN_CAMPAIGN_SYSTEM_SCRIPT = preload("res://systems/GorenganCampaignSystem.gd")
 const PLAYER_FACING_DAY_SIX_TRIGGER_DAY := 5
 const POLICY_PARODY_MIN_TRIGGER_DAY := 10
 const NO_RECENT_EVENT_DAYS := 9999
@@ -69,6 +70,8 @@ const DIFFICULTY_PROFILES := {
 		"max_focus_multiplier": 2.15
 	}
 }
+
+var gorengan_campaign_system = GORENGAN_CAMPAIGN_SYSTEM_SCRIPT.new()
 
 
 func resolve_day(run_state, trade_date: Dictionary, day_number: int, macro_state: Dictionary) -> Dictionary:
@@ -649,6 +652,7 @@ func _score_company_attention(
 		1.0
 	)
 	var corporate_pressure: float = _corporate_pressure_score(company_profile, runtime)
+	var campaign_attention: Dictionary = gorengan_campaign_system.campaign_attention_context(runtime)
 
 	var attention_score: float = clamp(
 		fundamental_interest * 0.18 +
@@ -661,7 +665,8 @@ func _score_company_attention(
 		technical_signal_score * 0.05 +
 		corporate_pressure * 0.08 +
 		player_footprint * 0.05 +
-		operator_pressure * 0.04,
+		operator_pressure * 0.04 +
+		float(campaign_attention.get("attention_boost", 0.0)),
 		0.0,
 		1.0
 	)
@@ -675,14 +680,15 @@ func _score_company_attention(
 			max(volume_activity, chart_activity) * 0.08 +
 			player_footprint * 0.05 +
 			operator_pressure * 0.13 +
-			divergence_pressure * 0.04
+			divergence_pressure * 0.04 +
+			float(campaign_attention.get("dirty_boost", 0.0))
 		) * float(difficulty_profile.get("dirty_market_multiplier", 1.0)),
 		0.0,
 		1.0
 	)
-	var focus_rank_score: float = max(attention_score, dirty_market_score * 0.85, operator_pressure * 0.58)
+	var focus_rank_score: float = max(attention_score, dirty_market_score * 0.85, operator_pressure * 0.58 + float(campaign_attention.get("focus_boost", 0.0)))
 	var focus_weight: float = clamp(
-		1.0 + (attention_score * 0.72) + (dirty_market_score * 0.36) + (cycle_attention * 0.12),
+		1.0 + (attention_score * 0.72) + (dirty_market_score * 0.36) + (cycle_attention * 0.12) + float(campaign_attention.get("focus_boost", 0.0)),
 		1.0,
 		float(difficulty_profile.get("max_focus_multiplier", 1.75))
 	)

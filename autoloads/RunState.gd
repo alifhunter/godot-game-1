@@ -42,6 +42,8 @@ const REPORT_MONTH_BY_QUARTER := {
 	3: 7,
 	4: 10
 }
+const QUARTERLY_STATEMENT_HISTORY_LIMIT := 64
+const QUARTERLY_FILING_HISTORY_LIMIT := 16
 const STARTUP_PERF_LOG_PREFIX := "[perf][startup]"
 const COMPANY_DETAIL_PERSISTENCE_PERSISTENT := "persistent"
 const COMPANY_DETAIL_PERSISTENCE_EPHEMERAL := "ephemeral"
@@ -79,6 +81,7 @@ const COMPANY_PROFILE_KEYS := [
 	"financials",
 	"financial_history",
 	"financial_statement_snapshot",
+	"quarterly_filing_history",
 	"generation_traits",
 	"shares_outstanding",
 	"detail_status",
@@ -840,7 +843,8 @@ func _build_last_day_results_save_payload(source_results: Variant) -> Dictionary
 		"network_request_results": source.get("network_request_results", []).duplicate(true),
 		"network_tip_results": source.get("network_tip_results", []).duplicate(true),
 		"dirty_tip_offers": source.get("dirty_tip_offers", []).duplicate(true),
-		"dirty_tip_results": source.get("dirty_tip_results", []).duplicate(true)
+		"dirty_tip_results": source.get("dirty_tip_results", []).duplicate(true),
+		"quarterly_statement_filings": source.get("quarterly_statement_filings", []).duplicate(true)
 	}
 	return save_results
 
@@ -1304,6 +1308,13 @@ func apply_day_result(day_result: Dictionary) -> void:
 	_enforce_current_day_price_bounds_for_company_ids(
 		_company_ids_from_post_close_adjustments(corporate_action_applications, stock_dividend_distributions)
 	)
+	var quarterly_statement_filings: Array = _apply_quarterly_report_filings(
+		day_result.get("report_events", []),
+		day_result.get("trade_date", {}),
+		int(day_result.get("day_number", day_index))
+	)
+	if not quarterly_statement_filings.is_empty():
+		last_day_results["quarterly_statement_filings"] = quarterly_statement_filings.duplicate(true)
 	_log_apply_day_perf_elapsed(log_apply_perf, "normalize_companies", phase_started_at_usec, " companies=%d" % applied_company_count)
 
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -1421,12 +1432,12 @@ func get_quarterly_reports_for_date(date_info: Dictionary) -> Array:
 	return _reports_for_date_key(date_key)
 
 
-func get_quarterly_report_events_for_day_number(trading_day_number: int, trade_date: Dictionary) -> Array:
+func get_quarterly_report_events_for_day_number(trading_day_number: int, trade_date: Dictionary, macro_state: Dictionary = {}) -> Array:
 	var reports: Array = get_quarterly_reports_for_date(trade_date)
 	var events: Array = []
 	for report_value in reports:
 		var report: Dictionary = report_value
-		events.append(_build_quarterly_report_event(report, trading_day_number, trade_date))
+		events.append(_build_quarterly_report_event(report, trading_day_number, trade_date, macro_state))
 	return events
 
 
@@ -2362,6 +2373,8 @@ func get_available_guide_flows() -> Array:
 			continue
 		var status: String = "available"
 		var release_status: String = GUIDE_FLOW_SYSTEM.flow_release_status(flow_id)
+		if release_status == "disabled":
+			continue
 		var is_enabled: bool = GUIDE_FLOW_SYSTEM.flow_enabled(flow_id)
 		if not is_enabled:
 			status = "coming_soon"
@@ -6088,7 +6101,7 @@ func _build_quarterly_report_record(company_id: String, year_value: int, quarter
 	}
 
 
-func _build_quarterly_report_event(report: Dictionary, trading_day_number: int, trade_date: Dictionary) -> Dictionary:
+func _build_quarterly_report_event(report: Dictionary, trading_day_number: int, trade_date: Dictionary, macro_state: Dictionary = {}) -> Dictionary:
 	var company_id: String = str(report.get("company_id", ""))
 	var definition: Dictionary = get_effective_company_definition(company_id, false, false)
 	var runtime: Dictionary = get_company(company_id)
@@ -6096,6 +6109,7 @@ func _build_quarterly_report_event(report: Dictionary, trading_day_number: int, 
 		return {}
 
 	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "report_event", company_id, str(report.get("id", ""))])
+	var filing: Dictionary = _build_quarterly_filing_payload(report, trading_day_number, trade_date, macro_state)
 	var quality: float = float(definition.get("quality_score", 50.0))
 	var growth: float = float(definition.get("growth_score", 50.0))
 	var risk: float = float(definition.get("risk_score", 50.0))
@@ -6107,6 +6121,8 @@ func _build_quarterly_report_event(report: Dictionary, trading_day_number: int, 
 		recent_sentiment * 180.0 +
 		rng.randf_range(-18.0, 18.0)
 	)
+	if not filing.is_empty():
+		surprise_score = float(filing.get("surprise_score", surprise_score))
 	var event_id: String = "earnings_beat" if surprise_score >= 0.0 else "earnings_miss"
 	var event_definition: Dictionary = DataRepository.get_event_definition(event_id)
 	var ticker: String = str(definition.get("ticker", company_id.to_upper()))
@@ -6116,6 +6132,14 @@ func _build_quarterly_report_event(report: Dictionary, trading_day_number: int, 
 		int(report.get("year", int(trade_date.get("year", 2020))))
 	]))
 	var tone: String = str(event_definition.get("tone", "positive" if event_id == "earnings_beat" else "negative"))
+	var revenue_growth_yoy: float = float(filing.get("revenue_growth_yoy", 0.0))
+	var earnings_growth_yoy: float = float(filing.get("earnings_growth_yoy", 0.0))
+	var margin: float = float(filing.get("net_profit_margin", 0.0))
+	var sentiment_shift: float = clamp(
+		float(event_definition.get("sentiment_shift", 0.0)) + (clamp(surprise_score, -55.0, 55.0) * 0.00042),
+		-0.04,
+		0.04
+	)
 	return {
 		"event_id": event_id,
 		"scope": "company",
@@ -6126,16 +6150,732 @@ func _build_quarterly_report_event(report: Dictionary, trading_day_number: int, 
 		"target_ticker": ticker,
 		"target_name": company_name,
 		"headline": "%s files %s %s" % [ticker, period_label, "above expectations" if event_id == "earnings_beat" else "below expectations"],
-		"summary": "%s files its %s report %s expectations." % [company_name, period_label, "above" if event_id == "earnings_beat" else "below"],
+		"summary": "%s files its %s report %s expectations. Revenue %+.1f%% YoY, earnings %+.1f%% YoY, margin %.1f%%." % [
+			company_name,
+			period_label,
+			"above" if event_id == "earnings_beat" else "below",
+			revenue_growth_yoy,
+			earnings_growth_yoy,
+			margin
+		],
 		"description": str(event_definition.get("description", "")),
-		"sentiment_shift": float(event_definition.get("sentiment_shift", 0.0)),
+		"sentiment_shift": sentiment_shift,
 		"broker_bias": str(event_definition.get("broker_bias", "")),
 		"quarterly_report": true,
+		"quarterly_filing": filing.duplicate(true),
+		"quarterly_surprise_score": surprise_score,
+		"quarterly_revenue_growth_yoy": revenue_growth_yoy,
+		"quarterly_earnings_growth_yoy": earnings_growth_yoy,
 		"report_id": str(report.get("id", "")),
 		"report_period_label": period_label,
 		"report_date": trade_date.duplicate(true),
 		"day_index": trading_day_number
 	}
+
+
+func _build_quarterly_filing_payload(report: Dictionary, trading_day_number: int, trade_date: Dictionary, macro_state: Dictionary = {}) -> Dictionary:
+	var company_id: String = str(report.get("company_id", ""))
+	var definition: Dictionary = get_effective_company_definition(company_id, false, true)
+	var runtime: Dictionary = get_company(company_id)
+	if company_id.is_empty() or definition.is_empty() or runtime.is_empty():
+		return {}
+
+	var sector_id: String = str(definition.get("sector_id", ""))
+	var profile_value = runtime.get("company_profile", {})
+	var profile: Dictionary = profile_value.duplicate(true) if typeof(profile_value) == TYPE_DICTIONARY else {}
+	var traits_value = definition.get("generation_traits", profile.get("generation_traits", {}))
+	var traits: Dictionary = traits_value.duplicate(true) if typeof(traits_value) == TYPE_DICTIONARY else {}
+	var financials_value = definition.get("financials", profile.get("financials", {}))
+	var financials_before: Dictionary = financials_value.duplicate(true) if typeof(financials_value) == TYPE_DICTIONARY else {}
+	var snapshot_value = definition.get("financial_statement_snapshot", profile.get("financial_statement_snapshot", {}))
+	var snapshot: Dictionary = snapshot_value.duplicate(true) if typeof(snapshot_value) == TYPE_DICTIONARY else {}
+	var statements: Array = _quarterly_statement_history_from_snapshot(snapshot)
+	var year_value: int = int(report.get("year", int(trade_date.get("year", 2020))))
+	var quarter_value: int = int(clamp(int(report.get("quarter", 1)), 1, 4))
+	var period_label: String = str(report.get("period_label", "Q%d %d" % [quarter_value, year_value]))
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "quarterly_filing", company_id, str(report.get("id", ""))])
+
+	var previous_statement: Dictionary = _latest_statement_before_period(statements, year_value, quarter_value)
+	var same_quarter_previous: Dictionary = _statement_for_period(statements, year_value - 1, quarter_value)
+	var previous_revenue: float = max(
+		_statement_entry_value(previous_statement, "income_statement", "revenue"),
+		max(float(financials_before.get("revenue", 0.0)) / 4.0, 1.0)
+	)
+	var previous_net_income: float = _statement_entry_value(previous_statement, "income_statement", "net_income")
+	if is_zero_approx(previous_net_income):
+		previous_net_income = float(financials_before.get("net_income", 0.0)) / 4.0
+	var previous_equity: float = max(
+		_statement_entry_value(previous_statement, "balance_sheet", "equity"),
+		max(float(financials_before.get("revenue", 0.0)) * 0.16, 1.0)
+	)
+	var previous_liabilities: float = max(_statement_entry_value(previous_statement, "balance_sheet", "total_liabilities"), 0.0)
+	var previous_debt: float = max(previous_liabilities * 0.72, 0.0)
+	var same_quarter_revenue: float = max(_statement_entry_value(same_quarter_previous, "income_statement", "revenue"), previous_revenue)
+	var same_quarter_net_income: float = _statement_entry_value(same_quarter_previous, "income_statement", "net_income")
+	if same_quarter_previous.is_empty():
+		same_quarter_net_income = previous_net_income
+	var shares_outstanding: float = max(
+		_statement_entry_value(previous_statement, "balance_sheet", "shares_outstanding"),
+		max(float(definition.get("shares_outstanding", financials_before.get("shares_outstanding", 0.0))), 1.0)
+	)
+
+	var sector_bias: float = _quarterly_filing_sector_bias(macro_state, sector_id)
+	var macro_pressure: float = _quarterly_filing_macro_pressure(macro_state, sector_bias)
+	var micro_pressure: float = _quarterly_filing_micro_pressure(traits)
+	var market_pressure: float = _quarterly_filing_market_pressure(runtime, company_id, sector_id)
+	var base_revenue_growth: float = clamp(float(financials_before.get("revenue_growth_yoy", 0.0)) / 100.0, -0.35, 0.55)
+	var qoq_growth_target: float = clamp(
+		(base_revenue_growth * 0.22) +
+		(macro_pressure * 0.46) +
+		(micro_pressure * 0.34) +
+		(market_pressure * 0.20) +
+		rng.randf_range(-0.045, 0.045),
+		-0.22,
+		0.32
+	)
+	var yoy_growth_target: float = clamp(
+		base_revenue_growth +
+		(macro_pressure * 1.85) +
+		(micro_pressure * 1.55) +
+		(market_pressure * 0.72) +
+		rng.randf_range(-0.085, 0.085),
+		-0.50,
+		0.85
+	)
+	var revenue_from_qoq: float = previous_revenue * (1.0 + qoq_growth_target)
+	var revenue_from_yoy: float = same_quarter_revenue * (1.0 + yoy_growth_target)
+	var quarter_revenue: float = max(lerpf(revenue_from_qoq, revenue_from_yoy, 0.58), 1.0)
+
+	var base_margin: float = clamp(float(financials_before.get("net_profit_margin", 0.0)) / 100.0, -0.30, 0.35)
+	if is_zero_approx(base_margin) and previous_revenue > 0.0:
+		base_margin = clamp(previous_net_income / previous_revenue, -0.30, 0.35)
+	var inflation_yoy: float = float(macro_state.get("inflation_yoy", 3.2))
+	var policy_rate: float = float(macro_state.get("policy_rate", 5.0))
+	var margin_pressure: float = (
+		((float(traits.get("margin_strength", 0.5)) - 0.5) * 0.080) +
+		((float(traits.get("execution_consistency", 0.5)) - 0.5) * 0.052) +
+		((float(traits.get("balance_sheet_strength", 0.5)) - 0.5) * 0.036) -
+		(max(inflation_yoy - 3.8, 0.0) * 0.010) -
+		(max(policy_rate - 5.0, 0.0) * 0.005 * float(traits.get("capital_intensity", 0.5))) +
+		(sector_bias * 0.38) +
+		(market_pressure * 0.10)
+	)
+	var net_margin: float = clamp(base_margin + margin_pressure + rng.randf_range(-0.027, 0.027), -0.35, 0.38)
+	var quarter_net_income: float = quarter_revenue * net_margin
+	if same_quarter_net_income < 0.0 and quarter_net_income > 0.0:
+		quarter_net_income *= 0.88
+
+	var debt_pressure: float = clamp(
+		(float(traits.get("capital_intensity", 0.5)) - 0.45) * 0.045 -
+		(float(traits.get("balance_sheet_strength", 0.5)) - 0.50) * 0.055 +
+		max(policy_rate - 5.0, 0.0) * 0.010 -
+		max(net_margin, 0.0) * 0.035 +
+		rng.randf_range(-0.025, 0.025),
+		-0.10,
+		0.16
+	)
+	var quarter_debt: float = max(previous_debt * (1.0 + debt_pressure), quarter_revenue * 0.012)
+	var retained_income: float = quarter_net_income * (0.72 if quarter_net_income > 0.0 else 1.0)
+	var quarter_equity: float = max(previous_equity + retained_income + max(quarter_revenue * micro_pressure * 0.04, -quarter_revenue * 0.025), quarter_revenue * 0.05)
+	var statement: Dictionary = company_generator._build_statement_period(
+		year_value,
+		quarter_value,
+		quarter_revenue,
+		quarter_net_income,
+		quarter_equity,
+		quarter_debt,
+		shares_outstanding,
+		previous_revenue,
+		previous_debt,
+		traits,
+		rng
+	)
+	var updated_statements: Array = _upsert_quarterly_statement(statements, statement)
+	var financials_after: Dictionary = _financials_from_quarterly_statements(updated_statements, financials_before, runtime, sector_id)
+	var revenue_growth_yoy: float = _filing_growth_percent(same_quarter_revenue, quarter_revenue)
+	var earnings_growth_yoy: float = _filing_growth_percent(same_quarter_net_income, quarter_net_income)
+	financials_after["revenue_growth_yoy"] = float(financials_after.get("revenue_growth_yoy", revenue_growth_yoy))
+	financials_after["earnings_growth_yoy"] = float(financials_after.get("earnings_growth_yoy", earnings_growth_yoy))
+	financials_after["net_profit_margin"] = net_margin * 100.0
+
+	var margin_delta: float = (net_margin - base_margin) * 100.0
+	var surprise_score: float = clamp(
+		((revenue_growth_yoy - float(financials_before.get("revenue_growth_yoy", 0.0))) * 0.34) +
+		((earnings_growth_yoy - float(financials_before.get("earnings_growth_yoy", 0.0))) * 0.22) +
+		(margin_delta * 1.25) +
+		(macro_pressure * 35.0) +
+		(market_pressure * 28.0) +
+		rng.randf_range(-8.0, 8.0),
+		-85.0,
+		85.0
+	)
+	var traits_after: Dictionary = _quarterly_filing_adjusted_traits(traits, financials_after, surprise_score, macro_pressure, market_pressure)
+	var quality_after: int = _derive_dynamic_quality_score(traits_after, financials_after)
+	var growth_after: int = _derive_dynamic_growth_score(traits_after, financials_after)
+	var risk_after: int = _derive_dynamic_risk_score(traits_after, financials_after)
+	var base_volatility_after: float = _derive_dynamic_base_volatility(traits_after, risk_after)
+
+	return {
+		"company_id": company_id,
+		"ticker": str(definition.get("ticker", company_id.to_upper())),
+		"company_name": str(definition.get("name", company_id.to_upper())),
+		"sector_id": sector_id,
+		"report_id": str(report.get("id", "")),
+		"year": year_value,
+		"quarter": quarter_value,
+		"period_label": period_label,
+		"trade_date": trade_date.duplicate(true),
+		"day_index": trading_day_number,
+		"statement": statement.duplicate(true),
+		"financials_before": financials_before.duplicate(true),
+		"financials_after": financials_after.duplicate(true),
+		"traits_after": traits_after.duplicate(true),
+		"quality_score_before": int(definition.get("quality_score", 50)),
+		"growth_score_before": int(definition.get("growth_score", 50)),
+		"risk_score_before": int(definition.get("risk_score", 50)),
+		"base_volatility_before": float(definition.get("base_volatility", 0.03)),
+		"quality_score_after": quality_after,
+		"growth_score_after": growth_after,
+		"risk_score_after": risk_after,
+		"base_volatility_after": base_volatility_after,
+		"surprise_score": surprise_score,
+		"revenue_growth_yoy": revenue_growth_yoy,
+		"earnings_growth_yoy": earnings_growth_yoy,
+		"net_profit_margin": net_margin * 100.0,
+		"macro_pressure": macro_pressure,
+		"micro_pressure": micro_pressure,
+		"market_pressure": market_pressure
+	}
+
+
+func _apply_quarterly_report_filings(report_events: Array, trade_date: Dictionary, day_number: int) -> Array:
+	var applied_filings: Array = []
+	for event_value in report_events:
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event: Dictionary = event_value
+		var filing_value = event.get("quarterly_filing", {})
+		if typeof(filing_value) != TYPE_DICTIONARY:
+			continue
+		var filing: Dictionary = filing_value
+		if filing.is_empty():
+			continue
+		var applied: Dictionary = _apply_quarterly_filing(filing, trade_date, day_number)
+		if not applied.is_empty():
+			applied_filings.append(applied)
+	return applied_filings
+
+
+func _apply_quarterly_filing(filing: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
+	var company_id: String = str(filing.get("company_id", ""))
+	if company_id.is_empty() or not companies.has(company_id):
+		return {}
+	var statement_value = filing.get("statement", {})
+	if typeof(statement_value) != TYPE_DICTIONARY:
+		return {}
+	var statement: Dictionary = statement_value.duplicate(true)
+	if statement.is_empty():
+		return {}
+
+	var runtime: Dictionary = companies[company_id].duplicate(true)
+	var profile_value = runtime.get("company_profile", {})
+	var profile: Dictionary = profile_value.duplicate(true) if typeof(profile_value) == TYPE_DICTIONARY else {}
+	if profile.is_empty():
+		return {}
+	var snapshot_value = profile.get("financial_statement_snapshot", {})
+	var snapshot: Dictionary = snapshot_value.duplicate(true) if typeof(snapshot_value) == TYPE_DICTIONARY else {}
+	var statements: Array = _upsert_quarterly_statement(_quarterly_statement_history_from_snapshot(snapshot), statement)
+	var updated_snapshot: Dictionary = _statement_snapshot_from_quarters(statements)
+	var financials_value = filing.get("financials_after", {})
+	var financials_after: Dictionary = financials_value.duplicate(true) if typeof(financials_value) == TYPE_DICTIONARY else {}
+	if financials_after.is_empty():
+		financials_after = _financials_from_quarterly_statements(statements, profile.get("financials", {}), runtime, str(profile.get("sector_id", "")))
+	var shares_outstanding: float = max(
+		_statement_entry_value(statement, "balance_sheet", "shares_outstanding"),
+		max(float(profile.get("shares_outstanding", financials_after.get("shares_outstanding", 0.0))), 1.0)
+	)
+	var current_price: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("current_price", profile.get("base_price", 0.0))))
+	financials_after["shares_outstanding"] = shares_outstanding
+	financials_after["market_cap"] = max(current_price * shares_outstanding, float(financials_after.get("market_cap", 0.0)))
+
+	profile["financial_statement_snapshot"] = updated_snapshot
+	profile["financials"] = financials_after
+	profile["shares_outstanding"] = shares_outstanding
+	profile["quality_score"] = int(filing.get("quality_score_after", profile.get("quality_score", 50)))
+	profile["growth_score"] = int(filing.get("growth_score_after", profile.get("growth_score", 50)))
+	profile["risk_score"] = int(filing.get("risk_score_after", profile.get("risk_score", 50)))
+	profile["base_volatility"] = float(filing.get("base_volatility_after", profile.get("base_volatility", 0.03)))
+	var traits_value = filing.get("traits_after", profile.get("generation_traits", {}))
+	if typeof(traits_value) == TYPE_DICTIONARY:
+		profile["generation_traits"] = traits_value.duplicate(true)
+	if int(filing.get("quarter", 0)) == 4:
+		profile["financial_history"] = _upsert_annual_financial_history(
+			profile.get("financial_history", []),
+			int(filing.get("year", int(trade_date.get("year", 2020)))),
+			financials_after,
+			statement,
+			current_price
+		)
+
+	var summary: Dictionary = {
+		"company_id": company_id,
+		"ticker": str(filing.get("ticker", company_id.to_upper())),
+		"period_label": str(filing.get("period_label", "")),
+		"year": int(filing.get("year", 0)),
+		"quarter": int(filing.get("quarter", 0)),
+		"day_index": day_number,
+		"trade_date": trade_date.duplicate(true),
+		"surprise_score": float(filing.get("surprise_score", 0.0)),
+		"revenue_growth_yoy": float(filing.get("revenue_growth_yoy", 0.0)),
+		"earnings_growth_yoy": float(filing.get("earnings_growth_yoy", 0.0)),
+		"net_profit_margin": float(filing.get("net_profit_margin", 0.0)),
+		"quality_score_after": int(profile.get("quality_score", 50)),
+		"growth_score_after": int(profile.get("growth_score", 50)),
+		"risk_score_after": int(profile.get("risk_score", 50))
+	}
+	var filing_history: Array = profile.get("quarterly_filing_history", []).duplicate(true)
+	filing_history.append(summary.duplicate(true))
+	if filing_history.size() > QUARTERLY_FILING_HISTORY_LIMIT:
+		filing_history = filing_history.slice(filing_history.size() - QUARTERLY_FILING_HISTORY_LIMIT, filing_history.size())
+	profile["quarterly_filing_history"] = filing_history
+	runtime["company_profile"] = _normalize_company_profile(profile)
+	companies[company_id] = runtime
+	return summary
+
+
+func _quarterly_statement_history_from_snapshot(snapshot: Dictionary) -> Array:
+	var statements: Array = []
+	for statement_value in snapshot.get("quarterly_statements", []):
+		if typeof(statement_value) != TYPE_DICTIONARY:
+			continue
+		statements.append(statement_value.duplicate(true))
+	if statements.is_empty() and not snapshot.get("income_statement", []).is_empty():
+		statements.append({
+			"statement_year": int(snapshot.get("statement_year", 2019)),
+			"statement_quarter": int(snapshot.get("statement_quarter", 4)),
+			"statement_period_label": str(snapshot.get("statement_period_label", "Q4 2019")),
+			"income_statement": snapshot.get("income_statement", []).duplicate(true),
+			"balance_sheet": snapshot.get("balance_sheet", []).duplicate(true),
+			"cash_flow": snapshot.get("cash_flow", []).duplicate(true)
+		})
+	return _sort_quarterly_statements(statements)
+
+
+func _sort_quarterly_statements(statements: Array) -> Array:
+	var rows: Array = []
+	for statement_value in statements:
+		if typeof(statement_value) != TYPE_DICTIONARY:
+			continue
+		rows.append(statement_value.duplicate(true))
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return _quarterly_period_sort_value(int(a.get("statement_year", 0)), int(a.get("statement_quarter", 0))) < _quarterly_period_sort_value(int(b.get("statement_year", 0)), int(b.get("statement_quarter", 0)))
+	)
+	if rows.size() > QUARTERLY_STATEMENT_HISTORY_LIMIT:
+		rows = rows.slice(rows.size() - QUARTERLY_STATEMENT_HISTORY_LIMIT, rows.size())
+	return rows
+
+
+func _upsert_quarterly_statement(statements: Array, statement: Dictionary) -> Array:
+	var rows: Array = []
+	var target_key: String = _quarterly_period_key(
+		int(statement.get("statement_year", 0)),
+		int(statement.get("statement_quarter", 0))
+	)
+	var replaced: bool = false
+	for existing_value in statements:
+		if typeof(existing_value) != TYPE_DICTIONARY:
+			continue
+		var existing: Dictionary = existing_value.duplicate(true)
+		var existing_key: String = _quarterly_period_key(
+			int(existing.get("statement_year", 0)),
+			int(existing.get("statement_quarter", 0))
+		)
+		if existing_key == target_key:
+			rows.append(statement.duplicate(true))
+			replaced = true
+		else:
+			rows.append(existing)
+	if not replaced:
+		rows.append(statement.duplicate(true))
+	return _sort_quarterly_statements(rows)
+
+
+func _statement_snapshot_from_quarters(statements: Array) -> Dictionary:
+	var rows: Array = _sort_quarterly_statements(statements)
+	if rows.is_empty():
+		return {}
+	var latest_statement: Dictionary = rows[rows.size() - 1].duplicate(true)
+	var first_statement: Dictionary = rows[0]
+	return {
+		"statement_year": int(latest_statement.get("statement_year", 0)),
+		"statement_quarter": int(latest_statement.get("statement_quarter", 0)),
+		"statement_period_label": str(latest_statement.get("statement_period_label", "")),
+		"statement_scope": "quarterly",
+		"quarterly_statement_count": rows.size(),
+		"history_start_period_label": str(first_statement.get("statement_period_label", "")),
+		"history_end_period_label": str(latest_statement.get("statement_period_label", "")),
+		"income_statement": latest_statement.get("income_statement", []).duplicate(true),
+		"balance_sheet": latest_statement.get("balance_sheet", []).duplicate(true),
+		"cash_flow": latest_statement.get("cash_flow", []).duplicate(true),
+		"quarterly_statements": rows
+	}
+
+
+func _financials_from_quarterly_statements(statements: Array, previous_financials: Dictionary, runtime: Dictionary, sector_id: String) -> Dictionary:
+	var rows: Array = _sort_quarterly_statements(statements)
+	if rows.is_empty():
+		return previous_financials.duplicate(true)
+	var latest_statement: Dictionary = rows[rows.size() - 1]
+	var recent_four: Array = rows.slice(max(rows.size() - 4, 0), rows.size())
+	var prior_four: Array = []
+	if rows.size() >= 8:
+		prior_four = rows.slice(rows.size() - 8, rows.size() - 4)
+	var revenue_ttm: float = max(_sum_statement_entries(recent_four, "income_statement", "revenue"), 1.0)
+	var net_income_ttm: float = _sum_statement_entries(recent_four, "income_statement", "net_income")
+	var prior_revenue_ttm: float = _sum_statement_entries(prior_four, "income_statement", "revenue")
+	var prior_net_income_ttm: float = _sum_statement_entries(prior_four, "income_statement", "net_income")
+	var revenue_growth_yoy: float = _filing_growth_percent(prior_revenue_ttm, revenue_ttm)
+	var earnings_growth_yoy: float = _filing_growth_percent(prior_net_income_ttm, net_income_ttm)
+	if prior_four.is_empty():
+		revenue_growth_yoy = float(previous_financials.get("revenue_growth_yoy", revenue_growth_yoy))
+		earnings_growth_yoy = float(previous_financials.get("earnings_growth_yoy", earnings_growth_yoy))
+	var equity: float = max(_statement_entry_value(latest_statement, "balance_sheet", "equity"), 1.0)
+	var total_liabilities: float = max(_statement_entry_value(latest_statement, "balance_sheet", "total_liabilities"), 0.0)
+	var shares_outstanding: float = max(
+		_statement_entry_value(latest_statement, "balance_sheet", "shares_outstanding"),
+		float(previous_financials.get("shares_outstanding", 1.0))
+	)
+	var current_price: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("current_price", runtime.get("starting_price", 0.0))))
+	var market_cap: float = max(current_price * shares_outstanding, float(previous_financials.get("market_cap", 0.0)))
+	var recent_value: float = _recent_average_bar_value(runtime, 20, float(previous_financials.get("avg_daily_value", 0.0)))
+	var free_float_pct: float = clamp(float(previous_financials.get("free_float_pct", 35.0)), 7.0, 85.0)
+	var margin_pct: float = (net_income_ttm / revenue_ttm) * 100.0
+	var roe_pct: float = (net_income_ttm / equity) * 100.0
+	var debt_to_equity: float = clamp((total_liabilities * 0.72) / equity, 0.0, 3.5)
+	var old_revenue_cagr: float = float(previous_financials.get("revenue_cagr_10y", 0.0))
+	var old_earnings_cagr: float = float(previous_financials.get("earnings_cagr_10y", 0.0))
+	return {
+		"market_cap": market_cap,
+		"free_float_pct": free_float_pct,
+		"avg_daily_value": max(recent_value, current_price * 1000.0),
+		"revenue_growth_yoy": clamp(revenue_growth_yoy, -200.0, 300.0),
+		"earnings_growth_yoy": clamp(earnings_growth_yoy, -300.0, 500.0),
+		"net_profit_margin": clamp(margin_pct, -35.0, 38.0),
+		"roe": clamp(roe_pct, -80.0, 80.0),
+		"debt_to_equity": debt_to_equity,
+		"revenue": revenue_ttm,
+		"net_income": net_income_ttm,
+		"shares_outstanding": shares_outstanding,
+		"revenue_cagr_10y": clamp(lerpf(old_revenue_cagr, revenue_growth_yoy * 0.22, 0.18), -25.0, 40.0),
+		"earnings_cagr_10y": clamp(lerpf(old_earnings_cagr, earnings_growth_yoy * 0.16, 0.18), -35.0, 48.0),
+		"history_start_year": int(previous_financials.get("history_start_year", int(latest_statement.get("statement_year", 2020)))),
+		"history_end_year": int(latest_statement.get("statement_year", 2020)),
+		"history_years": max(int(previous_financials.get("history_years", 1)), 1),
+		"latest_statement_period": str(latest_statement.get("statement_period_label", "")),
+		"latest_statement_sector_id": sector_id
+	}
+
+
+func _upsert_annual_financial_history(financial_history_value: Variant, year_value: int, financials: Dictionary, statement: Dictionary, current_price: float) -> Array:
+	var history: Array = []
+	if typeof(financial_history_value) == TYPE_ARRAY:
+		for entry_value in financial_history_value:
+			if typeof(entry_value) == TYPE_DICTIONARY:
+				history.append(entry_value.duplicate(true))
+	var shares_outstanding: float = max(float(financials.get("shares_outstanding", 0.0)), 1.0)
+	var entry: Dictionary = {
+		"year": year_value,
+		"market_cap": float(financials.get("market_cap", current_price * shares_outstanding)),
+		"free_float_pct": float(financials.get("free_float_pct", 35.0)),
+		"avg_daily_value": float(financials.get("avg_daily_value", 0.0)),
+		"revenue": float(financials.get("revenue", 0.0)),
+		"net_income": float(financials.get("net_income", 0.0)),
+		"equity": _statement_entry_value(statement, "balance_sheet", "equity"),
+		"debt": max(_statement_entry_value(statement, "balance_sheet", "total_liabilities") * 0.72, 0.0),
+		"revenue_growth_yoy": float(financials.get("revenue_growth_yoy", 0.0)),
+		"earnings_growth_yoy": float(financials.get("earnings_growth_yoy", 0.0)),
+		"net_profit_margin": float(financials.get("net_profit_margin", 0.0)),
+		"roe": float(financials.get("roe", 0.0)),
+		"debt_to_equity": float(financials.get("debt_to_equity", 0.0)),
+		"shares_outstanding": shares_outstanding,
+		"implied_share_price": IDX_PRICE_RULES.normalize_last_price(max(current_price, 50.0))
+	}
+	var replaced: bool = false
+	for index in range(history.size()):
+		if int(history[index].get("year", 0)) == year_value:
+			history[index] = entry
+			replaced = true
+			break
+	if not replaced:
+		history.append(entry)
+	history.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("year", 0)) < int(b.get("year", 0))
+	)
+	return history
+
+
+func _quarterly_filing_sector_bias(macro_state: Dictionary, sector_id: String) -> float:
+	var sector_biases_value = macro_state.get("sector_biases", {})
+	if typeof(sector_biases_value) != TYPE_DICTIONARY:
+		return 0.0
+	var sector_biases: Dictionary = sector_biases_value
+	return float(sector_biases.get(sector_id, 0.0))
+
+
+func _quarterly_filing_macro_pressure(macro_state: Dictionary, sector_bias: float) -> float:
+	var gdp_growth: float = float(macro_state.get("gdp_growth", 4.8))
+	var inflation_yoy: float = float(macro_state.get("inflation_yoy", 3.2))
+	var policy_rate: float = float(macro_state.get("policy_rate", 5.0))
+	var policy_action_bps: float = float(macro_state.get("policy_action_bps", 0))
+	var risk_appetite: float = float(macro_state.get("risk_appetite", 0.5))
+	var market_bias: float = float(macro_state.get("market_bias", 0.0))
+	return clamp(
+		((gdp_growth - 4.8) * 0.028) -
+		(max(inflation_yoy - 3.5, 0.0) * 0.014) -
+		(max(policy_rate - 5.0, 0.0) * 0.007) -
+		(max(policy_action_bps, 0.0) / 25.0 * 0.010) +
+		((risk_appetite - 0.5) * 0.115) +
+		(market_bias * 1.75) +
+		(sector_bias * 2.20),
+		-0.18,
+		0.20
+	)
+
+
+func _quarterly_filing_micro_pressure(traits: Dictionary) -> float:
+	return clamp(
+		((float(traits.get("growth_engine", 0.5)) - 0.5) * 0.125) +
+		((float(traits.get("execution_consistency", 0.5)) - 0.5) * 0.085) +
+		((float(traits.get("margin_strength", 0.5)) - 0.5) * 0.045) +
+		((float(traits.get("balance_sheet_strength", 0.5)) - 0.5) * 0.035) -
+		((float(traits.get("cyclicality", 0.5)) - 0.5) * 0.025),
+		-0.16,
+		0.18
+	)
+
+
+func _quarterly_filing_market_pressure(runtime: Dictionary, company_id: String, sector_id: String) -> float:
+	var recent_20d: float = _recent_price_return(runtime, 20)
+	var recent_60d: float = _recent_price_return(runtime, 60)
+	var broker_flow_value = runtime.get("broker_flow", {})
+	var broker_flow: Dictionary = broker_flow_value if typeof(broker_flow_value) == TYPE_DICTIONARY else {}
+	var active_event_sentiment: float = _active_event_sentiment_for_company(runtime, company_id, sector_id)
+	var campaign_pressure: float = _campaign_financial_story_pressure(runtime)
+	return clamp(
+		(recent_20d * 0.075) +
+		(recent_60d * 0.045) +
+		(float(broker_flow.get("net_pressure", 0.0)) * 0.020) +
+		(float(broker_flow.get("smart_money_pressure", 0.0)) * 0.025) +
+		(active_event_sentiment * 1.05) +
+		campaign_pressure,
+		-0.15,
+		0.17
+	)
+
+
+func _campaign_financial_story_pressure(runtime: Dictionary) -> float:
+	var pressure: float = 0.0
+	var campaign_value = runtime.get("gorengan_campaign", {})
+	if typeof(campaign_value) == TYPE_DICTIONARY:
+		var campaign: Dictionary = campaign_value
+		match str(campaign.get("phase", "")):
+			"accumulation":
+				pressure += 0.018
+			"markup":
+				pressure += 0.030
+			"final_hype":
+				pressure += 0.020
+			"distribution":
+				pressure -= 0.034
+			"dump":
+				pressure -= 0.060
+			"dead_cat":
+				pressure -= 0.030
+	var abnormal_value = runtime.get("abnormal_move_context", {})
+	if typeof(abnormal_value) == TYPE_DICTIONARY:
+		var abnormal: Dictionary = abnormal_value
+		match str(abnormal.get("floor_status", "")):
+			"turnaround_candidate":
+				pressure += 0.026
+			"floor_zombie":
+				pressure -= 0.072
+		if bool(abnormal.get("suspension_seen", false)):
+			pressure -= 0.018
+	return clamp(pressure, -0.10, 0.08)
+
+
+func _active_event_sentiment_for_company(runtime: Dictionary, company_id: String, sector_id: String) -> float:
+	var total: float = 0.0
+	for event_value in runtime.get("active_events", []):
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event: Dictionary = event_value
+		if not _event_applies_to_company(event, company_id, sector_id):
+			continue
+		total += float(event.get("sentiment_shift", 0.0))
+	return clamp(total, -0.08, 0.08)
+
+
+func _quarterly_filing_adjusted_traits(traits: Dictionary, financials: Dictionary, surprise_score: float, macro_pressure: float, market_pressure: float) -> Dictionary:
+	var adjusted: Dictionary = traits.duplicate(true)
+	var surprise_norm: float = clamp(surprise_score / 100.0, -0.55, 0.55)
+	adjusted["execution_consistency"] = clamp(float(adjusted.get("execution_consistency", 0.5)) + surprise_norm * 0.035, 0.08, 0.94)
+	adjusted["balance_sheet_strength"] = clamp(float(adjusted.get("balance_sheet_strength", 0.5)) + (float(financials.get("roe", 0.0)) / 100.0) * 0.018 - max(float(financials.get("debt_to_equity", 0.0)) - 1.2, 0.0) * 0.010, 0.08, 0.94)
+	adjusted["growth_engine"] = clamp(float(adjusted.get("growth_engine", 0.5)) + clamp(float(financials.get("revenue_growth_yoy", 0.0)) / 100.0, -0.4, 0.6) * 0.025 + macro_pressure * 0.030, 0.08, 0.94)
+	adjusted["story_heat"] = clamp(float(adjusted.get("story_heat", 0.5)) + surprise_norm * 0.024 + market_pressure * 0.045, 0.08, 0.97)
+	return adjusted
+
+
+func _derive_dynamic_quality_score(traits: Dictionary, financials: Dictionary) -> int:
+	var quality_raw: float = (
+		25.0 +
+		(float(financials.get("net_profit_margin", 0.0)) * 1.2) +
+		(float(financials.get("roe", 0.0)) * 0.9) +
+		(float(traits.get("execution_consistency", 0.5)) * 18.0) +
+		(float(traits.get("balance_sheet_strength", 0.5)) * 16.0) -
+		(float(financials.get("debt_to_equity", 0.0)) * 10.0)
+	)
+	return int(round(clamp(quality_raw, 20.0, 90.0)))
+
+
+func _derive_dynamic_growth_score(traits: Dictionary, financials: Dictionary) -> int:
+	var growth_raw: float = (
+		20.0 +
+		(float(financials.get("revenue_cagr_10y", 0.0)) * 1.4) +
+		(float(financials.get("earnings_cagr_10y", 0.0)) * 1.0) +
+		(float(traits.get("growth_engine", 0.5)) * 18.0) +
+		(float(traits.get("story_heat", 0.5)) * 6.0) -
+		(float(traits.get("scale", 0.5)) * 3.0)
+	)
+	return int(round(clamp(growth_raw, 20.0, 92.0)))
+
+
+func _derive_dynamic_risk_score(traits: Dictionary, financials: Dictionary) -> int:
+	var risk_raw: float = (
+		18.0 +
+		(float(traits.get("cyclicality", 0.5)) * 24.0) +
+		(float(traits.get("capital_intensity", 0.5)) * 10.0) +
+		(float(traits.get("float_tightness", 0.5)) * 12.0) +
+		(float(traits.get("story_heat", 0.5)) * 10.0) +
+		(float(financials.get("debt_to_equity", 0.0)) * 12.0) -
+		(float(traits.get("balance_sheet_strength", 0.5)) * 10.0) -
+		(float(traits.get("execution_consistency", 0.5)) * 8.0)
+	)
+	return int(round(clamp(risk_raw, 18.0, 88.0)))
+
+
+func _derive_dynamic_base_volatility(traits: Dictionary, risk_score: int) -> float:
+	var base_volatility: float = (
+		0.018 +
+		((float(risk_score) / 100.0) * 0.018) +
+		(float(traits.get("story_heat", 0.5)) * 0.006) +
+		(float(traits.get("cyclicality", 0.5)) * 0.007) +
+		((1.0 - float(traits.get("liquidity_profile", 0.5))) * 0.006)
+	)
+	return clamp(base_volatility, 0.018, 0.052)
+
+
+func _statement_line(id: String, label: String, value: float, value_format: String = "currency") -> Dictionary:
+	return {
+		"id": id,
+		"label": label,
+		"value": value,
+		"format": value_format
+	}
+
+
+func _statement_value(statement_lines: Array, line_id: String) -> float:
+	for line_value in statement_lines:
+		if typeof(line_value) != TYPE_DICTIONARY:
+			continue
+		var line: Dictionary = line_value
+		if str(line.get("id", "")) == line_id:
+			return float(line.get("value", 0.0))
+	return 0.0
+
+
+func _statement_entry_value(statement: Dictionary, section_key: String, line_id: String) -> float:
+	return _statement_value(statement.get(section_key, []), line_id)
+
+
+func _sum_statement_entries(statements: Array, section_key: String, line_id: String) -> float:
+	var total: float = 0.0
+	for statement_value in statements:
+		if typeof(statement_value) != TYPE_DICTIONARY:
+			continue
+		total += _statement_entry_value(statement_value, section_key, line_id)
+	return total
+
+
+func _statement_for_period(statements: Array, year_value: int, quarter_value: int) -> Dictionary:
+	for statement_value in statements:
+		if typeof(statement_value) != TYPE_DICTIONARY:
+			continue
+		var statement: Dictionary = statement_value
+		if int(statement.get("statement_year", 0)) == year_value and int(statement.get("statement_quarter", 0)) == quarter_value:
+			return statement.duplicate(true)
+	return {}
+
+
+func _latest_statement_before_period(statements: Array, year_value: int, quarter_value: int) -> Dictionary:
+	var target_sort_value: int = _quarterly_period_sort_value(year_value, quarter_value)
+	var latest: Dictionary = {}
+	for statement_value in _sort_quarterly_statements(statements):
+		if typeof(statement_value) != TYPE_DICTIONARY:
+			continue
+		var statement: Dictionary = statement_value
+		var sort_value: int = _quarterly_period_sort_value(int(statement.get("statement_year", 0)), int(statement.get("statement_quarter", 0)))
+		if sort_value >= target_sort_value:
+			break
+		latest = statement.duplicate(true)
+	return latest
+
+
+func _quarterly_period_sort_value(year_value: int, quarter_value: int) -> int:
+	return (year_value * 4) + int(clamp(quarter_value, 1, 4))
+
+
+func _quarterly_period_key(year_value: int, quarter_value: int) -> String:
+	return "%d_q%d" % [year_value, int(clamp(quarter_value, 1, 4))]
+
+
+func _recent_price_return(runtime: Dictionary, lookback: int) -> float:
+	var prices: Array = runtime.get("price_history", [])
+	if prices.size() < 2:
+		return 0.0
+	var latest_price: float = max(float(prices[prices.size() - 1]), 1.0)
+	var reference_index: int = max(prices.size() - 1 - max(lookback, 1), 0)
+	var reference_price: float = max(float(prices[reference_index]), 1.0)
+	return clamp((latest_price - reference_price) / reference_price, -2.0, 5.0)
+
+
+func _recent_average_bar_value(runtime: Dictionary, lookback: int, fallback: float = 0.0) -> float:
+	var bars: Array = runtime.get("price_bars", [])
+	if bars.is_empty():
+		return max(fallback, 0.0)
+	var start_index: int = max(bars.size() - max(lookback, 1), 0)
+	var total_value: float = 0.0
+	var count: int = 0
+	for index in range(start_index, bars.size()):
+		if typeof(bars[index]) != TYPE_DICTIONARY:
+			continue
+		total_value += max(float(bars[index].get("value", 0.0)), 0.0)
+		count += 1
+	if count <= 0:
+		return max(fallback, 0.0)
+	return max(total_value / float(count), fallback * 0.35)
+
+
+func _filing_growth_percent(previous_value: float, current_value: float) -> float:
+	if previous_value > 0.0:
+		return clamp(((current_value - previous_value) / previous_value) * 100.0, -400.0, 600.0)
+	if previous_value < 0.0:
+		return clamp(((current_value - previous_value) / absf(previous_value)) * 100.0, -400.0, 600.0)
+	if current_value > 0.0:
+		return 100.0
+	if current_value < 0.0:
+		return -100.0
+	return 0.0
 
 
 func _reports_for_date_key(date_key: String) -> Array:

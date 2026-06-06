@@ -2466,7 +2466,7 @@ func is_academy_available() -> bool:
 
 
 func get_academy_release_message() -> String:
-	return "Open Academy lessons from the desktop."
+	return "Academy lessons are coming soon."
 
 
 func get_watchlist_company_ids() -> Array:
@@ -6298,6 +6298,11 @@ func debug_force_dirty_tip_offer(company_id: String = "") -> Dictionary:
 	var target_company_id: String = company_id.strip_edges()
 	if target_company_id.is_empty() and not RunState.company_order.is_empty():
 		target_company_id = str(RunState.company_order[0])
+	if target_company_id.is_empty():
+		return {"success": false, "message": "No stock universe is loaded yet."}
+	var definition: Dictionary = RunState.get_effective_company_definition(target_company_id, false, false)
+	if definition.is_empty():
+		return {"success": false, "message": "Pick a valid stock first."}
 	var directives: Dictionary = {
 		"selected_lane": "dirty_market",
 		"dirty_market_pressure": 1.0,
@@ -6318,11 +6323,157 @@ func debug_force_dirty_tip_offer(company_id: String = "") -> Dictionary:
 		result["message"] = "Dirty tip could not be forced: %s." % str(result.get("reason", "unknown"))
 		return result
 	result["success"] = true
-	result["message"] = "Dirty tip offer forced."
+	result["company_id"] = target_company_id
+	result["ticker"] = str(definition.get("ticker", target_company_id.to_upper()))
+	result["message"] = "Dirty tip offer forced for %s." % str(result.get("ticker", target_company_id.to_upper()))
 	_invalidate_daily_activity_snapshot_cache()
 	_request_autosave("debug_dirty_tip_offer")
 	network_changed.emit()
 	return result
+
+
+func debug_force_dirty_tip_jail(company_id: String = "") -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var target_company_id: String = company_id.strip_edges()
+	if target_company_id.is_empty() and not RunState.company_order.is_empty():
+		target_company_id = str(RunState.company_order[0])
+	if target_company_id.is_empty():
+		return {"success": false, "message": "No stock universe is loaded yet."}
+	var definition: Dictionary = RunState.get_effective_company_definition(target_company_id, false, false)
+	if definition.is_empty():
+		return {"success": false, "message": "Pick a valid stock first."}
+
+	var life_state: Dictionary = RunState.get_player_life()
+	var legal_state: Dictionary = life_state.get("legal_state", {}) if typeof(life_state.get("legal_state", {})) == TYPE_DICTIONARY else {}
+	if bool(legal_state.get("active", false)) and int(legal_state.get("days_remaining", 0)) > 0:
+		return {"success": false, "message": "Legal hold is already active."}
+
+	var offer: Dictionary = _debug_open_dirty_tip_request(target_company_id)
+	if offer.is_empty():
+		var offer_result: Dictionary = debug_force_dirty_tip_offer(target_company_id)
+		if not bool(offer_result.get("success", false)):
+			return offer_result
+		var offers: Array = offer_result.get("offers", [])
+		if offers.is_empty() or typeof(offers[0]) != TYPE_DICTIONARY:
+			return {"success": false, "message": "Dirty tip jail could not create an offer."}
+		offer = offers[0]
+	var offer_id: String = str(offer.get("id", ""))
+	if str(offer.get("status", "")) == "offered":
+		var accept_result: Dictionary = dirty_tip_system.accept_offer(RunState, offer_id)
+		if not bool(accept_result.get("success", false)):
+			return accept_result
+	elif str(offer.get("status", "")) != "accepted":
+		return {"success": false, "message": "Dirty tip jail needs an offered or accepted case."}
+
+	var requests: Dictionary = RunState.get_network_requests()
+	var request: Dictionary = requests.get(offer_id, {}).duplicate(true)
+	if request.is_empty():
+		return {"success": false, "message": "Dirty tip jail could not find the accepted case."}
+	request["debug_force_caught"] = true
+	request["due_day_index"] = int(RunState.day_index)
+	request["active_until_day_index"] = int(RunState.day_index)
+	request["journal_detail"] = "Debug forced a caught dirty-tip case on %s." % str(request.get("target_ticker", target_company_id.to_upper()))
+	requests[offer_id] = request.duplicate(true)
+	RunState.set_network_requests(requests)
+
+	var dirty_tip_results: Array = dirty_tip_system.process_due_cases(RunState, DataRepository)
+	if dirty_tip_results.is_empty():
+		return {"success": false, "message": "Dirty tip jail did not resolve a case."}
+	var caught_result: Dictionary = {}
+	for result_value in dirty_tip_results:
+		if typeof(result_value) != TYPE_DICTIONARY:
+			continue
+		var result_row: Dictionary = result_value
+		if str(result_row.get("id", "")) == offer_id:
+			caught_result = result_row
+			break
+	if caught_result.is_empty() and typeof(dirty_tip_results[0]) == TYPE_DICTIONARY:
+		caught_result = dirty_tip_results[0]
+	if str(caught_result.get("status", "")) != "caught":
+		return {"success": false, "message": "Dirty tip jail resolved without a caught outcome."}
+
+	RunState.last_day_results["dirty_tip_results"] = dirty_tip_results.duplicate(true)
+	var updated_life_state: Dictionary = RunState.get_player_life()
+	var updated_legal_state: Dictionary = updated_life_state.get("legal_state", {}) if typeof(updated_life_state.get("legal_state", {})) == TYPE_DICTIONARY else {}
+	RunState.last_day_results["life_legal"] = {
+		"legal_hold_day_completed": false,
+		"legal_hold_active": bool(updated_legal_state.get("active", false)),
+		"days_before": int(updated_legal_state.get("days_remaining", 0)),
+		"days_remaining": int(updated_legal_state.get("days_remaining", 0)),
+		"case_id": str(updated_legal_state.get("case_id", offer_id)),
+		"target_company_id": str(updated_legal_state.get("target_company_id", target_company_id)),
+		"target_ticker": str(updated_legal_state.get("target_ticker", definition.get("ticker", target_company_id.to_upper()))),
+		"status": str(updated_legal_state.get("status", "held")),
+		"trade_date": RunState.get_current_trade_date()
+	}
+	_invalidate_daily_activity_snapshot_cache()
+	_request_autosave("debug_force_dirty_tip_jail")
+	network_changed.emit()
+	life_changed.emit()
+	portfolio_changed.emit()
+	return {
+		"success": true,
+		"message": "Debug jail: %s caught, fine %s, legal hold %d day(s)." % [
+			str(definition.get("ticker", target_company_id.to_upper())),
+			_format_currency(float(caught_result.get("fine_amount", 0.0))),
+			int(caught_result.get("legal_days", updated_legal_state.get("days_remaining", 0)))
+		],
+		"company_id": target_company_id,
+		"ticker": str(definition.get("ticker", target_company_id.to_upper())),
+		"offer": offer.duplicate(true),
+		"result": caught_result.duplicate(true),
+		"legal_state": updated_legal_state.duplicate(true)
+	}
+
+
+func debug_force_hospital_stress() -> Dictionary:
+	if not RunState.has_active_run():
+		return {"success": false, "message": "No active run."}
+	var life_state: Dictionary = RunState.get_player_life()
+	if int(life_state.get("hospital_days_remaining", 0)) > 0:
+		return {"success": false, "message": "Hospital recovery is already active."}
+	life_state["stress_value"] = 100.0
+	life_state["hospital_days_remaining"] = RunState.LIFE_HOSPITAL_TRADING_DAYS
+	life_state["hospital_started_day_index"] = RunState.day_index
+	life_state["last_hospital_trade_date"] = RunState.get_current_trade_date()
+	life_state["burnout_risk_active"] = false
+	life_state["burnout_risk_days_remaining"] = 0
+	life_state["updated_day_index"] = RunState.day_index
+	life_state["updated_trade_date"] = RunState.get_current_trade_date()
+	RunState.set_player_life(life_state)
+	var updated_life_state: Dictionary = RunState.get_player_life()
+	var hospital_days: int = int(updated_life_state.get("hospital_days_remaining", 0))
+	var result: Dictionary = {
+		"success": true,
+		"message": "Debug hospital: stress set to 100 and hospital recovery started for %d day(s)." % hospital_days,
+		"hospital_started": true,
+		"hospital_days_remaining": hospital_days,
+		"stress_value": float(updated_life_state.get("stress_value", RunState.LIFE_DEFAULT_STRESS_VALUE)),
+		"happiness_value": float(updated_life_state.get("happiness_value", RunState.LIFE_DEFAULT_HAPPINESS_VALUE)),
+		"stress_stage": RunState.get_life_stress_stage(updated_life_state)
+	}
+	RunState.last_day_results["life_wellbeing"] = result.duplicate(true)
+	_invalidate_daily_activity_snapshot_cache()
+	_request_autosave("debug_force_hospital_stress")
+	daily_actions_changed.emit()
+	life_changed.emit()
+	return result
+
+
+func _debug_open_dirty_tip_request(company_id: String) -> Dictionary:
+	for request_value in RunState.get_network_requests().values():
+		if typeof(request_value) != TYPE_DICTIONARY:
+			continue
+		var request: Dictionary = request_value
+		if str(request.get("request_type", "")) != "dirty_tip":
+			continue
+		if not (str(request.get("status", "")) in ["offered", "accepted"]):
+			continue
+		if str(request.get("target_company_id", "")) != company_id:
+			continue
+		return request.duplicate(true)
+	return {}
 
 
 func _after_dirty_tip_decision(result: Dictionary, save_reason: String) -> void:

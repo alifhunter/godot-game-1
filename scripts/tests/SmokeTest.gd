@@ -56,6 +56,7 @@ const DIRTY_TIP_SYSTEM_SCRIPT = preload("res://systems/DirtyTipSystem.gd")
 const SPECIAL_EVENT_SYSTEM_SCRIPT = preload("res://systems/SpecialEventSystem.gd")
 const COMPANY_EVENT_SYSTEM_SCRIPT = preload("res://systems/CompanyEventSystem.gd")
 const MARKET_SIMULATOR_SCRIPT = preload("res://systems/MarketSimulator.gd")
+const GORENGAN_CAMPAIGN_SYSTEM_SCRIPT = preload("res://systems/GorenganCampaignSystem.gd")
 const COMPANY_GENERATOR_SCRIPT = preload("res://systems/CompanyGenerator.gd")
 const CHART_SYSTEM_SCRIPT = preload("res://systems/ChartSystem.gd")
 const CHART_PATTERN_SYSTEM_SCRIPT = preload("res://systems/ChartPatternSystem.gd")
@@ -130,6 +131,12 @@ func _ready() -> void:
 	var corporate_action_price_validation: String = _validate_corporate_action_price_factor_limits()
 	if not corporate_action_price_validation.is_empty():
 		push_error(corporate_action_price_validation)
+		get_tree().quit(1)
+		return
+
+	var gorengan_campaign_validation: String = _validate_gorengan_campaign_balance()
+	if not gorengan_campaign_validation.is_empty():
+		push_error(gorengan_campaign_validation)
 		get_tree().quit(1)
 		return
 
@@ -674,6 +681,54 @@ func _validate_enriched_social_generation() -> String:
 		trade_date,
 		4
 	)
+	var market_thread_feed_data: Dictionary = feed_data.duplicate(true)
+	market_thread_feed_data["accounts"] = [{
+		"id": "forced_sector_classroom",
+		"display_name": "Forced Sector Classroom",
+		"handle": "@forcedclassroom",
+		"tier": 1,
+		"verified": false,
+		"voice": "sector_classroom",
+		"thread_preference": true
+	}]
+	var market_thread_snapshot: Dictionary = social_system.build_social_snapshot(
+		null,
+		market_thread_feed_data,
+		company_rows,
+		market_history,
+		[],
+		[{
+			"event_id": "forced_market_thread_context",
+			"event_family": "special",
+			"scope": "market",
+			"category": "market_wrap",
+			"tone": "negative",
+			"summary": "The index move needs a breadth check.",
+			"start_day_index": int(trade_date.get("day_index", 0)),
+			"duration_days": 1,
+			"day_index": int(trade_date.get("day_index", 0)),
+			"trade_date": trade_date.duplicate(true)
+		}],
+		[],
+		trade_date,
+		4
+	)
+	var saw_rendered_market_thread: bool = false
+	for market_thread_post_value in market_thread_snapshot.get("posts", []):
+		if typeof(market_thread_post_value) != TYPE_DICTIONARY:
+			continue
+		var market_thread_post: Dictionary = market_thread_post_value
+		if str(market_thread_post.get("account_id", "")) != "forced_sector_classroom":
+			continue
+		var market_thread_lines: Array = market_thread_post.get("thread_lines", []) if typeof(market_thread_post.get("thread_lines", [])) == TYPE_ARRAY else []
+		if market_thread_lines.is_empty():
+			continue
+		saw_rendered_market_thread = true
+		var rendered_market_thread_text: String = "\n".join(market_thread_lines)
+		if _contains_unresolved_template_token(rendered_market_thread_text):
+			return "Smoke test expected market-scope Twooter thread lines to render market_change, advancers, and decliners."
+	if not saw_rendered_market_thread:
+		return "Smoke test expected a forced market-scope Twooter thread fixture to render."
 	var posts: Array = first_snapshot.get("posts", [])
 	var previous_post_day: int = 999999
 	for post_value in posts:
@@ -3612,15 +3667,20 @@ func _validate_progressive_guide_flow() -> Dictionary:
 		return await _guide_smoke_fail(game_root, "Smoke test could not complete life_finance_flow.")
 
 	var academy_app_button: Button = game_root.find_child("AcademyAppButton", true, false) as Button
-	if academy_app_button == null:
-		return await _guide_smoke_fail(game_root, "Smoke test could not find the Academy desktop shortcut.")
-	academy_app_button.emit_signal("pressed")
-	await _guide_smoke_wait(4)
-	guide_state = game_root.call("get_guide_smoke_state")
-	if not game_root.call("is_desktop_app_open", "academy") or game_root.get_active_desktop_app_id() != "academy":
-		return await _guide_smoke_fail(game_root, "Smoke test expected Academy to reopen from the desktop shortcut, got %s." % str(guide_state))
-	game_root.close_desktop_app("academy")
-	await _guide_smoke_wait(3)
+	if GameManager.is_academy_available():
+		return await _guide_smoke_fail(game_root, "Smoke test expected Academy to be disabled for this release.")
+	if GameManager.start_guide_flow("academy_flow"):
+		return await _guide_smoke_fail(game_root, "Smoke test expected the disabled Academy guide flow to reject manual starts.")
+	if academy_app_button != null:
+		var academy_app_label: Label = game_root.find_child("AcademyAppLabel", true, false) as Label
+		var academy_tile: Control = academy_app_button.get_parent() as Control
+		if not academy_app_button.is_visible_in_tree() or (academy_tile != null and not academy_tile.is_visible_in_tree()) or academy_app_label == null or academy_app_label.text.find("COMING SOON") < 0:
+			return await _guide_smoke_fail(game_root, "Smoke test expected the Academy desktop shortcut to show a Coming Soon tag for this release.")
+		academy_app_button.emit_signal("pressed")
+		await _guide_smoke_wait(4)
+		guide_state = game_root.call("get_guide_smoke_state")
+		if game_root.call("is_desktop_app_open", "academy") or game_root.get_active_desktop_app_id() == "academy":
+			return await _guide_smoke_fail(game_root, "Smoke test expected Coming Soon Academy shortcut presses to keep Academy closed, got %s." % str(guide_state))
 
 	GameManager.start_guide_flow("corporate_event_flow")
 	game_root.call("_refresh_ftue_progress")
@@ -3635,8 +3695,8 @@ func _validate_progressive_guide_flow() -> Dictionary:
 	await _guide_smoke_wait(3)
 	var academy_flow_token: String = str(game_root.call("_node_token", "academy_flow"))
 	var academy_flow_button: Button = game_root.find_child("GuideHubStart%sButton" % academy_flow_token, true, false) as Button
-	if academy_flow_button == null or academy_flow_button.text != "Start" or academy_flow_button.disabled:
-		return await _guide_smoke_fail(game_root, "Smoke test expected Guide Hub to show Academy as an available guide.")
+	if academy_flow_button == null or academy_flow_button.text != "Soon" or not academy_flow_button.disabled:
+		return await _guide_smoke_fail(game_root, "Smoke test expected Guide Hub to show Academy as a disabled Coming Soon flow.")
 	var research_flow_token: String = str(game_root.call("_node_token", "research_flow"))
 	var restart_research_button: Button = game_root.find_child("GuideHubStart%sButton" % research_flow_token, true, false) as Button
 	if restart_research_button == null or restart_research_button.text != "Restart":
@@ -4661,6 +4721,111 @@ func _validate_corporate_action_price_factor_limits() -> String:
 	return ""
 
 
+func _validate_gorengan_campaign_balance() -> String:
+	var system = GORENGAN_CAMPAIGN_SYSTEM_SCRIPT.new()
+	var definition: Dictionary = {
+		"id": "mock_gorengan",
+		"ticker": "MGRN",
+		"name": "Mock Gorengan Tbk",
+		"sector_id": "tech",
+		"listing_board": "main",
+		"risk_score": 72.0,
+		"narrative_tags": ["gorengan", "retail_favorite"],
+		"financials": {
+			"free_float_pct": 18.0,
+			"market_cap": 120000000000.0,
+			"avg_daily_value": 900000000.0
+		},
+		"generation_traits": {
+			"is_gorengan": true,
+			"story_heat": 0.82,
+			"chart_profile": {
+				"cycle_template": "operator_markup",
+				"operator_pressure": 0.82
+			}
+		}
+	}
+	var one_ca_runtime: Dictionary = {
+		"starting_price": 100.0,
+		"current_price": 3000.0,
+		"previous_close": 3000.0,
+		"company_profile": {
+			"generation_traits": definition.get("generation_traits", {})
+		},
+		"gorengan_campaign": {
+			"active": true,
+			"company_id": "mock_gorengan",
+			"ticker": "MGRN",
+			"tier": "common",
+			"phase": "markup",
+			"wave": "3",
+			"start_day_index": 1,
+			"start_price": 100.0,
+			"target_return_pct": 6.0,
+			"required_hard_catalysts": 4,
+			"hard_chain_ids": ["ca|one"],
+			"soft_chain_ids": [],
+			"green_limit_streak": 5,
+			"regulatory_heat": 0.52
+		}
+	}
+	var one_ca_arcs: Array = [{
+		"arc_id": "ca|one",
+		"source_chain_id": "ca|one",
+		"event_family": "company_arc",
+		"source_system": "corporate_action",
+		"target_company_id": "mock_gorengan",
+		"category": "corporate_action_filing",
+		"chain_family": "stock_buyback",
+		"phase_sentiment_shift": 0.28
+	}]
+	var one_ca_context: Dictionary = system.resolve_pre_close_context(definition, one_ca_runtime, one_ca_arcs, {}, [], 3000.0, 777001, 44)
+	if one_ca_context.is_empty():
+		return "Smoke test expected one-CA gorengan runtime to resolve campaign context."
+	var one_ca_campaign: Dictionary = one_ca_context.get("campaign", {})
+	if not bool(one_ca_campaign.get("gate_locked", false)):
+		return "Smoke test expected +2900% one-CA gorengan campaign to be gate locked."
+	var throttled_context: Dictionary = system.apply_event_context({"event_bias": 0.28, "active_events": [], "event_tags": [], "hidden_story_flags": []}, one_ca_context)
+	if float(throttled_context.get("event_bias", 0.0)) > 0.02:
+		return "Smoke test expected one-CA gorengan positive event bias to be muted, got %.4f." % float(throttled_context.get("event_bias", 0.0))
+
+	var multi_ca_runtime: Dictionary = one_ca_runtime.duplicate(true)
+	var multi_campaign: Dictionary = one_ca_runtime.get("gorengan_campaign", {}).duplicate(true)
+	multi_campaign["hard_chain_ids"] = ["ca|one", "ca|two", "ca|three", "ca|four"]
+	multi_campaign["green_limit_streak"] = 0
+	multi_campaign["regulatory_heat"] = 0.12
+	multi_campaign["target_return_pct"] = 6.0
+	multi_ca_runtime["current_price"] = 420.0
+	multi_ca_runtime["previous_close"] = 420.0
+	multi_ca_runtime["gorengan_campaign"] = multi_campaign
+	var multi_ca_context: Dictionary = system.resolve_pre_close_context(definition, multi_ca_runtime, [], {}, [], 420.0, 777001, 26)
+	var multi_modifiers: Dictionary = multi_ca_context.get("modifiers", {})
+	if float(multi_modifiers.get("positive_change_multiplier", 0.0)) < 0.80:
+		return "Smoke test expected fully-catalyzed common gorengan to keep markup permission."
+	if str(multi_ca_context.get("campaign", {}).get("phase", "")) != "markup":
+		return "Smoke test expected fully-catalyzed mid-run gorengan to be in markup phase."
+
+	var split_runtime: Dictionary = one_ca_runtime.duplicate(true)
+	var split_campaign: Dictionary = one_ca_runtime.get("gorengan_campaign", {}).duplicate(true)
+	split_campaign["tier"] = "rare"
+	split_campaign["target_return_pct"] = 18.0
+	split_campaign["required_hard_catalysts"] = 5
+	split_campaign["hard_chain_ids"] = ["ca|one", "ca|two", "ca|three", "ca|four", "ca|five"]
+	split_campaign["green_limit_streak"] = 6
+	split_campaign["uma_issued"] = true
+	split_campaign["suspension_seen"] = true
+	split_campaign["regulatory_heat"] = 0.65
+	split_campaign["split_scheduled"] = false
+	split_runtime["current_price"] = 120000.0
+	split_runtime["previous_close"] = 120000.0
+	split_runtime["gorengan_campaign"] = split_campaign
+	var split_context: Dictionary = system.resolve_pre_close_context(definition, split_runtime, [], {}, [], 120000.0, 777001, 58)
+	var split_campaign_result: Dictionary = split_context.get("campaign", {})
+	if not bool(split_campaign_result.get("split_required", false)) or not bool(split_campaign_result.get("gate_locked", false)):
+		return "Smoke test expected Rp100k+ rare gorengan without split path to require split and lock the next leg."
+	return ""
+
+
 func _validate_index_review_content_assets() -> String:
 	var catalog: Dictionary = DataRepository.get_index_review_catalog()
 	var providers: Array = catalog.get("providers", [])
@@ -4965,6 +5130,21 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test could not find the prototype desktop icons, Advance Day button, Academy icon, Thesis icon, Life icon, Upgrades icon, and taskbar launch buttons."
 		}
+	if not GameManager.is_academy_available():
+		var academy_desktop_tile: Control = academy_app_button.get_parent() as Control
+		if (
+			not academy_app_button.is_visible_in_tree() or
+			academy_app_label == null or
+			not academy_app_label.is_visible_in_tree() or
+			academy_app_label.text.find("COMING SOON") < 0 or
+			(academy_desktop_tile != null and not academy_desktop_tile.is_visible_in_tree())
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the Academy desktop shortcut to show a Coming Soon tag for this release."
+			}
 
 	if (
 		not game_root.has_method("is_desktop_app_open") or
@@ -8557,52 +8737,71 @@ func _run_scenario(
 			"message": thesis_board_validation
 		}
 
-	academy_app_button.emit_signal("pressed")
-	await get_tree().process_frame
 	var academy_available: bool = GameManager.is_academy_available()
-	var academy_window_missing: bool = academy_window == null
-	var academy_window_visible: bool = academy_window.visible if academy_window != null else false
-	var academy_app_open: bool = game_root.is_desktop_app_open("academy")
-	var academy_active_app: String = str(game_root.get_active_desktop_app_id())
-	var academy_label_text: String = str(academy_app_label.text if academy_app_label != null else "<missing>")
-	var academy_tooltip_text: String = str(academy_app_button.tooltip_text if academy_app_button != null else "<missing>")
-	if (
-		not academy_available or
-		academy_window_missing or
-		not academy_window_visible or
-		not academy_app_open or
-		academy_active_app != "academy" or
-		academy_app_label == null or
-		academy_label_text.find("COMING SOON") != -1
-	):
-		game_root.queue_free()
+	if academy_available:
+		academy_app_button.emit_signal("pressed")
 		await get_tree().process_frame
-		return {
-			"success": false,
-			"message": "Smoke test expected the Academy icon to open the Academy window. available=%s window_null=%s window_visible=%s app_open=%s active=%s label=%s tooltip=%s" % [
-				str(academy_available),
-				str(academy_window_missing),
-				str(academy_window_visible),
-				str(academy_app_open),
-				academy_active_app,
-				academy_label_text,
-				academy_tooltip_text
-			]
-		}
+		var academy_window_missing: bool = academy_window == null
+		var academy_window_visible: bool = academy_window.visible if academy_window != null else false
+		var academy_app_open: bool = game_root.is_desktop_app_open("academy")
+		var academy_active_app: String = str(game_root.get_active_desktop_app_id())
+		var academy_label_text: String = str(academy_app_label.text if academy_app_label != null else "<missing>")
+		var academy_tooltip_text: String = str(academy_app_button.tooltip_text if academy_app_button != null else "<missing>")
+		if (
+			academy_window_missing or
+			not academy_window_visible or
+			not academy_app_open or
+			academy_active_app != "academy" or
+			academy_app_label == null or
+			academy_label_text.find("COMING SOON") != -1
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected the Academy icon to open the Academy window. window_null=%s window_visible=%s app_open=%s active=%s label=%s tooltip=%s" % [
+					str(academy_window_missing),
+					str(academy_window_visible),
+					str(academy_app_open),
+					academy_active_app,
+					academy_label_text,
+					academy_tooltip_text
+				]
+			}
 
-	var academy_mindset_tab_button: Button = game_root.find_child("AcademyCategoryButton_mindset", true, false) as Button
-	var academy_technical_tab_button: Button = game_root.find_child("AcademyCategoryButton_technical", true, false) as Button
-	if (
-		academy_mindset_tab_button == null or
-		not academy_mindset_tab_button.button_pressed or
-		(academy_technical_tab_button != null and academy_technical_tab_button.button_pressed)
-	):
-		game_root.queue_free()
+		var academy_mindset_tab_button: Button = game_root.find_child("AcademyCategoryButton_mindset", true, false) as Button
+		var academy_technical_tab_button: Button = game_root.find_child("AcademyCategoryButton_technical", true, false) as Button
+		if (
+			academy_mindset_tab_button == null or
+			not academy_mindset_tab_button.button_pressed or
+			(academy_technical_tab_button != null and academy_technical_tab_button.button_pressed)
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected Academy to open on the Mindset category by default."
+			}
+	else:
+		var academy_release_tile: Control = academy_app_button.get_parent() as Control
+		academy_app_button.emit_signal("pressed")
 		await get_tree().process_frame
-		return {
-			"success": false,
-			"message": "Smoke test expected Academy to open on the Mindset category by default."
-		}
+		if (
+			(academy_release_tile != null and not academy_release_tile.is_visible_in_tree()) or
+			not academy_app_button.is_visible_in_tree() or
+			academy_app_label == null or
+			not academy_app_label.is_visible_in_tree() or
+			academy_app_label.text.find("COMING SOON") < 0 or
+			(academy_window != null and academy_window.visible) or
+			game_root.is_desktop_app_open("academy") or
+			str(game_root.get_active_desktop_app_id()) == "academy"
+		):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected Academy to show Coming Soon while staying closed for this release."
+			}
 
 	if academy_banner_frame == null or academy_banner_frame.visible:
 		game_root.queue_free()

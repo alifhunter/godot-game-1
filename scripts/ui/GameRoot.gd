@@ -431,6 +431,10 @@ var debug_company_control_button: Button = null
 var debug_company_control_status_label: Label = null
 var debug_company_roadmap_status_label: Label = null
 var debug_life_development_status_label: Label = null
+var debug_dirty_tip_button: Button = null
+var debug_jail_button: Button = null
+var debug_hospital_button: Button = null
+var debug_jail_status_label: Label = null
 var contact_intel_panel: PanelContainer = null
 var contact_intel_option: OptionButton = null
 var contact_intel_button: Button = null
@@ -597,6 +601,9 @@ var stress_meter_label: Label = null
 var hospital_overlay: Control = null
 var hospital_body_label: Label = null
 var hospital_advance_button: Button = null
+var jail_overlay: Control = null
+var jail_body_label: Label = null
+var jail_advance_button: Button = null
 @onready var app_window_backdrop: Control = $AppWindowBackdrop
 @onready var app_window_margin: MarginContainer = $AppWindowBackdrop/AppWindowMargin
 @onready var app_window_panel: PanelContainer = $AppWindowBackdrop/AppWindowMargin/AppWindowPanel
@@ -990,6 +997,7 @@ func _ready() -> void:
 	_ensure_settings_dialog()
 	_ensure_bankruptcy_overlay()
 	_ensure_hospital_overlay()
+	_ensure_jail_overlay()
 	_ensure_daily_recap_dialog()
 	_ensure_macro_event_dialog()
 	_ensure_dirty_tip_dialog()
@@ -3176,6 +3184,7 @@ func _refresh_header() -> void:
 	_style_stockbot_label_chip(top_section_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_AMBER)
 	_refresh_stress_meter()
 	_refresh_hospital_overlay()
+	_refresh_jail_overlay()
 
 
 func _refresh_desktop() -> void:
@@ -3185,7 +3194,7 @@ func _refresh_desktop() -> void:
 		desktop_title_label.text = "Gorengan OS"
 		desktop_date_label.text = "No active run"
 		desktop_subtitle_label.text = "Boot a run from the main menu to bring the terminal online."
-		desktop_hint_label.text = "Desktop icons launch apps. STOCKBOT trades, News reads the event tape, Twooter surfaces chatter, Network manages contacts, Academy teaches concepts, and Settings handles save/load."
+		desktop_hint_label.text = "Desktop icons launch apps. STOCKBOT trades, News reads the event tape, Twooter surfaces chatter, Network manages contacts, Academy is coming soon, and Settings handles save/load."
 		taskbar_status_label.text = "No active run loaded."
 		_refresh_build_number_labels()
 		taskbar_clock_label.text = "MENU"
@@ -3205,7 +3214,7 @@ func _refresh_desktop() -> void:
 		GameManager.get_current_difficulty_label(),
 		_format_currency(RunState.get_total_equity())
 	]
-	desktop_hint_label.text = "STOCKBOT is live. News renders event-driven intel feeds, Twooter shows public market chatter, Network tracks contacts, Academy teaches concepts, Company unlocks with majority control, and Settings handles save/load."
+	desktop_hint_label.text = "STOCKBOT is live. News renders event-driven intel feeds, Twooter shows public market chatter, Network tracks contacts, Academy is coming soon, Company unlocks with majority control, and Settings handles save/load."
 	taskbar_status_label.text = _append_save_status(_build_taskbar_status_text(focus_snapshot))
 	_refresh_build_number_labels()
 	taskbar_clock_label.text = "DAY %d  |  %s" % [
@@ -3841,12 +3850,18 @@ func _apply_academy_release_lock_state() -> void:
 	if academy_app_button == null:
 		return
 	var academy_available: bool = GameManager.is_academy_available()
-	if academy_window != null:
-		academy_window.visible = academy_available
+	var academy_tile: Control = academy_app_button.get_parent() as Control
+	if academy_tile != null:
+		academy_tile.visible = true
+	if academy_window != null and not academy_available:
+		academy_window.visible = false
+	academy_app_button.visible = true
+	academy_app_button.disabled = false
 	academy_app_button.tooltip_text = "Open Academy lessons." if academy_available else GameManager.get_academy_release_message()
 	academy_app_button.modulate = Color(1, 1, 1, 1) if academy_available else Color(0.74, 0.72, 0.66, 1)
 	academy_app_button.set_pressed_no_signal(false if not academy_available else academy_app_button.button_pressed)
 	if academy_app_label != null:
+		academy_app_label.visible = true
 		academy_app_label.text = "ACADEMY" if academy_available else "ACADEMY\nCOMING SOON"
 		academy_app_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN if academy_available else Color(0.431373, 0.380392, 0.286275, 1))
 		academy_app_label.add_theme_font_size_override("font_size", 15 if academy_available else 13)
@@ -5906,8 +5921,12 @@ func _style_academy_quiz_option_button(option_button: OptionButton) -> void:
 
 
 func _style_academy_quiz_submit_button(button: Button) -> void:
-	UiTheme.style_button(button, "desktop_primary")
+	_style_button(button, COLOR_ACADEMY_BROWN, COLOR_ACADEMY_BORDER, COLOR_ACADEMY_CREAM, 0)
 	_apply_academy_button_padding(button, 18)
+	button.add_theme_color_override("font_color", COLOR_ACADEMY_CREAM)
+	button.add_theme_color_override("font_hover_color", COLOR_ACADEMY_CREAM)
+	button.add_theme_color_override("font_pressed_color", COLOR_ACADEMY_CREAM)
+	button.add_theme_color_override("font_focus_color", COLOR_ACADEMY_CREAM)
 
 
 func _restyle_academy_controls() -> void:
@@ -11978,6 +11997,7 @@ func _refresh_debug_overlay() -> void:
 	_refresh_debug_index_review_controls()
 	_refresh_debug_company_roadmap_controls()
 	_refresh_debug_life_development_controls()
+	_refresh_debug_jail_controls()
 	if not RunState.has_active_run():
 		upcoming_events_label.text = "No active run."
 		current_events_label.text = "No active run."
@@ -12079,6 +12099,10 @@ func _build_debug_generator_controls() -> void:
 	debug_company_control_status_label = null
 	debug_company_roadmap_status_label = null
 	debug_life_development_status_label = null
+	debug_dirty_tip_button = null
+	debug_jail_button = null
+	debug_hospital_button = null
+	debug_jail_status_label = null
 	for child in debug_generator_groups.get_children():
 		child.queue_free()
 
@@ -12122,11 +12146,13 @@ func _build_debug_generator_controls() -> void:
 	_build_debug_index_review_controls()
 	_build_debug_company_roadmap_controls()
 	_build_debug_life_development_controls()
+	_build_debug_jail_controls()
 	_refresh_debug_company_control_controls()
 	_refresh_debug_corporate_action_controls()
 	_refresh_debug_index_review_controls()
 	_refresh_debug_company_roadmap_controls()
 	_refresh_debug_life_development_controls()
+	_refresh_debug_jail_controls()
 
 
 func _update_debug_generator_buttons_enabled(is_enabled: bool) -> void:
@@ -12157,6 +12183,12 @@ func _update_debug_generator_buttons_enabled(is_enabled: bool) -> void:
 		life_button.disabled = not is_enabled
 	if debug_company_control_button != null:
 		debug_company_control_button.disabled = not is_enabled
+	if debug_dirty_tip_button != null:
+		debug_dirty_tip_button.disabled = not is_enabled
+	if debug_jail_button != null:
+		debug_jail_button.disabled = not is_enabled
+	if debug_hospital_button != null:
+		debug_hospital_button.disabled = not is_enabled
 
 
 func _on_debug_generate_event_pressed(event_id: String) -> void:
@@ -12973,6 +13005,264 @@ func _on_debug_life_development_pressed(generator_id: String) -> void:
 	_refresh_life()
 	_refresh_news()
 	_refresh_network()
+
+
+func _build_debug_jail_controls() -> void:
+	if debug_generator_groups == null:
+		return
+	var group_label := Label.new()
+	group_label.name = "DebugJailGeneratorLabel"
+	group_label.text = "Dirty Tip / Lock State Generators"
+	group_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	group_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
+	_set_label_tone(group_label, COLOR_TEXT)
+	debug_generator_groups.add_child(group_label)
+
+	var status_label := Label.new()
+	status_label.name = "DebugJailGeneratorStatusLabel"
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_tone(status_label, COLOR_MUTED)
+	debug_generator_groups.add_child(status_label)
+	debug_jail_status_label = status_label
+
+	var hint_label := Label.new()
+	hint_label.name = "DebugJailGeneratorHintLabel"
+	hint_label.text = "Force Dirty Tip opens the normal Market Room offer for the selected STOCKBOT stock. Force Jail resolves a caught case. Force Hospital sets stress to 100 and starts recovery."
+	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hint_label.add_theme_font_size_override("font_size", 11)
+	_set_label_tone(hint_label, COLOR_MUTED)
+	debug_generator_groups.add_child(hint_label)
+
+	var flow := HFlowContainer.new()
+	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	flow.add_theme_constant_override("h_separation", 8)
+	flow.add_theme_constant_override("v_separation", 8)
+	debug_generator_groups.add_child(flow)
+
+	var dirty_tip_button := Button.new()
+	dirty_tip_button.name = "DebugForceDirtyTipButton"
+	dirty_tip_button.custom_minimum_size = Vector2(190, 34)
+	dirty_tip_button.text = "Force Dirty Tip"
+	dirty_tip_button.tooltip_text = "Force a Dirty Tip offer and show the Market Room modal."
+	dirty_tip_button.pressed.connect(_on_debug_force_dirty_tip_pressed)
+	_style_button(dirty_tip_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	flow.add_child(dirty_tip_button)
+	debug_dirty_tip_button = dirty_tip_button
+
+	var action_button := Button.new()
+	action_button.name = "DebugForceJailButton"
+	action_button.custom_minimum_size = Vector2(190, 34)
+	action_button.text = "Force Jail"
+	action_button.tooltip_text = "Force a caught Dirty Tip case and legal hold."
+	action_button.pressed.connect(_on_debug_force_jail_pressed)
+	_style_button(action_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	flow.add_child(action_button)
+	debug_jail_button = action_button
+
+	var hospital_button := Button.new()
+	hospital_button.name = "DebugForceHospitalButton"
+	hospital_button.custom_minimum_size = Vector2(190, 34)
+	hospital_button.text = "Force Hospital"
+	hospital_button.tooltip_text = "Set stress to 100 and start hospital recovery."
+	hospital_button.pressed.connect(_on_debug_force_hospital_pressed)
+	_style_button(hospital_button, Color(0.164706, 0.215686, 0.278431, 1), COLOR_BORDER, COLOR_TEXT, 0)
+	flow.add_child(hospital_button)
+	debug_hospital_button = hospital_button
+
+
+func _refresh_debug_jail_controls() -> void:
+	var dirty_tip_state: Dictionary = _debug_dirty_tip_status_state()
+	var state: Dictionary = _debug_jail_status_state()
+	var hospital_state: Dictionary = _debug_hospital_status_state()
+	if debug_jail_status_label != null:
+		debug_jail_status_label.text = "%s\n%s\n%s" % [
+			str(dirty_tip_state.get("status_text", "Ready to force a Dirty Tip offer.")),
+			str(state.get("status_text", "Ready to force a jail state.")),
+			str(hospital_state.get("status_text", "Ready to force a hospital state."))
+		]
+	if debug_dirty_tip_button != null:
+		debug_dirty_tip_button.disabled = not bool(dirty_tip_state.get("enabled", false))
+		debug_dirty_tip_button.tooltip_text = str(dirty_tip_state.get("tooltip_text", dirty_tip_state.get("status_text", "Force a Dirty Tip offer.")))
+	if debug_jail_button != null:
+		debug_jail_button.disabled = not bool(state.get("enabled", false))
+		debug_jail_button.tooltip_text = str(state.get("tooltip_text", state.get("status_text", "Force a jail state.")))
+	if debug_hospital_button != null:
+		debug_hospital_button.disabled = not bool(hospital_state.get("enabled", false))
+		debug_hospital_button.tooltip_text = str(hospital_state.get("tooltip_text", hospital_state.get("status_text", "Force a hospital state.")))
+
+
+func _debug_dirty_tip_status_state() -> Dictionary:
+	if not RunState.has_active_run():
+		return {"enabled": false, "company_id": "", "status_text": "Dirty Tip: no active run.", "tooltip_text": "Start or load a run first."}
+	var life_state: Dictionary = RunState.get_player_life()
+	var legal_state: Dictionary = life_state.get("legal_state", {}) if typeof(life_state.get("legal_state", {})) == TYPE_DICTIONARY else {}
+	if bool(legal_state.get("active", false)) and int(legal_state.get("days_remaining", 0)) > 0:
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "Dirty Tip: legal hold already active.",
+			"tooltip_text": "Advance days to clear the current legal hold before forcing a Dirty Tip."
+		}
+	var hospital_days: int = int(life_state.get("hospital_days_remaining", 0))
+	if hospital_days > 0:
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "Dirty Tip: hospital recovery active.",
+			"tooltip_text": "Advance days to clear hospital recovery before forcing a Dirty Tip."
+		}
+	for request_value in RunState.get_network_requests().values():
+		if typeof(request_value) != TYPE_DICTIONARY:
+			continue
+		var request: Dictionary = request_value
+		if str(request.get("request_type", "")) == "dirty_tip" and str(request.get("status", "")) in ["offered", "accepted"]:
+			return {
+				"enabled": false,
+				"company_id": "",
+				"status_text": "Dirty Tip already open: %s is %s." % [
+					str(request.get("target_ticker", "target")),
+					str(request.get("status", "open"))
+				],
+				"tooltip_text": "Resolve or advance the current Dirty Tip before forcing another."
+			}
+	var company_id: String = selected_company_id
+	if company_id.is_empty() and not RunState.company_order.is_empty():
+		company_id = str(RunState.company_order[0])
+	if company_id.is_empty():
+		return {"enabled": false, "company_id": "", "status_text": "Dirty Tip: no stock universe is loaded yet."}
+	var definition: Dictionary = RunState.get_effective_company_definition(company_id, false, false)
+	if definition.is_empty():
+		return {"enabled": false, "company_id": "", "status_text": "Dirty Tip: pick a valid stock first."}
+	var ticker: String = str(definition.get("ticker", company_id.to_upper()))
+	return {
+		"enabled": true,
+		"company_id": company_id,
+		"ticker": ticker,
+		"status_text": "Dirty Tip target: %s | Opens Market Room offer." % ticker,
+		"tooltip_text": "Force a Dirty Tip offer on %s and show the Market Room modal." % ticker
+	}
+
+
+func _debug_jail_status_state() -> Dictionary:
+	if not RunState.has_active_run():
+		return {"enabled": false, "company_id": "", "status_text": "No active run. Start or load a run first."}
+	var life_state: Dictionary = RunState.get_player_life()
+	var legal_state: Dictionary = life_state.get("legal_state", {}) if typeof(life_state.get("legal_state", {})) == TYPE_DICTIONARY else {}
+	if bool(legal_state.get("active", false)) and int(legal_state.get("days_remaining", 0)) > 0:
+		return {
+			"enabled": false,
+			"company_id": "",
+			"status_text": "Legal hold already active: %d day(s) remaining." % int(legal_state.get("days_remaining", 0)),
+			"tooltip_text": "Advance days to clear the current legal hold before forcing another."
+		}
+	var company_id: String = selected_company_id
+	if company_id.is_empty() and not RunState.company_order.is_empty():
+		company_id = str(RunState.company_order[0])
+	if company_id.is_empty():
+		return {"enabled": false, "company_id": "", "status_text": "No stock universe is loaded yet."}
+	var definition: Dictionary = RunState.get_effective_company_definition(company_id, false, false)
+	if definition.is_empty():
+		return {"enabled": false, "company_id": "", "status_text": "Pick a valid stock first."}
+	var ticker: String = str(definition.get("ticker", company_id.to_upper()))
+	return {
+		"enabled": true,
+		"company_id": company_id,
+		"ticker": ticker,
+		"status_text": "Target: %s | Forces caught Dirty Tip legal hold." % ticker,
+		"tooltip_text": "Force a caught Dirty Tip case on %s and apply the normal jail/legal state." % ticker
+	}
+
+
+func _debug_hospital_status_state() -> Dictionary:
+	if not RunState.has_active_run():
+		return {"enabled": false, "status_text": "Hospital: no active run.", "tooltip_text": "Start or load a run first."}
+	var life_state: Dictionary = RunState.get_player_life()
+	var legal_state: Dictionary = life_state.get("legal_state", {}) if typeof(life_state.get("legal_state", {})) == TYPE_DICTIONARY else {}
+	if bool(legal_state.get("active", false)) and int(legal_state.get("days_remaining", 0)) > 0:
+		return {
+			"enabled": false,
+			"status_text": "Hospital: clear the active legal hold before forcing hospital.",
+			"tooltip_text": "Advance days until the legal hold is released, then force hospital."
+		}
+	var hospital_days: int = int(life_state.get("hospital_days_remaining", 0))
+	if hospital_days > 0:
+		return {
+			"enabled": false,
+			"status_text": "Hospital already active: %d day(s) remaining." % hospital_days,
+			"tooltip_text": "Advance days to clear the current hospital recovery."
+		}
+	return {
+		"enabled": true,
+		"status_text": "Hospital: sets Stress to 100 and starts recovery.",
+		"tooltip_text": "Set stress to 100 and start the hospital recovery lock screen."
+	}
+
+
+func _on_debug_force_dirty_tip_pressed() -> void:
+	var state: Dictionary = _debug_dirty_tip_status_state()
+	if not bool(state.get("enabled", false)):
+		_show_toast(str(state.get("status_text", "Could not force Dirty Tip offer.")), false)
+		_refresh_debug_jail_controls()
+		return
+	var company_id: String = str(state.get("company_id", ""))
+	var result: Dictionary = GameManager.debug_force_dirty_tip_offer(company_id)
+	_show_toast(str(result.get("message", "Debug Dirty Tip updated.")), bool(result.get("success", false)))
+	_refresh_debug_overlay()
+	if not bool(result.get("success", false)):
+		return
+	for offer_value in result.get("offers", []):
+		if typeof(offer_value) != TYPE_DICTIONARY:
+			continue
+		var offer: Dictionary = offer_value
+		if str(offer.get("request_type", "")) != "dirty_tip" or str(offer.get("status", "")) != "offered":
+			continue
+		pending_dirty_tip_alerts.append(offer.duplicate(true))
+	call_deferred("_show_next_dirty_tip_alert")
+	_refresh_desktop()
+	_refresh_network()
+
+
+func _on_debug_force_jail_pressed() -> void:
+	var state: Dictionary = _debug_jail_status_state()
+	if not bool(state.get("enabled", false)):
+		_show_toast(str(state.get("status_text", "Could not force jail state.")), false)
+		_refresh_debug_jail_controls()
+		return
+	var company_id: String = str(state.get("company_id", ""))
+	var result: Dictionary = GameManager.debug_force_dirty_tip_jail(company_id)
+	_show_toast(str(result.get("message", "Debug jail updated.")), bool(result.get("success", false)))
+	_refresh_debug_overlay()
+	if not bool(result.get("success", false)):
+		return
+	_refresh_header()
+	_refresh_desktop()
+	_refresh_life()
+	_refresh_network()
+	_refresh_portfolio()
+	_refresh_trade_workspace()
+	_refresh_hospital_overlay()
+	_refresh_jail_overlay()
+
+
+func _on_debug_force_hospital_pressed() -> void:
+	var state: Dictionary = _debug_hospital_status_state()
+	if not bool(state.get("enabled", false)):
+		_show_toast(str(state.get("status_text", "Could not force hospital state.")), false)
+		_refresh_debug_jail_controls()
+		return
+	var result: Dictionary = GameManager.debug_force_hospital_stress()
+	_show_toast(str(result.get("message", "Debug hospital updated.")), bool(result.get("success", false)))
+	_refresh_debug_overlay()
+	if not bool(result.get("success", false)):
+		return
+	_refresh_header()
+	_refresh_desktop()
+	_refresh_life()
+	_refresh_trade_workspace()
+	_refresh_hospital_overlay()
+	_refresh_jail_overlay()
 
 
 func _build_contact_intel_controls() -> void:
@@ -15959,6 +16249,101 @@ func _on_hospital_advance_pressed() -> void:
 	_on_next_day_pressed()
 
 
+func _ensure_jail_overlay() -> void:
+	if jail_overlay != null:
+		return
+	jail_overlay = Control.new()
+	jail_overlay.name = "JailOverlay"
+	jail_overlay.visible = false
+	jail_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	jail_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(jail_overlay)
+	var scrim := ColorRect.new()
+	scrim.name = "JailOverlayScrim"
+	scrim.color = Color(0.04, 0.04, 0.04, 0.80)
+	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	jail_overlay.add_child(scrim)
+	var center := CenterContainer.new()
+	center.name = "JailOverlayCenter"
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	jail_overlay.add_child(center)
+	var panel := PanelContainer.new()
+	panel.name = "JailOverlayPanel"
+	panel.custom_minimum_size = Vector2(520, 260)
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = COLOR_DESKTOP_CREAM
+	panel_style.border_color = COLOR_DESKTOP_BROWN
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(6)
+	panel.add_theme_stylebox_override("panel", panel_style)
+	center.add_child(panel)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 22)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_right", 22)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 14)
+	margin.add_child(vbox)
+	var title := Label.new()
+	title.text = "Jail"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
+	vbox.add_child(title)
+	jail_body_label = Label.new()
+	jail_body_label.name = "JailBodyLabel"
+	jail_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	jail_body_label.add_theme_font_size_override("font_size", 14)
+	jail_body_label.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
+	vbox.add_child(jail_body_label)
+	jail_advance_button = Button.new()
+	jail_advance_button.name = "JailAdvanceDayButton"
+	jail_advance_button.text = "ADVANCE DAY"
+	jail_advance_button.custom_minimum_size = Vector2(220, 42)
+	jail_advance_button.pressed.connect(_on_jail_advance_pressed)
+	vbox.add_child(jail_advance_button)
+	_style_button(jail_advance_button, COLOR_DESKTOP_BROWN, COLOR_DESKTOP_BROWN, COLOR_DESKTOP_CREAM, 5)
+
+
+func _refresh_jail_overlay() -> void:
+	if jail_overlay == null:
+		return
+	var legal_state: Dictionary = {}
+	if RunState.has_active_run():
+		var life_state: Dictionary = RunState.get_player_life()
+		legal_state = life_state.get("legal_state", {}) if typeof(life_state.get("legal_state", {})) == TYPE_DICTIONARY else {}
+	var legal_days: int = int(legal_state.get("days_remaining", 0))
+	var legal_active: bool = bool(legal_state.get("active", false)) and legal_days > 0
+	jail_overlay.visible = legal_active
+	if not legal_active:
+		return
+	jail_overlay.move_to_front()
+	if jail_body_label != null:
+		var ticker: String = str(legal_state.get("target_ticker", "")).strip_edges()
+		if ticker.is_empty():
+			ticker = "the dirty tip"
+		var fine_amount: float = float(legal_state.get("fine_amount", 0.0))
+		var fine_text: String = ""
+		if fine_amount > 0.0:
+			fine_text = "\nFine paid: %s." % _format_currency(fine_amount)
+		jail_body_label.text = "The dirty-tip trail around %s got traced back to you. You are in legal hold for %d more trading day%s.\n\nAll apps are paused. Advance Day to serve the hold.%s" % [
+			ticker,
+			legal_days,
+			"" if legal_days == 1 else "s",
+			fine_text
+		]
+	if jail_advance_button != null:
+		jail_advance_button.disabled = advance_day_processing
+		jail_advance_button.text = "ADVANCING..." if advance_day_processing else "ADVANCE DAY"
+
+
+func _on_jail_advance_pressed() -> void:
+	_on_next_day_pressed()
+
+
 func _on_bankruptcy_menu_pressed() -> void:
 	GameManager.return_to_menu()
 
@@ -16077,6 +16462,7 @@ func _on_next_day_pressed() -> void:
 	advance_day_processing = true
 	pending_daily_recap_snapshot = {}
 	_refresh_hospital_overlay()
+	_refresh_jail_overlay()
 	_refresh_ftue_overlay()
 	_set_advance_day_phase("Closing Market", false)
 	_play_advance_day_button_feedback()
@@ -16155,6 +16541,7 @@ func _set_advance_day_phase(label: String, play_pulse: bool = true) -> void:
 		_refresh_dashboard()
 	_refresh_desktop()
 	_refresh_hospital_overlay()
+	_refresh_jail_overlay()
 
 
 func _finish_advance_day_processing() -> void:
@@ -16166,6 +16553,7 @@ func _finish_advance_day_processing() -> void:
 		_reset_advance_day_button_animation_state()
 	_refresh_desktop()
 	_refresh_hospital_overlay()
+	_refresh_jail_overlay()
 
 
 func _show_daily_recap_if_pending() -> void:
@@ -19413,7 +19801,7 @@ func _ensure_dirty_tip_dialog() -> void:
 
 	var scrim := ColorRect.new()
 	scrim.name = "DirtyTipScrim"
-	scrim.color = Color(0.0, 0.0, 0.0, UI_DAILY_RECAP_SCRIM_ALPHA)
+	scrim.color = Color(0.0, 0.0, 0.0, 0.38)
 	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
 	dirty_tip_dialog.add_child(scrim)
 	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -19549,10 +19937,13 @@ func _style_dirty_tip_dialog() -> void:
 	if frame != null:
 		var frame_style := StyleBoxFlat.new()
 		frame_style.bg_color = COLOR_DESKTOP_CREAM
-		frame_style.border_color = Color(COLOR_ACADEMY_BROWN.r, COLOR_ACADEMY_BROWN.g, COLOR_ACADEMY_BROWN.b, 0)
-		frame_style.set_border_width_all(0)
+		frame_style.border_color = Color(COLOR_ACADEMY_BORDER.r, COLOR_ACADEMY_BORDER.g, COLOR_ACADEMY_BORDER.b, 0.95)
+		frame_style.set_border_width_all(2)
 		frame_style.set_corner_radius_all(0)
 		frame.add_theme_stylebox_override("panel", frame_style)
+	var scrim: ColorRect = dirty_tip_dialog.find_child("DirtyTipScrim", true, false) as ColorRect
+	if scrim != null:
+		scrim.color = Color(0.0, 0.0, 0.0, 0.38)
 	var title_bar: PanelContainer = dirty_tip_dialog.get_node_or_null("DirtyTipCenter/DirtyTipFrame/DirtyTipFrameVBox/DirtyTipTitleBar") as PanelContainer
 	if title_bar != null:
 		_style_window_title_bar(title_bar, COLOR_ACADEMY_BROWN)
@@ -21072,6 +21463,10 @@ func _build_debug_stock_performance_text() -> String:
 	if stock_rows.is_empty():
 		return "No stock universe is loaded yet."
 
+	var sections: Array = [
+		_build_debug_pump_dump_candidate_text(stock_rows)
+	]
+
 	stock_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return str(a.get("ticker", "")) < str(b.get("ticker", ""))
 	)
@@ -21080,17 +21475,441 @@ func _build_debug_stock_performance_text() -> String:
 	var lines: Array = []
 	for row_value in stock_rows:
 		var row: Dictionary = row_value
-		lines.append("%s | Start %s | %d YTD Open %s | Current %s | Since start %s | YTD %s" % [
+		var company_id: String = str(row.get("id", ""))
+		var runtime: Dictionary = RunState.get_company(company_id)
+		var current_price: float = float(row.get("current_price", runtime.get("current_price", 0.0)))
+		var previous_close: float = float(row.get("previous_close", runtime.get("previous_close", current_price)))
+		var daily_change_pct: float = float(row.get("daily_change_pct", runtime.get("daily_change_pct", 0.0)))
+		if is_zero_approx(daily_change_pct) and not is_zero_approx(previous_close):
+			daily_change_pct = (current_price - previous_close) / previous_close
+		var starting_price: float = float(row.get("starting_price", runtime.get("starting_price", current_price)))
+		var ytd_open_price: float = float(row.get("ytd_open_price", runtime.get("ytd_open_price", starting_price)))
+		var since_start_pct: float = 0.0
+		if not is_zero_approx(starting_price):
+			since_start_pct = (current_price - starting_price) / starting_price
+		var ytd_change_pct: float = 0.0
+		if not is_zero_approx(ytd_open_price):
+			ytd_change_pct = (current_price - ytd_open_price) / ytd_open_price
+		lines.append("%s | Today %s | Start %s | %d YTD Open %s | Current %s | Since start %s | YTD %s" % [
 			str(row.get("ticker", "")),
-			_format_currency(float(row.get("starting_price", 0.0))),
-			int(row.get("ytd_reference_year", current_year)),
-			_format_currency(float(row.get("ytd_open_price", 0.0))),
-			_format_currency(float(row.get("current_price", 0.0))),
-			_format_change(float(row.get("since_start_pct", 0.0))),
-			_format_change(float(row.get("ytd_change_pct", 0.0)))
+			_format_change(daily_change_pct),
+			_format_currency(starting_price),
+			int(row.get("ytd_reference_year", runtime.get("ytd_reference_year", current_year))),
+			_format_currency(ytd_open_price),
+			_format_currency(current_price),
+			_format_change(since_start_pct),
+			_format_change(ytd_change_pct)
 		])
 
+	sections.append("ALL STOCK PERFORMANCE\n%s" % "\n".join(lines))
+	return "\n\n".join(sections)
+
+
+func _build_debug_pump_dump_candidate_text(stock_rows: Array) -> String:
+	var candidates: Array = []
+	for row_value in stock_rows:
+		var row: Dictionary = row_value
+		var candidate: Dictionary = _debug_pump_dump_candidate(row)
+		if candidate.is_empty():
+			continue
+		candidates.append(candidate)
+
+	if candidates.is_empty():
+		return "PUMP / DUMP TRAILER CANDIDATES\nNo candidate data is available yet."
+
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("score", 0.0)) > float(b.get("score", 0.0))
+	)
+
+	var lines: Array = ["PUMP / DUMP TRAILER CANDIDATES"]
+	var max_rows: int = min(candidates.size(), 12)
+	for index in range(max_rows):
+		var candidate: Dictionary = candidates[index]
+		var row_text: String = "%d. %s | %s | Today %s | 3d %s | Broker %s | Score %s\n   Why: %s" % [
+			index + 1,
+			str(candidate.get("ticker", "")),
+			str(candidate.get("label", "WATCH")),
+			_format_change(float(candidate.get("daily_change_pct", 0.0))),
+			_format_change(float(candidate.get("recent_change_pct", 0.0))),
+			str(candidate.get("flow_tag", "neutral")).capitalize(),
+			String.num(float(candidate.get("score", 0.0)), 1),
+			_debug_join_reasons(candidate.get("reasons", []))
+		]
+		var campaign_line: String = str(candidate.get("campaign_line", ""))
+		if not campaign_line.is_empty():
+			row_text += "\n   Campaign: %s" % campaign_line
+		var abnormal_line: String = str(candidate.get("abnormal_line", ""))
+		if not abnormal_line.is_empty():
+			row_text += "\n   Guard: %s" % abnormal_line
+		lines.append(row_text)
 	return "\n".join(lines)
+
+
+func _debug_pump_dump_candidate(row: Dictionary) -> Dictionary:
+	var company_id: String = str(row.get("id", ""))
+	if company_id.is_empty():
+		return {}
+
+	var runtime: Dictionary = RunState.get_company(company_id)
+	if runtime.is_empty():
+		return {}
+
+	var definition: Dictionary = RunState.get_effective_company_definition(company_id, false, false)
+	var current_price: float = float(row.get("current_price", runtime.get("current_price", 0.0)))
+	var previous_close: float = float(row.get("previous_close", runtime.get("previous_close", current_price)))
+	var daily_change_pct: float = float(row.get("daily_change_pct", runtime.get("daily_change_pct", 0.0)))
+	if is_zero_approx(daily_change_pct) and not is_zero_approx(previous_close):
+		daily_change_pct = (current_price - previous_close) / previous_close
+	var recent_change_pct: float = _debug_recent_price_change(runtime, current_price, 3)
+	var ten_day_change_pct: float = _debug_recent_price_change(runtime, current_price, 10)
+
+	var broker_flow: Dictionary = row.get("broker_flow", {})
+	if broker_flow.is_empty():
+		broker_flow = runtime.get("broker_flow", {})
+	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
+	var net_pressure: float = clamp(float(broker_flow.get("net_pressure", 0.0)), -1.0, 1.0)
+	var action_meter_score: float = clamp(float(broker_flow.get("action_meter_score", net_pressure)), -1.0, 1.0)
+	var event_context: Dictionary = _debug_active_event_context(runtime, row)
+	var event_score: float = float(event_context.get("score", 0.0))
+	var event_labels: Array = event_context.get("labels", [])
+	var profile_context: Dictionary = _debug_profile_pump_dump_context(definition, runtime)
+	var campaign_context: Dictionary = _debug_gorengan_campaign_context(runtime)
+	var abnormal_context: Dictionary = _debug_abnormal_move_context(runtime)
+
+	var pump_score: float = 0.0
+	pump_score += max(daily_change_pct, 0.0) * 280.0
+	pump_score += max(recent_change_pct, 0.0) * 190.0
+	pump_score += max(ten_day_change_pct, 0.0) * 70.0
+	pump_score += max(net_pressure, 0.0) * 18.0
+	pump_score += max(action_meter_score, 0.0) * 10.0
+	pump_score += max(event_score, 0.0) * 22.0
+	pump_score += float(profile_context.get("pump_bonus", 0.0))
+	pump_score += float(campaign_context.get("pump_bonus", 0.0))
+	pump_score += float(abnormal_context.get("pump_bonus", 0.0))
+
+	var dump_score: float = 0.0
+	dump_score += max(-daily_change_pct, 0.0) * 280.0
+	dump_score += max(-recent_change_pct, 0.0) * 190.0
+	dump_score += max(-ten_day_change_pct, 0.0) * 70.0
+	dump_score += max(-net_pressure, 0.0) * 18.0
+	dump_score += max(-action_meter_score, 0.0) * 10.0
+	dump_score += max(-event_score, 0.0) * 22.0
+	dump_score += float(profile_context.get("dump_bonus", 0.0))
+	dump_score += float(campaign_context.get("dump_bonus", 0.0))
+	dump_score += float(abnormal_context.get("dump_bonus", 0.0))
+
+	var reasons: Array = []
+	if absf(daily_change_pct) >= 0.035:
+		_debug_append_unique_reason(reasons, "big move today")
+	if absf(recent_change_pct) >= 0.060:
+		_debug_append_unique_reason(reasons, "3-day momentum")
+	if absf(ten_day_change_pct) >= 0.120:
+		_debug_append_unique_reason(reasons, "10-day swing")
+	if flow_tag == "accumulation":
+		pump_score += 10.0
+		_debug_append_unique_reason(reasons, "broker accumulation")
+	elif flow_tag == "distribution":
+		dump_score += 10.0
+		_debug_append_unique_reason(reasons, "broker distribution")
+	elif absf(net_pressure) >= 0.16:
+		_debug_append_unique_reason(reasons, "broker pressure %s" % _debug_signed_decimal(net_pressure))
+	for event_label_value in event_labels:
+		_debug_append_unique_reason(reasons, str(event_label_value))
+	var profile_reason: String = str(profile_context.get("reason", ""))
+	if not profile_reason.is_empty():
+		_debug_append_unique_reason(reasons, profile_reason)
+	var hidden_flags: Array = runtime.get("hidden_story_flags", [])
+	if _debug_text_list_has(hidden_flags, ["accumulation", "stealth_interest"]):
+		pump_score += 8.0
+		_debug_append_unique_reason(reasons, "hidden accumulation flag")
+	if _debug_text_list_has(hidden_flags, ["distribution"]):
+		dump_score += 8.0
+		_debug_append_unique_reason(reasons, "hidden distribution flag")
+	var campaign_reason: String = str(campaign_context.get("reason", ""))
+	if not campaign_reason.is_empty():
+		_debug_append_unique_reason(reasons, campaign_reason)
+	var abnormal_reason: String = str(abnormal_context.get("reason", ""))
+	if not abnormal_reason.is_empty():
+		_debug_append_unique_reason(reasons, abnormal_reason)
+
+	var label: String = "PUMP" if pump_score >= dump_score else "DUMP"
+	var score: float = max(pump_score, dump_score)
+	if score < 12.0:
+		label = "WATCH"
+		if reasons.is_empty():
+			_debug_append_unique_reason(reasons, "quiet tape; use as baseline")
+	elif label == "PUMP" and recent_change_pct < -0.025 and daily_change_pct < 0.0:
+		label = "DUMP"
+	elif label == "DUMP" and recent_change_pct > 0.025 and daily_change_pct > 0.0:
+		label = "PUMP"
+
+	return {
+		"ticker": str(row.get("ticker", definition.get("ticker", company_id.to_upper()))),
+		"label": label,
+		"score": score,
+		"daily_change_pct": daily_change_pct,
+		"recent_change_pct": recent_change_pct,
+		"flow_tag": flow_tag,
+		"reasons": reasons,
+		"campaign_line": str(campaign_context.get("line", "")),
+		"abnormal_line": str(abnormal_context.get("line", ""))
+	}
+
+
+func _debug_recent_price_change(runtime: Dictionary, fallback_current_price: float, lookback_days: int) -> float:
+	var history_value = runtime.get("price_history", [])
+	if typeof(history_value) != TYPE_ARRAY:
+		return 0.0
+	var price_history: Array = history_value
+	if price_history.size() < 2:
+		return 0.0
+	var end_index: int = price_history.size() - 1
+	var start_index: int = max(end_index - max(lookback_days, 1), 0)
+	var start_price: float = float(price_history[start_index])
+	var end_price: float = float(price_history[end_index])
+	if end_price <= 0.0:
+		end_price = fallback_current_price
+	if is_zero_approx(start_price):
+		return 0.0
+	return (end_price - start_price) / start_price
+
+
+func _debug_active_event_context(runtime: Dictionary, row: Dictionary) -> Dictionary:
+	var score: float = 0.0
+	var labels: Array = []
+	var active_events_value = runtime.get("active_events", [])
+	if typeof(active_events_value) == TYPE_ARRAY:
+		for event_value in active_events_value:
+			if typeof(event_value) != TYPE_DICTIONARY:
+				continue
+			var event_data: Dictionary = event_value
+			var event_id: String = str(event_data.get("event_id", event_data.get("id", "")))
+			var tone: String = str(event_data.get("tone", "mixed")).to_lower()
+			var shift: float = float(event_data.get("sentiment_shift", event_data.get("market_bias_shift", 0.0)))
+			if is_zero_approx(shift):
+				if tone == "positive":
+					shift = 0.012
+				elif tone == "negative":
+					shift = -0.012
+			score += clamp(shift * 22.0, -0.8, 0.8)
+			if not event_id.is_empty() and labels.size() < 2:
+				labels.append(_format_debug_event_title(event_id))
+
+	var tag_values = runtime.get("active_event_tags", row.get("event_tags", []))
+	if typeof(tag_values) == TYPE_ARRAY:
+		for tag_value in tag_values:
+			var tag_text: String = str(tag_value).to_lower()
+			if tag_text.contains("pump") or tag_text.contains("hype") or tag_text.contains("positive") or tag_text.contains("optimism"):
+				score += 0.25
+			if tag_text.contains("dump") or tag_text.contains("negative") or tag_text.contains("controversy") or tag_text.contains("spiral"):
+				score -= 0.25
+			if labels.size() < 2 and not tag_text.is_empty():
+				labels.append(_format_debug_event_title(tag_text))
+
+	if labels.is_empty() and absf(score) >= 0.18:
+		labels.append("active event bias %s" % _debug_signed_decimal(score))
+
+	return {
+		"score": clamp(score, -1.0, 1.0),
+		"labels": labels
+	}
+
+
+func _debug_profile_pump_dump_context(definition: Dictionary, runtime: Dictionary) -> Dictionary:
+	var chart_profile: Dictionary = definition.get("chart_profile", {})
+	var generation_traits: Dictionary = definition.get("generation_traits", {})
+	if chart_profile.is_empty() and generation_traits.has("chart_profile"):
+		chart_profile = generation_traits.get("chart_profile", {})
+	var narrative_tags: Array = definition.get("narrative_tags", [])
+	var profile_tags: Array = definition.get("profile_tags", [])
+	var archetype_text: String = "%s %s %s %s" % [
+		str(definition.get("archetype_id", "")),
+		str(definition.get("archetype_label", "")),
+		str(chart_profile.get("archetype", "")),
+		str(chart_profile.get("cycle_template", ""))
+	]
+	var tag_values: Array = []
+	tag_values.append_array(narrative_tags)
+	tag_values.append_array(profile_tags)
+	tag_values.append_array(runtime.get("hidden_story_flags", []))
+	tag_values.append(archetype_text)
+
+	var pump_bonus: float = 0.0
+	var dump_bonus: float = 0.0
+	var reason: String = ""
+	if _debug_text_list_has(tag_values, ["gorengan", "operator_markup", "retail_favorite", "narrative_hot", "speculative"]):
+		pump_bonus += 10.0
+		dump_bonus += 8.0
+		reason = "speculative/gorengan profile"
+	if _debug_text_list_has(tag_values, ["operator_rug", "distribution", "distressed"]):
+		dump_bonus += 11.0
+		if reason.is_empty():
+			reason = "distribution/rug profile"
+	if _debug_text_list_has(tag_values, ["stealth_interest", "accumulation"]):
+		pump_bonus += 7.0
+		if reason.is_empty():
+			reason = "accumulation profile"
+
+	return {
+		"pump_bonus": pump_bonus,
+		"dump_bonus": dump_bonus,
+		"reason": reason
+	}
+
+
+func _debug_abnormal_move_context(runtime: Dictionary) -> Dictionary:
+	var abnormal_value = runtime.get("abnormal_move_context", {})
+	if typeof(abnormal_value) != TYPE_DICTIONARY:
+		return {}
+	var abnormal: Dictionary = abnormal_value
+	if abnormal.is_empty() or not bool(abnormal.get("active", false)):
+		return {}
+	var phase: String = str(abnormal.get("phase", "normal")).replace("_", " ")
+	var hard_count: int = int(abnormal.get("hard_catalyst_count", 0))
+	var required_count: int = int(abnormal.get("required_hard_catalysts", 0))
+	var status_parts: Array = []
+	if bool(abnormal.get("uma_issued", false)):
+		status_parts.append("UMA")
+	if bool(abnormal.get("suspension_seen", false)):
+		status_parts.append("suspension")
+	if bool(abnormal.get("split_scheduled", false)) or bool(abnormal.get("split_executed", false)):
+		status_parts.append("split path")
+	elif bool(abnormal.get("split_required", false)):
+		status_parts.append("split needed")
+	elif bool(abnormal.get("split_pressure", false)):
+		status_parts.append("split pressure")
+	var floor_days: int = int(abnormal.get("floor_days", 0))
+	if floor_days > 0:
+		var floor_status: String = str(abnormal.get("floor_status", "floor_watch")).replace("_", " ")
+		var floor_score: float = float(abnormal.get("floor_turnaround_score", 0.0))
+		status_parts.append("floor %dd %s %.2f" % [floor_days, floor_status, floor_score])
+	var line: String = "%s | CA %d/%d | Since %s | YTD %s | Green streak %d" % [
+		phase.capitalize(),
+		hard_count,
+		required_count,
+		_format_change(float(abnormal.get("since_start_return", 0.0))),
+		_format_change(float(abnormal.get("ytd_return", 0.0))),
+		int(abnormal.get("green_limit_streak", 0))
+	]
+	if not status_parts.is_empty():
+		line += " | %s" % ", ".join(status_parts)
+	var next_needed: String = str(abnormal.get("next_needed_beat", ""))
+	if not next_needed.is_empty():
+		line += " | Next: %s" % next_needed
+	var dump_bonus: float = 0.0
+	var pump_bonus: float = 0.0
+	if phase.contains("watch"):
+		pump_bonus += 4.0
+		dump_bonus += 4.0
+	elif phase.contains("distribution") or phase.contains("split") or phase.contains("suspension") or phase.contains("chop") or phase.contains("guard"):
+		dump_bonus += 12.0
+	elif phase.contains("floor"):
+		pump_bonus += 5.0
+	var reason: String = ""
+	if not next_needed.is_empty():
+		reason = "guard needs %s" % next_needed
+	elif not phase.is_empty():
+		reason = "guard phase %s" % phase
+	return {
+		"line": line,
+		"pump_bonus": pump_bonus,
+		"dump_bonus": dump_bonus,
+		"reason": reason
+	}
+
+
+func _debug_gorengan_campaign_context(runtime: Dictionary) -> Dictionary:
+	var campaign_value = runtime.get("gorengan_campaign", {})
+	if typeof(campaign_value) != TYPE_DICTIONARY:
+		return {}
+	var campaign: Dictionary = campaign_value
+	if campaign.is_empty():
+		return {}
+	var phase: String = str(campaign.get("phase", ""))
+	var wave: String = str(campaign.get("wave", ""))
+	var tier: String = str(campaign.get("tier", "common")).capitalize()
+	var realized_pct: float = float(campaign.get("realized_return_pct", campaign.get("last_realized_return_pct", 0.0)))
+	var target_pct: float = float(campaign.get("target_return_pct", 0.0))
+	var hard_count: int = int(campaign.get("hard_catalyst_count", 0))
+	var required_count: int = max(int(campaign.get("required_hard_catalysts", 0)), 0)
+	var regulatory_heat: float = float(campaign.get("regulatory_heat", 0.0))
+	var status_parts: Array = []
+	if bool(campaign.get("uma_issued", false)):
+		status_parts.append("UMA")
+	if bool(campaign.get("suspension_seen", false)):
+		status_parts.append("suspension")
+	if bool(campaign.get("split_scheduled", false)) or bool(campaign.get("split_executed", false)):
+		status_parts.append("split path")
+	elif bool(campaign.get("split_required", false)):
+		status_parts.append("split needed")
+	var next_needed: String = str(campaign.get("next_needed_beat", ""))
+	var line: String = "%s | Wave %s %s | CA %d/%d | Return %s/%s | Heat %d%%" % [
+		tier,
+		wave,
+		phase.replace("_", " "),
+		hard_count,
+		required_count,
+		_format_change(realized_pct),
+		_format_change(target_pct),
+		int(round(regulatory_heat * 100.0))
+	]
+	if not status_parts.is_empty():
+		line += " | %s" % ", ".join(status_parts)
+	if not next_needed.is_empty():
+		line += " | Next: %s" % next_needed
+	var pump_bonus: float = 0.0
+	var dump_bonus: float = 0.0
+	if phase in ["accumulation", "markup", "final_hype"]:
+		pump_bonus += 14.0
+	elif phase in ["shakeout", "regulatory_chop"]:
+		pump_bonus += 5.0
+		dump_bonus += 8.0
+	elif phase in ["distribution", "dump", "dead_cat", "cooldown"]:
+		dump_bonus += 18.0
+	var reason: String = ""
+	if bool(campaign.get("gate_locked", false)):
+		reason = "campaign gate locked"
+	elif not phase.is_empty():
+		reason = "campaign %s wave %s" % [phase.replace("_", " "), wave]
+	return {
+		"line": line,
+		"pump_bonus": pump_bonus,
+		"dump_bonus": dump_bonus,
+		"reason": reason
+	}
+
+
+func _debug_text_list_has(values: Array, needles: Array) -> bool:
+	for value in values:
+		var value_text: String = str(value).to_lower()
+		if value_text.is_empty():
+			continue
+		for needle_value in needles:
+			var needle: String = str(needle_value).to_lower()
+			if not needle.is_empty() and value_text.contains(needle):
+				return true
+	return false
+
+
+func _debug_append_unique_reason(reasons: Array, reason: String) -> void:
+	var clean_reason: String = reason.strip_edges()
+	if clean_reason.is_empty() or reasons.has(clean_reason):
+		return
+	reasons.append(clean_reason)
+
+
+func _debug_join_reasons(reasons: Array) -> String:
+	if reasons.is_empty():
+		return "quiet tape; use as baseline"
+	var trimmed_reasons: Array = []
+	var max_reasons: int = min(reasons.size(), 4)
+	for index in range(max_reasons):
+		trimmed_reasons.append(str(reasons[index]))
+	return "; ".join(trimmed_reasons)
+
+
+func _debug_signed_decimal(value: float) -> String:
+	return "%+.2f" % [value]
 
 
 func _build_debug_market_history_text() -> String:
@@ -21576,7 +22395,7 @@ func _build_taskbar_status_text(focus_snapshot: Dictionary) -> String:
 		return "Company open  |  Majority-control agenda tools online."
 	if active_app_id == APP_ID_UPGRADES:
 		return "Upgrades open  |  Spend cash to improve your desk."
-	return "Desktop ready  |  Open STOCKBOT, News, Twooter, Network, Academy, Thesis, Life, Company, Shop, or Settings."
+	return "Desktop ready  |  Open STOCKBOT, News, Twooter, Network, Academy (Coming Soon), Thesis, Life, Company, Shop, or Settings."
 
 
 func _section_label(section_id: String) -> String:
@@ -23560,7 +24379,7 @@ func _refresh_corporate_action_timeline(timeline_snapshot: Dictionary) -> void:
 
 func _corporate_action_timeline_summary(all_rows: Array, visible_rows: Array) -> String:
 	if all_rows.is_empty():
-		return "No corporate action history or scheduled action is visible for this company yet."
+		return "No filed or scheduled corporate action is visible for this company yet."
 	var dividend_count: int = 0
 	var meeting_count: int = 0
 	var event_count: int = 0

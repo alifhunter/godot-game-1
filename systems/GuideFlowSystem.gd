@@ -22,7 +22,9 @@ const FLOW_ORDER := [
 	FLOW_ACADEMY
 ]
 
-const RELEASE_LOCKED_FLOW_IDS := {}
+const RELEASE_LOCKED_FLOW_IDS := {
+	FLOW_ACADEMY: "coming_soon"
+}
 
 const CONTEXT_FLOW_IDS := {
 	"watchlist": FLOW_WATCHLIST,
@@ -472,11 +474,16 @@ static func flow_exists(flow_id: String) -> bool:
 
 
 static func flow_enabled(flow_id: String) -> bool:
-	return FLOW_CATALOG.has(flow_id) and not bool(RELEASE_LOCKED_FLOW_IDS.get(flow_id, false))
+	return FLOW_CATALOG.has(flow_id) and flow_release_status(flow_id) == "available"
 
 
 static func flow_release_status(flow_id: String) -> String:
-	return "coming_soon" if bool(RELEASE_LOCKED_FLOW_IDS.get(flow_id, false)) else "available"
+	var release_value: Variant = RELEASE_LOCKED_FLOW_IDS.get(flow_id, null)
+	if release_value == null:
+		return "available"
+	if typeof(release_value) == TYPE_STRING and not str(release_value).strip_edges().is_empty():
+		return str(release_value).strip_edges()
+	return "coming_soon"
 
 
 static func flow(flow_id: String) -> Dictionary:

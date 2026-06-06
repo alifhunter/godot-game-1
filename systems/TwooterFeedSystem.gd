@@ -37,14 +37,15 @@ func build_social_snapshot(
 		company_row_lookup[str(row.get("id", ""))] = row.duplicate(true)
 	var current_day_index: int = int(current_trade_date.get("day_index", current_trade_date.get("day", 0)))
 	var story_memory: Dictionary = _build_story_memory(event_history, active_company_arcs, current_day_index)
+	var latest_market_entry: Dictionary = _latest_market_entry(market_history)
 
 	var posts: Array = []
 	var seen_ids: Dictionary = {}
 	for post_value in _build_hidden_arc_posts(feed_data, unlocked_accounts, company_row_lookup, active_company_arcs, current_trade_date, story_memory):
 		_append_unique_post(posts, seen_ids, post_value)
-	for post_value in _build_active_special_posts(feed_data, unlocked_accounts, active_special_events, current_trade_date, story_memory):
+	for post_value in _build_active_special_posts(feed_data, unlocked_accounts, active_special_events, current_trade_date, story_memory, latest_market_entry):
 		_append_unique_post(posts, seen_ids, post_value)
-	for post_value in _build_recent_event_posts(feed_data, unlocked_accounts, company_row_lookup, event_history, current_trade_date, story_memory):
+	for post_value in _build_recent_event_posts(feed_data, unlocked_accounts, company_row_lookup, event_history, current_trade_date, story_memory, latest_market_entry):
 		_append_unique_post(posts, seen_ids, post_value)
 	for post_value in _build_ambient_posts(feed_data, unlocked_accounts, company_rows, market_history, current_trade_date):
 		_append_unique_post(posts, seen_ids, post_value)
@@ -149,12 +150,14 @@ func _build_active_special_posts(
 	unlocked_accounts: Array,
 	active_special_events: Array,
 	current_trade_date: Dictionary,
-	story_memory: Dictionary
+	story_memory: Dictionary,
+	latest_market_entry: Dictionary = {}
 ) -> Array:
 	var posts: Array = []
 	var current_day_index: int = int(current_trade_date.get("day_index", current_trade_date.get("day", 0)))
 	for event_value in active_special_events:
 		var event_data: Dictionary = event_value
+		var source_data: Dictionary = _source_with_market_context(event_data, latest_market_entry)
 		var start_day_index: int = int(event_data.get("start_day_index", current_day_index))
 		var duration_days: int = max(int(event_data.get("duration_days", 1)), 1)
 		var elapsed_days: int = max(current_day_index - start_day_index + 1, 1)
@@ -176,21 +179,21 @@ func _build_active_special_posts(
 		if account.is_empty():
 			continue
 
-		var context: Dictionary = _build_context(feed_data, event_data, {}, current_trade_date, story_memory)
-		var text_key: String = _scope_voice_key(event_data)
+		var context: Dictionary = _build_context(feed_data, source_data, {}, current_trade_date, story_memory)
+		var text_key: String = _scope_voice_key(source_data)
 		var post_text: String = _pick_voice_text(
 			feed_data,
 			str(account.get("voice", "")),
 			text_key,
-			"special|%s|%s" % [str(event_data.get("event_id", "")), start_day_index],
+			"special|%s|%s" % [str(source_data.get("event_id", "")), start_day_index],
 			context
 		)
 		posts.append(_build_post(
 			feed_data,
 			account,
-			"active_special|%s|%s" % [str(event_data.get("event_id", "")), start_day_index],
+			"active_special|%s|%s" % [str(source_data.get("event_id", "")), start_day_index],
 			post_text,
-			event_data,
+			source_data,
 			current_trade_date,
 			context,
 			_progress_label_for_ratio(progress_ratio),
@@ -255,7 +258,8 @@ func _build_recent_event_posts(
 	company_row_lookup: Dictionary,
 	event_history: Array,
 	current_trade_date: Dictionary,
-	story_memory: Dictionary
+	story_memory: Dictionary,
+	latest_market_entry: Dictionary = {}
 ) -> Array:
 	var posts: Array = []
 	var recent_history: Array = event_history.duplicate(true)
@@ -269,43 +273,44 @@ func _build_recent_event_posts(
 	var source_counts: Dictionary = {}
 	for event_value in recent_history:
 		var event_data: Dictionary = event_value
-		var source_key: String = str(event_data.get("event_id", "")) + "|" + str(event_data.get("target_company_id", ""))
+		var source_data: Dictionary = _source_with_market_context(event_data, latest_market_entry)
+		var source_key: String = str(source_data.get("event_id", "")) + "|" + str(source_data.get("target_company_id", ""))
 		source_counts[source_key] = int(source_counts.get(source_key, 0))
 		if int(source_counts.get(source_key, 0)) >= MAX_RECENT_POSTS_PER_SOURCE:
 			continue
 
-		var age_days: int = max(current_day_index - int(event_data.get("day_index", current_day_index)), 0)
-		var company_id: String = str(event_data.get("target_company_id", ""))
+		var age_days: int = max(current_day_index - int(source_data.get("day_index", current_day_index)), 0)
+		var company_id: String = str(source_data.get("target_company_id", ""))
 		var row: Dictionary = company_row_lookup.get(company_id, {})
-		var context: Dictionary = _build_context(feed_data, event_data, row, current_trade_date, story_memory)
+		var context: Dictionary = _build_context(feed_data, source_data, row, current_trade_date, story_memory)
 		var post: Dictionary = {}
 
-		if str(event_data.get("event_family", "")) == "person":
-			post = _build_persona_post(feed_data, unlocked_accounts, event_data, current_trade_date, context)
+		if str(source_data.get("event_family", "")) == "person":
+			post = _build_persona_post(feed_data, unlocked_accounts, source_data, current_trade_date, context)
 		if post.is_empty():
 			var minimum_tier: int = _required_tier_for_event_age(age_days)
-			if str(event_data.get("event_family", "")) == "index_review":
+			if str(source_data.get("event_family", "")) == "index_review":
 				minimum_tier = 1
-			var account: Dictionary = _pick_generic_account(unlocked_accounts, minimum_tier, "event|%s|%s" % [str(event_data.get("event_id", "")), company_id])
+			var account: Dictionary = _pick_generic_account(unlocked_accounts, minimum_tier, "event|%s|%s" % [str(source_data.get("event_id", "")), company_id])
 			if account.is_empty():
 				continue
-			var text_key: String = _voice_key_for_event(event_data)
+			var text_key: String = _voice_key_for_event(source_data)
 			var post_text: String = _pick_voice_text(
 				feed_data,
 				str(account.get("voice", "")),
 				text_key,
-				"event|%s|%s|%s" % [str(event_data.get("event_id", "")), company_id, age_days],
+				"event|%s|%s|%s" % [str(source_data.get("event_id", "")), company_id, age_days],
 				context
 			)
 			var post_priority: float = 2.4 - min(float(age_days) * 0.08, 1.0)
-			if str(event_data.get("event_family", "")) == "index_review":
+			if str(source_data.get("event_family", "")) == "index_review":
 				post_priority = 4.25 - min(float(age_days) * 0.05, 0.4)
 			post = _build_post(
 				feed_data,
 				account,
-				"event|%s|%s|%s" % [str(event_data.get("event_id", "")), int(event_data.get("day_index", -1)), company_id],
+				"event|%s|%s|%s" % [str(source_data.get("event_id", "")), int(source_data.get("day_index", -1)), company_id],
 				post_text,
-				event_data,
+				source_data,
 				current_trade_date,
 				context,
 				_visibility_label_for_age(age_days),
@@ -713,7 +718,7 @@ func _build_context(feed_data: Dictionary, source_data: Dictionary, company_row:
 	var category: String = str(source_data.get("category", ""))
 	var tone: String = str(source_data.get("tone", "mixed"))
 	var provider_label: String = str(source_data.get("provider_label", ""))
-	return {
+	var context: Dictionary = {
 		"target_ticker": str(source_data.get("target_ticker", company_row.get("ticker", ""))),
 		"target_company_name": str(source_data.get("target_company_name", company_row.get("name", ""))),
 		"provider_label": provider_label,
@@ -729,6 +734,39 @@ func _build_context(feed_data: Dictionary, source_data: Dictionary, company_row:
 		"continuity_phrase": continuity_phrase,
 		"public_context_hint": _public_context_hint(source_data, continuity_phrase)
 	}
+	if _source_needs_market_context(source_data):
+		var biggest_winner: Dictionary = source_data.get("biggest_winner", {}) if typeof(source_data.get("biggest_winner", {})) == TYPE_DICTIONARY else {}
+		var biggest_loser: Dictionary = source_data.get("biggest_loser", {}) if typeof(source_data.get("biggest_loser", {})) == TYPE_DICTIONARY else {}
+		context["market_change"] = _format_percent(float(source_data.get("average_change_pct", source_data.get("market_change_pct", 0.0))))
+		context["advancers"] = str(int(source_data.get("advancers", 0)))
+		context["decliners"] = str(int(source_data.get("decliners", 0)))
+		context["biggest_winner"] = str(biggest_winner.get("ticker", "leader"))
+		context["biggest_loser"] = str(biggest_loser.get("ticker", "laggard"))
+	return context
+
+
+func _latest_market_entry(market_history: Array) -> Dictionary:
+	if market_history.is_empty():
+		return {}
+	var latest_value = market_history[market_history.size() - 1]
+	if typeof(latest_value) != TYPE_DICTIONARY:
+		return {}
+	return latest_value.duplicate(true)
+
+
+func _source_with_market_context(source_data: Dictionary, latest_market_entry: Dictionary) -> Dictionary:
+	if not _source_needs_market_context(source_data) or latest_market_entry.is_empty():
+		return source_data.duplicate(true)
+	var enriched: Dictionary = source_data.duplicate(true)
+	for key in ["average_change_pct", "advancers", "decliners", "biggest_winner", "biggest_loser"]:
+		if not enriched.has(key) and latest_market_entry.has(key):
+			enriched[key] = latest_market_entry.get(key)
+	return enriched
+
+
+func _source_needs_market_context(source_data: Dictionary) -> bool:
+	var category: String = str(source_data.get("category", ""))
+	return str(source_data.get("scope", "")) == "market" or category == "market_wrap" or _category_family_key(source_data) == "market_wrap"
 
 
 func _build_thread_lines(feed_data: Dictionary, account: Dictionary, source_data: Dictionary, context: Dictionary, _post_id: String) -> Array:

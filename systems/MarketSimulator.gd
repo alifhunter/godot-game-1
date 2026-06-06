@@ -8,6 +8,32 @@ const CHART_GAP_FREQUENCIES := ["rare", "moderate", "active"]
 const CHART_GAP_FOLLOWTHROUGH := ["hold", "fade", "fill", "continue"]
 const CHART_BAR_FRICTION_PROFILES := ["clean_liquid", "balanced_chop", "operator_dirty", "distribution_chop"]
 const CHART_TAPE_REGIME_PROFILES := ["clean_trend", "messy_accumulation", "operator_campaign", "distribution_breakdown", "failed_reclaim"]
+const ABNORMAL_GREEN_LIMIT_THRESHOLD := 0.165
+const ABNORMAL_SPLIT_PRESSURE_PRICE := 50000.0
+const ABNORMAL_SPLIT_REQUIRED_PRICE := 100000.0
+const ABNORMAL_FANTASY_PRICE_GUARD := 250000.0
+const REGULAR_MARKET_PRICE_FLOOR := 50.0
+const FLOOR_TURNAROUND_WATCH_DAYS := 5
+const VALUE_GOVERNOR_SMALL_CAP := 30000000000.0
+const VALUE_GOVERNOR_MID_CAP := 120000000000.0
+const VALUE_GOVERNOR_LARGE_CAP := 450000000000.0
+const VALUE_GOVERNOR_GIANT_CAP := 1000000000000.0
+const VALUE_GOVERNOR_FLOOR_MAX := 250000000000.0
+const VALUE_GOVERNOR_TURNAROUND_MAX := 700000000000.0
+const VALUE_GOVERNOR_REGULAR_MAX := 1200000000000.0
+const VALUE_GOVERNOR_HOT_MAX := 3500000000000.0
+const VALUE_GOVERNOR_EXTREME_MAX := 8000000000000.0
+const ABNORMAL_HARD_CATALYST_CATEGORIES := {
+	"corporate_action_filing": true,
+	"corporate_meeting": true,
+	"corporate_action_resolution": true,
+	"corporate_action_execution": true
+}
+const ABNORMAL_SOFT_CATALYST_CATEGORIES := {
+	"corporate_action_rumor": true,
+	"corporate_action_speculation": true,
+	"corporate_action_clarification": true
+}
 
 var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
 var company_roadmap_system = preload("res://systems/CompanyRoadmapSystem.gd").new()
@@ -16,6 +42,7 @@ var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
 var index_review_system = preload("res://systems/IndexReviewSystem.gd").new()
 var attention_director_system = preload("res://systems/AttentionDirectorSystem.gd").new()
 var dirty_tip_system = preload("res://systems/DirtyTipSystem.gd").new()
+var gorengan_campaign_system = preload("res://systems/GorenganCampaignSystem.gd").new()
 
 
 func simulate_day(run_state, data_repository, broker_flow_system, corporate_action_system) -> Dictionary:
@@ -29,7 +56,7 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		day_number,
 		macro_state
 	)
-	var report_events: Array = run_state.get_quarterly_report_events_for_day_number(day_number, trade_date)
+	var report_events: Array = run_state.get_quarterly_report_events_for_day_number(day_number, trade_date, macro_state)
 	var corporate_action_resolution: Dictionary = corporate_action_system.resolve_day(
 		run_state,
 		data_repository,
@@ -150,6 +177,16 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 			runtime,
 			run_state.get_player_market_flow_context(company_id, day_number)
 		)
+		var gorengan_campaign_context: Dictionary = gorengan_campaign_system.resolve_pre_close_context(
+			definition,
+			runtime,
+			active_company_arcs,
+			scheduled_event,
+			report_events,
+			previous_close,
+			run_state.run_seed,
+			day_number
+		)
 		var event_context: Dictionary = _resolve_event_context(
 			definition,
 			runtime,
@@ -163,6 +200,17 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 			event_context,
 			dirty_tip_system.market_effect_for_company(run_state, company_id, day_number)
 		)
+		event_context = gorengan_campaign_system.apply_event_context(event_context, gorengan_campaign_context)
+		var abnormal_move_context: Dictionary = _build_abnormal_move_context(
+			definition,
+			runtime,
+			event_context,
+			gorengan_campaign_context,
+			previous_close,
+			ar_limits,
+			day_number
+		)
+		event_context = _apply_abnormal_move_context(event_context, abnormal_move_context)
 		var market_depth_context: Dictionary = _build_market_depth_context(
 			definition,
 			runtime,
@@ -238,10 +286,17 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 			company_id,
 			player_flow_context
 		)
+		close_context = _apply_abnormal_close_guard(
+			close_context,
+			previous_close,
+			ar_limits,
+			abnormal_move_context
+		)
 		var current_price: float = float(close_context.get("close_price", previous_close))
 		daily_change_pct = 0.0
 		if not is_zero_approx(previous_close):
 			daily_change_pct = (current_price - previous_close) / previous_close
+		volume_context["abnormal_move_context"] = abnormal_move_context.duplicate(true)
 		volume_context["market_depth_context"] = market_depth_context.duplicate(true)
 		volume_context["limit_lock"] = str(close_context.get("limit_lock", ""))
 		volume_context["limit_source"] = str(close_context.get("limit_source", ""))
@@ -293,7 +348,19 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		runtime["ar_limits"] = ar_limits.duplicate(true)
 		runtime["volume_context"] = volume_context.duplicate(true)
 		runtime["market_depth_context"] = market_depth_context.duplicate(true)
+		runtime["abnormal_move_context"] = abnormal_move_context.duplicate(true)
+		runtime["abnormal_move_state"] = abnormal_move_context.get("state", {}).duplicate(true)
 		runtime["player_market_impact"] = _build_player_market_impact_snapshot(player_flow_context, close_context)
+		var finalized_campaign: Dictionary = gorengan_campaign_system.finalize_day_context(
+			gorengan_campaign_context,
+			previous_close,
+			current_price,
+			close_context,
+			volume_context,
+			day_number
+		)
+		if not finalized_campaign.is_empty():
+			runtime["gorengan_campaign"] = finalized_campaign.duplicate(true)
 
 		companies_result[company_id] = runtime
 
@@ -352,6 +419,11 @@ func _resolve_day_close_price(
 		company_id
 	)
 	if scripted_price > 0.0:
+		scripted_price = clamp(
+			IDX_PRICE_RULES.snap_price_for_day(scripted_price, previous_close),
+			float(ar_limits.get("lower_price", REGULAR_MARKET_PRICE_FLOOR)),
+			float(ar_limits.get("upper_price", scripted_price))
+		)
 		return scripted_price
 
 	var current_price: float = IDX_PRICE_RULES.snap_price_for_day(raw_price, previous_close)
@@ -383,6 +455,11 @@ func _resolve_day_close_context(
 		company_id
 	)
 	if scripted_price > 0.0:
+		scripted_price = clamp(
+			IDX_PRICE_RULES.snap_price_for_day(scripted_price, previous_close),
+			float(ar_limits.get("lower_price", REGULAR_MARKET_PRICE_FLOOR)),
+			float(ar_limits.get("upper_price", scripted_price))
+		)
 		var scripted_lock: String = _limit_lock_for_price(scripted_price, ar_limits)
 		return {
 			"close_price": scripted_price,
@@ -430,6 +507,706 @@ func _limit_lock_for_price(price: float, ar_limits: Dictionary) -> String:
 	if price <= lower_price + 0.0001:
 		return "arb"
 	return ""
+
+
+func _build_abnormal_move_context(
+	definition: Dictionary,
+	runtime: Dictionary,
+	event_context: Dictionary,
+	gorengan_campaign_context: Dictionary,
+	previous_close: float,
+	ar_limits: Dictionary,
+	day_number: int
+) -> Dictionary:
+	var company_id: String = str(definition.get("id", ""))
+	var price_history: Array = runtime.get("price_history", [])
+	var starting_price: float = max(float(runtime.get("starting_price", definition.get("base_price", previous_close))), 1.0)
+	var ytd_open_price: float = max(float(runtime.get("ytd_open_price", starting_price)), 1.0)
+	var since_start_return: float = (previous_close - starting_price) / starting_price
+	var ytd_return: float = (previous_close - ytd_open_price) / ytd_open_price
+	var ten_day_return: float = _recent_price_history_change(price_history, 10)
+	var thirty_day_return: float = _recent_price_history_change(price_history, 30)
+	var green_limit_streak: int = _recent_green_limit_streak(price_history, ABNORMAL_GREEN_LIMIT_THRESHOLD)
+	var state: Dictionary = _abnormal_move_state_for_runtime(runtime, definition, event_context, day_number)
+	var floor_state: Dictionary = _floor_board_state_for_runtime(definition, runtime, state, previous_close, day_number)
+	var floor_days: int = int(floor_state.get("floor_days", 0))
+	var floor_turnaround_score: float = float(floor_state.get("turnaround_score", 0.0))
+	var floor_turnaround_eligible: bool = bool(floor_state.get("turnaround_eligible", false))
+	var floor_status: String = str(floor_state.get("status", "none"))
+	var campaign: Dictionary = {}
+	if not gorengan_campaign_context.is_empty() and typeof(gorengan_campaign_context.get("campaign", {})) == TYPE_DICTIONARY:
+		campaign = gorengan_campaign_context.get("campaign", {}).duplicate(true)
+	elif typeof(event_context.get("gorengan_campaign", {})) == TYPE_DICTIONARY:
+		campaign = event_context.get("gorengan_campaign", {}).duplicate(true)
+	var has_campaign: bool = not campaign.is_empty() and bool(campaign.get("active", false))
+	var hard_count: int = int(state.get("hard_catalyst_count", 0))
+	var soft_count: int = int(state.get("soft_catalyst_count", 0))
+	var required_hard: int = 0
+	var campaign_realized_return: float = since_start_return
+	if has_campaign:
+		hard_count = max(hard_count, int(campaign.get("hard_catalyst_count", 0)))
+		soft_count = max(soft_count, int(campaign.get("soft_catalyst_count", 0)))
+		required_hard = max(int(campaign.get("required_hard_catalysts", 0)), 0)
+		campaign_realized_return = float(campaign.get("realized_return_pct", since_start_return))
+		if bool(campaign.get("uma_issued", false)):
+			state["uma_issued"] = true
+		if bool(campaign.get("suspension_seen", false)):
+			state["suspension_seen"] = true
+		if bool(campaign.get("split_scheduled", false)):
+			state["split_scheduled"] = true
+		if bool(campaign.get("split_executed", false)):
+			state["split_executed"] = true
+	else:
+		required_hard = _required_abnormal_hard_catalysts(since_start_return, ytd_return, thirty_day_return)
+
+	var flags: Array = []
+	var phase: String = "normal"
+	var next_needed_beat: String = ""
+	var price_bias_shift: float = 0.0
+	var positive_multiplier: float = 1.0
+	var max_positive_change: float = 999.0
+	var negative_multiplier: float = 1.0
+	var min_negative_change: float = -999.0
+	var volume_activity_multiplier: float = 1.0
+	var turnover_floor_rate: float = 0.0
+
+	var split_path_seen: bool = bool(state.get("split_scheduled", false)) or bool(state.get("split_executed", false))
+	if previous_close >= ABNORMAL_SPLIT_PRESSURE_PRICE:
+		state["split_pressure"] = true
+		phase = "split_pressure"
+		flags.append("abnormal_split_pressure")
+		positive_multiplier = min(positive_multiplier, 0.48)
+		max_positive_change = min(max_positive_change, 0.028)
+		volume_activity_multiplier = max(volume_activity_multiplier, 1.25)
+		turnover_floor_rate = max(turnover_floor_rate, 0.0025)
+		next_needed_beat = "stock split path"
+	if previous_close >= ABNORMAL_SPLIT_REQUIRED_PRICE and not split_path_seen:
+		state["split_required"] = true
+		phase = "split_required"
+		flags.append("abnormal_split_required")
+		positive_multiplier = min(positive_multiplier, 0.12)
+		max_positive_change = min(max_positive_change, 0.006)
+		price_bias_shift -= 0.026
+		volume_activity_multiplier = max(volume_activity_multiplier, 1.85)
+		turnover_floor_rate = max(turnover_floor_rate, 0.006)
+		next_needed_beat = "stock split before more upside"
+	if previous_close >= ABNORMAL_FANTASY_PRICE_GUARD and not split_path_seen:
+		phase = "fantasy_price_guard"
+		flags.append("abnormal_fantasy_price_guard")
+		positive_multiplier = 0.0
+		max_positive_change = min(max_positive_change, -0.012)
+		price_bias_shift -= 0.040
+		volume_activity_multiplier = max(volume_activity_multiplier, 2.45)
+		turnover_floor_rate = max(turnover_floor_rate, 0.010)
+		next_needed_beat = "cooldown and split path"
+
+	if green_limit_streak >= 3:
+		phase = "uma_watch" if phase == "normal" else phase
+		flags.append("abnormal_uma_watch")
+		positive_multiplier = min(positive_multiplier, 0.62)
+		max_positive_change = min(max_positive_change, 0.060)
+		price_bias_shift -= 0.006
+		volume_activity_multiplier = max(volume_activity_multiplier, 1.35)
+		turnover_floor_rate = max(turnover_floor_rate, 0.002)
+		next_needed_beat = "red day / exchange attention" if next_needed_beat.is_empty() else next_needed_beat
+	if green_limit_streak >= 5:
+		state["uma_issued"] = true
+		if int(state.get("uma_day_index", -1)) < 0:
+			state["uma_day_index"] = day_number
+		phase = "uma_issued"
+		flags.append("abnormal_uma_issued")
+		positive_multiplier = min(positive_multiplier, 0.30)
+		max_positive_change = min(max_positive_change, 0.018)
+		price_bias_shift -= 0.016
+		volume_activity_multiplier = max(volume_activity_multiplier, 2.20)
+		turnover_floor_rate = max(turnover_floor_rate, 0.007)
+		next_needed_beat = "cooling trade after UMA"
+	if green_limit_streak >= 7:
+		state["suspension_seen"] = true
+		if int(state.get("suspension_day_index", -1)) < 0:
+			state["suspension_day_index"] = day_number
+		phase = "suspension_risk"
+		flags.append("abnormal_suspension_risk")
+		positive_multiplier = 0.0
+		max_positive_change = min(max_positive_change, -0.006)
+		price_bias_shift -= 0.042
+		volume_activity_multiplier = max(volume_activity_multiplier, 3.20)
+		turnover_floor_rate = max(turnover_floor_rate, 0.014)
+		next_needed_beat = "suspension / reopen chop"
+
+	if has_campaign:
+		var campaign_phase: String = str(campaign.get("phase", ""))
+		var tier: String = str(campaign.get("tier", "common"))
+		var target_return: float = max(float(campaign.get("target_return_pct", 2.0)), 0.0)
+		if campaign_realized_return >= target_return * 0.85 and target_return > 0.0:
+			flags.append("abnormal_campaign_budget_near_target")
+			positive_multiplier = min(positive_multiplier, 0.34)
+			max_positive_change = min(max_positive_change, 0.026)
+			price_bias_shift -= 0.010
+			next_needed_beat = "distribution beat" if next_needed_beat.is_empty() else next_needed_beat
+		if tier == "common" and campaign_realized_return >= 8.0:
+			flags.append("abnormal_common_campaign_cap")
+			positive_multiplier = min(positive_multiplier, 0.08)
+			max_positive_change = min(max_positive_change, 0.006)
+			price_bias_shift -= 0.022
+			volume_activity_multiplier = max(volume_activity_multiplier, 2.35)
+			turnover_floor_rate = max(turnover_floor_rate, 0.010)
+			next_needed_beat = "ugly distribution"
+		if campaign_realized_return >= 10.0 and (not bool(state.get("uma_issued", false)) or (tier in ["rare", "legendary"] and (not bool(state.get("suspension_seen", false)) or not split_path_seen))):
+			flags.append("abnormal_campaign_gate_locked")
+			phase = "campaign_gate_locked"
+			positive_multiplier = min(positive_multiplier, 0.04)
+			max_positive_change = min(max_positive_change, 0.002)
+			price_bias_shift -= 0.036
+			volume_activity_multiplier = max(volume_activity_multiplier, 2.80)
+			turnover_floor_rate = max(turnover_floor_rate, 0.014)
+			next_needed_beat = "UMA / suspension / split story beat"
+		if campaign_phase in ["distribution", "dump", "dead_cat", "cooldown"]:
+			phase = campaign_phase
+			flags.append("abnormal_campaign_distribution")
+			positive_multiplier = min(positive_multiplier, 0.22)
+			max_positive_change = min(max_positive_change, 0.018)
+			volume_activity_multiplier = max(volume_activity_multiplier, 3.10)
+			turnover_floor_rate = max(turnover_floor_rate, 0.016)
+	else:
+		var runaway_return: float = max(max(since_start_return, ytd_return), thirty_day_return)
+		if runaway_return >= 1.0:
+			phase = "abnormal_watch" if phase == "normal" else phase
+			flags.append("abnormal_move_watch")
+			positive_multiplier = min(positive_multiplier, 0.72)
+			max_positive_change = min(max_positive_change, 0.055)
+			price_bias_shift -= 0.004
+			volume_activity_multiplier = max(volume_activity_multiplier, 1.20)
+			next_needed_beat = "another story beat" if next_needed_beat.is_empty() else next_needed_beat
+		if runaway_return >= 2.0:
+			phase = "needs_hard_catalyst" if hard_count < 1 else phase
+			flags.append("abnormal_needs_catalyst")
+			if hard_count < 1:
+				positive_multiplier = min(positive_multiplier, 0.20)
+				max_positive_change = min(max_positive_change, 0.012)
+				price_bias_shift -= 0.018
+				next_needed_beat = "first hard CA beat"
+			else:
+				positive_multiplier = min(positive_multiplier, 0.55)
+				max_positive_change = min(max_positive_change, 0.040)
+			volume_activity_multiplier = max(volume_activity_multiplier, 1.65)
+			turnover_floor_rate = max(turnover_floor_rate, 0.004)
+		if runaway_return >= 4.0:
+			phase = "forced_chop" if hard_count < 2 else phase
+			flags.append("abnormal_forced_chop")
+			if hard_count < 2:
+				positive_multiplier = min(positive_multiplier, 0.06)
+				max_positive_change = min(max_positive_change, 0.004)
+				price_bias_shift -= 0.034
+				next_needed_beat = "second distinct CA chain"
+			else:
+				positive_multiplier = min(positive_multiplier, 0.35)
+				max_positive_change = min(max_positive_change, 0.018)
+			volume_activity_multiplier = max(volume_activity_multiplier, 2.15)
+			turnover_floor_rate = max(turnover_floor_rate, 0.008)
+		if runaway_return >= 6.8:
+			phase = "pre_800_guard"
+			flags.append("abnormal_pre_800_guard")
+			if hard_count < 3 or not bool(state.get("uma_issued", false)):
+				positive_multiplier = min(positive_multiplier, 0.03)
+				max_positive_change = min(max_positive_change, 0.002)
+				price_bias_shift -= 0.030
+				next_needed_beat = "UMA plus third CA beat before +800%"
+			else:
+				positive_multiplier = min(positive_multiplier, 0.16)
+				max_positive_change = min(max_positive_change, 0.010)
+			volume_activity_multiplier = max(volume_activity_multiplier, 2.55)
+			turnover_floor_rate = max(turnover_floor_rate, 0.012)
+		if runaway_return >= 8.0:
+			phase = "distribution_guard"
+			flags.append("abnormal_distribution_guard")
+			if hard_count < 3 or not bool(state.get("uma_issued", false)):
+				positive_multiplier = 0.0
+				max_positive_change = min(max_positive_change, -0.008)
+				price_bias_shift -= 0.058
+				next_needed_beat = "UMA plus third CA beat"
+			else:
+				positive_multiplier = min(positive_multiplier, 0.18)
+				max_positive_change = min(max_positive_change, 0.012)
+			volume_activity_multiplier = max(volume_activity_multiplier, 3.00)
+			turnover_floor_rate = max(turnover_floor_rate, 0.016)
+		if runaway_return >= 10.0 and not split_path_seen:
+			phase = "split_required"
+			flags.append("abnormal_extreme_without_split")
+			positive_multiplier = 0.0
+			max_positive_change = min(max_positive_change, -0.018)
+			price_bias_shift -= 0.072
+			volume_activity_multiplier = max(volume_activity_multiplier, 3.60)
+			turnover_floor_rate = max(turnover_floor_rate, 0.020)
+			next_needed_beat = "stock split and ugly dump"
+
+		if since_start_return <= -0.75:
+			phase = "floor_watch" if phase == "normal" else phase
+			flags.append("abnormal_deep_drawdown_stabilizer")
+			negative_multiplier = min(negative_multiplier, 0.55)
+			min_negative_change = max(min_negative_change, -0.040)
+			price_bias_shift += 0.012
+			volume_activity_multiplier = max(volume_activity_multiplier, 1.10)
+		if since_start_return <= -0.90 or floor_days > 0:
+			phase = "floor_watch" if phase == "normal" else phase
+			flags.append("abnormal_floor_board")
+			negative_multiplier = min(negative_multiplier, 0.18)
+			min_negative_change = max(min_negative_change, -0.006)
+			volume_activity_multiplier = max(volume_activity_multiplier, 1.06)
+		if floor_days >= FLOOR_TURNAROUND_WATCH_DAYS:
+			if floor_turnaround_eligible:
+				phase = "floor_turnaround_watch" if phase in ["normal", "floor_watch", "floor_rebound"] else phase
+				flags.append("abnormal_floor_turnaround_candidate")
+				positive_multiplier = min(positive_multiplier, 0.62)
+				max_positive_change = min(max_positive_change, 0.026)
+				negative_multiplier = min(negative_multiplier, 0.28)
+				min_negative_change = max(min_negative_change, -0.012)
+				price_bias_shift += clamp((floor_turnaround_score - 0.48) * 0.035, 0.002, 0.014)
+				volume_activity_multiplier = max(volume_activity_multiplier, 1.35)
+				turnover_floor_rate = max(turnover_floor_rate, 0.0012)
+				next_needed_beat = "turnaround corporate action" if next_needed_beat.is_empty() else next_needed_beat
+			else:
+				phase = "floor_zombie"
+				flags.append("abnormal_floor_zombie")
+				positive_multiplier = min(positive_multiplier, 0.10)
+				max_positive_change = min(max_positive_change, 0.004)
+				negative_multiplier = min(negative_multiplier, 0.05)
+				min_negative_change = max(min_negative_change, -0.002)
+				price_bias_shift -= 0.010
+				volume_activity_multiplier = min(volume_activity_multiplier, 0.80)
+				next_needed_beat = "business still too weak" if next_needed_beat.is_empty() else next_needed_beat
+
+	state["hard_catalyst_count"] = hard_count
+	state["soft_catalyst_count"] = soft_count
+	state["last_phase"] = phase
+	state["last_flags"] = flags.duplicate()
+	state["last_checked_day_index"] = day_number
+	return {
+		"active": flags.size() > 0 or hard_count > 0 or soft_count > 0,
+		"company_id": company_id,
+		"phase": phase,
+		"flags": _unique_string_array(flags),
+		"next_needed_beat": next_needed_beat,
+		"since_start_return": since_start_return,
+		"ytd_return": ytd_return,
+		"ten_day_return": ten_day_return,
+		"thirty_day_return": thirty_day_return,
+		"green_limit_streak": green_limit_streak,
+		"floor_days": floor_days,
+		"floor_status": floor_status,
+		"floor_turnaround_score": floor_turnaround_score,
+		"floor_turnaround_eligible": floor_turnaround_eligible,
+		"hard_catalyst_count": hard_count,
+		"soft_catalyst_count": soft_count,
+		"required_hard_catalysts": required_hard,
+		"uma_issued": bool(state.get("uma_issued", false)),
+		"suspension_seen": bool(state.get("suspension_seen", false)),
+		"split_pressure": bool(state.get("split_pressure", false)),
+		"split_required": bool(state.get("split_required", false)),
+		"split_scheduled": bool(state.get("split_scheduled", false)),
+		"split_executed": bool(state.get("split_executed", false)),
+		"price_bias_shift": price_bias_shift,
+		"event_bias_shift": price_bias_shift * 0.35,
+		"positive_change_multiplier": clamp(positive_multiplier, 0.0, 1.0),
+		"max_positive_change": max_positive_change,
+		"negative_change_multiplier": clamp(negative_multiplier, 0.05, 1.0),
+		"min_negative_change": min_negative_change,
+		"volume_activity_multiplier": volume_activity_multiplier,
+		"turnover_floor_rate": _temper_turnover_floor_rate(turnover_floor_rate),
+		"state": state.duplicate(true)
+	}
+
+
+func _apply_abnormal_move_context(event_context: Dictionary, abnormal_context: Dictionary) -> Dictionary:
+	if abnormal_context.is_empty() or not bool(abnormal_context.get("active", false)):
+		return event_context
+	var context: Dictionary = event_context.duplicate(true)
+	context["event_bias"] = clamp(
+		float(context.get("event_bias", 0.0)) + float(abnormal_context.get("event_bias_shift", 0.0)),
+		-0.18,
+		0.18
+	)
+	context["volume_activity_multiplier"] = clamp(
+		float(context.get("volume_activity_multiplier", 1.0)) * float(abnormal_context.get("volume_activity_multiplier", 1.0)),
+		0.35,
+		5.8
+	)
+	context["abnormal_move_context"] = abnormal_context.duplicate(true)
+	var hidden_flags: Array = context.get("hidden_story_flags", []).duplicate()
+	for flag_value in abnormal_context.get("flags", []):
+		var flag: String = str(flag_value)
+		if not flag.is_empty() and not hidden_flags.has(flag):
+			hidden_flags.append(flag)
+	context["hidden_story_flags"] = hidden_flags
+	var event_tags: Array = context.get("event_tags", []).duplicate()
+	var phase_tag: String = "abnormal_%s" % str(abnormal_context.get("phase", "move"))
+	if not event_tags.has(phase_tag):
+		event_tags.append(phase_tag)
+	context["event_tags"] = event_tags
+	return context
+
+
+func _apply_abnormal_daily_change_guard(daily_change: float, daily_move_cap: float, volume_context: Dictionary) -> float:
+	var abnormal_context: Dictionary = volume_context.get("abnormal_move_context", {}) if typeof(volume_context.get("abnormal_move_context", {})) == TYPE_DICTIONARY else {}
+	if abnormal_context.is_empty() or not bool(abnormal_context.get("active", false)):
+		return clamp(daily_change, -daily_move_cap, daily_move_cap)
+
+	var guarded_change: float = daily_change + float(abnormal_context.get("price_bias_shift", 0.0))
+	if guarded_change > 0.0:
+		guarded_change *= clamp(float(abnormal_context.get("positive_change_multiplier", 1.0)), 0.0, 1.0)
+		guarded_change = min(guarded_change, float(abnormal_context.get("max_positive_change", guarded_change)))
+	elif guarded_change < 0.0:
+		guarded_change *= clamp(float(abnormal_context.get("negative_change_multiplier", 1.0)), 0.05, 1.0)
+		guarded_change = max(guarded_change, float(abnormal_context.get("min_negative_change", guarded_change)))
+	return clamp(guarded_change, -daily_move_cap, daily_move_cap)
+
+
+func _temper_turnover_floor_rate(raw_rate: float) -> float:
+	return clamp(raw_rate * 0.26, 0.0, 0.0052)
+
+
+func _value_governor_cap(
+	market_cap: float,
+	avg_daily_value: float,
+	free_float_value: float,
+	current_price: float,
+	free_float_ratio: float,
+	liquidity_profile: float,
+	story_heat: float,
+	gorengan_campaign: Dictionary,
+	abnormal_context: Dictionary
+) -> float:
+	var minimum_value: float = max(current_price * 1000.0, 25000000.0)
+	var current_market_cap: float = max(market_cap, free_float_value / max(free_float_ratio, 0.01))
+	var size_cap: float = VALUE_GOVERNOR_SMALL_CAP
+	if current_market_cap >= 100000000000000.0:
+		size_cap = VALUE_GOVERNOR_GIANT_CAP
+	elif current_market_cap >= 25000000000000.0:
+		size_cap = VALUE_GOVERNOR_LARGE_CAP
+	elif current_market_cap >= 6000000000000.0:
+		size_cap = VALUE_GOVERNOR_MID_CAP
+	var adv_cap: float = max(avg_daily_value * lerp(4.0, 10.0, liquidity_profile), minimum_value)
+	var float_cap: float = max(free_float_value * lerp(0.00035, 0.0014, liquidity_profile), minimum_value)
+	var raw_cap: float = max(size_cap, max(adv_cap, float_cap))
+	raw_cap *= 1.0 + clamp(story_heat, 0.0, 1.0) * 0.16
+	raw_cap *= _value_governor_phase_multiplier(gorengan_campaign, abnormal_context)
+	return clamp(raw_cap, minimum_value, _value_governor_ceiling(gorengan_campaign, abnormal_context))
+
+
+func _value_governor_phase_multiplier(gorengan_campaign: Dictionary, abnormal_context: Dictionary) -> float:
+	var multiplier: float = 1.0
+	if not gorengan_campaign.is_empty() and bool(gorengan_campaign.get("active", false)):
+		match str(gorengan_campaign.get("phase", "")):
+			"accumulation":
+				multiplier = max(multiplier, 1.10)
+			"markup":
+				multiplier = max(multiplier, 1.70)
+			"final_hype":
+				multiplier = max(multiplier, 2.10)
+			"shakeout":
+				multiplier = max(multiplier, 1.85)
+			"regulatory_chop":
+				multiplier = max(multiplier, 2.20)
+			"distribution":
+				multiplier = max(multiplier, 2.70)
+			"dump":
+				multiplier = max(multiplier, 3.15)
+			"dead_cat":
+				multiplier = max(multiplier, 2.35)
+		match str(gorengan_campaign.get("tier", "common")):
+			"rare":
+				multiplier += 0.16
+			"legendary":
+				multiplier += 0.32
+	if not abnormal_context.is_empty() and bool(abnormal_context.get("active", false)):
+		match str(abnormal_context.get("phase", "")):
+			"floor_zombie":
+				multiplier = min(multiplier, 0.45)
+			"floor_watch":
+				multiplier = min(multiplier, 0.72)
+			"uma_watch":
+				multiplier = max(multiplier, 1.35)
+			"uma_issued":
+				multiplier = max(multiplier, 1.80)
+			"suspension_risk":
+				multiplier = max(multiplier, 2.65)
+			"split_pressure", "split_required", "fantasy_price_guard":
+				multiplier = max(multiplier, 1.85)
+			"distribution_guard", "campaign_gate_locked":
+				multiplier = max(multiplier, 2.45)
+			"floor_turnaround_watch":
+				multiplier = max(multiplier, 1.18)
+	return clamp(multiplier, 0.75, 3.65)
+
+
+func _value_governor_ceiling(gorengan_campaign: Dictionary, abnormal_context: Dictionary) -> float:
+	var campaign_phase: String = str(gorengan_campaign.get("phase", "")) if not gorengan_campaign.is_empty() else ""
+	var abnormal_phase: String = str(abnormal_context.get("phase", "")) if not abnormal_context.is_empty() else ""
+	if abnormal_phase == "floor_zombie" or abnormal_phase == "floor_watch":
+		return VALUE_GOVERNOR_FLOOR_MAX
+	if abnormal_phase == "floor_turnaround_watch":
+		return VALUE_GOVERNOR_TURNAROUND_MAX
+	if campaign_phase in ["distribution", "dump", "dead_cat"] or abnormal_phase in ["suspension_risk", "distribution_guard", "campaign_gate_locked"]:
+		return VALUE_GOVERNOR_EXTREME_MAX
+	if (not gorengan_campaign.is_empty() and bool(gorengan_campaign.get("active", false))) or (not abnormal_context.is_empty() and bool(abnormal_context.get("active", false))):
+		return VALUE_GOVERNOR_HOT_MAX
+	return VALUE_GOVERNOR_REGULAR_MAX
+
+
+func _apply_abnormal_close_guard(
+	close_context: Dictionary,
+	previous_close: float,
+	ar_limits: Dictionary,
+	abnormal_context: Dictionary
+) -> Dictionary:
+	if abnormal_context.is_empty() or not bool(abnormal_context.get("active", false)):
+		return close_context
+	if bool(close_context.get("scripted_override", false)):
+		return close_context
+	var current_price: float = float(close_context.get("close_price", previous_close))
+	if is_zero_approx(previous_close):
+		return close_context
+	var daily_change: float = (current_price - previous_close) / previous_close
+	var guarded_change: float = daily_change
+	var max_positive_change: float = float(abnormal_context.get("max_positive_change", 999.0))
+	var min_negative_change: float = float(abnormal_context.get("min_negative_change", -999.0))
+	if daily_change > max_positive_change:
+		guarded_change = max_positive_change
+	if daily_change < min_negative_change:
+		guarded_change = min_negative_change
+	if is_equal_approx(guarded_change, daily_change):
+		return close_context
+
+	var target_price: float = previous_close * (1.0 + guarded_change)
+	var guarded_price: float = IDX_PRICE_RULES.snap_price_for_day(target_price, previous_close)
+	guarded_price = clamp(
+		guarded_price,
+		float(ar_limits.get("lower_price", 1.0)),
+		float(ar_limits.get("upper_price", guarded_price))
+	)
+	var next: Dictionary = close_context.duplicate(true)
+	next["close_price"] = guarded_price
+	next["limit_lock"] = _limit_lock_for_price(guarded_price, ar_limits)
+	next["limit_source"] = "abnormal_move_supervisor"
+	next["abnormal_move_guarded"] = true
+	return next
+
+
+func _abnormal_move_state_for_runtime(runtime: Dictionary, definition: Dictionary, event_context: Dictionary, day_number: int) -> Dictionary:
+	var state: Dictionary = runtime.get("abnormal_move_state", {}) if typeof(runtime.get("abnormal_move_state", {})) == TYPE_DICTIONARY else {}
+	state = state.duplicate(true)
+	var hard_ids: Array = _unique_string_array(state.get("hard_chain_ids", []))
+	var soft_ids: Array = _unique_string_array(state.get("soft_chain_ids", []))
+	var company_id: String = str(definition.get("id", ""))
+	var active_events: Array = event_context.get("active_events", []) if typeof(event_context.get("active_events", [])) == TYPE_ARRAY else []
+	for event_value in active_events:
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event: Dictionary = event_value
+		if not _abnormal_event_targets_company(event, company_id):
+			continue
+		var category: String = str(event.get("category", ""))
+		var chain_id: String = _abnormal_event_chain_id(event, category)
+		var family: String = str(event.get("chain_family", event.get("event_id", "")))
+		if family == "stock_split":
+			state["split_scheduled"] = true
+			if category == "corporate_action_execution" or str(event.get("current_phase_id", "")) == "execution":
+				state["split_executed"] = true
+		if ABNORMAL_HARD_CATALYST_CATEGORIES.has(category):
+			if not hard_ids.has(chain_id):
+				hard_ids.append(chain_id)
+		elif ABNORMAL_SOFT_CATALYST_CATEGORIES.has(category):
+			if not soft_ids.has(chain_id):
+				soft_ids.append(chain_id)
+	state["hard_chain_ids"] = hard_ids
+	state["soft_chain_ids"] = soft_ids
+	state["hard_catalyst_count"] = hard_ids.size()
+	state["soft_catalyst_count"] = soft_ids.size()
+	if not state.has("uma_day_index"):
+		state["uma_day_index"] = -1
+	if not state.has("suspension_day_index"):
+		state["suspension_day_index"] = -1
+	state["last_event_day_index"] = day_number if not active_events.is_empty() else int(state.get("last_event_day_index", -1))
+	return state
+
+
+func _abnormal_event_targets_company(event: Dictionary, company_id: String) -> bool:
+	var target_company_id: String = str(event.get("target_company_id", ""))
+	if target_company_id.is_empty():
+		return false
+	return target_company_id == company_id
+
+
+func _abnormal_event_chain_id(event: Dictionary, category: String) -> String:
+	var chain_id: String = str(event.get("source_chain_id", event.get("arc_id", "")))
+	if chain_id.is_empty():
+		chain_id = "%s|%s" % [str(event.get("event_id", "")), category]
+	return chain_id
+
+
+func _required_abnormal_hard_catalysts(since_start_return: float, ytd_return: float, thirty_day_return: float) -> int:
+	var runaway_return: float = max(max(since_start_return, ytd_return), thirty_day_return)
+	if runaway_return >= 8.0:
+		return 3
+	if runaway_return >= 4.0:
+		return 2
+	if runaway_return >= 2.0:
+		return 1
+	return 0
+
+
+func _floor_board_state_for_runtime(
+	definition: Dictionary,
+	runtime: Dictionary,
+	state: Dictionary,
+	previous_close: float,
+	day_number: int
+) -> Dictionary:
+	var floor_days: int = max(int(state.get("floor_days", 0)), 0)
+	var last_checked_day: int = int(state.get("floor_last_checked_day_index", -1))
+	var at_floor: bool = previous_close <= REGULAR_MARKET_PRICE_FLOOR + 0.001
+	if last_checked_day != day_number:
+		floor_days = floor_days + 1 if at_floor else 0
+	state["floor_days"] = floor_days
+	state["floor_last_checked_day_index"] = day_number
+	state["floor_last_price"] = previous_close
+
+	var quality_context: Dictionary = _floor_turnaround_quality_context(definition, runtime)
+	var turnaround_score: float = float(quality_context.get("score", 0.0))
+	var eligible: bool = bool(quality_context.get("eligible", false))
+	var status: String = "none"
+	if floor_days > 0:
+		status = "floor_watch"
+	if floor_days >= FLOOR_TURNAROUND_WATCH_DAYS:
+		status = "turnaround_candidate" if eligible else "floor_zombie"
+	state["floor_status"] = status
+	state["floor_turnaround_score"] = turnaround_score
+	state["floor_turnaround_eligible"] = eligible
+	state["floor_turnaround_reasons"] = quality_context.get("reasons", []).duplicate()
+	return {
+		"floor_days": floor_days,
+		"status": status,
+		"turnaround_score": turnaround_score,
+		"turnaround_eligible": eligible,
+		"reasons": quality_context.get("reasons", []).duplicate()
+	}
+
+
+func _floor_turnaround_quality_context(definition: Dictionary, runtime: Dictionary) -> Dictionary:
+	var financials: Dictionary = definition.get("financials", {})
+	var traits: Dictionary = definition.get("generation_traits", {}).duplicate(true)
+	var profile: Dictionary = runtime.get("company_profile", {}) if typeof(runtime.get("company_profile", {})) == TYPE_DICTIONARY else {}
+	var profile_traits: Dictionary = profile.get("generation_traits", {}) if typeof(profile.get("generation_traits", {})) == TYPE_DICTIONARY else {}
+	for key_value in profile_traits.keys():
+		var key: String = str(key_value)
+		if not traits.has(key):
+			traits[key] = profile_traits.get(key)
+
+	var quality: float = clamp(float(definition.get("quality_score", 50.0)) / 100.0, 0.0, 1.0)
+	var growth_score: float = clamp(float(definition.get("growth_score", 50.0)) / 100.0, 0.0, 1.0)
+	var risk: float = clamp(float(definition.get("risk_score", 50.0)) / 100.0, 0.0, 1.0)
+	var balance_sheet_strength: float = clamp(float(traits.get("balance_sheet_strength", 0.5)), 0.0, 1.0)
+	var execution_consistency: float = clamp(float(traits.get("execution_consistency", 0.5)), 0.0, 1.0)
+	var story_heat: float = clamp(float(traits.get("story_heat", 0.5)), 0.0, 1.0)
+	var margin: float = float(financials.get("net_profit_margin", 0.0))
+	var roe: float = float(financials.get("roe", 0.0))
+	var revenue_growth: float = float(financials.get("revenue_growth_yoy", 0.0))
+	var earnings_growth: float = float(financials.get("earnings_growth_yoy", 0.0))
+	var debt_to_equity: float = max(float(financials.get("debt_to_equity", 0.0)), 0.0)
+	var margin_score: float = clamp((margin + 4.0) / 22.0, 0.0, 1.0)
+	var roe_score: float = clamp((roe + 3.0) / 22.0, 0.0, 1.0)
+	var growth_actual_score: float = clamp((revenue_growth + earnings_growth + 8.0) / 40.0, 0.0, 1.0)
+	var debt_drag: float = clamp((debt_to_equity - 0.65) / 2.20, 0.0, 1.0)
+	var risk_drag: float = clamp((risk - 0.50) / 0.50, 0.0, 1.0)
+	var score: float = clamp(
+		quality * 0.23 +
+		growth_score * 0.10 +
+		balance_sheet_strength * 0.20 +
+		execution_consistency * 0.10 +
+		margin_score * 0.13 +
+		roe_score * 0.10 +
+		growth_actual_score * 0.08 +
+		story_heat * 0.05 -
+		debt_drag * 0.16 -
+		risk_drag * 0.10,
+		0.0,
+		1.0
+	)
+	var has_real_fundamental_anchor: bool = (
+		quality >= 0.50 or
+		balance_sheet_strength >= 0.54 or
+		margin > 1.5 or
+		roe > 3.0
+	)
+	var too_broken: bool = debt_to_equity > 2.85 or (margin < -10.0 and earnings_growth < -12.0) or risk >= 0.88
+	var eligible: bool = score >= 0.48 and has_real_fundamental_anchor and not too_broken
+	var reasons: Array = []
+	if quality >= 0.50:
+		reasons.append("quality holds")
+	if balance_sheet_strength >= 0.54:
+		reasons.append("balance sheet holds")
+	if margin > 1.5 or roe > 3.0:
+		reasons.append("profitability still alive")
+	if debt_to_equity > 2.85:
+		reasons.append("debt too heavy")
+	if margin < -10.0 and earnings_growth < -12.0:
+		reasons.append("earnings break")
+	if risk >= 0.88:
+		reasons.append("risk too high")
+	return {
+		"score": score,
+		"eligible": eligible,
+		"reasons": reasons,
+		"quality": quality,
+		"growth_score": growth_score,
+		"risk": risk,
+		"balance_sheet_strength": balance_sheet_strength,
+		"execution_consistency": execution_consistency,
+		"debt_to_equity": debt_to_equity,
+		"net_profit_margin": margin,
+		"roe": roe,
+		"revenue_growth_yoy": revenue_growth,
+		"earnings_growth_yoy": earnings_growth
+	}
+
+
+func _recent_green_limit_streak(price_history: Array, threshold: float) -> int:
+	if price_history.size() < 2:
+		return 0
+	var streak: int = 0
+	for offset in range(price_history.size() - 1, 0, -1):
+		var close_price: float = float(price_history[offset])
+		var previous_price: float = float(price_history[offset - 1])
+		if previous_price <= 0.0:
+			break
+		var change_pct: float = (close_price - previous_price) / previous_price
+		if change_pct < threshold:
+			break
+		streak += 1
+	return streak
+
+
+func _recent_price_history_change(price_history: Array, lookback: int) -> float:
+	if price_history.size() < 2:
+		return 0.0
+	var end_index: int = price_history.size() - 1
+	var start_index: int = max(end_index - max(lookback, 1), 0)
+	var start_price: float = float(price_history[start_index])
+	var end_price: float = float(price_history[end_index])
+	if is_zero_approx(start_price):
+		return 0.0
+	return (end_price - start_price) / start_price
+
+
+func _unique_string_array(source_value: Variant) -> Array:
+	var rows: Array = []
+	if typeof(source_value) != TYPE_ARRAY:
+		return rows
+	for value in source_value:
+		var text: String = str(value)
+		if not text.is_empty() and not rows.has(text):
+			rows.append(text)
+	return rows
 
 
 func _resolve_special_price_override(
@@ -574,6 +1351,7 @@ func _build_daily_event_plan(
 	var event_interval_days: float = max(float(difficulty_config.get("event_interval_days", 30.0)), 1.0)
 	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_state.run_seed, "daily_event", day_number])
 	var scheduled_event_probability_multiplier: float = clamp(float(attention_directives.get("scheduled_event_probability_multiplier", 1.0)), 0.0, 4.0)
+	var suppress_market_scheduled_event: bool = bool(attention_directives.get("suppress_market_scheduled_event", false))
 
 	if scheduled_event_probability_multiplier <= 0.0:
 		return {}
@@ -614,7 +1392,7 @@ func _build_daily_event_plan(
 		candidates.append(risk_off_candidate)
 		risk_off_priority_chance = 0.13
 
-	if not risk_off_candidate.is_empty() and rng.randf() < risk_off_priority_chance:
+	if not suppress_market_scheduled_event and not risk_off_candidate.is_empty() and rng.randf() < risk_off_priority_chance:
 		var priority_candidate: Dictionary = risk_off_candidate.duplicate(true)
 		priority_candidate.erase("weight")
 		return priority_candidate
@@ -651,7 +1429,7 @@ func _build_daily_event_plan(
 		)
 	)
 	candidates = _apply_attention_focus_weights(candidates, attention_directives)
-	if bool(attention_directives.get("suppress_market_scheduled_event", false)):
+	if suppress_market_scheduled_event:
 		candidates = candidates.filter(func(candidate_value: Dictionary) -> bool:
 			return str(candidate_value.get("scope", "company")) != "market"
 		)
@@ -1196,8 +1974,11 @@ func _calculate_daily_change(
 	daily_change += float(volume_context.get("distribution_drag", 0.0))
 	daily_change += momentum_component
 	daily_change += noise_component
+	daily_change += float(volume_context.get("campaign_price_bias", 0.0))
+	if daily_change > 0.0:
+		daily_change *= clamp(float(volume_context.get("campaign_positive_change_multiplier", 1.0)), 0.04, 1.18)
 
-	return clamp(daily_change, -daily_move_cap, daily_move_cap)
+	return _apply_abnormal_daily_change_guard(daily_change, daily_move_cap, volume_context)
 
 
 func _recent_momentum(price_history: Array) -> float:
@@ -1230,6 +2011,7 @@ func _build_volume_activity_context(
 	var traits: Dictionary = definition.get("generation_traits", {})
 	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", 1.0))), 1.0)
 	var market_cap: float = max(float(financials.get("market_cap", current_price * 1000000000.0)), current_price * 1000000.0)
+	var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", market_cap / current_price))), 1.0)
 	var free_float_ratio: float = clamp(float(financials.get("free_float_pct", 35.0)) / 100.0, 0.07, 0.85)
 	var avg_daily_value: float = max(float(financials.get("avg_daily_value", current_price * 250000.0)), current_price * 1000.0)
 	var liquidity_profile: float = clamp(float(traits.get("liquidity_profile", 0.5)), 0.0, 1.0)
@@ -1237,17 +2019,34 @@ func _build_volume_activity_context(
 	var narrative_tags: Array = definition.get("narrative_tags", [])
 	var hidden_flags: Array = event_context.get("hidden_story_flags", runtime.get("hidden_story_flags", [])).duplicate()
 	var price_bars: Array = runtime.get("price_bars", [])
-	var chart_profile: Dictionary = _chart_profile_from_definition(definition, run_seed, company_id)
+	var chart_profile: Dictionary = _apply_gorengan_chart_overlay(
+		_chart_profile_from_definition(definition, run_seed, company_id),
+		event_context.get("gorengan_campaign", {})
+	)
 	var event_bias: float = float(event_context.get("event_bias", 0.0))
 	var event_volatility_multiplier: float = clamp(float(event_context.get("event_volatility_multiplier", 1.0)), 0.55, 2.1)
 	var passive_flow_pressure: float = clamp(float(event_context.get("passive_flow_pressure", 0.0)), -1.0, 1.0)
 	var passive_volume_multiplier: float = clamp(float(event_context.get("volume_activity_multiplier", 1.0)), 0.35, 3.0)
+	var gorengan_campaign: Dictionary = event_context.get("gorengan_campaign", {}) if typeof(event_context.get("gorengan_campaign", {})) == TYPE_DICTIONARY else {}
+	var gorengan_modifiers: Dictionary = event_context.get("gorengan_campaign_modifiers", {}) if typeof(event_context.get("gorengan_campaign_modifiers", {})) == TYPE_DICTIONARY else {}
+	var abnormal_context: Dictionary = event_context.get("abnormal_move_context", {}) if typeof(event_context.get("abnormal_move_context", {})) == TYPE_DICTIONARY else {}
 	var net_pressure: float = clamp(float(broker_flow.get("net_pressure", 0.0)), -1.0, 1.0)
 	var smart_money_pressure: float = clamp(float(broker_flow.get("smart_money_pressure", 0.0)), -1.0, 1.0)
 	var retail_pressure: float = clamp(float(broker_flow.get("retail_net", 0.0)) / 100.0, -1.0, 1.0)
 	var float_tightness: float = clamp((0.48 - free_float_ratio) / 0.40, 0.0, 1.0)
 
-	var free_float_value: float = market_cap * free_float_ratio
+	var free_float_value: float = max(market_cap * free_float_ratio, shares_outstanding * free_float_ratio * current_price)
+	var starting_price: float = max(float(runtime.get("starting_price", definition.get("base_price", current_price))), 1.0)
+	var realized_return: float = max((current_price - starting_price) / starting_price, 0.0)
+	var floor_reference_value: float = max(
+		free_float_value / sqrt(1.0 + realized_return),
+		current_price * 1000.0
+	)
+	floor_reference_value = min(
+		floor_reference_value,
+		max(max(market_cap * free_float_ratio * 2.6, avg_daily_value * 420.0), current_price * 1000.0)
+	)
+	var turnover_reference_value: float = lerp(free_float_value, floor_reference_value, 0.58)
 	var turnover_rate: float = clamp(
 		0.00045 +
 		(liquidity_profile * 0.0028) +
@@ -1264,9 +2063,30 @@ func _build_volume_activity_context(
 		turnover_rate += 0.00020
 	turnover_rate = clamp(turnover_rate, 0.00035, 0.0095)
 
-	var free_float_daily_value: float = max(free_float_value * turnover_rate, current_price * 1000.0)
+	var free_float_daily_value: float = max(turnover_reference_value * turnover_rate, current_price * 1000.0)
 	var quiet_float_drag: float = lerp(1.0, 0.78, float_tightness * (1.0 - liquidity_profile))
 	var base_daily_value: float = max(lerp(avg_daily_value, free_float_daily_value, 0.48) * quiet_float_drag, current_price * 1000.0)
+	if not gorengan_campaign.is_empty():
+		var campaign_turnover_floor_rate: float = clamp(float(gorengan_modifiers.get("campaign_turnover_floor_rate", 0.0)), 0.0, 0.006)
+		if campaign_turnover_floor_rate > 0.0:
+			base_daily_value = max(base_daily_value, floor_reference_value * campaign_turnover_floor_rate)
+	if not abnormal_context.is_empty():
+		var abnormal_turnover_floor_rate: float = clamp(float(abnormal_context.get("turnover_floor_rate", 0.0)), 0.0, 0.006)
+		if abnormal_turnover_floor_rate > 0.0:
+			base_daily_value = max(base_daily_value, floor_reference_value * abnormal_turnover_floor_rate)
+	var value_governor_cap: float = _value_governor_cap(
+		market_cap,
+		avg_daily_value,
+		free_float_value,
+		current_price,
+		free_float_ratio,
+		liquidity_profile,
+		story_heat,
+		gorengan_campaign,
+		abnormal_context
+	)
+	var base_daily_value_uncapped: float = base_daily_value
+	base_daily_value = min(base_daily_value, value_governor_cap)
 	var player_flow: Dictionary = broker_flow.get("player_flow", {})
 	var player_net_value: float = float(player_flow.get("net_value", 0.0))
 	var player_abs_value: float = max(absf(float(player_flow.get("buy_value", 0.0))) + absf(float(player_flow.get("sell_value", 0.0))), absf(player_net_value))
@@ -1413,15 +2233,20 @@ func _build_volume_activity_context(
 		operator_multiplier *
 		float(technical_context.get("volume_multiplier", 1.0)) *
 		passive_volume_multiplier *
+		float(gorengan_modifiers.get("campaign_volume_multiplier", 1.0)) *
+		float(abnormal_context.get("volume_activity_multiplier", 1.0)) *
 		player_volume_multiplier *
 		lumpy_noise,
 		0.30,
-		8.00
+		14.00
 	)
-	var expected_activity_ratio: float = (base_daily_value * volume_multiplier) / max(recent_value_average, 1.0)
+	var expected_trade_value: float = min(base_daily_value * volume_multiplier, value_governor_cap)
+	var expected_activity_ratio: float = expected_trade_value / max(recent_value_average, 1.0)
 
 	return {
 		"base_daily_value": base_daily_value,
+		"base_daily_value_uncapped": base_daily_value_uncapped,
+		"value_governor_cap": value_governor_cap,
 		"volume_multiplier": volume_multiplier,
 		"passive_flow_pressure": passive_flow_pressure,
 		"passive_volume_multiplier": passive_volume_multiplier,
@@ -1435,6 +2260,16 @@ func _build_volume_activity_context(
 		"buying_exhaustion_score": exhaustion_score,
 		"buying_exhaustion_drag": exhaustion_drag,
 		"distribution_drag": distribution_drag,
+		"abnormal_move_context": abnormal_context.duplicate(true),
+		"abnormal_move_phase": str(abnormal_context.get("phase", "")),
+		"abnormal_move_flags": abnormal_context.get("flags", []).duplicate(),
+		"gorengan_campaign": gorengan_campaign.duplicate(true),
+		"gorengan_campaign_phase": str(gorengan_campaign.get("phase", "")),
+		"gorengan_campaign_wave": str(gorengan_campaign.get("wave", "")),
+		"campaign_price_bias": float(gorengan_modifiers.get("campaign_price_bias", 0.0)),
+		"campaign_positive_change_multiplier": float(gorengan_modifiers.get("positive_change_multiplier", 1.0)),
+		"campaign_volume_multiplier": float(gorengan_modifiers.get("campaign_volume_multiplier", 1.0)),
+		"campaign_turnover_floor_rate": float(gorengan_modifiers.get("campaign_turnover_floor_rate", 0.0)),
 		"technical_price_bias": float(technical_context.get("price_bias", 0.0)),
 		"technical_volume_multiplier": float(technical_context.get("volume_multiplier", 1.0)),
 		"technical_sma_period": int(technical_context.get("sma_period", 0)),
@@ -2053,6 +2888,23 @@ func _build_technical_structure_context(
 	}
 
 
+func _apply_gorengan_chart_overlay(chart_profile: Dictionary, campaign_value: Variant) -> Dictionary:
+	var merged_profile: Dictionary = chart_profile.duplicate(true)
+	if typeof(campaign_value) != TYPE_DICTIONARY:
+		return merged_profile
+	var campaign: Dictionary = campaign_value
+	if campaign.is_empty() or not bool(campaign.get("active", false)):
+		return merged_profile
+	var overlay: Dictionary = gorengan_campaign_system.chart_overlay_for_campaign(campaign)
+	for key_value in overlay.keys():
+		var key: String = str(key_value)
+		if key in ["operator_pressure", "cycle_strength", "microstructure_intensity", "regime_block_intensity"]:
+			merged_profile[key] = max(float(merged_profile.get(key, 0.0)), float(overlay.get(key, 0.0)))
+		else:
+			merged_profile[key] = overlay.get(key)
+	return merged_profile
+
+
 func _chart_profile_from_definition(definition: Dictionary, run_seed: int, company_id: String) -> Dictionary:
 	var traits: Dictionary = definition.get("generation_traits", {})
 	var profile_value = traits.get("chart_profile", {})
@@ -2564,7 +3416,10 @@ func _build_daily_price_bar(
 
 	var limit_lock: String = str(close_context.get("limit_lock", ""))
 	var limit_source: String = str(close_context.get("limit_source", ""))
-	var chart_profile: Dictionary = _chart_profile_from_definition(definition, run_seed, company_id)
+	var chart_profile: Dictionary = _apply_gorengan_chart_overlay(
+		_chart_profile_from_definition(definition, run_seed, company_id),
+		volume_context.get("gorengan_campaign", {})
+	)
 	var technical_gap_bias: float = _live_chart_gap_bias(
 		chart_profile,
 		daily_change_pct,
@@ -2679,7 +3534,11 @@ func _build_daily_price_bar(
 	var day_move_confirmation: float = 1.0 + min(absf(daily_change_pct) * 4.5, 0.75)
 	if not limit_lock.is_empty():
 		day_move_confirmation += 0.65 + min(absf(float(player_flow_context.get("depth_impact_ratio", 0.0))) * 0.12, 0.95)
-	var traded_value: float = max(base_daily_value * volume_multiplier * day_move_confirmation, current_price * 1000.0)
+	var raw_traded_value: float = max(base_daily_value * volume_multiplier * day_move_confirmation, current_price * 1000.0)
+	var value_governor_cap: float = max(float(volume_context.get("value_governor_cap", raw_traded_value)), current_price * 1000.0)
+	var player_visible_value: float = max(absf(float(player_flow_context.get("buy_value", 0.0))) + absf(float(player_flow_context.get("sell_value", 0.0))), 0.0)
+	var governed_cap: float = max(value_governor_cap, player_visible_value * 1.15)
+	var traded_value: float = max(min(raw_traded_value, governed_cap), max(player_visible_value, current_price * 1000.0))
 	var volume_shares: int = int(max(round(traded_value / max(current_price, 1.0) / 100.0), 1.0) * 100.0)
 	var bar_value: float = current_price * float(volume_shares)
 
@@ -2693,6 +3552,10 @@ func _build_daily_price_bar(
 		"volume_shares": volume_shares,
 		"value": bar_value
 	}
+	if raw_traded_value > governed_cap + 0.01:
+		bar["value_governed"] = true
+		bar["raw_value_before_governor"] = raw_traded_value
+		bar["value_governor_cap"] = value_governor_cap
 	if not limit_lock.is_empty():
 		bar["limit_lock"] = limit_lock
 		bar["limit_source"] = limit_source
@@ -2703,6 +3566,11 @@ func _build_daily_price_bar(
 		bar["player_liquidity_consumed"] = float(player_flow_context.get("side_depth_ratio", 0.0))
 		bar["player_free_float_pct"] = float(player_flow_context.get("side_free_float_pct", 0.0))
 		bar["player_broker_code"] = str(player_flow_context.get("broker_code", ""))
+	var abnormal_context: Dictionary = volume_context.get("abnormal_move_context", {}) if typeof(volume_context.get("abnormal_move_context", {})) == TYPE_DICTIONARY else {}
+	if not abnormal_context.is_empty() and bool(abnormal_context.get("active", false)):
+		bar["abnormal_move_phase"] = str(abnormal_context.get("phase", ""))
+		bar["abnormal_move_flags"] = abnormal_context.get("flags", []).duplicate()
+		bar["abnormal_move_guarded"] = bool(close_context.get("abnormal_move_guarded", false))
 	if not market_depth_context.is_empty():
 		bar["ask_depth_value"] = float(market_depth_context.get("ask_depth_value", 0.0))
 		bar["bid_depth_value"] = float(market_depth_context.get("bid_depth_value", 0.0))

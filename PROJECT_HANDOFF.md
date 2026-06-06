@@ -23,8 +23,9 @@ Read this file first in the next session.
   - GitHub remote configured as `origin`
   - remote URL: `https://github.com/alifhunter/godot-game-1.git`
   - current branch tracks `origin/main`
-  - latest pushed clean checkpoint at handoff refresh: `02c2421 Polish app UI and Company debug controls`
+  - latest pushed clean checkpoint at handoff refresh: `0b06d1b Polish UI help and build metadata`
   - recent committed checkpoints include:
+    - `0b06d1b Polish UI help and build metadata`
     - `02c2421 Polish app UI and Company debug controls`
     - `1c8619e Polish RUPSLB meeting overlay`
     - `0a7cdbf Bump build version`
@@ -43,11 +44,17 @@ Read this file first in the next session.
   - current local note: formatter locals that previously shadowed Godot's built-in `sign()` are now renamed to `sign_prefix`
 
 ## Latest Session Snapshot
-- 2026-06-05 follow-up UI/build polish: the difficulty-selection screen no longer shows the selected-run detail blurb (`Cash`, company count, volatility, event pace) after choosing a mode. Home now shows visible version/build text as `0.1.0-ea / Build 2026.06.05.1`, with `BuildInfo` and tester-facing Steam docs moved to build `2026.06.05.1` / date `2026-06-05`.
-- Thesis Board now follows the newer cream app treatment used by Life/Network: cream backing for Thesis window gaps, warmer panel colors, `14px` minimum label/chip/rich-text scale, light item-list styling, shared desktop button/dropdown styling, and styled thesis title input.
-- Stockbot Help now intentionally hides all old help copy and the `HELP` title. The Help view should show only the `Open Guide Hub` button; `SmokeTest.gd` was updated to assert the hidden title/body plus the `HelpGuideHubButton`.
-- Current dirty implementation files for this follow-up batch are `autoloads/BuildInfo.gd`, `docs/BUG_REPORT_TEMPLATE.md`, `docs/KNOWN_ISSUES.md`, `docs/STEAM_PLAYTEST_CHECKLIST.md`, `scenes/game/views/HelpView.tscn`, `scripts/tests/SmokeTest.gd`, `scripts/ui/GameRoot.gd`, `scripts/ui/MainMenu.gd`, `scripts/ui/widgets/ThesisBoardWidget.gd`, plus this handoff file. Preserve these local edits unless the user explicitly asks to revert, commit, or split them.
-- Verification for this follow-up batch: `git diff --check` passed for the MainMenu/BuildInfo/doc updates, Thesis styling changes, and Help/SmokeTest changes. Windows Godot `4.6.2` headless project load passed using `C:\Users\Alif\Desktop\Godot_v4.6.2-stable_win64_console.exe --headless --path . --log-file logs\debug-company-control-load.log --quit` after the UI edits; it still prints the usual non-blocking trailing `ObjectDB instances leaked at exit` warning. Full smoke was not rerun for these UI-only changes.
+- 2026-06-06 gorengan / market-balance / dynamic filing pass is the current uncommitted implementation batch. It adds `systems/GorenganCampaignSystem.gd`, campaign-aware integration through `MarketSimulator`, `AttentionDirectorSystem`, `CorporateActionSystem`, `RunState`, and `GameRoot`, a reusable `MarketYearAudit` scene/script, Rp50 floor/turnaround logic, dynamic quarterly filing updates, and debug generators for dirty tips, jail, hospital, and campaign inspection.
+- Gorengan campaigns now aim for cinematic but bounded stories instead of one-corporate-action absurdity: common campaigns target roughly `+200%` to `+800%`, rare/legendary runs require more distinct hard catalysts, higher regulatory heat, UMA/suspension/split paths, and later distribution/dump phases. The campaign state tracks tier, phase, Elliott-like wave, catalysts seen/required, realized return, return budget, green-limit streak, split/UMA/suspension flags, regulatory heat, and next-needed beat for debug display.
+- Turnover/value was retuned after the first 2-year audit exposed quadrillion-Rupiah days. The current `MarketSimulator.gd` value governor caps daily traded value by floor/reference price, realized return, market-cap bucket, and campaign heat. Tuned caps are currently around `Rp250B` floor names, `Rp700B` turnaround names, `Rp1.2T` regular names, `Rp3.5T` hot names, and `Rp8T` extreme names, with campaign turnover floors reduced in `GorenganCampaignSystem.gd`.
+- Quarterly report events now update actual post-2020 company financial snapshots instead of only emitting `earnings_beat` / `earnings_miss` headlines. `RunState.get_quarterly_report_events_for_day_number(day, trade_date, macro_state)` uses current macro, micro/company quality, market tape, and seeded noise; `RunState._apply_quarterly_report_filings()` applies the resulting statements after close, so future filings can improve or degrade fundamentals over time.
+- Rp50 floor behavior now treats long-floor stocks as a special board: after roughly a week at `Rp50`, fundamentally survivable names can become turnaround candidates and qualify for turnaround/backdoor-style corporate-action stories, while weak names remain `floor_zombie`. Because quarterly filings now move fundamentals, a `floor_zombie` can eventually recover only if later generated filings improve enough.
+- Academy is release-locked as a visible Coming Soon item for this build: the desktop tile stays visible with `ACADEMY / COMING SOON` and the `SOON` badge, clicks only show `Academy lessons are coming soon.`, and Guide Hub/FTUE lists Academy as disabled `Soon` instead of starting `academy_flow`. The implemented Academy content/editor/backend remain in place for later unlock.
+- Twooter market-advice placeholder regression is fixed: market-scoped posts now enrich context with `market_change`, `advancers`, and `decliners` from the latest market snapshot so literal `{market_change}` / `{advancers}` / `{decliners}` text should not leak.
+- Recent UI/build polish in the last clean checkpoint: difficulty selection no longer shows the selected-run detail blurb, Home shows `0.1.0-ea / Build 2026.06.05.1`, Thesis follows the cream Life/Network visual treatment with larger `14px` text, Stockbot Help intentionally leaves only the `Open Guide Hub` button, Twooter margins/buttons/text were tightened and enlarged, Twooter score/verified/public tags were removed, News/Academy/Life tabs share the News tab style, Life was narrowed and de-browned, Company buttons were restyled, the dirty-tip window gained border/overlay, and Jail now follows the Hospital screen treatment.
+- Current dirty implementation files for this market-balance batch are `PROJECT_HANDOFF.md`, `autoloads/GameManager.gd`, `autoloads/RunState.gd`, `data/academy/academy_catalog.json`, `scripts/tests/SmokeTest.gd`, `scripts/ui/GameRoot.gd`, `systems/AttentionDirectorSystem.gd`, `systems/CorporateActionSystem.gd`, `systems/GuideFlowSystem.gd`, `systems/IDXPriceRules.gd`, `systems/MarketSimulator.gd`, `systems/TwooterFeedSystem.gd`, `tools/academy_editor/academy_source.json`, plus new `scenes/tests/MarketYearAudit.tscn`, `scripts/tests/MarketYearAudit.gd`, `scripts/tests/MarketYearAudit.gd.uid`, `systems/GorenganCampaignSystem.gd`, and `systems/GorenganCampaignSystem.gd.uid`. Preserve these local edits unless the user explicitly asks to revert, commit, or split them.
+- Verification for this batch: Windows Godot `4.6.2` headless project load passed with `C:\Users\Alif\Desktop\Godot_v4.6.2-stable_win64_console.exe --headless --path . --quit` and only the usual trailing `ObjectDB instances leaked at exit` warning. Quick smoke also passed after the Academy Coming Soon correction and Twooter placeholder regression with `SMOKE_QUICK_OK normal_equity=94762318.11 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.` A 120-day audit after value tuning reported average market value `Rp8.96T/day`, max market value `Rp22.62T`, average gorengan value `Rp2.47T/day`, and max gorengan value `Rp6.43T`. The final 504-day audit reported average market value `Rp32.06T/day`, max market value `Rp57.62T`, average gorengan value `Rp12.55T/day`, max gorengan value `Rp25.25T`, best final stock `HAFO +796.98%`, `0` final stocks over `+1000%`, `0` final prices over `Rp100k`, `18` gorengan campaigns started, `16` campaigns saw dump phase, `420` corporate-action events, `310` hard corporate-action events, `95` rumor/soft corporate-action events, `429` company/quarterly report events, `51` special events, `0` passive dirty-tip/jail/hospital starts, `14` final floor zombies, and `11` floor-turnaround candidate stock-days during the run.
+- Current caveats from the audit: no passive campaign counted as `successful_executed` even though the best stock reached roughly `+797%`, so the success metric may be stricter than player-facing "a campaign happened"; UMA/suspension stock-days were `0`, so visible regulatory interruption cadence likely still needs tuning; the passive audit does not exercise debug-only dirty tip, jail, or hospital generators; and the final 504-day market was still harsh with `45` decliners / `5` advancers, which may fit the tone but needs human playtest feel.
 - 2026-05-25 RUPSLB overlay polish: the interactive `RUPSLB` venue now uses a centered vertical meeting card instead of the old wide split layout. The card stacks company/meta, blue active stepper, agenda title, one host/people preview, description/details, and vertical action buttons. The arrival stage no longer shows a separate blank info rectangle.
 - The RUPSLB people preview now uses a clean `3 x 5` seating grid with uniform marker size. Four interactive room leads are mapped into fixed balanced seats (`top row seats 2/4`, `bottom row seats 2/4`), while the remaining seats are ambient non-clickable attendees. Lead prominence comes from the existing `!` / `?` styling, not marker size.
 - RUPSLB speech bubbles now run as a one-at-a-time carousel instead of appearing simultaneously. The carousel walks lead bubbles in grid order, loops until the player advances/closes/votes, and clicking an attendee immediately prioritizes that attendee's bubble for one cycle. Bubble bounds remain clamped to the people preview so they do not cover the description/action area.
@@ -103,7 +110,7 @@ Read this file first in the next session.
 - Verification for the credibility/hygiene pass: JSON parse checks passed for `data/upgrades/upgrade_catalog.json`, `data/social/twooter_feed_data.json`, `tools/twooter_editor/twooter_source.json`, and `tools/balance_upgrades_editor/balance_upgrades_source.json`; `python tools/twooter_editor/server.py --validate` passed; `python tools/content_lint_dashboard/server.py --validate` passed with all 9 tools / 15 runtime files valid; Windows Godot `4.6.2` project load exited `0`; `LifeDevelopmentIntelTest.tscn` printed `LIFE_DEVELOPMENT_INTEL_TEST_OK`; `NormalPlayPerfTest.tscn` printed the perf line above; `SmokeTest.tscn -- --smoke-quick --smoke-local-io` printed `SMOKE_QUICK_OK normal_equity=94762318.11 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today`; `git diff --check` passed with only CRLF warnings on exported Twooter JSON/source.
 - 2026-05-17 STOCKBOT Key Stats visual polish: Key Stats dashboard cards now use the same card shell as the Corp. Action timeline cards: `COLOR_STOCKBOT_SURFACE_ALT` fill, `COLOR_STOCKBOT_EDGE` border, `6px` radius, and STOCKBOT text tones. The `Net Income` / `EPS` / `Revenue` metric toggles now use STOCKBOT button styling as well. This was a visual-only pass; Key Stats data, hover/click capture menus, metric capture, and Research Tray behavior were not changed.
 - Verification for the Key Stats style pass: `git diff --check` passed. Windows Godot `4.6.2` project load passed with explicit `--log-file res://logs/key_stats_style_project_load.log`; a plain no-log headless launch first hit the already-known Windows/Godot `user://logs/godot...log` signal `11` path, so prefer explicit `--log-file` for local headless verification on this machine. The usual non-blocking `Could not create directory: 'res://logs'` warning still appeared after the successful load.
-- 2026-05-16 Academy/FTUE cleanup batch: Academy is reopened by clearing `GuideFlowSystem.RELEASE_LOCKED_FLOW_IDS`; the desktop icon opens the Academy window again, Guide Hub shows Academy as `Start`, and stale `Academy is coming soon` desktop/help/guide copy was replaced with normal Academy wording. `GameManager.get_academy_release_message()` now only acts as future fallback copy.
+- 2026-05-16 Academy/FTUE cleanup batch (historical; superseded by the current 2026-06-06 Coming Soon release lock): Academy was reopened by clearing `GuideFlowSystem.RELEASE_LOCKED_FLOW_IDS`; the desktop icon opened the Academy window again, Guide Hub showed Academy as `Start`, and stale `Academy is coming soon` desktop/help/guide copy was replaced with normal Academy wording. `GameManager.get_academy_release_message()` now acts as the release-lock copy again.
 - The Academy `Transactional` category was removed from `data/academy/academy_catalog.json`; the active Academy category set is now `mindset`, `fundamental`, `corporate_action`, and `technical`. Smoke expectations now assert the removed `transactional` tab stays out of the catalog instead of expecting it as a coming-soon category.
 - Thesis FTUE/Guide Flow now matches the Research Tray redesign. `thesis_flow` starts with `capture_evidence`, then `open_thesis`, `create_thesis`, `save_thesis`, `add_evidence`, `generate_or_defer`, and `handoff`. The guide asks players to capture a real metric/chart/article/flow row first, then open Thesis Board, start a draft, save stock/stance/timeframe, attach captured evidence, and generate or defer the thesis. Fundamental and Technical guide handoff copy now explicitly points useful rows/patterns toward Research Tray capture.
 - Verification for the Academy/FTUE cleanup batch: `git diff --check` passed, Academy catalog JSON parsed through PowerShell `ConvertFrom-Json`, Windows Godot `4.6.2` headless project load exited `0`, and a quick-smoke attempt got past the updated Thesis FTUE path before hitting the local 180s shell timeout deep later in the suite. The usual non-blocking `res://logs` directory warning still appears when using `--log-file res://logs/...`.
@@ -428,6 +435,7 @@ Read this file first in the next session.
   - Desktop badges for `News`, `Twooter`, and `Network` are still approximate current-day counts, but the counts are cached during `Advance Day` so recap construction and app badge refreshes no longer rebuild feed/network snapshots just to count activity.
   - Desktop app windows now get a small open fade/scale and title-bar focus flash; the animation never changes window rect, z-order, content layout, or deferred refresh behavior.
 - Academy status:
+  - Current release presentation is locked/visible: desktop shows `ACADEMY` with `COMING SOON` plus the `SOON` badge, click only toasts `Academy lessons are coming soon.`, and Guide Hub shows Academy as disabled `Soon`; FTUE/context prompts cannot start Academy.
   - Runtime Academy has the newspaper-module layout with top category tabs, left `CORE MODULES` rail, one main scroll area, reserved banner frame, fixed action row, card-style lesson blocks, nested infoboxes, inline images, and blue `key_insights` blocks.
   - The dev-only local web editor in `tools/academy_editor/` is the source-authoring path for Academy content and exports directly to `data/academy/academy_catalog.json`.
   - Editor/runtime support image uploads into `assets/academy/lessons/`; missing image paths fall back to placeholders rather than breaking runtime UI.
@@ -438,7 +446,7 @@ Read this file first in the next session.
   - Academy text cards now parse markdown-style tables (`|---|`) into actual table controls in runtime and the local editor preview, so Fundamental statement/scenario data no longer appears as raw pipe text to players.
   - Academy quiz dropdowns and submit buttons now get quiz-specific readable styling after the global Academy text-theme pass, including light dropdown/popup surfaces and high-contrast submit text.
   - Corporate Action is now a playable Academy category covering Annual RUPS, RUPSLB, earnings calls, cash dividends, stock dividends, rights issues, private placements, stock buybacks, stock splits, tender offers, strategic M&A, backdoor listings, restructuring, and CEO changes, with matching quiz and glossary entries.
-  - Quick smoke now verifies Mindset, Fundamental, and Corporate Action are playable, unlock after required lessons, grant their badges, and return key glossary terms.
+  - Smoke/content regression coverage still verifies Mindset, Fundamental, and Corporate Action catalog data, lesson unlock rules, badges, and key glossary terms for future unlock, while player-facing smoke currently checks the Coming Soon release lock.
 - Thesis Board status:
   - `Thesis Board` is now a first playable desktop app registered as app id `thesis`.
   - Desktop shortcut/nav SVGs live in `assets/ui/desktop/thesis_shortcut.svg` and `assets/ui/desktop/thesis_nav.svg`.
@@ -730,10 +738,10 @@ Read this file first in the next session.
   - both controls currently just hide the window; there is no separate minimized/taskbar state yet
   - `STOCKBOT` opens the trading platform in the large dark desktop window
   - `News` opens a large beige `News Browser` window
-  - `Twooter` opens a wide dark social window with `Home` and `Message` navigation
-  - `Academy` opens a warm newspaper-module learning window
-  - `Thesis Board` opens a warm research-note builder window
-  - `Life` opens a warm monthly cash-flow planning window with an `Overview` tab and a `Finance` tab for cash stress, emergency loans, repayment status, and bankruptcy risk
+  - `Twooter` opens a wide dark social window with `Home` and `Message` navigation; recent polish fixes left/right section margins, adds right-side space after the vertical divider, enlarges feed text, tightens `Follow` / `Send Message` / `Show thread` buttons, and removes post score/verified/public tags
+  - `Academy` is visible as a Coming Soon desktop shortcut for this release; clicking it shows the release-lock message and does not open the implemented warm newspaper-module learning window
+  - `Thesis Board` opens a warm research-note builder window; it now follows the cream Life/Network treatment and uses larger `14px` text across labels/chips/rich text
+  - `Life` opens a warm monthly cash-flow planning window with an `Overview` tab and a `Finance` tab for cash stress, emergency loans, repayment status, and bankruptcy risk; recent polish keeps section borders, narrows the window, avoids the old brown-dominant background, uses `14px` text, and matches the News tab style
   - `Network` opens a beige contact/recognition window for discovered market contacts
   - `Shop` opens the existing beige `Upgrades` cash shop window
   - `Exit` returns to the main menu
@@ -753,6 +761,10 @@ Read this file first in the next session.
   - `Start RUPSLB` targets the currently selected `STOCKBOT` stock
   - the button only enables when the player owns at least `1` lot and the selected company has no live corporate-action chain
   - the debug action schedules a next-day `rights_issue` `RUPSLB`, keeps it hidden from current player-facing meeting surfaces, and reveals it through the normal Dashboard meeting strip after one `Advance Day`
+  - newer generator controls also include selected-stock company-ownership helper, dirty-tip generator, jail generator, and hospital generator that forces the player to `100` stress
+  - the pump/dump candidate readout now includes gorengan campaign tier, phase, wave, catalysts seen/required, return target, realized return, regulatory heat, split/UMA/suspension flags, and the next needed story beat
+  - dirty-tip modal presentation now uses a proper overlay and border instead of appearing as an unframed floating prompt
+  - Jail now follows the Hospital-style full-screen treatment, so both forced-state debug flows share the same stronger interruption language
 - Stock app identity:
   - desktop label: `STOCKBOT`
   - app-window title: `STOCKBOT`
@@ -764,8 +776,8 @@ Read this file first in the next session.
   - desktop label: `Network`
   - app-window title: `Network`
 - Academy app identity:
-  - desktop label: `Academy`
-  - app-window title: `Academy`
+  - desktop label: `Academy` with `COMING SOON` release tag
+  - app-window title: `Academy` (implemented backend/window, but player opening is blocked while release-locked)
 - Thesis app identity:
   - desktop label: `Thesis`
   - app-window title: `Thesis Board`
@@ -779,6 +791,8 @@ Read this file first in the next session.
   - `Trade`
   - `Portfolio`
   - `Help`
+- `STOCKBOT > Help` intentionally hides the old help title/body copy and leaves only the `Open Guide Hub` button
+- `STOCKBOT > Corp Action` should not expose rumor/speculation stages; only filing/fixed/resolution/execution-style corporate actions belong there
 - Top stock-terminal navbar currently surfaces:
   - `Market`
   - `Equity`
@@ -1206,9 +1220,10 @@ Read this file first in the next session.
   - loaded through `DataRepository.gd`
   - builds a lightweight in-snapshot story memory from recent event history and active arcs so related posts can naturally reference prior rumor/denial/filing/meeting beats
   - account selection now lightly prefers new fictional accounts for specific contexts such as market diary posts, rights-issue threads, earnings/quality reads, and commodity/macro education
+  - market-scoped advice/thread posts now enrich missing market placeholders from the latest market snapshot, preventing literal `{market_change}`, `{advancers}`, or `{decliners}` copy from leaking into Twooter
 
 ## Academy App
-- `Academy` is now a first playable desktop learning app
+- `Academy` content/app code is implemented, but current release presentation is Coming Soon only: visible desktop shortcut plus disabled Guide Hub row, with no Academy window opening for players.
 - It still lives in `GameRoot.tscn` and is reparented into the runtime desktop window manager; there is still no separate scene for it
 - Current category tabs are:
   - `Mindset`
@@ -1540,8 +1555,10 @@ Read this file first in the next session.
 - Quarterly report events:
   - report dates are generated by `RunState._build_quarterly_report_calendar()`
   - on the scheduled trading day, `MarketSimulator.gd` asks `RunState.get_quarterly_report_events_for_day_number()`
-  - report filings currently resolve into `earnings_beat` or `earnings_miss` events based on a deterministic surprise score from quality, growth, risk, recent sentiment, and seeded noise
+  - report filings now resolve into `earnings_beat` or `earnings_miss` events based on a deterministic surprise score from quality, growth, risk, recent sentiment, macro state, sector/company conditions, and seeded noise
   - report events are company-scoped, affect that company's daily event bias, and are recorded into `event_history`
+  - `RunState._apply_quarterly_report_filings()` now writes post-2020 quarterly statement data back into the company snapshot after close, so the `Financials` tab can actually change over time instead of staying locked to generated 2019 history
+  - the generated filing payload can improve or degrade revenue, margins, debt pressure, quality/growth/risk scores, floor-turnaround eligibility, and later corporate-action suitability
   - eligible filings can now also seed first-pass `earnings_call` venue rows through `CorporateActionSystem.gd`, typically `0-1` trading days after the filing day
 - Person-of-interest event generation:
   - `systems/PersonEventSystem.gd`
@@ -1564,6 +1581,7 @@ Read this file first in the next session.
 ## Corporate Action / Meeting Chain System
 - A first-pass shared corporate-action layer is now implemented through `systems/CorporateActionSystem.gd`
 - It is the authoritative source of truth for live corporate-action storylines and meeting rows; `event_history` and `active_company_arcs` are now emitted read models rather than the primary source of truth
+- `STOCKBOT > Corp Action` should show only hard/official-enough stages such as filing, fixed agenda, resolution, execution, and other formal phases; rumor/speculation beats should route through News, Twooter, Network, or debug surfaces instead of appearing as confirmed corporate actions
 - The core runtime/save buckets now exist in `RunState`:
   - `RunState.active_corporate_action_chains`
   - `RunState.corporate_meeting_calendar`
@@ -2162,6 +2180,59 @@ Read this file first in the next session.
   - `GameManager.execute_console_command(command_text)`
   - currently recognized commands are `cuankus` and `ordalbos`
 
+## Gorengan Campaign / Market Balance
+- `systems/GorenganCampaignSystem.gd` is the new dedicated runtime layer for operator-style pump/dump stories
+- Runtime campaign state tracks:
+  - `tier`: `common`, `rare`, or `legendary`
+  - `phase`: accumulation, shakeout, markup, regulatory chop, final hype, distribution, dump, dead-cat, cooldown
+  - `wave`: `1`, `2`, `3`, `4`, `5`, `A`, `B`, or `C`
+  - catalyst counts and distinct hard corporate-action chains
+  - return target, realized return, remaining return/leg budget, regulatory heat, retail heat, and green-limit streak
+  - split, UMA, suspension, dump, and cooldown flags
+- Balance intent:
+  - common campaigns should usually land around `+200%` to `+800%`
+  - rare campaigns can reach `+1000%` to `+3000%`, but should need more hard catalysts plus UMA/suspension/split interruption
+  - legendary campaigns are allowed to be absurd, but should be rare, require many beats, mandatory split/suspension/reopen style interruption, and an ugly later dump
+  - a single corporate-action chain must not unlock a full super-run
+  - above roughly `+800%`, the stock should need another distinct corporate-action beat before further major upside
+  - above roughly `+1000%`, the stock should need stronger regulatory/split pathing before further major upside
+- Corporate action integration:
+  - rumors and speculation build attention and early wave pressure, but do not unlock the full markup budget by themselves
+  - filing/resolution/execution style hard beats from distinct CA chains unlock real campaign budget
+  - `CorporateActionSystem.gd` can receive campaign/floor-turnaround context and should continue to keep rumors out of `STOCKBOT > Corp Action`
+- AttentionDirector integration:
+  - active campaigns raise focus weights so News, Twooter, Network, and dirty-market pressure are more likely to point at the stock
+  - accumulation/markup phases should create chatter and hype
+  - distribution/dump phases should lean warning, suspicious, or post-mortem rather than only bullish hype
+- Elliott-like chart overlay:
+  - campaign state modifies the live chart profile instead of replacing the existing chart system
+  - Wave `1`: stealth accumulation
+  - Wave `2`: shakeout / red days
+  - Wave `3`: strongest CA-driven markup
+  - Wave `4`: UMA/suspension/chop/split interruption
+  - Wave `5`: final retail hype
+  - Waves `A/B/C`: dump, dead-cat bounce, final dump/cooldown
+- Regulatory and split guardrails:
+  - repeated ARA-like green days raise regulatory heat
+  - very long green-limit streaks should push toward UMA and possible suspension
+  - above `Rp50k`, split pressure begins
+  - above `Rp100k`, positive campaign bias should be throttled until a stock split path is scheduled/executed
+  - the final passive 504-day audit still showed `0` UMA/suspension stock-days, so these guardrails exist but likely need stronger trigger cadence if visible interruptions are desired
+- Turnover/value governor:
+  - ARA lock days can stay relatively thin
+  - markup chase, suspension reopen, distribution, and dump days should carry higher value
+  - `MarketSimulator.gd` now tempers value using reference price, realized return, market-cap bucket, and campaign heat
+  - current daily value caps are intentionally IDX-fantasy-busy rather than NYSE-size: about `Rp250B` floor, `Rp700B` turnaround, `Rp1.2T` regular, `Rp3.5T` hot, and `Rp8T` extreme per name
+  - rows clipped by the governor can carry `value_governed`, `raw_value_before_governor`, and `value_governor_cap`
+- Rp50 floor / turnaround:
+  - stocks pinned at `Rp50` for about a week enter floor-board review
+  - fundamentally survivable names can become turnaround candidates and feed backdoor/turnaround CA stories
+  - weak names become or remain `floor_zombie`
+  - quarterly filing updates can eventually make a weak/floor name recoverable if generated fundamentals improve enough
+- Debug/readout:
+  - pump/dump candidates now expose campaign tier, phase, wave, catalysts seen/required, return target, realized return, regulatory heat, split/UMA/suspension status, and next needed story beat
+  - this is useful for trailer setup: buy into a visibly hyped campaign, advance into shakeout/dump, and capture the pain
+
 ## Trading Rules
 - Lot size: `1 lot = 100 shares`
 - Order ticket max buy/sell quantity is currently `99.999.999` lots
@@ -2189,6 +2260,14 @@ Read this file first in the next session.
   - `scripts/tests/NormalPlayPerfTest.gd`
   - runs a short headless normal-play path: fresh Normal run, desktop settle, open Network, advance with Network open, advance from desktop, open Stock, advance with Stock open, open News + Network, advance again, then flush pending save
   - writes a compact one-line result to `res://logs/normal_play_perf_result.txt` when run with `--smoke-local-io`
+- Market-year audit scene:
+  - `scenes/tests/MarketYearAudit.tscn`
+  - `scripts/tests/MarketYearAudit.gd`
+  - runs deterministic long-market audits for gorengan balance, turnover/value, quarterly filings, floor/turnaround behavior, campaign counts, event counts, and passive dirty-tip/jail/hospital incidence
+  - 504-day command used for the current value-tuned pass:
+    - `& "C:\Users\Alif\Desktop\Godot_v4.6.2-stable_win64_console.exe" --headless --path . --scene res://scenes/tests/MarketYearAudit.tscn -- --audit-days 504 --audit-seed 20260606 --audit-difficulty grind`
+  - latest 120-day value-tuned readout: average market value `Rp8.96T/day`, max market value `Rp22.62T`, average gorengan value `Rp2.47T/day`, max gorengan value `Rp6.43T`
+  - latest 504-day value-tuned readout: average market value `Rp32.06T/day`, max market value `Rp57.62T`, average gorengan value `Rp12.55T/day`, max gorengan value `Rp25.25T`, best final stock `HAFO +796.98%`, no final `+1000%` stocks, no final prices over `Rp100k`, `18` campaigns started, `16` campaign dumps seen, `420` corporate-action events, `429` company/quarterly report events, `51` special events, `0` passive dirty-tip/jail/hospital starts, and `14` final floor zombies
 - Full smoke command remains:
   - `& "C:\Users\Alif\Desktop\Godot_v4.6.2-stable_win64_console.exe" --headless --path . --scene res://scenes/tests/SmokeTest.tscn`
 - Quick smoke mode now exists for faster iteration:
@@ -2259,10 +2338,9 @@ Read this file first in the next session.
   - News/Twooter/Network badges appear from current-day activity counts, persist through save/load, and clear when the relevant app is opened
   - `News` opens the event-driven desk with outlet buttons and populated stories
   - `Twooter` opens the dark Social Hub with visible `Home` / `Message` sidebar navigation and populated interactable post cards
-  - `Academy` desktop icon opens the Academy window
-  - Academy shows the catalog category tabs `Mindset`, `Fundamental`, `Corporate Action`, and `Technical`; `Transactional` should stay absent; Technical exposes eight sections, Mindset exposes fourteen, and Fundamental exposes twenty
-  - Academy exposes the reserved lesson banner frame and keeps the selected module/action row inside the visible Academy window
-  - Academy quiz starts locked and unlocks after the required reading sections are marked read
+  - `Academy` desktop shortcut shows the Coming Soon release tag/badge and stays closed when pressed
+  - Guide Hub shows Academy as disabled `Soon`; `academy_flow` cannot be manually started while release-locked
+  - Academy catalog/content/quiz checks remain backend/regression coverage for future unlock: category data still contains `Mindset`, `Fundamental`, `Corporate Action`, and `Technical`; `Transactional` should stay absent; Technical exposes eight sections, Mindset exposes fourteen, Fundamental exposes twenty, and quizzes still unlock after required reading sections
   - `Thesis Board` desktop icon opens/focuses/closes the Thesis window and settles animation state
   - Thesis Board opens as a two-column layout and no longer shows the old always-visible `ThesisReportPanel`
   - Thesis report overlay exists, starts hidden, shows staged preparing copy, then reveals `ThesisWhitePaperPanel` with populated report text
@@ -2603,11 +2681,27 @@ Read this file first in the next session.
   - not a full accounting engine
   - not based on real filing logic like depreciation schedules, working-capital ledgers, minority-interest ownership trees, or tax assets/liabilities
   - designed to be coherent and learnable rather than standards-accurate
+- Quarterly filings now update post-2020 financial snapshots, but the model is still a deterministic simulation layer:
+  - macro, market tape, sector fit, quality/growth/risk, and seeded noise influence the new statements
+  - there is no full balance-sheet continuity model yet
+  - there is no detailed quarter-over-quarter reconciliation UI beyond the current Financials tab
 - `Key Stats` uses derived overview approximations for labels that the game does not explicitly store yet, especially cash, EV, forward PE, PEG, capex, and free cash flow
 - The `Financials` tab currently shows one quarter at a time:
   - there is no dense multi-quarter grid/table yet
   - there is no annual/quarter toggle yet
   - there is no export / comparison UI yet
+- Gorengan campaign balance is much safer than the first million-percent audit, but still needs playtest tuning:
+  - the latest 504-day audit capped the best final stock around `+797%` and avoided final `+1000%` / `Rp100k+` names
+  - `successful_executed` stayed at `0` despite visible campaigns and dumps, so the success metric may be too strict or not aligned with player-facing campaign success
+  - UMA/suspension stock-days stayed at `0`, so regulatory interruptions may need stronger trigger cadence if they should be visible in normal passive runs
+  - value/turnover is no longer quadrillion-scale, but simultaneous hot campaigns can still push Index Gorengan into tens of trillions/day; judge after visual playtest
+- Rp50 floor logic is first-pass:
+  - floor-board candidates require enough time at `Rp50` and survivable fundamentals
+  - `floor_zombie` names can recover only if later generated filings improve fundamentals enough
+  - there is no FCA board implementation yet, so the `Rp50` behavior is an abstraction rather than an exchange-rule recreation
+- Passive long-run audits do not exercise player/debug-only forced paths:
+  - dirty-tip, jail, and hospital generators exist in debug
+  - the latest passive 504-day audit recorded `0` dirty-tip offers/results, legal-hold starts/days, and hospital starts/days
 - No deeper onboarding beyond the current tutorial popup
 - No player-custom widget layout yet
 - The global fishbowl display effect is registered as an autoload again after flicker QA isolated fullscreen mode as the culprit, but there is no player-facing accessibility toggle, strength slider, per-scene override, or input-coordinate remap yet
@@ -2721,10 +2815,16 @@ Read this file first in the next session.
 
 ## Recommended Next Steps (Confirm user first)
 - Keep the checkpoint clean:
-  - current checked state before this handoff refresh: `main` tracks `origin/main` at `02c2421 Polish app UI and Company debug controls`
-  - current working tree is intentionally dirty with the latest follow-up UI/build batch: `PROJECT_HANDOFF.md`, `autoloads/BuildInfo.gd`, `docs/BUG_REPORT_TEMPLATE.md`, `docs/KNOWN_ISSUES.md`, `docs/STEAM_PLAYTEST_CHECKLIST.md`, `scenes/game/views/HelpView.tscn`, `scripts/tests/SmokeTest.gd`, `scripts/ui/GameRoot.gd`, `scripts/ui/MainMenu.gd`, and `scripts/ui/widgets/ThesisBoardWidget.gd`
+  - current checked state before this handoff refresh: `main` tracks `origin/main` at `0b06d1b Polish UI help and build metadata`
+  - current working tree is intentionally dirty with the market-balance batch: `PROJECT_HANDOFF.md`, `autoloads/GameManager.gd`, `autoloads/RunState.gd`, `data/academy/academy_catalog.json`, `scripts/tests/SmokeTest.gd`, `scripts/ui/GameRoot.gd`, `systems/AttentionDirectorSystem.gd`, `systems/CorporateActionSystem.gd`, `systems/GuideFlowSystem.gd`, `systems/IDXPriceRules.gd`, `systems/MarketSimulator.gd`, `systems/TwooterFeedSystem.gd`, `tools/academy_editor/academy_source.json`, `scenes/tests/MarketYearAudit.tscn`, `scripts/tests/MarketYearAudit.gd`, `scripts/tests/MarketYearAudit.gd.uid`, `systems/GorenganCampaignSystem.gd`, and `systems/GorenganCampaignSystem.gd.uid`
   - preserve ignored local `logs/` output as disposable test data
   - treat a trailing `ERROR: Failed to read the root certificate store.` after `SMOKE_QUICK_OK` as non-blocking Windows/Godot noise
+- Market/gorengan follow-up:
+  - review why `successful_executed` remains `0` in the 504-day audit even when campaigns reach dump/final-hype style behavior; either loosen the metric or rename it to match what it actually counts
+  - tune UMA/suspension visibility if the normal campaign story should regularly show regulatory interruption, because the current passive audit produced `0` UMA/suspension stock-days
+  - visually playtest Index Gorengan and Trade value bars after the value governor; the latest numbers are far below the quadrillion bug but still intentionally busy
+  - run a forced/debug trailer pass using the pump/dump candidate readout, dirty-tip generator, jail generator, and hospital generator rather than expecting passive audits to trigger those scenes
+  - consider a small smoke assertion for campaign save/load and debug candidate readout once the balance constants stop moving
 - Release-readiness next pass:
   - run one fresh Steam-client playtest from the live test branch after the next export/upload, including save, quit, rename/delete local folder, Steam Cloud restore, load, and advance-day sanity
   - rerun `NormalPlayPerfTest.tscn -- --smoke-local-io` after the latest Life/property and roadmap changes if performance anxiety returns; the last roadmap perf pass was healthy, but full UI quick smoke can still show noisy multi-second app refresh/save spikes

@@ -35,7 +35,32 @@ const INTERACTIVE_RUPSLB_FAMILY_IDS := {
 	"ceo_change": true,
 	"restructuring": true
 }
+const STOCKBOT_VISIBLE_CORPORATE_ACTION_STAGES := {
+	"formal_agenda_or_filing": true,
+	"meeting_or_call": true,
+	"resolution": true,
+	"execution": true,
+	"aftermath": true
+}
+const STOCKBOT_VISIBLE_CORPORATE_ACTION_EVENT_CATEGORIES := {
+	"corporate_action_filing": true,
+	"corporate_meeting": true,
+	"corporate_action_resolution": true,
+	"corporate_action_execution": true,
+	"corporate_action_cancellation": true
+}
 const CORPORATE_ACTION_YEAR_LOOKAHEAD := 2
+const FLOOR_TURNAROUND_SOURCE := "floor_turnaround"
+const FLOOR_TURNAROUND_MIN_DAYS := 5
+const FLOOR_TURNAROUND_COOLDOWN_DAYS := 45
+const FLOOR_TURNAROUND_FAMILIES := [
+	"restructuring",
+	"ceo_change",
+	"private_placement",
+	"backdoor_listing",
+	"stock_buyback",
+	"strategic_merger_acquisition"
+]
 
 var trading_calendar = TRADING_CALENDAR.new()
 
@@ -265,6 +290,19 @@ func resolve_day(
 			if not spawned_chain.is_empty():
 				chains[str(spawned_chain.get("chain_id", ""))] = spawned_chain
 			corporate_action_events.append_array(spawn_result.get("events", []))
+		var floor_spawn_result: Dictionary = _maybe_spawn_floor_turnaround_chain(
+			run_state,
+			catalog,
+			trade_date,
+			day_number,
+			chains,
+			calendar
+		)
+		if not floor_spawn_result.is_empty():
+			var floor_chain: Dictionary = floor_spawn_result.get("chain", {})
+			if not floor_chain.is_empty():
+				chains[str(floor_chain.get("chain_id", ""))] = floor_chain
+			corporate_action_events.append_array(floor_spawn_result.get("events", []))
 
 	var next_chains: Dictionary = {}
 	var chain_ids: Array = chains.keys()
@@ -556,6 +594,8 @@ func get_company_timeline_snapshot(run_state, company_id: String) -> Dictionary:
 		if typeof(chain_value) != TYPE_DICTIONARY:
 			continue
 		var chain: Dictionary = chain_value
+		if not _stockbot_should_show_corporate_action_chain(chain):
+			continue
 		var chain_id: String = str(chain.get("chain_id", ""))
 		rows.append({
 			"id": "chain_%s" % chain_id,
@@ -632,6 +672,8 @@ func get_company_timeline_snapshot(run_state, company_id: String) -> Dictionary:
 			continue
 		if str(event.get("target_company_id", "")) != company_id:
 			continue
+		if not _stockbot_should_show_corporate_action_event(event):
+			continue
 		rows.append({
 			"id": "event_%s_%d_%s" % [str(event.get("event_id", "corporate")), int(event.get("day_index", 0)), str(event.get("category", ""))],
 			"source_id": str(event.get("event_id", "")),
@@ -665,6 +707,17 @@ func get_company_timeline_snapshot(run_state, company_id: String) -> Dictionary:
 		"day_index": run_state.day_index,
 		"rows": rows
 	}
+
+
+func _stockbot_should_show_corporate_action_chain(chain: Dictionary) -> bool:
+	return STOCKBOT_VISIBLE_CORPORATE_ACTION_STAGES.has(str(chain.get("stage", "")))
+
+
+func _stockbot_should_show_corporate_action_event(event: Dictionary) -> bool:
+	var phase_id: String = str(event.get("current_phase_id", ""))
+	if not phase_id.is_empty():
+		return STOCKBOT_VISIBLE_CORPORATE_ACTION_STAGES.has(phase_id)
+	return STOCKBOT_VISIBLE_CORPORATE_ACTION_EVENT_CATEGORIES.has(str(event.get("category", "")))
 
 
 func get_dividend_snapshot(run_state, company_id: String = "") -> Dictionary:
@@ -1705,6 +1758,206 @@ func _maybe_spawn_chain(
 	}
 
 
+func _maybe_spawn_floor_turnaround_chain(
+	run_state,
+	catalog: Dictionary,
+	trade_date: Dictionary,
+	day_number: int,
+	chains: Dictionary,
+	calendar: Dictionary
+) -> Dictionary:
+	var candidates: Array = _build_floor_turnaround_candidates(run_state, catalog, chains, day_number)
+	if candidates.is_empty():
+		return {}
+	var picked: Dictionary = _pick_floor_turnaround_candidate(run_state.run_seed, day_number, candidates)
+	if picked.is_empty():
+		return {}
+	var spawn_chance: float = clamp(
+		0.08 +
+		float(picked.get("turnaround_score", 0.0)) * 0.18 +
+		min(max(int(picked.get("floor_days", 0)) - FLOOR_TURNAROUND_MIN_DAYS, 0), 20) * 0.006,
+		0.08,
+		0.32
+	)
+	var roll: float = STABLE_RNG.unit_float([run_state.run_seed, "floor_turnaround_spawn", day_number, str(picked.get("company_id", ""))])
+	if roll > spawn_chance:
+		return {}
+	var company_id: String = str(picked.get("company_id", ""))
+	var family_id: String = str(picked.get("family", ""))
+	var chain: Dictionary = _build_new_chain(run_state, catalog, company_id, family_id, day_number)
+	if chain.is_empty():
+		return {}
+	var floor_chain_id: String = "ca|floor_turnaround|%s|%s|%d" % [family_id, company_id, day_number]
+	chain["chain_id"] = floor_chain_id
+	chain["request_source"] = FLOOR_TURNAROUND_SOURCE
+	chain["floor_turnaround_context"] = picked.duplicate(true)
+	chain["public_heat"] = max(float(chain.get("public_heat", 0.0)), clamp(0.22 + float(picked.get("turnaround_score", 0.0)) * 0.34, 0.22, 0.52))
+	chain["retail_positioning"] = max(float(chain.get("retail_positioning", 0.0)), clamp(0.10 + float(picked.get("turnaround_score", 0.0)) * 0.18, 0.10, 0.34))
+	chain["smart_money_phase"] = "turnaround_watch"
+	chain["next_expected_step"] = "The floor-board story needs a real filing or meeting date."
+	if str(chain.get("expected_meeting_type", "")) == "annual_rups":
+		_attach_chain_to_existing_annual_meeting(run_state, chain, calendar)
+	_mark_floor_turnaround_spawned(run_state, company_id, floor_chain_id, day_number)
+	var spawned_event: Dictionary = _build_public_event(
+		catalog,
+		chain,
+		trade_date,
+		day_number,
+		"corporate_action_rumor",
+		"%s starts getting floor-board turnaround whispers" % str(chain.get("target_ticker", "")),
+		"%s has been stuck around Rp50 long enough that traders are watching for a credible %s path. The story still needs paperwork before Stockbot treats it as real." % [
+			str(chain.get("target_company_name", "")),
+			_family_label(family_id).to_lower()
+		]
+	)
+	return {
+		"chain": chain,
+		"events": [spawned_event] if not spawned_event.is_empty() else []
+	}
+
+
+func _build_floor_turnaround_candidates(run_state, catalog: Dictionary, chains: Dictionary, day_number: int) -> Array:
+	var candidates: Array = []
+	for company_id_value in run_state.company_order:
+		var company_id: String = str(company_id_value)
+		if _company_has_live_chain(chains, company_id):
+			continue
+		var runtime: Dictionary = run_state.get_company(company_id)
+		var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+		if runtime.is_empty() or definition.is_empty():
+			continue
+		var current_price: float = float(runtime.get("current_price", definition.get("base_price", 0.0)))
+		if current_price > 50.5:
+			continue
+		var floor_context: Dictionary = _floor_turnaround_context_from_runtime(runtime)
+		var floor_days: int = int(floor_context.get("floor_days", 0))
+		if floor_days < FLOOR_TURNAROUND_MIN_DAYS:
+			continue
+		if not bool(floor_context.get("eligible", false)):
+			continue
+		var last_spawn_day: int = int(floor_context.get("last_spawn_day_index", -9999))
+		if day_number - last_spawn_day < FLOOR_TURNAROUND_COOLDOWN_DAYS:
+			continue
+		var family_id: String = _floor_turnaround_family_for_company(catalog, chains, definition, runtime, company_id)
+		if family_id.is_empty():
+			continue
+		var score: float = clamp(
+			float(floor_context.get("score", 0.0)) +
+			min(max(floor_days - FLOOR_TURNAROUND_MIN_DAYS, 0), 20) * 0.012,
+			0.0,
+			1.0
+		)
+		candidates.append({
+			"company_id": company_id,
+			"ticker": str(definition.get("ticker", company_id.to_upper())),
+			"company_name": str(definition.get("name", company_id.to_upper())),
+			"family": family_id,
+			"floor_days": floor_days,
+			"turnaround_score": float(floor_context.get("score", 0.0)),
+			"score": score,
+			"floor_status": str(floor_context.get("status", "")),
+			"reasons": floor_context.get("reasons", []).duplicate()
+		})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("score", 0.0)) > float(b.get("score", 0.0))
+	)
+	if candidates.size() > 10:
+		candidates = candidates.slice(0, 10)
+	return candidates
+
+
+func _floor_turnaround_context_from_runtime(runtime: Dictionary) -> Dictionary:
+	var abnormal_state: Dictionary = runtime.get("abnormal_move_state", {}) if typeof(runtime.get("abnormal_move_state", {})) == TYPE_DICTIONARY else {}
+	var abnormal_context: Dictionary = runtime.get("abnormal_move_context", {}) if typeof(runtime.get("abnormal_move_context", {})) == TYPE_DICTIONARY else {}
+	var floor_days: int = max(int(abnormal_state.get("floor_days", 0)), int(abnormal_context.get("floor_days", 0)))
+	var eligible: bool = bool(abnormal_state.get("floor_turnaround_eligible", abnormal_context.get("floor_turnaround_eligible", false)))
+	return {
+		"floor_days": floor_days,
+		"eligible": eligible,
+		"score": float(abnormal_state.get("floor_turnaround_score", abnormal_context.get("floor_turnaround_score", 0.0))),
+		"status": str(abnormal_state.get("floor_status", abnormal_context.get("floor_status", ""))),
+		"reasons": abnormal_state.get("floor_turnaround_reasons", []).duplicate(),
+		"last_spawn_day_index": int(abnormal_state.get("floor_turnaround_last_spawn_day_index", -9999))
+	}
+
+
+func _floor_turnaround_family_for_company(
+	catalog: Dictionary,
+	chains: Dictionary,
+	definition: Dictionary,
+	runtime: Dictionary,
+	company_id: String
+) -> String:
+	var financials: Dictionary = definition.get("financials", {})
+	var profile: Dictionary = runtime.get("company_profile", {}) if typeof(runtime.get("company_profile", {})) == TYPE_DICTIONARY else {}
+	var traits: Dictionary = profile.get("generation_traits", {}) if typeof(profile.get("generation_traits", {})) == TYPE_DICTIONARY else definition.get("generation_traits", {})
+	var debt_to_equity: float = float(financials.get("debt_to_equity", 0.0))
+	var margin: float = float(financials.get("net_profit_margin", 0.0))
+	var roe: float = float(financials.get("roe", 0.0))
+	var balance_sheet_strength: float = clamp(float(traits.get("balance_sheet_strength", 0.5)), 0.0, 1.0)
+	var execution_consistency: float = clamp(float(traits.get("execution_consistency", 0.5)), 0.0, 1.0)
+	var story_heat: float = clamp(float(traits.get("story_heat", 0.5)), 0.0, 1.0)
+	var family_order: Array = []
+	if debt_to_equity >= 1.15:
+		family_order.append("restructuring")
+	if execution_consistency <= 0.48:
+		family_order.append("ceo_change")
+	if story_heat >= 0.60 and balance_sheet_strength >= 0.42:
+		family_order.append("backdoor_listing")
+	if balance_sheet_strength >= 0.58 and (margin > 1.5 or roe > 3.0):
+		family_order.append("stock_buyback")
+	if balance_sheet_strength >= 0.45:
+		family_order.append("private_placement")
+	family_order.append_array(FLOOR_TURNAROUND_FAMILIES)
+	for family_value in family_order:
+		var family_id: String = str(family_value)
+		if family_id.is_empty() or not V1_FAMILY_IDS.has(family_id):
+			continue
+		var family: Dictionary = _family_definition(catalog, family_id)
+		if family.is_empty() or not bool(family.get("enabled", false)):
+			continue
+		if _family_conflicts(chains, company_id, family_id, family):
+			continue
+		return family_id
+	return ""
+
+
+func _pick_floor_turnaround_candidate(run_seed: int, day_number: int, candidates: Array) -> Dictionary:
+	if candidates.is_empty():
+		return {}
+	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "floor_turnaround_pick", day_number])
+	var total_weight: float = 0.0
+	for candidate_value in candidates:
+		if typeof(candidate_value) != TYPE_DICTIONARY:
+			continue
+		var candidate: Dictionary = candidate_value
+		total_weight += pow(max(float(candidate.get("score", 0.0)), 0.08), 1.55)
+	if total_weight <= 0.0:
+		return candidates[0].duplicate(true)
+	var roll: float = rng.randf_range(0.0, total_weight)
+	var cumulative_weight: float = 0.0
+	for candidate_value in candidates:
+		if typeof(candidate_value) != TYPE_DICTIONARY:
+			continue
+		var candidate: Dictionary = candidate_value
+		cumulative_weight += pow(max(float(candidate.get("score", 0.0)), 0.08), 1.55)
+		if roll <= cumulative_weight:
+			return candidate.duplicate(true)
+	return candidates[candidates.size() - 1].duplicate(true)
+
+
+func _mark_floor_turnaround_spawned(run_state, company_id: String, chain_id: String, day_number: int) -> void:
+	if company_id.is_empty() or not run_state.companies.has(company_id):
+		return
+	var runtime: Dictionary = run_state.companies.get(company_id, {}).duplicate(true)
+	var abnormal_state: Dictionary = runtime.get("abnormal_move_state", {}) if typeof(runtime.get("abnormal_move_state", {})) == TYPE_DICTIONARY else {}
+	abnormal_state = abnormal_state.duplicate(true)
+	abnormal_state["floor_turnaround_last_spawn_day_index"] = day_number
+	abnormal_state["floor_turnaround_last_chain_id"] = chain_id
+	runtime["abnormal_move_state"] = abnormal_state
+	run_state.companies[company_id] = runtime
+
+
 func _organic_chain_cap_for_day(difficulty_id: String, day_number: int) -> int:
 	var base_cap: int = int(DIFFICULTY_CHAIN_CAP.get(difficulty_id, DIFFICULTY_CHAIN_CAP["normal"]))
 	if difficulty_id != "normal":
@@ -1734,6 +1987,8 @@ func _is_organic_chain_source(source_tag: String) -> bool:
 	if normalized_source.is_empty() or normalized_source == "organic":
 		return true
 	if normalized_source == "guided_first_hour":
+		return false
+	if normalized_source == FLOOR_TURNAROUND_SOURCE:
 		return false
 	return not normalized_source.begins_with("debug")
 
