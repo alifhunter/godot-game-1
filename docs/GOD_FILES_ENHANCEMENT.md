@@ -1,6 +1,6 @@
 # God Files Enhancement — Progress Log
 
-Tracks the Tier 5 refactor of the three god files. **Tiers 5a and 5b are complete (2026-06-11); Tier 5c is next.** All work is uncommitted.
+Tracks the Tier 5 refactor of the three god files. **Tiers 5a, 5b, and 5c Session 1 are complete (2026-06-11, committed as checkpoints `16f15ac` → `d279d4d` → `4bb362c` → `1e23e0e`); next: GameRoot per-app controllers, one app per session.**
 
 | God file | Tier 5 start | Current | Change |
 |---|---|---|---|
@@ -23,7 +23,8 @@ Working rules: zero behavior change per step; dict-in/dict-out at system boundar
 | 5b-10a | Thesis domain → `systems/ThesisManager.gd` | ✅ Done 2026-06-11, thesis-test + smoke verified |
 | 5b-10b | Life domain → `systems/LifeManager.gd` | ✅ Done 2026-06-11, smoke-verified (identical equity) |
 | 5b-11 | News archive dedup | ⏸ Deferred — single-writer confirmed (no desync risk today); fold into 5c-15 save migrations |
-| 5c | Structural — session-budgeted plan below: Session 1 stability batch (13+16+15, fits ~50% usage), then per-app GameRoot controllers one app per session | ⬜ Not started |
+| 5c Session 1 | Stability batch: refresh coalescer (13), advance-day phases (16), save migrations (15) | ✅ Done 2026-06-11, each task committed as its own checkpoint |
+| 5c Sessions 2..N | Per-app GameRoot controllers (12), CompanyRuntime rides along (14) | ⬜ Not started |
 
 ---
 
@@ -116,21 +117,26 @@ Working rules: zero behavior change per step; dict-in/dict-out at system boundar
 - Investigated: both `news_archive_index` (4-level nested) and `news_archive_articles` (flat) are written ONLY inside RunState's `_upsert_news_archive_article` path (grep-verified, no other writers anywhere). The duplication is wasteful but consistent-by-construction — the desync risk flagged in the review is theoretical until a second writer appears.
 - The real fix (single representation + adapter that reconstructs the legacy save shape) requires the save-version migration infrastructure. Fold this into 5c item 15 instead of doing a risky standalone restructure.
 
-## Tier 5c — NEXT UP (structural; session-budgeted plan)
+## Tier 5c Session 1 — stability batch, completed 2026-06-11
 
-Commit the current verified-green Tier 1–5b batch as a checkpoint before starting. For calibration: all of 5a + the five 5b extractions together consumed roughly one full usage window.
+Each task is its own git checkpoint. Baseline commit `16f15ac` holds the whole Tier 1–5b batch.
 
-### Session 1 — "stability batch" (fits in ~50% of a usage limit)
+### 13. Refresh coalescer — commit `d279d4d`
+- The nine no-arg GameManager refresh signals in GameRoot now connect through `_queue_signal_refresh(handler)`: same-frame duplicate signals collapse to one handler run, flushed once at end of frame in **arrival order** (preserves the upgrades→portfolio `suppress_next_portfolio_refresh` handshake). Arg-carrying signals (`price_formed`, `summary_ready`, `company_detail_ready`) stay directly connected.
+- `advance_day_processing` spans multiple frames (the advance flow awaits between phases), so coalesced handlers flushing at end-of-frame still take their deferred-queue paths mid-processing — semantics preserved.
+- **Finding:** the FULL smoke suite (`--smoke-local-io` without `--smoke-quick`) fails on a pre-existing RUPSLB overlay layout assertion — verified present on the baseline commit before this change. The quick smoke is the reliable gate.
 
-Do these three together; they close out everything except the GameRoot decomposition:
+### 16. Advance-day named phases — commit `4bb362c`
+- `_advance_day_internal` is now a ~25-line orchestrator over six phases: `_advance_phase_simulate_market`, `_advance_phase_apply_life`, `_advance_phase_process_events`, `_advance_phase_emit_market_signals`, `_advance_phase_build_summary_and_news`, `_advance_phase_save_and_announce`. Bodies verbatim; ordering, emission conditions, and perf labels unchanged.
 
-| # | Task | Est. cost | Notes |
-|---|---|---|---|
-| 13 | **Refresh coalescer** — queue refresh scopes in GameRoot, batch once per frame; kills double-refresh hazards from same-frame signals | ~10–15% | Small, self-contained. Do first. |
-| 16 | **Split `_advance_day_internal` into named phases** | ~10% | Its body already shrank in 5b (the `_apply_life_*` appliers now delegate). |
-| 15 | **Save-version migrations** (`_migrate_vN_to_vN+1` keyed off the schema version already written into saves but never read) **+ the deferred 5b-11 news-archive dedup** riding on that infrastructure | ~15–20% | Needs careful save/load round-trip testing — use the MarketYearAudit baseline workflow plus a manual save→load→save byte comparison. |
+### 15. Save-version migrations — commit `1e23e0e`
+- **New file:** `systems/SaveMigrations.gd`. `RunState.load_from_dict` routes the loaded dict through `SaveMigrations.migrate()`, which upgrades stepwise by version. `RunState.SAVE_SCHEMA_VERSION` aliases `SaveMigrations.CURRENT_SCHEMA_VERSION` (7). Versions 0..6 remain absorbed by the `_normalize_*` layer; the first structural rewrite adds a real `_migrate_v7_to_v8` arm (instructions in the file header).
+- **5b-11 closed, not just deferred:** re-investigation showed the nested `news_archive_index` stores a deliberate ~24-field *summary projection* for browsing lists (`get_news_archive_article_summaries`), while flat `news_archive_articles` is the single full-record store fetched by id. That's sound design, not duplication — the review's finding was overstated. No restructure needed.
 
-### Sessions 2..N — GameRoot per-app controllers (item 12, the big one)
+### Verification (Session 1)
+- Every task: headless editor pass clean + quick smoke `SMOKE_QUICK_OK normal_equity=94765318.11 days=3` byte-identical.
+
+## Tier 5c Sessions 2..N — NEXT UP: GameRoot per-app controllers (item 12)
 
 GameRoot is still ~25,400 lines; this is the majority of the remaining problem and does NOT fit a 50% budget — each app is its own extraction comparable to or bigger than a whole 5b item, and UI code is riskier (node paths, signal wiring, scene files, visual verification needed).
 
@@ -156,6 +162,7 @@ Each app session: extract scene + controller, GameRoot keeps the window-manageme
 - `systems/CorporateActionApplications.gd` (5b-9, 1,022 lines) — corporate-action application bodies
 - `systems/ThesisManager.gd` (5b-10a, 1,050 lines) — GameManager-side thesis/research domain
 - `systems/LifeManager.gd` (5b-10b, 1,495 lines) — GameManager-side life orchestration
+- `systems/SaveMigrations.gd` (5c-15) — stepwise save-format migration
 
 **Modified:**
 - `autoloads/RunState.gd` — 8,026 → 6,432 lines (delegates + const aliases)
