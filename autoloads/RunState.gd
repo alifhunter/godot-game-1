@@ -1,7 +1,8 @@
 extends Node
 
 const STABLE_RNG = preload("res://systems/StableRng.gd")
-const SAVE_SCHEMA_VERSION := 7
+const SAVE_MIGRATIONS := preload("res://systems/SaveMigrations.gd")
+const SAVE_SCHEMA_VERSION := SAVE_MIGRATIONS.CURRENT_SCHEMA_VERSION
 const SAVE_FORMAT_ID := "daytrader_single_run"
 const LOT_SIZE := 100
 const PLAYER_BROKER_CODE := "XL"
@@ -483,6 +484,7 @@ func _log_apply_day_perf_elapsed(enabled: bool, label: String, started_at_usec: 
 func load_from_dict(data: Dictionary) -> void:
 	var started_at_usec: int = Time.get_ticks_usec()
 	var phase_started_at_usec: int = started_at_usec
+	data = SAVE_MIGRATIONS.migrate(data)
 	reset()
 	run_seed = int(data.get("seed", 0))
 	day_index = int(data.get("day_index", 0))
