@@ -391,24 +391,18 @@ var selected_financial_statement_index: int = -1
 var selected_financial_statement_company_id: String = ""
 var selected_key_stats_metric: String = KEY_STATS_METRIC_NET_INCOME
 var key_stats_capture_menu: PopupMenu = null
-var pending_key_stats_capture_payload: Dictionary = {}
 var dashboard_sector_capture_menu: PopupMenu = null
-var pending_dashboard_sector_capture_payload: Dictionary = {}
 var broker_capture_menu: PopupMenu = null
-var pending_broker_capture_payload: Dictionary = {}
 var news_capture_menu: PopupMenu = null
-var pending_news_capture_article: Dictionary = {}
 var profile_capture_menu: PopupMenu = null
-var pending_profile_capture_payload: Dictionary = {}
 var financial_statement_capture_menu: PopupMenu = null
-var pending_financial_statement_capture_payload: Dictionary = {}
 var corporate_action_filter_id: String = "all"
 var corporate_action_capture_menu: PopupMenu = null
-var pending_corporate_action_capture_payload: Dictionary = {}
 var social_capture_menu: PopupMenu = null
-var pending_social_capture_payload: Dictionary = {}
 var trade_quote_capture_menu: PopupMenu = null
-var pending_trade_quote_capture_payload: Dictionary = {}
+# One pending research-capture payload per source kind (key stats, broker,
+# social, ...). Committed and cleared by _commit_pending_capture.
+var pending_capture_payloads: Dictionary = {}
 var current_trade_snapshot: Dictionary = {}
 var cached_company_rows: Array = []
 var cached_company_row_lookup: Dictionary = {}
@@ -1038,19 +1032,19 @@ func _ready() -> void:
 	stock_list_tabs.set_tab_title(STOCK_LIST_TAB_WATCHLIST, "Watchlist")
 	stock_list_tabs.set_tab_title(STOCK_LIST_TAB_ALL_STOCKS, "All Stock")
 	stock_list_tabs.set_tab_title(STOCK_LIST_TAB_PORTFOLIO, "Portfolio")
-	stock_app_button.pressed.connect(_on_stock_app_pressed)
-	news_app_button.pressed.connect(_on_news_app_pressed)
-	social_app_button.pressed.connect(_on_social_app_pressed)
-	network_app_button.pressed.connect(_on_network_app_pressed)
+	stock_app_button.pressed.connect(_set_active_app.bind(APP_ID_STOCK))
+	news_app_button.pressed.connect(_set_active_app.bind(APP_ID_NEWS))
+	social_app_button.pressed.connect(_set_active_app.bind(APP_ID_SOCIAL))
+	network_app_button.pressed.connect(_set_active_app.bind(APP_ID_NETWORK))
 	if academy_app_button != null:
 		academy_app_button.pressed.connect(_on_academy_app_pressed)
 	if thesis_app_button != null:
 		thesis_app_button.pressed.connect(_on_thesis_app_pressed)
 	if life_app_button != null:
-		life_app_button.pressed.connect(_on_life_app_pressed)
+		life_app_button.pressed.connect(_set_active_app.bind(APP_ID_LIFE))
 	if company_app_button != null:
-		company_app_button.pressed.connect(_on_company_app_pressed)
-	upgrades_app_button.pressed.connect(_on_upgrades_app_pressed)
+		company_app_button.pressed.connect(_set_active_app.bind(APP_ID_COMPANY))
+	upgrades_app_button.pressed.connect(_set_active_app.bind(APP_ID_UPGRADES))
 	exit_app_button.pressed.connect(_on_settings_app_pressed)
 	taskbar_home_button.pressed.connect(_on_taskbar_home_pressed)
 	taskbar_stock_button.pressed.connect(_on_taskbar_stock_pressed)
@@ -1206,8 +1200,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var key_event: InputEventKey = event
 		if key_event.ctrl_pressed and key_event.keycode == KEY_L:
-			_toggle_debug_overlay()
-			get_viewport().set_input_as_handled()
+			if OS.is_debug_build():
+				_toggle_debug_overlay()
+				get_viewport().set_input_as_handled()
 			return
 		if console_overlay != null and console_overlay.visible and key_event.keycode == KEY_ESCAPE:
 			_hide_console_overlay()
@@ -1925,7 +1920,7 @@ func _on_key_stats_value_row_gui_input(event: InputEvent, source_row: Dictionary
 	if selected_company_id.is_empty():
 		_show_toast("Pick a stock before capturing research.", false)
 		return
-	pending_key_stats_capture_payload = {
+	var capture_payload: Dictionary = {
 		"source_type": "key_stats",
 		"company_id": selected_company_id,
 		"label": label_text,
@@ -1934,9 +1929,10 @@ func _on_key_stats_value_row_gui_input(event: InputEvent, source_row: Dictionary
 		"source_id": _node_token(label_text)
 	}
 	if source_row.has("category"):
-		pending_key_stats_capture_payload["category"] = str(source_row.get("category", ""))
+		capture_payload["category"] = str(source_row.get("category", ""))
 	if source_row.has("raw_value"):
-		pending_key_stats_capture_payload["raw_value"] = float(source_row.get("raw_value", 0.0))
+		capture_payload["raw_value"] = float(source_row.get("raw_value", 0.0))
+	pending_capture_payloads["key_stats"] = capture_payload
 	_show_key_stats_capture_menu(mouse_event.global_position)
 
 
@@ -1952,12 +1948,17 @@ func _show_key_stats_capture_menu(global_position: Vector2) -> void:
 	key_stats_capture_menu.popup()
 
 
-func _on_key_stats_capture_menu_id_pressed(id: int) -> void:
-	if id != 1 or pending_key_stats_capture_payload.is_empty():
+func _commit_pending_capture(kind: String, id: int) -> void:
+	var payload: Dictionary = pending_capture_payloads.get(kind, {})
+	if id != 1 or payload.is_empty():
 		return
-	var result: Dictionary = GameManager.capture_research_evidence(pending_key_stats_capture_payload.duplicate(true))
-	pending_key_stats_capture_payload.clear()
+	var result: Dictionary = GameManager.capture_research_evidence(payload.duplicate(true))
+	pending_capture_payloads.erase(kind)
 	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
+
+
+func _on_key_stats_capture_menu_id_pressed(id: int) -> void:
+	_commit_pending_capture("key_stats", id)
 
 
 func _key_stats_row_is_capturable(label_text: String, value_text: String) -> bool:
@@ -2389,7 +2390,7 @@ func _on_key_stats_metric_value_gui_input(event: InputEvent, capture_payload: Di
 		return
 	if capture_payload.is_empty():
 		return
-	pending_key_stats_capture_payload = capture_payload.duplicate(true)
+	pending_capture_payloads["key_stats"] = capture_payload.duplicate(true)
 	_show_key_stats_capture_menu(mouse_event.global_position)
 
 
@@ -7134,7 +7135,7 @@ func _on_trade_quote_label_gui_input(event: InputEvent, quote_key: String) -> vo
 	if payload.is_empty():
 		_show_toast("This quote item is not ready yet.", false)
 		return
-	pending_trade_quote_capture_payload = payload
+	pending_capture_payloads["trade_quote"] = payload
 	_show_trade_quote_capture_menu(mouse_event.global_position)
 
 
@@ -7232,11 +7233,7 @@ func _show_trade_quote_capture_menu(global_position: Vector2) -> void:
 
 
 func _on_trade_quote_capture_menu_id_pressed(id: int) -> void:
-	if id != 1 or pending_trade_quote_capture_payload.is_empty():
-		return
-	var result: Dictionary = GameManager.capture_research_evidence(pending_trade_quote_capture_payload.duplicate(true))
-	pending_trade_quote_capture_payload.clear()
-	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
+	_commit_pending_capture("trade_quote", id)
 
 
 func _broker_type_side_value(broker_flow: Dictionary, broker_type: String, side: String) -> float:
@@ -8591,7 +8588,7 @@ func _on_social_post_capture_gui_input(event: InputEvent, post: Dictionary) -> v
 	if payload.is_empty():
 		_show_toast("This Twooter post is not ready to capture.", false)
 		return
-	pending_social_capture_payload = payload
+	pending_capture_payloads["social"] = payload
 	_show_social_capture_menu(mouse_event.global_position)
 
 
@@ -8605,7 +8602,7 @@ func _on_social_dm_capture_gui_input(event: InputEvent, row: Dictionary, account
 	if payload.is_empty():
 		_show_toast("This Twooter DM is not ready to capture.", false)
 		return
-	pending_social_capture_payload = payload
+	pending_capture_payloads["social"] = payload
 	_show_social_capture_menu(mouse_event.global_position)
 
 
@@ -8733,11 +8730,7 @@ func _show_social_capture_menu(global_position: Vector2) -> void:
 
 
 func _on_social_capture_menu_id_pressed(id: int) -> void:
-	if id != 1 or pending_social_capture_payload.is_empty():
-		return
-	var result: Dictionary = GameManager.capture_research_evidence(pending_social_capture_payload.duplicate(true))
-	pending_social_capture_payload.clear()
-	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
+	_commit_pending_capture("social", id)
 
 
 func _make_social_rail_body_label(text: String) -> Label:
@@ -10122,7 +10115,7 @@ func _open_news_capture_menu_from_event(event: InputEvent, context: String) -> v
 	var article: Dictionary = GameManager.get_news_archive_article(selected_news_article_id)
 	if article.is_empty():
 		return
-	pending_news_capture_article = article.duplicate(true)
+	pending_capture_payloads["news_article"] = article.duplicate(true)
 	_show_news_capture_menu(mouse_event.global_position, context)
 	get_viewport().set_input_as_handled()
 
@@ -10152,7 +10145,8 @@ func _show_news_capture_menu(global_position: Vector2, context: String) -> void:
 
 
 func _on_news_capture_menu_id_pressed(id: int) -> void:
-	if pending_news_capture_article.is_empty():
+	var pending_article: Dictionary = pending_capture_payloads.get("news_article", {})
+	if pending_article.is_empty():
 		return
 	var kind: String = ""
 	match id:
@@ -10166,8 +10160,8 @@ func _on_news_capture_menu_id_pressed(id: int) -> void:
 			kind = "source_lead"
 		_:
 			return
-	var payload: Dictionary = _build_news_capture_payload(pending_news_capture_article, kind)
-	pending_news_capture_article.clear()
+	var payload: Dictionary = _build_news_capture_payload(pending_article, kind)
+	pending_capture_payloads.erase("news_article")
 	if payload.is_empty():
 		_show_toast("Nothing to capture from this article.", false)
 		return
@@ -11217,7 +11211,7 @@ func _prepare_dashboard_sector_capture(row: Dictionary) -> void:
 		str(row.get("strongest_ticker", "n/a")),
 		_format_change(float(row.get("strongest_change_pct", 0.0)))
 	]
-	pending_dashboard_sector_capture_payload = {
+	pending_capture_payloads["dashboard_sector"] = {
 		"source_type": "sector_macro",
 		"category": "sector_macro",
 		"category_label": "Sector / Macro",
@@ -11245,11 +11239,7 @@ func _show_dashboard_sector_capture_menu(global_position: Vector2) -> void:
 
 
 func _on_dashboard_sector_capture_menu_id_pressed(id: int) -> void:
-	if id != 1 or pending_dashboard_sector_capture_payload.is_empty():
-		return
-	var result: Dictionary = GameManager.capture_research_evidence(pending_dashboard_sector_capture_payload.duplicate(true))
-	pending_dashboard_sector_capture_payload.clear()
-	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
+	_commit_pending_capture("dashboard_sector", id)
 
 
 func _on_dashboard_sector_back_pressed() -> void:
@@ -14429,7 +14419,7 @@ func _on_profile_background_gui_input(event: InputEvent) -> void:
 		_show_toast("Company background is not ready yet.", false)
 		return
 	var ticker: String = str(current_trade_snapshot.get("ticker", selected_company_id)).strip_edges()
-	pending_profile_capture_payload = {
+	pending_capture_payloads["profile"] = {
 		"source_type": "company_profile",
 		"category": "fundamentals",
 		"company_id": selected_company_id,
@@ -14515,7 +14505,7 @@ func _on_profile_capture_row_gui_input(event: InputEvent, capture_payload: Dicti
 		return
 	if capture_payload.is_empty():
 		return
-	pending_profile_capture_payload = capture_payload.duplicate(true)
+	pending_capture_payloads["profile"] = capture_payload.duplicate(true)
 	_show_profile_capture_menu(mouse_event.global_position)
 
 
@@ -14532,11 +14522,7 @@ func _show_profile_capture_menu(global_position: Vector2) -> void:
 
 
 func _on_profile_capture_menu_id_pressed(id: int) -> void:
-	if id != 1 or pending_profile_capture_payload.is_empty():
-		return
-	var result: Dictionary = GameManager.capture_research_evidence(pending_profile_capture_payload.duplicate(true))
-	pending_profile_capture_payload.clear()
-	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
+	_commit_pending_capture("profile", id)
 
 
 func _build_profile_empty_row(message: String) -> Control:
@@ -15101,22 +15087,6 @@ func _on_dashboard_pressed() -> void:
 	_set_active_section("dashboard")
 
 
-func _on_stock_app_pressed() -> void:
-	_set_active_app(APP_ID_STOCK)
-
-
-func _on_news_app_pressed() -> void:
-	_set_active_app(APP_ID_NEWS)
-
-
-func _on_social_app_pressed() -> void:
-	_set_active_app(APP_ID_SOCIAL)
-
-
-func _on_network_app_pressed() -> void:
-	_set_active_app(APP_ID_NETWORK)
-
-
 func _on_academy_app_pressed() -> void:
 	if not GameManager.is_academy_available():
 		_show_toast(GameManager.get_academy_release_message(), false)
@@ -15128,18 +15098,6 @@ func _on_academy_app_pressed() -> void:
 func _on_thesis_app_pressed() -> void:
 	_set_active_app(APP_ID_THESIS)
 	call_deferred("_refresh_ftue_progress")
-
-
-func _on_life_app_pressed() -> void:
-	_set_active_app(APP_ID_LIFE)
-
-
-func _on_company_app_pressed() -> void:
-	_set_active_app(APP_ID_COMPANY)
-
-
-func _on_upgrades_app_pressed() -> void:
-	_set_active_app(APP_ID_UPGRADES)
 
 
 func _on_company_request_pressed() -> void:
@@ -24225,10 +24183,7 @@ func _style_item_list(item_list: ItemList, panel_radius: int = 8, cursor_radius:
 
 
 func _format_currency(value: float) -> String:
-	return "%sRp%s" % [
-		"-" if value < 0.0 else "",
-		_format_decimal(absf(value), 2, true)
-	]
+	return UIFormatter.format_currency(value)
 
 
 func _format_signed_currency(value: float) -> String:
@@ -24781,7 +24736,7 @@ func _show_corporate_action_capture_menu(row: Dictionary, global_position: Vecto
 	if payload.is_empty():
 		_show_toast("Nothing to capture from this corporate action.", false)
 		return
-	pending_corporate_action_capture_payload = payload
+	pending_capture_payloads["corporate_action"] = payload
 	if corporate_action_capture_menu == null:
 		corporate_action_capture_menu = PopupMenu.new()
 		corporate_action_capture_menu.name = "CorporateActionCaptureContextMenu"
@@ -24794,11 +24749,7 @@ func _show_corporate_action_capture_menu(row: Dictionary, global_position: Vecto
 
 
 func _on_corporate_action_capture_menu_id_pressed(id: int) -> void:
-	if id != 1 or pending_corporate_action_capture_payload.is_empty():
-		return
-	var result: Dictionary = GameManager.capture_research_evidence(pending_corporate_action_capture_payload.duplicate(true))
-	pending_corporate_action_capture_payload.clear()
-	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
+	_commit_pending_capture("corporate_action", id)
 
 
 func _capture_corporate_action_row(row: Dictionary) -> void:
@@ -25071,7 +25022,7 @@ func _prepare_broker_capture(broker_row: Dictionary, side: String) -> void:
 	]
 	if not broker_name.is_empty() and broker_name != broker_code:
 		detail += " Broker name: %s." % broker_name
-	pending_broker_capture_payload = {
+	pending_capture_payloads["broker"] = {
 		"source_type": "broker_summary",
 		"category": "broker_flow",
 		"category_label": "Broker Flow",
@@ -25098,11 +25049,7 @@ func _show_broker_capture_menu(global_position: Vector2) -> void:
 
 
 func _on_broker_capture_menu_id_pressed(id: int) -> void:
-	if id != 1 or pending_broker_capture_payload.is_empty():
-		return
-	var result: Dictionary = GameManager.capture_research_evidence(pending_broker_capture_payload.duplicate(true))
-	pending_broker_capture_payload.clear()
-	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
+	_commit_pending_capture("broker", id)
 
 
 func _sync_financial_statement_selection(company_id: String, financial_statement_snapshot: Dictionary) -> void:
@@ -25319,7 +25266,7 @@ func _on_financial_statement_row_gui_input(event: InputEvent, capture_payload: D
 	var mouse_event := event as InputEventMouseButton
 	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
 		return
-	pending_financial_statement_capture_payload = capture_payload.duplicate(true)
+	pending_capture_payloads["financial_statement"] = capture_payload.duplicate(true)
 	_show_financial_statement_capture_menu(mouse_event.global_position)
 
 
@@ -25336,11 +25283,7 @@ func _show_financial_statement_capture_menu(global_position: Vector2) -> void:
 
 
 func _on_financial_statement_capture_menu_id_pressed(id: int) -> void:
-	if id != 1 or pending_financial_statement_capture_payload.is_empty():
-		return
-	var result: Dictionary = GameManager.capture_research_evidence(pending_financial_statement_capture_payload.duplicate(true))
-	pending_financial_statement_capture_payload.clear()
-	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
+	_commit_pending_capture("financial_statement", id)
 
 
 func _format_statement_value(line_item: Dictionary) -> String:
@@ -25352,23 +25295,7 @@ func _format_statement_value(line_item: Dictionary) -> String:
 
 
 func _format_compact_currency(value: float) -> String:
-	var absolute_value: float = absf(value)
-	if absolute_value >= 1000000000000.0:
-		return "%sRp%sT" % [
-			"-" if value < 0.0 else "",
-			_format_decimal(absf(value) / 1000000000000.0, 2, false)
-		]
-	if absolute_value >= 1000000000.0:
-		return "%sRp%sB" % [
-			"-" if value < 0.0 else "",
-			_format_decimal(absf(value) / 1000000000.0, 2, false)
-		]
-	if absolute_value >= 1000000.0:
-		return "%sRp%sM" % [
-			"-" if value < 0.0 else "",
-			_format_decimal(absf(value) / 1000000.0, 2, false)
-		]
-	return _format_currency(value)
+	return UIFormatter.format_compact_currency(value)
 
 
 func _format_signed_compact_currency(value: float) -> String:
@@ -25393,18 +25320,7 @@ func _format_signed_compact_lots(value: float) -> String:
 
 
 func _format_grouped_integer(value: int) -> String:
-	var negative: bool = value < 0
-	var digits: String = str(abs(value))
-	var groups: Array = []
-	while digits.length() > 3:
-		groups.push_front(digits.substr(digits.length() - 3, 3))
-		digits = digits.substr(0, digits.length() - 3)
-	if not digits.is_empty():
-		groups.push_front(digits)
-	var grouped_value: String = ".".join(groups)
-	if grouped_value.is_empty():
-		grouped_value = "0"
-	return "-%s" % grouped_value if negative else grouped_value
+	return UIFormatter.format_grouped_integer(value)
 
 
 func _format_percent_value(value: float) -> String:
@@ -25434,20 +25350,7 @@ func _format_signed_decimal(value: float, decimal_places: int = 2, use_grouping:
 
 
 func _format_decimal(value: float, decimal_places: int = 2, use_grouping: bool = true) -> String:
-	var safe_places: int = max(decimal_places, 0)
-	var decimal_scale: int = 1
-	for _index in range(safe_places):
-		decimal_scale *= 10
-	var scaled_value: int = int(round(absf(value) * float(decimal_scale)))
-	var whole_value: int = int(floor(float(scaled_value) / float(decimal_scale)))
-	var decimal_value: int = scaled_value % decimal_scale
-	var whole_text: String = _format_grouped_integer(whole_value) if use_grouping else str(whole_value)
-	if safe_places <= 0:
-		return whole_text
-	var decimal_text: String = str(decimal_value)
-	while decimal_text.length() < safe_places:
-		decimal_text = "0" + decimal_text
-	return "%s,%s" % [whole_text, decimal_text]
+	return UIFormatter.format_decimal(value, decimal_places, use_grouping)
 
 
 func _join_or_default(values: Array, default_text: String) -> String:

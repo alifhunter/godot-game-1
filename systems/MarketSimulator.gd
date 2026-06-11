@@ -35,14 +35,49 @@ const ABNORMAL_SOFT_CATALYST_CATEGORIES := {
 	"corporate_action_clarification": true
 }
 
-var company_event_system = preload("res://systems/CompanyEventSystem.gd").new()
-var company_roadmap_system = preload("res://systems/CompanyRoadmapSystem.gd").new()
-var person_event_system = preload("res://systems/PersonEventSystem.gd").new()
-var special_event_system = preload("res://systems/SpecialEventSystem.gd").new()
-var index_review_system = preload("res://systems/IndexReviewSystem.gd").new()
-var attention_director_system = preload("res://systems/AttentionDirectorSystem.gd").new()
-var dirty_tip_system = preload("res://systems/DirtyTipSystem.gd").new()
-var gorengan_campaign_system = preload("res://systems/GorenganCampaignSystem.gd").new()
+# Price formation weights — how much each input axis moves the daily close
+const PRICE_QUALITY_EDGE_WEIGHT := 0.0032   # high-quality companies drift slightly up per day
+const PRICE_GROWTH_EDGE_WEIGHT := 0.002     # growth score adds a smaller secondary drift
+const PRICE_RISK_EDGE_WEIGHT := 0.0034      # high-risk score subtracts drift (more than quality adds)
+const PRICE_BASELINE_DRIFT := -0.0014       # intentional negative baseline: average stocks decline ~30%/yr
+const PRICE_MARKET_SENTIMENT_WEIGHT := 0.45 # broad market sentiment influence on each stock
+const PRICE_SECTOR_SENTIMENT_WEIGHT := 0.55 # sector sentiment outweighs market on individual names
+const PRICE_EVENT_BIAS_WEIGHT := 0.8        # corporate/news events have strong direct price impact
+const PRICE_BROKER_PRESSURE_WEIGHT := 0.03  # broker flow has modest direct price impact
+const PRICE_NOISE_SCALE := 0.65             # random noise dampening (prevents pure random walk)
+const PRICE_MOMENTUM_MEAN_REVERSION := 0.16 # mean-reversion pull against prior-day momentum
+const PRICE_MOMENTUM_CAP := 0.015           # max daily change from momentum component alone
+const PRICE_VOLATILITY_MIN_MULTIPLIER := 0.55
+const PRICE_VOLATILITY_MAX_MULTIPLIER := 2.1
+
+var company_event_system
+var company_roadmap_system
+var person_event_system
+var special_event_system
+var index_review_system
+var attention_director_system
+var dirty_tip_system
+var gorengan_campaign_system
+
+
+func _init(
+	p_company_event_system = null,
+	p_company_roadmap_system = null,
+	p_person_event_system = null,
+	p_special_event_system = null,
+	p_index_review_system = null,
+	p_attention_director_system = null,
+	p_dirty_tip_system = null,
+	p_gorengan_campaign_system = null
+) -> void:
+	company_event_system = p_company_event_system if p_company_event_system != null else preload("res://systems/CompanyEventSystem.gd").new()
+	company_roadmap_system = p_company_roadmap_system if p_company_roadmap_system != null else preload("res://systems/CompanyRoadmapSystem.gd").new()
+	person_event_system = p_person_event_system if p_person_event_system != null else preload("res://systems/PersonEventSystem.gd").new()
+	special_event_system = p_special_event_system if p_special_event_system != null else preload("res://systems/SpecialEventSystem.gd").new()
+	index_review_system = p_index_review_system if p_index_review_system != null else preload("res://systems/IndexReviewSystem.gd").new()
+	attention_director_system = p_attention_director_system if p_attention_director_system != null else preload("res://systems/AttentionDirectorSystem.gd").new()
+	dirty_tip_system = p_dirty_tip_system if p_dirty_tip_system != null else preload("res://systems/DirtyTipSystem.gd").new()
+	gorengan_campaign_system = p_gorengan_campaign_system if p_gorengan_campaign_system != null else preload("res://systems/GorenganCampaignSystem.gd").new()
 
 
 func simulate_day(run_state, data_repository, broker_flow_system, corporate_action_system) -> Dictionary:
@@ -74,10 +109,11 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		macro_state,
 		corporate_action_resolution
 	)
-	if company_roadmap_resolution.has("active_corporate_action_chains"):
-		corporate_action_resolution["active_corporate_action_chains"] = company_roadmap_resolution.get("active_corporate_action_chains", {}).duplicate(true)
-	if company_roadmap_resolution.has("corporate_meeting_calendar"):
-		corporate_action_resolution["corporate_meeting_calendar"] = company_roadmap_resolution.get("corporate_meeting_calendar", {}).duplicate(true)
+	corporate_action_resolution = _merge_resolution(
+		corporate_action_resolution,
+		company_roadmap_resolution,
+		["active_corporate_action_chains", "corporate_meeting_calendar"]
+	)
 	var company_attention_directives: Dictionary = attention_directives.duplicate(true)
 	var blocked_company_ids: Array = []
 	for blocked_company_id_value in company_roadmap_resolution.get("blocked_company_ids", []):
@@ -187,7 +223,7 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 			run_state.run_seed,
 			day_number
 		)
-		var event_context: Dictionary = _resolve_event_context(
+		var event_context_state: EventContext = _resolve_event_context(
 			definition,
 			runtime,
 			sector_definition,
@@ -196,21 +232,24 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 			active_special_events,
 			active_company_arcs
 		)
-		event_context = _apply_dirty_tip_market_effect(
-			event_context,
+		event_context_state = _apply_dirty_tip_market_effect(
+			event_context_state,
 			dirty_tip_system.market_effect_for_company(run_state, company_id, day_number)
 		)
-		event_context = gorengan_campaign_system.apply_event_context(event_context, gorengan_campaign_context)
+		event_context_state = EventContext.from_dict(
+			gorengan_campaign_system.apply_event_context(event_context_state.to_dict(), gorengan_campaign_context)
+		)
 		var abnormal_move_context: Dictionary = _build_abnormal_move_context(
 			definition,
 			runtime,
-			event_context,
+			event_context_state.to_dict(),
 			gorengan_campaign_context,
 			previous_close,
 			ar_limits,
 			day_number
 		)
-		event_context = _apply_abnormal_move_context(event_context, abnormal_move_context)
+		event_context_state = _apply_abnormal_move_context(event_context_state, abnormal_move_context)
+		var event_context: Dictionary = event_context_state.to_dict()
 		var market_depth_context: Dictionary = _build_market_depth_context(
 			definition,
 			runtime,
@@ -817,32 +856,23 @@ func _build_abnormal_move_context(
 	}
 
 
-func _apply_abnormal_move_context(event_context: Dictionary, abnormal_context: Dictionary) -> Dictionary:
+func _apply_abnormal_move_context(context: EventContext, abnormal_context: Dictionary) -> EventContext:
 	if abnormal_context.is_empty() or not bool(abnormal_context.get("active", false)):
-		return event_context
-	var context: Dictionary = event_context.duplicate(true)
-	context["event_bias"] = clamp(
-		float(context.get("event_bias", 0.0)) + float(abnormal_context.get("event_bias_shift", 0.0)),
+		return context
+	context.event_bias = clamp(
+		context.event_bias + float(abnormal_context.get("event_bias_shift", 0.0)),
 		-0.18,
 		0.18
 	)
-	context["volume_activity_multiplier"] = clamp(
-		float(context.get("volume_activity_multiplier", 1.0)) * float(abnormal_context.get("volume_activity_multiplier", 1.0)),
+	context.volume_activity_multiplier = clamp(
+		context.volume_activity_multiplier * float(abnormal_context.get("volume_activity_multiplier", 1.0)),
 		0.35,
 		5.8
 	)
-	context["abnormal_move_context"] = abnormal_context.duplicate(true)
-	var hidden_flags: Array = context.get("hidden_story_flags", []).duplicate()
+	context.abnormal_move_context = abnormal_context.duplicate(true)
 	for flag_value in abnormal_context.get("flags", []):
-		var flag: String = str(flag_value)
-		if not flag.is_empty() and not hidden_flags.has(flag):
-			hidden_flags.append(flag)
-	context["hidden_story_flags"] = hidden_flags
-	var event_tags: Array = context.get("event_tags", []).duplicate()
-	var phase_tag: String = "abnormal_%s" % str(abnormal_context.get("phase", "move"))
-	if not event_tags.has(phase_tag):
-		event_tags.append(phase_tag)
-	context["event_tags"] = event_tags
+		context.add_hidden_flag(str(flag_value))
+	context.add_event_tag("abnormal_%s" % str(abnormal_context.get("phase", "move")))
 	return context
 
 
@@ -1493,99 +1523,86 @@ func _resolve_event_context(
 	report_events: Array = [],
 	active_special_events: Array = [],
 	active_company_arcs: Array = []
-) -> Dictionary:
-	var event_tags: Array = []
-	var active_events: Array = []
-	var hidden_story_flags: Array = runtime.get("hidden_story_flags", []).duplicate()
-	var event_bias: float = 0.0
+) -> EventContext:
+	var context: EventContext = EventContext.new()
+	context.hidden_story_flags = runtime.get("hidden_story_flags", []).duplicate()
 	var event_volatility_multiplier: float = 1.0
 	var passive_flow_pressure: float = 0.0
 	var volume_activity_multiplier: float = 1.0
 	var depth_liquidity_multiplier: float = 1.0
 	var company_id: String = str(definition.get("id", ""))
 	var sector_id: String = str(sector_definition.get("id", ""))
+	context.sector_id = sector_id
 
-	event_bias = _append_event_if_applicable(
+	context.event_bias = _append_event_if_applicable(
 		scheduled_event,
 		company_id,
 		sector_id,
-		event_tags,
-		active_events,
-		event_bias
+		context.event_tags,
+		context.active_events,
+		context.event_bias
 	)
 	for report_event_value in report_events:
 		var report_event: Dictionary = report_event_value
-		event_bias = _append_event_if_applicable(
+		context.event_bias = _append_event_if_applicable(
 			report_event,
 			company_id,
 			sector_id,
-			event_tags,
-			active_events,
-			event_bias
+			context.event_tags,
+			context.active_events,
+			context.event_bias
 		)
 	for special_event_value in active_special_events:
-		event_bias = _append_event_if_applicable(
+		context.event_bias = _append_event_if_applicable(
 			special_event_value,
 			company_id,
 			sector_id,
-			event_tags,
-			active_events,
-			event_bias
+			context.event_tags,
+			context.active_events,
+			context.event_bias
 		)
 	for company_arc_value in active_company_arcs:
 		var company_arc: Dictionary = company_arc_value
 		if not _event_applies_to_company(company_arc, company_id, sector_id):
 			continue
 
-		event_bias += float(company_arc.get("phase_sentiment_shift", 0.0))
+		context.event_bias += float(company_arc.get("phase_sentiment_shift", 0.0))
 		event_volatility_multiplier *= float(company_arc.get("phase_volatility_multiplier", 1.0))
 		passive_flow_pressure += float(company_arc.get("phase_passive_flow_pressure", 0.0))
 		volume_activity_multiplier *= float(company_arc.get("phase_volume_activity_multiplier", 1.0))
 		depth_liquidity_multiplier *= float(company_arc.get("phase_depth_liquidity_multiplier", 1.0))
 		var phase_visibility: String = str(company_arc.get("phase_visibility", "visible"))
 		if phase_visibility == "hidden":
-			var hidden_flag: String = str(company_arc.get("phase_hidden_flag", ""))
-			if not hidden_flag.is_empty() and not hidden_story_flags.has(hidden_flag):
-				hidden_story_flags.append(hidden_flag)
+			context.add_hidden_flag(str(company_arc.get("phase_hidden_flag", "")))
 			continue
 
 		var visible_arc: Dictionary = company_arc.duplicate(true)
 		visible_arc["sentiment_shift"] = float(company_arc.get("phase_sentiment_shift", 0.0))
-		event_bias = _append_event_if_applicable(
+		context.event_bias = _append_event_if_applicable(
 			visible_arc,
 			company_id,
 			sector_id,
-			event_tags,
-			active_events,
-			event_bias - float(company_arc.get("phase_sentiment_shift", 0.0))
+			context.event_tags,
+			context.active_events,
+			context.event_bias - float(company_arc.get("phase_sentiment_shift", 0.0))
 		)
 
-	return {
-		"event_tags": event_tags,
-		"active_events": active_events,
-		"event_bias": event_bias,
-		"event_volatility_multiplier": clamp(event_volatility_multiplier, 0.55, 2.1),
-		"passive_flow_pressure": clamp(passive_flow_pressure, -1.0, 1.0),
-		"volume_activity_multiplier": clamp(volume_activity_multiplier, 0.35, 3.0),
-		"depth_liquidity_multiplier": clamp(depth_liquidity_multiplier, 0.55, 2.4),
-		"hidden_story_flags": hidden_story_flags,
-		"sector_id": str(sector_definition.get("id", ""))
-	}
+	context.event_volatility_multiplier = clamp(event_volatility_multiplier, 0.55, 2.1)
+	context.passive_flow_pressure = clamp(passive_flow_pressure, -1.0, 1.0)
+	context.volume_activity_multiplier = clamp(volume_activity_multiplier, 0.35, 3.0)
+	context.depth_liquidity_multiplier = clamp(depth_liquidity_multiplier, 0.55, 2.4)
+	return context
 
 
-func _apply_dirty_tip_market_effect(event_context: Dictionary, dirty_tip_effect: Dictionary) -> Dictionary:
+func _apply_dirty_tip_market_effect(context: EventContext, dirty_tip_effect: Dictionary) -> EventContext:
 	if dirty_tip_effect.is_empty():
-		return event_context
-	var context: Dictionary = event_context.duplicate(true)
-	context["event_bias"] = clamp(float(context.get("event_bias", 0.0)) + float(dirty_tip_effect.get("price_bias", 0.0)), -0.08, 0.08)
-	context["passive_flow_pressure"] = clamp(float(context.get("passive_flow_pressure", 0.0)) + float(dirty_tip_effect.get("broker_pressure", 0.0)), -1.0, 1.0)
-	context["volume_activity_multiplier"] = clamp(float(context.get("volume_activity_multiplier", 1.0)) * float(dirty_tip_effect.get("volume_multiplier", 1.0)), 0.35, 3.0)
-	var hidden_flags: Array = context.get("hidden_story_flags", []).duplicate()
-	if not hidden_flags.has("dirty_tip_pressure"):
-		hidden_flags.append("dirty_tip_pressure")
-	context["hidden_story_flags"] = hidden_flags
-	context["dirty_tip_pressure"] = float(dirty_tip_effect.get("pressure", 0.0))
-	context["dirty_tip_offer_id"] = str(dirty_tip_effect.get("offer_id", ""))
+		return context
+	context.event_bias = clamp(context.event_bias + float(dirty_tip_effect.get("price_bias", 0.0)), -0.08, 0.08)
+	context.passive_flow_pressure = clamp(context.passive_flow_pressure + float(dirty_tip_effect.get("broker_pressure", 0.0)), -1.0, 1.0)
+	context.volume_activity_multiplier = clamp(context.volume_activity_multiplier * float(dirty_tip_effect.get("volume_multiplier", 1.0)), 0.35, 3.0)
+	context.add_hidden_flag("dirty_tip_pressure")
+	context.dirty_tip_pressure = float(dirty_tip_effect.get("pressure", 0.0))
+	context.dirty_tip_offer_id = str(dirty_tip_effect.get("offer_id", ""))
 	return context
 
 
@@ -1956,18 +1973,18 @@ func _calculate_daily_change(
 	var base_volatility: float = (
 		float(definition.get("base_volatility", 0.03)) +
 		float(sector_definition.get("volatility_bias", 0.0))
-	) * volatility_multiplier * clamp(event_volatility_multiplier, 0.55, 2.1)
+	) * volatility_multiplier * clamp(event_volatility_multiplier, PRICE_VOLATILITY_MIN_MULTIPLIER, PRICE_VOLATILITY_MAX_MULTIPLIER)
 	var quality_edge: float = (quality - 50.0) / 50.0
 	var growth_edge: float = (growth - 50.0) / 50.0
 	var risk_edge: float = (risk - 50.0) / 50.0
-	var quality_drift: float = (quality_edge * 0.0032) + (growth_edge * 0.002) - (risk_edge * 0.0034) - 0.0014
-	var momentum_component: float = clamp(-recent_momentum * 0.16, -0.015, 0.015)
-	var noise_component: float = rng.randf_range(-base_volatility, base_volatility) * 0.65
+	var quality_drift: float = (quality_edge * PRICE_QUALITY_EDGE_WEIGHT) + (growth_edge * PRICE_GROWTH_EDGE_WEIGHT) - (risk_edge * PRICE_RISK_EDGE_WEIGHT) + PRICE_BASELINE_DRIFT
+	var momentum_component: float = clamp(-recent_momentum * PRICE_MOMENTUM_MEAN_REVERSION, -PRICE_MOMENTUM_CAP, PRICE_MOMENTUM_CAP)
+	var noise_component: float = rng.randf_range(-base_volatility, base_volatility) * PRICE_NOISE_SCALE
 	var daily_change: float = quality_drift
-	daily_change += market_sentiment * 0.45
-	daily_change += sector_sentiment * 0.55
-	daily_change += event_bias * 0.8
-	daily_change += broker_pressure * 0.03 * broker_impact_multiplier
+	daily_change += market_sentiment * PRICE_MARKET_SENTIMENT_WEIGHT
+	daily_change += sector_sentiment * PRICE_SECTOR_SENTIMENT_WEIGHT
+	daily_change += event_bias * PRICE_EVENT_BIAS_WEIGHT
+	daily_change += broker_pressure * PRICE_BROKER_PRESSURE_WEIGHT * broker_impact_multiplier
 	daily_change += float(volume_context.get("lead_price_bias", 0.0)) * broker_impact_multiplier
 	daily_change += float(volume_context.get("technical_price_bias", 0.0))
 	daily_change += float(volume_context.get("buying_exhaustion_drag", 0.0))
@@ -1982,15 +1999,17 @@ func _calculate_daily_change(
 
 
 func _recent_momentum(price_history: Array) -> float:
-	if price_history.size() < 2:
+	# Use a 5-bar rolling average rate of change to smooth out single-day noise.
+	# Falls back to fewer bars when history is short (e.g. early in the run).
+	const LOOKBACK := 5
+	var n: int = min(LOOKBACK, price_history.size() - 1)
+	if n <= 0:
 		return 0.0
-
 	var last_close: float = float(price_history[price_history.size() - 1])
-	var previous_close: float = float(price_history[price_history.size() - 2])
-	if is_zero_approx(previous_close):
+	var anchor_close: float = float(price_history[price_history.size() - 1 - n])
+	if is_zero_approx(anchor_close):
 		return 0.0
-
-	return (last_close - previous_close) / previous_close
+	return (last_close - anchor_close) / (anchor_close * n)
 
 
 func _build_volume_activity_context(
@@ -3756,3 +3775,17 @@ func _pick_weighted_candidate(rng: RandomNumberGenerator, candidates: Array) -> 
 	var fallback_candidate: Dictionary = candidates[candidates.size() - 1].duplicate(true)
 	fallback_candidate.erase("weight")
 	return fallback_candidate
+
+
+# Safely copy listed keys from `overlay` into `base`.
+# Logs a warning for any key that is expected but missing from overlay,
+# preventing silent data loss when a subsystem renames or drops a key.
+func _merge_resolution(base: Dictionary, overlay: Dictionary, keys: Array) -> Dictionary:
+	var result: Dictionary = base.duplicate(true)
+	for key_value in keys:
+		var key: String = str(key_value)
+		if overlay.has(key):
+			result[key] = overlay[key].duplicate(true) if typeof(overlay[key]) == TYPE_DICTIONARY or typeof(overlay[key]) == TYPE_ARRAY else overlay[key]
+		else:
+			push_warning("MarketSimulator._merge_resolution: expected key '%s' missing from overlay" % key)
+	return result

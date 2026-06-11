@@ -990,16 +990,16 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	var company_market_rows: Array = get_company_market_rows(true)
 	_log_advance_perf_elapsed(log_advance_perf, "build_company_market_rows", phase_started_at_usec, " count=%d" % company_market_rows.size())
 	phase_started_at_usec = Time.get_ticks_usec()
-	var life_obligation_result: Dictionary = _apply_life_monthly_obligation_if_due(previous_trade_date, RunState.current_trade_date)
+	var life_obligation_result: Dictionary = LifeManager.apply_life_monthly_obligation_if_due(self, previous_trade_date, RunState.current_trade_date)
 	_log_advance_perf_elapsed(log_advance_perf, "apply_life_obligation", phase_started_at_usec, " amount=%.2f" % float(life_obligation_result.get("amount", 0.0)))
 	phase_started_at_usec = Time.get_ticks_usec()
-	var life_loan_payment_result: Dictionary = _apply_life_loan_payment_if_due(previous_trade_date, RunState.current_trade_date)
+	var life_loan_payment_result: Dictionary = LifeManager.apply_life_loan_payment_if_due(previous_trade_date, RunState.current_trade_date)
 	_log_advance_perf_elapsed(log_advance_perf, "apply_life_loan_payment", phase_started_at_usec, " amount=%.2f" % float(life_loan_payment_result.get("amount", 0.0)))
 	phase_started_at_usec = Time.get_ticks_usec()
-	var life_legal_result: Dictionary = _apply_life_legal_state_update()
+	var life_legal_result: Dictionary = LifeManager.apply_life_legal_state_update()
 	_log_advance_perf_elapsed(log_advance_perf, "apply_life_legal", phase_started_at_usec, " remaining=%d" % int(life_legal_result.get("days_remaining", 0)))
 	phase_started_at_usec = Time.get_ticks_usec()
-	var life_wellbeing_result: Dictionary = _apply_life_daily_wellbeing_update()
+	var life_wellbeing_result: Dictionary = LifeManager.apply_life_daily_wellbeing_update(self)
 	_log_advance_perf_elapsed(log_advance_perf, "apply_life_wellbeing", phase_started_at_usec, " stress=%.2f" % float(life_wellbeing_result.get("stress_value", 0.0)))
 	phase_started_at_usec = Time.get_ticks_usec()
 	var network_results: Array = contact_network_system.process_due_requests(RunState, DataRepository)
@@ -1289,6 +1289,8 @@ func execute_console_command(command_text: String) -> Dictionary:
 
 
 func debug_grant_company_control(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	var normalized_company_id: String = company_id.strip_edges().to_lower()
@@ -1368,6 +1370,8 @@ func get_debug_corporate_action_generator_catalog() -> Array:
 
 
 func debug_generate_corporate_action(generator_id: String, company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	var generator: Dictionary = _debug_corporate_action_generator_by_id(generator_id)
@@ -1392,6 +1396,8 @@ func get_debug_index_review_generator_catalog() -> Array:
 
 
 func debug_generate_index_review(generator_id: String, company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	var generator: Dictionary = _debug_index_review_generator_by_id(generator_id)
@@ -1437,6 +1443,8 @@ func get_debug_company_roadmap_generator_catalog() -> Array:
 
 
 func debug_generate_company_roadmap(generator_id: String, company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	var generator: Dictionary = _debug_company_roadmap_generator_by_id(generator_id)
@@ -1494,42 +1502,16 @@ func debug_generate_company_roadmap(generator_id: String, company_id: String) ->
 
 
 func get_debug_life_development_generator_catalog() -> Array:
-	var groups: Array = []
-	for group_value in DEBUG_LIFE_DEVELOPMENT_GENERATOR_GROUPS:
-		if typeof(group_value) == TYPE_DICTIONARY:
-			groups.append(group_value.duplicate(true))
-	return groups
+	return LifeManager.get_debug_life_development_generator_catalog(self)
 
 
 func debug_generate_life_development(generator_id: String) -> Dictionary:
-	if not RunState.has_active_run():
-		return {"success": false, "message": "No active run."}
-	var generator: Dictionary = _debug_life_development_generator_by_id(generator_id)
-	if generator.is_empty():
-		return {"success": false, "message": "Unknown Life property-intel generator."}
-	var result: Dictionary = debug_force_life_development_lead(
-		str(generator.get("location_id", "jakarta")),
-		str(generator.get("theme", "modern_city")),
-		str(generator.get("impact_tier", "major")),
-		str(generator.get("source_type", "network")),
-		str(generator.get("outcome_override", ""))
-	)
-	if not bool(result.get("success", false)):
-		return result
-	var lead: Dictionary = result.get("lead", {})
-	return {
-		"success": true,
-		"message": "Generated property watch: %s / %s." % [
-			str(lead.get("location_label", str(generator.get("location_id", "Jakarta")).capitalize())),
-			str(lead.get("theme_label", str(generator.get("theme", "modern_city")).replace("_", " ").capitalize()))
-		],
-		"generator_id": generator_id,
-		"generator_label": str(generator.get("label", "Life property intel")),
-		"lead": lead.duplicate(true)
-	}
+	return LifeManager.debug_generate_life_development(self, generator_id)
 
 
 func debug_force_rights_issue_rupslb(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
@@ -1546,6 +1528,8 @@ func debug_force_rights_issue_rupslb(company_id: String) -> Dictionary:
 
 
 func debug_schedule_next_day_rights_issue_rupslb(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -1572,6 +1556,8 @@ func debug_schedule_next_day_rights_issue_rupslb(company_id: String) -> Dictiona
 
 
 func debug_schedule_next_day_private_placement_rupslb(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -1595,6 +1581,8 @@ func debug_schedule_next_day_private_placement_rupslb(company_id: String) -> Dic
 
 
 func debug_schedule_next_day_stock_buyback_rupslb(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -1618,6 +1606,8 @@ func debug_schedule_next_day_stock_buyback_rupslb(company_id: String) -> Diction
 
 
 func debug_schedule_next_day_stock_split_rupslb(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -1641,6 +1631,8 @@ func debug_schedule_next_day_stock_split_rupslb(company_id: String) -> Dictionar
 
 
 func debug_schedule_next_day_tender_offer_rupslb(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -1664,6 +1656,8 @@ func debug_schedule_next_day_tender_offer_rupslb(company_id: String) -> Dictiona
 
 
 func debug_schedule_next_day_strategic_mna_rupslb(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -1687,6 +1681,8 @@ func debug_schedule_next_day_strategic_mna_rupslb(company_id: String) -> Diction
 
 
 func debug_schedule_next_day_backdoor_listing_rupslb(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -1710,6 +1706,8 @@ func debug_schedule_next_day_backdoor_listing_rupslb(company_id: String) -> Dict
 
 
 func debug_schedule_next_day_restructuring_rupslb(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -1733,6 +1731,8 @@ func debug_schedule_next_day_restructuring_rupslb(company_id: String) -> Diction
 
 
 func debug_schedule_next_day_ceo_change_rupslb(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -2088,20 +2088,6 @@ func _debug_company_roadmap_generator_by_id(generator_id: String) -> Dictionary:
 	return {}
 
 
-func _debug_life_development_generator_by_id(generator_id: String) -> Dictionary:
-	for group_value in DEBUG_LIFE_DEVELOPMENT_GENERATOR_GROUPS:
-		if typeof(group_value) != TYPE_DICTIONARY:
-			continue
-		var group: Dictionary = group_value
-		for generator_value in group.get("generators", []):
-			if typeof(generator_value) != TYPE_DICTIONARY:
-				continue
-			var generator: Dictionary = generator_value
-			if str(generator.get("id", "")) == generator_id:
-				return generator.duplicate(true)
-	return {}
-
-
 func _stock_contact_tip_relevance(contact: Dictionary, company_id: String, sector_id: String) -> Dictionary:
 	var score: int = int(contact.get("relationship", 0))
 	var group: int = 90
@@ -2146,6 +2132,8 @@ func _stock_contact_tip_relevance(contact: Dictionary, company_id: String, secto
 
 
 func debug_force_stock_buyback_execution(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -2164,6 +2152,8 @@ func debug_force_stock_buyback_execution(company_id: String) -> Dictionary:
 
 
 func debug_force_stock_split_execution(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -2182,6 +2172,8 @@ func debug_force_stock_split_execution(company_id: String) -> Dictionary:
 
 
 func debug_force_tender_offer_execution(company_id: String, force_go_private: bool = false) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -2200,6 +2192,8 @@ func debug_force_tender_offer_execution(company_id: String, force_go_private: bo
 
 
 func debug_force_strategic_mna_execution(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -2218,6 +2212,8 @@ func debug_force_strategic_mna_execution(company_id: String) -> Dictionary:
 
 
 func debug_force_backdoor_listing_execution(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -2236,6 +2232,8 @@ func debug_force_backdoor_listing_execution(company_id: String) -> Dictionary:
 
 
 func debug_force_restructuring_execution(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -2254,6 +2252,8 @@ func debug_force_restructuring_execution(company_id: String) -> Dictionary:
 
 
 func debug_force_ceo_change_execution(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -2272,6 +2272,8 @@ func debug_force_ceo_change_execution(company_id: String) -> Dictionary:
 
 
 func debug_schedule_next_day_cash_dividend(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -2291,6 +2293,8 @@ func debug_schedule_next_day_cash_dividend(company_id: String) -> Dictionary:
 
 
 func debug_schedule_next_day_stock_dividend(company_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	if company_id.is_empty():
@@ -4018,26 +4022,7 @@ func get_finance_status_snapshot() -> Dictionary:
 
 
 func get_life_action_block_reason(action_id: String) -> String:
-	if not RunState.has_active_run():
-		return "No active run."
-	var normalized_action: String = action_id.to_lower()
-	var life_state: Dictionary = RunState.get_player_life()
-	var legal_state: Dictionary = life_state.get("legal_state", {}) if typeof(life_state.get("legal_state", {})) == TYPE_DICTIONARY else {}
-	if bool(legal_state.get("active", false)) and int(legal_state.get("days_remaining", 0)) > 0:
-		if normalized_action == "advance_day":
-			return ""
-		return "Legal hold is active. Only Advance Day is available for %d trading day%s." % [
-			int(legal_state.get("days_remaining", 0)),
-			"" if int(legal_state.get("days_remaining", 0)) == 1 else "s"
-		]
-	if int(life_state.get("hospital_days_remaining", 0)) > 0:
-		if normalized_action == "advance_day":
-			return ""
-		return "Hospital recovery is active. Only Advance Day is available for %d trading day%s." % [
-			int(life_state.get("hospital_days_remaining", 0)),
-			"" if int(life_state.get("hospital_days_remaining", 0)) == 1 else "s"
-		]
-	return get_cash_stress_block_reason(action_id)
+	return LifeManager.get_life_action_block_reason(self, action_id)
 
 
 func get_cash_stress_block_reason(action_id: String) -> String:
@@ -4125,102 +4110,7 @@ func take_emergency_loan() -> Dictionary:
 
 
 func get_life_snapshot() -> Dictionary:
-	if not RunState.has_active_run():
-		return {}
-
-	var life_state: Dictionary = RunState.get_player_life()
-	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, str(life_state.get("housing_id", "")))
-	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, str(life_state.get("lifestyle_id", "")))
-	var basics_tier: Dictionary = _life_basics_tier_by_id(str(life_state.get("basics_tier_id", RunState.LIFE_DEFAULT_BASICS_TIER_ID)))
-	var asset_summary: Dictionary = _build_life_asset_summary(life_state)
-	var development_leads: Array = _build_life_development_lead_rows(life_state)
-	var property_value_events: Array = _build_life_property_value_event_rows(asset_summary.get("properties", []))
-	var portfolio: Dictionary = get_portfolio_snapshot()
-	var dividend_projection: Dictionary = _build_life_dividend_projection()
-	var basics_cost: float = float(basics_tier.get("monthly_cost", LIFE_BASIC_EXPENSES_MONTHLY))
-	var monthly_extra: float = max(float(life_state.get("monthly_extra", 0.0)), 0.0)
-	var monthly_outflow: float = _life_monthly_outflow_for_state(life_state)
-	var estimated_monthly_dividends: float = float(dividend_projection.get("estimated_monthly_dividends", 0.0))
-	var net_monthly: float = estimated_monthly_dividends - monthly_outflow
-	var cash: float = float(portfolio.get("cash", 0.0))
-	var runway_months: float = 999.0
-	if monthly_outflow > 0.0:
-		runway_months = cash / monthly_outflow
-	var next_life_payment: Dictionary = _build_next_life_payment_snapshot(monthly_outflow)
-	var status_label: String = "Comfortable runway"
-	var finance_status: Dictionary = get_finance_status_snapshot()
-	var stress_stage: Dictionary = RunState.get_life_stress_stage(life_state)
-	var public_image: Dictionary = _build_life_public_image_snapshot(portfolio, asset_summary)
-	if bool(finance_status.get("bankrupt", false)):
-		status_label = "Bankrupt"
-	elif int(life_state.get("hospital_days_remaining", 0)) > 0:
-		status_label = "Hospitalized"
-	elif bool(life_state.get("burnout_risk_active", false)):
-		status_label = "Burnout risk"
-	elif bool(finance_status.get("cash_stress_active", false)):
-		status_label = "Cash stress"
-	elif runway_months < 6.0:
-		status_label = "Cash pressure"
-	elif runway_months < 12.0:
-		status_label = "Thin runway"
-	elif runway_months < 24.0:
-		status_label = "Manageable runway"
-
-	return {
-		"state": life_state,
-		"trade_date": get_current_trade_date(),
-		"cash": cash,
-		"equity": float(portfolio.get("equity", 0.0)),
-		"market_value": float(portfolio.get("market_value", 0.0)),
-		"housing": housing,
-		"basics_tier": basics_tier,
-		"lifestyle": lifestyle,
-		"housing_options": LIFE_HOUSING_OPTIONS.duplicate(true),
-		"basics_tiers": LIFE_BASICS_TIERS.duplicate(true),
-		"lifestyle_options": LIFE_LIFESTYLE_OPTIONS.duplicate(true),
-		"property_catalog": _build_life_property_catalog_rows(),
-		"car_catalog": LIFE_CAR_CATALOG.duplicate(true),
-		"property_locations": _build_life_property_location_rows(),
-		"properties": asset_summary.get("properties", []).duplicate(true),
-		"cars": asset_summary.get("cars", []).duplicate(true),
-		"development_leads": development_leads,
-		"property_value_events": property_value_events,
-		"primary_property": asset_summary.get("primary_property", {}).duplicate(true),
-		"active_car": asset_summary.get("active_car", {}).duplicate(true),
-		"public_image": public_image,
-		"lifestyle_asset_value": float(asset_summary.get("asset_value", 0.0)),
-		"property_value": float(asset_summary.get("property_value", 0.0)),
-		"car_value": float(asset_summary.get("car_value", 0.0)),
-		"rental_income": float(asset_summary.get("rental_income", 0.0)),
-		"asset_upkeep": float(asset_summary.get("asset_upkeep", 0.0)),
-		"property_upkeep": float(asset_summary.get("property_upkeep", 0.0)),
-		"non_primary_property_upkeep": float(asset_summary.get("non_primary_property_upkeep", 0.0)),
-		"car_upkeep": float(asset_summary.get("car_upkeep", 0.0)),
-		"housing_cost_monthly": float(asset_summary.get("primary_residence_cost", 0.0)) if bool(asset_summary.get("owned_primary_residence", false)) else float(housing.get("monthly_cost", 0.0)),
-		"net_lifestyle_cashflow": float(asset_summary.get("net_lifestyle_cashflow", 0.0)),
-		"owned_primary_residence": bool(asset_summary.get("owned_primary_residence", false)),
-		"basic_expenses_monthly": basics_cost,
-		"monthly_extra": monthly_extra,
-		"monthly_outflow": monthly_outflow,
-		"next_life_payment": next_life_payment,
-		"estimated_monthly_dividends": estimated_monthly_dividends,
-		"estimated_annual_dividends": estimated_monthly_dividends * 12.0,
-		"declared_dividend_total_12m": float(dividend_projection.get("declared_dividend_total_12m", 0.0)),
-		"net_monthly": net_monthly,
-		"runway_months": runway_months,
-		"finance": finance_status,
-		"status_label": status_label,
-		"stress_value": float(life_state.get("stress_value", RunState.LIFE_DEFAULT_STRESS_VALUE)),
-		"happiness_value": float(life_state.get("happiness_value", RunState.LIFE_DEFAULT_HAPPINESS_VALUE)),
-		"stress_stage": stress_stage,
-		"stress_ap_penalty": RunState.get_life_stress_ap_penalty(life_state),
-		"burnout_risk_active": bool(life_state.get("burnout_risk_active", false)),
-		"burnout_risk_days_remaining": int(life_state.get("burnout_risk_days_remaining", 0)),
-		"hospital_days_remaining": int(life_state.get("hospital_days_remaining", 0)),
-		"hospitalized": int(life_state.get("hospital_days_remaining", 0)) > 0,
-		"dividend_rows": dividend_projection.get("rows", []).duplicate(true),
-		"note": "Monthly costs and loan payments deduct cash on the first trading day of each new month. Dividends only count after corporate actions are declared."
-	}
+	return LifeManager.get_life_snapshot(self)
 
 
 func _build_daily_recap_life_snapshot(portfolio_totals: Dictionary) -> Dictionary:
@@ -4525,270 +4415,29 @@ func _build_first_month_warning_rows(
 
 
 func set_life_plan(housing_id: String, lifestyle_id: String, basics_tier_id: String = "") -> Dictionary:
-	if not RunState.has_active_run():
-		return {"success": false, "message": "No active run."}
-	var hospital_block_reason: String = get_life_action_block_reason("life_plan")
-	if not hospital_block_reason.is_empty():
-		return {"success": false, "message": hospital_block_reason}
-	var life_state: Dictionary = RunState.get_player_life()
-	var housing: Dictionary = _life_option_by_id(LIFE_HOUSING_OPTIONS, housing_id)
-	var lifestyle: Dictionary = _life_option_by_id(LIFE_LIFESTYLE_OPTIONS, lifestyle_id)
-	var basics_tier: Dictionary = _life_basics_tier_by_id(basics_tier_id if not basics_tier_id.is_empty() else str(life_state.get("basics_tier_id", RunState.LIFE_DEFAULT_BASICS_TIER_ID)))
-	var current_outflow: float = _life_monthly_outflow_for_state(life_state)
-	var next_outflow: float = _life_monthly_outflow_for_options(
-		str(housing.get("id", "kost_room")),
-		str(lifestyle.get("id", "balanced")),
-		str(basics_tier.get("id", RunState.LIFE_DEFAULT_BASICS_TIER_ID)),
-		max(float(life_state.get("monthly_extra", 0.0)), 0.0)
-	)
-	var finance_status: Dictionary = get_finance_status_snapshot()
-	if bool(finance_status.get("bankrupt", false)):
-		return {"success": false, "message": "Bankruptcy has disabled Life plan changes."}
-	if bool(finance_status.get("cash_stress_active", false)) and next_outflow > current_outflow + 0.0001:
-		return {"success": false, "message": "Cash stress is active. Lower or maintain Life costs before increasing monthly outflow."}
-	life_state["housing_id"] = str(housing.get("id", "kost_room"))
-	life_state["lifestyle_id"] = str(lifestyle.get("id", "balanced"))
-	life_state["basics_tier_id"] = str(basics_tier.get("id", RunState.LIFE_DEFAULT_BASICS_TIER_ID))
-	life_state["updated_day_index"] = RunState.day_index
-	life_state["updated_trade_date"] = get_current_trade_date()
-	RunState.set_player_life(life_state)
-	_request_autosave("life_plan")
-	life_changed.emit()
-	return {
-		"success": true,
-		"message": "Life plan updated.",
-		"snapshot": get_life_snapshot()
-	}
+	return LifeManager.set_life_plan(self, housing_id, lifestyle_id, basics_tier_id)
 
 
 func process_life_development_leads() -> Array:
-	if not RunState.has_active_run():
-		return []
-	var life_state: Dictionary = RunState.get_player_life()
-	var leads: Array = life_state.get("development_leads", []).duplicate(true)
-	if leads.is_empty():
-		return []
-	var properties: Array = life_state.get("properties", []).duplicate(true)
-	var results: Array = []
-	var changed: bool = false
-	for lead_index in range(leads.size()):
-		if typeof(leads[lead_index]) != TYPE_DICTIONARY:
-			continue
-		var lead: Dictionary = leads[lead_index]
-		if bool(lead.get("resolved", false)):
-			continue
-		if RunState.day_index < int(lead.get("due_day_index", RunState.day_index + 1)):
-			continue
-		var resolution: Dictionary = _resolve_life_development_lead(lead)
-		var outcome: String = str(resolution.get("outcome", "cancelled"))
-		var result: Dictionary = {
-			"lead_id": str(lead.get("id", "")),
-			"location_id": str(lead.get("location_id", "")),
-			"location_label": _life_location_label(str(lead.get("location_id", ""))),
-			"theme": str(lead.get("theme", "")),
-			"theme_label": _life_development_theme_label(str(lead.get("theme", ""))),
-			"source_type": str(lead.get("source_type", "")),
-			"contact_id": str(lead.get("contact_id", "")),
-			"stage": outcome,
-			"outcome": outcome,
-			"applied_property_ids": []
-		}
-		if outcome == "delayed":
-			var delay_days: int = int(resolution.get("delay_days", 4))
-			lead["stage"] = "delayed"
-			lead["due_day_index"] = RunState.day_index + max(delay_days, 1)
-			lead["delay_count"] = int(lead.get("delay_count", 0)) + 1
-			lead["source_note"] = "The lead is still alive, but permits and land work are taking longer than expected."
-			result["due_day_index"] = int(lead.get("due_day_index", 0))
-			results.append(result)
-			leads[lead_index] = lead
-			changed = true
-			continue
-		lead["resolved"] = true
-		lead["outcome"] = outcome
-		lead["public_confirmed"] = outcome == "confirmed"
-		lead["stage"] = "confirmed" if outcome == "confirmed" else "cancelled"
-		lead["display_location_label"] = _life_location_label(str(lead.get("location_id", "")))
-		lead["display_theme_label"] = _life_development_theme_label(str(lead.get("theme", "")))
-		if outcome == "confirmed":
-			var value_multiplier: float = max(float(resolution.get("value_multiplier", 1.0)), 1.0)
-			lead["value_multiplier"] = value_multiplier
-			var applied_property_ids: Array = []
-			for property_index in range(properties.size()):
-				if typeof(properties[property_index]) != TYPE_DICTIONARY:
-					continue
-				var property_row: Dictionary = properties[property_index]
-				if str(property_row.get("location_id", "")) != str(lead.get("location_id", "")):
-					continue
-				if _life_property_has_value_event(property_row, str(lead.get("id", ""))):
-					continue
-				var old_value: float = max(float(property_row.get("current_value", property_row.get("purchase_price", 0.0))), 0.0)
-				var new_value: float = old_value * value_multiplier
-				var event: Dictionary = {
-					"lead_id": str(lead.get("id", "")),
-					"label": "%s confirmed in %s" % [_life_development_theme_label(str(lead.get("theme", ""))), _life_location_label(str(lead.get("location_id", "")))],
-					"theme": str(lead.get("theme", "")),
-					"theme_label": _life_development_theme_label(str(lead.get("theme", ""))),
-					"source_type": str(lead.get("source_type", "")),
-					"outcome": "confirmed",
-					"multiplier": value_multiplier,
-					"old_value": old_value,
-					"new_value": new_value,
-					"day_index": RunState.day_index,
-					"trade_date": get_current_trade_date()
-				}
-				var value_events: Array = property_row.get("value_events", []).duplicate(true)
-				value_events.append(event)
-				property_row["value_events"] = value_events
-				property_row["current_value"] = new_value
-				properties[property_index] = property_row
-				applied_property_ids.append(str(property_row.get("id", "")))
-			lead["applied_property_ids"] = applied_property_ids
-			result["value_multiplier"] = value_multiplier
-			result["applied_property_ids"] = applied_property_ids
-			result["stage"] = "confirmed"
-		else:
-			lead["value_multiplier"] = 1.0
-			lead["source_note"] = "The lead did not survive public confirmation. No property value uplift was applied."
-			result["stage"] = "cancelled"
-			result["value_multiplier"] = 1.0
-		results.append(result)
-		leads[lead_index] = lead
-		changed = true
-	if changed:
-		life_state["development_leads"] = leads
-		life_state["properties"] = properties
-		life_state["updated_day_index"] = RunState.day_index
-		life_state["updated_trade_date"] = get_current_trade_date()
-		RunState.set_player_life(life_state)
-	return results
+	return LifeManager.process_life_development_leads(self)
 
 
 func debug_force_life_development_lead(location_id: String, theme: String = "modern_city", impact_tier: String = "major", source_type: String = "network", outcome_override: String = "") -> Dictionary:
-	var result: Dictionary = _create_life_development_lead(
-		location_id,
-		theme,
-		impact_tier,
-		source_type,
-		"debug_%s_%s_%d" % [location_id, theme, RunState.day_index],
-		"",
-		88.0,
-		"Forced property report",
-		"",
-		outcome_override,
-		4
-	)
-	if bool(result.get("success", false)):
-		_request_autosave("life_development_debug")
-		life_changed.emit()
-		network_changed.emit()
-	return result
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
+	return LifeManager.debug_force_life_development_lead(self, location_id, theme, impact_tier, source_type, outcome_override)
 
 
 func discover_life_development_lead_from_article(article: Dictionary) -> Dictionary:
-	var result: Dictionary = _maybe_create_life_development_lead_from_news_article(article)
-	if bool(result.get("success", false)) and not bool(result.get("duplicate", false)):
-		_request_autosave("life_development_news")
-		life_changed.emit()
-		network_changed.emit()
-	return result
+	return LifeManager.discover_life_development_lead_from_article(self, article)
 
 
 func get_life_development_lead_for_article(article: Dictionary) -> Dictionary:
-	if not RunState.has_active_run() or article.is_empty():
-		return {}
-	var source_id: String = _life_development_news_source_id(article)
-	if source_id.is_empty():
-		return {}
-	var life_state: Dictionary = RunState.get_player_life()
-	for lead_value in life_state.get("development_leads", []):
-		if typeof(lead_value) != TYPE_DICTIONARY:
-			continue
-		var lead: Dictionary = lead_value
-		if str(lead.get("source_type", "")) == "news" and str(lead.get("source_id", "")) == source_id:
-			return lead.duplicate(true)
-	return {}
+	return LifeManager.get_life_development_lead_for_article(self, article)
 
 
 func purchase_life_property(catalog_id: String, location_id: String = "", make_primary: bool = false) -> Dictionary:
-	if not RunState.has_active_run():
-		return {"success": false, "message": "No active run."}
-	var block_reason: String = get_life_action_block_reason("buy")
-	if not block_reason.is_empty():
-		return {"success": false, "message": block_reason}
-	var catalog: Dictionary = _life_property_catalog_by_id(catalog_id)
-	if catalog.is_empty():
-		return {"success": false, "message": "Unknown property."}
-	var location: Dictionary = _life_location_by_id(location_id)
-	var base_price: float = _life_property_base_price_for_location(catalog, location)
-	var price: float = _life_property_price_for_location(catalog, location)
-	var cash: float = float(get_portfolio_snapshot().get("cash", 0.0))
-	if cash + 0.0001 < price:
-		return {
-			"success": false,
-			"reason": "insufficient_cash",
-			"message": "Not enough cash for this property.",
-			"required_cash": price,
-			"available_cash": cash
-		}
-	var life_state: Dictionary = RunState.get_player_life()
-	var properties: Array = life_state.get("properties", []).duplicate(true)
-	var property_id: String = _life_next_asset_id("property", properties)
-	if make_primary:
-		for index in range(properties.size()):
-			if typeof(properties[index]) == TYPE_DICTIONARY:
-				var existing_property: Dictionary = properties[index]
-				existing_property["is_primary"] = false
-				properties[index] = existing_property
-	var property_row: Dictionary = {
-		"id": property_id,
-		"catalog_id": str(catalog.get("id", "")),
-		"location_id": str(location.get("id", "jakarta")),
-		"label": str(catalog.get("label", "")),
-		"location_label": str(location.get("label", "Jakarta")),
-		"purchase_price": price,
-		"base_value": base_price,
-		"current_value": price,
-		"monthly_upkeep": _life_property_monthly_upkeep_for_location(catalog, location),
-		"rent_income": _life_property_rent_for_location(catalog, location),
-		"rented_out": false,
-		"is_primary": make_primary,
-		"stress_delta": float(catalog.get("stress_delta", 0.0)),
-		"happiness_delta": float(catalog.get("happiness_delta", 0.0)),
-		"status_value": float(catalog.get("status_value", 0.0)),
-		"value_events": [],
-		"priced_in_lead_ids": _life_public_confirmed_lead_ids_for_location(str(location.get("id", "jakarta"))),
-		"purchased_day_index": RunState.day_index,
-		"purchased_trade_date": get_current_trade_date()
-	}
-	properties.append(property_row)
-	life_state["properties"] = properties
-	life_state["updated_day_index"] = RunState.day_index
-	life_state["updated_trade_date"] = get_current_trade_date()
-	RunState.set_player_life(life_state)
-	var payment: Dictionary = RunState.apply_cash_obligation("life_property_purchase", price, {
-		"company_id": "life",
-		"side": "life_property_purchase",
-		"asset_id": property_id,
-		"asset_label": str(catalog.get("label", "")),
-		"location_label": str(location.get("label", "Jakarta"))
-	})
-	if not bool(payment.get("success", false)):
-		return payment
-	_record_steam_progress_event("life_property_purchased", {
-		"catalog_id": catalog_id,
-		"location_id": str(location.get("id", "jakarta")),
-		"price": price
-	})
-	_request_autosave("life_property_purchase")
-	life_changed.emit()
-	portfolio_changed.emit()
-	return {
-		"success": true,
-		"message": "%s purchased." % str(catalog.get("label", "Property")),
-		"property": property_row.duplicate(true),
-		"snapshot": get_life_snapshot()
-	}
+	return LifeManager.purchase_life_property(self, catalog_id, location_id, make_primary)
 
 
 func set_primary_residence(property_id: String) -> Dictionary:
@@ -4858,404 +4507,19 @@ func set_property_rental(property_id: String, rented_out: bool) -> Dictionary:
 
 
 func sell_life_property(property_id: String) -> Dictionary:
-	if not RunState.has_active_run():
-		return {"success": false, "message": "No active run."}
-	var block_reason: String = get_life_action_block_reason("life_plan")
-	if not block_reason.is_empty():
-		return {"success": false, "message": block_reason}
-	var life_state: Dictionary = RunState.get_player_life()
-	var properties: Array = life_state.get("properties", []).duplicate(true)
-	var sold_property: Dictionary = {}
-	var next_properties: Array = []
-	for property_value in properties:
-		if typeof(property_value) != TYPE_DICTIONARY:
-			continue
-		var property_row: Dictionary = property_value
-		if str(property_row.get("id", "")) == property_id:
-			sold_property = property_row
-			continue
-		next_properties.append(property_row)
-	if sold_property.is_empty():
-		return {"success": false, "message": "Property not found."}
-	var proceeds: float = max(float(sold_property.get("current_value", sold_property.get("purchase_price", 0.0))) * LIFE_ASSET_SELL_MULTIPLIER, 0.0)
-	life_state["properties"] = next_properties
-	life_state["updated_day_index"] = RunState.day_index
-	life_state["updated_trade_date"] = get_current_trade_date()
-	RunState.set_player_life(life_state)
-	var inflow: Dictionary = RunState.apply_cash_inflow("life_property_sale", proceeds, {
-		"company_id": "life",
-		"side": "life_property_sale",
-		"asset_id": property_id,
-		"asset_label": str(sold_property.get("label", "Property"))
-	})
-	if not bool(inflow.get("success", false)):
-		return inflow
-	_request_autosave("life_property_sale")
-	life_changed.emit()
-	portfolio_changed.emit()
-	return {
-		"success": true,
-		"message": "%s sold." % str(sold_property.get("label", "Property")),
-		"proceeds": proceeds,
-		"snapshot": get_life_snapshot()
-	}
+	return LifeManager.sell_life_property(self, property_id)
 
 
 func purchase_life_car(catalog_id: String) -> Dictionary:
-	if not RunState.has_active_run():
-		return {"success": false, "message": "No active run."}
-	var block_reason: String = get_life_action_block_reason("buy")
-	if not block_reason.is_empty():
-		return {"success": false, "message": block_reason}
-	var catalog: Dictionary = _life_car_catalog_by_id(catalog_id)
-	if catalog.is_empty():
-		return {"success": false, "message": "Unknown car."}
-	var price: float = max(float(catalog.get("price", 0.0)), 0.0)
-	var cash: float = float(get_portfolio_snapshot().get("cash", 0.0))
-	if cash + 0.0001 < price:
-		return {
-			"success": false,
-			"reason": "insufficient_cash",
-			"message": "Not enough cash for this car.",
-			"required_cash": price,
-			"available_cash": cash
-		}
-	var life_state: Dictionary = RunState.get_player_life()
-	var cars: Array = life_state.get("cars", []).duplicate(true)
-	var car_id: String = _life_next_asset_id("car", cars)
-	var first_car: bool = cars.is_empty()
-	var car_row: Dictionary = {
-		"id": car_id,
-		"catalog_id": str(catalog.get("id", "")),
-		"label": str(catalog.get("label", "")),
-		"purchase_price": price,
-		"current_value": price,
-		"monthly_upkeep": max(float(catalog.get("monthly_upkeep", 0.0)), 0.0),
-		"status_value": float(catalog.get("status_value", 0.0)),
-		"stress_delta": float(catalog.get("stress_delta", 0.0)),
-		"happiness_delta": float(catalog.get("happiness_delta", 0.0)),
-		"is_active": first_car,
-		"purchased_day_index": RunState.day_index,
-		"purchased_trade_date": get_current_trade_date()
-	}
-	cars.append(car_row)
-	life_state["cars"] = cars
-	life_state["updated_day_index"] = RunState.day_index
-	life_state["updated_trade_date"] = get_current_trade_date()
-	RunState.set_player_life(life_state)
-	var payment: Dictionary = RunState.apply_cash_obligation("life_car_purchase", price, {
-		"company_id": "life",
-		"side": "life_car_purchase",
-		"asset_id": car_id,
-		"asset_label": str(catalog.get("label", "Car"))
-	})
-	if not bool(payment.get("success", false)):
-		return payment
-	_record_steam_progress_event("life_car_purchased", {
-		"catalog_id": catalog_id,
-		"price": price
-	})
-	_request_autosave("life_car_purchase")
-	life_changed.emit()
-	portfolio_changed.emit()
-	return {
-		"success": true,
-		"message": "%s purchased." % str(catalog.get("label", "Car")),
-		"car": car_row.duplicate(true),
-		"snapshot": get_life_snapshot()
-	}
+	return LifeManager.purchase_life_car(self, catalog_id)
 
 
 func set_active_life_car(car_id: String) -> Dictionary:
-	if not RunState.has_active_run():
-		return {"success": false, "message": "No active run."}
-	var block_reason: String = get_life_action_block_reason("life_plan")
-	if not block_reason.is_empty():
-		return {"success": false, "message": block_reason}
-	var life_state: Dictionary = RunState.get_player_life()
-	var cars: Array = life_state.get("cars", []).duplicate(true)
-	var found: bool = false
-	for index in range(cars.size()):
-		if typeof(cars[index]) != TYPE_DICTIONARY:
-			continue
-		var car_row: Dictionary = cars[index]
-		var is_target: bool = str(car_row.get("id", "")) == car_id
-		car_row["is_active"] = is_target
-		if is_target:
-			found = true
-		cars[index] = car_row
-	if not found:
-		return {"success": false, "message": "Car not found."}
-	life_state["cars"] = cars
-	life_state["updated_day_index"] = RunState.day_index
-	life_state["updated_trade_date"] = get_current_trade_date()
-	RunState.set_player_life(life_state)
-	_request_autosave("life_active_car")
-	life_changed.emit()
-	return {"success": true, "message": "Active car updated.", "snapshot": get_life_snapshot()}
+	return LifeManager.set_active_life_car(self, car_id)
 
 
 func sell_life_car(car_id: String) -> Dictionary:
-	if not RunState.has_active_run():
-		return {"success": false, "message": "No active run."}
-	var block_reason: String = get_life_action_block_reason("life_plan")
-	if not block_reason.is_empty():
-		return {"success": false, "message": block_reason}
-	var life_state: Dictionary = RunState.get_player_life()
-	var cars: Array = life_state.get("cars", []).duplicate(true)
-	var sold_car: Dictionary = {}
-	var next_cars: Array = []
-	for car_value in cars:
-		if typeof(car_value) != TYPE_DICTIONARY:
-			continue
-		var car_row: Dictionary = car_value
-		if str(car_row.get("id", "")) == car_id:
-			sold_car = car_row
-			continue
-		next_cars.append(car_row)
-	if sold_car.is_empty():
-		return {"success": false, "message": "Car not found."}
-	if bool(sold_car.get("is_active", false)) and not next_cars.is_empty() and typeof(next_cars[0]) == TYPE_DICTIONARY:
-		var next_active: Dictionary = next_cars[0]
-		next_active["is_active"] = true
-		next_cars[0] = next_active
-	var proceeds: float = max(float(sold_car.get("current_value", sold_car.get("purchase_price", 0.0))) * LIFE_ASSET_SELL_MULTIPLIER, 0.0)
-	life_state["cars"] = next_cars
-	life_state["updated_day_index"] = RunState.day_index
-	life_state["updated_trade_date"] = get_current_trade_date()
-	RunState.set_player_life(life_state)
-	var inflow: Dictionary = RunState.apply_cash_inflow("life_car_sale", proceeds, {
-		"company_id": "life",
-		"side": "life_car_sale",
-		"asset_id": car_id,
-		"asset_label": str(sold_car.get("label", "Car"))
-	})
-	if not bool(inflow.get("success", false)):
-		return inflow
-	_request_autosave("life_car_sale")
-	life_changed.emit()
-	portfolio_changed.emit()
-	return {
-		"success": true,
-		"message": "%s sold." % str(sold_car.get("label", "Car")),
-		"proceeds": proceeds,
-		"snapshot": get_life_snapshot()
-	}
-
-
-func _apply_life_monthly_obligation_if_due(previous_trade_date: Dictionary, current_trade_date: Dictionary) -> Dictionary:
-	if previous_trade_date.is_empty() or current_trade_date.is_empty():
-		return {}
-	var previous_year: int = int(previous_trade_date.get("year", 0))
-	var previous_month: int = int(previous_trade_date.get("month", 0))
-	var current_year: int = int(current_trade_date.get("year", 0))
-	var current_month: int = int(current_trade_date.get("month", 0))
-	if previous_year == current_year and previous_month == current_month:
-		return {}
-	if current_year <= 0 or current_month <= 0:
-		return {}
-
-	var obligation: Dictionary = _build_life_monthly_obligation()
-	var amount: float = float(obligation.get("amount", 0.0))
-	if amount <= 0.0:
-		return {}
-
-	var period_id: String = "%04d-%02d" % [current_year, current_month]
-	var life_state: Dictionary = RunState.get_player_life()
-	if str(life_state.get("last_obligation_period", "")) == period_id:
-		return {}
-
-	obligation["period_id"] = period_id
-	obligation["trade_date"] = current_trade_date.duplicate(true)
-	var result: Dictionary = RunState.apply_cash_obligation("life_obligation", amount, obligation)
-	if not bool(result.get("success", false)):
-		return {}
-
-	life_state = RunState.get_player_life()
-	life_state["last_obligation_period"] = period_id
-	life_state["last_obligation_day_index"] = RunState.day_index
-	life_state["last_obligation_amount"] = amount
-	life_state["last_obligation_trade_date"] = current_trade_date.duplicate(true)
-	RunState.set_player_life(life_state)
-	RunState.last_day_results["life_obligation"] = result.duplicate(true)
-	return result
-
-
-func _apply_life_loan_payment_if_due(previous_trade_date: Dictionary, current_trade_date: Dictionary) -> Dictionary:
-	if previous_trade_date.is_empty() or current_trade_date.is_empty():
-		return {}
-	var previous_year: int = int(previous_trade_date.get("year", 0))
-	var previous_month: int = int(previous_trade_date.get("month", 0))
-	var current_year: int = int(current_trade_date.get("year", 0))
-	var current_month: int = int(current_trade_date.get("month", 0))
-	if previous_year == current_year and previous_month == current_month:
-		return {}
-	if current_year <= 0 or current_month <= 0:
-		return {}
-
-	var finance: Dictionary = RunState.get_life_finance()
-	var active_loan: Dictionary = finance.get("active_loan", {})
-	if active_loan.is_empty():
-		return {}
-	var period_id: String = "%04d-%02d" % [current_year, current_month]
-	if str(active_loan.get("last_payment_period", "")) == period_id:
-		return {}
-	var amount: float = max(float(active_loan.get("monthly_payment", 0.0)), 0.0)
-	if amount <= 0.0:
-		return {}
-	var result: Dictionary = RunState.apply_life_loan_payment(amount, {
-		"period_id": period_id,
-		"trade_date": current_trade_date.duplicate(true)
-	})
-	if not bool(result.get("success", false)):
-		return {}
-	RunState.last_day_results["life_loan_payment"] = result.duplicate(true)
-	return result
-
-
-func _apply_life_legal_state_update() -> Dictionary:
-	if not RunState.has_active_run():
-		return {}
-	var life_state: Dictionary = RunState.get_player_life()
-	var legal_state: Dictionary = life_state.get("legal_state", {}) if typeof(life_state.get("legal_state", {})) == TYPE_DICTIONARY else {}
-	if not bool(legal_state.get("active", false)) or int(legal_state.get("days_remaining", 0)) <= 0:
-		return {}
-	RunState.pause_cash_stress_deadline(1)
-	life_state = RunState.get_player_life()
-	legal_state = life_state.get("legal_state", {}) if typeof(life_state.get("legal_state", {})) == TYPE_DICTIONARY else {}
-	var days_before: int = int(legal_state.get("days_remaining", 0))
-	var days_remaining: int = max(days_before - 1, 0)
-	legal_state["days_remaining"] = days_remaining
-	legal_state["last_legal_trade_date"] = RunState.current_trade_date.duplicate(true)
-	legal_state["updated_day_index"] = RunState.day_index
-	if days_remaining <= 0:
-		legal_state["active"] = false
-		legal_state["status"] = "released"
-		legal_state["released_day_index"] = RunState.day_index
-	else:
-		legal_state["active"] = true
-		legal_state["status"] = "held"
-	life_state["legal_state"] = legal_state
-	RunState.set_player_life(life_state)
-	var result: Dictionary = {
-		"legal_hold_day_completed": true,
-		"legal_hold_active": days_remaining > 0,
-		"days_before": days_before,
-		"days_remaining": days_remaining,
-		"case_id": str(legal_state.get("case_id", "")),
-		"target_company_id": str(legal_state.get("target_company_id", "")),
-		"target_ticker": str(legal_state.get("target_ticker", "")),
-		"status": str(legal_state.get("status", "held")),
-		"trade_date": RunState.current_trade_date.duplicate(true)
-	}
-	RunState.last_day_results["life_legal"] = result.duplicate(true)
-	return result
-
-
-func _apply_life_daily_wellbeing_update() -> Dictionary:
-	if not RunState.has_active_run():
-		return {}
-	var life_state: Dictionary = RunState.get_player_life()
-	var was_hospitalized: bool = int(life_state.get("hospital_days_remaining", 0)) > 0
-	if was_hospitalized:
-		RunState.pause_cash_stress_deadline(1)
-		life_state = RunState.get_player_life()
-		var remaining_days: int = max(int(life_state.get("hospital_days_remaining", 0)) - 1, 0)
-		life_state["hospital_days_remaining"] = remaining_days
-		life_state["last_hospital_trade_date"] = RunState.current_trade_date.duplicate(true)
-		life_state["burnout_risk_active"] = false
-		life_state["burnout_risk_days_remaining"] = 0
-		if remaining_days <= 0:
-			life_state["stress_value"] = RunState.LIFE_HOSPITAL_RECOVERY_STRESS
-			life_state["happiness_value"] = RunState.LIFE_HOSPITAL_RECOVERY_HAPPINESS
-			life_state["hospital_started_day_index"] = -1
-		RunState.set_player_life(life_state)
-		var hospital_result: Dictionary = {
-			"hospitalized": remaining_days > 0,
-			"hospital_day_completed": true,
-			"hospital_days_remaining": remaining_days,
-			"stress_value": float(life_state.get("stress_value", RunState.LIFE_DEFAULT_STRESS_VALUE)),
-			"happiness_value": float(life_state.get("happiness_value", RunState.LIFE_DEFAULT_HAPPINESS_VALUE)),
-			"stress_stage": RunState.get_life_stress_stage(life_state)
-		}
-		RunState.last_day_results["life_wellbeing"] = hospital_result.duplicate(true)
-		return hospital_result
-
-	var basics_tier: Dictionary = _life_basics_tier_by_id(str(life_state.get("basics_tier_id", RunState.LIFE_DEFAULT_BASICS_TIER_ID)))
-	var lifestyle_id: String = str(life_state.get("lifestyle_id", "balanced"))
-	var stress_delta: float = float(basics_tier.get("stress_delta", 0.0))
-	var happiness_delta: float = float(basics_tier.get("happiness_delta", 0.0))
-	match lifestyle_id:
-		"frugal":
-			stress_delta += 1.0
-			happiness_delta -= 1.0
-		"status":
-			stress_delta -= 1.0
-			happiness_delta += 1.0
-	var asset_summary: Dictionary = _build_life_asset_summary(life_state)
-	stress_delta += float(asset_summary.get("stress_delta", 0.0))
-	happiness_delta += float(asset_summary.get("happiness_delta", 0.0))
-	var finance_status: Dictionary = get_finance_status_snapshot()
-	var runway_months: float = float(finance_status.get("runway_months", 999.0))
-	if bool(finance_status.get("cash_stress_active", false)):
-		stress_delta += 8.0
-		happiness_delta -= 4.0
-	elif runway_months < 0.5:
-		stress_delta += 6.0
-		happiness_delta -= 3.0
-	elif runway_months < 1.0:
-		stress_delta += 4.0
-		happiness_delta -= 2.0
-	elif runway_months < 3.0:
-		stress_delta += 2.0
-		happiness_delta -= 1.0
-	elif runway_months >= 12.0:
-		stress_delta -= 1.0
-		happiness_delta += 1.0
-
-	var previous_happiness: float = float(life_state.get("happiness_value", RunState.LIFE_DEFAULT_HAPPINESS_VALUE))
-	var next_happiness: float = clamp(previous_happiness + happiness_delta, 0.0, 100.0)
-	if next_happiness < 30.0:
-		stress_delta += 3.0
-	elif next_happiness < 45.0:
-		stress_delta += 1.0
-	elif next_happiness >= 75.0:
-		stress_delta -= 1.0
-	var next_stress: float = clamp(float(life_state.get("stress_value", RunState.LIFE_DEFAULT_STRESS_VALUE)) + stress_delta, 0.0, 100.0)
-	life_state["stress_value"] = next_stress
-	life_state["happiness_value"] = next_happiness
-	var hospital_started: bool = false
-	if next_stress >= 100.0:
-		if not bool(life_state.get("burnout_risk_active", false)):
-			life_state["burnout_risk_active"] = true
-			life_state["burnout_risk_days_remaining"] = RunState.LIFE_BURNOUT_WARNING_TRADING_DAYS
-		else:
-			var risk_days_remaining: int = max(int(life_state.get("burnout_risk_days_remaining", RunState.LIFE_BURNOUT_WARNING_TRADING_DAYS)) - 1, 0)
-			life_state["burnout_risk_days_remaining"] = risk_days_remaining
-			if risk_days_remaining <= 0:
-				hospital_started = true
-				life_state["hospital_days_remaining"] = RunState.LIFE_HOSPITAL_TRADING_DAYS
-				life_state["hospital_started_day_index"] = RunState.day_index
-				life_state["last_hospital_trade_date"] = RunState.current_trade_date.duplicate(true)
-				life_state["burnout_risk_active"] = false
-	else:
-		life_state["burnout_risk_active"] = false
-		life_state["burnout_risk_days_remaining"] = 0
-	RunState.set_player_life(life_state)
-	var result: Dictionary = {
-		"stress_value": next_stress,
-		"happiness_value": next_happiness,
-		"stress_delta": stress_delta,
-		"happiness_delta": happiness_delta,
-		"stress_stage": RunState.get_life_stress_stage(life_state),
-		"stress_ap_penalty": RunState.get_life_stress_ap_penalty(life_state),
-		"burnout_risk_active": bool(life_state.get("burnout_risk_active", false)),
-		"burnout_risk_days_remaining": int(life_state.get("burnout_risk_days_remaining", 0)),
-		"hospital_started": hospital_started,
-		"hospital_days_remaining": int(life_state.get("hospital_days_remaining", 0))
-	}
-	RunState.last_day_results["life_wellbeing"] = result.duplicate(true)
-	return result
+	return LifeManager.sell_life_car(self, car_id)
 
 
 func _build_life_monthly_obligation() -> Dictionary:
@@ -5319,16 +4583,6 @@ func _life_monthly_outflow_for_state(life_state: Dictionary) -> float:
 	return max(gross_outflow - max(float(asset_summary.get("rental_income", 0.0)), 0.0), 0.0)
 
 
-func _life_monthly_outflow_for_options(housing_id: String, lifestyle_id: String, basics_tier_id: String = "", monthly_extra: float = 0.0) -> float:
-	var life_state: Dictionary = {
-		"housing_id": housing_id,
-		"lifestyle_id": lifestyle_id,
-		"basics_tier_id": basics_tier_id if not basics_tier_id.is_empty() else RunState.LIFE_DEFAULT_BASICS_TIER_ID,
-		"monthly_extra": monthly_extra
-	}
-	return _life_monthly_outflow_for_state(life_state)
-
-
 func _estimate_sellable_holdings_value() -> float:
 	var total: float = 0.0
 	var holdings: Dictionary = RunState.player_portfolio.get("holdings", {})
@@ -5342,34 +4596,6 @@ func _estimate_sellable_holdings_value() -> float:
 		if bool(estimate.get("success", false)):
 			total += max(float(estimate.get("net_proceeds", 0.0)), 0.0)
 	return total
-
-
-func _build_life_property_catalog_rows() -> Array:
-	var rows: Array = []
-	for catalog_value in LIFE_PROPERTY_CATALOG:
-		if typeof(catalog_value) != TYPE_DICTIONARY:
-			continue
-		var catalog: Dictionary = catalog_value
-		for location_value in LIFE_PROPERTY_LOCATIONS:
-			if typeof(location_value) != TYPE_DICTIONARY:
-				continue
-			var location: Dictionary = location_value
-			var location_id: String = str(location.get("id", "jakarta"))
-			var public_uplift: float = _life_location_public_uplift_multiplier(location_id)
-			var row: Dictionary = catalog.duplicate(true)
-			row["id"] = "%s_%s" % [str(catalog.get("id", "")), location_id]
-			row["catalog_id"] = str(catalog.get("id", ""))
-			row["location_id"] = location_id
-			row["location_label"] = str(location.get("label", "Jakarta"))
-			row["base_price"] = _life_property_base_price_for_location(catalog, location)
-			row["price"] = _life_property_price_for_location(catalog, location)
-			row["monthly_upkeep"] = _life_property_monthly_upkeep_for_location(catalog, location)
-			row["rent_income"] = _life_property_rent_for_location(catalog, location)
-			row["public_uplift_multiplier"] = public_uplift
-			row["public_uplift_label"] = _life_public_uplift_label(public_uplift)
-			row["priced_in_lead_ids"] = _life_public_confirmed_lead_ids_for_location(location_id)
-			rows.append(row)
-	return rows
 
 
 func _build_life_asset_summary(life_state: Dictionary) -> Dictionary:
@@ -5438,47 +4664,6 @@ func _build_life_asset_summary(life_state: Dictionary) -> Dictionary:
 	}
 
 
-func _build_life_public_image_snapshot(portfolio: Dictionary, asset_summary: Dictionary) -> Dictionary:
-	var cash: float = max(float(portfolio.get("cash", 0.0)), 0.0)
-	var market_value: float = max(float(portfolio.get("market_value", 0.0)), 0.0)
-	var asset_value: float = max(float(asset_summary.get("asset_value", 0.0)), 0.0)
-	var score: float = 0.0
-	score += min(cash / 250000000.0, 20.0)
-	score += min(market_value / 500000000.0, 25.0)
-	score += min(asset_value / 750000000.0, 35.0)
-	score += min(float(asset_summary.get("status_value", 0.0)), 35.0)
-	score += _life_thesis_public_image_score()
-	score += _life_twooter_reputation_score()
-	score += _life_network_reputation_score()
-	score = clamp(score, 0.0, 100.0)
-	var title: String = "Unknown Retail"
-	var next_title: String = "Emerging Operator"
-	var next_score: int = 18
-	if score >= 78.0:
-		title = "Market Patron"
-		next_title = "Peak standing"
-		next_score = 100
-	elif score >= 58.0:
-		title = "Public Figure"
-		next_title = "Market Patron"
-		next_score = 78
-	elif score >= 38.0:
-		title = "Established Investor"
-		next_title = "Public Figure"
-		next_score = 58
-	elif score >= 18.0:
-		title = "Emerging Operator"
-		next_title = "Established Investor"
-		next_score = 38
-	return {
-		"score": score,
-		"title": title,
-		"next_title": next_title,
-		"next_score": next_score,
-		"detail": "Derived from cash, portfolio, owned properties, cars, thesis work, and social reputation."
-	}
-
-
 func _life_thesis_public_image_score() -> float:
 	var score: float = 0.0
 	for thesis_value in RunState.get_player_theses().values():
@@ -5491,51 +4676,6 @@ func _life_thesis_public_image_score() -> float:
 		if not thesis.get("report", {}).is_empty():
 			score += 1.5
 	return min(score, 8.0)
-
-
-func _life_twooter_reputation_score() -> float:
-	var score: float = 0.0
-	var social_state: Dictionary = RunState.get_twooter_social_state()
-	var account_states: Dictionary = social_state.get("account_states", {}) if typeof(social_state.get("account_states", {})) == TYPE_DICTIONARY else {}
-	for account_state_value in account_states.values():
-		if typeof(account_state_value) != TYPE_DICTIONARY:
-			continue
-		var account_state: Dictionary = account_state_value
-		score += min(max(float(account_state.get("relationship", 0.0)), 0.0) / 20.0, 1.5)
-		score += min(max(float(account_state.get("credibility", 0.0)), 0.0) / 15.0, 1.0)
-	return min(score, 7.0)
-
-
-func _life_network_reputation_score() -> float:
-	var score: float = 0.0
-	for contact_value in RunState.get_network_contacts().values():
-		if typeof(contact_value) != TYPE_DICTIONARY:
-			continue
-		var contact: Dictionary = contact_value
-		if not bool(contact.get("met", false)):
-			continue
-		score += min(max(float(contact.get("relationship", 0.0)), 0.0) / 35.0, 1.3)
-	return min(score, 7.0)
-
-
-func _life_property_catalog_by_id(catalog_id: String) -> Dictionary:
-	for catalog_value in LIFE_PROPERTY_CATALOG:
-		if typeof(catalog_value) != TYPE_DICTIONARY:
-			continue
-		var catalog: Dictionary = catalog_value
-		if str(catalog.get("id", "")) == catalog_id:
-			return catalog.duplicate(true)
-	return {}
-
-
-func _life_car_catalog_by_id(catalog_id: String) -> Dictionary:
-	for catalog_value in LIFE_CAR_CATALOG:
-		if typeof(catalog_value) != TYPE_DICTIONARY:
-			continue
-		var catalog: Dictionary = catalog_value
-		if str(catalog.get("id", "")) == catalog_id:
-			return catalog.duplicate(true)
-	return {}
 
 
 func _life_location_by_id(location_id: String) -> Dictionary:
@@ -5565,340 +4705,6 @@ func _normalize_life_location_id(location_id: String) -> String:
 	return normalized_location_id
 
 
-func _life_property_price_for_location(catalog: Dictionary, location: Dictionary) -> float:
-	return _life_property_base_price_for_location(catalog, location) * _life_location_public_uplift_multiplier(str(location.get("id", "jakarta")))
-
-
-func _life_property_base_price_for_location(catalog: Dictionary, location: Dictionary) -> float:
-	return max(float(catalog.get("price", 0.0)) * max(float(location.get("market_factor", 1.0)), 0.1), 0.0)
-
-
-func _life_property_monthly_upkeep_for_location(catalog: Dictionary, location: Dictionary) -> float:
-	return max(float(catalog.get("monthly_upkeep", 0.0)) * max(float(location.get("market_factor", 1.0)), 0.1), 0.0)
-
-
-func _life_property_rent_for_location(catalog: Dictionary, location: Dictionary) -> float:
-	return max(float(catalog.get("rent_income", 0.0)) * max(float(location.get("market_factor", 1.0)), 0.1), 0.0)
-
-
-func _build_life_property_location_rows() -> Array:
-	var rows: Array = []
-	for location_value in LIFE_PROPERTY_LOCATIONS:
-		if typeof(location_value) != TYPE_DICTIONARY:
-			continue
-		var location: Dictionary = location_value.duplicate(true)
-		var location_id: String = str(location.get("id", ""))
-		var public_uplift: float = _life_location_public_uplift_multiplier(location_id)
-		location["public_uplift_multiplier"] = public_uplift
-		location["public_uplift_label"] = _life_public_uplift_label(public_uplift)
-		location["confirmed_lead_ids"] = _life_public_confirmed_lead_ids_for_location(location_id)
-		rows.append(location)
-	return rows
-
-
-func _build_life_development_lead_rows(life_state: Dictionary) -> Array:
-	var rows: Array = []
-	for lead_value in life_state.get("development_leads", []):
-		if typeof(lead_value) != TYPE_DICTIONARY:
-			continue
-		var lead: Dictionary = lead_value.duplicate(true)
-		var location_id: String = str(lead.get("location_id", "jakarta"))
-		var theme: String = str(lead.get("theme", "modern_city"))
-		lead["location_label"] = _life_location_label(location_id)
-		lead["theme_label"] = _life_development_theme_label(theme)
-		lead["clarity_level"] = clamp(int(lead.get("clarity_level", 4 if str(lead.get("source_type", "")) == "network" else 1)), 1, 4)
-		lead["clarity_label"] = _life_development_clarity_label(int(lead.get("clarity_level", 1)))
-		lead["display_location_label"] = _life_development_display_location_label(lead)
-		lead["display_theme_label"] = _life_development_display_theme_label(lead)
-		lead["impact_label"] = _life_development_impact_label(str(lead.get("impact_tier", "moderate")))
-		lead["stage_label"] = _life_development_stage_label(str(lead.get("stage", "rumor")))
-		lead["timing_label"] = _life_development_timing_label(lead)
-		rows.append(lead)
-	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		var a_resolved: bool = bool(a.get("resolved", false))
-		var b_resolved: bool = bool(b.get("resolved", false))
-		if a_resolved != b_resolved:
-			return not a_resolved
-		return int(a.get("due_day_index", 0)) < int(b.get("due_day_index", 0))
-	)
-	return rows
-
-
-func _build_life_property_value_event_rows(properties: Array) -> Array:
-	var rows: Array = []
-	for property_value in properties:
-		if typeof(property_value) != TYPE_DICTIONARY:
-			continue
-		var property_row: Dictionary = property_value
-		for event_value in property_row.get("value_events", []):
-			if typeof(event_value) != TYPE_DICTIONARY:
-				continue
-			var event: Dictionary = event_value.duplicate(true)
-			event["property_id"] = str(property_row.get("id", ""))
-			event["property_label"] = str(property_row.get("label", "Property"))
-			event["location_id"] = str(property_row.get("location_id", ""))
-			event["location_label"] = str(property_row.get("location_label", ""))
-			rows.append(event)
-	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return int(a.get("day_index", 0)) > int(b.get("day_index", 0))
-	)
-	return rows
-
-
-func _life_location_public_uplift_multiplier(location_id: String) -> float:
-	var best_multiplier: float = 1.0
-	if not RunState.has_active_run():
-		return best_multiplier
-	var life_state: Dictionary = RunState.get_player_life()
-	for lead_value in life_state.get("development_leads", []):
-		if typeof(lead_value) != TYPE_DICTIONARY:
-			continue
-		var lead: Dictionary = lead_value
-		if str(lead.get("location_id", "")) != location_id:
-			continue
-		if not bool(lead.get("public_confirmed", false)) or str(lead.get("outcome", "")) != "confirmed":
-			continue
-		best_multiplier = max(best_multiplier, float(lead.get("value_multiplier", 1.0)))
-	return best_multiplier
-
-
-func _life_public_confirmed_lead_ids_for_location(location_id: String) -> Array:
-	var rows: Array = []
-	if not RunState.has_active_run():
-		return rows
-	var life_state: Dictionary = RunState.get_player_life()
-	for lead_value in life_state.get("development_leads", []):
-		if typeof(lead_value) != TYPE_DICTIONARY:
-			continue
-		var lead: Dictionary = lead_value
-		if str(lead.get("location_id", "")) == location_id and bool(lead.get("public_confirmed", false)):
-			rows.append(str(lead.get("id", "")))
-	return rows
-
-
-func _life_public_uplift_label(multiplier: float) -> String:
-	if multiplier <= 1.001:
-		return ""
-	return "Public uplift x%.2f" % multiplier
-
-
-func _life_property_has_value_event(property_row: Dictionary, lead_id: String) -> bool:
-	for event_value in property_row.get("value_events", []):
-		if typeof(event_value) == TYPE_DICTIONARY and str(event_value.get("lead_id", "")) == lead_id:
-			return true
-	return false
-
-
-func _resolve_life_development_lead(lead: Dictionary) -> Dictionary:
-	var outcome_override: String = str(lead.get("outcome_override", "")).strip_edges()
-	if not outcome_override.is_empty():
-		if outcome_override == "delayed":
-			return {"outcome": "delayed", "delay_days": 4}
-		if outcome_override == "cancelled":
-			return {"outcome": "cancelled"}
-		if outcome_override == "confirmed_big":
-			return {"outcome": "confirmed", "value_multiplier": _life_development_multiplier(lead, true)}
-		return {"outcome": "confirmed", "value_multiplier": _life_development_multiplier(lead, false)}
-	var rng: RandomNumberGenerator = STABLE_RNG.rng([
-		RunState.run_seed,
-		"life_development_resolve",
-		str(lead.get("id", "")),
-		int(lead.get("due_day_index", 0)),
-		int(lead.get("delay_count", 0))
-	])
-	var reliability: float = clamp(float(lead.get("reliability", 50.0)), 0.0, 100.0) / 100.0
-	var roll: float = rng.randf()
-	var delay_count: int = int(lead.get("delay_count", 0))
-	if delay_count < 2 and roll > reliability and roll <= reliability + 0.18:
-		return {"outcome": "delayed", "delay_days": 3 + int(rng.randi_range(0, 4))}
-	if roll > reliability + 0.18:
-		return {"outcome": "cancelled"}
-	var big_win_chance: float = 0.08
-	match str(lead.get("impact_tier", "moderate")):
-		"minor":
-			big_win_chance = 0.05
-		"moderate":
-			big_win_chance = 0.10
-		"major":
-			big_win_chance = 0.16
-		"transformational":
-			big_win_chance = 0.22
-	var big_win: bool = rng.randf() < big_win_chance
-	return {"outcome": "confirmed", "value_multiplier": _life_development_multiplier(lead, big_win)}
-
-
-func _life_development_multiplier(lead: Dictionary, big_win: bool) -> float:
-	var tier: Dictionary = LIFE_DEVELOPMENT_IMPACT_TIERS.get(str(lead.get("impact_tier", "moderate")), LIFE_DEVELOPMENT_IMPACT_TIERS.get("moderate", {}))
-	var multiplier: float = float(tier.get("big_win_multiplier" if big_win else "base_multiplier", 1.18))
-	var reliability: float = clamp(float(lead.get("reliability", 50.0)), 0.0, 100.0)
-	if not big_win:
-		multiplier += clamp((reliability - 50.0) / 400.0, -0.04, 0.08)
-	return max(multiplier, 1.0)
-
-
-func _create_life_development_lead(
-	location_id: String,
-	theme: String,
-	impact_tier: String,
-	source_type: String,
-	source_id: String,
-	contact_id: String,
-	reliability: float,
-	source_label: String = "",
-	source_note: String = "",
-	outcome_override: String = "",
-	clarity_level: int = 1
-) -> Dictionary:
-	if not RunState.has_active_run():
-		return {"success": false, "message": "No active run."}
-	var location: Dictionary = _life_location_by_id(location_id)
-	var resolved_location_id: String = str(location.get("id", "jakarta"))
-	var resolved_theme: String = _life_development_theme_id(theme)
-	var resolved_impact_tier: String = _life_development_impact_tier_id(impact_tier)
-	var dedupe_key: String = "%s|%s|%s|%s" % [resolved_location_id, resolved_theme, source_type, source_id]
-	var life_state: Dictionary = RunState.get_player_life()
-	var leads: Array = life_state.get("development_leads", []).duplicate(true)
-	for lead_value in leads:
-		if typeof(lead_value) != TYPE_DICTIONARY:
-			continue
-		var existing: Dictionary = lead_value
-		if str(existing.get("dedupe_key", "")) == dedupe_key:
-			var incoming_clarity: int = clamp(clarity_level, 1, 4)
-			if incoming_clarity > int(existing.get("clarity_level", 1)):
-				var existing_index: int = leads.find(lead_value)
-				existing["clarity_level"] = incoming_clarity
-				existing["clarity_label"] = _life_development_clarity_label(incoming_clarity)
-				existing["source_label"] = source_label
-				existing["source_note"] = source_note
-				existing["reliability"] = max(float(existing.get("reliability", 0.0)), clamp(reliability, 0.0, 100.0))
-				existing["stage"] = "permit_watch" if float(existing.get("reliability", 0.0)) >= 72.0 else str(existing.get("stage", "rumor"))
-				existing["display_location_label"] = _life_location_label(str(existing.get("location_id", resolved_location_id))) if source_type != "news" or incoming_clarity >= 2 else "Location not named"
-				existing["display_theme_label"] = _life_development_theme_label(str(existing.get("theme", resolved_theme))) if source_type != "news" or incoming_clarity >= 3 else "Project not named"
-				if existing_index >= 0:
-					leads[existing_index] = existing
-					life_state["development_leads"] = leads
-					life_state["updated_day_index"] = RunState.day_index
-					life_state["updated_trade_date"] = get_current_trade_date()
-					RunState.set_player_life(life_state)
-					_invalidate_news_snapshot_cache()
-			return {"success": true, "duplicate": true, "message": "Property watch already tracked.", "lead": existing.duplicate(true)}
-	var tier: Dictionary = LIFE_DEVELOPMENT_IMPACT_TIERS.get(resolved_impact_tier, LIFE_DEVELOPMENT_IMPACT_TIERS.get("moderate", {}))
-	var resolve_days: int = int(tier.get("resolve_days", 7))
-	if source_type == "network":
-		resolve_days = max(resolve_days - 2, 2)
-	elif source_type == "news":
-		resolve_days += 1
-	var lead_seed: int = int(STABLE_RNG.seed_from_parts([RunState.run_seed, "life_development_lead", dedupe_key, RunState.day_index]) % 100000)
-	var contact_name: String = ""
-	if not contact_id.is_empty():
-		contact_name = _network_contact_display_name(contact_id)
-	var resolved_clarity_level: int = clamp(clarity_level, 1, 4)
-	var location_label: String = str(location.get("label", "Jakarta"))
-	var theme_label: String = _life_development_theme_label(resolved_theme)
-	var lead: Dictionary = {
-		"id": "dev_%s_%s_%d_%05d" % [resolved_location_id, resolved_theme, RunState.day_index, lead_seed],
-		"dedupe_key": dedupe_key,
-		"location_id": resolved_location_id,
-		"location_label": location_label,
-		"theme": resolved_theme,
-		"theme_label": theme_label,
-		"source_type": source_type,
-		"source_id": source_id,
-		"source_label": source_label,
-		"source_note": source_note,
-		"contact_id": contact_id,
-		"contact_name": contact_name,
-		"discovered_day_index": RunState.day_index,
-		"discovered_trade_date": get_current_trade_date(),
-		"stage": "permit_watch" if reliability >= 72.0 else "rumor",
-		"reliability": clamp(reliability, 0.0, 100.0),
-		"clarity_level": resolved_clarity_level,
-		"clarity_label": _life_development_clarity_label(resolved_clarity_level),
-		"display_location_label": location_label if source_type != "news" or resolved_clarity_level >= 2 else "Location not named",
-		"display_theme_label": theme_label if source_type != "news" or resolved_clarity_level >= 3 else "Project not named",
-		"impact_tier": resolved_impact_tier,
-		"due_day_index": RunState.day_index + resolve_days,
-		"resolved": false,
-		"outcome": "",
-		"value_multiplier": 1.0,
-		"public_confirmed": false,
-		"applied_property_ids": [],
-		"delay_count": 0,
-		"outcome_override": outcome_override
-	}
-	leads.append(lead)
-	life_state["development_leads"] = leads
-	life_state["updated_day_index"] = RunState.day_index
-	life_state["updated_trade_date"] = get_current_trade_date()
-	RunState.set_player_life(life_state)
-	_invalidate_news_snapshot_cache()
-	return {"success": true, "message": "Property watch tracked.", "lead": lead.duplicate(true)}
-
-
-func _maybe_create_life_development_lead_from_news_article(article: Dictionary) -> Dictionary:
-	if article.is_empty():
-		return {"success": false, "message": "No article."}
-	if not _is_life_development_story_article(article) and not _article_can_seed_life_development(article):
-		return {"success": false, "message": "Article is not tied to a property report."}
-	var article_id: String = _life_development_news_source_id(article)
-	var seed: String = "%s|%s|%s" % [article_id, str(article.get("headline", "")), str(article.get("target_sector_id", ""))]
-	var location_id: String = _life_development_location_for_article(article, seed)
-	var theme: String = _life_development_theme_for_article(article, seed)
-	var news_intel_level: int = clamp(int(article.get("intel_level", 1)), 1, 4)
-	var big_development: bool = _text_mentions_big_development(str(article.get("headline", "")) + " " + str(article.get("body", "")))
-	var impact_tier: String = "major" if big_development else "moderate"
-	if news_intel_level <= 1 and impact_tier == "major":
-		impact_tier = "moderate"
-	elif news_intel_level >= 4 and big_development and _text_mentions_transformational_development(str(article.get("headline", "")) + " " + str(article.get("body", ""))):
-		impact_tier = "transformational"
-	var reliability_by_level: Array = [0.0, 46.0, 56.0, 66.0, 76.0]
-	var reliability: float = float(reliability_by_level[news_intel_level])
-	return _create_life_development_lead(
-		location_id,
-		theme,
-		impact_tier,
-		"news",
-		article_id,
-		str(article.get("author_contact_id", "")),
-		reliability,
-		_life_development_news_source_label(article, news_intel_level),
-		_life_development_news_source_note(article, location_id, theme, news_intel_level),
-		"",
-		news_intel_level
-	)
-
-
-func _maybe_create_life_development_lead_from_network_tip(contact_id: String, tip_result: Dictionary) -> Dictionary:
-	var contact: Dictionary = _network_contact_definition_by_id(contact_id)
-	if contact.is_empty() or not _contact_can_seed_life_development(contact):
-		return {}
-	var runtime: Dictionary = RunState.get_network_contacts().get(contact_id, {})
-	var relationship: float = float(runtime.get("relationship", 0.0))
-	var seed: String = "%s|%s|%d" % [contact_id, str(tip_result.get("target_company_id", "")), RunState.day_index]
-	var location_id: String = _life_development_location_for_seed(seed)
-	var haystack: String = "%s %s %s" % [str(contact.get("role", "")), str(contact.get("intro", "")), str(tip_result.get("tip_read", ""))]
-	var theme: String = _life_development_theme_for_text(haystack, seed)
-	var impact_tier: String = "major" if relationship >= 35.0 else "moderate"
-	var reliability: float = clamp(58.0 + relationship * 0.45, 45.0, 84.0)
-	return _create_life_development_lead(
-		location_id,
-		theme,
-		impact_tier,
-		"network",
-		"%s_%d" % [contact_id, RunState.day_index],
-		contact_id,
-		reliability,
-		"%s location read" % str(contact.get("display_name", "Network contact")),
-		"%s mentioned a possible %s around %s." % [
-			str(contact.get("display_name", "A contact")),
-			_life_development_theme_label(theme).to_lower(),
-			_life_location_label(location_id)
-		],
-		"",
-		4
-	)
-
-
 func _is_life_development_story_article(article: Dictionary) -> bool:
 	return bool(article.get("is_property_development_story", false)) or str(article.get("category", "")) == "property_development"
 
@@ -5912,21 +4718,6 @@ func _life_development_news_source_id(article: Dictionary) -> String:
 	if source_id.is_empty():
 		source_id = "news_%d" % RunState.day_index
 	return source_id
-
-
-func _life_development_news_source_label(article: Dictionary, intel_level: int) -> String:
-	var outlet_label: String = str(article.get("outlet_label", "News")).strip_edges()
-	if outlet_label.is_empty():
-		outlet_label = "News"
-	match clamp(intel_level, 1, 4):
-		1:
-			return "%s property follow-up" % outlet_label
-		2:
-			return "%s location follow-up" % outlet_label
-		3:
-			return "%s project follow-up" % outlet_label
-		_:
-			return "%s property file" % outlet_label
 
 
 func _life_development_news_source_note(article: Dictionary, location_id: String, theme: String, intel_level: int) -> String:
@@ -6013,22 +4804,6 @@ func _article_can_seed_life_development(article: Dictionary) -> bool:
 	return false
 
 
-func _contact_can_seed_life_development(contact: Dictionary) -> bool:
-	var text: String = ("%s %s" % [str(contact.get("role", "")), str(contact.get("intro", ""))]).to_lower()
-	for sector_value in contact.get("sector_ids", []):
-		var sector_id: String = str(sector_value)
-		if sector_id == "health":
-			if _text_mentions_health_development(text):
-				return true
-			continue
-		if LIFE_DEVELOPMENT_RELEVANT_SECTORS.has(sector_id):
-			return true
-	for keyword in ["construction", "infrastructure", "property", "port", "logistics", "hospital", "campus", "planning", "concession", "industrial"]:
-		if text.find(keyword) >= 0:
-			return true
-	return false
-
-
 func _life_development_location_for_seed(seed: String) -> String:
 	if LIFE_PROPERTY_LOCATIONS.is_empty():
 		return "jakarta"
@@ -6095,22 +4870,6 @@ func _text_mentions_health_development(text: String) -> bool:
 	return false
 
 
-func _text_mentions_big_development(text: String) -> bool:
-	var lower_text: String = text.to_lower()
-	for keyword in ["modern city", "new city", "toll road", "port expansion", "industrial estate", "transit corridor"]:
-		if lower_text.find(keyword) >= 0:
-			return true
-	return false
-
-
-func _text_mentions_transformational_development(text: String) -> bool:
-	var lower_text: String = text.to_lower()
-	for keyword in ["modern city", "new city", "master-planned", "mega project", "port expansion", "industrial estate"]:
-		if lower_text.find(keyword) >= 0:
-			return true
-	return false
-
-
 func _life_development_clarity_label(clarity_level: int) -> String:
 	match clamp(clarity_level, 1, 4):
 		1:
@@ -6123,35 +4882,6 @@ func _life_development_clarity_label(clarity_level: int) -> String:
 			return "Public signals"
 
 
-func _life_development_display_location_label(lead: Dictionary) -> String:
-	if bool(lead.get("public_confirmed", false)) or str(lead.get("source_type", "")) != "news":
-		return str(lead.get("location_label", _life_location_label(str(lead.get("location_id", "")))))
-	if int(lead.get("clarity_level", 1)) >= 2:
-		return str(lead.get("location_label", _life_location_label(str(lead.get("location_id", "")))))
-	return "Location not named"
-
-
-func _life_development_display_theme_label(lead: Dictionary) -> String:
-	if bool(lead.get("public_confirmed", false)) or str(lead.get("source_type", "")) != "news":
-		return str(lead.get("theme_label", _life_development_theme_label(str(lead.get("theme", "")))))
-	if int(lead.get("clarity_level", 1)) >= 3:
-		return str(lead.get("theme_label", _life_development_theme_label(str(lead.get("theme", "")))))
-	return "Project not named"
-
-
-func _life_development_theme_id(theme: String) -> String:
-	for theme_value in LIFE_DEVELOPMENT_THEMES:
-		if typeof(theme_value) == TYPE_DICTIONARY and str(theme_value.get("id", "")) == theme:
-			return theme
-	return "modern_city"
-
-
-func _life_development_impact_tier_id(impact_tier: String) -> String:
-	if LIFE_DEVELOPMENT_IMPACT_TIERS.has(impact_tier):
-		return impact_tier
-	return "moderate"
-
-
 func _life_location_label(location_id: String) -> String:
 	return str(_life_location_by_id(location_id).get("label", "Jakarta"))
 
@@ -6161,34 +4891,6 @@ func _life_development_theme_label(theme: String) -> String:
 		if typeof(theme_value) == TYPE_DICTIONARY and str(theme_value.get("id", "")) == theme:
 			return str(theme_value.get("label", theme.capitalize()))
 	return theme.capitalize()
-
-
-func _life_development_impact_label(impact_tier: String) -> String:
-	var tier: Dictionary = LIFE_DEVELOPMENT_IMPACT_TIERS.get(impact_tier, LIFE_DEVELOPMENT_IMPACT_TIERS.get("moderate", {}))
-	return str(tier.get("label", impact_tier.capitalize()))
-
-
-func _life_development_stage_label(stage: String) -> String:
-	match stage:
-		"permit_watch":
-			return "Permit watch"
-		"confirmed":
-			return "Confirmed"
-		"delayed":
-			return "Delayed"
-		"cancelled":
-			return "Cancelled"
-		_:
-			return "Rumor"
-
-
-func _life_development_timing_label(lead: Dictionary) -> String:
-	if bool(lead.get("resolved", false)):
-		return str(lead.get("outcome", "resolved")).capitalize()
-	var days: int = int(lead.get("due_day_index", RunState.day_index)) - RunState.day_index
-	if days <= 0:
-		return "Due now"
-	return "About %d trading day%s" % [days, "" if days == 1 else "s"]
 
 
 func _network_contact_definition_by_id(contact_id: String) -> Dictionary:
@@ -6204,20 +4906,6 @@ func _network_contact_definition_by_id(contact_id: String) -> Dictionary:
 func _network_contact_display_name(contact_id: String) -> String:
 	var contact: Dictionary = _network_contact_definition_by_id(contact_id)
 	return str(contact.get("display_name", contact_id))
-
-
-func _life_next_asset_id(prefix: String, existing_rows: Array) -> String:
-	var used: Dictionary = {}
-	for row_value in existing_rows:
-		if typeof(row_value) == TYPE_DICTIONARY:
-			used[str(row_value.get("id", ""))] = true
-	var attempt: int = existing_rows.size() + 1
-	while attempt < 10000:
-		var candidate: String = "%s_%d_%03d" % [prefix, RunState.day_index, attempt]
-		if not used.has(candidate):
-			return candidate
-		attempt += 1
-	return "%s_%d_%d" % [prefix, RunState.day_index, Time.get_ticks_msec()]
 
 
 func _life_option_by_id(options: Array, option_id: String) -> Dictionary:
@@ -6245,43 +4933,6 @@ func _life_basics_tier_by_id(tier_id: String) -> Dictionary:
 			if str(tier.get("id", "")) == RunState.LIFE_DEFAULT_BASICS_TIER_ID:
 				return tier.duplicate(true)
 	return LIFE_BASICS_TIERS[0].duplicate(true)
-
-
-func _build_life_dividend_projection() -> Dictionary:
-	var rows: Array = []
-	var declared_total: float = 0.0
-	var dividend_snapshot: Dictionary = get_corporate_dividend_snapshot()
-	var current_day_number: int = RunState.day_index + 1
-	var cutoff_day_number: int = current_day_number + 252
-	for row_value in dividend_snapshot.get("declared_rows", []):
-		if typeof(row_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = row_value
-		var payment_day_number: int = int(row.get("payment_day_number", 0))
-		if payment_day_number < current_day_number or payment_day_number > cutoff_day_number:
-			continue
-		var projected_amount: float = max(float(row.get("projected_amount", 0.0)), 0.0)
-		if projected_amount <= 0.0:
-			continue
-		declared_total += projected_amount
-		rows.append({
-			"company_id": str(row.get("company_id", "")),
-			"ticker": str(row.get("ticker", "")),
-			"eligible_shares": int(row.get("eligible_shares", 0)),
-			"amount_per_share": float(row.get("amount_per_share", 0.0)),
-			"payment_day_number": payment_day_number,
-			"projected_amount": projected_amount,
-			"monthly_income": projected_amount / 12.0,
-			"status": str(row.get("status", ""))
-		})
-	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return float(a.get("monthly_income", 0.0)) > float(b.get("monthly_income", 0.0))
-	)
-	return {
-		"estimated_monthly_dividends": declared_total / 12.0,
-		"declared_dividend_total_12m": declared_total,
-		"rows": rows
-	}
 
 
 func get_sector_rows() -> Array:
@@ -6703,7 +5354,7 @@ func discover_network_contacts_from_article(article: Dictionary) -> Array:
 	if not RunState.has_active_run() or article.is_empty():
 		return []
 	var discovered: Array = contact_network_system.discover_from_article(RunState, DataRepository, article)
-	var development_lead: Dictionary = _maybe_create_life_development_lead_from_news_article(article) if _is_life_development_story_article(article) else {}
+	var development_lead: Dictionary = LifeManager.maybe_create_life_development_lead_from_news_article(self, article) if _is_life_development_story_article(article) else {}
 	if bool(development_lead.get("success", false)) and not bool(development_lead.get("duplicate", false)):
 		life_changed.emit()
 		network_changed.emit()
@@ -6751,7 +5402,7 @@ func request_contact_tip(contact_id: String, company_id: String = "") -> Diction
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	var result: Dictionary = contact_network_system.request_tip(RunState, DataRepository, corporate_action_system, contact_id, company_id)
 	if bool(result.get("success", false)):
-		var development_lead: Dictionary = _maybe_create_life_development_lead_from_network_tip(contact_id, result)
+		var development_lead: Dictionary = LifeManager.maybe_create_life_development_lead_from_network_tip(self, contact_id, result)
 		if bool(development_lead.get("success", false)):
 			result["development_lead"] = development_lead.get("lead", {}).duplicate(true)
 		_spend_network_action("tip")
@@ -6797,6 +5448,8 @@ func report_dirty_tip_offer(offer_id: String) -> Dictionary:
 
 
 func debug_force_dirty_tip_offer(company_id: String = "") -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	var target_company_id: String = company_id.strip_edges()
@@ -6837,6 +5490,8 @@ func debug_force_dirty_tip_offer(company_id: String = "") -> Dictionary:
 
 
 func debug_force_dirty_tip_jail(company_id: String = "") -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run."}
 	var target_company_id: String = company_id.strip_edges()
@@ -6932,37 +5587,9 @@ func debug_force_dirty_tip_jail(company_id: String = "") -> Dictionary:
 
 
 func debug_force_hospital_stress() -> Dictionary:
-	if not RunState.has_active_run():
-		return {"success": false, "message": "No active run."}
-	var life_state: Dictionary = RunState.get_player_life()
-	if int(life_state.get("hospital_days_remaining", 0)) > 0:
-		return {"success": false, "message": "Hospital recovery is already active."}
-	life_state["stress_value"] = 100.0
-	life_state["hospital_days_remaining"] = RunState.LIFE_HOSPITAL_TRADING_DAYS
-	life_state["hospital_started_day_index"] = RunState.day_index
-	life_state["last_hospital_trade_date"] = RunState.get_current_trade_date()
-	life_state["burnout_risk_active"] = false
-	life_state["burnout_risk_days_remaining"] = 0
-	life_state["updated_day_index"] = RunState.day_index
-	life_state["updated_trade_date"] = RunState.get_current_trade_date()
-	RunState.set_player_life(life_state)
-	var updated_life_state: Dictionary = RunState.get_player_life()
-	var hospital_days: int = int(updated_life_state.get("hospital_days_remaining", 0))
-	var result: Dictionary = {
-		"success": true,
-		"message": "Debug hospital: stress set to 100 and hospital recovery started for %d day(s)." % hospital_days,
-		"hospital_started": true,
-		"hospital_days_remaining": hospital_days,
-		"stress_value": float(updated_life_state.get("stress_value", RunState.LIFE_DEFAULT_STRESS_VALUE)),
-		"happiness_value": float(updated_life_state.get("happiness_value", RunState.LIFE_DEFAULT_HAPPINESS_VALUE)),
-		"stress_stage": RunState.get_life_stress_stage(updated_life_state)
-	}
-	RunState.last_day_results["life_wellbeing"] = result.duplicate(true)
-	_invalidate_daily_activity_snapshot_cache()
-	_request_autosave("debug_force_hospital_stress")
-	daily_actions_changed.emit()
-	life_changed.emit()
-	return result
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
+	return LifeManager.debug_force_hospital_stress(self)
 
 
 func _debug_open_dirty_tip_request(company_id: String) -> Dictionary:
@@ -7097,6 +5724,8 @@ func get_debug_event_generator_catalog() -> Array:
 
 
 func debug_generate_event(event_id: String) -> Dictionary:
+	if not OS.is_debug_build():
+		return {"success": false, "message": "Debug tools are only available in debug builds."}
 	if not RunState.has_active_run():
 		return {"success": false, "message": "No active run to modify."}
 
@@ -7693,256 +6322,27 @@ func _after_twooter_interaction(spent_ap: bool, changed_network: bool, autosave_
 
 
 func get_thesis_board_snapshot() -> Dictionary:
-	if not RunState.has_active_run():
-		return {"theses": [], "companies": [], "research_tray": {"rows": []}}
-	var theses: Array = []
-	for thesis_value in RunState.get_player_theses().values():
-		if typeof(thesis_value) != TYPE_DICTIONARY:
-			continue
-		var thesis: Dictionary = thesis_value.duplicate(true)
-		thesis["has_report"] = not thesis.get("report", {}).is_empty()
-		thesis["evidence_count"] = thesis.get("evidence", []).size()
-		theses.append(thesis)
-	theses.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		if int(a.get("updated_day_index", 0)) == int(b.get("updated_day_index", 0)):
-			return str(a.get("title", "")) < str(b.get("title", ""))
-		return int(a.get("updated_day_index", 0)) > int(b.get("updated_day_index", 0))
-	)
-	return {
-		"day_index": RunState.day_index,
-		"trade_date": get_current_trade_date(),
-		"theses": theses,
-		"companies": _thesis_company_options(),
-		"research_tray": get_research_tray_snapshot()
-	}
+	return ThesisManager.get_thesis_board_snapshot(self)
 
 
 func get_research_tray_snapshot(company_id: String = "") -> Dictionary:
-	if not RunState.has_active_run():
-		return {"day_index": 0, "trade_date": {}, "company_id": str(company_id), "rows": []}
-	var normalized_company_id: String = str(company_id)
-	var selected_sector_id: String = ""
-	if not normalized_company_id.is_empty():
-		var selected_company: Dictionary = RunState.get_company(normalized_company_id)
-		selected_sector_id = str(selected_company.get("sector_id", "")).strip_edges()
-		if selected_sector_id.is_empty() and typeof(selected_company.get("company_profile", {})) == TYPE_DICTIONARY:
-			selected_sector_id = str(selected_company.get("company_profile", {}).get("sector_id", "")).strip_edges()
-		if selected_sector_id.is_empty():
-			selected_sector_id = str(RunState.company_definitions.get(normalized_company_id, {}).get("sector_id", "")).strip_edges()
-	var rows: Array = []
-	for row_value in RunState.get_thesis_research_tray().values():
-		if typeof(row_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = row_value.duplicate(true)
-		if not normalized_company_id.is_empty():
-			var row_company_id: String = str(row.get("company_id", "")).strip_edges()
-			var row_category: String = str(row.get("category", "")).to_lower()
-			var row_sector_id: String = str(row.get("sector_id", "")).strip_edges()
-			var sector_context_match: bool = (
-				row_company_id.is_empty() and
-				row_category == "sector_macro" and
-				(row_sector_id.is_empty() or row_sector_id == selected_sector_id)
-			)
-			if row_company_id != normalized_company_id and not sector_context_match:
-				continue
-		rows.append(row)
-	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		if int(a.get("captured_day_index", 0)) == int(b.get("captured_day_index", 0)):
-			return str(a.get("label", "")) < str(b.get("label", ""))
-		return int(a.get("captured_day_index", 0)) > int(b.get("captured_day_index", 0))
-	)
-	return {
-		"day_index": RunState.day_index,
-		"trade_date": get_current_trade_date(),
-		"company_id": normalized_company_id,
-		"rows": rows
-	}
+	return ThesisManager.get_research_tray_snapshot(self, company_id)
 
 
 func capture_research_evidence(payload: Dictionary) -> Dictionary:
-	if not RunState.has_active_run():
-		return {"success": false, "message": "No active run."}
-	var company_id: String = str(payload.get("company_id", "")).strip_edges()
-	var company: Dictionary = {}
-	if not company_id.is_empty():
-		company = get_company_snapshot(company_id, false, false, false)
-		if company.is_empty():
-			return {"success": false, "message": "Unknown company for research evidence."}
-	var row: Dictionary = thesis_evidence_capture_system.normalize_capture(payload, {
-		"company": company,
-		"day_index": RunState.day_index,
-		"trade_date": get_current_trade_date()
-	})
-	if str(row.get("company_id", "")).is_empty():
-		row["company_id"] = company_id
-	if str(row.get("ticker", "")).is_empty() and not company.is_empty():
-		row["ticker"] = str(company.get("ticker", ""))
-	if str(row.get("company_name", "")).is_empty() and not company.is_empty():
-		row["company_name"] = str(company.get("name", ""))
-	if str(row.get("category", "")).is_empty() or str(row.get("label", "")).is_empty():
-		return {"success": false, "message": "Pick a valid evidence row first."}
-	var tray: Dictionary = RunState.get_thesis_research_tray()
-	var dedupe_key: String = _research_evidence_dedupe_key(row)
-	row["dedupe_key"] = dedupe_key
-	for existing_value in tray.values():
-		if typeof(existing_value) != TYPE_DICTIONARY:
-			continue
-		var existing: Dictionary = existing_value
-		var existing_key: String = str(existing.get("dedupe_key", ""))
-		if existing_key.is_empty():
-			existing_key = _research_evidence_dedupe_key(existing)
-		if not dedupe_key.is_empty() and existing_key == dedupe_key:
-			return {
-				"success": true,
-				"message": "Already in Research Tray.",
-				"evidence": existing.duplicate(true),
-				"snapshot": get_research_tray_snapshot(str(existing.get("company_id", "")))
-			}
-	var evidence_id: String = _next_research_evidence_id(tray)
-	row["id"] = evidence_id
-	row["captured_day_index"] = RunState.day_index
-	row["day_index"] = RunState.day_index
-	row["captured_trade_date"] = get_current_trade_date()
-	row["status"] = "active"
-	tray[evidence_id] = row
-	RunState.set_thesis_research_tray(tray)
-	_record_steam_progress_event("research_evidence_captured", {
-		"source_type": str(row.get("source_type", "")),
-		"company_id": str(row.get("company_id", "")),
-		"category": str(row.get("category", ""))
-	})
-	_request_autosave("thesis_capture_research")
-	thesis_changed.emit()
-	return {"success": true, "message": "Added to Research Tray.", "evidence": row, "snapshot": get_research_tray_snapshot(str(row.get("company_id", "")))}
-
-
-func _research_evidence_dedupe_key(row: Dictionary) -> String:
-	var parts: Array = [
-		_research_dedupe_segment(str(row.get("source_type", "manual"))),
-		_research_dedupe_segment(str(row.get("company_id", ""))),
-		_research_dedupe_segment(str(row.get("sector_id", ""))),
-		_research_dedupe_segment(str(row.get("source_id", ""))),
-		_research_dedupe_segment(str(row.get("label", ""))),
-		_research_dedupe_segment(str(row.get("value", ""))),
-		_research_dedupe_segment(str(row.get("pattern_id", ""))),
-		_research_dedupe_segment(str(row.get("chart_range", row.get("range_id", "")))),
-		_research_dedupe_segment(str(row.get("region_label", "")))
-	]
-	return "|".join(parts)
-
-
-func _research_dedupe_segment(value: String) -> String:
-	return value.strip_edges().to_lower().replace("\n", " ").replace("\t", " ")
+	return ThesisManager.capture_research_evidence(self, payload)
 
 
 func attach_research_evidence_to_thesis(thesis_id: String, evidence_id: String, interpretation: String = "watch", note: String = "") -> Dictionary:
-	var block_reason: String = get_life_action_block_reason("thesis")
-	if not block_reason.is_empty():
-		return {"success": false, "message": block_reason}
-	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
-	if thesis.is_empty():
-		return {"success": false, "message": "Unknown thesis."}
-	if str(thesis.get("status", "open")) == "closed":
-		return {"success": false, "message": "This thesis is closed."}
-	var research_row: Dictionary = RunState.get_research_evidence(evidence_id)
-	if research_row.is_empty():
-		return {"success": false, "message": "This research item is no longer available."}
-	var research_company_id: String = str(research_row.get("company_id", "")).strip_edges()
-	var thesis_company_id: String = str(thesis.get("company_id", "")).strip_edges()
-	if research_company_id != thesis_company_id:
-		var thesis_company: Dictionary = RunState.get_company(thesis_company_id)
-		var thesis_sector_id: String = str(thesis_company.get("sector_id", "")).strip_edges()
-		if thesis_sector_id.is_empty() and typeof(thesis_company.get("company_profile", {})) == TYPE_DICTIONARY:
-			thesis_sector_id = str(thesis_company.get("company_profile", {}).get("sector_id", "")).strip_edges()
-		if thesis_sector_id.is_empty():
-			thesis_sector_id = str(RunState.company_definitions.get(thesis_company_id, {}).get("sector_id", "")).strip_edges()
-		var research_sector_id: String = str(research_row.get("sector_id", "")).strip_edges()
-		var sector_context_match: bool = (
-			research_company_id.is_empty() and
-			str(research_row.get("category", "")).to_lower() == "sector_macro" and
-			(research_sector_id.is_empty() or research_sector_id == thesis_sector_id)
-		)
-		if not sector_context_match:
-			return {"success": false, "message": "This research belongs to a different stock."}
-	for evidence_value in thesis.get("evidence", []):
-		if typeof(evidence_value) == TYPE_DICTIONARY and str(evidence_value.get("source_evidence_id", "")) == evidence_id:
-			return {"success": false, "message": "Research item is already attached."}
-	var evidence_rows: Array = thesis.get("evidence", [])
-	var attached: Dictionary = thesis_evidence_capture_system.normalize_attached_evidence(research_row, interpretation, note)
-	attached["id"] = _next_thesis_evidence_id(evidence_rows)
-	attached["source_evidence_id"] = evidence_id
-	attached["day_index"] = RunState.day_index
-	attached["impact"] = thesis_evidence_capture_system.impact_for_interpretation(str(attached.get("interpretation", interpretation)))
-	evidence_rows.append(attached)
-	thesis["evidence"] = evidence_rows
-	thesis["updated_day_index"] = RunState.day_index
-	RunState.set_player_thesis(thesis)
-	_record_steam_progress_event("research_evidence_attached", {
-		"thesis_id": thesis_id,
-		"evidence_id": evidence_id,
-		"source_type": str(attached.get("source_type", ""))
-	})
-	_request_autosave("thesis_attach_research")
-	thesis_changed.emit()
-	return {"success": true, "message": "Research attached as %s." % str(attached.get("interpretation_label", "evidence")), "thesis": thesis, "evidence": attached}
+	return ThesisManager.attach_research_evidence_to_thesis(self, thesis_id, evidence_id, interpretation, note)
 
 
 func update_thesis_evidence_interpretation(thesis_id: String, evidence_id: String, fields: Dictionary = {}) -> Dictionary:
-	var block_reason: String = get_life_action_block_reason("thesis")
-	if not block_reason.is_empty():
-		return {"success": false, "message": block_reason}
-	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
-	if thesis.is_empty():
-		return {"success": false, "message": "Unknown thesis."}
-	var rows: Array = []
-	var updated_row: Dictionary = {}
-	for evidence_value in thesis.get("evidence", []):
-		if typeof(evidence_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = evidence_value.duplicate(true)
-		if str(row.get("id", "")) == evidence_id:
-			if fields.has("interpretation"):
-				row["interpretation"] = thesis_evidence_capture_system.normalize_interpretation(str(fields.get("interpretation", row.get("interpretation", "watch"))))
-				row["interpretation_label"] = thesis_evidence_capture_system.interpretation_label(str(row.get("interpretation", "watch")))
-				row["impact"] = thesis_evidence_capture_system.impact_for_interpretation(str(row.get("interpretation", "watch")))
-			if fields.has("note") or fields.has("player_note"):
-				row["player_note"] = str(fields.get("player_note", fields.get("note", ""))).strip_edges()
-			updated_row = row.duplicate(true)
-		rows.append(row)
-	if updated_row.is_empty():
-		return {"success": false, "message": "Unknown evidence row."}
-	thesis["evidence"] = rows
-	thesis["updated_day_index"] = RunState.day_index
-	RunState.set_player_thesis(thesis)
-	_request_autosave("thesis_update_evidence")
-	thesis_changed.emit()
-	return {"success": true, "message": "Evidence interpretation updated.", "thesis": thesis, "evidence": updated_row}
+	return ThesisManager.update_thesis_evidence_interpretation(self, thesis_id, evidence_id, fields)
 
 
 func get_thesis_evidence_options(company_id: String) -> Dictionary:
-	if not RunState.has_active_run():
-		return {"company": {}, "categories": []}
-	var company: Dictionary = get_company_snapshot(company_id, true, true, true)
-	if company.is_empty():
-		return {"company": {}, "categories": []}
-
-	var categories: Array = [
-		{"id": "fundamentals", "label": "Fundamentals / Key Stats", "options": _thesis_fundamental_options(company)},
-		{"id": "financials", "label": "Financials", "options": _thesis_financial_options(company)},
-		{"id": "price_action", "label": "Price Action", "options": _thesis_price_action_options(company)},
-		{"id": "broker_flow", "label": "Broker Flow", "options": _thesis_broker_options(company)},
-		{"id": "ownership", "label": "Ownership", "options": _thesis_ownership_options(company)},
-		{"id": "sector_macro", "label": "Sector / Macro", "options": _thesis_sector_macro_options(company)},
-		{"id": "news", "label": "News", "options": _thesis_news_options(company)},
-		{"id": "twooter", "label": "Twooter", "options": _thesis_twooter_options(company)},
-		{"id": "network_intel", "label": "Network Intel", "options": _thesis_network_options(company)},
-		{"id": "corporate_events", "label": "Corporate Events", "options": _thesis_corporate_event_options(company)},
-		{"id": "risk_invalidation", "label": "Risk / Invalidation", "options": _thesis_risk_options(company)}
-	]
-	return {
-		"company": _thesis_company_compact(company),
-		"categories": categories
-	}
+	return ThesisManager.get_thesis_evidence_options(self, company_id)
 
 
 func get_chart_pattern_catalog() -> Array:
@@ -7950,34 +6350,7 @@ func get_chart_pattern_catalog() -> Array:
 
 
 func get_open_theses_for_company(company_id: String) -> Array:
-	if not RunState.has_active_run():
-		return []
-	var normalized_company_id: String = str(company_id)
-	var rows: Array = []
-	for thesis_value in RunState.get_player_theses().values():
-		if typeof(thesis_value) != TYPE_DICTIONARY:
-			continue
-		var thesis: Dictionary = thesis_value
-		if str(thesis.get("company_id", "")) != normalized_company_id:
-			continue
-		if str(thesis.get("status", "open")) == "closed":
-			continue
-		rows.append({
-			"id": str(thesis.get("id", "")),
-			"title": str(thesis.get("title", "")),
-			"ticker": str(thesis.get("ticker", "")),
-			"company_name": str(thesis.get("company_name", "")),
-			"stance": str(thesis.get("stance", "")),
-			"horizon": str(thesis.get("horizon", "")),
-			"evidence_count": thesis.get("evidence", []).size(),
-			"updated_day_index": int(thesis.get("updated_day_index", 0))
-		})
-	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		if int(a.get("updated_day_index", 0)) == int(b.get("updated_day_index", 0)):
-			return str(a.get("title", "")) < str(b.get("title", ""))
-		return int(a.get("updated_day_index", 0)) > int(b.get("updated_day_index", 0))
-	)
-	return rows
+	return ThesisManager.get_open_theses_for_company(company_id)
 
 
 func evaluate_chart_pattern_claim(
@@ -8017,765 +6390,37 @@ func evaluate_chart_pattern_claim(
 
 
 func add_chart_pattern_evidence_to_thesis(thesis_id: String, claim: Dictionary) -> Dictionary:
-	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
-	if thesis.is_empty():
-		return {"success": false, "message": "Unknown thesis."}
-	if str(thesis.get("status", "open")) == "closed":
-		return {"success": false, "message": "This thesis is closed."}
-	if not bool(claim.get("success", false)):
-		return {"success": false, "message": str(claim.get("message", "Complete a valid chart pattern claim first."))}
-	var claim_company_id: String = str(claim.get("company_id", thesis.get("company_id", "")))
-	if not claim_company_id.is_empty() and claim_company_id != str(thesis.get("company_id", "")):
-		return {"success": false, "message": "This pattern claim belongs to a different stock."}
-	var evidence: Dictionary = claim.duplicate(true)
-	evidence["category"] = "price_action"
-	evidence["category_label"] = "Price Action"
-	evidence["source_type"] = "chart_pattern"
-	evidence["source_label"] = "STOCKBOT Chart"
-	var capture_result: Dictionary = capture_research_evidence(evidence)
-	if not bool(capture_result.get("success", false)):
-		return capture_result
-	var captured_id: String = str(capture_result.get("evidence", {}).get("id", ""))
-	return attach_research_evidence_to_thesis(thesis_id, captured_id, "watch")
+	return ThesisManager.add_chart_pattern_evidence_to_thesis(self, thesis_id, claim)
 
 
 func create_thesis(company_id: String, stance: String, horizon: String, title: String = "") -> Dictionary:
-	if not RunState.has_active_run():
-		return {"success": false, "message": "No active run."}
-	var block_reason: String = get_life_action_block_reason("thesis")
-	if not block_reason.is_empty():
-		return {"success": false, "message": block_reason}
-	var company: Dictionary = get_company_snapshot(company_id, false, true, true)
-	if company.is_empty():
-		return {"success": false, "message": "Unknown company selection."}
-	var thesis_id: String = _next_thesis_id(company_id)
-	var normalized_stance: String = _normalize_thesis_stance(stance)
-	var normalized_horizon: String = _normalize_thesis_horizon(horizon)
-	var resolved_title: String = title.strip_edges()
-	if resolved_title.is_empty():
-		resolved_title = "%s %s thesis" % [str(company.get("ticker", company_id.to_upper())), normalized_stance.capitalize()]
-	var thesis: Dictionary = {
-		"id": thesis_id,
-		"company_id": company_id,
-		"ticker": str(company.get("ticker", company_id.to_upper())),
-		"company_name": str(company.get("name", "")),
-		"title": resolved_title,
-		"stance": normalized_stance,
-		"horizon": normalized_horizon,
-		"status": "open",
-		"created_day_index": RunState.day_index,
-		"created_trade_date": get_current_trade_date(),
-		"updated_day_index": RunState.day_index,
-		"evidence": [],
-		"report": {},
-		"review": {}
-	}
-	RunState.set_player_thesis(thesis)
-	_record_steam_progress_event("thesis_created", {
-		"company_id": company_id,
-		"stance": normalized_stance,
-		"horizon": normalized_horizon
-	})
-	_request_autosave("thesis_create")
-	thesis_changed.emit()
-	return {"success": true, "message": "Thesis created.", "thesis": thesis}
+	return ThesisManager.create_thesis(self, company_id, stance, horizon, title)
 
 
 func update_thesis_meta(thesis_id: String, fields: Dictionary) -> Dictionary:
-	var block_reason: String = get_life_action_block_reason("thesis")
-	if not block_reason.is_empty():
-		return {"success": false, "message": block_reason}
-	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
-	if thesis.is_empty():
-		return {"success": false, "message": "Unknown thesis."}
-	if fields.has("title"):
-		thesis["title"] = str(fields.get("title", thesis.get("title", ""))).strip_edges()
-	if fields.has("stance"):
-		thesis["stance"] = _normalize_thesis_stance(str(fields.get("stance", thesis.get("stance", "bullish"))))
-	if fields.has("horizon"):
-		thesis["horizon"] = _normalize_thesis_horizon(str(fields.get("horizon", thesis.get("horizon", "swing"))))
-	if fields.has("status"):
-		var status: String = str(fields.get("status", thesis.get("status", "open"))).to_lower()
-		thesis["status"] = "closed" if status == "closed" else "open"
-	thesis["updated_day_index"] = RunState.day_index
-	RunState.set_player_thesis(thesis)
-	_request_autosave("thesis_update")
-	thesis_changed.emit()
-	return {"success": true, "message": "Thesis updated.", "thesis": thesis}
+	return ThesisManager.update_thesis_meta(self, thesis_id, fields)
 
 
 func add_thesis_evidence(thesis_id: String, evidence: Dictionary) -> Dictionary:
-	var block_reason: String = get_life_action_block_reason("thesis")
-	if not block_reason.is_empty():
-		return {"success": false, "message": block_reason}
-	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
-	if thesis.is_empty():
-		return {"success": false, "message": "Unknown thesis."}
-	var evidence_rows: Array = thesis.get("evidence", [])
-	var evidence_id: String = _next_thesis_evidence_id(evidence_rows)
-	var compact_evidence: Dictionary = {
-		"id": evidence_id,
-		"category": str(evidence.get("category", "")),
-		"category_label": str(evidence.get("category_label", "")),
-		"label": str(evidence.get("label", "")),
-		"value": str(evidence.get("value", "")),
-		"detail": str(evidence.get("detail", "")),
-		"source_label": str(evidence.get("source_label", "")),
-		"impact": str(evidence.get("impact", "mixed")),
-		"day_index": RunState.day_index
-	}
-	for key_value in ["source_type", "source_id", "source_evidence_id", "interpretation", "interpretation_label", "player_note"]:
-		var key: String = str(key_value)
-		if evidence.has(key):
-			compact_evidence[key] = str(evidence.get(key, ""))
-	if str(compact_evidence.get("interpretation", "")).is_empty():
-		compact_evidence["interpretation"] = thesis_evidence_capture_system.normalize_interpretation(str(evidence.get("interpretation", "watch")))
-		compact_evidence["interpretation_label"] = thesis_evidence_capture_system.interpretation_label(str(compact_evidence.get("interpretation", "watch")))
-	_copy_optional_thesis_evidence_fields(compact_evidence, evidence)
-	if str(compact_evidence.get("category", "")).is_empty() or str(compact_evidence.get("label", "")).is_empty():
-		return {"success": false, "message": "Pick a valid evidence row first."}
-	evidence_rows.append(compact_evidence)
-	thesis["evidence"] = evidence_rows
-	thesis["updated_day_index"] = RunState.day_index
-	RunState.set_player_thesis(thesis)
-	_request_autosave("thesis_add_evidence")
-	thesis_changed.emit()
-	return {"success": true, "message": "Evidence added.", "thesis": thesis}
+	return ThesisManager.add_thesis_evidence(self, thesis_id, evidence)
 
 
 func remove_thesis_evidence(thesis_id: String, evidence_id: String) -> Dictionary:
-	var block_reason: String = get_life_action_block_reason("thesis")
-	if not block_reason.is_empty():
-		return {"success": false, "message": block_reason}
-	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
-	if thesis.is_empty():
-		return {"success": false, "message": "Unknown thesis."}
-	var next_rows: Array = []
-	for evidence_value in thesis.get("evidence", []):
-		if typeof(evidence_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = evidence_value
-		if str(row.get("id", "")) != evidence_id:
-			next_rows.append(row)
-	thesis["evidence"] = next_rows
-	thesis["updated_day_index"] = RunState.day_index
-	RunState.set_player_thesis(thesis)
-	_request_autosave("thesis_remove_evidence")
-	thesis_changed.emit()
-	return {"success": true, "message": "Evidence removed.", "thesis": thesis}
+	return ThesisManager.remove_thesis_evidence(self, thesis_id, evidence_id)
 
 
 func generate_thesis_report(thesis_id: String) -> Dictionary:
-	if not RunState.has_active_run():
-		return {"success": false, "message": "No active run.", "action_cost": THESIS_REPORT_ACTION_COST}
-	var block_reason: String = get_life_action_block_reason("thesis")
-	if not block_reason.is_empty():
-		return {
-			"success": false,
-			"message": block_reason,
-			"action_cost": THESIS_REPORT_ACTION_COST,
-			"snapshot": RunState.get_daily_action_snapshot()
-		}
-	if not RunState.can_spend_daily_action(THESIS_REPORT_ACTION_COST):
-		return {
-			"success": false,
-			"message": "Need %d AP to generate a Thesis report." % THESIS_REPORT_ACTION_COST,
-			"action_cost": THESIS_REPORT_ACTION_COST,
-			"snapshot": RunState.get_daily_action_snapshot()
-		}
-	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
-	if thesis.is_empty():
-		return {"success": false, "message": "Unknown thesis.", "action_cost": THESIS_REPORT_ACTION_COST}
-	var context: Dictionary = _thesis_report_context(str(thesis.get("company_id", "")))
-	var report: Dictionary = thesis_report_system.build_report(thesis, context)
-	if report.is_empty():
-		return {"success": false, "message": "Could not generate report for this thesis.", "action_cost": THESIS_REPORT_ACTION_COST}
-	var spend_result: Dictionary = RunState.spend_daily_action(THESIS_REPORT_ACTION_COST)
-	if not bool(spend_result.get("success", false)):
-		return {
-			"success": false,
-			"message": "Need %d AP to generate a Thesis report." % THESIS_REPORT_ACTION_COST,
-			"action_cost": THESIS_REPORT_ACTION_COST,
-			"snapshot": RunState.get_daily_action_snapshot()
-		}
-	thesis["report"] = report
-	thesis["review"] = thesis_report_system.build_review(thesis, context)
-	thesis["updated_day_index"] = RunState.day_index
-	RunState.set_player_thesis(thesis)
-	_request_autosave("thesis_generate_report")
-	daily_actions_changed.emit()
-	thesis_changed.emit()
-	return {
-		"success": true,
-		"message": "Research note generated. Spent %d AP." % THESIS_REPORT_ACTION_COST,
-		"thesis": thesis,
-		"report": report,
-		"action_cost": THESIS_REPORT_ACTION_COST,
-		"snapshot": spend_result.get("snapshot", RunState.get_daily_action_snapshot())
-	}
+	return ThesisManager.generate_thesis_report(self, thesis_id)
 
 
 func refresh_thesis_review(thesis_id: String) -> Dictionary:
-	var block_reason: String = get_life_action_block_reason("thesis")
-	if not block_reason.is_empty():
-		return {"success": false, "message": block_reason}
-	var thesis: Dictionary = RunState.get_player_thesis(thesis_id)
-	if thesis.is_empty():
-		return {"success": false, "message": "Unknown thesis."}
-	var context: Dictionary = _thesis_report_context(str(thesis.get("company_id", "")))
-	var review: Dictionary = thesis_report_system.build_review(thesis, context)
-	thesis["review"] = review
-	thesis["updated_day_index"] = RunState.day_index
-	RunState.set_player_thesis(thesis)
-	_request_autosave("thesis_refresh_review")
-	thesis_changed.emit()
-	return {"success": true, "message": "Thesis review refreshed.", "thesis": thesis, "review": review}
+	return ThesisManager.refresh_thesis_review(self, thesis_id)
 
 
 func close_thesis(thesis_id: String) -> Dictionary:
-	return update_thesis_meta(thesis_id, {"status": "closed"})
+	return ThesisManager.close_thesis(self, thesis_id)
 
 
-func _thesis_company_options() -> Array:
-	var rows: Array = []
-	for row_value in get_company_rows():
-		var row: Dictionary = row_value
-		rows.append({
-			"id": str(row.get("id", "")),
-			"ticker": str(row.get("ticker", "")),
-			"name": str(row.get("name", "")),
-			"sector_name": str(row.get("sector_name", "")),
-			"current_price": float(row.get("current_price", 0.0)),
-			"daily_change_pct": float(row.get("daily_change_pct", 0.0))
-		})
-	return rows
-
-
-func _thesis_company_compact(company: Dictionary) -> Dictionary:
-	return {
-		"id": str(company.get("id", company.get("company_id", ""))),
-		"ticker": str(company.get("ticker", "")),
-		"name": str(company.get("name", "")),
-		"sector_name": str(company.get("sector_name", "")),
-		"current_price": float(company.get("current_price", 0.0)),
-		"daily_change_pct": float(company.get("daily_change_pct", 0.0))
-	}
-
-
-func _thesis_report_context(company_id: String) -> Dictionary:
-	return {
-		"day_index": RunState.day_index,
-		"trade_date": get_current_trade_date(),
-		"company": get_company_snapshot(company_id, true, true, true),
-		"macro_state": get_current_macro_state()
-	}
-
-
-func _thesis_fundamental_options(company: Dictionary) -> Array:
-	var financials: Dictionary = company.get("financials", {})
-	var quality_score: int = int(company.get("quality_score", 0))
-	var growth_score: int = int(company.get("growth_score", 0))
-	var risk_score: int = int(company.get("risk_score", 0))
-	return [
-		_thesis_option("fundamentals", "Business quality", _thesis_quality_band_label(quality_score), _thesis_quality_band_detail(quality_score), _impact_from_score(float(quality_score), 62.0, 48.0)),
-		_thesis_option("fundamentals", "Growth profile", _thesis_growth_band_label(growth_score), _thesis_growth_band_detail(growth_score), _impact_from_score(float(growth_score), 62.0, 48.0)),
-		_thesis_option("fundamentals", "Risk profile", _thesis_risk_band_label(risk_score), _thesis_risk_band_detail(risk_score), "negative" if risk_score >= 58 else "positive"),
-		_thesis_option("fundamentals", "ROE", _thesis_format_percent(float(financials.get("roe", 0.0)) / 100.0), "Return on equity gives a quick quality check.", _impact_from_score(float(financials.get("roe", 0.0)), 14.0, 8.0)),
-		_thesis_option("fundamentals", "Debt to equity", "%sx" % String.num(float(financials.get("debt_to_equity", 0.0)), 2), "Leverage affects how much room the thesis has for mistakes.", "negative" if float(financials.get("debt_to_equity", 0.0)) >= 1.0 else "positive")
-	]
-
-
-func _thesis_financial_options(company: Dictionary) -> Array:
-	var financials: Dictionary = company.get("financials", {})
-	var market_cap: float = float(financials.get("market_cap", 0.0))
-	var net_income: float = float(financials.get("net_income", 0.0))
-	var pe: float = _safe_divide(market_cap, net_income)
-	return [
-		_thesis_option("financials", "Revenue growth YoY", _thesis_format_percent(float(financials.get("revenue_growth_yoy", 0.0)) / 100.0), "Revenue growth helps tell whether the story is expanding or fading.", _impact_from_score(float(financials.get("revenue_growth_yoy", 0.0)), 10.0, 0.0)),
-		_thesis_option("financials", "Earnings growth YoY", _thesis_format_percent(float(financials.get("earnings_growth_yoy", 0.0)) / 100.0), "Earnings growth checks whether growth reaches the bottom line.", _impact_from_score(float(financials.get("earnings_growth_yoy", 0.0)), 8.0, 0.0)),
-		_thesis_option("financials", "Net profit margin", _thesis_format_percent(float(financials.get("net_profit_margin", 0.0)) / 100.0), "Margin quality helps separate real business strength from noisy sales.", _impact_from_score(float(financials.get("net_profit_margin", 0.0)), 8.0, 3.0)),
-		_thesis_option("valuation", "Current PE", "%sx" % String.num(pe, 2), "PE is an approximate valuation anchor from generated earnings.", "negative" if pe > 20.0 else ("positive" if pe > 0.0 and pe < 12.0 else "mixed")),
-		_thesis_option("valuation", "Market cap", _thesis_format_currency(market_cap), "Market cap helps keep expectations realistic for the company size.", "mixed")
-	]
-
-
-func _thesis_price_action_options(company: Dictionary) -> Array:
-	var price_bars: Array = company.get("price_bars", [])
-	var recent_return: float = _recent_price_bar_return(price_bars, 5)
-	return [
-		_thesis_option("price_action", "Current price", _thesis_format_currency(float(company.get("current_price", 0.0))), "This freezes the entry context for the thesis.", "mixed"),
-		_thesis_option("price_action", "Daily move", _thesis_format_percent(float(company.get("daily_change_pct", 0.0))), "The daily move shows whether the thesis is early or chasing strength.", _impact_from_change(float(company.get("daily_change_pct", 0.0)))),
-		_thesis_option("price_action", "Five-bar trend", _thesis_format_percent(recent_return), "Recent bars show whether price action confirms the setup.", _impact_from_change(recent_return)),
-		_thesis_option("price_action", "YTD move", _thesis_format_percent(float(company.get("ytd_change_pct", 0.0))), "YTD context helps avoid confusing a late move with an early setup.", _impact_from_change(float(company.get("ytd_change_pct", 0.0))))
-	]
-
-
-func _thesis_broker_options(company: Dictionary) -> Array:
-	var broker_flow: Dictionary = company.get("broker_flow", {})
-	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
-	var buyer: String = _broker_actor_label_for_thesis(broker_flow, "buy")
-	var seller: String = _broker_actor_label_for_thesis(broker_flow, "sell")
-	return [
-		_thesis_option("broker_flow", "Broker flow", flow_tag.capitalize(), "Broker flow checks whether stronger desks are supporting or leaning on the tape.", "positive" if flow_tag == "accumulation" else ("negative" if flow_tag == "distribution" else "mixed")),
-		_thesis_option("broker_flow", "Dominant buyer", buyer, "Strong buyer identity helps judge the quality of demand.", "positive" if buyer != "Balanced" else "mixed"),
-		_thesis_option("broker_flow", "Dominant seller", seller, "Strong seller identity is useful risk evidence.", "negative" if seller != "Balanced" else "mixed"),
-		_thesis_option("broker_flow", "Net pressure", String.num(float(broker_flow.get("net_pressure", 0.0)), 2), "Net pressure gives the tape read a compact direction.", _impact_from_change(float(broker_flow.get("net_pressure", 0.0))))
-	]
-
-
-func _thesis_ownership_options(company: Dictionary) -> Array:
-	var rows: Array = []
-	rows.append(_thesis_option("ownership", "Player ownership", _thesis_format_percent(float(company.get("ownership_pct", 0.0))), "Your ownership affects meeting eligibility and concentration.", "mixed"))
-	rows.append(_thesis_option("ownership", "Free float", _thesis_format_percent(float(company.get("financials", {}).get("free_float_pct", 0.0)) / 100.0), "Free float shapes liquidity and how crowded the tape can become.", "mixed"))
-	for shareholder_value in company.get("shareholder_rows", []):
-		if typeof(shareholder_value) != TYPE_DICTIONARY:
-			continue
-		var shareholder: Dictionary = shareholder_value
-		rows.append(_thesis_option("ownership", "Major holder", "%s %s" % [str(shareholder.get("name", "Holder")), _thesis_format_percent(float(shareholder.get("ownership_pct", 0.0)))], "Ownership concentration can support or constrain a thesis.", "mixed"))
-		if rows.size() >= 4:
-			break
-	return rows
-
-
-func _thesis_sector_macro_options(company: Dictionary) -> Array:
-	var rows: Array = []
-	var company_sector_id: String = str(company.get("sector_id", ""))
-	var company_sector_name: String = "Sector"
-	for sector_value in get_sector_rows():
-		var sector: Dictionary = sector_value
-		if str(sector.get("id", "")) != company_sector_id:
-			continue
-		company_sector_name = str(sector.get("name", company_sector_name))
-		rows.append(_thesis_option("sector_macro", "Sector performance", _thesis_format_percent(float(sector.get("average_change_pct", 0.0))), "Sector tape shows whether the stock is moving with or against its group.", _impact_from_change(float(sector.get("average_change_pct", 0.0)))))
-		rows.append(_thesis_option("sector_macro", "Sector breadth", "%d green / %d red" % [int(sector.get("advancers", 0)), int(sector.get("decliners", 0))], "Breadth helps separate broad sector demand from one-stock noise.", "positive" if int(sector.get("advancers", 0)) >= int(sector.get("decliners", 0)) else "negative"))
-		break
-	var macro: Dictionary = get_current_macro_state()
-	rows.append(_thesis_option("sector_macro", "Inflation backdrop", "%s%% YoY" % String.num(float(macro.get("inflation_yoy", 0.0)), 1), "Inflation pressure affects margins, consumer demand, rate expectations, and valuation tolerance.", _thesis_inflation_impact(float(macro.get("inflation_yoy", 0.0)))))
-	rows.append(_thesis_option("sector_macro", "GDP growth", "%s%%" % String.num(float(macro.get("gdp_growth", 0.0)), 1), "GDP growth is the broad demand backdrop for cyclical revenue and market risk appetite.", _thesis_gdp_impact(float(macro.get("gdp_growth", 0.0)))))
-	rows.append(_thesis_option("sector_macro", "Employment backdrop", "%s / unemployment %s%%" % [str(macro.get("employment_label", "Mixed")), String.num(float(macro.get("unemployment_rate", 0.0)), 1)], "Employment strength helps explain household demand and how much risk the market can carry.", _thesis_employment_impact(float(macro.get("employment_index", 0.0)))))
-	rows.append(_thesis_option("sector_macro", "Policy rate", _thesis_policy_rate_label(macro), "The policy-rate path changes funding cost, valuation appetite, and sector leadership.", _thesis_policy_impact(str(macro.get("central_bank_stance", "hold")))))
-	rows.append(_thesis_option("sector_macro", "Risk appetite", _thesis_risk_appetite_label(float(macro.get("risk_appetite", 0.5))), "Risk appetite is the market-wide willingness to pay for uncertainty.", _thesis_risk_appetite_impact(float(macro.get("risk_appetite", 0.5)))))
-	var sector_macro_bias: float = float(macro.get("sector_biases", {}).get(company_sector_id, 0.0))
-	rows.append(_thesis_option("sector_macro", "Sector macro bias", "%s %s" % [company_sector_name, _thesis_format_percent(sector_macro_bias)], "This is the simulator's direct macro tilt for the company's sector from inflation, GDP, employment, rates, and risk appetite.", _impact_from_change(sector_macro_bias)))
-	rows.append(_thesis_active_macro_shock_option())
-	return rows
-
-
-func _thesis_news_options(company: Dictionary) -> Array:
-	var rows: Array = []
-	var snapshot: Dictionary = get_news_snapshot()
-	for feed_value in snapshot.get("feeds", {}).values():
-		if typeof(feed_value) != TYPE_DICTIONARY:
-			continue
-		var feed: Dictionary = feed_value
-		for article_value in feed.get("articles", []):
-			if typeof(article_value) != TYPE_DICTIONARY:
-				continue
-			var article: Dictionary = article_value
-			if str(article.get("target_company_id", "")) != str(company.get("id", "")) and str(article.get("target_ticker", "")) != str(company.get("ticker", "")):
-				continue
-			rows.append(_thesis_option("news", str(article.get("headline", "News article")), str(article.get("public_status_label", article.get("tone", "mixed"))), str(article.get("deck", article.get("body", ""))).left(220), _impact_from_tone(str(article.get("tone", "mixed"))), str(feed.get("label", "News"))))
-			if rows.size() >= 5:
-				return rows
-	if rows.is_empty():
-		rows.append(_thesis_option("news", "No company-specific article", "No current article", "No fresh company-specific News article is available for this stock today.", "mixed", "News"))
-	return rows
-
-
-func _thesis_twooter_options(company: Dictionary) -> Array:
-	var rows: Array = []
-	var snapshot: Dictionary = get_twooter_snapshot()
-	for post_value in snapshot.get("posts", []):
-		if typeof(post_value) != TYPE_DICTIONARY:
-			continue
-		var post: Dictionary = post_value
-		if str(post.get("target_ticker", "")) != str(company.get("ticker", "")):
-			continue
-		rows.append(_thesis_option("twooter", "@%s" % str(post.get("account_handle", "")), str(post.get("post_text", "")).left(120), str(post.get("context_hint", "")), _impact_from_tone(str(post.get("tone", "mixed"))), "Twooter"))
-		if rows.size() >= 5:
-			return rows
-	if rows.is_empty():
-		rows.append(_thesis_option("twooter", "No company-specific chatter", "No current post", "No fresh company-specific Twooter post is available for this stock today.", "mixed", "Twooter"))
-	return rows
-
-
-func _thesis_network_options(company: Dictionary) -> Array:
-	var rows: Array = []
-	var snapshot: Dictionary = get_network_snapshot()
-	for contact_value in snapshot.get("contacts", []):
-		if typeof(contact_value) != TYPE_DICTIONARY:
-			continue
-		var contact: Dictionary = contact_value
-		if not bool(contact.get("met", false)):
-			continue
-		var company_ids: Array = contact.get("target_company_ids", [])
-		var focus_company_id: String = str(contact.get("company_id", ""))
-		if focus_company_id != str(company.get("id", "")) and not company_ids.has(str(company.get("id", ""))):
-			continue
-		rows.append(_thesis_option("network_intel", str(contact.get("display_name", contact.get("name", "Network contact"))), str(contact.get("role", contact.get("affiliation_role", "Contact"))), str(contact.get("last_tip_note", contact.get("description", "Known contact can add private context."))).left(220), "mixed", "Network"))
-		if rows.size() >= 4:
-			return rows
-	if rows.is_empty():
-		rows.append(_thesis_option("network_intel", "No met contact", "No private read", "Meet relevant contacts before treating Network as thesis evidence.", "mixed", "Network"))
-	return rows
-
-
-func _thesis_corporate_event_options(company: Dictionary) -> Array:
-	var rows: Array = []
-	for event_value in get_event_history():
-		if typeof(event_value) != TYPE_DICTIONARY:
-			continue
-		var event: Dictionary = event_value
-		if str(event.get("target_company_id", "")) != str(company.get("id", "")):
-			continue
-		rows.append(_thesis_option("corporate_events", str(event.get("headline", event.get("event_id", "Corporate event"))), str(event.get("summary", event.get("category", ""))).left(140), "Corporate event history can be a catalyst or a risk depending on confirmation.", _impact_from_tone(str(event.get("tone", "mixed"))), "Corporate events"))
-		if rows.size() >= 5:
-			return rows
-	var meeting_snapshot: Dictionary = get_corporate_meeting_snapshot()
-	for meeting_value in meeting_snapshot.get("upcoming_rows", []):
-		if typeof(meeting_value) != TYPE_DICTIONARY:
-			continue
-		var meeting: Dictionary = meeting_value
-		if str(meeting.get("company_id", "")) != str(company.get("id", "")):
-			continue
-		rows.append(_thesis_option("corporate_events", str(meeting.get("label", "Corporate meeting")), str(meeting.get("ticker", "")), str(meeting.get("public_summary", "Upcoming meeting can change the setup.")).left(180), "mixed", "Meeting calendar"))
-	if rows.is_empty():
-		rows.append(_thesis_option("corporate_events", "No active corporate event", "No event selected", "No current corporate event is tied to this company.", "mixed", "Corporate events"))
-	return rows
-
-
-func _thesis_risk_options(company: Dictionary) -> Array:
-	var financials: Dictionary = company.get("financials", {})
-	var risk_score: int = int(company.get("risk_score", 0))
-	var debt_to_equity: float = float(financials.get("debt_to_equity", 0.0))
-	var daily_change: float = float(company.get("daily_change_pct", 0.0))
-	return [
-		_thesis_option("risk_invalidation", "Risk profile invalidation", _thesis_risk_band_label(risk_score), _thesis_risk_band_detail(risk_score), "negative" if risk_score >= 58 else "mixed"),
-		_thesis_option("risk_invalidation", "Leverage invalidation", "%sx debt/equity" % String.num(debt_to_equity, 2), "If leverage is high, weak earnings can break the thesis faster.", "negative" if debt_to_equity >= 1.0 else "mixed"),
-		_thesis_option("risk_invalidation", "Price invalidation", "Breaks below today's price by 5%", "If price loses the thesis level, re-check before averaging down.", "negative"),
-		_thesis_option("risk_invalidation", "Chasing risk", _thesis_format_percent(daily_change), "If the move already ran, a good story can still be a bad entry.", "negative" if daily_change > 0.05 else "mixed")
-	]
-
-
-func _thesis_option(category: String, label: String, value: String, detail: String, impact: String = "mixed", source_label: String = "") -> Dictionary:
-	return {
-		"category": category,
-		"category_label": _thesis_category_label(category),
-		"label": label,
-		"value": value,
-		"detail": detail,
-		"impact": impact,
-		"source_label": source_label
-	}
-
-
-func _copy_optional_thesis_evidence_fields(target: Dictionary, source: Dictionary) -> void:
-	for key_value in [
-		"company_id",
-		"ticker",
-		"pattern_id",
-		"pattern_label",
-		"feedback_state",
-		"feedback_reason",
-		"invalidation",
-		"next_check",
-		"chart_range",
-		"chart_range_label",
-		"region_label"
-	]:
-		var key: String = str(key_value)
-		if source.has(key):
-			target[key] = str(source.get(key, ""))
-	for key_value in ["start_price", "end_price", "current_price"]:
-		var key: String = str(key_value)
-		if source.has(key):
-			target[key] = float(source.get(key, 0.0))
-	for key_value in ["start_anchor", "end_anchor", "start_date", "end_date", "report_date", "captured_trade_date"]:
-		var key: String = str(key_value)
-		if typeof(source.get(key, {})) == TYPE_DICTIONARY:
-			target[key] = source.get(key, {}).duplicate(true)
-
-
-func _thesis_category_label(category: String) -> String:
-	var labels := {
-		"fundamentals": "Fundamentals / Key Stats",
-		"financials": "Financials",
-		"valuation": "Valuation",
-		"price_action": "Price Action",
-		"broker_flow": "Broker Flow",
-		"ownership": "Ownership",
-		"management": "Management",
-		"sector_macro": "Sector / Macro",
-		"news": "News",
-		"twooter": "Twooter",
-		"network_intel": "Network Intel",
-		"corporate_events": "Corporate Events",
-		"risk_invalidation": "Risk / Invalidation"
-	}
-	return str(labels.get(category, category.capitalize()))
-
-
-func _next_thesis_id(company_id: String) -> String:
-	var index: int = RunState.get_player_theses().size() + 1
-	while true:
-		var thesis_id: String = "thesis_%s_%03d" % [company_id, index]
-		if RunState.get_player_thesis(thesis_id).is_empty():
-			return thesis_id
-		index += 1
-	return "thesis_%s_%03d" % [company_id, index]
-
-
-func _next_thesis_evidence_id(evidence_rows: Array) -> String:
-	var index: int = evidence_rows.size() + 1
-	while true:
-		var evidence_id: String = "evidence_%03d" % index
-		var found: bool = false
-		for row_value in evidence_rows:
-			if typeof(row_value) == TYPE_DICTIONARY and str(row_value.get("id", "")) == evidence_id:
-				found = true
-				break
-		if not found:
-			return evidence_id
-		index += 1
-	return "evidence_%03d" % index
-
-
-func _next_research_evidence_id(tray: Dictionary) -> String:
-	var index: int = tray.size() + 1
-	while true:
-		var evidence_id: String = "research_%03d" % index
-		if not tray.has(evidence_id):
-			return evidence_id
-		index += 1
-	return "research_%03d" % index
-
-
-func _normalize_thesis_stance(stance: String) -> String:
-	var normalized: String = stance.to_lower()
-	if normalized in ["bullish", "bearish", "income", "watch"]:
-		return normalized
-	return "bullish"
-
-
-func _normalize_thesis_horizon(horizon: String) -> String:
-	var normalized: String = horizon.to_lower()
-	if normalized in ["swing", "position", "income", "event"]:
-		return normalized
-	return "swing"
-
-
-func _recent_price_bar_return(price_bars: Array, lookback: int) -> float:
-	if price_bars.size() < 2:
-		return 0.0
-	var end_bar: Dictionary = price_bars[price_bars.size() - 1]
-	var start_index: int = max(price_bars.size() - lookback, 0)
-	var start_bar: Dictionary = price_bars[start_index]
-	var start_price: float = float(start_bar.get("close", start_bar.get("price", 0.0)))
-	var end_price: float = float(end_bar.get("close", end_bar.get("price", 0.0)))
-	if is_zero_approx(start_price):
-		return 0.0
-	return (end_price - start_price) / start_price
-
-
-func _thesis_quality_band_label(score: int) -> String:
-	if score >= 80:
-		return "Excellent"
-	if score >= 65:
-		return "Strong"
-	if score >= 50:
-		return "Average"
-	if score >= 35:
-		return "Weak"
-	return "Fragile"
-
-
-func _thesis_growth_band_label(score: int) -> String:
-	if score >= 80:
-		return "Accelerating"
-	if score >= 65:
-		return "Healthy"
-	if score >= 50:
-		return "Steady"
-	if score >= 35:
-		return "Uneven"
-	return "Stalling"
-
-
-func _thesis_risk_band_label(score: int) -> String:
-	if score >= 80:
-		return "High"
-	if score >= 65:
-		return "Elevated"
-	if score >= 45:
-		return "Moderate"
-	if score >= 25:
-		return "Manageable"
-	return "Low"
-
-
-func _thesis_quality_band_detail(score: int) -> String:
-	if score >= 80:
-		return "Excellent quality can support conviction, but the entry and valuation still need confirmation."
-	if score >= 65:
-		return "Strong quality gives the thesis fundamental support if valuation is still reasonable."
-	if score >= 50:
-		return "Average quality is workable, but the stock needs help from price action, valuation, or catalysts."
-	if score >= 35:
-		return "Weak quality means the thesis needs clear confirmation before adding size."
-	return "Fragile quality means the thesis needs more than one bullish signal before it deserves conviction."
-
-
-func _thesis_growth_band_detail(score: int) -> String:
-	if score >= 80:
-		return "Accelerating growth can justify a stronger upside case if margins and tape confirm."
-	if score >= 65:
-		return "Healthy growth supports a constructive thesis when valuation is not stretched."
-	if score >= 50:
-		return "Steady growth is useful, but it rarely carries the thesis alone."
-	if score >= 35:
-		return "Uneven growth is not broken, but it needs confirmation from fresh financials or catalysts."
-	return "Stalling growth needs either a valuation gap, turnaround catalyst, or clear tape support."
-
-
-func _thesis_risk_band_detail(score: int) -> String:
-	if score >= 80:
-		return "High risk needs tight invalidation and strong evidence before the position can be sized."
-	if score >= 65:
-		return "Elevated risk means the idea can work, but only with clear confirmation and controlled size."
-	if score >= 45:
-		return "Moderate risk demands confirmation, but it does not reject the idea by itself."
-	if score >= 25:
-		return "Manageable risk gives the thesis room to develop if evidence stays consistent."
-	return "Low risk gives the thesis more room, though price and valuation still matter."
-
-
-func _thesis_policy_rate_label(macro: Dictionary) -> String:
-	var stance: String = str(macro.get("central_bank_stance", "hold")).capitalize()
-	var rate: float = float(macro.get("policy_rate", 0.0))
-	var bps: int = int(macro.get("policy_action_bps", 0))
-	return "%s to %s%% (%+d bps)" % [stance, String.num(rate, 2), bps]
-
-
-func _thesis_risk_appetite_label(risk_appetite: float) -> String:
-	if risk_appetite >= 0.64:
-		return "Risk-on"
-	if risk_appetite >= 0.54:
-		return "Constructive"
-	if risk_appetite <= 0.36:
-		return "Risk-off"
-	if risk_appetite <= 0.46:
-		return "Defensive"
-	return "Neutral"
-
-
-func _thesis_active_macro_shock_option() -> Dictionary:
-	var active_events: Array = get_active_special_events()
-	if active_events.is_empty():
-		return _thesis_option("sector_macro", "Active macro shock", "None", "No active special macro shock is currently pressuring the tape.", "mixed", "Macro shocks")
-	var event: Dictionary = active_events[0] if typeof(active_events[0]) == TYPE_DICTIONARY else {}
-	var headline: String = str(event.get("headline", event.get("headline_detail", event.get("event_id", "Macro shock"))))
-	var detail: String = str(event.get("description", event.get("headline_detail", "An active macro shock is changing volatility, market bias, or sector leadership.")))
-	return _thesis_option("sector_macro", "Active macro shock", headline, detail.left(220), _impact_from_tone(str(event.get("tone", "mixed"))), "Macro shocks")
-
-
-func _thesis_inflation_impact(inflation_yoy: float) -> String:
-	if inflation_yoy >= 4.6:
-		return "negative"
-	if inflation_yoy <= 2.8:
-		return "positive"
-	return "mixed"
-
-
-func _thesis_gdp_impact(gdp_growth: float) -> String:
-	if gdp_growth >= 5.2:
-		return "positive"
-	if gdp_growth <= 3.4:
-		return "negative"
-	return "mixed"
-
-
-func _thesis_employment_impact(employment_index: float) -> String:
-	if employment_index >= 0.58:
-		return "positive"
-	if employment_index <= 0.42:
-		return "negative"
-	return "mixed"
-
-
-func _thesis_policy_impact(central_bank_stance: String) -> String:
-	var normalized: String = central_bank_stance.to_lower()
-	if normalized == "cut":
-		return "positive"
-	if normalized == "hike":
-		return "negative"
-	return "mixed"
-
-
-func _thesis_risk_appetite_impact(risk_appetite: float) -> String:
-	if risk_appetite >= 0.54:
-		return "positive"
-	if risk_appetite <= 0.46:
-		return "negative"
-	return "mixed"
-
-
-func _impact_from_score(value: float, positive_threshold: float, negative_threshold: float) -> String:
-	if value >= positive_threshold:
-		return "positive"
-	if value <= negative_threshold:
-		return "negative"
-	return "mixed"
-
-
-func _impact_from_change(value: float) -> String:
-	if value > 0.005:
-		return "positive"
-	if value < -0.005:
-		return "negative"
-	return "mixed"
-
-
-func _impact_from_tone(tone: String) -> String:
-	var normalized: String = tone.to_lower()
-	if normalized in ["positive", "bullish", "constructive"]:
-		return "positive"
-	if normalized in ["negative", "bearish", "defensive"]:
-		return "negative"
-	return "mixed"
-
-
-func _broker_actor_label_for_thesis(broker_flow: Dictionary, side: String) -> String:
-	var broker_code_key: String = "dominant_buy_broker_code" if side == "buy" else "dominant_sell_broker_code"
-	var broker_type_key: String = "dominant_buy_broker_type" if side == "buy" else "dominant_sell_broker_type"
-	var fallback_key: String = "dominant_buyer" if side == "buy" else "dominant_seller"
-	var broker_code: String = str(broker_flow.get(broker_code_key, ""))
-	if not broker_code.is_empty():
-		return broker_code
-	var fallback_value: String = str(broker_flow.get(broker_type_key, broker_flow.get(fallback_key, "balanced")))
-	return "Balanced" if fallback_value.is_empty() else fallback_value.capitalize()
-
-
-func _thesis_format_currency(value: float) -> String:
-	var sign_prefix: String = "-" if value < 0.0 else ""
-	var abs_value: float = abs(value)
-	if abs_value >= 1000000000000.0:
-		return "%sRp%sT" % [sign_prefix, String.num(abs_value / 1000000000000.0, 2)]
-	if abs_value >= 1000000000.0:
-		return "%sRp%sB" % [sign_prefix, String.num(abs_value / 1000000000.0, 2)]
-	if abs_value >= 1000000.0:
-		return "%sRp%sM" % [sign_prefix, String.num(abs_value / 1000000.0, 2)]
-	return "%sRp%s" % [sign_prefix, String.num(abs_value, 2)]
-
-
-func _thesis_format_percent(value: float) -> String:
-	var sign_prefix: String = "+" if value > 0.0 else ""
-	return "%s%s%%" % [sign_prefix, String.num(value * 100.0, 2)]
-
-
-func _safe_divide(numerator: float, denominator: float) -> float:
-	if is_zero_approx(denominator):
-		return 0.0
-	return numerator / denominator
 
 
 func get_difficulty_options() -> Array:
@@ -8852,48 +6497,19 @@ func format_trade_date(date_info: Dictionary) -> String:
 
 
 func _format_currency(value: float) -> String:
-	return "%sRp%s" % [
-		"-" if value < 0.0 else "",
-		_format_decimal(absf(value), 2, true)
-	]
+	return UIFormatter.format_currency(value)
 
 
 func _format_decimal(value: float, decimal_places: int = 2, use_grouping: bool = true) -> String:
-	var safe_places: int = max(decimal_places, 0)
-	var decimal_scale: int = 1
-	for _index in range(safe_places):
-		decimal_scale *= 10
-	var scaled_value: int = int(round(absf(value) * float(decimal_scale)))
-	var whole_value: int = int(floor(float(scaled_value) / float(decimal_scale)))
-	var decimal_value: int = scaled_value % decimal_scale
-	var whole_text: String = _format_grouped_integer(whole_value) if use_grouping else str(whole_value)
-	if safe_places <= 0:
-		return whole_text
-	var decimals := str(decimal_value).pad_zeros(safe_places)
-	return "%s,%s" % [whole_text, decimals]
+	return UIFormatter.format_decimal(value, decimal_places, use_grouping)
 
 
 func _format_grouped_integer(value: int) -> String:
-	var text: String = str(abs(value))
-	var parts: Array[String] = []
-	while text.length() > 3:
-		parts.push_front(text.substr(text.length() - 3, 3))
-		text = text.substr(0, text.length() - 3)
-	parts.push_front(text)
-	var prefix: String = "-" if value < 0 else ""
-	return prefix + ".".join(parts)
+	return UIFormatter.format_grouped_integer(value)
 
 
 func _format_currency_compact(value: float) -> String:
-	var absolute_value: float = absf(value)
-	var sign_prefix: String = "-" if value < 0.0 else ""
-	if absolute_value >= 1000000000000.0:
-		return "%sRp%sT" % [sign_prefix, String.num(absolute_value / 1000000000000.0, 2)]
-	if absolute_value >= 1000000000.0:
-		return "%sRp%sB" % [sign_prefix, String.num(absolute_value / 1000000000.0, 2)]
-	if absolute_value >= 1000000.0:
-		return "%sRp%sM" % [sign_prefix, String.num(absolute_value / 1000000.0, 2)]
-	return "%sRp%s" % [sign_prefix, String.num(absolute_value, 2)]
+	return UIFormatter.format_currency_compact(value)
 
 
 func should_show_tutorial() -> bool:
