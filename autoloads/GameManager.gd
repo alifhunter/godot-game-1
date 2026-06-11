@@ -969,11 +969,26 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 		return finance_gate
 	var log_advance_perf: bool = _should_log_advance_perf(save_after, emit_runtime_signals)
 	var total_started_at_usec: int = Time.get_ticks_usec()
-	var phase_started_at_usec: int = total_started_at_usec
+
+	var simulation: Dictionary = _advance_phase_simulate_market(log_advance_perf, emit_runtime_signals)
+	var day_result: Dictionary = simulation.get("day_result", {})
+	var life_results: Dictionary = _advance_phase_apply_life(log_advance_perf, simulation.get("previous_trade_date", {}))
+	var event_results: Dictionary = _advance_phase_process_events(log_advance_perf, day_result, simulation.get("previous_trade_date", {}), life_results)
+	_advance_phase_emit_market_signals(log_advance_perf, emit_runtime_signals, life_results, event_results)
+	var summary: Dictionary = _advance_phase_build_summary_and_news(log_advance_perf, simulation.get("company_market_rows", []))
+	_advance_phase_save_and_announce(log_advance_perf, save_after, emit_runtime_signals, flush_save_immediately, summary)
+	_log_advance_perf_elapsed(log_advance_perf, "total", total_started_at_usec, " save_after=%s emit_runtime_signals=%s flush_save_immediately=%s" % [str(save_after), str(emit_runtime_signals), str(flush_save_immediately)])
+	return {
+		"day_result": day_result,
+		"summary": summary
+	}
+
+
+func _advance_phase_simulate_market(log_advance_perf: bool, emit_runtime_signals: bool) -> Dictionary:
+	var phase_started_at_usec: int = Time.get_ticks_usec()
 	corporate_action_system.ensure_initialized(RunState, DataRepository)
 	index_review_system.ensure_initialized(RunState, DataRepository)
 	_log_advance_perf_elapsed(log_advance_perf, "ensure_corporate_actions", phase_started_at_usec)
-
 	if emit_runtime_signals:
 		phase_started_at_usec = Time.get_ticks_usec()
 		day_started.emit(RunState.day_index + 1)
@@ -989,7 +1004,15 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	phase_started_at_usec = Time.get_ticks_usec()
 	var company_market_rows: Array = get_company_market_rows(true)
 	_log_advance_perf_elapsed(log_advance_perf, "build_company_market_rows", phase_started_at_usec, " count=%d" % company_market_rows.size())
-	phase_started_at_usec = Time.get_ticks_usec()
+	return {
+		"day_result": day_result,
+		"previous_trade_date": previous_trade_date,
+		"company_market_rows": company_market_rows
+	}
+
+
+func _advance_phase_apply_life(log_advance_perf: bool, previous_trade_date: Dictionary) -> Dictionary:
+	var phase_started_at_usec: int = Time.get_ticks_usec()
 	var life_obligation_result: Dictionary = LifeManager.apply_life_monthly_obligation_if_due(self, previous_trade_date, RunState.current_trade_date)
 	_log_advance_perf_elapsed(log_advance_perf, "apply_life_obligation", phase_started_at_usec, " amount=%.2f" % float(life_obligation_result.get("amount", 0.0)))
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -1001,7 +1024,16 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	phase_started_at_usec = Time.get_ticks_usec()
 	var life_wellbeing_result: Dictionary = LifeManager.apply_life_daily_wellbeing_update(self)
 	_log_advance_perf_elapsed(log_advance_perf, "apply_life_wellbeing", phase_started_at_usec, " stress=%.2f" % float(life_wellbeing_result.get("stress_value", 0.0)))
-	phase_started_at_usec = Time.get_ticks_usec()
+	return {
+		"obligation": life_obligation_result,
+		"loan_payment": life_loan_payment_result,
+		"legal": life_legal_result,
+		"wellbeing": life_wellbeing_result
+	}
+
+
+func _advance_phase_process_events(log_advance_perf: bool, day_result: Dictionary, previous_trade_date: Dictionary, life_results: Dictionary) -> Dictionary:
+	var phase_started_at_usec: int = Time.get_ticks_usec()
 	var network_results: Array = contact_network_system.process_due_requests(RunState, DataRepository)
 	_log_advance_perf_elapsed(log_advance_perf, "process_due_requests", phase_started_at_usec, " count=%d" % network_results.size())
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -1023,6 +1055,7 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	)
 	var dirty_tip_offers: Array = dirty_tip_offer_resolution.get("offers", []).duplicate(true)
 	_log_advance_perf_elapsed(log_advance_perf, "resolve_dirty_tip_offer", phase_started_at_usec, " count=%d reason=%s" % [dirty_tip_offers.size(), str(dirty_tip_offer_resolution.get("reason", ""))])
+	var life_legal_result: Dictionary = life_results.get("legal", {})
 	if not life_legal_result.is_empty():
 		RunState.last_day_results["life_legal"] = life_legal_result.duplicate(true)
 	if not network_results.is_empty():
@@ -1038,6 +1071,22 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	phase_started_at_usec = Time.get_ticks_usec()
 	_rebuild_dashboard_event_snapshot_cache("", log_advance_perf)
 	_log_advance_perf_elapsed(log_advance_perf, "build_dashboard_event_cache", phase_started_at_usec)
+	return {
+		"network_results": network_results,
+		"network_tip_results": network_tip_results,
+		"life_development_results": life_development_results,
+		"dirty_tip_results": dirty_tip_results,
+		"dirty_tip_offers": dirty_tip_offers
+	}
+
+
+func _advance_phase_emit_market_signals(log_advance_perf: bool, emit_runtime_signals: bool, life_results: Dictionary, event_results: Dictionary) -> void:
+	var network_results: Array = event_results.get("network_results", [])
+	var network_tip_results: Array = event_results.get("network_tip_results", [])
+	var life_development_results: Array = event_results.get("life_development_results", [])
+	var dirty_tip_results: Array = event_results.get("dirty_tip_results", [])
+	var dirty_tip_offers: Array = event_results.get("dirty_tip_offers", [])
+	var phase_started_at_usec: int = 0
 	if (not network_results.is_empty() or not network_tip_results.is_empty() or not life_development_results.is_empty() or not dirty_tip_results.is_empty() or not dirty_tip_offers.is_empty()) and emit_runtime_signals:
 		phase_started_at_usec = Time.get_ticks_usec()
 		network_changed.emit()
@@ -1052,12 +1101,14 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 		phase_started_at_usec = Time.get_ticks_usec()
 		daily_actions_changed.emit()
 		_log_advance_perf_elapsed(log_advance_perf, "emit_daily_actions_changed", phase_started_at_usec)
-		if not life_obligation_result.is_empty() or not life_loan_payment_result.is_empty() or not life_legal_result.is_empty() or not life_wellbeing_result.is_empty() or not life_development_results.is_empty() or _dirty_tip_results_include_legal(dirty_tip_results):
+		if not life_results.get("obligation", {}).is_empty() or not life_results.get("loan_payment", {}).is_empty() or not life_results.get("legal", {}).is_empty() or not life_results.get("wellbeing", {}).is_empty() or not life_development_results.is_empty() or _dirty_tip_results_include_legal(dirty_tip_results):
 			phase_started_at_usec = Time.get_ticks_usec()
 			life_changed.emit()
 			_log_advance_perf_elapsed(log_advance_perf, "emit_life_changed", phase_started_at_usec)
 
-	phase_started_at_usec = Time.get_ticks_usec()
+
+func _advance_phase_build_summary_and_news(log_advance_perf: bool, company_market_rows: Array) -> Dictionary:
+	var phase_started_at_usec: int = Time.get_ticks_usec()
 	var summary: Dictionary = summary_system.build_daily_summary(RunState, DataRepository, log_advance_perf, company_market_rows)
 	_log_advance_perf_elapsed(log_advance_perf, "build_daily_summary", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -1075,6 +1126,11 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 	_rebuild_daily_activity_snapshot_cache(news_snapshot, "", log_advance_perf, feed_context)
 	_log_advance_perf_elapsed(log_advance_perf, "build_daily_activity_cache", phase_started_at_usec)
 	_record_steam_day_advanced()
+	return summary
+
+
+func _advance_phase_save_and_announce(log_advance_perf: bool, save_after: bool, emit_runtime_signals: bool, flush_save_immediately: bool, summary: Dictionary) -> void:
+	var phase_started_at_usec: int = 0
 	if save_after:
 		phase_started_at_usec = Time.get_ticks_usec()
 		if flush_save_immediately:
@@ -1090,11 +1146,6 @@ func _advance_day_internal(save_after: bool = true, emit_runtime_signals: bool =
 		phase_started_at_usec = Time.get_ticks_usec()
 		portfolio_changed.emit()
 		_log_advance_perf_elapsed(log_advance_perf, "emit_portfolio_changed", phase_started_at_usec)
-	_log_advance_perf_elapsed(log_advance_perf, "total", total_started_at_usec, " save_after=%s emit_runtime_signals=%s flush_save_immediately=%s" % [str(save_after), str(emit_runtime_signals), str(flush_save_immediately)])
-	return {
-		"day_result": day_result,
-		"summary": summary
-	}
 
 
 func _dirty_tip_results_include_legal(results: Array) -> bool:
