@@ -540,6 +540,10 @@ var desktop_app_windows: Dictionary = {}
 var desktop_dragging_app_id: String = ""
 var desktop_drag_offset: Vector2 = Vector2.ZERO
 var advance_day_processing: bool = false
+# Coalesced no-arg refresh signals: handlers queued in arrival order, flushed
+# once at end of frame so same-frame duplicate signals refresh the UI once.
+var pending_signal_refresh_handlers: Array = []
+var signal_refresh_flush_scheduled: bool = false
 var deferred_open_app_refresh_queue: Array = []
 var deferred_open_app_refresh_scheduled: bool = false
 var deferred_dashboard_refresh_after_recap: bool = false
@@ -1112,15 +1116,19 @@ func _ready() -> void:
 	sell_button.pressed.connect(_on_sell_side_pressed)
 	submit_order_button.pressed.connect(_on_submit_order_pressed)
 	get_viewport().size_changed.connect(_update_responsive_layout)
-	GameManager.portfolio_changed.connect(_on_portfolio_changed)
-	GameManager.watchlist_changed.connect(_on_watchlist_changed)
-	GameManager.network_changed.connect(_on_network_changed)
-	GameManager.social_changed.connect(_refresh_social)
-	GameManager.thesis_changed.connect(_on_thesis_changed)
-	GameManager.upgrades_changed.connect(_on_upgrades_changed)
-	GameManager.life_changed.connect(_on_life_changed)
-	GameManager.daily_actions_changed.connect(_refresh_daily_action_displays)
-	GameManager.academy_changed.connect(_refresh_academy)
+	# No-arg refresh signals are coalesced: same-frame duplicates collapse to
+	# one handler run at end of frame, in arrival order (see _queue_signal_refresh).
+	# Arg-carrying signals (price_formed, summary_ready, company_detail_ready)
+	# stay direct — unique payloads, not double-refresh sources.
+	GameManager.portfolio_changed.connect(_queue_signal_refresh.bind(_on_portfolio_changed))
+	GameManager.watchlist_changed.connect(_queue_signal_refresh.bind(_on_watchlist_changed))
+	GameManager.network_changed.connect(_queue_signal_refresh.bind(_on_network_changed))
+	GameManager.social_changed.connect(_queue_signal_refresh.bind(_refresh_social))
+	GameManager.thesis_changed.connect(_queue_signal_refresh.bind(_on_thesis_changed))
+	GameManager.upgrades_changed.connect(_queue_signal_refresh.bind(_on_upgrades_changed))
+	GameManager.life_changed.connect(_queue_signal_refresh.bind(_on_life_changed))
+	GameManager.daily_actions_changed.connect(_queue_signal_refresh.bind(_refresh_daily_action_displays))
+	GameManager.academy_changed.connect(_queue_signal_refresh.bind(_refresh_academy))
 	GameManager.price_formed.connect(_on_day_progressed)
 	GameManager.summary_ready.connect(_on_summary_ready)
 	GameManager.company_detail_ready.connect(_on_company_detail_ready)
@@ -3166,6 +3174,28 @@ func _build_company_row_lookup(company_rows: Array) -> Dictionary:
 func _suppress_next_portfolio_refresh() -> void:
 	suppress_next_portfolio_refresh = true
 	call_deferred("_clear_suppressed_portfolio_refresh")
+
+
+func _queue_signal_refresh(handler: Callable) -> void:
+	if pending_signal_refresh_handlers.has(handler):
+		return
+	pending_signal_refresh_handlers.append(handler)
+	if signal_refresh_flush_scheduled:
+		return
+	signal_refresh_flush_scheduled = true
+	call_deferred("_flush_signal_refreshes")
+
+
+func _flush_signal_refreshes() -> void:
+	signal_refresh_flush_scheduled = false
+	# Handlers may emit further signals while running; swap the queue first so
+	# new arrivals coalesce into the next flush instead of growing this one.
+	var handlers: Array = pending_signal_refresh_handlers
+	pending_signal_refresh_handlers = []
+	for handler_value in handlers:
+		var handler: Callable = handler_value
+		if handler.is_valid():
+			handler.call()
 
 
 func _clear_suppressed_portfolio_refresh() -> void:
