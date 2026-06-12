@@ -108,6 +108,10 @@ var news_meet_contact_button: Button = null
 
 func setup(root) -> void:
 	_root = root
+	if _root != null:
+		var capture_payloads = _root.get("pending_capture_payloads")
+		if typeof(capture_payloads) == TYPE_DICTIONARY:
+			pending_capture_payloads = capture_payloads
 	_sync_dynamic_refs_from_root()
 	_sync_state_from_root()
 	_sync_root_refs()
@@ -734,7 +738,6 @@ func _on_social_message_option_selected(option_index: int) -> void:
 		_style_social_thread_button(option_button)
 	_style_social_filter_button(button, true, true)
 	_start_social_message_typewriter(pending_social_message_text)
-	_sync_root_state()
 
 
 func _start_social_message_typewriter(text: String) -> void:
@@ -782,7 +785,6 @@ func _send_social_message_composer() -> void:
 	var thesis_id: String = pending_social_message_thesis_id
 	var player_text: String = pending_social_message_text
 	_reset_social_message_composer(true)
-	_sync_root_state()
 	_on_social_message_action_pressed(account_id, action_id, thesis_id, player_text)
 
 
@@ -1934,7 +1936,6 @@ func _open_social_reply_composer(post: Dictionary) -> void:
 		button.set_meta("option_id", str(option.get("option_id", "")))
 		button.set_meta("player_text", str(option.get("player_text", "")))
 	social_reply_dialog.visible = true
-	_sync_root_state()
 
 
 func _on_social_reply_option_selected(option_index: int) -> void:
@@ -1949,7 +1950,6 @@ func _on_social_reply_option_selected(option_index: int) -> void:
 		_style_social_thread_button(option_button)
 	_style_social_filter_button(button, true, true)
 	_start_social_reply_typewriter(pending_social_reply_text)
-	_sync_root_state()
 
 
 func _start_social_reply_typewriter(text: String) -> void:
@@ -1984,7 +1984,6 @@ func _send_social_reply_composer() -> void:
 	var action_id: String = pending_social_reply_action_id
 	var player_text: String = pending_social_reply_text
 	_hide_social_reply_composer()
-	_sync_root_state()
 	_on_social_post_action_pressed(post_id, action_id, "", player_text)
 
 
@@ -1997,7 +1996,6 @@ func _hide_social_reply_composer() -> void:
 	pending_social_reply_text = ""
 	if social_reply_dialog != null:
 		social_reply_dialog.visible = false
-	_sync_root_state()
 
 
 func _social_category_label(post: Dictionary) -> String:
@@ -2123,7 +2121,6 @@ func _on_social_thread_toggled(post_id: String, thread_container: VBoxContainer,
 	thread_button.text = "Hide thread" if next_visible else "Show thread"
 	if next_visible:
 		_mark_guide_research_interaction()
-	_sync_root_state()
 
 
 func _style_social_post_card(panel: PanelContainer, _tone: String) -> void:
@@ -2282,7 +2279,6 @@ func _open_social_account_from_news(account_id: String, contact_id: String = "")
 	selected_social_view_id = "home"
 	selected_social_account_id = account_id
 	selected_social_feed_filter_id = SOCIAL_FEED_FILTER_ALL
-	_sync_root_state()
 	_set_active_app(APP_ID_SOCIAL)
 	var account: Dictionary = _social_account_from_snapshot(account_id)
 	var handle: String = str(account.get("handle", "")).strip_edges()
@@ -2820,25 +2816,9 @@ func _sync_dynamic_refs_from_root() -> void:
 
 
 func _sync_state_from_root() -> void:
-	if _root == null:
-		return
-	var capture_payloads = _root.get("pending_capture_payloads")
-	pending_capture_payloads = capture_payloads if typeof(capture_payloads) == TYPE_DICTIONARY else {}
-	var snapshot = _root.get("current_social_snapshot")
-	current_social_snapshot = snapshot if typeof(snapshot) == TYPE_DICTIONARY else {}
-	var expanded_threads = _root.get("expanded_social_thread_ids")
-	expanded_social_thread_ids = expanded_threads if typeof(expanded_threads) == TYPE_DICTIONARY else {}
-	selected_social_account_id = str(_root.get("selected_social_account_id"))
-	selected_social_feed_filter_id = str(_root.get("selected_social_feed_filter_id"))
-	selected_social_view_id = str(_root.get("selected_social_view_id"))
-	selected_social_message_account_id = str(_root.get("selected_social_message_account_id"))
-	pending_social_message_account_id = str(_root.get("pending_social_message_account_id"))
-	pending_social_message_action_id = str(_root.get("pending_social_message_action_id"))
-	pending_social_message_thesis_id = str(_root.get("pending_social_message_thesis_id"))
-	pending_social_message_text = str(_root.get("pending_social_message_text"))
-	pending_social_reply_post_id = str(_root.get("pending_social_reply_post_id"))
-	pending_social_reply_action_id = str(_root.get("pending_social_reply_action_id"))
-	pending_social_reply_text = str(_root.get("pending_social_reply_text"))
+	# Social state is controller-owned; the shared capture dict is aliased in
+	# setup(). Kept as a no-op for GameRoot call-site compat.
+	pass
 
 
 func _sync_root_refs() -> void:
@@ -2889,26 +2869,7 @@ func _sync_root_refs() -> void:
 	_root.set("social_reply_send_button", social_reply_send_button)
 	_root.set("social_reply_cancel_button", social_reply_cancel_button)
 	_root.set("social_reply_typing_tween", social_reply_typing_tween)
-	_sync_root_state()
 
-
-func _sync_root_state() -> void:
-	if _root == null:
-		return
-	_root.set("pending_capture_payloads", pending_capture_payloads)
-	_root.set("current_social_snapshot", current_social_snapshot)
-	_root.set("expanded_social_thread_ids", expanded_social_thread_ids)
-	_root.set("selected_social_account_id", selected_social_account_id)
-	_root.set("selected_social_feed_filter_id", selected_social_feed_filter_id)
-	_root.set("selected_social_view_id", selected_social_view_id)
-	_root.set("selected_social_message_account_id", selected_social_message_account_id)
-	_root.set("pending_social_message_account_id", pending_social_message_account_id)
-	_root.set("pending_social_message_action_id", pending_social_message_action_id)
-	_root.set("pending_social_message_thesis_id", pending_social_message_thesis_id)
-	_root.set("pending_social_message_text", pending_social_message_text)
-	_root.set("pending_social_reply_post_id", pending_social_reply_post_id)
-	_root.set("pending_social_reply_action_id", pending_social_reply_action_id)
-	_root.set("pending_social_reply_text", pending_social_reply_text)
 
 
 func add_child(node: Node) -> void:

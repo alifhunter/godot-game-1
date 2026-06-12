@@ -9926,10 +9926,11 @@ func _run_scenario(
 			"message": "Smoke test expected the News -> Twooter handle -> source DM loop to spend AP, write message rows, and promote the source into Network."
 		}
 	RunState.load_from_dict(source_loop_restore_state)
-	game_root.selected_social_account_id = ""
-	game_root.selected_social_message_account_id = ""
-	game_root.selected_social_feed_filter_id = "all"
-	game_root.selected_social_view_id = "home"
+	game_root._ensure_social_controller()
+	game_root.social_controller.selected_social_account_id = ""
+	game_root.social_controller.selected_social_message_account_id = ""
+	game_root.social_controller.selected_social_feed_filter_id = "all"
+	game_root.social_controller.selected_social_view_id = "home"
 	game_root.close_desktop_app("social")
 	await get_tree().process_frame
 	game_root._set_active_app("news")
@@ -11569,7 +11570,8 @@ func _run_scenario(
 		"",
 		"I am trying to reopen the same thread without new context."
 	)
-	game_root.selected_social_message_account_id = social_first_account_id
+	game_root._ensure_social_controller()
+	game_root.social_controller.selected_social_message_account_id = social_first_account_id
 	social_home_button.emit_signal("pressed")
 	await get_tree().process_frame
 	social_message_button.emit_signal("pressed")
@@ -11612,8 +11614,9 @@ func _run_scenario(
 	share_branch_dialog_state["accounts"] = share_branch_accounts
 	share_branch_social_state["dialog_state"] = share_branch_dialog_state
 	RunState.set_twooter_social_state(share_branch_social_state)
-	game_root.selected_social_message_account_id = social_first_account_id
-	game_root.selected_social_view_id = "message"
+	game_root._ensure_social_controller()
+	game_root.social_controller.selected_social_message_account_id = social_first_account_id
+	game_root.social_controller.selected_social_view_id = "message"
 	game_root._refresh_social()
 	await get_tree().process_frame
 	social_message_options = game_root.find_child("SocialMessageComposerOptions", true, false) as VBoxContainer
