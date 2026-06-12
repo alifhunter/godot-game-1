@@ -36,7 +36,7 @@ Working rules: zero behavior change per step; dict-in/dict-out at system boundar
 | Follow-up A | Manual click-through playtest of all 8 apps, then checkpoint commit | ✅ Done 2026-06-12 — playtest clean, committed `e5c3bfc` |
 | Follow-up B | Warnings cleanup pass (44 behavior-neutral edits across 7 files) | ✅ Done 2026-06-12 — committed `20211ee`, smoke byte-identical |
 | Follow-up C | Shared `UITheme` constants (`scripts/ui/UITheme.gd`, 75 colors; 193 duplicate lines collapsed via preload aliases) | ✅ Done 2026-06-12 — committed `9e2d49e`, smoke byte-identical |
-| Follow-up D | Controller-owned state (retire the manual `_sync_state_from_root`/`_sync_root_state` layer) | ⬜ NEXT — one controller per sitting, smallest first |
+| Follow-up D | Controller-owned state (retire the manual sync layer) | 🔶 5/6 done 2026-06-12 — Company `8490cfd`, Academy `dfe933e`, News `494fe5e`, Social `8bff2dd`, Network `636e9d4`. **Stock remains** (own session: 80+ vars, ~15 GameRoot readers of selected_company_id). Life/Upgrades never had duplicated state (N/A). |
 | 5c item 14 | Typed `CompanyRuntime` class, gradual callsite migration | ⬜ Planned |
 
 ---
@@ -235,6 +235,8 @@ Known structural weaknesses (accepted for now, addressed by follow-ups below):
 ## Follow-up plan — context/usage-budget conscious
 
 Calibration to date: a 5b-style extraction ≈ 15–25% of a usage window; quick-win batches ≈ 10–15%. Order chosen so each step is independently committable and the budget can stop anywhere.
+
+**Follow-up D progress notes (for the Stock session):** the proven recipe per controller — (1) inventory the controller's `_sync_root_state` writes; (2) for each var, count REAL GameRoot readers (declaration-only copies just get deleted; real readers get redirected through `<x>_controller.<var>` after `_ensure_<x>_controller()`); (3) the shared `pending_capture_payloads` dict stays GameRoot-owned, aliased once in the controller's `setup()` (dict reference semantics make further sync redundant); (4) gut `_sync_state_from_root` to a no-op (GameRoot call-site compat) and delete `_sync_root_state` + call sites; (5) **grep SmokeTest for `game_root.<var>` reads AND `game_root.set("<var>", ...)` writes** — the set() form silently no-ops against deleted vars, so it breaks tests without erroring (caught twice: news assertion, network tip-journal); (6) verify with editor pass + quick smoke (it executes these UI sections and surfaces Invalid-access errors), commit per controller. Stock extra care: `selected_company_id` is read by GameRoot dashboard/FTUE/guide code in ~15 places and synced down by NetworkController — migrate readers to accessors first, then delete.
 
 | Step | Task | Est. cost | Why this order |
 |---|---|---|---|
