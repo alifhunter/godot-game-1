@@ -415,7 +415,6 @@ var cached_company_row_lookup: Dictionary = {}
 var has_cached_company_rows: bool = false
 var all_stock_rows_dirty: bool = true
 var portfolio_stock_rows_dirty: bool = true
-var current_news_snapshot: Dictionary = {}
 var current_social_snapshot: Dictionary = {}
 var current_network_snapshot: Dictionary = {}
 var current_corporate_meeting_id: String = ""
@@ -470,12 +469,6 @@ var broker_net_mode: bool = false
 var selected_broker_range_id: String = "1d"
 var broker_range_buttons: Dictionary = {}
 var broker_range_row: HBoxContainer = null
-var selected_news_outlet_id: String = ""
-var selected_news_archive_year: int = 0
-var selected_news_archive_month: int = 0
-var selected_news_article_id: String = ""
-var news_article_cards_generation: int = 0
-var news_article_card_press_positions: Dictionary = {}
 var trade_workspace_detail_cache_key: String = ""
 var trade_workspace_profile_cache_key: String = ""
 var trade_workspace_financial_history_cache_key: String = ""
@@ -9581,9 +9574,8 @@ func _on_day_progressed(_day_index: int) -> void:
 	status_message = "Market closed."
 	_suppress_next_portfolio_refresh()
 	if _is_desktop_app_window_open(APP_ID_NEWS):
-		selected_news_archive_year = 0
-		selected_news_archive_month = 0
-		selected_news_article_id = ""
+		_ensure_news_controller()
+		news_controller.reset_archive_selection()
 	if advance_day_processing:
 		_queue_deferred_open_app_refresh()
 		deferred_dashboard_refresh_after_recap = true

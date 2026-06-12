@@ -9942,7 +9942,7 @@ func _run_scenario(
 		var first_article_after_reload: String = str(news_article_list.get_item_metadata(0).get("id", ""))
 		game_root._on_day_progressed(RunState.day_index + 1)
 		await get_tree().process_frame
-		if game_root.selected_news_article_id != first_article_after_reload:
+		if game_root.news_controller.selected_news_article_id != first_article_after_reload:
 			game_root.queue_free()
 			await get_tree().process_frame
 			return {

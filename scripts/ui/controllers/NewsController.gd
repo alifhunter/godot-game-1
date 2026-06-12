@@ -83,6 +83,10 @@ var news_grunge_overlay: Control = null
 
 func setup(root) -> void:
 	_root = root
+	if _root != null:
+		var capture_payloads = _root.get("pending_capture_payloads")
+		if typeof(capture_payloads) == TYPE_DICTIONARY:
+			pending_capture_payloads = capture_payloads
 	_sync_dynamic_refs_from_root()
 	_sync_state_from_root()
 	_sync_root_refs()
@@ -1524,19 +1528,9 @@ func _sync_dynamic_refs_from_root() -> void:
 
 
 func _sync_state_from_root() -> void:
-	if _root == null:
-		return
-	var capture_payloads = _root.get("pending_capture_payloads")
-	pending_capture_payloads = capture_payloads if typeof(capture_payloads) == TYPE_DICTIONARY else {}
-	var snapshot = _root.get("current_news_snapshot")
-	current_news_snapshot = snapshot if typeof(snapshot) == TYPE_DICTIONARY else {}
-	selected_news_outlet_id = str(_root.get("selected_news_outlet_id"))
-	selected_news_archive_year = int(_root.get("selected_news_archive_year"))
-	selected_news_archive_month = int(_root.get("selected_news_archive_month"))
-	selected_news_article_id = str(_root.get("selected_news_article_id"))
-	news_article_cards_generation = int(_root.get("news_article_cards_generation"))
-	var press_positions = _root.get("news_article_card_press_positions")
-	news_article_card_press_positions = press_positions if typeof(press_positions) == TYPE_DICTIONARY else {}
+	# News-domain state is controller-owned now; the shared capture dict is
+	# aliased once in setup(). Kept as a no-op for GameRoot call-site compat.
+	pass
 
 
 func _sync_root_refs() -> void:
@@ -1585,20 +1579,8 @@ func _sync_root_refs() -> void:
 	_root.set("news_detail_action_row", news_detail_action_row)
 	_root.set("news_open_meeting_button", news_open_meeting_button)
 	_root.set("news_grunge_overlay", news_grunge_overlay)
-	_sync_root_state()
 
 
-func _sync_root_state() -> void:
-	if _root == null:
-		return
-	_root.set("pending_capture_payloads", pending_capture_payloads)
-	_root.set("current_news_snapshot", current_news_snapshot)
-	_root.set("selected_news_outlet_id", selected_news_outlet_id)
-	_root.set("selected_news_archive_year", selected_news_archive_year)
-	_root.set("selected_news_archive_month", selected_news_archive_month)
-	_root.set("selected_news_article_id", selected_news_article_id)
-	_root.set("news_article_cards_generation", news_article_cards_generation)
-	_root.set("news_article_card_press_positions", news_article_card_press_positions)
 
 
 func add_child(node: Node) -> void:
@@ -1700,3 +1682,9 @@ func _desktop_texture(path: String) -> Texture2D:
 	if _root == null:
 		return null
 	return _root.call("_desktop_texture", path) as Texture2D
+
+
+func reset_archive_selection() -> void:
+	selected_news_archive_year = 0
+	selected_news_archive_month = 0
+	selected_news_article_id = ""
