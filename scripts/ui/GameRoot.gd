@@ -415,7 +415,6 @@ var cached_company_row_lookup: Dictionary = {}
 var has_cached_company_rows: bool = false
 var all_stock_rows_dirty: bool = true
 var portfolio_stock_rows_dirty: bool = true
-var current_network_snapshot: Dictionary = {}
 var current_corporate_meeting_id: String = ""
 var debug_generator_buttons: Dictionary = {}
 var debug_corporate_action_buttons: Dictionary = {}
@@ -475,9 +474,6 @@ var trade_workspace_key_stats_cache_key: String = ""
 var trade_workspace_broker_cache_key: String = ""
 var trade_workspace_corporate_action_cache_key: String = ""
 var trade_workspace_statement_cache_key: String = ""
-var selected_network_contact_id: String = ""
-var selected_network_journal_id: String = ""
-var selected_network_journal_filter: String = "all"
 var network_controller = null
 var academy_controller = null
 var social_reply_dialog: Control = null
@@ -4541,10 +4537,10 @@ func _ensure_network_detail_scroll() -> void:
 
 
 func _contact_for_context(source_type: String, source_id: String, company_id: String) -> Dictionary:
-	current_network_snapshot = GameManager.get_network_snapshot()
+	var network_snapshot: Dictionary = GameManager.get_network_snapshot()
 	var rows: Array = []
-	rows.append_array(current_network_snapshot.get("discoveries", []))
-	rows.append_array(current_network_snapshot.get("contacts", []))
+	rows.append_array(network_snapshot.get("discoveries", []))
+	rows.append_array(network_snapshot.get("contacts", []))
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a.get("lead_score", 0)) > int(b.get("lead_score", 0))
 	)

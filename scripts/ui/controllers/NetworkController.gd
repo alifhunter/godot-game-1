@@ -78,7 +78,6 @@ func setup(root, refs: Dictionary) -> void:
 func refresh() -> void:
 	_sync_from_root_state()
 	_refresh_network()
-	_sync_root_state()
 
 
 func ensure_context_ui() -> void:
@@ -202,7 +201,6 @@ func ensure_context_ui() -> void:
 	_ensure_network_detail_scroll()
 	_connect_network_signals()
 	_sync_root_refs()
-	_sync_root_state()
 
 
 func ensure_detail_scroll() -> void:
@@ -212,7 +210,6 @@ func ensure_detail_scroll() -> void:
 
 func rebuild_contact_list() -> void:
 	_rebuild_network_contact_list()
-	_sync_root_state()
 
 
 func rebuild_request_list() -> void:
@@ -221,12 +218,10 @@ func rebuild_request_list() -> void:
 
 func rebuild_journal_list() -> void:
 	_rebuild_network_journal_list()
-	_sync_root_state()
 
 
 func refresh_journal_filter_buttons() -> void:
 	_refresh_network_journal_filter_buttons()
-	_sync_root_state()
 
 
 func network_state_for_contact(network_snapshot: Dictionary, contact_id: String) -> String:
@@ -240,52 +235,42 @@ func network_contact_target_company(contact: Dictionary) -> String:
 
 func on_contact_selected(index: int) -> void:
 	_on_network_contact_selected(index)
-	_sync_root_state()
 
 
 func on_request_selected(index: int) -> void:
 	_on_network_request_selected(index)
-	_sync_root_state()
 
 
 func on_journal_selected(index: int) -> void:
 	_on_network_journal_selected(index)
-	_sync_root_state()
 
 
 func on_journal_filter_pressed(filter_id: String) -> void:
 	_on_network_journal_filter_pressed(filter_id)
-	_sync_root_state()
 
 
 func on_meet_pressed() -> void:
 	_on_network_meet_pressed()
-	_sync_root_state()
 
 
 func on_tip_pressed() -> void:
 	_on_network_tip_pressed()
-	_sync_root_state()
 
 
 func on_request_pressed() -> void:
 	_on_network_request_pressed()
-	_sync_root_state()
 
 
 func on_referral_pressed() -> void:
 	_on_network_referral_pressed()
-	_sync_root_state()
 
 
 func on_followup_selected(menu_id: int) -> void:
 	_on_network_followup_selected(menu_id)
-	_sync_root_state()
 
 
 func on_source_check_pressed() -> void:
 	_on_network_source_check_pressed()
-	_sync_root_state()
 
 
 func on_open_meeting_pressed() -> void:
@@ -321,14 +306,10 @@ func _connect_signal_once(signal_object: Signal, handler: Callable) -> void:
 
 
 func _sync_from_root_state() -> void:
+	# Network-domain state is controller-owned; only the Stock-owned selected
+	# company id still syncs down (until StockController owns it end-to-end).
 	if _root == null:
 		return
-	var root_snapshot: Variant = _root.get("current_network_snapshot")
-	if typeof(root_snapshot) == TYPE_DICTIONARY:
-		current_network_snapshot = root_snapshot as Dictionary
-	selected_network_contact_id = str(_root.get("selected_network_contact_id"))
-	selected_network_journal_id = str(_root.get("selected_network_journal_id"))
-	selected_network_journal_filter = str(_root.get("selected_network_journal_filter"))
 	selected_company_id = str(_root.get("selected_company_id"))
 	if selected_network_journal_filter.is_empty():
 		selected_network_journal_filter = "all"
@@ -352,14 +333,6 @@ func _sync_dynamic_refs_from_root() -> void:
 	network_detail_scroll_content = _root.get("network_detail_scroll_content") as VBoxContainer
 	network_journal_detail_label = _root.get("network_journal_detail_label") as Label
 
-
-func _sync_root_state() -> void:
-	if _root == null:
-		return
-	_root.set("current_network_snapshot", current_network_snapshot)
-	_root.set("selected_network_contact_id", selected_network_contact_id)
-	_root.set("selected_network_journal_id", selected_network_journal_id)
-	_root.set("selected_network_journal_filter", selected_network_journal_filter)
 
 
 func _sync_root_refs() -> void:

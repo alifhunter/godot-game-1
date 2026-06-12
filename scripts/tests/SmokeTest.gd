@@ -13426,7 +13426,8 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected source-check answers to persist in the tip journal and surface on contacts."
 		}
-	game_root.set("selected_network_contact_id", contact_id)
+	game_root._ensure_network_controller()
+	game_root.network_controller.selected_network_contact_id = contact_id
 	game_root.call("_refresh_network")
 	await get_tree().process_frame
 	if (
