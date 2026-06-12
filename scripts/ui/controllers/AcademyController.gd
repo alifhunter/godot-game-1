@@ -46,13 +46,6 @@ var academy_glossary_list: ItemList = null
 
 func setup(root) -> void:
 	_root = root
-	if _root == null:
-		return
-	selected_academy_category_id = str(_root.get("selected_academy_category_id"))
-	selected_academy_section_id = str(_root.get("selected_academy_section_id"))
-	current_academy_snapshot = _root.get("current_academy_snapshot") as Dictionary
-	academy_quiz_option_buttons = _root.get("academy_quiz_option_buttons") as Dictionary
-	_sync_root_state()
 
 
 func ensure_ui() -> void:
@@ -339,13 +332,11 @@ func refresh() -> void:
 		academy_next_button.disabled = true
 		_apply_font_overrides_to_subtree(academy_window)
 		restyle_controls()
-		_sync_root_state()
 		return
 
 	current_academy_snapshot = GameManager.get_academy_snapshot(selected_academy_category_id, selected_academy_section_id)
 	selected_academy_category_id = str(current_academy_snapshot.get("category_id", selected_academy_category_id))
 	selected_academy_section_id = str(current_academy_snapshot.get("selected_section_id", selected_academy_section_id))
-	_sync_root_state()
 	academy_title_label.text = ""
 	_rebuild_academy_category_tabs()
 	_rebuild_academy_section_list()
@@ -354,7 +345,6 @@ func refresh() -> void:
 	apply_text_theme()
 	_apply_font_overrides_to_subtree(academy_window)
 	restyle_controls()
-	_sync_root_state()
 
 
 func apply_text_theme() -> void:
@@ -1554,16 +1544,8 @@ func _sync_root_refs() -> void:
 	_root.set("academy_side_body_label", academy_side_body_label)
 	_root.set("academy_glossary_search_input", academy_glossary_search_input)
 	_root.set("academy_glossary_list", academy_glossary_list)
-	_sync_root_state()
 
 
-func _sync_root_state() -> void:
-	if _root == null:
-		return
-	_root.set("current_academy_snapshot", current_academy_snapshot)
-	_root.set("selected_academy_category_id", selected_academy_category_id)
-	_root.set("selected_academy_section_id", selected_academy_section_id)
-	_root.set("academy_quiz_option_buttons", academy_quiz_option_buttons)
 
 
 func _clear_container_children(container: Node) -> void:

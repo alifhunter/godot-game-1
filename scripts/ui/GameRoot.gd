@@ -418,7 +418,6 @@ var portfolio_stock_rows_dirty: bool = true
 var current_news_snapshot: Dictionary = {}
 var current_social_snapshot: Dictionary = {}
 var current_network_snapshot: Dictionary = {}
-var current_academy_snapshot: Dictionary = {}
 var current_corporate_meeting_id: String = ""
 var debug_generator_buttons: Dictionary = {}
 var debug_corporate_action_buttons: Dictionary = {}
@@ -487,9 +486,6 @@ var trade_workspace_statement_cache_key: String = ""
 var selected_network_contact_id: String = ""
 var selected_network_journal_id: String = ""
 var selected_network_journal_filter: String = "all"
-var selected_academy_category_id: String = "mindset"
-var selected_academy_section_id: String = "survival_mindset"
-var academy_quiz_option_buttons: Dictionary = {}
 var network_controller = null
 var academy_controller = null
 var expanded_social_thread_ids: Dictionary = {}
@@ -11406,9 +11402,10 @@ func _guide_life_finance_tab_open() -> bool:
 
 
 func _guide_current_academy_lesson_read() -> bool:
+	_ensure_academy_controller()
 	var progress: Dictionary = RunState.get_academy_progress()
 	var read_sections: Dictionary = progress.get("read_sections", {})
-	return read_sections.get(selected_academy_category_id, []).has(selected_academy_section_id)
+	return read_sections.get(academy_controller.selected_academy_category_id, []).has(academy_controller.selected_academy_section_id)
 
 
 func _guide_has_approached_lead(snapshot: Dictionary) -> bool:
