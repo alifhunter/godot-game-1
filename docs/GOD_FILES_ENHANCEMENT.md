@@ -1,14 +1,14 @@
 # God Files Enhancement — Progress Log
 
-Tracks the Tier 5 refactor of the three god files. **Tiers 5a, 5b, and 5c Session 1 are complete (2026-06-11, committed as checkpoints `16f15ac` → `d279d4d` → `4bb362c` → `1e23e0e`); next: GameRoot per-app controllers, one app per session.**
+Tracks the Tier 5 refactor of the three god files. **Tiers 5a, 5b, and 5c Sessions 1-9 are complete (2026-06-12); per-app GameRoot controller extraction is done.**
 
 | God file | Tier 5 start | Current | Change |
 |---|---|---|---|
-| `scripts/ui/GameRoot.gd` | 25,460 | ~25,400 | 5c target (per-app controllers) |
+| `scripts/ui/GameRoot.gd` | 25,460 | 16,076 | 5c target (per-app controllers; Upgrades + Academy + Network + Life + Company + Social + News + Stock extracted) |
 | `autoloads/GameManager.gd` | ~9,447 | 7,063 | −2,384 |
 | `autoloads/RunState.gd` | 8,026 | 6,432 | −1,594 |
 
-Six new focused systems extracted: `UIFormatter`, `LifeStateSystem`, `TwooterStateSystem`, `CorporateActionApplications`, `ThesisManager`, `LifeManager` (~5,300 lines of relocated, now-testable logic). Every step verified zero-behavior-change.
+Six new focused systems plus eight UI controllers extracted: `UIFormatter`, `LifeStateSystem`, `TwooterStateSystem`, `CorporateActionApplications`, `ThesisManager`, `LifeManager`, `UpgradesController`, `AcademyController`, `NetworkController`, `LifeController`, `CompanyController`, `SocialController`, `NewsController`, `StockController` (~20,000 lines of relocated, now-testable logic). Every step verified zero-behavior-change.
 Full review and rationale: [CODE_REVIEW_GOD_FILES.md](CODE_REVIEW_GOD_FILES.md).
 Working rules: zero behavior change per step; dict-in/dict-out at system boundaries for save compatibility; verify each step with a headless editor pass (`godot --headless -e --quit`, expect zero script errors) and the quick smoke test (`godot --headless --path . --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, expect `SMOKE_QUICK_OK`).
 
@@ -24,7 +24,20 @@ Working rules: zero behavior change per step; dict-in/dict-out at system boundar
 | 5b-10b | Life domain → `systems/LifeManager.gd` | ✅ Done 2026-06-11, smoke-verified (identical equity) |
 | 5b-11 | News archive dedup | ⏸ Deferred — single-writer confirmed (no desync risk today); fold into 5c-15 save migrations |
 | 5c Session 1 | Stability batch: refresh coalescer (13), advance-day phases (16), save migrations (15) | ✅ Done 2026-06-11, each task committed as its own checkpoint |
-| 5c Sessions 2..N | Per-app GameRoot controllers (12), CompanyRuntime rides along (14) | ⬜ Not started |
+| 5c Session 2 | Upgrades app controller extraction (12 first slice) | ✅ Done 2026-06-11, script + smoke verified |
+| 5c Session 3 | Academy app controller extraction (12 second slice) | ✅ Done 2026-06-11, script + smoke verified |
+| 5c Session 4 | Network app controller extraction (12 third slice) | ✅ Done 2026-06-11, script + smoke verified |
+| 5c Session 5 | Life app controller extraction (12 fourth slice) | ✅ Done 2026-06-12, editor + smoke verified |
+| 5c Session 6 | Company app controller extraction (12 fifth slice) | ✅ Done 2026-06-12, MCP + smoke verified |
+| 5c Session 7 | Social app controller extraction (12 sixth slice) | ✅ Done 2026-06-12, MCP + smoke verified |
+| 5c Session 8 | News app controller extraction (12 seventh slice) | ✅ Done 2026-06-12, MCP + smoke verified |
+| 5c Session 9 | Stock app controller extraction (12 final slice) | ✅ Done 2026-06-12, MCP + smoke verified |
+| 5c review | Independent 3-reviewer pass over the controller decomposition | ✅ Done 2026-06-12 — verdict: sound, no real bugs; see "Controller decomposition review" below |
+| Follow-up A | Manual click-through playtest of all 8 apps, then checkpoint commit | ⬜ Next (blocking the commit) |
+| Follow-up B | Warnings cleanup pass (shadowed `seed`/`size`/`theme`, unused vars/params, ternaries, false-positive signal warnings) | ⬜ Planned |
+| Follow-up C | Shared `UITheme` constants file (kill the 9 duplicated `COLOR_*` palettes) | ⬜ Planned |
+| Follow-up D | Controller-owned state (retire the manual `_sync_state_from_root`/`_sync_root_state` layer) | ⬜ Planned — largest follow-up, do per-controller |
+| 5c item 14 | Typed `CompanyRuntime` class, gradual callsite migration | ⬜ Planned |
 
 ---
 
@@ -136,22 +149,102 @@ Each task is its own git checkpoint. Baseline commit `16f15ac` holds the whole T
 ### Verification (Session 1)
 - Every task: headless editor pass clean + quick smoke `SMOKE_QUICK_OK normal_equity=94765318.11 days=3` byte-identical.
 
-## Tier 5c Sessions 2..N — NEXT UP: GameRoot per-app controllers (item 12)
+## Tier 5c Session 2 — Upgrades controller extraction, completed 2026-06-11
 
-GameRoot is still ~25,400 lines; this is the majority of the remaining problem and does NOT fit a 50% budget — each app is its own extraction comparable to or bigger than a whole 5b item, and UI code is riskier (node paths, signal wiring, scene files, visual verification needed).
+- **New file:** `scripts/ui/controllers/UpgradesController.gd` (319 lines). It owns Upgrades refresh, card construction, purchase dialog setup/styling, pending purchase state, and purchase confirmation.
+- `GameRoot.gd` keeps the existing `UpgradeWindow` scene nodes, desktop-window registration, app-open refresh hooks, and compatibility wrappers (`_refresh_upgrades`, `_ensure_upgrade_purchase_dialog`, `_style_upgrade_purchase_dialog`) that now delegate to the controller.
+- Behavior surface preserved: same `GameManager.get_upgrade_shop_snapshot()`, `GameManager.purchase_upgrade()`, toast messages, theme helpers, and perf labels (`_refresh_upgrades`, `_on_upgrade_purchase_confirmed`).
+- Size change: `GameRoot.gd` 25,393 → 25,190 lines in this session; controller pattern now proven on the smallest app.
+- Verification: MCP `validate_script` clean for `GameRoot.gd` and `UpgradesController.gd`; headless editor pass clean; quick smoke `SMOKE_QUICK_OK normal_equity=94765318.11 days=3`.
 
-**One app per session**, in this order:
-1. **Upgrades or Academy first** — smallest apps; proves the controller pattern (one scene + script per app, GameRoot shrinks toward window manager + signal router) cheaply.
-2. Then **Network, Life, Company, Social, News** in rough size order.
-3. **Stock app last** — biggest (trade workspace + key stats + broker views, likely 5–8k lines); benefits from a matured pattern.
+## Tier 5c Session 3 — Academy controller extraction, completed 2026-06-11
 
-Each app session: extract scene + controller, GameRoot keeps the window-management hooks, verify with editor pass + smoke + a manual visual check of that app in the running game (`get_editor_screenshot`/`get_game_screenshot` via godot-mcp-pro if the editor is open).
+- **New file:** `scripts/ui/controllers/AcademyController.gd` (1,614 lines). It owns Academy UI construction, selected category/section state, snapshots, lesson content rendering, glossary search, quiz option wiring, inline checks, and mark-read/next actions.
+- `GameRoot.gd` keeps release-lock gating, desktop-window registration, FTUE references, active-window styling/layout hooks, and compatibility delegates used by the smoke harness (`_build_academy_content_block`, `_style_academy_quiz_option_button`, `_style_academy_quiz_submit_button`).
+- Behavior surface preserved: same `GameManager.get_academy_snapshot()`, `mark_academy_section_read()`, `submit_academy_inline_check()`, `submit_academy_quiz()`, glossary search, guide markers, theme helpers, and release-lock behavior.
+- Size change: `GameRoot.gd` 25,190 → 23,817 lines in this session.
+- Verification: MCP `validate_script` clean for `GameRoot.gd` and `AcademyController.gd`; headless editor pass clean; quick smoke `SMOKE_QUICK_OK normal_equity=94765318.11 days=3`.
 
-### Rides along wherever there's room
+## Tier 5c Session 4 — Network controller extraction, completed 2026-06-11
 
-| # | Task | Est. cost | Notes |
+- **New file:** `scripts/ui/controllers/NetworkController.gd` (1,168 lines). It owns Network refresh, contacts/requests/journal list rendering, journal filters/details, relationship action button state, dynamic Network context UI, and Network action handlers.
+- `GameRoot.gd` keeps desktop-window registration, app-open refresh hooks, corporate meeting overlay ownership, shared Profile/News meeting helpers, visual theme hooks, and smoke-compatible delegates for old Network private method names.
+- Behavior surface preserved: same `GameManager.get_network_snapshot()`, meet/tip/request/referral/follow-up/source-check calls, corporate meeting handoff, toast messages, theme helpers, and perf labels.
+- Size change: `GameRoot.gd` 23,817 → 23,014 lines in this session.
+- Verification: MCP `validate_script` clean for `GameRoot.gd`, `NetworkController.gd`, `AcademyController.gd`, and `UpgradesController.gd`; headless editor pass clean; quick smoke `SMOKE_QUICK_OK normal_equity=94765318.11 days=3`.
+
+## Tier 5c Session 5 — Life controller extraction, completed 2026-06-12
+
+- **New file:** `scripts/ui/controllers/LifeController.gd` (535 lines). It owns Life app icon/window bootstrap, `LifeWidget` refresh and tab styling, FTUE Life guide bindings, the stress meter, and hospital/jail overlays.
+- `GameRoot.gd` keeps desktop-window registration, active-app routing, FTUE step evaluation state, global header refresh hooks, and compatibility delegates (`_refresh_life`, `_bind_life_guide_tabs`, `_refresh_stress_meter`, `_refresh_hospital_overlay`, `_refresh_jail_overlay`).
+- Behavior surface preserved: same `LifeWidget.gd` finance/property/car tab implementation, same stress-stage colors/tooltips, same hospital/jail advance-day buttons, and same guide markers.
+- Size change: `GameRoot.gd` 23,014 → 22,694 lines in this session. Life was already partly widgetized, so this slice removed the remaining root ownership rather than moving tab internals.
+- Verification: headless editor pass clean; quick smoke `SMOKE_QUICK_OK normal_equity=94765318.11 days=3`; `git diff --check` clean.
+
+## Tier 5c Session 6 — Company controller extraction, completed 2026-06-12
+
+- **New file:** `scripts/ui/controllers/CompanyController.gd` (368 lines). It owns Company app icon/window bootstrap, management snapshot rendering, controlled-company and agenda option state, and Set Agenda action handling.
+- `GameRoot.gd` keeps desktop-window registration, active-app routing, broader dashboard/news/network/trade refresh surfaces, corporate meeting overlays, and compatibility delegates (`_refresh_company`, `_refresh_company_app_availability`, `_selected_company_management_company_id`, `_selected_company_management_action_id`, `_on_company_request_pressed`).
+- Behavior surface preserved: same `GameManager.get_company_management_snapshot()`, `request_governance_control_action()`, agenda option metadata, toast text, and post-success refresh fan-out.
+- Size change: `GameRoot.gd` 22,694 → 22,488 lines in this session. Company is a small app shell; the heavier corporate-event/RUPSLB surfaces remain in GameRoot for a later boundary pass.
+- Verification: MCP `validate_script` clean for `GameRoot.gd` and `CompanyController.gd`; quick smoke `SMOKE_QUICK_OK normal_equity=94765318.11 days=3`; `git diff --check` clean.
+
+## Tier 5c Session 7 — Social controller extraction, completed 2026-06-12
+
+- **New file:** `scripts/ui/controllers/SocialController.gd` (2,995 lines). It owns the Twooter shell/feed/message UI, feed filters, right rail, account profile card, ticker tape, public reply composer, private message composer, Social capture payloads, and Social action handlers.
+- `GameRoot.gd` keeps desktop-window registration, active-app routing, global layout/theme hooks, News/Profile handoff wrappers, shared research-tray commit storage, and smoke-compatible delegates for old Social private method names.
+- Behavior surface preserved: same `GameManager.get_twooter_snapshot()`, post reply/like, follow, private message, research capture, Network refresh fan-out, guide markers, and Twooter styling. One state-sync bug caught by smoke (shared typed button arrays were being cleared during sync) was fixed by rebuilding controller-side arrays from root refs.
+- Size change: `GameRoot.gd` 22,488 → 20,339 lines in this session. Social was the first large UI-only controller extraction and validated the pattern used for News.
+- Verification: MCP `validate_script` clean for `GameRoot.gd` and `SocialController.gd`; quick smoke `SMOKE_QUICK_OK normal_equity=94765318.11 days=3`; `git diff --check` clean.
+
+## Tier 5c Session 8 — News controller extraction, completed 2026-06-12
+
+- **New file:** `scripts/ui/controllers/NewsController.gd` (1,700 lines). It owns the Market Papers shell/archive/detail UI, outlet buttons, archive filters, article cards, article detail layout, capture context menu, source-contact handoff, and linked corporate-meeting action state.
+- `GameRoot.gd` keeps desktop-window registration, active-app routing, broader refresh/theme hooks, corporate-action button creation, shared research-capture storage, and smoke-compatible delegates for old News private method names.
+- Behavior surface preserved: same `GameManager.get_news_snapshot()`, archive summary/detail calls, article-read tracking, network-contact discovery, research capture payloads, Twooter source handoff, corporate-meeting gating, and newspaper visual styling.
+- Size change: `GameRoot.gd` 20,339 → 19,349 lines in this session. News still has compatibility wrappers in root because other controllers and smoke tests call several old private helper names.
+- Verification: MCP `validate_script` clean for `GameRoot.gd` and `NewsController.gd`; quick smoke `SMOKE_QUICK_OK normal_equity=94765318.11 days=3`; `git diff --check` clean.
+
+## Tier 5c Session 9 — Stock controller extraction, completed 2026-06-12
+
+- **New file:** `scripts/ui/controllers/StockController.gd` (5,994 lines). It owns the Stockbot market surface: watchlist/all/portfolio stock lists, trade workspace refresh, order ticket, quote capture, key stats dashboard, profile/background/shareholder/management tables, broker flow, financial statements, corporate-action timeline, and Stockbot styling helpers.
+- `GameRoot.gd` keeps desktop/window routing, global refresh wiring, shared formatter helpers, debug/dashboard surfaces, Network/News/Profile handoff wrappers, and compatibility delegates for the old Stock private method names.
+- Behavior surface preserved: same `GameManager.get_stock_snapshot()`, watchlist mutations, order buy/sell calls, broker/key-stats/profile/financial/corporate-action research capture payloads, guide markers, Steam progress tab tracking, and cached company-detail hydration.
+- Size change: `GameRoot.gd` 19,349 → 16,076 lines in this session. This closes the per-app controller extraction track; the remaining work is now domain/runtime cleanup rather than another app split.
+- Verification: MCP `validate_script` clean for `GameRoot.gd` and `StockController.gd`; quick smoke `SMOKE_QUICK_OK normal_equity=94765318.11 days=3`; `git diff --check` clean.
+
+## Controller decomposition review — 2026-06-12
+
+Three independent reviewers (architecture/consistency, GameRoot-side bug hunt, StockController deep-dive) plus manual adjudication of every claimed bug.
+
+**Verdict: sound — no real bugs found.** Build health re-verified: headless editor pass clean, quick smoke byte-identical.
+
+What held up under scrutiny:
+- Refs-dict contracts consistent across all 8 controllers; no silent-null keys.
+- Spot-checked StockController's biggest functions against the `81f46ef` baseline: byte-for-byte moves, no logic drift.
+- The sync discipline is complete: Stock/Academy/Company/News/Social call `_sync_root_state()` at the end of `_sync_root_refs()`; Network syncs explicitly at every mutation site; Life owns no duplicated state (node refs only; its one shared flag writes through `_root.set()` immediately); Upgrades keeps only private state GameRoot never reads.
+- Signal wiring safe (one-time setup guards; rebuilt buttons reconnect by construction); capture payloads delegate to GameRoot's `_commit_pending_capture` rather than relying on state sync.
+- One reviewer claimed seven "real bugs" around state sync-back — **all seven dissolved under direct verification**. Recorded here so future sessions don't chase them.
+
+Known structural weaknesses (accepted for now, addressed by follow-ups below):
+1. Bidirectional state duplication kept consistent only by manual discipline — one forgotten `_sync_root_state()` in a future handler is a silent stale-state bug (→ Follow-up D).
+2. GameRoot invokes the StockController sync trio ~262 times, each pass copying 120+ properties — fine today, first suspect if UI ever feels sluggish.
+3. Each controller re-declares its own `COLOR_*` palette (~9 copies project-wide) (→ Follow-up C).
+4. All verification so far is headless; no human has clicked through the apps post-decomposition (→ Follow-up A).
+
+## Follow-up plan — context/usage-budget conscious
+
+Calibration to date: a 5b-style extraction ≈ 15–25% of a usage window; quick-win batches ≈ 10–15%. Order chosen so each step is independently committable and the budget can stop anywhere.
+
+| Step | Task | Est. cost | Why this order |
 |---|---|---|---|
-| 14 | **Typed `CompanyRuntime` class** (continue the Tier 4 `CampaignState`/`EventContext`/`CompanyProfile` pattern) with gradual callsite migration via a wrapper getter | ~20–25% total, incremental by design | Migrate a few of the ~40 callsites per session; safe to pause at any point. |
+| A | **Manual playtest + checkpoint commit.** Human clicks through all 8 apps (trade once, capture research from key stats/broker/news/social, buy an upgrade, open academy/life/company/network); then commit the whole decomposition as one checkpoint | ~5% (mostly human time) | Cheapest step, unblocks everything; nothing else should land before the decomposition is committed. |
+| B | **Warnings cleanup pass** — rename `seed`/`size`/`theme`/`wrap` shadowers, underscore unused params/vars, fix the 3 `INCOMPATIBLE_TERNARY`s, annotate the false-positive `UNUSED_SIGNAL`s | ~10–15% | Gets the Problems panel to zero so real regressions are visible during C/D. Commit per file-group. |
+| C | **Shared `UITheme` constants** — one `scripts/ui/UITheme.gd` (or systems/) holding the palette; controllers + GameRoot reference it; delete the 9 local copies | ~10% | Mechanical, verifiable by compile + smoke; do before D so D's diffs stay readable. |
+| D | **Controller-owned state** — per controller, move the duplicated `selected_*`/`current_*` vars to live ONLY in the controller; GameRoot reads via thin accessors; delete that controller's `_sync_state_from_root`/`_sync_root_state` pair | ~10–15% **per controller** (8 controllers; Stock last and largest) | The real fix for weakness #1. One controller per sitting, smoke + click-test that app, commit, stop anywhere. |
+| 14 | **Typed `CompanyRuntime`** (Tier 4 pattern) with wrapper getter, gradual callsite migration | ~20–25% total, incremental | Independent of A–D; can ride along any session with spare budget. |
+
+Single-session guidance: A+B+C fit one ~35–40% session comfortably. D is a multi-session track (like the app extractions were) — budget one or two controllers per session and never start a controller you can't finish and verify within the session.
 
 ## File inventory (Tier 5, all uncommitted)
 
@@ -163,11 +256,19 @@ Each app session: extract scene + controller, GameRoot keeps the window-manageme
 - `systems/ThesisManager.gd` (5b-10a, 1,050 lines) — GameManager-side thesis/research domain
 - `systems/LifeManager.gd` (5b-10b, 1,495 lines) — GameManager-side life orchestration
 - `systems/SaveMigrations.gd` (5c-15) — stepwise save-format migration
+- `scripts/ui/controllers/UpgradesController.gd` (5c Session 2, 319 lines) — Upgrades app controller
+- `scripts/ui/controllers/AcademyController.gd` (5c Session 3, 1,614 lines) — Academy app controller
+- `scripts/ui/controllers/NetworkController.gd` (5c Session 4, 1,168 lines) — Network app controller
+- `scripts/ui/controllers/LifeController.gd` (5c Session 5, 535 lines) — Life app shell, guide bindings, stress meter, hospital/jail overlays
+- `scripts/ui/controllers/CompanyController.gd` (5c Session 6, 368 lines) — Company app shell and governance agenda controls
+- `scripts/ui/controllers/SocialController.gd` (5c Session 7, 2,995 lines) — Twooter shell, feed, message UI, capture payloads, and Social actions
+- `scripts/ui/controllers/NewsController.gd` (5c Session 8, 1,700 lines) — Market Papers shell, archive/detail UI, article cards, capture payloads, and News actions
+- `scripts/ui/controllers/StockController.gd` (5c Session 9, 5,994 lines) — Stockbot market lists, trade workspace, order ticket, key stats, broker, profile, financials, and corporate-action UI
 
 **Modified:**
 - `autoloads/RunState.gd` — 8,026 → 6,432 lines (delegates + const aliases)
 - `autoloads/GameManager.gd` — ~9,447 → 7,063 lines (delegates, debug guards, formatter delegation)
-- `scripts/ui/GameRoot.gd` — debug-overlay gating, capture-payload dict, app-button binds, formatter delegation
+- `scripts/ui/GameRoot.gd` — debug-overlay gating, capture-payload dict, app-button binds, formatter delegation, Upgrades + Academy + Network + Life + Company + Social + News + Stock controller delegation
 - `scripts/ui/widgets/LifeWidget.gd`, `ThesisBoardWidget.gd`, `TradeWorkspaceWidget.gd` — formatter delegation
 
 **Earlier tiers (1–4):** new `systems/CampaignState.gd`, `systems/EventContext.gd`, `systems/CompanyProfile.gd`; constants/typed refactors in `systems/MarketSimulator.gd`, `systems/GorenganCampaignSystem.gd`

@@ -11,11 +11,14 @@ const APP_ID_UPGRADES := "upgrades"
 const APP_ID_THESIS := "thesis"
 const APP_ID_LIFE := "life"
 const APP_ID_COMPANY := "company"
-const NETWORK_FOLLOWUP_ACTIONS := {
-	0: "thank",
-	1: "ask_why",
-	2: "challenge"
-}
+const ACADEMY_CONTROLLER_SCRIPT := preload("res://scripts/ui/controllers/AcademyController.gd")
+const COMPANY_CONTROLLER_SCRIPT := preload("res://scripts/ui/controllers/CompanyController.gd")
+const NEWS_CONTROLLER_SCRIPT := preload("res://scripts/ui/controllers/NewsController.gd")
+const SOCIAL_CONTROLLER_SCRIPT := preload("res://scripts/ui/controllers/SocialController.gd")
+const LIFE_CONTROLLER_SCRIPT := preload("res://scripts/ui/controllers/LifeController.gd")
+const NETWORK_CONTROLLER_SCRIPT := preload("res://scripts/ui/controllers/NetworkController.gd")
+const UPGRADES_CONTROLLER_SCRIPT := preload("res://scripts/ui/controllers/UpgradesController.gd")
+const STOCK_CONTROLLER_SCRIPT := preload("res://scripts/ui/controllers/StockController.gd")
 const STOCK_APP_FONT_SIZE := 14
 const DEFAULT_APP_FONT_SIZE := 14
 const APP_FONT_CANDIDATE_PATHS := [
@@ -317,7 +320,6 @@ const KEY_STATS_METRIC_VALUE_WIDTH := 74.0
 const RUPSLB_MEETING_OVERLAY_SCRIPT = preload("res://scripts/ui/widgets/RupslbMeetingOverlay.gd")
 const DASHBOARD_SPARKLINE_SCRIPT = preload("res://scripts/ui/widgets/DashboardSparklineCanvas.gd")
 const THESIS_BOARD_WIDGET_SCRIPT = preload("res://scripts/ui/widgets/ThesisBoardWidget.gd")
-const LIFE_WIDGET_SCRIPT = preload("res://scripts/ui/widgets/LifeWidget.gd")
 
 var selected_company_id: String = ""
 var displayed_company_ids: Array = []
@@ -376,7 +378,8 @@ var watchlist_picker_dialog: ConfirmationDialog = null
 var watchlist_picker_list: ItemList = null
 var upgrade_purchase_dialog: ConfirmationDialog = null
 var upgrade_purchase_body_label: Label = null
-var pending_upgrade_track_id: String = ""
+var upgrades_controller = null
+var life_controller = null
 var console_overlay: Control = null
 var console_panel: PanelContainer = null
 var console_title_label: Label = null
@@ -384,6 +387,7 @@ var console_hint_label: Label = null
 var console_input: LineEdit = null
 var console_status_label: Label = null
 var selected_lots: int = 1
+var stock_controller = null
 var active_section_id: String = "dashboard"
 var active_app_id: String = APP_ID_DESKTOP
 var status_message: String = "Ready."
@@ -446,6 +450,9 @@ var company_agenda_label: Label = null
 var company_agenda_option: OptionButton = null
 var company_request_button: Button = null
 var company_management_snapshot: Dictionary = {}
+var company_controller = null
+var news_controller = null
+var social_controller = null
 var cached_app_font: Font = null
 var has_checked_app_font: bool = false
 var cached_dashboard_title_font: Font = null
@@ -482,6 +489,8 @@ var selected_network_journal_filter: String = "all"
 var selected_academy_category_id: String = "mindset"
 var selected_academy_section_id: String = "survival_mindset"
 var academy_quiz_option_buttons: Dictionary = {}
+var network_controller = null
+var academy_controller = null
 var expanded_social_thread_ids: Dictionary = {}
 var selected_social_account_id: String = ""
 var selected_social_feed_filter_id: String = SOCIAL_FEED_FILTER_ALL
@@ -994,10 +1003,85 @@ var profile_management_title_label: Label = null
 var profile_management_rows: VBoxContainer = null
 
 
+func _ensure_stock_controller() -> void:
+	if stock_controller != null:
+		return
+	stock_controller = STOCK_CONTROLLER_SCRIPT.new()
+	stock_controller.setup(self)
+
+func _ensure_network_controller() -> void:
+	if network_controller != null:
+		return
+	network_controller = NETWORK_CONTROLLER_SCRIPT.new()
+	network_controller.setup(self, {
+		"window": network_window,
+		"window_body": network_window_body,
+		"title_label": network_title_label,
+		"recognition_label": network_recognition_label,
+		"summary_label": network_summary_label,
+		"list_panel": network_list_panel,
+		"detail_panel": network_detail_panel,
+		"contacts_label": network_contacts_label,
+		"contacts_list": network_contacts_list,
+		"requests_label": network_requests_label,
+		"requests_list": network_requests_list,
+		"contact_name_label": network_contact_name_label,
+		"contact_meta_label": network_contact_meta_label,
+		"contact_body_label": network_contact_body_label,
+		"meet_button": network_meet_button,
+		"tip_button": network_tip_button,
+		"request_button": network_request_button,
+		"referral_button": network_referral_button
+	})
+
+
+func _ensure_upgrades_controller() -> void:
+	if upgrades_controller != null:
+		return
+	upgrades_controller = UPGRADES_CONTROLLER_SCRIPT.new()
+	upgrades_controller.setup(self, {
+		"window": upgrade_window,
+		"window_body": upgrade_window_body,
+		"title_label": upgrade_title_label,
+		"cash_label": upgrade_cash_label,
+		"summary_label": upgrade_summary_label,
+		"cards_vbox": upgrade_cards_vbox
+	})
+
+
+func _ensure_life_controller() -> void:
+	if life_controller != null:
+		return
+	life_controller = LIFE_CONTROLLER_SCRIPT.new()
+	life_controller.setup(self)
+
+
+func _ensure_company_controller() -> void:
+	if company_controller != null:
+		return
+	company_controller = COMPANY_CONTROLLER_SCRIPT.new()
+	company_controller.setup(self)
+
+
+func _ensure_news_controller() -> void:
+	if news_controller != null:
+		return
+	news_controller = NEWS_CONTROLLER_SCRIPT.new()
+	news_controller.setup(self)
+
+
+func _ensure_social_controller() -> void:
+	if social_controller != null:
+		return
+	social_controller = SOCIAL_CONTROLLER_SCRIPT.new()
+	social_controller.setup(self)
+
+
 func _ready() -> void:
 	_ensure_ftue_overlay()
 	_ensure_first_hour_guide_ui()
 	_ensure_watchlist_picker_dialog()
+	_ensure_upgrades_controller()
 	_ensure_upgrade_purchase_dialog()
 	_ensure_settings_dialog()
 	_ensure_bankruptcy_overlay()
@@ -1015,6 +1099,7 @@ func _ready() -> void:
 	_ensure_thesis_ui()
 	_ensure_life_ui()
 	_ensure_company_ui()
+	_ensure_network_controller()
 	_ensure_corporate_action_ui()
 	_ensure_news_newspaper_ui()
 	_ensure_social_feed_ui()
@@ -1093,22 +1178,6 @@ func _ready() -> void:
 	news_detail_hint_label.gui_input.connect(_on_news_source_hint_gui_input)
 	news_archive_year_option.item_selected.connect(_on_news_archive_year_selected)
 	news_archive_month_option.item_selected.connect(_on_news_archive_month_selected)
-	network_contacts_list.item_selected.connect(_on_network_contact_selected)
-	network_requests_list.item_selected.connect(_on_network_request_selected)
-	if network_journal_list != null:
-		network_journal_list.item_selected.connect(_on_network_journal_selected)
-	if academy_section_list != null:
-		academy_section_list.item_selected.connect(_on_academy_section_selected)
-	if academy_mark_read_button != null:
-		academy_mark_read_button.pressed.connect(_on_academy_mark_read_pressed)
-	if academy_next_button != null:
-		academy_next_button.pressed.connect(_on_academy_next_pressed)
-	if academy_glossary_search_input != null:
-		academy_glossary_search_input.text_changed.connect(_on_academy_glossary_search_changed)
-	network_meet_button.pressed.connect(_on_network_meet_pressed)
-	network_tip_button.pressed.connect(_on_network_tip_pressed)
-	network_request_button.pressed.connect(_on_network_request_pressed)
-	network_referral_button.pressed.connect(_on_network_referral_pressed)
 	profile_meet_contact_button.pressed.connect(_on_profile_meet_contact_pressed)
 	lot_spin_box.value_changed.connect(_on_lot_size_changed)
 	order_ticket_toggle_button.pressed.connect(_on_order_ticket_toggle_pressed)
@@ -1270,28 +1339,11 @@ func _apply_compact_layout() -> void:
 
 
 func _apply_trade_layout_ratios() -> void:
-	trade_split.add_theme_constant_override("separation", 4)
-	main_trade_split.add_theme_constant_override("separation", 4)
-	watchlist_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	watchlist_panel.size_flags_stretch_ratio = TRADE_LEFT_SECTION_RATIO
-	main_trade_split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	main_trade_split.size_flags_stretch_ratio = TRADE_CENTER_SECTION_RATIO + TRADE_RIGHT_SECTION_RATIO
-	work_area_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	order_ticket_toggle_button.custom_minimum_size = Vector2(ORDER_TICKET_TOGGLE_WIDTH, 0)
-	order_ticket_toggle_button.visible = true
-	if order_ticket_collapsed:
-		work_area_panel.size_flags_stretch_ratio = TRADE_CENTER_SECTION_RATIO + TRADE_RIGHT_SECTION_RATIO
-		action_panel.visible = false
-		action_panel.size_flags_horizontal = Control.SIZE_FILL
-		action_panel.size_flags_stretch_ratio = 0.0
-	else:
-		work_area_panel.size_flags_stretch_ratio = TRADE_CENTER_SECTION_RATIO
-		action_panel.visible = true
-		action_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		action_panel.size_flags_stretch_ratio = TRADE_RIGHT_SECTION_RATIO
-	_refresh_order_ticket_toggle_state()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._apply_trade_layout_ratios()
+	stock_controller._sync_root_refs()
 func _apply_dashboard_perk_visibility() -> void:
 	pass
 
@@ -1328,85 +1380,36 @@ func _update_responsive_layout() -> void:
 
 
 func _remove_financial_and_broker_helper_text() -> void:
-	if financials_year_label != null:
-		financials_year_label.text = ""
-		financials_year_label.visible = false
-	if broker_summary_label != null:
-		broker_summary_label.text = ""
-		broker_summary_label.visible = false
-	if broker_meter_label != null:
-		broker_meter_label.text = ""
-		broker_meter_label.visible = false
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._remove_financial_and_broker_helper_text()
+	stock_controller._sync_root_refs()
 func _ensure_broker_range_controls() -> void:
-	if broker_net_toggle == null:
-		return
-	var controls_row: HBoxContainer = broker_net_toggle.get_parent() as HBoxContainer
-	if controls_row == null:
-		return
-	broker_range_row = controls_row.get_node_or_null("BrokerRangeRow") as HBoxContainer
-	if broker_range_row == null:
-		broker_range_row = HBoxContainer.new()
-		broker_range_row.name = "BrokerRangeRow"
-		broker_range_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		broker_range_row.add_theme_constant_override("separation", 4)
-		controls_row.add_child(broker_range_row)
-		controls_row.move_child(broker_range_row, 0)
-	broker_range_buttons.clear()
-	for range_value in GameManager.get_broker_range_catalog():
-		if typeof(range_value) != TYPE_DICTIONARY:
-			continue
-		var range_definition: Dictionary = range_value
-		var range_id: String = str(range_definition.get("id", ""))
-		if range_id.is_empty():
-			continue
-		var button_name: String = _broker_range_button_name(range_id)
-		var button: Button = broker_range_row.get_node_or_null(button_name) as Button
-		if button == null:
-			button = Button.new()
-			button.name = button_name
-			button.text = str(range_definition.get("label", range_id.to_upper()))
-			button.toggle_mode = true
-			button.custom_minimum_size = Vector2(40, 28)
-			button.focus_mode = Control.FOCUS_NONE
-			button.tooltip_text = "Show %s broker flow." % str(range_definition.get("label", range_id.to_upper()))
-			button.pressed.connect(_on_broker_range_pressed.bind(range_id))
-			broker_range_row.add_child(button)
-		broker_range_buttons[range_id] = button
-	_refresh_broker_range_buttons()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._ensure_broker_range_controls()
+	stock_controller._sync_root_refs()
 func _broker_range_button_name(range_id: String) -> String:
-	return "BrokerRange%sButton" % range_id.to_upper()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._broker_range_button_name(range_id)
+	stock_controller._sync_root_refs()
+	return result
 func _refresh_broker_range_buttons() -> void:
-	for range_id_value in broker_range_buttons.keys():
-		var range_id: String = str(range_id_value)
-		var button: Button = broker_range_buttons.get(range_id, null) as Button
-		if button == null:
-			continue
-		var is_selected: bool = range_id == selected_broker_range_id
-		button.set_pressed_no_signal(is_selected)
-		UiTheme.style_tab_button(button, "terminal_tab", is_selected, {"radius": 0})
-		_apply_font_override_to_control(button, 12, _get_app_font())
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_broker_range_buttons()
+	stock_controller._sync_root_refs()
 func _on_broker_range_pressed(range_id: String) -> void:
-	if range_id.is_empty():
-		return
-	selected_broker_range_id = range_id
-	_refresh_broker_range_buttons()
-	if current_trade_snapshot.is_empty():
-		_refresh_broker_table({})
-		trade_workspace_broker_cache_key = ""
-		return
-	var broker_flow: Dictionary = _broker_range_flow_for_snapshot(current_trade_snapshot)
-	_refresh_broker_table(broker_flow)
-	trade_workspace_broker_cache_key = _trade_workspace_broker_snapshot_key(current_trade_snapshot)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_broker_range_pressed(range_id)
+	stock_controller._sync_root_refs()
 func _style_dashboard_calendar_grid() -> void:
 	if dashboard_calendar_week_header != null:
 		dashboard_calendar_week_header.columns = 7
@@ -1616,67 +1619,18 @@ func _ensure_dashboard_broker_flow_ui() -> void:
 
 
 func _ensure_key_stats_dashboard_ui() -> void:
-	if key_stats_dashboard_grid != null:
-		return
-	if key_stats_panel == null:
-		return
-	var key_stats_vbox: VBoxContainer = key_stats_panel.get_node_or_null("KeyStatsMargin/KeyStatsVBox") as VBoxContainer
-	if key_stats_vbox == null:
-		return
-	var key_stats_scroll: ScrollContainer = key_stats_panel.get_parent() as ScrollContainer
-	if key_stats_scroll != null:
-		key_stats_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	var old_title: Control = key_stats_vbox.get_node_or_null("KeyStatsTitle") as Control
-	if old_title != null:
-		old_title.visible = false
-	key_stats_financial_label.visible = false
-	financial_history_summary_label.visible = false
-	var financial_history_table: Control = key_stats_vbox.get_node_or_null("FinancialHistoryTable") as Control
-	if financial_history_table != null:
-		financial_history_table.visible = false
-
-	key_stats_dashboard_grid = GridContainer.new()
-	key_stats_dashboard_grid.name = "KeyStatsDashboardGrid"
-	key_stats_dashboard_grid.columns = 3
-	key_stats_dashboard_grid.custom_minimum_size = Vector2(KEY_STATS_DASHBOARD_DESKTOP_WIDTH, 0)
-	key_stats_dashboard_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	key_stats_dashboard_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	key_stats_dashboard_grid.add_theme_constant_override("h_separation", 12)
-	key_stats_dashboard_grid.add_theme_constant_override("v_separation", 12)
-	key_stats_vbox.add_child(key_stats_dashboard_grid)
-
-	var left_column: VBoxContainer = _build_key_stats_dashboard_column("KeyStatsLeftColumn")
-	var center_column: VBoxContainer = _build_key_stats_dashboard_column("KeyStatsCenterColumn")
-	var right_column: VBoxContainer = _build_key_stats_dashboard_column("KeyStatsRightColumn")
-	key_stats_dashboard_columns = {
-		"left": left_column,
-		"center": center_column,
-		"right": right_column
-	}
-
-	_build_key_stats_card("current_valuation", "Current Valuation", "KeyStatsCurrentValuationCard", "KeyStatsCurrentValuationRows", left_column)
-	_build_key_stats_card("per_share", "Per Share", "KeyStatsPerShareCard", "KeyStatsPerShareRows", left_column)
-	_build_key_stats_card("dividend", "Dividend", "KeyStatsDividendCard", "KeyStatsDividendRows", left_column)
-	_build_key_stats_metric_card(center_column)
-	_build_key_stats_card("profitability", "Profitability", "KeyStatsProfitabilityCard", "KeyStatsProfitabilityRows", center_column)
-	_build_key_stats_card("income_statement", "Income Statement", "KeyStatsIncomeStatementCard", "KeyStatsIncomeStatementRows", right_column)
-	_build_key_stats_card("balance_sheet", "Balance Sheet", "KeyStatsBalanceSheetCard", "KeyStatsBalanceSheetRows", right_column)
-	_build_key_stats_card("cash_flow", "Cash Flow Statement", "KeyStatsCashFlowStatementCard", "KeyStatsCashFlowStatementRows", right_column)
-	_style_key_stats_dashboard_ui()
-	_update_key_stats_dashboard_layout()
-	_refresh_key_stats_dashboard({})
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._ensure_key_stats_dashboard_ui()
+	stock_controller._sync_root_refs()
 func _build_key_stats_dashboard_column(column_name: String) -> VBoxContainer:
-	var column := VBoxContainer.new()
-	column.name = column_name
-	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	column.size_flags_vertical = Control.SIZE_FILL
-	column.add_theme_constant_override("separation", 12)
-	key_stats_dashboard_grid.add_child(column)
-	return column
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: VBoxContainer = stock_controller._build_key_stats_dashboard_column(column_name)
+	stock_controller._sync_root_refs()
+	return result
 func _build_key_stats_card(
 	card_id: String,
 	title: String,
@@ -1684,278 +1638,91 @@ func _build_key_stats_card(
 	rows_name: String,
 	parent_node: Node
 ) -> VBoxContainer:
-	var card: PanelContainer = PanelContainer.new()
-	card.name = card_name
-	card.custom_minimum_size = Vector2(250, 0)
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.size_flags_vertical = Control.SIZE_FILL
-	parent_node.add_child(card)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 10)
-	card.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 7)
-	margin.add_child(vbox)
-
-	var title_label := Label.new()
-	title_label.name = "%sTitle" % card_name
-	title_label.text = title
-	title_label.add_theme_color_override("font_color", COLOR_STOCKBOT_TEXT)
-	title_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 2)
-	vbox.add_child(title_label)
-
-	var separator := HSeparator.new()
-	vbox.add_child(separator)
-
-	var rows := VBoxContainer.new()
-	rows.name = rows_name
-	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rows.add_theme_constant_override("separation", 5)
-	vbox.add_child(rows)
-	key_stats_card_rows[card_id] = rows
-	return rows
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: VBoxContainer = stock_controller._build_key_stats_card(card_id, title, card_name, rows_name, parent_node)
+	stock_controller._sync_root_refs()
+	return result
 func _build_key_stats_metric_card(parent_node: Node) -> void:
-	var card: PanelContainer = PanelContainer.new()
-	card.name = "KeyStatsMetricTableCard"
-	card.custom_minimum_size = Vector2(280, 0)
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	parent_node.add_child(card)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 8)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 10)
-	card.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 7)
-	margin.add_child(vbox)
-
-	var button_row := HBoxContainer.new()
-	button_row.name = "KeyStatsMetricPillRow"
-	button_row.add_theme_constant_override("separation", 6)
-	vbox.add_child(button_row)
-
-	var metrics := [
-		{"id": KEY_STATS_METRIC_NET_INCOME, "label": "Net Income", "name": "KeyStatsMetricNetIncomeButton"},
-		{"id": KEY_STATS_METRIC_EPS, "label": "EPS", "name": "KeyStatsMetricEpsButton"},
-		{"id": KEY_STATS_METRIC_REVENUE, "label": "Revenue", "name": "KeyStatsMetricRevenueButton"}
-	]
-	for metric_value in metrics:
-		var metric: Dictionary = metric_value
-		var button := Button.new()
-		button.name = str(metric.get("name", ""))
-		button.text = str(metric.get("label", ""))
-		button.custom_minimum_size = Vector2(72, 32)
-		button.pressed.connect(_on_key_stats_metric_button_pressed.bind(str(metric.get("id", ""))))
-		button_row.add_child(button)
-		key_stats_metric_buttons[str(metric.get("id", ""))] = button
-
-	var separator := HSeparator.new()
-	vbox.add_child(separator)
-
-	key_stats_metric_table_rows = VBoxContainer.new()
-	key_stats_metric_table_rows.name = "KeyStatsMetricTableRows"
-	key_stats_metric_table_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	key_stats_metric_table_rows.add_theme_constant_override("separation", 5)
-	vbox.add_child(key_stats_metric_table_rows)
-
-	var footer_separator := HSeparator.new()
-	vbox.add_child(footer_separator)
-
-	key_stats_metric_footer_rows = VBoxContainer.new()
-	key_stats_metric_footer_rows.name = "KeyStatsMetricFooterRows"
-	key_stats_metric_footer_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	key_stats_metric_footer_rows.add_theme_constant_override("separation", 5)
-	vbox.add_child(key_stats_metric_footer_rows)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._build_key_stats_metric_card(parent_node)
+	stock_controller._sync_root_refs()
 func _style_key_stats_dashboard_ui() -> void:
-	if key_stats_dashboard_grid == null:
-		return
-	_style_key_stats_card_tree(key_stats_dashboard_grid)
-	_refresh_key_stats_metric_button_styles()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._style_key_stats_dashboard_ui()
+	stock_controller._sync_root_refs()
 func _style_key_stats_card_tree(node: Node) -> void:
-	for child in node.get_children():
-		var card: PanelContainer = child as PanelContainer
-		if card != null:
-			_style_stockbot_panel(card, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE, 6, 1)
-		_style_key_stats_card_tree(child)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._style_key_stats_card_tree(node)
+	stock_controller._sync_root_refs()
 func _update_key_stats_dashboard_layout() -> void:
-	if key_stats_dashboard_grid == null:
-		return
-	var viewport_width: float = get_viewport_rect().size.x
-	var content_width: float = 0.0
-	if work_area_panel != null:
-		content_width = work_area_panel.get_rect().size.x
-	content_width = max(content_width, viewport_width - 520.0)
-	if viewport_width >= 1200.0 or content_width >= KEY_STATS_DASHBOARD_DESKTOP_WIDTH:
-		key_stats_dashboard_grid.columns = 3
-		key_stats_dashboard_grid.custom_minimum_size = Vector2(KEY_STATS_DASHBOARD_DESKTOP_WIDTH, 0)
-	elif content_width >= KEY_STATS_DASHBOARD_TWO_COLUMN_WIDTH:
-		key_stats_dashboard_grid.columns = 2
-		key_stats_dashboard_grid.custom_minimum_size = Vector2.ZERO
-	else:
-		key_stats_dashboard_grid.columns = 1
-		key_stats_dashboard_grid.custom_minimum_size = Vector2.ZERO
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._update_key_stats_dashboard_layout()
+	stock_controller._sync_root_refs()
 func _on_key_stats_metric_button_pressed(metric_id: String) -> void:
-	if metric_id.is_empty() or selected_key_stats_metric == metric_id:
-		return
-	selected_key_stats_metric = metric_id
-	_refresh_key_stats_metric_button_styles()
-	_refresh_key_stats_dashboard(current_trade_snapshot)
-	trade_workspace_key_stats_cache_key = _trade_workspace_key_stats_snapshot_key(current_trade_snapshot)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_key_stats_metric_button_pressed(metric_id)
+	stock_controller._sync_root_refs()
 func _refresh_key_stats_metric_button_styles() -> void:
-	for metric_id_value in key_stats_metric_buttons.keys():
-		var metric_id: String = str(metric_id_value)
-		var button: Button = key_stats_metric_buttons.get(metric_id, null) as Button
-		if button == null:
-			continue
-		UiTheme.style_tab_button(button, "terminal_tab", metric_id == selected_key_stats_metric, {"radius": 0})
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_key_stats_metric_button_styles()
+	stock_controller._sync_root_refs()
 func _refresh_key_stats_dashboard(snapshot: Dictionary) -> void:
-	if key_stats_dashboard_grid == null:
-		return
-
-	if snapshot.is_empty():
-		var empty_rows: Array = [{"label": "Status", "value": "Pick a stock"}]
-		_refresh_key_stats_rows("current_valuation", empty_rows)
-		_refresh_key_stats_rows("per_share", empty_rows)
-		_refresh_key_stats_rows("dividend", empty_rows)
-		_refresh_key_stats_rows("profitability", empty_rows)
-		_refresh_key_stats_rows("income_statement", empty_rows)
-		_refresh_key_stats_rows("balance_sheet", empty_rows)
-		_refresh_key_stats_rows("cash_flow", empty_rows)
-		_refresh_key_stats_metric_table({}, {})
-		return
-
-	var context: Dictionary = _build_key_stats_context(snapshot)
-	_refresh_key_stats_rows("current_valuation", _build_key_stats_valuation_rows(context))
-	_refresh_key_stats_rows("per_share", _build_key_stats_per_share_rows(context))
-	_refresh_key_stats_rows("dividend", _build_key_stats_dividend_rows(context))
-	_refresh_key_stats_rows("profitability", _build_key_stats_profitability_rows(context))
-	_refresh_key_stats_rows("income_statement", _build_key_stats_income_statement_rows(context))
-	_refresh_key_stats_rows("balance_sheet", _build_key_stats_balance_sheet_rows(context))
-	_refresh_key_stats_rows("cash_flow", _build_key_stats_cash_flow_rows(context))
-	_refresh_key_stats_metric_table(snapshot, context)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_key_stats_dashboard(snapshot)
+	stock_controller._sync_root_refs()
 func _refresh_key_stats_rows(card_id: String, rows: Array) -> void:
-	var container: VBoxContainer = key_stats_card_rows.get(card_id, null) as VBoxContainer
-	if container == null:
-		return
-	_refresh_key_stats_rows_in_container(container, rows)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_key_stats_rows(card_id, rows)
+	stock_controller._sync_root_refs()
 func _refresh_key_stats_rows_in_container(container: VBoxContainer, rows: Array) -> void:
-	_clear_key_stats_container(container)
-	for row_value in rows:
-		var row: Dictionary = row_value
-		container.add_child(_build_key_stats_value_row(
-			str(row.get("label", "")),
-			str(row.get("value", "-")),
-			row.get("color", COLOR_STOCKBOT_TEXT),
-			row
-		))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_key_stats_rows_in_container(container, rows)
+	stock_controller._sync_root_refs()
 func _clear_key_stats_container(container: VBoxContainer) -> void:
-	for child in container.get_children():
-		container.remove_child(child)
-		child.queue_free()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._clear_key_stats_container(container)
+	stock_controller._sync_root_refs()
 func _build_key_stats_value_row(label_text: String, value_text: String, value_color: Color = COLOR_STOCKBOT_TEXT, source_row: Dictionary = {}) -> Control:
-	var row := HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 8)
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	var capturable: bool = _key_stats_row_is_capturable(label_text, value_text)
-	row.tooltip_text = "Click to open research actions." if capturable else ""
-	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if capturable else Control.CURSOR_ARROW
-	row.gui_input.connect(_on_key_stats_value_row_gui_input.bind(source_row.duplicate(true), label_text, value_text))
-
-	var label := Label.new()
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.text = label_text
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_color_override("font_color", COLOR_STOCKBOT_MUTED)
-	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE, _get_app_font())
-	row.add_child(label)
-
-	var value := Label.new()
-	value.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	value.text = value_text
-	value.custom_minimum_size = Vector2(KEY_STATS_ROW_VALUE_WIDTH, 0)
-	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	value.clip_text = true
-	value.add_theme_color_override("font_color", value_color)
-	_apply_font_override_to_control(value, DEFAULT_APP_FONT_SIZE, _get_app_font())
-	row.add_child(value)
-	return row
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Control = stock_controller._build_key_stats_value_row(label_text, value_text, value_color, source_row)
+	stock_controller._sync_root_refs()
+	return result
 func _on_key_stats_value_row_gui_input(event: InputEvent, source_row: Dictionary, label_text: String, value_text: String) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var mouse_event := event as InputEventMouseButton
-	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
-		return
-	if not _key_stats_row_is_capturable(label_text, value_text):
-		return
-	if selected_company_id.is_empty():
-		_show_toast("Pick a stock before capturing research.", false)
-		return
-	var capture_payload: Dictionary = {
-		"source_type": "key_stats",
-		"company_id": selected_company_id,
-		"label": label_text,
-		"value": value_text,
-		"detail": str(source_row.get("detail", "")),
-		"source_id": _node_token(label_text)
-	}
-	if source_row.has("category"):
-		capture_payload["category"] = str(source_row.get("category", ""))
-	if source_row.has("raw_value"):
-		capture_payload["raw_value"] = float(source_row.get("raw_value", 0.0))
-	pending_capture_payloads["key_stats"] = capture_payload
-	_show_key_stats_capture_menu(mouse_event.global_position)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_key_stats_value_row_gui_input(event, source_row, label_text, value_text)
+	stock_controller._sync_root_refs()
 func _show_key_stats_capture_menu(global_position: Vector2) -> void:
-	if key_stats_capture_menu == null:
-		key_stats_capture_menu = PopupMenu.new()
-		key_stats_capture_menu.name = "KeyStatsCaptureContextMenu"
-		key_stats_capture_menu.id_pressed.connect(_on_key_stats_capture_menu_id_pressed)
-		add_child(key_stats_capture_menu)
-	key_stats_capture_menu.clear()
-	key_stats_capture_menu.add_item("Add to Research Tray", 1)
-	key_stats_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
-	key_stats_capture_menu.popup()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._show_key_stats_capture_menu(global_position)
+	stock_controller._sync_root_refs()
 func _commit_pending_capture(kind: String, id: int) -> void:
 	var payload: Dictionary = pending_capture_payloads.get(kind, {})
 	if id != 1 or payload.is_empty():
@@ -1966,349 +1733,87 @@ func _commit_pending_capture(kind: String, id: int) -> void:
 
 
 func _on_key_stats_capture_menu_id_pressed(id: int) -> void:
-	_commit_pending_capture("key_stats", id)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_key_stats_capture_menu_id_pressed(id)
+	stock_controller._sync_root_refs()
 func _key_stats_row_is_capturable(label_text: String, value_text: String) -> bool:
-	if selected_company_id.is_empty():
-		return false
-	var label_lower: String = label_text.to_lower()
-	if label_lower in ["status", "period"] or label_lower.begins_with("q"):
-		return false
-	var value_clean: String = value_text.strip_edges()
-	if value_clean.is_empty() or value_clean == "-" or value_clean.to_lower() in ["n/a", "na"]:
-		return false
-	if label_lower.find("record / pay") != -1:
-		return false
-	return true
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: bool = stock_controller._key_stats_row_is_capturable(label_text, value_text)
+	stock_controller._sync_root_refs()
+	return result
 func _build_key_stats_context(snapshot: Dictionary) -> Dictionary:
-	var financials: Dictionary = snapshot.get("financials", {})
-	var financial_history: Array = snapshot.get("financial_history", [])
-	var financial_statement_snapshot: Dictionary = snapshot.get("financial_statement_snapshot", {})
-	var selected_period: Dictionary = {}
-	if not financial_statement_snapshot.is_empty():
-		selected_period = _selected_statement_period(financial_statement_snapshot)
-	var latest_quarters: Array = _key_stats_latest_quarters(financial_statement_snapshot, 4)
-	if selected_period.is_empty() and not latest_quarters.is_empty():
-		selected_period = latest_quarters[0]
-
-	var latest_history: Dictionary = _key_stats_latest_history_entry(financial_history)
-	var current_price: float = max(float(snapshot.get("current_price", snapshot.get("previous_close", 0.0))), 0.0)
-	var shares_outstanding: float = max(float(financials.get("shares_outstanding", snapshot.get("shares_outstanding", 0.0))), 0.0)
-	var statement_shares: float = _key_stats_statement_value_from_period(selected_period, "balance_sheet", "shares_outstanding")
-	if shares_outstanding <= 0.0 and statement_shares > 0.0:
-		shares_outstanding = statement_shares
-
-	var market_cap: float = max(float(financials.get("market_cap", 0.0)), 0.0)
-	if market_cap <= 0.0 and shares_outstanding > 0.0 and current_price > 0.0:
-		market_cap = current_price * shares_outstanding
-
-	var revenue_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "income_statement", "revenue", float(financials.get("revenue", latest_history.get("revenue", 0.0))))
-	var net_income_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "income_statement", "net_income", float(financials.get("net_income", latest_history.get("net_income", 0.0))))
-	var gross_profit_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "income_statement", "gross_profit", max(revenue_ttm * 0.25, net_income_ttm))
-	var operating_income_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "income_statement", "operating_income", net_income_ttm * 1.18)
-	var income_before_tax_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "income_statement", "income_before_tax", net_income_ttm * 1.22)
-	var ebitda_ttm: float = operating_income_ttm + max(revenue_ttm * 0.035, 0.0)
-
-	var current_assets: float = _key_stats_statement_value_from_period(selected_period, "balance_sheet", "current_assets")
-	var total_assets: float = _key_stats_statement_value_from_period(selected_period, "balance_sheet", "total_assets")
-	var current_liabilities: float = _key_stats_statement_value_from_period(selected_period, "balance_sheet", "current_liabilities")
-	var total_liabilities: float = _key_stats_statement_value_from_period(selected_period, "balance_sheet", "total_liabilities")
-	var equity: float = _key_stats_statement_value_from_period(selected_period, "balance_sheet", "equity")
-	var estimated_cash: float = current_assets * 0.18 if current_assets > 0.0 else revenue_ttm * 0.025
-	var working_capital: float = current_assets - current_liabilities
-
-	var cash_from_operating_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "cash_flow", "cash_from_operating", max(net_income_ttm + (revenue_ttm * 0.025), 0.0))
-	var cash_from_investing_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "cash_flow", "cash_from_investing", -max(revenue_ttm * 0.08, 0.0))
-	var cash_from_financing_ttm: float = _key_stats_ttm_sum(financial_statement_snapshot, "cash_flow", "cash_from_financing", 0.0)
-	var capital_expenditure_ttm: float = max(-cash_from_investing_ttm, 0.0)
-	var free_cash_flow_ttm: float = cash_from_operating_ttm - capital_expenditure_ttm
-	var enterprise_value: float = max(market_cap + total_liabilities - estimated_cash, 0.0)
-
-	var selected_revenue_q: float = _key_stats_statement_value_from_period(selected_period, "income_statement", "revenue")
-	var selected_gross_profit_q: float = _key_stats_statement_value_from_period(selected_period, "income_statement", "gross_profit")
-	var selected_operating_income_q: float = _key_stats_statement_value_from_period(selected_period, "income_statement", "operating_income")
-	var selected_net_income_q: float = _key_stats_statement_value_from_period(selected_period, "income_statement", "net_income")
-	if selected_revenue_q <= 0.0:
-		selected_revenue_q = revenue_ttm / 4.0
-	if selected_gross_profit_q <= 0.0:
-		selected_gross_profit_q = gross_profit_ttm / 4.0
-	if is_zero_approx(selected_operating_income_q):
-		selected_operating_income_q = operating_income_ttm / 4.0
-	if is_zero_approx(selected_net_income_q):
-		selected_net_income_q = net_income_ttm / 4.0
-
-	var eps_ttm: float = _key_stats_safe_divide(net_income_ttm, shares_outstanding)
-	var eps_annualised: float = _key_stats_safe_divide(selected_net_income_q * 4.0, shares_outstanding)
-	var revenue_per_share: float = _key_stats_safe_divide(revenue_ttm, shares_outstanding)
-	var cash_per_share: float = _key_stats_safe_divide(estimated_cash, shares_outstanding)
-	var book_value_per_share: float = _key_stats_safe_divide(equity, shares_outstanding)
-	var operating_cashflow_per_share: float = _key_stats_safe_divide(cash_from_operating_ttm, shares_outstanding)
-	var free_cashflow_per_share: float = _key_stats_safe_divide(free_cash_flow_ttm, shares_outstanding)
-	var company_id: String = str(snapshot.get("id", ""))
-	var dividend_context: Dictionary = _build_key_stats_dividend_context(
-		GameManager.get_corporate_dividend_snapshot(company_id) if not company_id.is_empty() else {},
-		current_price
-	)
-
-	return {
-		"company_id": company_id,
-		"financials": financials,
-		"financial_history": financial_history,
-		"financial_statement_snapshot": financial_statement_snapshot,
-		"dividend_context": dividend_context,
-		"selected_period": selected_period,
-		"current_price": current_price,
-		"shares_outstanding": shares_outstanding,
-		"market_cap": market_cap,
-		"revenue_ttm": revenue_ttm,
-		"net_income_ttm": net_income_ttm,
-		"gross_profit_ttm": gross_profit_ttm,
-		"operating_income_ttm": operating_income_ttm,
-		"income_before_tax_ttm": income_before_tax_ttm,
-		"ebitda_ttm": ebitda_ttm,
-		"current_assets": current_assets,
-		"total_assets": total_assets,
-		"current_liabilities": current_liabilities,
-		"total_liabilities": total_liabilities,
-		"equity": equity,
-		"estimated_cash": estimated_cash,
-		"working_capital": working_capital,
-		"cash_from_operating_ttm": cash_from_operating_ttm,
-		"cash_from_investing_ttm": cash_from_investing_ttm,
-		"cash_from_financing_ttm": cash_from_financing_ttm,
-		"capital_expenditure_ttm": capital_expenditure_ttm,
-		"free_cash_flow_ttm": free_cash_flow_ttm,
-		"enterprise_value": enterprise_value,
-		"selected_revenue_q": selected_revenue_q,
-		"selected_gross_profit_q": selected_gross_profit_q,
-		"selected_operating_income_q": selected_operating_income_q,
-		"selected_net_income_q": selected_net_income_q,
-		"eps_ttm": eps_ttm,
-		"eps_annualised": eps_annualised,
-		"revenue_per_share": revenue_per_share,
-		"cash_per_share": cash_per_share,
-		"book_value_per_share": book_value_per_share,
-		"operating_cashflow_per_share": operating_cashflow_per_share,
-		"free_cashflow_per_share": free_cashflow_per_share
-	}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._build_key_stats_context(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _build_key_stats_valuation_rows(context: Dictionary) -> Array:
-	var financials: Dictionary = context.get("financials", {})
-	var current_price: float = float(context.get("current_price", 0.0))
-	var market_cap: float = float(context.get("market_cap", 0.0))
-	var net_income_ttm: float = float(context.get("net_income_ttm", 0.0))
-	var revenue_ttm: float = float(context.get("revenue_ttm", 0.0))
-	var equity: float = float(context.get("equity", 0.0))
-	var cash_from_operating_ttm: float = float(context.get("cash_from_operating_ttm", 0.0))
-	var free_cash_flow_ttm: float = float(context.get("free_cash_flow_ttm", 0.0))
-	var operating_income_ttm: float = float(context.get("operating_income_ttm", 0.0))
-	var ebitda_ttm: float = float(context.get("ebitda_ttm", 0.0))
-	var enterprise_value: float = float(context.get("enterprise_value", 0.0))
-	var eps_ttm: float = float(context.get("eps_ttm", 0.0))
-	var eps_annualised: float = float(context.get("eps_annualised", 0.0))
-	var earnings_growth: float = float(financials.get("earnings_growth_yoy", 0.0))
-	var earnings_cagr: float = float(financials.get("earnings_cagr_10y", earnings_growth))
-	var forward_net_income: float = net_income_ttm * max(1.0 + (earnings_growth / 100.0), 0.05)
-	var pe_ttm: float = _key_stats_safe_divide(current_price, eps_ttm)
-	var forward_pe: float = _key_stats_safe_divide(market_cap, forward_net_income)
-	return [
-		{"label": "Current PE Ratio (Annualised)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(current_price, eps_annualised), eps_annualised > 0.0)},
-		{"label": "Current PE Ratio (TTM)", "value": _format_key_stats_ratio_value(pe_ttm, eps_ttm > 0.0)},
-		{"label": "Forward PE Ratio", "value": _format_key_stats_ratio_value(forward_pe, forward_net_income > 0.0)},
-		{"label": "Earnings Yield (TTM)", "value": _format_key_stats_percent_ratio(_key_stats_safe_divide(net_income_ttm, market_cap), market_cap > 0.0)},
-		{"label": "Current Price to Sales (TTM)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(market_cap, revenue_ttm), revenue_ttm > 0.0)},
-		{"label": "Current Price to Book Value", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(market_cap, equity), equity > 0.0)},
-		{"label": "Current Price To Cashflow (TTM)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(market_cap, cash_from_operating_ttm), cash_from_operating_ttm > 0.0)},
-		{"label": "Current Price To Free Cashflow (TTM)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(market_cap, free_cash_flow_ttm), free_cash_flow_ttm > 0.0)},
-		{"label": "EV to EBIT (TTM)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(enterprise_value, operating_income_ttm), operating_income_ttm > 0.0)},
-		{"label": "EV to EBITDA (TTM)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(enterprise_value, ebitda_ttm), ebitda_ttm > 0.0)},
-		{"label": "PEG Ratio", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(pe_ttm, earnings_growth), earnings_growth > 0.0 and pe_ttm > 0.0)},
-		{"label": "PEG Ratio (3yr)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(pe_ttm, earnings_cagr), earnings_cagr > 0.0 and pe_ttm > 0.0)},
-		{"label": "PEG (Forward)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(forward_pe, max(earnings_growth + 2.0, 0.0)), earnings_growth > -2.0 and forward_pe > 0.0)}
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._build_key_stats_valuation_rows(context)
+	stock_controller._sync_root_refs()
+	return result
 func _build_key_stats_per_share_rows(context: Dictionary) -> Array:
-	return [
-		{"label": "Current EPS (TTM)", "value": _format_key_stats_decimal_value(float(context.get("eps_ttm", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)},
-		{"label": "Current EPS (Annualised)", "value": _format_key_stats_decimal_value(float(context.get("eps_annualised", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)},
-		{"label": "Revenue Per Share (TTM)", "value": _format_key_stats_decimal_value(float(context.get("revenue_per_share", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)},
-		{"label": "Cash Per Share (Quarter)", "value": _format_key_stats_decimal_value(float(context.get("cash_per_share", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)},
-		{"label": "Book Value Per Share", "value": _format_key_stats_decimal_value(float(context.get("book_value_per_share", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)},
-		{"label": "Operating Cashflow Per Share (TTM)", "value": _format_key_stats_decimal_value(float(context.get("operating_cashflow_per_share", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)},
-		{"label": "Free Cashflow Per Share (TTM)", "value": _format_key_stats_decimal_value(float(context.get("free_cashflow_per_share", 0.0)), float(context.get("shares_outstanding", 0.0)) > 0.0)}
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._build_key_stats_per_share_rows(context)
+	stock_controller._sync_root_refs()
+	return result
 func _build_key_stats_dividend_context(dividend_snapshot: Dictionary, current_price: float) -> Dictionary:
-	var current_day_number: int = RunState.day_index + 1
-	var declared_rows: Array = dividend_snapshot.get("declared_rows", [])
-	var upcoming_rows: Array = dividend_snapshot.get("upcoming_rows", [])
-	var declared_cash_row: Dictionary = _first_key_stats_dividend_row_by_type(declared_rows, "cash_dividend")
-	var next_cash_row: Dictionary = declared_cash_row
-	if next_cash_row.is_empty():
-		next_cash_row = _first_key_stats_dividend_row_by_type(upcoming_rows, "cash_dividend")
-	var declared_stock_row: Dictionary = _first_key_stats_dividend_row_by_type(declared_rows, "stock_dividend")
-	var next_stock_row: Dictionary = declared_stock_row
-	if next_stock_row.is_empty():
-		next_stock_row = _first_key_stats_dividend_row_by_type(upcoming_rows, "stock_dividend")
-	var next_row: Dictionary = next_cash_row if not next_cash_row.is_empty() else next_stock_row
-	var paid_row: Dictionary = _last_key_stats_dividend_row(dividend_snapshot.get("paid_rows", []))
-	var basis_row: Dictionary = next_row if not next_row.is_empty() else paid_row
-	var next_dps: float = float(next_cash_row.get("amount_per_share", 0.0)) if not next_cash_row.is_empty() else 0.0
-	return {
-		"status": _key_stats_dividend_status_label(next_row),
-		"has_declared": not declared_cash_row.is_empty(),
-		"declared_dps": float(declared_cash_row.get("amount_per_share", 0.0)) if not declared_cash_row.is_empty() else 0.0,
-		"next_dps": next_dps,
-		"next_yield": _key_stats_safe_divide(next_dps, current_price),
-		"payout_ratio": float(basis_row.get("payout_ratio", 0.0)) if not basis_row.is_empty() else 0.0,
-		"record_day_number": int(next_cash_row.get("record_day_number", 0)) if not next_cash_row.is_empty() else 0,
-		"payment_day_number": int(next_cash_row.get("payment_day_number", 0)) if not next_cash_row.is_empty() else 0,
-		"eligible_shares": int(next_cash_row.get("eligible_shares", 0)) if not next_cash_row.is_empty() else 0,
-		"projected_amount": float(next_cash_row.get("projected_amount", 0.0)) if not next_cash_row.is_empty() else 0.0,
-		"stock_ratio": float(next_stock_row.get("stock_dividend_ratio", 0.0)) if not next_stock_row.is_empty() else 0.0,
-		"stock_bonus_estimate": int(next_stock_row.get("projected_bonus_shares", 0)) if not next_stock_row.is_empty() else 0,
-		"stock_payment_day_number": int(next_stock_row.get("payment_day_number", 0)) if not next_stock_row.is_empty() else 0,
-		"last_paid_dps": float(paid_row.get("amount_per_share", 0.0)) if not paid_row.is_empty() else 0.0,
-		"current_day_number": current_day_number
-	}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._build_key_stats_dividend_context(dividend_snapshot, current_price)
+	stock_controller._sync_root_refs()
+	return result
 func _build_key_stats_dividend_rows(context: Dictionary) -> Array:
-	var dividend_context: Dictionary = context.get("dividend_context", {})
-	var current_day_number: int = int(dividend_context.get("current_day_number", RunState.day_index + 1))
-	var has_declared: bool = bool(dividend_context.get("has_declared", false))
-	var next_dps: float = float(dividend_context.get("next_dps", 0.0))
-	var payout_ratio: float = float(dividend_context.get("payout_ratio", 0.0))
-	var projected_amount: float = float(dividend_context.get("projected_amount", 0.0))
-	var stock_ratio: float = float(dividend_context.get("stock_ratio", 0.0))
-	var stock_bonus_estimate: int = int(dividend_context.get("stock_bonus_estimate", 0))
-	return [
-		{"label": "Status", "value": str(dividend_context.get("status", "No scheduled"))},
-		{"label": "Declared DPS", "value": _format_currency(float(dividend_context.get("declared_dps", 0.0))) if has_declared else "-"},
-		{"label": "Next DPS", "value": _format_currency(next_dps) if next_dps > 0.0 else "-"},
-		{"label": "Next Yield", "value": _format_key_stats_percent_ratio(float(dividend_context.get("next_yield", 0.0)), next_dps > 0.0)},
-		{"label": "Payout Ratio", "value": _format_key_stats_percent_ratio(payout_ratio, payout_ratio > 0.0)},
-		{"label": "Record / Pay", "value": _format_key_stats_dividend_timetable(
-			int(dividend_context.get("record_day_number", 0)),
-			int(dividend_context.get("payment_day_number", 0)),
-			current_day_number
-		)},
-		{"label": "Stock Ratio", "value": _format_key_stats_percent_ratio(stock_ratio, stock_ratio > 0.0)},
-		{"label": "Stock Est.", "value": "%d share(s)" % stock_bonus_estimate if stock_ratio > 0.0 else "-"},
-		{"label": "Your Est.", "value": _format_currency(projected_amount) if next_dps > 0.0 else "-", "color": COLOR_POSITIVE if projected_amount > 0.0 else COLOR_MUTED},
-		{"label": "Last Paid DPS", "value": _format_currency(float(dividend_context.get("last_paid_dps", 0.0))) if float(dividend_context.get("last_paid_dps", 0.0)) > 0.0 else "-"}
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._build_key_stats_dividend_rows(context)
+	stock_controller._sync_root_refs()
+	return result
 func _build_key_stats_profitability_rows(context: Dictionary) -> Array:
-	var financials: Dictionary = context.get("financials", {})
-	var selected_revenue_q: float = float(context.get("selected_revenue_q", 0.0))
-	var selected_gross_profit_q: float = float(context.get("selected_gross_profit_q", 0.0))
-	var selected_operating_income_q: float = float(context.get("selected_operating_income_q", 0.0))
-	var selected_net_income_q: float = float(context.get("selected_net_income_q", 0.0))
-	var net_income_ttm: float = float(context.get("net_income_ttm", 0.0))
-	var revenue_ttm: float = float(context.get("revenue_ttm", 0.0))
-	var total_assets: float = float(context.get("total_assets", 0.0))
-	var equity: float = float(context.get("equity", 0.0))
-	var total_liabilities: float = float(context.get("total_liabilities", 0.0))
-	var computed_roe: float = _key_stats_safe_divide(net_income_ttm, equity) * 100.0
-	var roe_value: float = float(financials.get("roe", computed_roe))
-	var debt_to_equity: float = float(financials.get("debt_to_equity", _key_stats_safe_divide(total_liabilities, equity)))
-	return [
-		{"label": "Gross Profit Margin (Quarter)", "value": _format_key_stats_percent_ratio(_key_stats_safe_divide(selected_gross_profit_q, selected_revenue_q), selected_revenue_q > 0.0)},
-		{"label": "Operating Profit Margin (Quarter)", "value": _format_key_stats_percent_ratio(_key_stats_safe_divide(selected_operating_income_q, selected_revenue_q), selected_revenue_q > 0.0)},
-		{"label": "Net Profit Margin (Quarter)", "value": _format_key_stats_percent_ratio(_key_stats_safe_divide(selected_net_income_q, selected_revenue_q), selected_revenue_q > 0.0)},
-		{"label": "ROE (Annualised)", "value": _format_key_stats_percent_value(roe_value, equity > 0.0 or financials.has("roe"))},
-		{"label": "Asset Turnover (TTM)", "value": _format_key_stats_ratio_value(_key_stats_safe_divide(revenue_ttm, total_assets), total_assets > 0.0)},
-		{"label": "Debt To Equity", "value": _format_key_stats_ratio_value(debt_to_equity, equity > 0.0 or financials.has("debt_to_equity"))}
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._build_key_stats_profitability_rows(context)
+	stock_controller._sync_root_refs()
+	return result
 func _build_key_stats_income_statement_rows(context: Dictionary) -> Array:
-	return [
-		{"label": "Revenue (TTM)", "value": _format_compact_currency(float(context.get("revenue_ttm", 0.0)))},
-		{"label": "Gross Profit (TTM)", "value": _format_compact_currency(float(context.get("gross_profit_ttm", 0.0)))},
-		{"label": "EBITDA (TTM)", "value": _format_compact_currency(float(context.get("ebitda_ttm", 0.0)))},
-		{"label": "Net Income (TTM)", "value": _format_compact_currency(float(context.get("net_income_ttm", 0.0))), "color": _key_stats_amount_color(float(context.get("net_income_ttm", 0.0)))}
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._build_key_stats_income_statement_rows(context)
+	stock_controller._sync_root_refs()
+	return result
 func _build_key_stats_balance_sheet_rows(context: Dictionary) -> Array:
-	var equity: float = float(context.get("equity", 0.0))
-	return [
-		{"label": "Cash (Quarter)", "value": _format_compact_currency(float(context.get("estimated_cash", 0.0)))},
-		{"label": "Total Assets (Quarter)", "value": _format_compact_currency(float(context.get("total_assets", 0.0)))},
-		{"label": "Total Liabilities (Quarter)", "value": _format_compact_currency(float(context.get("total_liabilities", 0.0)))},
-		{"label": "Working Capital (Quarter)", "value": _format_compact_currency(float(context.get("working_capital", 0.0))), "color": _key_stats_amount_color(float(context.get("working_capital", 0.0)))},
-		{"label": "Common Equity", "value": _format_compact_currency(equity * 0.998)},
-		{"label": "Total Equity", "value": _format_compact_currency(equity)}
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._build_key_stats_balance_sheet_rows(context)
+	stock_controller._sync_root_refs()
+	return result
 func _build_key_stats_cash_flow_rows(context: Dictionary) -> Array:
-	return [
-		{"label": "Cash From Operations (TTM)", "value": _format_compact_currency(float(context.get("cash_from_operating_ttm", 0.0))), "color": _key_stats_amount_color(float(context.get("cash_from_operating_ttm", 0.0)))},
-		{"label": "Cash From Investing (TTM)", "value": _format_compact_currency(float(context.get("cash_from_investing_ttm", 0.0))), "color": _key_stats_amount_color(float(context.get("cash_from_investing_ttm", 0.0)))},
-		{"label": "Cash From Financing (TTM)", "value": _format_compact_currency(float(context.get("cash_from_financing_ttm", 0.0))), "color": _key_stats_amount_color(float(context.get("cash_from_financing_ttm", 0.0)))},
-		{"label": "Capital Expenditure (TTM)", "value": _format_compact_currency(float(context.get("capital_expenditure_ttm", 0.0)))},
-		{"label": "Free Cash Flow (TTM)", "value": _format_compact_currency(float(context.get("free_cash_flow_ttm", 0.0))), "color": _key_stats_amount_color(float(context.get("free_cash_flow_ttm", 0.0)))}
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._build_key_stats_cash_flow_rows(context)
+	stock_controller._sync_root_refs()
+	return result
 func _refresh_key_stats_metric_table(snapshot: Dictionary, context: Dictionary) -> void:
-	if key_stats_metric_table_rows == null or key_stats_metric_footer_rows == null:
-		return
-	_clear_key_stats_container(key_stats_metric_table_rows)
-	_clear_key_stats_container(key_stats_metric_footer_rows)
-
-	if snapshot.is_empty() or context.is_empty():
-		key_stats_metric_table_rows.add_child(_build_key_stats_value_row("Period", "-"))
-		key_stats_metric_footer_rows.add_child(_build_key_stats_value_row("Market Cap", "-"))
-		return
-
-	var financial_history: Array = context.get("financial_history", [])
-	var financial_statement_snapshot: Dictionary = context.get("financial_statement_snapshot", {})
-	var years: Array = _key_stats_recent_years(financial_history, financial_statement_snapshot)
-	key_stats_metric_table_rows.add_child(_build_key_stats_metric_row("Period", _key_stats_year_labels(years), COLOR_STOCKBOT_AMBER, COLOR_STOCKBOT_AMBER))
-	for quarter in range(1, 5):
-		key_stats_metric_table_rows.add_child(_build_key_stats_metric_row(
-			"Q%d" % quarter,
-			_key_stats_metric_values_for_quarter(financial_statement_snapshot, selected_key_stats_metric, years, quarter),
-			COLOR_STOCKBOT_MUTED,
-			COLOR_STOCKBOT_TEXT,
-			selected_key_stats_metric,
-			years
-		))
-	key_stats_metric_table_rows.add_child(_build_key_stats_metric_row(
-		"Annualised",
-		_key_stats_metric_values_for_annual(financial_statement_snapshot, financial_history, selected_key_stats_metric, years),
-		COLOR_STOCKBOT_MUTED,
-		COLOR_STOCKBOT_TEXT,
-		selected_key_stats_metric,
-		years
-	))
-	key_stats_metric_table_rows.add_child(_build_key_stats_metric_row(
-		"TTM",
-		_key_stats_metric_values_for_ttm(financial_statement_snapshot, financial_history, selected_key_stats_metric, years),
-		COLOR_STOCKBOT_MUTED,
-		COLOR_STOCKBOT_TEXT,
-		selected_key_stats_metric,
-		years
-	))
-
-	key_stats_metric_footer_rows.add_child(_build_key_stats_value_row("Market Cap", _format_compact_currency(float(context.get("market_cap", 0.0)))))
-	key_stats_metric_footer_rows.add_child(_build_key_stats_value_row("Enterprise Value", _format_compact_currency(float(context.get("enterprise_value", 0.0)))))
-	key_stats_metric_footer_rows.add_child(_build_key_stats_value_row("Current Share Outstanding", _format_key_stats_compact_number(float(context.get("shares_outstanding", 0.0)))))
-	var financials: Dictionary = context.get("financials", {})
-	key_stats_metric_footer_rows.add_child(_build_key_stats_value_row("Free Float", _format_key_stats_percent_value(float(financials.get("free_float_pct", 0.0)), financials.has("free_float_pct"))))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_key_stats_metric_table(snapshot, context)
+	stock_controller._sync_root_refs()
 func _build_key_stats_metric_row(
 	label_text: String,
 	values: Array,
@@ -2317,484 +1822,288 @@ func _build_key_stats_metric_row(
 	metric_id: String = "",
 	years: Array = []
 ) -> Control:
-	var row := HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 8)
-
-	var label := Label.new()
-	label.text = label_text
-	label.custom_minimum_size = Vector2(KEY_STATS_METRIC_LABEL_WIDTH, 0)
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.add_theme_color_override("font_color", label_color)
-	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE, _get_app_font())
-	row.add_child(label)
-
-	for value_index in range(values.size()):
-		var value_text = values[value_index]
-		var value := Label.new()
-		value.text = str(value_text)
-		value.custom_minimum_size = Vector2(KEY_STATS_METRIC_VALUE_WIDTH, 0)
-		value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		value.clip_text = true
-		value.add_theme_color_override("font_color", value_color)
-		_apply_font_override_to_control(value, DEFAULT_APP_FONT_SIZE, _get_app_font())
-		var payload: Dictionary = _key_stats_metric_capture_payload(metric_id, label_text, value.text, years, value_index)
-		if not payload.is_empty():
-			value.mouse_filter = Control.MOUSE_FILTER_STOP
-			value.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-			value.tooltip_text = "Click to add this metric value to the Research Tray."
-			value.gui_input.connect(_on_key_stats_metric_value_gui_input.bind(payload))
-		row.add_child(value)
-	return row
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Control = stock_controller._build_key_stats_metric_row(label_text, values, label_color, value_color, metric_id, years)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_metric_capture_payload(metric_id: String, row_label: String, value_text: String, years: Array, value_index: int) -> Dictionary:
-	if selected_company_id.is_empty() or metric_id.is_empty():
-		return {}
-	var clean_value: String = value_text.strip_edges()
-	if clean_value.is_empty() or clean_value == "-":
-		return {}
-	var year_label: String = ""
-	if value_index >= 0 and value_index < years.size():
-		year_label = str(int(years[value_index]))
-	var metric_label: String = _key_stats_metric_display_label(metric_id)
-	var label_parts: Array = [metric_label, row_label]
-	if not year_label.is_empty():
-		label_parts.append(year_label)
-	var label_text: String = " ".join(label_parts)
-	return {
-		"source_type": "key_stats",
-		"category": "financials",
-		"company_id": selected_company_id,
-		"label": label_text,
-		"value": clean_value,
-		"detail": "%s captured from the Key Stats metric table." % label_text,
-		"source_id": "key_stats_metric_%s_%s_%s_%s" % [
-			selected_company_id,
-			metric_id,
-			_node_token(row_label),
-			_node_token(year_label)
-		]
-	}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._key_stats_metric_capture_payload(metric_id, row_label, value_text, years, value_index)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_metric_display_label(metric_id: String) -> String:
-	match metric_id:
-		KEY_STATS_METRIC_EPS:
-			return "EPS"
-		KEY_STATS_METRIC_REVENUE:
-			return "Revenue"
-		_:
-			return "Net Income"
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._key_stats_metric_display_label(metric_id)
+	stock_controller._sync_root_refs()
+	return result
 func _on_key_stats_metric_value_gui_input(event: InputEvent, capture_payload: Dictionary) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var mouse_event := event as InputEventMouseButton
-	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
-		return
-	if capture_payload.is_empty():
-		return
-	pending_capture_payloads["key_stats"] = capture_payload.duplicate(true)
-	_show_key_stats_capture_menu(mouse_event.global_position)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_key_stats_metric_value_gui_input(event, capture_payload)
+	stock_controller._sync_root_refs()
 func _key_stats_year_labels(years: Array) -> Array:
-	var labels: Array = []
-	for year_value in years:
-		labels.append(str(int(year_value)))
-	while labels.size() < KEY_STATS_YEAR_COLUMN_LIMIT:
-		labels.append("-")
-	return labels
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._key_stats_year_labels(years)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_metric_values_for_quarter(
 	financial_statement_snapshot: Dictionary,
 	metric_id: String,
 	years: Array,
 	quarter: int
 ) -> Array:
-	var values: Array = []
-	for year_value in years:
-		var statement: Dictionary = _key_stats_statement_for_year_quarter(financial_statement_snapshot, int(year_value), quarter)
-		values.append(_format_key_stats_metric_result(metric_id, _key_stats_metric_result_from_statement(statement, metric_id)))
-	while values.size() < KEY_STATS_YEAR_COLUMN_LIMIT:
-		values.append("-")
-	return values
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._key_stats_metric_values_for_quarter(financial_statement_snapshot, metric_id, years, quarter)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_metric_values_for_annual(
 	financial_statement_snapshot: Dictionary,
 	financial_history: Array,
 	metric_id: String,
 	years: Array
 ) -> Array:
-	var values: Array = []
-	for year_value in years:
-		values.append(_format_key_stats_metric_result(metric_id, _key_stats_metric_annual_result(financial_statement_snapshot, financial_history, metric_id, int(year_value))))
-	while values.size() < KEY_STATS_YEAR_COLUMN_LIMIT:
-		values.append("-")
-	return values
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._key_stats_metric_values_for_annual(financial_statement_snapshot, financial_history, metric_id, years)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_metric_values_for_ttm(
 	financial_statement_snapshot: Dictionary,
 	financial_history: Array,
 	metric_id: String,
 	years: Array
 ) -> Array:
-	var values: Array = []
-	for year_value in years:
-		values.append(_format_key_stats_metric_result(metric_id, _key_stats_metric_ttm_result(financial_statement_snapshot, financial_history, metric_id, int(year_value))))
-	while values.size() < KEY_STATS_YEAR_COLUMN_LIMIT:
-		values.append("-")
-	return values
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._key_stats_metric_values_for_ttm(financial_statement_snapshot, financial_history, metric_id, years)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_recent_years(financial_history: Array, financial_statement_snapshot: Dictionary) -> Array:
-	var seen_years: Dictionary = {}
-	for statement_value in financial_statement_snapshot.get("quarterly_statements", []):
-		if typeof(statement_value) != TYPE_DICTIONARY:
-			continue
-		var statement: Dictionary = statement_value
-		var year: int = int(statement.get("statement_year", 0))
-		if year > 0:
-			seen_years[year] = true
-	if seen_years.is_empty():
-		for history_value in financial_history:
-			if typeof(history_value) != TYPE_DICTIONARY:
-				continue
-			var history_entry: Dictionary = history_value
-			var year_from_history: int = int(history_entry.get("year", 0))
-			if year_from_history > 0:
-				seen_years[year_from_history] = true
-
-	var years: Array = []
-	for year_key in seen_years.keys():
-		years.append(int(year_key))
-	years.sort()
-
-	var recent_years: Array = []
-	for year_index in range(years.size() - 1, -1, -1):
-		recent_years.append(int(years[year_index]))
-		if recent_years.size() >= KEY_STATS_YEAR_COLUMN_LIMIT:
-			break
-	return recent_years
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._key_stats_recent_years(financial_history, financial_statement_snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_metric_result_from_statement(statement: Dictionary, metric_id: String) -> Dictionary:
-	if statement.is_empty():
-		return {"valid": false, "value": 0.0}
-	if metric_id == KEY_STATS_METRIC_EPS:
-		var net_income: float = _key_stats_statement_value_from_period(statement, "income_statement", "net_income")
-		var shares_outstanding: float = _key_stats_statement_value_from_period(statement, "balance_sheet", "shares_outstanding")
-		return {"valid": shares_outstanding > 0.0, "value": _key_stats_safe_divide(net_income, shares_outstanding)}
-	if metric_id == KEY_STATS_METRIC_REVENUE:
-		return {
-			"valid": _key_stats_period_has_statement_line(statement, "income_statement", "revenue"),
-			"value": _key_stats_statement_value_from_period(statement, "income_statement", "revenue")
-		}
-	return {
-		"valid": _key_stats_period_has_statement_line(statement, "income_statement", "net_income"),
-		"value": _key_stats_statement_value_from_period(statement, "income_statement", "net_income")
-	}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._key_stats_metric_result_from_statement(statement, metric_id)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_metric_annual_result(
 	financial_statement_snapshot: Dictionary,
 	financial_history: Array,
 	metric_id: String,
 	year: int
 ) -> Dictionary:
-	for quarter in range(4, 0, -1):
-		var statement: Dictionary = _key_stats_statement_for_year_quarter(financial_statement_snapshot, year, quarter)
-		var result: Dictionary = _key_stats_metric_result_from_statement(statement, metric_id)
-		if bool(result.get("valid", false)):
-			return {"valid": true, "value": float(result.get("value", 0.0)) * 4.0}
-	return _key_stats_history_metric_result(financial_history, metric_id, year)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._key_stats_metric_annual_result(financial_statement_snapshot, financial_history, metric_id, year)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_metric_ttm_result(
 	financial_statement_snapshot: Dictionary,
 	financial_history: Array,
 	metric_id: String,
 	year: int
 ) -> Dictionary:
-	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
-	var end_index: int = -1
-	for statement_index in range(quarterly_statements.size()):
-		var statement: Dictionary = quarterly_statements[statement_index]
-		if int(statement.get("statement_year", 0)) != year:
-			continue
-		end_index = statement_index
-		if int(statement.get("statement_quarter", 0)) == 4:
-			break
-	if end_index < 0:
-		return _key_stats_history_metric_result(financial_history, metric_id, year)
-
-	var total: float = 0.0
-	var valid_count: int = 0
-	var start_index: int = max(end_index - 3, 0)
-	for statement_index in range(start_index, end_index + 1):
-		var result: Dictionary = _key_stats_metric_result_from_statement(quarterly_statements[statement_index], metric_id)
-		if bool(result.get("valid", false)):
-			total += float(result.get("value", 0.0))
-			valid_count += 1
-	if valid_count > 0:
-		return {"valid": true, "value": total}
-	return _key_stats_history_metric_result(financial_history, metric_id, year)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._key_stats_metric_ttm_result(financial_statement_snapshot, financial_history, metric_id, year)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_history_metric_result(financial_history: Array, metric_id: String, year: int) -> Dictionary:
-	for history_value in financial_history:
-		if typeof(history_value) != TYPE_DICTIONARY:
-			continue
-		var history_entry: Dictionary = history_value
-		if int(history_entry.get("year", 0)) != year:
-			continue
-		if metric_id == KEY_STATS_METRIC_REVENUE:
-			return {"valid": history_entry.has("revenue"), "value": float(history_entry.get("revenue", 0.0))}
-		if metric_id == KEY_STATS_METRIC_EPS:
-			var shares_outstanding: float = float(history_entry.get("shares_outstanding", 0.0))
-			return {
-				"valid": shares_outstanding > 0.0 and history_entry.has("net_income"),
-				"value": _key_stats_safe_divide(float(history_entry.get("net_income", 0.0)), shares_outstanding)
-			}
-		return {"valid": history_entry.has("net_income"), "value": float(history_entry.get("net_income", 0.0))}
-	return {"valid": false, "value": 0.0}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._key_stats_history_metric_result(financial_history, metric_id, year)
+	stock_controller._sync_root_refs()
+	return result
 func _format_key_stats_metric_result(metric_id: String, result: Dictionary) -> String:
-	if not bool(result.get("valid", false)):
-		return "-"
-	var value: float = float(result.get("value", 0.0))
-	if metric_id == KEY_STATS_METRIC_EPS:
-		return _format_decimal(value, 2, true)
-	return _format_compact_currency(value)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var formatted_result: String = stock_controller._format_key_stats_metric_result(metric_id, result)
+	stock_controller._sync_root_refs()
+	return formatted_result
 func _key_stats_statement_for_year_quarter(
 	financial_statement_snapshot: Dictionary,
 	year: int,
 	quarter: int
 ) -> Dictionary:
-	for statement_value in financial_statement_snapshot.get("quarterly_statements", []):
-		if typeof(statement_value) != TYPE_DICTIONARY:
-			continue
-		var statement: Dictionary = statement_value
-		if int(statement.get("statement_year", 0)) == year and int(statement.get("statement_quarter", 0)) == quarter:
-			return statement
-	return {}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._key_stats_statement_for_year_quarter(financial_statement_snapshot, year, quarter)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_latest_history_entry(financial_history: Array) -> Dictionary:
-	if financial_history.is_empty():
-		return {}
-	for history_index in range(financial_history.size() - 1, -1, -1):
-		if typeof(financial_history[history_index]) == TYPE_DICTIONARY:
-			return financial_history[history_index]
-	return {}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._key_stats_latest_history_entry(financial_history)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_latest_quarters(financial_statement_snapshot: Dictionary, count: int = 4) -> Array:
-	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
-	if quarterly_statements.is_empty():
-		return []
-
-	var end_index: int = quarterly_statements.size() - 1
-	if selected_financial_statement_index >= 0:
-		end_index = clampi(selected_financial_statement_index, 0, quarterly_statements.size() - 1)
-	var start_index: int = max(end_index - max(count - 1, 0), 0)
-	var periods: Array = []
-	for statement_index in range(end_index, start_index - 1, -1):
-		periods.append(quarterly_statements[statement_index])
-	return periods
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._key_stats_latest_quarters(financial_statement_snapshot, count)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_ttm_sum(
 	financial_statement_snapshot: Dictionary,
 	section_id: String,
 	line_id: String,
 	fallback_value: float
 ) -> float:
-	var latest_quarters: Array = _key_stats_latest_quarters(financial_statement_snapshot, 4)
-	if latest_quarters.size() < 4:
-		return fallback_value
-	var total: float = 0.0
-	var found_count: int = 0
-	for period_value in latest_quarters:
-		if typeof(period_value) != TYPE_DICTIONARY:
-			continue
-		var period: Dictionary = period_value
-		if not _key_stats_period_has_statement_line(period, section_id, line_id):
-			continue
-		total += _key_stats_statement_value_from_period(period, section_id, line_id)
-		found_count += 1
-	return total if found_count > 0 else fallback_value
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: float = stock_controller._key_stats_ttm_sum(financial_statement_snapshot, section_id, line_id, fallback_value)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_statement_value_from_period(period: Dictionary, section_id: String, line_id: String) -> float:
-	if period.is_empty():
-		return 0.0
-	return _key_stats_statement_value(period.get(section_id, []), line_id)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: float = stock_controller._key_stats_statement_value_from_period(period, section_id, line_id)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_statement_value(lines: Array, line_id: String) -> float:
-	for line_value in lines:
-		if typeof(line_value) != TYPE_DICTIONARY:
-			continue
-		var line_item: Dictionary = line_value
-		if str(line_item.get("id", "")) == line_id:
-			return float(line_item.get("value", 0.0))
-	return 0.0
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: float = stock_controller._key_stats_statement_value(lines, line_id)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_period_has_statement_line(period: Dictionary, section_id: String, line_id: String) -> bool:
-	if period.is_empty():
-		return false
-	var lines: Array = period.get(section_id, [])
-	for line_value in lines:
-		if typeof(line_value) != TYPE_DICTIONARY:
-			continue
-		var line_item: Dictionary = line_value
-		if str(line_item.get("id", "")) == line_id:
-			return true
-	return false
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: bool = stock_controller._key_stats_period_has_statement_line(period, section_id, line_id)
+	stock_controller._sync_root_refs()
+	return result
 func _first_key_stats_dividend_row(rows: Array) -> Dictionary:
-	for row_value in rows:
-		if typeof(row_value) == TYPE_DICTIONARY:
-			return row_value
-	return {}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._first_key_stats_dividend_row(rows)
+	stock_controller._sync_root_refs()
+	return result
 func _first_key_stats_dividend_row_by_type(rows: Array, action_type: String) -> Dictionary:
-	for row_value in rows:
-		if typeof(row_value) == TYPE_DICTIONARY and str(row_value.get("action_type", "")) == action_type:
-			return row_value
-	return {}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._first_key_stats_dividend_row_by_type(rows, action_type)
+	stock_controller._sync_root_refs()
+	return result
 func _last_key_stats_dividend_row(rows: Array) -> Dictionary:
-	for row_index in range(rows.size() - 1, -1, -1):
-		if typeof(rows[row_index]) == TYPE_DICTIONARY:
-			return rows[row_index]
-	return {}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._last_key_stats_dividend_row(rows)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_dividend_status_label(row: Dictionary) -> String:
-	if row.is_empty():
-		return "No scheduled"
-	match str(row.get("status", "scheduled")):
-		"approved":
-			return "Declared"
-		"ex_date":
-			return "Ex-date"
-		"recorded":
-			return "Recorded"
-		"paid":
-			return "Paid"
-		_:
-			return "Proposed"
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._key_stats_dividend_status_label(row)
+	stock_controller._sync_root_refs()
+	return result
 func _format_key_stats_dividend_timetable(record_day_number: int, payment_day_number: int, current_day_number: int) -> String:
-	if record_day_number <= 0 and payment_day_number <= 0:
-		return "-"
-	return "%s / %s" % [
-		_format_key_stats_day_delta(record_day_number, current_day_number),
-		_format_key_stats_day_delta(payment_day_number, current_day_number)
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_key_stats_dividend_timetable(record_day_number, payment_day_number, current_day_number)
+	stock_controller._sync_root_refs()
+	return result
 func _format_key_stats_day_delta(day_number: int, current_day_number: int) -> String:
-	if day_number <= 0:
-		return "-"
-	var delta: int = day_number - current_day_number
-	if delta == 0:
-		return "Today"
-	if delta > 0:
-		return "D+%d" % delta
-	return "D%d" % delta
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_key_stats_day_delta(day_number, current_day_number)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_safe_divide(numerator: float, denominator: float) -> float:
-	if is_zero_approx(denominator):
-		return 0.0
-	return numerator / denominator
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: float = stock_controller._key_stats_safe_divide(numerator, denominator)
+	stock_controller._sync_root_refs()
+	return result
 func _format_key_stats_ratio_value(value: float, is_valid: bool = true) -> String:
-	if not is_valid:
-		return "-"
-	return _format_decimal(value, 2, false)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_key_stats_ratio_value(value, is_valid)
+	stock_controller._sync_root_refs()
+	return result
 func _format_key_stats_decimal_value(value: float, is_valid: bool = true) -> String:
-	if not is_valid:
-		return "-"
-	return _format_decimal(value, 2, true)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_key_stats_decimal_value(value, is_valid)
+	stock_controller._sync_root_refs()
+	return result
 func _format_key_stats_percent_value(value: float, is_valid: bool = true) -> String:
-	if not is_valid:
-		return "-"
-	return _format_percent_value(value)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_key_stats_percent_value(value, is_valid)
+	stock_controller._sync_root_refs()
+	return result
 func _format_key_stats_percent_ratio(value: float, is_valid: bool = true) -> String:
-	if not is_valid:
-		return "-"
-	return _format_percent_value(value * 100.0)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_key_stats_percent_ratio(value, is_valid)
+	stock_controller._sync_root_refs()
+	return result
 func _format_key_stats_compact_number(value: float) -> String:
-	var absolute_value: float = absf(value)
-	if absolute_value >= 1000000000.0:
-		return "%s%sB" % ["-" if value < 0.0 else "", _format_decimal(absolute_value / 1000000000.0, 2, false)]
-	if absolute_value >= 1000000.0:
-		return "%s%sM" % ["-" if value < 0.0 else "", _format_decimal(absolute_value / 1000000.0, 2, false)]
-	if absolute_value >= 1000.0:
-		return "%s%sK" % ["-" if value < 0.0 else "", _format_decimal(absolute_value / 1000.0, 2, false)]
-	return _format_decimal(value, 0, true)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_key_stats_compact_number(value)
+	stock_controller._sync_root_refs()
+	return result
 func _key_stats_amount_color(value: float) -> Color:
-	if value < 0.0:
-		return COLOR_NEGATIVE
-	if value > 0.0:
-		return COLOR_POSITIVE
-	return COLOR_TEXT
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Color = stock_controller._key_stats_amount_color(value)
+	stock_controller._sync_root_refs()
+	return result
 func _on_order_ticket_toggle_pressed() -> void:
-	order_ticket_collapsed = not order_ticket_collapsed
-	_apply_trade_layout_ratios()
-	main_trade_split.queue_sort()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_order_ticket_toggle_pressed()
+	stock_controller._sync_root_refs()
 func _refresh_order_ticket_toggle_state() -> void:
-	if order_ticket_toggle_button == null:
-		return
-	order_ticket_toggle_button.text = ""
-	order_ticket_toggle_button.icon = _load_stockbot_icon("chevron_up" if order_ticket_collapsed else "chevron_down")
-	order_ticket_toggle_button.expand_icon = true
-	order_ticket_toggle_button.tooltip_text = "Show the order ticket." if order_ticket_collapsed else "Hide the order ticket."
-	_style_stockbot_icon_button(
-		order_ticket_toggle_button,
-		"chevron_up" if order_ticket_collapsed else "chevron_down",
-		"",
-		order_ticket_toggle_button.tooltip_text,
-		false,
-		COLOR_STOCKBOT_SURFACE_ALT,
-		COLOR_STOCKBOT_EDGE_STRONG
-	)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_order_ticket_toggle_state()
+	stock_controller._sync_root_refs()
 func _refresh_all(refresh_open_apps: bool = true) -> void:
 	var started_at_usec: int = Time.get_ticks_usec()
 	var phase_started_at_usec: int = started_at_usec
@@ -3384,265 +2693,46 @@ func _on_save_status_changed() -> void:
 
 
 func _refresh_news() -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	var phase_started_at_usec: int = started_at_usec
-	current_news_snapshot = {}
-	news_title_label.text = "The Market Papers"
-	if not RunState.has_active_run():
-		selected_news_outlet_id = ""
-		selected_news_archive_year = 0
-		selected_news_archive_month = 0
-		selected_news_article_id = ""
-		_rebuild_news_outlet_buttons([])
-		_refresh_news_archive_filters()
-		news_intel_status_label.text = ""
-		news_feed_summary_label.text = ""
-		news_article_list.clear()
-		_rebuild_news_article_cards([])
-		if news_masthead_date_label != null:
-			news_masthead_date_label.text = ""
-		if news_masthead_issue_number_label != null:
-			news_masthead_issue_number_label.text = "No. 0000"
-		_show_news_article({})
-		_apply_font_overrides_to_subtree(news_outlet_buttons)
-		_log_perf_elapsed("_refresh_news:no_active_run", started_at_usec)
-		return
-
-	current_news_snapshot = GameManager.get_news_snapshot()
-	_log_perf_phase(true, "_refresh_news:snapshot", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
-	var outlets: Array = current_news_snapshot.get("outlets", [])
-	if selected_news_outlet_id.is_empty() or not _news_outlet_exists(outlets, selected_news_outlet_id):
-		selected_news_outlet_id = _default_news_outlet_id(outlets)
-		selected_news_archive_year = 0
-		selected_news_archive_month = 0
-		selected_news_article_id = ""
-
-	var current_trade_date: Dictionary = GameManager.get_current_trade_date()
-	if news_masthead_date_label != null:
-		news_masthead_date_label.text = GameManager.format_trade_date(current_trade_date)
-	if news_masthead_issue_number_label != null:
-		news_masthead_issue_number_label.text = "No. %04d" % max(RunState.day_index + 1, 1)
-	news_intel_status_label.text = ""
-	_rebuild_news_outlet_buttons(outlets)
-	_log_perf_phase(true, "_refresh_news:outlets", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
-	_refresh_news_archive_filters()
-	_log_perf_phase(true, "_refresh_news:archive_filters", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
-	_refresh_news_article_list()
-	_log_perf_phase(true, "_refresh_news:article_list", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
-	_apply_font_overrides_to_subtree(news_outlet_buttons)
-	_log_perf_phase(true, "_refresh_news:fonts", phase_started_at_usec)
-	_log_perf_elapsed("_refresh_news", started_at_usec)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._refresh_news()
+	news_controller._sync_root_refs()
 
 func _rebuild_news_outlet_buttons(outlets: Array) -> void:
-	for child in news_outlet_buttons.get_children():
-		news_outlet_buttons.remove_child(child)
-		child.queue_free()
-
-	for outlet_value in outlets:
-		var outlet: Dictionary = outlet_value
-		var outlet_id: String = str(outlet.get("id", ""))
-		var button: Button = Button.new()
-		var unlocked: bool = bool(outlet.get("unlocked", true))
-		button.name = "NewsOutletButton_%s" % outlet_id
-		button.text = str(outlet.get("label", outlet_id))
-		button.toggle_mode = true
-		button.disabled = not unlocked
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.custom_minimum_size = Vector2(0, 36)
-		button.tooltip_text = ""
-		_style_news_outlet_button(button, outlet_id == selected_news_outlet_id, unlocked)
-		button.pressed.connect(_on_news_outlet_pressed.bind(outlet_id))
-		news_outlet_buttons.add_child(button)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._rebuild_news_outlet_buttons(outlets)
+	news_controller._sync_root_refs()
 
 func _refresh_news_archive_filters() -> void:
-	news_archive_year_option.clear()
-	news_archive_month_option.clear()
-
-	var years: Array = []
-	if not selected_news_outlet_id.is_empty():
-		years = GameManager.get_news_archive_years(selected_news_outlet_id)
-
-	if years.is_empty():
-		selected_news_archive_year = 0
-		selected_news_archive_month = 0
-		news_archive_year_option.disabled = true
-		news_archive_month_option.disabled = true
-		return
-
-	news_archive_year_option.disabled = false
-	if not years.has(selected_news_archive_year):
-		selected_news_archive_year = int(years[0])
-
-	var selected_year_index: int = 0
-	for year_index in range(years.size()):
-		var year_number: int = int(years[year_index])
-		news_archive_year_option.add_item(str(year_number))
-		if year_number == selected_news_archive_year:
-			selected_year_index = year_index
-	news_archive_year_option.select(selected_year_index)
-	_refresh_news_archive_month_options()
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._refresh_news_archive_filters()
+	news_controller._sync_root_refs()
 
 func _refresh_news_archive_month_options() -> void:
-	news_archive_month_option.clear()
-
-	var months: Array = []
-	if not selected_news_outlet_id.is_empty() and selected_news_archive_year > 0:
-		months = GameManager.get_news_archive_months(selected_news_outlet_id, selected_news_archive_year)
-
-	if months.is_empty():
-		selected_news_archive_month = 0
-		news_archive_month_option.disabled = true
-		return
-
-	news_archive_month_option.disabled = false
-	if not months.has(selected_news_archive_month):
-		selected_news_archive_month = int(months[0])
-
-	var selected_month_index: int = 0
-	for month_index in range(months.size()):
-		var month_number: int = int(months[month_index])
-		news_archive_month_option.add_item(_news_archive_month_label(month_number))
-		if month_number == selected_news_archive_month:
-			selected_month_index = month_index
-	news_archive_month_option.select(selected_month_index)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._refresh_news_archive_month_options()
+	news_controller._sync_root_refs()
 
 func _refresh_news_article_list() -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	var phase_started_at_usec: int = started_at_usec
-	news_article_list.clear()
-	var articles: Array = _current_news_archive_article_summaries()
-	_log_perf_phase(true, "_refresh_news_article_list:summaries", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
-	var feed: Dictionary = current_news_snapshot.get("feeds", {}).get(selected_news_outlet_id, {})
-	var feed_tagline: String = str(feed.get("tagline", "")).strip_edges()
-	news_feed_summary_label.text = "ARCHIVE" if feed_tagline.is_empty() else "ARCHIVE  ·  %s" % feed_tagline
-
-	for article_value in articles:
-		var article: Dictionary = article_value
-		var line: String = _build_news_article_list_line(article)
-		news_article_list.add_item(line)
-		var item_index: int = news_article_list.item_count - 1
-		news_article_list.set_item_tooltip(item_index, "")
-		news_article_list.set_item_metadata(item_index, article)
-	_log_perf_phase(true, "_refresh_news_article_list:item_list", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
-
-	var selected_index: int = -1
-	for article_index in range(articles.size()):
-		if str(articles[article_index].get("id", "")) == selected_news_article_id:
-			selected_index = article_index
-			break
-
-	if selected_index == -1 and not articles.is_empty():
-		selected_index = 0
-		selected_news_article_id = str(articles[0].get("id", ""))
-
-	_rebuild_news_article_cards(articles)
-	_log_perf_phase(true, "_refresh_news_article_list:cards", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
-	if selected_index >= 0:
-		news_article_list.select(selected_index)
-		_show_news_article(GameManager.get_news_archive_article(selected_news_article_id))
-	else:
-		selected_news_article_id = ""
-		_show_news_article({})
-	_log_perf_phase(true, "_refresh_news_article_list:show_article", phase_started_at_usec)
-	_log_perf_elapsed("_refresh_news_article_list", started_at_usec)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._refresh_news_article_list()
+	news_controller._sync_root_refs()
 
 func _refresh_social() -> void:
-	_ensure_social_feed_ui()
-	current_social_snapshot = {}
-	social_title_label.text = "Home" if selected_social_view_id == "home" else "Message"
-	if not RunState.has_active_run():
-		selected_social_account_id = ""
-		selected_social_feed_filter_id = SOCIAL_FEED_FILTER_ALL
-		social_access_status_label.text = "No run loaded"
-		social_feed_summary_label.text = "Start a run to populate the feed."
-		_refresh_social_tier_indicator(0)
-		_rebuild_social_filter_chips([])
-		_rebuild_social_ticker_tape([], [])
-		_rebuild_social_feed_cards([])
-		_rebuild_social_right_rail({})
-		_rebuild_social_message_view({})
-		_apply_social_view_visibility()
-		_apply_font_overrides_to_subtree(social_feed_cards)
-		return
-
-	current_social_snapshot = GameManager.get_twooter_snapshot()
-	var all_posts: Array = current_social_snapshot.get("posts", [])
-	var selected_account_name: String = _selected_social_account_name(all_posts)
-	if not selected_social_account_id.is_empty() and selected_account_name.is_empty():
-		selected_social_account_id = ""
-	var account_posts: Array = _filtered_social_posts(all_posts)
-	if selected_social_feed_filter_id.is_empty():
-		selected_social_feed_filter_id = SOCIAL_FEED_FILTER_ALL
-	var available_social_filter_ids: Dictionary = {}
-	for filter_value in _social_feed_filters_for_posts(account_posts):
-		if typeof(filter_value) == TYPE_DICTIONARY:
-			available_social_filter_ids[str(filter_value.get("id", ""))] = true
-	if not available_social_filter_ids.has(selected_social_feed_filter_id):
-		selected_social_feed_filter_id = SOCIAL_FEED_FILTER_ALL
-	var posts: Array = _filtered_social_posts_by_feed_filter(account_posts)
-	social_title_label.text = "Home" if selected_social_view_id == "home" else "Message"
-	social_access_status_label.text = "Live | Public chatter"
-	var filter_label: String = _social_feed_filter_label(selected_social_feed_filter_id)
-	if selected_social_account_id.is_empty():
-		social_feed_summary_label.text = "%d of %d posts | %s | Public feed" % [posts.size(), all_posts.size(), filter_label]
-	else:
-		social_title_label.text = "%s" % selected_account_name if selected_social_view_id == "home" else "Message"
-		social_feed_summary_label.text = "%d of %d posts | %s | %s" % [posts.size(), account_posts.size(), selected_account_name, filter_label]
-	_refresh_social_tier_indicator(int(current_social_snapshot.get("access_tier", current_social_snapshot.get("tier", 1))))
-	_rebuild_social_filter_chips(account_posts)
-	_rebuild_social_ticker_tape(posts, all_posts)
-	_rebuild_social_feed_cards(posts)
-	_rebuild_social_right_rail(current_social_snapshot)
-	_rebuild_social_message_view(current_social_snapshot)
-	_apply_social_view_visibility()
-	_apply_font_overrides_to_subtree(social_feed_cards)
-
-
+	_ensure_social_controller()
+	social_controller.refresh()
 func _refresh_network() -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	current_network_snapshot = {}
-	network_title_label.text = "Network"
-	if not RunState.has_active_run():
-		selected_network_contact_id = ""
-		network_recognition_label.text = "Recognition: Unknown"
-		network_summary_label.text = "Start a run to meet market contacts."
-		network_contacts_list.clear()
-		network_requests_list.clear()
-		if network_journal_list != null:
-			network_journal_list.clear()
-		_show_network_contact({})
-		_log_perf_elapsed("_refresh_network", started_at_usec)
-		return
-
-	current_network_snapshot = GameManager.get_network_snapshot()
-	var recognition: Dictionary = current_network_snapshot.get("recognition", {})
-	network_recognition_label.text = "Recognition: %s (%d)" % [
-		str(recognition.get("label", "Unknown")),
-		int(round(float(recognition.get("score", 0.0))))
-	]
-	var action_snapshot: Dictionary = GameManager.get_daily_action_snapshot()
-	network_summary_label.text = "%d / %d contacts met  |  AP %d/%d  |  Contacts are discovered through News, referrals, and RUPSLB rooms." % [
-		int(current_network_snapshot.get("met_count", 0)),
-		int(current_network_snapshot.get("contact_cap", 2)),
-		int(action_snapshot.get("remaining", 0)),
-		int(action_snapshot.get("limit", 10))
-	]
-	_rebuild_network_contact_list()
-	_rebuild_network_request_list()
-	_rebuild_network_journal_list()
-	_log_perf_elapsed("_refresh_network", started_at_usec)
+	_ensure_network_controller()
+	network_controller.refresh()
 
 
 func _refresh_daily_action_displays() -> void:
@@ -5247,2663 +4337,230 @@ func _refresh_thesis() -> void:
 
 
 func _ensure_life_ui() -> void:
-	if life_window != null:
-		return
-
-	var desktop_icons_row: HBoxContainer = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow
-	var life_tile := VBoxContainer.new()
-	life_tile.name = "LifeAppTile"
-	life_tile.add_theme_constant_override("separation", 10)
-	desktop_icons_row.add_child(life_tile)
-	var upgrades_tile: Node = desktop_icons_row.get_node_or_null("UpgradesAppTile")
-	if upgrades_tile != null:
-		desktop_icons_row.move_child(life_tile, upgrades_tile.get_index())
-
-	life_app_button = Button.new()
-	life_app_button.name = "LifeAppButton"
-	life_app_button.custom_minimum_size = Vector2(92, 92)
-	life_app_button.toggle_mode = true
-	life_tile.add_child(life_app_button)
-
-	life_app_label = Label.new()
-	life_app_label.name = "LifeAppLabel"
-	life_app_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	life_app_label.text = "Life"
-	life_app_label.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
-	life_tile.add_child(life_app_label)
-
-	life_window = LIFE_WIDGET_SCRIPT.new()
-	life_window.name = "LifeWindow"
-	life_window.visible = false
-	life_window.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(life_window)
-	var upgrade_window_node: Node = get_node_or_null("UpgradeWindow")
-	if upgrade_window_node != null:
-		move_child(life_window, upgrade_window_node.get_index())
-	call_deferred("_style_life_news_tabs")
+	_ensure_life_controller()
+	life_controller.ensure_ui()
 
 
 func _refresh_life() -> void:
-	if life_window == null:
-		return
-	if life_window.has_method("refresh"):
-		life_window.call("refresh")
-	_style_life_news_tabs()
+	_ensure_life_controller()
+	life_controller.refresh()
 
 
 func _style_life_news_tabs() -> void:
-	if life_window == null:
-		return
-	var tabs := life_window.find_child("LifeTabs", true, false) as TabContainer
-	_style_news_tab_container(tabs)
+	_ensure_life_controller()
+	life_controller.style_tabs()
 
 
 func _ensure_company_ui() -> void:
-	if company_window != null:
-		return
-
-	var desktop_icons_row: HBoxContainer = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow
-	var company_tile := VBoxContainer.new()
-	company_tile.name = "CompanyAppTile"
-	company_tile.add_theme_constant_override("separation", 10)
-	desktop_icons_row.add_child(company_tile)
-	var upgrades_tile: Node = desktop_icons_row.get_node_or_null("UpgradesAppTile")
-	if upgrades_tile != null:
-		desktop_icons_row.move_child(company_tile, upgrades_tile.get_index())
-
-	company_app_button = Button.new()
-	company_app_button.name = "CompanyAppButton"
-	company_app_button.custom_minimum_size = Vector2(92, 92)
-	company_app_button.toggle_mode = true
-	company_tile.add_child(company_app_button)
-
-	company_app_label = Label.new()
-	company_app_label.name = "CompanyAppLabel"
-	company_app_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	company_app_label.text = "Company"
-	company_app_label.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
-	company_tile.add_child(company_app_label)
-
-	company_window = MarginContainer.new()
-	company_window.name = "CompanyWindow"
-	company_window.visible = false
-	company_window.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(company_window)
-	var upgrade_window_node: Node = get_node_or_null("UpgradeWindow")
-	if upgrade_window_node != null:
-		move_child(company_window, upgrade_window_node.get_index())
-
-	var body := PanelContainer.new()
-	body.name = "CompanyWindowBody"
-	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_style_panel(body, COLOR_ACADEMY_CREAM, 0, 0, 0, 0, 0)
-	company_window.add_child(body)
-
-	var margin := MarginContainer.new()
-	margin.name = "CompanyWindowMargin"
-	margin.add_theme_constant_override("margin_left", 18)
-	margin.add_theme_constant_override("margin_top", 18)
-	margin.add_theme_constant_override("margin_right", 18)
-	margin.add_theme_constant_override("margin_bottom", 18)
-	body.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.name = "CompanyWindowVBox"
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 12)
-	margin.add_child(vbox)
-
-	var title := Label.new()
-	title.name = "CompanyTitleLabel"
-	title.text = "Company Control"
-	title.add_theme_font_size_override("font_size", 20)
-	title.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	vbox.add_child(title)
-
-	company_status_label = Label.new()
-	company_status_label.name = "CompanyStatusLabel"
-	company_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	company_status_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-	company_status_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	vbox.add_child(company_status_label)
-
-	company_controlled_option = OptionButton.new()
-	company_controlled_option.name = "CompanyControlledOption"
-	company_controlled_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	company_controlled_option.item_selected.connect(func(_index: int) -> void:
-		_refresh_company()
-	)
-	_style_light_option_button(company_controlled_option)
-	vbox.add_child(company_controlled_option)
-
-	company_detail_label = Label.new()
-	company_detail_label.name = "CompanyDetailLabel"
-	company_detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	company_detail_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	company_detail_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-	company_detail_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	vbox.add_child(company_detail_label)
-
-	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(0, 10)
-	vbox.add_child(spacer)
-
-	company_agenda_label = Label.new()
-	company_agenda_label.name = "CompanyAgendaLabel"
-	company_agenda_label.text = "RUPSLB agenda"
-	company_agenda_label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-	company_agenda_label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	vbox.add_child(company_agenda_label)
-
-	company_agenda_option = OptionButton.new()
-	company_agenda_option.name = "CompanyAgendaOption"
-	company_agenda_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_light_option_button(company_agenda_option)
-	vbox.add_child(company_agenda_option)
-
-	company_request_button = Button.new()
-	company_request_button.name = "CompanyRequestButton"
-	company_request_button.text = "Set Agenda"
-	company_request_button.custom_minimum_size = Vector2(0, 42)
-	company_request_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	company_request_button.tooltip_text = "Use majority ownership to set a company-direction agenda."
-	company_request_button.pressed.connect(_on_company_request_pressed)
-	_style_company_action_button(company_request_button, true)
-	vbox.add_child(company_request_button)
-
-	var bottom_spacer := Control.new()
-	bottom_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(bottom_spacer)
+	_ensure_company_controller()
+	company_controller.ensure_ui()
 
 
 func _refresh_company_app_availability() -> void:
-	if company_app_button == null:
-		return
-	var snapshot: Dictionary = GameManager.get_company_management_snapshot()
-	var unlocked: bool = bool(snapshot.get("unlocked", false))
-	company_app_button.disabled = false
-	company_app_button.tooltip_text = "Open Company." if unlocked else str(snapshot.get("status_text", "You have no company yet."))
-	if company_app_label != null:
-		company_app_label.modulate = Color.WHITE
+	_ensure_company_controller()
+	company_controller.refresh_app_availability()
 
 
 func _refresh_company(preferred_company_id: String = "") -> void:
-	if company_window == null:
-		return
-	var previous_company_id: String = preferred_company_id if not preferred_company_id.is_empty() else _selected_company_management_company_id()
-	company_management_snapshot = GameManager.get_company_management_snapshot(previous_company_id)
-	var controlled_rows: Array = company_management_snapshot.get("controlled_rows", [])
-	var candidate_rows: Array = company_management_snapshot.get("candidate_rows", [])
-	var selected_company_management_id: String = str(company_management_snapshot.get("selected_company_id", ""))
-	var selected_options: Dictionary = company_management_snapshot.get("selected_options", {})
-	var has_company: bool = not controlled_rows.is_empty()
-
-	if company_status_label != null:
-		company_status_label.text = str(company_management_snapshot.get("status_text", "You have no company yet."))
-	if company_controlled_option != null:
-		company_controlled_option.clear()
-		company_controlled_option.visible = has_company
-		var selected_index: int = 0
-		for row_index in range(controlled_rows.size()):
-			if typeof(controlled_rows[row_index]) != TYPE_DICTIONARY:
-				continue
-			var row: Dictionary = controlled_rows[row_index]
-			var company_id: String = str(row.get("company_id", ""))
-			company_controlled_option.add_item("%s  |  %.2f%%" % [
-				str(row.get("ticker", company_id.to_upper())),
-				float(row.get("ownership_pct", 0.0)) * 100.0
-			])
-			var item_index: int = company_controlled_option.get_item_count() - 1
-			company_controlled_option.set_item_metadata(item_index, company_id)
-			if company_id == selected_company_management_id:
-				selected_index = item_index
-		if company_controlled_option.get_item_count() > 0:
-			company_controlled_option.select(clamp(selected_index, 0, company_controlled_option.get_item_count() - 1))
-		company_controlled_option.disabled = company_controlled_option.get_item_count() <= 0
-
-	if company_detail_label != null:
-		company_detail_label.text = _company_management_detail_text(controlled_rows, candidate_rows, selected_company_management_id, selected_options)
-	if company_agenda_label != null:
-		company_agenda_label.visible = has_company
-
-	var previous_action_id: String = _selected_company_management_action_id()
-	if company_agenda_option != null:
-		company_agenda_option.clear()
-		company_agenda_option.visible = has_company
-		var rows: Array = selected_options.get("rows", [])
-		var selected_action_index: int = 0
-		for row_index in range(rows.size()):
-			if typeof(rows[row_index]) != TYPE_DICTIONARY:
-				continue
-			var action_row: Dictionary = rows[row_index]
-			var action_id: String = str(action_row.get("id", ""))
-			company_agenda_option.add_item(str(action_row.get("label", "Agenda")))
-			var item_index: int = company_agenda_option.get_item_count() - 1
-			company_agenda_option.set_item_metadata(item_index, action_id)
-			if action_id == previous_action_id:
-				selected_action_index = item_index
-		if company_agenda_option.get_item_count() > 0:
-			company_agenda_option.select(clamp(selected_action_index, 0, company_agenda_option.get_item_count() - 1))
-		company_agenda_option.disabled = not bool(selected_options.get("enabled", false)) or company_agenda_option.get_item_count() <= 0
-
-	if company_request_button != null:
-		var enabled: bool = bool(selected_options.get("enabled", false)) and company_agenda_option != null and company_agenda_option.get_item_count() > 0
-		company_request_button.disabled = not enabled
-		company_request_button.visible = has_company
-		company_request_button.tooltip_text = str(selected_options.get("tooltip_text", "Use majority ownership to set a company-direction agenda."))
-		_style_company_action_button(company_request_button, enabled)
-	_refresh_company_app_availability()
+	_ensure_company_controller()
+	company_controller.refresh(preferred_company_id)
 
 
 func _company_management_detail_text(controlled_rows: Array, candidate_rows: Array, selected_company_management_id: String, selected_options: Dictionary) -> String:
-	for row_value in controlled_rows:
-		if typeof(row_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = row_value
-		if str(row.get("company_id", "")) != selected_company_management_id:
-			continue
-		return "%s - %s\nOwned %s share(s), %.2f%% of outstanding. Control threshold: %s share(s).\n%s" % [
-			str(row.get("ticker", "")),
-			str(row.get("name", "")),
-			_format_grouped_integer(int(row.get("shares_owned", 0))),
-			float(row.get("ownership_pct", 0.0)) * 100.0,
-			_format_grouped_integer(int(row.get("control_required_shares", 0))),
-			str(selected_options.get("status_text", "Pick an agenda."))
-		]
-	return "You have no company yet."
+	_ensure_company_controller()
+	return company_controller.company_management_detail_text(controlled_rows, candidate_rows, selected_company_management_id, selected_options)
 
 
 func _selected_company_management_company_id() -> String:
-	if company_controlled_option == null or company_controlled_option.get_item_count() <= 0:
-		return str(company_management_snapshot.get("selected_company_id", ""))
-	var selected_index: int = company_controlled_option.selected
-	if selected_index < 0 or selected_index >= company_controlled_option.get_item_count():
-		return str(company_management_snapshot.get("selected_company_id", ""))
-	return str(company_controlled_option.get_item_metadata(selected_index))
+	_ensure_company_controller()
+	return company_controller.selected_company_id()
 
 
 func _selected_company_management_action_id() -> String:
-	if company_agenda_option == null or company_agenda_option.get_item_count() <= 0:
-		return ""
-	var selected_index: int = company_agenda_option.selected
-	if selected_index < 0 or selected_index >= company_agenda_option.get_item_count():
-		return ""
-	return str(company_agenda_option.get_item_metadata(selected_index))
+	_ensure_company_controller()
+	return company_controller.selected_action_id()
+
+
+func _ensure_academy_controller() -> void:
+	if academy_controller != null:
+		return
+	academy_controller = ACADEMY_CONTROLLER_SCRIPT.new()
+	academy_controller.setup(self)
 
 
 func _ensure_academy_ui() -> void:
-	if academy_window != null:
-		return
-
-	var desktop_icons_row: HBoxContainer = $DesktopLayer/DesktopMargin/DesktopVBox/DesktopIconsRow
-	var academy_tile := VBoxContainer.new()
-	academy_tile.name = "AcademyAppTile"
-	academy_tile.add_theme_constant_override("separation", 10)
-	desktop_icons_row.add_child(academy_tile)
-	var upgrades_tile: Node = desktop_icons_row.get_node_or_null("UpgradesAppTile")
-	if upgrades_tile != null:
-		desktop_icons_row.move_child(academy_tile, upgrades_tile.get_index())
-
-	academy_app_button = Button.new()
-	academy_app_button.name = "AcademyAppButton"
-	academy_app_button.custom_minimum_size = Vector2(92, 92)
-	academy_app_button.toggle_mode = true
-	academy_tile.add_child(academy_app_button)
-
-	academy_app_label = Label.new()
-	academy_app_label.name = "AcademyAppLabel"
-	academy_app_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	academy_app_label.text = "Academy"
-	academy_app_label.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
-	academy_tile.add_child(academy_app_label)
-
-	academy_window = MarginContainer.new()
-	academy_window.name = "AcademyWindow"
-	academy_window.visible = false
-	academy_window.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(academy_window)
-	var upgrade_window_node: Node = get_node_or_null("UpgradeWindow")
-	if upgrade_window_node != null:
-		move_child(academy_window, upgrade_window_node.get_index())
-
-	academy_window_body = PanelContainer.new()
-	academy_window_body.name = "AcademyWindowBody"
-	academy_window_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	academy_window_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	academy_window.add_child(academy_window_body)
-
-	var academy_margin := MarginContainer.new()
-	academy_margin.name = "AcademyWindowMargin"
-	academy_margin.add_theme_constant_override("margin_left", 14)
-	academy_margin.add_theme_constant_override("margin_top", 14)
-	academy_margin.add_theme_constant_override("margin_right", 14)
-	academy_margin.add_theme_constant_override("margin_bottom", 14)
-	academy_window_body.add_child(academy_margin)
-
-	var academy_vbox := VBoxContainer.new()
-	academy_vbox.name = "AcademyWindowVBox"
-	academy_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	academy_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	academy_vbox.add_theme_constant_override("separation", 12)
-	academy_margin.add_child(academy_vbox)
-
-	var header_row := HBoxContainer.new()
-	header_row.name = "AcademyHeaderRow"
-	header_row.visible = false
-	header_row.add_theme_constant_override("separation", 12)
-	academy_vbox.add_child(header_row)
-
-	academy_title_label = Label.new()
-	academy_title_label.name = "AcademyTitleLabel"
-	academy_title_label.text = "Academy"
-	academy_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_row.add_child(academy_title_label)
-
-	academy_progress_label = Label.new()
-	academy_progress_label.name = "AcademyProgressLabel"
-	academy_progress_label.text = ""
-	header_row.add_child(academy_progress_label)
-
-	academy_category_tabs = HBoxContainer.new()
-	academy_category_tabs.name = "AcademyCategoryTabs"
-	academy_category_tabs.add_theme_constant_override("separation", 12)
-	academy_category_tabs.custom_minimum_size = Vector2(0, 38)
-	academy_vbox.add_child(academy_category_tabs)
-
-	academy_section_tabs = GridContainer.new()
-	academy_section_tabs.name = "AcademySectionTabs"
-	academy_section_tabs.visible = false
-	academy_section_tabs.columns = 4
-	academy_section_tabs.add_theme_constant_override("h_separation", 12)
-	academy_section_tabs.add_theme_constant_override("v_separation", 12)
-	academy_vbox.add_child(academy_section_tabs)
-
-	academy_summary_label = Label.new()
-	academy_summary_label.name = "AcademySummaryLabel"
-	academy_summary_label.visible = false
-	academy_summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	academy_vbox.add_child(academy_summary_label)
-
-	var content_split := HSplitContainer.new()
-	content_split.name = "AcademyContentSplit"
-	content_split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content_split.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content_split.split_offset = 242
-	academy_vbox.add_child(content_split)
-
-	var list_panel := PanelContainer.new()
-	list_panel.name = "AcademySectionListPanel"
-	list_panel.visible = true
-	list_panel.custom_minimum_size = Vector2(240, 0)
-	content_split.add_child(list_panel)
-	_style_panel(list_panel, COLOR_ACADEMY_RAIL, 0)
-	var list_margin := MarginContainer.new()
-	list_margin.add_theme_constant_override("margin_left", 0)
-	list_margin.add_theme_constant_override("margin_top", 12)
-	list_margin.add_theme_constant_override("margin_right", 0)
-	list_margin.add_theme_constant_override("margin_bottom", 12)
-	list_panel.add_child(list_margin)
-	var list_vbox := VBoxContainer.new()
-	list_vbox.add_theme_constant_override("separation", 10)
-	list_margin.add_child(list_vbox)
-	var list_title := Label.new()
-	list_title.name = "AcademyCoreModulesLabel"
-	list_title.text = "CORE MODULES"
-	list_title.add_theme_font_size_override("font_size", 11)
-	list_title.add_theme_constant_override("line_spacing", 0)
-	var list_title_margin := MarginContainer.new()
-	list_title_margin.add_theme_constant_override("margin_left", 14)
-	list_title_margin.add_theme_constant_override("margin_right", 14)
-	list_title_margin.add_child(list_title)
-	list_vbox.add_child(list_title_margin)
-	academy_section_list = ItemList.new()
-	academy_section_list.name = "AcademySectionList"
-	academy_section_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	academy_section_list.fixed_column_width = 0
-	academy_section_list.same_column_width = false
-	academy_section_list.max_text_lines = 2
-	var list_inner_margin := MarginContainer.new()
-	list_inner_margin.add_theme_constant_override("margin_left", 12)
-	list_inner_margin.add_theme_constant_override("margin_right", 12)
-	list_inner_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	list_inner_margin.add_child(academy_section_list)
-	list_vbox.add_child(list_inner_margin)
-
-	var lesson_panel := PanelContainer.new()
-	lesson_panel.name = "AcademyLessonPanel"
-	lesson_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lesson_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content_split.add_child(lesson_panel)
-	_style_panel(lesson_panel, COLOR_ACADEMY_CREAM, 0)
-	var lesson_margin := MarginContainer.new()
-	lesson_margin.add_theme_constant_override("margin_left", 26)
-	lesson_margin.add_theme_constant_override("margin_top", 24)
-	lesson_margin.add_theme_constant_override("margin_right", 26)
-	lesson_margin.add_theme_constant_override("margin_bottom", 16)
-	lesson_panel.add_child(lesson_margin)
-	var lesson_vbox := VBoxContainer.new()
-	lesson_vbox.add_theme_constant_override("separation", 12)
-	lesson_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lesson_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	lesson_margin.add_child(lesson_vbox)
-	academy_lesson_scroll = ScrollContainer.new()
-	academy_lesson_scroll.name = "AcademyLessonScroll"
-	academy_lesson_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	academy_lesson_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	lesson_vbox.add_child(academy_lesson_scroll)
-	var lesson_scroll_vbox := VBoxContainer.new()
-	lesson_scroll_vbox.name = "AcademyLessonScrollVBox"
-	lesson_scroll_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lesson_scroll_vbox.add_theme_constant_override("separation", 12)
-	academy_lesson_scroll.add_child(lesson_scroll_vbox)
-	academy_selection_chip_label = Label.new()
-	academy_selection_chip_label.name = "AcademySelectionChipLabel"
-	academy_selection_chip_label.text = "CURRENT SELECTION"
-	academy_selection_chip_label.add_theme_font_size_override("font_size", 10)
-	academy_selection_chip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	academy_selection_chip_label.custom_minimum_size = Vector2(150, 20)
-	lesson_scroll_vbox.add_child(academy_selection_chip_label)
-	academy_lesson_title_label = Label.new()
-	academy_lesson_title_label.name = "AcademyLessonTitleLabel"
-	academy_lesson_title_label.visible = true
-	academy_lesson_title_label.add_theme_font_size_override("font_size", 30)
-	academy_lesson_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	lesson_scroll_vbox.add_child(academy_lesson_title_label)
-	academy_lesson_meta_label = Label.new()
-	academy_lesson_meta_label.name = "AcademyLessonMetaLabel"
-	academy_lesson_meta_label.visible = true
-	academy_lesson_meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	lesson_scroll_vbox.add_child(academy_lesson_meta_label)
-	academy_lesson_banner_frame = PanelContainer.new()
-	academy_lesson_banner_frame.name = "AcademyLessonBannerFrame"
-	academy_lesson_banner_frame.custom_minimum_size = Vector2(0, 150)
-	academy_lesson_banner_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	academy_lesson_banner_frame.visible = SHOW_ACADEMY_IMAGE_PLACEHOLDERS
-	lesson_scroll_vbox.add_child(academy_lesson_banner_frame)
-	_style_academy_banner_frame(academy_lesson_banner_frame)
-	var banner_center := CenterContainer.new()
-	academy_lesson_banner_frame.add_child(banner_center)
-	academy_lesson_banner_label = Label.new()
-	academy_lesson_banner_label.name = "AcademyLessonBannerLabel"
-	academy_lesson_banner_label.text = "CHART MODULE"
-	academy_lesson_banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	academy_lesson_banner_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	academy_lesson_banner_label.add_theme_font_size_override("font_size", 16)
-	banner_center.add_child(academy_lesson_banner_label)
-	academy_lesson_content_vbox = VBoxContainer.new()
-	academy_lesson_content_vbox.name = "AcademyLessonContentVBox"
-	academy_lesson_content_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	academy_lesson_content_vbox.add_theme_constant_override("separation", 10)
-	lesson_scroll_vbox.add_child(academy_lesson_content_vbox)
-	academy_action_row = HBoxContainer.new()
-	academy_action_row.name = "AcademyActionRow"
-	academy_action_row.add_theme_constant_override("separation", 10)
-	lesson_vbox.add_child(academy_action_row)
-	academy_mark_read_button = Button.new()
-	academy_mark_read_button.name = "AcademyMarkReadButton"
-	academy_mark_read_button.text = "MARK AS COMPLETE"
-	academy_mark_read_button.custom_minimum_size = Vector2(170, 44)
-	academy_action_row.add_child(academy_mark_read_button)
-	academy_next_button = Button.new()
-	academy_next_button.name = "AcademyNextButton"
-	academy_next_button.text = "Next Section"
-	academy_next_button.custom_minimum_size = Vector2(130, 44)
-	academy_action_row.add_child(academy_next_button)
-
-	var side_panel := PanelContainer.new()
-	side_panel.name = "AcademySidePanel"
-	side_panel.visible = false
-	side_panel.custom_minimum_size = Vector2(260, 0)
-	content_split.add_child(side_panel)
-	_style_panel(side_panel, Color(0.952941, 0.94902, 0.87451, 1), 0)
-	var side_margin := MarginContainer.new()
-	side_margin.add_theme_constant_override("margin_left", 10)
-	side_margin.add_theme_constant_override("margin_top", 10)
-	side_margin.add_theme_constant_override("margin_right", 10)
-	side_margin.add_theme_constant_override("margin_bottom", 10)
-	side_panel.add_child(side_margin)
-	var side_vbox := VBoxContainer.new()
-	side_vbox.add_theme_constant_override("separation", 8)
-	side_margin.add_child(side_vbox)
-	academy_side_title_label = Label.new()
-	academy_side_title_label.name = "AcademySideTitleLabel"
-	side_vbox.add_child(academy_side_title_label)
-	academy_side_body_label = Label.new()
-	academy_side_body_label.name = "AcademySideBodyLabel"
-	academy_side_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	side_vbox.add_child(academy_side_body_label)
-	academy_glossary_search_input = LineEdit.new()
-	academy_glossary_search_input.name = "AcademyGlossarySearchInput"
-	academy_glossary_search_input.placeholder_text = "Search glossary"
-	side_vbox.add_child(academy_glossary_search_input)
-	academy_glossary_list = ItemList.new()
-	academy_glossary_list.name = "AcademyGlossaryList"
-	academy_glossary_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	side_vbox.add_child(academy_glossary_list)
-	_apply_academy_text_theme()
-	_style_academy_primary_button(academy_mark_read_button)
-	_style_academy_primary_button(academy_next_button)
-	_apply_academy_button_padding(academy_mark_read_button, 14)
-	_apply_academy_button_padding(academy_next_button, 14)
-	_restyle_academy_controls()
+	_ensure_academy_controller()
+	academy_controller.ensure_ui()
 
 
 func _refresh_academy() -> void:
-	if academy_window == null:
-		return
-	current_academy_snapshot = {}
-	academy_title_label.text = "Academy"
-	if not RunState.has_active_run():
-		academy_progress_label.text = "No run loaded"
-		academy_summary_label.text = "Start a run to open Academy lessons."
-		academy_section_list.clear()
-		_clear_container_children(academy_category_tabs)
-		_clear_container_children(academy_section_tabs)
-		_clear_container_children(academy_lesson_content_vbox)
-		if academy_selection_chip_label != null:
-			academy_selection_chip_label.text = "NO RUN LOADED"
-		if academy_lesson_banner_label != null:
-			academy_lesson_banner_label.text = "ACADEMY"
-		academy_lesson_title_label.text = "No lesson"
-		academy_lesson_meta_label.text = ""
-		academy_mark_read_button.disabled = true
-		academy_next_button.disabled = true
-		_apply_font_overrides_to_subtree(academy_window)
-		_restyle_academy_controls()
-		return
-
-	current_academy_snapshot = GameManager.get_academy_snapshot(selected_academy_category_id, selected_academy_section_id)
-	selected_academy_category_id = str(current_academy_snapshot.get("category_id", selected_academy_category_id))
-	selected_academy_section_id = str(current_academy_snapshot.get("selected_section_id", selected_academy_section_id))
-	academy_title_label.text = ""
-	_rebuild_academy_category_tabs()
-	_rebuild_academy_section_list()
-	_rebuild_academy_section_tabs()
-	_refresh_academy_content()
-	_apply_academy_text_theme()
-	_apply_font_overrides_to_subtree(academy_window)
-	_restyle_academy_controls()
+	_ensure_academy_controller()
+	academy_controller.refresh()
 
 
 func _apply_academy_text_theme() -> void:
-	if academy_window == null:
-		return
-	_apply_academy_text_theme_to_node(academy_window)
-
-
-func _apply_academy_text_theme_to_node(node: Node) -> void:
-	if node is Label:
-		var label: Label = node
-		label.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	elif node is RichTextLabel:
-		var rich_text: RichTextLabel = node
-		rich_text.add_theme_color_override("default_color", COLOR_WINDOW_TEXT)
-	elif node is ItemList:
-		var item_list: ItemList = node
-		item_list.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-		item_list.add_theme_color_override("font_hovered_color", COLOR_WINDOW_TEXT)
-		item_list.add_theme_color_override("font_selected_color", COLOR_WINDOW_TEXT)
-	elif node is LineEdit:
-		var line_edit: LineEdit = node
-		line_edit.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-		line_edit.add_theme_color_override("font_placeholder_color", Color(0.352941, 0.309804, 0.203922, 0.78))
-	elif node is OptionButton:
-		var option_button: OptionButton = node
-		option_button.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-		option_button.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
-		option_button.add_theme_color_override("font_pressed_color", COLOR_WINDOW_TEXT)
-	elif node is Button:
-		var button: Button = node
-		button.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-		button.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
-		button.add_theme_color_override("font_pressed_color", COLOR_WINDOW_TEXT)
-		button.add_theme_color_override("font_disabled_color", Color(0.352941, 0.309804, 0.203922, 0.62))
-
-	for child in node.get_children():
-		_apply_academy_text_theme_to_node(child)
-
-
-func _rebuild_academy_category_tabs() -> void:
-	_clear_container_children(academy_category_tabs)
-	for category_value in current_academy_snapshot.get("categories", []):
-		var category: Dictionary = category_value
-		var button := Button.new()
-		var category_id: String = str(category.get("id", ""))
-		button.name = "AcademyCategoryButton_%s" % category_id
-		button.text = str(category.get("label", category_id.capitalize())).to_upper()
-		button.toggle_mode = true
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.custom_minimum_size = Vector2(0, 36)
-		button.set_pressed_no_signal(category_id == selected_academy_category_id)
-		button.pressed.connect(_on_academy_category_pressed.bind(category_id))
-		academy_category_tabs.add_child(button)
-		_style_academy_category_tab(button, category_id == selected_academy_category_id)
-
-
-func _style_academy_category_tab(button: Button, selected: bool) -> void:
-	_style_news_tab_button(button, selected, true)
-
-
-func _apply_academy_button_padding(button: Button, padding: int = 24) -> void:
-	for style_name in ["normal", "hover", "pressed", "focus", "disabled"]:
-		var current_style: StyleBox = button.get_theme_stylebox(style_name)
-		if current_style == null or current_style is not StyleBoxFlat:
-			continue
-		var flat_style: StyleBoxFlat = current_style.duplicate()
-		flat_style.content_margin_left = padding
-		flat_style.content_margin_right = padding
-		flat_style.content_margin_top = padding
-		flat_style.content_margin_bottom = padding
-		button.add_theme_stylebox_override(style_name, flat_style)
-
-
-func _style_academy_primary_button(button: Button) -> void:
-	if button == null:
-		return
-	UiTheme.style_button(button, "desktop_primary")
-
-
-func _style_academy_selection_chip(label: Label) -> void:
-	var chip_style := StyleBoxFlat.new()
-	chip_style.bg_color = COLOR_ACADEMY_GREEN
-	chip_style.border_color = COLOR_ACADEMY_GREEN.darkened(0.18)
-	chip_style.set_border_width_all(0)
-	chip_style.corner_radius_top_left = 0
-	chip_style.corner_radius_top_right = 0
-	chip_style.corner_radius_bottom_left = 0
-	chip_style.corner_radius_bottom_right = 0
-	chip_style.content_margin_left = 10
-	chip_style.content_margin_right = 10
-	chip_style.content_margin_top = 4
-	chip_style.content_margin_bottom = 4
-	label.add_theme_stylebox_override("normal", chip_style)
-	label.add_theme_color_override("font_color", Color(0.247059, 0.278431, 0.117647, 1))
-
-
-func _style_academy_banner_frame(panel: PanelContainer) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.2, 0.196078, 0.156863, 0.92)
-	style.border_color = Color(0.12549, 0.113725, 0.0823529, 1)
-	style.set_border_width_all(2)
-	style.corner_radius_top_left = 0
-	style.corner_radius_top_right = 0
-	style.corner_radius_bottom_left = 0
-	style.corner_radius_bottom_right = 0
-	panel.add_theme_stylebox_override("panel", style)
-
-
-func _style_academy_content_block(panel: PanelContainer, fill_color: Color, border_left: int = 1) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = fill_color
-	style.border_color = COLOR_ACADEMY_BORDER
-	style.border_width_left = border_left
-	style.border_width_top = 0 if border_left > 1 else 1
-	style.border_width_right = 0 if border_left > 1 else 1
-	style.border_width_bottom = 0 if border_left > 1 else 1
-	style.corner_radius_top_left = 0
-	style.corner_radius_top_right = 0
-	style.corner_radius_bottom_left = 0
-	style.corner_radius_bottom_right = 0
-	panel.add_theme_stylebox_override("panel", style)
-
-
-func _style_academy_text_card(panel: PanelContainer) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = COLOR_ACADEMY_CREAM
-	style.border_color = Color(0.658824, 0.533333, 0.278431, 0.92)
-	style.set_border_width_all(1)
-	style.corner_radius_top_left = 0
-	style.corner_radius_top_right = 0
-	style.corner_radius_bottom_left = 0
-	style.corner_radius_bottom_right = 0
-	panel.add_theme_stylebox_override("panel", style)
-
-
-func _style_academy_infobox_card(panel: PanelContainer) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.945098, 0.894118, 0.705882, 1)
-	style.border_color = Color(0.658824, 0.533333, 0.278431, 0.95)
-	style.set_border_width_all(1)
-	style.corner_radius_top_left = 0
-	style.corner_radius_top_right = 0
-	style.corner_radius_bottom_left = 0
-	style.corner_radius_bottom_right = 0
-	panel.add_theme_stylebox_override("panel", style)
-
-
-func _style_academy_table_card(panel: PanelContainer) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.968627, 0.92549, 0.760784, 1)
-	style.border_color = Color(0.607843, 0.470588, 0.219608, 0.95)
-	style.set_border_width_all(1)
-	style.corner_radius_top_left = 0
-	style.corner_radius_top_right = 0
-	style.corner_radius_bottom_left = 0
-	style.corner_radius_bottom_right = 0
-	panel.add_theme_stylebox_override("panel", style)
-
-
-func _style_academy_key_insights_card(panel: PanelContainer) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.835294, 0.898039, 0.968627, 1)
-	style.border_color = Color(0.133333, 0.376471, 0.694118, 1)
-	style.border_width_left = 5
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 0
-	style.corner_radius_top_right = 0
-	style.corner_radius_bottom_left = 0
-	style.corner_radius_bottom_right = 0
-	panel.add_theme_stylebox_override("panel", style)
-
-
-func _style_academy_quick_check_button(button: Button) -> void:
-	_style_button(button, Color(0.945098, 0.894118, 0.705882, 1), COLOR_ACADEMY_BORDER, COLOR_WINDOW_TEXT, 0)
-	_apply_academy_button_padding(button, 10)
-	button.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	button.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
-	button.add_theme_color_override("font_pressed_color", COLOR_WINDOW_TEXT)
-	button.add_theme_color_override("font_focus_color", COLOR_WINDOW_TEXT)
-
-
-func _style_academy_quiz_option_button(option_button: OptionButton) -> void:
-	_style_button(
-		option_button,
-		Color(0.980392, 0.952941, 0.807843, 1),
-		Color(0.552941, 0.411765, 0.164706, 1),
-		COLOR_WINDOW_TEXT,
-		0
-	)
-	_apply_academy_button_padding(option_button, 12)
-	option_button.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	option_button.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
-	option_button.add_theme_color_override("font_pressed_color", COLOR_WINDOW_TEXT)
-	option_button.add_theme_color_override("font_focus_color", COLOR_WINDOW_TEXT)
-	option_button.add_theme_color_override("font_disabled_color", Color(0.352941, 0.309804, 0.203922, 0.78))
-	var popup: PopupMenu = option_button.get_popup()
-	if popup == null:
-		return
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.992157, 0.976471, 0.894118, 1)
-	panel_style.border_color = COLOR_ACADEMY_BORDER
-	panel_style.set_border_width_all(1)
-	panel_style.corner_radius_top_left = 0
-	panel_style.corner_radius_top_right = 0
-	panel_style.corner_radius_bottom_left = 0
-	panel_style.corner_radius_bottom_right = 0
-	popup.add_theme_stylebox_override("panel", panel_style)
-	var hover_style := StyleBoxFlat.new()
-	hover_style.bg_color = Color(0.894118, 0.807843, 0.560784, 1)
-	hover_style.border_color = Color(0.709804, 0.607843, 0.345098, 1)
-	hover_style.set_border_width_all(0)
-	popup.add_theme_stylebox_override("hover", hover_style)
-	popup.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	popup.add_theme_color_override("font_hover_color", COLOR_WINDOW_TEXT)
-	popup.add_theme_color_override("font_accelerator_color", COLOR_WINDOW_TEXT)
-	popup.add_theme_color_override("font_disabled_color", Color(0.352941, 0.309804, 0.203922, 0.62))
-
-
-func _style_academy_quiz_submit_button(button: Button) -> void:
-	_style_button(button, COLOR_ACADEMY_BROWN, COLOR_ACADEMY_BORDER, COLOR_ACADEMY_CREAM, 0)
-	_apply_academy_button_padding(button, 18)
-	button.add_theme_color_override("font_color", COLOR_ACADEMY_CREAM)
-	button.add_theme_color_override("font_hover_color", COLOR_ACADEMY_CREAM)
-	button.add_theme_color_override("font_pressed_color", COLOR_ACADEMY_CREAM)
-	button.add_theme_color_override("font_focus_color", COLOR_ACADEMY_CREAM)
+	_ensure_academy_controller()
+	academy_controller.apply_text_theme()
 
 
 func _restyle_academy_controls() -> void:
-	if academy_window_body != null:
-		_style_panel(academy_window_body, COLOR_ACADEMY_CREAM, 0, 0, 0, 0, 0)
-	if academy_section_list != null:
-		_style_light_item_list(academy_section_list)
-	if academy_glossary_list != null:
-		_style_light_item_list(academy_glossary_list)
-	if academy_category_tabs != null:
-		for child in academy_category_tabs.get_children():
-			var tab_button: Button = child as Button
-			if tab_button == null:
-				continue
-			var tab_id: String = tab_button.name.trim_prefix("AcademyCategoryButton_")
-			_style_academy_category_tab(tab_button, tab_id == selected_academy_category_id)
-	if academy_section_tabs != null:
-		for child in academy_section_tabs.get_children():
-			var section_tab_button: Button = child as Button
-			if section_tab_button == null:
-				continue
-			var section_tab_id: String = section_tab_button.name.trim_prefix("AcademySectionTab_")
-			_style_academy_section_tab(section_tab_button, section_tab_id == selected_academy_section_id, section_tab_button.disabled)
-	if academy_selection_chip_label != null:
-		_style_academy_selection_chip(academy_selection_chip_label)
-		academy_selection_chip_label.add_theme_font_size_override("font_size", 10)
-	if academy_lesson_title_label != null:
-		academy_lesson_title_label.add_theme_color_override("font_color", COLOR_ACADEMY_BROWN)
-		academy_lesson_title_label.add_theme_font_size_override("font_size", 30)
-	if academy_lesson_meta_label != null:
-		academy_lesson_meta_label.add_theme_color_override("font_color", Color(0.25098, 0.223529, 0.156863, 1))
-		academy_lesson_meta_label.add_theme_font_size_override("font_size", 14)
-	if academy_lesson_banner_frame != null:
-		_style_academy_banner_frame(academy_lesson_banner_frame)
-	if academy_lesson_banner_label != null:
-		academy_lesson_banner_label.add_theme_color_override("font_color", Color(0.898039, 0.870588, 0.745098, 1))
-		academy_lesson_banner_label.add_theme_font_size_override("font_size", 16)
-	if academy_mark_read_button != null:
-		_style_academy_primary_button(academy_mark_read_button)
-		_apply_academy_button_padding(academy_mark_read_button, 14)
-	if academy_next_button != null:
-		_style_academy_primary_button(academy_next_button)
-		_apply_academy_button_padding(academy_next_button, 14)
-	if academy_lesson_content_vbox != null:
-		_restyle_academy_content_nodes(academy_lesson_content_vbox)
-
-
-func _restyle_academy_content_nodes(node: Node) -> void:
-	if node.name == "AcademyTextBlockTitle" and node is Label:
-		var label: Label = node
-		label.add_theme_font_size_override("font_size", 16)
-		label.add_theme_color_override("font_color", Color(0.129412, 0.101961, 0.058824, 1))
-	if node.name == "AcademyKeyInsightsTitle" and node is Label:
-		var insights_label: Label = node
-		insights_label.add_theme_font_size_override("font_size", 16)
-		insights_label.add_theme_color_override("font_color", Color(0.054902, 0.164706, 0.313726, 1))
-	if node.name == "AcademyQuickCheckOptionButton" and node is Button:
-		_style_academy_quick_check_button(node as Button)
-	if String(node.name).begins_with("AcademyQuizOption_") and node is OptionButton:
-		_style_academy_quiz_option_button(node as OptionButton)
-	if node.name == "AcademyQuizSubmitButton" and node is Button:
-		_style_academy_quiz_submit_button(node as Button)
-	for child in node.get_children():
-		_restyle_academy_content_nodes(child)
-
-
-func _rebuild_academy_section_list() -> void:
-	academy_section_list.clear()
-	var sections: Array = current_academy_snapshot.get("sections", [])
-	for index in range(sections.size()):
-		var section: Dictionary = sections[index]
-		var section_id: String = str(section.get("id", ""))
-		var order: int = int(section.get("order", index + 1))
-		var title: String = str(section.get("title", section.get("label", "Section")))
-		var status_label: String = _academy_module_status_label(section)
-		var label: String = "%d    %s\n     %s" % [order, title, status_label]
-		academy_section_list.add_item(label)
-		academy_section_list.set_item_metadata(index, section.duplicate(true))
-		academy_section_list.set_item_disabled(index, bool(section.get("locked", false)))
-		academy_section_list.set_item_custom_fg_color(index, COLOR_WINDOW_TEXT if not bool(section.get("locked", false)) else Color(0.329412, 0.313725, 0.266667, 0.78))
-		academy_section_list.set_item_custom_bg_color(index, _academy_module_row_color(section, section_id == selected_academy_section_id))
-		if section_id == selected_academy_section_id:
-			academy_section_list.select(index)
-
-
-func _academy_module_status_label(section: Dictionary) -> String:
-	var kind: String = str(section.get("kind", "lesson"))
-	if kind == "quiz":
-		return "Quiz locked" if bool(section.get("locked", false)) else "Quiz"
-	if kind == "glossary":
-		return "Glossary"
-	if bool(section.get("read", false)):
-		return "Completed"
-	return "Not learned"
-
-
-func _academy_module_row_color(section: Dictionary, selected: bool) -> Color:
-	if selected:
-		return Color(0.87451, 0.831373, 0.666667, 1)
-	if bool(section.get("read", false)):
-		return Color(0.917647, 0.933333, 0.741176, 1)
-	if bool(section.get("locked", false)):
-		return Color(0.839216, 0.815686, 0.72549, 0.45)
-	return Color(0.968627, 0.941176, 0.815686, 0.62)
-
-
-func _rebuild_academy_section_tabs() -> void:
-	_clear_container_children(academy_section_tabs)
-	var sections: Array = current_academy_snapshot.get("sections", [])
-	for section_value in sections:
-		var section: Dictionary = section_value
-		var section_id: String = str(section.get("id", ""))
-		var selected: bool = section_id == selected_academy_section_id
-		var button := Button.new()
-		button.name = "AcademySectionTab_%s" % section_id
-		button.custom_minimum_size = Vector2(220, 56)
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.toggle_mode = true
-		button.text = _academy_section_tab_label(section, selected)
-		button.disabled = bool(section.get("locked", false))
-		button.set_pressed_no_signal(selected)
-		button.pressed.connect(_on_academy_section_tab_pressed.bind(section_id))
-		academy_section_tabs.add_child(button)
-		_style_academy_section_tab(button, selected, bool(section.get("locked", false)))
-
-
-func _academy_section_tab_label(section: Dictionary, selected: bool = false) -> String:
-	var label: String = str(section.get("label", "Section"))
-	var title: String = str(section.get("title", ""))
-	var order: int = int(section.get("order", 0))
-	var prefix: String = "%02d / 08 " % order if selected and order > 0 else ""
-	if label.begins_with("01"):
-		return "%s01 Getting to Know TA" % prefix
-	if label.begins_with("02"):
-		return "%s02 Market Structure" % prefix
-	if label.begins_with("03"):
-		return "%s03 Candlesticks" % prefix
-	if label.begins_with("04"):
-		return "%s04 Patterns" % prefix
-	if label.begins_with("05"):
-		return "%s05 Moving Average" % prefix
-	if label.begins_with("06"):
-		return "%s06 Framework" % prefix
-	if label.begins_with("07"):
-		return "%s07 Quiz" % prefix if not bool(section.get("locked", false)) else "%s07 Quiz locked" % prefix
-	if label.begins_with("08"):
-		return "%s08 Glossary" % prefix
-	return "%s%s" % [prefix, title if not title.is_empty() else label]
-
-
-func _style_academy_section_tab(button: Button, selected: bool, locked: bool) -> void:
-	_style_news_tab_button(button, selected, not locked)
-
-
-func _refresh_academy_content() -> void:
-	var progress: Dictionary = current_academy_snapshot.get("progress", {})
-	var quiz: Dictionary = current_academy_snapshot.get("quiz", {})
-	academy_progress_label.text = "%d/%d sections read  |  Quiz %s  |  Best %d%%" % [
-		int(progress.get("read_count", 0)),
-		int(progress.get("readable_count", 0)),
-		"passed" if bool(quiz.get("passed", false)) else ("locked" if bool(quiz.get("locked", true)) else "open"),
-		int(quiz.get("best_score_percent", 0))
-	]
-	_clear_container_children(academy_lesson_content_vbox)
-	academy_quiz_option_buttons.clear()
-
-	if bool(current_academy_snapshot.get("coming_soon", false)):
-		academy_summary_label.text = str(current_academy_snapshot.get("category_label", "Academy")).to_upper()
-		if academy_selection_chip_label != null:
-			academy_selection_chip_label.text = "TRACK PREVIEW"
-		academy_lesson_title_label.text = str(current_academy_snapshot.get("category_label", "Academy"))
-		academy_lesson_meta_label.text = str(current_academy_snapshot.get("coming_soon_copy", "Coming soon."))
-		if academy_lesson_banner_label != null:
-			academy_lesson_banner_label.text = "COMING SOON"
-		academy_mark_read_button.visible = false
-		academy_next_button.visible = false
-		_refresh_academy_side_panel()
-		return
-
-	var section: Dictionary = current_academy_snapshot.get("selected_section", {})
-	if section.is_empty():
-		academy_summary_label.text = ""
-		if academy_selection_chip_label != null:
-			academy_selection_chip_label.text = "CHOOSE MODULE"
-		academy_lesson_title_label.text = "Choose a section"
-		academy_lesson_meta_label.text = ""
-		if academy_lesson_banner_label != null:
-			academy_lesson_banner_label.text = "ACADEMY"
-		academy_mark_read_button.visible = false
-		academy_next_button.visible = false
-		_refresh_academy_side_panel()
-		return
-
-	var kind: String = str(section.get("kind", "lesson"))
-	academy_summary_label.text = str(section.get("label", "")).to_upper()
-	if academy_selection_chip_label != null:
-		academy_selection_chip_label.text = _academy_selection_chip_text(section)
-	academy_lesson_title_label.text = str(section.get("title", section.get("label", "Lesson")))
-	academy_lesson_meta_label.text = _academy_lesson_deck(section)
-	if academy_lesson_banner_label != null:
-		academy_lesson_banner_label.text = _academy_banner_label_for_section(section)
-	if kind == "quiz":
-		_build_academy_quiz(section)
-	elif kind == "glossary":
-		_build_academy_glossary_section()
-	else:
-		_build_academy_lesson(section)
-
-	academy_mark_read_button.visible = kind == "lesson"
-	academy_mark_read_button.disabled = bool(section.get("read", false))
-	academy_mark_read_button.text = "COMPLETED" if bool(section.get("read", false)) else "MARK AS COMPLETE"
-	academy_next_button.visible = true
-	academy_next_button.disabled = _next_academy_section_id().is_empty()
-	_refresh_academy_side_panel()
-
-
-func _academy_selection_chip_text(section: Dictionary) -> String:
-	var kind: String = str(section.get("kind", "lesson"))
-	if kind == "quiz":
-		return "CURRENT SELECTION: QUIZ"
-	if kind == "glossary":
-		return "CURRENT SELECTION: GLOSSARY"
-	var order: int = int(section.get("order", 0))
-	return "CURRENT SELECTION: MODULE %d" % max(order, 1)
-
-
-func _academy_lesson_deck(section: Dictionary) -> String:
-	var kind: String = str(section.get("kind", "lesson"))
-	if kind == "quiz":
-		return "Score 80 percent or better to earn %s." % _academy_current_badge_label()
-	if kind == "glossary":
-		return "Search the core vocabulary used across the %s track." % _academy_current_category_label()
-	var completion_signal_text: String = str(section.get("completion_signal", "")).strip_edges()
-	if not completion_signal_text.is_empty():
-		var softened_signal: String = completion_signal_text.substr(0, 1).to_lower() + completion_signal_text.substr(1)
-		return "In this chapter, %s" % softened_signal
-	return "In this chapter, build one repeatable market-reading habit."
-
-
-func _academy_current_badge_label() -> String:
-	var badge: Dictionary = current_academy_snapshot.get("badge", {})
-	return str(badge.get("label", "the module badge"))
-
-
-func _academy_current_category_label() -> String:
-	return str(current_academy_snapshot.get("category_label", "Academy"))
-
-
-func _academy_banner_label_for_section(section: Dictionary) -> String:
-	var kind: String = str(section.get("kind", "lesson"))
-	if kind == "quiz":
-		return "QUIZ BOARD"
-	if kind == "glossary":
-		return "GLOSSARY"
-	var section_id: String = str(section.get("id", ""))
-	match section_id:
-		"market_structure":
-			return "MARKET STRUCTURE"
-		"candlesticks":
-			return "CANDLE STUDY"
-		"patterns":
-			return "PATTERN BOARD"
-		"moving_average":
-			return "TREND MODULE"
-		"thinking_framework":
-			return "ROUTINE BOARD"
-		_:
-			return "CHART MODULE"
-
-
-func _build_academy_lesson(section: Dictionary) -> void:
-	var content_blocks: Array = section.get("content_blocks", [])
-	if not content_blocks.is_empty():
-		for block_value in content_blocks:
-			var block: Dictionary = block_value
-			academy_lesson_content_vbox.add_child(_build_academy_content_block(block))
-	else:
-		var paragraphs: Array = []
-		for page_value in section.get("pages", []):
-			var page: Dictionary = page_value
-			var body: String = str(page.get("body", "")).strip_edges()
-			if not body.is_empty():
-				paragraphs.append(body)
-		if not paragraphs.is_empty():
-			academy_lesson_content_vbox.add_child(_build_academy_text_block(
-				_academy_lesson_card_title(section),
-				"\n\n".join(paragraphs)
-			))
-
-	var stored_checks: Dictionary = RunState.get_academy_progress().get("inline_checks", {}).get(selected_academy_category_id, {}).get(str(section.get("id", "")), {})
-	for check_value in section.get("checks", []):
-		var check: Dictionary = check_value
-		academy_lesson_content_vbox.add_child(_build_academy_check_block(str(section.get("id", "")), check, stored_checks.get(str(check.get("id", "")), {})))
-
-
-func _build_academy_content_block(block: Dictionary) -> Control:
-	var block_type: String = str(block.get("type", "text"))
-	if block_type == "image":
-		return _build_academy_image_block(
-			str(block.get("asset_path", "")),
-			str(block.get("caption", "")),
-			str(block.get("alt", "Academy image"))
-		)
-	if block_type == "key_insights":
-		return _build_academy_key_insights_block(
-			str(block.get("title", "Key Insights")),
-			block.get("bullets", [])
-		)
-	return _build_academy_text_block(
-		str(block.get("heading", "Lesson")),
-		str(block.get("body", "")),
-		block.get("infoboxes", []),
-		block.get("images", [])
-	)
-
-
-func _academy_lesson_card_title(section: Dictionary) -> String:
-	var section_id: String = str(section.get("id", ""))
-	if section_id == "intro":
-		return "What is technical analysis?"
-	if section_id == "market_structure":
-		return "Read the market shape first"
-	if section_id == "candlesticks":
-		return "Read the fight inside each candle"
-	if section_id == "patterns":
-		return "Patterns need context"
-	if section_id == "moving_average":
-		return "Moving averages confirm, not command"
-	if section_id == "thinking_framework":
-		return "A repeatable routine beats guessing"
-	return str(section.get("title", "Lesson"))
-
-
-func _build_academy_quiz(section: Dictionary) -> void:
-	var quiz: Dictionary = current_academy_snapshot.get("quiz", {})
-	if bool(quiz.get("locked", true)):
-		var unread_labels: Array = []
-		for unread_value in quiz.get("unread_required_sections", []):
-			var unread: Dictionary = unread_value
-			unread_labels.append(str(unread.get("label", "")))
-		academy_lesson_content_vbox.add_child(_build_academy_text_block("Locked", "Read these sections first: %s." % ", ".join(unread_labels)))
-		return
-
-	for block_value in section.get("content_blocks", []):
-		var block: Dictionary = block_value
-		academy_lesson_content_vbox.add_child(_build_academy_content_block(block))
-	academy_lesson_content_vbox.add_child(_build_academy_text_block("Quiz", "Score 80 percent or better to earn %s. Wrong answers give feedback after submission." % _academy_current_badge_label()))
-	var catalog: Dictionary = DataRepository.get_academy_catalog()
-	var module_category: Dictionary = {}
-	for category_value in catalog.get("categories", []):
-		var category: Dictionary = category_value
-		if str(category.get("id", "")) == selected_academy_category_id:
-			module_category = category
-			break
-	for question_value in module_category.get("quiz_questions", []):
-		var question: Dictionary = question_value
-		var block := VBoxContainer.new()
-		block.add_theme_constant_override("separation", 6)
-		var prompt := Label.new()
-		prompt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		prompt.text = "%s: %s" % [str(question.get("category", "Question")), str(question.get("prompt", ""))]
-		prompt.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-		block.add_child(prompt)
-		var option_button := OptionButton.new()
-		option_button.name = "AcademyQuizOption_%s" % str(question.get("id", ""))
-		option_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		option_button.custom_minimum_size = Vector2(0, 42)
-		for option_value in question.get("options", []):
-			var option: Dictionary = option_value
-			option_button.add_item(str(option.get("label", "")))
-			option_button.set_item_metadata(option_button.get_item_count() - 1, str(option.get("id", "")))
-		academy_quiz_option_buttons[str(question.get("id", ""))] = option_button
-		_style_academy_quiz_option_button(option_button)
-		block.add_child(option_button)
-		academy_lesson_content_vbox.add_child(block)
-
-	var submit_button := Button.new()
-	submit_button.name = "AcademyQuizSubmitButton"
-	submit_button.text = "Submit Quiz"
-	submit_button.pressed.connect(_on_academy_quiz_submit_pressed)
-	academy_lesson_content_vbox.add_child(submit_button)
-	_style_academy_quiz_submit_button(submit_button)
-
-
-func _build_academy_glossary_section() -> void:
-	academy_lesson_content_vbox.add_child(_build_academy_text_block("Searchable Glossary", "Search any technical term from this academy track."))
-	var search_input := LineEdit.new()
-	search_input.name = "AcademyGlossaryInlineSearchInput"
-	search_input.placeholder_text = "Search glossary"
-	search_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	academy_lesson_content_vbox.add_child(search_input)
-	var glossary_list := ItemList.new()
-	glossary_list.name = "AcademyGlossaryInlineList"
-	glossary_list.custom_minimum_size = Vector2(0, 260)
-	glossary_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	academy_lesson_content_vbox.add_child(glossary_list)
-	_populate_academy_glossary_list(glossary_list, "")
-	search_input.text_changed.connect(func(new_text: String) -> void:
-		_populate_academy_glossary_list(glossary_list, new_text)
-	)
-	_style_light_item_list(glossary_list)
-	_style_line_input(search_input)
-
-
-func _build_academy_text_block(title: String, body: String, infoboxes: Array = [], images: Array = []) -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.name = "AcademyTextBlock"
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_academy_text_card(panel)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 20)
-	margin.add_theme_constant_override("margin_top", 18)
-	margin.add_theme_constant_override("margin_right", 20)
-	margin.add_theme_constant_override("margin_bottom", 18)
-	panel.add_child(margin)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
-	margin.add_child(vbox)
-	var title_label := Label.new()
-	title_label.name = "AcademyTextBlockTitle"
-	title_label.text = title
-	title_label.add_theme_font_size_override("font_size", 16)
-	title_label.add_theme_color_override("font_color", Color(0.129412, 0.101961, 0.058824, 1))
-	vbox.add_child(title_label)
-	_add_academy_markdown_body(vbox, body)
-	for image_value in images:
-		var image: Dictionary = image_value
-		var image_path: String = str(image.get("asset_path", "")).strip_edges()
-		var image_caption: String = str(image.get("caption", "")).strip_edges()
-		var image_alt: String = str(image.get("alt", "Academy image")).strip_edges()
-		vbox.add_child(_build_academy_text_inline_image_block(image_path, image_caption, image_alt))
-	for infobox_value in infoboxes:
-		var infobox: Dictionary = infobox_value
-		var infobox_title: String = str(infobox.get("title", "")).strip_edges()
-		var infobox_body: String = str(infobox.get("body", "")).strip_edges()
-		if infobox_title.is_empty() and infobox_body.is_empty():
-			continue
-		vbox.add_child(_build_academy_infobox_card(infobox_title, infobox_body))
-	return panel
-
-
-func _add_academy_markdown_body(vbox: VBoxContainer, body: String) -> void:
-	var segments: Array = _split_academy_markdown_tables(body)
-	for segment_value in segments:
-		var segment: Dictionary = segment_value
-		var segment_type: String = str(segment.get("type", "text"))
-		if segment_type == "table":
-			vbox.add_child(_build_academy_markdown_table(
-				segment.get("headers", []),
-				segment.get("rows", []),
-				segment.get("alignments", [])
-			))
-			continue
-		var text: String = str(segment.get("text", "")).strip_edges()
-		if text.is_empty():
-			continue
-		var body_label := Label.new()
-		body_label.name = "AcademyTextBlockBody"
-		body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		body_label.text = text
-		body_label.add_theme_font_size_override("font_size", 14)
-		body_label.add_theme_color_override("font_color", Color(0.352941, 0.309804, 0.203922, 1))
-		vbox.add_child(body_label)
-
-
-func _split_academy_markdown_tables(body: String) -> Array:
-	var segments: Array = []
-	var lines: PackedStringArray = body.split("\n", true)
-	var text_lines: Array = []
-	var line_index: int = 0
-	while line_index < lines.size():
-		var line: String = str(lines[line_index])
-		var next_line: String = str(lines[line_index + 1]) if line_index + 1 < lines.size() else ""
-		if _is_academy_markdown_table_row(line) and _is_academy_markdown_table_separator(next_line):
-			_flush_academy_markdown_text_segment(segments, text_lines)
-			text_lines.clear()
-			var headers: Array = _parse_academy_markdown_table_row(line)
-			var alignments: Array = _parse_academy_markdown_table_alignments(next_line)
-			var rows: Array = []
-			line_index += 2
-			while line_index < lines.size() and _is_academy_markdown_table_row(str(lines[line_index])):
-				rows.append(_parse_academy_markdown_table_row(str(lines[line_index])))
-				line_index += 1
-			segments.append({
-				"type": "table",
-				"headers": headers,
-				"rows": rows,
-				"alignments": alignments
-			})
-			continue
-		text_lines.append(line)
-		line_index += 1
-	_flush_academy_markdown_text_segment(segments, text_lines)
-	return segments
-
-
-func _flush_academy_markdown_text_segment(segments: Array, text_lines: Array) -> void:
-	var text: String = "\n".join(text_lines).strip_edges()
-	if not text.is_empty():
-		segments.append({"type": "text", "text": text})
-
-
-func _is_academy_markdown_table_row(line: String) -> bool:
-	var trimmed: String = line.strip_edges()
-	return trimmed.begins_with("|") and trimmed.ends_with("|") and trimmed.count("|") >= 3
-
-
-func _is_academy_markdown_table_separator(line: String) -> bool:
-	if not _is_academy_markdown_table_row(line):
-		return false
-	var cells: Array = _parse_academy_markdown_table_row(line)
-	if cells.is_empty():
-		return false
-	for cell_value in cells:
-		var cell: String = str(cell_value).strip_edges()
-		if cell.is_empty():
-			return false
-		for char_index in cell.length():
-			var character: String = cell.substr(char_index, 1)
-			if character != "-" and character != ":" and character != " ":
-				return false
-		if not cell.contains("-"):
-			return false
-	return true
-
-
-func _parse_academy_markdown_table_row(line: String) -> Array:
-	var trimmed: String = line.strip_edges()
-	if trimmed.begins_with("|"):
-		trimmed = trimmed.substr(1)
-	if trimmed.ends_with("|"):
-		trimmed = trimmed.substr(0, trimmed.length() - 1)
-	var cells: Array = []
-	for cell_value in trimmed.split("|", true):
-		cells.append(str(cell_value).strip_edges())
-	return cells
-
-
-func _parse_academy_markdown_table_alignments(line: String) -> Array:
-	var alignments: Array = []
-	for cell_value in _parse_academy_markdown_table_row(line):
-		var cell: String = str(cell_value).strip_edges()
-		if cell.begins_with(":") and cell.ends_with(":"):
-			alignments.append(HORIZONTAL_ALIGNMENT_CENTER)
-		elif cell.ends_with(":"):
-			alignments.append(HORIZONTAL_ALIGNMENT_RIGHT)
-		else:
-			alignments.append(HORIZONTAL_ALIGNMENT_LEFT)
-	return alignments
-
-
-func _build_academy_markdown_table(headers: Array, rows: Array, alignments: Array) -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.name = "AcademyMarkdownTable"
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_academy_table_card(panel)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 10)
-	margin.add_theme_constant_override("margin_top", 8)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_bottom", 8)
-	panel.add_child(margin)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 5)
-	margin.add_child(vbox)
-	vbox.add_child(_build_academy_markdown_table_row(headers, alignments, true))
-	for row_value in rows:
-		vbox.add_child(HSeparator.new())
-		vbox.add_child(_build_academy_markdown_table_row(row_value, alignments, false))
-	return panel
-
-
-func _build_academy_markdown_table_row(cells: Array, alignments: Array, is_header: bool) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.name = "AcademyMarkdownTableHeaderRow" if is_header else "AcademyMarkdownTableRow"
-	row.add_theme_constant_override("separation", 8)
-	var column_count: int = max(cells.size(), alignments.size())
-	for cell_index in column_count:
-		var cell_text: String = str(cells[cell_index]) if cell_index < cells.size() else ""
-		var alignment: HorizontalAlignment = alignments[cell_index] if cell_index < alignments.size() else HORIZONTAL_ALIGNMENT_LEFT
-		row.add_child(_build_academy_markdown_table_cell(cell_text, alignment, is_header))
-	return row
-
-
-func _build_academy_markdown_table_cell(text: String, alignment: HorizontalAlignment, is_header: bool) -> Label:
-	var label := Label.new()
-	label.name = "AcademyMarkdownTableHeaderCell" if is_header else "AcademyMarkdownTableCell"
-	label.custom_minimum_size = Vector2(92, 0)
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.horizontal_alignment = alignment
-	label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.text = text
-	label.add_theme_font_size_override("font_size", 13)
-	label.add_theme_color_override("font_color", Color(0.176471, 0.129412, 0.070588, 1) if is_header else Color(0.352941, 0.309804, 0.203922, 1))
-	if is_header:
-		label.add_theme_color_override("font_outline_color", Color(0.980392, 0.933333, 0.741176, 0.6))
-		label.add_theme_constant_override("outline_size", 1)
-	return label
-
-
-func _build_academy_text_inline_image_block(asset_path: String, caption: String = "", alt_text: String = "") -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.name = "AcademyTextInlineImageBlock"
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_academy_content_block(panel, Color(0.258824, 0.25098, 0.196078, 1), 1)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 8)
-	margin.add_theme_constant_override("margin_top", 8)
-	margin.add_theme_constant_override("margin_right", 8)
-	margin.add_theme_constant_override("margin_bottom", 8)
-	panel.add_child(margin)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
-	margin.add_child(vbox)
-	var image_frame := PanelContainer.new()
-	image_frame.name = "AcademyTextInlineImageFrame"
-	image_frame.custom_minimum_size = Vector2(0, 150)
-	image_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_child(image_frame)
-	_style_academy_banner_frame(image_frame)
-	var center := CenterContainer.new()
-	image_frame.add_child(center)
-	var image_texture: Texture2D = null
-	if not asset_path.is_empty() and ResourceLoader.exists(asset_path):
-		image_texture = load(asset_path) as Texture2D
-	if image_texture != null:
-		var texture_rect := TextureRect.new()
-		texture_rect.name = "AcademyTextInlineImageTexture"
-		texture_rect.texture = image_texture
-		texture_rect.custom_minimum_size = Vector2(0, 140)
-		texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		texture_rect.tooltip_text = alt_text
-		center.add_child(texture_rect)
-	else:
-		var placeholder := Label.new()
-		placeholder.name = "AcademyTextInlineImagePlaceholder"
-		placeholder.text = "IMAGE PLACEHOLDER" if asset_path.is_empty() else "MISSING IMAGE"
-		placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		placeholder.add_theme_color_override("font_color", Color(0.898039, 0.870588, 0.745098, 1))
-		center.add_child(placeholder)
-	if not caption.strip_edges().is_empty():
-		var caption_label := Label.new()
-		caption_label.name = "AcademyTextInlineImageCaption"
-		caption_label.text = caption
-		caption_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		caption_label.add_theme_color_override("font_color", Color(0.898039, 0.870588, 0.745098, 1))
-		vbox.add_child(caption_label)
-	return panel
-
-
-func _build_academy_infobox_card(title: String, body: String) -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.name = "AcademyInfoboxCard"
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_academy_infobox_card(panel)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 14)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 14)
-	margin.add_theme_constant_override("margin_bottom", 10)
-	panel.add_child(margin)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
-	margin.add_child(vbox)
-	if not title.is_empty():
-		var title_label := Label.new()
-		title_label.text = title
-		title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		title_label.add_theme_color_override("font_color", COLOR_ACADEMY_BROWN)
-		vbox.add_child(title_label)
-	if not body.is_empty():
-		var body_label := Label.new()
-		body_label.text = body
-		body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		body_label.add_theme_color_override("font_color", Color(0.352941, 0.309804, 0.203922, 1))
-		vbox.add_child(body_label)
-	return panel
-
-
-func _build_academy_key_insights_block(title: String, bullets: Array) -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.name = "AcademyKeyInsightsBlock"
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_academy_key_insights_card(panel)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 20)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_right", 18)
-	margin.add_theme_constant_override("margin_bottom", 16)
-	panel.add_child(margin)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
-	margin.add_child(vbox)
-	var title_label := Label.new()
-	title_label.name = "AcademyKeyInsightsTitle"
-	title_label.text = title if not title.strip_edges().is_empty() else "Key Insights"
-	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	title_label.add_theme_color_override("font_color", Color(0.054902, 0.164706, 0.313726, 1))
-	title_label.add_theme_font_size_override("font_size", 16)
-	vbox.add_child(title_label)
-	for bullet_value in bullets:
-		var bullet_text: String = str(bullet_value).strip_edges()
-		if bullet_text.is_empty():
-			continue
-		var bullet_label := Label.new()
-		bullet_label.text = "- %s" % bullet_text
-		bullet_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		bullet_label.add_theme_color_override("font_color", Color(0.07451, 0.156863, 0.270588, 1))
-		vbox.add_child(bullet_label)
-	return panel
-
-
-func _build_academy_image_block(asset_path: String, caption: String = "", alt_text: String = "") -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.name = "AcademyImageBlock"
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_academy_banner_frame(panel)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 10)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_bottom", 10)
-	panel.add_child(margin)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
-	margin.add_child(vbox)
-	var image_frame := PanelContainer.new()
-	image_frame.name = "AcademyInlineImageFrame"
-	image_frame.custom_minimum_size = Vector2(0, 190)
-	image_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_child(image_frame)
-	_style_academy_banner_frame(image_frame)
-	var center := CenterContainer.new()
-	image_frame.add_child(center)
-	var image_texture: Texture2D = null
-	if not asset_path.is_empty() and ResourceLoader.exists(asset_path):
-		image_texture = load(asset_path) as Texture2D
-	if image_texture != null:
-		var texture_rect := TextureRect.new()
-		texture_rect.name = "AcademyInlineImageTexture"
-		texture_rect.texture = image_texture
-		texture_rect.custom_minimum_size = Vector2(0, 180)
-		texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		texture_rect.tooltip_text = alt_text
-		center.add_child(texture_rect)
-	else:
-		var placeholder := Label.new()
-		placeholder.name = "AcademyInlineImagePlaceholder"
-		placeholder.text = "IMAGE PLACEHOLDER" if asset_path.is_empty() else "MISSING IMAGE"
-		placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		placeholder.add_theme_color_override("font_color", Color(0.898039, 0.870588, 0.745098, 1))
-		center.add_child(placeholder)
-	if not caption.strip_edges().is_empty():
-		var caption_label := Label.new()
-		caption_label.name = "AcademyInlineImageCaption"
-		caption_label.text = caption
-		caption_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		caption_label.add_theme_color_override("font_color", Color(0.898039, 0.870588, 0.745098, 1))
-		vbox.add_child(caption_label)
-	return panel
-
-
-func _build_academy_example_block(title: String, example_type: String) -> PanelContainer:
-	var body: String = "Practice: %s. Run the same read on live stock charts after you finish the lesson." % example_type.replace("_", " ")
-	return _build_academy_text_block(title, body)
-
-
-func _build_academy_check_block(section_id: String, check: Dictionary, stored_result: Dictionary) -> PanelContainer:
-	var scenario_text: String = str(check.get("scenario", "")).strip_edges()
-	var question_text: String = str(check.get("question", "")).strip_edges()
-	var body_text: String = question_text
-	if not scenario_text.is_empty():
-		body_text = "%s\n\nQuestion: %s" % [scenario_text, question_text]
-	var panel := _build_academy_text_block(str(check.get("title", "Quick Check")), body_text)
-	var vbox: VBoxContainer = panel.get_child(0).get_child(0) as VBoxContainer
-	var options_row := HBoxContainer.new()
-	options_row.add_theme_constant_override("separation", 6)
-	vbox.add_child(options_row)
-	for option_value in check.get("options", []):
-		var option: Dictionary = option_value
-		var button := Button.new()
-		button.name = "AcademyQuickCheckOptionButton"
-		button.text = str(option.get("label", "Answer"))
-		button.pressed.connect(_on_academy_inline_check_pressed.bind(section_id, str(check.get("id", "")), str(option.get("id", ""))))
-		options_row.add_child(button)
-		_style_academy_quick_check_button(button)
-	if not stored_result.is_empty():
-		var result_label := Label.new()
-		result_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		result_label.text = "Saved answer: %s. %s" % [
-			"Correct" if bool(stored_result.get("correct", false)) else "Not yet",
-			str(stored_result.get("feedback", ""))
-		]
-		result_label.add_theme_color_override("font_color", COLOR_POSITIVE if bool(stored_result.get("correct", false)) else COLOR_NEGATIVE)
-		vbox.add_child(result_label)
-	return panel
-
-
-func _refresh_academy_side_panel() -> void:
-	var quiz: Dictionary = current_academy_snapshot.get("quiz", {})
-	var badge: Dictionary = current_academy_snapshot.get("badge", {})
-	academy_side_title_label.text = "Progress"
-	var status_lines: Array = [
-		"Quiz: %s" % ("passed" if bool(quiz.get("passed", false)) else ("locked" if bool(quiz.get("locked", true)) else "open")),
-		"Attempts: %d" % int(quiz.get("attempts", 0)),
-		"Best score: %d%%" % int(quiz.get("best_score_percent", 0))
-	]
-	if bool(current_academy_snapshot.get("progress", {}).get("badge_earned", false)):
-		status_lines.append("Badge earned: %s" % str(badge.get("label", _academy_current_badge_label())))
-	academy_side_body_label.text = "\n".join(status_lines)
-	var show_glossary_tools: bool = not bool(current_academy_snapshot.get("coming_soon", true))
-	academy_glossary_search_input.visible = show_glossary_tools
-	academy_glossary_list.visible = show_glossary_tools
-	_refresh_academy_glossary_results()
+	_ensure_academy_controller()
+	academy_controller.restyle_controls()
 
 
 func _refresh_academy_glossary_results() -> void:
-	if academy_glossary_list == null:
-		return
-	var query: String = academy_glossary_search_input.text if academy_glossary_search_input != null else ""
-	_populate_academy_glossary_list(academy_glossary_list, query)
-
-
-func _populate_academy_glossary_list(target_list: ItemList, query: String) -> void:
-	target_list.clear()
-	var rows: Array = GameManager.search_academy_glossary(query)
-	if rows.is_empty():
-		target_list.add_item("No matching terms.")
-		target_list.set_item_disabled(0, true)
-		return
-	for index in range(rows.size()):
-		var row: Dictionary = rows[index]
-		target_list.add_item("%s - %s" % [str(row.get("term", "")), str(row.get("definition", ""))])
-		target_list.set_item_metadata(index, row)
+	_ensure_academy_controller()
+	academy_controller.refresh_glossary_results()
 
 
 func _next_academy_section_id() -> String:
-	var sections: Array = current_academy_snapshot.get("sections", [])
-	for index in range(sections.size()):
-		var section: Dictionary = sections[index]
-		if str(section.get("id", "")) != selected_academy_section_id:
-			continue
-		for next_index in range(index + 1, sections.size()):
-			var next_section: Dictionary = sections[next_index]
-			if not bool(next_section.get("locked", false)):
-				return str(next_section.get("id", ""))
-	return ""
+	_ensure_academy_controller()
+	return academy_controller.next_section_id()
+
+
+func _build_academy_content_block(block: Dictionary) -> Control:
+	_ensure_academy_controller()
+	return academy_controller.call("_build_academy_content_block", block) as Control
+
+
+func _style_academy_quiz_option_button(option_button: OptionButton) -> void:
+	_ensure_academy_controller()
+	academy_controller.call("_style_academy_quiz_option_button", option_button)
+
+
+func _style_academy_quiz_submit_button(button: Button) -> void:
+	_ensure_academy_controller()
+	academy_controller.call("_style_academy_quiz_submit_button", button)
 
 
 func _refresh_upgrades() -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	if upgrade_cards_vbox == null:
-		return
-	for child in upgrade_cards_vbox.get_children():
-		upgrade_cards_vbox.remove_child(child)
-		child.queue_free()
-
-	upgrade_title_label.text = "Upgrades"
-	if not RunState.has_active_run():
-		upgrade_cash_label.text = "No run loaded"
-		upgrade_summary_label.text = "Start a run to buy upgrades."
-		_apply_font_overrides_to_subtree(upgrade_window)
-		_log_perf_elapsed("_refresh_upgrades", started_at_usec)
-		return
-
-	var snapshot: Dictionary = GameManager.get_upgrade_shop_snapshot()
-	var action_snapshot: Dictionary = snapshot.get("daily_action", {})
-	var upgrade_block_reason: String = ""
-	for track_value in snapshot.get("tracks", []):
-		if typeof(track_value) == TYPE_DICTIONARY:
-			upgrade_block_reason = str(track_value.get("block_reason", ""))
-			if not upgrade_block_reason.is_empty():
-				break
-	upgrade_cash_label.text = "Cash %s" % _format_currency(float(snapshot.get("cash", 0.0)))
-	if not upgrade_block_reason.is_empty():
-		upgrade_summary_label.text = upgrade_block_reason
-	else:
-		upgrade_summary_label.text = "Network AP %d/%d today. Upgrades are paid from available cash." % [
-			int(action_snapshot.get("remaining", 0)),
-			int(action_snapshot.get("limit", 10))
-		]
-
-	for track_value in snapshot.get("tracks", []):
-		var track: Dictionary = track_value
-		upgrade_cards_vbox.add_child(_build_upgrade_card(track))
-	_apply_font_overrides_to_subtree(upgrade_cards_vbox)
-	_log_perf_elapsed("_refresh_upgrades", started_at_usec)
-
-
-func _build_upgrade_card(track: Dictionary) -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.name = "UpgradeCard_%s" % str(track.get("id", ""))
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_cream_app_panel(panel, COLOR_DESKTOP_CREAM, COLOR_ACADEMY_BORDER, 4, 1)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 10)
-	panel.add_child(margin)
-
-	var row := HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 12)
-	margin.add_child(row)
-
-	var copy := VBoxContainer.new()
-	copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	copy.add_theme_constant_override("separation", 4)
-	row.add_child(copy)
-
-	var title := Label.new()
-	title.text = "%s  |  Tier %d" % [str(track.get("label", "Upgrade")), int(track.get("tier", 4))]
-	title.add_theme_color_override("font_color", COLOR_WINDOW_TEXT)
-	copy.add_child(title)
-
-	var body := Label.new()
-	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.text = "%s\nCurrent: %s" % [
-		str(track.get("description", "")),
-		str(track.get("effect_label", ""))
-	]
-	body.add_theme_color_override("font_color", Color(0.352941, 0.309804, 0.203922, 1))
-	copy.add_child(body)
-
-	var purchase_button := Button.new()
-	purchase_button.name = "UpgradeBuyButton_%s" % str(track.get("id", ""))
-	purchase_button.custom_minimum_size = Vector2(190, 44)
-	if bool(track.get("maxed", false)):
-		purchase_button.text = "Max Tier"
-		purchase_button.disabled = true
-	else:
-		purchase_button.text = "Buy Tier %d\n%s" % [
-			int(track.get("next_tier", 0)),
-			_format_currency(float(track.get("next_cost", 0.0)))
-		]
-		purchase_button.disabled = not bool(track.get("can_purchase", false))
-		var block_reason: String = str(track.get("block_reason", ""))
-		purchase_button.tooltip_text = block_reason if not block_reason.is_empty() else "Next: %s" % str(track.get("next_effect_label", ""))
-		purchase_button.pressed.connect(_on_upgrade_purchase_pressed.bind(str(track.get("id", ""))))
-	row.add_child(purchase_button)
-	_style_cream_app_button(purchase_button, not purchase_button.disabled)
-	return panel
-
-
-func _upgrade_track_from_snapshot(snapshot: Dictionary, track_id: String) -> Dictionary:
-	for track_value in snapshot.get("tracks", []):
-		var track: Dictionary = track_value
-		if str(track.get("id", "")) == track_id:
-			return track
-	return {}
+	_ensure_upgrades_controller()
+	upgrades_controller.refresh()
 
 
 func _cache_order_market_summary_labels() -> void:
-	order_market_value_labels = {
-		"open": find_child("OpenValueLabel", true, false) as Label,
-		"high": find_child("HighValueLabel", true, false) as Label,
-		"low": find_child("LowValueLabel", true, false) as Label,
-		"prev": find_child("PrevValueLabel", true, false) as Label,
-		"ara": find_child("ARAValueLabel", true, false) as Label,
-		"arb": find_child("ARBValueLabel", true, false) as Label,
-		"lot": find_child("LotValueLabel", true, false) as Label,
-		"val": find_child("ValValueLabel", true, false) as Label,
-		"avg": find_child("AvgValueLabel", true, false) as Label,
-		"f_buy": find_child("FBuyValueLabel", true, false) as Label,
-		"f_sell": find_child("FSellValueLabel", true, false) as Label,
-		"depth": find_child("DepthValueLabel", true, false) as Label
-	}
-	order_market_name_labels = {
-		"open": find_child("OpenLabel", true, false) as Label,
-		"high": find_child("HighLabel", true, false) as Label,
-		"low": find_child("LowLabel", true, false) as Label,
-		"prev": find_child("PrevLabel", true, false) as Label,
-		"ara": find_child("ARALabel", true, false) as Label,
-		"arb": find_child("ARBLabel", true, false) as Label,
-		"lot": find_child("LotLabel", true, false) as Label,
-		"val": find_child("ValLabel", true, false) as Label,
-		"avg": find_child("AvgLabel", true, false) as Label,
-		"f_buy": find_child("FBuyLabel", true, false) as Label,
-		"f_sell": find_child("FSellLabel", true, false) as Label,
-		"depth": find_child("DepthLabel", true, false) as Label
-	}
-	_bind_order_market_capture_labels()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._cache_order_market_summary_labels()
+	stock_controller._sync_root_refs()
 func _bind_order_market_capture_labels() -> void:
-	for key_value in order_market_value_labels.keys():
-		var key: String = str(key_value)
-		var label: Label = order_market_value_labels.get(key, null) as Label
-		if label == null:
-			continue
-		label.mouse_filter = Control.MOUSE_FILTER_STOP
-		label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		label.tooltip_text = "Click to add this quote item to the Research Tray."
-		label.gui_input.connect(_on_trade_quote_label_gui_input.bind(key))
-	for header_label_value in [order_price_value_label, order_price_change_label]:
-		var header_label: Label = header_label_value as Label
-		if header_label == null:
-			continue
-		header_label.mouse_filter = Control.MOUSE_FILTER_STOP
-		header_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		header_label.tooltip_text = "Click to add this quote item to the Research Tray."
-	if order_price_value_label != null:
-		order_price_value_label.gui_input.connect(_on_trade_quote_label_gui_input.bind("current_price"))
-	if order_price_change_label != null:
-		order_price_change_label.gui_input.connect(_on_trade_quote_label_gui_input.bind("daily_change"))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._bind_order_market_capture_labels()
+	stock_controller._sync_root_refs()
 func _style_order_market_summary_labels() -> void:
-	for label_value in order_market_name_labels.values():
-		var label: Label = label_value as Label
-		if label == null:
-			continue
-		_set_label_tone(label, COLOR_STOCKBOT_MUTED)
-		label.custom_minimum_size = Vector2(42.0, 0.0)
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.modulate = Color.WHITE
-		label.clip_text = true
-		label.add_theme_font_size_override("font_size", 11)
-	for label_value in order_market_value_labels.values():
-		var label: Label = label_value as Label
-		if label == null:
-			continue
-		label.add_theme_stylebox_override("normal", _make_stockbot_stylebox(COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_EDGE, 4, 1, 4))
-		label.clip_text = true
-		label.add_theme_font_size_override("font_size", 11)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._style_order_market_summary_labels()
+	stock_controller._sync_root_refs()
 func _style_order_ticker_badge() -> void:
-	if order_company_name_label == null:
-		return
-	var badge_style := StyleBoxFlat.new()
-	badge_style.bg_color = COLOR_STOCKBOT_BLUE_TINT
-	badge_style.border_color = COLOR_STOCKBOT_BLUE
-	badge_style.set_border_width_all(1)
-	badge_style.corner_radius_top_left = 5
-	badge_style.corner_radius_top_right = 5
-	badge_style.corner_radius_bottom_left = 5
-	badge_style.corner_radius_bottom_right = 5
-	badge_style.content_margin_left = 6
-	badge_style.content_margin_right = 6
-	badge_style.content_margin_top = 2
-	badge_style.content_margin_bottom = 2
-	order_company_name_label.add_theme_stylebox_override("normal", badge_style)
-	_set_label_tone(order_company_name_label, COLOR_STOCKBOT_BLUE)
-	order_company_name_label.clip_text = true
-	order_company_name_label.add_theme_font_size_override("font_size", STOCK_APP_FONT_SIZE)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._style_order_ticker_badge()
+	stock_controller._sync_root_refs()
 func _refresh_order_market_summary(snapshot: Dictionary) -> void:
-	if snapshot.is_empty():
-		for key_value in order_market_value_labels.keys():
-			_set_order_market_value(str(key_value), "-", COLOR_STOCKBOT_MUTED)
-		return
-
-	var current_price: float = float(snapshot.get("current_price", 0.0))
-	var previous_close: float = float(snapshot.get("previous_close", current_price))
-	var latest_bar: Dictionary = _latest_price_bar(snapshot)
-	var open_price: float = float(latest_bar.get("open", previous_close))
-	var high_price: float = float(latest_bar.get("high", max(open_price, current_price)))
-	var low_price: float = float(latest_bar.get("low", min(open_price, current_price)))
-	var volume_shares: float = max(float(latest_bar.get("volume_shares", 0.0)), 0.0)
-	var volume_lots: float = max(float(latest_bar.get("volume_lots", volume_shares / float(GameManager.get_lot_size()))), 0.0)
-	var traded_value: float = max(float(latest_bar.get("value", 0.0)), 0.0)
-	if traded_value <= 0.0 and volume_shares > 0.0:
-		traded_value = current_price * volume_shares
-	var avg_price: float = traded_value / volume_shares if volume_shares > 0.0 else current_price
-	var broker_flow: Dictionary = snapshot.get("broker_flow", {})
-	var impactability: Dictionary = snapshot.get("impactability", {})
-
-	_set_order_market_value("open", _format_quote_price(open_price), COLOR_STOCKBOT_AMBER)
-	_set_order_market_value("high", _format_quote_price(high_price), COLOR_STOCKBOT_BULL)
-	_set_order_market_value("low", _format_quote_price(low_price), COLOR_STOCKBOT_BEAR)
-	_set_order_market_value("prev", _format_quote_price(previous_close), COLOR_STOCKBOT_AMBER)
-	_set_order_market_value("ara", _format_quote_price(float(snapshot.get("ara_price", current_price))), COLOR_STOCKBOT_TEXT)
-	_set_order_market_value("arb", _format_quote_price(float(snapshot.get("arb_price", current_price))), COLOR_STOCKBOT_MUTED)
-	_set_order_market_value("lot", _format_compact_lots(volume_lots), COLOR_STOCKBOT_MUTED)
-	_set_order_market_value("val", _format_compact_currency(traded_value), COLOR_STOCKBOT_MUTED)
-	_set_order_market_value("avg", _format_quote_price(avg_price), COLOR_STOCKBOT_AMBER)
-	_set_order_market_value("f_buy", _format_compact_currency(_broker_type_side_value(broker_flow, "foreign", "buy")), COLOR_STOCKBOT_BULL)
-	_set_order_market_value("f_sell", _format_compact_currency(_broker_type_side_value(broker_flow, "foreign", "sell")), COLOR_STOCKBOT_BEAR)
-	_set_order_market_value("depth", _format_compact_currency(float(impactability.get("visible_depth_value", 0.0))), COLOR_STOCKBOT_BLUE)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_order_market_summary(snapshot)
+	stock_controller._sync_root_refs()
 func _set_order_market_value(key: String, text: String, tone: Color) -> void:
-	var value_label: Label = order_market_value_labels.get(key, null) as Label
-	if value_label == null:
-		return
-	value_label.text = text
-	_set_label_tone(value_label, tone)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._set_order_market_value(key, text, tone)
+	stock_controller._sync_root_refs()
 func _on_trade_quote_label_gui_input(event: InputEvent, quote_key: String) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var mouse_event := event as InputEventMouseButton
-	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
-		return
-	if selected_company_id.is_empty() or current_trade_snapshot.is_empty():
-		_show_toast("Pick a stock before capturing research.", false)
-		return
-	var payload: Dictionary = _trade_quote_capture_payload(quote_key)
-	if payload.is_empty():
-		_show_toast("This quote item is not ready yet.", false)
-		return
-	pending_capture_payloads["trade_quote"] = payload
-	_show_trade_quote_capture_menu(mouse_event.global_position)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_trade_quote_label_gui_input(event, quote_key)
+	stock_controller._sync_root_refs()
 func _trade_quote_capture_payload(quote_key: String) -> Dictionary:
-	var key: String = quote_key.strip_edges().to_lower()
-	var label_text: String = _trade_quote_label(key)
-	if label_text.is_empty():
-		return {}
-	var value_text: String = ""
-	if key == "current_price":
-		value_text = str(order_price_value_label.text).strip_edges() if order_price_value_label != null else ""
-	elif key == "daily_change":
-		value_text = str(order_price_change_label.text).strip_edges() if order_price_change_label != null else ""
-	else:
-		var value_label: Label = order_market_value_labels.get(key, null) as Label
-		value_text = str(value_label.text).strip_edges() if value_label != null else ""
-	if value_text.is_empty() or value_text == "-":
-		return {}
-	var category: String = "broker_flow" if ["f_buy", "f_sell"].has(key) else "price_action"
-	var detail: String = "%s captured from the STOCKBOT trade panel for %s." % [
-		label_text,
-		str(current_trade_snapshot.get("ticker", selected_company_id)).to_upper()
-	]
-	return {
-		"source_type": "trade_quote",
-		"source_label": "STOCKBOT Quote",
-		"category": category,
-		"company_id": selected_company_id,
-		"label": label_text,
-		"value": value_text,
-		"detail": detail,
-		"source_id": "trade_quote_%s_%s" % [selected_company_id, key],
-		"impact": _trade_quote_impact(key, value_text)
-	}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._trade_quote_capture_payload(quote_key)
+	stock_controller._sync_root_refs()
+	return result
 func _trade_quote_label(quote_key: String) -> String:
-	match quote_key:
-		"current_price":
-			return "Current price"
-		"daily_change":
-			return "Daily change"
-		"open":
-			return "Open price"
-		"high":
-			return "Day high"
-		"low":
-			return "Day low"
-		"prev":
-			return "Previous close"
-		"ara":
-			return "ARA limit"
-		"arb":
-			return "ARB limit"
-		"lot":
-			return "Traded lot"
-		"val":
-			return "Traded value"
-		"avg":
-			return "Average trade price"
-		"f_buy":
-			return "Foreign buy value"
-		"f_sell":
-			return "Foreign sell value"
-		"depth":
-			return "Visible depth"
-	return quote_key.replace("_", " ").capitalize()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._trade_quote_label(quote_key)
+	stock_controller._sync_root_refs()
+	return result
 func _trade_quote_impact(quote_key: String, value_text: String) -> String:
-	var key: String = quote_key.to_lower()
-	var lower_value: String = value_text.to_lower()
-	if key == "f_buy":
-		return "positive"
-	if key == "f_sell":
-		return "negative"
-	if key == "daily_change":
-		if lower_value.find("-") != -1:
-			return "negative"
-		if lower_value.find("+") != -1:
-			return "positive"
-	return "mixed"
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._trade_quote_impact(quote_key, value_text)
+	stock_controller._sync_root_refs()
+	return result
 func _show_trade_quote_capture_menu(global_position: Vector2) -> void:
-	if trade_quote_capture_menu == null:
-		trade_quote_capture_menu = PopupMenu.new()
-		trade_quote_capture_menu.name = "TradeQuoteCaptureContextMenu"
-		trade_quote_capture_menu.id_pressed.connect(_on_trade_quote_capture_menu_id_pressed)
-		add_child(trade_quote_capture_menu)
-	trade_quote_capture_menu.clear()
-	trade_quote_capture_menu.add_item("Add to Research Tray", 1)
-	trade_quote_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
-	trade_quote_capture_menu.popup()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._show_trade_quote_capture_menu(global_position)
+	stock_controller._sync_root_refs()
 func _on_trade_quote_capture_menu_id_pressed(id: int) -> void:
-	_commit_pending_capture("trade_quote", id)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_trade_quote_capture_menu_id_pressed(id)
+	stock_controller._sync_root_refs()
 func _broker_type_side_value(broker_flow: Dictionary, broker_type: String, side: String) -> float:
-	var normalized_side: String = "sell" if side == "sell" else "buy"
-	var value_key: String = "%s_value" % normalized_side
-	var type_totals: Dictionary = broker_flow.get("broker_type_totals", {})
-	var type_total: Dictionary = type_totals.get(broker_type, {}) if typeof(type_totals) == TYPE_DICTIONARY else {}
-	var typed_value: float = max(float(type_total.get(value_key, 0.0)), 0.0)
-	if typed_value > 0.0:
-		return typed_value
-
-	var rows_key: String = "%s_brokers" % normalized_side
-	return _broker_side_value_by_type(broker_flow.get(rows_key, []), broker_type, "value")
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: float = stock_controller._broker_type_side_value(broker_flow, broker_type, side)
+	stock_controller._sync_root_refs()
+	return result
 func _latest_price_bar(snapshot: Dictionary) -> Dictionary:
-	var price_bars: Array = snapshot.get("price_bars", [])
-	if price_bars.is_empty():
-		return {}
-	var latest_bar = price_bars[price_bars.size() - 1]
-	if typeof(latest_bar) == TYPE_DICTIONARY:
-		return latest_bar
-	return {}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._latest_price_bar(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _broker_side_value_by_type(rows: Array, broker_type: String, value_key: String) -> float:
-	var total: float = 0.0
-	for row_value in rows:
-		if typeof(row_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = row_value
-		if str(row.get("broker_type", "")) != broker_type:
-			continue
-		total += max(float(row.get(value_key, row.get("value", 0.0))), 0.0)
-	return total
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: float = stock_controller._broker_side_value_by_type(rows, broker_type, value_key)
+	stock_controller._sync_root_refs()
+	return result
 func _format_quote_price(value: float) -> String:
-	return _format_grouped_integer(int(round(value)))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_quote_price(value)
+	stock_controller._sync_root_refs()
+	return result
 func _format_signed_quote_delta(value: float) -> String:
-	var sign_prefix: String = "+" if value >= 0.0 else "-"
-	return "%s%s" % [sign_prefix, _format_grouped_integer(int(round(absf(value))))]
-
-
-func _rebuild_network_contact_list() -> void:
-	network_contacts_list.clear()
-	var rows: Array = []
-	rows.append_array(current_network_snapshot.get("contacts", []))
-	if rows.is_empty():
-		selected_network_contact_id = ""
-		network_contacts_list.add_item("No contacts yet. Meet a lead from News, referrals, or an RUPSLB room first.")
-		network_contacts_list.set_item_disabled(0, true)
-		_show_network_contact({})
-		return
-
-	var selected_index: int = -1
-	for row_index in range(rows.size()):
-		var row: Dictionary = rows[row_index]
-		var affiliation_label: String = "Insider" if str(row.get("affiliation_type", "floater")) == "insider" else "Floater"
-		var prefix: String = "Met %s" % affiliation_label if bool(row.get("met", false)) else "Lead %s" % affiliation_label
-		if str(row.get("source_type", "")) == "referral" and not bool(row.get("met", false)):
-			prefix = "Referred Insider"
-		var display_role: String = str(row.get("role", ""))
-		var twooter_handle: String = str(row.get("twooter_handle", "")).strip_edges()
-		if not twooter_handle.is_empty():
-			display_role += " | %s" % twooter_handle
-		var last_tip_label: String = str(row.get("last_tip_label", ""))
-		if not last_tip_label.is_empty():
-			display_role += " | %s" % last_tip_label
-		network_contacts_list.add_item("%s  |  %s - %s" % [
-			prefix,
-			str(row.get("display_name", "")),
-			display_role
-		])
-		var item_index: int = network_contacts_list.item_count - 1
-		network_contacts_list.set_item_metadata(item_index, row.duplicate(true))
-		if str(row.get("id", "")) == selected_network_contact_id:
-			selected_index = item_index
-
-	if selected_index == -1:
-		selected_index = 0
-		selected_network_contact_id = str(rows[0].get("id", ""))
-	network_contacts_list.select(selected_index)
-	_show_network_contact(rows[selected_index])
-
-
-func _rebuild_network_request_list() -> void:
-	network_requests_list.clear()
-	var requests: Array = current_network_snapshot.get("requests", [])
-	for request_value in requests:
-		var request: Dictionary = request_value
-		network_requests_list.add_item("%s  |  %s  |  %s" % [
-			str(request.get("status", "pending")).capitalize(),
-			_ticker_for_company(str(request.get("target_company_id", ""))),
-			_network_request_due_label(request)
-		])
-		network_requests_list.set_item_metadata(network_requests_list.item_count - 1, request.duplicate(true))
-	if requests.is_empty():
-		network_requests_list.add_item("No active requests.")
-		network_requests_list.set_item_disabled(0, true)
-
-
-func _network_request_due_label(request: Dictionary) -> String:
-	if str(request.get("request_type", "")) == "dirty_tip":
-		match str(request.get("status", "")):
-			"offered":
-				return "Awaiting decision"
-			"accepted":
-				return "Active until day %d" % int(request.get("active_until_day_index", request.get("due_day_index", 0)))
-			"reported":
-				return "Reported"
-			"declined":
-				return "Declined"
-			"caught":
-				return "Caught"
-			"resolved_clean":
-				return "Resolved"
-			"expired":
-				return "Expired"
-	var due_date_text: String = _network_request_due_date_text(request)
-	if due_date_text.is_empty():
-		return "Due date unknown"
-	return "Due %s" % due_date_text
-
-
-func _network_request_due_date_text(request: Dictionary) -> String:
-	var due_day_index: int = int(request.get("due_day_index", 0))
-	if due_day_index <= 0:
-		return ""
-	var date_info: Dictionary = portfolio_trading_calendar.trade_date_for_index(max(due_day_index, 1))
-	var month_names := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-	var month_index: int = clamp(int(date_info.get("month", 1)) - 1, 0, month_names.size() - 1)
-	return "%s %d, %d" % [
-		month_names[month_index],
-		int(date_info.get("day", 1)),
-		int(date_info.get("year", 2020))
-	]
-
-
-func _rebuild_network_journal_list() -> void:
-	if network_journal_list == null:
-		return
-	network_journal_list.clear()
-	var rows: Array = current_network_snapshot.get("journal", [])
-	var selected_item_index: int = -1
-	var selected_contact: Dictionary = _selected_network_contact_for_journal_context()
-	var grouped_rows: Dictionary = {
-		"tips": [],
-		"requests": [],
-		"referrals": [],
-		"source_checks": []
-	}
-	for row_value in rows:
-		if typeof(row_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = row_value
-		var group_key: String = _network_journal_group_key(str(row.get("type", "")))
-		if not grouped_rows.has(group_key):
-			group_key = "tips"
-		if selected_network_journal_filter != "all" and selected_network_journal_filter != group_key:
-			continue
-		var rows_for_group: Array = grouped_rows.get(group_key, [])
-		rows_for_group.append(row)
-		grouped_rows[group_key] = rows_for_group
-	for group_key in ["tips", "requests", "referrals", "source_checks"]:
-		var group_rows: Array = grouped_rows.get(group_key, [])
-		if group_rows.is_empty():
-			continue
-		network_journal_list.add_item(_network_journal_group_label(group_key))
-		var header_index: int = network_journal_list.item_count - 1
-		network_journal_list.set_item_disabled(header_index, true)
-		network_journal_list.set_item_custom_fg_color(header_index, Color(0.454902, 0.337255, 0.141176, 1))
-		network_journal_list.set_item_custom_bg_color(header_index, Color(0.866667, 0.807843, 0.635294, 0.58))
-		for row_value in group_rows:
-			var row: Dictionary = row_value
-			var line: String = "D%d  |  %s" % [
-				int(row.get("day_index", 0)),
-				str(row.get("title", "Network note"))
-			]
-			var detail: String = str(row.get("detail", ""))
-			if not detail.is_empty():
-				line += "  -  %s" % detail
-			if line.length() > 150:
-				line = line.substr(0, 147) + "..."
-			network_journal_list.add_item(line)
-			var item_index: int = network_journal_list.item_count - 1
-			network_journal_list.set_item_metadata(item_index, row.duplicate(true))
-			if _network_journal_row_matches_contact(row, selected_contact):
-				network_journal_list.set_item_custom_bg_color(item_index, Color(0.835294, 0.764706, 0.529412, 0.30))
-				network_journal_list.set_item_custom_fg_color(item_index, COLOR_WINDOW_TEXT)
-			if str(row.get("id", "")) == selected_network_journal_id:
-				selected_item_index = item_index
-	if rows.is_empty():
-		network_journal_list.add_item("No journal entries yet.")
-		network_journal_list.set_item_disabled(0, true)
-		selected_network_journal_id = ""
-		_show_network_journal_detail({})
-	elif network_journal_list.item_count <= 0:
-		network_journal_list.add_item("No journal entries for this filter.")
-		network_journal_list.set_item_disabled(0, true)
-		selected_network_journal_id = ""
-		_show_network_journal_detail({})
-	elif selected_item_index >= 0:
-		network_journal_list.select(selected_item_index)
-		var selected_metadata: Variant = network_journal_list.get_item_metadata(selected_item_index)
-		if typeof(selected_metadata) == TYPE_DICTIONARY:
-			_show_network_journal_detail(selected_metadata)
-	elif not selected_network_journal_id.is_empty():
-		selected_network_journal_id = ""
-		_show_network_journal_detail({})
-
-
-func _selected_network_contact_for_journal_context() -> Dictionary:
-	if selected_network_contact_id.is_empty():
-		return {}
-	for row_value in current_network_snapshot.get("contacts", []):
-		if typeof(row_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = row_value
-		if str(row.get("id", "")) == selected_network_contact_id:
-			return row
-	for row_value in current_network_snapshot.get("discoveries", []):
-		if typeof(row_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = row_value
-		if str(row.get("id", "")) == selected_network_contact_id:
-			return row
-	return {}
-
-
-func _network_journal_row_matches_contact(row: Dictionary, contact: Dictionary) -> bool:
-	if contact.is_empty():
-		return false
-	if not str(row.get("contact_id", "")).is_empty() and str(row.get("contact_id", "")) == str(contact.get("id", "")):
-		return true
-	var row_company_id: String = str(row.get("target_company_id", ""))
-	if not row_company_id.is_empty() and row_company_id == _network_contact_target_company(contact):
-		return true
-	var row_ticker: String = str(row.get("target_ticker", ""))
-	return not row_ticker.is_empty() and row_ticker == _ticker_for_company(_network_contact_target_company(contact))
-
-
-func _network_journal_group_key(row_type: String) -> String:
-	match row_type:
-		"request", "dirty_tip":
-			return "requests"
-		"referral":
-			return "referrals"
-		"source_check":
-			return "source_checks"
-		_:
-			return "tips"
-
-
-func _network_journal_group_label(group_key: String) -> String:
-	match group_key:
-		"requests":
-			return "Requests"
-		"referrals":
-			return "Referrals"
-		"source_checks":
-			return "Source Checks"
-		_:
-			return "Tips"
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_signed_quote_delta(value)
+	stock_controller._sync_root_refs()
+	return result
 func _refresh_network_journal_filter_buttons() -> void:
-	for filter_id_value in network_journal_filter_buttons.keys():
-		var filter_id: String = str(filter_id_value)
-		var button: Button = network_journal_filter_buttons.get(filter_id, null) as Button
-		if button == null:
-			continue
-		var is_selected: bool = filter_id == selected_network_journal_filter
-		button.disabled = is_selected
-		_style_network_journal_filter_button(button, is_selected)
+	_ensure_network_controller()
+	network_controller.refresh_journal_filter_buttons()
 
 
-func _show_network_journal_detail(row: Dictionary) -> void:
-	if network_journal_detail_label == null:
-		return
-	if row.is_empty():
-		network_journal_detail_label.visible = false
-		network_journal_detail_label.text = ""
-		return
-	var row_type: String = str(row.get("type", "tip"))
-	var title_prefix: String = "Request" if row_type == "request" else "Market Room" if row_type == "dirty_tip" else "Journal"
-	var lines: Array = [
-		"%s: %s" % [title_prefix, str(row.get("title", "Network note"))],
-		"Day %d  |  %s  |  %s" % [
-			int(row.get("day_index", 0)),
-			_network_journal_group_label(_network_journal_group_key(row_type)),
-			str(row.get("status", "recorded")).capitalize()
-		]
-	]
-	var contact_name: String = str(row.get("contact_name", ""))
-	if not contact_name.is_empty():
-		lines.append("Contact: %s" % contact_name)
-	var ticker: String = str(row.get("target_ticker", ""))
-	if not ticker.is_empty():
-		lines.append("Ticker: %s" % ticker)
-	var detail: String = str(row.get("detail", ""))
-	if not detail.is_empty():
-		lines.append("")
-		lines.append(detail)
-	network_journal_detail_label.text = "\n".join(lines)
-	network_journal_detail_label.visible = true
+func _ensure_network_context_ui() -> void:
+	_ensure_network_controller()
+	network_controller.ensure_context_ui()
 
 
-func _network_request_detail_row(request: Dictionary) -> Dictionary:
-	if str(request.get("request_type", "")) == "dirty_tip":
-		var dirty_ticker: String = str(request.get("target_ticker", _ticker_for_company(str(request.get("target_company_id", "")))))
-		var dirty_status: String = str(request.get("status", "offered"))
-		var dirty_detail: String = str(request.get("offer_body", request.get("journal_detail", "")))
-		if dirty_status in ["accepted", "resolved_clean", "caught", "expired", "reported", "declined"]:
-			dirty_detail = str(request.get("outcome_note", request.get("journal_detail", dirty_detail)))
-		if dirty_status == "accepted":
-			dirty_detail = "Accepted. Active until day %d. %s" % [
-				int(request.get("active_until_day_index", request.get("due_day_index", 0))),
-				str(request.get("offer_body", ""))
-			]
-		return {
-			"id": "%s:dirty_tip_detail" % str(request.get("id", "")),
-			"type": "dirty_tip",
-			"day_index": int(request.get("created_day_index", current_network_snapshot.get("day_index", 0))),
-			"contact_id": str(request.get("contact_id", "")),
-			"contact_name": str(request.get("contact_name", "Operator Room")),
-			"target_company_id": str(request.get("target_company_id", "")),
-			"target_ticker": dirty_ticker,
-			"status": dirty_status,
-			"title": "Dirty Tip | %s | %s" % [dirty_ticker, dirty_status.capitalize()],
-			"detail": "%s | %s" % [str(request.get("contact_name", "Operator Room")), dirty_detail]
-		}
-	var target_company_id: String = str(request.get("target_company_id", ""))
-	var ticker: String = _ticker_for_company(target_company_id)
-	var status: String = str(request.get("status", "pending"))
-	var contact_name: String = str(request.get("contact_name", "Contact"))
-	if contact_name == "Contact":
-		for contact_value in current_network_snapshot.get("contacts", []):
-			if typeof(contact_value) != TYPE_DICTIONARY:
-				continue
-			var contact: Dictionary = contact_value
-			if str(contact.get("id", "")) == str(request.get("contact_id", "")):
-				contact_name = str(contact.get("display_name", "Contact"))
-				break
-	var detail: String = "%s. Hold at least 1 lot of %s by %s to complete this request." % [
-		_network_request_due_label(request),
-		ticker,
-		_network_request_due_date_text(request)
-	]
-	if status == "completed":
-		detail = "Completed after you held at least 1 lot of %s." % ticker
-	elif status == "missed":
-		detail = "Missed because you did not hold the requested target."
-	return {
-		"id": "%s:request_detail" % str(request.get("id", "")),
-		"type": "request",
-		"day_index": int(request.get("created_day_index", current_network_snapshot.get("day_index", 0))),
-		"contact_id": str(request.get("contact_id", "")),
-		"contact_name": contact_name,
-		"target_company_id": target_company_id,
-		"target_ticker": ticker,
-		"status": status,
-		"title": "Request | %s | %s" % [ticker, status.capitalize()],
-		"detail": "%s | %s" % [contact_name, detail]
-	}
-
-
-func _show_network_contact(contact: Dictionary) -> void:
-	if contact.is_empty():
-		network_contact_name_label.text = "No leads yet."
-		network_contact_meta_label.text = ""
-		network_contact_body_label.text = "Explore the world more. Read News, follow referrals, and approach RUPSLB room leads to discover people before they appear here."
-		if network_corporate_action_label != null:
-			network_corporate_action_label.visible = false
-			network_corporate_action_label.text = ""
-		if network_open_meeting_button != null:
-			network_open_meeting_button.visible = false
-			network_open_meeting_button.disabled = true
-			network_open_meeting_button.set_meta("meeting_id", "")
-		if network_followup_button != null:
-			network_followup_button.visible = false
-			network_followup_button.disabled = true
-		if network_source_check_button != null:
-			network_source_check_button.visible = false
-			network_source_check_button.disabled = true
-		if network_tip_history_label != null:
-			network_tip_history_label.visible = false
-			network_tip_history_label.text = ""
-		if network_crosscheck_label != null:
-			network_crosscheck_label.visible = false
-			network_crosscheck_label.text = ""
-		network_meet_button.disabled = true
-		network_tip_button.disabled = true
-		network_request_button.disabled = true
-		network_referral_button.disabled = true
-		return
-
-	var is_met: bool = bool(contact.get("met", false))
-	var affiliation_type: String = str(contact.get("affiliation_type", "floater"))
-	network_contact_name_label.text = "%s  |  %s" % [
-		str(contact.get("display_name", "")),
-		str(contact.get("role", ""))
-	]
-	var affiliation_label: String = "Floater"
-	var affiliated_company_id: String = str(contact.get("affiliated_company_id", contact.get("company_id", "")))
-	if affiliation_type == "insider":
-		affiliation_label = "Insider at %s" % _ticker_for_company(affiliated_company_id)
-	elif str(contact.get("source_type", "")) == "referral":
-		affiliation_label = "Referred lead"
-	var source_type_label: String = _network_source_type_label(str(contact.get("source_type", "network")))
-	var network_meta_parts: Array = [
-		affiliation_label,
-		"Relationship %d" % int(contact.get("relationship", 0)),
-		"Required recognition %d" % int(contact.get("recognition_required", 0)),
-		"Discovered via %s" % source_type_label
-	]
-	var contact_twooter_handle: String = str(contact.get("twooter_handle", "")).strip_edges()
-	if not contact_twooter_handle.is_empty():
-		network_meta_parts.append("Twooter %s" % contact_twooter_handle)
-	network_contact_meta_label.text = "  |  ".join(network_meta_parts)
-	var contact_body_text: String = str(contact.get("intro", ""))
-	var last_tip_note: String = str(contact.get("last_tip_note", ""))
-	if not last_tip_note.is_empty():
-		contact_body_text += "\n\n%s" % last_tip_note
-	var reaction_note: String = str(contact.get("last_reaction_note", ""))
-	if not reaction_note.is_empty():
-		contact_body_text += "\n\nLatest DM: %s" % reaction_note
-	var followup_note: String = str(contact.get("last_tip_followup_note", ""))
-	if not followup_note.is_empty():
-		contact_body_text += "\n%s" % followup_note
-	network_contact_body_label.text = contact_body_text
-	_update_network_tip_history_panel(contact)
-	_update_network_crosscheck_panel(contact)
-	var remaining_ap: int = int(GameManager.get_daily_action_snapshot().get("remaining", 0))
-	var referral_company_id: String = selected_company_id
-	if referral_company_id.is_empty():
-		referral_company_id = _network_contact_target_company(contact)
-	var tip_cooldown_active: bool = int(contact.get("last_tip_request_day_index", -9999)) == RunState.day_index
-	var referral_cooldown_active: bool = int(contact.get("last_referral_day_index", -9999)) == RunState.day_index
-	network_meet_button.text = "Meet (%d AP)" % GameManager.get_network_action_cost("meet")
-	network_tip_button.text = "Ask Tip (%d AP)" % GameManager.get_network_action_cost("tip")
-	network_request_button.text = "Accept Request (%d AP)" % GameManager.get_network_action_cost("request")
-	network_referral_button.text = "Ask Referral (%d AP)" % GameManager.get_network_action_cost("referral")
-	network_meet_button.disabled = is_met or not bool(contact.get("can_meet", false)) or remaining_ap < GameManager.get_network_action_cost("meet")
-	network_tip_button.disabled = not is_met or tip_cooldown_active or remaining_ap < GameManager.get_network_action_cost("tip")
-	network_tip_button.tooltip_text = "Already asked this contact for a read today." if tip_cooldown_active else "Ask for a fresh market read."
-	network_request_button.disabled = not is_met or remaining_ap < GameManager.get_network_action_cost("request")
-	network_referral_button.disabled = not (is_met and affiliation_type == "floater" and not referral_company_id.is_empty() and not referral_cooldown_active and remaining_ap >= GameManager.get_network_action_cost("referral"))
-	network_referral_button.tooltip_text = "Already asked this contact for an introduction today." if referral_cooldown_active else "Ask this contact to introduce a connected insider."
-	_update_network_followup_button(contact, is_met, remaining_ap)
-	_update_network_source_check_button(contact, is_met, remaining_ap)
-	if remaining_ap < GameManager.get_network_action_cost("meet") and not is_met:
-		network_meet_button.disabled = true
-	var company_snapshot: Dictionary = GameManager.get_company_corporate_action_snapshot(_network_contact_target_company(contact))
-	var primary_chain: Dictionary = company_snapshot.get("primary_chain", {})
-	var meeting_id: String = str(primary_chain.get("meeting_id", ""))
-	if meeting_id.is_empty():
-		var upcoming_meetings: Array = company_snapshot.get("upcoming_meetings", [])
-		if not upcoming_meetings.is_empty():
-			meeting_id = str(upcoming_meetings[0].get("id", ""))
-	if network_corporate_action_label != null:
-		var action_text: String = ""
-		if not primary_chain.is_empty():
-			action_text = str(primary_chain.get("public_summary", ""))
-			var intel_summary: String = str(primary_chain.get("intel_summary", ""))
-			if not intel_summary.is_empty():
-				action_text += "\nIntel: %s" % intel_summary
-		elif not company_snapshot.get("upcoming_meetings", []).is_empty():
-			action_text = str(company_snapshot.get("upcoming_meetings", [])[0].get("public_summary", ""))
-		network_corporate_action_label.text = action_text
-		network_corporate_action_label.visible = not action_text.is_empty()
-	if network_open_meeting_button != null:
-		var meeting_detail: Dictionary = GameManager.get_corporate_meeting_detail(meeting_id) if not meeting_id.is_empty() else {}
-		var meeting_blocked_reason: String = _corporate_meeting_open_blocked_reason(meeting_detail)
-		network_open_meeting_button.visible = not meeting_id.is_empty()
-		network_open_meeting_button.disabled = meeting_id.is_empty() or not meeting_blocked_reason.is_empty()
-		network_open_meeting_button.text = "Shareholders Only" if not meeting_blocked_reason.is_empty() else "Open Meeting"
-		network_open_meeting_button.tooltip_text = meeting_blocked_reason if not meeting_blocked_reason.is_empty() else "Open the linked corporate meeting."
-		network_open_meeting_button.set_meta("meeting_id", meeting_id)
-
-
-func _current_network_contact() -> Dictionary:
-	if network_contacts_list.item_count <= 0:
-		return {}
-	var selected_items: PackedInt32Array = network_contacts_list.get_selected_items()
-	if selected_items.is_empty():
-		return {}
-	var item_index: int = selected_items[0]
-	var metadata: Variant = network_contacts_list.get_item_metadata(item_index)
-	if typeof(metadata) == TYPE_DICTIONARY:
-		var row: Dictionary = metadata
-		return row
-	return {}
-
-
-func _network_source_type_label(source_type: String) -> String:
-	match source_type.strip_edges().to_lower():
-		"news":
-			return "News lead"
-		"twooter":
-			return "Twooter lead"
-		"referral":
-			return "Referral"
-		"meeting":
-			return "Meeting room"
-		"manual":
-			return "Manual note"
-		"debug":
-			return "Test lead"
-		_:
-			return "Network lead"
-
-
-func _update_network_followup_button(contact: Dictionary, is_met: bool, remaining_ap: int) -> void:
-	if network_followup_button == null:
-		return
-	var options: Array = contact.get("tip_followup_options", [])
-	var can_follow_up: bool = is_met and bool(contact.get("can_follow_up_tip", false)) and not options.is_empty()
-	network_followup_button.visible = can_follow_up
-	network_followup_button.text = "Follow Up (%d AP)" % GameManager.get_network_action_cost("followup")
-	network_followup_button.disabled = not can_follow_up or remaining_ap < GameManager.get_network_action_cost("followup")
-	var popup: PopupMenu = network_followup_button.get_popup()
-	popup.clear()
-	for option_value in options:
-		if typeof(option_value) != TYPE_DICTIONARY:
-			continue
-		var option: Dictionary = option_value
-		var followup_id: String = str(option.get("id", ""))
-		var menu_id: int = _network_followup_menu_id(followup_id)
-		if menu_id < 0:
-			continue
-		popup.add_item(str(option.get("label", followup_id.capitalize())), menu_id)
-	network_followup_button.tooltip_text = "Follow up on the selected contact's latest resolved read."
-
-
-func _update_network_source_check_button(contact: Dictionary, is_met: bool, remaining_ap: int) -> void:
-	if network_source_check_button == null:
-		return
-	var has_direct_conflict: bool = bool(contact.get("has_direct_source_conflict", false))
-	var can_ask: bool = is_met and bool(contact.get("can_ask_source_check", false))
-	var has_answer: bool = not str(contact.get("source_check_note", "")).is_empty()
-	network_source_check_button.visible = is_met and has_direct_conflict
-	network_source_check_button.disabled = not can_ask or remaining_ap < GameManager.get_network_action_cost("source_check")
-	if has_answer:
-		network_source_check_button.text = "Conflict Asked"
-		network_source_check_button.disabled = true
-		network_source_check_button.tooltip_text = "This conflict already has a follow-up answer in the Source Cross-Check panel."
-	elif remaining_ap < GameManager.get_network_action_cost("source_check"):
-		network_source_check_button.text = "Ask About Conflict (%d AP)" % GameManager.get_network_action_cost("source_check")
-		network_source_check_button.tooltip_text = "No daily action points left."
-	else:
-		network_source_check_button.text = "Ask About Conflict (%d AP)" % GameManager.get_network_action_cost("source_check")
-		network_source_check_button.tooltip_text = "Spend 1 action point to ask this contact why another source disagrees."
-
-
-func _network_followup_menu_id(followup_id: String) -> int:
-	for menu_id_value in NETWORK_FOLLOWUP_ACTIONS.keys():
-		var menu_id: int = int(menu_id_value)
-		if str(NETWORK_FOLLOWUP_ACTIONS.get(menu_id, "")) == followup_id:
-			return menu_id
-	return -1
-
-
-func _update_network_tip_history_panel(contact: Dictionary) -> void:
-	if network_tip_history_label == null:
-		return
-	var history_text: String = _network_tip_history_text(contact)
-	network_tip_history_label.text = history_text
-	network_tip_history_label.visible = not history_text.is_empty()
-
-
-func _network_tip_history_text(contact: Dictionary) -> String:
-	var rows: Array = contact.get("tip_history", [])
-	if rows.is_empty():
-		return ""
-	var useful_count: int = int(contact.get("tip_useful_count", 0))
-	var resolved_count: int = int(contact.get("tip_resolved_count", rows.size()))
-	var missed_count: int = int(contact.get("tip_missed_count", 0))
-	var header: String = "Read History | %s | %d/%d useful" % [
-		str(contact.get("tip_reliability_label", "Mixed record")),
-		useful_count,
-		resolved_count
-	]
-	if missed_count > 0:
-		header += " | %d missed" % missed_count
-	var lines: Array = [header]
-	for row_value in rows:
-		if typeof(row_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = row_value
-		var line: String = "- %s: %s" % [
-			str(row.get("target_ticker", "")),
-			str(row.get("outcome_label", "Read"))
-		]
-		var player_action: String = str(row.get("player_action_label", ""))
-		if not player_action.is_empty():
-			line += " | %s" % player_action
-		var followup_label: String = str(row.get("followup_label", ""))
-		if not followup_label.is_empty():
-			line += " | %s" % followup_label
-		lines.append(line)
-	return "\n".join(lines)
-
-
-func _update_network_crosscheck_panel(contact: Dictionary) -> void:
-	if network_crosscheck_label == null:
-		return
-	var crosscheck_text: String = _network_crosscheck_text(contact)
-	network_crosscheck_label.text = crosscheck_text
-	network_crosscheck_label.visible = not crosscheck_text.is_empty()
-
-
-func _network_crosscheck_text(contact: Dictionary) -> String:
-	var label: String = str(contact.get("cross_contact_label", ""))
-	var note: String = str(contact.get("cross_contact_note", ""))
-	if label.is_empty() or note.is_empty():
-		return ""
-	var lines: Array = ["Source Cross-Check | %s" % label, note]
-	for row_value in contact.get("cross_contact_rows", []):
-		if typeof(row_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = row_value
-		var source_role: String = str(row.get("source_role", ""))
-		var contact_label: String = str(row.get("contact_name", "Another contact"))
-		if not source_role.is_empty():
-			contact_label += " (%s)" % source_role
-		var line: String = "- %s: %s" % [
-			contact_label,
-			str(row.get("truth_label", "different read"))
-		]
-		var confidence_label: String = str(row.get("confidence_label", ""))
-		if not confidence_label.is_empty():
-			line += " | %s" % confidence_label
-		lines.append(line)
-	var source_check_note: String = str(contact.get("source_check_note", ""))
-	if not source_check_note.is_empty():
-		lines.append("Conflict Follow-up | %s" % source_check_note)
-	return "\n".join(lines)
+func _ensure_network_detail_scroll() -> void:
+	_ensure_network_controller()
+	network_controller.ensure_detail_scroll()
 
 
 func _contact_for_context(source_type: String, source_id: String, company_id: String) -> Dictionary:
@@ -7932,2817 +4589,706 @@ func _contact_for_context(source_type: String, source_id: String, company_id: St
 
 
 func _filtered_social_posts(posts: Array) -> Array:
-	if selected_social_account_id.is_empty():
-		return posts
-	var filtered_posts: Array = []
-	for post_value in posts:
-		if typeof(post_value) != TYPE_DICTIONARY:
-			continue
-		var post: Dictionary = post_value
-		if str(post.get("account_id", "")) == selected_social_account_id:
-			filtered_posts.append(post)
-	return filtered_posts
-
+	_ensure_social_controller()
+	return social_controller._filtered_social_posts(posts)
 
 func _filtered_social_posts_by_feed_filter(posts: Array) -> Array:
-	if selected_social_feed_filter_id == SOCIAL_FEED_FILTER_ALL:
-		return posts
-
-	var filtered_posts: Array = []
-	for post_value in posts:
-		if typeof(post_value) != TYPE_DICTIONARY:
-			continue
-		var post: Dictionary = post_value
-		if _social_post_matches_feed_filter(post, selected_social_feed_filter_id):
-			filtered_posts.append(post)
-
-	if selected_social_feed_filter_id == SOCIAL_FEED_FILTER_TRENDING and filtered_posts.is_empty() and not posts.is_empty():
-		var sorted_posts: Array = posts.duplicate()
-		sorted_posts.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-			return _social_post_engagement_score(a) > _social_post_engagement_score(b)
-		)
-		return sorted_posts.slice(0, min(3, sorted_posts.size()))
-
-	return filtered_posts
-
+	_ensure_social_controller()
+	return social_controller._filtered_social_posts_by_feed_filter(posts)
 
 func _social_post_matches_feed_filter(post: Dictionary, filter_id: String) -> bool:
-	if filter_id == SOCIAL_FEED_FILTER_FOLLOWING:
-		return _following_social_account_lookup().has(str(post.get("account_id", "")))
-	if filter_id == SOCIAL_FEED_FILTER_COMPANIES:
-		return _social_post_is_company(post)
-	if filter_id == SOCIAL_FEED_FILTER_SECTORS:
-		return _social_post_is_sector(post)
-	if filter_id == SOCIAL_FEED_FILTER_TRENDING:
-		return float(post.get("priority", 0.0)) >= 2.4 or _social_post_engagement_score(post) >= 500
-	return true
-
+	_ensure_social_controller()
+	return social_controller._social_post_matches_feed_filter(post, filter_id)
 
 func _social_feed_filters_for_posts(_posts: Array) -> Array:
-	var filters: Array = [{"id": SOCIAL_FEED_FILTER_ALL, "label": "All"}]
-	if not _following_social_account_lookup().is_empty():
-		filters.append({"id": SOCIAL_FEED_FILTER_FOLLOWING, "label": "Following"})
-	for filter_value in SOCIAL_FEED_FILTERS:
-		if typeof(filter_value) != TYPE_DICTIONARY:
-			continue
-		var filter: Dictionary = filter_value
-		var filter_id: String = str(filter.get("id", ""))
-		if filter_id == SOCIAL_FEED_FILTER_ALL:
-			continue
-		filters.append(filter.duplicate(true))
-	return filters
-
+	_ensure_social_controller()
+	return social_controller._social_feed_filters_for_posts(_posts)
 
 func _following_social_account_lookup() -> Dictionary:
-	var lookup: Dictionary = {}
-	for account_value in current_social_snapshot.get("accounts", []):
-		if typeof(account_value) != TYPE_DICTIONARY:
-			continue
-		var account: Dictionary = account_value
-		var account_id: String = str(account.get("id", ""))
-		if not account_id.is_empty() and bool(account.get("following", false)):
-			lookup[account_id] = true
-	return lookup
-
+	_ensure_social_controller()
+	return social_controller._following_social_account_lookup()
 
 func _social_account_from_snapshot(account_id: String) -> Dictionary:
-	if account_id.is_empty():
-		return {}
-	for account_value in current_social_snapshot.get("accounts", []):
-		if typeof(account_value) != TYPE_DICTIONARY:
-			continue
-		var account: Dictionary = account_value
-		if str(account.get("id", "")) == account_id:
-			return account
-	return {}
-
+	_ensure_social_controller()
+	return social_controller._social_account_from_snapshot(account_id)
 
 func _social_post_is_company(post: Dictionary) -> bool:
-	return not str(post.get("target_ticker", "")).strip_edges().is_empty() or not str(post.get("target_company_name", "")).strip_edges().is_empty()
-
+	_ensure_social_controller()
+	return social_controller._social_post_is_company(post)
 
 func _social_post_is_sector(post: Dictionary) -> bool:
-	var category: String = str(post.get("category", "")).to_lower()
-	var has_sector: bool = not str(post.get("sector_name", "")).strip_edges().is_empty()
-	return (has_sector and not _social_post_is_company(post)) or category.contains("sector")
-
+	_ensure_social_controller()
+	return social_controller._social_post_is_sector(post)
 
 func _social_post_engagement_score(post: Dictionary) -> int:
-	return int(post.get("likes", 0)) + int(post.get("retwoots", 0)) * 3 + int(post.get("replies", 0)) * 2
-
+	_ensure_social_controller()
+	return social_controller._social_post_engagement_score(post)
 
 func _social_feed_filter_label(filter_id: String) -> String:
-	if filter_id == SOCIAL_FEED_FILTER_FOLLOWING:
-		return "Following"
-	for filter_value in SOCIAL_FEED_FILTERS:
-		var filter: Dictionary = filter_value
-		if str(filter.get("id", "")) == filter_id:
-			return str(filter.get("label", "All"))
-	return "All"
-
+	_ensure_social_controller()
+	return social_controller._social_feed_filter_label(filter_id)
 
 func _count_social_posts_for_filter(posts: Array, filter_id: String) -> int:
-	if filter_id == SOCIAL_FEED_FILTER_ALL:
-		return posts.size()
-	var count: int = 0
-	for post_value in posts:
-		if typeof(post_value) != TYPE_DICTIONARY:
-			continue
-		var post: Dictionary = post_value
-		if _social_post_matches_feed_filter(post, filter_id):
-			count += 1
-	return count
-
+	_ensure_social_controller()
+	return social_controller._count_social_posts_for_filter(posts, filter_id)
 
 func _selected_social_account_name(posts: Array) -> String:
-	if selected_social_account_id.is_empty():
-		return ""
-	var account: Dictionary = _social_account_from_snapshot(selected_social_account_id)
-	if not account.is_empty():
-		var display_name: String = str(account.get("display_name", "")).strip_edges()
-		if not display_name.is_empty():
-			return display_name
-		var handle: String = str(account.get("handle", "")).strip_edges()
-		if not handle.is_empty():
-			return handle
-	for post_value in posts:
-		if typeof(post_value) != TYPE_DICTIONARY:
-			continue
-		var post: Dictionary = post_value
-		if str(post.get("account_id", "")) != selected_social_account_id:
-			continue
-		var account_name: String = str(post.get("account_name", "")).strip_edges()
-		if account_name.is_empty():
-			account_name = str(post.get("account_handle", "")).strip_edges()
-		return account_name
-	return ""
-
+	_ensure_social_controller()
+	return social_controller._selected_social_account_name(posts)
 
 func _refresh_social_tier_indicator(_access_tier: int) -> void:
-	if social_tier_indicator == null:
-		return
-	for child in social_tier_indicator.get_children():
-		social_tier_indicator.remove_child(child)
-		child.queue_free()
-	social_tier_indicator.visible = false
-
+	_ensure_social_controller()
+	social_controller._refresh_social_tier_indicator(_access_tier)
 
 func _on_social_nav_pressed(view_id: String) -> void:
-	if view_id.is_empty() or selected_social_view_id == view_id:
-		return
-	selected_social_view_id = view_id
-	if view_id == "message" and _should_clear_social_message_selection_on_nav():
-		selected_social_message_account_id = ""
-	_refresh_social()
-
+	_ensure_social_controller()
+	social_controller._on_social_nav_pressed(view_id)
 
 func _should_clear_social_message_selection_on_nav() -> bool:
-	if selected_social_message_account_id.is_empty():
-		return false
-	var social_state: Dictionary = RunState.get_twooter_social_state()
-	var messages: Dictionary = social_state.get("messages", {}) if typeof(social_state.get("messages", {})) == TYPE_DICTIONARY else {}
-	var thread: Dictionary = messages.get(selected_social_message_account_id, {}) if typeof(messages.get(selected_social_message_account_id, {})) == TYPE_DICTIONARY else {}
-	var rows: Array = thread.get("rows", []) if typeof(thread.get("rows", [])) == TYPE_ARRAY else []
-	if not rows.is_empty():
-		return false
-	var dialog_state: Dictionary = social_state.get("dialog_state", {}) if typeof(social_state.get("dialog_state", {})) == TYPE_DICTIONARY else {}
-	var accounts: Dictionary = dialog_state.get("accounts", {}) if typeof(dialog_state.get("accounts", {})) == TYPE_DICTIONARY else {}
-	var branch: Dictionary = accounts.get(selected_social_message_account_id, {}) if typeof(accounts.get(selected_social_message_account_id, {})) == TYPE_DICTIONARY else {}
-	return int(branch.get("cooldown_until_day", -9999)) < RunState.day_index
-
+	_ensure_social_controller()
+	return social_controller._should_clear_social_message_selection_on_nav()
 
 func _apply_social_view_visibility() -> void:
-	var is_message: bool = selected_social_view_id == "message"
-	if social_filter_scroll != null:
-		social_filter_scroll.visible = not is_message
-	if social_ticker_tape_panel != null:
-		social_ticker_tape_panel.visible = not is_message
-	if social_feed_scroll != null:
-		social_feed_scroll.visible = not is_message
-	if social_message_view != null:
-		social_message_view.visible = is_message
-	if social_feed_summary_label != null:
-		social_feed_summary_label.visible = not is_message
-	for view_id_value in social_left_nav_buttons.keys():
-		var view_id: String = str(view_id_value)
-		var button: Button = social_left_nav_buttons.get(view_id) as Button
-		if button != null:
-			_style_social_nav_button(button, view_id == selected_social_view_id)
-	if social_right_rail != null:
-		social_right_rail.visible = false if is_message else get_viewport_rect().size.x >= 960.0
-
+	_ensure_social_controller()
+	social_controller._apply_social_view_visibility()
 
 func _rebuild_social_right_rail(snapshot: Dictionary) -> void:
-	_rebuild_social_account_search_results(snapshot)
-	_clear_container(social_trending_rows)
-	_clear_container(social_follow_rows)
-	if social_trending_rows != null:
-		var trending_rows: Array = snapshot.get("trending_rows", [])
-		if trending_rows.is_empty():
-			social_trending_rows.add_child(_make_social_rail_body_label("No trend rows yet."))
-		for row_value in trending_rows:
-			if typeof(row_value) == TYPE_DICTIONARY:
-				social_trending_rows.add_child(_build_social_trending_row(row_value))
-	if social_follow_rows != null:
-		var follow_rows: Array = snapshot.get("who_to_follow", [])
-		if follow_rows.is_empty():
-			social_follow_rows.add_child(_make_social_rail_body_label("No follow suggestions."))
-		for row_value in follow_rows:
-			if typeof(row_value) == TYPE_DICTIONARY:
-				social_follow_rows.add_child(_build_social_follow_row(row_value))
-
+	_ensure_social_controller()
+	social_controller._rebuild_social_right_rail(snapshot)
 
 func _rebuild_social_account_search_results(snapshot: Dictionary) -> void:
-	_clear_container(social_account_search_results)
-	if social_account_search_input == null or social_account_search_results == null:
-		return
-	var query: String = social_account_search_input.text.strip_edges().to_lower()
-	if query.is_empty():
-		social_account_search_results.visible = false
-		return
-	social_account_search_results.visible = true
-	var match_count: int = 0
-	for account_value in snapshot.get("accounts", []):
-		if typeof(account_value) != TYPE_DICTIONARY:
-			continue
-		var account: Dictionary = account_value
-		if not _social_account_matches_name_search(account, query):
-			continue
-		social_account_search_results.add_child(_build_social_account_search_result(account))
-		match_count += 1
-		if match_count >= 5:
-			break
-	if match_count <= 0:
-		var empty_label: Label = _make_social_rail_body_label("No account names match.")
-		empty_label.name = "SocialAccountSearchEmptyLabel"
-		social_account_search_results.add_child(empty_label)
-
+	_ensure_social_controller()
+	social_controller._rebuild_social_account_search_results(snapshot)
 
 func _social_account_matches_name_search(account: Dictionary, query: String) -> bool:
-	if query.is_empty():
-		return false
-	var display_name: String = str(account.get("display_name", "")).strip_edges().to_lower()
-	return not display_name.is_empty() and display_name.find(query) != -1
-
+	_ensure_social_controller()
+	return social_controller._social_account_matches_name_search(account, query)
 
 func _social_font_size(base_size: int) -> int:
-	return base_size + SOCIAL_FONT_SIZE_BUMP
-
+	_ensure_social_controller()
+	return social_controller._social_font_size(base_size)
 
 func _build_social_account_search_result(account: Dictionary) -> Button:
-	var account_id: String = str(account.get("id", ""))
-	var button := Button.new()
-	button.name = "SocialAccountSearchResultButton"
-	button.set_meta("social_account_id", account_id)
-	button.text = "%s\n%s" % [
-		str(account.get("display_name", "Account")),
-		str(account.get("handle", ""))
-	]
-	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	button.clip_text = true
-	button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	button.custom_minimum_size = Vector2(0, 42)
-	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	button.tooltip_text = "Open this account profile."
-	_style_social_thread_button(button)
-	button.pressed.connect(_on_social_account_pressed.bind(account_id))
-	return button
-
+	_ensure_social_controller()
+	return social_controller._build_social_account_search_result(account)
 
 func _on_social_account_search_changed(_new_text: String) -> void:
-	_rebuild_social_account_search_results(current_social_snapshot)
-
+	_ensure_social_controller()
+	social_controller._on_social_account_search_changed(_new_text)
 
 func _on_social_account_search_submitted(_new_text: String) -> void:
-	var query: String = social_account_search_input.text.strip_edges().to_lower() if social_account_search_input != null else ""
-	if query.is_empty():
-		return
-	for account_value in current_social_snapshot.get("accounts", []):
-		if typeof(account_value) != TYPE_DICTIONARY:
-			continue
-		var account: Dictionary = account_value
-		if _social_account_matches_name_search(account, query):
-			_on_social_account_pressed(str(account.get("id", "")))
-			return
-
+	_ensure_social_controller()
+	social_controller._on_social_account_search_submitted(_new_text)
 
 func _build_social_trending_row(row: Dictionary) -> VBoxContainer:
-	var vbox := VBoxContainer.new()
-	vbox.name = "SocialTrendingRow"
-	vbox.add_theme_constant_override("separation", 3)
-	var category := Label.new()
-	category.text = str(row.get("category", "Market"))
-	category.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(category, _social_font_size(12), _get_app_font())
-	vbox.add_child(category)
-	var tag := Label.new()
-	tag.text = str(row.get("tag", "#IDX"))
-	tag.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(tag, _social_font_size(DEFAULT_APP_FONT_SIZE + 1), _get_dashboard_title_font())
-	vbox.add_child(tag)
-	var count := Label.new()
-	count.text = "%d posts" % int(row.get("posts", 0))
-	count.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(count, _social_font_size(12), _get_app_font())
-	vbox.add_child(count)
-	return vbox
-
+	_ensure_social_controller()
+	return social_controller._build_social_trending_row(row)
 
 func _build_social_follow_row(row: Dictionary) -> HBoxContainer:
-	var hbox := HBoxContainer.new()
-	hbox.name = "SocialFollowRow"
-	var account_id: String = str(row.get("account_id", ""))
-	hbox.set_meta("social_account_id", account_id)
-	hbox.add_theme_constant_override("separation", 10)
-	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hbox.mouse_filter = Control.MOUSE_FILTER_STOP
-	hbox.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	hbox.gui_input.connect(_on_social_follow_row_gui_input.bind(account_id))
-	var avatar := PanelContainer.new()
-	avatar.custom_minimum_size = Vector2(36, 36)
-	avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_style_twooter_panel(avatar, _social_avatar_color(account_id), COLOR_TWOOTER_BORDER, 18, 1)
-	var avatar_label := Label.new()
-	avatar_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	avatar_label.text = str(row.get("display_name", "?")).left(1).to_upper()
-	avatar_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	avatar_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	avatar_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	avatar.add_child(avatar_label)
-	hbox.add_child(avatar)
-	var account_button := Button.new()
-	account_button.name = "SocialFollowAccountButton"
-	account_button.set_meta("social_account_id", account_id)
-	account_button.text = "%s\n%s" % [str(row.get("display_name", "Account")), str(row.get("handle", ""))]
-	account_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	account_button.clip_text = true
-	account_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	account_button.custom_minimum_size = Vector2(0, 42)
-	account_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	account_button.tooltip_text = "Open this account profile."
-	_style_social_thread_button(account_button)
-	account_button.pressed.connect(_on_social_account_pressed.bind(account_id))
-	hbox.add_child(account_button)
-	var button := Button.new()
-	button.name = "SocialFollowButton"
-	button.text = "Follow"
-	button.custom_minimum_size = Vector2(92, SOCIAL_ACTION_BUTTON_MIN_HEIGHT)
-	_style_social_follow_cta_button(button)
-	button.pressed.connect(_on_social_follow_pressed.bind(account_id))
-	hbox.add_child(button)
-	return hbox
-
+	_ensure_social_controller()
+	return social_controller._build_social_follow_row(row)
 
 func _on_social_follow_row_gui_input(event: InputEvent, account_id: String) -> void:
-	var mouse_event := event as InputEventMouseButton
-	if mouse_event == null or not mouse_event.pressed or mouse_event.button_index != MOUSE_BUTTON_LEFT:
-		return
-	_on_social_account_pressed(account_id)
-
+	_ensure_social_controller()
+	social_controller._on_social_follow_row_gui_input(event, account_id)
 
 func _on_social_follow_pressed(account_id: String) -> void:
-	var result: Dictionary = GameManager.follow_twooter_account(account_id)
-	if not bool(result.get("success", false)):
-		_show_toast(str(result.get("message", "Could not follow account.")), false)
-		return
-	_show_toast(str(result.get("message", "Following account.")), true)
-	_refresh_social()
-
+	_ensure_social_controller()
+	social_controller._on_social_follow_pressed(account_id)
 
 func _rebuild_social_message_view(snapshot: Dictionary) -> void:
-	_clear_container(social_message_threads)
-	_clear_container(social_message_header)
-	_clear_container(social_message_rows)
-	if social_message_threads == null or social_message_header == null or social_message_rows == null or social_message_actions == null:
-		return
-	_reset_social_message_composer(false)
-	var thread_rows: Array = snapshot.get("message_threads", [])
-	var account_lookup: Dictionary = {}
-	for account_value in snapshot.get("accounts", []):
-		if typeof(account_value) != TYPE_DICTIONARY:
-			continue
-		var account: Dictionary = account_value
-		var account_id: String = str(account.get("id", ""))
-		if not account_id.is_empty():
-			account_lookup[account_id] = account
-	var listed_accounts: Dictionary = {}
-	var first_thread_account_id := ""
-	for row_value in thread_rows:
-		if typeof(row_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = row_value
-		var row_account_id: String = str(row.get("account_id", ""))
-		if row_account_id.is_empty():
-			continue
-		if first_thread_account_id.is_empty():
-			first_thread_account_id = row_account_id
-		listed_accounts[row_account_id] = true
-		social_message_threads.add_child(_build_social_message_thread_button(row))
-	if selected_social_message_account_id.is_empty():
-		selected_social_message_account_id = first_thread_account_id
-	elif not account_lookup.has(selected_social_message_account_id) and not listed_accounts.has(selected_social_message_account_id):
-		selected_social_message_account_id = ""
-	for child in social_message_threads.get_children():
-		var thread_button := child as Button
-		if thread_button != null:
-			_style_social_filter_button(thread_button, str(thread_button.get_meta("account_id", "")) == selected_social_message_account_id, true)
-	var selected_account: Dictionary = account_lookup.get(selected_social_message_account_id, {})
-	if not selected_social_message_account_id.is_empty() and not listed_accounts.has(selected_social_message_account_id) and not selected_account.is_empty():
-		social_message_threads.add_child(_build_social_message_thread_button({
-			"account_id": selected_social_message_account_id,
-			"account_name": str(selected_account.get("display_name", "")),
-			"account_handle": str(selected_account.get("handle", "")),
-			"relationship_stage": str(selected_account.get("relationship_stage", "stranger")),
-			"last_text": "Start a message."
-		}))
-	if social_message_threads.get_child_count() == 0:
-		social_message_threads.add_child(_make_social_rail_body_label("No messages yet.\nOpen an account from Home to start one."))
-	if selected_social_message_account_id.is_empty():
-		_add_social_message_header("Messages", "Your inbox is quiet.")
-		social_message_rows.add_child(_make_social_rail_body_label("Your inbox is quiet. Open a Twooter account and press Send message to start a thread."))
-		return
-	var thread: Dictionary = GameManager.get_twooter_message_thread(selected_social_message_account_id)
-	var account_for_thread: Dictionary = thread.get("account", {})
-	if account_for_thread.is_empty() and not selected_account.is_empty():
-		account_for_thread = selected_account
-	var header_meta: String = "%s relationship | %d credibility | %d importance" % [
-		str(account_for_thread.get("relationship_stage", "stranger")).replace("_", " ").capitalize(),
-		int(account_for_thread.get("credibility", 0)),
-		int(account_for_thread.get("importance", 0))
-	]
-	_add_social_message_header(str(account_for_thread.get("display_name", "Choose a thread")), header_meta)
-	for row_value in thread.get("rows", []):
-		if typeof(row_value) == TYPE_DICTIONARY:
-			social_message_rows.add_child(_build_social_message_bubble(row_value))
-	var message_cooldown_reason: String = str(thread.get("cooldown_reason", ""))
-	if not message_cooldown_reason.is_empty():
-		social_message_rows.add_child(_make_social_rail_body_label(_social_dialog_cooldown_text(message_cooldown_reason)))
-	if int(social_message_rows.get_child_count()) <= 0:
-		social_message_rows.add_child(_make_social_rail_body_label("Start with a clean message or share a thesis."))
-	_hydrate_social_message_composer(selected_social_message_account_id, thread.get("dialog_options", []))
-	if social_message_rows_scroll != null:
-		call_deferred("_scroll_social_message_rows_to_bottom")
-
+	_ensure_social_controller()
+	social_controller._rebuild_social_message_view(snapshot)
 
 func _add_social_message_header(title_text: String, subtitle_text: String) -> void:
-	if social_message_header == null:
-		return
-	var title := Label.new()
-	title.name = "SocialMessageTitleLabel"
-	title.text = title_text
-	title.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(title, _social_font_size(DEFAULT_APP_FONT_SIZE + 5), _get_dashboard_title_font())
-	social_message_header.add_child(title)
-	if not subtitle_text.is_empty():
-		var subtitle := Label.new()
-		subtitle.name = "SocialMessageSubtitleLabel"
-		subtitle.text = subtitle_text
-		subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		subtitle.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-		_apply_font_override_to_control(subtitle, _social_font_size(12), _get_app_font())
-		social_message_header.add_child(subtitle)
-
+	_ensure_social_controller()
+	social_controller._add_social_message_header(title_text, subtitle_text)
 
 func _hydrate_social_message_composer(account_id: String, options: Array) -> void:
-	_reset_social_message_composer(true)
-	pending_social_message_account_id = account_id
-	if social_message_composer == null:
-		return
-	social_message_composer.visible = true
-	for option_index in range(social_message_option_buttons.size()):
-		var button: Button = social_message_option_buttons[option_index]
-		var option: Dictionary = options[option_index] if option_index < options.size() and typeof(options[option_index]) == TYPE_DICTIONARY else {}
-		button.visible = not option.is_empty()
-		button.disabled = option.is_empty() or not bool(option.get("enabled", true))
-		button.clip_text = true
-		button.text = str(option.get("player_text", option.get("label", "Message")))
-		button.tooltip_text = str(option.get("player_text", "")) if not bool(option.get("enabled", true)) else ""
-		button.set_meta("action_id", str(option.get("id", "")))
-		button.set_meta("tree_id", str(option.get("tree_id", "")))
-		button.set_meta("node_id", str(option.get("node_id", "")))
-		button.set_meta("option_id", str(option.get("option_id", "")))
-		button.set_meta("thesis_id", str(option.get("thesis_id", "")))
-		button.set_meta("player_text", str(option.get("player_text", "")))
-		button.set_meta("blocked_reason", str(option.get("blocked_reason", "")))
-	if options.is_empty() and social_message_composer_text_label != null:
-		social_message_composer_text_label.text = "No clean message options are available right now."
-
+	_ensure_social_controller()
+	social_controller._hydrate_social_message_composer(account_id, options)
 
 func _reset_social_message_composer(show_composer: bool) -> void:
-	if social_message_typing_tween != null:
-		social_message_typing_tween.kill()
-		social_message_typing_tween = null
-	pending_social_message_account_id = ""
-	pending_social_message_action_id = ""
-	pending_social_message_thesis_id = ""
-	pending_social_message_text = ""
-	if social_message_composer != null:
-		social_message_composer.visible = show_composer
-	if social_message_composer_text_label != null:
-		social_message_composer_text_label.text = "Choose a message below."
-		social_message_composer_text_label.visible_characters = social_message_composer_text_label.text.length()
-	for option_button in social_message_option_buttons:
-		option_button.visible = show_composer
-		option_button.disabled = true
-		option_button.text = ""
-		option_button.tooltip_text = ""
-		if option_button.has_meta("action_id"):
-			option_button.remove_meta("action_id")
-		if option_button.has_meta("tree_id"):
-			option_button.remove_meta("tree_id")
-		if option_button.has_meta("node_id"):
-			option_button.remove_meta("node_id")
-		if option_button.has_meta("option_id"):
-			option_button.remove_meta("option_id")
-		if option_button.has_meta("thesis_id"):
-			option_button.remove_meta("thesis_id")
-		if option_button.has_meta("player_text"):
-			option_button.remove_meta("player_text")
-		if option_button.has_meta("blocked_reason"):
-			option_button.remove_meta("blocked_reason")
-		_style_social_thread_button(option_button)
-	if social_message_send_button != null:
-		social_message_send_button.disabled = true
-
+	_ensure_social_controller()
+	social_controller._reset_social_message_composer(show_composer)
 
 func _on_social_message_option_selected(option_index: int) -> void:
-	if option_index < 0 or option_index >= social_message_option_buttons.size():
-		return
-	var button: Button = social_message_option_buttons[option_index]
-	pending_social_message_action_id = str(button.get_meta("action_id", ""))
-	pending_social_message_thesis_id = str(button.get_meta("thesis_id", ""))
-	pending_social_message_text = str(button.get_meta("player_text", ""))
-	if pending_social_message_account_id.is_empty():
-		pending_social_message_account_id = selected_social_message_account_id
-	if pending_social_message_action_id.is_empty() or pending_social_message_text.is_empty():
-		return
-	for option_button in social_message_option_buttons:
-		_style_social_thread_button(option_button)
-	_style_social_filter_button(button, true, true)
-	_start_social_message_typewriter(pending_social_message_text)
-
+	_ensure_social_controller()
+	social_controller._on_social_message_option_selected(option_index)
 
 func _start_social_message_typewriter(text: String) -> void:
-	if social_message_typing_tween != null:
-		social_message_typing_tween.kill()
-		social_message_typing_tween = null
-	if social_message_send_button != null:
-		social_message_send_button.disabled = true
-	if social_message_composer_text_label == null:
-		return
-	social_message_composer_text_label.text = text
-	social_message_composer_text_label.visible_characters = 0
-	var duration: float = clamp(float(text.length()) * 0.018, 0.28, 1.2)
-	if _is_smoke_test_runtime():
-		duration = 0.02
-	social_message_typing_tween = create_tween()
-	social_message_typing_tween.tween_property(social_message_composer_text_label, "visible_characters", text.length(), duration)
-	social_message_typing_tween.finished.connect(func() -> void:
-		if social_message_composer_text_label != null:
-			social_message_composer_text_label.visible_characters = social_message_composer_text_label.text.length()
-		if social_message_send_button != null:
-			social_message_send_button.disabled = pending_social_message_action_id.is_empty()
-		social_message_typing_tween = null
-	)
-
+	_ensure_social_controller()
+	social_controller._start_social_message_typewriter(text)
 
 func _is_smoke_test_runtime() -> bool:
-	for arg_value in OS.get_cmdline_user_args():
-		var arg: String = str(arg_value)
-		if arg.begins_with("--smoke"):
-			return true
-	return false
-
+	_ensure_social_controller()
+	return social_controller._is_smoke_test_runtime()
 
 func _send_social_message_composer() -> void:
-	if pending_social_message_account_id.is_empty() or pending_social_message_action_id.is_empty():
-		return
-	if social_message_typing_tween != null:
-		social_message_typing_tween.kill()
-		social_message_typing_tween = null
-		if social_message_composer_text_label != null:
-			social_message_composer_text_label.visible_characters = social_message_composer_text_label.text.length()
-	var account_id: String = pending_social_message_account_id
-	var action_id: String = pending_social_message_action_id
-	var thesis_id: String = pending_social_message_thesis_id
-	var player_text: String = pending_social_message_text
-	_reset_social_message_composer(true)
-	_on_social_message_action_pressed(account_id, action_id, thesis_id, player_text)
-
+	_ensure_social_controller()
+	social_controller._send_social_message_composer()
 
 func _scroll_social_message_rows_to_bottom() -> void:
-	if social_message_rows_scroll == null:
-		return
-	var scrollbar := social_message_rows_scroll.get_v_scroll_bar()
-	if scrollbar != null:
-		scrollbar.value = scrollbar.max_value
-
+	_ensure_social_controller()
+	social_controller._scroll_social_message_rows_to_bottom()
 
 func _build_social_message_thread_button(row: Dictionary) -> Button:
-	var button := Button.new()
-	button.name = "SocialMessageThreadButton"
-	button.set_meta("account_id", str(row.get("account_id", "")))
-	button.text = "%s\n%s" % [str(row.get("account_name", "Account")), str(row.get("last_text", ""))]
-	button.custom_minimum_size = Vector2(0, 52)
-	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	button.clip_text = true
-	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_style_social_filter_button(button, str(row.get("account_id", "")) == selected_social_message_account_id, true)
-	button.pressed.connect(_on_social_message_thread_pressed.bind(str(row.get("account_id", ""))))
-	return button
-
+	_ensure_social_controller()
+	return social_controller._build_social_message_thread_button(row)
 
 func _on_social_message_thread_pressed(account_id: String) -> void:
-	selected_social_message_account_id = account_id
-	_refresh_social()
-
+	_ensure_social_controller()
+	social_controller._on_social_message_thread_pressed(account_id)
 
 func _build_social_message_bubble(row: Dictionary) -> PanelContainer:
-	var bubble := PanelContainer.new()
-	bubble.name = "SocialMessageBubble"
-	var is_player: bool = str(row.get("sender", "")) == "player"
-	_style_twooter_panel(bubble, COLOR_TWOOTER_BLUE if is_player else COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 10, 1)
-	bubble.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bubble.mouse_filter = Control.MOUSE_FILTER_STOP
-	bubble.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	bubble.tooltip_text = "Click to add this DM to the Research Tray."
-	bubble.gui_input.connect(_on_social_dm_capture_gui_input.bind(row.duplicate(true), selected_social_message_account_id))
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 10)
-	margin.add_theme_constant_override("margin_top", 7)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_bottom", 7)
-	bubble.add_child(margin)
-	var label := Label.new()
-	label.name = "SocialMessagePlayerTextLabel" if is_player else "SocialMessageAccountTextLabel"
-	var body_text: String = str(row.get("text", ""))
-	label.text = body_text if is_player else _clean_social_account_reply_text(body_text)
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_color_override("font_color", COLOR_TWOOTER_PAGE if is_player else COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(label, _social_font_size(13), _get_app_font())
-	margin.add_child(label)
-	return bubble
-
+	_ensure_social_controller()
+	return social_controller._build_social_message_bubble(row)
 
 func _build_social_message_action_button(account_id: String, action_id: String, label: String, thesis_id: String) -> Button:
-	var button := Button.new()
-	button.name = "SocialMessageAction%sButton" % action_id.capitalize()
-	button.text = "%s | 1 AP" % label
-	button.custom_minimum_size = Vector2(0, 34)
-	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_style_social_filter_button(button, true, true)
-	button.pressed.connect(_on_social_message_action_pressed.bind(account_id, action_id, thesis_id))
-	return button
-
+	_ensure_social_controller()
+	return social_controller._build_social_message_action_button(account_id, action_id, label, thesis_id)
 
 func _on_social_message_action_pressed(account_id: String, action_id: String, thesis_id: String = "", player_message_text: String = "") -> void:
-	var result: Dictionary = GameManager.send_twooter_message(account_id, action_id, thesis_id, player_message_text)
-	if not bool(result.get("success", false)):
-		_show_toast(str(result.get("message", "Twooter action failed.")), false)
-		return
-	_show_toast(str(result.get("reply_text", result.get("message", "Message sent."))), true)
-	_refresh_social()
-	_refresh_network()
-
+	_ensure_social_controller()
+	social_controller._on_social_message_action_pressed(account_id, action_id, thesis_id, player_message_text)
 
 func _on_social_post_capture_gui_input(event: InputEvent, post: Dictionary) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var mouse_event := event as InputEventMouseButton
-	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
-		return
-	var payload: Dictionary = _social_post_capture_payload(post)
-	if payload.is_empty():
-		_show_toast("This Twooter post is not ready to capture.", false)
-		return
-	pending_capture_payloads["social"] = payload
-	_show_social_capture_menu(mouse_event.global_position)
-
+	_ensure_social_controller()
+	social_controller._on_social_post_capture_gui_input(event, post)
 
 func _on_social_dm_capture_gui_input(event: InputEvent, row: Dictionary, account_id: String) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var mouse_event := event as InputEventMouseButton
-	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
-		return
-	var payload: Dictionary = _social_dm_capture_payload(row, account_id)
-	if payload.is_empty():
-		_show_toast("This Twooter DM is not ready to capture.", false)
-		return
-	pending_capture_payloads["social"] = payload
-	_show_social_capture_menu(mouse_event.global_position)
-
+	_ensure_social_controller()
+	social_controller._on_social_dm_capture_gui_input(event, row, account_id)
 
 func _social_post_capture_payload(post: Dictionary) -> Dictionary:
-	var body_text: String = str(post.get("post_text", "")).strip_edges()
-	if body_text.is_empty():
-		return {}
-	var account_name: String = str(post.get("account_name", post.get("account_handle", "Twooter account"))).strip_edges()
-	var target_ticker: String = str(post.get("target_ticker", "")).strip_edges().to_upper()
-	var target_company_id: String = _social_target_company_id(post, str(post.get("account_id", "")))
-	var detail_parts: Array = [body_text]
-	var thread_lines: Array = post.get("thread_lines", []) if typeof(post.get("thread_lines", [])) == TYPE_ARRAY else []
-	for line_value in thread_lines.slice(0, 3):
-		var line_text: String = str(line_value).strip_edges()
-		if not line_text.is_empty():
-			detail_parts.append(line_text)
-	var label_text: String = "Twooter post: %s" % account_name
-	var value_text: String = "$%s" % target_ticker if not target_ticker.is_empty() else "Public chatter"
-	return {
-		"source_type": "twooter_post",
-		"source_label": "Twooter",
-		"category": "twooter",
-		"company_id": target_company_id,
-		"ticker": target_ticker,
-		"label": label_text,
-		"value": value_text,
-		"detail": " ".join(detail_parts),
-		"source_id": "twooter_post_%s" % str(post.get("id", _node_token(body_text.left(48)))),
-		"impact": _social_tone_to_impact(str(post.get("tone", "mixed")))
-	}
-
+	_ensure_social_controller()
+	return social_controller._social_post_capture_payload(post)
 
 func _social_dm_capture_payload(row: Dictionary, account_id: String) -> Dictionary:
-	var account: Dictionary = _social_account_for_id(account_id)
-	var body_text: String = str(row.get("text", "")).strip_edges()
-	if body_text.is_empty():
-		return {}
-	if str(row.get("sender", "")) != "player":
-		body_text = _clean_social_account_reply_text(body_text)
-	var account_name: String = str(account.get("display_name", "Twooter DM")).strip_edges()
-	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
-	var target_ticker: String = str(profile.get("target_ticker", "")).strip_edges().to_upper()
-	var target_company_id: String = _social_target_company_id(profile, account_id)
-	var sender_label: String = "You" if str(row.get("sender", "")) == "player" else account_name
-	return {
-		"source_type": "twooter_dm",
-		"source_label": "Twooter DM",
-		"category": "twooter",
-		"company_id": target_company_id,
-		"ticker": target_ticker,
-		"label": "Twooter DM: %s" % account_name,
-		"value": sender_label,
-		"detail": body_text,
-		"source_id": "twooter_dm_%s_%d_%s_%s" % [
-			account_id,
-			int(row.get("day_index", RunState.day_index)),
-			str(row.get("action_id", "message")),
-			_node_token(body_text.left(48))
-		],
-		"impact": "mixed"
-	}
-
+	_ensure_social_controller()
+	return social_controller._social_dm_capture_payload(row, account_id)
 
 func _social_target_company_id(source: Dictionary, account_id: String = "") -> String:
-	var company_id: String = str(source.get("target_company_id", source.get("company_id", ""))).strip_edges()
-	if not company_id.is_empty():
-		return company_id
-	var ticker: String = str(source.get("target_ticker", "")).strip_edges()
-	if ticker.is_empty() and not account_id.is_empty():
-		var account: Dictionary = _social_account_for_id(account_id)
-		var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
-		ticker = str(profile.get("target_ticker", "")).strip_edges()
-		company_id = str(profile.get("target_company_id", "")).strip_edges()
-		if not company_id.is_empty():
-			return company_id
-	return _company_id_for_ticker(ticker)
-
+	_ensure_social_controller()
+	return social_controller._social_target_company_id(source, account_id)
 
 func _social_account_for_id(account_id: String) -> Dictionary:
-	if account_id.is_empty() or current_social_snapshot.is_empty():
-		return {}
-	for account_value in current_social_snapshot.get("accounts", []):
-		if typeof(account_value) != TYPE_DICTIONARY:
-			continue
-		var account: Dictionary = account_value
-		if str(account.get("id", "")) == account_id:
-			return account
-	return {}
-
+	_ensure_social_controller()
+	return social_controller._social_account_for_id(account_id)
 
 func _social_tone_to_impact(tone: String) -> String:
-	match tone.to_lower():
-		"bullish", "positive", "constructive":
-			return "positive"
-		"bearish", "negative", "warning", "risk":
-			return "negative"
-	return "mixed"
-
+	_ensure_social_controller()
+	return social_controller._social_tone_to_impact(tone)
 
 func _company_id_for_ticker(ticker: String) -> String:
-	var normalized_ticker: String = ticker.strip_edges().to_upper()
-	if normalized_ticker.begins_with("$"):
-		normalized_ticker = normalized_ticker.substr(1)
-	if normalized_ticker.is_empty():
-		return ""
-	for row_value in _get_company_rows_cached():
-		if typeof(row_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = row_value
-		if str(row.get("ticker", "")).strip_edges().to_upper() == normalized_ticker:
-			return str(row.get("id", ""))
-	return ""
-
+	_ensure_social_controller()
+	return social_controller._company_id_for_ticker(ticker)
 
 func _show_social_capture_menu(global_position: Vector2) -> void:
-	if social_capture_menu == null:
-		social_capture_menu = PopupMenu.new()
-		social_capture_menu.name = "SocialCaptureContextMenu"
-		social_capture_menu.id_pressed.connect(_on_social_capture_menu_id_pressed)
-		add_child(social_capture_menu)
-	social_capture_menu.clear()
-	social_capture_menu.add_item("Add to Research Tray", 1)
-	social_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
-	social_capture_menu.popup()
-
+	_ensure_social_controller()
+	social_controller._show_social_capture_menu(global_position)
 
 func _on_social_capture_menu_id_pressed(id: int) -> void:
-	_commit_pending_capture("social", id)
-
+	_ensure_social_controller()
+	social_controller._on_social_capture_menu_id_pressed(id)
 
 func _make_social_rail_body_label(text: String) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(label, _social_font_size(12), _get_app_font())
-	return label
-
+	_ensure_social_controller()
+	return social_controller._make_social_rail_body_label(text)
 
 func _clear_container(container: Container) -> void:
-	if container == null:
-		return
-	for child in container.get_children():
-		container.remove_child(child)
-		child.queue_free()
-
+	_ensure_social_controller()
+	social_controller._clear_container(container)
 
 func _rebuild_social_filter_chips(posts: Array) -> void:
-	if social_filter_chips == null:
-		return
-	for child in social_filter_chips.get_children():
-		social_filter_chips.remove_child(child)
-		child.queue_free()
-
-	for filter_value in _social_feed_filters_for_posts(posts):
-		var filter: Dictionary = filter_value
-		var filter_id: String = str(filter.get("id", SOCIAL_FEED_FILTER_ALL))
-		var count: int = _count_social_posts_for_filter(posts, filter_id)
-		var button := Button.new()
-		button.name = "SocialFeedFilter%sButton" % filter_id.capitalize()
-		button.text = "%s %d" % [str(filter.get("label", "All")), count]
-		button.custom_minimum_size = Vector2(82, 30)
-		button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-		button.tooltip_text = "Filter the Twooter feed by %s." % str(filter.get("label", "All")).to_lower()
-		button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		button.disabled = filter_id != SOCIAL_FEED_FILTER_ALL and count == 0
-		_style_social_filter_button(button, filter_id == selected_social_feed_filter_id, not button.disabled)
-		social_filter_chips.add_child(button)
-		button.pressed.connect(_on_social_feed_filter_pressed.bind(filter_id))
-
+	_ensure_social_controller()
+	social_controller._rebuild_social_filter_chips(posts)
 
 func _on_social_feed_filter_pressed(filter_id: String) -> void:
-	if filter_id.is_empty() or filter_id == selected_social_feed_filter_id:
-		return
-	selected_social_feed_filter_id = filter_id
-	_refresh_social()
-
+	_ensure_social_controller()
+	social_controller._on_social_feed_filter_pressed(filter_id)
 
 func _rebuild_social_ticker_tape(visible_posts: Array, all_posts: Array) -> void:
-	if social_ticker_tape == null:
-		return
-	for child in social_ticker_tape.get_children():
-		social_ticker_tape.remove_child(child)
-		child.queue_free()
-
-	var ticker_rows: Array = _social_ticker_rows_from_posts(visible_posts)
-	if ticker_rows.is_empty():
-		ticker_rows = _social_ticker_rows_from_posts(all_posts)
-
-	if ticker_rows.is_empty():
-		var empty_label := Label.new()
-		empty_label.name = "SocialTickerTapeEmptyLabel"
-		empty_label.text = "No ticker chatter yet"
-		empty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		empty_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-		_apply_font_override_to_control(empty_label, _social_font_size(12), _get_app_font())
-		social_ticker_tape.add_child(empty_label)
-		return
-
-	for row_index in range(min(ticker_rows.size(), SOCIAL_TICKER_TAPE_LIMIT)):
-		var row: Dictionary = ticker_rows[row_index]
-		social_ticker_tape.add_child(_build_social_ticker_chip(row))
-
+	_ensure_social_controller()
+	social_controller._rebuild_social_ticker_tape(visible_posts, all_posts)
 
 func _social_ticker_rows_from_posts(posts: Array) -> Array:
-	var lookup: Dictionary = {}
-	var rows: Array = []
-	for post_value in posts:
-		if typeof(post_value) != TYPE_DICTIONARY:
-			continue
-		var post: Dictionary = post_value
-		var ticker: String = str(post.get("target_ticker", "")).strip_edges().to_upper()
-		if ticker.is_empty() or lookup.has(ticker):
-			continue
-		lookup[ticker] = true
-		rows.append({
-			"ticker": ticker,
-			"tone": str(post.get("tone", "mixed")),
-			"score": _social_post_engagement_score(post)
-		})
-	return rows
-
+	_ensure_social_controller()
+	return social_controller._social_ticker_rows_from_posts(posts)
 
 func _build_social_ticker_chip(row: Dictionary) -> PanelContainer:
-	var tone: String = str(row.get("tone", "mixed"))
-	var chip := PanelContainer.new()
-	chip.name = "SocialTickerChip"
-	chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_style_social_ticker_chip(chip, tone)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 8)
-	margin.add_theme_constant_override("margin_top", 4)
-	margin.add_theme_constant_override("margin_right", 8)
-	margin.add_theme_constant_override("margin_bottom", 4)
-	chip.add_child(margin)
-
-	var row_box := HBoxContainer.new()
-	row_box.add_theme_constant_override("separation", 5)
-	margin.add_child(row_box)
-
-	var ticker_label := Label.new()
-	ticker_label.text = "$%s" % str(row.get("ticker", ""))
-	ticker_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
-	_apply_font_override_to_control(ticker_label, _social_font_size(12), _get_dashboard_title_font())
-	row_box.add_child(ticker_label)
-	return chip
-
+	_ensure_social_controller()
+	return social_controller._build_social_ticker_chip(row)
 
 func _rebuild_social_feed_cards(posts: Array) -> void:
-	for child in social_feed_cards.get_children():
-		social_feed_cards.remove_child(child)
-		child.queue_free()
-
-	if not selected_social_account_id.is_empty():
-		var all_posts: Array = current_social_snapshot.get("posts", [])
-		var selected_account_name: String = _selected_social_account_name(all_posts)
-		social_feed_cards.add_child(_build_social_account_filter_nav_row())
-		social_feed_cards.add_child(_build_social_account_filter_card(selected_account_name, selected_social_account_id))
-
-	if posts.is_empty():
-		social_feed_cards.add_child(_build_social_empty_card())
-		return
-
-	for post_value in posts:
-		var post: Dictionary = post_value
-		social_feed_cards.add_child(_build_social_post_card(post))
-
-	if social_feed_scroll.get_v_scroll_bar() != null:
-		social_feed_scroll.get_v_scroll_bar().value = 0.0
-
+	_ensure_social_controller()
+	social_controller._rebuild_social_feed_cards(posts)
 
 func _build_social_account_filter_nav_row() -> HBoxContainer:
-	var row: HBoxContainer = HBoxContainer.new()
-	row.name = "SocialAccountFilterNavRow"
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 8)
-
-	var clear_button: Button = Button.new()
-	clear_button.name = "SocialAccountClearButton"
-	clear_button.text = "All accounts"
-	clear_button.tooltip_text = "Return to the full Twooter feed."
-	clear_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	clear_button.custom_minimum_size = Vector2(112, 32)
-	_style_social_filter_button(clear_button, false, true)
-	row.add_child(clear_button)
-	clear_button.pressed.connect(_on_social_account_filter_cleared)
-
-	var spacer: Control = Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(spacer)
-	return row
-
+	_ensure_social_controller()
+	return social_controller._build_social_account_filter_nav_row()
 
 func _build_social_account_filter_card(account_name: String, account_id: String) -> PanelContainer:
-	var card: PanelContainer = PanelContainer.new()
-	card.name = "SocialAccountProfileCard"
-	card.set_meta("social_account_id", account_id)
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_social_post_card(card, "mixed")
-
-	var margin: MarginContainer = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 16)
-	margin.add_theme_constant_override("margin_top", 14)
-	margin.add_theme_constant_override("margin_right", 16)
-	margin.add_theme_constant_override("margin_bottom", 14)
-	card.add_child(margin)
-
-	var account: Dictionary = _social_account_from_snapshot(account_id)
-	if account_name.strip_edges().is_empty():
-		account_name = str(account.get("display_name", account_id))
-	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.name = "SocialAccountProfileVBox"
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 12)
-	margin.add_child(vbox)
-
-	var header_row: HBoxContainer = HBoxContainer.new()
-	header_row.name = "SocialAccountProfileHeader"
-	header_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_row.add_theme_constant_override("separation", 12)
-	vbox.add_child(header_row)
-
-	var avatar := PanelContainer.new()
-	avatar.name = "SocialAccountProfileAvatar"
-	avatar.custom_minimum_size = Vector2(52, 52)
-	_style_twooter_panel(avatar, _social_avatar_color(account_id), COLOR_TWOOTER_BLUE_EDGE, 26, 2)
-	var avatar_label := Label.new()
-	avatar_label.text = account_name.left(1).to_upper()
-	avatar_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	avatar_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	avatar_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(avatar_label, _social_font_size(DEFAULT_APP_FONT_SIZE + 6), _get_dashboard_title_font())
-	avatar.add_child(avatar_label)
-	header_row.add_child(avatar)
-
-	var identity_box: VBoxContainer = VBoxContainer.new()
-	identity_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	identity_box.add_theme_constant_override("separation", 4)
-	header_row.add_child(identity_box)
-
-	var title_row := HBoxContainer.new()
-	title_row.name = "SocialAccountProfileTitleRow"
-	title_row.add_theme_constant_override("separation", 6)
-	identity_box.add_child(title_row)
-	var name_label: Label = Label.new()
-	name_label.name = "SocialAccountProfileNameLabel"
-	name_label.text = account_name
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_label.clip_text = true
-	name_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(name_label, _social_font_size(DEFAULT_APP_FONT_SIZE + 4), _get_dashboard_title_font())
-	title_row.add_child(name_label)
-	if bool(account.get("verified", false)):
-		var verified_label := Label.new()
-		verified_label.name = "SocialAccountProfileVerifiedLabel"
-		verified_label.text = "Verified"
-		verified_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		verified_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE)
-		_apply_font_override_to_control(verified_label, _social_font_size(11), _get_dashboard_title_font())
-		title_row.add_child(verified_label)
-
-	var handle_label: Label = Label.new()
-	handle_label.name = "SocialAccountProfileHandleLabel"
-	handle_label.text = "%s  |  %s" % [
-		str(account.get("handle", "")),
-		_social_stage_label(str(account.get("relationship_stage", "stranger")))
-	]
-	handle_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	handle_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(handle_label, _social_font_size(12), _get_app_font())
-	identity_box.add_child(handle_label)
-
-	var role_label: Label = Label.new()
-	role_label.name = "SocialAccountProfileRoleLabel"
-	role_label.text = str(profile.get("role", "Public market voice"))
-	role_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	role_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(role_label, _social_font_size(13), _get_app_font())
-	identity_box.add_child(role_label)
-
-	var action_row: HBoxContainer = HBoxContainer.new()
-	action_row.name = "SocialAccountProfileActionRow"
-	action_row.add_theme_constant_override("separation", 8)
-	action_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_child(action_row)
-
-	var follow_button: Button = Button.new()
-	follow_button.name = "SocialAccountFollowButton"
-	follow_button.text = "Following" if bool(account.get("following", false)) else "Follow"
-	follow_button.tooltip_text = "Follow this account and add it to the Following feed."
-	follow_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	follow_button.custom_minimum_size = Vector2(112, SOCIAL_ACTION_BUTTON_MIN_HEIGHT)
-	follow_button.disabled = bool(account.get("following", false))
-	_style_social_filter_button(follow_button, bool(account.get("following", false)), true)
-	action_row.add_child(follow_button)
-	follow_button.pressed.connect(_on_social_follow_pressed.bind(account_id))
-
-	var message_button: Button = Button.new()
-	message_button.name = "SocialStartMessageButton"
-	message_button.text = "Send message"
-	message_button.tooltip_text = "Start a private Twooter message."
-	message_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	message_button.custom_minimum_size = Vector2(148, SOCIAL_ACTION_BUTTON_MIN_HEIGHT)
-	_style_social_filter_button(message_button, false, true)
-	action_row.add_child(message_button)
-	message_button.pressed.connect(_on_social_start_message_pressed.bind(account_id))
-
-	var stats_row := HFlowContainer.new()
-	stats_row.name = "SocialAccountProfileStats"
-	stats_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stats_row.add_theme_constant_override("h_separation", 6)
-	stats_row.add_theme_constant_override("v_separation", 6)
-	vbox.add_child(stats_row)
-	stats_row.add_child(_build_social_profile_stat_chip("Relationship", int(account.get("relationship", 0))))
-	stats_row.add_child(_build_social_profile_stat_chip("Credibility", int(account.get("credibility", 0))))
-	stats_row.add_child(_build_social_profile_stat_chip("Importance", int(account.get("importance", 0))))
-	stats_row.add_child(_build_social_profile_stat_chip("Exposure", int(account.get("exposure", 0))))
-	stats_row.add_child(_build_social_profile_stat_chip("Likes", int(account.get("likes_given", 0))))
-	stats_row.add_child(_build_social_profile_stat_chip("Posts", int(account.get("public_post_count", 0))))
-
-	var description_label: Label = _make_social_profile_body_label(_social_account_description_text(account))
-	description_label.name = "SocialAccountProfileDescriptionLabel"
-	vbox.add_child(description_label)
-	return card
-
+	_ensure_social_controller()
+	return social_controller._build_social_account_filter_card(account_name, account_id)
 
 func _build_social_profile_stat_chip(label_text: String, value: int) -> PanelContainer:
-	var chip := PanelContainer.new()
-	chip.name = "SocialAccountProfileStatChip"
-	chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_style_twooter_panel(chip, COLOR_TWOOTER_BLUE_TINT, COLOR_TWOOTER_BORDER, 6, 1)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 8)
-	margin.add_theme_constant_override("margin_top", 5)
-	margin.add_theme_constant_override("margin_right", 8)
-	margin.add_theme_constant_override("margin_bottom", 5)
-	chip.add_child(margin)
-	var label := Label.new()
-	label.text = "%s %d" % [label_text, value]
-	label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(label, _social_font_size(11), _get_app_font())
-	margin.add_child(label)
-	return chip
-
+	_ensure_social_controller()
+	return social_controller._build_social_profile_stat_chip(label_text, value)
 
 func _make_social_profile_body_label(text: String) -> Label:
-	var label := Label.new()
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.text = text
-	label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(label, _social_font_size(12), _get_app_font())
-	return label
-
+	_ensure_social_controller()
+	return social_controller._make_social_profile_body_label(text)
 
 func _social_stage_label(stage_id: String) -> String:
-	var clean_stage: String = stage_id.replace("_", " ").strip_edges()
-	if clean_stage.is_empty():
-		clean_stage = "stranger"
-	return "%s relationship" % clean_stage.capitalize()
-
+	_ensure_social_controller()
+	return social_controller._social_stage_label(stage_id)
 
 func _social_account_description_text(account: Dictionary) -> String:
-	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
-	var description: String = str(profile.get("description", profile.get("intro", ""))).strip_edges()
-	if not description.is_empty():
-		return description
-	var account_name: String = str(account.get("display_name", "This account")).strip_edges()
-	var role: String = str(profile.get("role", "Public market voice")).strip_edges()
-	var risk_profile: String = str(profile.get("risk_profile", "clean")).replace("_", " ").strip_edges()
-	var voice: String = str(account.get("voice", "")).replace("_", " ").strip_edges()
-	if role.is_empty():
-		role = "public market voice"
-	if risk_profile == "suspicious":
-		return "%s is a %s. Useful for leads and crowd temperature, but treat its posts as starting points until you can verify them." % [account_name, role.to_lower()]
-	if voice.contains("macro"):
-		return "%s is a %s focused on broad market context, sector pressure, and the bigger forces behind daily moves." % [account_name, role.to_lower()]
-	if voice.contains("funda") or voice.contains("quality") or voice.contains("value") or role.to_lower().contains("analyst"):
-		return "%s is a %s who prefers written theses, public sources, and clear failure points before offering deeper feedback." % [account_name, role.to_lower()]
-	return "%s is a %s who can help turn public chatter into cleaner watch items when you ask with evidence and patience." % [account_name, role.to_lower()]
-
+	_ensure_social_controller()
+	return social_controller._social_account_description_text(account)
 
 func _social_account_next_step_text(account: Dictionary) -> String:
-	var relationship: int = int(account.get("relationship", 0))
-	var credibility: int = int(account.get("credibility", 0))
-	var importance: int = int(account.get("importance", 0))
-	var stage: String = str(account.get("relationship_stage", "stranger"))
-	var has_shareable_thesis: bool = not current_social_snapshot.get("shareable_theses", []).is_empty()
-	if not bool(account.get("following", false)) and int(account.get("interaction_count", 0)) > 0:
-		return "Next: follow this account before asking for deeper reads. Likes and follow history now count as social attention."
-	if relationship >= 5 and credibility < 12 and not has_shareable_thesis:
-		return "Next: build an open Thesis first. Thesis-sharing and deeper review options need something concrete to inspect."
-	if relationship < 5:
-		return "Next: reply with useful context or send a clean intro. Early trust grows through specific, non-pushy questions."
-	if stage == "stranger":
-		return "Next: keep the thread useful until this account becomes familiar. Repeating the same ask will cool the branch."
-	if stage == "familiar" and credibility < 7:
-		return "Next: ask for sources or share a prepared Thesis to build credibility."
-	if stage == "trusted":
-		return "Next: trusted contacts can start surfacing room invites or higher-signal requests through Message."
-	if importance >= 55:
-		return "Next: this account sees you as important. Watch for inner-circle follow-ups and keep boundaries clean."
-	return "Next: keep improving relationship, credibility, and importance through varied replies and private messages."
-
+	_ensure_social_controller()
+	return social_controller._social_account_next_step_text(account)
 
 func _social_account_memory_text(account: Dictionary) -> String:
-	var timeline: Array = account.get("timeline", []) if typeof(account.get("timeline", [])) == TYPE_ARRAY else []
-	if timeline.is_empty():
-		return "Recent memory: no direct interaction yet. Reply or send a message to start a trackable relationship."
-	var latest: Dictionary = timeline[timeline.size() - 1] if typeof(timeline[timeline.size() - 1]) == TYPE_DICTIONARY else {}
-	var action_label: String = _social_action_label(str(latest.get("action_id", "")))
-	var body: String = str(latest.get("text", "")).strip_edges()
-	if body.length() > 110:
-		body = "%s..." % body.left(107)
-	if body.is_empty():
-		body = "Interaction recorded."
-	return "Recent memory: %s - %s" % [action_label, body]
-
+	_ensure_social_controller()
+	return social_controller._social_account_memory_text(account)
 
 func _social_action_label(action_id: String) -> String:
-	match action_id:
-		"reply_support":
-			return "Support"
-		"reply_skeptic":
-			return "Question"
-		"ask_source_public", "ask_source_private":
-			return "Source ask"
-		"share_thesis":
-			return "Thesis"
-		"message_check_in":
-			return "Message"
-		"connect":
-			return "Connect"
-		"ask_tip":
-			return "Clean read"
-		"accept_invite":
-			return "Invite"
-		"respond_suspicious_request":
-			return "Boundary"
-		"like_post":
-			return "Like"
-		"follow":
-			return "Follow"
-	return "Interaction"
-
+	_ensure_social_controller()
+	return social_controller._social_action_label(action_id)
 
 func _build_social_empty_card() -> PanelContainer:
-	var card: PanelContainer = PanelContainer.new()
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_social_post_card(card, "mixed")
-
-	var margin: MarginContainer = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 12)
-	card.add_child(margin)
-
-	var body: Label = Label.new()
-	body.text = "No posts yet.\nAdvance the day to generate fresh chatter."
-	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.add_theme_font_size_override("font_size", _social_font_size(DEFAULT_APP_FONT_SIZE))
-	body.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	margin.add_child(body)
-	return card
-
+	_ensure_social_controller()
+	return social_controller._build_social_empty_card()
 
 func _build_social_post_card(post: Dictionary) -> PanelContainer:
-	var card: PanelContainer = PanelContainer.new()
-	card.name = "SocialPostCard"
-	card.set_meta("social_account_id", str(post.get("account_id", "")))
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.custom_minimum_size = Vector2(0, 0)
-	_style_social_post_card(card, str(post.get("tone", "mixed")))
-
-	var margin: MarginContainer = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 14)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_right", 14)
-	margin.add_theme_constant_override("margin_bottom", 12)
-	card.add_child(margin)
-
-	var card_row: HBoxContainer = HBoxContainer.new()
-	card_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card_row.add_theme_constant_override("separation", 12)
-	margin.add_child(card_row)
-
-	card_row.add_child(_build_social_avatar(post))
-
-	var content: VBoxContainer = VBoxContainer.new()
-	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.add_theme_constant_override("separation", 8)
-	card_row.add_child(content)
-
-	var header_row: HBoxContainer = HBoxContainer.new()
-	header_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_row.add_theme_constant_override("separation", 5)
-	content.add_child(header_row)
-
-	var account_button: Button = Button.new()
-	account_button.name = "SocialAccountNameButton"
-	account_button.set_meta("social_account_id", str(post.get("account_id", "")))
-	account_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var account_name: String = str(post.get("account_name", "")).strip_edges()
-	if account_name.is_empty():
-		account_name = str(post.get("account_handle", "")).strip_edges()
-	account_button.text = account_name
-	account_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	account_button.tooltip_text = "Open this account profile and filter their posts."
-	account_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_style_social_account_button(account_button, str(post.get("account_id", "")) == selected_social_account_id)
-	header_row.add_child(account_button)
-	account_button.pressed.connect(func() -> void:
-		_on_social_account_pressed(str(post.get("account_id", "")))
-	)
-
-	var handle_label: Label = Label.new()
-	handle_label.text = _build_social_card_meta_line(post)
-	handle_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	handle_label.add_theme_font_size_override("font_size", _social_font_size(12))
-	handle_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	content.add_child(handle_label)
-
-	var tag_row := HFlowContainer.new()
-	tag_row.name = "SocialPostTagRow"
-	tag_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tag_row.add_theme_constant_override("h_separation", 5)
-	tag_row.add_theme_constant_override("v_separation", 4)
-	var has_tags: bool = false
-	var target_ticker: String = str(post.get("target_ticker", "")).strip_edges().to_upper()
-	var target_company: String = str(post.get("target_company_name", "")).strip_edges()
-	var sector_name: String = str(post.get("sector_name", "")).strip_edges()
-	if not target_ticker.is_empty():
-		tag_row.add_child(_build_social_tag_chip("$%s" % target_ticker, "blue"))
-		has_tags = true
-	if not target_company.is_empty():
-		tag_row.add_child(_build_social_tag_chip(target_company, "mixed"))
-		has_tags = true
-	elif not sector_name.is_empty():
-		tag_row.add_child(_build_social_tag_chip(sector_name, "mixed"))
-		has_tags = true
-	var category_label: String = _social_category_label(post)
-	if not category_label.is_empty():
-		tag_row.add_child(_build_social_tag_chip(category_label, "blue"))
-		has_tags = true
-	if has_tags:
-		content.add_child(tag_row)
-
-	var body_label: Label = Label.new()
-	body_label.text = str(post.get("post_text", ""))
-	body_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body_label.mouse_filter = Control.MOUSE_FILTER_STOP
-	body_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	body_label.tooltip_text = "Click to add this post to the Research Tray."
-	body_label.gui_input.connect(_on_social_post_capture_gui_input.bind(post.duplicate(true)))
-	body_label.add_theme_font_size_override("font_size", _social_font_size(DEFAULT_APP_FONT_SIZE + 1))
-	body_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	content.add_child(body_label)
-
-	var thread_lines: Array = post.get("thread_lines", [])
-	if not thread_lines.is_empty():
-		var thread_button: Button = Button.new()
-		thread_button.name = "SocialThreadToggleButton"
-		thread_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-		thread_button.text = "Hide thread" if bool(expanded_social_thread_ids.get(str(post.get("id", "")), false)) else "Show thread"
-		thread_button.tooltip_text = "Expand this Twooter thread."
-		_style_social_thread_button(thread_button)
-		content.add_child(thread_button)
-
-		var thread_container: VBoxContainer = VBoxContainer.new()
-		thread_container.name = "SocialThreadLines"
-		thread_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		thread_container.add_theme_constant_override("separation", 5)
-		thread_container.visible = bool(expanded_social_thread_ids.get(str(post.get("id", "")), false))
-		content.add_child(thread_container)
-		for thread_index in range(thread_lines.size()):
-			var thread_line: Label = Label.new()
-			thread_line.name = "SocialThreadLineLabel"
-			var thread_text: String = str(thread_lines[thread_index])
-			thread_line.text = thread_text if thread_text.begins_with("%d." % (thread_index + 1)) else "%d. %s" % [thread_index + 1, thread_text]
-			thread_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			thread_line.add_theme_font_size_override("font_size", _social_font_size(12))
-			thread_line.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE_DARK)
-			thread_container.add_child(thread_line)
-		thread_button.pressed.connect(func() -> void:
-			_on_social_thread_toggled(str(post.get("id", "")), thread_container, thread_button)
-		)
-
-	for reply_value in post.get("player_replies", []):
-		if typeof(reply_value) == TYPE_DICTIONARY:
-			content.add_child(_build_social_reply_row(reply_value))
-	var conclusion_reason: String = str(post.get("conversation_conclusion", ""))
-	if not conclusion_reason.is_empty():
-		content.add_child(_build_social_conclusion_row(post))
-
-	var options: Array = post.get("interaction_options", [])
-	if bool(post.get("followup_unlocked", false)):
-		var followup_button := Button.new()
-		followup_button.name = "SocialPostFollowupButton"
-		followup_button.text = "Message"
-		followup_button.custom_minimum_size = Vector2(94, 30)
-		followup_button.tooltip_text = "Continue this contact through private messages."
-		_style_social_thread_button(followup_button)
-		followup_button.pressed.connect(_on_social_start_message_pressed.bind(str(post.get("account_id", ""))))
-		content.add_child(followup_button)
-	elif bool(post.get("can_reply", true)) and not options.is_empty():
-		var option_row := HBoxContainer.new()
-		option_row.name = "SocialPostActionRow"
-		option_row.add_theme_constant_override("separation", 8)
-		option_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		content.add_child(option_row)
-		var reply_button := Button.new()
-		reply_button.name = "SocialPostActionButton"
-		reply_button.text = "Reply"
-		reply_button.custom_minimum_size = Vector2(86, 30)
-		reply_button.tooltip_text = "Open the reply composer."
-		_style_social_thread_button(reply_button)
-		reply_button.pressed.connect(_open_social_reply_composer.bind(post.duplicate(true)))
-		option_row.add_child(reply_button)
-
-	var reactions_row := HBoxContainer.new()
-	reactions_row.name = "SocialEngagementRow"
-	reactions_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	reactions_row.add_theme_constant_override("separation", 9)
-	content.add_child(reactions_row)
-	reactions_row.add_child(_build_social_engagement_label("Reply", int(post.get("replies", 0))))
-	reactions_row.add_child(_build_social_engagement_label("Retwoot", int(post.get("retwoots", 0))))
-	reactions_row.add_child(_build_social_like_button(post))
-
-	return card
-
+	_ensure_social_controller()
+	return social_controller._build_social_post_card(post)
 
 func _build_social_tag_chip(text: String, tone: String) -> PanelContainer:
-	var chip := PanelContainer.new()
-	chip.name = "SocialPostTagChip"
-	chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_style_social_tag_chip(chip, tone)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 7)
-	margin.add_theme_constant_override("margin_top", 3)
-	margin.add_theme_constant_override("margin_right", 7)
-	margin.add_theme_constant_override("margin_bottom", 3)
-	chip.add_child(margin)
-
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", _social_font_size(11))
-	label.add_theme_color_override("font_color", _social_tag_font_color(tone))
-	margin.add_child(label)
-	return chip
-
+	_ensure_social_controller()
+	return social_controller._build_social_tag_chip(text, tone)
 
 func _build_social_engagement_label(label_text: String, value: int) -> Label:
-	var label := Label.new()
-	label.text = "%s %d" % [label_text, value]
-	label.add_theme_font_size_override("font_size", _social_font_size(11))
-	label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	return label
-
+	_ensure_social_controller()
+	return social_controller._build_social_engagement_label(label_text, value)
 
 func _build_social_like_button(post: Dictionary) -> Button:
-	var button := Button.new()
-	button.name = "SocialPostLikeButton"
-	button.text = "%s %d" % ["Liked" if bool(post.get("liked_by_player", false)) else "Like", int(post.get("likes", 0))]
-	button.tooltip_text = "Like this post. Likes slowly build relationship with the account."
-	button.disabled = bool(post.get("liked_by_player", false))
-	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	button.custom_minimum_size = Vector2(76, 24)
-	_style_social_thread_button(button)
-	button.pressed.connect(_on_social_post_like_pressed.bind(str(post.get("id", ""))))
-	return button
-
+	_ensure_social_controller()
+	return social_controller._build_social_like_button(post)
 
 func _build_social_reply_row(reply: Dictionary) -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.name = "SocialReplyRow"
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_twooter_panel(panel, COLOR_TWOOTER_CARD, COLOR_TWOOTER_BORDER, 8, 1)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 10)
-	margin.add_theme_constant_override("margin_top", 7)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_bottom", 7)
-	panel.add_child(margin)
-	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 6)
-	margin.add_child(stack)
-	var player_text: String = str(reply.get("player_text", "")).strip_edges()
-	if not player_text.is_empty():
-		stack.add_child(_build_social_reply_bubble("You", player_text, true))
-	stack.add_child(_build_social_reply_bubble("", str(reply.get("reply_text", "")), false))
-	return panel
-
+	_ensure_social_controller()
+	return social_controller._build_social_reply_row(reply)
 
 func _build_social_reply_bubble(sender_label: String, body_text: String, is_player: bool) -> PanelContainer:
-	var bubble := PanelContainer.new()
-	bubble.name = "SocialPlayerReplyBubble" if is_player else "SocialAccountReplyBubble"
-	bubble.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var fill_color: Color = COLOR_TWOOTER_BLUE_TINT if is_player else COLOR_TWOOTER_SURFACE
-	_style_twooter_panel(bubble, fill_color, COLOR_TWOOTER_BORDER, 6, 1)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 10)
-	margin.add_theme_constant_override("margin_top", 7)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_bottom", 7)
-	bubble.add_child(margin)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 3)
-	margin.add_child(vbox)
-	if not sender_label.strip_edges().is_empty():
-		var name_label := Label.new()
-		name_label.text = sender_label
-		name_label.add_theme_color_override("font_color", COLOR_TWOOTER_BLUE if is_player else COLOR_TWOOTER_MUTED)
-		_apply_font_override_to_control(name_label, _social_font_size(11), _get_dashboard_title_font())
-		vbox.add_child(name_label)
-	var label := Label.new()
-	label.name = "SocialPlayerReplyTextLabel" if is_player else "SocialAccountReplyTextLabel"
-	label.text = body_text if is_player else _clean_social_account_reply_text(body_text)
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(label, _social_font_size(13), _get_app_font())
-	vbox.add_child(label)
-	return bubble
-
+	_ensure_social_controller()
+	return social_controller._build_social_reply_bubble(sender_label, body_text, is_player)
 
 func _clean_social_account_reply_text(raw_text: String) -> String:
-	var text: String = raw_text.strip_edges()
-	if text.is_empty():
-		return text
-	var colon_index: int = text.find(":")
-	if colon_index > 0 and colon_index < 72:
-		var prefix: String = text.substr(0, colon_index).strip_edges().to_lower()
-		var remainder: String = text.substr(colon_index + 1).strip_edges()
-		if prefix.ends_with(" replies") or prefix.ends_with(" answers") or prefix.ends_with(" says") or remainder.begins_with("\""):
-			text = remainder
-	if text.length() >= 2 and text.begins_with("\"") and text.ends_with("\""):
-		text = text.substr(1, text.length() - 2).strip_edges()
-	return text
-
+	_ensure_social_controller()
+	return social_controller._clean_social_account_reply_text(raw_text)
 
 func _build_social_conclusion_row(post: Dictionary) -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.name = "SocialConversationConclusionRow"
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_twooter_panel(panel, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 6, 1)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 10)
-	margin.add_theme_constant_override("margin_top", 7)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_bottom", 7)
-	panel.add_child(margin)
-	var label := Label.new()
-	if bool(post.get("followup_unlocked", false)):
-		label.text = "The public thread has enough trust to continue privately."
-	elif str(post.get("cooldown_reason", "")).is_empty() == false or str(post.get("conversation_conclusion", "")) == "soft_cooldown":
-		label.text = _social_dialog_cooldown_text(str(post.get("cooldown_reason", "soft_cooldown")))
-	else:
-		label.text = "The thread cools here. Build more relationship, credibility, and importance before pushing further."
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(label, _social_font_size(12), _get_app_font())
-	margin.add_child(label)
-	return panel
-
+	_ensure_social_controller()
+	return social_controller._build_social_conclusion_row(post)
 
 func _social_dialog_cooldown_text(reason: String) -> String:
-	if reason == "soft_cooldown":
-		return "The conversation is circling. Wait for new tape, share a sharper thesis, or bring a cleaner source before pushing again."
-	return "The conversation pauses here. Bring new context before continuing."
-
+	_ensure_social_controller()
+	return social_controller._social_dialog_cooldown_text(reason)
 
 func _on_social_post_action_pressed(post_id: String, action_id: String, thesis_id: String = "", player_reply_text: String = "") -> void:
-	var result: Dictionary = GameManager.interact_with_twooter_post(post_id, action_id, thesis_id, player_reply_text)
-	if not bool(result.get("success", false)):
-		_show_toast(str(result.get("message", "Twooter action failed.")), false)
-		return
-	_show_toast(str(result.get("reply_text", result.get("message", "Twooter replied."))), true)
-	_refresh_social()
-	_refresh_network()
-
+	_ensure_social_controller()
+	social_controller._on_social_post_action_pressed(post_id, action_id, thesis_id, player_reply_text)
 
 func _on_social_post_like_pressed(post_id: String) -> void:
-	var result: Dictionary = GameManager.like_twooter_post(post_id)
-	if not bool(result.get("success", false)):
-		_show_toast(str(result.get("message", "Could not like post.")), false)
-		return
-	_show_toast(str(result.get("message", "Post liked.")), true)
-	_refresh_social()
-
+	_ensure_social_controller()
+	social_controller._on_social_post_like_pressed(post_id)
 
 func _ensure_social_reply_composer_dialog() -> void:
-	if social_reply_dialog != null:
-		return
-	social_reply_dialog = Control.new()
-	social_reply_dialog.name = "SocialReplyComposerDialog"
-	social_reply_dialog.visible = false
-	social_reply_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
-	social_reply_dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(social_reply_dialog)
-
-	var scrim := ColorRect.new()
-	scrim.name = "SocialReplyComposerScrim"
-	scrim.color = Color(0.0, 0.0, 0.0, 0.58)
-	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
-	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	social_reply_dialog.add_child(scrim)
-
-	var center := CenterContainer.new()
-	center.name = "SocialReplyComposerCenter"
-	center.mouse_filter = Control.MOUSE_FILTER_PASS
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	social_reply_dialog.add_child(center)
-
-	var frame := PanelContainer.new()
-	frame.name = "SocialReplyComposerFrame"
-	frame.custom_minimum_size = Vector2(620, 360)
-	frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_style_twooter_panel(frame, COLOR_TWOOTER_PAGE, COLOR_TWOOTER_BLUE_EDGE, 10, 1)
-	center.add_child(frame)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 18)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_right", 18)
-	margin.add_theme_constant_override("margin_bottom", 16)
-	frame.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.name = "SocialReplyComposerVBox"
-	vbox.add_theme_constant_override("separation", 12)
-	margin.add_child(vbox)
-
-	var title_row := HBoxContainer.new()
-	title_row.add_theme_constant_override("separation", 8)
-	vbox.add_child(title_row)
-	var title := Label.new()
-	title.name = "SocialReplyComposerTitle"
-	title.text = "Reply"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(title, _social_font_size(DEFAULT_APP_FONT_SIZE + 5), _get_dashboard_title_font())
-	title_row.add_child(title)
-	var close_button := Button.new()
-	close_button.name = "SocialReplyComposerCloseButton"
-	close_button.text = "X"
-	close_button.custom_minimum_size = Vector2(32, 26)
-	_style_button(close_button, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, COLOR_TWOOTER_TEXT, 5)
-	close_button.pressed.connect(_hide_social_reply_composer)
-	title_row.add_child(close_button)
-
-	social_reply_context_label = Label.new()
-	social_reply_context_label.name = "SocialReplyComposerContextLabel"
-	social_reply_context_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	social_reply_context_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(social_reply_context_label, _social_font_size(12), _get_app_font())
-	vbox.add_child(social_reply_context_label)
-
-	var text_panel := PanelContainer.new()
-	text_panel.name = "SocialReplyComposerTextPanel"
-	text_panel.custom_minimum_size = Vector2(0, 96)
-	text_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_twooter_panel(text_panel, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 7, 1)
-	vbox.add_child(text_panel)
-	var text_margin := MarginContainer.new()
-	text_margin.add_theme_constant_override("margin_left", 12)
-	text_margin.add_theme_constant_override("margin_top", 10)
-	text_margin.add_theme_constant_override("margin_right", 12)
-	text_margin.add_theme_constant_override("margin_bottom", 10)
-	text_panel.add_child(text_margin)
-	social_reply_text_label = Label.new()
-	social_reply_text_label.name = "SocialReplyComposerTextLabel"
-	social_reply_text_label.text = ""
-	social_reply_text_label.visible_characters = 0
-	social_reply_text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	social_reply_text_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	social_reply_text_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(social_reply_text_label, _social_font_size(DEFAULT_APP_FONT_SIZE), _get_app_font())
-	text_margin.add_child(social_reply_text_label)
-
-	var options := VBoxContainer.new()
-	options.name = "SocialReplyComposerOptions"
-	options.add_theme_constant_override("separation", 8)
-	vbox.add_child(options)
-	social_reply_option_buttons.clear()
-	for option_index in range(3):
-		var option_button := Button.new()
-		option_button.name = "SocialReplyDialogOptionButton"
-		option_button.custom_minimum_size = Vector2(0, 34)
-		option_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		option_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		_style_social_thread_button(option_button)
-		option_button.pressed.connect(_on_social_reply_option_selected.bind(option_index))
-		options.add_child(option_button)
-		social_reply_option_buttons.append(option_button)
-
-	var action_row := HBoxContainer.new()
-	action_row.name = "SocialReplyComposerActionRow"
-	action_row.alignment = BoxContainer.ALIGNMENT_END
-	action_row.add_theme_constant_override("separation", 8)
-	vbox.add_child(action_row)
-	social_reply_cancel_button = Button.new()
-	social_reply_cancel_button.name = "SocialReplyCancelButton"
-	social_reply_cancel_button.text = "Cancel"
-	social_reply_cancel_button.custom_minimum_size = Vector2(92, 34)
-	_style_social_thread_button(social_reply_cancel_button)
-	social_reply_cancel_button.pressed.connect(_hide_social_reply_composer)
-	action_row.add_child(social_reply_cancel_button)
-	social_reply_send_button = Button.new()
-	social_reply_send_button.name = "SocialReplySendButton"
-	social_reply_send_button.text = "Reply"
-	social_reply_send_button.custom_minimum_size = Vector2(92, 34)
-	social_reply_send_button.disabled = true
-	_style_social_filter_button(social_reply_send_button, true, true)
-	social_reply_send_button.pressed.connect(_send_social_reply_composer)
-	action_row.add_child(social_reply_send_button)
-
+	_ensure_social_controller()
+	social_controller._ensure_social_reply_composer_dialog()
 
 func _open_social_reply_composer(post: Dictionary) -> void:
-	_ensure_social_reply_composer_dialog()
-	pending_social_reply_post_id = str(post.get("id", ""))
-	pending_social_reply_action_id = ""
-	pending_social_reply_text = ""
-	social_reply_context_label.text = "%s %s" % [str(post.get("account_name", "Account")), _build_social_card_meta_line(post)]
-	social_reply_text_label.text = "Choose a reply below."
-	social_reply_text_label.visible_characters = social_reply_text_label.text.length()
-	social_reply_send_button.disabled = true
-	var options: Array = post.get("reply_dialog_options", [])
-	for option_index in range(social_reply_option_buttons.size()):
-		var button: Button = social_reply_option_buttons[option_index]
-		var option: Dictionary = options[option_index] if option_index < options.size() and typeof(options[option_index]) == TYPE_DICTIONARY else {}
-		button.visible = not option.is_empty()
-		button.disabled = option.is_empty() or not bool(option.get("enabled", true))
-		button.text = str(option.get("player_text", option.get("label", "Reply")))
-		button.tooltip_text = str(option.get("player_text", "")) if not bool(option.get("enabled", true)) else ""
-		button.set_meta("action_id", str(option.get("id", "")))
-		button.set_meta("tree_id", str(option.get("tree_id", "")))
-		button.set_meta("node_id", str(option.get("node_id", "")))
-		button.set_meta("option_id", str(option.get("option_id", "")))
-		button.set_meta("player_text", str(option.get("player_text", "")))
-	social_reply_dialog.visible = true
-
+	_ensure_social_controller()
+	social_controller._open_social_reply_composer(post)
 
 func _on_social_reply_option_selected(option_index: int) -> void:
-	if option_index < 0 or option_index >= social_reply_option_buttons.size():
-		return
-	var button: Button = social_reply_option_buttons[option_index]
-	pending_social_reply_action_id = str(button.get_meta("action_id", ""))
-	pending_social_reply_text = str(button.get_meta("player_text", ""))
-	if pending_social_reply_action_id.is_empty() or pending_social_reply_text.is_empty():
-		return
-	for option_button in social_reply_option_buttons:
-		_style_social_thread_button(option_button)
-	_style_social_filter_button(button, true, true)
-	_start_social_reply_typewriter(pending_social_reply_text)
-
+	_ensure_social_controller()
+	social_controller._on_social_reply_option_selected(option_index)
 
 func _start_social_reply_typewriter(text: String) -> void:
-	if social_reply_typing_tween != null:
-		social_reply_typing_tween.kill()
-		social_reply_typing_tween = null
-	social_reply_send_button.disabled = true
-	social_reply_text_label.text = text
-	social_reply_text_label.visible_characters = 0
-	var duration: float = clamp(float(text.length()) * 0.018, 0.28, 1.2)
-	if _is_smoke_test_runtime():
-		duration = 0.02
-	social_reply_typing_tween = create_tween()
-	social_reply_typing_tween.tween_property(social_reply_text_label, "visible_characters", text.length(), duration)
-	social_reply_typing_tween.finished.connect(func() -> void:
-		if social_reply_text_label != null:
-			social_reply_text_label.visible_characters = social_reply_text_label.text.length()
-		if social_reply_send_button != null:
-			social_reply_send_button.disabled = pending_social_reply_action_id.is_empty()
-		social_reply_typing_tween = null
-	)
-
+	_ensure_social_controller()
+	social_controller._start_social_reply_typewriter(text)
 
 func _send_social_reply_composer() -> void:
-	if pending_social_reply_post_id.is_empty() or pending_social_reply_action_id.is_empty():
-		return
-	if social_reply_typing_tween != null:
-		social_reply_typing_tween.kill()
-		social_reply_typing_tween = null
-		social_reply_text_label.visible_characters = social_reply_text_label.text.length()
-	var post_id: String = pending_social_reply_post_id
-	var action_id: String = pending_social_reply_action_id
-	var player_text: String = pending_social_reply_text
-	_hide_social_reply_composer()
-	_on_social_post_action_pressed(post_id, action_id, "", player_text)
-
+	_ensure_social_controller()
+	social_controller._send_social_reply_composer()
 
 func _hide_social_reply_composer() -> void:
-	if social_reply_typing_tween != null:
-		social_reply_typing_tween.kill()
-		social_reply_typing_tween = null
-	pending_social_reply_post_id = ""
-	pending_social_reply_action_id = ""
-	pending_social_reply_text = ""
-	if social_reply_dialog != null:
-		social_reply_dialog.visible = false
-
+	_ensure_social_controller()
+	social_controller._hide_social_reply_composer()
 
 func _social_category_label(post: Dictionary) -> String:
-	var category: String = str(post.get("category", "")).strip_edges()
-	if category.is_empty():
-		return ""
-	return category.replace("_", " ").capitalize()
-
+	_ensure_social_controller()
+	return social_controller._social_category_label(post)
 
 func _build_social_avatar(post: Dictionary) -> PanelContainer:
-	var avatar: PanelContainer = PanelContainer.new()
-	avatar.name = "SocialAvatar"
-	avatar.custom_minimum_size = Vector2(40, 40)
-	avatar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	avatar.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = _social_avatar_color(str(post.get("account_id", post.get("account_handle", ""))))
-	style.border_color = COLOR_TWOOTER_BLUE_EDGE if bool(post.get("account_verified", false)) else Color(COLOR_TWOOTER_BORDER.r, COLOR_TWOOTER_BORDER.g, COLOR_TWOOTER_BORDER.b, 0.68)
-	style.set_border_width_all(2)
-	style.corner_radius_top_left = 20
-	style.corner_radius_top_right = 20
-	style.corner_radius_bottom_right = 20
-	style.corner_radius_bottom_left = 20
-	style.content_margin_left = 0
-	style.content_margin_top = 0
-	style.content_margin_right = 0
-	style.content_margin_bottom = 0
-	avatar.add_theme_stylebox_override("panel", style)
-
-	var initial_label: Label = Label.new()
-	initial_label.name = "SocialAvatarLabel"
-	initial_label.custom_minimum_size = Vector2(40, 40)
-	initial_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	initial_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	initial_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	initial_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	initial_label.text = _social_avatar_initial(post)
-	initial_label.add_theme_font_size_override("font_size", _social_font_size(DEFAULT_APP_FONT_SIZE + 3))
-	initial_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
-	avatar.add_child(initial_label)
-	return avatar
-
+	_ensure_social_controller()
+	return social_controller._build_social_avatar(post)
 
 func _social_avatar_initial(post: Dictionary) -> String:
-	var account_name: String = str(post.get("account_name", "")).strip_edges()
-	if account_name.is_empty():
-		account_name = str(post.get("account_handle", "")).strip_edges()
-		if account_name.begins_with("@"):
-			account_name = account_name.substr(1)
-	if account_name.is_empty():
-		return "?"
-	return account_name.substr(0, 1).to_upper()
-
+	_ensure_social_controller()
+	return social_controller._social_avatar_initial(post)
 
 func _social_avatar_color(seed_value: String) -> Color:
-	var palette: Array = [
-		Color(0.109804, 0.431373, 0.709804, 1),
-		Color(0.164706, 0.505882, 0.65098, 1),
-		Color(0.117647, 0.470588, 0.290196, 1),
-		Color(0.447059, 0.364706, 0.176471, 1),
-		Color(0.168627, 0.294118, 0.54902, 1),
-		Color(0.501961, 0.290196, 0.505882, 1),
-		Color(0.0705882, 0.356863, 0.415686, 1),
-		Color(0.635294, 0.098039, 0.164706, 1)
-	]
-	var seed: int = 0
-	for index in range(seed_value.length()):
-		seed = posmod(seed * 33 + seed_value.unicode_at(index), 2147483647)
-	return palette[posmod(seed, palette.size())]
-
+	_ensure_social_controller()
+	return social_controller._social_avatar_color(seed_value)
 
 func _build_social_card_meta_line(post: Dictionary) -> String:
-	var meta_parts: Array = []
-	var handle: String = str(post.get("account_handle", "")).strip_edges()
-	if not handle.is_empty():
-		meta_parts.append(handle)
-	var trade_date: Dictionary = post.get("trade_date", {})
-	if not trade_date.is_empty():
-		meta_parts.append(GameManager.format_trade_date(trade_date))
-	if not str(post.get("visibility_label", "")).is_empty():
-		meta_parts.append(str(post.get("visibility_label", "")))
-	if not str(post.get("public_topic_label", "")).is_empty():
-		meta_parts.append(str(post.get("public_topic_label", "")))
-	if not str(post.get("public_confidence_label", "")).is_empty():
-		meta_parts.append(str(post.get("public_confidence_label", "")))
-	if not str(post.get("target_ticker", "")).is_empty():
-		meta_parts.append(str(post.get("target_ticker", "")))
-	elif not str(post.get("person_name", "")).is_empty():
-		meta_parts.append(str(post.get("person_name", "")))
-	elif not str(post.get("sector_name", "")).is_empty():
-		meta_parts.append(str(post.get("sector_name", "")))
-	return "  |  ".join(meta_parts)
-
+	_ensure_social_controller()
+	return social_controller._build_social_card_meta_line(post)
 
 func _on_social_account_pressed(account_id: String) -> void:
-	if account_id.is_empty() or account_id == selected_social_account_id:
-		return
-	selected_social_account_id = account_id
-	_refresh_social()
-	_mark_guide_research_interaction()
-
+	_ensure_social_controller()
+	social_controller._on_social_account_pressed(account_id)
 
 func _on_social_account_filter_cleared() -> void:
-	if selected_social_account_id.is_empty():
-		return
-	selected_social_account_id = ""
-	_refresh_social()
-
+	_ensure_social_controller()
+	social_controller._on_social_account_filter_cleared()
 
 func _on_social_start_message_pressed(account_id: String) -> void:
-	if account_id.is_empty():
-		return
-	selected_social_message_account_id = account_id
-	selected_social_view_id = "message"
-	_refresh_social()
-
+	_ensure_social_controller()
+	social_controller._on_social_start_message_pressed(account_id)
 
 func _on_social_thread_toggled(post_id: String, thread_container: VBoxContainer, thread_button: Button) -> void:
-	var next_visible: bool = not thread_container.visible
-	thread_container.visible = next_visible
-	expanded_social_thread_ids[post_id] = next_visible
-	thread_button.text = "Hide thread" if next_visible else "Show thread"
-	if next_visible:
-		_mark_guide_research_interaction()
-
+	_ensure_social_controller()
+	social_controller._on_social_thread_toggled(post_id, thread_container, thread_button)
 
 func _style_social_post_card(panel: PanelContainer, _tone: String) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = COLOR_TWOOTER_CARD
-	style.border_color = COLOR_TWOOTER_BORDER
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 6
-	style.corner_radius_top_right = 6
-	style.corner_radius_bottom_right = 6
-	style.corner_radius_bottom_left = 6
-	panel.add_theme_stylebox_override("panel", style)
-
+	_ensure_social_controller()
+	social_controller._style_social_post_card(panel, _tone)
 
 func _social_card_border_color(_tone: String) -> Color:
-	return COLOR_TWOOTER_BORDER
-
+	_ensure_social_controller()
+	return social_controller._social_card_border_color(_tone)
 
 func _style_twooter_ui() -> void:
-	if social_window_body == null:
-		return
-	_style_twooter_panel(social_window_body, COLOR_TWOOTER_PAGE, COLOR_TWOOTER_BLUE_EDGE, 0, 2)
-	if social_center_panel != null:
-		_style_twooter_panel(social_center_panel, COLOR_TWOOTER_PAGE, COLOR_TWOOTER_BORDER, 0, 1)
-	if social_left_sidebar != null:
-		_style_twooter_panel(social_left_sidebar, COLOR_TWOOTER_PAGE, COLOR_TWOOTER_BORDER, 0, 1)
-	if social_ticker_tape_panel != null:
-		_style_twooter_panel(social_ticker_tape_panel, COLOR_TWOOTER_BLUE_TINT, COLOR_TWOOTER_BORDER, 0, 1)
-	if social_live_dot != null:
-		_style_twooter_panel(social_live_dot, COLOR_TWOOTER_LIVE, COLOR_TWOOTER_LIVE, 5, 1)
-	if social_live_label != null:
-		social_live_label.add_theme_color_override("font_color", COLOR_TWOOTER_MUTED)
-		_apply_font_override_to_control(social_live_label, _social_font_size(11), _get_dashboard_title_font())
-	_set_label_tone(social_title_label, COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(social_title_label, _social_font_size(DEFAULT_APP_FONT_SIZE + 8), _get_dashboard_title_font())
-	_set_label_tone(social_access_status_label, COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(social_access_status_label, _social_font_size(12), _get_app_font())
-	_set_label_tone(social_feed_summary_label, COLOR_TWOOTER_MUTED)
-	_apply_font_override_to_control(social_feed_summary_label, _social_font_size(12), _get_app_font())
-	_apply_social_view_visibility()
-
+	_ensure_social_controller()
+	social_controller._style_twooter_ui()
 
 func _style_twooter_panel(panel: PanelContainer, fill_color: Color, border_color: Color, radius: int = 6, border_width: int = 1) -> void:
-	if panel == null:
-		return
-	var style := StyleBoxFlat.new()
-	style.bg_color = fill_color
-	style.border_color = border_color
-	style.set_border_width_all(border_width)
-	style.corner_radius_top_left = radius
-	style.corner_radius_top_right = radius
-	style.corner_radius_bottom_right = radius
-	style.corner_radius_bottom_left = radius
-	panel.add_theme_stylebox_override("panel", style)
-
+	_ensure_social_controller()
+	social_controller._style_twooter_panel(panel, fill_color, border_color, radius, border_width)
 
 func _style_social_ticker_chip(panel: PanelContainer, _tone: String) -> void:
-	_style_twooter_panel(panel, COLOR_TWOOTER_CARD, COLOR_TWOOTER_BLUE_EDGE, 5, 1)
-
+	_ensure_social_controller()
+	social_controller._style_social_ticker_chip(panel, _tone)
 
 func _style_social_tag_chip(panel: PanelContainer, tone: String) -> void:
-	var fill_color: Color = Color(COLOR_TWOOTER_BLUE_TINT.r, COLOR_TWOOTER_BLUE_TINT.g, COLOR_TWOOTER_BLUE_TINT.b, 0.62)
-	var border_color: Color = COLOR_TWOOTER_BLUE_EDGE
-	if tone == "mixed":
-		fill_color = Color(COLOR_TWOOTER_SURFACE.r, COLOR_TWOOTER_SURFACE.g, COLOR_TWOOTER_SURFACE.b, 0.86)
-		border_color = Color(COLOR_TWOOTER_BORDER.r, COLOR_TWOOTER_BORDER.g, COLOR_TWOOTER_BORDER.b, 0.62)
-	_style_twooter_panel(panel, fill_color, border_color, 5, 1)
-
+	_ensure_social_controller()
+	social_controller._style_social_tag_chip(panel, tone)
 
 func _social_tag_font_color(tone: String) -> Color:
-	if tone == "blue":
-		return COLOR_TWOOTER_BLUE_DARK
-	return COLOR_TWOOTER_MUTED
-
+	_ensure_social_controller()
+	return social_controller._social_tag_font_color(tone)
 
 func _style_social_nav_button(button: Button, is_selected: bool) -> void:
-	var fill_color: Color = COLOR_TWOOTER_SURFACE if is_selected else COLOR_TWOOTER_PAGE
-	var border_color: Color = COLOR_TWOOTER_SURFACE if is_selected else COLOR_TWOOTER_PAGE
-	var font_color: Color = COLOR_TWOOTER_TEXT if is_selected else COLOR_TWOOTER_MUTED
-	UiTheme.style_button(
-		button,
-		"custom",
-		{
-			"fill": fill_color,
-			"border": border_color,
-			"font": font_color,
-			"radius": 20,
-			"margins": {"left": SOCIAL_NAV_BUTTON_PAD_X, "top": SOCIAL_NAV_BUTTON_PAD_Y, "right": SOCIAL_NAV_BUTTON_PAD_X, "bottom": SOCIAL_NAV_BUTTON_PAD_Y}
-		}
-	)
-	_apply_font_override_to_control(button, _social_font_size(DEFAULT_APP_FONT_SIZE + 2), _get_dashboard_title_font())
-
+	_ensure_social_controller()
+	social_controller._style_social_nav_button(button, is_selected)
 
 func _style_social_thread_button(button: Button) -> void:
-	UiTheme.style_button(
-		button,
-		"custom",
-		{
-			"fill": COLOR_TWOOTER_BLUE_TINT,
-			"border": COLOR_TWOOTER_BORDER,
-			"font": COLOR_TWOOTER_BLUE,
-			"radius": 7,
-			"margins": {"left": SOCIAL_ACTION_BUTTON_PAD_X, "top": SOCIAL_ACTION_BUTTON_PAD_Y, "right": SOCIAL_ACTION_BUTTON_PAD_X, "bottom": SOCIAL_ACTION_BUTTON_PAD_Y}
-		}
-	)
-	button.custom_minimum_size = Vector2(button.custom_minimum_size.x, max(button.custom_minimum_size.y, float(SOCIAL_ACTION_BUTTON_MIN_HEIGHT)))
-	_apply_font_override_to_control(button, _social_font_size(12), _get_dashboard_title_font())
-
+	_ensure_social_controller()
+	social_controller._style_social_thread_button(button)
 
 func _style_social_follow_cta_button(button: Button) -> void:
-	UiTheme.style_button(
-		button,
-		"custom",
-		{
-			"fill": COLOR_TWOOTER_TEXT,
-			"border": COLOR_TWOOTER_TEXT,
-			"font": COLOR_TWOOTER_PAGE,
-			"radius": 19,
-			"margins": {"left": SOCIAL_ACTION_BUTTON_PAD_X, "top": SOCIAL_ACTION_BUTTON_PAD_Y, "right": SOCIAL_ACTION_BUTTON_PAD_X, "bottom": SOCIAL_ACTION_BUTTON_PAD_Y}
-		}
-	)
-	button.custom_minimum_size = Vector2(button.custom_minimum_size.x, max(button.custom_minimum_size.y, float(SOCIAL_ACTION_BUTTON_MIN_HEIGHT)))
-	_apply_font_override_to_control(button, _social_font_size(12), _get_dashboard_title_font())
-
+	_ensure_social_controller()
+	social_controller._style_social_follow_cta_button(button)
 
 func _style_social_search_input(line_edit: LineEdit) -> void:
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = COLOR_TWOOTER_BLUE_TINT
-	normal.border_color = COLOR_TWOOTER_BORDER
-	normal.set_border_width_all(1)
-	normal.corner_radius_top_left = 14
-	normal.corner_radius_top_right = 14
-	normal.corner_radius_bottom_right = 14
-	normal.corner_radius_bottom_left = 14
-	normal.content_margin_left = 14
-	normal.content_margin_right = 14
-	normal.content_margin_top = 8
-	normal.content_margin_bottom = 8
-	var focus: StyleBoxFlat = normal.duplicate()
-	focus.border_color = COLOR_TWOOTER_BLUE
-	line_edit.add_theme_stylebox_override("normal", normal)
-	line_edit.add_theme_stylebox_override("focus", focus)
-	line_edit.add_theme_stylebox_override("read_only", normal)
-	line_edit.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	line_edit.add_theme_color_override("font_placeholder_color", COLOR_TWOOTER_MUTED)
-	line_edit.add_theme_color_override("font_uneditable_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(line_edit, _social_font_size(DEFAULT_APP_FONT_SIZE), _get_app_font())
-
-
+	_ensure_social_controller()
+	social_controller._style_social_search_input(line_edit)
 func _show_news_article(article: Dictionary, discover_context: bool = true) -> void:
-	if article.is_empty():
-		news_detail_outlet_label.text = ""
-		news_detail_headline_label.text = "No article selected."
-		news_detail_deck_label.text = ""
-		news_detail_meta_label.text = ""
-		if news_detail_byline_label != null:
-			news_detail_byline_label.text = ""
-		if news_detail_chips_label != null:
-			news_detail_chips_label.text = ""
-		if news_detail_photo_caption_label != null:
-			news_detail_photo_caption_label.text = ""
-		_set_news_detail_hero_slot("")
-		news_detail_body.text = "Choose a story from the list."
-		news_detail_hint_label.text = ""
-		news_detail_hint_label.visible = false
-		news_meet_contact_button.visible = false
-		news_meet_contact_button.disabled = true
-		news_meet_contact_button.set_meta("contact_id", "")
-		news_meet_contact_button.set_meta("twooter_account_id", "")
-		news_meet_contact_button.set_meta("twooter_handle", "")
-		if news_open_meeting_button != null:
-			news_open_meeting_button.visible = false
-			news_open_meeting_button.disabled = true
-			news_open_meeting_button.set_meta("meeting_id", "")
-		_reset_news_detail_scroll()
-		return
-
-	var trade_date: Dictionary = article.get("trade_date", {})
-	var trade_date_text: String = ""
-	if not trade_date.is_empty():
-		trade_date_text = GameManager.format_trade_date(trade_date)
-
-	news_detail_outlet_label.text = "FROM · %s" % str(article.get("outlet_label", "News")).to_upper()
-	news_detail_headline_label.text = str(article.get("headline", ""))
-	news_detail_deck_label.text = str(article.get("deck", ""))
-	news_detail_meta_label.text = trade_date_text
-	if news_detail_byline_label != null:
-		news_detail_byline_label.text = _news_byline_text(article)
-	if news_detail_chips_label != null:
-		news_detail_chips_label.text = _news_article_chip_line(article)
-	if news_detail_photo_caption_label != null:
-		news_detail_photo_caption_label.text = "Photo: Bursa archive · %s treatment." % _news_image_slot_label(str(article.get("image_slot", "brief"))).to_lower()
-	_set_news_detail_hero_slot(str(article.get("image_slot", "brief")))
-	news_detail_body.text = str(article.get("body", ""))
-	if discover_context:
-		call_deferred("_discover_news_article_context_after_show", article.duplicate(true), str(article.get("id", "")))
-	var contact: Dictionary = {}
-	if not discover_context:
-		contact = _contact_for_context("news", str(article.get("id", "")), str(article.get("target_company_id", "")))
-	var twooter_account_id: String = str(contact.get("twooter_account_id", ""))
-	var twooter_handle: String = str(contact.get("twooter_handle", "")).strip_edges()
-	news_meet_contact_button.visible = not contact.is_empty() and not twooter_account_id.is_empty()
-	news_meet_contact_button.disabled = contact.is_empty() or twooter_account_id.is_empty()
-	news_meet_contact_button.text = "View %s on Twooter" % twooter_handle if not twooter_handle.is_empty() else "View Source on Twooter"
-	news_meet_contact_button.tooltip_text = "Open this source's Twooter profile."
-	news_meet_contact_button.set_meta("contact_id", str(contact.get("id", "")))
-	news_meet_contact_button.set_meta("twooter_account_id", twooter_account_id)
-	news_meet_contact_button.set_meta("twooter_handle", twooter_handle)
-	if news_open_meeting_button != null:
-		var meeting_id: String = str(article.get("meeting_id", ""))
-		var meeting_detail: Dictionary = GameManager.get_corporate_meeting_detail(meeting_id) if not meeting_id.is_empty() else {}
-		var meeting_blocked_reason: String = _corporate_meeting_open_blocked_reason(meeting_detail)
-		news_open_meeting_button.visible = not meeting_id.is_empty()
-		news_open_meeting_button.disabled = meeting_id.is_empty() or not meeting_blocked_reason.is_empty()
-		news_open_meeting_button.text = "Shareholders Only" if not meeting_blocked_reason.is_empty() else (_news_meeting_action_label(article) if not meeting_id.is_empty() else "View Notice")
-		news_open_meeting_button.tooltip_text = meeting_blocked_reason if not meeting_blocked_reason.is_empty() else "Open the linked corporate meeting."
-		news_open_meeting_button.set_meta("meeting_id", meeting_id)
-	var detail_hints: Array = []
-	if not contact.is_empty():
-		var handle_label: String = twooter_handle if not twooter_handle.is_empty() else "Twooter handle pending"
-		news_detail_hint_label.text = "TWOOTER SOURCE\n%s · %s" % [
-			str(contact.get("display_name", "")),
-			handle_label
-		]
-		news_detail_hint_label.visible = true
-		detail_hints.append(news_detail_hint_label.text)
-	else:
-		news_detail_hint_label.text = ""
-		news_detail_hint_label.visible = false
-	news_detail_hint_label.text = "\n\n".join(detail_hints)
-	news_detail_hint_label.visible = not detail_hints.is_empty()
-	_reset_news_detail_scroll()
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._show_news_article(article, discover_context)
+	news_controller._sync_root_refs()
 
 func _discover_news_article_context_after_show(article: Dictionary, article_id: String) -> void:
-	if article.is_empty():
-		return
-	for _frame_index in range(4):
-		await get_tree().process_frame
-		if selected_news_article_id != article_id:
-			return
-	var discovered: Array = GameManager.discover_network_contacts_from_article(article)
-	if str(article.get("id", "")) != article_id or selected_news_article_id != article_id:
-		return
-	var contact: Dictionary = _contact_for_context("news", article_id, str(article.get("target_company_id", "")))
-	if discovered.is_empty() and contact.is_empty() and not bool(article.get("is_property_development_story", false)) and str(article.get("category", "")) != "property_development":
-		return
-	_show_news_article(GameManager.get_news_archive_article(selected_news_article_id), false)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._discover_news_article_context_after_show(article, article_id)
+	news_controller._sync_root_refs()
 
 func _reset_news_detail_scroll() -> void:
-	if news_detail_scroll == null:
-		return
-	var scroll_bar := news_detail_scroll.get_v_scroll_bar()
-	if scroll_bar == null:
-		return
-	scroll_bar.value = 0.0
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._reset_news_detail_scroll()
+	news_controller._sync_root_refs()
 
 func _on_news_headline_gui_input(event: InputEvent) -> void:
-	_open_news_capture_menu_from_event(event, "headline")
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._on_news_headline_gui_input(event)
+	news_controller._sync_root_refs()
 
 func _on_news_body_gui_input(event: InputEvent) -> void:
-	_open_news_capture_menu_from_event(event, "article")
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._on_news_body_gui_input(event)
+	news_controller._sync_root_refs()
 
 func _on_news_source_hint_gui_input(event: InputEvent) -> void:
-	_open_news_capture_menu_from_event(event, "source")
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._on_news_source_hint_gui_input(event)
+	news_controller._sync_root_refs()
 
 func _open_news_capture_menu_from_event(event: InputEvent, context: String) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var mouse_event := event as InputEventMouseButton
-	if not mouse_event.pressed or mouse_event.button_index != MOUSE_BUTTON_RIGHT:
-		return
-	var article: Dictionary = GameManager.get_news_archive_article(selected_news_article_id)
-	if article.is_empty():
-		return
-	pending_capture_payloads["news_article"] = article.duplicate(true)
-	_show_news_capture_menu(mouse_event.global_position, context)
-	get_viewport().set_input_as_handled()
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._open_news_capture_menu_from_event(event, context)
+	news_controller._sync_root_refs()
 
 func _show_news_capture_menu(global_position: Vector2, context: String) -> void:
-	if news_capture_menu == null:
-		news_capture_menu = PopupMenu.new()
-		news_capture_menu.name = "NewsCaptureContextMenu"
-		news_capture_menu.id_pressed.connect(_on_news_capture_menu_id_pressed)
-		add_child(news_capture_menu)
-	news_capture_menu.clear()
-	match context:
-		"headline":
-			news_capture_menu.add_item("Add Headline to Research Tray", 1)
-			news_capture_menu.add_item("Add Headline + Article to Research Tray", 3)
-		"article":
-			news_capture_menu.add_item("Add Article to Research Tray", 2)
-			news_capture_menu.add_item("Add Headline + Article to Research Tray", 3)
-		"source":
-			news_capture_menu.add_item("Add Source Lead to Research Tray", 4)
-		_:
-			news_capture_menu.add_item("Add Headline to Research Tray", 1)
-			news_capture_menu.add_item("Add Article to Research Tray", 2)
-			news_capture_menu.add_item("Add Source Lead to Research Tray", 4)
-	news_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
-	news_capture_menu.popup()
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._show_news_capture_menu(global_position, context)
+	news_controller._sync_root_refs()
 
 func _on_news_capture_menu_id_pressed(id: int) -> void:
-	var pending_article: Dictionary = pending_capture_payloads.get("news_article", {})
-	if pending_article.is_empty():
-		return
-	var kind: String = ""
-	match id:
-		1:
-			kind = "headline"
-		2:
-			kind = "article"
-		3:
-			kind = "headline_article"
-		4:
-			kind = "source_lead"
-		_:
-			return
-	var payload: Dictionary = _build_news_capture_payload(pending_article, kind)
-	pending_capture_payloads.erase("news_article")
-	if payload.is_empty():
-		_show_toast("Nothing to capture from this article.", false)
-		return
-	var result: Dictionary = GameManager.capture_research_evidence(payload)
-	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._on_news_capture_menu_id_pressed(id)
+	news_controller._sync_root_refs()
 
 func _build_news_capture_payload(article: Dictionary, kind: String) -> Dictionary:
-	var article_id: String = str(article.get("id", selected_news_article_id)).strip_edges()
-	var headline: String = str(article.get("headline", "News article")).strip_edges()
-	var deck: String = str(article.get("deck", "")).strip_edges()
-	var body: String = str(article.get("body", "")).strip_edges()
-	var target_company_id: String = str(article.get("target_company_id", "")).strip_edges()
-	var target_ticker: String = str(article.get("target_ticker", "")).strip_edges()
-	var source_id: String = "news_%s_%s" % [kind, _node_token(article_id)]
-	var impact: String = _impact_from_news_article(article)
-	var source_label: String = str(article.get("outlet_label", "News")).strip_edges()
-	if source_label.is_empty():
-		source_label = "News"
-	match kind:
-		"headline":
-			return {
-				"source_type": "news_article",
-				"category": "news",
-				"category_label": "News",
-				"source_label": "%s Headline" % source_label,
-				"source_id": source_id,
-				"company_id": target_company_id,
-				"label": "Headline: %s" % headline,
-				"value": headline,
-				"detail": deck if not deck.is_empty() else _news_article_status_line(article),
-				"impact": impact
-			}
-		"article":
-			return {
-				"source_type": "news_article",
-				"category": "news",
-				"category_label": "News",
-				"source_label": "%s Article" % source_label,
-				"source_id": source_id,
-				"company_id": target_company_id,
-				"label": "Article: %s" % headline,
-				"value": deck if not deck.is_empty() else headline,
-				"detail": _news_capture_excerpt(body),
-				"impact": impact
-			}
-		"headline_article":
-			var combined_detail: String = deck
-			var body_excerpt: String = _news_capture_excerpt(body)
-			if not body_excerpt.is_empty():
-				combined_detail = "%s %s" % [combined_detail, body_excerpt] if not combined_detail.is_empty() else body_excerpt
-			return {
-				"source_type": "news_article",
-				"category": "news",
-				"category_label": "News",
-				"source_label": "%s Headline + Article" % source_label,
-				"source_id": source_id,
-				"company_id": target_company_id,
-				"ticker": target_ticker,
-				"label": "Headline + article: %s" % headline,
-				"value": headline,
-				"detail": combined_detail,
-				"impact": impact
-			}
-		"source_lead":
-			var contact: Dictionary = _contact_for_context("news", article_id, target_company_id)
-			var handle: String = str(contact.get("twooter_handle", "")).strip_edges()
-			var display_name: String = str(contact.get("display_name", "")).strip_edges()
-			if display_name.is_empty():
-				display_name = str(article.get("author_name", "News source")).strip_edges()
-			if display_name.is_empty():
-				display_name = "News source"
-			var value_text: String = handle if not handle.is_empty() else _news_byline_text(article)
-			return {
-				"source_type": "network_journal",
-				"category": "network_intel",
-				"category_label": "Network Intel",
-				"source_label": "News Source Lead",
-				"source_id": source_id,
-				"company_id": target_company_id,
-				"ticker": target_ticker,
-				"label": "Source lead: %s" % display_name,
-				"value": value_text,
-				"detail": "This source is connected to the article \"%s\"." % headline,
-				"impact": "mixed"
-			}
-	return {}
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: Dictionary = news_controller._build_news_capture_payload(article, kind)
+	news_controller._sync_root_refs()
+	return result
 
 func _news_capture_excerpt(body: String) -> String:
-	var text: String = body.strip_edges().replace("\n", " ")
-	while text.find("  ") != -1:
-		text = text.replace("  ", " ")
-	if text.length() > 280:
-		text = "%s..." % text.left(277).strip_edges()
-	return text
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: String = news_controller._news_capture_excerpt(body)
+	news_controller._sync_root_refs()
+	return result
 
 func _impact_from_news_article(article: Dictionary) -> String:
-	var tone: String = str(article.get("tone", article.get("public_status_label", ""))).to_lower()
-	if tone.find("positive") != -1 or tone.find("bull") != -1 or tone.find("constructive") != -1 or tone.find("tailwind") != -1:
-		return "positive"
-	if tone.find("negative") != -1 or tone.find("bear") != -1 or tone.find("risk") != -1 or tone.find("headwind") != -1:
-		return "negative"
-	return "mixed"
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: String = news_controller._impact_from_news_article(article)
+	news_controller._sync_root_refs()
+	return result
 
 func _current_news_archive_article_summaries() -> Array:
-	if selected_news_outlet_id.is_empty() or selected_news_archive_year <= 0 or selected_news_archive_month <= 0:
-		return []
-	return GameManager.get_news_archive_article_summaries(
-		selected_news_outlet_id,
-		selected_news_archive_year,
-		selected_news_archive_month
-	)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: Array = news_controller._current_news_archive_article_summaries()
+	news_controller._sync_root_refs()
+	return result
 
 func _build_news_article_list_line(article: Dictionary) -> String:
-	return str(article.get("headline", ""))
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: String = news_controller._build_news_article_list_line(article)
+	news_controller._sync_root_refs()
+	return result
 
 func _news_byline_text(article: Dictionary) -> String:
-	var author_name: String = str(article.get("author_name", "News Desk"))
-	var author_role: String = str(article.get("author_role", "Reporter"))
-	if author_name.is_empty():
-		author_name = "News Desk"
-	if author_role.is_empty():
-		return "By %s" % author_name
-	return "By %s, %s" % [author_name, author_role]
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: String = news_controller._news_byline_text(article)
+	news_controller._sync_root_refs()
+	return result
 
 func _news_article_status_line(article: Dictionary) -> String:
-	var parts: Array = []
-	var section_label: String = str(article.get("public_section_label", ""))
-	var status_label: String = str(article.get("public_status_label", ""))
-	if not section_label.is_empty():
-		parts.append(section_label)
-	if not status_label.is_empty():
-		parts.append(status_label)
-	var trade_date: Dictionary = article.get("trade_date", {})
-	if not trade_date.is_empty():
-		parts.append(GameManager.format_trade_date(trade_date))
-	return "  ·  ".join(parts)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: String = news_controller._news_article_status_line(article)
+	news_controller._sync_root_refs()
+	return result
 
 func _news_article_chip_line(article: Dictionary) -> String:
-	var chips: Array = []
-	var section_label: String = str(article.get("public_section_label", ""))
-	var status_label: String = str(article.get("public_status_label", ""))
-	var target_ticker: String = str(article.get("target_ticker", ""))
-	if not section_label.is_empty():
-		chips.append(section_label)
-	if not status_label.is_empty():
-		chips.append(status_label)
-	if not target_ticker.is_empty():
-		chips.append(target_ticker)
-	return "  ·  ".join(chips)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: String = news_controller._news_article_chip_line(article)
+	news_controller._sync_root_refs()
+	return result
 
 func _news_image_slot_label(image_slot: String) -> String:
-	match image_slot:
-		"boardroom":
-			return "BOARDROOM IMAGE"
-		"market":
-			return "MARKET PHOTO"
-		"company":
-			return "COMPANY IMAGE"
-		_:
-			return "ARTICLE IMAGE"
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: String = news_controller._news_image_slot_label(image_slot)
+	news_controller._sync_root_refs()
+	return result
 
 func _set_news_detail_hero_slot(image_slot: String) -> void:
-	if news_detail_hero_frame == null:
-		return
-	news_detail_hero_frame.visible = SHOW_NEWS_IMAGE_PLACEHOLDERS
-	if news_detail_photo_caption_label != null:
-		news_detail_photo_caption_label.visible = SHOW_NEWS_IMAGE_PLACEHOLDERS
-	if not SHOW_NEWS_IMAGE_PLACEHOLDERS:
-		return
-	var placeholder: Label = news_detail_hero_frame.get_node_or_null("NewsDetailHeroPlaceholder") as Label
-	if placeholder != null:
-		placeholder.text = _news_image_slot_label(image_slot)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._set_news_detail_hero_slot(image_slot)
+	news_controller._sync_root_refs()
 
 func _news_meeting_action_label(article: Dictionary) -> String:
-	var venue_type: String = str(article.get("venue_type", ""))
-	if venue_type == "rupslb":
-		return "Attend RUPSLB"
-	if venue_type == "annual_rups":
-		return "View Meeting Notice"
-	if venue_type == "earnings_call":
-		return "Read Call Notice"
-	return "View Meeting Notice"
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: String = news_controller._news_meeting_action_label(article)
+	news_controller._sync_root_refs()
+	return result
 
 func _corporate_meeting_open_blocked_reason(detail: Dictionary) -> String:
-	if detail.is_empty():
-		return "Meeting not found."
-	if (
-		bool(detail.get("interactive_v1", false)) and
-		bool(detail.get("requires_shareholder", false)) and
-		not bool(detail.get("attendance_eligible", true))
-	):
-		return str(detail.get("attendance_blocked_reason", "Shareholder ownership is required to attend this meeting."))
-	return ""
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: String = news_controller._corporate_meeting_open_blocked_reason(detail)
+	news_controller._sync_root_refs()
+	return result
 
 func _rebuild_news_article_cards(articles: Array, reset_scroll: bool = true) -> void:
-	if news_article_cards == null:
-		return
-	news_article_cards_generation += 1
-	news_article_card_press_positions.clear()
-	var generation: int = news_article_cards_generation
-	var previous_scroll_value: float = 0.0
-	if news_article_cards_scroll != null and news_article_cards_scroll.get_v_scroll_bar() != null:
-		previous_scroll_value = news_article_cards_scroll.get_v_scroll_bar().value
-	for child in news_article_cards.get_children():
-		news_article_cards.remove_child(child)
-		child.queue_free()
-	if articles.is_empty():
-		var empty_label := Label.new()
-		empty_label.name = "NewsArticleCardsEmptyLabel"
-		empty_label.text = "No stories filed for this issue yet."
-		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		news_article_cards.add_child(empty_label)
-		return
-	var card_articles: Array = _news_article_cards_visible_rows(articles)
-	var immediate_count: int = card_articles.size()
-	if reset_scroll and card_articles.size() > NEWS_ARTICLE_INITIAL_CARD_LIMIT:
-		immediate_count = NEWS_ARTICLE_INITIAL_CARD_LIMIT
-	for article_index in range(immediate_count):
-		var article_value = card_articles[article_index]
-		var article: Dictionary = article_value
-		news_article_cards.add_child(_build_news_article_card(article))
-	if immediate_count < card_articles.size():
-		var remaining_articles: Array = card_articles.slice(immediate_count, card_articles.size())
-		call_deferred("_finish_news_article_cards_rebuild", generation, remaining_articles)
-	if news_article_cards_scroll != null and news_article_cards_scroll.get_v_scroll_bar() != null:
-		var next_scroll_value: float = 0.0 if reset_scroll else previous_scroll_value
-		news_article_cards_scroll.get_v_scroll_bar().value = next_scroll_value
-		if not reset_scroll:
-			call_deferred("_restore_news_article_cards_scroll", next_scroll_value)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._rebuild_news_article_cards(articles, reset_scroll)
+	news_controller._sync_root_refs()
 
 func _finish_news_article_cards_rebuild(generation: int, remaining_articles: Array) -> void:
-	for _frame_index in range(4):
-		await get_tree().process_frame
-		if generation != news_article_cards_generation:
-			return
-	if news_article_cards == null or generation != news_article_cards_generation:
-		return
-	for article_value in remaining_articles:
-		if typeof(article_value) != TYPE_DICTIONARY:
-			continue
-		var article: Dictionary = article_value
-		news_article_cards.add_child(_build_news_article_card(article))
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._finish_news_article_cards_rebuild(generation, remaining_articles)
+	news_controller._sync_root_refs()
 
 func _news_article_cards_visible_rows(articles: Array) -> Array:
-	if articles.size() <= NEWS_ARTICLE_CARD_LIMIT:
-		return articles
-	var rows: Array = articles.slice(0, NEWS_ARTICLE_CARD_LIMIT)
-	if selected_news_article_id.is_empty():
-		return rows
-	for article_value in rows:
-		if typeof(article_value) == TYPE_DICTIONARY and str(article_value.get("id", "")) == selected_news_article_id:
-			return rows
-	for article_value in articles:
-		if typeof(article_value) == TYPE_DICTIONARY and str(article_value.get("id", "")) == selected_news_article_id:
-			rows.append(article_value)
-			return rows
-	return rows
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: Array = news_controller._news_article_cards_visible_rows(articles)
+	news_controller._sync_root_refs()
+	return result
 
 func _restore_news_article_cards_scroll(scroll_value: float) -> void:
-	if news_article_cards_scroll == null:
-		return
-	var scroll_bar := news_article_cards_scroll.get_v_scroll_bar()
-	if scroll_bar == null:
-		return
-	scroll_bar.value = clamp(scroll_value, scroll_bar.min_value, scroll_bar.max_value)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._restore_news_article_cards_scroll(scroll_value)
+	news_controller._sync_root_refs()
 
 func _build_news_article_card(article: Dictionary) -> PanelContainer:
-	var article_id: String = str(article.get("id", ""))
-	var is_selected: bool = article_id == selected_news_article_id
-	var card := PanelContainer.new()
-	card.name = "NewsArticleCard_%s" % article_id.replace("|", "_")
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_news_article_card(card, is_selected)
-
-	var margin := MarginContainer.new()
-	margin.name = "NewsArticleCardMargin"
-	margin.add_theme_constant_override("margin_left", 9)
-	margin.add_theme_constant_override("margin_top", 9)
-	margin.add_theme_constant_override("margin_right", 9)
-	margin.add_theme_constant_override("margin_bottom", 9)
-	card.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.name = "NewsArticleCardVBox"
-	vbox.add_theme_constant_override("separation", 8)
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	margin.add_child(vbox)
-
-	var stamp_slot := Control.new()
-	stamp_slot.name = "NewsArticleCardStampSlot"
-	stamp_slot.custom_minimum_size = Vector2(0, 24)
-	stamp_slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_child(stamp_slot)
-	if is_selected:
-		var stamp_rect := TextureRect.new()
-		stamp_rect.name = "NewsArticleCardOpenStamp"
-		stamp_rect.texture = _market_paper_texture("stamp_open")
-		stamp_rect.custom_minimum_size = Vector2(110, 28)
-		stamp_rect.size = Vector2(110, 28)
-		stamp_rect.position = Vector2(-4, 0)
-		stamp_rect.modulate = Color(1, 1, 1, 0.88)
-		stamp_rect.rotation_degrees = -7.0
-		stamp_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		stamp_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		stamp_slot.add_child(stamp_rect)
-
-	var inner_panel := PanelContainer.new()
-	inner_panel.name = "NewsArticleCardInnerPanel"
-	inner_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_news_inner_panel(inner_panel, COLOR_MARKET_PAPER_CARD)
-	vbox.add_child(inner_panel)
-
-	var inner_margin := MarginContainer.new()
-	inner_margin.name = "NewsArticleCardInnerMargin"
-	inner_margin.add_theme_constant_override("margin_left", 9)
-	inner_margin.add_theme_constant_override("margin_top", 9)
-	inner_margin.add_theme_constant_override("margin_right", 9)
-	inner_margin.add_theme_constant_override("margin_bottom", 9)
-	inner_panel.add_child(inner_margin)
-
-	var inner_vbox := VBoxContainer.new()
-	inner_vbox.name = "NewsArticleCardInnerVBox"
-	inner_vbox.add_theme_constant_override("separation", 8)
-	inner_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inner_margin.add_child(inner_vbox)
-
-	var top_row := HBoxContainer.new()
-	top_row.name = "NewsArticleCardTopRow"
-	top_row.add_theme_constant_override("separation", 10)
-	top_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inner_vbox.add_child(top_row)
-
-	var image_frame := PanelContainer.new()
-	image_frame.name = "NewsArticleCardImageFrame"
-	image_frame.custom_minimum_size = Vector2(112, 82)
-	image_frame.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	image_frame.visible = SHOW_NEWS_IMAGE_PLACEHOLDERS
-	_style_news_asset_frame(image_frame)
-	top_row.add_child(image_frame)
-	var image_label := Label.new()
-	image_label.name = "NewsArticleCardImagePlaceholder"
-	image_label.text = _news_image_slot_label(str(article.get("image_slot", "brief")))
-	image_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	image_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_set_label_tone(image_label, Color(0.454902, 0.337255, 0.141176, 1))
-	_apply_font_override_to_control(image_label, 10, _get_app_font())
-	image_frame.add_child(image_label)
-
-	var text_vbox := VBoxContainer.new()
-	text_vbox.name = "NewsArticleCardTextVBox"
-	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	text_vbox.add_theme_constant_override("separation", 5)
-	top_row.add_child(text_vbox)
-
-	var status_label := Label.new()
-	status_label.name = "NewsArticleCardStatusLabel"
-	status_label.text = _news_article_status_line(article).to_upper()
-	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_set_label_tone(status_label, COLOR_MARKET_PAPER_RED)
-	_apply_font_override_to_control(status_label, 11, _get_dashboard_title_font())
-	text_vbox.add_child(status_label)
-
-	var headline_label := Label.new()
-	headline_label.name = "NewsArticleCardHeadlineLabel"
-	headline_label.text = str(article.get("headline", ""))
-	headline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_apply_font_override_to_control(headline_label, 15, _get_dashboard_title_font())
-	_set_label_tone(headline_label, COLOR_WINDOW_TEXT)
-	text_vbox.add_child(headline_label)
-
-	var deck_label := Label.new()
-	deck_label.name = "NewsArticleCardDeckLabel"
-	deck_label.text = str(article.get("deck", ""))
-	deck_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_set_label_tone(deck_label, Color(0.352941, 0.309804, 0.203922, 1))
-	inner_vbox.add_child(deck_label)
-
-	var byline_rule := ColorRect.new()
-	byline_rule.name = "NewsArticleCardBylineRule"
-	byline_rule.color = Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.55)
-	byline_rule.custom_minimum_size = Vector2(0, 1)
-	inner_vbox.add_child(byline_rule)
-
-	var byline_label := Label.new()
-	byline_label.name = "NewsArticleCardBylineLabel"
-	byline_label.text = _news_byline_text(article)
-	byline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_set_label_tone(byline_label, Color(0.454902, 0.337255, 0.141176, 1))
-	inner_vbox.add_child(byline_label)
-
-	var read_button := Button.new()
-	read_button.name = "NewsArticleCardReadButton"
-	read_button.text = "READ STORY"
-	read_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	read_button.pressed.connect(_on_news_article_card_pressed.bind(article_id))
-	_style_news_command_button(read_button, is_selected)
-	vbox.add_child(read_button)
-	_make_news_article_card_clickable(card, article_id)
-	return card
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: PanelContainer = news_controller._build_news_article_card(article)
+	news_controller._sync_root_refs()
+	return result
 
 func _make_news_article_card_clickable(root: Control, article_id: String) -> void:
-	if root == null or article_id.is_empty():
-		return
-	var stack: Array = [root]
-	while not stack.is_empty():
-		var node: Node = stack.pop_back()
-		if not (node is Control):
-			continue
-		var control: Control = node as Control
-		if control is BaseButton:
-			continue
-		control.mouse_filter = Control.MOUSE_FILTER_PASS
-		control.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		control.tooltip_text = "Read story."
-		control.gui_input.connect(_on_news_article_card_gui_input.bind(article_id))
-		for child in control.get_children():
-			stack.append(child)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._make_news_article_card_clickable(root, article_id)
+	news_controller._sync_root_refs()
 
 func _on_news_article_card_gui_input(event: InputEvent, article_id: String) -> void:
-	if article_id.is_empty() or not (event is InputEventMouseButton):
-		return
-	var mouse_event := event as InputEventMouseButton
-	if mouse_event.button_index != MOUSE_BUTTON_LEFT:
-		return
-	if mouse_event.pressed:
-		news_article_card_press_positions[article_id] = mouse_event.position
-		return
-	var start_position: Vector2 = mouse_event.position
-	var stored_position: Variant = news_article_card_press_positions.get(article_id)
-	if stored_position is Vector2:
-		start_position = stored_position
-	news_article_card_press_positions.erase(article_id)
-	if start_position.distance_to(mouse_event.position) > NEWS_ARTICLE_CARD_CLICK_DRAG_THRESHOLD:
-		return
-	_on_news_article_card_pressed(article_id)
-	get_viewport().set_input_as_handled()
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._on_news_article_card_gui_input(event, article_id)
+	news_controller._sync_root_refs()
 
 func _news_article_card_node(article_id: String) -> PanelContainer:
-	if news_article_cards == null or article_id.is_empty():
-		return null
-	var node_name: String = "NewsArticleCard_%s" % article_id.replace("|", "_")
-	return news_article_cards.get_node_or_null(node_name) as PanelContainer
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: PanelContainer = news_controller._news_article_card_node(article_id)
+	news_controller._sync_root_refs()
+	return result
 
 func _news_article_card_exists(article_id: String) -> bool:
-	return _news_article_card_node(article_id) != null
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: bool = news_controller._news_article_card_exists(article_id)
+	news_controller._sync_root_refs()
+	return result
 
 func _restyle_news_article_cards(previous_article_id: String, next_article_id: String) -> void:
-	for article_id in [previous_article_id, next_article_id]:
-		var card: PanelContainer = _news_article_card_node(str(article_id))
-		if card == null:
-			continue
-		var is_selected: bool = str(article_id) == next_article_id
-		_style_news_article_card(card, is_selected)
-		var read_button: Button = card.find_child("NewsArticleCardReadButton", true, false) as Button
-		if read_button != null:
-			_style_news_command_button(read_button, is_selected)
-		var stamp_slot: Control = card.find_child("NewsArticleCardStampSlot", true, false) as Control
-		if stamp_slot == null:
-			continue
-		for child in stamp_slot.get_children():
-			stamp_slot.remove_child(child)
-			child.queue_free()
-		if is_selected:
-			var stamp_rect := TextureRect.new()
-			stamp_rect.name = "NewsArticleCardOpenStamp"
-			stamp_rect.texture = _market_paper_texture("stamp_open")
-			stamp_rect.custom_minimum_size = Vector2(110, 28)
-			stamp_rect.size = Vector2(110, 28)
-			stamp_rect.position = Vector2(-4, 0)
-			stamp_rect.modulate = Color(1, 1, 1, 0.88)
-			stamp_rect.rotation_degrees = -7.0
-			stamp_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			stamp_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			stamp_slot.add_child(stamp_rect)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._restyle_news_article_cards(previous_article_id, next_article_id)
+	news_controller._sync_root_refs()
 
 func _on_news_article_card_pressed(article_id: String) -> void:
-	if article_id.is_empty():
-		return
-	var previous_article_id: String = selected_news_article_id
-	selected_news_article_id = article_id
-	var articles: Array = _current_news_archive_article_summaries()
-	for article_index in range(articles.size()):
-		if str(articles[article_index].get("id", "")) == article_id:
-			news_article_list.select(article_index)
-			break
-	if _news_article_card_exists(article_id):
-		_restyle_news_article_cards(previous_article_id, article_id)
-	else:
-		_rebuild_news_article_cards(articles, false)
-	_show_news_article(GameManager.get_news_archive_article(selected_news_article_id))
-	_record_steam_news_article_read(selected_news_article_id)
-	_mark_guide_research_interaction()
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._on_news_article_card_pressed(article_id)
+	news_controller._sync_root_refs()
 
 func _ticker_for_company(company_id: String) -> String:
-	if company_id.is_empty():
-		return "-"
-	var snapshot: Dictionary = GameManager.get_company_snapshot(company_id)
-	return str(snapshot.get("ticker", company_id.to_upper()))
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: String = news_controller._ticker_for_company(company_id)
+	news_controller._sync_root_refs()
+	return result
 
 func _news_archive_month_label(month_number: int) -> String:
-	return DASHBOARD_MONTH_NAMES[clamp(month_number - 1, 0, DASHBOARD_MONTH_NAMES.size() - 1)]
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: String = news_controller._news_archive_month_label(month_number)
+	news_controller._sync_root_refs()
+	return result
 
 func _news_color_for_tone(tone: String) -> Color:
-	if tone == "positive":
-		return Color(0.156863, 0.364706, 0.247059, 1)
-	if tone == "negative":
-		return Color(0.494118, 0.184314, 0.184314, 1)
-	return Color(0.301961, 0.247059, 0.121569, 1)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: Color = news_controller._news_color_for_tone(tone)
+	news_controller._sync_root_refs()
+	return result
 
 func _default_news_outlet_id(outlets: Array) -> String:
-	for outlet_value in outlets:
-		var outlet: Dictionary = outlet_value
-		if bool(outlet.get("unlocked", true)):
-			return str(outlet.get("id", ""))
-	return ""
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: String = news_controller._default_news_outlet_id(outlets)
+	news_controller._sync_root_refs()
+	return result
 
 func _news_outlet_exists(outlets: Array, outlet_id: String) -> bool:
-	for outlet_value in outlets:
-		var outlet: Dictionary = outlet_value
-		if str(outlet.get("id", "")) == outlet_id:
-			return true
-	return false
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: bool = news_controller._news_outlet_exists(outlets, outlet_id)
+	news_controller._sync_root_refs()
+	return result
 
 func _refresh_sidebar() -> void:
 	sidebar_hint_label.text = ""
@@ -12079,42 +6625,23 @@ func _is_leap_year(year_value: int) -> bool:
 
 
 func _refresh_markets() -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	var phase_started_at_usec: int = started_at_usec
-	var company_rows: Array = _get_company_rows_cached()
-	var company_row_lookup: Dictionary = _get_company_row_lookup_cached()
-	_log_perf_phase(true, "_refresh_markets:rows", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
-	_refresh_company_list(company_rows, company_row_lookup)
-	_log_perf_phase(true, "_refresh_markets:company_list", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
-	_refresh_trade_workspace()
-	_log_perf_phase(true, "_refresh_markets:workspace", phase_started_at_usec)
-	_log_perf_elapsed("_refresh_markets", started_at_usec)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_markets()
+	stock_controller._sync_root_refs()
 func _refresh_after_company_selection() -> void:
-	_refresh_company_selection_state()
-	_refresh_trade_workspace()
-	_refresh_dashboard()
-	_refresh_desktop()
-	if _is_desktop_app_window_open(APP_ID_THESIS):
-		_refresh_thesis()
-	if debug_overlay.visible:
-		_refresh_debug_overlay()
-	_refresh_ftue_progress()
-	_refresh_first_hour_guide_progress()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_after_company_selection()
+	stock_controller._sync_root_refs()
 func _on_company_detail_ready(company_id: String) -> void:
-	if company_id.is_empty():
-		return
-	if company_id == selected_company_id:
-		_refresh_trade_workspace()
-	if debug_overlay.visible:
-		_refresh_debug_overlay()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_company_detail_ready(company_id)
+	stock_controller._sync_root_refs()
 func _refresh_portfolio() -> void:
 	var portfolio: Dictionary = GameManager.get_portfolio_snapshot()
 	var cash_value: float = float(portfolio.get("cash", 0.0))
@@ -13422,991 +7949,270 @@ func _on_debug_force_hospital_pressed() -> void:
 
 
 func _build_contact_intel_controls() -> void:
-	if contact_intel_panel != null:
-		contact_intel_panel.visible = false
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._build_contact_intel_controls()
+	stock_controller._sync_root_refs()
 func _refresh_contact_intel_controls() -> void:
-	if contact_intel_option == null or contact_intel_button == null or contact_intel_status_label == null:
-		return
-	var previous_contact_id: String = _selected_contact_intel_contact_id()
-	var state: Dictionary = GameManager.get_stock_contact_tip_options(selected_company_id)
-	var rows: Array = state.get("rows", [])
-	contact_intel_option.clear()
-	var selected_index: int = 0
-	for row_index in range(rows.size()):
-		if typeof(rows[row_index]) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = rows[row_index]
-		contact_intel_option.add_item(str(row.get("label", "Contact")))
-		var item_index: int = contact_intel_option.get_item_count() - 1
-		var contact_id: String = str(row.get("id", ""))
-		contact_intel_option.set_item_metadata(item_index, contact_id)
-		if contact_id == previous_contact_id:
-			selected_index = item_index
-	if contact_intel_option.get_item_count() > 0:
-		contact_intel_option.select(clamp(selected_index, 0, contact_intel_option.get_item_count() - 1))
-	var enabled: bool = bool(state.get("enabled", false)) and contact_intel_option.get_item_count() > 0
-	contact_intel_option.disabled = not enabled
-	contact_intel_button.disabled = not enabled
-	contact_intel_button.tooltip_text = str(state.get("tooltip_text", "Ask a Network contact for a market read."))
-	contact_intel_status_label.text = str(state.get("status_text", "Pick a stock first."))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_contact_intel_controls()
+	stock_controller._sync_root_refs()
 func _selected_contact_intel_contact_id() -> String:
-	if contact_intel_option == null or contact_intel_option.get_item_count() <= 0:
-		return ""
-	var selected_index: int = contact_intel_option.selected
-	if selected_index < 0 or selected_index >= contact_intel_option.get_item_count():
-		return ""
-	var metadata = contact_intel_option.get_item_metadata(selected_index)
-	return str(metadata)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._selected_contact_intel_contact_id()
+	stock_controller._sync_root_refs()
+	return result
 func _on_contact_intel_pressed() -> void:
-	var contact_id: String = _selected_contact_intel_contact_id()
-	var result: Dictionary = GameManager.ask_stock_contact_tip(selected_company_id, contact_id)
-	_show_toast(str(result.get("message", "Could not ask contact.")), bool(result.get("success", false)))
-	_refresh_contact_intel_controls()
-	if not bool(result.get("success", false)):
-		return
-	_refresh_network()
-	_refresh_trade_workspace()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_contact_intel_pressed()
+	stock_controller._sync_root_refs()
 func _sync_selected_company_with_active_stock_list() -> void:
-	var watchlist_ids: Array = GameManager.get_watchlist_company_ids()
-	var holdings_ids: Array = _get_portfolio_company_ids()
-	if selected_company_id.is_empty():
-		if stock_list_tabs.current_tab == STOCK_LIST_TAB_WATCHLIST:
-			selected_company_id = str(watchlist_ids[0]) if not watchlist_ids.is_empty() else ""
-		elif stock_list_tabs.current_tab == STOCK_LIST_TAB_PORTFOLIO:
-			selected_company_id = str(holdings_ids[0]) if not holdings_ids.is_empty() else ""
-		elif not RunState.company_order.is_empty():
-			selected_company_id = str(RunState.company_order[0])
-		return
-
-	if RunState.get_company(selected_company_id).is_empty():
-		selected_company_id = ""
-		_sync_selected_company_with_active_stock_list()
-		return
-
-	if stock_list_tabs.current_tab == STOCK_LIST_TAB_WATCHLIST and not watchlist_ids.has(selected_company_id):
-		selected_company_id = str(watchlist_ids[0]) if not watchlist_ids.is_empty() else ""
-	elif stock_list_tabs.current_tab == STOCK_LIST_TAB_PORTFOLIO and not holdings_ids.has(selected_company_id):
-		selected_company_id = str(holdings_ids[0]) if not holdings_ids.is_empty() else ""
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._sync_selected_company_with_active_stock_list()
+	stock_controller._sync_root_refs()
 func _build_watchlist_lookup(watchlist_company_ids: Array = []) -> Dictionary:
-	if watchlist_company_ids.is_empty():
-		watchlist_company_ids = GameManager.get_watchlist_company_ids()
-	var watchlist_lookup: Dictionary = {}
-	for company_id_value in watchlist_company_ids:
-		watchlist_lookup[str(company_id_value)] = true
-	return watchlist_lookup
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._build_watchlist_lookup(watchlist_company_ids)
+	stock_controller._sync_root_refs()
+	return result
 func _refresh_company_list(
 	company_rows: Array = [],
 	company_row_lookup: Dictionary = {},
 	refresh_all_stock_rows: bool = true,
 	refresh_portfolio_sidebar: bool = true
 ) -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	var phase_started_at_usec: int = started_at_usec
-	if company_rows.is_empty() and RunState.has_active_run():
-		company_rows = _get_company_rows_cached()
-	if company_row_lookup.is_empty() and not company_rows.is_empty():
-		company_row_lookup = _build_company_row_lookup(company_rows)
-	var watchlist_lookup: Dictionary = _build_watchlist_lookup()
-	_refresh_watchlist_rows(company_rows, watchlist_lookup)
-	_log_perf_phase(true, "_refresh_company_list:watchlist", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
-	if refresh_all_stock_rows:
-		if _should_refresh_all_stock_rows():
-			_refresh_all_stock_rows(company_rows, watchlist_lookup)
-			all_stock_rows_dirty = false
-		else:
-			all_stock_rows_dirty = true
-	_log_perf_phase(true, "_refresh_company_list:all_stock", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
-	if refresh_portfolio_sidebar:
-		if _should_refresh_portfolio_stock_rows():
-			_refresh_portfolio_stock_rows(GameManager.get_portfolio_snapshot().get("holdings", []), company_row_lookup)
-			portfolio_stock_rows_dirty = false
-		else:
-			portfolio_stock_rows_dirty = true
-	_log_perf_phase(true, "_refresh_company_list:portfolio", phase_started_at_usec)
-	_log_perf_elapsed("_refresh_company_list", started_at_usec)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_company_list(company_rows, company_row_lookup, refresh_all_stock_rows, refresh_portfolio_sidebar)
+	stock_controller._sync_root_refs()
 func _should_refresh_all_stock_rows() -> bool:
-	return stock_list_tabs.current_tab == STOCK_LIST_TAB_ALL_STOCKS
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: bool = stock_controller._should_refresh_all_stock_rows()
+	stock_controller._sync_root_refs()
+	return result
 func _should_refresh_portfolio_stock_rows() -> bool:
-	return stock_list_tabs.current_tab == STOCK_LIST_TAB_PORTFOLIO
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: bool = stock_controller._should_refresh_portfolio_stock_rows()
+	stock_controller._sync_root_refs()
+	return result
 func _refresh_watchlist_rows(company_rows: Array, watchlist_lookup: Dictionary) -> void:
-	displayed_company_ids.clear()
-	company_list.clear()
-	for row_value in company_rows:
-		var row: Dictionary = row_value
-		var company_id: String = str(row.get("id", ""))
-		if not watchlist_lookup.has(company_id):
-			continue
-		displayed_company_ids.append(company_id)
-		var line: String = _build_stock_list_line(row)
-		company_list.add_item(line)
-		var item_index: int = company_list.item_count - 1
-		company_list.set_item_metadata(item_index, row)
-		company_list.set_item_tooltip(item_index, _watchlist_tooltip(row))
-		_style_watchlist_row_item(item_index, row, false)
-
-	var selected_index: int = displayed_company_ids.find(selected_company_id)
-	if stock_list_tabs.current_tab == STOCK_LIST_TAB_WATCHLIST and selected_index == -1 and not displayed_company_ids.is_empty():
-		selected_company_id = str(displayed_company_ids[0])
-		selected_index = 0
-
-	if selected_index >= 0:
-		var selected_row: Dictionary = _get_watchlist_row_metadata(selected_index)
-		_style_watchlist_row_item(selected_index, selected_row, true)
-		company_list.select(selected_index)
-	watchlist_empty_label.visible = displayed_company_ids.is_empty()
-	_refresh_watchlist_action_state(watchlist_lookup)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_watchlist_rows(company_rows, watchlist_lookup)
+	stock_controller._sync_root_refs()
 func _get_watchlist_row_metadata(item_index: int) -> Dictionary:
-	if company_list == null or item_index < 0 or item_index >= company_list.item_count:
-		return {}
-	var metadata = company_list.get_item_metadata(item_index)
-	if metadata is Dictionary:
-		return metadata
-	return {}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._get_watchlist_row_metadata(item_index)
+	stock_controller._sync_root_refs()
+	return result
 func _style_watchlist_row_item(item_index: int, row: Dictionary, is_selected: bool) -> void:
-	if company_list == null or item_index < 0 or item_index >= company_list.item_count:
-		return
-	var broker_flow: Dictionary = row.get("broker_flow", {})
-	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
-	var change_pct: float = float(row.get("daily_change_pct", 0.0))
-	company_list.set_item_icon(item_index, null)
-	company_list.set_item_custom_fg_color(item_index, COLOR_STOCKBOT_TEXT if is_selected else _color_for_change(change_pct))
-	company_list.set_item_custom_bg_color(item_index, COLOR_STOCKBOT_BLUE_TINT if is_selected else _color_for_flow_bg(flow_tag))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._style_watchlist_row_item(item_index, row, is_selected)
+	stock_controller._sync_root_refs()
 func _refresh_all_stock_watchlist_button_states(watchlist_lookup: Dictionary) -> void:
-	for row_box_value in all_stocks_rows.get_children():
-		if row_box_value is not HBoxContainer:
-			continue
-		var row_box: HBoxContainer = row_box_value
-		var company_id: String = str(row_box.name).trim_prefix("AllStockRow_")
-		var add_button: Button = row_box.get_node_or_null("AllStockAddButton_%s" % company_id) as Button
-		if add_button == null:
-			continue
-		var is_in_watchlist: bool = watchlist_lookup.has(company_id)
-		add_button.text = "" if is_in_watchlist else "Watch"
-		add_button.icon = _load_stockbot_icon("check" if is_in_watchlist else "plus")
-		add_button.expand_icon = is_in_watchlist
-		add_button.disabled = is_in_watchlist
-		_style_stockbot_button(
-			add_button,
-			COLOR_STOCKBOT_SURFACE_ALT if is_in_watchlist else COLOR_STOCKBOT_BULL_TINT,
-			COLOR_STOCKBOT_EDGE if is_in_watchlist else COLOR_STOCKBOT_BULL_EDGE,
-			COLOR_STOCKBOT_TEXT,
-			4
-		)
-		var add_callable: Callable = Callable(self, "_on_add_to_watchlist_pressed").bind(company_id)
-		if not is_in_watchlist and not add_button.pressed.is_connected(add_callable):
-			add_button.pressed.connect(add_callable)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_all_stock_watchlist_button_states(watchlist_lookup)
+	stock_controller._sync_root_refs()
 func _refresh_all_stock_rows(company_rows: Array, watchlist_lookup: Dictionary) -> void:
-	for child in all_stocks_rows.get_children():
-		all_stocks_rows.remove_child(child)
-		child.queue_free()
-
-	var search_query: String = ""
-	if all_stocks_search_input != null:
-		search_query = all_stocks_search_input.text.strip_edges().to_lower()
-	var has_visible_rows: bool = false
-	for row_value in company_rows:
-		var row: Dictionary = row_value
-		if not _matches_all_stock_search(row, search_query):
-			continue
-
-		has_visible_rows = true
-		var company_id: String = str(row.get("id", ""))
-		var line: String = _build_stock_list_line(row)
-		var is_selected: bool = company_id == selected_company_id
-		var is_in_watchlist: bool = watchlist_lookup.has(company_id)
-
-		var row_box: HBoxContainer = HBoxContainer.new()
-		row_box.add_theme_constant_override("separation", 0)
-		row_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row_box.name = "AllStockRow_%s" % company_id
-
-		var selected_stripe: ColorRect = ColorRect.new()
-		selected_stripe.name = "AllStockSelectedStripe_%s" % company_id
-		selected_stripe.custom_minimum_size = Vector2(4, 42)
-		selected_stripe.color = COLOR_STOCKBOT_BLUE if is_selected else Color(COLOR_STOCKBOT_EDGE.r, COLOR_STOCKBOT_EDGE.g, COLOR_STOCKBOT_EDGE.b, 0.25)
-		row_box.add_child(selected_stripe)
-
-		var select_button: Button = Button.new()
-		select_button.name = "AllStockSelectButton_%s" % company_id
-		select_button.text = line
-		select_button.tooltip_text = _watchlist_tooltip(row)
-		select_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		select_button.custom_minimum_size = Vector2(0, 42)
-		_style_stock_list_row_button(select_button, is_selected)
-		select_button.pressed.connect(_on_all_stock_selected.bind(company_id))
-		row_box.add_child(select_button)
-
-		var add_button: Button = Button.new()
-		add_button.name = "AllStockAddButton_%s" % company_id
-		add_button.custom_minimum_size = Vector2(STOCK_LIST_ADD_BUTTON_WIDTH, 42)
-		add_button.text = "" if is_in_watchlist else "Watch"
-		add_button.icon = _load_stockbot_icon("check" if is_in_watchlist else "plus")
-		add_button.expand_icon = is_in_watchlist
-		add_button.disabled = is_in_watchlist
-		_style_stockbot_button(
-			add_button,
-			COLOR_STOCKBOT_SURFACE_ALT if is_in_watchlist else COLOR_STOCKBOT_BULL_TINT,
-			COLOR_STOCKBOT_EDGE if is_in_watchlist else COLOR_STOCKBOT_BULL_EDGE,
-			COLOR_STOCKBOT_TEXT,
-			4
-		)
-		if not is_in_watchlist:
-			add_button.pressed.connect(_on_add_to_watchlist_pressed.bind(company_id))
-		row_box.add_child(add_button)
-
-		all_stocks_rows.add_child(row_box)
-
-	if not has_visible_rows and not search_query.is_empty():
-		var empty_label: Label = Label.new()
-		empty_label.name = "AllStocksSearchEmptyLabel"
-		empty_label.text = "No stocks match \"%s\"." % all_stocks_search_input.text.strip_edges()
-		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		empty_label.add_theme_color_override("font_color", COLOR_MUTED)
-		_apply_font_override_to_control(empty_label, DEFAULT_APP_FONT_SIZE, _get_app_font())
-		all_stocks_rows.add_child(empty_label)
-	_apply_font_overrides_to_subtree(all_stocks_rows)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_all_stock_rows(company_rows, watchlist_lookup)
+	stock_controller._sync_root_refs()
 func _matches_all_stock_search(row: Dictionary, search_query: String) -> bool:
-	if search_query.is_empty():
-		return true
-
-	var searchable_text: String = "%s %s %s" % [
-		str(row.get("ticker", "")),
-		str(row.get("name", "")),
-		str(row.get("sector_name", ""))
-	]
-	return searchable_text.to_lower().find(search_query) != -1
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: bool = stock_controller._matches_all_stock_search(row, search_query)
+	stock_controller._sync_root_refs()
+	return result
 func _refresh_portfolio_stock_rows(holdings: Array, company_row_lookup: Dictionary) -> void:
-	for child in portfolio_stocks_rows.get_children():
-		if child == portfolio_stocks_empty_label:
-			continue
-		portfolio_stocks_rows.remove_child(child)
-		child.queue_free()
-
-	var has_holdings: bool = false
-	for holding_value in holdings:
-		var holding: Dictionary = holding_value
-		var company_id: String = str(holding.get("company_id", ""))
-		if company_id.is_empty():
-			continue
-		var row: Dictionary = company_row_lookup.get(company_id, {})
-		if row.is_empty():
-			continue
-
-		has_holdings = true
-		var lots_owned: int = int(holding.get("lots", 0))
-		var line: String = "%s  |  %d lot(s)" % [_build_stock_list_line(row), lots_owned]
-		var select_button: Button = Button.new()
-		select_button.name = "PortfolioSelectButton_%s" % company_id
-		select_button.text = line
-		select_button.tooltip_text = _watchlist_tooltip(row)
-		select_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		select_button.custom_minimum_size = Vector2(0, 40)
-		_style_stock_list_row_button(select_button, company_id == selected_company_id)
-		select_button.pressed.connect(_on_portfolio_stock_selected.bind(company_id))
-		portfolio_stocks_rows.add_child(select_button)
-
-	portfolio_stocks_empty_label.visible = not has_holdings
-	_apply_font_overrides_to_subtree(portfolio_stocks_rows)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_portfolio_stock_rows(holdings, company_row_lookup)
+	stock_controller._sync_root_refs()
 func _refresh_company_selection_state() -> void:
-	var selected_index: int = displayed_company_ids.find(selected_company_id)
-	for item_index in range(company_list.item_count):
-		var row: Dictionary = _get_watchlist_row_metadata(item_index)
-		_style_watchlist_row_item(item_index, row, item_index == selected_index)
-	if selected_index >= 0:
-		company_list.select(selected_index)
-	else:
-		company_list.deselect_all()
-	_refresh_watchlist_action_state()
-
-	for row_box_value in all_stocks_rows.get_children():
-		if row_box_value is not HBoxContainer:
-			continue
-		var row_box: HBoxContainer = row_box_value
-		var company_id: String = str(row_box.name).trim_prefix("AllStockRow_")
-		var selected_stripe: ColorRect = row_box.get_node_or_null("AllStockSelectedStripe_%s" % company_id) as ColorRect
-		if selected_stripe != null:
-			selected_stripe.color = COLOR_STOCKBOT_BLUE if company_id == selected_company_id else Color(COLOR_STOCKBOT_EDGE.r, COLOR_STOCKBOT_EDGE.g, COLOR_STOCKBOT_EDGE.b, 0.25)
-		var select_button: Button = row_box.get_node_or_null("AllStockSelectButton_%s" % company_id) as Button
-		if select_button == null:
-			continue
-		_style_stock_list_row_button(select_button, company_id == selected_company_id)
-
-	for child in portfolio_stocks_rows.get_children():
-		if child == portfolio_stocks_empty_label or child is not Button:
-			continue
-		var portfolio_row_button: Button = child
-		var company_id: String = str(portfolio_row_button.name).trim_prefix("PortfolioSelectButton_")
-		_style_stock_list_row_button(portfolio_row_button, company_id == selected_company_id)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_company_selection_state()
+	stock_controller._sync_root_refs()
 func _refresh_watchlist_action_state(watchlist_lookup: Dictionary = {}) -> void:
-	if remove_watchlist_button == null:
-		return
-	if watchlist_lookup.is_empty():
-		for company_id_value in GameManager.get_watchlist_company_ids():
-			watchlist_lookup[str(company_id_value)] = true
-	remove_watchlist_button.disabled = selected_company_id.is_empty() or not watchlist_lookup.has(selected_company_id)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_watchlist_action_state(watchlist_lookup)
+	stock_controller._sync_root_refs()
 func _build_stock_list_line(row: Dictionary) -> String:
-	return "%s  %s  %s" % [
-		row.get("ticker", ""),
-		_format_currency(float(row.get("current_price", 0.0))),
-		_format_change(float(row.get("daily_change_pct", 0.0)))
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._build_stock_list_line(row)
+	stock_controller._sync_root_refs()
+	return result
 func _get_portfolio_company_ids() -> Array:
-	var company_ids: Array = []
-	var holdings: Array = GameManager.get_portfolio_snapshot().get("holdings", [])
-	for holding_value in holdings:
-		var holding: Dictionary = holding_value
-		var company_id: String = str(holding.get("company_id", ""))
-		if company_id.is_empty():
-			continue
-		company_ids.append(company_id)
-	return company_ids
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._get_portfolio_company_ids()
+	stock_controller._sync_root_refs()
+	return result
 func _prioritized_company_detail_ids() -> Array:
-	var prioritized_ids: Array = []
-	var seen_ids: Dictionary = {}
-	var candidate_ids: Array = []
-	if not selected_company_id.is_empty():
-		candidate_ids.append(selected_company_id)
-	candidate_ids.append_array(_get_portfolio_company_ids())
-	candidate_ids.append_array(GameManager.get_watchlist_company_ids())
-	for company_id_value in candidate_ids:
-		var company_id: String = str(company_id_value)
-		if company_id.is_empty() or seen_ids.has(company_id):
-			continue
-		seen_ids[company_id] = true
-		prioritized_ids.append(company_id)
-	return prioritized_ids
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Array = stock_controller._prioritized_company_detail_ids()
+	stock_controller._sync_root_refs()
+	return result
 func _start_background_company_detail_hydration() -> void:
-	if not RunState.has_active_run():
-		return
-	GameManager.start_background_company_detail_hydration(_prioritized_company_detail_ids())
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._start_background_company_detail_hydration()
+	stock_controller._sync_root_refs()
 func _start_background_company_detail_hydration_after_startup() -> void:
-	if not is_inside_tree():
-		return
-	await get_tree().process_frame
-	if not is_inside_tree():
-		return
-	await get_tree().process_frame
-	if not is_inside_tree():
-		return
-	_start_background_company_detail_hydration()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._start_background_company_detail_hydration_after_startup()
+	stock_controller._sync_root_refs()
 func _request_selected_company_detail(priority: bool = true) -> void:
-	if selected_company_id.is_empty():
-		return
-	if str(RunState.get_company_detail_status(selected_company_id)) == "ready":
-		return
-	var priority_ids: Array = [selected_company_id] if priority else []
-	GameManager.start_background_company_detail_hydration(priority_ids)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._request_selected_company_detail(priority)
+	stock_controller._sync_root_refs()
 func _refresh_trade_workspace() -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	var phase_started_at_usec: int = started_at_usec
-	_request_selected_company_detail()
-	_log_perf_phase(true, "_refresh_trade_workspace:request_detail", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
-	var snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id, true, true, true)
-	_log_perf_phase(true, "_refresh_trade_workspace:snapshot", phase_started_at_usec)
-	phase_started_at_usec = Time.get_ticks_usec()
-	_apply_trade_workspace_snapshot(snapshot)
-	_log_perf_phase(true, "_refresh_trade_workspace:apply", phase_started_at_usec)
-	_log_perf_elapsed("_refresh_trade_workspace", started_at_usec)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_trade_workspace()
+	stock_controller._sync_root_refs()
 func _refresh_trade_workspace_holdings_state() -> void:
-	if selected_company_id.is_empty():
-		_apply_trade_workspace_snapshot({})
-		return
-	if current_trade_snapshot.is_empty() or str(current_trade_snapshot.get("id", "")) != selected_company_id:
-		_refresh_trade_workspace()
-		return
-
-	var holdings_snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id, false, false, false)
-	if holdings_snapshot.is_empty():
-		_refresh_trade_workspace()
-		return
-	if (
-		current_trade_snapshot.get("financial_history", []).is_empty() or
-		current_trade_snapshot.get("financial_statement_snapshot", {}).get("quarterly_statements", []).is_empty() or
-		not _broker_flow_has_rows(current_trade_snapshot.get("broker_flow", {}))
-	):
-		_refresh_trade_workspace()
-		return
-
-	var merged_snapshot: Dictionary = current_trade_snapshot.duplicate()
-	for key_value in holdings_snapshot.keys():
-		var key: String = str(key_value)
-		if key == "financial_history" or key == "financial_statement_snapshot" or key == "broker_flow":
-			continue
-		merged_snapshot[key] = holdings_snapshot[key]
-	_apply_trade_workspace_snapshot(merged_snapshot)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_trade_workspace_holdings_state()
+	stock_controller._sync_root_refs()
 func _apply_trade_workspace_snapshot(snapshot: Dictionary) -> void:
-	var previous_company_id: String = str(current_trade_snapshot.get("id", ""))
-	var next_company_id: String = str(snapshot.get("id", ""))
-	var active_tab_name: String = _trade_workspace_active_tab_name()
-	var refresh_chart_now: bool = snapshot.is_empty() or previous_company_id != next_company_id or active_tab_name == "Chart"
-	current_trade_snapshot = snapshot
-	if previous_company_id != next_company_id:
-		_reset_trade_workspace_detail_caches()
-	trade_workspace_widget.set_company_snapshot(snapshot, refresh_chart_now)
-	if snapshot.is_empty():
-		current_trade_snapshot = {}
-		_reset_trade_workspace_detail_caches()
-		selected_financial_statement_company_id = ""
-		selected_financial_statement_index = -1
-		active_order_side = "buy"
-		order_company_name_label.text = "-"
-		selection_label.text = "-"
-		selection_label.visible = false
-		order_price_value_label.text = "0"
-		order_price_change_label.text = "+0 (+0.00%)"
-		order_position_label.text = ""
-		order_position_label.visible = false
-		_refresh_order_market_summary({})
-		order_title_label.text = "Buy Order"
-		order_price_line_edit.text = ""
-		estimated_total_value_label.text = _format_currency(0.0)
-		buy_button.disabled = true
-		sell_button.disabled = true
-		submit_order_button.disabled = true
-		submit_order_button.text = "Submit Buy Order"
-		_set_label_tone(order_price_change_label, COLOR_MUTED)
-		_set_label_tone(estimated_total_value_label, COLOR_MUTED)
-		_update_order_side_buttons()
-		profile_company_name_label.text = "No selection"
-		profile_sector_label.text = "Sector:"
-		profile_price_label.text = ""
-		profile_price_label.visible = false
-		profile_factor_label.text = ""
-		profile_management_label.text = "Management:"
-		profile_shareholders_label.text = "Shareholders:"
-		profile_tags_label.text = "Tags:"
-		profile_description_label.text = "Description:"
-		_refresh_profile_company_layout({}, false)
-		profile_network_hint_label.text = ""
-		profile_network_hint_label.visible = false
-		profile_meet_contact_button.visible = false
-		profile_meet_contact_button.disabled = true
-		profile_meet_contact_button.set_meta("contact_id", "")
-		key_stats_financial_label.text = "Financials:"
-		financials_year_label.text = ""
-		financials_year_label.visible = false
-		financials_period_label.text = "Viewing latest available period."
-		broker_summary_label.text = ""
-		broker_summary_label.visible = false
-		broker_meter_label.text = ""
-		broker_meter_label.visible = false
-		broker_meter_bar.value = 50.0
-		analyzer_setup_label.text = "Setup read:"
-		analyzer_support_label.text = "Supportive signals:"
-		analyzer_risk_label.text = "Risk signals:"
-		analyzer_event_label.text = "Visible inputs:"
-		analyzer_history_label.text = "Recent closes:"
-		financial_history_summary_label.text = "Generated history unavailable."
-		_refresh_financial_history_table([], {})
-		_refresh_key_stats_dashboard({})
-		_refresh_broker_table({})
-		_refresh_corporate_action_timeline({})
-		_refresh_statement_sections({})
-		_refresh_contact_intel_controls()
-		return
-
-	var detail_status: String = str(snapshot.get("detail_status", "ready"))
-	var detail_ready: bool = detail_status == "ready"
-	var financial_statement_snapshot: Dictionary = snapshot.get("financial_statement_snapshot", {}) if detail_ready else {}
-	if (
-		selected_financial_statement_company_id != next_company_id or
-		selected_financial_statement_index < 0
-	):
-		_sync_financial_statement_selection(str(snapshot.get("id", "")), financial_statement_snapshot)
-	var next_profile_cache_key: String = _trade_workspace_profile_snapshot_key(snapshot, financial_statement_snapshot)
-	var next_financial_history_cache_key: String = _trade_workspace_financial_history_snapshot_key(snapshot)
-	var next_key_stats_cache_key: String = _trade_workspace_key_stats_snapshot_key(snapshot)
-	var next_broker_cache_key: String = _trade_workspace_broker_snapshot_key(snapshot)
-	var next_statement_cache_key: String = _trade_workspace_statement_snapshot_key(snapshot, financial_statement_snapshot)
-	var refresh_profile_panels: bool = next_profile_cache_key != trade_workspace_profile_cache_key
-	var refresh_financial_history_panel: bool = next_financial_history_cache_key != trade_workspace_financial_history_cache_key
-	var refresh_key_stats_panel: bool = (
-		next_key_stats_cache_key != trade_workspace_key_stats_cache_key and
-		(active_tab_name == "KeyStats" or trade_workspace_key_stats_cache_key.is_empty())
-	)
-	var refresh_broker_panel: bool = next_broker_cache_key != trade_workspace_broker_cache_key
-	var refresh_statement_panel: bool = next_statement_cache_key != trade_workspace_statement_cache_key
-	lot_spin_box.set_value_no_signal(float(_selected_lots()))
-	profile_company_name_label.text = "%s  |  %s" % [snapshot.get("ticker", ""), snapshot.get("name", "")]
-	profile_sector_label.text = "Sector: %s  |  Archetype: %s  |  Size: %s  |  Board: %s" % [
-		snapshot.get("sector_name", "Unknown"),
-		str(snapshot.get("archetype_label", "Unclassified")),
-		str(snapshot.get("company_size_label", "Unknown")),
-		str(snapshot.get("listing_board", "main")).capitalize()
-	]
-	profile_price_label.text = ""
-	profile_price_label.visible = false
-	var profile_background_text: String = _build_profile_background_text(snapshot, detail_ready)
-	if detail_ready:
-		profile_factor_label.text = "Company profile: founded %d  |  age %dy  |  employees %s  |  revenue %s" % [
-			int(snapshot.get("founded_year", 0)),
-			int(snapshot.get("company_age", 0)),
-			_format_grouped_integer(int(snapshot.get("employee_count", 0))),
-			_format_compact_currency(float(snapshot.get("profile_revenue", 0.0)))
-		]
-		profile_tags_label.text = "Tags: %s" % _join_or_default(snapshot.get("profile_tags", []), "none")
-	else:
-		profile_factor_label.text = "Company profile: preparing company profile..."
-		profile_tags_label.text = "Tags: preparing company tags..."
-	profile_management_label.text = _format_profile_management(snapshot)
-	profile_shareholders_label.text = _format_profile_shareholders(snapshot)
-	profile_description_label.text = "Description: %s" % profile_background_text
-	if refresh_profile_panels:
-		trade_workspace_profile_cache_key = next_profile_cache_key
-		_refresh_profile_company_layout(snapshot, detail_ready)
-		_refresh_profile_network_contact(str(snapshot.get("id", "")))
-	key_stats_financial_label.text = "Financials:\n%s" % _format_financial_block(snapshot.get("financials", {}))
-	financials_year_label.text = ""
-	financials_year_label.visible = false
-	analyzer_setup_label.text = "Setup read:\n%s" % _build_setup_read(snapshot)
-	analyzer_support_label.text = "Supportive signals:\n%s" % _build_support_signals(snapshot)
-	analyzer_risk_label.text = "Risk signals:\n%s" % _build_risk_signals(snapshot)
-	analyzer_event_label.text = "Visible inputs:\nEvent tags: %s\nNarratives: %s" % [
-		_join_or_default(snapshot.get("event_tags", []), "none today"),
-		_join_or_default(snapshot.get("narrative_tags", []), "none")
-	]
-	analyzer_history_label.text = "Recent closes:\n%s" % _format_history(snapshot.get("price_history", []))
-	financial_history_summary_label.text = (
-		_format_financial_history_summary(snapshot.get("financial_history", []), snapshot.get("financials", {}))
-		if detail_ready
-		else "Generating company detail..."
-	)
-	if refresh_financial_history_panel:
-		trade_workspace_financial_history_cache_key = next_financial_history_cache_key
-		_refresh_financial_history_table(
-			snapshot.get("financial_history", []),
-			snapshot.get("financials", {}),
-			"Generating company detail..." if not detail_ready else ""
-		)
-	if refresh_key_stats_panel:
-		trade_workspace_key_stats_cache_key = next_key_stats_cache_key
-		_refresh_key_stats_dashboard(snapshot if detail_ready else {})
-	if refresh_broker_panel:
-		trade_workspace_broker_cache_key = next_broker_cache_key
-		_refresh_broker_table(_broker_range_flow_for_snapshot(snapshot))
-	if active_tab_name == "CorporateActions":
-		_refresh_trade_workspace_corporate_action_timeline(true)
-	if refresh_statement_panel:
-		trade_workspace_statement_cache_key = next_statement_cache_key
-		_refresh_statement_sections(financial_statement_snapshot)
-	if not detail_ready:
-		financials_period_label.text = "Detailed quarterly statements will appear once the company profile finishes generating."
-	_refresh_order_controls(snapshot)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._apply_trade_workspace_snapshot(snapshot)
+	stock_controller._sync_root_refs()
 func _reset_trade_workspace_detail_caches() -> void:
-	trade_workspace_detail_cache_key = ""
-	trade_workspace_profile_cache_key = ""
-	trade_workspace_financial_history_cache_key = ""
-	trade_workspace_key_stats_cache_key = ""
-	trade_workspace_broker_cache_key = ""
-	trade_workspace_corporate_action_cache_key = ""
-	trade_workspace_statement_cache_key = ""
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._reset_trade_workspace_detail_caches()
+	stock_controller._sync_root_refs()
 func _trade_workspace_active_tab_name() -> String:
-	if work_tabs == null:
-		return ""
-	var tab_index: int = int(work_tabs.current_tab)
-	if tab_index < 0 or tab_index >= work_tabs.get_child_count():
-		return ""
-	var tab_control := work_tabs.get_child(tab_index)
-	return str(tab_control.name) if tab_control != null else ""
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._trade_workspace_active_tab_name()
+	stock_controller._sync_root_refs()
+	return result
 func _refresh_visible_trade_workspace_tab() -> void:
-	if current_trade_snapshot.is_empty():
-		return
-	var active_tab_name: String = _trade_workspace_active_tab_name()
-	var detail_ready: bool = str(current_trade_snapshot.get("detail_status", "ready")) == "ready"
-	var financial_statement_snapshot: Dictionary = current_trade_snapshot.get("financial_statement_snapshot", {}) if detail_ready else {}
-	match active_tab_name:
-		"Chart":
-			trade_workspace_widget.set_company_snapshot(current_trade_snapshot, true)
-		"KeyStats":
-			var next_key_stats_cache_key: String = _trade_workspace_key_stats_snapshot_key(current_trade_snapshot)
-			if next_key_stats_cache_key != trade_workspace_key_stats_cache_key:
-				trade_workspace_key_stats_cache_key = next_key_stats_cache_key
-				_refresh_key_stats_dashboard(current_trade_snapshot if detail_ready else {})
-			var next_financial_history_cache_key: String = _trade_workspace_financial_history_snapshot_key(current_trade_snapshot)
-			if next_financial_history_cache_key != trade_workspace_financial_history_cache_key:
-				trade_workspace_financial_history_cache_key = next_financial_history_cache_key
-				_refresh_financial_history_table(
-					current_trade_snapshot.get("financial_history", []),
-					current_trade_snapshot.get("financials", {}),
-					"Generating company detail..." if not detail_ready else ""
-				)
-		"Financials":
-			_sync_financial_statement_selection(str(current_trade_snapshot.get("id", "")), financial_statement_snapshot)
-			var next_statement_cache_key: String = _trade_workspace_statement_snapshot_key(current_trade_snapshot, financial_statement_snapshot)
-			if next_statement_cache_key != trade_workspace_statement_cache_key:
-				trade_workspace_statement_cache_key = next_statement_cache_key
-				_refresh_statement_sections(financial_statement_snapshot)
-		"Broker":
-			var next_broker_cache_key: String = _trade_workspace_broker_snapshot_key(current_trade_snapshot)
-			if next_broker_cache_key != trade_workspace_broker_cache_key:
-				trade_workspace_broker_cache_key = next_broker_cache_key
-				_refresh_broker_table(_broker_range_flow_for_snapshot(current_trade_snapshot))
-		"CorporateActions":
-			_refresh_trade_workspace_corporate_action_timeline(true)
-		"Profile":
-			var next_profile_cache_key: String = _trade_workspace_profile_snapshot_key(current_trade_snapshot, financial_statement_snapshot)
-			if next_profile_cache_key != trade_workspace_profile_cache_key:
-				trade_workspace_profile_cache_key = next_profile_cache_key
-				_refresh_profile_company_layout(current_trade_snapshot, detail_ready)
-				_refresh_profile_network_contact(str(current_trade_snapshot.get("id", "")))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_visible_trade_workspace_tab()
+	stock_controller._sync_root_refs()
 func _refresh_trade_workspace_corporate_action_timeline(force_refresh: bool = false) -> void:
-	if current_trade_snapshot.is_empty():
-		_refresh_corporate_action_timeline({})
-		trade_workspace_corporate_action_cache_key = ""
-		return
-	var timeline_snapshot: Dictionary = GameManager.get_company_corporate_action_timeline(str(current_trade_snapshot.get("id", "")))
-	var next_corporate_action_cache_key: String = _trade_workspace_corporate_action_snapshot_key(timeline_snapshot)
-	if force_refresh or next_corporate_action_cache_key != trade_workspace_corporate_action_cache_key:
-		trade_workspace_corporate_action_cache_key = next_corporate_action_cache_key
-		_refresh_corporate_action_timeline(timeline_snapshot)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_trade_workspace_corporate_action_timeline(force_refresh)
+	stock_controller._sync_root_refs()
 func _ensure_profile_company_layout() -> void:
-	if profile_background_card != null:
-		return
-	var profile_vbox: VBoxContainer = profile_description_label.get_parent() as VBoxContainer
-	if profile_vbox == null:
-		return
-
-	var legacy_nodes: Array = [
-		profile_vbox.get_node_or_null("ProfileTitle"),
-		profile_company_name_label,
-		profile_sector_label,
-		profile_price_label,
-		profile_factor_label,
-		profile_management_label,
-		profile_shareholders_label,
-		profile_tags_label,
-		profile_description_label,
-		profile_network_hint_label,
-		profile_meet_contact_button
-	]
-	for node_value in legacy_nodes:
-		var node: Control = node_value as Control
-		if node != null:
-			node.visible = false
-
-	profile_background_card = _build_profile_card("ProfileBackgroundCard")
-	var background_vbox: VBoxContainer = profile_background_card.get_meta("content_vbox") as VBoxContainer
-	profile_background_title_label = _build_profile_title_label("Company Background")
-	profile_background_title_label.name = "ProfileBackgroundTitleLabel"
-	background_vbox.add_child(profile_background_title_label)
-	profile_background_meta_label = _build_profile_body_label("", COLOR_MUTED)
-	profile_background_meta_label.name = "ProfileBackgroundMetaLabel"
-	background_vbox.add_child(profile_background_meta_label)
-	profile_background_body_label = _build_profile_body_label("", COLOR_TEXT)
-	profile_background_body_label.name = "ProfileBackgroundBodyLabel"
-	profile_background_body_label.mouse_filter = Control.MOUSE_FILTER_STOP
-	profile_background_body_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	profile_background_body_label.tooltip_text = "Click to open research actions."
-	profile_background_body_label.gui_input.connect(_on_profile_background_gui_input)
-	background_vbox.add_child(profile_background_body_label)
-	profile_tags_flow = HFlowContainer.new()
-	profile_tags_flow.name = "ProfileTagsFlow"
-	profile_tags_flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	profile_tags_flow.add_theme_constant_override("h_separation", 6)
-	profile_tags_flow.add_theme_constant_override("v_separation", 6)
-	background_vbox.add_child(profile_tags_flow)
-	profile_vbox.add_child(profile_background_card)
-
-	profile_shareholder_card = _build_profile_card("ProfileShareholderCard")
-	var shareholder_vbox: VBoxContainer = profile_shareholder_card.get_meta("content_vbox") as VBoxContainer
-	var shareholder_header := HBoxContainer.new()
-	shareholder_header.name = "ProfileShareholderHeader"
-	shareholder_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	shareholder_header.add_theme_constant_override("separation", 8)
-	profile_shareholder_title_label = _build_profile_title_label("Shareholders")
-	profile_shareholder_title_label.name = "ProfileShareholderTitleLabel"
-	shareholder_header.add_child(profile_shareholder_title_label)
-	var shareholder_spacer := Control.new()
-	shareholder_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	shareholder_header.add_child(shareholder_spacer)
-	profile_shareholder_updated_label = _build_profile_body_label("", COLOR_MUTED)
-	profile_shareholder_updated_label.name = "ProfileShareholderUpdatedLabel"
-	profile_shareholder_updated_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	shareholder_header.add_child(profile_shareholder_updated_label)
-	shareholder_vbox.add_child(shareholder_header)
-	profile_shareholder_rows = VBoxContainer.new()
-	profile_shareholder_rows.name = "ProfileShareholderRows"
-	profile_shareholder_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	profile_shareholder_rows.add_theme_constant_override("separation", 0)
-	shareholder_vbox.add_child(profile_shareholder_rows)
-	profile_vbox.add_child(profile_shareholder_card)
-
-	profile_management_card = _build_profile_card("ProfileManagementCard")
-	var management_vbox: VBoxContainer = profile_management_card.get_meta("content_vbox") as VBoxContainer
-	profile_management_title_label = _build_profile_title_label("Management")
-	profile_management_title_label.name = "ProfileManagementTitleLabel"
-	management_vbox.add_child(profile_management_title_label)
-	profile_management_rows = VBoxContainer.new()
-	profile_management_rows.name = "ProfileManagementRows"
-	profile_management_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	profile_management_rows.add_theme_constant_override("separation", 0)
-	management_vbox.add_child(profile_management_rows)
-	profile_vbox.add_child(profile_management_card)
-	_style_profile_company_layout()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._ensure_profile_company_layout()
+	stock_controller._sync_root_refs()
 func _build_profile_card(card_name: String) -> PanelContainer:
-	var card := PanelContainer.new()
-	card.name = card_name
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var margin := MarginContainer.new()
-	margin.name = "%sMargin" % card_name
-	margin.add_theme_constant_override("margin_left", 14)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_right", 14)
-	margin.add_theme_constant_override("margin_bottom", 12)
-	card.add_child(margin)
-	var content_vbox := VBoxContainer.new()
-	content_vbox.name = "%sVBox" % card_name
-	content_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content_vbox.add_theme_constant_override("separation", 10)
-	margin.add_child(content_vbox)
-	card.set_meta("content_vbox", content_vbox)
-	return card
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: PanelContainer = stock_controller._build_profile_card(card_name)
+	stock_controller._sync_root_refs()
+	return result
 func _build_profile_title_label(text_value: String) -> Label:
-	var label := Label.new()
-	label.text = text_value
-	label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE + 2)
-	label.add_theme_color_override("font_color", COLOR_TEXT)
-	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE + 2, _get_app_font())
-	return label
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Label = stock_controller._build_profile_title_label(text_value)
+	stock_controller._sync_root_refs()
+	return result
 func _build_profile_body_label(text_value: String, color: Color) -> Label:
-	var label := Label.new()
-	label.text = text_value
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-	label.add_theme_color_override("font_color", color)
-	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE, _get_app_font())
-	return label
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Label = stock_controller._build_profile_body_label(text_value, color)
+	stock_controller._sync_root_refs()
+	return result
 func _style_profile_company_layout() -> void:
-	for card_value in [profile_background_card, profile_shareholder_card, profile_management_card]:
-		var card: PanelContainer = card_value as PanelContainer
-		if card != null:
-			_style_stockbot_panel(card, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE, 6, 1)
-	for label_value in [profile_background_title_label, profile_shareholder_title_label, profile_management_title_label]:
-		var label: Label = label_value as Label
-		if label != null:
-			_set_label_tone(label, COLOR_STOCKBOT_TEXT)
-	for label_value in [profile_background_meta_label, profile_shareholder_updated_label]:
-		var label: Label = label_value as Label
-		if label != null:
-			_set_label_tone(label, COLOR_STOCKBOT_MUTED)
-	if profile_background_body_label != null:
-		_set_label_tone(profile_background_body_label, COLOR_STOCKBOT_TEXT)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._style_profile_company_layout()
+	stock_controller._sync_root_refs()
 func _refresh_profile_company_layout(snapshot: Dictionary, detail_ready: bool) -> void:
-	_ensure_profile_company_layout()
-	if profile_background_card == null:
-		return
-	if snapshot.is_empty():
-		profile_background_title_label.text = "Company Background"
-		profile_background_meta_label.text = "Select a company to view public background, tags, shareholders, and management."
-		profile_background_body_label.text = ""
-		profile_background_body_label.tooltip_text = ""
-		_refresh_profile_tags([])
-		_refresh_profile_shareholder_table({})
-		_refresh_profile_management_table({})
-		return
-
-	profile_background_title_label.text = "Company Background"
-	var index_snapshot: Dictionary = snapshot.get("index_review", {})
-	var meta_parts: Array = [
-		str(snapshot.get("ticker", "")),
-		str(snapshot.get("sector_name", "Unknown")),
-		str(snapshot.get("archetype_label", "Unclassified")),
-		"%s board" % str(snapshot.get("listing_board", "main")).capitalize()
-	]
-	var index_summary: String = str(index_snapshot.get("summary_label", "")).strip_edges()
-	if not index_summary.is_empty():
-		meta_parts.append(index_summary)
-	profile_background_meta_label.text = " | ".join(meta_parts)
-	profile_background_body_label.text = _build_profile_background_text(snapshot, detail_ready)
-	profile_background_body_label.tooltip_text = "Click to add this company background to the Research Tray." if detail_ready else ""
-	var profile_tags: Array = snapshot.get("profile_tags", []).duplicate() if detail_ready else []
-	for membership_label_value in index_snapshot.get("membership_labels", []):
-		var membership_label: String = str(membership_label_value).strip_edges()
-		if not membership_label.is_empty():
-			profile_tags.append("%s member" % membership_label)
-	for candidate_label_value in index_snapshot.get("candidate_labels", []):
-		var candidate_label: String = str(candidate_label_value).strip_edges()
-		if not candidate_label.is_empty():
-			profile_tags.append(candidate_label)
-	_refresh_profile_tags(profile_tags)
-	_refresh_profile_shareholder_table(snapshot)
-	_refresh_profile_management_table(snapshot)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_profile_company_layout(snapshot, detail_ready)
+	stock_controller._sync_root_refs()
 func _refresh_profile_tags(tags: Array) -> void:
-	if profile_tags_flow == null:
-		return
-	_clear_profile_container(profile_tags_flow)
-	for tag_value in tags:
-		var tag_text: String = str(tag_value).strip_edges()
-		if tag_text.is_empty():
-			continue
-		profile_tags_flow.add_child(_build_profile_tag_pill(tag_text))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_profile_tags(tags)
+	stock_controller._sync_root_refs()
 func _build_profile_tag_pill(tag_text: String) -> PanelContainer:
-	var pill := PanelContainer.new()
-	var style := _make_stockbot_stylebox(COLOR_STOCKBOT_BLUE_TINT, COLOR_STOCKBOT_BLUE_EDGE, 6, 1, 6)
-	style.content_margin_top = 3
-	style.content_margin_bottom = 3
-	pill.add_theme_stylebox_override("panel", style)
-	var label := Label.new()
-	label.text = tag_text if tag_text.contains("MSCY") or tag_text.contains("FTSI") else tag_text.replace("_", " ").capitalize()
-	label.add_theme_color_override("font_color", COLOR_STOCKBOT_BLUE)
-	label.add_theme_font_size_override("font_size", DEFAULT_APP_FONT_SIZE)
-	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE, _get_app_font())
-	pill.add_child(label)
-	return pill
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: PanelContainer = stock_controller._build_profile_tag_pill(tag_text)
+	stock_controller._sync_root_refs()
+	return result
 func _refresh_profile_shareholder_table(snapshot: Dictionary) -> void:
-	if profile_shareholder_rows == null:
-		return
-	_clear_profile_container(profile_shareholder_rows)
-	var updated_date: String = GameManager.format_trade_date(RunState.get_current_trade_date()) if RunState.has_active_run() else "-"
-	profile_shareholder_updated_label.text = "Updated %s" % updated_date
-	profile_shareholder_rows.add_child(_build_profile_table_row(
-		["Name", "Total Shares", "Percentage"],
-		[240.0, 136.0, 92.0],
-		true,
-		[1, 2]
-	))
-	var rows: Array = snapshot.get("shareholder_rows", [])
-	var shares_outstanding: float = max(float(snapshot.get("shares_outstanding", 0.0)), 0.0)
-	var added_count: int = 0
-	for row_value in rows:
-		var row: Dictionary = row_value
-		var ownership_pct: float = float(row.get("ownership_pct", 0.0))
-		if ownership_pct <= 0.0:
-			continue
-		profile_shareholder_rows.add_child(_build_profile_table_row(
-			[
-				str(row.get("name", "")),
-				_format_grouped_integer(int(round(shares_outstanding * ownership_pct))),
-				_format_percent_value(ownership_pct * 100.0)
-			],
-			[240.0, 136.0, 92.0],
-			false,
-			[1, 2],
-			_profile_shareholder_capture_payload(row, ownership_pct, shares_outstanding)
-		))
-		added_count += 1
-	if added_count == 0:
-		profile_shareholder_rows.add_child(_build_profile_empty_row("No shareholder breakdown is visible yet."))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_profile_shareholder_table(snapshot)
+	stock_controller._sync_root_refs()
 func _refresh_profile_management_table(snapshot: Dictionary) -> void:
-	if profile_management_rows == null:
-		return
-	_clear_profile_container(profile_management_rows)
-	profile_management_rows.add_child(_build_profile_table_row(
-		["Role", "Name", "Public Status"],
-		[140.0, 220.0, 130.0],
-		true,
-		[]
-	))
-	if str(snapshot.get("detail_status", "ready")) != "ready":
-		profile_management_rows.add_child(_build_profile_empty_row("Preparing company roster..."))
-		return
-	var roster: Array = snapshot.get("management_roster", [])
-	if roster.is_empty():
-		profile_management_rows.add_child(_build_profile_empty_row("Management roster has not been generated for this company."))
-		return
-	var network_snapshot: Dictionary = GameManager.get_network_snapshot()
-	for management_value in roster:
-		if typeof(management_value) != TYPE_DICTIONARY:
-			continue
-		var management: Dictionary = management_value
-		var contact_id: String = str(management.get("id", management.get("contact_id", "")))
-		profile_management_rows.add_child(_build_profile_table_row(
-			[
-				str(management.get("role_label", management.get("role", "Management"))),
-				str(management.get("display_name", "")),
-				_network_state_for_contact(network_snapshot, contact_id).capitalize()
-			],
-			[140.0, 220.0, 130.0],
-			false,
-			[],
-			_profile_management_capture_payload(management, _network_state_for_contact(network_snapshot, contact_id))
-		))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_profile_management_table(snapshot)
+	stock_controller._sync_root_refs()
 func _build_profile_table_row(
 	cells: Array,
 	widths: Array,
@@ -14414,519 +8220,212 @@ func _build_profile_table_row(
 	right_aligned_columns: Array = [],
 	capture_payload: Dictionary = {}
 ) -> Control:
-	var row := HBoxContainer.new()
-	row.name = "ProfileTableHeaderRow" if header else "ProfileTableRow"
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 10)
-	if not capture_payload.is_empty():
-		row.mouse_filter = Control.MOUSE_FILTER_STOP
-		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		row.tooltip_text = "Click to open research actions."
-		row.gui_input.connect(_on_profile_capture_row_gui_input.bind(capture_payload.duplicate(true)))
-	for index in range(cells.size()):
-		var width: float = float(widths[index]) if index < widths.size() else 90.0
-		var alignment: HorizontalAlignment = HORIZONTAL_ALIGNMENT_RIGHT if right_aligned_columns.has(index) else HORIZONTAL_ALIGNMENT_LEFT
-		var color: Color = COLOR_STOCKBOT_AMBER if header else (COLOR_STOCKBOT_MUTED if index == 0 else COLOR_STOCKBOT_TEXT)
-		var expand: bool = index == 0
-		var cell: Label = _build_table_cell(str(cells[index]), width, color, expand, alignment)
-		if not capture_payload.is_empty():
-			cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(cell)
-	return row
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Control = stock_controller._build_profile_table_row(cells, widths, header, right_aligned_columns, capture_payload)
+	stock_controller._sync_root_refs()
+	return result
 func _on_profile_background_gui_input(event: InputEvent) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var mouse_event := event as InputEventMouseButton
-	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
-		return
-	if selected_company_id.is_empty() or current_trade_snapshot.is_empty():
-		_show_toast("Pick a stock before capturing research.", false)
-		return
-	var body: String = str(profile_background_body_label.text).strip_edges() if profile_background_body_label != null else ""
-	if body.is_empty() or body.to_lower().begins_with("preparing"):
-		_show_toast("Company background is not ready yet.", false)
-		return
-	var ticker: String = str(current_trade_snapshot.get("ticker", selected_company_id)).strip_edges()
-	pending_capture_payloads["profile"] = {
-		"source_type": "company_profile",
-		"category": "fundamentals",
-		"company_id": selected_company_id,
-		"label": "Business description",
-		"value": ticker,
-		"detail": body,
-		"source_id": "profile_description_%s" % selected_company_id
-	}
-	_show_profile_capture_menu(mouse_event.global_position)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_profile_background_gui_input(event)
+	stock_controller._sync_root_refs()
 func _profile_shareholder_capture_payload(row: Dictionary, ownership_pct: float, shares_outstanding: float) -> Dictionary:
-	if selected_company_id.is_empty():
-		return {}
-	var holder_name: String = str(row.get("name", "")).strip_edges()
-	if holder_name.is_empty():
-		return {}
-	var label: String = "Free float" if holder_name.to_lower().find("public float") != -1 else "%s ownership" % holder_name
-	var percent_text: String = _format_percent_value(ownership_pct * 100.0)
-	var shares_text: String = _format_grouped_integer(int(round(shares_outstanding * ownership_pct)))
-	var role: String = str(row.get("role", "shareholder")).strip_edges()
-	var detail: String = "%s holds %s of shares outstanding (%s share(s))." % [
-		holder_name,
-		percent_text,
-		shares_text
-	]
-	if not role.is_empty():
-		detail += " Public role: %s." % role
-	if holder_name.to_lower().find("public float") != -1:
-		detail += " Free float shapes liquidity, crowding, and how easily larger orders can move the tape."
-	return {
-		"source_type": "company_profile",
-		"category": "ownership",
-		"company_id": selected_company_id,
-		"label": label,
-		"value": percent_text,
-		"detail": detail,
-		"source_id": "profile_shareholder_%s_%s" % [selected_company_id, _node_token(holder_name)]
-	}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._profile_shareholder_capture_payload(row, ownership_pct, shares_outstanding)
+	stock_controller._sync_root_refs()
+	return result
 func _profile_management_capture_payload(management: Dictionary, network_state: String) -> Dictionary:
-	if selected_company_id.is_empty():
-		return {}
-	var display_name: String = str(management.get("display_name", "")).strip_edges()
-	if display_name.is_empty():
-		return {}
-	var role_label: String = str(management.get("role_label", management.get("role", "Management"))).strip_edges()
-	if role_label.is_empty():
-		role_label = "Management"
-	var intro: String = str(management.get("intro", "")).strip_edges()
-	var tone: String = str(management.get("tone", "")).strip_edges()
-	var reliability: float = float(management.get("reliability", 0.0))
-	var detail_parts: Array = []
-	if not intro.is_empty():
-		detail_parts.append(intro)
-	if not tone.is_empty():
-		detail_parts.append("Public tone: %s." % tone)
-	if reliability > 0.0:
-		var track_record_label: String = "strong" if reliability >= 0.72 else ("mixed" if reliability >= 0.54 else "limited")
-		detail_parts.append("Public track record: %s." % track_record_label)
-	if not network_state.strip_edges().is_empty():
-		detail_parts.append("Contact status: %s." % network_state.capitalize())
-	return {
-		"source_type": "company_profile",
-		"category": "management",
-		"company_id": selected_company_id,
-		"label": "%s: %s" % [role_label, display_name],
-		"value": role_label,
-		"detail": " ".join(detail_parts),
-		"source_id": "profile_management_%s_%s" % [
-			selected_company_id,
-			_node_token(str(management.get("id", management.get("contact_id", display_name))))
-		]
-	}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._profile_management_capture_payload(management, network_state)
+	stock_controller._sync_root_refs()
+	return result
 func _on_profile_capture_row_gui_input(event: InputEvent, capture_payload: Dictionary) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var mouse_event := event as InputEventMouseButton
-	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
-		return
-	if capture_payload.is_empty():
-		return
-	pending_capture_payloads["profile"] = capture_payload.duplicate(true)
-	_show_profile_capture_menu(mouse_event.global_position)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_profile_capture_row_gui_input(event, capture_payload)
+	stock_controller._sync_root_refs()
 func _show_profile_capture_menu(global_position: Vector2) -> void:
-	if profile_capture_menu == null:
-		profile_capture_menu = PopupMenu.new()
-		profile_capture_menu.name = "ProfileCaptureContextMenu"
-		profile_capture_menu.id_pressed.connect(_on_profile_capture_menu_id_pressed)
-		add_child(profile_capture_menu)
-	profile_capture_menu.clear()
-	profile_capture_menu.add_item("Add to Research Tray", 1)
-	profile_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
-	profile_capture_menu.popup()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._show_profile_capture_menu(global_position)
+	stock_controller._sync_root_refs()
 func _on_profile_capture_menu_id_pressed(id: int) -> void:
-	_commit_pending_capture("profile", id)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_profile_capture_menu_id_pressed(id)
+	stock_controller._sync_root_refs()
 func _build_profile_empty_row(message: String) -> Control:
-	var row_wrap := VBoxContainer.new()
-	var label := _build_profile_body_label(message, COLOR_MUTED)
-	row_wrap.add_child(label)
-	return row_wrap
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Control = stock_controller._build_profile_empty_row(message)
+	stock_controller._sync_root_refs()
+	return result
 func _build_profile_background_text(snapshot: Dictionary, detail_ready: bool) -> String:
-	if not detail_ready:
-		return "Preparing company background..."
-	var company_name: String = str(snapshot.get("name", "This company"))
-	var founded_year: int = int(snapshot.get("founded_year", 0))
-	var sector_name: String = str(snapshot.get("sector_name", "its sector"))
-	var archetype_label: String = str(snapshot.get("archetype_label", "listed company"))
-	var description: String = str(snapshot.get("profile_description", "")).strip_edges()
-	var intro: String = "%s is a %s listing in %s." % [company_name, archetype_label, sector_name]
-	if founded_year > 0:
-		intro = "%s was founded in %d and operates as a %s listing in %s." % [
-			company_name,
-			founded_year,
-			archetype_label,
-			sector_name
-		]
-	var scale_sentence: String = _profile_scale_sentence(snapshot)
-	var read_sentence: String = " %s" % _profile_operating_read(snapshot)
-	var footprint_sentence: String = _profile_footprint_sentence(snapshot)
-	var roadmap_sentence: String = _profile_roadmap_sentence(snapshot)
-	if description.is_empty():
-		return "%s%s%s%s%s" % [intro, scale_sentence, footprint_sentence, roadmap_sentence, read_sentence]
-	return "%s %s%s%s%s%s" % [intro, description, scale_sentence, footprint_sentence, roadmap_sentence, read_sentence]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._build_profile_background_text(snapshot, detail_ready)
+	stock_controller._sync_root_refs()
+	return result
 func _profile_scale_sentence(snapshot: Dictionary) -> String:
-	var employee_count: int = int(snapshot.get("employee_count", 0))
-	var profile_revenue: float = float(snapshot.get("profile_revenue", 0.0))
-	if employee_count > 0 and profile_revenue > 0.0:
-		return " It employs about %s people and generates roughly %s in annual revenue." % [
-			_format_grouped_integer(employee_count),
-			_format_compact_currency(profile_revenue)
-		]
-	if employee_count > 0:
-		return " It employs about %s people." % _format_grouped_integer(employee_count)
-	if profile_revenue > 0.0:
-		return " It generates roughly %s in annual revenue." % _format_compact_currency(profile_revenue)
-	return ""
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._profile_scale_sentence(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _profile_footprint_sentence(snapshot: Dictionary) -> String:
-	var location_profile: Dictionary = snapshot.get("location_profile", {})
-	if location_profile.is_empty():
-		return ""
-	var footprint: String = str(location_profile.get("public_footprint", "")).strip_edges()
-	if not footprint.is_empty():
-		return _profile_sentence_from_fragment(_profile_clean_footprint_phrase(footprint))
-	var hq_label: String = str(location_profile.get("hq_location_label", "")).strip_edges()
-	if hq_label.is_empty():
-		return ""
-	return " Based in %s." % hq_label
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._profile_footprint_sentence(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _profile_clean_footprint_phrase(footprint: String) -> String:
-	var phrase: String = footprint.strip_edges()
-	if phrase.begins_with("Headquartered in "):
-		phrase = "Based in %s" % phrase.substr("Headquartered in ".length())
-	phrase = phrase.replace(" with operating exposure around ", ", with operations around ")
-	phrase = phrase.replace(" with a focused Indonesian operating footprint", ", with a focused Indonesian operating footprint")
-	return phrase
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._profile_clean_footprint_phrase(footprint)
+	stock_controller._sync_root_refs()
+	return result
 func _profile_roadmap_sentence(snapshot: Dictionary) -> String:
-	var roadmap_profile: Dictionary = snapshot.get("roadmap_profile", {})
-	if roadmap_profile.is_empty():
-		return ""
-	var priority: String = str(roadmap_profile.get("public_priority", "")).strip_edges()
-	if priority.is_empty():
-		return ""
-	var detail: String = str(roadmap_profile.get("public_priority_detail", "")).strip_edges()
-	var phrase: String = _profile_clean_priority_phrase(detail if not detail.is_empty() else priority)
-	if phrase.is_empty():
-		return ""
-	return " Management is focused on %s." % phrase
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._profile_roadmap_sentence(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _profile_clean_priority_phrase(priority_text: String) -> String:
-	var phrase: String = priority_text.strip_edges()
-	if phrase.begins_with("Public roadmap focus:"):
-		phrase = phrase.substr("Public roadmap focus:".length()).strip_edges()
-	if phrase.ends_with("."):
-		phrase = phrase.substr(0, phrase.length() - 1).strip_edges()
-	phrase = phrase.replace(" tied to the company's Indonesian operating base", " across its Indonesian operating base")
-	phrase = phrase.replace(" tied to its Indonesian operating base", " across its Indonesian operating base")
-	return phrase
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._profile_clean_priority_phrase(priority_text)
+	stock_controller._sync_root_refs()
+	return result
 func _profile_sentence_from_fragment(fragment: String) -> String:
-	var sentence: String = fragment.strip_edges()
-	if sentence.is_empty():
-		return ""
-	if not sentence.ends_with(".") and not sentence.ends_with("!") and not sentence.ends_with("?"):
-		sentence += "."
-	return " %s" % sentence
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._profile_sentence_from_fragment(fragment)
+	stock_controller._sync_root_refs()
+	return result
 func _profile_operating_read(snapshot: Dictionary) -> String:
-	var quality: int = int(snapshot.get("quality_score", 0))
-	var growth: int = int(snapshot.get("growth_score", 0))
-	var risk: int = int(snapshot.get("risk_score", 0))
-	var execution_read: String = "the operating base still needs confirmation"
-	if quality >= 70:
-		execution_read = "the operating base looks durable"
-	elif quality >= 58:
-		execution_read = "the operating base looks serviceable"
-	elif quality <= 45:
-		execution_read = "the operating base looks fragile"
-	var expansion_read: String = "expansion signals look steady"
-	if growth >= 68:
-		expansion_read = "expansion signals look active"
-	elif growth <= 45:
-		expansion_read = "expansion signals look muted"
-	var uncertainty_read: String = "uncertainty should still be checked against filings and tape"
-	if risk >= 65:
-		uncertainty_read = "uncertainty demands tighter confirmation before sizing up"
-	elif risk <= 35:
-		uncertainty_read = "uncertainty looks relatively contained"
-	return "At a glance, %s, %s, and %s." % [
-		execution_read,
-		expansion_read,
-		uncertainty_read
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._profile_operating_read(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _clear_profile_container(container: Node) -> void:
-	for child in container.get_children():
-		container.remove_child(child)
-		child.queue_free()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._clear_profile_container(container)
+	stock_controller._sync_root_refs()
 func _refresh_profile_network_contact(_company_id: String) -> void:
-	profile_network_hint_label.text = ""
-	profile_network_hint_label.visible = false
-	profile_meet_contact_button.visible = false
-	profile_meet_contact_button.disabled = true
-	profile_meet_contact_button.text = "Meet Contact"
-	profile_meet_contact_button.set_meta("contact_id", "")
-	return
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_profile_network_contact(_company_id)
+	stock_controller._sync_root_refs()
 func _format_profile_management(snapshot: Dictionary) -> String:
-	if str(snapshot.get("detail_status", "ready")) != "ready":
-		return "Management: preparing company roster..."
-	var roster: Array = snapshot.get("management_roster", [])
-	if roster.is_empty():
-		return "Management: not generated for this company yet."
-	var network_snapshot: Dictionary = GameManager.get_network_snapshot()
-	var lines: Array = ["Management:"]
-	for management_value in roster:
-		if typeof(management_value) != TYPE_DICTIONARY:
-			continue
-		var management: Dictionary = management_value
-		var contact_id: String = str(management.get("id", management.get("contact_id", "")))
-		lines.append("%s: %s (%s)" % [
-			str(management.get("role_label", management.get("role", "Management"))),
-			str(management.get("display_name", "")),
-			_network_state_for_contact(network_snapshot, contact_id)
-		])
-	return "\n".join(lines)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_profile_management(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _format_profile_shareholders(snapshot: Dictionary) -> String:
-	var rows: Array = snapshot.get("shareholder_rows", [])
-	var player_ownership_pct: float = float(snapshot.get("ownership_pct", 0.0))
-	var lines: Array = ["Shareholders:"]
-	for row_value in rows:
-		var row: Dictionary = row_value
-		lines.append("%s: %s ownership (%s)" % [
-			str(row.get("name", "")),
-			_format_percent_value(float(row.get("ownership_pct", 0.0)) * 100.0),
-			str(row.get("role", "holder"))
-		])
-	if player_ownership_pct > 0.0 and not bool(snapshot.get("is_major_shareholder", false)):
-		lines.append("Player: %s ownership" % _format_percent_value(player_ownership_pct * 100.0))
-	return "\n".join(lines)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_profile_shareholders(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _broker_flow_has_rows(broker_flow: Dictionary) -> bool:
-	return (
-		not broker_flow.get("buy_brokers", []).is_empty() or
-		not broker_flow.get("sell_brokers", []).is_empty() or
-		not broker_flow.get("net_buy_brokers", []).is_empty() or
-		not broker_flow.get("net_sell_brokers", []).is_empty()
-	)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: bool = stock_controller._broker_flow_has_rows(broker_flow)
+	stock_controller._sync_root_refs()
+	return result
 func _trade_workspace_detail_snapshot_key(snapshot: Dictionary, financial_statement_snapshot: Dictionary) -> String:
-	if snapshot.is_empty():
-		return ""
-	var broker_flow: Dictionary = snapshot.get("broker_flow", {})
-	var financial_history: Array = snapshot.get("financial_history", [])
-	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
-	var buy_brokers: Array = broker_flow.get("buy_brokers", [])
-	var sell_brokers: Array = broker_flow.get("sell_brokers", [])
-	var net_buy_brokers: Array = broker_flow.get("net_buy_brokers", [])
-	var net_sell_brokers: Array = broker_flow.get("net_sell_brokers", [])
-	return "%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%s" % [
-		str(snapshot.get("id", "")),
-		str(snapshot.get("detail_status", "ready")),
-		RunState.day_index,
-		financial_history.size(),
-		quarterly_statements.size(),
-		buy_brokers.size(),
-		sell_brokers.size(),
-		net_buy_brokers.size() + net_sell_brokers.size(),
-		str(broker_flow.get("flow_tag", "")),
-		str(broker_flow.get("dominant_buy_broker_code", "")),
-		str(broker_flow.get("dominant_sell_broker_code", ""))
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._trade_workspace_detail_snapshot_key(snapshot, financial_statement_snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _trade_workspace_profile_snapshot_key(snapshot: Dictionary, financial_statement_snapshot: Dictionary) -> String:
-	if snapshot.is_empty():
-		return ""
-	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
-	var financial_history: Array = snapshot.get("financial_history", [])
-	var profile_tags: Array = snapshot.get("profile_tags", [])
-	var shareholder_rows: Array = snapshot.get("shareholder_rows", [])
-	var management_rows: Array = snapshot.get("management_roster", [])
-	var location_profile: Dictionary = snapshot.get("location_profile", {})
-	var roadmap_profile: Dictionary = snapshot.get("roadmap_profile", {})
-	return "%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%s" % [
-		str(snapshot.get("id", "")),
-		str(snapshot.get("detail_status", "ready")),
-		profile_tags.size(),
-		shareholder_rows.size(),
-		management_rows.size(),
-		str(snapshot.get("profile_description", "")).length(),
-		financial_history.size(),
-		quarterly_statements.size(),
-		str(location_profile.get("hq_location_id", "")),
-		str(roadmap_profile.get("primary_family_id", "")),
-		str(roadmap_profile.get("public_priority", "")).length()
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._trade_workspace_profile_snapshot_key(snapshot, financial_statement_snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _trade_workspace_financial_history_snapshot_key(snapshot: Dictionary) -> String:
-	if snapshot.is_empty():
-		return ""
-	var financial_history: Array = snapshot.get("financial_history", [])
-	var financials: Dictionary = snapshot.get("financials", {})
-	return "%s|%s|%d|%s|%s" % [
-		str(snapshot.get("id", "")),
-		str(snapshot.get("detail_status", "ready")),
-		financial_history.size(),
-		str(financials.get("history_start_year", "")),
-		str(financials.get("history_end_year", ""))
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._trade_workspace_financial_history_snapshot_key(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _trade_workspace_key_stats_snapshot_key(snapshot: Dictionary) -> String:
-	if snapshot.is_empty():
-		return ""
-	var financials: Dictionary = snapshot.get("financials", {})
-	return "%s|%s|%d|%s|%s|%s|%s|%s|%s|%s|%s" % [
-		str(snapshot.get("id", "")),
-		str(snapshot.get("detail_status", "ready")),
-		RunState.day_index,
-		str(snapshot.get("current_price", "")),
-		str(snapshot.get("previous_close", "")),
-		str(snapshot.get("daily_change_pct", "")),
-		str(financials.get("market_cap", "")),
-		str(financials.get("net_income", "")),
-		str(financials.get("revenue", "")),
-		str(financials.get("eps", "")),
-		selected_key_stats_metric
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._trade_workspace_key_stats_snapshot_key(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _broker_range_flow_for_snapshot(snapshot: Dictionary) -> Dictionary:
-	if snapshot.is_empty():
-		return {}
-	var company_id: String = str(snapshot.get("id", ""))
-	if company_id.is_empty():
-		return {}
-	var range_flow: Dictionary = GameManager.get_company_broker_flow_snapshot(company_id, selected_broker_range_id)
-	if range_flow.is_empty():
-		return snapshot.get("broker_flow", {}).duplicate(true) if typeof(snapshot.get("broker_flow", {})) == TYPE_DICTIONARY else {}
-	return range_flow
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._broker_range_flow_for_snapshot(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _trade_workspace_broker_snapshot_key(snapshot: Dictionary) -> String:
-	if snapshot.is_empty():
-		return ""
-	var broker_flow: Dictionary = _broker_range_flow_for_snapshot(snapshot)
-	return "%s|%d|%s|%s|%s|%s|%s|%s|%s|%s|%d|%s|%s" % [
-		str(snapshot.get("id", "")),
-		RunState.day_index,
-		str(broker_net_mode),
-		selected_broker_range_id,
-		str(broker_flow.get("flow_tag", "")),
-		str(broker_flow.get("action_meter_score", "")),
-		str(broker_flow.get("dominant_buy_broker_code", "")),
-		str(broker_flow.get("dominant_sell_broker_code", "")),
-		_broker_rows_signature(broker_flow.get("net_buy_brokers", []) if broker_net_mode else broker_flow.get("buy_brokers", [])),
-		_broker_rows_signature(broker_flow.get("net_sell_brokers", []) if broker_net_mode else broker_flow.get("sell_brokers", [])),
-		int(broker_flow.get("range_day_count", 0)),
-		str(broker_flow.get("history_mode", "")),
-		str(broker_flow.get("broker_trade_value", ""))
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._trade_workspace_broker_snapshot_key(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _trade_workspace_statement_snapshot_key(snapshot: Dictionary, financial_statement_snapshot: Dictionary) -> String:
-	if snapshot.is_empty():
-		return ""
-	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
-	var selected_period: Dictionary = _selected_statement_period(financial_statement_snapshot) if not financial_statement_snapshot.is_empty() else {}
-	return "%s|%s|%d|%d|%s" % [
-		str(snapshot.get("id", "")),
-		str(snapshot.get("detail_status", "ready")),
-		quarterly_statements.size(),
-		selected_financial_statement_index,
-		str(selected_period.get("statement_period_label", selected_period.get("period_label", "")))
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._trade_workspace_statement_snapshot_key(snapshot, financial_statement_snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _trade_workspace_corporate_action_snapshot_key(timeline_snapshot: Dictionary) -> String:
-	if timeline_snapshot.is_empty():
-		return ""
-	var rows: Array = timeline_snapshot.get("rows", [])
-	var first_row_id: String = ""
-	var last_row_id: String = ""
-	if not rows.is_empty() and typeof(rows.front()) == TYPE_DICTIONARY:
-		var first_row: Dictionary = rows.front()
-		first_row_id = str(first_row.get("id", first_row.get("source_id", "")))
-	if not rows.is_empty() and typeof(rows.back()) == TYPE_DICTIONARY:
-		var last_row: Dictionary = rows.back()
-		last_row_id = str(last_row.get("id", last_row.get("source_id", "")))
-	return "%s|%d|%d|%s|%s|%s" % [
-		str(timeline_snapshot.get("company_id", "")),
-		RunState.day_index,
-		rows.size(),
-		first_row_id,
-		last_row_id,
-		corporate_action_filter_id
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._trade_workspace_corporate_action_snapshot_key(timeline_snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _broker_rows_signature(rows: Array) -> String:
-	var total_value: float = 0.0
-	var total_lots: float = 0.0
-	var first_code: String = ""
-	var last_code: String = ""
-	for row_index in range(rows.size()):
-		if typeof(rows[row_index]) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = rows[row_index]
-		if first_code.is_empty():
-			first_code = str(row.get("code", ""))
-		last_code = str(row.get("code", last_code))
-		total_value += float(row.get("value", 0.0))
-		total_lots += float(row.get("lots", 0.0))
-	return "%d|%s|%s|%.0f|%.0f" % [rows.size(), first_code, last_code, total_value, total_lots]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._broker_rows_signature(rows)
+	stock_controller._sync_root_refs()
+	return result
 func _network_state_for_contact(network_snapshot: Dictionary, contact_id: String) -> String:
-	for contact_value in network_snapshot.get("contacts", []):
-		var contact: Dictionary = contact_value
-		if str(contact.get("id", "")) == contact_id and bool(contact.get("met", false)):
-			return "met"
-	for discovery_value in network_snapshot.get("discoveries", []):
-		var discovery: Dictionary = discovery_value
-		if str(discovery.get("id", "")) == contact_id:
-			return "discovered"
-	return "public"
+	_ensure_network_controller()
+	return network_controller.network_state_for_contact(network_snapshot, contact_id)
 
 
 func _refresh_trade_history() -> void:
@@ -15131,18 +8630,8 @@ func _on_thesis_app_pressed() -> void:
 
 
 func _on_company_request_pressed() -> void:
-	var company_id: String = _selected_company_management_company_id()
-	var action_id: String = _selected_company_management_action_id()
-	var result: Dictionary = GameManager.request_governance_control_action(company_id, action_id)
-	_show_toast(str(result.get("message", "Could not set company agenda.")), bool(result.get("success", false)))
-	_refresh_company()
-	_refresh_desktop()
-	if not bool(result.get("success", false)):
-		return
-	_refresh_dashboard()
-	_refresh_news()
-	_refresh_network()
-	_refresh_trade_workspace()
+	_ensure_company_controller()
+	company_controller.on_request_pressed()
 
 
 func _on_upgrades_changed() -> void:
@@ -15168,203 +8657,80 @@ func _on_upgrades_changed() -> void:
 
 
 func _on_academy_category_pressed(category_id: String) -> void:
-	selected_academy_category_id = category_id
-	selected_academy_section_id = ""
-	_refresh_academy()
-	_mark_guide_academy_lesson_chosen()
+	_ensure_academy_controller()
+	academy_controller.on_category_pressed(category_id)
 
 
 func _on_academy_section_selected(index: int) -> void:
-	var metadata: Variant = academy_section_list.get_item_metadata(index)
-	if typeof(metadata) != TYPE_DICTIONARY:
-		return
-	var section: Dictionary = metadata
-	if bool(section.get("locked", false)):
-		return
-	selected_academy_section_id = str(section.get("id", ""))
-	_refresh_academy()
-	_mark_guide_academy_lesson_chosen()
+	_ensure_academy_controller()
+	academy_controller.on_section_selected(index)
 
 
 func _on_academy_section_tab_pressed(section_id: String) -> void:
-	if section_id.is_empty():
-		return
-	selected_academy_section_id = section_id
-	_refresh_academy()
-	_mark_guide_academy_lesson_chosen()
+	_ensure_academy_controller()
+	academy_controller.on_section_tab_pressed(section_id)
 
 
 func _on_academy_mark_read_pressed() -> void:
-	var result: Dictionary = GameManager.mark_academy_section_read(selected_academy_category_id, selected_academy_section_id)
-	_show_toast(str(result.get("message", "Academy updated.")), bool(result.get("success", false)))
-	_refresh_academy()
-	_mark_guide_academy_read_action()
+	_ensure_academy_controller()
+	academy_controller.on_mark_read_pressed()
 
 
 func _on_academy_next_pressed() -> void:
-	var next_section_id: String = _next_academy_section_id()
-	if next_section_id.is_empty():
-		return
-	selected_academy_section_id = next_section_id
-	_refresh_academy()
-	_mark_guide_academy_lesson_chosen()
+	_ensure_academy_controller()
+	academy_controller.on_next_pressed()
 
 
 func _on_academy_inline_check_pressed(section_id: String, check_id: String, answer_id: String) -> void:
-	var result: Dictionary = GameManager.submit_academy_inline_check(selected_academy_category_id, section_id, check_id, answer_id)
-	_show_toast(str(result.get("feedback", result.get("message", "Answer saved."))), bool(result.get("correct", false)))
-	_refresh_academy()
+	_ensure_academy_controller()
+	academy_controller.on_inline_check_pressed(section_id, check_id, answer_id)
 
 
 func _on_academy_quiz_submit_pressed() -> void:
-	var answers: Dictionary = {}
-	for question_id_value in academy_quiz_option_buttons.keys():
-		var question_id: String = str(question_id_value)
-		var option_button: OptionButton = academy_quiz_option_buttons[question_id]
-		if option_button.selected >= 0:
-			answers[question_id] = str(option_button.get_item_metadata(option_button.selected))
-	var result: Dictionary = GameManager.submit_academy_quiz(selected_academy_category_id, answers)
-	if not bool(result.get("success", false)):
-		_show_toast(str(result.get("message", "Quiz could not be submitted.")), false)
-		_refresh_academy()
-		return
-	var result_badge: Dictionary = result.get("badge", current_academy_snapshot.get("badge", {}))
-	var badge_label: String = str(result_badge.get("label", _academy_current_badge_label()))
-	var message: String = "Quiz score %d%%. %s" % [
-		int(result.get("score_percent", 0)),
-		"%s earned." % badge_label if bool(result.get("passed", false)) else "Review and try again."
-	]
-	_show_toast(message, bool(result.get("passed", false)))
-	_refresh_academy()
-	_show_academy_quiz_feedback(result.get("feedback", []), bool(result.get("passed", false)), int(result.get("score_percent", 0)))
+	_ensure_academy_controller()
+	academy_controller.on_quiz_submit_pressed()
 
 
 func _show_academy_quiz_feedback(feedback_rows: Array, passed: bool, score_percent: int) -> void:
-	_clear_container_children(academy_lesson_content_vbox)
-	academy_lesson_content_vbox.add_child(_build_academy_text_block(
-		"Quiz Result",
-		"Score: %d%%. %s" % [score_percent, "Passed. %s is now earned." % _academy_current_badge_label() if passed else "Not yet. Review the feedback and retry."]
-	))
-	for feedback_value in feedback_rows:
-		var feedback: Dictionary = feedback_value
-		academy_lesson_content_vbox.add_child(_build_academy_text_block(
-			"%s - %s" % [str(feedback.get("prompt", "Question")), "Correct" if bool(feedback.get("correct", false)) else "Review"],
-			str(feedback.get("feedback", ""))
-		))
+	_ensure_academy_controller()
+	academy_controller.show_quiz_feedback(feedback_rows, passed, score_percent)
 
 
 func _on_academy_glossary_search_changed(_new_text: String) -> void:
-	_refresh_academy_glossary_results()
-
-
-func _on_upgrade_purchase_pressed(track_id: String) -> void:
-	_ensure_upgrade_purchase_dialog()
-	var snapshot: Dictionary = GameManager.get_upgrade_shop_snapshot()
-	var track: Dictionary = _upgrade_track_from_snapshot(snapshot, track_id)
-	if track.is_empty():
-		_show_toast("Upgrade track not found.", false)
-		_refresh_upgrades()
-		return
-	if bool(track.get("maxed", false)):
-		_show_toast("%s is already tier 1." % str(track.get("label", "Upgrade")), false)
-		_refresh_upgrades()
-		return
-	if not bool(track.get("can_purchase", false)):
-		_show_toast(
-			"Need %s for %s." % [
-				_format_currency(float(track.get("next_cost", 0.0))),
-				str(track.get("label", "this upgrade"))
-			],
-			false
-		)
-		_refresh_upgrades()
-		return
-
-	pending_upgrade_track_id = track_id
-	var cost: float = float(track.get("next_cost", 0.0))
-	var cash: float = float(snapshot.get("cash", 0.0))
-	upgrade_purchase_body_label.text = "Buy %s Tier %d?\n\nCurrent: Tier %d - %s\nNext: Tier %d - %s\nCost: %s\nCash after purchase: %s" % [
-		str(track.get("label", "Upgrade")),
-		int(track.get("next_tier", 0)),
-		int(track.get("tier", 4)),
-		str(track.get("effect_label", "")),
-		int(track.get("next_tier", 0)),
-		str(track.get("next_effect_label", "")),
-		_format_currency(cost),
-		_format_currency(cash - cost)
-	]
-	_style_upgrade_purchase_dialog()
-	upgrade_purchase_dialog.popup_centered(Vector2i(560, 260))
-
-
-func _on_upgrade_purchase_confirmed() -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	if pending_upgrade_track_id.is_empty():
-		_show_toast("No upgrade selected.", false)
-		return
-
-	var track_id: String = pending_upgrade_track_id
-	pending_upgrade_track_id = ""
-	var result: Dictionary = GameManager.purchase_upgrade(track_id)
-	if upgrade_purchase_dialog != null:
-		upgrade_purchase_dialog.hide()
-	_show_toast(str(result.get("message", "Upgrade updated.")), bool(result.get("success", false)))
-	_log_perf_elapsed("_on_upgrade_purchase_confirmed", started_at_usec)
+	_ensure_academy_controller()
+	academy_controller.on_glossary_search_changed(_new_text)
 
 
 func _on_news_outlet_pressed(outlet_id: String) -> void:
-	selected_news_outlet_id = outlet_id
-	selected_news_archive_year = 0
-	selected_news_archive_month = 0
-	selected_news_article_id = ""
-	_rebuild_news_outlet_buttons(current_news_snapshot.get("outlets", []))
-	_refresh_news_archive_filters()
-	_refresh_news_article_list()
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._on_news_outlet_pressed(outlet_id)
+	news_controller._sync_root_refs()
 
 func _on_news_article_selected(index: int) -> void:
-	var articles: Array = _current_news_archive_article_summaries()
-	if index < 0 or index >= articles.size():
-		return
-	var previous_article_id: String = selected_news_article_id
-	selected_news_article_id = str(articles[index].get("id", ""))
-	if _news_article_card_exists(selected_news_article_id):
-		_restyle_news_article_cards(previous_article_id, selected_news_article_id)
-	else:
-		_rebuild_news_article_cards(articles, false)
-	_show_news_article(GameManager.get_news_archive_article(selected_news_article_id))
-	_record_steam_news_article_read(selected_news_article_id)
-	_mark_guide_research_interaction()
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._on_news_article_selected(index)
+	news_controller._sync_root_refs()
 
 func _on_news_meet_contact_pressed() -> void:
-	var contact_id: String = str(news_meet_contact_button.get_meta("contact_id", ""))
-	var account_id: String = str(news_meet_contact_button.get_meta("twooter_account_id", ""))
-	_open_social_account_from_news(account_id, contact_id)
-	_mark_guide_research_interaction()
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._on_news_meet_contact_pressed()
+	news_controller._sync_root_refs()
 
 func _open_social_account_from_news(account_id: String, contact_id: String = "") -> void:
-	if account_id.is_empty():
-		_show_toast("No Twooter handle is available for that source yet.", false)
-		return
-	selected_social_view_id = "home"
-	selected_social_account_id = account_id
-	selected_social_feed_filter_id = SOCIAL_FEED_FILTER_ALL
-	_set_active_app(APP_ID_SOCIAL)
-	var account: Dictionary = _social_account_from_snapshot(account_id)
-	var handle: String = str(account.get("handle", "")).strip_edges()
-	if handle.is_empty() and not contact_id.is_empty():
-		handle = str(news_meet_contact_button.get_meta("twooter_handle", "")).strip_edges()
-	_show_toast("Opened %s on Twooter." % (handle if not handle.is_empty() else "source"), true)
-
-
+	_ensure_social_controller()
+	social_controller.open_account_from_news(account_id, contact_id)
 func _on_news_open_meeting_pressed() -> void:
-	if news_open_meeting_button == null:
-		return
-	_open_corporate_meeting_modal(str(news_open_meeting_button.get_meta("meeting_id", "")))
-	_mark_guide_research_interaction()
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._on_news_open_meeting_pressed()
+	news_controller._sync_root_refs()
 
 func _on_profile_meet_contact_pressed() -> void:
 	var contact_id: String = str(profile_meet_contact_button.get_meta("contact_id", ""))
@@ -15372,105 +8738,58 @@ func _on_profile_meet_contact_pressed() -> void:
 
 
 func _on_network_contact_selected(index: int) -> void:
-	var metadata: Variant = network_contacts_list.get_item_metadata(index)
-	if typeof(metadata) != TYPE_DICTIONARY:
-		return
-	var contact: Dictionary = metadata
-	selected_network_contact_id = str(contact.get("id", ""))
-	selected_network_journal_id = ""
-	if network_journal_list != null:
-		network_journal_list.deselect_all()
-	_show_network_journal_detail({})
-	_show_network_contact(contact)
-	_rebuild_network_journal_list()
+	_ensure_network_controller()
+	network_controller.on_contact_selected(index)
 
 
 func _on_network_request_selected(index: int) -> void:
-	var metadata: Variant = network_requests_list.get_item_metadata(index)
-	if typeof(metadata) != TYPE_DICTIONARY:
-		return
-	var request: Dictionary = metadata
-	selected_network_journal_id = ""
-	if network_journal_list != null:
-		network_journal_list.deselect_all()
-	_show_network_journal_detail(_network_request_detail_row(request))
+	_ensure_network_controller()
+	network_controller.on_request_selected(index)
 
 
 func _on_network_journal_selected(index: int) -> void:
-	if network_journal_list == null:
-		return
-	var metadata: Variant = network_journal_list.get_item_metadata(index)
-	if typeof(metadata) != TYPE_DICTIONARY:
-		return
-	var row: Dictionary = metadata
-	selected_network_journal_id = str(row.get("id", ""))
-	_show_network_journal_detail(row)
+	_ensure_network_controller()
+	network_controller.on_journal_selected(index)
 
 
 func _on_network_journal_filter_pressed(filter_id: String) -> void:
-	selected_network_journal_filter = filter_id
-	selected_network_journal_id = ""
-	_refresh_network_journal_filter_buttons()
-	_rebuild_network_journal_list()
+	_ensure_network_controller()
+	network_controller.on_journal_filter_pressed(filter_id)
 
 
 func _on_network_meet_pressed() -> void:
-	var contact: Dictionary = _current_network_contact()
-	_meet_contact_from_context(str(contact.get("id", "")), {"source_type": "network"})
+	_ensure_network_controller()
+	network_controller.on_meet_pressed()
 
 
 func _on_network_tip_pressed() -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	var contact: Dictionary = _current_network_contact()
-	var company_id: String = _network_contact_target_company(contact)
-	var result: Dictionary = GameManager.request_contact_tip(str(contact.get("id", "")), company_id)
-	_show_toast(str(result.get("message", "Network tip updated.")), bool(result.get("success", false)))
-	_log_perf_elapsed("_on_network_tip_pressed", started_at_usec)
+	_ensure_network_controller()
+	network_controller.on_tip_pressed()
 
 
 func _on_network_request_pressed() -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	var contact: Dictionary = _current_network_contact()
-	var company_id: String = _network_contact_target_company(contact)
-	var result: Dictionary = GameManager.accept_contact_request(str(contact.get("id", "")), company_id)
-	_show_toast(str(result.get("message", "Network request updated.")), bool(result.get("success", false)))
-	_log_perf_elapsed("_on_network_request_pressed", started_at_usec)
+	_ensure_network_controller()
+	network_controller.on_request_pressed()
 
 
 func _on_network_referral_pressed() -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	var contact: Dictionary = _current_network_contact()
-	var company_id: String = selected_company_id
-	if company_id.is_empty():
-		company_id = _network_contact_target_company(contact)
-	var result: Dictionary = GameManager.request_contact_referral(str(contact.get("id", "")), company_id)
-	_show_toast(str(result.get("message", "Network referral updated.")), bool(result.get("success", false)))
-	_log_perf_elapsed("_on_network_referral_pressed", started_at_usec)
+	_ensure_network_controller()
+	network_controller.on_referral_pressed()
 
 
 func _on_network_followup_selected(menu_id: int) -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	var followup_id: String = str(NETWORK_FOLLOWUP_ACTIONS.get(menu_id, ""))
-	if followup_id.is_empty():
-		return
-	var contact: Dictionary = _current_network_contact()
-	var result: Dictionary = GameManager.follow_up_contact_tip(str(contact.get("id", "")), followup_id)
-	_show_toast(str(result.get("message", "Network follow-up updated.")), bool(result.get("success", false)))
-	_log_perf_elapsed("_on_network_followup_selected", started_at_usec)
+	_ensure_network_controller()
+	network_controller.on_followup_selected(menu_id)
 
 
 func _on_network_source_check_pressed() -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	var contact: Dictionary = _current_network_contact()
-	var result: Dictionary = GameManager.ask_contact_source_check(str(contact.get("id", "")))
-	_show_toast(str(result.get("message", "Source check updated.")), bool(result.get("success", false)))
-	_log_perf_elapsed("_on_network_source_check_pressed", started_at_usec)
+	_ensure_network_controller()
+	network_controller.on_source_check_pressed()
 
 
 func _on_network_open_meeting_pressed() -> void:
-	if network_open_meeting_button == null:
-		return
-	_open_corporate_meeting_modal(str(network_open_meeting_button.get_meta("meeting_id", "")))
+	_ensure_network_controller()
+	network_controller.on_open_meeting_pressed()
 
 
 func _open_corporate_meeting_modal(meeting_id: String) -> void:
@@ -15655,70 +8974,36 @@ func _meet_contact_from_context(contact_id: String, source_context: Dictionary) 
 
 
 func _network_contact_target_company(contact: Dictionary) -> String:
-	var target_company_id: String = str(contact.get("target_company_id", ""))
-	if not target_company_id.is_empty():
-		return target_company_id
-	var affiliated_company_id: String = str(contact.get("affiliated_company_id", contact.get("company_id", "")))
-	if not affiliated_company_id.is_empty():
-		return affiliated_company_id
-	return selected_company_id
+	_ensure_network_controller()
+	return network_controller.network_contact_target_company(contact)
 
 
 func _on_news_archive_year_selected(index: int) -> void:
-	if index < 0 or index >= news_archive_year_option.item_count:
-		return
-	selected_news_archive_year = int(news_archive_year_option.get_item_text(index))
-	selected_news_archive_month = 0
-	selected_news_article_id = ""
-	_refresh_news_archive_month_options()
-	_refresh_news_article_list()
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._on_news_archive_year_selected(index)
+	news_controller._sync_root_refs()
 
 func _on_news_archive_month_selected(index: int) -> void:
-	if index < 0 or index >= news_archive_month_option.item_count:
-		return
-	selected_news_archive_month = clamp(index + 1, 1, 12)
-	var months: Array = GameManager.get_news_archive_months(selected_news_outlet_id, selected_news_archive_year)
-	if index < months.size():
-		selected_news_archive_month = int(months[index])
-	selected_news_article_id = ""
-	_refresh_news_article_list()
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._on_news_archive_month_selected(index)
+	news_controller._sync_root_refs()
 
 func _on_stock_list_tab_changed(_tab_index: int) -> void:
-	if suppress_stock_list_tab_refresh:
-		suppress_stock_list_tab_refresh = false
-		return
-	var started_at_usec: int = Time.get_ticks_usec()
-	var previous_selected_company_id: String = selected_company_id
-	_sync_selected_company_with_active_stock_list()
-	if stock_list_tabs.current_tab == STOCK_LIST_TAB_ALL_STOCKS and all_stock_rows_dirty:
-		_refresh_all_stock_rows(_get_company_rows_cached(), _build_watchlist_lookup())
-		all_stock_rows_dirty = false
-	elif stock_list_tabs.current_tab == STOCK_LIST_TAB_PORTFOLIO and portfolio_stock_rows_dirty:
-		_refresh_portfolio_stock_rows(GameManager.get_portfolio_snapshot().get("holdings", []), _get_company_row_lookup_cached())
-		portfolio_stock_rows_dirty = false
-	_refresh_company_selection_state()
-	if selected_company_id != previous_selected_company_id:
-		_refresh_trade_workspace()
-		_refresh_dashboard()
-		_refresh_desktop()
-		if debug_overlay.visible:
-			_refresh_debug_overlay()
-		_start_background_company_detail_hydration()
-	_log_perf_elapsed("_on_stock_list_tab_changed", started_at_usec)
-	_mark_guide_watchlist_all_stock_seen()
-	_refresh_ftue_progress()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_stock_list_tab_changed(_tab_index)
+	stock_controller._sync_root_refs()
 func _on_work_tab_changed(tab_index: int) -> void:
-	_refresh_visible_trade_workspace_tab()
-	_record_steam_stockbot_tab_view(_current_work_tab_title())
-	_mark_guide_fundamental_tab_seen(tab_index)
-	_refresh_ftue_progress()
-	_refresh_first_hour_guide_progress()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_work_tab_changed(tab_index)
+	stock_controller._sync_root_refs()
 func _on_guide_chart_interaction(_range_id = "") -> void:
 	var snapshot: Dictionary = GameManager.get_guide_snapshot()
 	if str(snapshot.get("active_flow_id", "")) == RunState.GUIDE_FLOW_SYSTEM.FLOW_TECHNICAL:
@@ -15758,123 +9043,68 @@ func _on_thesis_guide_company_selected(_index: int) -> void:
 
 
 func _bind_life_guide_tabs() -> void:
-	if life_window == null:
-		return
-	_style_life_news_tabs()
-	var tabs: TabContainer = life_window.find_child("LifeTabs", true, false) as TabContainer
-	if tabs != null and not tabs.tab_changed.is_connected(_on_life_guide_tab_changed):
-		tabs.tab_changed.connect(_on_life_guide_tab_changed)
-	var housing_option: OptionButton = life_window.find_child("LifeHousingOption", true, false) as OptionButton
-	if housing_option != null and not housing_option.item_selected.is_connected(_on_life_guide_plan_changed):
-		housing_option.item_selected.connect(_on_life_guide_plan_changed)
-	var lifestyle_option: OptionButton = life_window.find_child("LifeLifestyleOption", true, false) as OptionButton
-	if lifestyle_option != null and not lifestyle_option.item_selected.is_connected(_on_life_guide_plan_changed):
-		lifestyle_option.item_selected.connect(_on_life_guide_plan_changed)
-	var basics_slider: HSlider = life_window.find_child("LifeBasicsSlider", true, false) as HSlider
-	if basics_slider != null and not basics_slider.value_changed.is_connected(_on_life_guide_plan_changed):
-		basics_slider.value_changed.connect(_on_life_guide_plan_changed)
-	var update_button: Button = life_window.find_child("LifeUpdatePlanButton", true, false) as Button
-	if update_button != null and not update_button.pressed.is_connected(_mark_guide_life_plan_reviewed):
-		update_button.pressed.connect(_mark_guide_life_plan_reviewed)
+	_ensure_life_controller()
+	life_controller.bind_guide_tabs()
 
 
 func _on_life_guide_tab_changed(_tab_index: int) -> void:
-	var snapshot: Dictionary = GameManager.get_guide_snapshot()
-	if str(snapshot.get("active_flow_id", "")) == RunState.GUIDE_FLOW_SYSTEM.FLOW_LIFE_FINANCE:
-		var tabs: TabContainer = null
-		if life_window != null:
-			tabs = life_window.find_child("LifeTabs", true, false) as TabContainer
-		if tabs != null and _tab_index >= 0 and _tab_index < tabs.get_tab_count() and tabs.get_tab_title(_tab_index) == "Finance":
-			guide_life_finance_tab_seen = true
-	_refresh_ftue_progress()
+	_ensure_life_controller()
+	life_controller.on_guide_tab_changed(_tab_index)
 
 
 func _on_life_guide_plan_changed(_value = 0) -> void:
-	_mark_guide_life_plan_reviewed()
+	_ensure_life_controller()
+	life_controller.on_guide_plan_changed(_value)
 
 
 func _on_add_watchlist_pressed() -> void:
-	if not RunState.has_active_run():
-		return
-
-	_populate_watchlist_picker()
-	watchlist_picker_dialog.popup_centered(Vector2i(720, 520))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_add_watchlist_pressed()
+	stock_controller._sync_root_refs()
 func _on_remove_watchlist_pressed() -> void:
-	if selected_company_id.is_empty():
-		_show_toast("Pick a watchlist stock first.", false)
-		return
-
-	var removed_company_id: String = selected_company_id
-	var result: Dictionary = GameManager.remove_company_from_watchlist(removed_company_id)
-	_show_toast(str(result.get("message", "Watchlist updated.")), bool(result.get("success", false)))
-	if not bool(result.get("success", false)):
-		return
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_remove_watchlist_pressed()
+	stock_controller._sync_root_refs()
 func _on_watchlist_picker_confirmed() -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	if watchlist_picker_list == null:
-		return
-
-	var selected_items: PackedInt32Array = watchlist_picker_list.get_selected_items()
-	if selected_items.is_empty():
-		_show_toast("Pick a stock first.", false)
-		return
-
-	var selected_index: int = int(selected_items[0])
-	if selected_index < 0 or selected_index >= watchlist_picker_company_ids.size():
-		_show_toast("Pick a valid stock first.", false)
-		return
-
-	var company_id: String = str(watchlist_picker_company_ids[selected_index])
-	_queue_watchlist_refresh_override(company_id, STOCK_LIST_TAB_WATCHLIST)
-	var result: Dictionary = GameManager.add_company_to_watchlist(company_id)
-	if not bool(result.get("success", false)):
-		_clear_watchlist_refresh_override()
-	_show_toast(str(result.get("message", "Watchlist updated.")), bool(result.get("success", false)))
-	if bool(result.get("success", false)):
-		if watchlist_picker_dialog != null:
-			watchlist_picker_dialog.hide()
-		_refresh_first_hour_guide_progress()
-	_log_perf_elapsed("_on_watchlist_picker_confirmed", started_at_usec)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_watchlist_picker_confirmed()
+	stock_controller._sync_root_refs()
 func _on_watchlist_picker_item_activated(index: int) -> void:
-	if watchlist_picker_list == null:
-		return
-	watchlist_picker_list.select(index)
-	_on_watchlist_picker_confirmed()
-	if watchlist_picker_dialog != null:
-		watchlist_picker_dialog.hide()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_watchlist_picker_item_activated(index)
+	stock_controller._sync_root_refs()
 func _on_all_stock_selected(company_id: String) -> void:
-	selected_company_id = company_id
-	_refresh_after_company_selection()
-	_mark_guide_watchlist_stock_selected()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_all_stock_selected(company_id)
+	stock_controller._sync_root_refs()
 func _on_portfolio_stock_selected(company_id: String) -> void:
-	selected_company_id = company_id
-	_refresh_after_company_selection()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_portfolio_stock_selected(company_id)
+	stock_controller._sync_root_refs()
 func _on_add_to_watchlist_pressed(company_id: String) -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	var result: Dictionary = GameManager.add_company_to_watchlist(company_id)
-	_show_toast(str(result.get("message", "Watchlist updated.")), bool(result.get("success", false)))
-	if bool(result.get("success", false)):
-		_refresh_first_hour_guide_progress()
-	_log_perf_elapsed("_on_add_to_watchlist_pressed", started_at_usec)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_add_to_watchlist_pressed(company_id)
+	stock_controller._sync_root_refs()
 func _on_all_stock_search_text_changed(_new_text: String) -> void:
-	_refresh_company_list(_get_company_rows_cached(), _get_company_row_lookup_cached(), true, false)
-	all_stock_rows_dirty = false
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_all_stock_search_text_changed(_new_text)
+	stock_controller._sync_root_refs()
 func _on_taskbar_home_pressed() -> void:
 	_set_active_app(APP_ID_DESKTOP)
 
@@ -16165,323 +9395,53 @@ func _show_bankruptcy_overlay(bankruptcy: Dictionary = {}) -> void:
 
 
 func _ensure_stress_meter_ui() -> void:
-	if stress_meter_panel != null:
-		return
-	var desktop_vbox: VBoxContainer = $DesktopLayer/DesktopMargin/DesktopVBox
-	if desktop_vbox == null or desktop_figma_top_bar == null:
-		return
-	stress_meter_panel = PanelContainer.new()
-	stress_meter_panel.name = "LifeStressMeterPanel"
-	stress_meter_panel.custom_minimum_size = Vector2(0, 16)
-	stress_meter_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stress_meter_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	stress_meter_panel.gui_input.connect(_on_stress_meter_gui_input)
-	desktop_vbox.add_child(stress_meter_panel)
-	desktop_vbox.move_child(stress_meter_panel, min(1, desktop_vbox.get_child_count() - 1))
-
-	var margin := MarginContainer.new()
-	margin.name = "LifeStressMeterMargin"
-	margin.add_theme_constant_override("margin_left", 0)
-	margin.add_theme_constant_override("margin_top", 0)
-	margin.add_theme_constant_override("margin_right", 0)
-	margin.add_theme_constant_override("margin_bottom", 0)
-	stress_meter_panel.add_child(margin)
-
-	var row := HBoxContainer.new()
-	row.name = "LifeStressMeterRow"
-	row.custom_minimum_size = Vector2(0, 16)
-	row.add_theme_constant_override("separation", 8)
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	margin.add_child(row)
-
-	stress_meter_title_label = Label.new()
-	stress_meter_title_label.name = "LifeStressMeterTitleLabel"
-	stress_meter_title_label.text = "STRESS LEVEL"
-	stress_meter_title_label.custom_minimum_size = Vector2(140, 16)
-	stress_meter_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stress_meter_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	stress_meter_title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stress_meter_title_label.add_theme_font_size_override("font_size", 10)
-	stress_meter_title_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
-	row.add_child(stress_meter_title_label)
-
-	stress_meter_bar = ProgressBar.new()
-	stress_meter_bar.name = "LifeStressMeterBar"
-	stress_meter_bar.min_value = 0.0
-	stress_meter_bar.max_value = 100.0
-	stress_meter_bar.show_percentage = false
-	stress_meter_bar.custom_minimum_size = Vector2(0, 8)
-	stress_meter_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stress_meter_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	stress_meter_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(stress_meter_bar)
-
-	stress_meter_label = Label.new()
-	stress_meter_label.name = "LifeStressMeterLabel"
-	stress_meter_label.custom_minimum_size = Vector2(126, 16)
-	stress_meter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	stress_meter_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	stress_meter_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stress_meter_label.add_theme_font_size_override("font_size", 10)
-	stress_meter_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
-	row.add_child(stress_meter_label)
-	_refresh_stress_meter()
+	_ensure_life_controller()
+	life_controller.ensure_stress_meter_ui()
 
 
 func _refresh_stress_meter() -> void:
-	if stress_meter_panel == null or stress_meter_bar == null:
-		return
-	if not RunState.has_active_run():
-		stress_meter_panel.visible = false
-		return
-	stress_meter_panel.visible = true
-	var life_state: Dictionary = RunState.get_player_life()
-	var stress_value: float = float(life_state.get("stress_value", RunState.LIFE_DEFAULT_STRESS_VALUE))
-	var stage: Dictionary = RunState.get_life_stress_stage(life_state)
-	var stage_id: String = str(stage.get("id", "calm"))
-	var fill_color: Color = _stress_stage_color(stage_id)
-	stress_meter_bar.value = stress_value
-	var bg_style := StyleBoxFlat.new()
-	bg_style.bg_color = Color(COLOR_DESKTOP_FRAME.r, COLOR_DESKTOP_FRAME.g, COLOR_DESKTOP_FRAME.b, 0.18)
-	bg_style.border_color = Color(COLOR_DESKTOP_BROWN.r, COLOR_DESKTOP_BROWN.g, COLOR_DESKTOP_BROWN.b, 0.0)
-	bg_style.set_border_width_all(0)
-	bg_style.set_corner_radius_all(0)
-	var track_style := StyleBoxFlat.new()
-	track_style.bg_color = Color(COLOR_DESKTOP_FRAME.r, COLOR_DESKTOP_FRAME.g, COLOR_DESKTOP_FRAME.b, 0.34)
-	track_style.border_color = Color(COLOR_DESKTOP_BROWN.r, COLOR_DESKTOP_BROWN.g, COLOR_DESKTOP_BROWN.b, 0.22)
-	track_style.set_border_width_all(1)
-	track_style.set_corner_radius_all(0)
-	var fill_style := StyleBoxFlat.new()
-	fill_style.bg_color = fill_color
-	fill_style.border_color = Color(fill_color.r, fill_color.g, fill_color.b, 0.0)
-	fill_style.set_corner_radius_all(0)
-	stress_meter_panel.add_theme_stylebox_override("panel", bg_style)
-	stress_meter_bar.add_theme_stylebox_override("background", track_style)
-	stress_meter_bar.add_theme_stylebox_override("fill", fill_style)
-	if stress_meter_title_label != null:
-		stress_meter_title_label.text = "STRESS LEVEL"
-		stress_meter_title_label.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
-	var ap_penalty: int = RunState.get_life_stress_ap_penalty(life_state)
-	var hospital_days: int = int(life_state.get("hospital_days_remaining", 0))
-	var risk_days: int = int(life_state.get("burnout_risk_days_remaining", 0))
-	var tooltip: String = "Stress %d/100: %s. AP penalty: %s." % [
-		int(round(stress_value)),
-		str(stage.get("label", "Calm")),
-		"-%d" % ap_penalty if ap_penalty > 0 else "none"
-	]
-	if hospital_days > 0:
-		tooltip += " Hospital recovery: %d trading day%s remaining." % [hospital_days, "" if hospital_days == 1 else "s"]
-	elif bool(life_state.get("burnout_risk_active", false)):
-		tooltip += " Burnout risk: %d trading day%s to recover before hospital." % [risk_days, "" if risk_days == 1 else "s"]
-	stress_meter_panel.tooltip_text = tooltip
-	if stress_meter_label != null:
-		stress_meter_label.visible = true
-		stress_meter_label.text = "%d/100 %s" % [
-			int(round(stress_value)),
-			str(stage.get("label", "Stress"))
-		]
+	_ensure_life_controller()
+	life_controller.refresh_stress_meter()
 
 
 func _stress_stage_color(stage_id: String) -> Color:
-	match stage_id:
-		"hospital":
-			return Color(0.34, 0.05, 0.06, 1)
-		"burnout_risk":
-			return Color(0.74, 0.08, 0.06, 1)
-		"strained":
-			return Color(0.92, 0.30, 0.12, 1)
-		"stressed":
-			return Color(0.95, 0.62, 0.10, 1)
-		"tense":
-			return Color(0.82, 0.74, 0.22, 1)
-		_:
-			return Color(0.22, 0.62, 0.32, 1)
+	_ensure_life_controller()
+	return life_controller.stress_stage_color(stage_id)
 
 
 func _on_stress_meter_gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		var mouse_event: InputEventMouseButton = event
-		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
-			_set_active_app(APP_ID_LIFE)
-			get_viewport().set_input_as_handled()
+	_ensure_life_controller()
+	life_controller.on_stress_meter_gui_input(event)
 
 
 func _ensure_hospital_overlay() -> void:
-	if hospital_overlay != null:
-		return
-	hospital_overlay = Control.new()
-	hospital_overlay.name = "HospitalOverlay"
-	hospital_overlay.visible = false
-	hospital_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	hospital_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(hospital_overlay)
-	var scrim := ColorRect.new()
-	scrim.name = "HospitalOverlayScrim"
-	scrim.color = Color(0.06, 0.04, 0.03, 0.78)
-	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
-	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	hospital_overlay.add_child(scrim)
-	var center := CenterContainer.new()
-	center.name = "HospitalOverlayCenter"
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	hospital_overlay.add_child(center)
-	var panel := PanelContainer.new()
-	panel.name = "HospitalOverlayPanel"
-	panel.custom_minimum_size = Vector2(520, 260)
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = COLOR_DESKTOP_CREAM
-	panel_style.border_color = COLOR_DESKTOP_BROWN
-	panel_style.set_border_width_all(2)
-	panel_style.set_corner_radius_all(6)
-	panel.add_theme_stylebox_override("panel", panel_style)
-	center.add_child(panel)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 22)
-	margin.add_theme_constant_override("margin_top", 20)
-	margin.add_theme_constant_override("margin_right", 22)
-	margin.add_theme_constant_override("margin_bottom", 20)
-	panel.add_child(margin)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 14)
-	margin.add_child(vbox)
-	var title := Label.new()
-	title.text = "Hospital Recovery"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 24)
-	title.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
-	vbox.add_child(title)
-	hospital_body_label = Label.new()
-	hospital_body_label.name = "HospitalBodyLabel"
-	hospital_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hospital_body_label.add_theme_font_size_override("font_size", 14)
-	hospital_body_label.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
-	vbox.add_child(hospital_body_label)
-	hospital_advance_button = Button.new()
-	hospital_advance_button.name = "HospitalAdvanceDayButton"
-	hospital_advance_button.text = "ADVANCE DAY"
-	hospital_advance_button.custom_minimum_size = Vector2(220, 42)
-	hospital_advance_button.pressed.connect(_on_hospital_advance_pressed)
-	vbox.add_child(hospital_advance_button)
-	_style_button(hospital_advance_button, COLOR_DESKTOP_BROWN, COLOR_DESKTOP_BROWN, COLOR_DESKTOP_CREAM, 5)
+	_ensure_life_controller()
+	life_controller.ensure_hospital_overlay()
 
 
 func _refresh_hospital_overlay() -> void:
-	if hospital_overlay == null:
-		return
-	var hospital_days: int = 0
-	if RunState.has_active_run():
-		hospital_days = int(RunState.get_player_life().get("hospital_days_remaining", 0))
-	hospital_overlay.visible = hospital_days > 0
-	if hospital_days <= 0:
-		return
-	hospital_overlay.move_to_front()
-	if hospital_body_label != null:
-		hospital_body_label.text = "Stress hit full burnout. You are in hospital recovery for %d more trading day%s.\n\nAll apps are paused. Advance Day to recover." % [
-			hospital_days,
-			"" if hospital_days == 1 else "s"
-		]
-	if hospital_advance_button != null:
-		hospital_advance_button.disabled = advance_day_processing
-		hospital_advance_button.text = "ADVANCING..." if advance_day_processing else "ADVANCE DAY"
+	_ensure_life_controller()
+	life_controller.refresh_hospital_overlay()
 
 
 func _on_hospital_advance_pressed() -> void:
-	_on_next_day_pressed()
+	_ensure_life_controller()
+	life_controller.on_hospital_advance_pressed()
 
 
 func _ensure_jail_overlay() -> void:
-	if jail_overlay != null:
-		return
-	jail_overlay = Control.new()
-	jail_overlay.name = "JailOverlay"
-	jail_overlay.visible = false
-	jail_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	jail_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(jail_overlay)
-	var scrim := ColorRect.new()
-	scrim.name = "JailOverlayScrim"
-	scrim.color = Color(0.04, 0.04, 0.04, 0.80)
-	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
-	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	jail_overlay.add_child(scrim)
-	var center := CenterContainer.new()
-	center.name = "JailOverlayCenter"
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	jail_overlay.add_child(center)
-	var panel := PanelContainer.new()
-	panel.name = "JailOverlayPanel"
-	panel.custom_minimum_size = Vector2(520, 260)
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = COLOR_DESKTOP_CREAM
-	panel_style.border_color = COLOR_DESKTOP_BROWN
-	panel_style.set_border_width_all(2)
-	panel_style.set_corner_radius_all(6)
-	panel.add_theme_stylebox_override("panel", panel_style)
-	center.add_child(panel)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 22)
-	margin.add_theme_constant_override("margin_top", 20)
-	margin.add_theme_constant_override("margin_right", 22)
-	margin.add_theme_constant_override("margin_bottom", 20)
-	panel.add_child(margin)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 14)
-	margin.add_child(vbox)
-	var title := Label.new()
-	title.text = "Jail"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 24)
-	title.add_theme_color_override("font_color", COLOR_DESKTOP_BROWN)
-	vbox.add_child(title)
-	jail_body_label = Label.new()
-	jail_body_label.name = "JailBodyLabel"
-	jail_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	jail_body_label.add_theme_font_size_override("font_size", 14)
-	jail_body_label.add_theme_color_override("font_color", COLOR_DESKTOP_TEXT)
-	vbox.add_child(jail_body_label)
-	jail_advance_button = Button.new()
-	jail_advance_button.name = "JailAdvanceDayButton"
-	jail_advance_button.text = "ADVANCE DAY"
-	jail_advance_button.custom_minimum_size = Vector2(220, 42)
-	jail_advance_button.pressed.connect(_on_jail_advance_pressed)
-	vbox.add_child(jail_advance_button)
-	_style_button(jail_advance_button, COLOR_DESKTOP_BROWN, COLOR_DESKTOP_BROWN, COLOR_DESKTOP_CREAM, 5)
+	_ensure_life_controller()
+	life_controller.ensure_jail_overlay()
 
 
 func _refresh_jail_overlay() -> void:
-	if jail_overlay == null:
-		return
-	var legal_state: Dictionary = {}
-	if RunState.has_active_run():
-		var life_state: Dictionary = RunState.get_player_life()
-		legal_state = life_state.get("legal_state", {}) if typeof(life_state.get("legal_state", {})) == TYPE_DICTIONARY else {}
-	var legal_days: int = int(legal_state.get("days_remaining", 0))
-	var legal_active: bool = bool(legal_state.get("active", false)) and legal_days > 0
-	jail_overlay.visible = legal_active
-	if not legal_active:
-		return
-	jail_overlay.move_to_front()
-	if jail_body_label != null:
-		var ticker: String = str(legal_state.get("target_ticker", "")).strip_edges()
-		if ticker.is_empty():
-			ticker = "the dirty tip"
-		var fine_amount: float = float(legal_state.get("fine_amount", 0.0))
-		var fine_text: String = ""
-		if fine_amount > 0.0:
-			fine_text = "\nFine paid: %s." % _format_currency(fine_amount)
-		jail_body_label.text = "The dirty-tip trail around %s got traced back to you. You are in legal hold for %d more trading day%s.\n\nAll apps are paused. Advance Day to serve the hold.%s" % [
-			ticker,
-			legal_days,
-			"" if legal_days == 1 else "s",
-			fine_text
-		]
-	if jail_advance_button != null:
-		jail_advance_button.disabled = advance_day_processing
-		jail_advance_button.text = "ADVANCING..." if advance_day_processing else "ADVANCE DAY"
+	_ensure_life_controller()
+	life_controller.refresh_jail_overlay()
 
 
 func _on_jail_advance_pressed() -> void:
-	_on_next_day_pressed()
+	_ensure_life_controller()
+	life_controller.on_jail_advance_pressed()
 
 
 func _on_bankruptcy_menu_pressed() -> void:
@@ -16516,52 +9476,41 @@ func _on_help_pressed() -> void:
 
 
 func _on_financials_previous_pressed() -> void:
-	_shift_financial_statement_selection(-1)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_financials_previous_pressed()
+	stock_controller._sync_root_refs()
 func _on_financials_next_pressed() -> void:
-	_shift_financial_statement_selection(1)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_financials_next_pressed()
+	stock_controller._sync_root_refs()
 func _on_company_selected(index: int) -> void:
-	if index < 0 or index >= displayed_company_ids.size():
-		return
-
-	selected_company_id = str(displayed_company_ids[index])
-	_refresh_after_company_selection()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_company_selected(index)
+	stock_controller._sync_root_refs()
 func _on_buy_side_pressed() -> void:
-	active_order_side = "buy"
-	_update_order_side_buttons()
-	if not current_trade_snapshot.is_empty():
-		_refresh_order_controls(current_trade_snapshot)
-	_refresh_ftue_overlay()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_buy_side_pressed()
+	stock_controller._sync_root_refs()
 func _on_sell_side_pressed() -> void:
-	active_order_side = "sell"
-	_update_order_side_buttons()
-	if not current_trade_snapshot.is_empty():
-		_refresh_order_controls(current_trade_snapshot)
-	_refresh_ftue_overlay()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_sell_side_pressed()
+	stock_controller._sync_root_refs()
 func _on_submit_order_pressed() -> void:
-	var started_at_usec: int = Time.get_ticks_usec()
-	var result: Dictionary = {}
-	if active_order_side == "sell":
-		result = GameManager.sell_lots(selected_company_id, _selected_lots())
-	else:
-		result = GameManager.buy_lots(selected_company_id, _selected_lots())
-	status_message = str(result.get("message", "Order finished."))
-	_show_toast(status_message, bool(result.get("success", false)))
-	if bool(result.get("success", false)):
-		_refresh_ftue_progress()
-		_refresh_first_hour_guide_progress()
-	_log_perf_elapsed("_on_submit_order_pressed", started_at_usec)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_submit_order_pressed()
+	stock_controller._sync_root_refs()
 func _show_toast(message: String, is_success: bool) -> void:
 	if message.is_empty():
 		return
@@ -17252,13 +10201,11 @@ func _daily_recap_market_mood(sentiment: float) -> String:
 
 
 func _on_lot_size_changed(value: float) -> void:
-	selected_lots = max(int(round(value)), 1)
-	_refresh_sidebar()
-	if not current_trade_snapshot.is_empty():
-		_refresh_order_controls(current_trade_snapshot)
-	_refresh_ftue_overlay()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_lot_size_changed(value)
+	stock_controller._sync_root_refs()
 func _show_ftue_if_needed() -> void:
 	_ensure_ftue_overlay()
 	_refresh_ftue_progress()
@@ -19131,77 +12078,13 @@ func _ensure_watchlist_picker_dialog() -> void:
 
 
 func _ensure_upgrade_purchase_dialog() -> void:
-	if upgrade_purchase_dialog != null:
-		return
-
-	upgrade_purchase_dialog = ConfirmationDialog.new()
-	upgrade_purchase_dialog.name = "UpgradePurchaseDialog"
-	upgrade_purchase_dialog.title = "Confirm Upgrade"
-	add_child(upgrade_purchase_dialog)
-	upgrade_purchase_dialog.confirmed.connect(_on_upgrade_purchase_confirmed)
-	upgrade_purchase_dialog.get_ok_button().text = "Buy Upgrade"
-	upgrade_purchase_dialog.get_cancel_button().text = "Cancel"
-
-	var content_panel: PanelContainer = PanelContainer.new()
-	content_panel.name = "UpgradePurchaseContentPanel"
-	content_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	upgrade_purchase_dialog.add_child(content_panel)
-
-	var dialog_margin: MarginContainer = MarginContainer.new()
-	dialog_margin.name = "UpgradePurchaseContentMargin"
-	dialog_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dialog_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	dialog_margin.add_theme_constant_override("margin_left", 18)
-	dialog_margin.add_theme_constant_override("margin_top", 18)
-	dialog_margin.add_theme_constant_override("margin_right", 18)
-	dialog_margin.add_theme_constant_override("margin_bottom", 18)
-	content_panel.add_child(dialog_margin)
-
-	upgrade_purchase_body_label = Label.new()
-	upgrade_purchase_body_label.name = "UpgradePurchaseBodyLabel"
-	upgrade_purchase_body_label.custom_minimum_size = Vector2(500, 150)
-	upgrade_purchase_body_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	upgrade_purchase_body_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	upgrade_purchase_body_label.text = ""
-	dialog_margin.add_child(upgrade_purchase_body_label)
-	_style_upgrade_purchase_dialog()
+	_ensure_upgrades_controller()
+	upgrades_controller.ensure_purchase_dialog()
 
 
 func _style_upgrade_purchase_dialog() -> void:
-	if upgrade_purchase_dialog == null:
-		return
-
-	UiTheme.style_panel(upgrade_purchase_dialog, "dialog")
-	var dialog_style: StyleBoxFlat = upgrade_purchase_dialog.get_theme_stylebox("panel") as StyleBoxFlat
-	if dialog_style == null:
-		dialog_style = UiTheme.make_stylebox(UiTheme.color("desktop.cream"), UiTheme.color("desktop.brown"), 2, 6)
-	upgrade_purchase_dialog.add_theme_stylebox_override("panel", dialog_style)
-	upgrade_purchase_dialog.add_theme_stylebox_override("embedded_border", dialog_style)
-	upgrade_purchase_dialog.add_theme_stylebox_override("embedded_unfocused_border", dialog_style)
-	upgrade_purchase_dialog.add_theme_color_override("font_color", UiTheme.color("desktop.text"))
-	upgrade_purchase_dialog.add_theme_color_override("title_color", UiTheme.color("desktop.brown"))
-	upgrade_purchase_dialog.add_theme_font_size_override("font_size", UiTheme.font_size("body"))
-
-	var content_panel: PanelContainer = upgrade_purchase_dialog.find_child("UpgradePurchaseContentPanel", true, false) as PanelContainer
-	if content_panel != null:
-		var content_style := StyleBoxFlat.new()
-		content_style.bg_color = Color(0.992157, 0.964706, 0.870588, 1)
-		content_style.border_color = Color(0.52549, 0.396078, 0.160784, 0.85)
-		content_style.set_border_width_all(1)
-		content_style.set_corner_radius_all(0)
-		content_panel.add_theme_stylebox_override("panel", content_style)
-
-	if upgrade_purchase_body_label != null:
-		UiTheme.style_label(upgrade_purchase_body_label, "desktop_body")
-		upgrade_purchase_body_label.add_theme_constant_override("line_spacing", 5)
-
-	var ok_button: Button = upgrade_purchase_dialog.get_ok_button()
-	if ok_button != null:
-		_style_button(ok_button, COLOR_DESKTOP_BROWN, COLOR_DESKTOP_BROWN.darkened(0.12), COLOR_DESKTOP_CREAM, 5)
-	var cancel_button: Button = upgrade_purchase_dialog.get_cancel_button()
-	if cancel_button != null:
-		_style_button(cancel_button, COLOR_DESKTOP_PANEL, COLOR_DESKTOP_FRAME, COLOR_DESKTOP_TEXT, 5)
+	_ensure_upgrades_controller()
+	upgrades_controller.style_purchase_dialog()
 
 
 func _ensure_bankruptcy_overlay() -> void:
@@ -20414,123 +13297,8 @@ func _ensure_corporate_action_ui() -> void:
 		news_detail_vbox.add_child(news_open_meeting_button)
 		news_detail_vbox.move_child(news_open_meeting_button, news_detail_vbox.get_children().find(news_meet_contact_button) + 1)
 
-	if network_corporate_action_label == null:
-		network_corporate_action_label = Label.new()
-		network_corporate_action_label.name = "NetworkCorporateActionLabel"
-		network_corporate_action_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		network_corporate_action_label.visible = false
-		var network_detail_vbox: VBoxContainer = network_contact_body_label.get_parent()
-		var action_row: HBoxContainer = network_meet_button.get_parent()
-		network_detail_vbox.add_child(network_corporate_action_label)
-		network_detail_vbox.move_child(network_corporate_action_label, network_detail_vbox.get_children().find(action_row))
+	_ensure_network_context_ui()
 
-	if network_tip_history_label == null:
-		network_tip_history_label = Label.new()
-		network_tip_history_label.name = "NetworkTipHistoryLabel"
-		network_tip_history_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		network_tip_history_label.visible = false
-		var network_detail_vbox: VBoxContainer = network_contact_body_label.get_parent()
-		var action_row: HBoxContainer = network_meet_button.get_parent()
-		network_detail_vbox.add_child(network_tip_history_label)
-		network_detail_vbox.move_child(network_tip_history_label, network_detail_vbox.get_children().find(action_row))
-
-	if network_crosscheck_label == null:
-		network_crosscheck_label = Label.new()
-		network_crosscheck_label.name = "NetworkCrosscheckLabel"
-		network_crosscheck_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		network_crosscheck_label.visible = false
-		var network_detail_vbox: VBoxContainer = network_contact_body_label.get_parent()
-		var action_row: HBoxContainer = network_meet_button.get_parent()
-		network_detail_vbox.add_child(network_crosscheck_label)
-		network_detail_vbox.move_child(network_crosscheck_label, network_detail_vbox.get_children().find(action_row))
-
-	if network_open_meeting_button == null:
-		network_open_meeting_button = Button.new()
-		network_open_meeting_button.name = "NetworkOpenMeetingButton"
-		network_open_meeting_button.text = "Open Meeting"
-		network_open_meeting_button.visible = false
-		network_open_meeting_button.disabled = true
-		network_open_meeting_button.tooltip_text = "Open the linked corporate meeting."
-		network_open_meeting_button.pressed.connect(_on_network_open_meeting_pressed)
-		var network_detail_vbox: VBoxContainer = network_contact_body_label.get_parent()
-		var action_row: HBoxContainer = network_meet_button.get_parent()
-		network_detail_vbox.add_child(network_open_meeting_button)
-		network_detail_vbox.move_child(network_open_meeting_button, network_detail_vbox.get_children().find(action_row))
-
-	if network_followup_button == null:
-		network_followup_button = MenuButton.new()
-		network_followup_button.name = "NetworkFollowupButton"
-		network_followup_button.text = "Follow Up"
-		network_followup_button.visible = false
-		network_followup_button.disabled = true
-		network_followup_button.tooltip_text = "Follow up on the latest resolved contact read."
-		network_followup_button.get_popup().id_pressed.connect(_on_network_followup_selected)
-		var network_action_row: HBoxContainer = network_meet_button.get_parent()
-		network_action_row.add_child(network_followup_button)
-
-	if network_source_check_button == null:
-		network_source_check_button = Button.new()
-		network_source_check_button.name = "NetworkSourceCheckButton"
-		network_source_check_button.text = "Ask About Conflict"
-		network_source_check_button.visible = false
-		network_source_check_button.disabled = true
-		network_source_check_button.tooltip_text = "Ask this contact why another source disagrees."
-		network_source_check_button.pressed.connect(_on_network_source_check_pressed)
-		var network_action_row: HBoxContainer = network_meet_button.get_parent()
-		network_action_row.add_child(network_source_check_button)
-
-	if network_journal_detail_label == null:
-		network_journal_detail_label = Label.new()
-		network_journal_detail_label.name = "NetworkJournalDetailLabel"
-		network_journal_detail_label.visible = false
-		network_journal_detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		network_journal_detail_label.text = ""
-		var network_detail_vbox: VBoxContainer = network_contact_body_label.get_parent()
-		var action_row: HBoxContainer = network_meet_button.get_parent()
-		network_detail_vbox.add_child(network_journal_detail_label)
-		network_detail_vbox.move_child(network_journal_detail_label, network_detail_vbox.get_children().find(action_row))
-
-	if network_journal_list == null:
-		var network_list_vbox: VBoxContainer = network_requests_list.get_parent()
-		network_contacts_list.custom_minimum_size = Vector2(0, 132)
-		network_requests_list.custom_minimum_size = Vector2(0, 76)
-		network_journal_label = Label.new()
-		network_journal_label.name = "NetworkJournalLabel"
-		network_journal_label.text = "Journal"
-		network_list_vbox.add_child(network_journal_label)
-
-		network_journal_filter_row = HBoxContainer.new()
-		network_journal_filter_row.name = "NetworkJournalFilterRow"
-		network_journal_filter_row.add_theme_constant_override("separation", 4)
-		network_list_vbox.add_child(network_journal_filter_row)
-		for filter_value in [
-			{"id": "all", "label": "All"},
-			{"id": "tips", "label": "Tips"},
-			{"id": "requests", "label": "Req"},
-			{"id": "referrals", "label": "Refs"},
-			{"id": "source_checks", "label": "Checks"}
-		]:
-			var filter_id: String = str(filter_value.get("id", "all"))
-			var filter_button := Button.new()
-			filter_button.name = "NetworkJournalFilter%sButton" % filter_id.capitalize().replace("_", "")
-			filter_button.text = str(filter_value.get("label", filter_id.capitalize()))
-			filter_button.custom_minimum_size = Vector2(42, 24)
-			filter_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			filter_button.tooltip_text = "Show %s journal rows." % str(filter_value.get("label", filter_id))
-			filter_button.pressed.connect(_on_network_journal_filter_pressed.bind(filter_id))
-			network_journal_filter_buttons[filter_id] = filter_button
-			network_journal_filter_row.add_child(filter_button)
-
-		network_journal_list = ItemList.new()
-		network_journal_list.name = "NetworkJournalList"
-		network_journal_list.custom_minimum_size = Vector2(0, 88)
-		network_journal_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		network_journal_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		network_journal_list.tooltip_text = "Recent tips, requests, referrals, follow-ups, and source checks."
-		network_journal_list.allow_reselect = true
-		network_list_vbox.add_child(network_journal_list)
-
-	_ensure_network_detail_scroll()
 
 	if rupslb_meeting_overlay == null:
 		rupslb_meeting_overlay = RUPSLB_MEETING_OVERLAY_SCRIPT.new()
@@ -20635,731 +13403,59 @@ func _ensure_corporate_action_ui() -> void:
 	button_row.add_child(corporate_meeting_close_button)
 
 
-func _ensure_network_detail_scroll() -> void:
-	if network_detail_scroll != null:
-		return
-	var detail_vbox: VBoxContainer = network_contact_body_label.get_parent()
-	var action_row: HBoxContainer = network_meet_button.get_parent()
-	if detail_vbox == null or action_row == null or action_row.get_parent() != detail_vbox:
-		return
-
-	network_detail_scroll = ScrollContainer.new()
-	network_detail_scroll.name = "NetworkDetailScroll"
-	network_detail_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	network_detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	network_detail_scroll.follow_focus = true
-	detail_vbox.add_child(network_detail_scroll)
-	detail_vbox.move_child(network_detail_scroll, 0)
-
-	network_detail_scroll_content = VBoxContainer.new()
-	network_detail_scroll_content.name = "NetworkDetailScrollContent"
-	network_detail_scroll_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	network_detail_scroll_content.add_theme_constant_override("separation", 10)
-	network_detail_scroll.add_child(network_detail_scroll_content)
-
-	var children_to_move: Array = []
-	for child_value in detail_vbox.get_children():
-		var child: Node = child_value
-		if child == network_detail_scroll or child == action_row:
-			continue
-		children_to_move.append(child)
-	for child_value in children_to_move:
-		var child: Node = child_value
-		detail_vbox.remove_child(child)
-		network_detail_scroll_content.add_child(child)
-
-
 func _ensure_news_detail_scroll() -> void:
-	if news_detail_scroll_content != null and news_detail_body.get_parent() == news_detail_scroll_content:
-		return
-	var detail_vbox: VBoxContainer = news_detail_headline_label.get_parent() as VBoxContainer
-	if detail_vbox == null:
-		return
-
-	news_detail_scroll = ScrollContainer.new()
-	news_detail_scroll.name = "NewsDetailScroll"
-	news_detail_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	news_detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	news_detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	news_detail_scroll.follow_focus = true
-	detail_vbox.add_child(news_detail_scroll)
-	detail_vbox.move_child(news_detail_scroll, 0)
-
-	news_detail_scroll_content = VBoxContainer.new()
-	news_detail_scroll_content.name = "NewsDetailScrollContent"
-	news_detail_scroll_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	news_detail_scroll_content.add_theme_constant_override("separation", 9)
-	news_detail_scroll.add_child(news_detail_scroll_content)
-
-	var children_to_move: Array = []
-	for child_value in detail_vbox.get_children():
-		var child: Node = child_value
-		if child == news_detail_scroll:
-			continue
-		children_to_move.append(child)
-	for child_value in children_to_move:
-		var child: Node = child_value
-		detail_vbox.remove_child(child)
-		news_detail_scroll_content.add_child(child)
-
-	news_detail_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	news_detail_body.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	news_detail_body.custom_minimum_size = Vector2.ZERO
-	news_detail_body.fit_content = true
-	news_detail_body.scroll_active = false
-	news_detail_body.scroll_following = false
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._ensure_news_detail_scroll()
+	news_controller._sync_root_refs()
 
 func _ensure_news_newspaper_ui() -> void:
-	news_title_label.text = "The Market Papers"
-	news_intel_status_label.visible = false
-	news_feed_summary_label.visible = true
-	news_feed_summary_label.text = "Select a publication and story."
-	news_detail_deck_label.visible = true
-	news_detail_hint_label.visible = false
-	news_article_list.visible = false
-	news_article_list.custom_minimum_size = Vector2.ZERO
-
-	var header_row: HBoxContainer = news_title_label.get_parent()
-	header_row.visible = false
-
-	var window_vbox: VBoxContainer = news_outlet_buttons.get_parent()
-	if news_masthead_panel == null:
-		news_masthead_panel = PanelContainer.new()
-		news_masthead_panel.name = "NewsMastheadPanel"
-		news_masthead_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		window_vbox.add_child(news_masthead_panel)
-		window_vbox.move_child(news_masthead_panel, window_vbox.get_children().find(news_outlet_buttons))
-
-		var masthead_margin := MarginContainer.new()
-		masthead_margin.name = "NewsMastheadMargin"
-		masthead_margin.add_theme_constant_override("margin_left", 14)
-		masthead_margin.add_theme_constant_override("margin_top", 10)
-		masthead_margin.add_theme_constant_override("margin_right", 14)
-		masthead_margin.add_theme_constant_override("margin_bottom", 10)
-		news_masthead_panel.add_child(masthead_margin)
-
-		var masthead_row := HBoxContainer.new()
-		masthead_row.name = "NewsMastheadRow"
-		masthead_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		masthead_row.add_theme_constant_override("separation", 16)
-		masthead_margin.add_child(masthead_row)
-
-		news_masthead_issue_box = PanelContainer.new()
-		news_masthead_issue_box.name = "NewsMastheadIssueBox"
-		news_masthead_issue_box.custom_minimum_size = Vector2(118, 58)
-		news_masthead_issue_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		masthead_row.add_child(news_masthead_issue_box)
-
-		var issue_vbox := VBoxContainer.new()
-		issue_vbox.name = "NewsMastheadIssueVBox"
-		issue_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-		issue_vbox.add_theme_constant_override("separation", 2)
-		news_masthead_issue_box.add_child(issue_vbox)
-		news_masthead_issue_label = Label.new()
-		news_masthead_issue_label.name = "NewsMastheadIssueLabel"
-		news_masthead_issue_label.text = "ISSUE"
-		news_masthead_issue_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		issue_vbox.add_child(news_masthead_issue_label)
-		news_masthead_issue_number_label = Label.new()
-		news_masthead_issue_number_label.name = "NewsMastheadIssueNumberLabel"
-		news_masthead_issue_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		issue_vbox.add_child(news_masthead_issue_number_label)
-
-		var title_block := VBoxContainer.new()
-		title_block.name = "NewsMastheadTitleBlock"
-		title_block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		title_block.alignment = BoxContainer.ALIGNMENT_CENTER
-		title_block.add_theme_constant_override("separation", 3)
-		masthead_row.add_child(title_block)
-		news_masthead_title_label = Label.new()
-		news_masthead_title_label.name = "NewsMastheadTitleLabel"
-		news_masthead_title_label.text = "The Market Papers"
-		news_masthead_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		news_masthead_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		title_block.add_child(news_masthead_title_label)
-		news_masthead_tagline_label = Label.new()
-		news_masthead_tagline_label.name = "NewsMastheadTaglineLabel"
-		news_masthead_tagline_label.text = "DAILY CAPITAL MARKETS JOURNAL"
-		news_masthead_tagline_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		title_block.add_child(news_masthead_tagline_label)
-
-		var date_block := VBoxContainer.new()
-		date_block.name = "NewsMastheadDateBlock"
-		date_block.custom_minimum_size = Vector2(160, 58)
-		date_block.alignment = BoxContainer.ALIGNMENT_CENTER
-		date_block.add_theme_constant_override("separation", 2)
-		masthead_row.add_child(date_block)
-		news_masthead_date_block_label = Label.new()
-		news_masthead_date_block_label.name = "NewsMastheadDateBlockLabel"
-		news_masthead_date_block_label.text = "TODAY'S EDITION"
-		news_masthead_date_block_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		date_block.add_child(news_masthead_date_block_label)
-		news_masthead_date_label = Label.new()
-		news_masthead_date_label.name = "NewsMastheadDateLabel"
-		news_masthead_date_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		date_block.add_child(news_masthead_date_label)
-		news_masthead_price_label = Label.new()
-		news_masthead_price_label.name = "NewsMastheadPriceLabel"
-		news_masthead_price_label.text = "Cover price · Rp 5.000"
-		news_masthead_price_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		date_block.add_child(news_masthead_price_label)
-
-	if news_masthead_rule_container == null:
-		news_masthead_rule_container = VBoxContainer.new()
-		news_masthead_rule_container.name = "NewsMastheadRule"
-		news_masthead_rule_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		news_masthead_rule_container.add_theme_constant_override("separation", 3)
-		window_vbox.add_child(news_masthead_rule_container)
-		window_vbox.move_child(news_masthead_rule_container, window_vbox.get_children().find(news_outlet_buttons))
-		var rule_top := ColorRect.new()
-		rule_top.name = "NewsMastheadRuleTop"
-		rule_top.custom_minimum_size = Vector2(0, 3)
-		news_masthead_rule_container.add_child(rule_top)
-		var rule_bottom := ColorRect.new()
-		rule_bottom.name = "NewsMastheadRuleBottom"
-		rule_bottom.custom_minimum_size = Vector2(0, 1)
-		news_masthead_rule_container.add_child(rule_bottom)
-
-	if news_source_tab_rule == null:
-		news_source_tab_rule = ColorRect.new()
-		news_source_tab_rule.name = "NewsSourceTabRule"
-		news_source_tab_rule.custom_minimum_size = Vector2(0, 1)
-		window_vbox.add_child(news_source_tab_rule)
-		window_vbox.move_child(news_source_tab_rule, window_vbox.get_children().find(news_outlet_buttons) + 1)
-
-	_ensure_news_grunge_overlay()
-
-	var feed_vbox: VBoxContainer = news_article_list.get_parent()
-	if news_article_cards_scroll == null:
-		news_article_cards_scroll = ScrollContainer.new()
-		news_article_cards_scroll.name = "NewsArticleCardsScroll"
-		news_article_cards_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		news_article_cards_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		news_article_cards_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		feed_vbox.add_child(news_article_cards_scroll)
-		feed_vbox.move_child(news_article_cards_scroll, feed_vbox.get_children().find(news_article_list))
-		news_article_cards = VBoxContainer.new()
-		news_article_cards.name = "NewsArticleCards"
-		news_article_cards.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		news_article_cards.add_theme_constant_override("separation", 14)
-		news_article_cards_scroll.add_child(news_article_cards)
-
-	var detail_vbox: VBoxContainer = news_detail_headline_label.get_parent()
-	if news_detail_hero_frame == null:
-		news_detail_hero_frame = PanelContainer.new()
-		news_detail_hero_frame.name = "NewsDetailHeroFrame"
-		news_detail_hero_frame.custom_minimum_size = Vector2(0, 138)
-		news_detail_hero_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		news_detail_hero_frame.visible = SHOW_NEWS_IMAGE_PLACEHOLDERS
-		detail_vbox.add_child(news_detail_hero_frame)
-		var hero_label := Label.new()
-		hero_label.name = "NewsDetailHeroPlaceholder"
-		hero_label.text = "IMAGE SLOT"
-		hero_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hero_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		news_detail_hero_frame.add_child(hero_label)
-	if news_detail_photo_caption_label == null:
-		news_detail_photo_caption_label = Label.new()
-		news_detail_photo_caption_label.name = "NewsDetailPhotoCaptionLabel"
-		news_detail_photo_caption_label.visible = SHOW_NEWS_IMAGE_PLACEHOLDERS
-		news_detail_photo_caption_label.text = "Photo: Bursa archive · trading floor activity."
-		news_detail_photo_caption_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		detail_vbox.add_child(news_detail_photo_caption_label)
-	if news_detail_byline_label == null:
-		news_detail_byline_label = Label.new()
-		news_detail_byline_label.name = "NewsDetailBylineLabel"
-		news_detail_byline_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		detail_vbox.add_child(news_detail_byline_label)
-	if news_detail_chips_label == null:
-		news_detail_chips_label = Label.new()
-		news_detail_chips_label.name = "NewsDetailChipsLabel"
-		news_detail_chips_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		detail_vbox.add_child(news_detail_chips_label)
-	if news_detail_action_row == null:
-		news_detail_action_row = HBoxContainer.new()
-		news_detail_action_row.name = "NewsDetailActionRow"
-		news_detail_action_row.add_theme_constant_override("separation", 10)
-		detail_vbox.add_child(news_detail_action_row)
-	if news_meet_contact_button.get_parent() != news_detail_action_row:
-		news_meet_contact_button.reparent(news_detail_action_row)
-	if news_open_meeting_button != null and news_open_meeting_button.get_parent() != news_detail_action_row:
-		news_open_meeting_button.reparent(news_detail_action_row)
-	_ensure_news_detail_scroll()
-	var detail_content: VBoxContainer = news_detail_scroll_content if news_detail_scroll_content != null else detail_vbox
-	_order_news_detail_nodes(detail_content)
-	_style_news_newspaper_ui()
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._ensure_news_newspaper_ui()
+	news_controller._sync_root_refs()
 
 func _ensure_social_feed_ui() -> void:
-	if social_window_body == null:
-		return
-
-	var window_margin := social_window_body.get_node_or_null("SocialWindowMargin") as MarginContainer
-	if window_margin != null:
-		window_margin.add_theme_constant_override("margin_left", 0)
-		window_margin.add_theme_constant_override("margin_top", 0)
-		window_margin.add_theme_constant_override("margin_right", 0)
-		window_margin.add_theme_constant_override("margin_bottom", 0)
-
-	var window_vbox := social_feed_summary_label.get_parent() as VBoxContainer
-	if window_vbox != null:
-		window_vbox.add_theme_constant_override("separation", 8)
-		window_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		window_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	if window_margin != null and window_vbox != null and social_app_shell == null:
-		social_app_shell = HBoxContainer.new()
-		social_app_shell.name = "SocialAppShell"
-		social_app_shell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_app_shell.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		social_app_shell.add_theme_constant_override("separation", 0)
-		window_margin.add_child(social_app_shell)
-
-		var left_sidebar_margin := MarginContainer.new()
-		left_sidebar_margin.name = "SocialLeftSidebarMargin"
-		left_sidebar_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		left_sidebar_margin.add_theme_constant_override("margin_left", SOCIAL_SIDE_MARGIN_LEFT)
-		left_sidebar_margin.add_theme_constant_override("margin_top", SOCIAL_SIDE_MARGIN_TOP)
-		left_sidebar_margin.add_theme_constant_override("margin_right", 0)
-		left_sidebar_margin.add_theme_constant_override("margin_bottom", SOCIAL_SIDE_MARGIN_BOTTOM)
-		social_app_shell.add_child(left_sidebar_margin)
-		social_left_sidebar = _build_social_left_sidebar()
-		left_sidebar_margin.add_child(social_left_sidebar)
-
-		social_center_panel = PanelContainer.new()
-		social_center_panel.name = "SocialCenterPanel"
-		social_center_panel.custom_minimum_size = Vector2(540, 0)
-		social_center_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_center_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		social_app_shell.add_child(social_center_panel)
-		var center_margin := MarginContainer.new()
-		center_margin.name = "SocialCenterMargin"
-		center_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		center_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		center_margin.add_theme_constant_override("margin_left", SOCIAL_CENTER_MARGIN_LEFT)
-		center_margin.add_theme_constant_override("margin_top", SOCIAL_CENTER_MARGIN_TOP)
-		center_margin.add_theme_constant_override("margin_right", SOCIAL_CENTER_MARGIN_RIGHT)
-		center_margin.add_theme_constant_override("margin_bottom", SOCIAL_CENTER_MARGIN_BOTTOM)
-		social_center_panel.add_child(center_margin)
-		var previous_parent: Node = window_vbox.get_parent()
-		if previous_parent != null:
-			previous_parent.remove_child(window_vbox)
-		center_margin.add_child(window_vbox)
-
-		var right_rail_margin := MarginContainer.new()
-		right_rail_margin.name = "SocialRightRailMargin"
-		right_rail_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		right_rail_margin.add_theme_constant_override("margin_left", SOCIAL_SIDE_MARGIN_LEFT)
-		right_rail_margin.add_theme_constant_override("margin_top", SOCIAL_SIDE_MARGIN_TOP)
-		right_rail_margin.add_theme_constant_override("margin_right", SOCIAL_SIDE_MARGIN_RIGHT)
-		right_rail_margin.add_theme_constant_override("margin_bottom", SOCIAL_SIDE_MARGIN_BOTTOM)
-		social_app_shell.add_child(right_rail_margin)
-		social_right_rail = _build_social_right_rail()
-		right_rail_margin.add_child(social_right_rail)
-
-	var header_row := social_title_label.get_parent() as HBoxContainer
-	if header_row != null:
-		header_row.custom_minimum_size = Vector2(0, 40)
-		header_row.add_theme_constant_override("separation", 8)
-		social_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_access_status_label.size_flags_horizontal = Control.SIZE_SHRINK_END
-		if social_live_dot == null:
-			social_live_dot = PanelContainer.new()
-			social_live_dot.name = "SocialLiveDot"
-			social_live_dot.custom_minimum_size = Vector2(9, 9)
-			social_live_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			header_row.add_child(social_live_dot)
-			header_row.move_child(social_live_dot, min(1, header_row.get_child_count() - 1))
-		if social_live_label == null:
-			social_live_label = Label.new()
-			social_live_label.name = "SocialLiveLabel"
-			social_live_label.text = "Live"
-			social_live_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			header_row.add_child(social_live_label)
-			header_row.move_child(social_live_label, min(2, header_row.get_child_count() - 1))
-		if social_tier_indicator == null:
-			social_tier_indicator = HBoxContainer.new()
-			social_tier_indicator.name = "SocialTierIndicator"
-			social_tier_indicator.custom_minimum_size = Vector2(54, 14)
-			social_tier_indicator.size_flags_horizontal = Control.SIZE_SHRINK_END
-			social_tier_indicator.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			social_tier_indicator.add_theme_constant_override("separation", 3)
-			header_row.add_child(social_tier_indicator)
-
-	social_feed_summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	social_feed_summary_label.clip_text = true
-	social_feed_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	social_feed_scroll.follow_focus = false
-	social_feed_cards.add_theme_constant_override("separation", 10)
-	social_feed_cards.custom_minimum_size = Vector2(0, 0)
-
-	if window_vbox != null and social_filter_scroll == null:
-		social_filter_scroll = ScrollContainer.new()
-		social_filter_scroll.name = "SocialFeedFilterScroll"
-		social_filter_scroll.custom_minimum_size = Vector2(0, 38)
-		social_filter_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_filter_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		window_vbox.add_child(social_filter_scroll)
-		window_vbox.move_child(social_filter_scroll, window_vbox.get_children().find(social_feed_scroll))
-
-		social_filter_chips = HBoxContainer.new()
-		social_filter_chips.name = "SocialFeedFilterChips"
-		social_filter_chips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_filter_chips.add_theme_constant_override("separation", 10)
-		social_filter_scroll.add_child(social_filter_chips)
-
-	if window_vbox != null and social_ticker_tape_panel == null:
-		social_ticker_tape_panel = PanelContainer.new()
-		social_ticker_tape_panel.name = "SocialTickerTapePanel"
-		social_ticker_tape_panel.custom_minimum_size = Vector2(0, 36)
-		social_ticker_tape_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		window_vbox.add_child(social_ticker_tape_panel)
-		window_vbox.move_child(social_ticker_tape_panel, window_vbox.get_children().find(social_feed_scroll))
-
-		var ticker_margin := MarginContainer.new()
-		ticker_margin.name = "SocialTickerTapeMargin"
-		ticker_margin.add_theme_constant_override("margin_left", 8)
-		ticker_margin.add_theme_constant_override("margin_top", 5)
-		ticker_margin.add_theme_constant_override("margin_right", 8)
-		ticker_margin.add_theme_constant_override("margin_bottom", 5)
-		social_ticker_tape_panel.add_child(ticker_margin)
-
-		social_ticker_tape_scroll = ScrollContainer.new()
-		social_ticker_tape_scroll.name = "SocialTickerTapeScroll"
-		social_ticker_tape_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_ticker_tape_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		ticker_margin.add_child(social_ticker_tape_scroll)
-
-		social_ticker_tape = HBoxContainer.new()
-		social_ticker_tape.name = "SocialTickerTape"
-		social_ticker_tape.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_ticker_tape.add_theme_constant_override("separation", 6)
-		social_ticker_tape_scroll.add_child(social_ticker_tape)
-
-	if window_vbox != null and social_message_view == null:
-		social_message_view = HBoxContainer.new()
-		social_message_view.name = "SocialMessageView"
-		social_message_view.custom_minimum_size = Vector2.ZERO
-		social_message_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_message_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		social_message_view.add_theme_constant_override("separation", 10)
-		window_vbox.add_child(social_message_view)
-
-		var thread_panel := PanelContainer.new()
-		thread_panel.name = "SocialMessageThreadPanel"
-		thread_panel.custom_minimum_size = Vector2(208, 0)
-		thread_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-		thread_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		_style_twooter_panel(thread_panel, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 0, 1)
-		social_message_view.add_child(thread_panel)
-		var thread_margin := MarginContainer.new()
-		thread_margin.add_theme_constant_override("margin_left", 10)
-		thread_margin.add_theme_constant_override("margin_top", 10)
-		thread_margin.add_theme_constant_override("margin_right", 10)
-		thread_margin.add_theme_constant_override("margin_bottom", 10)
-		thread_panel.add_child(thread_margin)
-		social_message_thread_scroll = ScrollContainer.new()
-		social_message_thread_scroll.name = "SocialMessageThreadScroll"
-		social_message_thread_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_message_thread_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		social_message_thread_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		thread_margin.add_child(social_message_thread_scroll)
-		social_message_threads = VBoxContainer.new()
-		social_message_threads.name = "SocialMessageThreads"
-		social_message_threads.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_message_threads.add_theme_constant_override("separation", 8)
-		social_message_thread_scroll.add_child(social_message_threads)
-
-		var detail_panel := PanelContainer.new()
-		detail_panel.name = "SocialMessageDetailPanel"
-		detail_panel.custom_minimum_size = Vector2.ZERO
-		detail_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		detail_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		_style_twooter_panel(detail_panel, COLOR_TWOOTER_PAGE, COLOR_TWOOTER_BORDER, 0, 1)
-		social_message_view.add_child(detail_panel)
-		var detail_margin := MarginContainer.new()
-		detail_margin.add_theme_constant_override("margin_left", 14)
-		detail_margin.add_theme_constant_override("margin_top", 14)
-		detail_margin.add_theme_constant_override("margin_right", 14)
-		detail_margin.add_theme_constant_override("margin_bottom", 14)
-		detail_panel.add_child(detail_margin)
-		social_message_detail = VBoxContainer.new()
-		social_message_detail.name = "SocialMessageDetail"
-		social_message_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_message_detail.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		social_message_detail.add_theme_constant_override("separation", 12)
-		detail_margin.add_child(social_message_detail)
-		social_message_header = VBoxContainer.new()
-		social_message_header.name = "SocialMessageHeader"
-		social_message_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_message_header.add_theme_constant_override("separation", 4)
-		social_message_detail.add_child(social_message_header)
-		social_message_rows_scroll = ScrollContainer.new()
-		social_message_rows_scroll.name = "SocialMessageRowsScroll"
-		social_message_rows_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_message_rows_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		social_message_rows_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		social_message_detail.add_child(social_message_rows_scroll)
-		social_message_rows = VBoxContainer.new()
-		social_message_rows.name = "SocialMessageRows"
-		social_message_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		social_message_rows.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		social_message_rows.add_theme_constant_override("separation", 8)
-		social_message_rows_scroll.add_child(social_message_rows)
-		social_message_composer = PanelContainer.new()
-		social_message_composer.name = "SocialMessageComposer"
-		social_message_composer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_style_twooter_panel(social_message_composer, COLOR_TWOOTER_CARD, COLOR_TWOOTER_BORDER, 8, 1)
-		social_message_detail.add_child(social_message_composer)
-		var composer_margin := MarginContainer.new()
-		composer_margin.add_theme_constant_override("margin_left", 10)
-		composer_margin.add_theme_constant_override("margin_top", 10)
-		composer_margin.add_theme_constant_override("margin_right", 10)
-		composer_margin.add_theme_constant_override("margin_bottom", 10)
-		social_message_composer.add_child(composer_margin)
-		var composer_vbox := VBoxContainer.new()
-		composer_vbox.name = "SocialMessageComposerVBox"
-		composer_vbox.add_theme_constant_override("separation", 8)
-		composer_margin.add_child(composer_vbox)
-		var composer_text_panel := PanelContainer.new()
-		composer_text_panel.name = "SocialMessageComposerTextPanel"
-		composer_text_panel.custom_minimum_size = Vector2(0, 58)
-		composer_text_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_style_twooter_panel(composer_text_panel, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 6, 1)
-		composer_vbox.add_child(composer_text_panel)
-		var composer_text_margin := MarginContainer.new()
-		composer_text_margin.add_theme_constant_override("margin_left", 10)
-		composer_text_margin.add_theme_constant_override("margin_top", 8)
-		composer_text_margin.add_theme_constant_override("margin_right", 10)
-		composer_text_margin.add_theme_constant_override("margin_bottom", 8)
-		composer_text_panel.add_child(composer_text_margin)
-		social_message_composer_text_label = Label.new()
-		social_message_composer_text_label.name = "SocialMessageComposerTextLabel"
-		social_message_composer_text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		social_message_composer_text_label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-		_apply_font_override_to_control(social_message_composer_text_label, _social_font_size(DEFAULT_APP_FONT_SIZE), _get_app_font())
-		composer_text_margin.add_child(social_message_composer_text_label)
-		social_message_actions = VBoxContainer.new()
-		social_message_actions.name = "SocialMessageComposerOptions"
-		social_message_actions.add_theme_constant_override("separation", 8)
-		composer_vbox.add_child(social_message_actions)
-		social_message_option_buttons.clear()
-		for option_index in range(3):
-			var option_button := Button.new()
-			option_button.name = "SocialMessageDialogOptionButton"
-			option_button.custom_minimum_size = Vector2(0, 34)
-			option_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			option_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-			option_button.clip_text = true
-			option_button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-			option_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-			_style_social_thread_button(option_button)
-			option_button.pressed.connect(_on_social_message_option_selected.bind(option_index))
-			social_message_actions.add_child(option_button)
-			social_message_option_buttons.append(option_button)
-		var composer_action_row := HBoxContainer.new()
-		composer_action_row.name = "SocialMessageComposerActionRow"
-		composer_action_row.alignment = BoxContainer.ALIGNMENT_END
-		composer_vbox.add_child(composer_action_row)
-		social_message_send_button = Button.new()
-		social_message_send_button.name = "SocialMessageSendButton"
-		social_message_send_button.text = "Send | 1 AP"
-		social_message_send_button.custom_minimum_size = Vector2(112, 34)
-		social_message_send_button.disabled = true
-		_style_social_filter_button(social_message_send_button, true, true)
-		social_message_send_button.pressed.connect(_send_social_message_composer)
-		composer_action_row.add_child(social_message_send_button)
-
-	_style_twooter_ui()
-
+	_ensure_social_controller()
+	social_controller.ensure_ui()
 
 func _build_social_left_sidebar() -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.name = "SocialLeftSidebar"
-	panel.custom_minimum_size = Vector2(190, 0)
-	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_style_twooter_panel(panel, COLOR_TWOOTER_PAGE, COLOR_TWOOTER_BORDER, 0, 1)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 16)
-	margin.add_theme_constant_override("margin_top", 16)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 16)
-	panel.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.name = "SocialLeftSidebarVBox"
-	vbox.add_theme_constant_override("separation", 14)
-	margin.add_child(vbox)
-
-	var logo := Label.new()
-	logo.name = "SocialLogoLabel"
-	logo.text = "Twooter"
-	logo.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(logo, _social_font_size(DEFAULT_APP_FONT_SIZE + 7), _get_dashboard_title_font())
-	vbox.add_child(logo)
-
-	social_left_nav_buttons.clear()
-	for row in [
-		{"id": "home", "label": "Home"},
-		{"id": "message", "label": "Message"}
-	]:
-		var button := Button.new()
-		button.name = "SocialNav%sButton" % str(row.get("id", "")).capitalize()
-		button.text = str(row.get("label", ""))
-		button.custom_minimum_size = Vector2(0, 42)
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		button.pressed.connect(_on_social_nav_pressed.bind(str(row.get("id", ""))))
-		vbox.add_child(button)
-		social_left_nav_buttons[str(row.get("id", ""))] = button
-	return panel
-
+	_ensure_social_controller()
+	return social_controller._build_social_left_sidebar()
 
 func _build_social_right_rail() -> VBoxContainer:
-	var rail := VBoxContainer.new()
-	rail.name = "SocialRightRail"
-	rail.custom_minimum_size = Vector2(288, 0)
-	rail.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	rail.add_theme_constant_override("separation", 18)
-
-	var search_card := _make_social_account_search_card()
-	rail.add_child(search_card)
-
-	var trending_card := _make_social_rail_card("SocialTrendingCard", "Trending")
-	social_trending_rows = trending_card.find_child("SocialRailRows", true, false) as VBoxContainer
-	rail.add_child(trending_card)
-
-	var follow_card := _make_social_rail_card("SocialFollowCard", "Who to follow")
-	social_follow_rows = follow_card.find_child("SocialRailRows", true, false) as VBoxContainer
-	rail.add_child(follow_card)
-	return rail
-
+	_ensure_social_controller()
+	return social_controller._build_social_right_rail()
 
 func _make_social_account_search_card() -> PanelContainer:
-	var card := PanelContainer.new()
-	card.name = "SocialAccountSearchCard"
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_twooter_panel(card, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 12, 1)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 10)
-	card.add_child(margin)
-	var vbox := VBoxContainer.new()
-	vbox.name = "SocialAccountSearchVBox"
-	vbox.add_theme_constant_override("separation", 8)
-	margin.add_child(vbox)
-	social_account_search_input = LineEdit.new()
-	social_account_search_input.name = "SocialAccountSearchInput"
-	social_account_search_input.placeholder_text = "Search account names"
-	social_account_search_input.clear_button_enabled = true
-	social_account_search_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_social_search_input(social_account_search_input)
-	social_account_search_input.text_changed.connect(_on_social_account_search_changed)
-	social_account_search_input.text_submitted.connect(_on_social_account_search_submitted)
-	vbox.add_child(social_account_search_input)
-	social_account_search_results = VBoxContainer.new()
-	social_account_search_results.name = "SocialAccountSearchResults"
-	social_account_search_results.add_theme_constant_override("separation", 6)
-	social_account_search_results.visible = false
-	vbox.add_child(social_account_search_results)
-	return card
-
+	_ensure_social_controller()
+	return social_controller._make_social_account_search_card()
 
 func _make_social_rail_card(node_name: String, title: String) -> PanelContainer:
-	var card := PanelContainer.new()
-	card.name = node_name
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_twooter_panel(card, COLOR_TWOOTER_SURFACE, COLOR_TWOOTER_BORDER, 12, 1)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 16)
-	margin.add_theme_constant_override("margin_top", 14)
-	margin.add_theme_constant_override("margin_right", 16)
-	margin.add_theme_constant_override("margin_bottom", 14)
-	card.add_child(margin)
-	var vbox := VBoxContainer.new()
-	vbox.name = "SocialRailVBox"
-	vbox.add_theme_constant_override("separation", 12)
-	margin.add_child(vbox)
-	var label := Label.new()
-	label.name = "SocialRailTitle"
-	label.text = title
-	label.add_theme_color_override("font_color", COLOR_TWOOTER_TEXT)
-	_apply_font_override_to_control(label, _social_font_size(DEFAULT_APP_FONT_SIZE + 6), _get_dashboard_title_font())
-	vbox.add_child(label)
-	var rows := VBoxContainer.new()
-	rows.name = "SocialRailRows"
-	rows.add_theme_constant_override("separation", 10)
-	vbox.add_child(rows)
-	return card
-
-
+	_ensure_social_controller()
+	return social_controller._make_social_rail_card(node_name, title)
 func _order_news_detail_nodes(detail_vbox: VBoxContainer) -> void:
-	var ordered_nodes: Array = [
-		news_detail_outlet_label,
-		news_detail_chips_label,
-		news_detail_headline_label,
-		news_detail_deck_label,
-		news_detail_byline_label,
-		news_detail_meta_label,
-		news_detail_hero_frame,
-		news_detail_photo_caption_label,
-		news_detail_body,
-		news_detail_hint_label,
-		news_detail_action_row
-	]
-	var insert_index: int = 0
-	for node_value in ordered_nodes:
-		var node: Node = node_value
-		if node == null or node.get_parent() != detail_vbox:
-			continue
-		detail_vbox.move_child(node, insert_index)
-		insert_index += 1
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._order_news_detail_nodes(detail_vbox)
+	news_controller._sync_root_refs()
 
 func _ensure_news_grunge_overlay() -> void:
-	if news_grunge_overlay != null:
-		return
-	news_grunge_overlay = Control.new()
-	news_grunge_overlay.name = "NewsGrungeOverlay"
-	news_grunge_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	news_grunge_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	news_grunge_overlay.z_index = 12
-	news_window_body.add_child(news_grunge_overlay)
-	_add_news_paper_speckles(news_grunge_overlay)
-	_add_news_grunge_texture(news_grunge_overlay, "NewsFoldVertical", "fold_vertical", 0.5, 0.0, 0.5, 1.0, -17.0, 0.0, 17.0, 0.0, 0.16, 0.0, TextureRect.STRETCH_SCALE)
-	_add_news_grunge_texture(news_grunge_overlay, "NewsFoldHorizontal", "fold_horizontal", 0.0, 0.38, 1.0, 0.38, 0.0, -12.0, 0.0, 12.0, 0.10, 0.0, TextureRect.STRETCH_SCALE)
-	_add_news_grunge_texture(news_grunge_overlay, "NewsCoffeeStain", "coffee", 0.52, 1.0, 0.52, 1.0, -72.0, -174.0, 168.0, 6.0, 0.24, 0.0, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
-	_add_news_grunge_texture(news_grunge_overlay, "NewsTraderEditionStamp", "stamp_trader", 1.0, 0.0, 1.0, 0.0, -146.0, 94.0, -34.0, 206.0, 0.32, -14.0, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
-	_add_news_grunge_texture(news_grunge_overlay, "NewsSmudgeOne", "smudge_01", 0.64, 0.29, 0.64, 0.29, 0.0, 0.0, 44.0, 28.0, 0.24, -10.0, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
-	_add_news_grunge_texture(news_grunge_overlay, "NewsSmudgeTwo", "smudge_02", 0.34, 0.52, 0.34, 0.52, 0.0, 0.0, 38.0, 24.0, 0.20, 13.0, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
-	_add_news_grunge_texture(news_grunge_overlay, "NewsSmudgeThree", "smudge_03", 0.79, 0.73, 0.79, 0.73, 0.0, 0.0, 36.0, 22.0, 0.18, -18.0, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
-	_add_news_grunge_texture(news_grunge_overlay, "NewsSmudgeFour", "smudge_04", 0.23, 0.78, 0.23, 0.78, 0.0, 0.0, 32.0, 20.0, 0.18, 8.0, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._ensure_news_grunge_overlay()
+	news_controller._sync_root_refs()
 
 func _add_news_paper_speckles(parent: Control) -> void:
-	for speck_index in range(72):
-		var speck := ColorRect.new()
-		speck.name = "NewsPaperSpeckle_%02d" % speck_index
-		speck.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var x_ratio: float = float((speck_index * 37 + 11) % 101) / 101.0
-		var y_ratio: float = float((speck_index * 53 + 7) % 97) / 97.0
-		speck.anchor_left = x_ratio
-		speck.anchor_right = x_ratio
-		speck.anchor_top = y_ratio
-		speck.anchor_bottom = y_ratio
-		var speck_size: float = 1.0 + float(speck_index % 3)
-		speck.offset_left = 0.0
-		speck.offset_top = 0.0
-		speck.offset_right = speck_size
-		speck.offset_bottom = speck_size
-		speck.color = Color(COLOR_MARKET_PAPER_MUTED.r, COLOR_MARKET_PAPER_MUTED.g, COLOR_MARKET_PAPER_MUTED.b, 0.055)
-		parent.add_child(speck)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._add_news_paper_speckles(parent)
+	news_controller._sync_root_refs()
 
 func _add_news_grunge_texture(
 	parent: Control,
@@ -21377,64 +13473,26 @@ func _add_news_grunge_texture(
 	rotation: float,
 	stretch_mode: int
 ) -> void:
-	var texture: Texture2D = _market_paper_texture(texture_id)
-	if texture == null:
-		return
-	var texture_rect := TextureRect.new()
-	texture_rect.name = node_name
-	texture_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	texture_rect.texture = texture
-	texture_rect.anchor_left = anchor_left
-	texture_rect.anchor_top = anchor_top
-	texture_rect.anchor_right = anchor_right
-	texture_rect.anchor_bottom = anchor_bottom
-	texture_rect.offset_left = offset_left
-	texture_rect.offset_top = offset_top
-	texture_rect.offset_right = offset_right
-	texture_rect.offset_bottom = offset_bottom
-	texture_rect.modulate = Color(1, 1, 1, alpha)
-	texture_rect.rotation_degrees = rotation
-	texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	texture_rect.stretch_mode = stretch_mode
-	parent.add_child(texture_rect)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._add_news_grunge_texture(parent, node_name, texture_id, anchor_left, anchor_top, anchor_right, anchor_bottom, offset_left, offset_top, offset_right, offset_bottom, alpha, rotation, stretch_mode)
+	news_controller._sync_root_refs()
 
 func _market_paper_texture(texture_id: String) -> Texture2D:
-	var path: String = str(MARKET_PAPER_GRUNGE_TEXTURES.get(texture_id, ""))
-	if path.is_empty():
-		return null
-	return _desktop_texture(path)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: Texture2D = news_controller._market_paper_texture(texture_id)
+	news_controller._sync_root_refs()
+	return result
 
 func _populate_watchlist_picker() -> void:
-	if watchlist_picker_list == null:
-		return
-
-	watchlist_picker_company_ids.clear()
-	watchlist_picker_list.clear()
-	var watchlist_lookup: Dictionary = {}
-	for company_id_value in GameManager.get_watchlist_company_ids():
-		watchlist_lookup[str(company_id_value)] = true
-
-	for row_value in _get_company_rows_cached():
-		var row: Dictionary = row_value
-		var company_id: String = str(row.get("id", ""))
-		var item_text: String = _build_stock_list_line(row)
-		watchlist_picker_company_ids.append(company_id)
-		watchlist_picker_list.add_item(item_text)
-		var item_index: int = watchlist_picker_list.item_count - 1
-		watchlist_picker_list.set_item_tooltip(item_index, _watchlist_tooltip(row))
-		if watchlist_lookup.has(company_id):
-			watchlist_picker_list.set_item_disabled(item_index, true)
-
-	if watchlist_picker_list.item_count > 0:
-		for item_index in range(watchlist_picker_list.item_count):
-			if watchlist_picker_list.is_item_disabled(item_index):
-				continue
-			watchlist_picker_list.select(item_index)
-			break
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._populate_watchlist_picker()
+	stock_controller._sync_root_refs()
 func _build_tutorial_text() -> String:
 	return "Open the STOCKBOT app from the desktop, then pick one stock first.\n\nUse the Chart, Key Stats, Financials, Broker, Corp. Action, or Profile tabs to inspect the setup, size the order from the right-side ticket, then use the navbar to advance the day.\n\nDashboard is now overview-only, while Portfolio keeps your holdings and trade history together.\n\nDifficulty: %s." % GameManager.get_current_difficulty_label()
 
@@ -22181,123 +14239,31 @@ func _format_debug_event_title(event_id: String) -> String:
 
 
 func _refresh_order_controls(snapshot: Dictionary) -> void:
-	var current_lots: int = _selected_lots()
-	var lot_size: int = GameManager.get_lot_size()
-	var shares_owned: int = int(snapshot.get("shares_owned", 0))
-	var buy_estimate: Dictionary = GameManager.estimate_buy_lots(selected_company_id, current_lots)
-	var sell_estimate: Dictionary = GameManager.estimate_sell_lots(selected_company_id, current_lots)
-	var portfolio: Dictionary = GameManager.get_portfolio_snapshot()
-	var available_cash: float = float(portfolio.get("cash", 0.0))
-	var max_sellable_lots: int = int(floor(float(shares_owned) / float(lot_size)))
-	var buy_total_cost: float = float(buy_estimate.get("total_cost", 0.0))
-	var buy_block_reason: String = GameManager.get_life_action_block_reason("buy") if RunState.has_active_run() else ""
-	var sell_block_reason: String = GameManager.get_life_action_block_reason("sell") if RunState.has_active_run() else ""
-	var can_buy: bool = bool(buy_estimate.get("success", false)) and buy_total_cost <= available_cash + 0.0001
-	var can_sell: bool = bool(sell_estimate.get("success", false)) and max_sellable_lots >= current_lots
-	if not buy_block_reason.is_empty():
-		can_buy = false
-	if not sell_block_reason.is_empty():
-		can_sell = false
-	var current_price: float = float(snapshot.get("current_price", 0.0))
-	var previous_close: float = float(snapshot.get("previous_close", current_price))
-	var price_change_value: float = current_price - previous_close
-	var active_estimate: Dictionary = sell_estimate if active_order_side == "sell" else buy_estimate
-	var estimated_total: float = float(active_estimate.get("net_proceeds", 0.0)) if active_order_side == "sell" else float(active_estimate.get("total_cost", 0.0))
-	var can_submit: bool = can_sell if active_order_side == "sell" else can_buy
-	var active_block_reason: String = sell_block_reason if active_order_side == "sell" else buy_block_reason
-	var impactability: Dictionary = snapshot.get("impactability", {})
-	var order_impact_hint: Dictionary = _build_order_impact_hint(snapshot, active_estimate, active_order_side)
-
-	order_company_name_label.text = str(snapshot.get("ticker", "-")).to_upper()
-	selection_label.text = str(snapshot.get("name", ""))
-	selection_label.visible = false
-	order_price_value_label.text = _format_quote_price(current_price)
-	order_price_change_label.text = "%s (%s)" % [
-		_format_signed_quote_delta(price_change_value),
-		_format_change(float(snapshot.get("daily_change_pct", 0.0)))
-	]
-	order_position_label.text = ""
-	order_position_label.tooltip_text = ""
-	order_position_label.visible = false
-	_refresh_order_market_summary(snapshot)
-
-	order_title_label.text = "Sell Order" if active_order_side == "sell" else "Buy Order"
-	order_price_line_edit.text = _format_currency(current_price)
-	estimated_total_value_label.text = _format_currency(estimated_total)
-	if not str(order_impact_hint.get("label", "")).is_empty():
-		estimated_total_value_label.text += "  |  %s" % str(order_impact_hint.get("label", ""))
-	if not active_block_reason.is_empty():
-		estimated_total_value_label.text += "  |  Blocked"
-	estimated_total_value_label.tooltip_text = active_block_reason if not active_block_reason.is_empty() else str(order_impact_hint.get("detail", impactability.get("detail", "")))
-	submit_order_button.text = "Submit Sell Order" if active_order_side == "sell" else "Submit Buy Order"
-	submit_order_button.disabled = not can_submit
-	buy_button.disabled = not sell_block_reason.is_empty() and not buy_block_reason.is_empty()
-	sell_button.disabled = buy_button.disabled
-	submit_order_button.tooltip_text = active_block_reason if not active_block_reason.is_empty() else "Submit the active order."
-	_refresh_submit_order_button_style()
-	_update_order_side_buttons()
-	_set_label_tone(order_price_change_label, _color_for_change(float(snapshot.get("daily_change_pct", 0.0))))
-	var estimate_tone: Color = COLOR_TEXT if can_submit else COLOR_MUTED
-	if can_submit and str(order_impact_hint.get("tone", "")) == "warning":
-		estimate_tone = COLOR_WARNING
-	_set_label_tone(estimated_total_value_label, estimate_tone)
-	_refresh_contact_intel_controls()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_order_controls(snapshot)
+	stock_controller._sync_root_refs()
 func _build_order_impact_hint(snapshot: Dictionary, active_estimate: Dictionary, side: String) -> Dictionary:
-	var impactability: Dictionary = snapshot.get("impactability", {})
-	if impactability.is_empty():
-		return {}
-
-	var order_value: float = float(active_estimate.get("net_proceeds", 0.0)) if side == "sell" else float(active_estimate.get("total_cost", 0.0))
-	if order_value <= 0.0:
-		return {}
-
-	var depth_key: String = "bid_depth_value" if side == "sell" else "ask_depth_value"
-	var side_depth_value: float = max(float(impactability.get(depth_key, 0.0)), 0.0)
-	if side_depth_value <= 0.0:
-		side_depth_value = max(float(impactability.get("visible_depth_value", 0.0)), float(impactability.get("avg_daily_value", 1.0)))
-	var depth_ratio: float = order_value / max(side_depth_value, 1.0)
-	var adv_ratio: float = order_value / max(float(impactability.get("avg_daily_value", 1.0)), 1.0)
-	var float_ratio: float = order_value / max(float(impactability.get("free_float_value", 1.0)), 1.0)
-	var side_text: String = "bid" if side == "sell" else "ask"
-	var detail: String = "Order is %.2fx %s depth, %.2fx ADV, %.2f%% of free-float value." % [
-		depth_ratio,
-		side_text,
-		adv_ratio,
-		float_ratio * 100.0
-	]
-	if depth_ratio >= 1.0 or float_ratio >= 0.006:
-		return {
-			"label": "Large vs depth",
-			"tone": "warning",
-			"detail": detail
-		}
-	if depth_ratio >= 0.35 or adv_ratio >= 0.20:
-		return {
-			"label": "Visible flow",
-			"tone": "warning",
-			"detail": detail
-		}
-	return {
-		"label": "",
-		"tone": str(impactability.get("tone", "")),
-		"detail": detail
-	}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._build_order_impact_hint(snapshot, active_estimate, side)
+	stock_controller._sync_root_refs()
+	return result
 func _selected_lots() -> int:
-	return max(selected_lots, 1)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: int = stock_controller._selected_lots()
+	stock_controller._sync_root_refs()
+	return result
 func _update_order_side_buttons() -> void:
-	buy_button.set_pressed_no_signal(active_order_side == "buy")
-	sell_button.set_pressed_no_signal(active_order_side == "sell")
-	_style_stockbot_button(buy_button, COLOR_STOCKBOT_BULL_TINT, COLOR_STOCKBOT_BULL_EDGE, COLOR_STOCKBOT_TEXT, 6, active_order_side == "buy")
-	_style_stockbot_button(sell_button, COLOR_STOCKBOT_BEAR_TINT, COLOR_STOCKBOT_BEAR_EDGE, COLOR_STOCKBOT_TEXT, 6, active_order_side == "sell")
-	_refresh_submit_order_button_style()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._update_order_side_buttons()
+	stock_controller._sync_root_refs()
 func _set_active_section(section_id: String) -> void:
 	var normalized_section_id: String = section_id.to_lower()
 	if not SECTION_ORDER.has(normalized_section_id):
@@ -22686,169 +14652,40 @@ func _format_trade_entry(trade: Dictionary) -> String:
 
 
 func _build_setup_read(snapshot: Dictionary) -> String:
-	var quality: int = int(snapshot.get("quality_score", 0))
-	var growth: int = int(snapshot.get("growth_score", 0))
-	var risk: int = int(snapshot.get("risk_score", 0))
-	var daily_change: float = float(snapshot.get("daily_change_pct", 0.0))
-	var broker_flow: Dictionary = snapshot.get("broker_flow", {})
-	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
-
-	var quality_read: String = "middle-quality name"
-	if quality >= 70:
-		quality_read = "higher-quality name"
-	elif quality <= 55:
-		quality_read = "more speculative name"
-
-	var growth_read: String = "with balanced growth"
-	if growth >= 68:
-		growth_read = "with stronger growth appeal"
-	elif growth <= 55:
-		growth_read = "with slower growth expectations"
-
-	var risk_read: String = "and controlled risk"
-	if risk >= 58:
-		risk_read = "but elevated risk"
-	elif risk <= 35:
-		risk_read = "and relatively contained risk"
-
-	var tape_read: String = "The tape is still waiting for conviction."
-	if daily_change > 0.025:
-		tape_read = "The tape is already pressing higher."
-	elif daily_change < -0.025:
-		tape_read = "The tape is under visible pressure."
-
-	var flow_read: String = "Broker flow is not clearly committed yet."
-	if flow_tag == "accumulation":
-		flow_read = "Broker flow is leaning toward accumulation."
-	elif flow_tag == "distribution":
-		flow_read = "Broker flow is leaning toward distribution."
-
-	return "%s %s %s. %s %s" % [quality_read.capitalize(), growth_read, risk_read, tape_read, flow_read]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._build_setup_read(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _build_support_signals(snapshot: Dictionary) -> String:
-	var signals: Array = []
-	var quality: int = int(snapshot.get("quality_score", 0))
-	var growth: int = int(snapshot.get("growth_score", 0))
-	var risk: int = int(snapshot.get("risk_score", 0))
-	var daily_change: float = float(snapshot.get("daily_change_pct", 0.0))
-	var broker_flow: Dictionary = snapshot.get("broker_flow", {})
-	var financials: Dictionary = snapshot.get("financials", {})
-	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
-	var dominant_buyer: String = str(broker_flow.get("dominant_buyer", "balanced"))
-	var dominant_buy_actor: String = _broker_actor_label(broker_flow, "buy")
-	var revenue_growth_yoy: float = float(financials.get("revenue_growth_yoy", 0.0))
-	var earnings_growth_yoy: float = float(financials.get("earnings_growth_yoy", 0.0))
-	var net_profit_margin: float = float(financials.get("net_profit_margin", 0.0))
-	var roe: float = float(financials.get("roe", 0.0))
-	var debt_to_equity: float = float(financials.get("debt_to_equity", 0.0))
-
-	if quality >= 68:
-		signals.append("- stronger company quality")
-	if growth >= 65:
-		signals.append("- healthy growth profile")
-	if risk <= 35:
-		signals.append("- lower relative risk")
-	if daily_change > 0.015:
-		signals.append("- price already confirms strength")
-	if flow_tag == "accumulation":
-		signals.append("- broker flow leans supportive")
-	if dominant_buyer in ["foreign", "institution", "bandar", "zombie"]:
-		signals.append("- cleaner buyer profile: %s" % dominant_buy_actor)
-	if revenue_growth_yoy >= 12.0:
-		signals.append("- revenue is still growing at a healthy clip")
-	if earnings_growth_yoy >= 10.0:
-		signals.append("- earnings are compounding, not just sales")
-	if net_profit_margin >= 8.0:
-		signals.append("- margins still show decent operating quality")
-	if roe >= 14.0:
-		signals.append("- return on equity supports the quality read")
-	if debt_to_equity <= 0.5:
-		signals.append("- balance sheet leverage stays manageable")
-
-	if signals.is_empty():
-		signals.append("- no obvious support edge yet")
-
-	return "\n".join(signals)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._build_support_signals(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _build_risk_signals(snapshot: Dictionary) -> String:
-	var risks: Array = []
-	var quality: int = int(snapshot.get("quality_score", 0))
-	var growth: int = int(snapshot.get("growth_score", 0))
-	var risk_score: int = int(snapshot.get("risk_score", 0))
-	var daily_change: float = float(snapshot.get("daily_change_pct", 0.0))
-	var broker_flow: Dictionary = snapshot.get("broker_flow", {})
-	var financials: Dictionary = snapshot.get("financials", {})
-	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
-	var dominant_seller: String = str(broker_flow.get("dominant_seller", "balanced"))
-	var dominant_sell_actor: String = _broker_actor_label(broker_flow, "sell")
-	var earnings_growth_yoy: float = float(financials.get("earnings_growth_yoy", 0.0))
-	var net_profit_margin: float = float(financials.get("net_profit_margin", 0.0))
-	var roe: float = float(financials.get("roe", 0.0))
-	var debt_to_equity: float = float(financials.get("debt_to_equity", 0.0))
-
-	if quality <= 55:
-		risks.append("- lower company quality")
-	if growth <= 55:
-		risks.append("- slower growth profile")
-	if risk_score >= 58:
-		risks.append("- elevated risk score")
-	if daily_change < -0.015:
-		risks.append("- price is already under pressure")
-	if flow_tag == "distribution":
-		risks.append("- broker flow leans defensive")
-	if dominant_seller in ["retail", "foreign", "institution", "bandar", "zombie"] and dominant_seller != "balanced":
-		risks.append("- active selling from %s" % dominant_sell_actor)
-	if earnings_growth_yoy < 0.0:
-		risks.append("- earnings are shrinking despite the story")
-	if net_profit_margin < 3.0:
-		risks.append("- thin margins leave less room for mistakes")
-	if roe < 8.0:
-		risks.append("- return on equity still looks weak")
-	if debt_to_equity >= 1.0:
-		risks.append("- leverage is starting to look heavy")
-
-	if risks.is_empty():
-		risks.append("- no major red flags at first glance")
-
-	return "\n".join(risks)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._build_risk_signals(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _build_action_hint(snapshot: Dictionary) -> String:
-	var shares_owned: int = int(snapshot.get("shares_owned", 0))
-	var lots_owned: int = int(snapshot.get("lots_owned", 0))
-	var broker_flow: Dictionary = snapshot.get("broker_flow", {})
-	var dominant_buyer: String = str(broker_flow.get("dominant_buyer", "balanced"))
-	var dominant_seller: String = str(broker_flow.get("dominant_seller", "balanced"))
-	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
-	var dominant_buy_actor: String = _broker_actor_label(broker_flow, "buy")
-	var dominant_sell_actor: String = _broker_actor_label(broker_flow, "sell")
-
-	if shares_owned > 0 and flow_tag == "distribution":
-		return "You already hold %d lot(s). Decide whether today's selling pressure weakens your original thesis." % lots_owned
-	if shares_owned > 0:
-		return "You already have exposure. Use the lot selector to scale deliberately, not just because price moved."
-	if flow_tag == "accumulation" and dominant_buyer != "balanced":
-		return "%s is currently the strongest buyer. Start small and let the fee-aware preview define your first lot." % dominant_buy_actor
-	if dominant_seller != "balanced":
-		return "%s is leaning on this tape. Waiting is a valid decision." % dominant_sell_actor
-	return "No position yet. Use this panel to size a deliberate first lot."
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._build_action_hint(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _build_broker_hint(snapshot: Dictionary) -> String:
-	var broker_flow: Dictionary = snapshot.get("broker_flow", {})
-	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
-	var dominant_buy_actor: String = _broker_actor_label(broker_flow, "buy")
-	var dominant_sell_actor: String = _broker_actor_label(broker_flow, "sell")
-
-	if flow_tag == "accumulation":
-		return "Read: %s is supporting the tape, so ask whether price action agrees or is still lagging." % dominant_buy_actor
-	if flow_tag == "distribution":
-		return "Read: %s is the main seller, so ask whether weakness is temporary or the thesis is breaking." % dominant_sell_actor
-	return "Read: mixed broker behavior. Treat this as a lower-conviction setup unless the company story is especially strong."
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._build_broker_hint(snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _build_reflection_prompt(summary: Dictionary) -> String:
 	var best_accumulation: Dictionary = summary.get("best_accumulation", {})
 	var heaviest_distribution: Dictionary = summary.get("heaviest_distribution", {})
@@ -22907,32 +14744,19 @@ func _titleize_snake_case(value: String) -> String:
 
 
 func _broker_actor_label(broker_flow: Dictionary, side: String) -> String:
-	var normalized_side: String = side.to_lower()
-	var broker_code_key: String = "dominant_buy_broker_code" if normalized_side == "buy" else "dominant_sell_broker_code"
-	var broker_type_key: String = "dominant_buy_broker_type" if normalized_side == "buy" else "dominant_sell_broker_type"
-	var fallback_key: String = "dominant_buyer" if normalized_side == "buy" else "dominant_seller"
-	var broker_code: String = str(broker_flow.get(broker_code_key, ""))
-	if not broker_code.is_empty():
-		return broker_code
-	var fallback_value: String = str(broker_flow.get(broker_type_key, broker_flow.get(fallback_key, "balanced")))
-	if fallback_value.is_empty() or fallback_value == "balanced":
-		return "Balanced"
-	return fallback_value.capitalize()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._broker_actor_label(broker_flow, side)
+	stock_controller._sync_root_refs()
+	return result
 func _watchlist_tooltip(row: Dictionary) -> String:
-	var broker_flow: Dictionary = row.get("broker_flow", {})
-	return "%s\nSector: %s\nHeld: %d lot(s) / %d share(s)\nBuyer: %s\nSeller: %s\nTape: %s" % [
-		row.get("name", row.get("ticker", "")),
-		row.get("sector_name", "Unknown"),
-		int(row.get("lots_owned", 0)),
-		int(row.get("shares_owned", 0)),
-		_broker_actor_label(broker_flow, "buy"),
-		_broker_actor_label(broker_flow, "sell"),
-		str(broker_flow.get("flow_tag", "neutral")).capitalize()
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._watchlist_tooltip(row)
+	stock_controller._sync_root_refs()
+	return result
 func _flow_badge(flow_tag: String) -> String:
 	if flow_tag == "accumulation":
 		return "[ACC]"
@@ -23391,21 +15215,12 @@ func _style_button(
 
 
 func _load_stockbot_icon(icon_id: String) -> Texture2D:
-	if stockbot_icon_cache.has(icon_id):
-		return stockbot_icon_cache.get(icon_id, null) as Texture2D
-	var icon_path: String = str(STOCKBOT_ICON_PATHS.get(icon_id, ""))
-	if icon_path.is_empty():
-		return null
-	if not ResourceLoader.exists(icon_path) and not FileAccess.file_exists(icon_path):
-		return null
-	var icon_resource := load(icon_path)
-	if icon_resource is Texture2D:
-		var texture := icon_resource as Texture2D
-		stockbot_icon_cache[icon_id] = texture
-		return texture
-	return null
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Texture2D = stock_controller._load_stockbot_icon(icon_id)
+	stock_controller._sync_root_refs()
+	return result
 func _make_stockbot_stylebox(
 	fill_color: Color,
 	border_color: Color,
@@ -23413,38 +15228,24 @@ func _make_stockbot_stylebox(
 	border_width: int = 1,
 	content_margin: int = 0
 ) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = fill_color
-	style.border_color = border_color
-	style.set_border_width_all(border_width)
-	style.corner_radius_top_left = corner_radius
-	style.corner_radius_top_right = corner_radius
-	style.corner_radius_bottom_right = corner_radius
-	style.corner_radius_bottom_left = corner_radius
-	style.content_margin_left = content_margin
-	style.content_margin_top = content_margin
-	style.content_margin_right = content_margin
-	style.content_margin_bottom = content_margin
-	return style
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: StyleBoxFlat = stock_controller._make_stockbot_stylebox(fill_color, border_color, corner_radius, border_width, content_margin)
+	stock_controller._sync_root_refs()
+	return result
 func _set_stockbot_margins(margin_container: MarginContainer, left: int, top: int, right: int, bottom: int) -> void:
-	if margin_container == null:
-		return
-	margin_container.add_theme_constant_override("margin_left", left)
-	margin_container.add_theme_constant_override("margin_top", top)
-	margin_container.add_theme_constant_override("margin_right", right)
-	margin_container.add_theme_constant_override("margin_bottom", bottom)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._set_stockbot_margins(margin_container, left, top, right, bottom)
+	stock_controller._sync_root_refs()
 func _set_stockbot_spacing(container: Container, separation: int) -> void:
-	if container == null:
-		return
-	container.add_theme_constant_override("separation", separation)
-	container.add_theme_constant_override("h_separation", separation)
-	container.add_theme_constant_override("v_separation", separation)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._set_stockbot_spacing(container, separation)
+	stock_controller._sync_root_refs()
 func _style_stockbot_panel(
 	panel: PanelContainer,
 	fill_color: Color = COLOR_STOCKBOT_SURFACE,
@@ -23452,11 +15253,11 @@ func _style_stockbot_panel(
 	corner_radius: int = 0,
 	border_width: int = 1
 ) -> void:
-	if panel == null:
-		return
-	panel.add_theme_stylebox_override("panel", _make_stockbot_stylebox(fill_color, border_color, corner_radius, border_width))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._style_stockbot_panel(panel, fill_color, border_color, corner_radius, border_width)
+	stock_controller._sync_root_refs()
 func _style_stockbot_button(
 	button: Button,
 	fill_color: Color,
@@ -23465,37 +15266,11 @@ func _style_stockbot_button(
 	corner_radius: int = 6,
 	selected: bool = false
 ) -> void:
-	if button == null:
-		return
-	var normal := _make_stockbot_stylebox(fill_color, border_color, corner_radius, 1, 3 if button.text.is_empty() else 6)
-	var hover := normal.duplicate()
-	hover.bg_color = fill_color.lightened(0.08)
-	var pressed := normal.duplicate()
-	pressed.bg_color = COLOR_STOCKBOT_BLUE_TINT if selected else fill_color.darkened(0.08)
-	pressed.border_color = COLOR_STOCKBOT_BLUE if selected else border_color.lightened(0.12)
-	pressed.set_border_width_all(2 if selected else 1)
-	var disabled := normal.duplicate()
-	disabled.bg_color = Color(fill_color.r, fill_color.g, fill_color.b, 0.45)
-	disabled.border_color = Color(border_color.r, border_color.g, border_color.b, 0.42)
-
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", pressed)
-	button.add_theme_stylebox_override("disabled", disabled)
-	button.add_theme_color_override("font_color", font_color)
-	button.add_theme_color_override("font_hover_color", COLOR_STOCKBOT_TEXT)
-	button.add_theme_color_override("font_pressed_color", COLOR_STOCKBOT_TEXT)
-	button.add_theme_color_override("font_focus_color", COLOR_STOCKBOT_TEXT)
-	button.add_theme_color_override("font_disabled_color", Color(COLOR_STOCKBOT_MUTED.r, COLOR_STOCKBOT_MUTED.g, COLOR_STOCKBOT_MUTED.b, 0.58))
-	button.add_theme_color_override("icon_normal_color", font_color)
-	button.add_theme_color_override("icon_hover_color", COLOR_STOCKBOT_TEXT)
-	button.add_theme_color_override("icon_pressed_color", COLOR_STOCKBOT_TEXT)
-	button.add_theme_color_override("icon_focus_color", COLOR_STOCKBOT_TEXT)
-	button.add_theme_color_override("icon_hover_pressed_color", COLOR_STOCKBOT_TEXT)
-	button.add_theme_color_override("icon_disabled_color", Color(COLOR_STOCKBOT_MUTED.r, COLOR_STOCKBOT_MUTED.g, COLOR_STOCKBOT_MUTED.b, 0.58))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._style_stockbot_button(button, fill_color, border_color, font_color, corner_radius, selected)
+	stock_controller._sync_root_refs()
 func _style_stockbot_icon_button(
 	button: Button,
 	icon_id: String,
@@ -23505,17 +15280,11 @@ func _style_stockbot_icon_button(
 	fill_color: Color = COLOR_STOCKBOT_SURFACE_ALT,
 	border_color: Color = COLOR_STOCKBOT_EDGE
 ) -> void:
-	if button == null:
-		return
-	button.icon = _load_stockbot_icon(icon_id)
-	button.text = text_value
-	button.tooltip_text = tooltip_value
-	button.expand_icon = text_value.is_empty()
-	button.add_theme_constant_override("h_separation", 7)
-	button.add_theme_constant_override("icon_max_width", 22)
-	_style_stockbot_button(button, fill_color, border_color, COLOR_STOCKBOT_TEXT, 6, selected)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._style_stockbot_icon_button(button, icon_id, text_value, tooltip_value, selected, fill_color, border_color)
+	stock_controller._sync_root_refs()
 func _style_stockbot_label_chip(
 	label: Label,
 	fill_color: Color,
@@ -23523,68 +15292,29 @@ func _style_stockbot_label_chip(
 	font_color: Color,
 	corner_radius: int = 6
 ) -> void:
-	if label == null:
-		return
-	label.add_theme_stylebox_override("normal", _make_stockbot_stylebox(fill_color, border_color, corner_radius, 1, 7))
-	label.add_theme_color_override("font_color", font_color)
-	label.add_theme_font_size_override("font_size", 12)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._style_stockbot_label_chip(label, fill_color, border_color, font_color, corner_radius)
+	stock_controller._sync_root_refs()
 func _apply_stockbot_compact_spacing() -> void:
-	_set_stockbot_margins(top_bar_panel.get_node_or_null("TopBarMargin") as MarginContainer, 8, 6, 8, 6)
-	_set_stockbot_spacing(top_bar_panel.get_node_or_null("TopBarMargin/TopBarVBox") as Container, 4)
-	_set_stockbot_spacing(top_bar_panel.get_node_or_null("TopBarMargin/TopBarVBox/TitleRow") as Container, 8)
-	_set_stockbot_margins(watchlist_panel.get_node_or_null("WatchlistMargin") as MarginContainer, 6, 6, 6, 6)
-	_set_stockbot_spacing(stock_list_tabs.get_node_or_null("WatchlistTab/WatchlistActionRow") as Container, 6)
-	_set_stockbot_spacing(stock_list_tabs.get_node_or_null("WatchlistTab") as Container, 6)
-	_set_stockbot_spacing(stock_list_tabs.get_node_or_null("AllStocksTab") as Container, 6)
-	_set_stockbot_spacing(all_stocks_rows, 0)
-	_set_stockbot_spacing(portfolio_stocks_rows, 0)
-	_set_stockbot_margins(action_panel.get_node_or_null("ActionMargin") as MarginContainer, 8, 8, 8, 8)
-	_set_stockbot_spacing(action_panel.get_node_or_null("ActionMargin/ActionVBox") as Container, 8)
-	_set_stockbot_spacing(action_panel.get_node_or_null("ActionMargin/ActionVBox/HeaderVBox") as Container, 5)
-	_set_stockbot_spacing(action_panel.get_node_or_null("ActionMargin/ActionVBox/HeaderVBox/MarketHeaderRow") as Container, 6)
-	_set_stockbot_spacing(action_panel.get_node_or_null("ActionMargin/ActionVBox/HeaderVBox/MarketStatGrid") as Container, 4)
-	_set_stockbot_spacing(action_panel.get_node_or_null("ActionMargin/ActionVBox/TradeButtonRow") as Container, 6)
-	_set_stockbot_margins(order_card_panel.get_node_or_null("OrderCardMargin") as MarginContainer, 9, 9, 9, 9)
-	_set_stockbot_spacing(order_card_panel.get_node_or_null("OrderCardMargin/OrderCardVBox") as Container, 7)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._apply_stockbot_compact_spacing()
+	stock_controller._sync_root_refs()
 func _ensure_stockbot_detail_section_cards() -> void:
-	_ensure_financials_section_cards()
-	_ensure_broker_section_cards()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._ensure_stockbot_detail_section_cards()
+	stock_controller._sync_root_refs()
 func _ensure_financials_section_cards() -> void:
-	if financials_panel == null:
-		return
-	var financials_vbox: VBoxContainer = financials_panel.get_node_or_null("FinancialsMargin/FinancialsVBox") as VBoxContainer
-	if financials_vbox == null:
-		return
-	_set_stockbot_spacing(financials_vbox, 10)
-	_ensure_financials_statement_card(
-		financials_vbox,
-		"IncomeStatementCard",
-		"IncomeStatementTitle",
-		income_statement_rows_vbox,
-		"IncomeStatementSeparator"
-	)
-	_ensure_financials_statement_card(
-		financials_vbox,
-		"BalanceSheetCard",
-		"BalanceSheetTitle",
-		balance_sheet_rows_vbox,
-		"BalanceSheetSeparator"
-	)
-	_ensure_financials_statement_card(
-		financials_vbox,
-		"CashFlowCard",
-		"CashFlowTitle",
-		cash_flow_rows_vbox,
-		""
-	)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._ensure_financials_section_cards()
+	stock_controller._sync_root_refs()
 func _ensure_financials_statement_card(
 	financials_vbox: VBoxContainer,
 	card_name: String,
@@ -23592,411 +15322,129 @@ func _ensure_financials_statement_card(
 	rows_vbox: VBoxContainer,
 	separator_name: String
 ) -> void:
-	if financials_vbox == null or rows_vbox == null:
-		return
-	var existing_card: PanelContainer = financials_vbox.get_node_or_null(card_name) as PanelContainer
-	if existing_card != null:
-		_style_stockbot_panel(existing_card, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE, 6, 1)
-		return
-	var title_node: Control = financials_vbox.get_node_or_null(title_name) as Control
-	if title_node == null:
-		return
-	if not separator_name.is_empty():
-		var separator: Control = financials_vbox.get_node_or_null(separator_name) as Control
-		if separator != null:
-			separator.visible = false
-	var insert_index: int = title_node.get_index()
-	_move_nodes_into_stockbot_detail_card(financials_vbox, card_name, [title_node, rows_vbox], insert_index)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._ensure_financials_statement_card(financials_vbox, card_name, title_name, rows_vbox, separator_name)
+	stock_controller._sync_root_refs()
 func _ensure_broker_section_cards() -> void:
-	if broker_panel == null:
-		return
-	var broker_vbox: VBoxContainer = broker_panel.get_node_or_null("BrokerMargin/BrokerVBox") as VBoxContainer
-	if broker_vbox == null:
-		return
-	_ensure_broker_range_controls()
-	_set_stockbot_spacing(broker_vbox, 10)
-	var scale_row: Control = null
-	if broker_scale_left_label != null:
-		scale_row = broker_scale_left_label.get_parent() as Control
-	var controls_row: Control = null
-	if broker_net_toggle != null:
-		controls_row = broker_net_toggle.get_parent() as Control
-	var read_insert_index: int = broker_vbox.get_child_count()
-	for node_value in [broker_summary_label, broker_meter_label, broker_meter_bar, scale_row, controls_row]:
-		var node: Control = node_value as Control
-		if node != null and node.get_parent() == broker_vbox:
-			read_insert_index = node.get_index()
-			break
-	_move_nodes_into_stockbot_detail_card(
-		broker_vbox,
-		"BrokerReadCard",
-		[broker_summary_label, broker_meter_label, broker_meter_bar, scale_row, controls_row],
-		read_insert_index
-	)
-	var separator: Control = broker_vbox.get_node_or_null("BrokerSeparator") as Control
-	if separator != null:
-		separator.visible = false
-	var tape_insert_index: int = broker_header_row.get_index() if broker_header_row != null and broker_header_row.get_parent() == broker_vbox else broker_vbox.get_child_count()
-	_move_nodes_into_stockbot_detail_card(
-		broker_vbox,
-		"BrokerTapeCard",
-		[broker_header_row, broker_rows_vbox],
-		tape_insert_index
-	)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._ensure_broker_section_cards()
+	stock_controller._sync_root_refs()
 func _build_stockbot_detail_section_card(card_name: String) -> PanelContainer:
-	var card := PanelContainer.new()
-	card.name = card_name
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_stockbot_panel(card, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE, 6, 1)
-	var margin := MarginContainer.new()
-	margin.name = "%sMargin" % card_name
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 10)
-	card.add_child(margin)
-	var content_vbox := VBoxContainer.new()
-	content_vbox.name = "%sVBox" % card_name
-	content_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content_vbox.add_theme_constant_override("separation", 8)
-	margin.add_child(content_vbox)
-	card.set_meta("content_vbox", content_vbox)
-	return card
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: PanelContainer = stock_controller._build_stockbot_detail_section_card(card_name)
+	stock_controller._sync_root_refs()
+	return result
 func _move_nodes_into_stockbot_detail_card(
 	parent_vbox: VBoxContainer,
 	card_name: String,
 	nodes: Array,
 	insert_index: int
 ) -> PanelContainer:
-	var existing_card: PanelContainer = parent_vbox.get_node_or_null(card_name) as PanelContainer
-	if existing_card != null:
-		_style_stockbot_panel(existing_card, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE, 6, 1)
-		return existing_card
-	var card: PanelContainer = _build_stockbot_detail_section_card(card_name)
-	parent_vbox.add_child(card)
-	parent_vbox.move_child(card, clampi(insert_index, 0, parent_vbox.get_child_count() - 1))
-	var content_vbox: VBoxContainer = card.get_meta("content_vbox") as VBoxContainer
-	for node_value in nodes:
-		var node: Control = node_value as Control
-		if node == null:
-			continue
-		if node.get_parent() == content_vbox:
-			continue
-		var current_parent: Node = node.get_parent()
-		if current_parent != null:
-			current_parent.remove_child(node)
-		content_vbox.add_child(node)
-	return card
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: PanelContainer = stock_controller._move_nodes_into_stockbot_detail_card(parent_vbox, card_name, nodes, insert_index)
+	stock_controller._sync_root_refs()
+	return result
 func _style_stockbot_app_ui() -> void:
-	_apply_stockbot_compact_spacing()
-	_style_stockbot_panel(stock_window_container, COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_BLUE_EDGE, 0, 1)
-	_style_stockbot_panel(top_bar_panel, COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_BLUE_EDGE, 0, 0)
-	_style_stockbot_panel(sidebar_panel, COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_EDGE, 0, 0)
-	_style_stockbot_panel(watchlist_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 0, 1)
-	_style_stockbot_panel(work_area_panel, COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_EDGE, 0, 1)
-	_style_stockbot_panel(action_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 0, 1)
-	_style_stockbot_panel(order_card_panel, COLOR_STOCKBOT_BASE, COLOR_STOCKBOT_EDGE_STRONG, 6, 1)
-	_style_stockbot_panel(key_stats_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 6, 1)
-	_style_stockbot_panel(financials_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 6, 1)
-	_style_stockbot_panel(broker_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 6, 1)
-	_style_stockbot_panel(analyzer_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 6, 1)
-	_style_stockbot_panel(corporate_actions_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 6, 1)
-	_style_stockbot_panel(profile_panel, COLOR_STOCKBOT_SURFACE, COLOR_STOCKBOT_EDGE, 6, 1)
-	_ensure_stockbot_detail_section_cards()
-	_style_stockbot_static_panel_labels()
-
-	_style_stockbot_label_chip(top_market_label, COLOR_STOCKBOT_BLUE_TINT, COLOR_STOCKBOT_BLUE_EDGE, _color_for_change(RunState.market_sentiment))
-	_style_stockbot_label_chip(top_equity_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_TEXT)
-	_style_stockbot_label_chip(top_cash_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_BLUE)
-	_style_stockbot_label_chip(top_section_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_AMBER)
-
-	_style_tab_container(stock_list_tabs, 0)
-	_style_tab_container(work_tabs, 0)
-	_refresh_broker_range_buttons()
-	_style_stockbot_icon_button(add_watchlist_button, "plus", "Watch", "Add the selected stock to your watchlist.", false, COLOR_STOCKBOT_BLUE_TINT, COLOR_STOCKBOT_BLUE_EDGE)
-	_style_stockbot_icon_button(remove_watchlist_button, "trash", "Remove", "Remove the selected stock from your watchlist.", false, COLOR_STOCKBOT_BEAR_TINT, COLOR_STOCKBOT_BEAR_EDGE)
-	_style_stockbot_icon_button(
-		order_ticket_toggle_button,
-		"chevron_up" if order_ticket_collapsed else "chevron_down",
-		"",
-		"Show the order ticket." if order_ticket_collapsed else "Hide the order ticket.",
-		false,
-		COLOR_STOCKBOT_SURFACE_ALT,
-		COLOR_STOCKBOT_EDGE_STRONG
-	)
-	_style_stockbot_icon_button(
-		submit_order_button,
-		"shopping_cart",
-		"Submit Sell Order" if active_order_side == "sell" else "Submit Buy Order",
-		"Submit the current order.",
-		false,
-		COLOR_STOCKBOT_BEAR_TINT if active_order_side == "sell" else COLOR_STOCKBOT_BULL_TINT,
-		COLOR_STOCKBOT_BEAR_EDGE if active_order_side == "sell" else COLOR_STOCKBOT_BULL_EDGE
-	)
-	_style_stockbot_button(financials_previous_button, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_TEXT, 5)
-	_style_stockbot_button(financials_next_button, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_TEXT, 5)
-	if corporate_actions_filter_option != null:
-		corporate_actions_filter_option.add_theme_color_override("font_color", COLOR_STOCKBOT_TEXT)
-		corporate_actions_filter_option.add_theme_color_override("font_hover_color", COLOR_STOCKBOT_TEXT)
-		corporate_actions_filter_option.add_theme_color_override("font_pressed_color", COLOR_STOCKBOT_TEXT)
-	_style_stockbot_button(buy_button, COLOR_STOCKBOT_BULL_TINT, COLOR_STOCKBOT_BULL_EDGE, COLOR_STOCKBOT_TEXT, 6, active_order_side == "buy")
-	_style_stockbot_button(sell_button, COLOR_STOCKBOT_BEAR_TINT, COLOR_STOCKBOT_BEAR_EDGE, COLOR_STOCKBOT_TEXT, 6, active_order_side == "sell")
-	order_price_value_label.add_theme_font_size_override("font_size", 22)
-	order_price_change_label.add_theme_font_size_override("font_size", 12)
-	order_title_label.add_theme_font_size_override("font_size", 13)
-	estimated_total_value_label.add_theme_stylebox_override("normal", _make_stockbot_stylebox(COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, 5, 1, 6))
-	estimated_total_value_label.add_theme_font_size_override("font_size", 13)
-	all_stocks_search_input.placeholder_text = "Search ticker, company, sector"
-	_style_line_input(all_stocks_search_input)
-	_style_line_input(order_price_line_edit)
-	_style_spin_input(lot_spin_box)
-	_style_item_list(company_list, 0, 0)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._style_stockbot_app_ui()
+	stock_controller._sync_root_refs()
 func _style_stockbot_static_panel_labels() -> void:
-	if stock_window_container == null:
-		return
-	for label_name in [
-		"FinancialsTitle",
-		"IncomeStatementTitle",
-		"BalanceSheetTitle",
-		"CashFlowTitle",
-		"BrokerTitle",
-		"ProfileTitle"
-	]:
-		var title_label: Label = stock_window_container.find_child(label_name, true, false) as Label
-		if title_label == null:
-			continue
-		_set_label_tone(title_label, COLOR_STOCKBOT_TEXT)
-		_apply_font_override_to_control(title_label, DEFAULT_APP_FONT_SIZE + 2, _get_dashboard_title_font())
-	for label_name in [
-		"FinancialsYearLabel",
-		"FinancialsPeriodLabel",
-		"BrokerScaleLeftLabel",
-		"BrokerScaleMidLabel",
-		"BrokerScaleRightLabel"
-	]:
-		var body_label: Label = stock_window_container.find_child(label_name, true, false) as Label
-		if body_label == null:
-			continue
-		_set_label_tone(body_label, COLOR_STOCKBOT_MUTED)
-		_apply_font_override_to_control(body_label, DEFAULT_APP_FONT_SIZE, _get_app_font())
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._style_stockbot_static_panel_labels()
+	stock_controller._sync_root_refs()
 func _style_light_option_button(option_button: OptionButton) -> void:
 	UiTheme.style_option_button(option_button, "desktop")
 
 
 func _style_news_newspaper_ui() -> void:
-	_style_news_panel(news_window_body, COLOR_MARKET_PAPER_PAGE, Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.0), 0)
-	_style_news_panel(news_masthead_panel, Color(COLOR_MARKET_PAPER_PAGE.r, COLOR_MARKET_PAPER_PAGE.g, COLOR_MARKET_PAPER_PAGE.b, 0.0), Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.0), 0)
-	_style_news_panel(news_feed_panel, Color(0.972549, 0.94902, 0.847059, 1), COLOR_MARKET_PAPER_BORDER, 1)
-	_style_news_panel(news_detail_panel, COLOR_MARKET_PAPER_CARD, COLOR_MARKET_PAPER_BORDER, 1)
-	_style_news_inner_panel(news_masthead_issue_box, Color(COLOR_MARKET_PAPER_PAGE.r, COLOR_MARKET_PAPER_PAGE.g, COLOR_MARKET_PAPER_PAGE.b, 0.34))
-
-	var news_window_margin := news_window_body.get_node_or_null("NewsWindowMargin") as MarginContainer
-	if news_window_margin != null:
-		news_window_margin.add_theme_constant_override("margin_left", 18)
-		news_window_margin.add_theme_constant_override("margin_top", 16)
-		news_window_margin.add_theme_constant_override("margin_right", 18)
-		news_window_margin.add_theme_constant_override("margin_bottom", 16)
-	var news_window_vbox := news_outlet_buttons.get_parent() as VBoxContainer
-	if news_window_vbox != null:
-		news_window_vbox.add_theme_constant_override("separation", 12)
-	news_outlet_buttons.add_theme_constant_override("separation", 12)
-	var content_split := news_feed_panel.get_parent() as HSplitContainer
-	if content_split != null:
-		content_split.split_offset = 430
-	news_feed_panel.custom_minimum_size = Vector2(370, 0)
-	news_feed_summary_label.add_theme_color_override("font_color", COLOR_MARKET_PAPER_RED)
-	_apply_font_override_to_control(news_feed_summary_label, 12, _get_dashboard_title_font())
-	_apply_font_override_to_control(news_archive_year_label, 13, _get_app_font())
-	_apply_font_override_to_control(news_archive_month_label, 13, _get_app_font())
-	_style_light_option_button(news_archive_year_option)
-	_style_light_option_button(news_archive_month_option)
-
-	if news_masthead_rule_container != null:
-		for child in news_masthead_rule_container.get_children():
-			if child is ColorRect:
-				var rule: ColorRect = child
-				rule.color = COLOR_MARKET_PAPER_RED
-	if news_source_tab_rule != null:
-		news_source_tab_rule.color = Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.74)
-
-	_style_news_label(news_masthead_issue_label, COLOR_WINDOW_TEXT, 10, _get_dashboard_title_font())
-	_style_news_label(news_masthead_issue_number_label, COLOR_MARKET_PAPER_RED, 18, _get_dashboard_title_font())
-	_style_news_label(news_masthead_title_label, COLOR_WINDOW_TEXT, 32, _get_dashboard_title_font())
-	_style_news_label(news_masthead_tagline_label, COLOR_MARKET_PAPER_MUTED, 11, _get_app_font())
-	_style_news_label(news_masthead_date_block_label, COLOR_WINDOW_TEXT, 10, _get_dashboard_title_font())
-	_style_news_label(news_masthead_date_label, COLOR_WINDOW_TEXT, 15, _get_dashboard_title_font())
-	_style_news_label(news_masthead_price_label, COLOR_MARKET_PAPER_MUTED, 11, _get_app_font())
-
-	_style_news_label(news_detail_outlet_label, COLOR_MARKET_PAPER_RED, 12, _get_dashboard_title_font())
-	_style_news_label(news_detail_chips_label, COLOR_MARKET_PAPER_RED, 12, _get_dashboard_title_font())
-	_style_news_label(news_detail_headline_label, COLOR_WINDOW_TEXT, 24, _get_dashboard_title_font())
-	_style_news_label(news_detail_deck_label, COLOR_MARKET_PAPER_MUTED, 15, _get_app_font())
-	_style_news_label(news_detail_byline_label, COLOR_WINDOW_TEXT, 13, _get_app_font())
-	_style_news_label(news_detail_meta_label, COLOR_MARKET_PAPER_MUTED, 12, _get_app_font())
-	_style_news_label(news_detail_photo_caption_label, COLOR_MARKET_PAPER_MUTED, 12, _get_app_font())
-	_style_news_label(news_detail_hint_label, COLOR_MARKET_PAPER_MUTED, 12, _get_app_font())
-	if news_detail_hero_frame != null:
-		_style_news_asset_frame(news_detail_hero_frame)
-	news_detail_body.add_theme_color_override("default_color", COLOR_WINDOW_TEXT)
-	news_detail_body.add_theme_color_override("font_selected_color", COLOR_WINDOW_TEXT)
-	_apply_font_override_to_control(news_detail_body, 14, _get_app_font())
-	if news_meet_contact_button != null:
-		_style_news_command_button(news_meet_contact_button, true)
-	if news_open_meeting_button != null:
-		_style_news_command_button(news_open_meeting_button, true)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._style_news_newspaper_ui()
+	news_controller._sync_root_refs()
 
 func _style_news_label(label: Label, color: Color, font_size: int, font_resource: Font = null) -> void:
-	if label == null:
-		return
-	label.add_theme_color_override("font_color", color)
-	_apply_font_override_to_control(label, font_size, font_resource)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._style_news_label(label, color, font_size, font_resource)
+	news_controller._sync_root_refs()
 
 func _style_news_panel(panel: PanelContainer, fill_color: Color, border_color: Color, border_width: int) -> void:
-	if panel == null:
-		return
-	var style := StyleBoxFlat.new()
-	style.bg_color = fill_color
-	style.border_color = border_color
-	style.set_border_width_all(border_width)
-	style.corner_radius_top_left = 0
-	style.corner_radius_top_right = 0
-	style.corner_radius_bottom_right = 0
-	style.corner_radius_bottom_left = 0
-	style.content_margin_left = 0
-	style.content_margin_top = 0
-	style.content_margin_right = 0
-	style.content_margin_bottom = 0
-	panel.add_theme_stylebox_override("panel", style)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._style_news_panel(panel, fill_color, border_color, border_width)
+	news_controller._sync_root_refs()
 
 func _style_news_inner_panel(panel: PanelContainer, fill_color: Color) -> void:
-	if panel == null:
-		return
-	var style := StyleBoxFlat.new()
-	style.bg_color = fill_color
-	style.border_color = Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.78)
-	style.set_border_width_all(1)
-	style.corner_radius_top_left = 0
-	style.corner_radius_top_right = 0
-	style.corner_radius_bottom_right = 0
-	style.corner_radius_bottom_left = 0
-	panel.add_theme_stylebox_override("panel", style)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._style_news_inner_panel(panel, fill_color)
+	news_controller._sync_root_refs()
 
 func _style_news_asset_frame(panel: PanelContainer) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = COLOR_MARKET_PAPER_RAIL
-	style.border_color = Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.85)
-	style.set_border_width_all(1)
-	style.corner_radius_top_left = 0
-	style.corner_radius_top_right = 0
-	style.corner_radius_bottom_right = 0
-	style.corner_radius_bottom_left = 0
-	panel.add_theme_stylebox_override("panel", style)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._style_news_asset_frame(panel)
+	news_controller._sync_root_refs()
 
 func _style_news_article_card(card: PanelContainer, is_selected: bool) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = COLOR_MARKET_PAPER_CARD if is_selected else Color(0.972549, 0.94902, 0.847059, 1)
-	style.border_color = COLOR_MARKET_PAPER_RED if is_selected else Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.76)
-	style.set_border_width_all(2 if is_selected else 1)
-	style.corner_radius_top_left = 0
-	style.corner_radius_top_right = 0
-	style.corner_radius_bottom_right = 0
-	style.corner_radius_bottom_left = 0
-	card.add_theme_stylebox_override("panel", style)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._style_news_article_card(card, is_selected)
+	news_controller._sync_root_refs()
 
 func _style_news_outlet_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
-	_style_news_tab_button(button, is_selected, is_unlocked)
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._style_news_outlet_button(button, is_selected, is_unlocked)
+	news_controller._sync_root_refs()
 
 func _make_news_tab_stylebox(fill_color: Color, border_color: Color, is_selected: bool) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = fill_color
-	style.border_color = border_color
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 5 if is_selected else 1
-	style.border_width_bottom = 0 if is_selected else 1
-	style.corner_radius_top_left = 0
-	style.corner_radius_top_right = 0
-	style.corner_radius_bottom_right = 0
-	style.corner_radius_bottom_left = 0
-	style.content_margin_left = 10
-	style.content_margin_right = 10
-	style.content_margin_top = 11 if is_selected else 14
-	style.content_margin_bottom = 14
-	return style
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	var result: StyleBoxFlat = news_controller._make_news_tab_stylebox(fill_color, border_color, is_selected)
+	news_controller._sync_root_refs()
+	return result
 
 func _style_news_tab_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
-	var fill_color: Color = COLOR_MARKET_PAPER_RAIL if is_unlocked else Color(0.85098, 0.835294, 0.772549, 1)
-	var border_color: Color = Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.86)
-	var font_color: Color = COLOR_WINDOW_TEXT if is_unlocked else Color(0.541176, 0.494118, 0.396078, 1)
-	if is_selected:
-		fill_color = COLOR_MARKET_PAPER_CARD
-		border_color = COLOR_MARKET_PAPER_RED
-		font_color = Color(0.184314, 0.14902, 0.0705882, 1)
-	var normal := _make_news_tab_stylebox(fill_color, border_color, is_selected)
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", normal)
-	button.add_theme_stylebox_override("pressed", normal)
-	button.add_theme_stylebox_override("focus", normal)
-	button.add_theme_stylebox_override("disabled", normal)
-	button.add_theme_color_override("font_color", font_color)
-	button.add_theme_color_override("font_hover_color", font_color)
-	button.add_theme_color_override("font_pressed_color", font_color)
-	button.add_theme_color_override("font_focus_color", font_color)
-	button.add_theme_color_override("font_disabled_color", Color(font_color.r, font_color.g, font_color.b, 0.54))
-	_apply_font_override_to_control(button, 15, _get_dashboard_title_font())
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._style_news_tab_button(button, is_selected, is_unlocked)
+	news_controller._sync_root_refs()
 
 func _style_news_tab_container(tab_container: TabContainer) -> void:
-	if tab_container == null:
-		return
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(COLOR_MARKET_PAPER_PAGE.r, COLOR_MARKET_PAPER_PAGE.g, COLOR_MARKET_PAPER_PAGE.b, 0.0)
-	panel_style.border_color = Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.0)
-	panel_style.set_border_width_all(0)
-	panel_style.set_corner_radius_all(0)
-	var unselected := _make_news_tab_stylebox(COLOR_MARKET_PAPER_RAIL, Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.86), false)
-	var selected := _make_news_tab_stylebox(COLOR_MARKET_PAPER_CARD, COLOR_MARKET_PAPER_RED, true)
-	var disabled := _make_news_tab_stylebox(Color(0.85098, 0.835294, 0.772549, 1), Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.42), false)
-	tab_container.add_theme_stylebox_override("panel", panel_style)
-	tab_container.add_theme_stylebox_override("tab_unselected", unselected)
-	tab_container.add_theme_stylebox_override("tab_selected", selected)
-	tab_container.add_theme_stylebox_override("tab_hovered", unselected)
-	tab_container.add_theme_stylebox_override("tab_disabled", disabled)
-	tab_container.add_theme_stylebox_override("tab_focus", selected)
-	tab_container.add_theme_color_override("font_selected_color", Color(0.184314, 0.14902, 0.0705882, 1))
-	tab_container.add_theme_color_override("font_unselected_color", COLOR_WINDOW_TEXT)
-	tab_container.add_theme_color_override("font_hovered_color", COLOR_WINDOW_TEXT)
-	tab_container.add_theme_color_override("font_disabled_color", Color(0.541176, 0.494118, 0.396078, 0.54))
-	tab_container.add_theme_constant_override("side_margin", 0)
-	tab_container.add_theme_constant_override("icon_separation", 6)
-	_apply_font_override_to_control(tab_container, 15, _get_dashboard_title_font())
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._style_news_tab_container(tab_container)
+	news_controller._sync_root_refs()
 
 func _style_news_command_button(button: Button, is_primary: bool) -> void:
-	if button == null:
-		return
-	UiTheme.style_button(button, "desktop_primary" if is_primary else "desktop_secondary")
-
+	_ensure_news_controller()
+	news_controller._sync_dynamic_refs_from_root()
+	news_controller._sync_state_from_root()
+	news_controller._style_news_command_button(button, is_primary)
+	news_controller._sync_root_refs()
 
 func _style_company_action_button(button: Button, enabled: bool) -> void:
 	if button == null:
@@ -24026,61 +15474,12 @@ func _style_company_action_button(button: Button, enabled: bool) -> void:
 
 
 func _style_social_filter_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
-	var fill_color: Color = COLOR_TWOOTER_CARD if is_unlocked else Color(COLOR_TWOOTER_SURFACE.r, COLOR_TWOOTER_SURFACE.g, COLOR_TWOOTER_SURFACE.b, 0.64)
-	var border_color: Color = COLOR_TWOOTER_BLUE_EDGE
-	var font_color: Color = COLOR_TWOOTER_BLUE if is_unlocked else COLOR_TWOOTER_FAINT
-	if is_selected:
-		fill_color = COLOR_TWOOTER_BLUE
-		border_color = COLOR_TWOOTER_BLUE_DARK
-		font_color = COLOR_TWOOTER_PAGE
-	UiTheme.style_button(
-		button,
-		"custom",
-		{
-			"fill": fill_color,
-			"border": border_color,
-			"font": font_color,
-			"radius": 7,
-			"margins": {"left": SOCIAL_ACTION_BUTTON_PAD_X, "top": SOCIAL_ACTION_BUTTON_PAD_Y, "right": SOCIAL_ACTION_BUTTON_PAD_X, "bottom": SOCIAL_ACTION_BUTTON_PAD_Y}
-		}
-	)
-	button.custom_minimum_size = Vector2(button.custom_minimum_size.x, max(button.custom_minimum_size.y, float(SOCIAL_ACTION_BUTTON_MIN_HEIGHT)))
-	_apply_font_override_to_control(button, _social_font_size(12), _get_dashboard_title_font())
-
+	_ensure_social_controller()
+	social_controller._style_social_filter_button(button, is_selected, is_unlocked)
 
 func _style_social_account_button(button: Button, is_selected: bool) -> void:
-	var normal: StyleBoxFlat = StyleBoxFlat.new()
-	normal.bg_color = Color(0, 0, 0, 0)
-	normal.border_color = Color(0, 0, 0, 0)
-	normal.set_border_width_all(0)
-	normal.content_margin_left = 0
-	normal.content_margin_right = 0
-	normal.content_margin_top = 0
-	normal.content_margin_bottom = 0
-
-	var hover: StyleBoxFlat = normal.duplicate()
-	hover.bg_color = Color(COLOR_TWOOTER_BLUE_TINT.r, COLOR_TWOOTER_BLUE_TINT.g, COLOR_TWOOTER_BLUE_TINT.b, 0.58)
-
-	var pressed: StyleBoxFlat = normal.duplicate()
-	pressed.bg_color = Color(COLOR_TWOOTER_BLUE_EDGE.r, COLOR_TWOOTER_BLUE_EDGE.g, COLOR_TWOOTER_BLUE_EDGE.b, 0.36)
-
-	var focus: StyleBoxFlat = pressed.duplicate()
-	if is_selected:
-		normal.bg_color = Color(COLOR_TWOOTER_BLUE_TINT.r, COLOR_TWOOTER_BLUE_TINT.g, COLOR_TWOOTER_BLUE_TINT.b, 0.44)
-
-	var font_color: Color = COLOR_TWOOTER_BLUE
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", focus)
-	button.add_theme_stylebox_override("disabled", normal)
-	button.add_theme_color_override("font_color", font_color)
-	button.add_theme_color_override("font_hover_color", COLOR_TWOOTER_BLUE)
-	button.add_theme_color_override("font_pressed_color", font_color)
-	button.add_theme_color_override("font_focus_color", font_color)
-	_apply_font_override_to_control(button, _social_font_size(DEFAULT_APP_FONT_SIZE), _get_app_font())
-
-
+	_ensure_social_controller()
+	social_controller._style_social_account_button(button, is_selected)
 func _style_line_input(line_edit: LineEdit) -> void:
 	var normal: StyleBoxFlat = StyleBoxFlat.new()
 	normal.bg_color = COLOR_STOCKBOT_BASE
@@ -24116,24 +15515,17 @@ func _style_spin_input(spin_box: SpinBox) -> void:
 
 
 func _refresh_submit_order_button_style() -> void:
-	if submit_order_button == null:
-		return
-	submit_order_button.icon = _load_stockbot_icon("shopping_cart")
-	submit_order_button.expand_icon = false
-	if active_order_side == "sell":
-		_style_stockbot_button(submit_order_button, COLOR_STOCKBOT_BEAR_TINT, COLOR_STOCKBOT_BEAR_EDGE, COLOR_STOCKBOT_TEXT, 6)
-	else:
-		_style_stockbot_button(submit_order_button, COLOR_STOCKBOT_BULL_TINT, COLOR_STOCKBOT_BULL_EDGE, COLOR_STOCKBOT_TEXT, 6)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_submit_order_button_style()
+	stock_controller._sync_root_refs()
 func _style_stock_list_row_button(button: Button, is_selected: bool) -> void:
-	var fill_color: Color = COLOR_STOCKBOT_BLUE_TINT if is_selected else COLOR_STOCKBOT_BASE
-	var border_color: Color = COLOR_STOCKBOT_BLUE if is_selected else COLOR_STOCKBOT_EDGE
-	_style_stockbot_button(button, fill_color, border_color, COLOR_STOCKBOT_TEXT, 4, is_selected)
-	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	button.add_theme_font_size_override("font_size", 12)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._style_stock_list_row_button(button, is_selected)
+	stock_controller._sync_root_refs()
 func _style_cream_app_panel(
 	panel: PanelContainer,
 	fill_color: Color = COLOR_DESKTOP_CREAM,
@@ -24240,712 +15632,217 @@ func _format_history(price_history: Array) -> String:
 
 
 func _format_financial_block(financials: Dictionary) -> String:
-	if financials.is_empty():
-		return "No financial snapshot yet."
-
-	var history_years: int = int(financials.get("history_years", 0))
-	var history_start_year: int = int(financials.get("history_start_year", 0))
-	var history_end_year: int = int(financials.get("history_end_year", 0))
-	var history_line: String = ""
-	if history_years > 0:
-		history_line = "\n%dY history %d-%d  |  Rev CAGR %s  |  Earn CAGR %s" % [
-			history_years,
-			history_start_year,
-			history_end_year,
-			_format_signed_percent_value(float(financials.get("revenue_cagr_10y", 0.0))),
-			_format_signed_percent_value(float(financials.get("earnings_cagr_10y", 0.0)))
-		]
-
-	return "MCap %s  |  Free float %s  |  ADV %s\nRevenue growth %s  |  Earnings growth %s\nNet margin %s  |  ROE %s  |  D/E %s%s" % [
-		_format_compact_currency(float(financials.get("market_cap", 0.0))),
-		_format_percent_value(float(financials.get("free_float_pct", 0.0))),
-		_format_compact_currency(float(financials.get("avg_daily_value", 0.0))),
-		_format_signed_percent_value(float(financials.get("revenue_growth_yoy", 0.0))),
-		_format_signed_percent_value(float(financials.get("earnings_growth_yoy", 0.0))),
-		_format_percent_value(float(financials.get("net_profit_margin", 0.0))),
-		_format_percent_value(float(financials.get("roe", 0.0))),
-		_format_multiple(float(financials.get("debt_to_equity", 0.0))),
-		history_line
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_financial_block(financials)
+	stock_controller._sync_root_refs()
+	return result
 func _format_financial_history_summary(financial_history: Array, financials: Dictionary) -> String:
-	if financial_history.is_empty():
-		return "Generated history unavailable for this run."
-
-	var first_year: Dictionary = financial_history[0]
-	var last_year: Dictionary = financial_history[financial_history.size() - 1]
-	var start_year: int = int(first_year.get("year", financials.get("history_start_year", 0)))
-	var end_year: int = int(last_year.get("year", financials.get("history_end_year", start_year)))
-	return "Generated %d-%d history  |  Rev CAGR %s  |  Earn CAGR %s  |  Implied price %s -> %s" % [
-		start_year,
-		end_year,
-		_format_signed_percent_value(float(financials.get("revenue_cagr_10y", 0.0))),
-		_format_signed_percent_value(float(financials.get("earnings_cagr_10y", 0.0))),
-		_format_last_price(float(first_year.get("implied_share_price", 0.0))),
-		_format_last_price(float(last_year.get("implied_share_price", 0.0)))
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_financial_history_summary(financial_history, financials)
+	stock_controller._sync_root_refs()
+	return result
 func _refresh_financial_history_header() -> void:
-	if financial_history_header_row == null:
-		return
-	if financial_history_header_row.get_child_count() > 0:
-		return
-
-	financial_history_header_row.add_child(_build_table_cell(
-		"Year",
-		FINANCIAL_HISTORY_YEAR_WIDTH,
-		COLOR_WARNING
-	))
-	financial_history_header_row.add_child(_build_table_cell(
-		"Revenue",
-		FINANCIAL_HISTORY_REVENUE_WIDTH,
-		COLOR_WARNING,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	financial_history_header_row.add_child(_build_table_cell(
-		"NI",
-		FINANCIAL_HISTORY_NET_INCOME_WIDTH,
-		COLOR_WARNING,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	financial_history_header_row.add_child(_build_table_cell(
-		"Margin",
-		FINANCIAL_HISTORY_MARGIN_WIDTH,
-		COLOR_WARNING,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	financial_history_header_row.add_child(_build_table_cell(
-		"ROE",
-		FINANCIAL_HISTORY_ROE_WIDTH,
-		COLOR_WARNING,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	financial_history_header_row.add_child(_build_table_cell(
-		"D/E",
-		FINANCIAL_HISTORY_DEBT_WIDTH,
-		COLOR_WARNING,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	financial_history_header_row.add_child(_build_table_cell(
-		"Price",
-		FINANCIAL_HISTORY_PRICE_WIDTH,
-		COLOR_WARNING,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_financial_history_header()
+	stock_controller._sync_root_refs()
 func _refresh_financial_history_table(financial_history: Array, _financials: Dictionary, empty_text: String = "") -> void:
-	if financial_history_rows_vbox == null or financial_history_empty_label == null:
-		return
-
-	_clear_dynamic_rows(financial_history_rows_vbox, financial_history_empty_label)
-	financial_history_empty_label.visible = financial_history.is_empty()
-	if financial_history.is_empty():
-		financial_history_empty_label.text = empty_text if not empty_text.is_empty() else "Generated history unavailable."
-		return
-
-	for history_index in range(financial_history.size() - 1, -1, -1):
-		var history_entry: Dictionary = financial_history[history_index]
-		financial_history_rows_vbox.add_child(_build_financial_history_row(history_entry))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_financial_history_table(financial_history, _financials, empty_text)
+	stock_controller._sync_root_refs()
 func _build_financial_history_row(history_entry: Dictionary) -> Control:
-	var row_wrap: VBoxContainer = VBoxContainer.new()
-	row_wrap.add_theme_constant_override("separation", 4)
-
-	var row: HBoxContainer = HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	row_wrap.add_child(row)
-
-	row.add_child(_build_table_cell(
-		str(int(history_entry.get("year", 0))),
-		FINANCIAL_HISTORY_YEAR_WIDTH,
-		COLOR_TEXT
-	))
-	row.add_child(_build_table_cell(
-		_format_compact_currency(float(history_entry.get("revenue", 0.0))),
-		FINANCIAL_HISTORY_REVENUE_WIDTH,
-		COLOR_TEXT,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	row.add_child(_build_table_cell(
-		_format_compact_currency(float(history_entry.get("net_income", 0.0))),
-		FINANCIAL_HISTORY_NET_INCOME_WIDTH,
-		COLOR_TEXT,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	row.add_child(_build_table_cell(
-		_format_percent_value(float(history_entry.get("net_profit_margin", 0.0))),
-		FINANCIAL_HISTORY_MARGIN_WIDTH,
-		COLOR_TEXT,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	row.add_child(_build_table_cell(
-		_format_percent_value(float(history_entry.get("roe", 0.0))),
-		FINANCIAL_HISTORY_ROE_WIDTH,
-		COLOR_TEXT,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	row.add_child(_build_table_cell(
-		_format_multiple(float(history_entry.get("debt_to_equity", 0.0))),
-		FINANCIAL_HISTORY_DEBT_WIDTH,
-		COLOR_TEXT,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-	row.add_child(_build_table_cell(
-		_format_last_price(float(history_entry.get("implied_share_price", 0.0))),
-		FINANCIAL_HISTORY_PRICE_WIDTH,
-		COLOR_TEXT,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	))
-
-	var separator: HSeparator = HSeparator.new()
-	row_wrap.add_child(separator)
-	return row_wrap
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Control = stock_controller._build_financial_history_row(history_entry)
+	stock_controller._sync_root_refs()
+	return result
 func _refresh_broker_header() -> void:
-	if broker_header_row == null:
-		return
-
-	for child in broker_header_row.get_children():
-		broker_header_row.remove_child(child)
-		child.queue_free()
-	broker_header_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	if broker_net_mode:
-		_add_broker_table_side(broker_header_row, "Net Buy", "N.Val", "N.Lot", "N.Avg", COLOR_POSITIVE)
-		broker_header_row.add_child(_build_broker_side_divider())
-		_add_broker_table_side(broker_header_row, "Net Sell", "N.Val", "N.Lot", "N.Avg", COLOR_NEGATIVE)
-	else:
-		_add_broker_table_side(broker_header_row, "Buy", "B.Val", "B.Lot", "B.Avg", COLOR_POSITIVE)
-		broker_header_row.add_child(_build_broker_side_divider())
-		_add_broker_table_side(broker_header_row, "Sell", "S.Val", "S.Lot", "S.Avg", COLOR_NEGATIVE)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_broker_header()
+	stock_controller._sync_root_refs()
 func _refresh_broker_table(broker_flow: Dictionary) -> void:
-	if broker_rows_vbox == null or broker_empty_label == null:
-		return
-
-	_clear_dynamic_rows(broker_rows_vbox, broker_empty_label)
-	var buy_brokers: Array = broker_flow.get("net_buy_brokers", []) if broker_net_mode else broker_flow.get("buy_brokers", [])
-	var sell_brokers: Array = broker_flow.get("net_sell_brokers", []) if broker_net_mode else broker_flow.get("sell_brokers", [])
-	var row_count: int = max(buy_brokers.size(), sell_brokers.size())
-	broker_empty_label.visible = row_count == 0
-	if row_count == 0:
-		broker_summary_label.text = ""
-		broker_summary_label.visible = false
-		broker_meter_label.text = ""
-		broker_meter_label.visible = false
-		broker_meter_bar.value = 50.0
-		_style_broker_meter(Color(0.603922, 0.623529, 0.662745, 0.92))
-		return
-
-	var action_meter_score: float = float(broker_flow.get("action_meter_score", 0.0))
-	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
-	var summary_text: String = _format_broker_range_summary(broker_flow)
-	broker_summary_label.text = summary_text
-	broker_summary_label.visible = not summary_text.is_empty()
-	var meter_text: String = str(broker_flow.get("action_meter_label", "")).strip_edges()
-	broker_meter_label.text = meter_text
-	broker_meter_label.visible = not meter_text.is_empty()
-	broker_meter_bar.value = clamp((action_meter_score + 1.0) * 50.0, 0.0, 100.0)
-	_style_broker_meter(_color_for_flow(flow_tag))
-
-	for row_index in range(row_count):
-		var buy_row: Dictionary = buy_brokers[row_index] if row_index < buy_brokers.size() else {}
-		var sell_row: Dictionary = sell_brokers[row_index] if row_index < sell_brokers.size() else {}
-		broker_rows_vbox.add_child(_build_broker_table_row(buy_row, sell_row))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_broker_table(broker_flow)
+	stock_controller._sync_root_refs()
 func _format_broker_range_summary(broker_flow: Dictionary) -> String:
-	if broker_flow.is_empty():
-		return ""
-	var range_label: String = str(broker_flow.get("range_label", "1D"))
-	var day_count: int = int(broker_flow.get("range_day_count", 1))
-	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral")).capitalize()
-	var traded_value: float = max(float(broker_flow.get("broker_trade_value", 0.0)), 0.0)
-	var date_text: String = _format_broker_range_date_text(
-		broker_flow.get("history_start_date", {}),
-		broker_flow.get("history_end_date", {})
-	)
-	var parts: Array = [
-		range_label,
-		"%d session%s" % [max(day_count, 1), "" if day_count == 1 else "s"],
-		flow_tag
-	]
-	if traded_value > 0.0:
-		parts.append("Value %s" % _format_compact_currency(traded_value))
-	if not date_text.is_empty():
-		parts.append(date_text)
-	return " | ".join(parts)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_broker_range_summary(broker_flow)
+	stock_controller._sync_root_refs()
+	return result
 func _format_broker_range_date_text(start_date_value: Variant, end_date_value: Variant) -> String:
-	if typeof(start_date_value) != TYPE_DICTIONARY or typeof(end_date_value) != TYPE_DICTIONARY:
-		return ""
-	var start_date: Dictionary = start_date_value
-	var end_date: Dictionary = end_date_value
-	if start_date.is_empty() or end_date.is_empty():
-		return ""
-	var start_text: String = _format_short_broker_date(start_date)
-	var end_text: String = _format_short_broker_date(end_date)
-	if start_text.is_empty() or end_text.is_empty():
-		return ""
-	if start_text == end_text:
-		return start_text
-	return "%s-%s" % [start_text, end_text]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_broker_range_date_text(start_date_value, end_date_value)
+	stock_controller._sync_root_refs()
+	return result
 func _format_short_broker_date(date_value: Dictionary) -> String:
-	if date_value.is_empty():
-		return ""
-	var month_names: Array = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-	var month_index: int = clampi(int(date_value.get("month", 1)) - 1, 0, month_names.size() - 1)
-	return "%02d %s" % [int(date_value.get("day", 0)), str(month_names[month_index])]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_short_broker_date(date_value)
+	stock_controller._sync_root_refs()
+	return result
 func _populate_corporate_action_filter() -> void:
-	if corporate_actions_filter_option == null:
-		return
-	corporate_actions_filter_option.clear()
-	var filter_rows: Array = [
-		{"id": "all", "label": "All"},
-		{"id": "dividends", "label": "Dividends"},
-		{"id": "meetings", "label": "Meetings"},
-		{"id": "events", "label": "Events"}
-	]
-	for filter_index in range(filter_rows.size()):
-		var row: Dictionary = filter_rows[filter_index]
-		corporate_actions_filter_option.add_item(str(row.get("label", "")))
-		corporate_actions_filter_option.set_item_metadata(filter_index, str(row.get("id", "all")))
-	corporate_actions_filter_option.select(0)
-	corporate_action_filter_id = "all"
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._populate_corporate_action_filter()
+	stock_controller._sync_root_refs()
 func _refresh_corporate_action_timeline(timeline_snapshot: Dictionary) -> void:
-	if corporate_actions_rows_vbox == null or corporate_actions_empty_label == null:
-		return
-	_clear_dynamic_rows(corporate_actions_rows_vbox, corporate_actions_empty_label)
-	var all_rows: Array = timeline_snapshot.get("rows", [])
-	var visible_rows: Array = []
-	for row_value in all_rows:
-		if typeof(row_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = row_value
-		if corporate_action_filter_id != "all" and str(row.get("filter", "")) != corporate_action_filter_id:
-			continue
-		visible_rows.append(row)
-	var no_selection: bool = timeline_snapshot.is_empty()
-	corporate_actions_empty_label.visible = visible_rows.is_empty()
-	if no_selection:
-		corporate_actions_empty_label.text = "Select a stock to see its corporate action timeline."
-		corporate_actions_summary_label.text = "No stock selected."
-		return
-	corporate_actions_empty_label.text = "No matching corporate actions for this filter."
-	corporate_actions_summary_label.text = _corporate_action_timeline_summary(all_rows, visible_rows)
-	for row in visible_rows:
-		corporate_actions_rows_vbox.add_child(_build_corporate_action_timeline_card(row))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_corporate_action_timeline(timeline_snapshot)
+	stock_controller._sync_root_refs()
 func _corporate_action_timeline_summary(all_rows: Array, visible_rows: Array) -> String:
-	if all_rows.is_empty():
-		return "No filed or scheduled corporate action is visible for this company yet."
-	var dividend_count: int = 0
-	var meeting_count: int = 0
-	var event_count: int = 0
-	for row_value in all_rows:
-		if typeof(row_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = row_value
-		match str(row.get("filter", "")):
-			"dividends":
-				dividend_count += 1
-			"meetings":
-				meeting_count += 1
-			"events":
-				event_count += 1
-	return "%d visible row(s). Dividends %d | Meetings %d | Events %d." % [
-		visible_rows.size(),
-		dividend_count,
-		meeting_count,
-		event_count
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._corporate_action_timeline_summary(all_rows, visible_rows)
+	stock_controller._sync_root_refs()
+	return result
 func _build_corporate_action_timeline_card(row: Dictionary) -> Control:
-	var panel := PanelContainer.new()
-	panel.name = "CorporateActionTimelineCard"
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	panel.tooltip_text = _corporate_action_row_tooltip(row)
-	panel.gui_input.connect(_on_corporate_action_timeline_card_gui_input.bind(row.duplicate(true)))
-	var is_soon: bool = _corporate_action_row_is_soon(row)
-	var edge_color: Color = COLOR_STOCKBOT_AMBER if is_soon else COLOR_STOCKBOT_EDGE
-	_style_stockbot_panel(panel, COLOR_STOCKBOT_SURFACE_ALT, edge_color, 6, 1)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 10)
-	panel.add_child(margin)
-	var vbox := VBoxContainer.new()
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 8)
-	margin.add_child(vbox)
-
-	var header := HBoxContainer.new()
-	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_theme_constant_override("separation", 8)
-	vbox.add_child(header)
-	var type_label := Label.new()
-	var soon_label: String = _corporate_action_row_soon_label(row)
-	type_label.text = str(row.get("type_label", "Corporate Action")) if soon_label.is_empty() else "%s | %s" % [
-		str(row.get("type_label", "Corporate Action")),
-		soon_label
-	]
-	_set_label_tone(type_label, COLOR_STOCKBOT_AMBER)
-	_apply_font_override_to_control(type_label, 13, _get_dashboard_title_font())
-	header.add_child(type_label)
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(spacer)
-	var status_label := Label.new()
-	var date_text: String = _format_corporate_action_date(row.get("trade_date", {}))
-	status_label.text = "%s | %s" % [str(row.get("status_label", "Visible")), date_text]
-	_set_label_tone(status_label, COLOR_STOCKBOT_MUTED)
-	_apply_font_override_to_control(status_label, 12, _get_app_font())
-	header.add_child(status_label)
-
-	var title_label := Label.new()
-	title_label.text = str(row.get("title", "Corporate action"))
-	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_set_label_tone(title_label, COLOR_STOCKBOT_TEXT)
-	_apply_font_override_to_control(title_label, 14, _get_dashboard_title_font())
-	vbox.add_child(title_label)
-	var summary_text: String = str(row.get("summary", "")).strip_edges()
-	if not summary_text.is_empty():
-		var summary_label := Label.new()
-		summary_label.text = summary_text
-		summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_set_label_tone(summary_label, COLOR_STOCKBOT_MUTED)
-		_apply_font_override_to_control(summary_label, 12, _get_app_font())
-		vbox.add_child(summary_label)
-
-	var fields: Array = row.get("fields", [])
-	if not fields.is_empty():
-		var field_grid := GridContainer.new()
-		field_grid.name = "CorporateActionTimelineFieldGrid"
-		field_grid.columns = 4
-		field_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		field_grid.add_theme_constant_override("h_separation", 12)
-		field_grid.add_theme_constant_override("v_separation", 8)
-		vbox.add_child(field_grid)
-		for field_value in fields:
-			if typeof(field_value) == TYPE_DICTIONARY:
-				field_grid.add_child(_build_corporate_action_field_cell(field_value))
-	var action_label := Label.new()
-	action_label.text = _corporate_action_row_action_text(row)
-	action_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_set_label_tone(action_label, COLOR_STOCKBOT_FAINT)
-	_apply_font_override_to_control(action_label, 11, _get_app_font())
-	vbox.add_child(action_label)
-	return panel
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Control = stock_controller._build_corporate_action_timeline_card(row)
+	stock_controller._sync_root_refs()
+	return result
 func _corporate_action_row_tooltip(row: Dictionary) -> String:
-	match str(row.get("row_type", "")):
-		"meeting":
-			return "Click to open the meeting notice. Right-click to add this row to Research Tray."
-		"dividend":
-			return "Click to inspect dividend eligibility. Right-click to add this row to Research Tray."
-		_:
-			return "Click or right-click to add this corporate action to Research Tray."
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._corporate_action_row_tooltip(row)
+	stock_controller._sync_root_refs()
+	return result
 func _corporate_action_row_action_text(row: Dictionary) -> String:
-	match str(row.get("row_type", "")):
-		"meeting":
-			return "Click: open meeting notice. Right-click: add to Research Tray."
-		"dividend":
-			return "Click: explain eligibility. Right-click: add to Research Tray."
-		_:
-			return "Click: add to Research Tray."
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._corporate_action_row_action_text(row)
+	stock_controller._sync_root_refs()
+	return result
 func _corporate_action_row_is_soon(row: Dictionary) -> bool:
-	var row_type: String = str(row.get("row_type", ""))
-	if not (row_type in ["meeting", "dividend"]):
-		return false
-	var current_day_number: int = max(int(row.get("current_day_number", 0)), 1)
-	var next_milestone: Dictionary = _corporate_action_next_milestone(row)
-	var milestone_day: int = int(next_milestone.get("day", 0))
-	if milestone_day <= 0:
-		return false
-	return milestone_day >= current_day_number and milestone_day <= current_day_number + 5
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: bool = stock_controller._corporate_action_row_is_soon(row)
+	stock_controller._sync_root_refs()
+	return result
 func _corporate_action_row_soon_label(row: Dictionary) -> String:
-	if not _corporate_action_row_is_soon(row):
-		return ""
-	var current_day_number: int = max(int(row.get("current_day_number", 0)), 1)
-	var next_milestone: Dictionary = _corporate_action_next_milestone(row)
-	var label: String = str(next_milestone.get("label", "Action")).strip_edges()
-	var milestone_day: int = int(next_milestone.get("day", 0))
-	if milestone_day <= current_day_number:
-		return "%s Today" % label
-	return "%s Soon" % label
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._corporate_action_row_soon_label(row)
+	stock_controller._sync_root_refs()
+	return result
 func _corporate_action_next_milestone(row: Dictionary) -> Dictionary:
-	var current_day_number: int = max(int(row.get("current_day_number", 0)), 1)
-	var candidates: Array = []
-	match str(row.get("row_type", "")):
-		"dividend":
-			candidates = [
-				{"label": "Ex", "day": int(row.get("ex_day_number", 0))},
-				{"label": "Record", "day": int(row.get("record_day_number", 0))},
-				{"label": "Payment", "day": int(row.get("payment_day_number", row.get("sort_day", 0)))}
-			]
-		"meeting":
-			candidates = [
-				{"label": "Meeting", "day": int(row.get("sort_day", 0))}
-			]
-	var best: Dictionary = {}
-	for candidate_value in candidates:
-		if typeof(candidate_value) != TYPE_DICTIONARY:
-			continue
-		var candidate: Dictionary = candidate_value
-		var candidate_day: int = int(candidate.get("day", 0))
-		if candidate_day < current_day_number:
-			continue
-		if best.is_empty() or candidate_day < int(best.get("day", 0)):
-			best = candidate.duplicate(true)
-	return best
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._corporate_action_next_milestone(row)
+	stock_controller._sync_root_refs()
+	return result
 func _on_corporate_action_timeline_card_gui_input(event: InputEvent, row: Dictionary) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var mouse_event := event as InputEventMouseButton
-	if not mouse_event.pressed:
-		return
-	if mouse_event.button_index == MOUSE_BUTTON_RIGHT:
-		_show_corporate_action_capture_menu(row, mouse_event.global_position)
-		get_viewport().set_input_as_handled()
-		return
-	if mouse_event.button_index != MOUSE_BUTTON_LEFT:
-		return
-	match str(row.get("row_type", "")):
-		"meeting":
-			_open_corporate_meeting_modal(str(row.get("meeting_id", row.get("source_id", ""))))
-		"dividend":
-			_show_toast(_corporate_action_dividend_explanation(row), true)
-		_:
-			_capture_corporate_action_row(row)
-	get_viewport().set_input_as_handled()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_corporate_action_timeline_card_gui_input(event, row)
+	stock_controller._sync_root_refs()
 func _show_corporate_action_capture_menu(row: Dictionary, global_position: Vector2) -> void:
-	var payload: Dictionary = _corporate_action_capture_payload(row)
-	if payload.is_empty():
-		_show_toast("Nothing to capture from this corporate action.", false)
-		return
-	pending_capture_payloads["corporate_action"] = payload
-	if corporate_action_capture_menu == null:
-		corporate_action_capture_menu = PopupMenu.new()
-		corporate_action_capture_menu.name = "CorporateActionCaptureContextMenu"
-		corporate_action_capture_menu.id_pressed.connect(_on_corporate_action_capture_menu_id_pressed)
-		add_child(corporate_action_capture_menu)
-	corporate_action_capture_menu.clear()
-	corporate_action_capture_menu.add_item("Add to Research Tray", 1)
-	corporate_action_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
-	corporate_action_capture_menu.popup()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._show_corporate_action_capture_menu(row, global_position)
+	stock_controller._sync_root_refs()
 func _on_corporate_action_capture_menu_id_pressed(id: int) -> void:
-	_commit_pending_capture("corporate_action", id)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_corporate_action_capture_menu_id_pressed(id)
+	stock_controller._sync_root_refs()
 func _capture_corporate_action_row(row: Dictionary) -> void:
-	var payload: Dictionary = _corporate_action_capture_payload(row)
-	if payload.is_empty():
-		_show_toast("Nothing to capture from this corporate action.", false)
-		return
-	var result: Dictionary = GameManager.capture_research_evidence(payload)
-	_show_toast(str(result.get("message", "Research capture updated.")), bool(result.get("success", false)))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._capture_corporate_action_row(row)
+	stock_controller._sync_root_refs()
 func _corporate_action_capture_payload(row: Dictionary) -> Dictionary:
-	var row_type: String = str(row.get("row_type", "event")).strip_edges()
-	var company_id: String = str(row.get("company_id", selected_company_id)).strip_edges()
-	if company_id.is_empty():
-		return {}
-	var title: String = str(row.get("title", row.get("type_label", "Corporate action"))).strip_edges()
-	var type_label: String = str(row.get("type_label", "Corporate Action")).strip_edges()
-	var source_id: String = str(row.get("source_id", row.get("id", ""))).strip_edges()
-	var source_token: String = "%s_%s" % [row_type, _node_token(source_id if not source_id.is_empty() else str(row.get("id", title)))]
-	var value_text: String = _corporate_action_capture_value(row)
-	return {
-		"source_type": "corporate_event",
-		"category": "corporate_events",
-		"category_label": "Corporate Events",
-		"source_label": "STOCKBOT Corp. Action",
-		"source_id": source_token,
-		"company_id": company_id,
-		"ticker": str(row.get("ticker", "")),
-		"label": "%s: %s" % [type_label, title],
-		"value": value_text if not value_text.is_empty() else str(row.get("status_label", "")),
-		"detail": _corporate_action_capture_detail(row),
-		"impact": str(row.get("impact", "mixed"))
-	}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._corporate_action_capture_payload(row)
+	stock_controller._sync_root_refs()
+	return result
 func _corporate_action_capture_value(row: Dictionary) -> String:
-	match str(row.get("row_type", "")):
-		"dividend":
-			return str(row.get("amount_text", row.get("title", "")))
-		"meeting":
-			return _format_corporate_action_date(row.get("trade_date", {}))
-		_:
-			return str(row.get("status_label", row.get("title", ""))).strip_edges()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._corporate_action_capture_value(row)
+	stock_controller._sync_root_refs()
+	return result
 func _corporate_action_capture_detail(row: Dictionary) -> String:
-	var parts: Array = []
-	var summary_text: String = str(row.get("summary", "")).strip_edges()
-	if not summary_text.is_empty():
-		parts.append(summary_text)
-	var field_parts: Array = []
-	for field_value in row.get("fields", []):
-		if typeof(field_value) != TYPE_DICTIONARY:
-			continue
-		var field: Dictionary = field_value
-		var label_text: String = str(field.get("label", "")).strip_edges()
-		var value_text: String = _corporate_action_field_value(field).strip_edges()
-		if label_text.is_empty() or value_text.is_empty() or value_text == "-":
-			continue
-		field_parts.append("%s: %s" % [label_text, value_text])
-	if not field_parts.is_empty():
-		parts.append(" | ".join(field_parts))
-	return " ".join(parts)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._corporate_action_capture_detail(row)
+	stock_controller._sync_root_refs()
+	return result
 func _corporate_action_dividend_explanation(row: Dictionary) -> String:
-	var ticker: String = str(row.get("ticker", selected_company_id.to_upper())).strip_edges()
-	var eligible_shares: int = max(int(row.get("eligible_shares", 0)), 0)
-	var current_shares: int = max(int(row.get("current_shares_owned", 0)), 0)
-	var payment_date: String = _format_corporate_action_date(row.get("payment_trade_date", row.get("trade_date", {})))
-	var record_date: String = _format_corporate_action_date(row.get("record_trade_date", {}))
-	var is_stock_dividend: bool = str(row.get("action_type", "")) == "stock_dividend"
-	if bool(row.get("shareholder_recorded", false)):
-		if eligible_shares <= 0:
-			return "%s dividend: no eligible shares were recorded on %s." % [ticker, record_date]
-		if is_stock_dividend:
-			return "%s dividend: %d eligible share(s) recorded. Expected bonus: %d share(s) on %s." % [
-				ticker,
-				eligible_shares,
-				int(row.get("projected_bonus_shares", 0)),
-				payment_date
-			]
-		return "%s dividend: %d eligible share(s) recorded. Expected cash: %s on %s." % [
-			ticker,
-			eligible_shares,
-			_format_compact_currency(float(row.get("projected_amount", 0.0))),
-			payment_date
-		]
-	if bool(row.get("shareholder_record_pending", false)):
-		if current_shares <= 0:
-			return "%s dividend: no projected eligible shares yet. Recording date is %s." % [ticker, record_date]
-		return "%s dividend: projected from current holding of %d share(s). Recording date is %s; payment is %s." % [
-			ticker,
-			current_shares,
-			record_date,
-			payment_date
-		]
-	return "%s dividend timetable is visible. Recording date: %s. Payment date: %s." % [
-		ticker,
-		record_date,
-		payment_date
-	]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._corporate_action_dividend_explanation(row)
+	stock_controller._sync_root_refs()
+	return result
 func _build_corporate_action_field_cell(field: Dictionary) -> Control:
-	var vbox := VBoxContainer.new()
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 2)
-	var label := Label.new()
-	label.text = str(field.get("label", "Field"))
-	label.clip_text = true
-	_set_label_tone(label, COLOR_STOCKBOT_MUTED)
-	_apply_font_override_to_control(label, 11, _get_app_font())
-	vbox.add_child(label)
-	var value := Label.new()
-	value.text = _corporate_action_field_value(field)
-	value.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_set_label_tone(value, COLOR_STOCKBOT_TEXT)
-	_apply_font_override_to_control(value, 12, _get_dashboard_title_font())
-	vbox.add_child(value)
-	return vbox
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Control = stock_controller._build_corporate_action_field_cell(field)
+	stock_controller._sync_root_refs()
+	return result
 func _corporate_action_field_value(field: Dictionary) -> String:
-	if field.has("date") and typeof(field.get("date", {})) == TYPE_DICTIONARY:
-		return _format_corporate_action_date(field.get("date", {}))
-	var value_text: String = str(field.get("value", "")).strip_edges()
-	return value_text if not value_text.is_empty() else "-"
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._corporate_action_field_value(field)
+	stock_controller._sync_root_refs()
+	return result
 func _format_corporate_action_date(date_info: Variant) -> String:
-	if typeof(date_info) != TYPE_DICTIONARY:
-		return "-"
-	var date_dict: Dictionary = date_info
-	if date_dict.is_empty():
-		return "-"
-	var full_text: String = GameManager.format_trade_date(date_dict)
-	var comma_index: int = full_text.find(", ")
-	if comma_index >= 0:
-		return full_text.substr(comma_index + 2)
-	return full_text
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_corporate_action_date(date_info)
+	stock_controller._sync_root_refs()
+	return result
 func _on_corporate_action_filter_selected(index: int) -> void:
-	if corporate_actions_filter_option == null:
-		return
-	var metadata = corporate_actions_filter_option.get_item_metadata(index)
-	corporate_action_filter_id = str(metadata) if metadata != null else "all"
-	if current_trade_snapshot.is_empty():
-		_refresh_corporate_action_timeline({})
-		trade_workspace_corporate_action_cache_key = ""
-		return
-	_refresh_trade_workspace_corporate_action_timeline(true)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_corporate_action_filter_selected(index)
+	stock_controller._sync_root_refs()
 func _on_broker_net_toggled(toggled_on: bool) -> void:
-	broker_net_mode = toggled_on
-	_refresh_broker_header()
-	if current_trade_snapshot.is_empty():
-		_refresh_broker_table({})
-	else:
-		_refresh_broker_table(_broker_range_flow_for_snapshot(current_trade_snapshot))
-		trade_workspace_broker_cache_key = _trade_workspace_broker_snapshot_key(current_trade_snapshot)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_broker_net_toggled(toggled_on)
+	stock_controller._sync_root_refs()
 func _add_broker_table_side(
 	row: HBoxContainer,
 	code_text: String,
@@ -24954,12 +15851,11 @@ func _add_broker_table_side(
 	average_text: String,
 	font_color: Color
 ) -> void:
-	row.add_child(_build_broker_table_cell(code_text, BROKER_CODE_WIDTH, font_color, HORIZONTAL_ALIGNMENT_LEFT, BROKER_CODE_RATIO))
-	row.add_child(_build_broker_table_cell(value_text, BROKER_VALUE_WIDTH, font_color, HORIZONTAL_ALIGNMENT_RIGHT, BROKER_VALUE_RATIO))
-	row.add_child(_build_broker_table_cell(lot_text, BROKER_LOT_WIDTH, font_color, HORIZONTAL_ALIGNMENT_RIGHT, BROKER_LOT_RATIO))
-	row.add_child(_build_broker_table_cell(average_text, BROKER_AVERAGE_WIDTH, font_color, HORIZONTAL_ALIGNMENT_RIGHT, BROKER_AVERAGE_RATIO))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._add_broker_table_side(row, code_text, value_text, lot_text, average_text, font_color)
+	stock_controller._sync_root_refs()
 func _build_broker_table_cell(
 	text: String,
 	minimum_width: float,
@@ -24967,230 +15863,88 @@ func _build_broker_table_cell(
 	alignment: HorizontalAlignment,
 	stretch_ratio: float
 ) -> Label:
-	var label: Label = _build_table_cell(text, minimum_width, font_color, true, alignment)
-	label.size_flags_stretch_ratio = stretch_ratio
-	return label
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Label = stock_controller._build_broker_table_cell(text, minimum_width, font_color, alignment, stretch_ratio)
+	stock_controller._sync_root_refs()
+	return result
 func _build_broker_side_divider() -> VSeparator:
-	var divider := VSeparator.new()
-	divider.custom_minimum_size = Vector2(BROKER_SIDE_DIVIDER_WIDTH, 0.0)
-	divider.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	return divider
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: VSeparator = stock_controller._build_broker_side_divider()
+	stock_controller._sync_root_refs()
+	return result
 func _build_broker_table_row(buy_row: Dictionary, sell_row: Dictionary) -> Control:
-	var row: HBoxContainer = HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 8)
-
-	var buy_side := _build_broker_table_side_control(buy_row, "buy")
-	row.add_child(buy_side)
-	row.add_child(_build_broker_side_divider())
-	var sell_side := _build_broker_table_side_control(sell_row, "sell")
-	row.add_child(sell_side)
-	return row
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Control = stock_controller._build_broker_table_row(buy_row, sell_row)
+	stock_controller._sync_root_refs()
+	return result
 func _build_broker_table_side_control(broker_row: Dictionary, side: String) -> HBoxContainer:
-	var side_row := HBoxContainer.new()
-	side_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	side_row.size_flags_stretch_ratio = 1.0
-	side_row.add_theme_constant_override("separation", 8)
-	side_row.mouse_filter = Control.MOUSE_FILTER_STOP
-	var has_broker: bool = not broker_row.is_empty()
-	var is_buy_side: bool = str(side).to_lower() == "buy"
-	side_row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if has_broker else Control.CURSOR_ARROW
-	side_row.tooltip_text = "Right-click to capture this %s-side broker row." % ("buy" if is_buy_side else "sell") if has_broker else ""
-	if has_broker:
-		side_row.gui_input.connect(_on_broker_table_side_gui_input.bind(broker_row.duplicate(true), "buy" if is_buy_side else "sell"))
-	_add_broker_table_side(
-		side_row,
-		str(broker_row.get("code", "-")),
-		_format_compact_currency(float(broker_row.get("value", 0.0))) if has_broker else "-",
-		_format_compact_lots(float(broker_row.get("lots", 0.0))) if has_broker else "-",
-		_format_last_price(float(broker_row.get("avg_price", 0.0))) if has_broker else "-",
-		COLOR_POSITIVE if has_broker and is_buy_side else (COLOR_NEGATIVE if has_broker else COLOR_MUTED)
-	)
-	return side_row
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: HBoxContainer = stock_controller._build_broker_table_side_control(broker_row, side)
+	stock_controller._sync_root_refs()
+	return result
 func _on_broker_table_side_gui_input(event: InputEvent, broker_row: Dictionary, side: String) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var mouse_event := event as InputEventMouseButton
-	if not mouse_event.pressed or mouse_event.button_index != MOUSE_BUTTON_RIGHT:
-		return
-	if selected_company_id.is_empty():
-		_show_toast("Pick a stock before capturing broker research.", false)
-		return
-	_prepare_broker_capture(broker_row, side)
-	_show_broker_capture_menu(mouse_event.global_position)
-	get_viewport().set_input_as_handled()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_broker_table_side_gui_input(event, broker_row, side)
+	stock_controller._sync_root_refs()
 func _prepare_broker_capture(broker_row: Dictionary, side: String) -> void:
-	var normalized_side: String = "sell" if str(side).to_lower() == "sell" else "buy"
-	var broker_code: String = str(broker_row.get("code", "")).strip_edges()
-	var broker_name: String = str(broker_row.get("company_name", broker_row.get("name", broker_code))).strip_edges()
-	var side_label: String = "Buy-side" if normalized_side == "buy" else "Sell-side"
-	var value_text: String = _format_compact_currency(float(broker_row.get("value", 0.0)))
-	var lots_text: String = _format_compact_lots(float(broker_row.get("lots", 0.0)))
-	var avg_text: String = _format_last_price(float(broker_row.get("avg_price", 0.0)))
-	var range_label: String = "1D"
-	var broker_flow: Dictionary = _broker_range_flow_for_snapshot(current_trade_snapshot)
-	if not broker_flow.is_empty():
-		range_label = str(broker_flow.get("range_label", range_label))
-	var impact: String = "positive" if normalized_side == "buy" else "negative"
-	var detail: String = "%s %s printed %s across %s lot(s) at an average price of %s in the %s broker range." % [
-		side_label,
-		broker_code,
-		value_text,
-		lots_text,
-		avg_text,
-		range_label
-	]
-	if not broker_name.is_empty() and broker_name != broker_code:
-		detail += " Broker name: %s." % broker_name
-	pending_capture_payloads["broker"] = {
-		"source_type": "broker_summary",
-		"category": "broker_flow",
-		"category_label": "Broker Flow",
-		"source_label": "STOCKBOT Broker",
-		"source_id": "stockbot_broker_%s_%s_%s_%s_day_%d" % [selected_company_id, normalized_side, _node_token(broker_code), _node_token(selected_broker_range_id), RunState.day_index],
-		"company_id": selected_company_id,
-		"label": "%s broker %s %s" % [side_label, broker_code, range_label],
-		"value": "%s | %s lot(s) | avg %s" % [value_text, lots_text, avg_text],
-		"detail": detail,
-		"impact": impact
-	}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._prepare_broker_capture(broker_row, side)
+	stock_controller._sync_root_refs()
 func _show_broker_capture_menu(global_position: Vector2) -> void:
-	if broker_capture_menu == null:
-		broker_capture_menu = PopupMenu.new()
-		broker_capture_menu.name = "BrokerCaptureContextMenu"
-		broker_capture_menu.id_pressed.connect(_on_broker_capture_menu_id_pressed)
-		add_child(broker_capture_menu)
-	broker_capture_menu.clear()
-	broker_capture_menu.add_item("Add to Research Tray", 1)
-	broker_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
-	broker_capture_menu.popup()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._show_broker_capture_menu(global_position)
+	stock_controller._sync_root_refs()
 func _on_broker_capture_menu_id_pressed(id: int) -> void:
-	_commit_pending_capture("broker", id)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_broker_capture_menu_id_pressed(id)
+	stock_controller._sync_root_refs()
 func _sync_financial_statement_selection(company_id: String, financial_statement_snapshot: Dictionary) -> void:
-	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
-	if company_id != selected_financial_statement_company_id:
-		selected_financial_statement_company_id = company_id
-		selected_financial_statement_index = quarterly_statements.size() - 1
-
-	if quarterly_statements.is_empty():
-		selected_financial_statement_index = -1
-		return
-
-	selected_financial_statement_index = clampi(
-		selected_financial_statement_index,
-		0,
-		quarterly_statements.size() - 1
-	)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._sync_financial_statement_selection(company_id, financial_statement_snapshot)
+	stock_controller._sync_root_refs()
 func _shift_financial_statement_selection(offset: int) -> void:
-	if selected_company_id.is_empty():
-		return
-
-	var financial_statement_snapshot: Dictionary = current_trade_snapshot.get("financial_statement_snapshot", {})
-	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
-	if quarterly_statements.is_empty():
-		return
-
-	_sync_financial_statement_selection(selected_company_id, financial_statement_snapshot)
-	selected_financial_statement_index = clampi(
-		selected_financial_statement_index + offset,
-		0,
-		quarterly_statements.size() - 1
-	)
-	financials_year_label.text = ""
-	financials_year_label.visible = false
-	_refresh_statement_sections(financial_statement_snapshot)
-	trade_workspace_statement_cache_key = _trade_workspace_statement_snapshot_key(current_trade_snapshot, financial_statement_snapshot)
-	_refresh_key_stats_dashboard(current_trade_snapshot)
-	trade_workspace_key_stats_cache_key = _trade_workspace_key_stats_snapshot_key(current_trade_snapshot)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._shift_financial_statement_selection(offset)
+	stock_controller._sync_root_refs()
 func _selected_statement_period(financial_statement_snapshot: Dictionary) -> Dictionary:
-	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
-	if quarterly_statements.is_empty():
-		return financial_statement_snapshot
-
-	var safe_index: int = quarterly_statements.size() - 1
-	if selected_financial_statement_index >= 0:
-		safe_index = clampi(selected_financial_statement_index, 0, quarterly_statements.size() - 1)
-	return quarterly_statements[safe_index]
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._selected_statement_period(financial_statement_snapshot)
+	stock_controller._sync_root_refs()
+	return result
 func _refresh_statement_navigation(financial_statement_snapshot: Dictionary) -> void:
-	if financials_period_label == null or financials_previous_button == null or financials_next_button == null:
-		return
-
-	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
-	if quarterly_statements.is_empty():
-		financials_period_label.text = "Viewing latest available period."
-		financials_previous_button.disabled = true
-		financials_next_button.disabled = true
-		return
-
-	var selected_period: Dictionary = _selected_statement_period(financial_statement_snapshot)
-	var selected_position: int = clampi(selected_financial_statement_index, 0, quarterly_statements.size() - 1)
-	financials_period_label.text = "Viewing %s  |  %d / %d" % [
-		str(selected_period.get("statement_period_label", "latest")),
-		selected_position + 1,
-		quarterly_statements.size()
-	]
-	financials_previous_button.disabled = selected_position <= 0
-	financials_next_button.disabled = selected_position >= quarterly_statements.size() - 1
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_statement_navigation(financial_statement_snapshot)
+	stock_controller._sync_root_refs()
 func _refresh_statement_sections(financial_statement_snapshot: Dictionary) -> void:
-	_refresh_statement_navigation(financial_statement_snapshot)
-	if financial_statement_snapshot.is_empty():
-		_refresh_statement_section(income_statement_rows_vbox, income_statement_empty_label, [], "income_statement", "Income Statement", "")
-		_refresh_statement_section(balance_sheet_rows_vbox, balance_sheet_empty_label, [], "balance_sheet", "Balance Sheet", "")
-		_refresh_statement_section(cash_flow_rows_vbox, cash_flow_empty_label, [], "cash_flow", "Cash Flow", "")
-		return
-
-	var selected_period: Dictionary = _selected_statement_period(financial_statement_snapshot)
-	var period_label: String = str(selected_period.get("statement_period_label", selected_period.get("period_label", "latest"))).strip_edges()
-	_refresh_statement_section(
-		income_statement_rows_vbox,
-		income_statement_empty_label,
-		selected_period.get("income_statement", []),
-		"income_statement",
-		"Income Statement",
-		period_label
-	)
-	_refresh_statement_section(
-		balance_sheet_rows_vbox,
-		balance_sheet_empty_label,
-		selected_period.get("balance_sheet", []),
-		"balance_sheet",
-		"Balance Sheet",
-		period_label
-	)
-	_refresh_statement_section(
-		cash_flow_rows_vbox,
-		cash_flow_empty_label,
-		selected_period.get("cash_flow", []),
-		"cash_flow",
-		"Cash Flow",
-		period_label
-	)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_statement_sections(financial_statement_snapshot)
+	stock_controller._sync_root_refs()
 func _refresh_statement_section(
 	rows_vbox: VBoxContainer,
 	empty_label: Label,
@@ -25199,131 +15953,60 @@ func _refresh_statement_section(
 	section_label: String = "",
 	period_label: String = ""
 ) -> void:
-	if rows_vbox == null or empty_label == null:
-		return
-
-	_clear_dynamic_rows(rows_vbox, empty_label)
-	empty_label.visible = lines.is_empty()
-	if lines.is_empty():
-		return
-
-	for line_value in lines:
-		var line_item: Dictionary = line_value
-		rows_vbox.add_child(_build_statement_row(line_item, section_id, section_label, period_label))
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._refresh_statement_section(rows_vbox, empty_label, lines, section_id, section_label, period_label)
+	stock_controller._sync_root_refs()
 func _build_statement_row(
 	line_item: Dictionary,
 	section_id: String = "",
 	section_label: String = "",
 	period_label: String = ""
 ) -> Control:
-	var capture_payload: Dictionary = _financial_statement_capture_payload(line_item, section_id, section_label, period_label)
-	var row: HBoxContainer = HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 8)
-	if not capture_payload.is_empty():
-		row.mouse_filter = Control.MOUSE_FILTER_STOP
-		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		row.tooltip_text = "Click to open research actions."
-		row.gui_input.connect(_on_financial_statement_row_gui_input.bind(capture_payload.duplicate(true)))
-
-	var label_cell: Label = _build_table_cell(
-		str(line_item.get("label", "")),
-		STATEMENT_LABEL_WIDTH,
-		COLOR_STOCKBOT_MUTED,
-		true
-	)
-	var value_cell: Label = _build_table_cell(
-		_format_statement_value(line_item),
-		STATEMENT_VALUE_WIDTH,
-		COLOR_STOCKBOT_TEXT,
-		false,
-		HORIZONTAL_ALIGNMENT_RIGHT
-	)
-	if not capture_payload.is_empty():
-		label_cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		value_cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(label_cell)
-	row.add_child(value_cell)
-	return row
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Control = stock_controller._build_statement_row(line_item, section_id, section_label, period_label)
+	stock_controller._sync_root_refs()
+	return result
 func _financial_statement_capture_payload(
 	line_item: Dictionary,
 	section_id: String,
 	section_label: String,
 	period_label: String
 ) -> Dictionary:
-	if selected_company_id.is_empty():
-		return {}
-	var label_text: String = str(line_item.get("label", "")).strip_edges()
-	if label_text.is_empty():
-		return {}
-	var value_text: String = _format_statement_value(line_item)
-	if value_text.strip_edges().is_empty() or value_text.strip_edges() == "-":
-		return {}
-	var resolved_section_id: String = section_id.strip_edges().to_lower()
-	if resolved_section_id == "cash flow":
-		resolved_section_id = "cash_flow"
-	var resolved_section_label: String = section_label.strip_edges()
-	if resolved_section_label.is_empty():
-		resolved_section_label = resolved_section_id.replace("_", " ").capitalize()
-	var resolved_period: String = period_label.strip_edges()
-	if resolved_period.is_empty():
-		resolved_period = "latest"
-	var detail: String = "%s line from %s (%s)." % [label_text, resolved_section_label, resolved_period]
-	return {
-		"source_type": "financial_statement",
-		"category": "financials",
-		"company_id": selected_company_id,
-		"label": label_text,
-		"value": value_text,
-		"detail": detail,
-		"source_id": "financial_statement_%s_%s_%s_%s" % [
-			selected_company_id,
-			resolved_section_id,
-			_node_token(resolved_period),
-			_node_token(label_text)
-		],
-		"raw_value": float(line_item.get("value", 0.0))
-	}
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: Dictionary = stock_controller._financial_statement_capture_payload(line_item, section_id, section_label, period_label)
+	stock_controller._sync_root_refs()
+	return result
 func _on_financial_statement_row_gui_input(event: InputEvent, capture_payload: Dictionary) -> void:
-	if not (event is InputEventMouseButton):
-		return
-	var mouse_event := event as InputEventMouseButton
-	if not mouse_event.pressed or not [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT].has(mouse_event.button_index):
-		return
-	pending_capture_payloads["financial_statement"] = capture_payload.duplicate(true)
-	_show_financial_statement_capture_menu(mouse_event.global_position)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_financial_statement_row_gui_input(event, capture_payload)
+	stock_controller._sync_root_refs()
 func _show_financial_statement_capture_menu(global_position: Vector2) -> void:
-	if financial_statement_capture_menu == null:
-		financial_statement_capture_menu = PopupMenu.new()
-		financial_statement_capture_menu.name = "FinancialStatementCaptureContextMenu"
-		financial_statement_capture_menu.id_pressed.connect(_on_financial_statement_capture_menu_id_pressed)
-		add_child(financial_statement_capture_menu)
-	financial_statement_capture_menu.clear()
-	financial_statement_capture_menu.add_item("Add to Research Tray", 1)
-	financial_statement_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
-	financial_statement_capture_menu.popup()
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._show_financial_statement_capture_menu(global_position)
+	stock_controller._sync_root_refs()
 func _on_financial_statement_capture_menu_id_pressed(id: int) -> void:
-	_commit_pending_capture("financial_statement", id)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	stock_controller._on_financial_statement_capture_menu_id_pressed(id)
+	stock_controller._sync_root_refs()
 func _format_statement_value(line_item: Dictionary) -> String:
-	var line_format: String = str(line_item.get("format", "currency"))
-	var value: float = float(line_item.get("value", 0.0))
-	if line_format == "shares":
-		return _format_grouped_integer(int(round(value)))
-	return _format_compact_currency(value)
-
-
+	_ensure_stock_controller()
+	stock_controller._sync_dynamic_refs_from_root()
+	stock_controller._sync_state_from_root()
+	var result: String = stock_controller._format_statement_value(line_item)
+	stock_controller._sync_root_refs()
+	return result
 func _format_compact_currency(value: float) -> String:
 	return UIFormatter.format_compact_currency(value)
 
