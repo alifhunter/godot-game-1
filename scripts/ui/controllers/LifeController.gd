@@ -1,11 +1,13 @@
 extends RefCounted
 
+const UI_THEME := preload("res://scripts/ui/UITheme.gd")
+
 const APP_ID_LIFE := "life"
 const LIFE_WIDGET_SCRIPT = preload("res://scripts/ui/widgets/LifeWidget.gd")
-const COLOR_DESKTOP_TEXT := Color(0.184314, 0.172549, 0.109804, 1)
-const COLOR_DESKTOP_CREAM := Color(1.0, 0.976471, 0.929412, 1)
-const COLOR_DESKTOP_BROWN := Color(0.509804, 0.231373, 0.0941176, 1)
-const COLOR_DESKTOP_FRAME := Color(0.729412, 0.694118, 0.603922, 1)
+const COLOR_DESKTOP_TEXT := UI_THEME.COLOR_DESKTOP_TEXT
+const COLOR_DESKTOP_CREAM := UI_THEME.COLOR_DESKTOP_CREAM
+const COLOR_DESKTOP_BROWN := UI_THEME.COLOR_DESKTOP_BROWN
+const COLOR_DESKTOP_FRAME := UI_THEME.COLOR_DESKTOP_FRAME
 
 var _root = null
 var life_app_button: Button = null

@@ -1,11 +1,13 @@
 extends RefCounted
 
+const UI_THEME := preload("res://scripts/ui/UITheme.gd")
+
 const NETWORK_FOLLOWUP_ACTIONS := {
 	0: "thank",
 	1: "ask_why",
 	2: "challenge"
 }
-const COLOR_WINDOW_TEXT := Color(0.184314, 0.172549, 0.109804, 1)
+const COLOR_WINDOW_TEXT := UI_THEME.COLOR_WINDOW_TEXT
 
 var portfolio_trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 var _root = null
