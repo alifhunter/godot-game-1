@@ -451,7 +451,6 @@ var company_detail_label: Label = null
 var company_agenda_label: Label = null
 var company_agenda_option: OptionButton = null
 var company_request_button: Button = null
-var company_management_snapshot: Dictionary = {}
 var company_controller = null
 var news_controller = null
 var social_controller = null

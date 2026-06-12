@@ -225,7 +225,6 @@ func refresh(preferred_company_id: String = "") -> void:
 		company_request_button.visible = has_company
 		company_request_button.tooltip_text = str(selected_options.get("tooltip_text", "Use majority ownership to set a company-direction agenda."))
 		_style_company_action_button(company_request_button, enabled)
-	_sync_root_state()
 	refresh_app_availability()
 
 
@@ -296,7 +295,6 @@ func _sync_dynamic_refs_from_root() -> void:
 	company_agenda_label = _root.get("company_agenda_label") as Label
 	company_agenda_option = _root.get("company_agenda_option") as OptionButton
 	company_request_button = _root.get("company_request_button") as Button
-	company_management_snapshot = _root.get("company_management_snapshot")
 
 
 func _sync_root_refs() -> void:
@@ -311,12 +309,6 @@ func _sync_root_refs() -> void:
 	_root.set("company_agenda_label", company_agenda_label)
 	_root.set("company_agenda_option", company_agenda_option)
 	_root.set("company_request_button", company_request_button)
-	_sync_root_state()
-
-
-func _sync_root_state() -> void:
-	if _root != null:
-		_root.set("company_management_snapshot", company_management_snapshot)
 
 
 func _style_panel(panel: PanelContainer, fill_color: Color, corner_radius: int = 10, border_top: int = 1, border_right: int = 1, border_bottom: int = 1, border_left: int = 1) -> void:
