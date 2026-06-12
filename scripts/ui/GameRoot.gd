@@ -1717,11 +1717,11 @@ func _on_key_stats_value_row_gui_input(event: InputEvent, source_row: Dictionary
 	stock_controller._sync_state_from_root()
 	stock_controller._on_key_stats_value_row_gui_input(event, source_row, label_text, value_text)
 	stock_controller._sync_root_refs()
-func _show_key_stats_capture_menu(global_position: Vector2) -> void:
+func _show_key_stats_capture_menu(menu_position: Vector2) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
 	stock_controller._sync_state_from_root()
-	stock_controller._show_key_stats_capture_menu(global_position)
+	stock_controller._show_key_stats_capture_menu(menu_position)
 	stock_controller._sync_root_refs()
 func _commit_pending_capture(kind: String, id: int) -> void:
 	var payload: Dictionary = pending_capture_payloads.get(kind, {})
@@ -3088,7 +3088,7 @@ func _apply_academy_release_lock_state() -> void:
 		_close_desktop_app_window(APP_ID_ACADEMY)
 
 
-func _ensure_academy_coming_soon_badge(visible: bool) -> void:
+func _ensure_academy_coming_soon_badge(is_shown: bool) -> void:
 	if academy_app_button == null:
 		return
 	var badge: Label = academy_app_button.get_node_or_null("AcademyComingSoonBadge") as Label
@@ -3113,7 +3113,7 @@ func _ensure_academy_coming_soon_badge(visible: bool) -> void:
 		badge_style.set_border_width_all(1)
 		badge_style.set_corner_radius_all(4)
 		badge.add_theme_stylebox_override("normal", badge_style)
-	badge.visible = visible
+	badge.visible = is_shown
 
 
 func _ensure_desktop_shortcut_corner_marker(button: Button) -> void:
@@ -3775,49 +3775,49 @@ func _desktop_window_work_rect() -> Rect2:
 
 func _desktop_window_default_rect(app_id: String) -> Rect2:
 	var work_rect: Rect2 = _desktop_window_work_rect()
-	var size := _desktop_window_min_size_for_app(app_id)
+	var window_size := _desktop_window_min_size_for_app(app_id)
 	match app_id:
 		APP_ID_STOCK:
-			size.x = min(max(work_rect.size.x - 20.0, size.x), work_rect.size.x)
-			size.y = min(max(work_rect.size.y - 28.0, size.y), work_rect.size.y)
-			return Rect2(work_rect.position + Vector2(10, 10), size)
+			window_size.x = min(max(work_rect.size.x - 20.0, window_size.x), work_rect.size.x)
+			window_size.y = min(max(work_rect.size.y - 28.0, window_size.y), work_rect.size.y)
+			return Rect2(work_rect.position + Vector2(10, 10), window_size)
 		APP_ID_NEWS:
-			size.x = min(max(work_rect.size.x * 0.8, size.x), work_rect.size.x - 12.0)
-			size.y = min(max(work_rect.size.y * 0.84, size.y), work_rect.size.y - 12.0)
-			return Rect2(work_rect.position + Vector2(26, 18), size)
+			window_size.x = min(max(work_rect.size.x * 0.8, window_size.x), work_rect.size.x - 12.0)
+			window_size.y = min(max(work_rect.size.y * 0.84, window_size.y), work_rect.size.y - 12.0)
+			return Rect2(work_rect.position + Vector2(26, 18), window_size)
 		APP_ID_SOCIAL:
-			size.x = min(max(work_rect.size.x * 0.86, size.x), min(SOCIAL_WINDOW_MAX_WIDTH + 36.0, work_rect.size.x - 12.0))
-			size.y = min(max(work_rect.size.y * 0.84, size.y), min(SOCIAL_WINDOW_MAX_HEIGHT + 24.0, work_rect.size.y - 12.0))
-			return Rect2(work_rect.position + Vector2(24, 18), size)
+			window_size.x = min(max(work_rect.size.x * 0.86, window_size.x), min(SOCIAL_WINDOW_MAX_WIDTH + 36.0, work_rect.size.x - 12.0))
+			window_size.y = min(max(work_rect.size.y * 0.84, window_size.y), min(SOCIAL_WINDOW_MAX_HEIGHT + 24.0, work_rect.size.y - 12.0))
+			return Rect2(work_rect.position + Vector2(24, 18), window_size)
 		APP_ID_NETWORK:
-			size.x = min(max(work_rect.size.x * 0.78, size.x), work_rect.size.x - 12.0)
-			size.y = min(max(work_rect.size.y * 0.88, size.y), work_rect.size.y - 12.0)
-			return Rect2(work_rect.position + Vector2(28, 14), size)
+			window_size.x = min(max(work_rect.size.x * 0.78, window_size.x), work_rect.size.x - 12.0)
+			window_size.y = min(max(work_rect.size.y * 0.88, window_size.y), work_rect.size.y - 12.0)
+			return Rect2(work_rect.position + Vector2(28, 14), window_size)
 		APP_ID_ACADEMY:
-			size.x = min(max(work_rect.size.x * 0.78, size.x), work_rect.size.x - 12.0)
-			size.y = min(max(work_rect.size.y * 0.86, size.y), work_rect.size.y - 12.0)
-			return Rect2(work_rect.position + Vector2(24, 18), size)
+			window_size.x = min(max(work_rect.size.x * 0.78, window_size.x), work_rect.size.x - 12.0)
+			window_size.y = min(max(work_rect.size.y * 0.86, window_size.y), work_rect.size.y - 12.0)
+			return Rect2(work_rect.position + Vector2(24, 18), window_size)
 		APP_ID_THESIS:
-			size.x = min(max(work_rect.size.x * 0.82, size.x), work_rect.size.x - 12.0)
-			size.y = min(max(work_rect.size.y * 0.86, size.y), work_rect.size.y - 12.0)
-			return Rect2(work_rect.position + Vector2(32, 22), size)
+			window_size.x = min(max(work_rect.size.x * 0.82, window_size.x), work_rect.size.x - 12.0)
+			window_size.y = min(max(work_rect.size.y * 0.86, window_size.y), work_rect.size.y - 12.0)
+			return Rect2(work_rect.position + Vector2(32, 22), window_size)
 		APP_ID_LIFE:
-			size.x = min(max(work_rect.size.x * 0.72, size.x), min(LIFE_WINDOW_MAX_WIDTH, work_rect.size.x - 12.0))
-			size.y = min(max(work_rect.size.y * 0.88, size.y), work_rect.size.y - 12.0)
-			var centered_x: float = max(floor((work_rect.size.x - size.x) * 0.5), 16.0)
-			return Rect2(work_rect.position + Vector2(centered_x, 18), size)
+			window_size.x = min(max(work_rect.size.x * 0.72, window_size.x), min(LIFE_WINDOW_MAX_WIDTH, work_rect.size.x - 12.0))
+			window_size.y = min(max(work_rect.size.y * 0.88, window_size.y), work_rect.size.y - 12.0)
+			var centered_x: float = max(floor((work_rect.size.x - window_size.x) * 0.5), 16.0)
+			return Rect2(work_rect.position + Vector2(centered_x, 18), window_size)
 		APP_ID_COMPANY:
-			size.x = min(max(work_rect.size.x * 0.68, size.x), work_rect.size.x - 16.0)
-			size.y = min(max(work_rect.size.y * 0.72, size.y), work_rect.size.y - 16.0)
-			return Rect2(work_rect.position + Vector2(64, 36), size)
+			window_size.x = min(max(work_rect.size.x * 0.68, window_size.x), work_rect.size.x - 16.0)
+			window_size.y = min(max(work_rect.size.y * 0.72, window_size.y), work_rect.size.y - 16.0)
+			return Rect2(work_rect.position + Vector2(64, 36), window_size)
 		APP_ID_UPGRADES:
-			size.x = min(max(work_rect.size.x * 0.64, size.x), work_rect.size.x - 16.0)
-			size.y = min(max(work_rect.size.y * 0.7, size.y), work_rect.size.y - 16.0)
-			return Rect2(work_rect.position + Vector2(72, 48), size)
+			window_size.x = min(max(work_rect.size.x * 0.64, window_size.x), work_rect.size.x - 16.0)
+			window_size.y = min(max(work_rect.size.y * 0.7, window_size.y), work_rect.size.y - 16.0)
+			return Rect2(work_rect.position + Vector2(72, 48), window_size)
 		_:
-			size.x = min(size.x, work_rect.size.x)
-			size.y = min(size.y, work_rect.size.y)
-			return Rect2(work_rect.position, size)
+			window_size.x = min(window_size.x, work_rect.size.x)
+			window_size.y = min(window_size.y, work_rect.size.y)
+			return Rect2(work_rect.position, window_size)
 
 
 func _desktop_window_initial_rect(app_id: String) -> Rect2:
@@ -4501,11 +4501,11 @@ func _trade_quote_impact(quote_key: String, value_text: String) -> String:
 	var result: String = stock_controller._trade_quote_impact(quote_key, value_text)
 	stock_controller._sync_root_refs()
 	return result
-func _show_trade_quote_capture_menu(global_position: Vector2) -> void:
+func _show_trade_quote_capture_menu(menu_position: Vector2) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
 	stock_controller._sync_state_from_root()
-	stock_controller._show_trade_quote_capture_menu(global_position)
+	stock_controller._show_trade_quote_capture_menu(menu_position)
 	stock_controller._sync_root_refs()
 func _on_trade_quote_capture_menu_id_pressed(id: int) -> void:
 	_ensure_stock_controller()
@@ -4784,9 +4784,9 @@ func _company_id_for_ticker(ticker: String) -> String:
 	_ensure_social_controller()
 	return social_controller._company_id_for_ticker(ticker)
 
-func _show_social_capture_menu(global_position: Vector2) -> void:
+func _show_social_capture_menu(menu_position: Vector2) -> void:
 	_ensure_social_controller()
-	social_controller._show_social_capture_menu(global_position)
+	social_controller._show_social_capture_menu(menu_position)
 
 func _on_social_capture_menu_id_pressed(id: int) -> void:
 	_ensure_social_controller()
@@ -5060,11 +5060,11 @@ func _open_news_capture_menu_from_event(event: InputEvent, context: String) -> v
 	news_controller._open_news_capture_menu_from_event(event, context)
 	news_controller._sync_root_refs()
 
-func _show_news_capture_menu(global_position: Vector2, context: String) -> void:
+func _show_news_capture_menu(menu_position: Vector2, context: String) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
 	news_controller._sync_state_from_root()
-	news_controller._show_news_capture_menu(global_position, context)
+	news_controller._show_news_capture_menu(menu_position, context)
 	news_controller._sync_root_refs()
 
 func _on_news_capture_menu_id_pressed(id: int) -> void:
@@ -5802,7 +5802,7 @@ func _prepare_dashboard_sector_capture(row: Dictionary) -> void:
 	}
 
 
-func _show_dashboard_sector_capture_menu(global_position: Vector2) -> void:
+func _show_dashboard_sector_capture_menu(menu_position: Vector2) -> void:
 	if dashboard_sector_capture_menu == null:
 		dashboard_sector_capture_menu = PopupMenu.new()
 		dashboard_sector_capture_menu.name = "DashboardSectorCaptureContextMenu"
@@ -5810,7 +5810,7 @@ func _show_dashboard_sector_capture_menu(global_position: Vector2) -> void:
 		add_child(dashboard_sector_capture_menu)
 	dashboard_sector_capture_menu.clear()
 	dashboard_sector_capture_menu.add_item("Add to Research Tray", 1)
-	dashboard_sector_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	dashboard_sector_capture_menu.position = Vector2i(int(menu_position.x), int(menu_position.y))
 	dashboard_sector_capture_menu.popup()
 
 
@@ -7200,7 +7200,7 @@ func _debug_corporate_action_target_state(generator_id: String) -> Dictionary:
 	var mode: String = str(generator.get("mode", "rupslb"))
 	var action_label: String = str(generator.get("full_label", generator.get("label", "Corporate Action")))
 	var status_text: String = "Target: %s | Generates %s." % [ticker, action_label]
-	var tooltip_text: String = str(generator.get("description", "Generate a corporate action for the selected stock."))
+	var tooltip_message: String = str(generator.get("description", "Generate a corporate action for the selected stock."))
 	if mode == "rupslb":
 		status_text = "Target: %s | Held %d lot(s) | Schedules %s for %s." % [
 			ticker,
@@ -7217,7 +7217,7 @@ func _debug_corporate_action_target_state(generator_id: String) -> Dictionary:
 		"company_id": selected_company_id,
 		"ticker": ticker,
 		"status_text": status_text,
-		"tooltip_text": tooltip_text
+		"tooltip_text": tooltip_message
 	}
 
 
@@ -8252,11 +8252,11 @@ func _on_profile_capture_row_gui_input(event: InputEvent, capture_payload: Dicti
 	stock_controller._sync_state_from_root()
 	stock_controller._on_profile_capture_row_gui_input(event, capture_payload)
 	stock_controller._sync_root_refs()
-func _show_profile_capture_menu(global_position: Vector2) -> void:
+func _show_profile_capture_menu(menu_position: Vector2) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
 	stock_controller._sync_state_from_root()
-	stock_controller._show_profile_capture_menu(global_position)
+	stock_controller._show_profile_capture_menu(menu_position)
 	stock_controller._sync_root_refs()
 func _on_profile_capture_menu_id_pressed(id: int) -> void:
 	_ensure_stock_controller()
@@ -10894,7 +10894,10 @@ func _ftue_target_rect_for_step(step_id: String) -> Rect2:
 		"welcome_desktop":
 			target = stock_app_button
 		"pick_stock":
-			target = company_list if active_app_id == APP_ID_STOCK else stock_app_button
+			if active_app_id == APP_ID_STOCK:
+				target = company_list
+			else:
+				target = stock_app_button
 		"inspect_setup":
 			target = work_tabs
 		"buy_one_lot":
@@ -10984,13 +10987,17 @@ func _guide_target_for_step(flow_id: String, step_id: String) -> Control:
 				"open_all_stock":
 					if active_app_id != APP_ID_STOCK:
 						return stock_app_button
-					return markets_button if active_section_id != "markets" else stock_list_tabs
+					if active_section_id != "markets":
+						return markets_button
+					return stock_list_tabs
 				"select_stock":
 					if active_app_id != APP_ID_STOCK:
 						return stock_app_button
 					if active_section_id != "markets":
 						return markets_button
-					return all_stocks_rows if stock_list_tabs.current_tab == STOCK_LIST_TAB_ALL_STOCKS else stock_list_tabs
+					if stock_list_tabs.current_tab == STOCK_LIST_TAB_ALL_STOCKS:
+						return all_stocks_rows
+					return stock_list_tabs
 				"add_watchlist":
 					if active_app_id != APP_ID_STOCK:
 						return stock_app_button
@@ -15764,11 +15771,11 @@ func _on_corporate_action_timeline_card_gui_input(event: InputEvent, row: Dictio
 	stock_controller._sync_state_from_root()
 	stock_controller._on_corporate_action_timeline_card_gui_input(event, row)
 	stock_controller._sync_root_refs()
-func _show_corporate_action_capture_menu(row: Dictionary, global_position: Vector2) -> void:
+func _show_corporate_action_capture_menu(row: Dictionary, menu_position: Vector2) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
 	stock_controller._sync_state_from_root()
-	stock_controller._show_corporate_action_capture_menu(row, global_position)
+	stock_controller._show_corporate_action_capture_menu(row, menu_position)
 	stock_controller._sync_root_refs()
 func _on_corporate_action_capture_menu_id_pressed(id: int) -> void:
 	_ensure_stock_controller()
@@ -15902,11 +15909,11 @@ func _prepare_broker_capture(broker_row: Dictionary, side: String) -> void:
 	stock_controller._sync_state_from_root()
 	stock_controller._prepare_broker_capture(broker_row, side)
 	stock_controller._sync_root_refs()
-func _show_broker_capture_menu(global_position: Vector2) -> void:
+func _show_broker_capture_menu(menu_position: Vector2) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
 	stock_controller._sync_state_from_root()
-	stock_controller._show_broker_capture_menu(global_position)
+	stock_controller._show_broker_capture_menu(menu_position)
 	stock_controller._sync_root_refs()
 func _on_broker_capture_menu_id_pressed(id: int) -> void:
 	_ensure_stock_controller()
@@ -15988,11 +15995,11 @@ func _on_financial_statement_row_gui_input(event: InputEvent, capture_payload: D
 	stock_controller._sync_state_from_root()
 	stock_controller._on_financial_statement_row_gui_input(event, capture_payload)
 	stock_controller._sync_root_refs()
-func _show_financial_statement_capture_menu(global_position: Vector2) -> void:
+func _show_financial_statement_capture_menu(menu_position: Vector2) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
 	stock_controller._sync_state_from_root()
-	stock_controller._show_financial_statement_capture_menu(global_position)
+	stock_controller._show_financial_statement_capture_menu(menu_position)
 	stock_controller._sync_root_refs()
 func _on_financial_statement_capture_menu_id_pressed(id: int) -> void:
 	_ensure_stock_controller()

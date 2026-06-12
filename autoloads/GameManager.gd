@@ -9,6 +9,7 @@ signal social_changed
 signal upgrades_changed
 signal daily_actions_changed
 signal academy_changed
+@warning_ignore("unused_signal") # emitted by ThesisManager via gm.
 signal thesis_changed
 signal life_changed
 signal summary_ready(summary)
@@ -4855,22 +4856,22 @@ func _article_can_seed_life_development(article: Dictionary) -> bool:
 	return false
 
 
-func _life_development_location_for_seed(seed: String) -> String:
+func _life_development_location_for_seed(seed_value: String) -> String:
 	if LIFE_PROPERTY_LOCATIONS.is_empty():
 		return "jakarta"
-	var index: int = int(STABLE_RNG.seed_from_parts([RunState.run_seed, "life_development_location", seed]) % LIFE_PROPERTY_LOCATIONS.size())
+	var index: int = int(STABLE_RNG.seed_from_parts([RunState.run_seed, "life_development_location", seed_value]) % LIFE_PROPERTY_LOCATIONS.size())
 	var location: Dictionary = LIFE_PROPERTY_LOCATIONS[index]
 	return str(location.get("id", "jakarta"))
 
 
-func _life_development_location_for_article(article: Dictionary, seed: String) -> String:
+func _life_development_location_for_article(article: Dictionary, seed_value: String) -> String:
 	var explicit_location_raw: String = str(article.get("property_development_location_id", "")).strip_edges()
 	if not explicit_location_raw.is_empty():
 		return _normalize_life_location_id(explicit_location_raw)
-	return _life_development_location_for_seed(seed)
+	return _life_development_location_for_seed(seed_value)
 
 
-func _life_development_theme_for_article(article: Dictionary, seed: String) -> String:
+func _life_development_theme_for_article(article: Dictionary, seed_value: String) -> String:
 	var explicit_theme: String = str(article.get("property_development_theme", "")).strip_edges()
 	if not explicit_theme.is_empty():
 		return explicit_theme
@@ -4892,10 +4893,10 @@ func _life_development_theme_for_article(article: Dictionary, seed: String) -> S
 		str(article.get("headline", "")),
 		str(article.get("deck", "")),
 		str(article.get("body", ""))
-	], seed)
+	], seed_value)
 
 
-func _life_development_theme_for_text(text: String, seed: String) -> String:
+func _life_development_theme_for_text(text: String, seed_value: String) -> String:
 	var lower_text: String = text.to_lower()
 	if lower_text.find("toll") >= 0:
 		return "toll_exit"
@@ -4909,7 +4910,7 @@ func _life_development_theme_for_text(text: String, seed: String) -> String:
 		return "resort_zone"
 	if lower_text.find("port") >= 0 or lower_text.find("logistics") >= 0:
 		return "port_logistics"
-	var index: int = int(STABLE_RNG.seed_from_parts([RunState.run_seed, "life_development_theme", seed]) % LIFE_DEVELOPMENT_THEMES.size())
+	var index: int = int(STABLE_RNG.seed_from_parts([RunState.run_seed, "life_development_theme", seed_value]) % LIFE_DEVELOPMENT_THEMES.size())
 	return str(LIFE_DEVELOPMENT_THEMES[index].get("id", "modern_city"))
 
 
@@ -6015,13 +6016,13 @@ func _build_life_development_news_articles_for_feed(outlet_id: String, feed: Dic
 
 func _build_life_development_news_article(outlet_id: String, outlet_label: String, outlet_level: int, source_article: Dictionary) -> Dictionary:
 	var source_id: String = _life_development_news_source_id(source_article)
-	var seed: String = "%s|%s|%s" % [
+	var seed_value: String = "%s|%s|%s" % [
 		source_id,
 		str(source_article.get("headline", "")),
 		str(source_article.get("target_sector_id", ""))
 	]
-	var location_id: String = _life_development_location_for_article(source_article, seed)
-	var theme: String = _life_development_theme_for_article(source_article, seed)
+	var location_id: String = _life_development_location_for_article(source_article, seed_value)
+	var theme: String = _life_development_theme_for_article(source_article, seed_value)
 	var intel_level: int = clamp(int(source_article.get("intel_level", outlet_level)), 1, 4)
 	var reliability_by_level: Array = [0.0, 46.0, 56.0, 66.0, 76.0]
 	var reliability: float = float(reliability_by_level[intel_level])

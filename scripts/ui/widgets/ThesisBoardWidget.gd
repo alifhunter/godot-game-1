@@ -1444,14 +1444,14 @@ func _make_report_section_rule(title: String) -> HBoxContainer:
 
 
 func _make_report_thesis_item(key: String, body: String, pills: Array) -> VBoxContainer:
-	var wrap := VBoxContainer.new()
-	wrap.name = "ThesisWhitePaperItem%s" % _node_token(key)
-	wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	wrap.add_theme_constant_override("separation", 0)
+	var wrap_container := VBoxContainer.new()
+	wrap_container.name = "ThesisWhitePaperItem%s" % _node_token(key)
+	wrap_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wrap_container.add_theme_constant_override("separation", 0)
 	var row := HBoxContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 0)
-	wrap.add_child(row)
+	wrap_container.add_child(row)
 	var key_margin := MarginContainer.new()
 	key_margin.custom_minimum_size = Vector2(128, 0)
 	key_margin.add_theme_constant_override("margin_left", 0)
@@ -1498,11 +1498,11 @@ func _make_report_thesis_item(key: String, body: String, pills: Array) -> VBoxCo
 	var bottom_rule := ColorRect.new()
 	bottom_rule.color = Color(0.87, 0.82, 0.70, 1)
 	bottom_rule.custom_minimum_size = Vector2(0, 1)
-	wrap.add_child(bottom_rule)
+	wrap_container.add_child(bottom_rule)
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 10)
-	wrap.add_child(spacer)
-	return wrap
+	wrap_container.add_child(spacer)
+	return wrap_container
 
 
 func _report_pills_for_text(key: String, body: String, report: Dictionary) -> Array:
@@ -1651,7 +1651,6 @@ func _style_report_action_button(button: Button, variant: String) -> void:
 	var cream: Color = _theme_color("desktop.cream", COLOR_REPORT_CREAM)
 	var gold: Color = _theme_color("desktop.gold", COLOR_REPORT_GOLD)
 	var brown: Color = _theme_color("desktop.brown", COLOR_REPORT_MAROON)
-	var text_color: Color = _theme_color("desktop.text", COLOR_TEXT)
 	var bg: Color = Color(0, 0, 0, 0)
 	var border: Color = Color(gold.r, gold.g, gold.b, 0.62)
 	var font: Color = cream
@@ -2243,7 +2242,6 @@ func _thesis_sentence_for_evidence(row: Dictionary) -> String:
 	var label: String = str(row.get("label", "Evidence")).strip_edges()
 	var value: String = _clean_evidence_value(str(row.get("value", "")).strip_edges())
 	var detail: String = str(row.get("detail", "")).strip_edges()
-	var source: String = str(row.get("source_label", "")).strip_edges()
 	var human_label: String = _humanize_thesis_metric_label(label)
 	var sentence: String = _sentence_case(human_label)
 	if not value.is_empty():
@@ -2284,7 +2282,6 @@ func _thesis_sentence_for_financial_statement_evidence(row: Dictionary) -> Strin
 func _thesis_sentence_for_ownership_evidence(row: Dictionary) -> String:
 	var label: String = _humanize_thesis_metric_label(str(row.get("label", "ownership"))).to_lower()
 	var value: String = _clean_evidence_value(str(row.get("value", "")))
-	var detail: String = str(row.get("detail", "")).strip_edges()
 	var sentence: String = "ownership shows %s" % label
 	if not value.is_empty():
 		sentence += " at %s" % value
@@ -2954,7 +2951,7 @@ func _make_empty_evidence_label(text: String) -> Label:
 	return label
 
 
-func _build_evidence_card(option: Dictionary, thesis: Dictionary) -> Button:
+func _build_evidence_card(option: Dictionary, _thesis: Dictionary) -> Button:
 	var option_key: String = _evidence_option_key(option)
 	var impact: String = str(option.get("impact", "mixed"))
 	var button := EvidenceDragButton.new()
@@ -3195,7 +3192,7 @@ func _flatten_evidence_options_for_tab(tab_id: String) -> Array:
 	return rows
 
 
-func _categories_for_evidence_tab(tab_id: String) -> Array:
+func _categories_for_evidence_tab(_tab_id: String) -> Array:
 	return []
 
 
@@ -3372,18 +3369,18 @@ func _make_padded_rounded_stylebox(bg_color: Color, border_color: Color, border_
 func _theme_color(token: String, fallback: Color) -> Color:
 	if not is_inside_tree():
 		return fallback
-	var theme = get_node_or_null("/root/UiTheme")
-	if theme != null and theme.has_method("color"):
-		return theme.color(token)
+	var ui_theme = get_node_or_null("/root/UiTheme")
+	if ui_theme != null and ui_theme.has_method("color"):
+		return ui_theme.color(token)
 	return fallback
 
 
 func _theme_font_size(role: String, fallback: int) -> int:
 	if not is_inside_tree():
 		return fallback
-	var theme = get_node_or_null("/root/UiTheme")
-	if theme != null and theme.has_method("font_size"):
-		return int(theme.font_size(role))
+	var ui_theme = get_node_or_null("/root/UiTheme")
+	if ui_theme != null and ui_theme.has_method("font_size"):
+		return int(ui_theme.font_size(role))
 	return fallback
 
 
@@ -3456,9 +3453,9 @@ func _make_title(text: String) -> Label:
 	return label
 
 
-func _style_label(label: Label, color: Color, size: int) -> void:
+func _style_label(label: Label, color: Color, font_size: int) -> void:
 	label.add_theme_color_override("font_color", color)
-	label.add_theme_font_size_override("font_size", maxi(size, THESIS_FONT_SIZE))
+	label.add_theme_font_size_override("font_size", maxi(font_size, THESIS_FONT_SIZE))
 
 
 func _style_rich_text(text_node: RichTextLabel) -> void:

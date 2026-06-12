@@ -392,7 +392,7 @@ func _open_news_capture_menu_from_event(event: InputEvent, context: String) -> v
 	pending_capture_payloads["news_article"] = article.duplicate(true)
 	_show_news_capture_menu(mouse_event.global_position, context)
 	get_viewport().set_input_as_handled()
-func _show_news_capture_menu(global_position: Vector2, context: String) -> void:
+func _show_news_capture_menu(menu_position: Vector2, context: String) -> void:
 	if news_capture_menu == null:
 		news_capture_menu = PopupMenu.new()
 		news_capture_menu.name = "NewsCaptureContextMenu"
@@ -412,7 +412,7 @@ func _show_news_capture_menu(global_position: Vector2, context: String) -> void:
 			news_capture_menu.add_item("Add Headline to Research Tray", 1)
 			news_capture_menu.add_item("Add Article to Research Tray", 2)
 			news_capture_menu.add_item("Add Source Lead to Research Tray", 4)
-	news_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	news_capture_menu.position = Vector2i(int(menu_position.x), int(menu_position.y))
 	news_capture_menu.popup()
 func _on_news_capture_menu_id_pressed(id: int) -> void:
 	var pending_article: Dictionary = pending_capture_payloads.get("news_article", {})

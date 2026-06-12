@@ -886,7 +886,7 @@ func _on_key_stats_value_row_gui_input(event: InputEvent, source_row: Dictionary
 	pending_capture_payloads["key_stats"] = capture_payload
 	_show_key_stats_capture_menu(mouse_event.global_position)
 
-func _show_key_stats_capture_menu(global_position: Vector2) -> void:
+func _show_key_stats_capture_menu(menu_position: Vector2) -> void:
 	if key_stats_capture_menu == null:
 		key_stats_capture_menu = PopupMenu.new()
 		key_stats_capture_menu.name = "KeyStatsCaptureContextMenu"
@@ -894,7 +894,7 @@ func _show_key_stats_capture_menu(global_position: Vector2) -> void:
 		add_child(key_stats_capture_menu)
 	key_stats_capture_menu.clear()
 	key_stats_capture_menu.add_item("Add to Research Tray", 1)
-	key_stats_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	key_stats_capture_menu.position = Vector2i(int(menu_position.x), int(menu_position.y))
 	key_stats_capture_menu.popup()
 
 func _on_key_stats_capture_menu_id_pressed(id: int) -> void:
@@ -1907,7 +1907,7 @@ func _trade_quote_impact(quote_key: String, value_text: String) -> String:
 			return "positive"
 	return "mixed"
 
-func _show_trade_quote_capture_menu(global_position: Vector2) -> void:
+func _show_trade_quote_capture_menu(menu_position: Vector2) -> void:
 	if trade_quote_capture_menu == null:
 		trade_quote_capture_menu = PopupMenu.new()
 		trade_quote_capture_menu.name = "TradeQuoteCaptureContextMenu"
@@ -1915,7 +1915,7 @@ func _show_trade_quote_capture_menu(global_position: Vector2) -> void:
 		add_child(trade_quote_capture_menu)
 	trade_quote_capture_menu.clear()
 	trade_quote_capture_menu.add_item("Add to Research Tray", 1)
-	trade_quote_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	trade_quote_capture_menu.position = Vector2i(int(menu_position.x), int(menu_position.y))
 	trade_quote_capture_menu.popup()
 
 func _on_trade_quote_capture_menu_id_pressed(id: int) -> void:
@@ -3066,7 +3066,7 @@ func _on_profile_capture_row_gui_input(event: InputEvent, capture_payload: Dicti
 	pending_capture_payloads["profile"] = capture_payload.duplicate(true)
 	_show_profile_capture_menu(mouse_event.global_position)
 
-func _show_profile_capture_menu(global_position: Vector2) -> void:
+func _show_profile_capture_menu(menu_position: Vector2) -> void:
 	if profile_capture_menu == null:
 		profile_capture_menu = PopupMenu.new()
 		profile_capture_menu.name = "ProfileCaptureContextMenu"
@@ -3074,7 +3074,7 @@ func _show_profile_capture_menu(global_position: Vector2) -> void:
 		add_child(profile_capture_menu)
 	profile_capture_menu.clear()
 	profile_capture_menu.add_item("Add to Research Tray", 1)
-	profile_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	profile_capture_menu.position = Vector2i(int(menu_position.x), int(menu_position.y))
 	profile_capture_menu.popup()
 
 func _on_profile_capture_menu_id_pressed(id: int) -> void:
@@ -4802,7 +4802,7 @@ func _on_corporate_action_timeline_card_gui_input(event: InputEvent, row: Dictio
 			_capture_corporate_action_row(row)
 	get_viewport().set_input_as_handled()
 
-func _show_corporate_action_capture_menu(row: Dictionary, global_position: Vector2) -> void:
+func _show_corporate_action_capture_menu(row: Dictionary, menu_position: Vector2) -> void:
 	var payload: Dictionary = _corporate_action_capture_payload(row)
 	if payload.is_empty():
 		_show_toast("Nothing to capture from this corporate action.", false)
@@ -4815,7 +4815,7 @@ func _show_corporate_action_capture_menu(row: Dictionary, global_position: Vecto
 		add_child(corporate_action_capture_menu)
 	corporate_action_capture_menu.clear()
 	corporate_action_capture_menu.add_item("Add to Research Tray", 1)
-	corporate_action_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	corporate_action_capture_menu.position = Vector2i(int(menu_position.x), int(menu_position.y))
 	corporate_action_capture_menu.popup()
 
 func _on_corporate_action_capture_menu_id_pressed(id: int) -> void:
@@ -5088,7 +5088,7 @@ func _prepare_broker_capture(broker_row: Dictionary, side: String) -> void:
 		"impact": impact
 	}
 
-func _show_broker_capture_menu(global_position: Vector2) -> void:
+func _show_broker_capture_menu(menu_position: Vector2) -> void:
 	if broker_capture_menu == null:
 		broker_capture_menu = PopupMenu.new()
 		broker_capture_menu.name = "BrokerCaptureContextMenu"
@@ -5096,7 +5096,7 @@ func _show_broker_capture_menu(global_position: Vector2) -> void:
 		add_child(broker_capture_menu)
 	broker_capture_menu.clear()
 	broker_capture_menu.add_item("Add to Research Tray", 1)
-	broker_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	broker_capture_menu.position = Vector2i(int(menu_position.x), int(menu_position.y))
 	broker_capture_menu.popup()
 
 func _on_broker_capture_menu_id_pressed(id: int) -> void:
@@ -5311,7 +5311,7 @@ func _on_financial_statement_row_gui_input(event: InputEvent, capture_payload: D
 	pending_capture_payloads["financial_statement"] = capture_payload.duplicate(true)
 	_show_financial_statement_capture_menu(mouse_event.global_position)
 
-func _show_financial_statement_capture_menu(global_position: Vector2) -> void:
+func _show_financial_statement_capture_menu(menu_position: Vector2) -> void:
 	if financial_statement_capture_menu == null:
 		financial_statement_capture_menu = PopupMenu.new()
 		financial_statement_capture_menu.name = "FinancialStatementCaptureContextMenu"
@@ -5319,7 +5319,7 @@ func _show_financial_statement_capture_menu(global_position: Vector2) -> void:
 		add_child(financial_statement_capture_menu)
 	financial_statement_capture_menu.clear()
 	financial_statement_capture_menu.add_item("Add to Research Tray", 1)
-	financial_statement_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	financial_statement_capture_menu.position = Vector2i(int(menu_position.x), int(menu_position.y))
 	financial_statement_capture_menu.popup()
 
 func _on_financial_statement_capture_menu_id_pressed(id: int) -> void:

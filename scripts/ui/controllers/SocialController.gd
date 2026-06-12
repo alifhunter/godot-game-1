@@ -1000,7 +1000,7 @@ func _company_id_for_ticker(ticker: String) -> String:
 	return ""
 
 
-func _show_social_capture_menu(global_position: Vector2) -> void:
+func _show_social_capture_menu(menu_position: Vector2) -> void:
 	if social_capture_menu == null:
 		social_capture_menu = PopupMenu.new()
 		social_capture_menu.name = "SocialCaptureContextMenu"
@@ -1009,7 +1009,7 @@ func _show_social_capture_menu(global_position: Vector2) -> void:
 		_sync_root_refs()
 	social_capture_menu.clear()
 	social_capture_menu.add_item("Add to Research Tray", 1)
-	social_capture_menu.position = Vector2i(int(global_position.x), int(global_position.y))
+	social_capture_menu.position = Vector2i(int(menu_position.x), int(menu_position.y))
 	social_capture_menu.popup()
 
 
@@ -2062,10 +2062,10 @@ func _social_avatar_color(seed_value: String) -> Color:
 		Color(0.0705882, 0.356863, 0.415686, 1),
 		Color(0.635294, 0.098039, 0.164706, 1)
 	]
-	var seed: int = 0
+	var rng_seed: int = 0
 	for index in range(seed_value.length()):
-		seed = posmod(seed * 33 + seed_value.unicode_at(index), 2147483647)
-	return palette[posmod(seed, palette.size())]
+		rng_seed = posmod(rng_seed * 33 + seed_value.unicode_at(index), 2147483647)
+	return palette[posmod(rng_seed, palette.size())]
 
 
 func _build_social_card_meta_line(post: Dictionary) -> String:

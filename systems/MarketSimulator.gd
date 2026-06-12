@@ -554,7 +554,7 @@ func _build_abnormal_move_context(
 	event_context: Dictionary,
 	gorengan_campaign_context: Dictionary,
 	previous_close: float,
-	ar_limits: Dictionary,
+	_ar_limits: Dictionary,
 	day_number: int
 ) -> Dictionary:
 	var company_id: String = str(definition.get("id", ""))
@@ -3605,9 +3605,9 @@ func _reconcile_live_candle_body_intent(
 	daily_change_pct: float,
 	event_bias: float,
 	ar_limits: Dictionary,
-	run_seed: int,
-	day_number: int,
-	company_id: String
+	_run_seed: int,
+	_day_number: int,
+	_company_id: String
 ) -> Dictionary:
 	var intended_direction: int = _live_candle_body_intent_direction(chart_profile, volume_context, daily_change_pct, event_bias)
 	if intended_direction == 0:
