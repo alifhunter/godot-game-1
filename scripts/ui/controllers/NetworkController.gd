@@ -306,11 +306,12 @@ func _connect_signal_once(signal_object: Signal, handler: Callable) -> void:
 
 
 func _sync_from_root_state() -> void:
-	# Network-domain state is controller-owned; only the Stock-owned selected
-	# company id still syncs down (until StockController owns it end-to-end).
+	# Network-domain state is controller-owned; Stock's selected company is
+	# read through GameRoot's controller accessor.
 	if _root == null:
 		return
-	selected_company_id = str(_root.get("selected_company_id"))
+	if _root.has_method("_selected_stock_company_id"):
+		selected_company_id = str(_root.call("_selected_stock_company_id"))
 	if selected_network_journal_filter.is_empty():
 		selected_network_journal_filter = "all"
 

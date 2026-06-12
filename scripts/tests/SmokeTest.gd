@@ -5393,7 +5393,7 @@ func _run_scenario(
 				"message": "Smoke test expected the dedicated Company app controls to exist."
 			}
 
-		game_root.selected_company_id = blocked_company_id
+		game_root._set_selected_stock_company_id(blocked_company_id)
 		game_root._refresh_trade_workspace()
 		game_root._refresh_desktop()
 		await get_tree().process_frame
@@ -6278,7 +6278,7 @@ func _run_scenario(
 				"message": "Smoke test expected the debug overlay to expose selected-stock corporate-action, index-review, roadmap, and Life property generator controls."
 			}
 
-		game_root.selected_company_id = ""
+		game_root._set_selected_stock_company_id("")
 		game_root._refresh_debug_overlay()
 		await get_tree().process_frame
 		if (
@@ -12042,7 +12042,7 @@ func _run_scenario(
 		}
 	if secondary_company_id != tracked_company_id:
 		RunState.ensure_company_full_detail(secondary_company_id)
-	game_root.selected_company_id = tracked_company_id
+	game_root._set_selected_stock_company_id(tracked_company_id)
 	game_root._refresh_trade_workspace()
 	await get_tree().process_frame
 
@@ -12101,7 +12101,7 @@ func _run_scenario(
 	all_stock_select_button.emit_signal("pressed")
 	await get_tree().process_frame
 
-	game_root.selected_company_id = tracked_company_id
+	game_root._set_selected_stock_company_id(tracked_company_id)
 	game_root._refresh_trade_workspace()
 	await get_tree().process_frame
 	var profile_meet_contact_button: Button = game_root.find_child("ProfileMeetContactButton", true, false) as Button

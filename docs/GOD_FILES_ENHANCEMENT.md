@@ -4,11 +4,11 @@ Tracks the Tier 5 refactor of the three god files. **Tiers 5a, 5b, and 5c Sessio
 
 | God file | Tier 5 start | Current | Change |
 |---|---|---|---|
-| `scripts/ui/GameRoot.gd` | 25,460 | 16,076 | 5c target (per-app controllers; Upgrades + Academy + Network + Life + Company + Social + News + Stock extracted) |
+| `scripts/ui/GameRoot.gd` | 25,460 | 15,699 | 5c target (per-app controllers; Upgrades + Academy + Network + Life + Company + Social + News + Stock extracted; no-op state sync retired) |
 | `autoloads/GameManager.gd` | ~9,447 | 7,063 | −2,384 |
-| `autoloads/RunState.gd` | 8,026 | 6,432 | −1,594 |
+| `autoloads/RunState.gd` | 8,026 | 6,463 | −1,563 |
 
-Six new focused systems plus eight UI controllers extracted: `UIFormatter`, `LifeStateSystem`, `TwooterStateSystem`, `CorporateActionApplications`, `ThesisManager`, `LifeManager`, `UpgradesController`, `AcademyController`, `NetworkController`, `LifeController`, `CompanyController`, `SocialController`, `NewsController`, `StockController` (~20,000 lines of relocated, now-testable logic). Every step verified zero-behavior-change.
+Seven new focused systems plus eight UI controllers extracted: `UIFormatter`, `LifeStateSystem`, `TwooterStateSystem`, `CorporateActionApplications`, `ThesisManager`, `LifeManager`, `CompanyRuntime`, `UpgradesController`, `AcademyController`, `NetworkController`, `LifeController`, `CompanyController`, `SocialController`, `NewsController`, `StockController` (~20,000 lines of relocated, now-testable logic). Every step verified zero-behavior-change.
 Full review and rationale: [CODE_REVIEW_GOD_FILES.md](CODE_REVIEW_GOD_FILES.md).
 Working rules: zero behavior change per step; dict-in/dict-out at system boundaries for save compatibility; verify each step with a headless editor pass (`godot --headless -e --quit`, expect zero script errors) and the quick smoke test (`godot --headless --path . --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`, expect `SMOKE_QUICK_OK`).
 
@@ -22,7 +22,7 @@ Working rules: zero behavior change per step; dict-in/dict-out at system boundar
 | 5b-9 | Corporate-action applications → `systems/CorporateActionApplications.gd` | ✅ Done 2026-06-11, audit-verified (120-day byte-identical) |
 | 5b-10a | Thesis domain → `systems/ThesisManager.gd` | ✅ Done 2026-06-11, thesis-test + smoke verified |
 | 5b-10b | Life domain → `systems/LifeManager.gd` | ✅ Done 2026-06-11, smoke-verified (identical equity) |
-| 5b-11 | News archive dedup | ⏸ Deferred — single-writer confirmed (no desync risk today); fold into 5c-15 save migrations |
+| 5b-11 | News archive dedup | ✅ Closed 2026-06-11 — re-investigation found summary-index + full-record store is intentional; no restructure needed |
 | 5c Session 1 | Stability batch: refresh coalescer (13), advance-day phases (16), save migrations (15) | ✅ Done 2026-06-11, each task committed as its own checkpoint |
 | 5c Session 2 | Upgrades app controller extraction (12 first slice) | ✅ Done 2026-06-11, script + smoke verified |
 | 5c Session 3 | Academy app controller extraction (12 second slice) | ✅ Done 2026-06-11, script + smoke verified |
@@ -36,8 +36,9 @@ Working rules: zero behavior change per step; dict-in/dict-out at system boundar
 | Follow-up A | Manual click-through playtest of all 8 apps, then checkpoint commit | ✅ Done 2026-06-12 — playtest clean, committed `e5c3bfc` |
 | Follow-up B | Warnings cleanup pass (44 behavior-neutral edits across 7 files) | ✅ Done 2026-06-12 — committed `20211ee`, smoke byte-identical |
 | Follow-up C | Shared `UITheme` constants (`scripts/ui/UITheme.gd`, 75 colors; 193 duplicate lines collapsed via preload aliases) | ✅ Done 2026-06-12 — committed `9e2d49e`, smoke byte-identical |
-| Follow-up D | Controller-owned state (retire the manual sync layer) | 🔶 5/6 done 2026-06-12 — Company `8490cfd`, Academy `dfe933e`, News `494fe5e`, Social `8bff2dd`, Network `636e9d4`. **Stock remains** (own session: 80+ vars, ~15 GameRoot readers of selected_company_id). Life/Upgrades never had duplicated state (N/A). |
-| 5c item 14 | Typed `CompanyRuntime` class, gradual callsite migration | ⬜ Planned |
+| Follow-up D | Controller-owned state (retire the manual sync layer) | ✅ Done 2026-06-12 — Company `8490cfd`, Academy `dfe933e`, News `494fe5e`, Social `8bff2dd`, Network `636e9d4`, Stock completed in this session. Life/Upgrades never had duplicated state (N/A). |
+| Follow-up E | Remove stale no-op state-sync call sites | ✅ Done 2026-06-12 — removed `GameRoot` calls to empty Stock/News/Social `_sync_state_from_root()` shims; dynamic/root ref sync remains |
+| 5c item 14 | Typed `CompanyRuntime` class, gradual callsite migration | ✅ Done 2026-06-12 — wrapper added; internal `RunState` runtime readers/writers migrated; public dict boundary preserved. Perf pass: hot single-field reads use direct dict access and the per-day normalizers skip the wrapper round-trip (apply_day was 14.8→174.9ms regressed, now 17.2ms; typed-schema enforcement kept at the save boundary). 120-day audit byte-identical throughout. |
 
 ---
 
@@ -125,7 +126,7 @@ Working rules: zero behavior change per step; dict-in/dict-out at system boundar
 - Note: `systems/LifeStateSystem.gd` (5b-7, RunState-side dict normalizers) and `systems/LifeManager.gd` (GameManager-side orchestration) are deliberately separate layers.
 - Verified: editor pass clean; smoke `SMOKE_QUICK_OK normal_equity=94765318.11` identical. Pre-edit backup at `/tmp/GameManager_pre_life.bak`.
 
-## Tier 5b-11 — news archive dedup: DEFERRED 2026-06-11
+## Tier 5b-11 — news archive dedup: closed 2026-06-11
 
 - Investigated: both `news_archive_index` (4-level nested) and `news_archive_articles` (flat) are written ONLY inside RunState's `_upsert_news_archive_article` path (grep-verified, no other writers anywhere). The duplication is wasteful but consistent-by-construction — the desync risk flagged in the review is theoretical until a second writer appears.
 - The real fix (single representation + adapter that reconstructs the legacy save shape) requires the save-version migration infrastructure. Fold this into 5c item 15 instead of doing a risky standalone restructure.
@@ -222,13 +223,13 @@ Three independent reviewers (architecture/consistency, GameRoot-side bug hunt, S
 What held up under scrutiny:
 - Refs-dict contracts consistent across all 8 controllers; no silent-null keys.
 - Spot-checked StockController's biggest functions against the `81f46ef` baseline: byte-for-byte moves, no logic drift.
-- The sync discipline is complete: Stock/Academy/Company/News/Social call `_sync_root_state()` at the end of `_sync_root_refs()`; Network syncs explicitly at every mutation site; Life owns no duplicated state (node refs only; its one shared flag writes through `_root.set()` immediately); Upgrades keeps only private state GameRoot never reads.
+- The original sync discipline was complete at review time; Follow-up D has since retired controller-domain mirror state for Stock/Academy/Company/News/Social/Network. Life owns no duplicated state (node refs only; its one shared flag writes through `_root.set()` immediately); Upgrades keeps only private state GameRoot never reads.
 - Signal wiring safe (one-time setup guards; rebuilt buttons reconnect by construction); capture payloads delegate to GameRoot's `_commit_pending_capture` rather than relying on state sync.
 - One reviewer claimed seven "real bugs" around state sync-back — **all seven dissolved under direct verification**. Recorded here so future sessions don't chase them.
 
 Known structural weaknesses (accepted for now, addressed by follow-ups below):
-1. Bidirectional state duplication kept consistent only by manual discipline — one forgotten `_sync_root_state()` in a future handler is a silent stale-state bug (→ Follow-up D).
-2. GameRoot invokes the StockController sync trio ~262 times, each pass copying 120+ properties — fine today, first suspect if UI ever feels sluggish.
+1. Bidirectional state duplication kept consistent only by manual discipline — resolved by Follow-up D.
+2. GameRoot invokes controller dynamic/root ref sync wrappers frequently — the stale state-copy leg was removed by Follow-up E; remaining ref sync is intentionally structural.
 3. Each controller re-declares its own `COLOR_*` palette (~9 copies project-wide) (→ Follow-up C).
 4. All verification so far is headless; no human has clicked through the apps post-decomposition (→ Follow-up A).
 
@@ -237,6 +238,12 @@ Known structural weaknesses (accepted for now, addressed by follow-ups below):
 Calibration to date: a 5b-style extraction ≈ 15–25% of a usage window; quick-win batches ≈ 10–15%. Order chosen so each step is independently committable and the budget can stop anywhere.
 
 **Follow-up D progress notes (for the Stock session):** the proven recipe per controller — (1) inventory the controller's `_sync_root_state` writes; (2) for each var, count REAL GameRoot readers (declaration-only copies just get deleted; real readers get redirected through `<x>_controller.<var>` after `_ensure_<x>_controller()`); (3) the shared `pending_capture_payloads` dict stays GameRoot-owned, aliased once in the controller's `setup()` (dict reference semantics make further sync redundant); (4) gut `_sync_state_from_root` to a no-op (GameRoot call-site compat) and delete `_sync_root_state` + call sites; (5) **grep SmokeTest for `game_root.<var>` reads AND `game_root.set("<var>", ...)` writes** — the set() form silently no-ops against deleted vars, so it breaks tests without erroring (caught twice: news assertion, network tip-journal); (6) verify with editor pass + quick smoke (it executes these UI sections and surfaces Invalid-access errors), commit per controller. Stock extra care: `selected_company_id` is read by GameRoot dashboard/FTUE/guide code in ~15 places and synced down by NetworkController — migrate readers to accessors first, then delete.
+
+**Follow-up D Stock session completed 2026-06-12:** `StockController` now owns its Stockbot state end-to-end. `GameRoot.gd` dropped the redundant Stockbot mirror vars and delegates selected-company reads/writes through `_selected_stock_company_id()` / `_set_selected_stock_company_id()`. `NetworkController` reads the selected stock through that accessor, `SmokeTest` no longer assigns `game_root.selected_company_id`, `pending_capture_payloads` remains the intentional shared GameRoot-owned alias, `_sync_state_from_root()` is now a no-op, and `_sync_root_state()` was deleted. Current line counts: `GameRoot.gd` 16,026; `StockController.gd` 5,926. Verification: MCP `validate_script` clean for `GameRoot.gd`, `StockController.gd`, `NetworkController.gd`, and `SmokeTest.gd`; quick smoke `SMOKE_QUICK_OK normal_equity=94765318.11 days=3`; headless project load clean with project-local log except known Steam/certificate/ObjectDB noise; `git diff --check` clean.
+
+**5c item 14 completed 2026-06-12:** new `systems/CompanyRuntime.gd` typed wrapper mirrors the current company runtime payload while preserving unknown fields and dict-in/dict-out save compatibility. `RunState` now preloads the wrapper, exposes `get_company_runtime()`, and routes detail status, core/full profile hydration, save payload building, chart bars, company profile views, previous-close lookup, portfolio market value, and the two company-runtime normalizers through it. Later slices added `CompanyRuntime.has_profile()`, `market_depth_dict()`, and `set_market_depth()`, then moved profile hydration queue/dequeue, corporate-action profile/market-depth writers, price-state writers, quarterly filing profile writers, active event/tag writers, hidden story flag writers, roadmap profile writers, player-flow current-price reads, and quarterly report/filing runtime snapshots onto the typed wrapper. The only direct `companies[company_id]` access left inside `RunState` is the seed assignment, public dictionary getter, runtime getter, and save payload builder; `get_company()` remains unchanged for external/public dictionary consumers. Verification: MCP `validate_script` clean for `CompanyRuntime.gd` and `RunState.gd`; quick smoke `SMOKE_QUICK_OK normal_equity=94765318.11 days=3`; headless project load clean with project-local log except known Steam/certificate/ObjectDB noise; `git diff --check` clean.
+
+**Follow-up E completed 2026-06-12:** after Follow-up D made Stock/News/Social state controller-owned, their `_sync_state_from_root()` methods were empty compatibility shims. Removed all `GameRoot` calls to those no-op methods plus the internal controller self-calls and empty method definitions. This keeps `_sync_dynamic_refs_from_root()` and `_sync_root_refs()` intact, because those still synchronize node references. Current line counts: `GameRoot.gd` 15,699; `StockController.gd` 5,919; `NewsController.gd` 1,682; `SocialController.gd` 2,949. Verification: MCP `validate_script` clean for `GameRoot.gd`, `StockController.gd`, `NewsController.gd`, and `SocialController.gd`; quick smoke `SMOKE_QUICK_OK normal_equity=94765318.11 days=3`; headless project load clean with project-local log except known Steam/certificate/ObjectDB noise; `git diff --check` clean.
 
 | Step | Task | Est. cost | Why this order |
 |---|---|---|---|
@@ -258,19 +265,20 @@ Single-session guidance: A+B+C fit one ~35–40% session comfortably. D is a mul
 - `systems/ThesisManager.gd` (5b-10a, 1,050 lines) — GameManager-side thesis/research domain
 - `systems/LifeManager.gd` (5b-10b, 1,495 lines) — GameManager-side life orchestration
 - `systems/SaveMigrations.gd` (5c-15) — stepwise save-format migration
+- `systems/CompanyRuntime.gd` (5c item 14, 321 lines) — typed wrapper for `RunState.companies` entries, with lossless dict round-trip and profile/market-depth mutation helpers
 - `scripts/ui/controllers/UpgradesController.gd` (5c Session 2, 319 lines) — Upgrades app controller
 - `scripts/ui/controllers/AcademyController.gd` (5c Session 3, 1,614 lines) — Academy app controller
 - `scripts/ui/controllers/NetworkController.gd` (5c Session 4, 1,168 lines) — Network app controller
 - `scripts/ui/controllers/LifeController.gd` (5c Session 5, 535 lines) — Life app shell, guide bindings, stress meter, hospital/jail overlays
 - `scripts/ui/controllers/CompanyController.gd` (5c Session 6, 368 lines) — Company app shell and governance agenda controls
-- `scripts/ui/controllers/SocialController.gd` (5c Session 7, 2,995 lines) — Twooter shell, feed, message UI, capture payloads, and Social actions
-- `scripts/ui/controllers/NewsController.gd` (5c Session 8, 1,700 lines) — Market Papers shell, archive/detail UI, article cards, capture payloads, and News actions
-- `scripts/ui/controllers/StockController.gd` (5c Session 9, 5,994 lines) — Stockbot market lists, trade workspace, order ticket, key stats, broker, profile, financials, and corporate-action UI
+- `scripts/ui/controllers/SocialController.gd` (5c Session 7 + Follow-up E, 2,949 lines) — Twooter shell, feed, message UI, capture payloads, and Social actions
+- `scripts/ui/controllers/NewsController.gd` (5c Session 8 + Follow-up E, 1,682 lines) — Market Papers shell, archive/detail UI, article cards, capture payloads, and News actions
+- `scripts/ui/controllers/StockController.gd` (5c Session 9 + Follow-up D/E, 5,919 lines) — Stockbot market lists, trade workspace, order ticket, key stats, broker, profile, financials, corporate-action UI, and Stockbot-owned UI state
 
 **Modified:**
-- `autoloads/RunState.gd` — 8,026 → 6,432 lines (delegates + const aliases)
+- `autoloads/RunState.gd` — 8,026 → 6,463 lines (delegates + const aliases + internal `CompanyRuntime` runtime boundaries)
 - `autoloads/GameManager.gd` — ~9,447 → 7,063 lines (delegates, debug guards, formatter delegation)
-- `scripts/ui/GameRoot.gd` — debug-overlay gating, capture-payload dict, app-button binds, formatter delegation, Upgrades + Academy + Network + Life + Company + Social + News + Stock controller delegation
+- `scripts/ui/GameRoot.gd` — 25,460 → 15,699 lines; debug-overlay gating, capture-payload dict, app-button binds, formatter delegation, Upgrades + Academy + Network + Life + Company + Social + News + Stock controller delegation, selected-stock accessors for non-Stockbot consumers, and stale no-op state-sync callsite cleanup
 - `scripts/ui/widgets/LifeWidget.gd`, `ThesisBoardWidget.gd`, `TradeWorkspaceWidget.gd` — formatter delegation
 
 **Earlier tiers (1–4):** new `systems/CampaignState.gd`, `systems/EventContext.gd`, `systems/CompanyProfile.gd`; constants/typed refactors in `systems/MarketSimulator.gd`, `systems/GorenganCampaignSystem.gd`

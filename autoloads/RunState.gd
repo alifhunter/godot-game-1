@@ -76,6 +76,7 @@ const PROFILE_SIZE_TAG_RULES := {
 }
 # Canonical profile schema lives in CompanyProfile.KEYS (systems/CompanyProfile.gd).
 const COMPANY_PROFILE := preload("res://systems/CompanyProfile.gd")
+const COMPANY_RUNTIME := preload("res://systems/CompanyRuntime.gd")
 const COMPANY_PROFILE_KEYS := COMPANY_PROFILE.KEYS
 const DEFAULT_DIFFICULTY_CONFIG := {
 	"id": "normal",
@@ -665,21 +666,39 @@ func get_company(company_id: String) -> Dictionary:
 	return companies[company_id]
 
 
+func get_company_runtime(company_id: String):
+	if not companies.has(company_id):
+		return COMPANY_RUNTIME.new()
+	var runtime_value = companies.get(company_id, {})
+	if typeof(runtime_value) != TYPE_DICTIONARY:
+		return COMPANY_RUNTIME.new()
+	return _company_runtime_from_dict(runtime_value)
+
+
+func _company_runtime_from_dict(source: Dictionary):
+	var runtime = COMPANY_RUNTIME.new()
+	runtime.load_from_dict(source)
+	return runtime
+
+
+func _store_company_runtime(runtime) -> void:
+	if runtime == null or runtime.company_id.is_empty():
+		return
+	companies[runtime.company_id] = runtime.to_dict()
+
+
 func get_company_detail_status(company_id: String) -> String:
-	var company: Dictionary = get_company(company_id)
-	if company.is_empty():
+	var runtime = get_company_runtime(company_id)
+	if runtime.is_empty():
 		return ""
-	var company_profile: Dictionary = company.get("company_profile", {})
-	if company_profile.is_empty():
-		return ""
-	return str(company_profile.get("detail_status", "ready"))
+	return runtime.profile_detail_status()
 
 
 func ensure_company_core_profile(company_id: String) -> bool:
 	if company_id.is_empty() or not companies.has(company_id):
 		return false
-	var runtime: Dictionary = companies[company_id].duplicate(true)
-	var company_profile: Dictionary = runtime.get("company_profile", {})
+	var runtime = get_company_runtime(company_id)
+	var company_profile: Dictionary = runtime.profile_dict()
 	if not company_profile.is_empty():
 		return true
 	var template: Dictionary = _get_base_company_definition(company_id)
@@ -687,8 +706,8 @@ func ensure_company_core_profile(company_id: String) -> bool:
 		return false
 	var sector_definition: Dictionary = DataRepository.get_sector_definition(str(template.get("sector_id", "")))
 	company_profile = company_generator.generate_company_profile_core(template, sector_definition, run_seed)
-	runtime["company_profile"] = company_profile
-	companies[company_id] = runtime
+	runtime.set_profile(company_profile)
+	_store_company_runtime(runtime)
 	return true
 
 
@@ -697,10 +716,10 @@ func ensure_company_full_detail(company_id: String, persist_detail: bool = true)
 		return false
 	if not ensure_company_core_profile(company_id):
 		return false
-	var runtime: Dictionary = companies[company_id].duplicate(true)
-	var company_profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
-	if company_profile.is_empty():
+	var runtime = get_company_runtime(company_id)
+	if not runtime.has_profile():
 		return false
+	var company_profile: Dictionary = runtime.profile_dict()
 	var current_status: String = str(company_profile.get("detail_status", "ready"))
 	if current_status == "ready" and _company_profile_needs_scale_refresh(company_id, company_profile):
 		company_profile["detail_status"] = "cold"
@@ -709,16 +728,16 @@ func ensure_company_full_detail(company_id: String, persist_detail: bool = true)
 	if current_status == "ready":
 		if persist_detail and str(company_profile.get("detail_persistence", COMPANY_DETAIL_PERSISTENCE_PERSISTENT)) != COMPANY_DETAIL_PERSISTENCE_PERSISTENT:
 			company_profile["detail_persistence"] = COMPANY_DETAIL_PERSISTENCE_PERSISTENT
-			runtime["company_profile"] = company_profile
-			companies[company_id] = runtime
+			runtime.set_profile(company_profile)
+			_store_company_runtime(runtime)
 		return true
 	var template: Dictionary = _get_base_company_definition(company_id)
 	if template.is_empty():
 		return false
 	var sector_definition: Dictionary = DataRepository.get_sector_definition(str(template.get("sector_id", "")))
 	company_profile["detail_status"] = "hydrating"
-	runtime["company_profile"] = company_profile
-	companies[company_id] = runtime
+	runtime.set_profile(company_profile)
+	_store_company_runtime(runtime)
 	var hydrated_profile: Dictionary = company_generator.hydrate_company_profile_detail(
 		company_profile,
 		template,
@@ -727,8 +746,8 @@ func ensure_company_full_detail(company_id: String, persist_detail: bool = true)
 	)
 	hydrated_profile["detail_status"] = "ready"
 	hydrated_profile["detail_persistence"] = COMPANY_DETAIL_PERSISTENCE_PERSISTENT if persist_detail else COMPANY_DETAIL_PERSISTENCE_EPHEMERAL
-	runtime["company_profile"] = _normalize_company_profile(hydrated_profile)
-	companies[company_id] = runtime
+	runtime.set_profile(_normalize_company_profile(hydrated_profile))
+	_store_company_runtime(runtime)
 	historical_chart_bar_cache.erase(company_id)
 	company_detail_hydration_lookup.erase(company_id)
 	var queued_index: int = company_detail_hydration_queue.find(company_id)
@@ -787,7 +806,11 @@ func _build_companies_save_payload() -> Dictionary:
 	var save_companies: Dictionary = {}
 	for company_id_value in companies.keys():
 		var company_id: String = str(company_id_value)
-		var runtime: Dictionary = companies[company_id_value].duplicate(true)
+		var runtime_value = companies.get(company_id_value, {})
+		if typeof(runtime_value) != TYPE_DICTIONARY:
+			continue
+		var runtime_model = _company_runtime_from_dict(runtime_value)
+		var runtime: Dictionary = runtime_model.to_dict()
 		var company_profile: Dictionary = runtime.get("company_profile", {})
 		if typeof(company_profile) == TYPE_DICTIONARY:
 			runtime["company_profile"] = _build_company_profile_save_payload(company_profile)
@@ -900,10 +923,10 @@ func queue_company_detail_hydration(company_id: String, priority: bool = false) 
 		return
 	if not ensure_company_core_profile(company_id):
 		return
-	var runtime: Dictionary = companies[company_id].duplicate(true)
-	var company_profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
-	if company_profile.is_empty():
+	var runtime = get_company_runtime(company_id)
+	if not runtime.has_profile():
 		return
+	var company_profile: Dictionary = runtime.profile_dict()
 	var current_status: String = str(company_profile.get("detail_status", "ready"))
 	if current_status == "ready" and _company_profile_needs_scale_refresh(company_id, company_profile):
 		company_profile["detail_status"] = "cold"
@@ -912,8 +935,8 @@ func queue_company_detail_hydration(company_id: String, priority: bool = false) 
 	if current_status == "ready" or current_status == "hydrating":
 		return
 	company_profile["detail_status"] = "queued"
-	runtime["company_profile"] = company_profile
-	companies[company_id] = runtime
+	runtime.set_profile(company_profile)
+	_store_company_runtime(runtime)
 	if company_detail_hydration_lookup.has(company_id):
 		if priority:
 			var existing_index: int = company_detail_hydration_queue.find(company_id)
@@ -938,21 +961,23 @@ func dequeue_company_detail_hydration() -> String:
 		company_detail_hydration_lookup.erase(company_id)
 		if company_id.is_empty() or not companies.has(company_id):
 			continue
-		var runtime: Dictionary = companies[company_id].duplicate(true)
-		var company_profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
-		if company_profile.is_empty():
+		var runtime = get_company_runtime(company_id)
+		if not runtime.has_profile():
 			continue
+		var company_profile: Dictionary = runtime.profile_dict()
 		var detail_status: String = str(company_profile.get("detail_status", "ready"))
 		if detail_status == "ready":
 			continue
 		company_profile["detail_status"] = "hydrating"
-		runtime["company_profile"] = company_profile
-		companies[company_id] = runtime
+		runtime.set_profile(company_profile)
+		_store_company_runtime(runtime)
 		return company_id
 	return ""
 
 
 func get_company_chart_bars(company_id: String) -> Array:
+	# Hot read path: direct dict access. CompanyRuntime deep-copies the whole
+	# entry on construction, which is too expensive for read-only lookups.
 	var runtime: Dictionary = get_company(company_id)
 	if runtime.is_empty():
 		return []
@@ -983,6 +1008,7 @@ func get_company_profile(
 	include_financial_history: bool = true,
 	include_statement_history: bool = true
 ) -> Dictionary:
+	# Hot read path: direct dict access (see get_company_chart_bars note).
 	var company: Dictionary = get_company(company_id)
 	if company.is_empty():
 		return {}
@@ -1017,6 +1043,7 @@ func get_effective_company_definitions() -> Array:
 
 
 func get_previous_close(company_id: String) -> float:
+	# Hot read path: direct dict access (see get_company_chart_bars note).
 	var company = get_company(company_id)
 	if company.is_empty():
 		return 0.0
@@ -3935,8 +3962,8 @@ func _record_player_restructuring_note(
 func _apply_company_restructuring_state(company_id: String, application: Dictionary, player_result: Dictionary) -> void:
 	if company_id.is_empty() or not companies.has(company_id):
 		return
-	var runtime: Dictionary = companies.get(company_id, {}).duplicate(true)
-	var profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
+	var runtime = get_company_runtime(company_id)
+	var profile: Dictionary = runtime.profile_dict()
 	var trade_date_value = application.get("trade_date", {})
 	var trade_date: Dictionary = trade_date_value.duplicate(true) if typeof(trade_date_value) == TYPE_DICTIONARY else {}
 	var credibility_score: float = clamp(float(application.get("credibility_score", 0.0)), 0.0, 1.0)
@@ -3981,8 +4008,8 @@ func _apply_company_restructuring_state(company_id: String, application: Diction
 	traits["story_heat"] = clamp(float(traits.get("story_heat", 0.5)) + 0.08 + stress_overhang_pct * 0.10, 0.0, 1.0)
 	profile["generation_traits"] = traits
 	profile["risk_score"] = clamp(int(profile.get("risk_score", 50)) + int(round(distress_score * 10.0 + stress_overhang_pct * 16.0 - credibility_score * 8.0)), 1, 99)
-	runtime["company_profile"] = profile
-	var depth_context: Dictionary = runtime.get("market_depth_context", {}).duplicate(true)
+	runtime.set_profile(profile)
+	var depth_context: Dictionary = runtime.market_depth_dict()
 	if not depth_context.is_empty():
 		depth_context["restructuring_state"] = "watch"
 		depth_context["restructuring_stress_overhang_pct"] = stress_overhang_pct
@@ -3991,8 +4018,8 @@ func _apply_company_restructuring_state(company_id: String, application: Diction
 		depth_context["ask_depth_value"] = max(float(depth_context.get("ask_depth_value", 0.0)) * (1.0 + stress_overhang_pct * 1.10), 1.0)
 		depth_context["bid_depth_value"] = max(float(depth_context.get("bid_depth_value", 0.0)) * clamp(1.0 - stress_overhang_pct * 0.24, 0.58, 1.0), 1.0)
 		depth_context["synthetic_daily_value"] = max(float(depth_context.get("synthetic_daily_value", 0.0)) * (1.0 + stress_overhang_pct * 0.36), 1.0)
-		runtime["market_depth_context"] = depth_context
-	companies[company_id] = runtime
+		runtime.set_market_depth(depth_context)
+	_store_company_runtime(runtime)
 
 
 func _apply_player_tender_offer(
@@ -4128,8 +4155,8 @@ func _apply_tender_offer_aftermath_state(company_id: String, application: Dictio
 	var state: String = str(aftermath_result.get("state", "none"))
 	if state == "none" or company_id.is_empty() or not companies.has(company_id):
 		return
-	var runtime: Dictionary = companies.get(company_id, {}).duplicate(true)
-	var profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
+	var runtime = get_company_runtime(company_id)
+	var profile: Dictionary = runtime.profile_dict()
 	var listing_label: String = "Public float warning"
 	if state == "go_private_cashout":
 		listing_label = "Go-private completed"
@@ -4152,8 +4179,8 @@ func _apply_tender_offer_aftermath_state(company_id: String, application: Dictio
 		"volatility_event_multiplier": float(aftermath_result.get("volatility_event_multiplier", 1.35)),
 		"final_cashout_price": float(aftermath_result.get("final_cashout_price", 0.0))
 	}
-	runtime["company_profile"] = profile
-	var depth_context: Dictionary = runtime.get("market_depth_context", {}).duplicate(true)
+	runtime.set_profile(profile)
+	var depth_context: Dictionary = runtime.market_depth_dict()
 	if not depth_context.is_empty():
 		var liquidity_penalty: float = clamp(float(aftermath_result.get("liquidity_penalty_multiplier", 0.35)), 0.05, 1.0)
 		depth_context["delisting_watch_state"] = state
@@ -4162,8 +4189,8 @@ func _apply_tender_offer_aftermath_state(company_id: String, application: Dictio
 		depth_context["ask_depth_value"] = max(float(depth_context.get("ask_depth_value", 0.0)) * liquidity_penalty, 1.0)
 		depth_context["bid_depth_value"] = max(float(depth_context.get("bid_depth_value", 0.0)) * liquidity_penalty, 1.0)
 		depth_context["float_tightness"] = max(float(depth_context.get("float_tightness", 0.0)), 0.92)
-		runtime["market_depth_context"] = depth_context
-	companies[company_id] = runtime
+		runtime.set_market_depth(depth_context)
+	_store_company_runtime(runtime)
 
 
 func _apply_player_acquisition_cashout(company_id: String, cashout_price: float) -> Dictionary:
@@ -4209,8 +4236,8 @@ func _apply_player_acquisition_cashout(company_id: String, cashout_price: float)
 func _apply_company_acquisition_state(company_id: String, application: Dictionary, player_result: Dictionary) -> void:
 	if company_id.is_empty() or not companies.has(company_id):
 		return
-	var runtime: Dictionary = companies.get(company_id, {}).duplicate(true)
-	var profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
+	var runtime = get_company_runtime(company_id)
+	var profile: Dictionary = runtime.profile_dict()
 	var trade_date_value = application.get("trade_date", {})
 	var trade_date: Dictionary = trade_date_value.duplicate(true) if typeof(trade_date_value) == TYPE_DICTIONARY else {}
 	var acquisition_result: Dictionary = {
@@ -4238,16 +4265,16 @@ func _apply_company_acquisition_state(company_id: String, application: Dictionar
 	profile["acquisition_result"] = acquisition_result
 	if profile.has("delisting_watch"):
 		profile.erase("delisting_watch")
-	runtime["company_profile"] = profile
-	var depth_context: Dictionary = runtime.get("market_depth_context", {}).duplicate(true)
+	runtime.set_profile(profile)
+	var depth_context: Dictionary = runtime.market_depth_dict()
 	if not depth_context.is_empty():
 		depth_context["acquisition_state"] = "acquired_cashout"
 		depth_context["synthetic_daily_value"] = 1.0
 		depth_context["ask_depth_value"] = 1.0
 		depth_context["bid_depth_value"] = 1.0
 		depth_context["free_float_value"] = 1.0
-		runtime["market_depth_context"] = depth_context
-	companies[company_id] = runtime
+		runtime.set_market_depth(depth_context)
+	_store_company_runtime(runtime)
 
 
 func _record_player_backdoor_listing_note(
@@ -4355,40 +4382,41 @@ func _apply_stock_dividend_distributions(distributions: Array) -> void:
 func _apply_company_price_factor(company_id: String, price_factor: float, adjust_history: bool) -> float:
 	if company_id.is_empty() or not companies.has(company_id):
 		return 0.0
-	var runtime: Dictionary = companies[company_id].duplicate(true)
+	var runtime = get_company_runtime(company_id)
 	var safe_factor: float = clamp(price_factor, 0.05, 20.0)
-	var current_price: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("current_price", 0.0)) * safe_factor)
+	var current_price: float = IDX_PRICE_RULES.normalize_last_price(runtime.current_price * safe_factor)
 	var current_day_bounds: Dictionary = {}
 	var limit_lock: String = ""
 	if not adjust_history:
-		current_day_bounds = _current_day_price_bounds(company_id, runtime, current_price)
+		current_day_bounds = _current_day_price_bounds(company_id, runtime.to_dict(), current_price)
 		current_price = float(current_day_bounds.get("price", current_price))
 		limit_lock = str(current_day_bounds.get("limit_lock", ""))
-	runtime["current_price"] = current_price
+	runtime.set_field("current_price", current_price)
+	var previous_close_source: float = runtime.previous_close if runtime.previous_close > 0.0 else current_price
 	if adjust_history:
-		runtime["previous_close"] = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("previous_close", current_price)) * safe_factor)
+		runtime.set_field("previous_close", IDX_PRICE_RULES.normalize_last_price(previous_close_source * safe_factor))
 	else:
-		runtime["previous_close"] = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("previous_close", current_price)))
-	var previous_close: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("previous_close", current_price)))
+		runtime.set_field("previous_close", IDX_PRICE_RULES.normalize_last_price(previous_close_source))
+	var previous_close: float = IDX_PRICE_RULES.normalize_last_price(runtime.previous_close)
 	var ar_limits: Dictionary = {}
 	if adjust_history:
 		ar_limits = _current_day_ar_limits(company_id, previous_close)
 	else:
 		ar_limits = current_day_bounds.get("ar_limits", _current_day_ar_limits(company_id, previous_close))
-	runtime["ar_limits"] = ar_limits.duplicate(true)
+	runtime.set_field("ar_limits", ar_limits)
 	var daily_change_pct: float = 0.0
 	if not is_zero_approx(previous_close):
 		daily_change_pct = (current_price - previous_close) / previous_close
-	runtime["daily_change_pct"] = daily_change_pct
-	runtime["sentiment"] = daily_change_pct
-	var price_history: Array = runtime.get("price_history", []).duplicate()
+	runtime.set_field("daily_change_pct", daily_change_pct)
+	runtime.set_field("sentiment", daily_change_pct)
+	var price_history: Array = runtime.price_history.duplicate()
 	if adjust_history:
 		for price_index in range(price_history.size()):
 			price_history[price_index] = IDX_PRICE_RULES.normalize_last_price(float(price_history[price_index]) * safe_factor)
 	elif not price_history.is_empty():
 		price_history[price_history.size() - 1] = current_price
-	runtime["price_history"] = price_history
-	var price_bars: Array = runtime.get("price_bars", []).duplicate(true)
+	runtime.set_field("price_history", price_history)
+	var price_bars: Array = runtime.price_bars.duplicate(true)
 	if adjust_history:
 		for bar_index in range(price_bars.size()):
 			price_bars[bar_index] = _scale_price_bar(price_bars[bar_index], safe_factor)
@@ -4400,8 +4428,8 @@ func _apply_company_price_factor(company_id: String, price_factor: float, adjust
 			ar_limits,
 			limit_lock
 		)
-	runtime["price_bars"] = price_bars
-	companies[company_id] = runtime
+	runtime.set_field("price_bars", price_bars)
+	_store_company_runtime(runtime)
 	return current_price
 
 
@@ -4520,28 +4548,28 @@ func _enforce_current_day_price_bounds_for_company_ids(company_ids: Array) -> vo
 func _enforce_current_day_price_bounds(company_id: String) -> void:
 	if company_id.is_empty() or not companies.has(company_id):
 		return
-	var runtime: Dictionary = companies[company_id].duplicate(true)
-	var current_price: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("current_price", 0.0)))
-	var current_day_bounds: Dictionary = _current_day_price_bounds(company_id, runtime, current_price)
+	var runtime = get_company_runtime(company_id)
+	var current_price: float = IDX_PRICE_RULES.normalize_last_price(runtime.current_price)
+	var current_day_bounds: Dictionary = _current_day_price_bounds(company_id, runtime.to_dict(), current_price)
 	var bounded_price: float = float(current_day_bounds.get("price", current_price))
 	var ar_limits: Dictionary = current_day_bounds.get("ar_limits", {}).duplicate(true)
-	var previous_close: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("previous_close", bounded_price)))
+	var previous_close: float = IDX_PRICE_RULES.normalize_last_price(runtime.previous_close if runtime.previous_close > 0.0 else bounded_price)
 	var daily_change_pct: float = 0.0
 	if not is_zero_approx(previous_close):
 		daily_change_pct = (bounded_price - previous_close) / previous_close
 
-	runtime["current_price"] = bounded_price
-	runtime["previous_close"] = previous_close
-	runtime["daily_change_pct"] = daily_change_pct
-	runtime["sentiment"] = daily_change_pct
-	runtime["ar_limits"] = ar_limits.duplicate(true)
+	runtime.set_field("current_price", bounded_price)
+	runtime.set_field("previous_close", previous_close)
+	runtime.set_field("daily_change_pct", daily_change_pct)
+	runtime.set_field("sentiment", daily_change_pct)
+	runtime.set_field("ar_limits", ar_limits)
 
-	var price_history: Array = runtime.get("price_history", []).duplicate()
+	var price_history: Array = runtime.price_history.duplicate()
 	if not price_history.is_empty():
 		price_history[price_history.size() - 1] = bounded_price
-	runtime["price_history"] = price_history
+	runtime.set_field("price_history", price_history)
 
-	var price_bars: Array = runtime.get("price_bars", []).duplicate(true)
+	var price_bars: Array = runtime.price_bars.duplicate(true)
 	if not price_bars.is_empty():
 		var previous_bar_source: String = ""
 		if typeof(price_bars[price_bars.size() - 1]) == TYPE_DICTIONARY:
@@ -4555,8 +4583,8 @@ func _enforce_current_day_price_bounds(company_id: String) -> void:
 			str(current_day_bounds.get("limit_lock", "")),
 			limit_source
 		)
-	runtime["price_bars"] = price_bars
-	companies[company_id] = runtime
+	runtime.set_field("price_bars", price_bars)
+	_store_company_runtime(runtime)
 
 
 func _scale_price_bar(bar_value: Variant, price_factor: float) -> Variant:
@@ -4578,8 +4606,8 @@ func _set_company_share_structure(
 ) -> void:
 	if company_id.is_empty() or not companies.has(company_id):
 		return
-	var runtime: Dictionary = companies[company_id].duplicate(true)
-	var profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
+	var runtime = get_company_runtime(company_id)
+	var profile: Dictionary = runtime.profile_dict()
 	var financials: Dictionary = get_effective_company_definition(company_id, false, false).get("financials", {}).duplicate(true)
 	if not profile.get("financials", {}).is_empty():
 		financials = profile.get("financials", {}).duplicate(true)
@@ -4593,24 +4621,27 @@ func _set_company_share_structure(
 	if adjustments.size() > 24:
 		adjustments = adjustments.slice(adjustments.size() - 24, adjustments.size())
 	profile["corporate_action_adjustments"] = adjustments
-	runtime["company_profile"] = profile
-	var depth_context: Dictionary = runtime.get("market_depth_context", {}).duplicate(true)
+	runtime.set_profile(profile)
+	var depth_context: Dictionary = runtime.market_depth_dict()
 	if not depth_context.is_empty():
 		depth_context["shares_outstanding"] = max(shares_outstanding, 1.0)
 		var free_float_ratio: float = clamp(free_float_pct / 100.0, 0.0, 1.0)
 		depth_context["free_float_ratio"] = free_float_ratio
 		depth_context["free_float_shares"] = max(shares_outstanding * free_float_ratio, 1.0)
-		depth_context["free_float_value"] = max(depth_context["free_float_shares"] * float(runtime.get("current_price", 0.0)), 1.0)
-		runtime["market_depth_context"] = depth_context
-	companies[company_id] = runtime
+		depth_context["free_float_value"] = max(depth_context["free_float_shares"] * runtime.current_price, 1.0)
+		runtime.set_market_depth(depth_context)
+	_store_company_runtime(runtime)
 
 
 func _record_player_market_flow(company_id: String, side: String, estimate: Dictionary) -> void:
 	if company_id.is_empty():
 		return
 	var definition: Dictionary = get_effective_company_definition(company_id, false, false)
-	var runtime: Dictionary = get_company(company_id)
-	var current_price: float = max(float(runtime.get("current_price", definition.get("base_price", estimate.get("price_per_share", 1.0)))), 1.0)
+	var runtime = get_company_runtime(company_id)
+	var current_price: float = runtime.current_price
+	if current_price <= 0.0:
+		current_price = float(definition.get("base_price", estimate.get("price_per_share", 1.0)))
+	current_price = max(current_price, 1.0)
 	var financials: Dictionary = definition.get("financials", {})
 	var market_cap: float = max(float(financials.get("market_cap", current_price * 1000000000.0)), current_price * 1000000.0)
 	var shares_outstanding: float = max(float(financials.get("shares_outstanding", definition.get("shares_outstanding", market_cap / current_price))), 1.0)
@@ -4772,16 +4803,17 @@ func _build_quarterly_report_record(company_id: String, year_value: int, quarter
 func _build_quarterly_report_event(report: Dictionary, trading_day_number: int, trade_date: Dictionary, macro_state: Dictionary = {}) -> Dictionary:
 	var company_id: String = str(report.get("company_id", ""))
 	var definition: Dictionary = get_effective_company_definition(company_id, false, false)
-	var runtime: Dictionary = get_company(company_id)
+	var runtime = get_company_runtime(company_id)
 	if definition.is_empty() or runtime.is_empty():
 		return {}
+	var runtime_snapshot: Dictionary = runtime.to_dict()
 
 	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "report_event", company_id, str(report.get("id", ""))])
 	var filing: Dictionary = _build_quarterly_filing_payload(report, trading_day_number, trade_date, macro_state)
 	var quality: float = float(definition.get("quality_score", 50.0))
 	var growth: float = float(definition.get("growth_score", 50.0))
 	var risk: float = float(definition.get("risk_score", 50.0))
-	var recent_sentiment: float = float(runtime.get("daily_change_pct", runtime.get("sentiment", 0.0)))
+	var recent_sentiment: float = float(runtime_snapshot.get("daily_change_pct", runtime.sentiment))
 	var surprise_score: float = (
 		(quality - 50.0) * 0.55 +
 		(growth - 50.0) * 0.35 -
@@ -4844,13 +4876,13 @@ func _build_quarterly_report_event(report: Dictionary, trading_day_number: int, 
 func _build_quarterly_filing_payload(report: Dictionary, trading_day_number: int, trade_date: Dictionary, macro_state: Dictionary = {}) -> Dictionary:
 	var company_id: String = str(report.get("company_id", ""))
 	var definition: Dictionary = get_effective_company_definition(company_id, false, true)
-	var runtime: Dictionary = get_company(company_id)
+	var runtime = get_company_runtime(company_id)
 	if company_id.is_empty() or definition.is_empty() or runtime.is_empty():
 		return {}
+	var runtime_snapshot: Dictionary = runtime.to_dict()
 
 	var sector_id: String = str(definition.get("sector_id", ""))
-	var profile_value = runtime.get("company_profile", {})
-	var profile: Dictionary = profile_value.duplicate(true) if typeof(profile_value) == TYPE_DICTIONARY else {}
+	var profile: Dictionary = runtime.profile_dict()
 	var traits_value = definition.get("generation_traits", profile.get("generation_traits", {}))
 	var traits: Dictionary = traits_value.duplicate(true) if typeof(traits_value) == TYPE_DICTIONARY else {}
 	var financials_value = definition.get("financials", profile.get("financials", {}))
@@ -4890,7 +4922,7 @@ func _build_quarterly_filing_payload(report: Dictionary, trading_day_number: int
 	var sector_bias: float = _quarterly_filing_sector_bias(macro_state, sector_id)
 	var macro_pressure: float = _quarterly_filing_macro_pressure(macro_state, sector_bias)
 	var micro_pressure: float = _quarterly_filing_micro_pressure(traits)
-	var market_pressure: float = _quarterly_filing_market_pressure(runtime, company_id, sector_id)
+	var market_pressure: float = _quarterly_filing_market_pressure(runtime_snapshot, company_id, sector_id)
 	var base_revenue_growth: float = clamp(float(financials_before.get("revenue_growth_yoy", 0.0)) / 100.0, -0.35, 0.55)
 	var qoq_growth_target: float = clamp(
 		(base_revenue_growth * FILING_QOQ_BASE_GROWTH_WEIGHT) +
@@ -4959,7 +4991,7 @@ func _build_quarterly_filing_payload(report: Dictionary, trading_day_number: int
 		rng
 	)
 	var updated_statements: Array = _upsert_quarterly_statement(statements, statement)
-	var financials_after: Dictionary = _financials_from_quarterly_statements(updated_statements, financials_before, runtime, sector_id)
+	var financials_after: Dictionary = _financials_from_quarterly_statements(updated_statements, financials_before, runtime_snapshot, sector_id)
 	var revenue_growth_yoy: float = _filing_growth_percent(same_quarter_revenue, quarter_revenue)
 	var earnings_growth_yoy: float = _filing_growth_percent(same_quarter_net_income, quarter_net_income)
 	financials_after["revenue_growth_yoy"] = float(financials_after.get("revenue_growth_yoy", revenue_growth_yoy))
@@ -5045,9 +5077,9 @@ func _apply_quarterly_filing(filing: Dictionary, trade_date: Dictionary, day_num
 	if statement.is_empty():
 		return {}
 
-	var runtime: Dictionary = companies[company_id].duplicate(true)
-	var profile_value = runtime.get("company_profile", {})
-	var profile: Dictionary = profile_value.duplicate(true) if typeof(profile_value) == TYPE_DICTIONARY else {}
+	var runtime = get_company_runtime(company_id)
+	var runtime_snapshot: Dictionary = runtime.to_dict()
+	var profile: Dictionary = runtime.profile_dict()
 	if profile.is_empty():
 		return {}
 	var snapshot_value = profile.get("financial_statement_snapshot", {})
@@ -5057,12 +5089,15 @@ func _apply_quarterly_filing(filing: Dictionary, trade_date: Dictionary, day_num
 	var financials_value = filing.get("financials_after", {})
 	var financials_after: Dictionary = financials_value.duplicate(true) if typeof(financials_value) == TYPE_DICTIONARY else {}
 	if financials_after.is_empty():
-		financials_after = _financials_from_quarterly_statements(statements, profile.get("financials", {}), runtime, str(profile.get("sector_id", "")))
+		financials_after = _financials_from_quarterly_statements(statements, profile.get("financials", {}), runtime_snapshot, str(profile.get("sector_id", "")))
 	var shares_outstanding: float = max(
 		_statement_entry_value(statement, "balance_sheet", "shares_outstanding"),
 		max(float(profile.get("shares_outstanding", financials_after.get("shares_outstanding", 0.0))), 1.0)
 	)
-	var current_price: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("current_price", profile.get("base_price", 0.0))))
+	var current_price_source: float = runtime.current_price
+	if current_price_source <= 0.0:
+		current_price_source = float(profile.get("base_price", 0.0))
+	var current_price: float = IDX_PRICE_RULES.normalize_last_price(current_price_source)
 	financials_after["shares_outstanding"] = shares_outstanding
 	financials_after["market_cap"] = max(current_price * shares_outstanding, float(financials_after.get("market_cap", 0.0)))
 
@@ -5106,8 +5141,8 @@ func _apply_quarterly_filing(filing: Dictionary, trade_date: Dictionary, day_num
 	if filing_history.size() > QUARTERLY_FILING_HISTORY_LIMIT:
 		filing_history = filing_history.slice(filing_history.size() - QUARTERLY_FILING_HISTORY_LIMIT, filing_history.size())
 	profile["quarterly_filing_history"] = filing_history
-	runtime["company_profile"] = _normalize_company_profile(profile)
-	companies[company_id] = runtime
+	runtime.set_profile(_normalize_company_profile(profile))
+	_store_company_runtime(runtime)
 	return summary
 
 
@@ -5827,17 +5862,17 @@ func _append_event_to_companies(event_data: Dictionary) -> void:
 		if not _event_applies_to_company(event_data, company_id, str(definition.get("sector_id", ""))):
 			continue
 
-		var runtime: Dictionary = companies[company_id].duplicate(true)
-		var active_events: Array = runtime.get("active_events", []).duplicate(true)
+		var runtime = get_company_runtime(company_id)
+		var active_events: Array = runtime.active_events.duplicate(true)
 		if not _active_event_exists(active_events, event_data):
 			active_events.append(event_data.duplicate(true))
-		runtime["active_events"] = active_events
+		runtime.set_field("active_events", active_events)
 
-		var active_event_tags: Array = runtime.get("active_event_tags", []).duplicate()
+		var active_event_tags: Array = runtime.active_event_tags.duplicate()
 		if not active_event_tags.has(event_id):
 			active_event_tags.append(event_id)
-		runtime["active_event_tags"] = active_event_tags
-		companies[company_id] = runtime
+		runtime.set_field("active_event_tags", active_event_tags)
+		_store_company_runtime(runtime)
 
 
 func _append_company_arc_to_companies(arc_data: Dictionary) -> void:
@@ -5845,19 +5880,19 @@ func _append_company_arc_to_companies(arc_data: Dictionary) -> void:
 	if company_id.is_empty() or not companies.has(company_id):
 		return
 
-	var runtime: Dictionary = companies[company_id].duplicate(true)
-	var hidden_story_flags: Array = runtime.get("hidden_story_flags", []).duplicate()
+	var runtime = get_company_runtime(company_id)
+	var hidden_story_flags: Array = runtime.hidden_story_flags.duplicate()
 	var phase_visibility: String = str(arc_data.get("phase_visibility", "hidden"))
 	if phase_visibility == "hidden":
 		var hidden_flag: String = str(arc_data.get("phase_hidden_flag", arc_data.get("hidden_story_flag", "")))
 		if not hidden_flag.is_empty() and not hidden_story_flags.has(hidden_flag):
 			hidden_story_flags.append(hidden_flag)
-		runtime["hidden_story_flags"] = hidden_story_flags
-		companies[company_id] = runtime
+		runtime.set_field("hidden_story_flags", hidden_story_flags)
+		_store_company_runtime(runtime)
 		return
 
-	runtime["hidden_story_flags"] = hidden_story_flags
-	companies[company_id] = runtime
+	runtime.set_field("hidden_story_flags", hidden_story_flags)
+	_store_company_runtime(runtime)
 	var visible_arc: Dictionary = arc_data.duplicate(true)
 	visible_arc["sentiment_shift"] = float(arc_data.get("phase_sentiment_shift", 0.0))
 	_append_event_to_companies(visible_arc)
@@ -5921,6 +5956,9 @@ func _normalize_company_runtime(runtime: Dictionary) -> Dictionary:
 	normalized_runtime["active_events"] = normalized_runtime.get("active_events", []).duplicate(true)
 	normalized_runtime["market_depth_context"] = normalized_runtime.get("market_depth_context", {}).duplicate(true)
 	normalized_runtime["player_market_impact"] = normalized_runtime.get("player_market_impact", {}).duplicate(true)
+	# No CompanyRuntime round-trip here: this runs per company in hot paths and
+	# the fields are already normalized above. Typed-schema enforcement happens
+	# once at the save boundary (_build_companies_save_payload).
 	return normalized_runtime
 
 
@@ -5949,6 +5987,8 @@ func _normalize_day_result_company_runtime(runtime: Dictionary) -> Dictionary:
 	normalized_runtime["volume_context"] = normalized_runtime.get("volume_context", {}).duplicate(true)
 	normalized_runtime["market_depth_context"] = normalized_runtime.get("market_depth_context", {}).duplicate(true)
 	normalized_runtime["player_market_impact"] = normalized_runtime.get("player_market_impact", {}).duplicate(true)
+	# Per-day per-company hot path: skip the CompanyRuntime round-trip (see
+	# _normalize_company_runtime note).
 	return normalized_runtime
 
 
@@ -6302,11 +6342,11 @@ func _build_statement_snapshot_view(
 func _reset_ytd_open_prices_for_year(year: int) -> void:
 	for company_id_value in companies.keys():
 		var company_id: String = str(company_id_value)
-		var runtime: Dictionary = companies[company_id].duplicate(true)
-		var current_price: float = IDX_PRICE_RULES.normalize_last_price(float(runtime.get("current_price", 0.0)))
-		runtime["ytd_open_price"] = current_price
-		runtime["ytd_reference_year"] = year
-		companies[company_id] = runtime
+		var runtime = get_company_runtime(company_id)
+		var current_price: float = IDX_PRICE_RULES.normalize_last_price(runtime.current_price)
+		runtime.set_field("ytd_open_price", current_price)
+		runtime.set_field("ytd_reference_year", year)
+		_store_company_runtime(runtime)
 
 
 func _ensure_macro_state_for_year(year: int) -> void:
@@ -6339,8 +6379,8 @@ func _ensure_company_roadmap_profiles() -> void:
 		var company_id: String = str(company_id_value)
 		if company_id.is_empty() or not companies.has(company_id):
 			continue
-		var runtime: Dictionary = companies.get(company_id, {}).duplicate(true)
-		var company_profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
+		var runtime = get_company_runtime(company_id)
+		var company_profile: Dictionary = runtime.profile_dict()
 		if company_profile.is_empty():
 			continue
 		var base_definition: Dictionary = _get_base_company_definition(company_id)
@@ -6353,8 +6393,8 @@ func _ensure_company_roadmap_profiles() -> void:
 			sector_definition,
 			run_seed
 		)
-		runtime["company_profile"] = _normalize_company_profile(ensured_profile)
-		companies[company_id] = runtime
+		runtime.set_profile(_normalize_company_profile(ensured_profile))
+		_store_company_runtime(runtime)
 
 
 func _get_base_company_definition(company_id: String) -> Dictionary:
@@ -6375,11 +6415,8 @@ func _apply_company_profile_to_definition(definition: Dictionary, company_profil
 func _company_trade_block_message(company_id: String) -> String:
 	if not companies.has(company_id):
 		return ""
-	var runtime: Dictionary = companies.get(company_id, {})
-	var profile_value = runtime.get("company_profile", {})
-	if typeof(profile_value) != TYPE_DICTIONARY:
-		return ""
-	var profile: Dictionary = profile_value
+	var runtime = get_company_runtime(company_id)
+	var profile: Dictionary = runtime.profile_dict()
 	if profile.is_empty():
 		return ""
 	if bool(profile.get("trade_disabled", false)):
@@ -6399,7 +6436,7 @@ func _estimate_order(company_id: String, shares: int, is_buy: bool) -> Dictionar
 	if not trade_block_message.is_empty():
 		return {"success": false, "message": trade_block_message}
 
-	var current_price = float(companies[company_id].get("current_price", 0.0))
+	var current_price = float(companies.get(company_id, {}).get("current_price", 0.0))
 	var gross_value: float = current_price * shares
 	var fee_rate: float = get_effective_buy_fee_rate() if is_buy else get_effective_sell_fee_rate()
 	var fee: float = gross_value * fee_rate

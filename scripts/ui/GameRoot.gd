@@ -323,9 +323,6 @@ const RUPSLB_MEETING_OVERLAY_SCRIPT = preload("res://scripts/ui/widgets/RupslbMe
 const DASHBOARD_SPARKLINE_SCRIPT = preload("res://scripts/ui/widgets/DashboardSparklineCanvas.gd")
 const THESIS_BOARD_WIDGET_SCRIPT = preload("res://scripts/ui/widgets/ThesisBoardWidget.gd")
 
-var selected_company_id: String = ""
-var displayed_company_ids: Array = []
-var watchlist_picker_company_ids: Array = []
 var ftue_overlay: Control = null
 var ftue_dim_top: ColorRect = null
 var ftue_dim_bottom: ColorRect = null
@@ -388,33 +385,16 @@ var console_title_label: Label = null
 var console_hint_label: Label = null
 var console_input: LineEdit = null
 var console_status_label: Label = null
-var selected_lots: int = 1
 var stock_controller = null
 var active_section_id: String = "dashboard"
 var active_app_id: String = APP_ID_DESKTOP
 var status_message: String = "Ready."
-var selected_financial_statement_index: int = -1
-var selected_financial_statement_company_id: String = ""
-var selected_key_stats_metric: String = KEY_STATS_METRIC_NET_INCOME
-var key_stats_capture_menu: PopupMenu = null
 var dashboard_sector_capture_menu: PopupMenu = null
-var broker_capture_menu: PopupMenu = null
 var news_capture_menu: PopupMenu = null
-var profile_capture_menu: PopupMenu = null
-var financial_statement_capture_menu: PopupMenu = null
-var corporate_action_filter_id: String = "all"
-var corporate_action_capture_menu: PopupMenu = null
 var social_capture_menu: PopupMenu = null
-var trade_quote_capture_menu: PopupMenu = null
 # One pending research-capture payload per source kind (key stats, broker,
 # social, ...). Committed and cleared by _commit_pending_capture.
 var pending_capture_payloads: Dictionary = {}
-var current_trade_snapshot: Dictionary = {}
-var cached_company_rows: Array = []
-var cached_company_row_lookup: Dictionary = {}
-var has_cached_company_rows: bool = false
-var all_stock_rows_dirty: bool = true
-var portfolio_stock_rows_dirty: bool = true
 var current_corporate_meeting_id: String = ""
 var debug_generator_buttons: Dictionary = {}
 var debug_corporate_action_buttons: Dictionary = {}
@@ -436,8 +416,6 @@ var contact_intel_panel: PanelContainer = null
 var contact_intel_option: OptionButton = null
 var contact_intel_button: Button = null
 var contact_intel_status_label: Label = null
-var order_market_value_labels: Dictionary = {}
-var order_market_name_labels: Dictionary = {}
 var company_app_button: Button = null
 var company_app_label: Label = null
 var company_window: MarginContainer = null
@@ -457,23 +435,7 @@ var has_checked_dashboard_title_font: bool = false
 var defer_next_dashboard_heavy_refresh: bool = false
 var dashboard_heavy_refresh_pending: bool = false
 var suppress_next_portfolio_refresh: bool = false
-var pending_watchlist_selected_company_id: String = ""
-var pending_watchlist_target_tab: int = -1
-var suppress_stock_list_tab_refresh: bool = false
 var selected_dashboard_sector_id: String = ""
-var active_order_side: String = "buy"
-var order_ticket_collapsed: bool = false
-var broker_net_mode: bool = false
-var selected_broker_range_id: String = "1d"
-var broker_range_buttons: Dictionary = {}
-var broker_range_row: HBoxContainer = null
-var trade_workspace_detail_cache_key: String = ""
-var trade_workspace_profile_cache_key: String = ""
-var trade_workspace_financial_history_cache_key: String = ""
-var trade_workspace_key_stats_cache_key: String = ""
-var trade_workspace_broker_cache_key: String = ""
-var trade_workspace_corporate_action_cache_key: String = ""
-var trade_workspace_statement_cache_key: String = ""
 var network_controller = null
 var academy_controller = null
 var social_reply_dialog: Control = null
@@ -557,7 +519,6 @@ var daily_recap_tween: Tween = null
 var macro_event_tween: Tween = null
 var desktop_window_open_tweens: Dictionary = {}
 var desktop_window_focus_tweens: Dictionary = {}
-var stockbot_icon_cache: Dictionary = {}
 var settings_dialog: Control = null
 var settings_panel: PanelContainer = null
 var settings_title_bar: PanelContainer = null
@@ -982,6 +943,17 @@ func _ensure_stock_controller() -> void:
 	stock_controller = STOCK_CONTROLLER_SCRIPT.new()
 	stock_controller.setup(self)
 
+
+func _selected_stock_company_id() -> String:
+	_ensure_stock_controller()
+	return str(stock_controller.selected_company_id)
+
+
+func _set_selected_stock_company_id(company_id: String) -> void:
+	_ensure_stock_controller()
+	stock_controller.selected_company_id = company_id
+
+
 func _ensure_network_controller() -> void:
 	if network_controller != null:
 		return
@@ -1314,7 +1286,6 @@ func _apply_compact_layout() -> void:
 func _apply_trade_layout_ratios() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._apply_trade_layout_ratios()
 	stock_controller._sync_root_refs()
 func _apply_dashboard_perk_visibility() -> void:
@@ -1355,32 +1326,27 @@ func _update_responsive_layout() -> void:
 func _remove_financial_and_broker_helper_text() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._remove_financial_and_broker_helper_text()
 	stock_controller._sync_root_refs()
 func _ensure_broker_range_controls() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._ensure_broker_range_controls()
 	stock_controller._sync_root_refs()
 func _broker_range_button_name(range_id: String) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._broker_range_button_name(range_id)
 	stock_controller._sync_root_refs()
 	return result
 func _refresh_broker_range_buttons() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_broker_range_buttons()
 	stock_controller._sync_root_refs()
 func _on_broker_range_pressed(range_id: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_broker_range_pressed(range_id)
 	stock_controller._sync_root_refs()
 func _style_dashboard_calendar_grid() -> void:
@@ -1594,13 +1560,11 @@ func _ensure_dashboard_broker_flow_ui() -> void:
 func _ensure_key_stats_dashboard_ui() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._ensure_key_stats_dashboard_ui()
 	stock_controller._sync_root_refs()
 func _build_key_stats_dashboard_column(column_name: String) -> VBoxContainer:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: VBoxContainer = stock_controller._build_key_stats_dashboard_column(column_name)
 	stock_controller._sync_root_refs()
 	return result
@@ -1613,87 +1577,73 @@ func _build_key_stats_card(
 ) -> VBoxContainer:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: VBoxContainer = stock_controller._build_key_stats_card(card_id, title, card_name, rows_name, parent_node)
 	stock_controller._sync_root_refs()
 	return result
 func _build_key_stats_metric_card(parent_node: Node) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._build_key_stats_metric_card(parent_node)
 	stock_controller._sync_root_refs()
 func _style_key_stats_dashboard_ui() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._style_key_stats_dashboard_ui()
 	stock_controller._sync_root_refs()
 func _style_key_stats_card_tree(node: Node) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._style_key_stats_card_tree(node)
 	stock_controller._sync_root_refs()
 func _update_key_stats_dashboard_layout() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._update_key_stats_dashboard_layout()
 	stock_controller._sync_root_refs()
 func _on_key_stats_metric_button_pressed(metric_id: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_key_stats_metric_button_pressed(metric_id)
 	stock_controller._sync_root_refs()
 func _refresh_key_stats_metric_button_styles() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_key_stats_metric_button_styles()
 	stock_controller._sync_root_refs()
 func _refresh_key_stats_dashboard(snapshot: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_key_stats_dashboard(snapshot)
 	stock_controller._sync_root_refs()
 func _refresh_key_stats_rows(card_id: String, rows: Array) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_key_stats_rows(card_id, rows)
 	stock_controller._sync_root_refs()
 func _refresh_key_stats_rows_in_container(container: VBoxContainer, rows: Array) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_key_stats_rows_in_container(container, rows)
 	stock_controller._sync_root_refs()
 func _clear_key_stats_container(container: VBoxContainer) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._clear_key_stats_container(container)
 	stock_controller._sync_root_refs()
 func _build_key_stats_value_row(label_text: String, value_text: String, value_color: Color = COLOR_STOCKBOT_TEXT, source_row: Dictionary = {}) -> Control:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Control = stock_controller._build_key_stats_value_row(label_text, value_text, value_color, source_row)
 	stock_controller._sync_root_refs()
 	return result
 func _on_key_stats_value_row_gui_input(event: InputEvent, source_row: Dictionary, label_text: String, value_text: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_key_stats_value_row_gui_input(event, source_row, label_text, value_text)
 	stock_controller._sync_root_refs()
 func _show_key_stats_capture_menu(menu_position: Vector2) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._show_key_stats_capture_menu(menu_position)
 	stock_controller._sync_root_refs()
 func _commit_pending_capture(kind: String, id: int) -> void:
@@ -1708,83 +1658,71 @@ func _commit_pending_capture(kind: String, id: int) -> void:
 func _on_key_stats_capture_menu_id_pressed(id: int) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_key_stats_capture_menu_id_pressed(id)
 	stock_controller._sync_root_refs()
 func _key_stats_row_is_capturable(label_text: String, value_text: String) -> bool:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: bool = stock_controller._key_stats_row_is_capturable(label_text, value_text)
 	stock_controller._sync_root_refs()
 	return result
 func _build_key_stats_context(snapshot: Dictionary) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._build_key_stats_context(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _build_key_stats_valuation_rows(context: Dictionary) -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._build_key_stats_valuation_rows(context)
 	stock_controller._sync_root_refs()
 	return result
 func _build_key_stats_per_share_rows(context: Dictionary) -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._build_key_stats_per_share_rows(context)
 	stock_controller._sync_root_refs()
 	return result
 func _build_key_stats_dividend_context(dividend_snapshot: Dictionary, current_price: float) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._build_key_stats_dividend_context(dividend_snapshot, current_price)
 	stock_controller._sync_root_refs()
 	return result
 func _build_key_stats_dividend_rows(context: Dictionary) -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._build_key_stats_dividend_rows(context)
 	stock_controller._sync_root_refs()
 	return result
 func _build_key_stats_profitability_rows(context: Dictionary) -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._build_key_stats_profitability_rows(context)
 	stock_controller._sync_root_refs()
 	return result
 func _build_key_stats_income_statement_rows(context: Dictionary) -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._build_key_stats_income_statement_rows(context)
 	stock_controller._sync_root_refs()
 	return result
 func _build_key_stats_balance_sheet_rows(context: Dictionary) -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._build_key_stats_balance_sheet_rows(context)
 	stock_controller._sync_root_refs()
 	return result
 func _build_key_stats_cash_flow_rows(context: Dictionary) -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._build_key_stats_cash_flow_rows(context)
 	stock_controller._sync_root_refs()
 	return result
 func _refresh_key_stats_metric_table(snapshot: Dictionary, context: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_key_stats_metric_table(snapshot, context)
 	stock_controller._sync_root_refs()
 func _build_key_stats_metric_row(
@@ -1797,34 +1735,29 @@ func _build_key_stats_metric_row(
 ) -> Control:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Control = stock_controller._build_key_stats_metric_row(label_text, values, label_color, value_color, metric_id, years)
 	stock_controller._sync_root_refs()
 	return result
 func _key_stats_metric_capture_payload(metric_id: String, row_label: String, value_text: String, years: Array, value_index: int) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._key_stats_metric_capture_payload(metric_id, row_label, value_text, years, value_index)
 	stock_controller._sync_root_refs()
 	return result
 func _key_stats_metric_display_label(metric_id: String) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._key_stats_metric_display_label(metric_id)
 	stock_controller._sync_root_refs()
 	return result
 func _on_key_stats_metric_value_gui_input(event: InputEvent, capture_payload: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_key_stats_metric_value_gui_input(event, capture_payload)
 	stock_controller._sync_root_refs()
 func _key_stats_year_labels(years: Array) -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._key_stats_year_labels(years)
 	stock_controller._sync_root_refs()
 	return result
@@ -1836,7 +1769,6 @@ func _key_stats_metric_values_for_quarter(
 ) -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._key_stats_metric_values_for_quarter(financial_statement_snapshot, metric_id, years, quarter)
 	stock_controller._sync_root_refs()
 	return result
@@ -1848,7 +1780,6 @@ func _key_stats_metric_values_for_annual(
 ) -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._key_stats_metric_values_for_annual(financial_statement_snapshot, financial_history, metric_id, years)
 	stock_controller._sync_root_refs()
 	return result
@@ -1860,21 +1791,18 @@ func _key_stats_metric_values_for_ttm(
 ) -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._key_stats_metric_values_for_ttm(financial_statement_snapshot, financial_history, metric_id, years)
 	stock_controller._sync_root_refs()
 	return result
 func _key_stats_recent_years(financial_history: Array, financial_statement_snapshot: Dictionary) -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._key_stats_recent_years(financial_history, financial_statement_snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _key_stats_metric_result_from_statement(statement: Dictionary, metric_id: String) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._key_stats_metric_result_from_statement(statement, metric_id)
 	stock_controller._sync_root_refs()
 	return result
@@ -1886,7 +1814,6 @@ func _key_stats_metric_annual_result(
 ) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._key_stats_metric_annual_result(financial_statement_snapshot, financial_history, metric_id, year)
 	stock_controller._sync_root_refs()
 	return result
@@ -1898,21 +1825,18 @@ func _key_stats_metric_ttm_result(
 ) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._key_stats_metric_ttm_result(financial_statement_snapshot, financial_history, metric_id, year)
 	stock_controller._sync_root_refs()
 	return result
 func _key_stats_history_metric_result(financial_history: Array, metric_id: String, year: int) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._key_stats_history_metric_result(financial_history, metric_id, year)
 	stock_controller._sync_root_refs()
 	return result
 func _format_key_stats_metric_result(metric_id: String, result: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var formatted_result: String = stock_controller._format_key_stats_metric_result(metric_id, result)
 	stock_controller._sync_root_refs()
 	return formatted_result
@@ -1923,21 +1847,18 @@ func _key_stats_statement_for_year_quarter(
 ) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._key_stats_statement_for_year_quarter(financial_statement_snapshot, year, quarter)
 	stock_controller._sync_root_refs()
 	return result
 func _key_stats_latest_history_entry(financial_history: Array) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._key_stats_latest_history_entry(financial_history)
 	stock_controller._sync_root_refs()
 	return result
 func _key_stats_latest_quarters(financial_statement_snapshot: Dictionary, count: int = 4) -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._key_stats_latest_quarters(financial_statement_snapshot, count)
 	stock_controller._sync_root_refs()
 	return result
@@ -1949,132 +1870,113 @@ func _key_stats_ttm_sum(
 ) -> float:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: float = stock_controller._key_stats_ttm_sum(financial_statement_snapshot, section_id, line_id, fallback_value)
 	stock_controller._sync_root_refs()
 	return result
 func _key_stats_statement_value_from_period(period: Dictionary, section_id: String, line_id: String) -> float:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: float = stock_controller._key_stats_statement_value_from_period(period, section_id, line_id)
 	stock_controller._sync_root_refs()
 	return result
 func _key_stats_statement_value(lines: Array, line_id: String) -> float:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: float = stock_controller._key_stats_statement_value(lines, line_id)
 	stock_controller._sync_root_refs()
 	return result
 func _key_stats_period_has_statement_line(period: Dictionary, section_id: String, line_id: String) -> bool:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: bool = stock_controller._key_stats_period_has_statement_line(period, section_id, line_id)
 	stock_controller._sync_root_refs()
 	return result
 func _first_key_stats_dividend_row(rows: Array) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._first_key_stats_dividend_row(rows)
 	stock_controller._sync_root_refs()
 	return result
 func _first_key_stats_dividend_row_by_type(rows: Array, action_type: String) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._first_key_stats_dividend_row_by_type(rows, action_type)
 	stock_controller._sync_root_refs()
 	return result
 func _last_key_stats_dividend_row(rows: Array) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._last_key_stats_dividend_row(rows)
 	stock_controller._sync_root_refs()
 	return result
 func _key_stats_dividend_status_label(row: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._key_stats_dividend_status_label(row)
 	stock_controller._sync_root_refs()
 	return result
 func _format_key_stats_dividend_timetable(record_day_number: int, payment_day_number: int, current_day_number: int) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_key_stats_dividend_timetable(record_day_number, payment_day_number, current_day_number)
 	stock_controller._sync_root_refs()
 	return result
 func _format_key_stats_day_delta(day_number: int, current_day_number: int) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_key_stats_day_delta(day_number, current_day_number)
 	stock_controller._sync_root_refs()
 	return result
 func _key_stats_safe_divide(numerator: float, denominator: float) -> float:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: float = stock_controller._key_stats_safe_divide(numerator, denominator)
 	stock_controller._sync_root_refs()
 	return result
 func _format_key_stats_ratio_value(value: float, is_valid: bool = true) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_key_stats_ratio_value(value, is_valid)
 	stock_controller._sync_root_refs()
 	return result
 func _format_key_stats_decimal_value(value: float, is_valid: bool = true) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_key_stats_decimal_value(value, is_valid)
 	stock_controller._sync_root_refs()
 	return result
 func _format_key_stats_percent_value(value: float, is_valid: bool = true) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_key_stats_percent_value(value, is_valid)
 	stock_controller._sync_root_refs()
 	return result
 func _format_key_stats_percent_ratio(value: float, is_valid: bool = true) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_key_stats_percent_ratio(value, is_valid)
 	stock_controller._sync_root_refs()
 	return result
 func _format_key_stats_compact_number(value: float) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_key_stats_compact_number(value)
 	stock_controller._sync_root_refs()
 	return result
 func _key_stats_amount_color(value: float) -> Color:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Color = stock_controller._key_stats_amount_color(value)
 	stock_controller._sync_root_refs()
 	return result
 func _on_order_ticket_toggle_pressed() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_order_ticket_toggle_pressed()
 	stock_controller._sync_root_refs()
 func _refresh_order_ticket_toggle_state() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_order_ticket_toggle_state()
 	stock_controller._sync_root_refs()
 func _refresh_all(refresh_open_apps: bool = true) -> void:
@@ -2086,7 +1988,7 @@ func _refresh_all(refresh_open_apps: bool = true) -> void:
 	_log_perf_phase(log_phase_details, "_refresh_all:desktop", phase_started_at_usec)
 	if not RunState.has_active_run():
 		status_message = "No active run. Return to menu to begin."
-		selected_company_id = ""
+		_set_selected_stock_company_id("")
 		phase_started_at_usec = Time.get_ticks_usec()
 		_refresh_header()
 		_log_perf_phase(log_phase_details, "_refresh_all:header", phase_started_at_usec)
@@ -2346,16 +2248,17 @@ func _on_life_changed() -> void:
 
 
 func _on_watchlist_changed() -> void:
+	_ensure_stock_controller()
 	var started_at_usec: int = Time.get_ticks_usec()
-	var previous_selected_company_id: String = selected_company_id
-	var target_company_id: String = pending_watchlist_selected_company_id
-	var target_tab: int = pending_watchlist_target_tab
+	var previous_selected_company_id: String = str(stock_controller.selected_company_id)
+	var target_company_id: String = str(stock_controller.pending_watchlist_selected_company_id)
+	var target_tab: int = int(stock_controller.pending_watchlist_target_tab)
 	var should_change_tab: bool = target_tab >= 0 and target_tab != stock_list_tabs.current_tab
 	if not target_company_id.is_empty():
-		selected_company_id = target_company_id
+		stock_controller.selected_company_id = target_company_id
 	_clear_watchlist_refresh_override()
 	if should_change_tab:
-		suppress_stock_list_tab_refresh = true
+		stock_controller.suppress_stock_list_tab_refresh = true
 		stock_list_tabs.current_tab = target_tab
 	_sync_selected_company_with_active_stock_list()
 	var company_rows: Array = _get_company_rows_cached()
@@ -2364,9 +2267,9 @@ func _on_watchlist_changed() -> void:
 	if _should_refresh_all_stock_rows():
 		_refresh_all_stock_watchlist_button_states(watchlist_lookup)
 	else:
-		all_stock_rows_dirty = true
+		stock_controller.all_stock_rows_dirty = true
 	_refresh_company_selection_state()
-	if selected_company_id != previous_selected_company_id:
+	if str(stock_controller.selected_company_id) != previous_selected_company_id:
 		_refresh_trade_workspace()
 		if active_section_id == "dashboard":
 			_refresh_dashboard()
@@ -2415,42 +2318,33 @@ func _apply_font_overrides_to_subtree(node: Node) -> void:
 
 
 func _queue_watchlist_refresh_override(company_id: String = "", target_tab: int = -1) -> void:
-	pending_watchlist_selected_company_id = company_id
-	pending_watchlist_target_tab = target_tab
+	_ensure_stock_controller()
+	stock_controller._queue_watchlist_refresh_override(company_id, target_tab)
 
 
 func _clear_watchlist_refresh_override() -> void:
-	pending_watchlist_selected_company_id = ""
-	pending_watchlist_target_tab = -1
+	_ensure_stock_controller()
+	stock_controller._clear_watchlist_refresh_override()
 
 
 func _invalidate_company_rows_cache() -> void:
-	cached_company_rows = []
-	cached_company_row_lookup = {}
-	has_cached_company_rows = false
-	all_stock_rows_dirty = true
-	portfolio_stock_rows_dirty = true
+	_ensure_stock_controller()
+	stock_controller._invalidate_company_rows_cache()
 
 
 func _get_company_rows_cached() -> Array:
-	if not has_cached_company_rows:
-		cached_company_rows = GameManager.get_company_market_rows()
-		cached_company_row_lookup = _build_company_row_lookup(cached_company_rows)
-		has_cached_company_rows = true
-	return cached_company_rows
+	_ensure_stock_controller()
+	return stock_controller._get_company_rows_cached()
 
 
 func _get_company_row_lookup_cached() -> Dictionary:
-	_get_company_rows_cached()
-	return cached_company_row_lookup
+	_ensure_stock_controller()
+	return stock_controller._get_company_row_lookup_cached()
 
 
 func _build_company_row_lookup(company_rows: Array) -> Dictionary:
-	var company_row_lookup: Dictionary = {}
-	for row_value in company_rows:
-		var company_row: Dictionary = row_value
-		company_row_lookup[str(company_row.get("id", ""))] = company_row
-	return company_row_lookup
+	_ensure_stock_controller()
+	return stock_controller._build_company_row_lookup(company_rows)
 
 
 func _suppress_next_portfolio_refresh() -> void:
@@ -2614,7 +2508,7 @@ func _refresh_desktop() -> void:
 		return
 
 	var current_trade_date: Dictionary = GameManager.get_current_trade_date()
-	var focus_snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id)
+	var focus_snapshot: Dictionary = GameManager.get_company_snapshot(_selected_stock_company_id())
 	desktop_title_label.text = "Gorengan OS"
 	desktop_date_label.text = "DAY %d  |  %s" % [
 		max(RunState.day_index + 1, 1),
@@ -2668,35 +2562,30 @@ func _on_save_status_changed() -> void:
 func _refresh_news() -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._refresh_news()
 	news_controller._sync_root_refs()
 
 func _rebuild_news_outlet_buttons(outlets: Array) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._rebuild_news_outlet_buttons(outlets)
 	news_controller._sync_root_refs()
 
 func _refresh_news_archive_filters() -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._refresh_news_archive_filters()
 	news_controller._sync_root_refs()
 
 func _refresh_news_archive_month_options() -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._refresh_news_archive_month_options()
 	news_controller._sync_root_refs()
 
 func _refresh_news_article_list() -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._refresh_news_article_list()
 	news_controller._sync_root_refs()
 
@@ -4303,7 +4192,7 @@ func _refresh_thesis() -> void:
 	if thesis_window == null:
 		return
 	if thesis_window.has_method("set_selected_company_id"):
-		thesis_window.call("set_selected_company_id", selected_company_id)
+		thesis_window.call("set_selected_company_id", _selected_stock_company_id())
 	if thesis_window.has_method("refresh"):
 		thesis_window.call("refresh")
 	_bind_thesis_guide_controls()
@@ -4414,110 +4303,93 @@ func _refresh_upgrades() -> void:
 func _cache_order_market_summary_labels() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._cache_order_market_summary_labels()
 	stock_controller._sync_root_refs()
 func _bind_order_market_capture_labels() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._bind_order_market_capture_labels()
 	stock_controller._sync_root_refs()
 func _style_order_market_summary_labels() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._style_order_market_summary_labels()
 	stock_controller._sync_root_refs()
 func _style_order_ticker_badge() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._style_order_ticker_badge()
 	stock_controller._sync_root_refs()
 func _refresh_order_market_summary(snapshot: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_order_market_summary(snapshot)
 	stock_controller._sync_root_refs()
 func _set_order_market_value(key: String, text: String, tone: Color) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._set_order_market_value(key, text, tone)
 	stock_controller._sync_root_refs()
 func _on_trade_quote_label_gui_input(event: InputEvent, quote_key: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_trade_quote_label_gui_input(event, quote_key)
 	stock_controller._sync_root_refs()
 func _trade_quote_capture_payload(quote_key: String) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._trade_quote_capture_payload(quote_key)
 	stock_controller._sync_root_refs()
 	return result
 func _trade_quote_label(quote_key: String) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._trade_quote_label(quote_key)
 	stock_controller._sync_root_refs()
 	return result
 func _trade_quote_impact(quote_key: String, value_text: String) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._trade_quote_impact(quote_key, value_text)
 	stock_controller._sync_root_refs()
 	return result
 func _show_trade_quote_capture_menu(menu_position: Vector2) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._show_trade_quote_capture_menu(menu_position)
 	stock_controller._sync_root_refs()
 func _on_trade_quote_capture_menu_id_pressed(id: int) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_trade_quote_capture_menu_id_pressed(id)
 	stock_controller._sync_root_refs()
 func _broker_type_side_value(broker_flow: Dictionary, broker_type: String, side: String) -> float:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: float = stock_controller._broker_type_side_value(broker_flow, broker_type, side)
 	stock_controller._sync_root_refs()
 	return result
 func _latest_price_bar(snapshot: Dictionary) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._latest_price_bar(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _broker_side_value_by_type(rows: Array, broker_type: String, value_key: String) -> float:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: float = stock_controller._broker_side_value_by_type(rows, broker_type, value_key)
 	stock_controller._sync_root_refs()
 	return result
 func _format_quote_price(value: float) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_quote_price(value)
 	stock_controller._sync_root_refs()
 	return result
 func _format_signed_quote_delta(value: float) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_signed_quote_delta(value)
 	stock_controller._sync_root_refs()
 	return result
@@ -4987,70 +4859,60 @@ func _style_social_search_input(line_edit: LineEdit) -> void:
 func _show_news_article(article: Dictionary, discover_context: bool = true) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._show_news_article(article, discover_context)
 	news_controller._sync_root_refs()
 
 func _discover_news_article_context_after_show(article: Dictionary, article_id: String) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._discover_news_article_context_after_show(article, article_id)
 	news_controller._sync_root_refs()
 
 func _reset_news_detail_scroll() -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._reset_news_detail_scroll()
 	news_controller._sync_root_refs()
 
 func _on_news_headline_gui_input(event: InputEvent) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._on_news_headline_gui_input(event)
 	news_controller._sync_root_refs()
 
 func _on_news_body_gui_input(event: InputEvent) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._on_news_body_gui_input(event)
 	news_controller._sync_root_refs()
 
 func _on_news_source_hint_gui_input(event: InputEvent) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._on_news_source_hint_gui_input(event)
 	news_controller._sync_root_refs()
 
 func _open_news_capture_menu_from_event(event: InputEvent, context: String) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._open_news_capture_menu_from_event(event, context)
 	news_controller._sync_root_refs()
 
 func _show_news_capture_menu(menu_position: Vector2, context: String) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._show_news_capture_menu(menu_position, context)
 	news_controller._sync_root_refs()
 
 func _on_news_capture_menu_id_pressed(id: int) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._on_news_capture_menu_id_pressed(id)
 	news_controller._sync_root_refs()
 
 func _build_news_capture_payload(article: Dictionary, kind: String) -> Dictionary:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: Dictionary = news_controller._build_news_capture_payload(article, kind)
 	news_controller._sync_root_refs()
 	return result
@@ -5058,7 +4920,6 @@ func _build_news_capture_payload(article: Dictionary, kind: String) -> Dictionar
 func _news_capture_excerpt(body: String) -> String:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: String = news_controller._news_capture_excerpt(body)
 	news_controller._sync_root_refs()
 	return result
@@ -5066,7 +4927,6 @@ func _news_capture_excerpt(body: String) -> String:
 func _impact_from_news_article(article: Dictionary) -> String:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: String = news_controller._impact_from_news_article(article)
 	news_controller._sync_root_refs()
 	return result
@@ -5074,7 +4934,6 @@ func _impact_from_news_article(article: Dictionary) -> String:
 func _current_news_archive_article_summaries() -> Array:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: Array = news_controller._current_news_archive_article_summaries()
 	news_controller._sync_root_refs()
 	return result
@@ -5082,7 +4941,6 @@ func _current_news_archive_article_summaries() -> Array:
 func _build_news_article_list_line(article: Dictionary) -> String:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: String = news_controller._build_news_article_list_line(article)
 	news_controller._sync_root_refs()
 	return result
@@ -5090,7 +4948,6 @@ func _build_news_article_list_line(article: Dictionary) -> String:
 func _news_byline_text(article: Dictionary) -> String:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: String = news_controller._news_byline_text(article)
 	news_controller._sync_root_refs()
 	return result
@@ -5098,7 +4955,6 @@ func _news_byline_text(article: Dictionary) -> String:
 func _news_article_status_line(article: Dictionary) -> String:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: String = news_controller._news_article_status_line(article)
 	news_controller._sync_root_refs()
 	return result
@@ -5106,7 +4962,6 @@ func _news_article_status_line(article: Dictionary) -> String:
 func _news_article_chip_line(article: Dictionary) -> String:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: String = news_controller._news_article_chip_line(article)
 	news_controller._sync_root_refs()
 	return result
@@ -5114,7 +4969,6 @@ func _news_article_chip_line(article: Dictionary) -> String:
 func _news_image_slot_label(image_slot: String) -> String:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: String = news_controller._news_image_slot_label(image_slot)
 	news_controller._sync_root_refs()
 	return result
@@ -5122,14 +4976,12 @@ func _news_image_slot_label(image_slot: String) -> String:
 func _set_news_detail_hero_slot(image_slot: String) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._set_news_detail_hero_slot(image_slot)
 	news_controller._sync_root_refs()
 
 func _news_meeting_action_label(article: Dictionary) -> String:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: String = news_controller._news_meeting_action_label(article)
 	news_controller._sync_root_refs()
 	return result
@@ -5137,7 +4989,6 @@ func _news_meeting_action_label(article: Dictionary) -> String:
 func _corporate_meeting_open_blocked_reason(detail: Dictionary) -> String:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: String = news_controller._corporate_meeting_open_blocked_reason(detail)
 	news_controller._sync_root_refs()
 	return result
@@ -5145,21 +4996,18 @@ func _corporate_meeting_open_blocked_reason(detail: Dictionary) -> String:
 func _rebuild_news_article_cards(articles: Array, reset_scroll: bool = true) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._rebuild_news_article_cards(articles, reset_scroll)
 	news_controller._sync_root_refs()
 
 func _finish_news_article_cards_rebuild(generation: int, remaining_articles: Array) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._finish_news_article_cards_rebuild(generation, remaining_articles)
 	news_controller._sync_root_refs()
 
 func _news_article_cards_visible_rows(articles: Array) -> Array:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: Array = news_controller._news_article_cards_visible_rows(articles)
 	news_controller._sync_root_refs()
 	return result
@@ -5167,14 +5015,12 @@ func _news_article_cards_visible_rows(articles: Array) -> Array:
 func _restore_news_article_cards_scroll(scroll_value: float) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._restore_news_article_cards_scroll(scroll_value)
 	news_controller._sync_root_refs()
 
 func _build_news_article_card(article: Dictionary) -> PanelContainer:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: PanelContainer = news_controller._build_news_article_card(article)
 	news_controller._sync_root_refs()
 	return result
@@ -5182,21 +5028,18 @@ func _build_news_article_card(article: Dictionary) -> PanelContainer:
 func _make_news_article_card_clickable(root: Control, article_id: String) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._make_news_article_card_clickable(root, article_id)
 	news_controller._sync_root_refs()
 
 func _on_news_article_card_gui_input(event: InputEvent, article_id: String) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._on_news_article_card_gui_input(event, article_id)
 	news_controller._sync_root_refs()
 
 func _news_article_card_node(article_id: String) -> PanelContainer:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: PanelContainer = news_controller._news_article_card_node(article_id)
 	news_controller._sync_root_refs()
 	return result
@@ -5204,7 +5047,6 @@ func _news_article_card_node(article_id: String) -> PanelContainer:
 func _news_article_card_exists(article_id: String) -> bool:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: bool = news_controller._news_article_card_exists(article_id)
 	news_controller._sync_root_refs()
 	return result
@@ -5212,21 +5054,18 @@ func _news_article_card_exists(article_id: String) -> bool:
 func _restyle_news_article_cards(previous_article_id: String, next_article_id: String) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._restyle_news_article_cards(previous_article_id, next_article_id)
 	news_controller._sync_root_refs()
 
 func _on_news_article_card_pressed(article_id: String) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._on_news_article_card_pressed(article_id)
 	news_controller._sync_root_refs()
 
 func _ticker_for_company(company_id: String) -> String:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: String = news_controller._ticker_for_company(company_id)
 	news_controller._sync_root_refs()
 	return result
@@ -5234,7 +5073,6 @@ func _ticker_for_company(company_id: String) -> String:
 func _news_archive_month_label(month_number: int) -> String:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: String = news_controller._news_archive_month_label(month_number)
 	news_controller._sync_root_refs()
 	return result
@@ -5242,7 +5080,6 @@ func _news_archive_month_label(month_number: int) -> String:
 func _news_color_for_tone(tone: String) -> Color:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: Color = news_controller._news_color_for_tone(tone)
 	news_controller._sync_root_refs()
 	return result
@@ -5250,7 +5087,6 @@ func _news_color_for_tone(tone: String) -> Color:
 func _default_news_outlet_id(outlets: Array) -> String:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: String = news_controller._default_news_outlet_id(outlets)
 	news_controller._sync_root_refs()
 	return result
@@ -5258,7 +5094,6 @@ func _default_news_outlet_id(outlets: Array) -> String:
 func _news_outlet_exists(outlets: Array, outlet_id: String) -> bool:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: bool = news_controller._news_outlet_exists(outlets, outlet_id)
 	news_controller._sync_root_refs()
 	return result
@@ -6600,19 +6435,16 @@ func _is_leap_year(year_value: int) -> bool:
 func _refresh_markets() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_markets()
 	stock_controller._sync_root_refs()
 func _refresh_after_company_selection() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_after_company_selection()
 	stock_controller._sync_root_refs()
 func _on_company_detail_ready(company_id: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_company_detail_ready(company_id)
 	stock_controller._sync_root_refs()
 func _refresh_portfolio() -> void:
@@ -6920,6 +6752,7 @@ func _debug_company_control_status_state() -> Dictionary:
 			"status_text": "No active run. Start or load a run first.",
 			"tooltip_text": "Start or load a run first."
 		}
+	var selected_company_id: String = _selected_stock_company_id()
 	if selected_company_id.is_empty():
 		return {
 			"enabled": false,
@@ -7132,6 +6965,7 @@ func _debug_corporate_action_target_state(generator_id: String) -> Dictionary:
 			"status_text": "Unknown corporate-action generator.",
 			"tooltip_text": "Unknown corporate-action generator."
 		}
+	var selected_company_id: String = _selected_stock_company_id()
 	if selected_company_id.is_empty():
 		return {
 			"enabled": false,
@@ -7323,6 +7157,7 @@ func _debug_index_review_status_state() -> Dictionary:
 			"company_id": "",
 			"status_text": "No index-review debug providers are loaded."
 		}
+	var selected_company_id: String = _selected_stock_company_id()
 	if selected_company_id.is_empty():
 		return {
 			"enabled": false,
@@ -7363,6 +7198,7 @@ func _debug_index_review_target_state(generator_id: String) -> Dictionary:
 			"status_text": "Unknown index-review generator.",
 			"tooltip_text": "Unknown index-review generator."
 		}
+	var selected_company_id: String = _selected_stock_company_id()
 	if selected_company_id.is_empty():
 		return {
 			"enabled": false,
@@ -7506,6 +7342,7 @@ func _refresh_debug_company_roadmap_controls() -> void:
 func _debug_company_roadmap_status_state() -> Dictionary:
 	if not RunState.has_active_run():
 		return {"enabled": false, "company_id": "", "status_text": "No active run. Start or load a run first."}
+	var selected_company_id: String = _selected_stock_company_id()
 	if selected_company_id.is_empty():
 		return {"enabled": false, "company_id": "", "status_text": "Target: none | Pick a stock first."}
 	var definition: Dictionary = RunState.get_effective_company_definition(selected_company_id, false, false)
@@ -7527,6 +7364,7 @@ func _debug_company_roadmap_status_state() -> Dictionary:
 func _debug_company_roadmap_target_state(generator_id: String) -> Dictionary:
 	var generator: Dictionary = _debug_company_roadmap_generator_definition(generator_id)
 	var base_state: Dictionary = _debug_company_roadmap_status_state()
+	var selected_company_id: String = _selected_stock_company_id()
 	if not bool(base_state.get("enabled", false)):
 		return {
 			"enabled": false,
@@ -7783,7 +7621,7 @@ func _debug_dirty_tip_status_state() -> Dictionary:
 				],
 				"tooltip_text": "Resolve or advance the current Dirty Tip before forcing another."
 			}
-	var company_id: String = selected_company_id
+	var company_id: String = _selected_stock_company_id()
 	if company_id.is_empty() and not RunState.company_order.is_empty():
 		company_id = str(RunState.company_order[0])
 	if company_id.is_empty():
@@ -7813,7 +7651,7 @@ func _debug_jail_status_state() -> Dictionary:
 			"status_text": "Legal hold already active: %d day(s) remaining." % int(legal_state.get("days_remaining", 0)),
 			"tooltip_text": "Advance days to clear the current legal hold before forcing another."
 		}
-	var company_id: String = selected_company_id
+	var company_id: String = _selected_stock_company_id()
 	if company_id.is_empty() and not RunState.company_order.is_empty():
 		company_id = str(RunState.company_order[0])
 	if company_id.is_empty():
@@ -7924,38 +7762,32 @@ func _on_debug_force_hospital_pressed() -> void:
 func _build_contact_intel_controls() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._build_contact_intel_controls()
 	stock_controller._sync_root_refs()
 func _refresh_contact_intel_controls() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_contact_intel_controls()
 	stock_controller._sync_root_refs()
 func _selected_contact_intel_contact_id() -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._selected_contact_intel_contact_id()
 	stock_controller._sync_root_refs()
 	return result
 func _on_contact_intel_pressed() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_contact_intel_pressed()
 	stock_controller._sync_root_refs()
 func _sync_selected_company_with_active_stock_list() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._sync_selected_company_with_active_stock_list()
 	stock_controller._sync_root_refs()
 func _build_watchlist_lookup(watchlist_company_ids: Array = []) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._build_watchlist_lookup(watchlist_company_ids)
 	stock_controller._sync_root_refs()
 	return result
@@ -7967,223 +7799,188 @@ func _refresh_company_list(
 ) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_company_list(company_rows, company_row_lookup, refresh_all_stock_rows, refresh_portfolio_sidebar)
 	stock_controller._sync_root_refs()
 func _should_refresh_all_stock_rows() -> bool:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: bool = stock_controller._should_refresh_all_stock_rows()
 	stock_controller._sync_root_refs()
 	return result
 func _should_refresh_portfolio_stock_rows() -> bool:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: bool = stock_controller._should_refresh_portfolio_stock_rows()
 	stock_controller._sync_root_refs()
 	return result
 func _refresh_watchlist_rows(company_rows: Array, watchlist_lookup: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_watchlist_rows(company_rows, watchlist_lookup)
 	stock_controller._sync_root_refs()
 func _get_watchlist_row_metadata(item_index: int) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._get_watchlist_row_metadata(item_index)
 	stock_controller._sync_root_refs()
 	return result
 func _style_watchlist_row_item(item_index: int, row: Dictionary, is_selected: bool) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._style_watchlist_row_item(item_index, row, is_selected)
 	stock_controller._sync_root_refs()
 func _refresh_all_stock_watchlist_button_states(watchlist_lookup: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_all_stock_watchlist_button_states(watchlist_lookup)
 	stock_controller._sync_root_refs()
 func _refresh_all_stock_rows(company_rows: Array, watchlist_lookup: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_all_stock_rows(company_rows, watchlist_lookup)
 	stock_controller._sync_root_refs()
 func _matches_all_stock_search(row: Dictionary, search_query: String) -> bool:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: bool = stock_controller._matches_all_stock_search(row, search_query)
 	stock_controller._sync_root_refs()
 	return result
 func _refresh_portfolio_stock_rows(holdings: Array, company_row_lookup: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_portfolio_stock_rows(holdings, company_row_lookup)
 	stock_controller._sync_root_refs()
 func _refresh_company_selection_state() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_company_selection_state()
 	stock_controller._sync_root_refs()
 func _refresh_watchlist_action_state(watchlist_lookup: Dictionary = {}) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_watchlist_action_state(watchlist_lookup)
 	stock_controller._sync_root_refs()
 func _build_stock_list_line(row: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._build_stock_list_line(row)
 	stock_controller._sync_root_refs()
 	return result
 func _get_portfolio_company_ids() -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._get_portfolio_company_ids()
 	stock_controller._sync_root_refs()
 	return result
 func _prioritized_company_detail_ids() -> Array:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Array = stock_controller._prioritized_company_detail_ids()
 	stock_controller._sync_root_refs()
 	return result
 func _start_background_company_detail_hydration() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._start_background_company_detail_hydration()
 	stock_controller._sync_root_refs()
 func _start_background_company_detail_hydration_after_startup() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._start_background_company_detail_hydration_after_startup()
 	stock_controller._sync_root_refs()
 func _request_selected_company_detail(priority: bool = true) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._request_selected_company_detail(priority)
 	stock_controller._sync_root_refs()
 func _refresh_trade_workspace() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_trade_workspace()
 	stock_controller._sync_root_refs()
 func _refresh_trade_workspace_holdings_state() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_trade_workspace_holdings_state()
 	stock_controller._sync_root_refs()
 func _apply_trade_workspace_snapshot(snapshot: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._apply_trade_workspace_snapshot(snapshot)
 	stock_controller._sync_root_refs()
 func _reset_trade_workspace_detail_caches() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._reset_trade_workspace_detail_caches()
 	stock_controller._sync_root_refs()
 func _trade_workspace_active_tab_name() -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._trade_workspace_active_tab_name()
 	stock_controller._sync_root_refs()
 	return result
 func _refresh_visible_trade_workspace_tab() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_visible_trade_workspace_tab()
 	stock_controller._sync_root_refs()
 func _refresh_trade_workspace_corporate_action_timeline(force_refresh: bool = false) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_trade_workspace_corporate_action_timeline(force_refresh)
 	stock_controller._sync_root_refs()
 func _ensure_profile_company_layout() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._ensure_profile_company_layout()
 	stock_controller._sync_root_refs()
 func _build_profile_card(card_name: String) -> PanelContainer:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: PanelContainer = stock_controller._build_profile_card(card_name)
 	stock_controller._sync_root_refs()
 	return result
 func _build_profile_title_label(text_value: String) -> Label:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Label = stock_controller._build_profile_title_label(text_value)
 	stock_controller._sync_root_refs()
 	return result
 func _build_profile_body_label(text_value: String, color: Color) -> Label:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Label = stock_controller._build_profile_body_label(text_value, color)
 	stock_controller._sync_root_refs()
 	return result
 func _style_profile_company_layout() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._style_profile_company_layout()
 	stock_controller._sync_root_refs()
 func _refresh_profile_company_layout(snapshot: Dictionary, detail_ready: bool) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_profile_company_layout(snapshot, detail_ready)
 	stock_controller._sync_root_refs()
 func _refresh_profile_tags(tags: Array) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_profile_tags(tags)
 	stock_controller._sync_root_refs()
 func _build_profile_tag_pill(tag_text: String) -> PanelContainer:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: PanelContainer = stock_controller._build_profile_tag_pill(tag_text)
 	stock_controller._sync_root_refs()
 	return result
 func _refresh_profile_shareholder_table(snapshot: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_profile_shareholder_table(snapshot)
 	stock_controller._sync_root_refs()
 func _refresh_profile_management_table(snapshot: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_profile_management_table(snapshot)
 	stock_controller._sync_root_refs()
 func _build_profile_table_row(
@@ -8195,204 +7992,174 @@ func _build_profile_table_row(
 ) -> Control:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Control = stock_controller._build_profile_table_row(cells, widths, header, right_aligned_columns, capture_payload)
 	stock_controller._sync_root_refs()
 	return result
 func _on_profile_background_gui_input(event: InputEvent) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_profile_background_gui_input(event)
 	stock_controller._sync_root_refs()
 func _profile_shareholder_capture_payload(row: Dictionary, ownership_pct: float, shares_outstanding: float) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._profile_shareholder_capture_payload(row, ownership_pct, shares_outstanding)
 	stock_controller._sync_root_refs()
 	return result
 func _profile_management_capture_payload(management: Dictionary, network_state: String) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._profile_management_capture_payload(management, network_state)
 	stock_controller._sync_root_refs()
 	return result
 func _on_profile_capture_row_gui_input(event: InputEvent, capture_payload: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_profile_capture_row_gui_input(event, capture_payload)
 	stock_controller._sync_root_refs()
 func _show_profile_capture_menu(menu_position: Vector2) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._show_profile_capture_menu(menu_position)
 	stock_controller._sync_root_refs()
 func _on_profile_capture_menu_id_pressed(id: int) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_profile_capture_menu_id_pressed(id)
 	stock_controller._sync_root_refs()
 func _build_profile_empty_row(message: String) -> Control:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Control = stock_controller._build_profile_empty_row(message)
 	stock_controller._sync_root_refs()
 	return result
 func _build_profile_background_text(snapshot: Dictionary, detail_ready: bool) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._build_profile_background_text(snapshot, detail_ready)
 	stock_controller._sync_root_refs()
 	return result
 func _profile_scale_sentence(snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._profile_scale_sentence(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _profile_footprint_sentence(snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._profile_footprint_sentence(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _profile_clean_footprint_phrase(footprint: String) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._profile_clean_footprint_phrase(footprint)
 	stock_controller._sync_root_refs()
 	return result
 func _profile_roadmap_sentence(snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._profile_roadmap_sentence(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _profile_clean_priority_phrase(priority_text: String) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._profile_clean_priority_phrase(priority_text)
 	stock_controller._sync_root_refs()
 	return result
 func _profile_sentence_from_fragment(fragment: String) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._profile_sentence_from_fragment(fragment)
 	stock_controller._sync_root_refs()
 	return result
 func _profile_operating_read(snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._profile_operating_read(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _clear_profile_container(container: Node) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._clear_profile_container(container)
 	stock_controller._sync_root_refs()
 func _refresh_profile_network_contact(_company_id: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_profile_network_contact(_company_id)
 	stock_controller._sync_root_refs()
 func _format_profile_management(snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_profile_management(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _format_profile_shareholders(snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_profile_shareholders(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _broker_flow_has_rows(broker_flow: Dictionary) -> bool:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: bool = stock_controller._broker_flow_has_rows(broker_flow)
 	stock_controller._sync_root_refs()
 	return result
 func _trade_workspace_detail_snapshot_key(snapshot: Dictionary, financial_statement_snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._trade_workspace_detail_snapshot_key(snapshot, financial_statement_snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _trade_workspace_profile_snapshot_key(snapshot: Dictionary, financial_statement_snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._trade_workspace_profile_snapshot_key(snapshot, financial_statement_snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _trade_workspace_financial_history_snapshot_key(snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._trade_workspace_financial_history_snapshot_key(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _trade_workspace_key_stats_snapshot_key(snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._trade_workspace_key_stats_snapshot_key(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _broker_range_flow_for_snapshot(snapshot: Dictionary) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._broker_range_flow_for_snapshot(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _trade_workspace_broker_snapshot_key(snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._trade_workspace_broker_snapshot_key(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _trade_workspace_statement_snapshot_key(snapshot: Dictionary, financial_statement_snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._trade_workspace_statement_snapshot_key(snapshot, financial_statement_snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _trade_workspace_corporate_action_snapshot_key(timeline_snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._trade_workspace_corporate_action_snapshot_key(timeline_snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _broker_rows_signature(rows: Array) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._broker_rows_signature(rows)
 	stock_controller._sync_root_refs()
 	return result
@@ -8677,21 +8444,18 @@ func _on_academy_glossary_search_changed(_new_text: String) -> void:
 func _on_news_outlet_pressed(outlet_id: String) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._on_news_outlet_pressed(outlet_id)
 	news_controller._sync_root_refs()
 
 func _on_news_article_selected(index: int) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._on_news_article_selected(index)
 	news_controller._sync_root_refs()
 
 func _on_news_meet_contact_pressed() -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._on_news_meet_contact_pressed()
 	news_controller._sync_root_refs()
 
@@ -8701,13 +8465,12 @@ func _open_social_account_from_news(account_id: String, contact_id: String = "")
 func _on_news_open_meeting_pressed() -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._on_news_open_meeting_pressed()
 	news_controller._sync_root_refs()
 
 func _on_profile_meet_contact_pressed() -> void:
 	var contact_id: String = str(profile_meet_contact_button.get_meta("contact_id", ""))
-	_meet_contact_from_context(contact_id, {"source_type": "profile", "source_id": selected_company_id})
+	_meet_contact_from_context(contact_id, {"source_type": "profile", "source_id": _selected_stock_company_id()})
 
 
 func _on_network_contact_selected(index: int) -> void:
@@ -8954,27 +8717,23 @@ func _network_contact_target_company(contact: Dictionary) -> String:
 func _on_news_archive_year_selected(index: int) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._on_news_archive_year_selected(index)
 	news_controller._sync_root_refs()
 
 func _on_news_archive_month_selected(index: int) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._on_news_archive_month_selected(index)
 	news_controller._sync_root_refs()
 
 func _on_stock_list_tab_changed(_tab_index: int) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_stock_list_tab_changed(_tab_index)
 	stock_controller._sync_root_refs()
 func _on_work_tab_changed(tab_index: int) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_work_tab_changed(tab_index)
 	stock_controller._sync_root_refs()
 func _on_guide_chart_interaction(_range_id = "") -> void:
@@ -8991,7 +8750,7 @@ func _steam_progress_manager() -> Node:
 func _record_steam_stockbot_tab_view(tab_title: String) -> void:
 	var progress_manager: Node = _steam_progress_manager()
 	if progress_manager != null and progress_manager.has_method("record_stockbot_tab_view"):
-		progress_manager.call("record_stockbot_tab_view", tab_title, selected_company_id)
+		progress_manager.call("record_stockbot_tab_view", tab_title, _selected_stock_company_id())
 
 
 func _record_steam_news_article_read(article_id: String) -> void:
@@ -9033,49 +8792,41 @@ func _on_life_guide_plan_changed(_value = 0) -> void:
 func _on_add_watchlist_pressed() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_add_watchlist_pressed()
 	stock_controller._sync_root_refs()
 func _on_remove_watchlist_pressed() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_remove_watchlist_pressed()
 	stock_controller._sync_root_refs()
 func _on_watchlist_picker_confirmed() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_watchlist_picker_confirmed()
 	stock_controller._sync_root_refs()
 func _on_watchlist_picker_item_activated(index: int) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_watchlist_picker_item_activated(index)
 	stock_controller._sync_root_refs()
 func _on_all_stock_selected(company_id: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_all_stock_selected(company_id)
 	stock_controller._sync_root_refs()
 func _on_portfolio_stock_selected(company_id: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_portfolio_stock_selected(company_id)
 	stock_controller._sync_root_refs()
 func _on_add_to_watchlist_pressed(company_id: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_add_to_watchlist_pressed(company_id)
 	stock_controller._sync_root_refs()
 func _on_all_stock_search_text_changed(_new_text: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_all_stock_search_text_changed(_new_text)
 	stock_controller._sync_root_refs()
 func _on_taskbar_home_pressed() -> void:
@@ -9451,37 +9202,31 @@ func _on_help_pressed() -> void:
 func _on_financials_previous_pressed() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_financials_previous_pressed()
 	stock_controller._sync_root_refs()
 func _on_financials_next_pressed() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_financials_next_pressed()
 	stock_controller._sync_root_refs()
 func _on_company_selected(index: int) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_company_selected(index)
 	stock_controller._sync_root_refs()
 func _on_buy_side_pressed() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_buy_side_pressed()
 	stock_controller._sync_root_refs()
 func _on_sell_side_pressed() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_sell_side_pressed()
 	stock_controller._sync_root_refs()
 func _on_submit_order_pressed() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_submit_order_pressed()
 	stock_controller._sync_root_refs()
 func _show_toast(message: String, is_success: bool) -> void:
@@ -10175,7 +9920,6 @@ func _daily_recap_market_mood(sentiment: float) -> String:
 func _on_lot_size_changed(value: float) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_lot_size_changed(value)
 	stock_controller._sync_root_refs()
 func _show_ftue_if_needed() -> void:
@@ -10715,13 +10459,13 @@ func _guide_step_completed(snapshot: Dictionary) -> bool:
 				"open_all_stock":
 					return active_app_id == APP_ID_STOCK and stock_list_tabs.current_tab == STOCK_LIST_TAB_ALL_STOCKS and guide_watchlist_all_stock_seen
 				"select_stock":
-					return active_app_id == APP_ID_STOCK and guide_watchlist_stock_selected and not selected_company_id.is_empty()
+					return active_app_id == APP_ID_STOCK and guide_watchlist_stock_selected and not _selected_stock_company_id().is_empty()
 				"add_watchlist":
 					return _guide_has_watchlist_stock()
 		RunState.GUIDE_FLOW_SYSTEM.FLOW_TRADE:
 			match step_id:
 				"inspect_setup":
-					return active_app_id == APP_ID_STOCK and not selected_company_id.is_empty() and _ftue_research_tab_viewed()
+					return active_app_id == APP_ID_STOCK and not _selected_stock_company_id().is_empty() and _ftue_research_tab_viewed()
 				"buy_one_lot":
 					return _ftue_has_first_buy()
 				"open_portfolio":
@@ -11225,7 +10969,7 @@ func _guide_app_label(app_id: String) -> String:
 
 
 func _ftue_prepare_stock_pick() -> void:
-	if active_app_id != APP_ID_STOCK or stock_list_tabs == null or not selected_company_id.is_empty():
+	if active_app_id != APP_ID_STOCK or stock_list_tabs == null or not _selected_stock_company_id().is_empty():
 		return
 	if stock_list_tabs.current_tab == STOCK_LIST_TAB_WATCHLIST and GameManager.get_watchlist_company_ids().is_empty() and not RunState.company_order.is_empty():
 		stock_list_tabs.current_tab = STOCK_LIST_TAB_ALL_STOCKS
@@ -11322,6 +11066,7 @@ func _guide_has_watchlist_stock() -> bool:
 	var watchlist_ids: Array = GameManager.get_watchlist_company_ids()
 	if watchlist_ids.is_empty():
 		return false
+	var selected_company_id: String = _selected_stock_company_id()
 	if selected_company_id.is_empty():
 		return true
 	return watchlist_ids.has(selected_company_id)
@@ -13386,14 +13131,12 @@ func _ensure_corporate_action_ui() -> void:
 func _ensure_news_detail_scroll() -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._ensure_news_detail_scroll()
 	news_controller._sync_root_refs()
 
 func _ensure_news_newspaper_ui() -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._ensure_news_newspaper_ui()
 	news_controller._sync_root_refs()
 
@@ -13419,21 +13162,18 @@ func _make_social_rail_card(node_name: String, title: String) -> PanelContainer:
 func _order_news_detail_nodes(detail_vbox: VBoxContainer) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._order_news_detail_nodes(detail_vbox)
 	news_controller._sync_root_refs()
 
 func _ensure_news_grunge_overlay() -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._ensure_news_grunge_overlay()
 	news_controller._sync_root_refs()
 
 func _add_news_paper_speckles(parent: Control) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._add_news_paper_speckles(parent)
 	news_controller._sync_root_refs()
 
@@ -13455,14 +13195,12 @@ func _add_news_grunge_texture(
 ) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._add_news_grunge_texture(parent, node_name, texture_id, anchor_left, anchor_top, anchor_right, anchor_bottom, offset_left, offset_top, offset_right, offset_bottom, alpha, rotation, stretch_mode)
 	news_controller._sync_root_refs()
 
 func _market_paper_texture(texture_id: String) -> Texture2D:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: Texture2D = news_controller._market_paper_texture(texture_id)
 	news_controller._sync_root_refs()
 	return result
@@ -13470,7 +13208,6 @@ func _market_paper_texture(texture_id: String) -> Texture2D:
 func _populate_watchlist_picker() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._populate_watchlist_picker()
 	stock_controller._sync_root_refs()
 func _build_tutorial_text() -> String:
@@ -14221,27 +13958,23 @@ func _format_debug_event_title(event_id: String) -> String:
 func _refresh_order_controls(snapshot: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_order_controls(snapshot)
 	stock_controller._sync_root_refs()
 func _build_order_impact_hint(snapshot: Dictionary, active_estimate: Dictionary, side: String) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._build_order_impact_hint(snapshot, active_estimate, side)
 	stock_controller._sync_root_refs()
 	return result
 func _selected_lots() -> int:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: int = stock_controller._selected_lots()
 	stock_controller._sync_root_refs()
 	return result
 func _update_order_side_buttons() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._update_order_side_buttons()
 	stock_controller._sync_root_refs()
 func _set_active_section(section_id: String) -> void:
@@ -14634,35 +14367,30 @@ func _format_trade_entry(trade: Dictionary) -> String:
 func _build_setup_read(snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._build_setup_read(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _build_support_signals(snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._build_support_signals(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _build_risk_signals(snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._build_risk_signals(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _build_action_hint(snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._build_action_hint(snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _build_broker_hint(snapshot: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._build_broker_hint(snapshot)
 	stock_controller._sync_root_refs()
 	return result
@@ -14726,14 +14454,12 @@ func _titleize_snake_case(value: String) -> String:
 func _broker_actor_label(broker_flow: Dictionary, side: String) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._broker_actor_label(broker_flow, side)
 	stock_controller._sync_root_refs()
 	return result
 func _watchlist_tooltip(row: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._watchlist_tooltip(row)
 	stock_controller._sync_root_refs()
 	return result
@@ -15197,7 +14923,6 @@ func _style_button(
 func _load_stockbot_icon(icon_id: String) -> Texture2D:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Texture2D = stock_controller._load_stockbot_icon(icon_id)
 	stock_controller._sync_root_refs()
 	return result
@@ -15210,20 +14935,17 @@ func _make_stockbot_stylebox(
 ) -> StyleBoxFlat:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: StyleBoxFlat = stock_controller._make_stockbot_stylebox(fill_color, border_color, corner_radius, border_width, content_margin)
 	stock_controller._sync_root_refs()
 	return result
 func _set_stockbot_margins(margin_container: MarginContainer, left: int, top: int, right: int, bottom: int) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._set_stockbot_margins(margin_container, left, top, right, bottom)
 	stock_controller._sync_root_refs()
 func _set_stockbot_spacing(container: Container, separation: int) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._set_stockbot_spacing(container, separation)
 	stock_controller._sync_root_refs()
 func _style_stockbot_panel(
@@ -15235,7 +14957,6 @@ func _style_stockbot_panel(
 ) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._style_stockbot_panel(panel, fill_color, border_color, corner_radius, border_width)
 	stock_controller._sync_root_refs()
 func _style_stockbot_button(
@@ -15248,7 +14969,6 @@ func _style_stockbot_button(
 ) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._style_stockbot_button(button, fill_color, border_color, font_color, corner_radius, selected)
 	stock_controller._sync_root_refs()
 func _style_stockbot_icon_button(
@@ -15262,7 +14982,6 @@ func _style_stockbot_icon_button(
 ) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._style_stockbot_icon_button(button, icon_id, text_value, tooltip_value, selected, fill_color, border_color)
 	stock_controller._sync_root_refs()
 func _style_stockbot_label_chip(
@@ -15274,25 +14993,21 @@ func _style_stockbot_label_chip(
 ) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._style_stockbot_label_chip(label, fill_color, border_color, font_color, corner_radius)
 	stock_controller._sync_root_refs()
 func _apply_stockbot_compact_spacing() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._apply_stockbot_compact_spacing()
 	stock_controller._sync_root_refs()
 func _ensure_stockbot_detail_section_cards() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._ensure_stockbot_detail_section_cards()
 	stock_controller._sync_root_refs()
 func _ensure_financials_section_cards() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._ensure_financials_section_cards()
 	stock_controller._sync_root_refs()
 func _ensure_financials_statement_card(
@@ -15304,19 +15019,16 @@ func _ensure_financials_statement_card(
 ) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._ensure_financials_statement_card(financials_vbox, card_name, title_name, rows_vbox, separator_name)
 	stock_controller._sync_root_refs()
 func _ensure_broker_section_cards() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._ensure_broker_section_cards()
 	stock_controller._sync_root_refs()
 func _build_stockbot_detail_section_card(card_name: String) -> PanelContainer:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: PanelContainer = stock_controller._build_stockbot_detail_section_card(card_name)
 	stock_controller._sync_root_refs()
 	return result
@@ -15328,20 +15040,17 @@ func _move_nodes_into_stockbot_detail_card(
 ) -> PanelContainer:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: PanelContainer = stock_controller._move_nodes_into_stockbot_detail_card(parent_vbox, card_name, nodes, insert_index)
 	stock_controller._sync_root_refs()
 	return result
 func _style_stockbot_app_ui() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._style_stockbot_app_ui()
 	stock_controller._sync_root_refs()
 func _style_stockbot_static_panel_labels() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._style_stockbot_static_panel_labels()
 	stock_controller._sync_root_refs()
 func _style_light_option_button(option_button: OptionButton) -> void:
@@ -15351,56 +15060,48 @@ func _style_light_option_button(option_button: OptionButton) -> void:
 func _style_news_newspaper_ui() -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._style_news_newspaper_ui()
 	news_controller._sync_root_refs()
 
 func _style_news_label(label: Label, color: Color, font_size: int, font_resource: Font = null) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._style_news_label(label, color, font_size, font_resource)
 	news_controller._sync_root_refs()
 
 func _style_news_panel(panel: PanelContainer, fill_color: Color, border_color: Color, border_width: int) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._style_news_panel(panel, fill_color, border_color, border_width)
 	news_controller._sync_root_refs()
 
 func _style_news_inner_panel(panel: PanelContainer, fill_color: Color) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._style_news_inner_panel(panel, fill_color)
 	news_controller._sync_root_refs()
 
 func _style_news_asset_frame(panel: PanelContainer) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._style_news_asset_frame(panel)
 	news_controller._sync_root_refs()
 
 func _style_news_article_card(card: PanelContainer, is_selected: bool) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._style_news_article_card(card, is_selected)
 	news_controller._sync_root_refs()
 
 func _style_news_outlet_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._style_news_outlet_button(button, is_selected, is_unlocked)
 	news_controller._sync_root_refs()
 
 func _make_news_tab_stylebox(fill_color: Color, border_color: Color, is_selected: bool) -> StyleBoxFlat:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	var result: StyleBoxFlat = news_controller._make_news_tab_stylebox(fill_color, border_color, is_selected)
 	news_controller._sync_root_refs()
 	return result
@@ -15408,21 +15109,18 @@ func _make_news_tab_stylebox(fill_color: Color, border_color: Color, is_selected
 func _style_news_tab_button(button: Button, is_selected: bool, is_unlocked: bool) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._style_news_tab_button(button, is_selected, is_unlocked)
 	news_controller._sync_root_refs()
 
 func _style_news_tab_container(tab_container: TabContainer) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._style_news_tab_container(tab_container)
 	news_controller._sync_root_refs()
 
 func _style_news_command_button(button: Button, is_primary: bool) -> void:
 	_ensure_news_controller()
 	news_controller._sync_dynamic_refs_from_root()
-	news_controller._sync_state_from_root()
 	news_controller._style_news_command_button(button, is_primary)
 	news_controller._sync_root_refs()
 
@@ -15497,13 +15195,11 @@ func _style_spin_input(spin_box: SpinBox) -> void:
 func _refresh_submit_order_button_style() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_submit_order_button_style()
 	stock_controller._sync_root_refs()
 func _style_stock_list_row_button(button: Button, is_selected: bool) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._style_stock_list_row_button(button, is_selected)
 	stock_controller._sync_root_refs()
 func _style_cream_app_panel(
@@ -15614,213 +15310,181 @@ func _format_history(price_history: Array) -> String:
 func _format_financial_block(financials: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_financial_block(financials)
 	stock_controller._sync_root_refs()
 	return result
 func _format_financial_history_summary(financial_history: Array, financials: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_financial_history_summary(financial_history, financials)
 	stock_controller._sync_root_refs()
 	return result
 func _refresh_financial_history_header() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_financial_history_header()
 	stock_controller._sync_root_refs()
 func _refresh_financial_history_table(financial_history: Array, _financials: Dictionary, empty_text: String = "") -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_financial_history_table(financial_history, _financials, empty_text)
 	stock_controller._sync_root_refs()
 func _build_financial_history_row(history_entry: Dictionary) -> Control:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Control = stock_controller._build_financial_history_row(history_entry)
 	stock_controller._sync_root_refs()
 	return result
 func _refresh_broker_header() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_broker_header()
 	stock_controller._sync_root_refs()
 func _refresh_broker_table(broker_flow: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_broker_table(broker_flow)
 	stock_controller._sync_root_refs()
 func _format_broker_range_summary(broker_flow: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_broker_range_summary(broker_flow)
 	stock_controller._sync_root_refs()
 	return result
 func _format_broker_range_date_text(start_date_value: Variant, end_date_value: Variant) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_broker_range_date_text(start_date_value, end_date_value)
 	stock_controller._sync_root_refs()
 	return result
 func _format_short_broker_date(date_value: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_short_broker_date(date_value)
 	stock_controller._sync_root_refs()
 	return result
 func _populate_corporate_action_filter() -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._populate_corporate_action_filter()
 	stock_controller._sync_root_refs()
 func _refresh_corporate_action_timeline(timeline_snapshot: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_corporate_action_timeline(timeline_snapshot)
 	stock_controller._sync_root_refs()
 func _corporate_action_timeline_summary(all_rows: Array, visible_rows: Array) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._corporate_action_timeline_summary(all_rows, visible_rows)
 	stock_controller._sync_root_refs()
 	return result
 func _build_corporate_action_timeline_card(row: Dictionary) -> Control:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Control = stock_controller._build_corporate_action_timeline_card(row)
 	stock_controller._sync_root_refs()
 	return result
 func _corporate_action_row_tooltip(row: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._corporate_action_row_tooltip(row)
 	stock_controller._sync_root_refs()
 	return result
 func _corporate_action_row_action_text(row: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._corporate_action_row_action_text(row)
 	stock_controller._sync_root_refs()
 	return result
 func _corporate_action_row_is_soon(row: Dictionary) -> bool:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: bool = stock_controller._corporate_action_row_is_soon(row)
 	stock_controller._sync_root_refs()
 	return result
 func _corporate_action_row_soon_label(row: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._corporate_action_row_soon_label(row)
 	stock_controller._sync_root_refs()
 	return result
 func _corporate_action_next_milestone(row: Dictionary) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._corporate_action_next_milestone(row)
 	stock_controller._sync_root_refs()
 	return result
 func _on_corporate_action_timeline_card_gui_input(event: InputEvent, row: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_corporate_action_timeline_card_gui_input(event, row)
 	stock_controller._sync_root_refs()
 func _show_corporate_action_capture_menu(row: Dictionary, menu_position: Vector2) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._show_corporate_action_capture_menu(row, menu_position)
 	stock_controller._sync_root_refs()
 func _on_corporate_action_capture_menu_id_pressed(id: int) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_corporate_action_capture_menu_id_pressed(id)
 	stock_controller._sync_root_refs()
 func _capture_corporate_action_row(row: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._capture_corporate_action_row(row)
 	stock_controller._sync_root_refs()
 func _corporate_action_capture_payload(row: Dictionary) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._corporate_action_capture_payload(row)
 	stock_controller._sync_root_refs()
 	return result
 func _corporate_action_capture_value(row: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._corporate_action_capture_value(row)
 	stock_controller._sync_root_refs()
 	return result
 func _corporate_action_capture_detail(row: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._corporate_action_capture_detail(row)
 	stock_controller._sync_root_refs()
 	return result
 func _corporate_action_dividend_explanation(row: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._corporate_action_dividend_explanation(row)
 	stock_controller._sync_root_refs()
 	return result
 func _build_corporate_action_field_cell(field: Dictionary) -> Control:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Control = stock_controller._build_corporate_action_field_cell(field)
 	stock_controller._sync_root_refs()
 	return result
 func _corporate_action_field_value(field: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._corporate_action_field_value(field)
 	stock_controller._sync_root_refs()
 	return result
 func _format_corporate_action_date(date_info: Variant) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_corporate_action_date(date_info)
 	stock_controller._sync_root_refs()
 	return result
 func _on_corporate_action_filter_selected(index: int) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_corporate_action_filter_selected(index)
 	stock_controller._sync_root_refs()
 func _on_broker_net_toggled(toggled_on: bool) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_broker_net_toggled(toggled_on)
 	stock_controller._sync_root_refs()
 func _add_broker_table_side(
@@ -15833,7 +15497,6 @@ func _add_broker_table_side(
 ) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._add_broker_table_side(row, code_text, value_text, lot_text, average_text, font_color)
 	stock_controller._sync_root_refs()
 func _build_broker_table_cell(
@@ -15845,84 +15508,71 @@ func _build_broker_table_cell(
 ) -> Label:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Label = stock_controller._build_broker_table_cell(text, minimum_width, font_color, alignment, stretch_ratio)
 	stock_controller._sync_root_refs()
 	return result
 func _build_broker_side_divider() -> VSeparator:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: VSeparator = stock_controller._build_broker_side_divider()
 	stock_controller._sync_root_refs()
 	return result
 func _build_broker_table_row(buy_row: Dictionary, sell_row: Dictionary) -> Control:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Control = stock_controller._build_broker_table_row(buy_row, sell_row)
 	stock_controller._sync_root_refs()
 	return result
 func _build_broker_table_side_control(broker_row: Dictionary, side: String) -> HBoxContainer:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: HBoxContainer = stock_controller._build_broker_table_side_control(broker_row, side)
 	stock_controller._sync_root_refs()
 	return result
 func _on_broker_table_side_gui_input(event: InputEvent, broker_row: Dictionary, side: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_broker_table_side_gui_input(event, broker_row, side)
 	stock_controller._sync_root_refs()
 func _prepare_broker_capture(broker_row: Dictionary, side: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._prepare_broker_capture(broker_row, side)
 	stock_controller._sync_root_refs()
 func _show_broker_capture_menu(menu_position: Vector2) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._show_broker_capture_menu(menu_position)
 	stock_controller._sync_root_refs()
 func _on_broker_capture_menu_id_pressed(id: int) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_broker_capture_menu_id_pressed(id)
 	stock_controller._sync_root_refs()
 func _sync_financial_statement_selection(company_id: String, financial_statement_snapshot: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._sync_financial_statement_selection(company_id, financial_statement_snapshot)
 	stock_controller._sync_root_refs()
 func _shift_financial_statement_selection(offset: int) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._shift_financial_statement_selection(offset)
 	stock_controller._sync_root_refs()
 func _selected_statement_period(financial_statement_snapshot: Dictionary) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._selected_statement_period(financial_statement_snapshot)
 	stock_controller._sync_root_refs()
 	return result
 func _refresh_statement_navigation(financial_statement_snapshot: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_statement_navigation(financial_statement_snapshot)
 	stock_controller._sync_root_refs()
 func _refresh_statement_sections(financial_statement_snapshot: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_statement_sections(financial_statement_snapshot)
 	stock_controller._sync_root_refs()
 func _refresh_statement_section(
@@ -15935,7 +15585,6 @@ func _refresh_statement_section(
 ) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._refresh_statement_section(rows_vbox, empty_label, lines, section_id, section_label, period_label)
 	stock_controller._sync_root_refs()
 func _build_statement_row(
@@ -15946,7 +15595,6 @@ func _build_statement_row(
 ) -> Control:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Control = stock_controller._build_statement_row(line_item, section_id, section_label, period_label)
 	stock_controller._sync_root_refs()
 	return result
@@ -15958,32 +15606,27 @@ func _financial_statement_capture_payload(
 ) -> Dictionary:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: Dictionary = stock_controller._financial_statement_capture_payload(line_item, section_id, section_label, period_label)
 	stock_controller._sync_root_refs()
 	return result
 func _on_financial_statement_row_gui_input(event: InputEvent, capture_payload: Dictionary) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_financial_statement_row_gui_input(event, capture_payload)
 	stock_controller._sync_root_refs()
 func _show_financial_statement_capture_menu(menu_position: Vector2) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._show_financial_statement_capture_menu(menu_position)
 	stock_controller._sync_root_refs()
 func _on_financial_statement_capture_menu_id_pressed(id: int) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	stock_controller._on_financial_statement_capture_menu_id_pressed(id)
 	stock_controller._sync_root_refs()
 func _format_statement_value(line_item: Dictionary) -> String:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
-	stock_controller._sync_state_from_root()
 	var result: String = stock_controller._format_statement_value(line_item)
 	stock_controller._sync_root_refs()
 	return result

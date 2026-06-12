@@ -88,13 +88,11 @@ func setup(root) -> void:
 		if typeof(capture_payloads) == TYPE_DICTIONARY:
 			pending_capture_payloads = capture_payloads
 	_sync_dynamic_refs_from_root()
-	_sync_state_from_root()
 	_sync_root_refs()
 
 
 func refresh() -> void:
 	_sync_dynamic_refs_from_root()
-	_sync_state_from_root()
 	_refresh_news()
 	_sync_root_refs()
 
@@ -1525,12 +1523,6 @@ func _sync_dynamic_refs_from_root() -> void:
 	news_detail_action_row = _root.get("news_detail_action_row") as HBoxContainer
 	news_open_meeting_button = _root.get("news_open_meeting_button") as Button
 	news_grunge_overlay = _root.get("news_grunge_overlay") as Control
-
-
-func _sync_state_from_root() -> void:
-	# News-domain state is controller-owned now; the shared capture dict is
-	# aliased once in setup(). Kept as a no-op for GameRoot call-site compat.
-	pass
 
 
 func _sync_root_refs() -> void:

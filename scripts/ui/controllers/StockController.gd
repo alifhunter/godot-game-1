@@ -332,6 +332,9 @@ var corporate_action_capture_menu: PopupMenu = null
 var trade_quote_capture_menu: PopupMenu = null
 var pending_capture_payloads: Dictionary = {}
 var current_trade_snapshot: Dictionary = {}
+var cached_company_rows: Array = []
+var cached_company_row_lookup: Dictionary = {}
+var has_cached_company_rows: bool = false
 var all_stock_rows_dirty: bool = true
 var portfolio_stock_rows_dirty: bool = true
 var order_market_value_labels: Dictionary = {}
@@ -473,8 +476,11 @@ var contact_intel_status_label: Label = null
 
 func setup(root) -> void:
 	_root = root
+	if _root != null:
+		var capture_payloads = _root.get("pending_capture_payloads")
+		if typeof(capture_payloads) == TYPE_DICTIONARY:
+			pending_capture_payloads = capture_payloads
 	_sync_dynamic_refs_from_root()
-	_sync_state_from_root()
 	_sync_root_refs()
 
 func _apply_trade_layout_ratios() -> void:
@@ -5458,57 +5464,6 @@ func _sync_dynamic_refs_from_root() -> void:
 	contact_intel_status_label = _root.get("contact_intel_status_label") as Label
 
 
-func _sync_state_from_root() -> void:
-	if _root == null:
-		return
-	selected_company_id = str(_root.get("selected_company_id"))
-	var displayed_company_ids_value = _root.get("displayed_company_ids")
-	displayed_company_ids = displayed_company_ids_value if typeof(displayed_company_ids_value) == TYPE_ARRAY else []
-	var watchlist_picker_company_ids_value = _root.get("watchlist_picker_company_ids")
-	watchlist_picker_company_ids = watchlist_picker_company_ids_value if typeof(watchlist_picker_company_ids_value) == TYPE_ARRAY else []
-	selected_lots = int(_root.get("selected_lots"))
-	selected_financial_statement_index = int(_root.get("selected_financial_statement_index"))
-	selected_financial_statement_company_id = str(_root.get("selected_financial_statement_company_id"))
-	selected_key_stats_metric = str(_root.get("selected_key_stats_metric"))
-	key_stats_capture_menu = _root.get("key_stats_capture_menu") as PopupMenu
-	broker_capture_menu = _root.get("broker_capture_menu") as PopupMenu
-	profile_capture_menu = _root.get("profile_capture_menu") as PopupMenu
-	financial_statement_capture_menu = _root.get("financial_statement_capture_menu") as PopupMenu
-	corporate_action_filter_id = str(_root.get("corporate_action_filter_id"))
-	corporate_action_capture_menu = _root.get("corporate_action_capture_menu") as PopupMenu
-	trade_quote_capture_menu = _root.get("trade_quote_capture_menu") as PopupMenu
-	var pending_capture_payloads_value = _root.get("pending_capture_payloads")
-	pending_capture_payloads = pending_capture_payloads_value if typeof(pending_capture_payloads_value) == TYPE_DICTIONARY else {}
-	var current_trade_snapshot_value = _root.get("current_trade_snapshot")
-	current_trade_snapshot = current_trade_snapshot_value if typeof(current_trade_snapshot_value) == TYPE_DICTIONARY else {}
-	all_stock_rows_dirty = bool(_root.get("all_stock_rows_dirty"))
-	portfolio_stock_rows_dirty = bool(_root.get("portfolio_stock_rows_dirty"))
-	var order_market_value_labels_value = _root.get("order_market_value_labels")
-	order_market_value_labels = order_market_value_labels_value if typeof(order_market_value_labels_value) == TYPE_DICTIONARY else {}
-	var order_market_name_labels_value = _root.get("order_market_name_labels")
-	order_market_name_labels = order_market_name_labels_value if typeof(order_market_name_labels_value) == TYPE_DICTIONARY else {}
-	pending_watchlist_selected_company_id = str(_root.get("pending_watchlist_selected_company_id"))
-	pending_watchlist_target_tab = int(_root.get("pending_watchlist_target_tab"))
-	suppress_stock_list_tab_refresh = bool(_root.get("suppress_stock_list_tab_refresh"))
-	active_order_side = str(_root.get("active_order_side"))
-	order_ticket_collapsed = bool(_root.get("order_ticket_collapsed"))
-	broker_net_mode = bool(_root.get("broker_net_mode"))
-	selected_broker_range_id = str(_root.get("selected_broker_range_id"))
-	var broker_range_buttons_value = _root.get("broker_range_buttons")
-	broker_range_buttons = broker_range_buttons_value if typeof(broker_range_buttons_value) == TYPE_DICTIONARY else {}
-	broker_range_row = _root.get("broker_range_row")
-	var stockbot_icon_cache_value = _root.get("stockbot_icon_cache")
-	stockbot_icon_cache = stockbot_icon_cache_value if typeof(stockbot_icon_cache_value) == TYPE_DICTIONARY else {}
-	trade_workspace_detail_cache_key = str(_root.get("trade_workspace_detail_cache_key"))
-	trade_workspace_profile_cache_key = str(_root.get("trade_workspace_profile_cache_key"))
-	trade_workspace_financial_history_cache_key = str(_root.get("trade_workspace_financial_history_cache_key"))
-	trade_workspace_key_stats_cache_key = str(_root.get("trade_workspace_key_stats_cache_key"))
-	trade_workspace_broker_cache_key = str(_root.get("trade_workspace_broker_cache_key"))
-	trade_workspace_corporate_action_cache_key = str(_root.get("trade_workspace_corporate_action_cache_key"))
-	trade_workspace_statement_cache_key = str(_root.get("trade_workspace_statement_cache_key"))
-	status_message = str(_root.get("status_message"))
-
-
 func _sync_root_refs() -> void:
 	if _root == null:
 		return
@@ -5628,50 +5583,6 @@ func _sync_root_refs() -> void:
 	_root.set("contact_intel_option", contact_intel_option)
 	_root.set("contact_intel_button", contact_intel_button)
 	_root.set("contact_intel_status_label", contact_intel_status_label)
-	_sync_root_state()
-
-
-func _sync_root_state() -> void:
-	if _root == null:
-		return
-	_root.set("selected_company_id", selected_company_id)
-	_root.set("displayed_company_ids", displayed_company_ids)
-	_root.set("watchlist_picker_company_ids", watchlist_picker_company_ids)
-	_root.set("selected_lots", selected_lots)
-	_root.set("selected_financial_statement_index", selected_financial_statement_index)
-	_root.set("selected_financial_statement_company_id", selected_financial_statement_company_id)
-	_root.set("selected_key_stats_metric", selected_key_stats_metric)
-	_root.set("key_stats_capture_menu", key_stats_capture_menu)
-	_root.set("broker_capture_menu", broker_capture_menu)
-	_root.set("profile_capture_menu", profile_capture_menu)
-	_root.set("financial_statement_capture_menu", financial_statement_capture_menu)
-	_root.set("corporate_action_filter_id", corporate_action_filter_id)
-	_root.set("corporate_action_capture_menu", corporate_action_capture_menu)
-	_root.set("trade_quote_capture_menu", trade_quote_capture_menu)
-	_root.set("pending_capture_payloads", pending_capture_payloads)
-	_root.set("current_trade_snapshot", current_trade_snapshot)
-	_root.set("all_stock_rows_dirty", all_stock_rows_dirty)
-	_root.set("portfolio_stock_rows_dirty", portfolio_stock_rows_dirty)
-	_root.set("order_market_value_labels", order_market_value_labels)
-	_root.set("order_market_name_labels", order_market_name_labels)
-	_root.set("pending_watchlist_selected_company_id", pending_watchlist_selected_company_id)
-	_root.set("pending_watchlist_target_tab", pending_watchlist_target_tab)
-	_root.set("suppress_stock_list_tab_refresh", suppress_stock_list_tab_refresh)
-	_root.set("active_order_side", active_order_side)
-	_root.set("order_ticket_collapsed", order_ticket_collapsed)
-	_root.set("broker_net_mode", broker_net_mode)
-	_root.set("selected_broker_range_id", selected_broker_range_id)
-	_root.set("broker_range_buttons", broker_range_buttons)
-	_root.set("broker_range_row", broker_range_row)
-	_root.set("stockbot_icon_cache", stockbot_icon_cache)
-	_root.set("trade_workspace_detail_cache_key", trade_workspace_detail_cache_key)
-	_root.set("trade_workspace_profile_cache_key", trade_workspace_profile_cache_key)
-	_root.set("trade_workspace_financial_history_cache_key", trade_workspace_financial_history_cache_key)
-	_root.set("trade_workspace_key_stats_cache_key", trade_workspace_key_stats_cache_key)
-	_root.set("trade_workspace_broker_cache_key", trade_workspace_broker_cache_key)
-	_root.set("trade_workspace_corporate_action_cache_key", trade_workspace_corporate_action_cache_key)
-	_root.set("trade_workspace_statement_cache_key", trade_workspace_statement_cache_key)
-	_root.set("status_message", status_message)
 
 
 func add_child(node: Node) -> void:
@@ -5719,30 +5630,42 @@ func _call_root(method_name: String, args: Array = []):
 
 
 func _queue_watchlist_refresh_override(company_id: String = "", target_tab: int = -1) -> void:
-	_call_root_void("_queue_watchlist_refresh_override", [company_id, target_tab])
+	pending_watchlist_selected_company_id = company_id
+	pending_watchlist_target_tab = target_tab
 
 
 func _clear_watchlist_refresh_override() -> void:
-	_call_root_void("_clear_watchlist_refresh_override")
+	pending_watchlist_selected_company_id = ""
+	pending_watchlist_target_tab = -1
 
 
 func _invalidate_company_rows_cache() -> void:
-	_call_root_void("_invalidate_company_rows_cache")
+	cached_company_rows = []
+	cached_company_row_lookup = {}
+	has_cached_company_rows = false
+	all_stock_rows_dirty = true
+	portfolio_stock_rows_dirty = true
 
 
 func _get_company_rows_cached() -> Array:
-	var result = _call_root("_get_company_rows_cached")
-	return result if typeof(result) == TYPE_ARRAY else []
+	if not has_cached_company_rows:
+		cached_company_rows = GameManager.get_company_market_rows()
+		cached_company_row_lookup = _build_company_row_lookup(cached_company_rows)
+		has_cached_company_rows = true
+	return cached_company_rows
 
 
 func _get_company_row_lookup_cached() -> Dictionary:
-	var result = _call_root("_get_company_row_lookup_cached")
-	return result if typeof(result) == TYPE_DICTIONARY else {}
+	_get_company_rows_cached()
+	return cached_company_row_lookup
 
 
 func _build_company_row_lookup(company_rows: Array) -> Dictionary:
-	var result = _call_root("_build_company_row_lookup", [company_rows])
-	return result if typeof(result) == TYPE_DICTIONARY else {}
+	var company_row_lookup: Dictionary = {}
+	for row_value in company_rows:
+		var company_row: Dictionary = row_value
+		company_row_lookup[str(company_row.get("id", ""))] = company_row
+	return company_row_lookup
 
 
 func _refresh_dashboard() -> void:

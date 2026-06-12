@@ -113,13 +113,11 @@ func setup(root) -> void:
 		if typeof(capture_payloads) == TYPE_DICTIONARY:
 			pending_capture_payloads = capture_payloads
 	_sync_dynamic_refs_from_root()
-	_sync_state_from_root()
 	_sync_root_refs()
 
 
 func refresh() -> void:
 	_sync_dynamic_refs_from_root()
-	_sync_state_from_root()
 	_refresh_social()
 
 
@@ -130,7 +128,6 @@ func ensure_ui() -> void:
 
 func open_account_from_news(account_id: String, contact_id: String = "") -> void:
 	_sync_dynamic_refs_from_root()
-	_sync_state_from_root()
 	_open_social_account_from_news(account_id, contact_id)
 	_sync_root_refs()
 
@@ -2813,12 +2810,6 @@ func _sync_dynamic_refs_from_root() -> void:
 	social_reply_cancel_button = _root.get("social_reply_cancel_button") as Button
 	social_reply_typing_tween = _root.get("social_reply_typing_tween") as Tween
 	news_meet_contact_button = _root.get("news_meet_contact_button") as Button
-
-
-func _sync_state_from_root() -> void:
-	# Social state is controller-owned; the shared capture dict is aliased in
-	# setup(). Kept as a no-op for GameRoot call-site compat.
-	pass
 
 
 func _sync_root_refs() -> void:
