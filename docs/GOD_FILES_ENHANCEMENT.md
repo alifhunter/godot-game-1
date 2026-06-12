@@ -33,10 +33,10 @@ Working rules: zero behavior change per step; dict-in/dict-out at system boundar
 | 5c Session 8 | News app controller extraction (12 seventh slice) | ✅ Done 2026-06-12, MCP + smoke verified |
 | 5c Session 9 | Stock app controller extraction (12 final slice) | ✅ Done 2026-06-12, MCP + smoke verified |
 | 5c review | Independent 3-reviewer pass over the controller decomposition | ✅ Done 2026-06-12 — verdict: sound, no real bugs; see "Controller decomposition review" below |
-| Follow-up A | Manual click-through playtest of all 8 apps, then checkpoint commit | ⬜ Next (blocking the commit) |
-| Follow-up B | Warnings cleanup pass (shadowed `seed`/`size`/`theme`, unused vars/params, ternaries, false-positive signal warnings) | ⬜ Planned |
-| Follow-up C | Shared `UITheme` constants file (kill the 9 duplicated `COLOR_*` palettes) | ⬜ Planned |
-| Follow-up D | Controller-owned state (retire the manual `_sync_state_from_root`/`_sync_root_state` layer) | ⬜ Planned — largest follow-up, do per-controller |
+| Follow-up A | Manual click-through playtest of all 8 apps, then checkpoint commit | ✅ Done 2026-06-12 — playtest clean, committed `e5c3bfc` |
+| Follow-up B | Warnings cleanup pass (44 behavior-neutral edits across 7 files) | ✅ Done 2026-06-12 — committed `20211ee`, smoke byte-identical |
+| Follow-up C | Shared `UITheme` constants (`scripts/ui/UITheme.gd`, 75 colors; 193 duplicate lines collapsed via preload aliases) | ✅ Done 2026-06-12 — committed `9e2d49e`, smoke byte-identical |
+| Follow-up D | Controller-owned state (retire the manual `_sync_state_from_root`/`_sync_root_state` layer) | ⬜ NEXT — one controller per sitting, smallest first |
 | 5c item 14 | Typed `CompanyRuntime` class, gradual callsite migration | ⬜ Planned |
 
 ---
