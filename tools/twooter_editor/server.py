@@ -71,6 +71,32 @@ ALLOWED_DIALOG_REQUIREMENT_KEYS = {
     "daily_ap",
 }
 ALLOWED_DIALOG_REQUIREMENT_STAGES = {"stranger", "familiar", "trusted", "inner_circle_candidate"}
+SPECIAL_ROUTING_TREE_IDS = {"profile_preferred"}
+ALLOWED_ROUTING_CONDITION_KEYS = {
+    "risk_profile",
+    "network_source",
+    "relationship_lt",
+    "relationship_gte",
+    "credibility_lt",
+    "credibility_gte",
+    "relationship_stage",
+    "thread_rows_gte",
+    "post_category_contains_any",
+}
+PRIVATE_DIALOG_ACTION_IDS = {
+    "message_check_in",
+    "connect",
+    "ask_source_private",
+    "share_thesis",
+    "ask_tip",
+    "accept_invite",
+    "respond_suspicious_request",
+}
+PUBLIC_DIALOG_ACTION_IDS = {
+    "reply_support",
+    "reply_skeptic",
+    "ask_source_public",
+}
 KNOWN_TEMPLATE_TOKENS = {
     "target_ticker",
     "target_company_name",
@@ -141,6 +167,8 @@ def normalize_catalog_for_source(catalog: dict) -> dict:
     catalog["prototype_default_access_tier"] = int(catalog.get("prototype_default_access_tier", 1) or 1)
     catalog["post_limit"] = int(catalog.get("post_limit", 18) or 18)
     catalog["tier_labels"] = normalize_string_map(catalog.get("tier_labels", {}))
+    if "dialog_routing" in catalog:
+        catalog["dialog_routing"] = normalize_dialog_routing(catalog.get("dialog_routing", {}))
     catalog["interaction_response_pools"] = normalize_pool_map(catalog.get("interaction_response_pools", {}))
     catalog["relationship_reply_pools"] = normalize_pool_map(catalog.get("relationship_reply_pools", {}))
     catalog["network_source_reply_pools"] = normalize_pool_map(catalog.get("network_source_reply_pools", {}))
@@ -223,6 +251,30 @@ def normalize_nested_pool_map(value) -> dict:
     return normalized
 
 
+def normalize_dialog_routing(value) -> dict:
+    if not isinstance(value, dict):
+        return {}
+    routing = copy.deepcopy(value)
+    for rule_key in ["public_rules", "private_rules"]:
+        if rule_key not in routing:
+            continue
+        rules = routing.get(rule_key)
+        if not isinstance(rules, list):
+            continue
+        normalized_rules: list[dict] = []
+        for rule_value in rules:
+            if not isinstance(rule_value, dict):
+                continue
+            rule = copy.deepcopy(rule_value)
+            rule["id"] = str(rule.get("id", "")).strip()
+            rule["tree_id"] = str(rule.get("tree_id", "")).strip()
+            if "conditions" in rule and isinstance(rule.get("conditions"), dict):
+                rule["conditions"] = copy.deepcopy(rule.get("conditions", {}))
+            normalized_rules.append(rule)
+        routing[rule_key] = normalized_rules
+    return routing
+
+
 def normalize_dialog_trees(value) -> dict:
     if not isinstance(value, dict):
         return {}
@@ -290,6 +342,7 @@ def validate_source(source: dict) -> dict:
         validate_pool_map(catalog.get("network_source_reply_pools", {}), "network_source_reply_pools", errors, warnings)
     validate_dialog_trees(catalog.get("dialog_trees", {}), errors, warnings)
     dialog_tree_ids = set(catalog.get("dialog_trees", {}).keys())
+    validate_dialog_routing(catalog.get("dialog_routing", {}), catalog.get("dialog_trees", {}), dialog_tree_ids, errors, warnings)
     voice_ids = set(catalog.get("voice_templates", {}).keys())
     thread_voice_ids = set(catalog.get("thread_templates", {}).keys())
     validate_accounts(catalog.get("accounts", []), voice_ids, thread_voice_ids, dialog_tree_ids, errors, warnings)
@@ -473,6 +526,111 @@ def validate_dialog_trees(dialog_trees: dict, errors: list[str], warnings: list[
                         errors.append(f"{option_label}.requirements must be an object when present.")
                     else:
                         validate_dialog_requirements(requirements, option_label, errors)
+
+
+def validate_dialog_routing(dialog_routing: dict, dialog_trees: dict, dialog_tree_ids: set[str], errors: list[str], warnings: list[str]) -> None:
+    if not dialog_routing:
+        return
+    if not isinstance(dialog_routing, dict):
+        errors.append("dialog_routing must be an object when present.")
+        return
+    for rule_key, is_private in [("public_rules", False), ("private_rules", True)]:
+        if rule_key not in dialog_routing:
+            continue
+        rules = dialog_routing.get(rule_key)
+        label = f"dialog_routing.{rule_key}"
+        if not isinstance(rules, list):
+            errors.append(f"{label} must be an array.")
+            continue
+        if not rules:
+            warnings.append(f"{label} is empty; hardcoded fallback routing will be used.")
+            continue
+        for index, rule in enumerate(rules):
+            rule_label = f"{label}[{index}]"
+            validate_dialog_routing_rule(rule, rule_label, is_private, dialog_trees, dialog_tree_ids, errors)
+
+
+def validate_dialog_routing_rule(rule, label: str, is_private: bool, dialog_trees: dict, dialog_tree_ids: set[str], errors: list[str]) -> None:
+    if not isinstance(rule, dict):
+        errors.append(f"{label} must be an object.")
+        return
+    rule_id = str(rule.get("id", "")).strip()
+    if not rule_id:
+        errors.append(f"{label}.id is required.")
+    tree_id = str(rule.get("tree_id", "")).strip()
+    if not tree_id:
+        errors.append(f"{label}.tree_id is required.")
+    elif tree_id not in SPECIAL_ROUTING_TREE_IDS:
+        if tree_id not in dialog_tree_ids:
+            errors.append(f"{label}.tree_id references missing dialog tree '{tree_id}'.")
+        elif not dialog_tree_has_surface(dialog_trees.get(tree_id, {}), is_private):
+            surface = "private" if is_private else "public"
+            errors.append(f"{label}.tree_id '{tree_id}' has no usable {surface} options.")
+    conditions = rule.get("conditions", {})
+    if "conditions" in rule:
+        if not isinstance(conditions, dict):
+            errors.append(f"{label}.conditions must be an object when present.")
+            return
+        validate_dialog_routing_conditions(conditions, label, errors)
+
+
+def validate_dialog_routing_conditions(conditions: dict, label: str, errors: list[str]) -> None:
+    for key, value in conditions.items():
+        condition_label = f"{label}.conditions.{key}"
+        if key not in ALLOWED_ROUTING_CONDITION_KEYS:
+            errors.append(f"{condition_label} is not supported.")
+            continue
+        if key == "risk_profile":
+            if str(value) not in ALLOWED_RISK_PROFILES:
+                errors.append(f"{condition_label} must be one of {sorted(ALLOWED_RISK_PROFILES)}.")
+        elif key == "network_source":
+            if not isinstance(value, bool):
+                errors.append(f"{condition_label} must be true/false.")
+        elif key in {"relationship_lt", "relationship_gte", "credibility_lt", "credibility_gte", "thread_rows_gte"}:
+            try:
+                int(value)
+            except (TypeError, ValueError):
+                errors.append(f"{condition_label} must be an integer.")
+        elif key == "relationship_stage":
+            stage_values = value if isinstance(value, list) else [value]
+            clean_stage_values = [str(row).strip() for row in stage_values if str(row).strip()]
+            if not clean_stage_values:
+                errors.append(f"{condition_label} must name at least one relationship stage.")
+            for stage_value in clean_stage_values:
+                if stage_value not in ALLOWED_DIALOG_REQUIREMENT_STAGES:
+                    errors.append(f"{condition_label} value '{stage_value}' must be one of {sorted(ALLOWED_DIALOG_REQUIREMENT_STAGES)}.")
+        elif key == "post_category_contains_any":
+            if not isinstance(value, list):
+                errors.append(f"{condition_label} must be an array of text snippets.")
+                continue
+            clean_needles = [str(row).strip() for row in value if str(row).strip()]
+            if not clean_needles:
+                errors.append(f"{condition_label} needs at least one non-empty text snippet.")
+
+
+def dialog_tree_has_surface(tree: dict, is_private: bool) -> bool:
+    if not isinstance(tree, dict):
+        return False
+    nodes = tree.get("nodes", {})
+    if not isinstance(nodes, dict):
+        return False
+    for node in nodes.values():
+        if not isinstance(node, dict):
+            continue
+        options = node.get("options", [])
+        if not isinstance(options, list):
+            continue
+        for option in options:
+            if not isinstance(option, dict):
+                continue
+            action_id = str(option.get("private_action_id" if is_private else "public_action_id", "")).strip()
+            if not action_id:
+                action_id = str(option.get("action_id", "")).strip()
+            if is_private and action_id in PRIVATE_DIALOG_ACTION_IDS:
+                return True
+            if not is_private and action_id in PUBLIC_DIALOG_ACTION_IDS:
+                return True
+    return False
 
 
 def validate_dialog_requirements(requirements: dict, label: str, errors: list[str]) -> None:

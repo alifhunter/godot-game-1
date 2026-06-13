@@ -317,6 +317,7 @@ const THESIS_BOARD_WIDGET_SCRIPT = preload("res://scripts/ui/widgets/ThesisBoard
 
 var _root = null
 var selected_company_id: String = ""
+var preserve_selected_company_outside_active_stock_list_once: bool = false
 var displayed_company_ids: Array = []
 var watchlist_picker_company_ids: Array = []
 var selected_lots: int = 1
@@ -2065,7 +2066,12 @@ func _sync_selected_company_with_active_stock_list() -> void:
 
 	if RunState.get_company(selected_company_id).is_empty():
 		selected_company_id = ""
+		preserve_selected_company_outside_active_stock_list_once = false
 		_sync_selected_company_with_active_stock_list()
+		return
+
+	if preserve_selected_company_outside_active_stock_list_once:
+		preserve_selected_company_outside_active_stock_list_once = false
 		return
 
 	if stock_list_tabs.current_tab == STOCK_LIST_TAB_WATCHLIST and not watchlist_ids.has(selected_company_id):
@@ -3542,6 +3548,10 @@ func _on_watchlist_picker_item_activated(index: int) -> void:
 
 func _on_all_stock_selected(company_id: String) -> void:
 	selected_company_id = company_id
+	preserve_selected_company_outside_active_stock_list_once = (
+		stock_list_tabs != null and
+		stock_list_tabs.current_tab != STOCK_LIST_TAB_ALL_STOCKS
+	)
 	_refresh_after_company_selection()
 	_mark_guide_watchlist_stock_selected()
 

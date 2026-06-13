@@ -3082,6 +3082,16 @@ func get_company_snapshot(
 	var backdoor_milestone_state: Dictionary = company_profile.get("backdoor_milestone_state", {}).duplicate(true) if typeof(company_profile) == TYPE_DICTIONARY else {}
 	var restructuring_result: Dictionary = company_profile.get("restructuring_result", {}).duplicate(true) if typeof(company_profile) == TYPE_DICTIONARY else {}
 	var ceo_change_result: Dictionary = company_profile.get("ceo_change_result", {}).duplicate(true) if typeof(company_profile) == TYPE_DICTIONARY else {}
+	var management_roster: Array = definition.get("management_roster", []).duplicate(true)
+	if typeof(company_profile) == TYPE_DICTIONARY and typeof(company_profile.get("management_roster", [])) == TYPE_ARRAY:
+		management_roster = company_profile.get("management_roster", []).duplicate(true)
+	if not ceo_change_result.is_empty():
+		management_roster = _management_roster_with_ceo_change_result(
+			management_roster,
+			ceo_change_result,
+			company_id,
+			definition
+		)
 	var snapshot: Dictionary = {
 		"id": company_id,
 		"detail_status": str(definition.get("detail_status", "ready")),
@@ -3101,7 +3111,7 @@ func get_company_snapshot(
 		"profile_revenue_unit": str(definition.get("profile_revenue_unit", "")),
 		"profile_description": str(definition.get("profile_description", "")),
 		"profile_tags": definition.get("profile_tags", []).duplicate(),
-		"management_roster": definition.get("management_roster", []).duplicate(true),
+		"management_roster": management_roster,
 		"location_profile": definition.get("location_profile", {}).duplicate(true),
 		"roadmap_profile": definition.get("roadmap_profile", {}).duplicate(true),
 		"current_price": current_price,
@@ -3164,6 +3174,63 @@ func get_company_snapshot(
 		snapshot["broker_flow_history"] = runtime.get("broker_flow_history", []).duplicate(true)
 
 	return snapshot
+
+
+func _management_roster_with_ceo_change_result(
+	management_roster: Array,
+	ceo_change_result: Dictionary,
+	company_id: String,
+	definition: Dictionary
+) -> Array:
+	var new_ceo_name: String = str(ceo_change_result.get("new_ceo_name", ""))
+	if new_ceo_name.is_empty():
+		return management_roster.duplicate(true)
+	var day_index: int = int(ceo_change_result.get("day_index", RunState.day_index))
+	var next_contact_id: String = "insider_%s_ceo_%d" % [company_id, day_index]
+	var next_roster: Array = []
+	var replaced_ceo: bool = false
+	for management_value in management_roster:
+		if typeof(management_value) != TYPE_DICTIONARY:
+			continue
+		var management: Dictionary = management_value.duplicate(true)
+		if str(management.get("affiliation_role", "")) == "ceo":
+			if not management.has("previous_display_name"):
+				management["previous_display_name"] = str(management.get("display_name", ""))
+			management["display_name"] = new_ceo_name
+			management["contact_id"] = next_contact_id
+			management["id"] = next_contact_id
+			management["role"] = "CEO"
+			management["role_label"] = "CEO"
+			management["tone"] = "constructive"
+			management["intro"] = "%s serves as CEO at %s after a shareholder-approved leadership reset focused on %s." % [
+				new_ceo_name,
+				str(definition.get("name", company_id.to_upper())),
+				str(ceo_change_result.get("mandate", "execution reset"))
+			]
+			replaced_ceo = true
+		next_roster.append(management)
+	if not replaced_ceo:
+		next_roster.insert(0, {
+			"contact_id": next_contact_id,
+			"id": next_contact_id,
+			"display_name": new_ceo_name,
+			"affiliation_type": "insider",
+			"affiliation_role": "ceo",
+			"company_id": company_id,
+			"affiliated_company_id": company_id,
+			"sector_id": str(definition.get("sector_id", "")),
+			"role": "CEO",
+			"role_label": "CEO",
+			"recognition_required": 50,
+			"base_relationship": 18,
+			"reliability": 0.68,
+			"tone": "constructive",
+			"intro": "%s serves as CEO at %s after a shareholder-approved leadership reset." % [
+				new_ceo_name,
+				str(definition.get("name", company_id.to_upper()))
+			]
+		})
+	return next_roster
 
 
 func _build_impactability_snapshot(definition: Dictionary, runtime: Dictionary, market_depth_context: Dictionary) -> Dictionary:
@@ -6186,7 +6253,7 @@ func get_twooter_snapshot(unlocked_access_tier: int = -1) -> Dictionary:
 	)
 
 
-func interact_with_twooter_post(post_id: String, action_id: String, thesis_id: String = "", player_reply_text: String = "") -> Dictionary:
+func interact_with_twooter_post(post_id: String, action_id: String, thesis_id: String = "", player_reply_text: String = "", option_id: String = "") -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "Start a run before using Twooter."}
 	var snapshot: Dictionary = get_twooter_snapshot()
@@ -6212,7 +6279,8 @@ func interact_with_twooter_post(post_id: String, action_id: String, thesis_id: S
 		post_id,
 		action_id,
 		thesis_id,
-		player_reply_text
+		player_reply_text,
+		option_id
 	)
 	if not bool(result.get("success", false)):
 		if spent_ap:
@@ -6224,7 +6292,7 @@ func interact_with_twooter_post(post_id: String, action_id: String, thesis_id: S
 	return result
 
 
-func send_twooter_message(account_id: String, action_id: String, thesis_id: String = "", player_message_text: String = "") -> Dictionary:
+func send_twooter_message(account_id: String, action_id: String, thesis_id: String = "", player_message_text: String = "", option_id: String = "") -> Dictionary:
 	if not RunState.has_active_run():
 		return {"success": false, "message": "Start a run before using Twooter."}
 	var snapshot: Dictionary = get_twooter_snapshot()
@@ -6248,7 +6316,8 @@ func send_twooter_message(account_id: String, action_id: String, thesis_id: Stri
 		account_id,
 		action_id,
 		thesis_id,
-		player_message_text
+		player_message_text,
+		option_id
 	)
 	if not bool(result.get("success", false)):
 		RunState.refund_daily_action(1)

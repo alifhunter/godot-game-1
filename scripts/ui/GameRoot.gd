@@ -395,6 +395,11 @@ var social_capture_menu: PopupMenu = null
 # One pending research-capture payload per source kind (key stats, broker,
 # social, ...). Committed and cleared by _commit_pending_capture.
 var pending_capture_payloads: Dictionary = {}
+var selected_social_account_id: String = ""
+var selected_social_feed_filter_id: String = SOCIAL_FEED_FILTER_ALL
+var selected_social_view_id: String = "home"
+var selected_social_message_account_id: String = ""
+var preserve_social_selection_on_next_open: bool = false
 var current_corporate_meeting_id: String = ""
 var debug_generator_buttons: Dictionary = {}
 var debug_corporate_action_buttons: Dictionary = {}
@@ -6442,6 +6447,16 @@ func _refresh_after_company_selection() -> void:
 	stock_controller._sync_dynamic_refs_from_root()
 	stock_controller._refresh_after_company_selection()
 	stock_controller._sync_root_refs()
+	_refresh_selected_stock_debug_controls()
+
+
+func _refresh_selected_stock_debug_controls() -> void:
+	_refresh_debug_company_control_controls()
+	_refresh_debug_corporate_action_controls()
+	_refresh_debug_index_review_controls()
+	_refresh_debug_company_roadmap_controls()
+
+
 func _on_company_detail_ready(company_id: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
@@ -8814,11 +8829,13 @@ func _on_all_stock_selected(company_id: String) -> void:
 	stock_controller._sync_dynamic_refs_from_root()
 	stock_controller._on_all_stock_selected(company_id)
 	stock_controller._sync_root_refs()
+	_refresh_selected_stock_debug_controls()
 func _on_portfolio_stock_selected(company_id: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
 	stock_controller._on_portfolio_stock_selected(company_id)
 	stock_controller._sync_root_refs()
+	_refresh_selected_stock_debug_controls()
 func _on_add_to_watchlist_pressed(company_id: String) -> void:
 	_ensure_stock_controller()
 	stock_controller._sync_dynamic_refs_from_root()
@@ -14012,6 +14029,14 @@ func _set_active_app(app_id: String) -> void:
 		_apply_academy_release_lock_state()
 		_refresh_desktop()
 		return
+	if normalized_app_id == APP_ID_SOCIAL:
+		if preserve_social_selection_on_next_open:
+			preserve_social_selection_on_next_open = false
+		else:
+			selected_social_account_id = ""
+			selected_social_feed_filter_id = SOCIAL_FEED_FILTER_ALL
+			selected_social_view_id = "home"
+			selected_social_message_account_id = ""
 
 	desktop_layer.visible = true
 	app_window_backdrop.visible = false

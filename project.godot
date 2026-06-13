@@ -31,6 +31,9 @@ SteamProgressManager="*res://autoloads/SteamProgressManager.gd"
 DataRepository="*res://autoloads/DataRepository.gd"
 SaveManager="*res://autoloads/SaveManager.gd"
 FishbowlOverlay="*res://autoloads/FishbowlOverlay.gd"
+MCPScreenshot="*res://addons/godot_mcp/mcp_screenshot_service.gd"
+MCPInputService="*res://addons/godot_mcp/mcp_input_service.gd"
+MCPGameInspector="*res://addons/godot_mcp/mcp_game_inspector_service.gd"
 
 [debug]
 
@@ -46,7 +49,7 @@ window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/godotsteam/plugin.cfg")
+enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg", "res://addons/godotsteam/plugin.cfg")
 
 [physics]
 

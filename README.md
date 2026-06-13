@@ -66,7 +66,7 @@ The project is intentionally trying to feel more like a world than a flat menu s
 
 The current financial statement layer is intentionally simplified. It is designed to be coherent and useful for learning, not to fully reproduce real-world accounting rules.
 
-Shared UI styling is documented in [`docs/DESIGN_SYSTEM.md`](./docs/DESIGN_SYSTEM.md). New screens should extend `UiTheme` first, then consume the shared tokens/components from feature scripts.
+Shared UI styling is documented in [`docs/development/DESIGN_SYSTEM.md`](./docs/development/DESIGN_SYSTEM.md). New screens should extend `UiTheme` first, then consume the shared tokens/components from feature scripts.
 
 ## Tech Notes
 
@@ -108,13 +108,13 @@ For Steam Early Access testing prep:
 - [`EULA.txt`](./EULA.txt) is the proprietary game product license for public builds.
 - [`THIRD_PARTY_NOTICES.txt`](./THIRD_PARTY_NOTICES.txt) is the bundled third-party notice file to ship beside `BHSL.exe`.
 - [`GODOT_COPYRIGHT.txt`](./GODOT_COPYRIGHT.txt) is the Godot Engine third-party copyright file to ship beside `BHSL.exe`.
-- [`docs/STEAM_BUILD_UPLOAD_GUIDE.md`](./docs/STEAM_BUILD_UPLOAD_GUIDE.md) is the repeatable Godot export, SteamPipe upload, branch, launch-option, and Cloud verification guide.
-- [`docs/STEAM_PLAYTEST_CHECKLIST.md`](./docs/STEAM_PLAYTEST_CHECKLIST.md) is the Steam-launch platform checklist for testers.
-- [`docs/RELEASE_LICENSE_AUDIT.md`](./docs/RELEASE_LICENSE_AUDIT.md) tracks third-party notices, owned-asset confirmations, and licensed-content release checks.
-- [`docs/KNOWN_ISSUES.md`](./docs/KNOWN_ISSUES.md) tracks current player-facing issues and workarounds.
-- [`docs/BUG_REPORT_TEMPLATE.md`](./docs/BUG_REPORT_TEMPLATE.md) is the tester bug-report format.
-- [`docs/STEAM_ACHIEVEMENT_IDS.md`](./docs/STEAM_ACHIEVEMENT_IDS.md) lists the future Steam achievement/stat API draft; public Early Access currently ships with Steam achievement/stat writes disabled.
-- [`docs/STEAM_CLOUD_SAVE_PATHS.md`](./docs/STEAM_CLOUD_SAVE_PATHS.md) maps the current save files to Steam Auto-Cloud setup.
+- [`docs/steam/STEAM_BUILD_UPLOAD_GUIDE.md`](./docs/steam/STEAM_BUILD_UPLOAD_GUIDE.md) is the repeatable Godot export, SteamPipe upload, branch, launch-option, and Cloud verification guide.
+- [`docs/steam/STEAM_PLAYTEST_CHECKLIST.md`](./docs/steam/STEAM_PLAYTEST_CHECKLIST.md) is the Steam-launch platform checklist for testers.
+- [`docs/steam/RELEASE_LICENSE_AUDIT.md`](./docs/steam/RELEASE_LICENSE_AUDIT.md) tracks third-party notices, owned-asset confirmations, and licensed-content release checks.
+- [`docs/development/KNOWN_ISSUES.md`](./docs/development/KNOWN_ISSUES.md) tracks current player-facing issues and workarounds.
+- [`docs/steam/BUG_REPORT_TEMPLATE.md`](./docs/steam/BUG_REPORT_TEMPLATE.md) is the tester bug-report format.
+- [`docs/steam/STEAM_ACHIEVEMENT_IDS.md`](./docs/steam/STEAM_ACHIEVEMENT_IDS.md) lists the future Steam achievement/stat API draft; public Early Access currently ships with Steam achievement/stat writes disabled.
+- [`docs/steam/STEAM_CLOUD_SAVE_PATHS.md`](./docs/steam/STEAM_CLOUD_SAVE_PATHS.md) maps the current save files to Steam Auto-Cloud setup.
 
 ## Project Structure
 

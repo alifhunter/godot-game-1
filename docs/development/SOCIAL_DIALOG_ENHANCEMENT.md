@@ -1,7 +1,7 @@
 # Social Dialog Enhancement — Plan & Progress Log
 
 Improves the Twooter social dialog system based on the 2026-06-12 read-only review.
-**Status: not started.** Designed to run in a fresh session; everything needed to execute cold is in this file.
+**Status: complete — Tasks 1–6 complete.** Designed to run in a fresh session; everything needed to execute cold is in this file.
 
 **Review verdict recap:** the engine is a solid, well-engineered *gating* system (deterministic text selection, visible blocked options with in-fiction reasons, soft cooldowns, stage-layered reply pools, strong writing) — but the content shape can't deliver real conversations yet: all 11 trees are ping-pong loops, replies don't acknowledge which option you picked, and the two fields a deeper system needs (`outcome`, `step_count`) are authored/tracked but consumed by nothing.
 
@@ -10,8 +10,8 @@ Improves the Twooter social dialog system based on the 2026-06-12 read-only revi
 | What | Where |
 |---|---|
 | Dialog engine | `systems/TwooterInteractionSystem.gd` (~2,270 lines) — trees/nodes/options resolution, requirements, cooldowns, reply rendering |
-| Dialog data | `data/social/twooter_feed_data.json` → `dialog_trees` (11 trees, 22 nodes, 66 options), `relationship_reply_pools`, `network_source_reply_pools`, `interaction_response_pools` |
-| Branch state (saved) | `twooter_social_state.dialog_state.{accounts,posts}[key]` = `{tree_id, node_id, last_option_id, last_action_id, repeat_count, last_day_index, cooldown_until_day, cooldown_reason, step_count}` — normalized in `systems/TwooterStateSystem.gd:normalize_dialog_branch` and `TwooterInteractionSystem._normalize_dialog_branch` |
+| Dialog data | `data/social/twooter_feed_data.json` → `dialog_trees` (11 trees, 24 nodes, 68 options), `relationship_reply_pools`, `network_source_reply_pools`, `interaction_response_pools` |
+| Branch state (saved) | `twooter_social_state.dialog_state.{accounts,posts}[key]` = `{tree_id, node_id, last_option_id, last_outcome, last_action_id, repeat_count, last_day_index, cooldown_until_day, cooldown_reason, step_count}` — normalized in `systems/TwooterStateSystem.gd:normalize_dialog_branch` and `TwooterInteractionSystem._normalize_dialog_branch` |
 | UI | `scripts/ui/controllers/SocialController.gd` (dialog options are rows from `_tree_dialog_options`; clicks route through GameManager `interact_with_twooter_post` / `send_twooter_message`) |
 | Key engine functions (line refs drift; locate by name) | `_dialog_branch` (~784), `_select_public_tree_id` (~808), `_select_message_tree_id` (~821), `_tree_dialog_options` (~869), `_dialog_option_block_reason` (~915), `_resolve_dialog_selection` (~1002), `_dialog_reply_text` (~1081), `_record_dialog_branch_progress` (~1171), `_render_dialog_pool` (~1230) |
 
@@ -28,14 +28,103 @@ Improves the Twooter social dialog system based on the 2026-06-12 read-only revi
 
 | # | Task | Est. cost | Status |
 |---|---|---|---|
-| 1 | Per-option reply pools | ~10% | ⬜ |
-| 4 | Exact option matching via `option_id` | ~5% | ⬜ |
-| 5 | Name tree-selection thresholds + warning hygiene | ~5% | ⬜ |
-| 2 | Wire `outcome` into network bridge / credibility | ~15–20% | ⬜ |
-| 3 | Tree endings via `step_count` graduation | ~15–20% | ⬜ |
-| 6 | Content pass: widen hot pools, per-option replies for top trees | ~10% (mostly writing) | ⬜ |
+| 1 | Per-option reply pools | ~10% | ✅ Complete |
+| 4 | Exact option matching via `option_id` | ~5% | ✅ Complete |
+| 5 | Name tree-selection thresholds + warning hygiene | ~5% | ✅ Complete |
+| 2 | Wire `outcome` into network bridge / credibility | ~15–20% | ✅ Complete |
+| 3 | Tree endings via `step_count` graduation | ~15–20% | ✅ Complete |
+| 6 | Content pass: widen hot pools, per-option replies for top trees | ~10% (mostly writing) | ✅ Complete |
 
 Recommended batching: **Session 1 = tasks 1+4+5** (mechanical, ~20–25% of a usage window). **Session 2 = task 2, Session 3 = task 3** (design work; do separately, playtest each). **Task 6** rides along after 1 lands.
+
+## Progress log
+
+### 2026-06-12 — Task 1 complete
+
+- Engine now prefers option-level `account_replies` in `_resolve_dialog_selection`, falling back to node-level replies when an option has no pool.
+- Added 21 option-level reply pools across the three hottest trees: `clean_intro`, `source_check`, and `market_read`.
+- Each option now has distinct account replies that acknowledge the specific player choice instead of drawing only from the shared node pool.
+- Verified:
+  - `python3 -m json.tool data/social/twooter_feed_data.json > /dev/null`
+  - `git diff --check`
+  - `/Users/user/.local/bin/godot --headless -e --quit`
+  - `/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`
+- Quick smoke result: `SMOKE_QUICK_OK normal_equity=94765318.11`.
+
+### 2026-06-12 — Task 4 complete
+
+- Threaded selected dialog `option_id` through public reply and private message composers in `SocialController.gd`.
+- Added optional `option_id` parameters to `GameManager.interact_with_twooter_post`, `GameManager.send_twooter_message`, `TwooterInteractionSystem.apply_post_interaction`, `apply_message_action`, `_apply_interaction`, and `_resolve_dialog_selection`.
+- `_resolve_dialog_selection` now matches the selected row by exact `option_id` when provided, and only falls back to the older action/text heuristic for legacy callers with an empty option id.
+- Existing direct/test callers remain compatible because the new argument is appended with a default value.
+- Verified:
+  - `git diff --check`
+  - `/Users/user/.local/bin/godot --headless -e --quit`
+  - `/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`
+- Quick smoke result: `SMOKE_QUICK_OK normal_equity=94765318.11`.
+
+### 2026-06-12 — Task 5 complete
+
+- Extracted dialog tree-selection thresholds into named constants in `TwooterInteractionSystem.gd`.
+- Replaced the familiar reply threshold with `DIALOG_FAMILIAR_REPLY_RELATIONSHIP`.
+- Renamed `seed` parameters/locals to `seed_key` in dialog rendering helpers to avoid shadowing Godot's global `seed()`.
+- Added a one-time warning detector for dialog nodes with more than 3 usable public/private options; extra options remain hidden by the existing cap.
+- Verified:
+  - `git diff --check`
+  - `/Users/user/.local/bin/godot --headless -e --quit`
+  - `/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`
+- Quick smoke result: `SMOKE_QUICK_OK normal_equity=94765318.11`.
+
+### 2026-06-12 — Task 2 complete
+
+- Inventoried authored dialog outcomes: `clean_read`, `contact_discovery`, `event_invite`, `source_check`, `suspicious_boundary`, `thesis_response`.
+- Added conservative `DIALOG_OUTCOME_*` constants and outcome labels in `TwooterInteractionSystem.gd`.
+- Wired selected `outcome` into `_apply_interaction` consequences after base action deltas are multiplied by `_social_gain_multiplier`, so outcome effects do not bypass same-day anti-grind caps.
+- `source_check` now adds a small credibility bonus. If the account is a Network source, it also nudges Network discovery lead quality and the Twooter journal confidence label.
+- `clean_read` now banks fractional relationship progress through the existing `like_relationship_progress` bucket, so two clean reads can roll into a relationship point without adding a separate progress system.
+- `suspicious_boundary` now applies a small exposure reduction and visible clean-boundary timeline note.
+- `contact_discovery`, `event_invite`, and `thesis_response` are currently visible/logging outcomes only; they get timeline/journal notes but no numeric bonus yet.
+- Dialog branches now persist `last_outcome`; public reply rows and account timeline rows persist `dialog_outcome`, and timeline text includes a visible outcome note.
+- Save normalizers in both `TwooterStateSystem.gd` and `TwooterInteractionSystem.gd` default new outcome keys to `""` for compatibility with older saves.
+- Network bridge rows now write `dialog_outcome`, `dialog_outcome_label`, `dialog_outcome_note`, and `dialog_outcome_quality_delta`; Network journal display now prefers the outcome label when present.
+- Verified:
+  - `python3 -m json.tool data/social/twooter_feed_data.json > /dev/null`
+  - `git diff --check`
+  - `/Users/user/.local/bin/godot --headless -e --quit`
+  - temporary targeted source-check outcome/daily-cap probe: `SOCIAL_TASK2_PROBE_OK`, first credibility delta `3`, second same-day credibility delta `0`
+  - `/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`
+- Quick smoke result: `SMOKE_QUICK_OK normal_equity=94765318.11`.
+
+### 2026-06-12 — Task 3 complete
+
+- Added optional per-tree `graduation` metadata support: `{steps, node, next_tree}`.
+- Mature branches now route to the configured finale node when `step_count >= graduation.steps`; trees without `graduation` keep the old looping behavior.
+- Finale selections now reset the branch to `graduation.next_tree` at that tree's entry node and clear `step_count` back to `0`.
+- Added debug-friendly interaction result fields: `dialog_graduated` and `dialog_next_tree`.
+- Added first two authored graduations:
+  - `clean_intro` graduates after 3 steps into `thesis_review` through `wrap_clean_intro`.
+  - `source_check` graduates after 3 steps into `trust_building` through `wrap_source_check`.
+- Verified:
+  - `python3 -m json.tool data/social/twooter_feed_data.json > /dev/null`
+  - `git diff --check`
+  - `/Users/user/.local/bin/godot --headless -e --quit`
+  - temporary targeted graduation probe: `SOCIAL_TASK3_PROBE_OK`, `clean_intro -> thesis_review/review`, `source_check -> trust_building/trust`
+  - `/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`
+- Quick smoke result: `SMOKE_QUICK_OK normal_equity=94765318.11`.
+
+### 2026-06-13 — Task 6 complete
+
+- Expanded `relationship_reply_pools.familiar` from 5 to 9 lines.
+- Added data-backed `soft_cooldown_reply_pool` and kept the original hardcoded cooldown lines as `SOFT_COOLDOWN_REPLY_POOL` fallback.
+- Expanded high-traffic `clean_intro` and `market_read` node reply pools to 9 lines each.
+- Added option-level `account_replies` to the remaining non-Task-1 dialog trees, so every authored option now has a specific account response pool.
+- Verified:
+  - `python3 -m json.tool data/social/twooter_feed_data.json > /dev/null`
+  - option-reply inventory: `0` missing option reply pools across `11` trees, `24` nodes, `68` options
+  - `git diff --check`
+  - `/Users/user/.local/bin/godot --headless -e --quit`
+  - `/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io`
+- Quick smoke result: `SMOKE_QUICK_OK normal_equity=94765318.11`.
 
 ---
 

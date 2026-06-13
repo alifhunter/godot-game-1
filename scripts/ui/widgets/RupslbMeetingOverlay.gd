@@ -87,12 +87,14 @@ var action_button_stack: VBoxContainer = null
 
 
 func _ready() -> void:
+	_sync_fullscreen_rect()
 	_build_ui()
 
 
 func _notification(what: int) -> void:
 	if what != NOTIFICATION_RESIZED:
 		return
+	_sync_fullscreen_rect()
 	var preferred_bubble_index: int = bubble_carousel_active_marker_index
 	_refresh_responsive_layout()
 	_refresh_meeting_leads()
@@ -103,6 +105,7 @@ func _notification(what: int) -> void:
 func configure(next_snapshot: Dictionary) -> void:
 	if main_panel == null:
 		_build_ui()
+	_sync_fullscreen_rect()
 	_stop_bubble_carousel()
 	snapshot = next_snapshot.duplicate(true)
 	current_stage_id = _normalized_stage_id(str(snapshot.get("current_stage_id", "arrival")))
@@ -119,13 +122,25 @@ func configure(next_snapshot: Dictionary) -> void:
 	_play_stage_animation()
 
 
+func _sync_fullscreen_rect() -> void:
+	var viewport_size: Vector2 = get_viewport_rect().size
+	if viewport_size.x <= 1.0 or viewport_size.y <= 1.0:
+		viewport_size = Vector2(1280, 720)
+	set_anchors_preset(Control.PRESET_TOP_LEFT)
+	offset_left = 0.0
+	offset_top = 0.0
+	offset_right = viewport_size.x
+	offset_bottom = viewport_size.y
+	position = Vector2.ZERO
+
+
 func get_current_stage_id() -> String:
 	return current_stage_id
 
 
 func _build_ui() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	_sync_fullscreen_rect()
 
 	scrim = ColorRect.new()
 	scrim.name = "RupslbScrim"

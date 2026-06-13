@@ -1,5 +1,8 @@
 extends RefCounted
 
+const TWOOTER_DIALOG_ROUTER_SCRIPT := preload("res://systems/TwooterDialogRouter.gd")
+const TWOOTER_OUTCOME_RESOLVER_SCRIPT := preload("res://systems/TwooterOutcomeResolver.gd")
+
 const MAX_MESSAGE_ROWS_PER_THREAD := 24
 const MAX_TIMELINE_ROWS_PER_ACCOUNT := 12
 const MAX_PUBLIC_REPLY_ROWS_PER_POST := 6
@@ -10,6 +13,14 @@ const SAME_DAY_SECOND_LIKE_RELATIONSHIP_PROGRESS := 0.25
 const PUBLIC_ACTION_IDS := ["reply_support", "reply_skeptic", "ask_source_public"]
 const PRIVATE_ACTION_IDS := ["message_check_in", "connect", "ask_source_private", "share_thesis", "ask_tip", "accept_invite", "respond_suspicious_request"]
 const ATTENTION_ASK_ACTION_IDS := ["reply_support", "reply_skeptic", "ask_source_public", "message_check_in", "ask_source_private", "share_thesis", "ask_tip"]
+const DIALOG_VISIBLE_OPTION_LIMIT := 3
+const FALLBACK_DIALOG_TREE_ID := "clean_intro"
+const DIALOG_FAMILIAR_REPLY_RELATIONSHIP := 8
+const SOFT_COOLDOWN_REPLY_POOL := [
+	"We are circling the same point. Wait for new tape or bring a sharper thesis.",
+	"You asked this angle already. Pause for now and come back with evidence.",
+	"Same question, same answer. Bring a source, a thesis, or fresh market context next time."
+]
 const RELATIONSHIP_DIALOG_REPLY_POOLS := {
 	"familiar": [
 		"You are asking with more structure now. For {ticker}, the useful next step is to keep the evidence and the risk in the same sentence.",
@@ -190,172 +201,27 @@ const ACTION_DEFINITIONS := {
 		"credibility_delta": 3
 	}
 }
+# Emergency-only fallback used when authored dialog_trees are unavailable.
 const DEFAULT_DIALOG_TREES := {
 	"clean_intro": {
 		"entry_node": "open",
 		"nodes": {
 			"open": {
 				"account_replies": [
-					"Good. Start with the part that would prove you wrong.",
-					"Clean reads begin with limits. What would make you step back?"
+					"Keep the read simple: evidence first, confidence second.",
+					"Clean reads start with what would prove you wrong."
 				],
 				"options": [
-					{"id": "define_process", "label": "Process", "private_action_id": "message_check_in", "player_lines": ["I am trying to separate useful context from noise. What would you check first?", "I want to build the read properly before I act. Where should I start?"], "next_node": "evidence"},
-					{"id": "ask_public_evidence", "label": "Evidence", "private_action_id": "ask_source_private", "public_action_id": "ask_source_public", "player_lines": ["Can you point me to the clean evidence instead of just the chatter?", "What public evidence would make this worth tracking?"], "next_node": "evidence"},
-					{"id": "connect_clean", "label": "Connect", "private_action_id": "connect", "player_lines": ["Your read is useful. I want to stay connected and keep this evidence-first.", "Let's connect, but I want the conversation to stay clean."], "next_node": "trust"}
-				]
-			},
-			"evidence": {
-				"account_replies": [
-					"Then watch confirmation, not certainty. The market rarely gives both.",
-					"Better. A clean source only matters if the next tape agrees."
-				],
-				"options": [
-					{"id": "state_disproof", "label": "Disproof", "private_action_id": "message_check_in", "public_action_id": "reply_skeptic", "player_lines": ["If volume fades or the filing does not confirm it, I step back.", "I will treat the idea as wrong if the follow-through disappears."], "next_node": "trust"},
-					{"id": "ask_clean_read", "label": "Clean read", "private_action_id": "ask_tip", "public_action_id": "reply_support", "player_lines": ["What would you watch next without turning it into a shortcut?", "Give me the clean watch item, not a buy signal."], "next_node": "trust"},
-					{"id": "bring_thesis", "label": "Thesis", "private_action_id": "share_thesis", "requirements": {"shareable_thesis": true}, "blocked_lines": ["Build a thesis first, then I can challenge the weak part.", "Bring a written thesis first; without it we are only trading vibes."], "player_lines": ["I have a thesis ready. Can you challenge the weak part?", "I want to share my thesis and hear what breaks first."], "next_node": "trust"}
-				]
-			},
-			"trust": {
-				"account_replies": [
-					"That is a better way to ask. Keep showing your work.",
-					"Now we are talking process instead of signals."
-				],
-				"options": [
-					{"id": "close_loop", "label": "Close loop", "private_action_id": "message_check_in", "public_action_id": "reply_support", "player_lines": ["I will come back after the next tape gives us more information.", "I will track it and avoid forcing a trade today."], "next_node": "evidence"},
-					{"id": "ask_next_context", "label": "Next context", "private_action_id": "ask_tip", "player_lines": ["What context should I bring next time so this is useful?", "What would make the next conversation more precise?"], "next_node": "evidence"},
-					{"id": "share_next_thesis", "label": "Share thesis", "private_action_id": "share_thesis", "requirements": {"shareable_thesis": true}, "blocked_lines": ["Build the thesis first. I need something concrete to review.", "Write the thesis first; then we can talk about what breaks it."], "player_lines": ["I have enough structure now; I want to share the thesis and have you challenge it.", "I will bring the written thesis next, not just another question."], "next_node": "evidence"}
-				]
-			}
-		}
-	},
-	"source_check": {
-		"entry_node": "source",
-		"nodes": {
-			"source": {
-				"account_replies": ["I would trust a source you can reopen tomorrow: an IDX filing, company disclosure, dated news, or a clear volume trail.", "Start with the public trail: filings, calendar dates, company disclosures, and whether volume confirms people are acting."],
-				"options": [
-					{"id": "ask_origin", "label": "Origin", "private_action_id": "ask_source_private", "public_action_id": "ask_source_public", "player_lines": ["Where did this read start, and what part is actually public?", "What source would you trust before treating this seriously?"], "next_node": "verify"},
-					{"id": "pushback", "label": "Pushback", "private_action_id": "message_check_in", "public_action_id": "reply_skeptic", "player_lines": ["If everyone is reading the same clue, I want to know what invalidates it.", "This could be crowded. What would make you change your mind?"], "next_node": "verify"},
-					{"id": "watch_only", "label": "Watch", "private_action_id": "ask_tip", "public_action_id": "reply_support", "player_lines": ["I will keep it as a watch item until evidence catches up.", "I am watching, not chasing, until confirmation shows up."], "next_node": "verify"}
-				]
-			},
-			"verify": {
-				"account_replies": ["Good. Verification beats speed when the tape is noisy.", "That is the clean habit: verify, then decide."],
-				"options": [
-					{"id": "file_check", "label": "Filing", "private_action_id": "ask_source_private", "public_action_id": "ask_source_public", "player_lines": ["I will check filings and volume before I trust the angle.", "I want a filing, date, or volume trail before calling this real."], "next_node": "source"},
-					{"id": "thesis_check", "label": "Thesis", "private_action_id": "share_thesis", "requirements": {"shareable_thesis": true}, "blocked_lines": ["Turn it into a thesis first; then I can test the assumptions.", "Write the thesis first so the idea has a falsifiable shape."], "player_lines": ["I can turn this into a thesis and test the assumptions.", "I will write the thesis first so the idea has a falsifiable shape."], "next_node": "source"},
-					{"id": "come_back", "label": "Wait", "private_action_id": "message_check_in", "public_action_id": "reply_support", "player_lines": ["I will wait for new tape before asking again.", "I will come back when the market gives us more data."], "next_node": "source"}
-				]
-			}
-		}
-	},
-	"thesis_review": {
-		"entry_node": "review",
-		"nodes": {
-			"review": {
-				"account_replies": ["A thesis is useful only if it names its own failure point.", "Show me the assumption that hurts if you are wrong."],
-				"options": [
-					{"id": "share_structure", "label": "Share thesis", "private_action_id": "share_thesis", "requirements": {"shareable_thesis": true}, "blocked_lines": ["Build your thesis first. I cannot review a direction without structure.", "Write a thesis first; I need assumptions, not just a ticker."], "player_lines": ["I want to share my thesis and have you attack the weakest assumption.", "Can you review my thesis for structure, not just direction?"], "next_node": "challenge"},
-					{"id": "ask_weakness", "label": "Weakness", "private_action_id": "message_check_in", "player_lines": ["The part I am least sure about is the follow-through. How would you test it?", "I am trying to find what breaks first before I trust it."], "next_node": "challenge"},
-					{"id": "source_thesis", "label": "Source", "private_action_id": "ask_source_private", "player_lines": ["What source would make my thesis cleaner or force me to rewrite it?", "Which evidence should I check before I defend this thesis?"], "next_node": "challenge"}
-				]
-			},
-			"challenge": {
-				"account_replies": ["Better. Now your opinion has a shape the market can test.", "That is the difference between a thesis and a feeling."],
-				"options": [
-					{"id": "accept_challenge", "label": "Accept", "private_action_id": "message_check_in", "player_lines": ["I will rewrite it with that failure point in mind.", "I will update the thesis before I ask for another read."], "next_node": "review"},
-					{"id": "ask_read", "label": "Clean read", "private_action_id": "ask_tip", "player_lines": ["What should I watch next to confirm or kill the thesis?", "What is the cleanest next signal for this thesis?"], "next_node": "review"},
-					{"id": "connect_process", "label": "Connect", "private_action_id": "connect", "player_lines": ["This is useful. I want to keep comparing thesis work with you.", "Let's connect; I will bring cleaner work next time."], "next_node": "review"}
-				]
-			}
-		}
-	},
-	"market_read": {
-		"entry_node": "read",
-		"nodes": {
-			"read": {
-				"account_replies": ["The move is only useful if you know what kind of move it is.", "A candle is not a thesis. Context first."],
-				"options": [
-					{"id": "support_context", "label": "Context", "private_action_id": "ask_tip", "public_action_id": "reply_support", "player_lines": ["I like the context, but I want the next tape to confirm it.", "This read helps, but I am not treating one move as proof."], "next_node": "follow"},
-					{"id": "question_flow", "label": "Question", "private_action_id": "message_check_in", "public_action_id": "reply_skeptic", "player_lines": ["How much of this is real demand versus everyone reacting to the same headline?", "What would make you say the move is fading instead of building?"], "next_node": "follow"},
-					{"id": "ask_source", "label": "Source", "private_action_id": "ask_source_private", "public_action_id": "ask_source_public", "player_lines": ["What clean source should I check before I trust this read?", "Is there a filing or public clue behind this move?"], "next_node": "follow"}
-				]
-			},
-			"follow": {
-				"account_replies": ["Good. Now wait for the market to answer.", "That is enough for now; new tape matters more than more words."],
-				"options": [
-					{"id": "wait_next", "label": "Wait", "private_action_id": "message_check_in", "public_action_id": "reply_support", "player_lines": ["I will wait for the next session before forcing another read.", "I will watch the follow-through instead of asking for certainty."], "next_node": "read"},
-					{"id": "ask_watch", "label": "Watch item", "private_action_id": "ask_tip", "player_lines": ["What single watch item would keep this clean?", "What should I monitor without treating it as a signal?"], "next_node": "read"},
-					{"id": "source_after", "label": "Verify", "private_action_id": "ask_source_private", "public_action_id": "ask_source_public", "player_lines": ["If a better source appears, I will verify before acting.", "I need cleaner evidence before this becomes conviction."], "next_node": "read"}
-				]
-			}
-		}
-	},
-	"trust_building": {
-		"entry_node": "trust",
-		"nodes": {
-			"trust": {
-				"account_replies": ["You are asking better questions now.", "I will spend more time when the questions stay this clean."],
-				"options": [
-					{"id": "ask_room", "label": "Room", "private_action_id": "accept_invite", "requirements": {"relationship_stage": "trusted"}, "blocked_lines": ["Build more trust first. Rooms open after your questions prove useful.", "Not yet. Earn more trust before asking for an invite."], "player_lines": ["If there is a room worth joining, I will bring a clean question.", "I can join, but I want the room to stay evidence-first."], "next_node": "after"},
-					{"id": "share_work", "label": "Share work", "private_action_id": "share_thesis", "requirements": {"shareable_thesis": true}, "blocked_lines": ["Bring written thesis work first. I cannot judge a blank page.", "Build the thesis first; then I can judge the process."], "player_lines": ["I will share the thesis so you can judge the process.", "I want you to challenge my written work, not just the trade idea."], "next_node": "after"},
-					{"id": "ask_next", "label": "Next", "private_action_id": "ask_tip", "public_action_id": "reply_support", "player_lines": ["What should I bring next time so the conversation is useful?", "What next context would make this worth revisiting?"], "next_node": "after"}
-				]
-			},
-			"after": {
-				"account_replies": ["Bring receipts next time. That is how trust compounds.", "Good. Access is only useful when your process improves."],
-				"options": [
-					{"id": "ack_process", "label": "Process", "private_action_id": "message_check_in", "public_action_id": "reply_support", "player_lines": ["I will bring evidence next time, not just a hunch.", "I will keep the process clean and come back with receipts."], "next_node": "trust"},
-					{"id": "ask_source_again", "label": "Source", "private_action_id": "ask_source_private", "public_action_id": "ask_source_public", "player_lines": ["I will verify the source before I take the next step.", "Point me to what is public; I will do the work from there."], "next_node": "trust"},
-					{"id": "clean_boundary", "label": "Boundary", "private_action_id": "respond_suspicious_request", "player_lines": ["If anything crosses a line, I am out.", "I want access, but not enough to take a dirty request."], "next_node": "trust"}
-				]
-			}
-		}
-	},
-	"suspicious_boundary": {
-		"entry_node": "boundary",
-		"nodes": {
-			"boundary": {
-				"account_replies": ["Some doors are not worth opening.", "A bad ask can ruin a good run."],
-				"options": [
-					{"id": "keep_clean", "label": "Keep clean", "private_action_id": "respond_suspicious_request", "player_lines": ["If the ask is not public, I am out.", "I am keeping this clean. No dirty requests."], "next_node": "safe"},
-					{"id": "ask_public_only", "label": "Public only", "private_action_id": "ask_source_private", "player_lines": ["Give me only what I can verify publicly.", "If there is no public trail, I do not want it."], "next_node": "safe"},
-					{"id": "walk_away", "label": "Walk away", "private_action_id": "message_check_in", "player_lines": ["I would rather miss the move than cross that line.", "I am stepping back until the read is clean."], "next_node": "safe"}
-				]
-			},
-			"safe": {
-				"account_replies": ["Good boundary. Reputation lasts longer than a hot tip.", "That answer keeps you in better rooms later."],
-				"options": [
-					{"id": "ack_boundary", "label": "Acknowledge", "private_action_id": "message_check_in", "player_lines": ["I will keep that line clear.", "I want my process to survive the trade."], "next_node": "boundary"},
-					{"id": "clean_source", "label": "Clean source", "private_action_id": "ask_source_private", "player_lines": ["If there is a clean source, I will check that instead.", "Point me only to public evidence."], "next_node": "boundary"},
-					{"id": "connect_cleanly", "label": "Connect", "private_action_id": "connect", "player_lines": ["I will connect only if we keep this clean.", "Let's stay connected, but with clear boundaries."], "next_node": "boundary"}
-				]
-			}
-		}
-	},
-	"event_invite": {
-		"entry_node": "invite",
-		"nodes": {
-			"invite": {
-				"account_replies": ["There may be a room worth joining, but do not confuse access with truth.", "If you come in, bring one useful question."],
-				"options": [
-					{"id": "accept_clean", "label": "Accept invite", "private_action_id": "accept_invite", "requirements": {"relationship_stage": "trusted"}, "blocked_lines": ["Build more trust first. An invite only makes sense when your process is known.", "Not yet. Keep showing clean work before entering a room."], "player_lines": ["I can join, and I will bring one clean question.", "I will show up prepared and keep the room evidence-first."], "next_node": "after"},
-					{"id": "ask_purpose", "label": "Purpose", "private_action_id": "message_check_in", "player_lines": ["What is the purpose of the room, and what should I prepare?", "I want to know what question would actually help there."], "next_node": "after"},
-					{"id": "share_before", "label": "Share thesis", "private_action_id": "share_thesis", "requirements": {"shareable_thesis": true}, "blocked_lines": ["Build a thesis first so the room has something concrete.", "Write the thesis first; do not show up empty."], "player_lines": ["I will share my thesis first so the room has something concrete.", "Let me bring my thesis instead of showing up empty."], "next_node": "after"}
-				]
-			},
-			"after": {
-				"account_replies": ["Good. Prepared people get invited back.", "That is the right way to treat access: useful, not magical."],
-				"options": [
-					{"id": "confirm_prepare", "label": "Prepare", "private_action_id": "message_check_in", "player_lines": ["I will prepare before I ask for more access.", "I will bring notes, not guesses."], "next_node": "invite"},
-					{"id": "ask_source", "label": "Source", "private_action_id": "ask_source_private", "player_lines": ["What public source should I check before the room?", "What should I verify before I show up?"], "next_node": "invite"},
-					{"id": "clean_boundary", "label": "Boundary", "private_action_id": "respond_suspicious_request", "player_lines": ["If the room turns dirty, I am leaving.", "Access is useful only if it stays clean."], "next_node": "invite"}
+					{"id": "fallback_check_in", "label": "Check in", "private_action_id": "message_check_in", "public_action_id": "reply_support", "player_lines": ["I am keeping this simple and evidence-first.", "I will keep the read clean until the next evidence shows up."], "next_node": "open"},
+					{"id": "fallback_source", "label": "Source", "private_action_id": "ask_source_private", "public_action_id": "ask_source_public", "player_lines": ["What public source should I check before trusting this?", "Point me to the cleanest public evidence first."], "next_node": "open", "outcome": "source_check"},
+					{"id": "fallback_wait", "label": "Wait", "private_action_id": "ask_tip", "public_action_id": "reply_skeptic", "player_lines": ["I will wait for confirmation instead of forcing conviction.", "If the evidence does not improve, I am stepping back."], "next_node": "open", "outcome": "clean_read"}
 				]
 			}
 		}
 	}
 }
+
+var _dialog_option_cap_warning_keys: Dictionary = {}
 
 
 func is_private_action(action_id: String) -> bool:
@@ -443,14 +309,14 @@ func validate_account_action(snapshot: Dictionary, account_id: String, action_id
 	return {"success": true}
 
 
-func apply_post_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, post_id: String, action_id: String, thesis_id: String = "", player_reply_text: String = "") -> Dictionary:
+func apply_post_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, post_id: String, action_id: String, thesis_id: String = "", player_reply_text: String = "", option_id: String = "") -> Dictionary:
 	var post: Dictionary = _post_by_id(snapshot.get("posts", []), post_id)
 	if post.is_empty():
 		return {"success": false, "message": "That Twooter post is no longer visible."}
-	return _apply_interaction(run_state, feed_data, snapshot, post, str(post.get("account_id", "")), action_id, thesis_id, post_id, player_reply_text)
+	return _apply_interaction(run_state, feed_data, snapshot, post, str(post.get("account_id", "")), action_id, thesis_id, post_id, player_reply_text, option_id)
 
 
-func apply_message_action(run_state, feed_data: Dictionary, snapshot: Dictionary, account_id: String, action_id: String, thesis_id: String = "", player_message_text: String = "") -> Dictionary:
+func apply_message_action(run_state, feed_data: Dictionary, snapshot: Dictionary, account_id: String, action_id: String, thesis_id: String = "", player_message_text: String = "", option_id: String = "") -> Dictionary:
 	var account: Dictionary = _account_by_id(snapshot.get("accounts", []), account_id)
 	if account.is_empty():
 		return {"success": false, "message": "That Twooter account is not available."}
@@ -466,7 +332,7 @@ func apply_message_action(run_state, feed_data: Dictionary, snapshot: Dictionary
 		"tone": "mixed",
 		"category": "message"
 	}
-	return _apply_interaction(run_state, feed_data, snapshot, post_stub, account_id, action_id, thesis_id, "", player_message_text)
+	return _apply_interaction(run_state, feed_data, snapshot, post_stub, account_id, action_id, thesis_id, "", player_message_text, option_id)
 
 
 func apply_follow_account(run_state, snapshot: Dictionary, account_id: String) -> Dictionary:
@@ -630,7 +496,7 @@ func normalize_social_state(source_state: Variant, day_index: int = 0) -> Dictio
 	return normalized
 
 
-func _apply_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, post: Dictionary, account_id: String, action_id: String, thesis_id: String, post_id: String, player_reply_text: String = "") -> Dictionary:
+func _apply_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, post: Dictionary, account_id: String, action_id: String, thesis_id: String, post_id: String, player_reply_text: String = "", option_id: String = "") -> Dictionary:
 	var validation: Dictionary = validate_account_action(snapshot, account_id, action_id, thesis_id)
 	if not bool(validation.get("success", false)):
 		return validation
@@ -656,7 +522,8 @@ func _apply_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, 
 		action_id,
 		thesis_id,
 		player_reply_text,
-		run_state.day_index
+		run_state.day_index,
+		option_id
 	)
 	if not str(dialog_selection.get("blocked_reason", "")).is_empty():
 		return {
@@ -680,8 +547,22 @@ func _apply_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, 
 	var relationship_delta: int = int(round(float(action_def.get("relationship_delta", 0)) * gain_multiplier))
 	var exposure_delta: int = int(round(float(action_def.get("exposure_delta", 0)) * gain_multiplier))
 	var credibility_delta: int = int(round(float(action_def.get("credibility_delta", 0)) * gain_multiplier))
-	if action_id == "share_thesis" and not thesis.is_empty() and not soft_cooldown:
-		credibility_delta += _thesis_credibility_bonus(thesis)
+	if action_id == "share_thesis" and not thesis.is_empty() and gain_multiplier > 0.0 and not soft_cooldown:
+		credibility_delta += int(round(float(_thesis_credibility_bonus(thesis)) * gain_multiplier))
+	var dialog_outcome: String = str(dialog_selection.get("outcome", "")).strip_edges()
+	var outcome_effect: Dictionary = _dialog_outcome_effect(dialog_outcome, account, gain_multiplier, thesis)
+	relationship_delta += int(outcome_effect.get("relationship_delta", 0))
+	exposure_delta += int(outcome_effect.get("exposure_delta", 0))
+	credibility_delta += int(outcome_effect.get("credibility_delta", 0))
+	var clean_read_progress: float = float(outcome_effect.get("relationship_progress_delta", 0.0))
+	if clean_read_progress > 0.0:
+		var next_relationship_progress: float = float(account_state.get("like_relationship_progress", 0.0)) + clean_read_progress
+		var progress_relationship_delta: int = int(floor(next_relationship_progress))
+		if progress_relationship_delta > 0:
+			relationship_delta += progress_relationship_delta
+			next_relationship_progress -= float(progress_relationship_delta)
+			outcome_effect["relationship_delta"] = int(outcome_effect.get("relationship_delta", 0)) + progress_relationship_delta
+		account_state["like_relationship_progress"] = float(clamp(next_relationship_progress, 0.0, 0.99))
 	var unfollowed_attention_nudge: bool = false
 	if _is_attention_ask_action(action_id) and not bool(account_state.get("following", false)):
 		account_state["unfollowed_ask_count"] = max(int(account_state.get("unfollowed_ask_count", 0)) + 1, 0)
@@ -703,7 +584,7 @@ func _apply_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, 
 
 	var reply_text: String = ""
 	if soft_cooldown:
-		reply_text = _dialog_cooldown_reply_text(account, dialog_selection, run_state.day_index)
+		reply_text = _dialog_cooldown_reply_text(feed_data, account, dialog_selection, run_state.day_index)
 	elif _should_correct_no_post_reference(account, resolved_player_text):
 		reply_text = _no_post_self_aware_reply_text(account, post, thesis, account_state, dialog_selection, run_state.day_index)
 	elif unfollowed_attention_nudge:
@@ -717,14 +598,14 @@ func _apply_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, 
 	if reply_text.is_empty():
 		reply_text = _reply_text(feed_data, account, post, account_state, action_id, thesis, run_state.day_index, gain_multiplier)
 	if not post_id.is_empty():
-		_record_post_reply(state, post_id, account_id, action_id, player_reply_text, reply_text, run_state.day_index, relationship_delta, exposure_delta, credibility_delta, account_state)
+		_record_post_reply(state, post_id, account_id, action_id, player_reply_text, reply_text, run_state.day_index, relationship_delta, exposure_delta, credibility_delta, account_state, dialog_outcome)
 	if is_private:
 		if resolved_player_text.is_empty():
 			resolved_player_text = _player_message_text(action_id, thesis, post)
 		_record_message_row(state, account, action_id, resolved_player_text, reply_text, run_state.day_index)
-	_record_timeline_row(state, account_id, action_id, reply_text, post_id, run_state.day_index)
+	_record_timeline_row(state, account_id, action_id, reply_text, post_id, run_state.day_index, dialog_outcome, outcome_effect)
 	_record_dialog_branch_progress(state, branch_scope, branch_key, dialog_branch, dialog_selection, next_repeat_count, soft_cooldown, run_state.day_index)
-	var network_result: Dictionary = _apply_network_bridge(run_state, state, account, account_state, post, action_id, thesis, reply_text)
+	var network_result: Dictionary = _apply_network_bridge(run_state, state, account, account_state, post, action_id, thesis, reply_text, dialog_outcome, outcome_effect)
 	run_state.set_twooter_social_state(state)
 	return {
 		"success": true,
@@ -734,6 +615,10 @@ func _apply_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, 
 		"relationship_delta": relationship_delta,
 		"exposure_delta": exposure_delta,
 		"credibility_delta": credibility_delta,
+		"dialog_outcome": dialog_outcome,
+		"outcome_effect": outcome_effect.duplicate(true),
+		"dialog_graduated": bool(dialog_selection.get("graduation_complete", false)),
+		"dialog_next_tree": str(dialog_selection.get("graduation_next_tree", "")),
 		"private": is_private,
 		"player_text": resolved_player_text,
 		"network_changed": bool(network_result.get("network_changed", false)),
@@ -766,10 +651,15 @@ func _dialog_trees(feed_data: Dictionary) -> Dictionary:
 
 
 func _dialog_tree(feed_data: Dictionary, tree_id: String) -> Dictionary:
+	var tree: Dictionary = _dialog_tree_exact(feed_data, tree_id)
+	if tree.is_empty():
+		tree = _dialog_tree_exact(feed_data, FALLBACK_DIALOG_TREE_ID)
+	return tree
+
+
+func _dialog_tree_exact(feed_data: Dictionary, tree_id: String) -> Dictionary:
 	var trees: Dictionary = _dialog_trees(feed_data)
 	var tree: Dictionary = trees.get(tree_id, {}) if typeof(trees.get(tree_id, {})) == TYPE_DICTIONARY else {}
-	if tree.is_empty():
-		tree = trees.get("clean_intro", {}) if typeof(trees.get("clean_intro", {})) == TYPE_DICTIONARY else {}
 	return tree
 
 
@@ -781,21 +671,12 @@ func _dialog_node(tree: Dictionary, node_id: String) -> Dictionary:
 	return nodes.get(resolved_node_id, {}) if typeof(nodes.get(resolved_node_id, {})) == TYPE_DICTIONARY else {}
 
 
+func _dialog_graduation(tree: Dictionary) -> Dictionary:
+	return TWOOTER_DIALOG_ROUTER_SCRIPT.dialog_graduation(tree)
+
+
 func _dialog_branch(state: Dictionary, scope: String, key_id: String, fallback_tree_id: String, feed_data: Dictionary) -> Dictionary:
-	var dialog_state: Dictionary = state.get("dialog_state", {}) if typeof(state.get("dialog_state", {})) == TYPE_DICTIONARY else {}
-	var scope_rows: Dictionary = dialog_state.get(scope, {}) if typeof(dialog_state.get(scope, {})) == TYPE_DICTIONARY else {}
-	var branch: Dictionary = _normalize_dialog_branch(scope_rows.get(key_id, {}))
-	var tree_id: String = str(branch.get("tree_id", ""))
-	if tree_id.is_empty():
-		tree_id = fallback_tree_id
-	var tree: Dictionary = _dialog_tree(feed_data, tree_id)
-	if tree.is_empty():
-		tree_id = "clean_intro"
-		tree = _dialog_tree(feed_data, tree_id)
-	branch["tree_id"] = tree_id
-	if str(branch.get("node_id", "")).is_empty():
-		branch["node_id"] = str(tree.get("entry_node", ""))
-	return branch
+	return TWOOTER_DIALOG_ROUTER_SCRIPT.dialog_branch(state, scope, key_id, fallback_tree_id, feed_data, FALLBACK_DIALOG_TREE_ID, DEFAULT_DIALOG_TREES, PUBLIC_ACTION_IDS, PRIVATE_ACTION_IDS)
 
 
 func _dialog_cooldown_reason(branch: Dictionary, day_index: int) -> String:
@@ -806,64 +687,15 @@ func _dialog_cooldown_reason(branch: Dictionary, day_index: int) -> String:
 
 
 func _select_public_tree_id(feed_data: Dictionary, account: Dictionary, account_state: Dictionary, post: Dictionary) -> String:
-	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
-	var preferred_tree_id: String = _profile_preferred_tree_id(feed_data, profile, false)
-	if not preferred_tree_id.is_empty():
-		return preferred_tree_id
-	var category: String = str(post.get("category", "")).to_lower()
-	if category.contains("source") or category.contains("rumor") or category.contains("corporate"):
-		return "source_check"
-	if int(account_state.get("relationship", 0)) >= 18:
-		return "trust_building"
-	return "market_read"
+	return TWOOTER_DIALOG_ROUTER_SCRIPT.select_public_tree_id(feed_data, account, account_state, post, PUBLIC_ACTION_IDS, PRIVATE_ACTION_IDS)
 
 
 func _select_message_tree_id(feed_data: Dictionary, account: Dictionary, account_state: Dictionary, thread: Dictionary, shareable_theses: Array) -> String:
-	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
-	var is_network_source: bool = bool(profile.get("network_source", false)) or str(profile.get("account_origin", "")) == "network_contact"
-	if is_network_source:
-		var preferred_network_tree_id: String = _profile_preferred_tree_id(feed_data, profile, true)
-		if not preferred_network_tree_id.is_empty():
-			return preferred_network_tree_id
-	if str(profile.get("risk_profile", "")) == "suspicious":
-		return "suspicious_boundary"
-	var stage: String = _relationship_stage(int(account_state.get("relationship", 0)), int(account_state.get("credibility", 0)), int(account_state.get("importance", 0)))
-	if stage in ["trusted", "inner_circle_candidate"]:
-		return "event_invite"
-	if int(account_state.get("relationship", 0)) < 5:
-		return "clean_intro"
-	if int(account_state.get("credibility", 0)) < 12:
-		return "thesis_review"
-	var rows: Array = thread.get("rows", []) if typeof(thread.get("rows", [])) == TYPE_ARRAY else []
-	if rows.size() >= 4 or int(account_state.get("relationship", 0)) >= 18:
-		return "trust_building"
-	if int(account_state.get("credibility", 0)) < 8:
-		return "source_check"
-	var preferred_tree_id: String = _profile_preferred_tree_id(feed_data, profile, true)
-	if not preferred_tree_id.is_empty():
-		return preferred_tree_id
-	return "clean_intro"
-
-
-func _profile_preferred_tree_id(feed_data: Dictionary, profile: Dictionary, is_private: bool) -> String:
-	var trees: Array = profile.get("dialog_trees", []) if typeof(profile.get("dialog_trees", [])) == TYPE_ARRAY else []
-	for tree_value in trees:
-		var tree_id: String = str(tree_value)
-		if _tree_has_surface(feed_data, tree_id, is_private):
-			return tree_id
-	return ""
+	return TWOOTER_DIALOG_ROUTER_SCRIPT.select_message_tree_id(feed_data, account, account_state, thread, shareable_theses, PUBLIC_ACTION_IDS, PRIVATE_ACTION_IDS)
 
 
 func _tree_has_surface(feed_data: Dictionary, tree_id: String, is_private: bool) -> bool:
-	var tree: Dictionary = _dialog_tree(feed_data, tree_id)
-	var nodes: Dictionary = tree.get("nodes", {}) if typeof(tree.get("nodes", {})) == TYPE_DICTIONARY else {}
-	for node_value in nodes.values():
-		if typeof(node_value) != TYPE_DICTIONARY:
-			continue
-		for option_value in node_value.get("options", []):
-			if typeof(option_value) == TYPE_DICTIONARY and not _dialog_option_action_id(option_value, is_private).is_empty():
-				return true
-	return false
+	return TWOOTER_DIALOG_ROUTER_SCRIPT.tree_has_surface(feed_data, tree_id, is_private, PUBLIC_ACTION_IDS, PRIVATE_ACTION_IDS)
 
 
 func _tree_dialog_options(feed_data: Dictionary, account: Dictionary, account_state: Dictionary, post: Dictionary, thesis_rows: Array, branch: Dictionary, is_private: bool, day_index: int, daily_action: Dictionary = {}) -> Array:
@@ -880,12 +712,21 @@ func _tree_dialog_options(feed_data: Dictionary, account: Dictionary, account_st
 		thesis = thesis_rows[0]
 	var rows: Array = []
 	var context: Dictionary = _dialog_context(account, account_state, post, thesis)
+	var usable_option_count: int = 0
 	for option_value in node.get("options", []):
-		if rows.size() >= 3 or typeof(option_value) != TYPE_DICTIONARY:
+		if typeof(option_value) != TYPE_DICTIONARY:
 			continue
 		var option: Dictionary = option_value
 		var action_id: String = _dialog_option_action_id(option, is_private)
 		if action_id.is_empty() or not ACTION_DEFINITIONS.has(action_id):
+			continue
+		usable_option_count += 1
+		if usable_option_count > DIALOG_VISIBLE_OPTION_LIMIT:
+			var surface: String = "private" if is_private else "public"
+			var warning_key: String = "%s|%s|%s" % [tree_id, node_id, surface]
+			if not _dialog_option_cap_warning_keys.has(warning_key):
+				push_warning("Twooter dialog tree '%s' node '%s' has more than %d usable %s options; extra options are hidden." % [tree_id, node_id, DIALOG_VISIBLE_OPTION_LIMIT, surface])
+				_dialog_option_cap_warning_keys[warning_key] = true
 			continue
 		var player_lines: Array = option.get("player_lines", []) if typeof(option.get("player_lines", [])) == TYPE_ARRAY else []
 		var block_reason: String = _dialog_option_block_reason(option, action_id, account_state, thesis, is_private, daily_action)
@@ -932,11 +773,11 @@ func _dialog_option_block_reason(option: Dictionary, action_id: String, account_
 	return ""
 
 
-func _dialog_option_blocked_text(option: Dictionary, action_id: String, block_reason: String, context: Dictionary, seed: String) -> String:
+func _dialog_option_blocked_text(option: Dictionary, action_id: String, block_reason: String, context: Dictionary, seed_key: String) -> String:
 	var blocked_lines: Array = option.get("blocked_lines", []) if typeof(option.get("blocked_lines", [])) == TYPE_ARRAY else []
 	if blocked_lines.is_empty():
 		blocked_lines = _default_dialog_blocked_lines(action_id, block_reason)
-	return _render_dialog_pool(blocked_lines, context, seed)
+	return _render_dialog_pool(blocked_lines, context, seed_key)
 
 
 func _default_dialog_blocked_lines(action_id: String, block_reason: String) -> Array:
@@ -999,36 +840,55 @@ func _dialog_option_action_id(option: Dictionary, is_private: bool) -> String:
 	return action_id
 
 
-func _resolve_dialog_selection(feed_data: Dictionary, account: Dictionary, account_state: Dictionary, post: Dictionary, thesis_rows: Array, branch: Dictionary, is_private: bool, action_id: String, thesis_id: String, player_text: String, day_index: int) -> Dictionary:
+func _resolve_dialog_selection(feed_data: Dictionary, account: Dictionary, account_state: Dictionary, post: Dictionary, thesis_rows: Array, branch: Dictionary, is_private: bool, action_id: String, thesis_id: String, player_text: String, day_index: int, option_id: String = "") -> Dictionary:
 	var cooldown_reason: String = _dialog_cooldown_reason(branch, day_index)
 	if not cooldown_reason.is_empty():
 		return {
 			"found": false,
 			"blocked_reason": cooldown_reason,
-			"message": _dialog_cooldown_reply_text(account, {"option_id": action_id}, day_index),
-			"option_id": action_id,
+			"message": _dialog_cooldown_reply_text(feed_data, account, {"option_id": option_id if not option_id.is_empty() else action_id}, day_index),
+			"option_id": option_id if not option_id.is_empty() else action_id,
 			"next_node": "",
 			"account_replies": []
 		}
 	var rows: Array = _tree_dialog_options(feed_data, account, account_state, post, thesis_rows, branch, is_private, day_index)
 	var selected_row: Dictionary = {}
 	var blocked_row: Dictionary = {}
-	for row_value in rows:
-		if typeof(row_value) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = row_value
-		if str(row.get("action_id", row.get("id", ""))) != action_id:
-			continue
-		if not bool(row.get("enabled", true)):
-			blocked_row = row
-			continue
-		if not thesis_id.is_empty() and str(row.get("thesis_id", "")) != thesis_id:
-			continue
-		if not player_text.strip_edges().is_empty() and str(row.get("player_text", "")) != player_text.strip_edges():
-			continue
-		selected_row = row
-		break
-	if selected_row.is_empty():
+	var requested_option_id: String = option_id.strip_edges()
+	if not requested_option_id.is_empty():
+		# UI-driven calls use option_id to avoid first-enabled-wins when node options share one action_id.
+		for row_value in rows:
+			if typeof(row_value) != TYPE_DICTIONARY:
+				continue
+			var row: Dictionary = row_value
+			if str(row.get("option_id", "")) != requested_option_id:
+				continue
+			if str(row.get("action_id", row.get("id", ""))) != action_id:
+				continue
+			if not bool(row.get("enabled", true)):
+				blocked_row = row
+				break
+			if not thesis_id.is_empty() and str(row.get("thesis_id", "")) != thesis_id:
+				continue
+			selected_row = row
+			break
+	else:
+		for row_value in rows:
+			if typeof(row_value) != TYPE_DICTIONARY:
+				continue
+			var row: Dictionary = row_value
+			if str(row.get("action_id", row.get("id", ""))) != action_id:
+				continue
+			if not bool(row.get("enabled", true)):
+				blocked_row = row
+				continue
+			if not thesis_id.is_empty() and str(row.get("thesis_id", "")) != thesis_id:
+				continue
+			if not player_text.strip_edges().is_empty() and str(row.get("player_text", "")) != player_text.strip_edges():
+				continue
+			selected_row = row
+			break
+	if selected_row.is_empty() and requested_option_id.is_empty():
 		for row_value in rows:
 			if typeof(row_value) == TYPE_DICTIONARY and bool(row_value.get("enabled", true)) and str(row_value.get("action_id", row_value.get("id", ""))) == action_id:
 				selected_row = row_value
@@ -1044,17 +904,30 @@ func _resolve_dialog_selection(feed_data: Dictionary, account: Dictionary, accou
 			"row": blocked_row
 		}
 	if selected_row.is_empty():
-		return {"found": false, "option_id": action_id, "next_node": "", "account_replies": []}
+		return {"found": false, "option_id": requested_option_id if not requested_option_id.is_empty() else action_id, "next_node": "", "account_replies": []}
 	var tree: Dictionary = _dialog_tree(feed_data, str(selected_row.get("tree_id", "")))
 	var node: Dictionary = _dialog_node(tree, str(selected_row.get("node_id", "")))
 	var raw_option: Dictionary = _raw_dialog_option(node, str(selected_row.get("option_id", "")))
+	var option_replies: Array = raw_option.get("account_replies", []) if typeof(raw_option.get("account_replies", [])) == TYPE_ARRAY else []
+	var node_replies: Array = node.get("account_replies", []) if typeof(node.get("account_replies", [])) == TYPE_ARRAY else []
+	var account_replies: Array = option_replies if not option_replies.is_empty() else node_replies
+	var graduation: Dictionary = _dialog_graduation(tree)
+	var graduation_next_tree: String = ""
+	var graduation_next_node: String = ""
+	if not graduation.is_empty() and str(selected_row.get("node_id", "")) == str(graduation.get("node", "")):
+		graduation_next_tree = str(graduation.get("next_tree", ""))
+		var next_tree: Dictionary = _dialog_tree(feed_data, graduation_next_tree)
+		graduation_next_node = str(next_tree.get("entry_node", ""))
 	return {
 		"found": true,
 		"tree_id": str(selected_row.get("tree_id", "")),
 		"node_id": str(selected_row.get("node_id", "")),
 		"option_id": str(selected_row.get("option_id", "")),
 		"next_node": str(raw_option.get("next_node", selected_row.get("node_id", ""))),
-		"account_replies": node.get("account_replies", []) if typeof(node.get("account_replies", [])) == TYPE_ARRAY else [],
+		"graduation_next_tree": graduation_next_tree,
+		"graduation_next_node": graduation_next_node,
+		"graduation_complete": not graduation_next_tree.is_empty(),
+		"account_replies": account_replies,
 		"outcome": str(raw_option.get("outcome", "")),
 		"row": selected_row
 	}
@@ -1084,7 +957,7 @@ func _dialog_reply_text(feed_data: Dictionary, account: Dictionary, post: Dictio
 	var pool: Array = selection.get("account_replies", []) if typeof(selection.get("account_replies", [])) == TYPE_ARRAY else []
 	pool = _relationship_dialog_reply_pool(pool, account, account_state, feed_data)
 	var context: Dictionary = _dialog_context(account, account_state, post, thesis)
-	var seed: String = "%s|%s|%s|%s|%d|%d" % [
+	var seed_key: String = "%s|%s|%s|%s|%d|%d" % [
 		str(account.get("id", "")),
 		str(selection.get("tree_id", "")),
 		str(selection.get("node_id", "")),
@@ -1092,7 +965,7 @@ func _dialog_reply_text(feed_data: Dictionary, account: Dictionary, post: Dictio
 		day_index,
 		int(account_state.get("interaction_count", 0))
 	]
-	return _render_dialog_pool(pool, context, seed)
+	return _render_dialog_pool(pool, context, seed_key)
 
 
 func _relationship_dialog_reply_pool(base_pool: Array, account: Dictionary, account_state: Dictionary, feed_data: Dictionary = {}) -> Array:
@@ -1101,14 +974,14 @@ func _relationship_dialog_reply_pool(base_pool: Array, account: Dictionary, acco
 	var stage: String = _relationship_stage(relationship, int(account_state.get("credibility", 0)), int(account_state.get("importance", 0)))
 	var tuned_pool: Array = base_pool.duplicate()
 	if bool(profile.get("network_source", false)) or str(profile.get("account_origin", "")) == "network_contact":
-		if relationship >= 8:
+		if relationship >= DIALOG_FAMILIAR_REPLY_RELATIONSHIP:
 			tuned_pool.append_array(_stage_reply_pool(feed_data, "network_source_reply_pools", "familiar", NETWORK_SOURCE_DIALOG_REPLY_POOLS))
 		if stage in ["trusted", "inner_circle_candidate"]:
 			tuned_pool.append_array(_stage_reply_pool(feed_data, "network_source_reply_pools", "trusted", NETWORK_SOURCE_DIALOG_REPLY_POOLS))
 		if stage == "inner_circle_candidate":
 			tuned_pool.append_array(_stage_reply_pool(feed_data, "network_source_reply_pools", "inner_circle_candidate", NETWORK_SOURCE_DIALOG_REPLY_POOLS))
 		return tuned_pool
-	if relationship >= 8:
+	if relationship >= DIALOG_FAMILIAR_REPLY_RELATIONSHIP:
 		tuned_pool.append_array(_stage_reply_pool(feed_data, "relationship_reply_pools", "familiar", RELATIONSHIP_DIALOG_REPLY_POOLS))
 	if stage in ["trusted", "inner_circle_candidate"]:
 		tuned_pool.append_array(_stage_reply_pool(feed_data, "relationship_reply_pools", "trusted", RELATIONSHIP_DIALOG_REPLY_POOLS))
@@ -1132,22 +1005,21 @@ func _is_attention_ask_action(action_id: String) -> bool:
 
 func _unfollowed_ask_reply_text(account: Dictionary, post: Dictionary, thesis: Dictionary, account_state: Dictionary, selection: Dictionary, day_index: int) -> String:
 	var context: Dictionary = _dialog_context(account, account_state, post, thesis)
-	var seed: String = "%s|%s|%s|unfollowed|%d|%d" % [
+	var seed_key: String = "%s|%s|%s|unfollowed|%d|%d" % [
 		str(account.get("id", "")),
 		str(selection.get("tree_id", "")),
 		str(selection.get("option_id", "")),
 		day_index,
 		int(account_state.get("unfollowed_ask_count", 0))
 	]
-	return _render_dialog_pool(UNFOLLOWED_ASK_REPLY_POOL, context, seed)
+	return _render_dialog_pool(UNFOLLOWED_ASK_REPLY_POOL, context, seed_key)
 
 
-func _dialog_cooldown_reply_text(account: Dictionary, selection: Dictionary, day_index: int) -> String:
-	var pool: Array = [
-		"We are circling the same point. Wait for new tape or bring a sharper thesis.",
-		"You asked this angle already. Pause for now and come back with evidence.",
-		"Same question, same answer. Bring a source, a thesis, or fresh market context next time."
-	]
+func _dialog_cooldown_reply_text(feed_data: Dictionary, account: Dictionary, selection: Dictionary, day_index: int) -> String:
+	var pool: Array = []
+	pool.append_array(SOFT_COOLDOWN_REPLY_POOL)
+	var data_pool: Array = feed_data.get("soft_cooldown_reply_pool", []) if typeof(feed_data.get("soft_cooldown_reply_pool", [])) == TYPE_ARRAY else []
+	pool.append_array(_clean_string_pool(data_pool))
 	var context: Dictionary = {"account_name": str(account.get("display_name", "Account"))}
 	return _render_dialog_pool(pool, context, "%s|%s|%d" % [str(account.get("id", "")), str(selection.get("option_id", "")), day_index])
 
@@ -1181,11 +1053,18 @@ func _record_dialog_branch_progress(state: Dictionary, scope: String, key_id: St
 	next_branch["tree_id"] = str(selection.get("tree_id", next_branch.get("tree_id", "")))
 	next_branch["node_id"] = str(selection.get("next_node", next_branch.get("node_id", "")))
 	next_branch["last_option_id"] = str(selection.get("option_id", ""))
+	next_branch["last_outcome"] = str(selection.get("outcome", ""))
 	var selected_row: Dictionary = selection.get("row", {}) if typeof(selection.get("row", {})) == TYPE_DICTIONARY else {}
 	next_branch["last_action_id"] = str(selected_row.get("action_id", ""))
 	next_branch["repeat_count"] = repeat_count
 	next_branch["last_day_index"] = day_index
 	next_branch["step_count"] = int(next_branch.get("step_count", 0)) + 1
+	var graduation_next_tree: String = str(selection.get("graduation_next_tree", "")).strip_edges()
+	if bool(selection.get("graduation_complete", false)) and not graduation_next_tree.is_empty():
+		next_branch["tree_id"] = graduation_next_tree
+		next_branch["node_id"] = str(selection.get("graduation_next_node", "")).strip_edges()
+		next_branch["repeat_count"] = 0
+		next_branch["step_count"] = 0
 	if soft_cooldown:
 		next_branch["cooldown_until_day"] = day_index
 		next_branch["cooldown_reason"] = "soft_cooldown"
@@ -1197,9 +1076,33 @@ func _record_dialog_branch_progress(state: Dictionary, scope: String, key_id: St
 	state["dialog_state"] = dialog_state
 
 
+func _dialog_outcome_effect(outcome: String, account: Dictionary, gain_multiplier: float, thesis: Dictionary = {}) -> Dictionary:
+	return TWOOTER_OUTCOME_RESOLVER_SCRIPT.outcome_effect(outcome, account, gain_multiplier, thesis)
+
+
+func _dialog_outcome_label(outcome: String) -> String:
+	return TWOOTER_OUTCOME_RESOLVER_SCRIPT.outcome_label(outcome)
+
+
+func _dialog_outcome_timeline_note(outcome: String, outcome_effect: Dictionary) -> String:
+	return TWOOTER_OUTCOME_RESOLVER_SCRIPT.outcome_timeline_note(outcome, outcome_effect)
+
+
+func _timeline_text_with_dialog_outcome(text: String, outcome: String, outcome_effect: Dictionary) -> String:
+	return TWOOTER_OUTCOME_RESOLVER_SCRIPT.timeline_text_with_dialog_outcome(text, outcome, outcome_effect)
+
+
+func _network_dialog_confidence_label(action_id: String, outcome: String, outcome_effect: Dictionary) -> String:
+	return TWOOTER_OUTCOME_RESOLVER_SCRIPT.network_dialog_confidence_label(action_id, outcome, outcome_effect)
+
+
+func _is_network_source_account(account: Dictionary) -> bool:
+	return TWOOTER_OUTCOME_RESOLVER_SCRIPT.is_network_source_account(account)
+
+
 func _dialog_context(account: Dictionary, account_state: Dictionary, post: Dictionary, thesis: Dictionary) -> Dictionary:
 	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
-	var is_network_source: bool = bool(profile.get("network_source", false)) or str(profile.get("account_origin", "")) == "network_contact"
+	var is_network_source: bool = _is_network_source_account(account)
 	var ticker: String = str(post.get("target_ticker", "")).strip_edges().to_upper()
 	if ticker.is_empty():
 		ticker = str(thesis.get("ticker", "")).strip_edges().to_upper()
@@ -1227,14 +1130,14 @@ func _dialog_context(account: Dictionary, account_state: Dictionary, post: Dicti
 	}
 
 
-func _render_dialog_pool(pool: Array, context: Dictionary, seed: String) -> String:
+func _render_dialog_pool(pool: Array, context: Dictionary, seed_key: String) -> String:
 	var clean_pool: Array = _clean_string_pool(pool)
 	if clean_pool.is_empty():
 		return "I want to keep this clean and evidence-first."
-	return _render_template(str(clean_pool[int(abs(hash(seed))) % clean_pool.size()]), context)
+	return _render_template(str(clean_pool[int(abs(hash(seed_key))) % clean_pool.size()]), context)
 
 
-func _self_aware_player_text(account: Dictionary, player_text: String, seed: String) -> String:
+func _self_aware_player_text(account: Dictionary, player_text: String, seed_key: String) -> String:
 	if not _should_correct_no_post_reference(account, player_text):
 		return player_text
 	var pool: Array = [
@@ -1242,7 +1145,7 @@ func _self_aware_player_text(account: Dictionary, player_text: String, seed: Str
 		"You do not have public posts here yet, so I want to ask about the lead directly and keep it evidence-first.",
 		"I have not seen public posts from you here. Can we start with what can actually be verified?"
 	]
-	return _render_dialog_pool(pool, _dialog_context(account, {}, {}, {}), seed)
+	return _render_dialog_pool(pool, _dialog_context(account, {}, {}, {}), seed_key)
 
 
 func _should_correct_no_post_reference(account: Dictionary, text: String) -> bool:
@@ -1385,7 +1288,7 @@ func _liked_post_memory_text(post: Dictionary) -> String:
 	return "Liked a Twooter post."
 
 
-func _record_post_reply(state: Dictionary, post_id: String, account_id: String, action_id: String, player_text: String, reply_text: String, day_index: int, relationship_delta: int, exposure_delta: int, credibility_delta: int, account_state: Dictionary) -> void:
+func _record_post_reply(state: Dictionary, post_id: String, account_id: String, action_id: String, player_text: String, reply_text: String, day_index: int, relationship_delta: int, exposure_delta: int, credibility_delta: int, account_state: Dictionary, dialog_outcome: String = "") -> void:
 	var post_interactions: Dictionary = state.get("post_interactions", {})
 	var interaction: Dictionary = _normalize_post_interaction(post_interactions.get(post_id, {}))
 	var replies: Array = interaction.get("replies", [])
@@ -1397,7 +1300,8 @@ func _record_post_reply(state: Dictionary, post_id: String, account_id: String, 
 		"day_index": day_index,
 		"relationship_delta": relationship_delta,
 		"exposure_delta": exposure_delta,
-		"credibility_delta": credibility_delta
+		"credibility_delta": credibility_delta,
+		"dialog_outcome": dialog_outcome
 	})
 	if replies.size() > MAX_PUBLIC_REPLY_ROWS_PER_POST:
 		replies = replies.slice(replies.size() - MAX_PUBLIC_REPLY_ROWS_PER_POST, replies.size())
@@ -1456,15 +1360,16 @@ func _public_conversation_conclusion(conversation_step: int, account_state: Dict
 	return {"concluded": false, "reason": "", "followup_unlocked": false}
 
 
-func _record_timeline_row(state: Dictionary, account_id: String, action_id: String, text: String, post_id: String, day_index: int) -> void:
+func _record_timeline_row(state: Dictionary, account_id: String, action_id: String, text: String, post_id: String, day_index: int, dialog_outcome: String = "", outcome_effect: Dictionary = {}) -> void:
 	var account_states: Dictionary = state.get("account_states", {})
 	var account_state: Dictionary = _account_state(account_states, account_id)
 	var timeline: Array = account_state.get("timeline", [])
 	timeline.append({
 		"day_index": day_index,
 		"action_id": action_id,
-		"text": text,
-		"post_id": post_id
+		"text": _timeline_text_with_dialog_outcome(text, dialog_outcome, outcome_effect),
+		"post_id": post_id,
+		"dialog_outcome": dialog_outcome
 	})
 	if timeline.size() > MAX_TIMELINE_ROWS_PER_ACCOUNT:
 		timeline = timeline.slice(timeline.size() - MAX_TIMELINE_ROWS_PER_ACCOUNT, timeline.size())
@@ -1473,7 +1378,7 @@ func _record_timeline_row(state: Dictionary, account_id: String, action_id: Stri
 	state["account_states"] = account_states
 
 
-func _apply_network_bridge(run_state, state: Dictionary, account: Dictionary, account_state: Dictionary, post: Dictionary, action_id: String, thesis: Dictionary, reply_text: String) -> Dictionary:
+func _apply_network_bridge(run_state, state: Dictionary, account: Dictionary, account_state: Dictionary, post: Dictionary, action_id: String, thesis: Dictionary, reply_text: String, dialog_outcome: String = "", outcome_effect: Dictionary = {}) -> Dictionary:
 	var network_changed: bool = false
 	var contact_id: String = _social_contact_id(account)
 	if action_id == "connect" and bool(run_state.get_network_contacts().get(contact_id, {}).get("met", false)):
@@ -1505,23 +1410,28 @@ func _apply_network_bridge(run_state, state: Dictionary, account: Dictionary, ac
 		discovery["twooter_account_id"] = str(account.get("id", ""))
 		discovery["twooter_handle"] = str(account.get("handle", ""))
 		discovery["twooter_action_id"] = action_id
+		discovery["dialog_outcome"] = dialog_outcome
+		discovery["dialog_outcome_label"] = _dialog_outcome_label(dialog_outcome)
 		discovery["source_only"] = bool(provenance.get("source_only", false))
 		discovery["target_company_id"] = str(post.get("target_company_id", post.get("company_id", "")))
 		discovery["target_ticker"] = str(post.get("target_ticker", ""))
 		discovery["target_sector_id"] = str(account.get("social_profile", {}).get("sector_id", ""))
 		var base_lead_score: int = 58 if discover_source_only else 70
-		discovery["lead_score"] = max(int(discovery.get("lead_score", 0)), base_lead_score + int(account_state.get("credibility", 0)) / 3)
+		discovery["lead_score"] = max(
+			int(discovery.get("lead_score", 0)),
+			base_lead_score + int(account_state.get("credibility", 0)) / 3 + int(outcome_effect.get("network_source_quality_delta", 0))
+		)
 		discovery["day_index"] = run_state.day_index
 		discoveries[contact_id] = discovery
 		run_state.set_network_discoveries(discoveries)
 		network_changed = true
 	if promote_to_met or discover_source_only:
-		_record_network_journal(run_state, account, contact_id, post, action_id, thesis, reply_text)
+		_record_network_journal(run_state, account, contact_id, post, action_id, thesis, reply_text, dialog_outcome, outcome_effect)
 		network_changed = true
 	return {"network_changed": network_changed, "contact_id": contact_id}
 
 
-func _record_network_journal(run_state, account: Dictionary, contact_id: String, post: Dictionary, action_id: String, thesis: Dictionary, reply_text: String) -> void:
+func _record_network_journal(run_state, account: Dictionary, contact_id: String, post: Dictionary, action_id: String, thesis: Dictionary, reply_text: String, dialog_outcome: String = "", outcome_effect: Dictionary = {}) -> void:
 	var journal: Dictionary = run_state.get_network_tip_journal()
 	var journal_id: String = "twooter|%s|%s|%d|%d" % [
 		contact_id,
@@ -1546,8 +1456,17 @@ func _record_network_journal(run_state, account: Dictionary, contact_id: String,
 		"target_company_id": str(thesis.get("company_id", post.get("target_company_id", ""))),
 		"target_ticker": ticker,
 		"truth_label": _network_action_label(action_id),
-		"confidence_label": "social",
+		"confidence_label": _network_dialog_confidence_label(action_id, dialog_outcome, outcome_effect),
 		"tip_read": reply_text,
+		"dialog_outcome": dialog_outcome,
+		"dialog_outcome_label": _dialog_outcome_label(dialog_outcome),
+		"dialog_outcome_note": _dialog_outcome_timeline_note(dialog_outcome, outcome_effect),
+		"dialog_outcome_quality_delta": int(outcome_effect.get("network_source_quality_delta", 0)),
+		"dialog_outcome_relationship_delta": int(outcome_effect.get("relationship_delta", 0)),
+		"dialog_outcome_credibility_delta": int(outcome_effect.get("credibility_delta", 0)),
+		"dialog_outcome_contact_discovery_delta": int(outcome_effect.get("contact_discovery_delta", 0)),
+		"dialog_outcome_event_invite_unlocked": bool(outcome_effect.get("event_invite_unlocked", false)),
+		"dialog_outcome_thesis_response_recorded": bool(outcome_effect.get("thesis_response_recorded", false)),
 		"twooter_action_id": action_id,
 		"twooter_account_id": str(account.get("id", "")),
 		"twooter_handle": str(account.get("handle", "")),
@@ -1615,14 +1534,14 @@ func _ensure_social_contact_definition(state: Dictionary, account: Dictionary, p
 func _reply_text(feed_data: Dictionary, account: Dictionary, post: Dictionary, account_state: Dictionary, action_id: String, thesis: Dictionary, day_index: int, gain_multiplier: float) -> String:
 	var context: Dictionary = _dialog_context(account, account_state, post, thesis)
 	var pool: Array = _response_pool(feed_data, account, action_id, str(account_state.get("relationship_stage", "stranger")))
-	var seed: String = "%s|%s|%s|%d|%d" % [
+	var seed_key: String = "%s|%s|%s|%d|%d" % [
 		str(account.get("id", "")),
 		str(post.get("id", "")),
 		action_id,
 		day_index,
 		int(account_state.get("interaction_count", 0))
 	]
-	var template: String = str(pool[int(abs(hash(seed))) % pool.size()])
+	var template: String = str(pool[int(abs(hash(seed_key))) % pool.size()])
 	var rendered: String = _render_template(template, context)
 	if gain_multiplier <= 0.0:
 		rendered += " They have already heard from you today, so this lands more as presence than progress."
@@ -1737,14 +1656,14 @@ func _player_public_reply_text(account: Dictionary, post: Dictionary, action_id:
 	var pool: Array = pools.get(action_id, []) if typeof(pools.get(action_id, [])) == TYPE_ARRAY else []
 	if pool.is_empty():
 		return "I want to reply to this thread with a cleaner market read."
-	var seed: String = "%s|%s|%s|%d|%d" % [
+	var seed_key: String = "%s|%s|%s|%d|%d" % [
 		str(account.get("id", "")),
 		str(post.get("id", "")),
 		action_id,
 		conversation_step,
 		day_index
 	]
-	return _render_template(str(pool[int(abs(hash(seed))) % pool.size()]), context)
+	return _render_template(str(pool[int(abs(hash(seed_key))) % pool.size()]), context)
 
 
 func _public_topic_text(post: Dictionary) -> String:
@@ -1865,14 +1784,14 @@ func _player_private_message_text(account: Dictionary, action_id: String, thesis
 	var pool: Array = pools.get(action_id, []) if typeof(pools.get(action_id, [])) == TYPE_ARRAY else []
 	if pool.is_empty():
 		return _player_message_text(action_id, thesis, {})
-	var seed: String = "%s|%s|%s|%d|%d" % [
+	var seed_key: String = "%s|%s|%s|%d|%d" % [
 		str(account.get("id", "")),
 		action_id,
 		str(thesis.get("id", "")),
 		thread_count,
 		day_index
 	]
-	return _render_template(str(pool[int(abs(hash(seed))) % pool.size()]), context)
+	return _render_template(str(pool[int(abs(hash(seed_key))) % pool.size()]), context)
 
 
 func _player_message_text(action_id: String, thesis: Dictionary, post: Dictionary) -> String:
@@ -1900,13 +1819,7 @@ func _player_message_text(action_id: String, thesis: Dictionary, post: Dictionar
 
 
 func _relationship_stage(relationship: int, credibility: int, importance: int) -> String:
-	if relationship >= 70 and credibility >= 45 and importance >= 55:
-		return "inner_circle_candidate"
-	if relationship >= 45:
-		return "trusted"
-	if relationship >= 18:
-		return "familiar"
-	return "stranger"
+	return TWOOTER_DIALOG_ROUTER_SCRIPT.relationship_stage(relationship, credibility, importance)
 
 
 func _importance_score(account_state: Dictionary) -> int:
@@ -2124,7 +2037,8 @@ func _normalize_account_state(source: Variant) -> Dictionary:
 			"day_index": int(timeline_row.get("day_index", 0)),
 			"action_id": str(timeline_row.get("action_id", "")),
 			"text": str(timeline_row.get("text", "")),
-			"post_id": str(timeline_row.get("post_id", ""))
+			"post_id": str(timeline_row.get("post_id", "")),
+			"dialog_outcome": str(timeline_row.get("dialog_outcome", ""))
 		})
 	if normalized["timeline"].size() > MAX_TIMELINE_ROWS_PER_ACCOUNT:
 		normalized["timeline"] = normalized["timeline"].slice(normalized["timeline"].size() - MAX_TIMELINE_ROWS_PER_ACCOUNT, normalized["timeline"].size())
@@ -2146,7 +2060,8 @@ func _normalize_post_interaction(source: Variant) -> Dictionary:
 			"day_index": int(reply.get("day_index", 0)),
 			"relationship_delta": int(reply.get("relationship_delta", 0)),
 			"exposure_delta": int(reply.get("exposure_delta", 0)),
-			"credibility_delta": int(reply.get("credibility_delta", 0))
+			"credibility_delta": int(reply.get("credibility_delta", 0)),
+			"dialog_outcome": str(reply.get("dialog_outcome", ""))
 		})
 	if replies.size() > MAX_PUBLIC_REPLY_ROWS_PER_POST:
 		replies = replies.slice(replies.size() - MAX_PUBLIC_REPLY_ROWS_PER_POST, replies.size())
@@ -2196,18 +2111,7 @@ func _normalize_message_thread(source: Variant) -> Dictionary:
 
 
 func _normalize_dialog_branch(source: Variant) -> Dictionary:
-	var row: Dictionary = source if typeof(source) == TYPE_DICTIONARY else {}
-	return {
-		"tree_id": str(row.get("tree_id", "")),
-		"node_id": str(row.get("node_id", "")),
-		"last_option_id": str(row.get("last_option_id", "")),
-		"last_action_id": str(row.get("last_action_id", "")),
-		"repeat_count": max(int(row.get("repeat_count", 0)), 0),
-		"last_day_index": int(row.get("last_day_index", -1)),
-		"cooldown_until_day": int(row.get("cooldown_until_day", -1)),
-		"cooldown_reason": str(row.get("cooldown_reason", "")),
-		"step_count": max(int(row.get("step_count", 0)), 0)
-	}
+	return TWOOTER_DIALOG_ROUTER_SCRIPT.normalize_dialog_branch(source)
 
 
 func _clean_string_pool(pool: Array) -> Array:

@@ -3078,13 +3078,22 @@ func _network_twooter_journal_row(tip: Dictionary) -> Dictionary:
 	var day_index: int = int(tip.get("created_day_index", 0))
 	var ticker: String = str(tip.get("target_ticker", ""))
 	var action_label: String = str(tip.get("truth_label", "Twooter"))
+	var outcome_label: String = str(tip.get("dialog_outcome_label", "")).strip_edges()
+	if not outcome_label.is_empty():
+		action_label = outcome_label
 	var source_label: String = str(tip.get("source_label", "Twooter")).strip_edges()
 	var source_note: String = str(tip.get("source_note", "")).strip_edges()
 	var detail: String = str(tip.get("tip_read", ""))
+	var outcome_note: String = str(tip.get("dialog_outcome_note", "")).strip_edges()
+	var confidence_label: String = str(tip.get("confidence_label", "")).strip_edges()
 	if not source_note.is_empty():
 		detail = "%s %s" % [source_note, detail]
 	elif not source_label.is_empty():
 		detail = "%s. %s" % [source_label, detail]
+	if not outcome_note.is_empty():
+		detail = "%s %s" % [detail.strip_edges(), outcome_note]
+	if not confidence_label.is_empty() and confidence_label != "social":
+		detail = "%s (%s)" % [detail.strip_edges(), confidence_label]
 	return {
 		"id": "%s:twooter" % str(tip.get("id", "")),
 		"type": "twooter",

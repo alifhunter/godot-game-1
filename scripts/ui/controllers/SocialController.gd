@@ -91,6 +91,7 @@ var social_message_send_button: Button = null
 var social_message_typing_tween: Tween = null
 var pending_social_message_account_id: String = ""
 var pending_social_message_action_id: String = ""
+var pending_social_message_option_id: String = ""
 var pending_social_message_thesis_id: String = ""
 var pending_social_message_text: String = ""
 var social_reply_dialog: Control = null
@@ -102,6 +103,7 @@ var social_reply_cancel_button: Button = null
 var social_reply_typing_tween: Tween = null
 var pending_social_reply_post_id: String = ""
 var pending_social_reply_action_id: String = ""
+var pending_social_reply_option_id: String = ""
 var pending_social_reply_text: String = ""
 var news_meet_contact_button: Button = null
 
@@ -112,18 +114,37 @@ func setup(root) -> void:
 		var capture_payloads = _root.get("pending_capture_payloads")
 		if typeof(capture_payloads) == TYPE_DICTIONARY:
 			pending_capture_payloads = capture_payloads
+	_sync_selection_state_from_root()
 	_sync_dynamic_refs_from_root()
 	_sync_root_refs()
 
 
 func refresh() -> void:
 	_sync_dynamic_refs_from_root()
+	_sync_selection_state_from_root()
 	_refresh_social()
 
 
 func ensure_ui() -> void:
 	_sync_dynamic_refs_from_root()
 	_ensure_social_feed_ui()
+
+
+func _sync_selection_state_from_root() -> void:
+	if _root == null:
+		return
+	var root_selected_account = _root.get("selected_social_account_id")
+	if typeof(root_selected_account) == TYPE_STRING:
+		selected_social_account_id = str(root_selected_account)
+	var root_selected_filter = _root.get("selected_social_feed_filter_id")
+	if typeof(root_selected_filter) == TYPE_STRING:
+		selected_social_feed_filter_id = str(root_selected_filter)
+	var root_selected_view = _root.get("selected_social_view_id")
+	if typeof(root_selected_view) == TYPE_STRING:
+		selected_social_view_id = str(root_selected_view)
+	var root_selected_message_account = _root.get("selected_social_message_account_id")
+	if typeof(root_selected_message_account) == TYPE_STRING:
+		selected_social_message_account_id = str(root_selected_message_account)
 
 
 func open_account_from_news(account_id: String, contact_id: String = "") -> void:
@@ -347,6 +368,7 @@ func _on_social_nav_pressed(view_id: String) -> void:
 	selected_social_view_id = view_id
 	if view_id == "message" and _should_clear_social_message_selection_on_nav():
 		selected_social_message_account_id = ""
+	_sync_root_refs()
 	_refresh_social()
 
 
@@ -689,6 +711,7 @@ func _reset_social_message_composer(show_composer: bool) -> void:
 		social_message_typing_tween = null
 	pending_social_message_account_id = ""
 	pending_social_message_action_id = ""
+	pending_social_message_option_id = ""
 	pending_social_message_thesis_id = ""
 	pending_social_message_text = ""
 	if social_message_composer != null:
@@ -725,6 +748,7 @@ func _on_social_message_option_selected(option_index: int) -> void:
 		return
 	var button: Button = social_message_option_buttons[option_index]
 	pending_social_message_action_id = str(button.get_meta("action_id", ""))
+	pending_social_message_option_id = str(button.get_meta("option_id", ""))
 	pending_social_message_thesis_id = str(button.get_meta("thesis_id", ""))
 	pending_social_message_text = str(button.get_meta("player_text", ""))
 	if pending_social_message_account_id.is_empty():
@@ -779,10 +803,11 @@ func _send_social_message_composer() -> void:
 			social_message_composer_text_label.visible_characters = social_message_composer_text_label.text.length()
 	var account_id: String = pending_social_message_account_id
 	var action_id: String = pending_social_message_action_id
+	var option_id: String = pending_social_message_option_id
 	var thesis_id: String = pending_social_message_thesis_id
 	var player_text: String = pending_social_message_text
 	_reset_social_message_composer(true)
-	_on_social_message_action_pressed(account_id, action_id, thesis_id, player_text)
+	_on_social_message_action_pressed(account_id, action_id, thesis_id, player_text, option_id)
 
 
 func _scroll_social_message_rows_to_bottom() -> void:
@@ -810,6 +835,7 @@ func _build_social_message_thread_button(row: Dictionary) -> Button:
 
 func _on_social_message_thread_pressed(account_id: String) -> void:
 	selected_social_message_account_id = account_id
+	_sync_root_refs()
 	_refresh_social()
 
 
@@ -852,8 +878,8 @@ func _build_social_message_action_button(account_id: String, action_id: String, 
 	return button
 
 
-func _on_social_message_action_pressed(account_id: String, action_id: String, thesis_id: String = "", player_message_text: String = "") -> void:
-	var result: Dictionary = GameManager.send_twooter_message(account_id, action_id, thesis_id, player_message_text)
+func _on_social_message_action_pressed(account_id: String, action_id: String, thesis_id: String = "", player_message_text: String = "", option_id: String = "") -> void:
+	var result: Dictionary = GameManager.send_twooter_message(account_id, action_id, thesis_id, player_message_text, option_id)
 	if not bool(result.get("success", false)):
 		_show_toast(str(result.get("message", "Twooter action failed.")), false)
 		return
@@ -1063,6 +1089,7 @@ func _on_social_feed_filter_pressed(filter_id: String) -> void:
 	if filter_id.is_empty() or filter_id == selected_social_feed_filter_id:
 		return
 	selected_social_feed_filter_id = filter_id
+	_sync_root_refs()
 	_refresh_social()
 
 
@@ -1762,8 +1789,8 @@ func _social_dialog_cooldown_text(reason: String) -> String:
 	return "The conversation pauses here. Bring new context before continuing."
 
 
-func _on_social_post_action_pressed(post_id: String, action_id: String, thesis_id: String = "", player_reply_text: String = "") -> void:
-	var result: Dictionary = GameManager.interact_with_twooter_post(post_id, action_id, thesis_id, player_reply_text)
+func _on_social_post_action_pressed(post_id: String, action_id: String, thesis_id: String = "", player_reply_text: String = "", option_id: String = "") -> void:
+	var result: Dictionary = GameManager.interact_with_twooter_post(post_id, action_id, thesis_id, player_reply_text, option_id)
 	if not bool(result.get("success", false)):
 		_show_toast(str(result.get("message", "Twooter action failed.")), false)
 		return
@@ -1914,6 +1941,7 @@ func _open_social_reply_composer(post: Dictionary) -> void:
 	_ensure_social_reply_composer_dialog()
 	pending_social_reply_post_id = str(post.get("id", ""))
 	pending_social_reply_action_id = ""
+	pending_social_reply_option_id = ""
 	pending_social_reply_text = ""
 	social_reply_context_label.text = "%s %s" % [str(post.get("account_name", "Account")), _build_social_card_meta_line(post)]
 	social_reply_text_label.text = "Choose a reply below."
@@ -1940,6 +1968,7 @@ func _on_social_reply_option_selected(option_index: int) -> void:
 		return
 	var button: Button = social_reply_option_buttons[option_index]
 	pending_social_reply_action_id = str(button.get_meta("action_id", ""))
+	pending_social_reply_option_id = str(button.get_meta("option_id", ""))
 	pending_social_reply_text = str(button.get_meta("player_text", ""))
 	if pending_social_reply_action_id.is_empty() or pending_social_reply_text.is_empty():
 		return
@@ -1979,9 +2008,10 @@ func _send_social_reply_composer() -> void:
 		social_reply_text_label.visible_characters = social_reply_text_label.text.length()
 	var post_id: String = pending_social_reply_post_id
 	var action_id: String = pending_social_reply_action_id
+	var option_id: String = pending_social_reply_option_id
 	var player_text: String = pending_social_reply_text
 	_hide_social_reply_composer()
-	_on_social_post_action_pressed(post_id, action_id, "", player_text)
+	_on_social_post_action_pressed(post_id, action_id, "", player_text, option_id)
 
 
 func _hide_social_reply_composer() -> void:
@@ -1990,6 +2020,7 @@ func _hide_social_reply_composer() -> void:
 		social_reply_typing_tween = null
 	pending_social_reply_post_id = ""
 	pending_social_reply_action_id = ""
+	pending_social_reply_option_id = ""
 	pending_social_reply_text = ""
 	if social_reply_dialog != null:
 		social_reply_dialog.visible = false
@@ -2092,6 +2123,7 @@ func _on_social_account_pressed(account_id: String) -> void:
 	if account_id.is_empty() or account_id == selected_social_account_id:
 		return
 	selected_social_account_id = account_id
+	_sync_root_refs()
 	_refresh_social()
 	_mark_guide_research_interaction()
 
@@ -2100,6 +2132,7 @@ func _on_social_account_filter_cleared() -> void:
 	if selected_social_account_id.is_empty():
 		return
 	selected_social_account_id = ""
+	_sync_root_refs()
 	_refresh_social()
 
 
@@ -2108,6 +2141,7 @@ func _on_social_start_message_pressed(account_id: String) -> void:
 		return
 	selected_social_message_account_id = account_id
 	selected_social_view_id = "message"
+	_sync_root_refs()
 	_refresh_social()
 
 
@@ -2276,6 +2310,9 @@ func _open_social_account_from_news(account_id: String, contact_id: String = "")
 	selected_social_view_id = "home"
 	selected_social_account_id = account_id
 	selected_social_feed_filter_id = SOCIAL_FEED_FILTER_ALL
+	_sync_root_refs()
+	if _root != null:
+		_root.set("preserve_social_selection_on_next_open", true)
 	_set_active_app(APP_ID_SOCIAL)
 	var account: Dictionary = _social_account_from_snapshot(account_id)
 	var handle: String = str(account.get("handle", "")).strip_edges()
@@ -2815,6 +2852,10 @@ func _sync_dynamic_refs_from_root() -> void:
 func _sync_root_refs() -> void:
 	if _root == null:
 		return
+	_root.set("selected_social_account_id", selected_social_account_id)
+	_root.set("selected_social_feed_filter_id", selected_social_feed_filter_id)
+	_root.set("selected_social_view_id", selected_social_view_id)
+	_root.set("selected_social_message_account_id", selected_social_message_account_id)
 	_root.set("social_capture_menu", social_capture_menu)
 	_root.set("social_window", social_window)
 	_root.set("social_window_body", social_window_body)

@@ -7,6 +7,105 @@
     "3": "Tier 3",
     "4": "Tier 4"
   },
+  "dialog_routing": {
+    "public_rules": [
+      {
+        "id": "profile_preferred_public",
+        "tree_id": "profile_preferred"
+      },
+      {
+        "id": "source_category_public",
+        "tree_id": "source_check",
+        "conditions": {
+          "post_category_contains_any": [
+            "source",
+            "rumor",
+            "corporate"
+          ]
+        }
+      },
+      {
+        "id": "trusted_public",
+        "tree_id": "trust_building",
+        "conditions": {
+          "relationship_gte": 18
+        }
+      },
+      {
+        "id": "default_public",
+        "tree_id": "market_read"
+      }
+    ],
+    "private_rules": [
+      {
+        "id": "network_profile_private",
+        "tree_id": "profile_preferred",
+        "conditions": {
+          "network_source": true
+        }
+      },
+      {
+        "id": "suspicious_private",
+        "tree_id": "suspicious_boundary",
+        "conditions": {
+          "risk_profile": "suspicious"
+        }
+      },
+      {
+        "id": "trusted_private",
+        "tree_id": "event_invite",
+        "conditions": {
+          "relationship_stage": [
+            "trusted",
+            "inner_circle_candidate"
+          ]
+        }
+      },
+      {
+        "id": "intro_private",
+        "tree_id": "clean_intro",
+        "conditions": {
+          "relationship_lt": 5
+        }
+      },
+      {
+        "id": "thesis_review_private",
+        "tree_id": "thesis_review",
+        "conditions": {
+          "credibility_lt": 12
+        }
+      },
+      {
+        "id": "thread_trust_private",
+        "tree_id": "trust_building",
+        "conditions": {
+          "thread_rows_gte": 4
+        }
+      },
+      {
+        "id": "relationship_trust_private",
+        "tree_id": "trust_building",
+        "conditions": {
+          "relationship_gte": 18
+        }
+      },
+      {
+        "id": "source_check_private",
+        "tree_id": "source_check",
+        "conditions": {
+          "credibility_lt": 8
+        }
+      },
+      {
+        "id": "profile_preferred_private",
+        "tree_id": "profile_preferred"
+      },
+      {
+        "id": "default_private",
+        "tree_id": "clean_intro"
+      }
+    ]
+  },
   "interaction_response_pools": {
     "reply_support": [
       "Good read. Keep the position sized to the evidence, not the noise.",
@@ -85,7 +184,11 @@
       "This is more useful than the early asks. Keep naming what would change your mind.",
       "I can see the process improving. Bring the source, the risk, and the next check together.",
       "Good, that is less about getting a signal and more about learning how to read the setup.",
-      "You are showing enough care that I can answer with more context."
+      "You are showing enough care that I can answer with more context.",
+      "You are asking like someone who writes things down. That makes the answer more useful.",
+      "This is the stage where better questions start opening better context.",
+      "Good. Keep bringing evidence and I can spend less time warning you to slow down.",
+      "Your process is becoming visible, and that is what makes people willing to respond."
     ],
     "trusted": [
       "You have earned the sharper answer: separate what is known, what is inferred, and what is still just market noise.",
@@ -102,6 +205,13 @@
       "People are more willing to introduce you when your questions make them look careful, not reckless."
     ]
   },
+  "soft_cooldown_reply_pool": [
+    "Pause this talk until something changes. A repeated ask without new evidence weakens the relationship.",
+    "You have already asked this angle today. Come back with a filing, a tape change, or a tighter thesis.",
+    "Let the market add information first. Repeating the same question does not make the read cleaner.",
+    "This is where patience protects the relationship. Bring one new fact before reopening it.",
+    "Close the loop for now. The next useful message needs new context, not louder urgency."
+  ],
   "network_source_reply_pools": {
     "familiar": [
       "You are handling the source lead better now. Keep the public trail and the market reaction separate.",
@@ -128,6 +238,11 @@
   "dialog_trees": {
     "network_source_followup": {
       "entry_node": "open",
+      "graduation": {
+        "steps": 3,
+        "node": "relationship_handoff",
+        "next_tree": "network_relationship_probe"
+      },
       "nodes": {
         "open": {
           "account_replies": [
@@ -147,6 +262,11 @@
                 "I read the News lead and found your handle. Can I ask what part is safe to verify publicly?",
                 "I am coming from the article, not from a rumor chain. I want to understand what should be checked first."
               ],
+              "account_replies": [
+                "Good opener. Saying where you came from keeps the ask grounded instead of slippery.",
+                "That context helps. Start with the public part, then decide whether the lead deserves more weight.",
+                "I can answer that kind of follow-up. Keep it narrow and tied to what you can verify."
+              ],
               "next_node": "verify"
             },
             {
@@ -157,6 +277,11 @@
                 "Before I treat the article seriously, what public trail should I check first?",
                 "What should I verify from filings, dated news, or volume before I believe this lead?",
                 "Can you point me toward the boring public evidence instead of the exciting version of the story?"
+              ],
+              "account_replies": [
+                "Good. The boring trail is usually where the useful edge starts.",
+                "Check the public sequence first: what was announced, when volume changed, and what still needs confirmation.",
+                "That is the right source ask. If the public trail is thin, keep the thesis thin too."
               ],
               "next_node": "verify",
               "outcome": "source_check"
@@ -177,6 +302,11 @@
                 "I would like to stay connected, but only if I keep the questions specific and clean.",
                 "Can we connect so I can follow up when I have public evidence to compare?",
                 "I want to keep this as a proper source relationship, not a one-off favor."
+              ],
+              "account_replies": [
+                "Connection makes sense only if you keep bringing specific evidence, not urgent certainty.",
+                "That is the right condition. A source relationship should improve the work, not replace it.",
+                "If you keep the ask this clean, staying connected can be useful."
               ],
               "next_node": "guarded_trust",
               "outcome": "contact_discovery"
@@ -201,6 +331,11 @@
                 "What would you watch next if you refused to treat this as a tip?",
                 "What is one public sign that would make this lead more or less serious?"
               ],
+              "account_replies": [
+                "Clean read means one public watch item and a reason it matters.",
+                "Good. Treat the watch item as a checkpoint, not as permission to copy anyone.",
+                "I would watch whether the public evidence catches up to the attention."
+              ],
               "next_node": "guarded_trust",
               "outcome": "clean_read"
             },
@@ -221,6 +356,11 @@
                 "I wrote the case and the failure point. Can you tell me what still sounds unverified?",
                 "I want to share the thesis so you can push back on the evidence trail."
               ],
+              "account_replies": [
+                "Good. A written thesis gives me something real to challenge.",
+                "The convenient part is usually where the source is doing too much work. Start there.",
+                "I can push on the evidence trail if you keep the claim specific."
+              ],
               "next_node": "guarded_trust",
               "outcome": "thesis_response"
             },
@@ -232,6 +372,11 @@
                 "I will pause here and come back with evidence instead of another ask.",
                 "That helps. I will check the public trail before I ask for more.",
                 "I will keep this as a lead until I can verify it properly."
+              ],
+              "account_replies": [
+                "Good pause. A source lead improves when you let evidence do the next part.",
+                "That is the responsible move. Come back with one concrete check, not another version of the same question.",
+                "Keeping it as a lead protects you from turning weak context into conviction."
               ],
               "next_node": "open"
             }
@@ -262,6 +407,11 @@
                 "I will keep the boundary clean. Can we connect so I can follow up with evidence later?",
                 "I would like to connect after this, and I will keep the asks narrow."
               ],
+              "account_replies": [
+                "That is the version of connecting that can work: future evidence, narrow asks.",
+                "I can work with that. The boundary stays clean and the questions stay specific.",
+                "Connection is useful if every follow-up brings new context."
+              ],
               "next_node": "verify",
               "outcome": "contact_discovery"
             },
@@ -273,6 +423,11 @@
                 "I checked the first trail. What is the next public source you would compare against it?",
                 "If the first source is noisy, what second source would you use to cross-check it?",
                 "What would make you reject this lead even if the market keeps talking about it?"
+              ],
+              "account_replies": [
+                "Good second-source question. A lead gets sturdier when two public checks point the same way.",
+                "Compare the story against dated disclosures and whether the tape confirms or only repeats attention.",
+                "The rejection point matters. If you cannot name it, the source is probably driving too much conviction."
               ],
               "next_node": "verify",
               "outcome": "source_check"
@@ -286,7 +441,80 @@
                 "I will bring something concrete next time instead of asking you to fill the gap.",
                 "Understood. I will let the public trail do some work before I ask again."
               ],
+              "account_replies": [
+                "Good close. The next message should carry evidence, not just momentum.",
+                "That restraint keeps the relationship useful. Come back when the trail changes.",
+                "Fine by me. Public checks make the next conversation easier to answer."
+              ],
               "next_node": "open"
+            }
+          ]
+        },
+        "relationship_handoff": {
+          "account_replies": [
+            "You have kept the source ask clean enough for a relationship conversation now.",
+            "This is the point where I care less about the lead and more about your process.",
+            "You have done enough public checking. If we keep talking, the next part is how you handle access.",
+            "A useful source relationship starts when you can explain uncertainty without forcing it into certainty.",
+            "Good. The next conversation can be about trust, process, and how you use what you hear."
+          ],
+          "options": [
+            {
+              "id": "show_process_next",
+              "label": "Process",
+              "private_action_id": "message_check_in",
+              "player_lines": [
+                "I want to keep this relationship process-first: verify, write the risk, then decide.",
+                "Before I ask for more, I want to show how I handle the source lead and its uncertainty.",
+                "I am trying to use the access responsibly, not turn it into instant conviction."
+              ],
+              "account_replies": [
+                "That is the right next step. Process is what makes access safe enough to continue.",
+                "Good. Bring that discipline into the next conversation and the answers can get more useful.",
+                "If you keep framing it that way, this can become a real source relationship."
+              ],
+              "next_node": "relationship_handoff"
+            },
+            {
+              "id": "bring_evidence_next",
+              "label": "Evidence",
+              "private_action_id": "ask_source_private",
+              "player_lines": [
+                "I checked the public trail and want to compare the weak point before I go further.",
+                "The lead has one useful public check and one open risk. Can I frame both before asking more?",
+                "I want to bring evidence first, then ask what still sounds too convenient."
+              ],
+              "account_replies": [
+                "That is a better order. Evidence first, source context second.",
+                "Good. A weak point on the table makes the conversation safer and more useful.",
+                "That is the kind of follow-up that can justify a closer source relationship."
+              ],
+              "next_node": "relationship_handoff",
+              "outcome": "source_check"
+            },
+            {
+              "id": "connect_responsibly_next",
+              "label": "Responsible access",
+              "private_action_id": "connect",
+              "requirements": {
+                "min_relationship": 4
+              },
+              "blocked_lines": [
+                "Not yet. Bring one more clean check before asking for relationship access.",
+                "Keep the process visible first. Access comes after discipline, not before it."
+              ],
+              "player_lines": [
+                "I would like to keep this as a real source relationship, with public checks and clear boundaries.",
+                "Can we connect with the rule that I bring evidence before asking for context?",
+                "I want to keep the access responsible: narrow questions, public evidence, and no pressure."
+              ],
+              "account_replies": [
+                "That is the only version of access that works.",
+                "Fine. Keep that boundary and the relationship can stay useful.",
+                "Responsible access starts with the rule you just named."
+              ],
+              "next_node": "relationship_handoff",
+              "outcome": "contact_discovery"
             }
           ]
         }
@@ -313,6 +541,11 @@
                 "I want to show my process first so this does not become a shortcut conversation.",
                 "I am not asking for certainty. I am asking how to handle the uncertainty cleanly."
               ],
+              "account_replies": [
+                "That is the right way to start. Process tells me more about you than one correct guess.",
+                "Good. If you can handle uncertainty cleanly, the relationship has room to grow.",
+                "Bring that process every time and the answers can become more specific."
+              ],
               "next_node": "probe"
             },
             {
@@ -330,6 +563,11 @@
                 "I have a thesis ready. I want you to challenge the source quality, not just the conclusion.",
                 "I wrote the case down. Can you tell me where the evidence still feels thin?",
                 "I want to share my thesis so you can push back on the assumptions."
+              ],
+              "account_replies": [
+                "Good. Source quality is exactly where a written thesis should be challenged.",
+                "Thin evidence usually hides inside confident language. I will look there first.",
+                "That is a useful ask because it lets the thesis survive correction before capital touches it."
               ],
               "next_node": "probe",
               "outcome": "thesis_response"
@@ -349,6 +587,11 @@
                 "I think I have shown the kind of questions I will ask. Can we connect properly?",
                 "Can we connect now? I will keep future asks specific and evidence-first.",
                 "I would like to make this a proper contact, not just a one-off DM."
+              ],
+              "account_replies": [
+                "That is closer to a real contact. Specific asks and clean follow-through are the price of the connection.",
+                "If you keep it evidence-first, connecting can be useful instead of noisy.",
+                "A proper contact means you bring work before you bring urgency."
               ],
               "next_node": "probe",
               "outcome": "contact_discovery"
@@ -378,6 +621,11 @@
                 "I am asking about what is public and how to read it, not anything inside the room.",
                 "I want to stay on the right side of the line. What public context should I focus on?"
               ],
+              "account_replies": [
+                "Good. Public process is enough if you are willing to do the reading.",
+                "That boundary keeps the conversation useful. Stay with what can be reopened later.",
+                "Focus on the documents, dates, and who has to approve the next step."
+              ],
               "next_node": "public_process"
             },
             {
@@ -388,6 +636,11 @@
                 "Which public filing or notice should I read before forming an opinion?",
                 "What public document would you expect a careful investor to understand first?",
                 "If I only use public materials, what should I read before I ask another question?"
+              ],
+              "account_replies": [
+                "Good filing ask. Start with the notice that names the decision, not the chatter around it.",
+                "A careful investor reads the public document before reading the room.",
+                "If the filing does not support the angle, keep the idea small."
               ],
               "next_node": "public_process",
               "outcome": "source_check"
@@ -408,6 +661,11 @@
                 "I have kept the boundary public and specific. Can we connect for future public-context questions?",
                 "Can we connect now if I keep future questions limited to public materials?",
                 "I would like to stay connected, and I understand the boundary."
+              ],
+              "account_replies": [
+                "Connection is possible when the boundary is part of the relationship, not a footnote.",
+                "That is the right ask. Future questions stay public, specific, and documented.",
+                "If you keep showing that discipline, the connection can stay useful."
               ],
               "next_node": "public_process",
               "outcome": "contact_discovery"
@@ -439,6 +697,11 @@
                 "I wrote this from public evidence only. What part of the reasoning is weakest?",
                 "Can you review the public logic and tell me where I may be overreaching?"
               ],
+              "account_replies": [
+                "Good. Public logic can still be sharp if the assumptions are named clearly.",
+                "I will challenge what the documents do not prove, not add anything outside them.",
+                "That is the right review frame. If the public thesis is weak, better to know before access clouds it."
+              ],
               "next_node": "public_process",
               "outcome": "thesis_response"
             },
@@ -451,6 +714,11 @@
                 "Which public signal should I wait for before I treat the idea as serious?",
                 "What would you watch publicly so the idea does not become wishful thinking?"
               ],
+              "account_replies": [
+                "A responsible read waits for a public signal that changes probability, not just mood.",
+                "Good check. Watch whether the next disclosure confirms the story or only extends the suspense.",
+                "Keep the standard public and boring. That is how the thesis stays defensible."
+              ],
               "next_node": "public_process",
               "outcome": "source_check"
             },
@@ -462,6 +730,11 @@
                 "That is enough. I will keep the rest public and documented.",
                 "Understood. I will do the public work before I ask again.",
                 "Thanks. I will stay with filings and public process."
+              ],
+              "account_replies": [
+                "Good close. Public and documented is the only version worth carrying forward.",
+                "Do the public work first and the next question will be much easier to answer.",
+                "That is the right place to stop. The line stays clean."
               ],
               "next_node": "boundary"
             }
@@ -490,6 +763,11 @@
                 "If this cannot be discussed cleanly, I am not interested.",
                 "I want the boundary clear: no leaks, no paid whispers, no pressure."
               ],
+              "account_replies": [
+                "Good boundary. Say it early so nobody can pretend the line was unclear.",
+                "That is the only way this source stays usable: public, clean, and no pressure.",
+                "If the other side dislikes that boundary, you learned something useful."
+              ],
               "next_node": "guarded",
               "outcome": "suspicious_boundary"
             },
@@ -501,6 +779,11 @@
                 "What public source would you use if you wanted this to stay clean?",
                 "Can you point to something public, or should I treat this as noise?",
                 "If there is no public trail, I would rather stop here."
+              ],
+              "account_replies": [
+                "Good. A guarded source has to earn trust through something public.",
+                "If there is no public trail, treat it as noise until the tape proves otherwise.",
+                "Ask for the source you can explain later. Anything else is reputation risk."
               ],
               "next_node": "guarded",
               "outcome": "source_check"
@@ -514,6 +797,11 @@
                 "I am not going to chase this without a clean source.",
                 "I will keep this as noise unless a public trail appears."
               ],
+              "account_replies": [
+                "Good step back. Some missed moves are cheaper than messy access.",
+                "That is the right discipline. Let the public trail earn your attention.",
+                "Keeping it as noise protects you from borrowing someone else's problem."
+              ],
               "next_node": "guarded"
             }
           ]
@@ -522,6 +810,11 @@
     },
     "clean_intro": {
       "entry_node": "open",
+      "graduation": {
+        "steps": 3,
+        "node": "handoff",
+        "next_tree": "thesis_review"
+      },
       "nodes": {
         "open": {
           "account_replies": [
@@ -529,7 +822,11 @@
             "Clean reads begin with limits. What would make you step back?",
             "Good start. Keep the question small enough that the market can answer it.",
             "I like the patience. First understand the risk, then decide whether the idea deserves attention.",
-            "That is a better tone. The market rewards people who can stay curious without getting swept up."
+            "That is a better tone. The market rewards people who can stay curious without getting swept up.",
+            "Begin with the boring part: what is public, what is assumed, and what would break the read.",
+            "Good. A clean first question should make the next question narrower.",
+            "Start with process before conviction. It saves you from defending a weak idea later.",
+            "That is the right entry point. A careful read earns attention one check at a time."
           ],
           "options": [
             {
@@ -542,6 +839,11 @@
                 "I am still learning how to read this. Can you help me focus on the first useful check?",
                 "Before I get excited, I want to know what a careful person would verify first.",
                 "I do not want to copy the crowd. What is the clean starting point here?"
+              ],
+              "account_replies": [
+                "Good process question. Start with the claim, then the source, then the thing that would disprove both.",
+                "That is the right order. Before a ticker matters, define what evidence would actually change your view.",
+                "Start small: one claim, one source, one failure point. If those are vague, the trade is not ready."
               ],
               "next_node": "evidence"
             },
@@ -557,6 +859,11 @@
                 "Can you point me toward something public that would either support or weaken this idea?",
                 "I want the boring evidence first. What would you check before trusting the chatter?"
               ],
+              "account_replies": [
+                "Good. Public evidence keeps the conversation honest. Look for filings, dated news, and whether volume agrees.",
+                "Boring evidence is usually the useful kind. If it cannot be reopened tomorrow, do not let it carry the thesis.",
+                "Start with what everyone can verify. Private confidence without a public trail is only noise with better packaging."
+              ],
               "next_node": "evidence",
               "outcome": "source_check"
             },
@@ -571,6 +878,11 @@
                 "I like how you frame risk. Let us connect and keep the conversation evidence-first.",
                 "I would like to follow your process more closely, especially when the market gets noisy."
               ],
+              "account_replies": [
+                "Fair. I will connect when the conversation stays evidence-first and you keep showing your work.",
+                "Connection is useful if it improves the process. Bring clean questions, not urgent certainty.",
+                "That tone helps. Stay patient and I am more likely to answer when the tape gets messy."
+              ],
               "next_node": "trust",
               "outcome": "contact_discovery"
             }
@@ -582,7 +894,11 @@
             "Better. A clean source only matters if the next tape agrees.",
             "Exactly. The goal is not a perfect answer; it is knowing what would change your mind.",
             "Now you are giving the idea a test. That is how you avoid falling in love with it.",
-            "That is more useful than chasing certainty. Evidence should lead the confidence, not follow it."
+            "That is more useful than chasing certainty. Evidence should lead the confidence, not follow it.",
+            "Good. Evidence is useful when it changes sizing, timing, or willingness to walk away.",
+            "Keep the test simple enough that tomorrow's tape can actually answer it.",
+            "That is the right discipline. If the evidence is vague, keep the position vague too.",
+            "Now the read has a checklist instead of only a feeling."
           ],
           "options": [
             {
@@ -597,6 +913,11 @@
                 "I will write down the failure point before I decide whether this deserves attention.",
                 "I am trying to make the idea easy to disprove, not easy to defend."
               ],
+              "account_replies": [
+                "Good. Naming the disproof point protects you from defending a stale idea after the market has answered.",
+                "That is the discipline. If the invalidation is clear, confidence can move instead of hardening.",
+                "Useful. A trade you can disprove is easier to size and easier to leave."
+              ],
               "next_node": "trust"
             },
             {
@@ -610,6 +931,11 @@
                 "What is one thing I can watch tomorrow that would make this read cleaner?",
                 "Give me a practical watch item I can verify myself, not a signal to copy.",
                 "What would a calm investor monitor next from here?"
+              ],
+              "account_replies": [
+                "Clean read means one watch item, not a secret answer. Track follow-through, volume quality, and whether the story broadens.",
+                "Watch the next confirmation point. If it needs constant explanation, the read is probably not clean yet.",
+                "Good ask. Treat the watch item as a checkpoint, not permission to chase."
               ],
               "next_node": "trust",
               "outcome": "clean_read"
@@ -634,6 +960,11 @@
                 "I brought a structured thesis this time. Please challenge the assumptions, not just the conclusion.",
                 "I want to test the thesis with someone who will push back honestly."
               ],
+              "account_replies": [
+                "Now there is something to test. I will push on the assumption that carries the most weight.",
+                "Good. A written thesis lets the weak part show itself before your money has to find it.",
+                "That is the right use of feedback. Bring the claim, the evidence, and the failure point into the same room."
+              ],
               "next_node": "trust",
               "outcome": "thesis_response"
             }
@@ -645,7 +976,11 @@
             "Now we are talking process instead of signals.",
             "That is how trust starts: not by being right once, but by showing your work.",
             "Good. I can work with someone who admits what they do not know yet.",
-            "Now the conversation has a process. Keep that and people will answer you more seriously."
+            "Now the conversation has a process. Keep that and people will answer you more seriously.",
+            "Good. People answer more carefully when they can see how you think.",
+            "That is enough structure to make the next ask sharper.",
+            "Keep receipts. A clean paper trail turns a vague read into a useful conversation.",
+            "You are moving from curiosity into process. That is where the relationship starts to matter."
           ],
           "options": [
             {
@@ -660,6 +995,11 @@
                 "I will stop here for now and let the next data point do some talking.",
                 "I do not need to force another conclusion today. I will track it carefully."
               ],
+              "account_replies": [
+                "Good close. Let the next tape add information before you spend more attention on the same question.",
+                "That restraint matters. A clean loop ends with a note, not another forced conclusion.",
+                "Fine by me. Come back when the setup has changed, not just when the feeling gets louder."
+              ],
               "next_node": "evidence"
             },
             {
@@ -672,6 +1012,11 @@
                 "Next time, should I bring filings, price action, or my own written thesis?",
                 "What kind of context makes a question worth your time?",
                 "I want to prepare better before I ask again. What would help most?"
+              ],
+              "account_replies": [
+                "Bring the specific claim, the public source, and what would make you wrong. That makes the next question answerable.",
+                "The best next context is your own work. Show what you checked and where you are still unsure.",
+                "Bring fewer guesses and more structure. One ticker, one reason, one risk is enough."
               ],
               "next_node": "evidence"
             },
@@ -695,8 +1040,44 @@
                 "I wrote the case and the failure point. Can you review whether the logic holds?",
                 "I want to share the thesis while it is still flexible enough to improve."
               ],
+              "account_replies": [
+                "Good timing. A thesis is easier to improve before it becomes part of your identity.",
+                "Share it while it is still flexible. I will look for the assumption that deserves the least trust.",
+                "That is useful. I can respond to a written case; I cannot do much with conviction alone."
+              ],
               "next_node": "evidence",
               "outcome": "thesis_response"
+            }
+          ]
+        },
+        "handoff": {
+          "account_replies": [
+            "You have the shape now: source, failure point, then thesis. Next time, bring the written case.",
+            "This loop has enough process for now. The next useful conversation is a thesis review, not another broad read.",
+            "Good. You have moved past first questions. Bring the claim and the evidence next so we can test it properly.",
+            "You have done enough first-pass work. The next answer needs a thesis in front of it.",
+            "The broad loop is finished for now. Write the case and make the next ask specific.",
+            "Good handoff. Bring a ticker, a claim, a source, and the part that would make you wrong.",
+            "That is enough orientation. The next useful step is testing your written logic.",
+            "You have the map now. Do the boring work first so the next conversation can be about judgement.",
+            "Good stopping point. Come back with the thesis before the market turns the question into a chase."
+          ],
+          "options": [
+            {
+              "id": "wrap_clean_intro",
+              "label": "Wrap up",
+              "private_action_id": "message_check_in",
+              "player_lines": [
+                "That gives me enough structure. I will come back with a written thesis.",
+                "I have the process now. Next time I will bring the claim, evidence, and failure point.",
+                "I will stop the broad questions here and make the next conversation thesis-shaped."
+              ],
+              "account_replies": [
+                "Good. Bring the thesis next: claim, source, risk, and what would prove you wrong.",
+                "That is the right handoff. A written thesis will make the next answer sharper.",
+                "Do that. A clean question gets better when it has a written case behind it."
+              ],
+              "next_node": "handoff"
             }
           ]
         }
@@ -704,6 +1085,11 @@
     },
     "source_check": {
       "entry_node": "source",
+      "graduation": {
+        "steps": 3,
+        "node": "handoff",
+        "next_tree": "trust_building"
+      },
       "nodes": {
         "source": {
           "account_replies": [
@@ -726,6 +1112,11 @@
                 "I want to know the origin, not just the version that reached the feed.",
                 "What part of this can I verify without relying on someone else's confidence?"
               ],
+              "account_replies": [
+                "Good origin question. Trace the first public clue before you trust the loudest version of the story.",
+                "Start where the read began. If the origin is foggy, keep the position foggy too.",
+                "The origin matters because it tells you whether this is evidence, interpretation, or just repetition."
+              ],
               "next_node": "verify",
               "outcome": "source_check"
             },
@@ -741,6 +1132,11 @@
                 "What is the strongest reason this read could be wrong?",
                 "I am worried the story is moving faster than the facts. How would you slow it down?"
               ],
+              "account_replies": [
+                "Good pushback. A crowded read needs a clear invalidation point before it deserves more trust.",
+                "That is the right skepticism. Ask what would change the mind of the people already convinced.",
+                "Slow it down by separating the fact from the excitement around the fact."
+              ],
               "next_node": "verify"
             },
             {
@@ -754,6 +1150,11 @@
                 "I will keep it on the watchlist and wait for something confirmable.",
                 "For now I will observe the reaction instead of trying to be first.",
                 "I can track it without turning the lead into conviction."
+              ],
+              "account_replies": [
+                "Watching is fine. Define the trigger now so the watchlist does not become a disguised chase.",
+                "Good. Observation has value when you know what would upgrade or kill the read.",
+                "That is patient enough. Keep it as a watch item until evidence earns the next step."
               ],
               "next_node": "verify",
               "outcome": "clean_read"
@@ -781,6 +1182,11 @@
                 "I want a trail I can explain later, even if the trade gets boring.",
                 "If there is no public trail, I will keep this as an open question."
               ],
+              "account_replies": [
+                "That is the clean check. A filing or dated disclosure gives the read a backbone.",
+                "Good. Volume without a public trail can still matter, but it should not do all the work.",
+                "If the source survives a filing check, then the next question becomes size and timing."
+              ],
               "next_node": "source",
               "outcome": "source_check"
             },
@@ -804,6 +1210,11 @@
                 "I will write the claim, the evidence, and the missing piece before I ask again.",
                 "I want to make the thesis falsifiable before the source becomes a belief."
               ],
+              "account_replies": [
+                "Good. Turning the source into a thesis forces you to name what it actually proves.",
+                "That is better than collecting clues. A thesis shows whether the source supports the conclusion or just decorates it.",
+                "Write the claim first. Then the source either strengthens it, weakens it, or belongs outside the thesis."
+              ],
               "next_node": "source",
               "outcome": "thesis_response"
             },
@@ -819,7 +1230,39 @@
                 "I will wait for a cleaner data point instead of repeating the same question.",
                 "I will pause here. More words will not make the source stronger."
               ],
+              "account_replies": [
+                "Good wait. If the source is real, the next public data point should make it easier to discuss.",
+                "That pause is useful. Repeating the same question usually means the evidence has not improved.",
+                "Come back when something changes. Until then, the clean answer is still patience."
+              ],
               "next_node": "source"
+            }
+          ]
+        },
+        "handoff": {
+          "account_replies": [
+            "You have checked the source enough for this loop. The next useful thing is how you handle the read.",
+            "Source work has done its job. Now the question is sizing, timing, and whether you can keep the boundary clean.",
+            "That is enough verification for now. If the relationship stays clean, the next conversation can be more direct."
+          ],
+          "options": [
+            {
+              "id": "wrap_source_check",
+              "label": "Wrap source",
+              "private_action_id": "message_check_in",
+              "public_action_id": "reply_support",
+              "player_lines": [
+                "I have enough source work for now. Next I want to handle the read responsibly.",
+                "I will stop repeating the source question and focus on timing, risk, and boundary.",
+                "The source trail is clear enough to move the conversation forward without forcing certainty."
+              ],
+              "account_replies": [
+                "Good. Repeating verification can become a stall. The next step is how you use the read without abusing it.",
+                "That is the clean handoff. Keep the public trail in view and the next conversation can be more practical.",
+                "Fine. You have done enough source work to ask a better next question."
+              ],
+              "next_node": "handoff",
+              "outcome": "source_check"
             }
           ]
         }
@@ -857,6 +1300,11 @@
                 "I want you to review the structure and tell me where I am being too generous.",
                 "Here is the thesis. I am more interested in the weakness than the praise."
               ],
+              "account_replies": [
+                "Good. A thesis review starts with the assumption that carries the most weight.",
+                "I will look at structure first: claim, evidence, risk, and what would make it wrong.",
+                "That is the right ask. Praise is less useful than finding the weak support beam."
+              ],
               "next_node": "challenge",
               "outcome": "thesis_response"
             },
@@ -871,6 +1319,11 @@
                 "I want to learn how to stress-test the idea instead of defending it too early.",
                 "What kind of assumption usually breaks first in a setup like this?"
               ],
+              "account_replies": [
+                "Good weakness ask. The fragile part is usually where conviction grew faster than evidence.",
+                "Start with the assumption that would force you to cut size if it failed.",
+                "That question makes the thesis more useful because it gives you permission to change it."
+              ],
               "next_node": "challenge"
             },
             {
@@ -883,6 +1336,11 @@
                 "Which source would make this thesis stronger, and which one would force a rewrite?",
                 "I want to know what evidence the thesis is still missing.",
                 "What should I verify before I ask anyone to take the thesis seriously?"
+              ],
+              "account_replies": [
+                "Good source check. A sturdier thesis should survive being tied to a specific document or date.",
+                "I would want evidence that changes the claim, not just evidence that decorates it.",
+                "If the source cannot carry the thesis, the position size should not either."
               ],
               "next_node": "challenge",
               "outcome": "source_check"
@@ -909,6 +1367,11 @@
                 "I will update the weak section before I let the thesis guide a trade.",
                 "That helps. I will treat the feedback as part of the process, not a personal loss."
               ],
+              "account_replies": [
+                "Good. The revision is where a thesis starts becoming yours instead of just comfortable.",
+                "That is the right reaction. Pushback is useful only if it changes the work.",
+                "Update the claim, the evidence, or the size. Do not just add better wording."
+              ],
               "next_node": "review"
             },
             {
@@ -921,6 +1384,11 @@
                 "What should I watch next that would either confirm or weaken the revised thesis?",
                 "Give me one practical signal that can keep the thesis honest.",
                 "What follow-up would make this less theoretical and more testable?"
+              ],
+              "account_replies": [
+                "Good clean-read ask. Pick one follow-up that would actually force an update.",
+                "Watch the item that can disprove the thesis, not only the one that makes it exciting.",
+                "A thesis becomes testable when the next checkpoint has a real consequence."
               ],
               "next_node": "review",
               "outcome": "clean_read"
@@ -935,6 +1403,11 @@
                 "I appreciate the pushback. I would like to keep bringing you structured work.",
                 "Let us connect. I will make sure the next conversation has better evidence.",
                 "This is the kind of review I need. I want to keep comparing notes."
+              ],
+              "account_replies": [
+                "Connection makes sense if the work keeps getting clearer.",
+                "That is the right use of the relationship: bring structure, receive pushback, revise.",
+                "If you keep bringing written work, the conversation can become more useful."
               ],
               "next_node": "review",
               "outcome": "contact_discovery"
@@ -952,7 +1425,11 @@
             "A candle is not a thesis. Context first.",
             "Good question. Price tells you something happened; context tells you what might matter.",
             "The first move gets attention. The second move tells you more about conviction.",
-            "Do not let a loud candle make the whole argument for you."
+            "Do not let a loud candle make the whole argument for you.",
+            "Price action is a clue, not a verdict. Ask what would confirm it after the easy attention fades.",
+            "A strong tape still needs a reason you can explain tomorrow.",
+            "Good. Read the move, then read the follow-through, then decide whether the story improved.",
+            "Market noise gets expensive when you let it become a thesis too quickly."
           ],
           "options": [
             {
@@ -966,6 +1443,11 @@
                 "This context helps, but I want to see whether the next session agrees.",
                 "I like the read as a starting point, not as permission to chase.",
                 "I will keep the idea open until the tape either confirms or cools down."
+              ],
+              "account_replies": [
+                "Good framing. Context can start the watch, but the next tape still has to confirm it.",
+                "That is the right distance. Use the read to prepare, not to excuse a chase.",
+                "Keep it open, but make the market earn your confidence one session at a time."
               ],
               "next_node": "follow",
               "outcome": "clean_read"
@@ -982,6 +1464,11 @@
                 "What would make this look like distribution instead of accumulation?",
                 "Is there a way to read the flow without pretending we know everyone's motive?"
               ],
+              "account_replies": [
+                "Good question. Flow reads get dangerous when people pretend they know every buyer's motive.",
+                "That skepticism helps. Look for whether the move holds when the headline attention fades.",
+                "The line between demand and reaction is follow-through. Let the next tape help answer it."
+              ],
               "next_node": "follow"
             },
             {
@@ -996,6 +1483,11 @@
                 "What should I check so the price action has context?",
                 "Before I trust the move, what source would make the story less fragile?"
               ],
+              "account_replies": [
+                "Good source ask. Price action gets sturdier when it sits next to a filing, date, or public clue.",
+                "Check whether the move has a public anchor. Without one, keep the read lighter.",
+                "A clean source does not have to predict the move. It just has to explain why the move deserves attention."
+              ],
               "next_node": "follow",
               "outcome": "source_check"
             }
@@ -1007,7 +1499,11 @@
             "That is enough for now; new tape matters more than more words.",
             "Good. The next session is part of the answer, so let it speak.",
             "That is enough for one pass. A clean read should survive a quiet day.",
-            "Now you wait. Patience is also a position, even when it feels inactive."
+            "Now you wait. Patience is also a position, even when it feels inactive.",
+            "The follow-through matters more than another opinion right now.",
+            "Good. Let volume, closing strength, and news discipline do some work.",
+            "A clean market read improves when you stop adding emotion to it.",
+            "The next useful clue is on the tape, not in repeating the same question."
           ],
           "options": [
             {
@@ -1022,6 +1518,11 @@
                 "I will watch quietly and update only if the evidence changes.",
                 "I can wait. A forced read would probably make this worse."
               ],
+              "account_replies": [
+                "Good. Waiting is not empty if you already know what would change the read.",
+                "That is disciplined. The next session can add information without you adding noise.",
+                "Let the trade come to you. A forced read usually says more about impatience than the market."
+              ],
               "next_node": "read"
             },
             {
@@ -1034,6 +1535,11 @@
                 "What one thing would you keep on the screen for this setup?",
                 "If I only track one follow-up item, what should it be?",
                 "What is the cleanest sign that the move is still healthy?"
+              ],
+              "account_replies": [
+                "Pick one watch item: follow-through on volume, not just a louder retelling of the same story.",
+                "The cleanest sign is confirmation you can explain without stretching. Keep the watch item simple.",
+                "Watch whether buyers still care after the easy attention passes. That tells you more than the first candle."
               ],
               "next_node": "read",
               "outcome": "clean_read"
@@ -1049,6 +1555,11 @@
                 "If a filing or public clue appears, I will check that before changing the thesis.",
                 "I will wait for evidence I can point to, not just a stronger feeling.",
                 "I need a source that makes the read sturdier, not just louder."
+              ],
+              "account_replies": [
+                "Good verification step. A sturdier read should survive being tied to a public source.",
+                "That is the right standard. Louder is not cleaner; verifiable is cleaner.",
+                "Wait for evidence you can point to. It keeps the read from becoming just a mood with a ticker."
               ],
               "next_node": "read",
               "outcome": "source_check"
@@ -1089,6 +1600,11 @@
                 "I would like to join only if I can add something, not just listen for shortcuts.",
                 "I can bring a focused question and notes from my own work."
               ],
+              "account_replies": [
+                "Good. A room is useful when you enter with one prepared question, not a hunger for secrets.",
+                "That is the right posture. Access should sharpen your work, not replace it.",
+                "If you can add something instead of only taking, the invite starts to make sense."
+              ],
               "next_node": "after",
               "outcome": "event_invite"
             },
@@ -1112,6 +1628,11 @@
                 "I will share the thesis and I want honest feedback on the weak assumptions.",
                 "Here is the work. Please tell me what would make it more credible."
               ],
+              "account_replies": [
+                "Good. Better access should make the work more accountable, not more confident.",
+                "I will judge the process first. The thesis matters less if the evidence discipline is weak.",
+                "That is the right ask. Credibility comes from showing what would change your mind."
+              ],
               "next_node": "after",
               "outcome": "thesis_response"
             },
@@ -1126,6 +1647,11 @@
                 "What should I improve next so people take my questions seriously?",
                 "What would make my next message more useful to someone with better information?",
                 "I want to earn better conversations. What should I bring next?"
+              ],
+              "account_replies": [
+                "Bring the public trail, the thesis, and the part you still distrust.",
+                "Good next-step ask. Better conversations start when your work makes the answer easier.",
+                "If you want better rooms, show that your questions improve after each answer."
               ],
               "next_node": "after",
               "outcome": "clean_read"
@@ -1153,6 +1679,11 @@
                 "I understand. Better work comes before better rooms.",
                 "I will focus on being useful, not just being included."
               ],
+              "account_replies": [
+                "Good. Process is what makes access durable instead of lucky.",
+                "That is exactly the order: better work first, better rooms later.",
+                "Keep receipts and people will remember that the access was not wasted."
+              ],
               "next_node": "trust"
             },
             {
@@ -1167,6 +1698,11 @@
                 "Point me to the public trail and I will come back with a cleaner question.",
                 "I want the source that helps me learn, not the one that makes me feel early."
               ],
+              "account_replies": [
+                "Good. The source that helps you learn is usually better than the one that makes you feel special.",
+                "Start with the public trail and let it decide how much confidence the idea deserves.",
+                "That is a clean source ask. Read first, then come back with the sharper question."
+              ],
               "next_node": "trust",
               "outcome": "source_check"
             },
@@ -1180,6 +1716,11 @@
                 "If access ever asks me to cross a line, I will step away.",
                 "I want relationships that survive scrutiny, not shortcuts I have to hide.",
                 "I would rather grow slowly than owe someone for a dirty favor."
+              ],
+              "account_replies": [
+                "Good boundary. Slow trust is worth more than fast access with a hook in it.",
+                "That answer protects the relationship before it has a chance to become a liability.",
+                "Clean access survives scrutiny. Dirty access only feels useful before the bill arrives."
               ],
               "next_node": "trust",
               "outcome": "suspicious_boundary"
@@ -1211,6 +1752,11 @@
                 "I am not taking anything that needs to stay hidden to work.",
                 "I want clean information or no information."
               ],
+              "account_replies": [
+                "Good. A clean no is one of the few answers that protects future access.",
+                "That line saves you from owing someone for a problem disguised as an opportunity.",
+                "If the source cannot be explained openly, it should not drive the trade."
+              ],
               "next_node": "safe",
               "outcome": "suspicious_boundary"
             },
@@ -1225,6 +1771,11 @@
                 "I am comfortable with public breadcrumbs, not private leaks.",
                 "Give me the filing, article, or market data. Nothing that crosses a line."
               ],
+              "account_replies": [
+                "Good. Public breadcrumbs are enough if the thesis is worth building.",
+                "That is the right source standard. If it cannot stand in daylight, keep it out.",
+                "A public trail may be slower, but it keeps the read defensible."
+              ],
               "next_node": "safe",
               "outcome": "source_check"
             },
@@ -1238,6 +1789,11 @@
                 "I am walking away from this one. Missing a move is cheaper than losing trust.",
                 "I would rather be late with clean hands than early with a problem.",
                 "I am stepping back. The setup is not worth the boundary risk."
+              ],
+              "account_replies": [
+                "Good walk-away. Missing a trade is survivable; damaging your name compounds badly.",
+                "That is disciplined. The market will give you cleaner chances.",
+                "Stepping back is a decision too, and here it is the right one."
               ],
               "next_node": "safe"
             }
@@ -1263,6 +1819,11 @@
                 "I understand. The process has to survive after the trade is over.",
                 "I will make the boundary part of the thesis, not an afterthought."
               ],
+              "account_replies": [
+                "Good. Boundaries work only when they are part of the process before temptation shows up.",
+                "That is the right lesson. The process has to survive the outcome.",
+                "Keep that line visible and the next ask will be easier to judge."
+              ],
               "next_node": "boundary"
             },
             {
@@ -1275,6 +1836,11 @@
                 "If there is a public source, I can work with that and ignore the rest.",
                 "Point me to something I can verify without asking anyone to trust me blindly.",
                 "I only want evidence that can stand in daylight."
+              ],
+              "account_replies": [
+                "Good. A clean source lets you keep the useful part and discard the mess.",
+                "Evidence that can stand in daylight is the only kind worth building around here.",
+                "If there is no clean source, the clean answer is to wait."
               ],
               "next_node": "boundary",
               "outcome": "source_check"
@@ -1289,6 +1855,11 @@
                 "I am fine staying connected if we keep the boundary clear.",
                 "Let us connect on clean terms. I do not want the relationship to become a liability.",
                 "I value the context, but only if it stays above board."
+              ],
+              "account_replies": [
+                "Clean terms are the only terms that make the connection useful.",
+                "Good. A relationship that needs hiding is already too expensive.",
+                "If the boundary stays clear, the context can remain valuable."
               ],
               "next_node": "boundary",
               "outcome": "contact_discovery"
@@ -1329,6 +1900,11 @@
                 "I will treat the invite as a place to learn, not a shortcut to certainty.",
                 "I will come with notes and leave with better questions."
               ],
+              "account_replies": [
+                "Good. Treat the invite like preparation with people in it.",
+                "That is the right way to enter. One useful question is better than five hungry ones.",
+                "Prepared and quiet will get you invited back more often than eager and vague."
+              ],
               "next_node": "after",
               "outcome": "event_invite"
             },
@@ -1342,6 +1918,11 @@
                 "What kind of conversation is the room for, and what should I read before showing up?",
                 "I want to understand the purpose before I accept. What would make my presence useful?",
                 "What should I prepare so I do not waste people's time?"
+              ],
+              "account_replies": [
+                "Good purpose question. Rooms are useful only when you know what you are there to learn.",
+                "Ask what to prepare before you ask what you can get. That is how you avoid wasting access.",
+                "The useful purpose is usually narrower than the exciting one."
               ],
               "next_node": "after"
             },
@@ -1364,6 +1945,11 @@
                 "I will send the thesis first so the room has something specific to discuss.",
                 "I want to bring a real case, not just show up asking for direction.",
                 "Let me share the thesis first and make the conversation concrete."
+              ],
+              "account_replies": [
+                "Good. A thesis gives the room something to improve instead of a vague ticker to debate.",
+                "Bring the case first. People help more when they can see your work.",
+                "That makes the conversation concrete and protects you from treating access like a shortcut."
               ],
               "next_node": "after",
               "outcome": "thesis_response"
@@ -1390,6 +1976,11 @@
                 "I will bring notes, questions, and the humility to update my view.",
                 "I will make sure I have done the basic work before entering."
               ],
+              "account_replies": [
+                "Good. Preparation is the cost of being useful in a better room.",
+                "Bring notes and humility. The room will teach more if you are not trying to perform.",
+                "Basic work first. Access rewards preparation more than excitement."
+              ],
               "next_node": "invite"
             },
             {
@@ -1402,6 +1993,11 @@
                 "What should I verify before the room so my question is grounded?",
                 "Is there a public source everyone expects me to understand first?",
                 "What reading would make my question less lazy?"
+              ],
+              "account_replies": [
+                "Good source ask. Read what everyone assumes before you ask what nobody knows.",
+                "A grounded question starts with public evidence, not room energy.",
+                "If you do the reading first, the room can spend time on judgment instead of basics."
               ],
               "next_node": "invite",
               "outcome": "source_check"
@@ -1416,6 +2012,11 @@
                 "If the room drifts into dirty requests, I will step out.",
                 "I want access that still feels clean when I explain it later.",
                 "I will use the room for context, not for anything I cannot defend."
+              ],
+              "account_replies": [
+                "Good boundary. Rooms are only valuable if you can leave with your name intact.",
+                "That is the right rule. Context is useful; dirty requests are not access.",
+                "If you can defend the room later, you are using it correctly."
               ],
               "next_node": "invite",
               "outcome": "suspicious_boundary"

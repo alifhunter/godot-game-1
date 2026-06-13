@@ -9,6 +9,105 @@
       "3": "Tier 3",
       "4": "Tier 4"
     },
+    "dialog_routing": {
+      "public_rules": [
+        {
+          "id": "profile_preferred_public",
+          "tree_id": "profile_preferred"
+        },
+        {
+          "id": "source_category_public",
+          "tree_id": "source_check",
+          "conditions": {
+            "post_category_contains_any": [
+              "source",
+              "rumor",
+              "corporate"
+            ]
+          }
+        },
+        {
+          "id": "trusted_public",
+          "tree_id": "trust_building",
+          "conditions": {
+            "relationship_gte": 18
+          }
+        },
+        {
+          "id": "default_public",
+          "tree_id": "market_read"
+        }
+      ],
+      "private_rules": [
+        {
+          "id": "network_profile_private",
+          "tree_id": "profile_preferred",
+          "conditions": {
+            "network_source": true
+          }
+        },
+        {
+          "id": "suspicious_private",
+          "tree_id": "suspicious_boundary",
+          "conditions": {
+            "risk_profile": "suspicious"
+          }
+        },
+        {
+          "id": "trusted_private",
+          "tree_id": "event_invite",
+          "conditions": {
+            "relationship_stage": [
+              "trusted",
+              "inner_circle_candidate"
+            ]
+          }
+        },
+        {
+          "id": "intro_private",
+          "tree_id": "clean_intro",
+          "conditions": {
+            "relationship_lt": 5
+          }
+        },
+        {
+          "id": "thesis_review_private",
+          "tree_id": "thesis_review",
+          "conditions": {
+            "credibility_lt": 12
+          }
+        },
+        {
+          "id": "thread_trust_private",
+          "tree_id": "trust_building",
+          "conditions": {
+            "thread_rows_gte": 4
+          }
+        },
+        {
+          "id": "relationship_trust_private",
+          "tree_id": "trust_building",
+          "conditions": {
+            "relationship_gte": 18
+          }
+        },
+        {
+          "id": "source_check_private",
+          "tree_id": "source_check",
+          "conditions": {
+            "credibility_lt": 8
+          }
+        },
+        {
+          "id": "profile_preferred_private",
+          "tree_id": "profile_preferred"
+        },
+        {
+          "id": "default_private",
+          "tree_id": "clean_intro"
+        }
+      ]
+    },
     "interaction_response_pools": {
       "reply_support": [
         "Good read. Keep the position sized to the evidence, not the noise.",
@@ -130,6 +229,11 @@
     "dialog_trees": {
       "network_source_followup": {
         "entry_node": "open",
+        "graduation": {
+          "steps": 3,
+          "node": "relationship_handoff",
+          "next_tree": "network_relationship_probe"
+        },
         "nodes": {
           "open": {
             "account_replies": [
@@ -289,6 +393,74 @@
                   "Understood. I will let the public trail do some work before I ask again."
                 ],
                 "next_node": "open"
+              }
+            ]
+          },
+          "relationship_handoff": {
+            "account_replies": [
+              "You have kept the source ask clean enough for a relationship conversation now.",
+              "This is the point where I care less about the lead and more about your process.",
+              "You have done enough public checking. If we keep talking, the next part is how you handle access.",
+              "A useful source relationship starts when you can explain uncertainty without forcing it into certainty.",
+              "Good. The next conversation can be about trust, process, and how you use what you hear."
+            ],
+            "options": [
+              {
+                "id": "show_process_next",
+                "label": "Process",
+                "private_action_id": "message_check_in",
+                "player_lines": [
+                  "I want to keep this relationship process-first: verify, write the risk, then decide.",
+                  "Before I ask for more, I want to show how I handle the source lead and its uncertainty.",
+                  "I am trying to use the access responsibly, not turn it into instant conviction."
+                ],
+                "account_replies": [
+                  "That is the right next step. Process is what makes access safe enough to continue.",
+                  "Good. Bring that discipline into the next conversation and the answers can get more useful.",
+                  "If you keep framing it that way, this can become a real source relationship."
+                ],
+                "next_node": "relationship_handoff"
+              },
+              {
+                "id": "bring_evidence_next",
+                "label": "Evidence",
+                "private_action_id": "ask_source_private",
+                "player_lines": [
+                  "I checked the public trail and want to compare the weak point before I go further.",
+                  "The lead has one useful public check and one open risk. Can I frame both before asking more?",
+                  "I want to bring evidence first, then ask what still sounds too convenient."
+                ],
+                "account_replies": [
+                  "That is a better order. Evidence first, source context second.",
+                  "Good. A weak point on the table makes the conversation safer and more useful.",
+                  "That is the kind of follow-up that can justify a closer source relationship."
+                ],
+                "next_node": "relationship_handoff",
+                "outcome": "source_check"
+              },
+              {
+                "id": "connect_responsibly_next",
+                "label": "Responsible access",
+                "private_action_id": "connect",
+                "requirements": {
+                  "min_relationship": 4
+                },
+                "blocked_lines": [
+                  "Not yet. Bring one more clean check before asking for relationship access.",
+                  "Keep the process visible first. Access comes after discipline, not before it."
+                ],
+                "player_lines": [
+                  "I would like to keep this as a real source relationship, with public checks and clear boundaries.",
+                  "Can we connect with the rule that I bring evidence before asking for context?",
+                  "I want to keep the access responsible: narrow questions, public evidence, and no pressure."
+                ],
+                "account_replies": [
+                  "That is the only version of access that works.",
+                  "Fine. Keep that boundary and the relationship can stay useful.",
+                  "Responsible access starts with the rule you just named."
+                ],
+                "next_node": "relationship_handoff",
+                "outcome": "contact_discovery"
               }
             ]
           }

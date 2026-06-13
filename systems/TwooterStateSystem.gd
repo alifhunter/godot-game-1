@@ -103,7 +103,8 @@ static func normalize_account_state(source_state: Variant) -> Dictionary:
 			"day_index": int(row.get("day_index", 0)),
 			"action_id": str(row.get("action_id", "")),
 			"text": str(row.get("text", "")),
-			"post_id": str(row.get("post_id", ""))
+			"post_id": str(row.get("post_id", "")),
+			"dialog_outcome": str(row.get("dialog_outcome", ""))
 		})
 	if normalized["timeline"].size() > 12:
 		normalized["timeline"] = normalized["timeline"].slice(normalized["timeline"].size() - 12, normalized["timeline"].size())
@@ -125,7 +126,8 @@ static func normalize_post_interaction(source_interaction: Variant) -> Dictionar
 			"day_index": int(reply.get("day_index", 0)),
 			"relationship_delta": int(reply.get("relationship_delta", 0)),
 			"exposure_delta": int(reply.get("exposure_delta", 0)),
-			"credibility_delta": int(reply.get("credibility_delta", 0))
+			"credibility_delta": int(reply.get("credibility_delta", 0)),
+			"dialog_outcome": str(reply.get("dialog_outcome", ""))
 		})
 	if replies.size() > 6:
 		replies = replies.slice(replies.size() - 6, replies.size())
@@ -179,6 +181,7 @@ static func normalize_dialog_branch(source_branch: Variant) -> Dictionary:
 		"tree_id": str(source.get("tree_id", "")),
 		"node_id": str(source.get("node_id", "")),
 		"last_option_id": str(source.get("last_option_id", "")),
+		"last_outcome": str(source.get("last_outcome", "")),
 		"last_action_id": str(source.get("last_action_id", "")),
 		"repeat_count": max(int(source.get("repeat_count", 0)), 0),
 		"last_day_index": int(source.get("last_day_index", -1)),

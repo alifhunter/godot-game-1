@@ -15612,11 +15612,11 @@ func _validate_design_system_assets() -> String:
 	if option_normal == null or not _color_close(option_button.get_theme_color("font_color"), UiTheme.color("desktop.text")):
 		return "Smoke test expected desktop option buttons to use UiTheme styling."
 
-	var design_doc_text: String = _read_text_file("res://docs/DESIGN_SYSTEM.md")
+	var design_doc_text: String = _read_text_file("res://docs/development/DESIGN_SYSTEM.md")
 	var readme_text: String = _read_text_file("res://README.md")
 	if design_doc_text.is_empty() or design_doc_text.find("desktop_tab") == -1 or design_doc_text.find("viewport-width font scaling") == -1:
-		return "Smoke test expected docs/DESIGN_SYSTEM.md to document tabs and UI scale rules."
-	if readme_text.find("docs/DESIGN_SYSTEM.md") == -1 or readme_text.find("UiTheme") == -1:
+		return "Smoke test expected docs/development/DESIGN_SYSTEM.md to document tabs and UI scale rules."
+	if readme_text.find("docs/development/DESIGN_SYSTEM.md") == -1 or readme_text.find("UiTheme") == -1:
 		return "Smoke test expected README.md to link the design system docs and mention UiTheme."
 
 	return ""
@@ -15674,16 +15674,16 @@ func _validate_release_readiness_assets() -> String:
 	if steam_report_context.find("Steam app id") == -1 or steam_report_context.find(str(expected_steam_app_id)) == -1:
 		return "Smoke test expected SteamManager bug-report context to include the configured Steam app id."
 
-	var known_issues_text: String = _read_text_file("res://docs/KNOWN_ISSUES.md")
+	var known_issues_text: String = _read_text_file("res://docs/development/KNOWN_ISSUES.md")
 	if (
 		known_issues_text.is_empty() or
 		known_issues_text.find(build_number) == -1 or
 		known_issues_text.find("KI-001") == -1 or
 		known_issues_text.find("Reporting Priority") == -1
 	):
-		return "Smoke test expected docs/KNOWN_ISSUES.md to include the current build number, issue ids, and reporting priorities."
+		return "Smoke test expected docs/development/KNOWN_ISSUES.md to include the current build number, issue ids, and reporting priorities."
 
-	var bug_template_text: String = _read_text_file("res://docs/BUG_REPORT_TEMPLATE.md")
+	var bug_template_text: String = _read_text_file("res://docs/steam/BUG_REPORT_TEMPLATE.md")
 	if (
 		bug_template_text.is_empty() or
 		bug_template_text.find(build_number) == -1 or
@@ -15693,9 +15693,9 @@ func _validate_release_readiness_assets() -> String:
 		bug_template_text.find("Expected Result") == -1 or
 		bug_template_text.find("Actual Result") == -1
 	):
-		return "Smoke test expected docs/BUG_REPORT_TEMPLATE.md to include Steam setup, build, reproduction, expected-result, and actual-result fields."
+		return "Smoke test expected docs/steam/BUG_REPORT_TEMPLATE.md to include Steam setup, build, reproduction, expected-result, and actual-result fields."
 
-	var playtest_doc_text: String = _read_text_file("res://docs/STEAM_PLAYTEST_CHECKLIST.md")
+	var playtest_doc_text: String = _read_text_file("res://docs/steam/STEAM_PLAYTEST_CHECKLIST.md")
 	if (
 		playtest_doc_text.is_empty() or
 		playtest_doc_text.find(build_number) == -1 or
@@ -15703,18 +15703,18 @@ func _validate_release_readiness_assets() -> String:
 		playtest_doc_text.find("App ID `%d`" % expected_steam_app_id) == -1 or
 		playtest_doc_text.find("Steam overlay") == -1
 	):
-		return "Smoke test expected docs/STEAM_PLAYTEST_CHECKLIST.md to define the Steam-launch platform checklist."
+		return "Smoke test expected docs/steam/STEAM_PLAYTEST_CHECKLIST.md to define the Steam-launch platform checklist."
 
-	var achievement_doc_text: String = _read_text_file("res://docs/STEAM_ACHIEVEMENT_IDS.md")
+	var achievement_doc_text: String = _read_text_file("res://docs/steam/STEAM_ACHIEVEMENT_IDS.md")
 	if (
 		achievement_doc_text.is_empty() or
 		achievement_doc_text.find("ACH_FIRST_TRADE") == -1 or
 		achievement_doc_text.find("STAT_TRADES_PLACED") == -1 or
 		achievement_doc_text.find("Steamworks") == -1
 	):
-		return "Smoke test expected docs/STEAM_ACHIEVEMENT_IDS.md to include Steam achievement and stat API prep."
+		return "Smoke test expected docs/steam/STEAM_ACHIEVEMENT_IDS.md to include Steam achievement and stat API prep."
 
-	var cloud_doc_text: String = _read_text_file("res://docs/STEAM_CLOUD_SAVE_PATHS.md")
+	var cloud_doc_text: String = _read_text_file("res://docs/steam/STEAM_CLOUD_SAVE_PATHS.md")
 	if (
 		cloud_doc_text.is_empty() or
 		cloud_doc_text.find("user://saves/slot_1.json") == -1 or
@@ -15724,7 +15724,7 @@ func _validate_release_readiness_assets() -> String:
 		cloud_doc_text.find("testappcloudpaths %d" % expected_steam_app_id) == -1 or
 		cloud_doc_text.find("Launch the Steam build from Steam") == -1
 	):
-		return "Smoke test expected docs/STEAM_CLOUD_SAVE_PATHS.md to document Steam Auto-Cloud save paths."
+		return "Smoke test expected docs/steam/STEAM_CLOUD_SAVE_PATHS.md to document Steam Auto-Cloud save paths."
 
 	var achievement_catalog_text: String = _read_text_file("res://data/steam/achievement_catalog.json")
 	if achievement_catalog_text.is_empty():
