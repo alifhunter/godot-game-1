@@ -38,6 +38,54 @@
     ],
     "private_rules": [
       {
+        "id": "network_insider_private",
+        "tree_id": "profile_preferred",
+        "conditions": {
+          "network_source": true,
+          "affiliation_role": "insider"
+        }
+      },
+      {
+        "id": "network_guarded_private",
+        "tree_id": "profile_preferred",
+        "conditions": {
+          "network_source": true,
+          "risk_profile": "suspicious"
+        }
+      },
+      {
+        "id": "network_inner_circle_private",
+        "tree_id": "network_inner_circle_source",
+        "conditions": {
+          "network_source": true,
+          "relationship_stage": "inner_circle_candidate"
+        }
+      },
+      {
+        "id": "network_trusted_private",
+        "tree_id": "network_trusted_source",
+        "conditions": {
+          "network_source": true,
+          "relationship_stage": "trusted"
+        }
+      },
+      {
+        "id": "network_familiar_private",
+        "tree_id": "network_familiar_source",
+        "conditions": {
+          "network_source": true,
+          "relationship_stage": "familiar"
+        }
+      },
+      {
+        "id": "network_stranger_private",
+        "tree_id": "network_stranger_source",
+        "conditions": {
+          "network_source": true,
+          "relationship_stage": "stranger"
+        }
+      },
+      {
         "id": "network_profile_private",
         "tree_id": "profile_preferred",
         "conditions": {
@@ -178,6 +226,11 @@
       "Keep saying no to dirty shortcuts. It protects future access."
     ]
   },
+  "direct_tip_reply_templates": [
+    "{direction_label} {ticker} {entry_timing} and hold {hold_period}. Confidence: {confidence_label}. Risk: {risk_note}. Boundary: {public_boundary_note}",
+    "Direct read: {direction_label} {ticker} {entry_timing}; hold {hold_period} unless {risk_note}. Keep it clean: {public_boundary_note}",
+    "{ticker}: {direction_label} {entry_timing}, hold {hold_period}. The invalidation is {risk_note}. {public_boundary_note}"
+  ],
   "relationship_reply_pools": {
     "familiar": [
       "You are getting easier to answer because your questions are specific now.",
@@ -236,6 +289,519 @@
     ]
   },
   "dialog_trees": {
+    "network_stranger_source": {
+      "entry_node": "open",
+      "nodes": {
+        "open": {
+          "account_replies": [
+            "I do not know you yet. Keep this public, narrow, and easy to verify.",
+            "Start with the clean edge: what can be checked without trusting me?",
+            "A first source message should lower risk, not create urgency.",
+            "Careful opener. I can answer process questions before I answer conviction questions.",
+            "If this came from a News lead, treat it as a checklist before it becomes a thesis."
+          ],
+          "options": [
+            {
+              "id": "source_context",
+              "label": "Context",
+              "private_action_id": "message_check_in",
+              "player_lines": [
+                "I found your handle from a public lead. I want to ask for context, not pressure you for a signal.",
+                "I am starting with how I found you and what I can verify publicly.",
+                "I want to keep this first message clean: public context, narrow question, no shortcut."
+              ],
+              "account_replies": [
+                "That is the right first boundary. Context first, conviction later.",
+                "Good. A source relationship starts with how you ask, not how much you ask for.",
+                "If you keep it public and narrow, there is something useful to discuss."
+              ],
+              "next_node": "open"
+            },
+            {
+              "id": "public_trail",
+              "label": "Public trail",
+              "private_action_id": "ask_source_private",
+              "player_lines": [
+                "What public filing, dated news, or volume trail should I verify before trusting this?",
+                "Before I give this lead weight, what public source would you check first?",
+                "Point me to the boring public trail before I let the story get exciting."
+              ],
+              "account_replies": [
+                "Good. Start with what you can reopen tomorrow and explain without me.",
+                "The public trail is the correct first ask. If it is thin, keep the read thin too.",
+                "Use filings, dates, and volume first. They keep the source from doing too much work."
+              ],
+              "next_node": "open",
+              "outcome": "source_check"
+            },
+            {
+              "id": "boundary_check",
+              "label": "Boundary",
+              "private_action_id": "message_check_in",
+              "player_lines": [
+                "I am not asking for private information. I only want the public boundary and what not to overread.",
+                "I want to stay on the safe side of this. What part should I avoid treating as certain?",
+                "If the clean answer is no trade and more verification, I am fine with that."
+              ],
+              "account_replies": [
+                "Good boundary. The safest first read is often what not to overread.",
+                "That framing protects both sides. Public context is enough for a first pass.",
+                "No-trade is a valid answer when the public evidence is not ready."
+              ],
+              "next_node": "open"
+            },
+            {
+              "id": "watch_item_soft",
+              "label": "Watch item",
+              "private_action_id": "ask_tip",
+              "requirements": {
+                "min_relationship": 4
+              },
+              "blocked_lines": [
+                "Ask for public context first. A watch item comes after I know you respect the boundary.",
+                "Not yet. Show the first question is clean before asking for a watch item."
+              ],
+              "player_lines": [
+                "If there is one low-conviction watch item here, what should I track without acting yet?",
+                "What single public checkpoint would make this worth watching, not buying?",
+                "Give me a watch item I can verify myself, not a trade to copy."
+              ],
+              "account_replies": [
+                "A watch item is fine. Define the public checkpoint before you define the trade.",
+                "Watch the confirmation, not the rumor. That keeps the read honest.",
+                "Low conviction means small attention, not hidden confidence."
+              ],
+              "next_node": "open",
+              "outcome": "clean_read"
+            },
+            {
+              "id": "close_loop",
+              "label": "Close loop",
+              "private_action_id": "message_check_in",
+              "player_lines": [
+                "That is enough for a first pass. I will check the trail before asking again.",
+                "I will close this loop and come back only if the public evidence changes.",
+                "I will keep the relationship clean by doing the next check myself."
+              ],
+              "account_replies": [
+                "Good close. The next message should bring evidence, not urgency.",
+                "That restraint matters. Come back when the source trail changes.",
+                "Fine by me. A careful pause makes the next question easier to answer."
+              ],
+              "next_node": "open"
+            }
+          ]
+        }
+      }
+    },
+    "network_familiar_source": {
+      "entry_node": "open",
+      "nodes": {
+        "open": {
+          "account_replies": [
+            "You have shown enough discipline for a cleaner read, but keep the evidence visible.",
+            "This is more useful now. Bring the ticker, the source, and the risk in one sentence.",
+            "Familiar does not mean certain. It means the question can get more specific.",
+            "I can answer a sharper ask when you keep the public trail attached.",
+            "Good. The relationship can handle a little more detail if the boundary stays clean."
+          ],
+          "options": [
+            {
+              "id": "clean_read",
+              "label": "Clean read",
+              "private_action_id": "ask_tip",
+              "player_lines": [
+                "What is the cleanest verifiable read on {ticker} right now?",
+                "Give me the careful read on {ticker}, including what would make it wrong.",
+                "What is the read here if we keep the public evidence and risk in view?"
+              ],
+              "account_replies": [
+                "The clean read is useful only if you keep the failure point beside it.",
+                "Good ask. Treat the read as a thesis input, not as permission to skip work.",
+                "For {ticker}, the useful part is what changes probability, not what sounds exciting."
+              ],
+              "next_node": "open",
+              "outcome": "clean_read"
+            },
+            {
+              "id": "second_source",
+              "label": "Second source",
+              "private_action_id": "ask_source_private",
+              "player_lines": [
+                "What second public source would confirm or reject this lead?",
+                "If I had to cross-check this, which public source should disagree first?",
+                "What would you compare against the first source before sizing the idea?"
+              ],
+              "account_replies": [
+                "Good. One source starts a question; two sources start a case.",
+                "The second source should be boring enough to argue against your excitement.",
+                "If the second check disagrees, respect that before the tape forces you to."
+              ],
+              "next_node": "open",
+              "outcome": "source_check"
+            },
+            {
+              "id": "connect_properly",
+              "label": "Connect",
+              "private_action_id": "connect",
+              "requirements": {
+                "min_relationship": 18
+              },
+              "blocked_lines": [
+                "Not yet. Keep the questions useful before turning this into a real contact.",
+                "A proper connection needs more than one clean exchange."
+              ],
+              "player_lines": [
+                "Can we turn this into a proper Network contact if I keep future asks evidence-first?",
+                "I would like to connect properly and keep the relationship useful, not urgent.",
+                "Can we connect with the rule that I bring public checks before asking for context?"
+              ],
+              "account_replies": [
+                "That is the right version of connecting: public checks before context.",
+                "If you keep that discipline, a proper contact can be useful.",
+                "Connection works when the questions keep improving."
+              ],
+              "next_node": "open",
+              "outcome": "contact_discovery"
+            },
+            {
+              "id": "risk_check",
+              "label": "Risk check",
+              "private_action_id": "ask_source_private",
+              "player_lines": [
+                "What would make you cautious even if the headline keeps improving?",
+                "What is the risk that would make this read too convenient?",
+                "What should I write as the invalidation point before I trust the setup?"
+              ],
+              "account_replies": [
+                "Good risk check. The useful source is the one that makes you less lazy.",
+                "Write the invalidation before the market gives you a reason to ignore it.",
+                "The risk is not separate from the read. It is what keeps the read honest."
+              ],
+              "next_node": "open",
+              "outcome": "source_check"
+            },
+            {
+              "id": "followup_timing",
+              "label": "Timing",
+              "private_action_id": "ask_tip",
+              "player_lines": [
+                "When is the next public checkpoint that should matter?",
+                "What timing should I watch before deciding whether this read is alive?",
+                "Is this a today problem, a next-week problem, or just a watchlist item?"
+              ],
+              "account_replies": [
+                "Timing matters because weak evidence becomes dangerous when you hurry it.",
+                "Name the next checkpoint before you name the position.",
+                "If the checkpoint is not close, keep the read small and patient."
+              ],
+              "next_node": "open",
+              "outcome": "clean_read"
+            },
+            {
+              "id": "share_thesis",
+              "label": "Share thesis",
+              "private_action_id": "share_thesis",
+              "requirements": {
+                "shareable_thesis": true
+              },
+              "blocked_lines": [
+                "Write the thesis first. Then I can challenge the source quality.",
+                "Bring a shareable thesis before asking me to react to the structure."
+              ],
+              "player_lines": [
+                "I wrote the thesis. Can you challenge where the source work is thin?",
+                "Can I share the thesis so you can attack the assumption that feels too easy?",
+                "I want you to push back on the source quality before I size anything."
+              ],
+              "account_replies": [
+                "Good. A written thesis gives the source work something to prove.",
+                "I will look for the part where the conclusion is doing more work than the evidence.",
+                "That is useful. A thesis should survive a source challenge before it gets capital."
+              ],
+              "next_node": "open",
+              "outcome": "thesis_response"
+            }
+          ]
+        }
+      }
+    },
+    "network_trusted_source": {
+      "entry_node": "open",
+      "nodes": {
+        "open": {
+          "account_replies": [
+            "You have earned a guarded read. I will be clearer, but the boundary still matters.",
+            "Trusted means I can spend more context, not that you get to skip verification.",
+            "You are asking like someone who can handle a sharper answer.",
+            "The stronger read comes with a stronger responsibility to name the risk.",
+            "This is where the source relationship becomes useful if you keep the work clean."
+          ],
+          "options": [
+            {
+              "id": "guarded_tip",
+              "label": "Guarded read",
+              "private_action_id": "ask_tip",
+              "requirements": {
+                "relationship_stage": "trusted"
+              },
+              "player_lines": [
+                "Give me the stronger read, but include the caveat that keeps it honest.",
+                "What is the guarded read here if I still have to defend it publicly?",
+                "What is the sharper view, and what would make you reduce confidence?"
+              ],
+              "account_replies": [
+                "The stronger read is useful only if the caveat travels with it.",
+                "Good. If you can defend the caveat, you can handle the read.",
+                "A guarded read should sharpen sizing, not inflate confidence."
+              ],
+              "next_node": "open",
+              "outcome": "clean_read"
+            },
+            {
+              "id": "referral_probe",
+              "label": "Referral",
+              "private_action_id": "ask_source_private",
+              "requirements": {
+                "relationship_stage": "trusted"
+              },
+              "player_lines": [
+                "Is there someone better suited to this topic, if I prepare the ask properly?",
+                "Would a narrower introduction make sense, or should I keep working the public trail?",
+                "If this needs a better source, what would I need to prove before asking for an intro?"
+              ],
+              "account_replies": [
+                "A referral is possible only when the ask is narrow enough not to waste reputation.",
+                "Good. Prepare the question before you ask for the person.",
+                "If I point you somewhere, your question has to prove you understand the cost of access."
+              ],
+              "next_node": "open",
+              "outcome": "contact_discovery"
+            },
+            {
+              "id": "position_sizing",
+              "label": "Sizing",
+              "private_action_id": "ask_tip",
+              "requirements": {
+                "relationship_stage": "trusted"
+              },
+              "player_lines": [
+                "How carefully should I size this if the evidence is useful but not complete?",
+                "What would keep this as a small position even if the read is right?",
+                "How should I think about sizing before the next public checkpoint?"
+              ],
+              "account_replies": [
+                "Sizing should follow evidence quality, not how privileged the conversation feels.",
+                "If the next checkpoint can break the read, size it like that is possible.",
+                "The right size is the one that survives being early or partly wrong."
+              ],
+              "next_node": "open",
+              "outcome": "clean_read"
+            },
+            {
+              "id": "challenge_thesis",
+              "label": "Challenge thesis",
+              "private_action_id": "share_thesis",
+              "requirements": {
+                "relationship_stage": "trusted",
+                "shareable_thesis": true
+              },
+              "blocked_lines": [
+                "Bring the written thesis. I can challenge assumptions, not impressions.",
+                "Write the evidence and failure point first; then the challenge is useful."
+              ],
+              "player_lines": [
+                "I have the thesis written. Please attack the assumption that would hurt me most.",
+                "Can you challenge the evidence stack and tell me what sounds too convenient?",
+                "I want you to push against the thesis before I let it become conviction."
+              ],
+              "account_replies": [
+                "Good. The most dangerous assumption is usually the one that sounds obvious.",
+                "A proper challenge will make the thesis smaller or stronger. Both are useful.",
+                "I will attack the evidence stack, not the headline."
+              ],
+              "next_node": "open",
+              "outcome": "thesis_response"
+            },
+            {
+              "id": "event_room",
+              "label": "Room",
+              "private_action_id": "accept_invite",
+              "requirements": {
+                "relationship_stage": "trusted"
+              },
+              "player_lines": [
+                "If there is a higher-context room, I will enter with one prepared question.",
+                "I can join a room only if I can add a clean read, not just listen for shortcuts.",
+                "If you invite me, I will keep the question narrow and evidence-first."
+              ],
+              "account_replies": [
+                "That is the right posture. Rooms punish lazy access quickly.",
+                "A room is useful when you bring work, not appetite.",
+                "Prepared questions keep access open."
+              ],
+              "next_node": "open",
+              "outcome": "event_invite"
+            },
+            {
+              "id": "source_conflict",
+              "label": "Conflict",
+              "private_action_id": "ask_source_private",
+              "requirements": {
+                "relationship_stage": "trusted"
+              },
+              "player_lines": [
+                "What would make two good sources disagree on this setup?",
+                "If another source rejects this read, what would probably be the reason?",
+                "Where is the disagreement that would tell me the idea is not ready?"
+              ],
+              "account_replies": [
+                "Source conflict is useful. It tells you which assumption is carrying the trade.",
+                "If good sources disagree, size the uncertainty before you size the position.",
+                "Find the disagreement before the market finds it for you."
+              ],
+              "next_node": "open",
+              "outcome": "source_check"
+            }
+          ]
+        }
+      }
+    },
+    "network_inner_circle_source": {
+      "entry_node": "open",
+      "nodes": {
+        "open": {
+          "account_replies": [
+            "You are close enough for the direct version, but the line stays clean.",
+            "Inner-circle access is fragile. Ask narrowly and write the risk before the trade.",
+            "I can be more practical now, but you still own the decision.",
+            "This level of context should make you more careful, not more aggressive.",
+            "Use the read to improve timing and risk, not to borrow conviction."
+          ],
+          "options": [
+            {
+              "id": "direct_tip",
+              "label": "Direct read",
+              "private_action_id": "ask_tip",
+              "requirements": {
+                "relationship_stage": "inner_circle_candidate"
+              },
+              "player_lines": [
+                "Give me the clearest actionable read you can give while keeping the boundary clean.",
+                "What is the direct read here if I still have to own the risk myself?",
+                "If you had to make this practical, what would you tell me to watch or do?"
+              ],
+              "account_replies": [
+                "The direct read is only useful if you still write the invalidation.",
+                "I can be practical, but not responsible for your sizing. Keep the risk explicit.",
+                "The clean version is actionable because it has a review point, not because it sounds certain."
+              ],
+              "next_node": "open",
+              "outcome": "direct_tip"
+            },
+            {
+              "id": "entry_timing",
+              "label": "Entry timing",
+              "private_action_id": "ask_tip",
+              "requirements": {
+                "relationship_stage": "inner_circle_candidate"
+              },
+              "player_lines": [
+                "Is this a today read, tomorrow read, this-week read, next-week read, or next-month read?",
+                "What entry timing keeps this from becoming an impatient trade?",
+                "When should I review the read before deciding whether it still deserves attention?"
+              ],
+              "account_replies": [
+                "Timing is the part that keeps a good read from becoming a bad trade.",
+                "Do not compress a next-week read into a today trade just because access feels close.",
+                "Review the read when the public checkpoint arrives, not when impatience arrives."
+              ],
+              "next_node": "open",
+              "outcome": "clean_read"
+            },
+            {
+              "id": "private_referral",
+              "label": "Private intro",
+              "private_action_id": "ask_source_private",
+              "requirements": {
+                "relationship_stage": "inner_circle_candidate"
+              },
+              "player_lines": [
+                "If there is a better person for this, I can prepare a narrow question before any intro.",
+                "Would a private introduction make sense here, or should I keep this with you?",
+                "If you introduce me, what should the question be so I do not waste the room?"
+              ],
+              "account_replies": [
+                "A private intro only works when the question is already precise.",
+                "If I open a door, you carry my reputation into it. Prepare accordingly.",
+                "The better person may exist, but the ask has to be narrow enough to deserve them."
+              ],
+              "next_node": "open",
+              "outcome": "contact_discovery"
+            },
+            {
+              "id": "hold_period",
+              "label": "Hold period",
+              "private_action_id": "ask_tip",
+              "requirements": {
+                "relationship_stage": "inner_circle_candidate"
+              },
+              "player_lines": [
+                "How long should this read stay valid before I force a review?",
+                "What hold period makes sense before the setup needs fresh evidence?",
+                "When does this read expire if the public evidence does not improve?"
+              ],
+              "account_replies": [
+                "Every read needs an expiry. Without one, conviction turns into inertia.",
+                "The hold period should end when the next public checkpoint fails to confirm.",
+                "Set the review date now, before the position starts negotiating with you."
+              ],
+              "next_node": "open",
+              "outcome": "clean_read"
+            },
+            {
+              "id": "conviction_risk",
+              "label": "Conviction risk",
+              "private_action_id": "ask_source_private",
+              "requirements": {
+                "relationship_stage": "inner_circle_candidate"
+              },
+              "player_lines": [
+                "What risk should force me to cut size even if the read still sounds right?",
+                "What would invalidate the read or make it too dangerous to size up?",
+                "Where is the failure point that I should respect immediately?"
+              ],
+              "account_replies": [
+                "The failure point matters more at this access level, not less.",
+                "Cut size when the public evidence stops matching the private confidence.",
+                "If the read needs silence to stay alive, it is already weaker than you think."
+              ],
+              "next_node": "open",
+              "outcome": "source_check"
+            },
+            {
+              "id": "no_trade_boundary",
+              "label": "No trade",
+              "private_action_id": "message_check_in",
+              "requirements": {
+                "relationship_stage": "inner_circle_candidate"
+              },
+              "player_lines": [
+                "If the clean answer is do nothing, I want to hear that plainly.",
+                "Tell me if this is a no-trade setup despite the access.",
+                "I would rather pass cleanly than force a trade from better context."
+              ],
+              "account_replies": [
+                "Good. No trade is often the highest-trust answer.",
+                "Passing is a position when the setup is not clean enough.",
+                "Better context does not obligate a trade. Sometimes it only improves the pass."
+              ],
+              "next_node": "open"
+            }
+          ]
+        }
+      }
+    },
     "network_source_followup": {
       "entry_node": "open",
       "graduation": {

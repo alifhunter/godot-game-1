@@ -4,6 +4,11 @@ const LOT_SIZE := 100
 const REFERRAL_RELATIONSHIP_THRESHOLD := 45
 const REFERRAL_RELATIONSHIP_COST := 10
 const REFERRAL_CONNECTION_THRESHOLD := 50
+const INNER_CIRCLE_REFERRAL_ROLE := "inner_circle"
+const INNER_CIRCLE_REFERRAL_RECOGNITION_THRESHOLD := 90
+const INNER_CIRCLE_BRIDGE_RECOGNITION_MIN := 70
+const INNER_CIRCLE_BRIDGE_RECOGNITION_MAX := 90
+const INNER_CIRCLE_REFERRAL_TRUST_RELATIONSHIP := 60
 const TIP_RELATIONSHIP_COST := 2
 const REQUEST_RELATIONSHIP_SUCCESS := 10
 const REQUEST_RELATIONSHIP_FAILURE := -4
@@ -17,15 +22,146 @@ const MAX_NETWORK_JOURNAL_ROWS := 18
 const MAX_SOCIAL_MESSAGE_ROWS_PER_THREAD := 24
 const NETWORK_TWOOTER_ACCOUNT_PREFIX := "network_"
 const NETWORK_REACTION_ACTION_ID := "network_followup_reaction"
-const MEETING_LEAD_TIER_ORDER := {
-	"open": 0,
-	"low": 1,
-	"mid": 2,
-	"high": 3
-}
-
+const TRUTH_LABEL_NETWORK_READ := "Network Read"
+const TRUTH_LABEL_ACCUMULATION := "Accumulation"
+const TRUTH_LABEL_FILING_BACKED := "Filing-Backed"
+const TRUTH_LABEL_EXECUTION_WATCH := "Execution Watch"
+const TRUTH_LABEL_REAL_BUT_DELAYED := "Real But Delayed"
+const TRUTH_LABEL_ROOM_RISK := "Room Risk"
+const TRUTH_LABEL_EARLY_READ := "Early Read"
+const TRUTH_LABEL_DISTRIBUTION_RISK := "Distribution Risk"
+const TRUTH_LABEL_RETAIL_TRAP := "Retail Trap"
+const TRUTH_LABEL_DEAD_STORY := "Dead Story"
+const TRUTH_LABEL_PRESSURE_READ := "Pressure Read"
+const CONSTRUCTIVE_TRUTH_LABELS := [
+	TRUTH_LABEL_ACCUMULATION,
+	TRUTH_LABEL_FILING_BACKED,
+	TRUTH_LABEL_EXECUTION_WATCH,
+	TRUTH_LABEL_NETWORK_READ
+]
+const TIMING_RISK_TRUTH_LABELS := [
+	TRUTH_LABEL_REAL_BUT_DELAYED,
+	TRUTH_LABEL_ROOM_RISK,
+	TRUTH_LABEL_EARLY_READ
+]
+const CAUTIONARY_TRUTH_LABELS := [
+	TRUTH_LABEL_DISTRIBUTION_RISK,
+	TRUTH_LABEL_RETAIL_TRAP,
+	TRUTH_LABEL_DEAD_STORY,
+	TRUTH_LABEL_PRESSURE_READ
+]
+const OUTCOME_LABEL_USEFUL_READ := "Useful read"
+const OUTCOME_LABEL_USEFUL_WARNING := "Useful warning"
+const OUTCOME_LABEL_USEFUL_TIMING_READ := "Useful timing read"
+const OUTCOME_LABEL_EARLY_NOT_WRONG := "Early, not wrong"
+const OUTCOME_LABEL_TOO_EARLY := "Too early"
+const OUTCOME_LABEL_MISSED_BADLY := "Missed badly"
+const OUTCOME_LABEL_STILL_PENDING := "Still pending"
+const GOOD_OUTCOME_LABELS := [
+	OUTCOME_LABEL_USEFUL_READ,
+	OUTCOME_LABEL_USEFUL_WARNING,
+	OUTCOME_LABEL_USEFUL_TIMING_READ,
+	OUTCOME_LABEL_EARLY_NOT_WRONG
+]
+const TIP_STATUS_PENDING := "pending"
+const TIP_STATUS_RESOLVED := "resolved"
+const TIP_STATUS_UNRESOLVED := "unresolved"
+const DISCOVERY_STATUS_DISCOVERED := "discovered"
+const REQUEST_STATUS_COMPLETED := "completed"
+const REQUEST_STATUS_MISSED := "missed"
+const DIRTY_TIP_STATUS_OFFERED := "offered"
+const DIRTY_TIP_STATUS_CAUGHT := "caught"
+const DIRTY_TIP_STATUS_RESOLVED_CLEAN := "resolved_clean"
+const MEETING_LEAD_STATUS_MET := "met"
+const REQUEST_TYPE_DIRTY_TIP := "dirty_tip"
+const TIP_JOURNAL_TYPE_TWOOTER_SOCIAL := "twooter_social"
+const STANCE_CONSTRUCTIVE := "constructive"
+const STANCE_CAUTION := "caution"
+const STANCE_TIMING_RISK := "timing_risk"
+const STANCE_UNCERTAIN := "uncertain"
+const LAST_TIP_NOTE_FIELD_MAP := [
+	{"target": "last_tip_status", "source": "status", "default": "", "type": "string"},
+	{"target": "last_tip_label", "source": "outcome_label", "default": "", "type": "string"},
+	{"target": "last_tip_note", "source": "outcome_note", "default": "", "type": "string"},
+	{"target": "last_tip_player_action_label", "source": "player_action_label", "default": "", "type": "string"},
+	{"target": "last_tip_player_action_alignment", "source": "player_action_alignment", "default": "", "type": "string"},
+	{"target": "last_tip_day_index", "source": "resolved_day_index", "default": 0, "type": "int"},
+	{"target": "last_tip_followup_id", "source": "followup_id", "default": "", "type": "string"},
+	{"target": "last_tip_followup_label", "source": "followup_label", "default": "", "type": "string"},
+	{"target": "last_tip_followup_note", "source": "followup_note", "default": "", "type": "string"},
+	{"target": "can_follow_up_tip", "method": "_decorator_tip_can_follow_up", "default": false, "type": "bool"},
+	{"target": "tip_followup_options", "method": "_decorator_tip_followup_options", "default": [], "type": "array_duplicate"}
+]
+const TIP_HISTORY_FIELD_MAP := [
+	{"target": "tip_history", "source": "rows", "default": [], "type": "array_duplicate"},
+	{"target": "tip_reliability_label", "source": "reliability_label", "default": "No track record yet", "type": "string"},
+	{"target": "tip_reliability_score", "source": "reliability_score", "default": 50.0, "type": "float"},
+	{"target": "tip_resolved_count", "source": "resolved_count", "default": 0, "type": "int"},
+	{"target": "tip_useful_count", "source": "useful_count", "default": 0, "type": "int"},
+	{"target": "tip_missed_count", "source": "missed_count", "default": 0, "type": "int"}
+]
+const TIP_HISTORY_DEFAULTS := [
+	{"target": "tip_history", "value": []},
+	{"target": "tip_reliability_label", "value": "No track record yet"},
+	{"target": "tip_reliability_score", "value": 50.0},
+	{"target": "tip_resolved_count", "value": 0},
+	{"target": "tip_useful_count", "value": 0},
+	{"target": "tip_missed_count", "value": 0}
+]
+const LATEST_REACTION_FIELD_MAP := [
+	{"target": "last_reaction_label", "source": "reaction_label", "default": "", "type": "string"},
+	{"target": "last_reaction_note", "source": "reaction_note", "default": "", "type": "string"},
+	{"target": "last_reaction_day_index", "source": "reaction_day_index", "default": 0, "type": "int"},
+	{"target": "last_reaction_twooter_account_id", "source": "reaction_twooter_account_id", "default": "", "type": "string"},
+	{"target": "last_reaction_twooter_handle", "source": "reaction_twooter_handle", "default": "", "type": "string"}
+]
+const LATEST_REACTION_DEFAULTS := [
+	{"target": "last_reaction_label", "value": ""},
+	{"target": "last_reaction_note", "value": ""},
+	{"target": "last_reaction_day_index", "value": 0},
+	{"target": "last_reaction_twooter_account_id", "value": ""},
+	{"target": "last_reaction_twooter_handle", "value": ""}
+]
+const DEVELOPMENT_LEAD_FIELD_MAP := [
+	{"target": "last_development_lead_id", "source": "id", "default": "", "type": "string"},
+	{"target": "last_development_lead_label", "method": "_decorator_development_lead_label", "default": "", "type": "string"},
+	{"target": "last_development_lead_note", "method": "_decorator_development_lead_note", "default": "", "type": "string"},
+	{"target": "last_development_lead_location", "method": "_decorator_development_lead_location", "default": "", "type": "string"},
+	{"target": "last_development_lead_day_index", "source": "discovered_day_index", "default": 0, "type": "int"}
+]
+const DEVELOPMENT_LEAD_DEFAULTS := [
+	{"target": "last_development_lead_id", "value": ""},
+	{"target": "last_development_lead_label", "value": ""},
+	{"target": "last_development_lead_note", "value": ""},
+	{"target": "last_development_lead_location", "value": ""},
+	{"target": "last_development_lead_day_index", "value": 0}
+]
+const CROSS_CONTACT_FIELD_MAP := [
+	{"target": "cross_contact_label", "source": "label", "default": "Mixed sources", "type": "string"},
+	{"target": "cross_contact_note", "source": "note", "default": "", "type": "string"},
+	{"target": "cross_contact_rows", "source": "rows", "default": [], "type": "array_duplicate"},
+	{"target": "has_direct_source_conflict", "source": "has_direct_source_conflict", "default": false, "type": "bool"},
+	{"target": "can_ask_source_check", "source": "can_ask_source_check", "default": false, "type": "bool"},
+	{"target": "source_check_label", "source": "source_check_label", "default": "", "type": "string"},
+	{"target": "source_check_note", "source": "source_check_note", "default": "", "type": "string"},
+	{"target": "source_check_day_index", "source": "source_check_day_index", "default": 0, "type": "int"}
+]
+const CROSS_CONTACT_DEFAULTS := [
+	{"target": "cross_contact_label", "value": ""},
+	{"target": "cross_contact_note", "value": ""},
+	{"target": "cross_contact_rows", "value": []},
+	{"target": "has_direct_source_conflict", "value": false},
+	{"target": "can_ask_source_check", "value": false},
+	{"target": "source_check_label", "value": ""},
+	{"target": "source_check_note", "value": ""},
+	{"target": "source_check_day_index", "value": 0}
+]
 var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 const STABLE_RNG = preload("res://systems/StableRng.gd")
+const NETWORK_CONTACT_PRESENTER_SCRIPT := preload("res://systems/NetworkContactPresenter.gd")
+const NETWORK_JOURNAL_BUILDER_SCRIPT := preload("res://systems/NetworkJournalBuilder.gd")
+const NETWORK_TIP_RESOLVER_SCRIPT := preload("res://systems/NetworkTipResolver.gd")
+const NETWORK_DISCOVERY_SCRIPT := preload("res://systems/NetworkDiscovery.gd")
 
 
 func build_snapshot(run_state, data_repository) -> Dictionary:
@@ -50,7 +186,10 @@ func build_snapshot(run_state, data_repository) -> Dictionary:
 			continue
 		var runtime: Dictionary = contacts.get(contact_id, {})
 		var discovery: Dictionary = discoveries.get(contact_id, {})
+		if _is_referral_required_contact(contact) and not _inner_circle_contact_is_unlocked(runtime, discovery):
+			continue
 		var row: Dictionary = _contact_row(contact, runtime, discovery, recognition)
+		_apply_access_provenance(row, contact, discovery, run_state, data_repository)
 		_apply_last_tip_note(row, last_tip_notes)
 		_apply_tip_history(row, tip_histories)
 		_apply_latest_reaction(row, reaction_notes)
@@ -77,7 +216,10 @@ func build_snapshot(run_state, data_repository) -> Dictionary:
 			continue
 		var runtime: Dictionary = contacts.get(generated_contact_id, {})
 		var discovery: Dictionary = discoveries.get(generated_contact_id, {})
+		if _is_referral_required_contact(generated_contact) and not _inner_circle_contact_is_unlocked(runtime, discovery):
+			continue
 		var row: Dictionary = _contact_row(generated_contact, runtime, discovery, recognition)
+		_apply_access_provenance(row, generated_contact, discovery, run_state, data_repository)
 		_apply_last_tip_note(row, last_tip_notes)
 		_apply_tip_history(row, tip_histories)
 		_apply_latest_reaction(row, reaction_notes)
@@ -118,6 +260,9 @@ func build_twooter_accounts(run_state, data_repository) -> Array:
 		if affiliation_type == "insider_template" or affiliation_type == "social":
 			continue
 		var discovery: Dictionary = run_state.get_network_discoveries().get(contact_id, {}) if not contact_id.is_empty() else {}
+		var runtime: Dictionary = run_state.get_network_contacts().get(contact_id, {}) if not contact_id.is_empty() else {}
+		if _is_referral_required_contact(contact) and not _inner_circle_contact_is_unlocked(runtime, discovery):
+			continue
 		var account: Dictionary = _contact_twooter_account(contact, discovery, run_state)
 		var account_id: String = str(account.get("id", ""))
 		if account_id.is_empty() or seen.has(account_id):
@@ -139,7 +284,7 @@ func count_current_day_activity(run_state) -> int:
 		var tip: Dictionary = tip_value
 		if int(tip.get("created_day_index", 0)) == target_day_index:
 			count += 1
-		if str(tip.get("status", "pending")) != "pending" and int(tip.get("resolved_day_index", tip.get("created_day_index", 0))) == target_day_index:
+		if str(tip.get("status", TIP_STATUS_PENDING)) != TIP_STATUS_PENDING and int(tip.get("resolved_day_index", tip.get("created_day_index", 0))) == target_day_index:
 			count += 1
 		if not str(tip.get("followup_note", "")).is_empty() and int(tip.get("followup_day_index", tip.get("resolved_day_index", tip.get("created_day_index", 0)))) == target_day_index:
 			count += 1
@@ -149,7 +294,7 @@ func count_current_day_activity(run_state) -> int:
 		if typeof(request_value) != TYPE_DICTIONARY:
 			continue
 		var request: Dictionary = request_value
-		if str(request.get("request_type", "")) == "dirty_tip":
+		if str(request.get("request_type", "")) == REQUEST_TYPE_DIRTY_TIP:
 			if int(request.get("created_day_index", -9999)) == target_day_index:
 				count += 1
 			if not str(request.get("decision", "")).is_empty() and int(request.get("decision_day_index", -9999)) == target_day_index:
@@ -157,8 +302,8 @@ func count_current_day_activity(run_state) -> int:
 			if int(request.get("resolved_day_index", -9999)) == target_day_index:
 				count += 1
 			continue
-		var status: String = str(request.get("status", "pending"))
-		var request_day_index: int = int(request.get("completed_day_index", request.get("created_day_index", 0))) if status != "pending" else int(request.get("created_day_index", 0))
+		var status: String = str(request.get("status", TIP_STATUS_PENDING))
+		var request_day_index: int = int(request.get("completed_day_index", request.get("created_day_index", 0))) if status != TIP_STATUS_PENDING else int(request.get("created_day_index", 0))
 		if request_day_index == target_day_index:
 			count += 1
 	for discovery_value in run_state.get_network_discoveries().values():
@@ -526,6 +671,8 @@ func request_referral(run_state, data_repository, contact_id: String, company_id
 	var target_company_id: String = company_id
 	if target_company_id.is_empty():
 		target_company_id = _resolve_target_company_id(run_state, data_repository, contact_id, company_id)
+	if affiliation_role == INNER_CIRCLE_REFERRAL_ROLE:
+		return _request_inner_circle_referral(run_state, data_repository, contact, contact_id, target_company_id)
 	var insider: Dictionary = _best_referral_insider(run_state, contact_id, target_company_id, affiliation_role)
 	if insider.is_empty():
 		return {"success": false, "message": "No connected insider referral is available for that company."}
@@ -542,6 +689,7 @@ func request_referral(run_state, data_repository, contact_id: String, company_id
 		"source_type": "referral",
 		"source_id": contact_id,
 		"referred_by_contact_id": contact_id,
+		"referral_day_index": run_state.day_index,
 		"target_company_id": str(insider.get("affiliated_company_id", insider.get("company_id", ""))),
 		"target_company_ids": [str(insider.get("affiliated_company_id", insider.get("company_id", "")))],
 		"target_sector_id": str(insider.get("sector_id", "")),
@@ -558,6 +706,56 @@ func request_referral(run_state, data_repository, contact_id: String, company_id
 			str(insider.get("display_name", "an insider"))
 		],
 		"contact_id": insider_id
+	}
+
+
+func _request_inner_circle_referral(run_state, data_repository, bridge_contact: Dictionary, bridge_contact_id: String, target_company_id: String) -> Dictionary:
+	var bridge_runtime: Dictionary = run_state.get_network_contacts().get(bridge_contact_id, {})
+	if not _is_inner_circle_referral_bridge(bridge_contact):
+		return {"success": false, "message": "Only high-recognition bridge contacts can make inner-circle introductions."}
+	if not _has_inner_circle_referral_trust_signal(bridge_runtime):
+		return {"success": false, "message": "Build a stronger recent track record before asking for an inner-circle introduction."}
+	var referred_contact: Dictionary = _best_inner_circle_referral_contact(run_state, data_repository, bridge_contact, bridge_contact_id, target_company_id)
+	if referred_contact.is_empty():
+		return {"success": false, "message": "No private inner-circle referral is available for that context."}
+
+	var referred_contact_id: String = str(referred_contact.get("id", referred_contact.get("contact_id", "")))
+	var definition: Dictionary = run_state.get_effective_company_definition(target_company_id, false, false)
+	var target_sector_id: String = str(definition.get("sector_id", referred_contact.get("sector_id", "")))
+	var target_ticker: String = str(definition.get("ticker", target_company_id.to_upper()))
+	var connection_score: int = _inner_circle_referral_score(referred_contact, bridge_contact, target_sector_id)
+	if connection_score < REFERRAL_CONNECTION_THRESHOLD:
+		return {"success": false, "message": "This contact is not close enough to make that private introduction."}
+
+	var discoveries: Dictionary = run_state.get_network_discoveries()
+	discoveries[referred_contact_id] = {
+		"contact_id": referred_contact_id,
+		"discovered": true,
+		"source_type": "referral",
+		"source_id": bridge_contact_id,
+		"referred_by_contact_id": bridge_contact_id,
+		"referral_day_index": run_state.day_index,
+		"privacy_gate": INNER_CIRCLE_REFERRAL_ROLE,
+		"referral_required": true,
+		"target_company_id": target_company_id,
+		"target_company_ids": [target_company_id],
+		"target_ticker": target_ticker,
+		"target_sector_id": target_sector_id,
+		"connection_score": connection_score,
+		"day_index": run_state.day_index
+	}
+	run_state.set_network_discoveries(discoveries)
+	_adjust_relationship(run_state, bridge_contact_id, -REFERRAL_RELATIONSHIP_COST)
+	_mark_contact_day_flag(run_state, bridge_contact_id, "last_referral_day_index")
+	return {
+		"success": true,
+		"message": "%s made a private introduction to %s." % [
+			str(bridge_contact.get("display_name", "Contact")),
+			str(referred_contact.get("display_name", "an inner-circle contact"))
+		],
+		"contact_id": referred_contact_id,
+		"referral_type": INNER_CIRCLE_REFERRAL_ROLE,
+		"connection_score": connection_score
 	}
 
 
@@ -674,24 +872,27 @@ func process_due_requests(run_state, data_repository) -> Array:
 func process_due_tip_memories(run_state, data_repository) -> Array:
 	var results: Array = []
 	var journal: Dictionary = run_state.get_network_tip_journal()
+	var contacts: Dictionary = run_state.get_network_contacts()
 	var changed: bool = false
+	var contacts_changed: bool = false
 	for tip_id_value in journal.keys():
 		var tip_id: String = str(tip_id_value)
 		var tip: Dictionary = journal.get(tip_id, {})
-		if str(tip.get("journal_type", "")) == "twooter_social":
+		if str(tip.get("journal_type", "")) == TIP_JOURNAL_TYPE_TWOOTER_SOCIAL:
 			if _network_reaction_is_due(tip, run_state.day_index):
-				var social_reaction: Dictionary = _apply_network_followup_reaction(run_state, data_repository, tip)
+				var social_reaction: Dictionary = _apply_network_followup_reaction_with_contacts(run_state, data_repository, tip, contacts)
 				tip = social_reaction.get("tip", tip)
+				contacts_changed = contacts_changed or bool(social_reaction.get("_contacts_changed", false))
 				journal[tip_id] = tip
 				changed = true
 				results.append(tip.duplicate(true))
 			continue
-		if str(tip.get("status", "pending")) == "pending":
+		if str(tip.get("status", TIP_STATUS_PENDING)) == TIP_STATUS_PENDING:
 			if int(tip.get("resolve_day_index", 0)) > run_state.day_index:
 				continue
 			var outcome: Dictionary = _resolve_tip_memory(run_state, data_repository, tip)
-			tip["status"] = str(outcome.get("status", "resolved"))
-			tip["outcome_label"] = str(outcome.get("outcome_label", "Still pending"))
+			tip["status"] = str(outcome.get("status", TIP_STATUS_RESOLVED))
+			tip["outcome_label"] = str(outcome.get("outcome_label", OUTCOME_LABEL_STILL_PENDING))
 			tip["outcome_note"] = str(outcome.get("outcome_note", "The read is still unresolved."))
 			tip["player_action_label"] = str(outcome.get("player_action_label", "No action"))
 			tip["player_action_note"] = str(outcome.get("player_action_note", ""))
@@ -703,17 +904,20 @@ func process_due_tip_memories(run_state, data_repository) -> Array:
 			tip["resolved_change_pct"] = float(outcome.get("change_pct", 0.0))
 			var relationship_delta: int = int(outcome.get("relationship_delta", 0))
 			if relationship_delta != 0:
-				_adjust_relationship(run_state, str(tip.get("contact_id", "")), relationship_delta)
-			_store_contact_tip_note(run_state, tip)
+				contacts_changed = _adjust_relationship_in_contacts(contacts, str(tip.get("contact_id", "")), relationship_delta) or contacts_changed
+			contacts_changed = _store_contact_tip_note_in_contacts(contacts, tip, run_state.day_index) or contacts_changed
 			journal[tip_id] = tip
 			changed = true
 			results.append(tip.duplicate(true))
 		if _network_reaction_is_due(tip, run_state.day_index):
-			var reaction: Dictionary = _apply_network_followup_reaction(run_state, data_repository, tip)
+			var reaction: Dictionary = _apply_network_followup_reaction_with_contacts(run_state, data_repository, tip, contacts)
 			tip = reaction.get("tip", tip)
+			contacts_changed = contacts_changed or bool(reaction.get("_contacts_changed", false))
 			journal[tip_id] = tip
 			changed = true
 			results.append(tip.duplicate(true))
+	if contacts_changed:
+		run_state.set_network_contacts(contacts)
 	if changed:
 		run_state.set_network_tip_journal(_pruned_tip_journal(journal))
 	return results
@@ -747,6 +951,8 @@ func _discover_matching_contacts(
 			continue
 		var contact_id: String = str(contact.get("id", ""))
 		if contact_id.is_empty() or bool(contacts.get(contact_id, {}).get("met", false)):
+			continue
+		if _should_skip_public_contact_discovery(contact, contact_id, discoveries, contacts):
 			continue
 		if not _can_add_company_lead(discoveries.get(contact_id, {}), company_id):
 			continue
@@ -801,11 +1007,13 @@ func _discover_article_author_contact(
 	var contacts: Dictionary = run_state.get_network_contacts()
 	if bool(contacts.get(author_contact_id, {}).get("met", false)):
 		return []
+	var discoveries: Dictionary = run_state.get_network_discoveries()
+	if _should_skip_public_contact_discovery(contact, author_contact_id, discoveries, contacts):
+		return []
 	if int(recognition.get("score", 0)) < int(contact.get("recognition_required", 0)):
 		return []
 	if _floater_discovery_score(contact, company_id, sector_id, category, "news") < 0.0:
 		return []
-	var discoveries: Dictionary = run_state.get_network_discoveries()
 	var discovery: Dictionary = discoveries.get(author_contact_id, {})
 	var target_company_ids: Array = _contact_company_targets(discovery)
 	if not company_id.is_empty() and not target_company_ids.has(company_id):
@@ -825,34 +1033,11 @@ func _discover_article_author_contact(
 
 
 func _discovery_limit_for_source(source_type: String, run_state) -> int:
-	if source_type == "profile":
-		return max(run_state.company_order.size(), 1)
-	if source_type == "news":
-		return max(run_state.company_order.size(), 1)
-	return 3
+	return NETWORK_DISCOVERY_SCRIPT.discovery_limit_for_source(source_type, run_state.company_order.size())
 
 
 func _floater_discovery_score(contact: Dictionary, company_id: String, sector_id: String, category: String, source_type: String) -> float:
-	var sector_match: bool = (not sector_id.is_empty()) and (sector_id in contact.get("sector_ids", []))
-	var category_match: bool = (not category.is_empty()) and (category in contact.get("categories", []))
-	var company_targeted: bool = not company_id.is_empty()
-	if company_targeted and not sector_match:
-		return -1.0
-	if not company_targeted and not category_match:
-		return -1.0
-	if not sector_match and not category_match:
-		return -1.0
-
-	var score: float = 0.0
-	if sector_match:
-		score += 65.0
-	if category_match:
-		score += (5.0 if category == "company" else 30.0)
-	if source_type == "profile":
-		score += 8.0
-	score += clamp(float(contact.get("reliability", 0.5)), 0.0, 1.0) * 10.0
-	score += max(0.0, 50.0 - float(contact.get("recognition_required", 0))) * 0.1
-	return score
+	return NETWORK_DISCOVERY_SCRIPT.floater_discovery_score(contact, company_id, sector_id, category, source_type)
 
 
 func _discover_company_insiders(
@@ -874,6 +1059,8 @@ func _discover_company_insiders(
 		if insider_id.is_empty() or bool(contacts.get(insider_id, {}).get("met", false)):
 			continue
 		if bool(discoveries.get(insider_id, {}).get("discovered", false)):
+			continue
+		if _should_skip_public_contact_discovery(insider, insider_id, discoveries, contacts):
 			continue
 		if int(recognition.get("score", 0)) < int(insider.get("recognition_required", 0)):
 			continue
@@ -955,16 +1142,16 @@ func _decorate_tip_result(run_state, data_repository, contact: Dictionary, compa
 		str(tip_result.get("intel_quality", "weak"))
 	)
 	var contact_name: String = str(contact.get("display_name", "Contact"))
-	result["public_truth_label"] = str(truth_read.get("truth_label", "Network Read"))
+	result["public_truth_label"] = str(truth_read.get("truth_label", TRUTH_LABEL_NETWORK_READ))
 	result["public_tip_read"] = str(truth_read.get("tip_read", ""))
 	result["public_confidence_label"] = str(truth_read.get("confidence_label", "Soft read"))
 	result["tip_source_role"] = str(truth_read.get("source_role", "market contact"))
 	result["intel_summary"] = "%s | %s" % [
-		str(truth_read.get("truth_label", "Network Read")),
+		str(truth_read.get("truth_label", TRUTH_LABEL_NETWORK_READ)),
 		str(truth_read.get("confidence_label", "Soft read"))
 	]
 	result["message"] = "%s | %s: %s" % [
-		str(truth_read.get("truth_label", "Network Read")),
+		str(truth_read.get("truth_label", TRUTH_LABEL_NETWORK_READ)),
 		contact_name,
 		str(truth_read.get("tip_read", ""))
 	]
@@ -982,12 +1169,12 @@ func _decorate_contact_arc_tip_result(run_state, data_repository, contact: Dicti
 		"weak"
 	)
 	var contact_name: String = str(contact.get("display_name", "Contact"))
-	result["public_truth_label"] = str(truth_read.get("truth_label", "Network Read"))
+	result["public_truth_label"] = str(truth_read.get("truth_label", TRUTH_LABEL_NETWORK_READ))
 	result["public_tip_read"] = str(truth_read.get("tip_read", ""))
 	result["public_confidence_label"] = str(truth_read.get("confidence_label", "Soft read"))
 	result["tip_source_role"] = str(truth_read.get("source_role", "market contact"))
 	result["message"] = "%s | %s: %s" % [
-		str(truth_read.get("truth_label", "Network Read")),
+		str(truth_read.get("truth_label", TRUTH_LABEL_NETWORK_READ)),
 		contact_name,
 		str(truth_read.get("tip_read", ""))
 	]
@@ -1021,11 +1208,11 @@ func _record_tip_memory(run_state, contact: Dictionary, company_id: String, tip_
 		"baseline_price": baseline_price,
 		"baseline_shares": int(holding.get("shares", 0)),
 		"chain_id": str(tip_result.get("chain_id", "")),
-		"truth_label": str(tip_result.get("public_truth_label", "Network Read")),
+		"truth_label": str(tip_result.get("public_truth_label", TRUTH_LABEL_NETWORK_READ)),
 		"confidence_label": str(tip_result.get("public_confidence_label", "Soft read")),
 		"source_role": str(tip_result.get("tip_source_role", "market contact")),
 		"tip_read": str(tip_result.get("public_tip_read", "")),
-		"status": "pending",
+		"status": TIP_STATUS_PENDING,
 		"reaction_due_day_index": run_state.day_index + TIP_MEMORY_RESOLVE_DAYS,
 		"reaction_sent": false,
 		"reaction_label": "",
@@ -1039,225 +1226,49 @@ func _record_tip_memory(run_state, contact: Dictionary, company_id: String, tip_
 
 
 func _resolve_tip_memory(run_state, _data_repository, tip: Dictionary) -> Dictionary:
-	var company_id: String = str(tip.get("target_company_id", ""))
-	var company: Dictionary = run_state.get_company(company_id)
-	var current_price: float = float(company.get("current_price", tip.get("baseline_price", 0.0)))
-	var baseline_price: float = max(float(tip.get("baseline_price", current_price)), 1.0)
-	var change_pct: float = (current_price - baseline_price) / baseline_price
-	var truth_label: String = str(tip.get("truth_label", "Network Read"))
-	var chain: Dictionary = _chain_by_id(run_state, str(tip.get("chain_id", "")))
-	var outcome_state: String = str(chain.get("outcome_state", ""))
-	var timeline_state: String = str(chain.get("current_timeline_state", ""))
-	var status: String = "resolved"
-	var outcome_label: String = "Still pending"
-	var relationship_delta: int = 0
-	if _tip_label_is_cautionary(truth_label):
-		if change_pct <= -0.015 or outcome_state == "cancelled" or timeline_state == "cancelled":
-			outcome_label = "Useful warning"
-			relationship_delta = 3
-		elif change_pct >= 0.025 or outcome_state == "approved":
-			outcome_label = "Missed badly"
-			relationship_delta = -3
-		elif absf(change_pct) <= 0.012:
-			outcome_label = "Still pending"
-			status = "unresolved"
-		else:
-			outcome_label = "Too early"
-	elif truth_label == "Real But Delayed":
-		if timeline_state == "delayed":
-			outcome_label = "Useful timing read"
-			relationship_delta = 2
-		elif change_pct >= 0.025 or outcome_state == "approved":
-			outcome_label = "Early, not wrong"
-			relationship_delta = 1
-		elif change_pct <= -0.025 or outcome_state == "cancelled":
-			outcome_label = "Missed badly"
-			relationship_delta = -3
-		else:
-			outcome_label = "Still pending"
-			status = "unresolved"
-	else:
-		if change_pct >= 0.018 or outcome_state == "approved" or timeline_state in ["approved", "executing", "completed"]:
-			outcome_label = "Useful read"
-			relationship_delta = 3
-		elif change_pct <= -0.025 or outcome_state == "cancelled" or timeline_state == "cancelled":
-			outcome_label = "Missed badly"
-			relationship_delta = -3
-		elif absf(change_pct) <= 0.012:
-			outcome_label = "Still pending"
-			status = "unresolved"
-		else:
-			outcome_label = "Too early"
-	var ticker: String = str(tip.get("target_ticker", company_id.to_upper()))
-	var player_action: Dictionary = _player_action_for_tip(run_state, tip)
-	var player_read: Dictionary = _player_tip_action_read(tip, outcome_label, player_action)
-	relationship_delta += int(player_read.get("relationship_delta", 0))
-	var outcome_note: String = _tip_outcome_note(outcome_label, ticker, change_pct)
-	var player_note: String = str(player_read.get("note", ""))
-	if not player_note.is_empty():
-		outcome_note += " " + player_note
-	return {
-		"status": status,
-		"outcome_label": outcome_label,
-		"outcome_note": outcome_note,
-		"player_action_label": str(player_read.get("label", "No action")),
-		"player_action_note": player_note,
-		"player_action_alignment": str(player_read.get("alignment", "neutral")),
-		"player_net_shares": int(player_action.get("net_shares", 0)),
-		"relationship_delta": relationship_delta,
-		"resolved_price": current_price,
-		"change_pct": change_pct
-	}
+	return NETWORK_TIP_RESOLVER_SCRIPT.resolve_tip_memory(
+		run_state,
+		tip,
+		_chain_by_id(run_state, str(tip.get("chain_id", "")))
+	)
 
 
 func _player_action_for_tip(run_state, tip: Dictionary) -> Dictionary:
-	var company_id: String = str(tip.get("target_company_id", ""))
-	var created_day_index: int = int(tip.get("created_day_index", 0))
-	var resolve_day_index: int = int(tip.get("resolve_day_index", run_state.day_index))
-	var buy_shares: int = 0
-	var sell_shares: int = 0
-	for trade_value in run_state.get_trade_history():
-		if typeof(trade_value) != TYPE_DICTIONARY:
-			continue
-		var trade: Dictionary = trade_value
-		if str(trade.get("company_id", "")) != company_id:
-			continue
-		var trade_day_index: int = int(trade.get("day_index", 0))
-		if trade_day_index < created_day_index or trade_day_index > resolve_day_index:
-			continue
-		var shares: int = int(trade.get("shares", 0))
-		if str(trade.get("side", "")) == "buy":
-			buy_shares += shares
-		elif str(trade.get("side", "")) == "sell":
-			sell_shares += shares
-	var baseline_shares: int = int(tip.get("baseline_shares", 0))
-	var ending_shares: int = int(run_state.get_holding(company_id).get("shares", 0))
-	var net_shares: int = buy_shares - sell_shares
-	var action_label: String = "Ignored"
-	if buy_shares > sell_shares:
-		action_label = "Bought after tip"
-	elif sell_shares > buy_shares:
-		action_label = "Sold after tip"
-	elif buy_shares > 0 and sell_shares > 0:
-		action_label = "Round-tripped"
-	elif baseline_shares > 0 and ending_shares > 0:
-		action_label = "Held through read"
-	return {
-		"label": action_label,
-		"buy_shares": buy_shares,
-		"sell_shares": sell_shares,
-		"net_shares": net_shares,
-		"baseline_shares": baseline_shares,
-		"ending_shares": ending_shares
-	}
+	return NETWORK_TIP_RESOLVER_SCRIPT.player_action_for_tip(run_state, tip)
 
 
 func _player_tip_action_read(tip: Dictionary, outcome_label: String, player_action: Dictionary) -> Dictionary:
-	var truth_label: String = str(tip.get("truth_label", "Network Read"))
-	var ticker: String = str(tip.get("target_ticker", str(tip.get("target_company_id", "")).to_upper()))
-	var action_label: String = str(player_action.get("label", "Ignored"))
-	var net_shares: int = int(player_action.get("net_shares", 0))
-	var baseline_shares: int = int(player_action.get("baseline_shares", 0))
-	var ending_shares: int = int(player_action.get("ending_shares", 0))
-	var read_was_good: bool = outcome_label in ["Useful read", "Useful warning", "Useful timing read", "Early, not wrong"]
-	var read_was_bad: bool = outcome_label == "Missed badly"
-	var cautionary: bool = _tip_label_is_cautionary(truth_label)
-	var label: String = action_label
-	var note: String = ""
-	var alignment: String = "neutral"
-	var relationship_delta: int = 0
-	if cautionary:
-		if net_shares < 0:
-			label = "Acted on warning"
-			alignment = "followed"
-			note = "You reduced exposure after the warning."
-		elif net_shares > 0:
-			label = "Chased against warning"
-			alignment = "against"
-			note = "You bought anyway, so the contact's warning became a test of discipline."
-		elif baseline_shares <= 0 and ending_shares <= 0:
-			label = "Avoided warning"
-			alignment = "followed"
-			note = "You stayed out after the warning."
-		elif baseline_shares > 0 and ending_shares > 0:
-			label = "Held despite warning"
-			alignment = "against"
-			note = "You kept holding despite the caution."
-	else:
-		if net_shares > 0:
-			label = "Followed read"
-			alignment = "followed"
-			note = "You followed the read with a buy."
-		elif baseline_shares > 0 and ending_shares > 0:
-			label = "Held through read"
-			alignment = "followed"
-			note = "You were already positioned and held through the read."
-		elif net_shares < 0:
-			label = "Sold against read"
-			alignment = "against"
-			note = "You sold against the contact's read."
-		else:
-			label = "Ignored read"
-			alignment = "ignored"
-			note = "You did not act on this read."
-	if read_was_good and alignment == "followed":
-		relationship_delta = 1
-		note += " That follow-through gives the relationship a small boost."
-	elif read_was_bad and alignment == "followed":
-		relationship_delta = -1
-		note += " The read aged poorly, and following it costs a little trust."
-	elif read_was_bad and alignment in ["ignored", "against"]:
-		note += " That restraint helped you dodge a bad read."
-	elif read_was_good and alignment == "ignored":
-		note += " The contact was useful, but you left it on the table."
-	if ticker.is_empty():
-		ticker = "the stock"
-	return {
-		"label": label,
-		"note": note,
-		"alignment": alignment,
-		"relationship_delta": relationship_delta
-	}
+	return NETWORK_TIP_RESOLVER_SCRIPT.player_tip_action_read(tip, outcome_label, player_action)
 
 
 func _tip_label_is_cautionary(truth_label: String) -> bool:
-	return truth_label in ["Distribution Risk", "Retail Trap", "Dead Story", "Pressure Read"]
+	return NETWORK_TIP_RESOLVER_SCRIPT.tip_label_is_cautionary(truth_label)
 
 
 func _tip_outcome_note(outcome_label: String, ticker: String, change_pct: float) -> String:
-	var pct_text: String = String.num(change_pct * 100.0, 1) + "%"
-	match outcome_label:
-		"Useful read":
-			return "Last read: useful. %s moved %s after the tip." % [ticker, pct_text]
-		"Useful warning":
-			return "Last read: useful warning. %s cooled %s after the tip." % [ticker, pct_text]
-		"Useful timing read":
-			return "Last read: useful timing read. The story did slow down."
-		"Early, not wrong":
-			return "Last read: early, not wrong. %s kept moving, just faster than expected." % ticker
-		"Too early":
-			return "Last read: too early. %s moved %s, but the signal stayed mixed." % [ticker, pct_text]
-		"Missed badly":
-			return "Last read: missed badly. %s moved against the read by %s." % [ticker, pct_text]
-		_:
-			return "Last read: still pending. %s has not confirmed or rejected the setup yet." % ticker
+	return NETWORK_TIP_RESOLVER_SCRIPT.tip_outcome_note(outcome_label, ticker, change_pct)
 
 
 func _store_contact_tip_note(run_state, tip: Dictionary) -> void:
+	var contacts: Dictionary = run_state.get_network_contacts()
+	if _store_contact_tip_note_in_contacts(contacts, tip, run_state.day_index):
+		run_state.set_network_contacts(contacts)
+
+
+func _store_contact_tip_note_in_contacts(contacts: Dictionary, tip: Dictionary, default_day_index: int) -> bool:
 	var contact_id: String = str(tip.get("contact_id", ""))
 	if contact_id.is_empty():
-		return
-	var contacts: Dictionary = run_state.get_network_contacts()
+		return false
 	var runtime: Dictionary = contacts.get(contact_id, {})
 	runtime["last_tip_id"] = str(tip.get("id", ""))
 	runtime["last_tip_status"] = str(tip.get("status", ""))
-	runtime["last_tip_label"] = str(tip.get("outcome_label", "Still pending"))
+	runtime["last_tip_label"] = str(tip.get("outcome_label", OUTCOME_LABEL_STILL_PENDING))
 	runtime["last_tip_note"] = str(tip.get("outcome_note", ""))
 	runtime["last_tip_player_action_label"] = str(tip.get("player_action_label", ""))
 	runtime["last_tip_player_action_alignment"] = str(tip.get("player_action_alignment", ""))
-	runtime["last_tip_day_index"] = int(tip.get("resolved_day_index", run_state.day_index))
+	runtime["last_tip_day_index"] = int(tip.get("resolved_day_index", default_day_index))
 	contacts[contact_id] = runtime
-	run_state.set_network_contacts(contacts)
+	return true
 
 
 func _store_contact_tip_followup(run_state, tip: Dictionary) -> void:
@@ -1287,6 +1298,15 @@ func _network_reaction_is_due(tip: Dictionary, day_index: int) -> bool:
 
 
 func _apply_network_followup_reaction(run_state, data_repository, source_tip: Dictionary) -> Dictionary:
+	var contacts: Dictionary = run_state.get_network_contacts()
+	var result: Dictionary = _apply_network_followup_reaction_with_contacts(run_state, data_repository, source_tip, contacts)
+	if bool(result.get("_contacts_changed", false)):
+		run_state.set_network_contacts(contacts)
+	result.erase("_contacts_changed")
+	return result
+
+
+func _apply_network_followup_reaction_with_contacts(run_state, data_repository, source_tip: Dictionary, contacts: Dictionary) -> Dictionary:
 	var tip: Dictionary = source_tip.duplicate(true)
 	var contact_id: String = str(tip.get("contact_id", ""))
 	var contact: Dictionary = _contact_definition(run_state, data_repository, contact_id)
@@ -1296,11 +1316,12 @@ func _apply_network_followup_reaction(run_state, data_repository, source_tip: Di
 			"display_name": str(tip.get("contact_name", "Contact")),
 			"role": "Network contact",
 			"affiliation_type": "floater"
-		}
+	}
 	var reaction: Dictionary = _build_network_followup_reaction(run_state, contact, tip)
 	var relationship_delta: int = int(reaction.get("relationship_delta", 0))
+	var contacts_changed: bool = false
 	if relationship_delta != 0:
-		_adjust_relationship(run_state, contact_id, relationship_delta)
+		contacts_changed = _adjust_relationship_in_contacts(contacts, contact_id, relationship_delta) or contacts_changed
 	var account: Dictionary = _reaction_twooter_account(run_state, contact, tip)
 	var account_id: String = str(account.get("id", tip.get("twooter_account_id", "")))
 	var handle: String = str(account.get("handle", tip.get("twooter_handle", "")))
@@ -1320,26 +1341,27 @@ func _apply_network_followup_reaction(run_state, data_repository, source_tip: Di
 	tip["reaction_reliability_delta"] = int(reaction.get("reliability_delta", 0))
 	tip["reaction_twooter_account_id"] = account_id
 	tip["reaction_twooter_handle"] = handle
-	_store_contact_reaction(run_state, tip)
+	contacts_changed = _store_contact_reaction_in_contacts(contacts, tip, run_state.day_index) or contacts_changed
 	return {
 		"success": true,
 		"tip": tip,
 		"reaction": reaction,
-		"twooter_account_id": account_id
+		"twooter_account_id": account_id,
+		"_contacts_changed": contacts_changed
 	}
 
 
 func _build_network_followup_reaction(run_state, contact: Dictionary, tip: Dictionary) -> Dictionary:
-	if bool(tip.get("source_only", false)) or str(tip.get("journal_type", "")) == "twooter_social":
+	if bool(tip.get("source_only", false)) or str(tip.get("journal_type", "")) == TIP_JOURNAL_TYPE_TWOOTER_SOCIAL:
 		return _build_source_only_reaction(run_state, contact, tip)
 	var ticker: String = str(tip.get("target_ticker", tip.get("target_company_id", ""))).strip_edges().to_upper()
 	if ticker.is_empty():
 		ticker = "the read"
-	var outcome_label: String = str(tip.get("outcome_label", "Still pending"))
+	var outcome_label: String = str(tip.get("outcome_label", OUTCOME_LABEL_STILL_PENDING))
 	var player_alignment: String = str(tip.get("player_action_alignment", "neutral"))
 	var player_action_label: String = str(tip.get("player_action_label", "No action"))
-	var read_was_good: bool = outcome_label in ["Useful read", "Useful warning", "Useful timing read", "Early, not wrong"]
-	var read_was_bad: bool = outcome_label == "Missed badly"
+	var read_was_good: bool = outcome_label in GOOD_OUTCOME_LABELS
+	var read_was_bad: bool = outcome_label == OUTCOME_LABEL_MISSED_BADLY
 	if read_was_good and player_alignment == "followed":
 		return {
 			"label": "Good follow-through",
@@ -1464,18 +1486,23 @@ func _append_twooter_account_message(run_state, account: Dictionary, action_id: 
 
 
 func _store_contact_reaction(run_state, tip: Dictionary) -> void:
+	var contacts: Dictionary = run_state.get_network_contacts()
+	if _store_contact_reaction_in_contacts(contacts, tip, run_state.day_index):
+		run_state.set_network_contacts(contacts)
+
+
+func _store_contact_reaction_in_contacts(contacts: Dictionary, tip: Dictionary, default_day_index: int) -> bool:
 	var contact_id: String = str(tip.get("contact_id", ""))
 	if contact_id.is_empty():
-		return
-	var contacts: Dictionary = run_state.get_network_contacts()
+		return false
 	var runtime: Dictionary = contacts.get(contact_id, {})
 	runtime["last_reaction_label"] = str(tip.get("reaction_label", ""))
 	runtime["last_reaction_note"] = str(tip.get("reaction_note", ""))
-	runtime["last_reaction_day_index"] = int(tip.get("reaction_day_index", run_state.day_index))
+	runtime["last_reaction_day_index"] = int(tip.get("reaction_day_index", default_day_index))
 	runtime["last_reaction_twooter_account_id"] = str(tip.get("reaction_twooter_account_id", ""))
 	runtime["last_reaction_twooter_handle"] = str(tip.get("reaction_twooter_handle", ""))
 	contacts[contact_id] = runtime
-	run_state.set_network_contacts(contacts)
+	return true
 
 
 func _latest_reaction_notes_by_contact(run_state) -> Dictionary:
@@ -1497,19 +1524,7 @@ func _latest_reaction_notes_by_contact(run_state) -> Dictionary:
 
 func _apply_latest_reaction(row: Dictionary, reaction_notes: Dictionary) -> void:
 	var contact_id: String = str(row.get("id", ""))
-	var reaction: Dictionary = reaction_notes.get(contact_id, {}) if not contact_id.is_empty() else {}
-	if reaction.is_empty():
-		row["last_reaction_label"] = ""
-		row["last_reaction_note"] = ""
-		row["last_reaction_day_index"] = 0
-		row["last_reaction_twooter_account_id"] = ""
-		row["last_reaction_twooter_handle"] = ""
-		return
-	row["last_reaction_label"] = str(reaction.get("reaction_label", ""))
-	row["last_reaction_note"] = str(reaction.get("reaction_note", ""))
-	row["last_reaction_day_index"] = int(reaction.get("reaction_day_index", 0))
-	row["last_reaction_twooter_account_id"] = str(reaction.get("reaction_twooter_account_id", ""))
-	row["last_reaction_twooter_handle"] = str(reaction.get("reaction_twooter_handle", ""))
+	_apply_decorator(row, reaction_notes, contact_id, LATEST_REACTION_FIELD_MAP, LATEST_REACTION_DEFAULTS)
 
 
 func _latest_development_leads_by_contact(run_state) -> Dictionary:
@@ -1530,25 +1545,95 @@ func _latest_development_leads_by_contact(run_state) -> Dictionary:
 
 func _apply_latest_development_lead(row: Dictionary, development_lead_notes: Dictionary) -> void:
 	var contact_id: String = str(row.get("id", ""))
-	var lead: Dictionary = development_lead_notes.get(contact_id, {}) if not contact_id.is_empty() else {}
-	if lead.is_empty():
-		row["last_development_lead_id"] = ""
-		row["last_development_lead_label"] = ""
-		row["last_development_lead_note"] = ""
-		row["last_development_lead_location"] = ""
-		row["last_development_lead_day_index"] = 0
-		return
+	_apply_decorator(row, development_lead_notes, contact_id, DEVELOPMENT_LEAD_FIELD_MAP, DEVELOPMENT_LEAD_DEFAULTS)
+
+
+func _apply_decorator(row: Dictionary, lookup: Dictionary, contact_id: String, field_map: Array, defaults: Array) -> bool:
+	var source: Dictionary = lookup.get(contact_id, {}) if not contact_id.is_empty() else {}
+	if source.is_empty():
+		_apply_decorator_defaults(row, defaults)
+		return false
+	for rule_value in field_map:
+		if typeof(rule_value) != TYPE_DICTIONARY:
+			continue
+		var rule: Dictionary = rule_value
+		var target: String = str(rule.get("target", ""))
+		if target.is_empty():
+			continue
+		row[target] = _decorator_rule_value(source, rule)
+	return true
+
+
+func _apply_decorator_defaults(row: Dictionary, defaults: Array) -> void:
+	for default_value in defaults:
+		if typeof(default_value) != TYPE_DICTIONARY:
+			continue
+		var entry: Dictionary = default_value
+		var target: String = str(entry.get("target", ""))
+		if target.is_empty():
+			continue
+		row[target] = _decorator_copy_value(entry.get("value", null))
+
+
+func _decorator_rule_value(source: Dictionary, rule: Dictionary) -> Variant:
+	var default_value: Variant = rule.get("default", null)
+	var value: Variant = default_value
+	var method_name: String = str(rule.get("method", ""))
+	if not method_name.is_empty() and has_method(method_name):
+		value = call(method_name, source)
+	else:
+		var source_key: String = str(rule.get("source", ""))
+		if not source_key.is_empty():
+			value = source.get(source_key, default_value)
+	return _decorator_cast_value(value, str(rule.get("type", "")), default_value)
+
+
+func _decorator_cast_value(value: Variant, type_name: String, default_value: Variant) -> Variant:
+	match type_name:
+		"string":
+			return str(value)
+		"int":
+			return int(value)
+		"float":
+			return float(value)
+		"bool":
+			return bool(value)
+		"array_duplicate":
+			var array_value: Variant = value if typeof(value) == TYPE_ARRAY else default_value
+			if typeof(array_value) == TYPE_ARRAY:
+				return array_value.duplicate(true)
+			return []
+		"dictionary_duplicate":
+			var dictionary_value: Variant = value if typeof(value) == TYPE_DICTIONARY else default_value
+			if typeof(dictionary_value) == TYPE_DICTIONARY:
+				return dictionary_value.duplicate(true)
+			return {}
+		_:
+			return _decorator_copy_value(value)
+
+
+func _decorator_copy_value(value: Variant) -> Variant:
+	if typeof(value) == TYPE_ARRAY or typeof(value) == TYPE_DICTIONARY:
+		return value.duplicate(true)
+	return value
+
+
+func _decorator_development_lead_label(lead: Dictionary) -> String:
 	var theme_label: String = str(lead.get("display_theme_label", lead.get("theme_label", lead.get("theme", "Development")))).capitalize()
 	var location_label: String = str(lead.get("display_location_label", lead.get("location_label", lead.get("location_id", ""))))
-	row["last_development_lead_id"] = str(lead.get("id", ""))
-	row["last_development_lead_label"] = "%s | %s" % [location_label, theme_label]
+	return "%s | %s" % [location_label, theme_label]
+
+
+func _decorator_development_lead_note(lead: Dictionary) -> String:
 	var clarity_label: String = str(lead.get("clarity_label", "")).strip_edges()
-	row["last_development_lead_note"] = "%s%s" % [
+	return "%s%s" % [
 		"%s. " % clarity_label if not clarity_label.is_empty() else "",
 		str(lead.get("source_note", ""))
 	]
-	row["last_development_lead_location"] = location_label
-	row["last_development_lead_day_index"] = int(lead.get("discovered_day_index", 0))
+
+
+func _decorator_development_lead_location(lead: Dictionary) -> String:
+	return str(lead.get("display_location_label", lead.get("location_label", lead.get("location_id", ""))))
 
 
 func _last_tip_notes_by_contact(run_state) -> Dictionary:
@@ -1558,7 +1643,7 @@ func _last_tip_notes_by_contact(run_state) -> Dictionary:
 		var contact_id: String = str(tip.get("contact_id", ""))
 		if contact_id.is_empty():
 			continue
-		if str(tip.get("status", "pending")) == "pending":
+		if str(tip.get("status", TIP_STATUS_PENDING)) == TIP_STATUS_PENDING:
 			continue
 		var existing: Dictionary = notes.get(contact_id, {})
 		if existing.is_empty() or int(tip.get("resolved_day_index", 0)) >= int(existing.get("resolved_day_index", 0)):
@@ -1568,286 +1653,61 @@ func _last_tip_notes_by_contact(run_state) -> Dictionary:
 
 func _apply_last_tip_note(row: Dictionary, last_tip_notes: Dictionary) -> void:
 	var contact_id: String = str(row.get("id", ""))
-	if contact_id.is_empty():
-		return
-	var note: Dictionary = last_tip_notes.get(contact_id, {})
-	if note.is_empty():
-		return
-	row["last_tip_status"] = str(note.get("status", ""))
-	row["last_tip_label"] = str(note.get("outcome_label", ""))
-	row["last_tip_note"] = str(note.get("outcome_note", ""))
-	row["last_tip_player_action_label"] = str(note.get("player_action_label", ""))
-	row["last_tip_player_action_alignment"] = str(note.get("player_action_alignment", ""))
-	row["last_tip_day_index"] = int(note.get("resolved_day_index", 0))
-	row["last_tip_followup_id"] = str(note.get("followup_id", ""))
-	row["last_tip_followup_label"] = str(note.get("followup_label", ""))
-	row["last_tip_followup_note"] = str(note.get("followup_note", ""))
-	row["can_follow_up_tip"] = str(note.get("followup_id", "")).is_empty()
-	row["tip_followup_options"] = _tip_followup_options(note)
+	_apply_decorator(row, last_tip_notes, contact_id, LAST_TIP_NOTE_FIELD_MAP, [])
+
+
+func _decorator_tip_can_follow_up(note: Dictionary) -> bool:
+	return str(note.get("followup_id", "")).is_empty()
+
+
+func _decorator_tip_followup_options(note: Dictionary) -> Array:
+	return _tip_followup_options(note)
 
 
 func _tip_histories_by_contact(run_state) -> Dictionary:
-	var grouped: Dictionary = {}
-	for tip_value in run_state.get_network_tip_journal().values():
-		if typeof(tip_value) != TYPE_DICTIONARY:
-			continue
-		var tip: Dictionary = tip_value
-		var contact_id: String = str(tip.get("contact_id", ""))
-		if contact_id.is_empty():
-			continue
-		if str(tip.get("status", "pending")) == "pending":
-			continue
-		var rows: Array = grouped.get(contact_id, [])
-		rows.append(_tip_history_row(tip))
-		grouped[contact_id] = rows
-	var histories: Dictionary = {}
-	for contact_id_value in grouped.keys():
-		var contact_id: String = str(contact_id_value)
-		var rows: Array = grouped.get(contact_id, [])
-		rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-			return int(a.get("resolved_day_index", 0)) > int(b.get("resolved_day_index", 0))
-		)
-		histories[contact_id] = _tip_history_summary(rows)
-	return histories
+	return NETWORK_TIP_RESOLVER_SCRIPT.tip_histories_by_contact(run_state.get_network_tip_journal())
 
 
 func _tip_history_row(tip: Dictionary) -> Dictionary:
-	return {
-		"id": str(tip.get("id", "")),
-		"target_company_id": str(tip.get("target_company_id", "")),
-		"target_ticker": str(tip.get("target_ticker", "")),
-		"truth_label": str(tip.get("truth_label", "")),
-		"outcome_label": str(tip.get("outcome_label", "")),
-		"player_action_label": str(tip.get("player_action_label", "")),
-		"followup_label": str(tip.get("followup_label", "")),
-		"resolved_day_index": int(tip.get("resolved_day_index", 0)),
-		"change_pct": float(tip.get("resolved_change_pct", 0.0))
-	}
+	return NETWORK_TIP_RESOLVER_SCRIPT.tip_history_row(tip)
 
 
 func _tip_history_summary(rows: Array) -> Dictionary:
-	var useful_count: int = 0
-	var missed_count: int = 0
-	var neutral_count: int = 0
-	var scored_count: int = 0
-	var score_total: float = 0.0
-	for row_value in rows:
-		var row: Dictionary = row_value
-		var outcome_label: String = str(row.get("outcome_label", ""))
-		if outcome_label in ["Useful read", "Useful warning", "Useful timing read", "Early, not wrong"]:
-			useful_count += 1
-			scored_count += 1
-			score_total += 1.0
-		elif outcome_label == "Missed badly":
-			missed_count += 1
-			scored_count += 1
-			score_total -= 1.0
-		else:
-			neutral_count += 1
-	var reliability_score: float = 50.0
-	if scored_count > 0:
-		reliability_score = clamp(50.0 + (score_total / float(scored_count)) * 35.0, 0.0, 100.0)
-	var reliability_label: String = _tip_reliability_label(rows.size(), useful_count, missed_count, reliability_score)
-	var visible_rows: Array = rows
-	if visible_rows.size() > 4:
-		visible_rows = visible_rows.slice(0, 4)
-	return {
-		"rows": visible_rows.duplicate(true),
-		"resolved_count": rows.size(),
-		"useful_count": useful_count,
-		"missed_count": missed_count,
-		"neutral_count": neutral_count,
-		"reliability_score": reliability_score,
-		"reliability_label": reliability_label
-	}
+	return NETWORK_TIP_RESOLVER_SCRIPT.tip_history_summary(rows)
 
 
 func _tip_reliability_label(resolved_count: int, useful_count: int, missed_count: int, reliability_score: float) -> String:
-	if resolved_count <= 0:
-		return "No track record yet"
-	if resolved_count == 1:
-		if useful_count > 0:
-			return "One useful read"
-		if missed_count > 0:
-			return "One bad read"
-		return "One unresolved read"
-	if reliability_score >= 72.0:
-		return "Reliable lately"
-	if reliability_score <= 38.0:
-		return "Cold lately"
-	return "Mixed record"
+	return NETWORK_TIP_RESOLVER_SCRIPT.tip_reliability_label(resolved_count, useful_count, missed_count, reliability_score)
 
 
 func _apply_tip_history(row: Dictionary, tip_histories: Dictionary) -> void:
 	var contact_id: String = str(row.get("id", ""))
-	var history: Dictionary = tip_histories.get(contact_id, {})
-	if history.is_empty():
-		row["tip_history"] = []
-		row["tip_reliability_label"] = "No track record yet"
-		row["tip_reliability_score"] = 50.0
-		row["tip_resolved_count"] = 0
-		row["tip_useful_count"] = 0
-		row["tip_missed_count"] = 0
-		return
-	row["tip_history"] = history.get("rows", []).duplicate(true)
-	row["tip_reliability_label"] = str(history.get("reliability_label", "No track record yet"))
-	row["tip_reliability_score"] = float(history.get("reliability_score", 50.0))
-	row["tip_resolved_count"] = int(history.get("resolved_count", 0))
-	row["tip_useful_count"] = int(history.get("useful_count", 0))
-	row["tip_missed_count"] = int(history.get("missed_count", 0))
+	_apply_decorator(row, tip_histories, contact_id, TIP_HISTORY_FIELD_MAP, TIP_HISTORY_DEFAULTS)
 
 
 func _cross_contact_reads_by_contact(run_state) -> Dictionary:
-	var recent_rows: Array = []
-	var min_day_index: int = run_state.day_index - 8
-	for tip_value in run_state.get_network_tip_journal().values():
-		if typeof(tip_value) != TYPE_DICTIONARY:
-			continue
-		var tip: Dictionary = tip_value
-		var contact_id: String = str(tip.get("contact_id", ""))
-		var company_id: String = str(tip.get("target_company_id", ""))
-		if contact_id.is_empty() or company_id.is_empty():
-			continue
-		if int(tip.get("created_day_index", 0)) < min_day_index:
-			continue
-		recent_rows.append(_cross_contact_read_row(tip))
-	var result: Dictionary = {}
-	for row_value in recent_rows:
-		var row: Dictionary = row_value
-		var contact_id: String = str(row.get("contact_id", ""))
-		var peers: Array = []
-		for peer_value in recent_rows:
-			var peer: Dictionary = peer_value
-			if str(peer.get("contact_id", "")) == contact_id:
-				continue
-			if str(peer.get("target_company_id", "")) != str(row.get("target_company_id", "")):
-				continue
-			peers.append(peer)
-		if peers.is_empty():
-			continue
-		var summary: Dictionary = _cross_contact_summary(row, peers)
-		var existing: Dictionary = result.get(contact_id, {})
-		if existing.is_empty() or int(row.get("created_day_index", 0)) > int(existing.get("created_day_index", 0)):
-			result[contact_id] = summary
-	return result
+	return NETWORK_TIP_RESOLVER_SCRIPT.cross_contact_reads_by_contact(run_state.get_network_tip_journal(), run_state.day_index)
 
 
 func _cross_contact_read_row(tip: Dictionary) -> Dictionary:
-	var truth_label: String = str(tip.get("truth_label", "Network Read"))
-	return {
-		"tip_id": str(tip.get("id", "")),
-		"contact_id": str(tip.get("contact_id", "")),
-		"contact_name": str(tip.get("contact_name", "Contact")),
-		"target_company_id": str(tip.get("target_company_id", "")),
-		"target_ticker": str(tip.get("target_ticker", "")),
-		"truth_label": truth_label,
-		"confidence_label": str(tip.get("confidence_label", "")),
-		"source_role": str(tip.get("source_role", "")),
-		"source_check_label": str(tip.get("source_check_label", "")),
-		"source_check_note": str(tip.get("source_check_note", "")),
-		"source_check_day_index": int(tip.get("source_check_day_index", 0)),
-		"status": str(tip.get("status", "pending")),
-		"created_day_index": int(tip.get("created_day_index", 0)),
-		"stance": _truth_stance(truth_label)
-	}
+	return NETWORK_TIP_RESOLVER_SCRIPT.cross_contact_read_row(tip)
 
 
 func _cross_contact_summary(current: Dictionary, peers: Array) -> Dictionary:
-	var conflict_rows: Array = []
-	var agreement_rows: Array = []
-	var mixed_rows: Array = []
-	var current_stance: String = str(current.get("stance", "uncertain"))
-	for peer_value in peers:
-		var peer: Dictionary = peer_value
-		var peer_stance: String = str(peer.get("stance", "uncertain"))
-		if _truth_stances_conflict(current_stance, peer_stance):
-			conflict_rows.append(peer)
-		elif current_stance == peer_stance:
-			agreement_rows.append(peer)
-		else:
-			mixed_rows.append(peer)
-	var label: String = "Mixed sources"
-	var note: String = "Other sources are reading the same name differently."
-	var rows: Array = mixed_rows
-	if not conflict_rows.is_empty():
-		label = "Conflicting sources"
-		var first_conflict: Dictionary = conflict_rows[0]
-		note = "%s has a different read on %s: %s versus %s." % [
-			str(first_conflict.get("contact_name", "Another contact")),
-			str(current.get("target_ticker", "")),
-			str(first_conflict.get("truth_label", "a different read")),
-			str(current.get("truth_label", "this read"))
-		]
-		rows = conflict_rows
-	elif not agreement_rows.is_empty():
-		label = "Source agreement"
-		var first_agreement: Dictionary = agreement_rows[0]
-		note = "%s is broadly aligned on %s." % [
-			str(first_agreement.get("contact_name", "Another contact")),
-			str(current.get("target_ticker", "this name"))
-		]
-		rows = agreement_rows
-	if rows.size() > 3:
-		rows = rows.slice(0, 3)
-	var source_check_note: String = str(current.get("source_check_note", ""))
-	var has_direct_source_conflict: bool = label == "Conflicting sources"
-	var can_ask_source_check: bool = has_direct_source_conflict and source_check_note.is_empty()
-	return {
-		"label": label,
-		"note": note,
-		"target_ticker": str(current.get("target_ticker", "")),
-		"current_tip_id": str(current.get("tip_id", "")),
-		"current_truth_label": str(current.get("truth_label", "")),
-		"current_confidence_label": str(current.get("confidence_label", "")),
-		"current_source_role": str(current.get("source_role", "")),
-		"current_stance": current_stance,
-		"rows": rows.duplicate(true),
-		"created_day_index": int(current.get("created_day_index", 0)),
-		"has_direct_source_conflict": has_direct_source_conflict,
-		"can_ask_source_check": can_ask_source_check,
-		"source_check_label": str(current.get("source_check_label", "")),
-		"source_check_note": source_check_note,
-		"source_check_day_index": int(current.get("source_check_day_index", 0))
-	}
+	return NETWORK_TIP_RESOLVER_SCRIPT.cross_contact_summary(current, peers)
 
 
 func _truth_stance(truth_label: String) -> String:
-	if _tip_label_is_cautionary(truth_label):
-		return "caution"
-	match truth_label:
-		"Accumulation", "Filing-Backed", "Execution Watch", "Network Read":
-			return "constructive"
-		"Real But Delayed", "Room Risk", "Early Read":
-			return "timing_risk"
-		_:
-			return "uncertain"
+	return NETWORK_TIP_RESOLVER_SCRIPT.truth_stance(truth_label)
 
 
 func _truth_stances_conflict(a: String, b: String) -> bool:
-	return (a == "constructive" and b == "caution") or (a == "caution" and b == "constructive")
+	return NETWORK_TIP_RESOLVER_SCRIPT.truth_stances_conflict(a, b)
 
 
 func _apply_cross_contact_read(row: Dictionary, cross_checks: Dictionary) -> void:
 	var contact_id: String = str(row.get("id", ""))
-	var cross_check: Dictionary = cross_checks.get(contact_id, {})
-	if cross_check.is_empty():
-		row["cross_contact_label"] = ""
-		row["cross_contact_note"] = ""
-		row["cross_contact_rows"] = []
-		row["has_direct_source_conflict"] = false
-		row["can_ask_source_check"] = false
-		row["source_check_label"] = ""
-		row["source_check_note"] = ""
-		row["source_check_day_index"] = 0
-		return
-	row["cross_contact_label"] = str(cross_check.get("label", "Mixed sources"))
-	row["cross_contact_note"] = str(cross_check.get("note", ""))
-	row["cross_contact_rows"] = cross_check.get("rows", []).duplicate(true)
-	row["has_direct_source_conflict"] = bool(cross_check.get("has_direct_source_conflict", false))
-	row["can_ask_source_check"] = bool(cross_check.get("can_ask_source_check", false))
-	row["source_check_label"] = str(cross_check.get("source_check_label", ""))
-	row["source_check_note"] = str(cross_check.get("source_check_note", ""))
-	row["source_check_day_index"] = int(cross_check.get("source_check_day_index", 0))
+	_apply_decorator(row, cross_checks, contact_id, CROSS_CONTACT_FIELD_MAP, CROSS_CONTACT_DEFAULTS)
 
 
 func _pruned_tip_journal(journal: Dictionary) -> Dictionary:
@@ -1874,7 +1734,7 @@ func _latest_followup_tip_for_contact(run_state, contact_id: String) -> Dictiona
 		var tip: Dictionary = tip_value
 		if str(tip.get("contact_id", "")) != contact_id:
 			continue
-		if str(tip.get("status", "pending")) == "pending":
+		if str(tip.get("status", TIP_STATUS_PENDING)) == TIP_STATUS_PENDING:
 			continue
 		if not str(tip.get("followup_id", "")).is_empty():
 			continue
@@ -1888,161 +1748,23 @@ func _latest_followup_tip_for_contact(run_state, contact_id: String) -> Dictiona
 
 
 func _tip_followup_options(tip: Dictionary) -> Array:
-	if not str(tip.get("followup_id", "")).is_empty():
-		return []
-	return [
-		{"id": "thank", "label": "Thank"},
-		{"id": "ask_why", "label": "Ask Why"},
-		{"id": "challenge", "label": "Challenge"}
-	]
+	return NETWORK_TIP_RESOLVER_SCRIPT.tip_followup_options(tip)
 
 
 func _build_tip_followup_result(contact: Dictionary, tip: Dictionary, followup_id: String) -> Dictionary:
-	var contact_name: String = str(contact.get("display_name", "Contact"))
-	var outcome_label: String = str(tip.get("outcome_label", "Still pending"))
-	var player_action_label: String = str(tip.get("player_action_label", "No action"))
-	var player_alignment: String = str(tip.get("player_action_alignment", "neutral"))
-	var truth_label: String = str(tip.get("truth_label", "Network Read"))
-	var read_was_good: bool = outcome_label in ["Useful read", "Useful warning", "Useful timing read", "Early, not wrong"]
-	var read_was_bad: bool = outcome_label == "Missed badly"
-	var reliability: float = clamp(float(contact.get("reliability", 0.6)), 0.0, 1.0)
-	var relationship_delta: int = 0
-	var label: String = ""
-	var note: String = ""
-	match followup_id:
-		"thank":
-			label = "Thanked"
-			if read_was_good and player_alignment == "followed":
-				relationship_delta = 2
-				note = "%s appreciates that you acted with discipline after the read." % contact_name
-			elif read_was_good:
-				relationship_delta = 1
-				note = "%s accepts the thanks, but points out that the market only pays when you act." % contact_name
-			elif read_was_bad:
-				note = "%s accepts the note, but admits the read did not age cleanly." % contact_name
-			else:
-				relationship_delta = 1
-				note = "%s logs it as unfinished business and keeps the line warm." % contact_name
-		"ask_why":
-			label = "Asked Why"
-			note = _tip_followup_explanation(contact_name, truth_label, outcome_label, player_action_label)
-			if read_was_good:
-				relationship_delta = 1
-		"challenge":
-			label = "Challenged"
-			if read_was_bad:
-				if reliability >= 0.65:
-					relationship_delta = 1
-					note = "%s respects the pushback and walks through what broke in the read." % contact_name
-				else:
-					relationship_delta = -1
-					note = "%s gets defensive, which tells you something about the quality of the source." % contact_name
-			elif read_was_good:
-				relationship_delta = -1
-				note = "%s thinks the tape already answered the question and does not love being second-guessed." % contact_name
-			else:
-				note = "%s agrees the setup is still not clean enough to call." % contact_name
-		_:
-			return {"success": false, "message": "Unknown follow-up option."}
-	return {
-		"success": true,
-		"followup_label": label,
-		"followup_note": note,
-		"relationship_delta": relationship_delta,
-		"message": "%s: %s" % [label, note]
-	}
+	return NETWORK_TIP_RESOLVER_SCRIPT.build_tip_followup_result(contact, tip, followup_id)
 
 
 func _build_source_check_response(contact: Dictionary, run_state, source_check: Dictionary) -> Dictionary:
-	var rows: Array = source_check.get("rows", [])
-	var peer: Dictionary = {}
-	if not rows.is_empty() and typeof(rows[0]) == TYPE_DICTIONARY:
-		peer = rows[0]
-	var contact_id: String = str(contact.get("id", ""))
-	var contact_name: String = str(contact.get("display_name", "Contact"))
-	var ticker: String = str(source_check.get("target_ticker", "this name"))
-	var current_truth: String = str(source_check.get("current_truth_label", "this read"))
-	var peer_truth: String = str(peer.get("truth_label", "the other read"))
-	var current_stance: String = str(source_check.get("current_stance", "uncertain"))
-	var relationship: int = int(run_state.get_network_contacts().get(contact_id, {}).get("relationship", contact.get("base_relationship", 25)))
-	var reliability: float = clamp(float(contact.get("reliability", 0.6)), 0.0, 1.0)
-	var evidence_phrase: String = _source_check_evidence_phrase(contact, str(source_check.get("current_source_role", "")))
-	var relationship_delta: int = 0
-	var note: String = ""
-	if relationship < 25:
-		relationship_delta = -1
-		note = "%s gives a guarded answer on %s: the conflict is real, but they will not open the whole book yet. Their read still leans on %s." % [
-			contact_name,
-			ticker,
-			evidence_phrase
-		]
-	elif reliability >= 0.72:
-		relationship_delta = 1
-		if current_stance == "constructive":
-			note = "%s says the warning from %s is worth respecting, but their constructive read still has better backing from %s. Treat size and timing carefully." % [
-				contact_name,
-				str(peer.get("contact_name", "the other source")),
-				evidence_phrase
-			]
-		else:
-			note = "%s says the bullish read from %s may be early or crowded; their warning is based on %s. Wait for cleaner confirmation before chasing." % [
-				contact_name,
-				str(peer.get("contact_name", "the other source")),
-				evidence_phrase
-			]
-	else:
-		if current_stance == "constructive":
-			note = "%s admits %s is not clean: %s conflicts with %s, so the idea needs confirmation before it deserves full trust." % [
-				contact_name,
-				ticker,
-				current_truth,
-				peer_truth
-			]
-		else:
-			note = "%s keeps the caution flag on %s, but admits the opposite read means the setup is not dead. The next tape or filing should decide it." % [
-				contact_name,
-				ticker
-			]
-	return {
-		"label": "Asked about conflict",
-		"note": note,
-		"relationship_delta": relationship_delta,
-		"peer_contact_id": str(peer.get("contact_id", "")),
-		"peer_contact_name": str(peer.get("contact_name", "")),
-		"message": "Source check: %s" % note
-	}
+	return NETWORK_TIP_RESOLVER_SCRIPT.build_source_check_response(contact, run_state, source_check)
 
 
 func _source_check_evidence_phrase(contact: Dictionary, source_role: String) -> String:
-	var categories_text: String = " ".join(contact.get("categories", [])).to_lower()
-	var role_text: String = ("%s %s %s" % [
-		source_role,
-		str(contact.get("role", "")),
-		categories_text
-	]).to_lower()
-	if role_text.find("flow") >= 0 or role_text.find("desk") >= 0 or role_text.find("broker") >= 0 or role_text.find("bandar") >= 0:
-		return "tape behavior, ritel pressure, and who keeps taking the offer"
-	if role_text.find("legal") >= 0 or role_text.find("corporate") >= 0 or role_text.find("insider") >= 0 or role_text.find("commissioner") >= 0:
-		return "paperwork timing and what the room is willing to sign"
-	if role_text.find("journal") >= 0 or role_text.find("source") >= 0 or role_text.find("news") >= 0:
-		return "how many independent source lines are telling the same story"
-	if role_text.find("research") >= 0 or role_text.find("analyst") >= 0 or role_text.find("fundamental") >= 0:
-		return "filing quality, valuation room, and whether the thesis still holds"
-	return "the parts of the story they can personally verify"
+	return NETWORK_TIP_RESOLVER_SCRIPT.source_check_evidence_phrase(contact, source_role)
 
 
 func _tip_followup_explanation(contact_name: String, truth_label: String, outcome_label: String, player_action_label: String) -> String:
-	match truth_label:
-		"Accumulation":
-			return "%s says the read came from absorption and follow-through, not the headline itself. Your action: %s. Outcome: %s." % [contact_name, player_action_label, outcome_label]
-		"Room Risk":
-			return "%s says the meeting room mattered more than the first tape reaction. Your action: %s. Outcome: %s." % [contact_name, player_action_label, outcome_label]
-		"Real But Delayed":
-			return "%s says the story was real, but the calendar moved under it. Your action: %s. Outcome: %s." % [contact_name, player_action_label, outcome_label]
-		"Retail Trap", "Distribution Risk", "Dead Story", "Pressure Read":
-			return "%s says the warning was about crowding and weak follow-through. Your action: %s. Outcome: %s." % [contact_name, player_action_label, outcome_label]
-		_:
-			return "%s says the read was only a lead until tape, filings, or another source confirmed it. Your action: %s. Outcome: %s." % [contact_name, player_action_label, outcome_label]
+	return NETWORK_TIP_RESOLVER_SCRIPT.tip_followup_explanation(contact_name, truth_label, outcome_label, player_action_label)
 
 
 func _chain_by_id(run_state, chain_id: String) -> Dictionary:
@@ -2083,21 +1805,21 @@ func _build_public_tip_read(
 
 func _public_tip_opening(truth_label: String, ticker: String, family_label: String) -> String:
 	match truth_label:
-		"Real But Delayed":
+		TRUTH_LABEL_REAL_BUT_DELAYED:
 			return "%s still looks live, but the timing is no longer clean." % ticker
-		"Room Risk":
+		TRUTH_LABEL_ROOM_RISK:
 			return "%s has a real %s path, but the room can still reset the trade." % [ticker, family_label]
-		"Filing-Backed":
+		TRUTH_LABEL_FILING_BACKED:
 			return "%s has moved past loose rumor; the paper trail is now doing the work." % ticker
-		"Accumulation":
+		TRUTH_LABEL_ACCUMULATION:
 			return "%s looks like a quiet accumulation story before the wider market fully agrees." % ticker
-		"Distribution Risk":
+		TRUTH_LABEL_DISTRIBUTION_RISK:
 			return "%s is getting crowded, and stronger hands may be selling into attention." % ticker
-		"Retail Trap":
+		TRUTH_LABEL_RETAIL_TRAP:
 			return "%s has the shape of a crowded ritel chase rather than a clean confirmation." % ticker
-		"Execution Watch":
+		TRUTH_LABEL_EXECUTION_WATCH:
 			return "%s cleared the noisy part; now the question is whether execution keeps pace." % ticker
-		"Dead Story":
+		TRUTH_LABEL_DEAD_STORY:
 			return "%s looks mostly spent for now; do not treat the old headline as fresh fuel." % ticker
 		_:
 			return "%s has a live read, but it is still early enough to demand confirmation." % ticker
@@ -2124,19 +1846,19 @@ func _public_tip_source_color(contact: Dictionary, source_role: String, _ticker:
 
 func _public_tip_watch_note(truth_label: String, chain: Dictionary) -> String:
 	match truth_label:
-		"Real But Delayed":
+		TRUTH_LABEL_REAL_BUT_DELAYED:
 			return "Wait for a fresh date, renewed accumulation, or a clearer boardroom cue."
-		"Room Risk":
+		TRUTH_LABEL_ROOM_RISK:
 			return "Meeting notices, attendance, and vote wording matter more than intraday noise."
-		"Filing-Backed":
+		TRUTH_LABEL_FILING_BACKED:
 			return "The next useful clue is whether the market buys the filing after the first reaction."
-		"Accumulation":
+		TRUTH_LABEL_ACCUMULATION:
 			return "If volume rises without the story getting too loud, the read improves."
-		"Distribution Risk", "Retail Trap":
+		TRUTH_LABEL_DISTRIBUTION_RISK, TRUTH_LABEL_RETAIL_TRAP:
 			return "Be careful if volume expands while the bid keeps slipping."
-		"Execution Watch":
+		TRUTH_LABEL_EXECUTION_WATCH:
 			return "Follow-through now matters more than another headline."
-		"Dead Story":
+		TRUTH_LABEL_DEAD_STORY:
 			return "Only a new notice or hard reversal would make it worth reopening."
 		_:
 			if not str(chain.get("active_meeting_id", "")).is_empty():
@@ -2147,8 +1869,8 @@ func _public_tip_watch_note(truth_label: String, chain: Dictionary) -> String:
 func _public_truth_label(contact: Dictionary, chain: Dictionary, intel_quality: String) -> String:
 	if chain.is_empty():
 		if str(contact.get("tone", "mixed")) == "negative":
-			return "Pressure Read"
-		return "Network Read"
+			return TRUTH_LABEL_PRESSURE_READ
+		return TRUTH_LABEL_NETWORK_READ
 	var stage: String = str(chain.get("stage", ""))
 	var timeline_state: String = str(chain.get("current_timeline_state", ""))
 	var outcome_state: String = str(chain.get("outcome_state", ""))
@@ -2157,24 +1879,24 @@ func _public_truth_label(contact: Dictionary, chain: Dictionary, intel_quality: 
 	var retail_positioning: float = float(chain.get("retail_positioning", 0.0))
 	var source_role: String = _contact_tip_voice(contact)
 	if outcome_state == "cancelled" or timeline_state == "cancelled":
-		return "Dead Story"
+		return TRUTH_LABEL_DEAD_STORY
 	if stage == "execution" or outcome_state == "approved":
-		return "Execution Watch"
+		return TRUTH_LABEL_EXECUTION_WATCH
 	if timeline_state == "delayed" or intel_quality == "very_strong":
-		return "Real But Delayed"
+		return TRUTH_LABEL_REAL_BUT_DELAYED
 	if source_role == "flow desk" and public_heat >= 0.45 and retail_positioning >= 0.24:
-		return "Retail Trap"
+		return TRUTH_LABEL_RETAIL_TRAP
 	if stage == "meeting_or_call" or not str(chain.get("active_meeting_id", "")).is_empty():
-		return "Room Risk"
+		return TRUTH_LABEL_ROOM_RISK
 	if smart_money_phase in ["distributing", "trapping"]:
-		return "Retail Trap" if public_heat >= 0.58 or retail_positioning >= 0.36 else "Distribution Risk"
+		return TRUTH_LABEL_RETAIL_TRAP if public_heat >= 0.58 or retail_positioning >= 0.36 else TRUTH_LABEL_DISTRIBUTION_RISK
 	if stage == "formal_agenda_or_filing":
-		return "Filing-Backed"
+		return TRUTH_LABEL_FILING_BACKED
 	if smart_money_phase in ["accumulating", "re_accumulating"] and stage in ["hidden_positioning", "unusual_activity", "rumor_leak"]:
-		return "Accumulation"
+		return TRUTH_LABEL_ACCUMULATION
 	if public_heat >= 0.64 and retail_positioning >= 0.34:
-		return "Retail Trap"
-	return "Early Read"
+		return TRUTH_LABEL_RETAIL_TRAP
+	return TRUTH_LABEL_EARLY_READ
 
 
 func _public_confidence_label(contact: Dictionary, intel_quality: String) -> String:
@@ -2393,32 +2115,11 @@ func _best_meeting_lead_contact(
 
 
 func _meeting_profile_matches_contact(profile: Dictionary, contact: Dictionary, sector_id: String) -> bool:
-	var contact_categories: Array = contact.get("categories", [])
-	var profile_categories: Array = profile.get("category_ids", [])
-	var has_category_match: bool = profile_categories.is_empty()
-	for category_value in profile_categories:
-		if str(category_value) in contact_categories:
-			has_category_match = true
-			break
-	var sector_match: bool = (not sector_id.is_empty()) and (sector_id in contact.get("sector_ids", []))
-	if bool(profile.get("sector_match_required", false)) and not sector_match:
-		return false
-	return has_category_match or sector_match
+	return NETWORK_DISCOVERY_SCRIPT.meeting_profile_matches_contact(profile, contact, sector_id)
 
 
 func _meeting_lead_contact_score(run_state, contact: Dictionary, profile: Dictionary, company_id: String, sector_id: String) -> float:
-	var score: float = 0.0
-	if not sector_id.is_empty() and sector_id in contact.get("sector_ids", []):
-		score += 60.0
-	for category_value in profile.get("category_ids", []):
-		if str(category_value) in contact.get("categories", []):
-			score += 18.0
-	score += clamp(float(contact.get("reliability", 0.55)), 0.0, 1.0) * 12.0
-	score += max(0.0, 55.0 - float(contact.get("recognition_required", 0))) * 0.08
-	if _is_met(run_state, str(contact.get("id", ""))):
-		score -= 18.0
-	score += float(STABLE_RNG.seed_from_parts([company_id, str(profile.get("id", "")), str(contact.get("id", "")), "meeting_lead"]) % 1000) / 1000.0
-	return score
+	return NETWORK_DISCOVERY_SCRIPT.meeting_lead_contact_score(run_state, contact, profile, company_id, sector_id)
 
 
 func _meeting_lead_public_row(
@@ -2606,7 +2307,7 @@ func _pick_meeting_text(text_rows: Array, seed_parts: Array, fallback: String) -
 
 
 func _meeting_lead_tier_rank(tier_id: String) -> int:
-	return int(MEETING_LEAD_TIER_ORDER.get(tier_id, 99))
+	return NETWORK_DISCOVERY_SCRIPT.meeting_lead_tier_rank(tier_id)
 
 
 func _meeting_lead_is_approached(session: Dictionary, lead_id: String) -> bool:
@@ -2695,6 +2396,119 @@ func _best_referral_insider(run_state, floater_id: String, company_id: String, a
 	return candidates[0].get("insider", {}).duplicate(true)
 
 
+func _is_referral_required_contact(contact: Dictionary) -> bool:
+	if str(contact.get("affiliation_type", "floater")) == "social":
+		return false
+	return int(contact.get("recognition_required", 0)) >= INNER_CIRCLE_REFERRAL_RECOGNITION_THRESHOLD
+
+
+func _inner_circle_contact_is_unlocked(runtime: Dictionary, discovery: Dictionary) -> bool:
+	if bool(runtime.get("met", false)):
+		return true
+	return str(discovery.get("source_type", "")) == "referral"
+
+
+func _should_skip_public_contact_discovery(contact: Dictionary, contact_id: String, discoveries: Dictionary, contacts: Dictionary) -> bool:
+	if not _is_referral_required_contact(contact):
+		return false
+	var runtime: Dictionary = contacts.get(contact_id, {}) if typeof(contacts.get(contact_id, {})) == TYPE_DICTIONARY else {}
+	var discovery: Dictionary = discoveries.get(contact_id, {}) if typeof(discoveries.get(contact_id, {})) == TYPE_DICTIONARY else {}
+	if _inner_circle_contact_is_unlocked(runtime, discovery):
+		return true
+	return true
+
+
+func _is_inner_circle_referral_bridge(contact: Dictionary) -> bool:
+	if str(contact.get("affiliation_type", "floater")) != "floater":
+		return false
+	var recognition_required: int = int(contact.get("recognition_required", 0))
+	return recognition_required >= INNER_CIRCLE_BRIDGE_RECOGNITION_MIN and recognition_required < INNER_CIRCLE_BRIDGE_RECOGNITION_MAX
+
+
+func _has_inner_circle_referral_trust_signal(runtime: Dictionary) -> bool:
+	if int(runtime.get("relationship", 0)) >= INNER_CIRCLE_REFERRAL_TRUST_RELATIONSHIP:
+		return true
+	if str(runtime.get("last_tip_label", "")) in GOOD_OUTCOME_LABELS:
+		return true
+	if not str(runtime.get("last_tip_followup_id", "")).is_empty():
+		return true
+	return not str(runtime.get("last_reaction_label", "")).is_empty()
+
+
+func _best_inner_circle_referral_contact(
+	run_state,
+	data_repository,
+	bridge_contact: Dictionary,
+	bridge_contact_id: String,
+	company_id: String
+) -> Dictionary:
+	var discoveries: Dictionary = run_state.get_network_discoveries()
+	var contacts: Dictionary = run_state.get_network_contacts()
+	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+	var sector_id: String = str(definition.get("sector_id", ""))
+	var candidates: Array = []
+	for contact_value in data_repository.get_contact_network_data().get("contacts", []):
+		if typeof(contact_value) != TYPE_DICTIONARY:
+			continue
+		var candidate: Dictionary = contact_value
+		var candidate_id: String = str(candidate.get("id", candidate.get("contact_id", "")))
+		if candidate_id.is_empty() or candidate_id == bridge_contact_id:
+			continue
+		if str(candidate.get("affiliation_type", "floater")) != "floater":
+			continue
+		if not _is_referral_required_contact(candidate):
+			continue
+		var candidate_runtime: Dictionary = contacts.get(candidate_id, {}) if typeof(contacts.get(candidate_id, {})) == TYPE_DICTIONARY else {}
+		var candidate_discovery: Dictionary = discoveries.get(candidate_id, {}) if typeof(discoveries.get(candidate_id, {})) == TYPE_DICTIONARY else {}
+		if _inner_circle_contact_is_unlocked(candidate_runtime, candidate_discovery):
+			continue
+		var score: int = _inner_circle_referral_score(candidate, bridge_contact, sector_id)
+		if score < REFERRAL_CONNECTION_THRESHOLD:
+			continue
+		candidates.append({"contact": candidate, "score": score})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("score", 0)) > int(b.get("score", 0))
+	)
+	if candidates.is_empty():
+		return {}
+	return candidates[0].get("contact", {}).duplicate(true)
+
+
+func _inner_circle_referral_score(candidate: Dictionary, bridge_contact: Dictionary, sector_id: String) -> int:
+	var score: int = 0
+	var candidate_sectors: Array = _string_array(candidate.get("sector_ids", []))
+	var bridge_sectors: Array = _string_array(bridge_contact.get("sector_ids", []))
+	if not sector_id.is_empty() and sector_id in candidate_sectors:
+		score += 34
+	if not sector_id.is_empty() and sector_id in bridge_sectors:
+		score += 10
+	score += min(_overlap_count(candidate_sectors, bridge_sectors), 3) * 8
+	score += min(_overlap_count(_string_array(candidate.get("categories", [])), _string_array(bridge_contact.get("categories", []))), 3) * 10
+	score += int(round(clamp(float(candidate.get("reliability", 0.5)), 0.0, 1.0) * 18.0))
+	score += int(round(clamp(float(bridge_contact.get("reliability", 0.5)), 0.0, 1.0) * 8.0))
+	score += max(0, int(candidate.get("recognition_required", 0)) - INNER_CIRCLE_REFERRAL_RECOGNITION_THRESHOLD) * 2
+	return score
+
+
+func _string_array(source: Variant) -> Array:
+	var rows: Array = []
+	if typeof(source) != TYPE_ARRAY:
+		return rows
+	for value in source:
+		var text: String = str(value).strip_edges()
+		if not text.is_empty() and not rows.has(text):
+			rows.append(text)
+	return rows
+
+
+func _overlap_count(left: Array, right: Array) -> int:
+	var count: int = 0
+	for value in left:
+		if right.has(value):
+			count += 1
+	return count
+
+
 func _connection_score_for_floater(insider: Dictionary, floater_id: String) -> int:
 	for bridge_value in insider.get("connected_floaters", []):
 		if typeof(bridge_value) != TYPE_DICTIONARY:
@@ -2722,284 +2536,119 @@ func _contact_definition(run_state, data_repository, contact_id: String) -> Dict
 
 
 func _contact_row(contact: Dictionary, runtime: Dictionary, discovery: Dictionary, recognition: Dictionary) -> Dictionary:
-	var affiliation_type: String = str(contact.get("affiliation_type", "floater"))
-	var affiliated_company_id: String = str(contact.get("affiliated_company_id", contact.get("company_id", "")))
-	var target_company_ids: Array = _contact_company_targets(discovery)
-	var primary_target_company_id: String = str(discovery.get("target_company_id", affiliated_company_id))
-	if primary_target_company_id.is_empty() and not target_company_ids.is_empty():
-		primary_target_company_id = str(target_company_ids[0])
-	var twooter_account: Dictionary = _contact_twooter_account(contact)
-	var twooter_profile: Dictionary = twooter_account.get("social_profile", {}) if typeof(twooter_account.get("social_profile", {})) == TYPE_DICTIONARY else {}
-	return {
-		"id": str(contact.get("id", "")),
-		"display_name": str(contact.get("display_name", "")),
-		"role": str(contact.get("role", "")),
-		"intro": str(contact.get("intro", "")),
-		"affiliation_type": affiliation_type,
-		"affiliation_role": str(contact.get("affiliation_role", "")),
-		"affiliated_company_id": affiliated_company_id,
-		"company_id": affiliated_company_id,
-		"template_contact_id": str(contact.get("template_contact_id", "")),
-		"relationship": int(runtime.get("relationship", 0)),
-		"met": bool(runtime.get("met", false)),
-		"discovered": bool(discovery.get("discovered", false)),
-		"can_meet": bool(discovery.get("discovered", false)) and not bool(runtime.get("met", false)) and (str(discovery.get("source_type", "")) == "referral" or int(recognition.get("score", 0)) >= int(contact.get("recognition_required", 0))),
-		"recognition_required": int(contact.get("recognition_required", 0)),
-		"source_type": str(discovery.get("source_type", "")),
-		"source_id": str(discovery.get("source_id", "")),
-		"source_label": str(discovery.get("source_label", contact.get("source_label", ""))),
-		"source_note": str(discovery.get("source_note", contact.get("source_note", ""))),
-		"twooter_origin": str(discovery.get("twooter_origin", contact.get("twooter_origin", ""))),
-		"source_only": bool(discovery.get("source_only", contact.get("source_only", false))),
-		"referred_by_contact_id": str(discovery.get("referred_by_contact_id", "")),
-		"connection_score": int(discovery.get("connection_score", 0)),
-		"target_company_id": primary_target_company_id,
-		"target_company_ids": target_company_ids,
-		"target_sector_id": str(discovery.get("target_sector_id", contact.get("sector_id", ""))),
-		"sector_ids": contact.get("sector_ids", []).duplicate(true),
-		"categories": contact.get("categories", []).duplicate(true),
-		"has_twooter_account": not str(twooter_account.get("id", "")).is_empty(),
-		"twooter_account_id": str(twooter_account.get("id", "")),
-		"twooter_handle": str(twooter_account.get("handle", "")),
-		"twooter_display_name": str(twooter_account.get("display_name", "")),
-		"twooter_bio": str(twooter_profile.get("description", "")),
-		"lead_score": int(discovery.get("lead_score", 0)),
-		"last_tip_status": str(runtime.get("last_tip_status", "")),
-		"last_tip_label": str(runtime.get("last_tip_label", "")),
-		"last_tip_note": str(runtime.get("last_tip_note", "")),
-		"last_tip_player_action_label": str(runtime.get("last_tip_player_action_label", "")),
-		"last_tip_player_action_alignment": str(runtime.get("last_tip_player_action_alignment", "")),
-		"last_tip_day_index": int(runtime.get("last_tip_day_index", 0)),
-		"last_tip_request_day_index": int(runtime.get("last_tip_request_day_index", -9999)),
-		"last_referral_day_index": int(runtime.get("last_referral_day_index", -9999)),
-		"last_tip_followup_id": str(runtime.get("last_tip_followup_id", "")),
-		"last_tip_followup_label": str(runtime.get("last_tip_followup_label", "")),
-		"last_tip_followup_note": str(runtime.get("last_tip_followup_note", "")),
-		"last_reaction_label": str(runtime.get("last_reaction_label", "")),
-		"last_reaction_note": str(runtime.get("last_reaction_note", "")),
-		"last_reaction_day_index": int(runtime.get("last_reaction_day_index", 0)),
-		"last_reaction_twooter_account_id": str(runtime.get("last_reaction_twooter_account_id", "")),
-		"last_reaction_twooter_handle": str(runtime.get("last_reaction_twooter_handle", "")),
-		"last_development_lead_id": "",
-		"last_development_lead_label": "",
-		"last_development_lead_note": "",
-		"last_development_lead_location": "",
-		"last_development_lead_day_index": 0,
-		"can_follow_up_tip": false,
-		"tip_followup_options": [],
-		"tip_history": [],
-		"tip_reliability_label": "No track record yet",
-		"tip_reliability_score": 50.0,
-		"tip_resolved_count": 0,
-		"tip_useful_count": 0,
-		"tip_missed_count": 0,
-		"cross_contact_label": "",
-		"cross_contact_note": "",
-		"cross_contact_rows": [],
-		"has_direct_source_conflict": false,
-		"can_ask_source_check": false,
-		"source_check_label": "",
-		"source_check_note": "",
-		"source_check_day_index": 0
-	}
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.contact_row(contact, runtime, discovery, recognition, NETWORK_TWOOTER_ACCOUNT_PREFIX)
+
+
+func _apply_access_provenance(row: Dictionary, contact: Dictionary, discovery: Dictionary, run_state, data_repository) -> void:
+	var source_type: String = str(discovery.get("source_type", "")).strip_edges().to_lower()
+	var access_label: String = _access_label_for_contact(contact, discovery)
+	var provenance_label: String = access_label
+	if provenance_label.is_empty():
+		provenance_label = _source_type_label_for_snapshot(source_type)
+	row["access_label"] = access_label
+	row["provenance_label"] = provenance_label
+	if source_type != "referral":
+		return
+	var source_contact_id: String = str(discovery.get("referred_by_contact_id", discovery.get("source_id", ""))).strip_edges()
+	var source_name: String = str(_contact_display_name(run_state, data_repository, source_contact_id)) if not source_contact_id.is_empty() else ""
+	var referral_day_index: int = int(discovery.get("referral_day_index", discovery.get("day_index", -9999)))
+	row["referred_by_contact_id"] = source_contact_id
+	row["referred_by_contact_name"] = source_name
+	row["referral_day_index"] = referral_day_index
+	row["referral_day_label"] = "Day %d" % referral_day_index if referral_day_index >= 0 else ""
+	var note_parts: Array = []
+	if not source_name.is_empty():
+		note_parts.append("%s from %s." % [access_label if not access_label.is_empty() else "Private referral", source_name])
+	if referral_day_index >= 0:
+		note_parts.append("Introduced on day %d." % referral_day_index)
+	if int(discovery.get("connection_score", 0)) > 0:
+		note_parts.append("Connection score %d." % int(discovery.get("connection_score", 0)))
+	row["referral_note"] = " ".join(note_parts).strip_edges()
+
+
+func _access_label_for_contact(contact: Dictionary, discovery: Dictionary) -> String:
+	var source_type: String = str(discovery.get("source_type", "")).strip_edges().to_lower()
+	if source_type != "referral":
+		return ""
+	var privacy_gate: String = str(discovery.get("privacy_gate", "")).strip_edges()
+	var referral_required: bool = bool(discovery.get("referral_required", false))
+	if privacy_gate == INNER_CIRCLE_REFERRAL_ROLE or referral_required or int(contact.get("recognition_required", 0)) >= INNER_CIRCLE_REFERRAL_RECOGNITION_THRESHOLD:
+		return "Inner-circle contact"
+	return "Private referral"
+
+
+func _source_type_label_for_snapshot(source_type: String) -> String:
+	match source_type:
+		"news":
+			return "News lead"
+		"twooter":
+			return "Twooter lead"
+		"referral":
+			return "Private referral"
+		MEETING_LEAD_SOURCE_TYPE:
+			return "RUPSLB room"
+		"manual":
+			return "Manual note"
+		"debug":
+			return "Test lead"
+		_:
+			return "Network lead"
 
 
 func _contact_twooter_account(contact: Dictionary, discovery: Dictionary = {}, run_state = null) -> Dictionary:
-	var contact_id: String = str(contact.get("id", contact.get("contact_id", "")))
-	if contact_id.is_empty():
-		return {}
-	var sector_ids: Array = _contact_string_array(contact.get("sector_ids", []))
-	var categories: Array = _contact_string_array(contact.get("categories", []))
-	var first_sector_id: String = str(sector_ids[0]) if not sector_ids.is_empty() else str(contact.get("sector_id", ""))
-	var target_company_id: String = _contact_twooter_target_company_id(contact, discovery)
-	var target_ticker: String = str(discovery.get("target_ticker", "")).strip_edges().to_upper()
-	if target_ticker.is_empty() and run_state != null and not target_company_id.is_empty():
-		target_ticker = _company_ticker(run_state, target_company_id)
-	var target_company_name: String = ""
-	if run_state != null and not target_company_id.is_empty():
-		var target_definition: Dictionary = run_state.get_effective_company_definition(target_company_id, false, false)
-		target_company_name = str(target_definition.get("name", target_ticker))
-	var profile: Dictionary = {
-		"role": str(contact.get("role", "Network contact")),
-		"intro": str(contact.get("intro", "A market contact you can approach through Twooter before they become part of your Network.")),
-		"description": _contact_twooter_description(contact),
-		"account_origin": "network_contact",
-		"network_source": true,
-		"affiliation_role": str(contact.get("affiliation_role", contact.get("affiliation_type", "network"))),
-		"risk_profile": _contact_twooter_risk_profile(contact),
-		"follow_weight": _contact_twooter_follow_weight(contact),
-		"network_contact_id": contact_id,
-		"sector_id": first_sector_id,
-		"sector_ids": sector_ids,
-		"categories": categories,
-		"target_company_id": target_company_id,
-		"target_ticker": target_ticker,
-		"target_company_name": target_company_name,
-		"dialog_trees": _contact_twooter_dialog_trees(contact)
-	}
-	return {
-		"id": _contact_twooter_account_id(contact),
-		"display_name": str(contact.get("display_name", contact_id)),
-		"handle": _contact_twooter_handle(contact),
-		"tier": 1,
-		"verified": _contact_twooter_verified(contact),
-		"voice": _contact_twooter_voice(contact),
-		"social_profile": profile
-	}
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.contact_twooter_account(contact, discovery, run_state, NETWORK_TWOOTER_ACCOUNT_PREFIX)
 
 
 func _contact_twooter_account_id(contact: Dictionary) -> String:
-	var explicit_id: String = str(contact.get("twooter_account_id", "")).strip_edges()
-	if not explicit_id.is_empty():
-		return explicit_id
-	var contact_id: String = str(contact.get("id", contact.get("contact_id", "contact"))).strip_edges()
-	return "%s%s" % [NETWORK_TWOOTER_ACCOUNT_PREFIX, _slug_text(contact_id, true)]
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.contact_twooter_account_id(contact, NETWORK_TWOOTER_ACCOUNT_PREFIX)
 
 
 func _contact_twooter_handle(contact: Dictionary) -> String:
-	var explicit_handle: String = str(contact.get("twooter_handle", "")).strip_edges()
-	if not explicit_handle.is_empty():
-		return explicit_handle if explicit_handle.begins_with("@") else "@%s" % explicit_handle
-	var handle_seed: String = str(contact.get("display_name", contact.get("id", "contact"))).strip_edges()
-	var slug: String = _slug_text(handle_seed, false)
-	if slug.is_empty():
-		slug = _slug_text(str(contact.get("id", "contact")), false)
-	if slug.is_empty():
-		slug = "contact"
-	return "@%s" % slug.left(24)
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.contact_twooter_handle(contact)
 
 
 func _contact_twooter_target_company_id(contact: Dictionary, discovery: Dictionary) -> String:
-	var target_company_id: String = str(discovery.get("target_company_id", "")).strip_edges()
-	if target_company_id.is_empty():
-		var target_company_ids: Array = _contact_company_targets(discovery)
-		if not target_company_ids.is_empty():
-			target_company_id = str(target_company_ids[0])
-	if target_company_id.is_empty():
-		target_company_id = str(contact.get("affiliated_company_id", contact.get("company_id", ""))).strip_edges()
-	return target_company_id
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.contact_twooter_target_company_id(contact, discovery)
 
 
 func _contact_twooter_description(contact: Dictionary) -> String:
-	var role: String = str(contact.get("role", "market contact")).strip_edges()
-	var intro: String = str(contact.get("intro", "")).strip_edges()
-	var reliability: float = float(contact.get("reliability", 0.5))
-	var tone: String = str(contact.get("tone", "mixed")).strip_edges()
-	var risk_label: String = "clean"
-	if reliability < 0.48:
-		risk_label = "noisy"
-	elif tone == "negative" or tone == "aggressive":
-		risk_label = "guarded"
-	var lines: Array = []
-	if not role.is_empty():
-		lines.append("%s with a %s source profile." % [role, risk_label])
-	if not intro.is_empty():
-		lines.append(intro)
-	lines.append("Start through Twooter: follow, like useful posts, then send a specific message before this source becomes a Network contact.")
-	return " ".join(lines)
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.contact_twooter_description(contact)
 
 
 func _contact_twooter_dialog_trees(contact: Dictionary) -> Array:
-	var affiliation_type: String = str(contact.get("affiliation_type", "floater"))
-	var role: String = str(contact.get("role", "")).to_lower()
-	var risk_profile: String = _contact_twooter_risk_profile(contact)
-	if affiliation_type == "insider":
-		return ["network_insider_boundary", "network_source_followup", "source_check"]
-	if risk_profile == "suspicious":
-		return ["network_guarded_source", "suspicious_boundary", "source_check"]
-	if role.contains("reporter") or role.contains("writer") or role.contains("columnist"):
-		return ["network_source_followup", "network_relationship_probe", "source_check"]
-	if role.contains("analyst"):
-		return ["network_source_followup", "network_relationship_probe", "thesis_review"]
-	return ["network_source_followup", "network_relationship_probe", "source_check"]
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.contact_twooter_dialog_trees(contact)
 
 
 func _contact_twooter_risk_profile(contact: Dictionary) -> String:
-	var reliability: float = float(contact.get("reliability", 0.5))
-	var tone: String = str(contact.get("tone", "mixed"))
-	if tone == "suspicious" or tone == "dirty":
-		return "suspicious"
-	if reliability < 0.48:
-		return "noisy"
-	return "clean"
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.contact_twooter_risk_profile(contact)
 
 
 func _contact_twooter_follow_weight(contact: Dictionary) -> int:
-	var reliability_bonus: int = int(round(clamp(float(contact.get("reliability", 0.5)), 0.0, 1.0) * 12.0))
-	var recognition_penalty: int = int(round(float(contact.get("recognition_required", 0)) / 12.0))
-	var affiliation_type: String = str(contact.get("affiliation_type", "floater"))
-	var affiliation_bonus: int = 4 if affiliation_type == "insider" else 0
-	return clampi(12 + reliability_bonus + affiliation_bonus - recognition_penalty, 4, 32)
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.contact_twooter_follow_weight(contact)
 
 
 func _contact_twooter_verified(contact: Dictionary) -> bool:
-	var role: String = str(contact.get("role", "")).to_lower()
-	return role.contains("reporter") or role.contains("writer") or role.contains("columnist") or role.contains("analyst")
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.contact_twooter_verified(contact)
 
 
 func _contact_twooter_voice(contact: Dictionary) -> String:
-	var role: String = str(contact.get("role", "")).to_lower()
-	var categories: Array = _contact_string_array(contact.get("categories", []))
-	if role.contains("macro") or categories.has("macro_shock") or categories.has("policy_post"):
-		return "macro_classroom"
-	if role.contains("reporter") or role.contains("writer") or role.contains("columnist"):
-		return "market_diary"
-	if role.contains("analyst") or categories.has("earnings"):
-		return "funda_thread"
-	if categories.has("rumor"):
-		return "bandar_alert"
-	return "market_diary"
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.contact_twooter_voice(contact)
 
 
 func _contact_string_array(source: Variant) -> Array:
-	var rows: Array = []
-	if typeof(source) != TYPE_ARRAY:
-		return rows
-	for value in source:
-		var text: String = str(value).strip_edges()
-		if not text.is_empty() and not rows.has(text):
-			rows.append(text)
-	return rows
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.contact_string_array(source)
 
 
 func _slug_text(value: String, keep_separator: bool) -> String:
-	var source: String = value.to_lower().strip_edges()
-	var parts: Array = []
-	var last_was_separator: bool = false
-	for index in range(source.length()):
-		var code: int = source.unicode_at(index)
-		var is_alnum: bool = (code >= 48 and code <= 57) or (code >= 97 and code <= 122)
-		if is_alnum:
-			parts.append(source.substr(index, 1))
-			last_was_separator = false
-		elif keep_separator and (code == 32 or code == 45 or code == 95 or code == 46) and not last_was_separator and not parts.is_empty():
-			parts.append("_")
-			last_was_separator = true
-	var slug: String = "".join(parts).strip_edges()
-	while slug.ends_with("_"):
-		slug = slug.left(slug.length() - 1)
-	if slug.is_empty():
-		return "contact"
-	return slug
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.slug_text(value, keep_separator)
 
 
 func _contact_company_targets(discovery: Dictionary) -> Array:
-	var targets: Array = []
-	for company_id_value in discovery.get("target_company_ids", []):
-		var company_id: String = str(company_id_value)
-		if not company_id.is_empty() and not targets.has(company_id):
-			targets.append(company_id)
-	var primary_company_id: String = str(discovery.get("target_company_id", ""))
-	if not primary_company_id.is_empty() and not targets.has(primary_company_id):
-		targets.append(primary_company_id)
-	return targets
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.contact_company_targets(discovery)
 
 
 func _can_add_company_lead(discovery: Dictionary, company_id: String) -> bool:
-	if company_id.is_empty():
-		return true
-	var targets: Array = _contact_company_targets(discovery)
-	return (not targets.has(company_id)) and targets.size() < MAX_COMPANY_LEADS_PER_FLOATER
+	return NETWORK_CONTACT_PRESENTER_SCRIPT.can_add_company_lead(discovery, company_id, MAX_COMPANY_LEADS_PER_FLOATER)
 
 
 func _request_rows(requests: Dictionary) -> Array:
@@ -3017,416 +2666,18 @@ func _request_rows(requests: Dictionary) -> Array:
 
 
 func _network_journal_rows(run_state, data_repository, requests: Dictionary, discoveries: Dictionary) -> Array:
-	var rows: Array = []
-	for tip_value in run_state.get_network_tip_journal().values():
-		if typeof(tip_value) != TYPE_DICTIONARY:
-			continue
-		var tip: Dictionary = tip_value
-		if str(tip.get("journal_type", "")) == "twooter_social":
-			rows.append(_network_twooter_journal_row(tip))
-			if bool(tip.get("reaction_sent", false)):
-				rows.append(_network_social_reaction_journal_row(tip))
-			continue
-		rows.append(_network_tip_journal_row(tip))
-		if str(tip.get("status", "pending")) != "pending":
-			rows.append(_network_tip_resolution_journal_row(tip))
-		if not str(tip.get("followup_note", "")).is_empty():
-			rows.append(_network_tip_followup_journal_row(tip))
-		if not str(tip.get("source_check_note", "")).is_empty():
-			rows.append(_network_source_check_journal_row(tip))
-		if bool(tip.get("reaction_sent", false)):
-			rows.append(_network_social_reaction_journal_row(tip))
-	for request_value in requests.values():
-		if typeof(request_value) != TYPE_DICTIONARY:
-			continue
-		var request: Dictionary = request_value
-		if str(request.get("request_type", "")) == "dirty_tip":
-			rows.append(_network_dirty_tip_journal_row(request))
-			if not str(request.get("decision", "")).is_empty():
-				rows.append(_network_dirty_tip_decision_journal_row(request))
-			if int(request.get("resolved_day_index", -1)) >= 0:
-				rows.append(_network_dirty_tip_result_journal_row(request))
-			continue
-		rows.append(_network_request_journal_row(run_state, data_repository, request))
-	for discovery_value in discoveries.values():
-		if typeof(discovery_value) != TYPE_DICTIONARY:
-			continue
-		var discovery: Dictionary = discovery_value
-		if str(discovery.get("source_type", "")) == "referral":
-			rows.append(_network_referral_journal_row(run_state, data_repository, discovery))
-		if str(discovery.get("source_type", "")) == MEETING_LEAD_SOURCE_TYPE:
-			rows.append(_network_meeting_lead_journal_row(run_state, data_repository, discovery))
-		if str(discovery.get("source_type", "")) == "twooter":
-			rows.append(_network_twooter_discovery_journal_row(run_state, data_repository, discovery))
-	var life_state: Dictionary = run_state.get_player_life()
-	for lead_value in life_state.get("development_leads", []):
-		if typeof(lead_value) == TYPE_DICTIONARY:
-			rows.append(_network_property_development_lead_journal_row(lead_value))
-	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		var a_sort: int = int(a.get("sort_index", int(a.get("day_index", 0)) * 10))
-		var b_sort: int = int(b.get("sort_index", int(b.get("day_index", 0)) * 10))
-		if a_sort == b_sort:
-			return str(a.get("id", "")) > str(b.get("id", ""))
-		return a_sort > b_sort
+	return NETWORK_JOURNAL_BUILDER_SCRIPT.network_journal_rows(
+		run_state,
+		data_repository,
+		requests,
+		discoveries,
+		Callable(self, "_contact_display_name"),
+		Callable(self, "_company_ticker")
 	)
-	if rows.size() > MAX_NETWORK_JOURNAL_ROWS:
-		rows = rows.slice(0, MAX_NETWORK_JOURNAL_ROWS)
-	return rows
-
-
-func _network_twooter_journal_row(tip: Dictionary) -> Dictionary:
-	var day_index: int = int(tip.get("created_day_index", 0))
-	var ticker: String = str(tip.get("target_ticker", ""))
-	var action_label: String = str(tip.get("truth_label", "Twooter"))
-	var outcome_label: String = str(tip.get("dialog_outcome_label", "")).strip_edges()
-	if not outcome_label.is_empty():
-		action_label = outcome_label
-	var source_label: String = str(tip.get("source_label", "Twooter")).strip_edges()
-	var source_note: String = str(tip.get("source_note", "")).strip_edges()
-	var detail: String = str(tip.get("tip_read", ""))
-	var outcome_note: String = str(tip.get("dialog_outcome_note", "")).strip_edges()
-	var confidence_label: String = str(tip.get("confidence_label", "")).strip_edges()
-	if not source_note.is_empty():
-		detail = "%s %s" % [source_note, detail]
-	elif not source_label.is_empty():
-		detail = "%s. %s" % [source_label, detail]
-	if not outcome_note.is_empty():
-		detail = "%s %s" % [detail.strip_edges(), outcome_note]
-	if not confidence_label.is_empty() and confidence_label != "social":
-		detail = "%s (%s)" % [detail.strip_edges(), confidence_label]
-	return {
-		"id": "%s:twooter" % str(tip.get("id", "")),
-		"type": "twooter",
-		"day_index": day_index,
-		"sort_index": day_index * 10 + 3,
-		"contact_id": str(tip.get("contact_id", "")),
-		"contact_name": str(tip.get("contact_name", "Twooter contact")),
-		"target_company_id": str(tip.get("target_company_id", "")),
-		"target_ticker": ticker,
-		"status": str(tip.get("status", "recorded")),
-		"title": "Twooter | %s%s" % [action_label, " | %s" % ticker if not ticker.is_empty() else ""],
-		"detail": detail.strip_edges()
-	}
-
-
-func _network_tip_journal_row(tip: Dictionary) -> Dictionary:
-	var day_index: int = int(tip.get("created_day_index", 0))
-	var ticker: String = str(tip.get("target_ticker", ""))
-	var read_label: String = str(tip.get("truth_label", "Network Read"))
-	return {
-		"id": "%s:tip" % str(tip.get("id", "")),
-		"type": "tip",
-		"day_index": day_index,
-		"sort_index": day_index * 10 + 1,
-		"contact_id": str(tip.get("contact_id", "")),
-		"contact_name": str(tip.get("contact_name", "Contact")),
-		"target_company_id": str(tip.get("target_company_id", "")),
-		"target_ticker": ticker,
-		"status": str(tip.get("status", "pending")),
-		"title": "Tip | %s | %s" % [ticker, read_label],
-		"detail": "%s gave a %s read. %s" % [
-			str(tip.get("contact_name", "Contact")),
-			str(tip.get("confidence_label", "soft")),
-			str(tip.get("tip_read", ""))
-		]
-	}
-
-
-func _network_tip_resolution_journal_row(tip: Dictionary) -> Dictionary:
-	var day_index: int = int(tip.get("resolved_day_index", tip.get("created_day_index", 0)))
-	return {
-		"id": "%s:resolved" % str(tip.get("id", "")),
-		"type": "tip_result",
-		"day_index": day_index,
-		"sort_index": day_index * 10 + 4,
-		"contact_id": str(tip.get("contact_id", "")),
-		"contact_name": str(tip.get("contact_name", "Contact")),
-		"target_company_id": str(tip.get("target_company_id", "")),
-		"target_ticker": str(tip.get("target_ticker", "")),
-		"status": str(tip.get("status", "resolved")),
-		"title": "Tip Result | %s | %s" % [
-			str(tip.get("target_ticker", "")),
-			str(tip.get("outcome_label", "Still pending"))
-		],
-		"detail": "%s | %s" % [
-			str(tip.get("outcome_note", "")),
-			str(tip.get("player_action_label", "No action"))
-		]
-	}
-
-
-func _network_tip_followup_journal_row(tip: Dictionary) -> Dictionary:
-	var day_index: int = int(tip.get("followup_day_index", tip.get("resolved_day_index", tip.get("created_day_index", 0))))
-	return {
-		"id": "%s:followup" % str(tip.get("id", "")),
-		"type": "followup",
-		"day_index": day_index,
-		"sort_index": day_index * 10 + 6,
-		"contact_id": str(tip.get("contact_id", "")),
-		"contact_name": str(tip.get("contact_name", "Contact")),
-		"target_company_id": str(tip.get("target_company_id", "")),
-		"target_ticker": str(tip.get("target_ticker", "")),
-		"status": "recorded",
-		"title": "Follow-up | %s | %s" % [
-			str(tip.get("target_ticker", "")),
-			str(tip.get("followup_label", "Follow-up"))
-		],
-		"detail": str(tip.get("followup_note", ""))
-	}
-
-
-func _network_source_check_journal_row(tip: Dictionary) -> Dictionary:
-	var day_index: int = int(tip.get("source_check_day_index", tip.get("created_day_index", 0)))
-	return {
-		"id": "%s:source_check" % str(tip.get("id", "")),
-		"type": "source_check",
-		"day_index": day_index,
-		"sort_index": day_index * 10 + 7,
-		"contact_id": str(tip.get("contact_id", "")),
-		"contact_name": str(tip.get("contact_name", "Contact")),
-		"target_company_id": str(tip.get("target_company_id", "")),
-		"target_ticker": str(tip.get("target_ticker", "")),
-		"status": "recorded",
-		"title": "Source Check | %s | %s" % [
-			str(tip.get("target_ticker", "")),
-			str(tip.get("source_check_peer_contact_name", "conflict"))
-		],
-		"detail": str(tip.get("source_check_note", ""))
-	}
-
-
-func _network_social_reaction_journal_row(tip: Dictionary) -> Dictionary:
-	var day_index: int = int(tip.get("reaction_day_index", tip.get("resolved_day_index", tip.get("created_day_index", 0))))
-	var ticker: String = str(tip.get("target_ticker", ""))
-	var title_suffix: String = " | %s" % ticker if not ticker.is_empty() else ""
-	var handle: String = str(tip.get("reaction_twooter_handle", tip.get("twooter_handle", ""))).strip_edges()
-	var detail: String = str(tip.get("reaction_note", ""))
-	if not handle.is_empty():
-		detail = "%s: %s" % [handle, detail]
-	return {
-		"id": "%s:social_reaction" % str(tip.get("id", "")),
-		"type": "social_reaction",
-		"day_index": day_index,
-		"sort_index": day_index * 10 + 9,
-		"contact_id": str(tip.get("contact_id", "")),
-		"contact_name": str(tip.get("contact_name", "Contact")),
-		"target_company_id": str(tip.get("target_company_id", "")),
-		"target_ticker": ticker,
-		"status": "recorded",
-		"title": "Follow-up DM%s | %s" % [title_suffix, str(tip.get("reaction_label", "Reaction"))],
-		"detail": detail.strip_edges()
-	}
-
-
-func _network_property_development_lead_journal_row(lead: Dictionary) -> Dictionary:
-	var day_index: int = int(lead.get("discovered_day_index", 0))
-	var location_label: String = str(lead.get("display_location_label", lead.get("location_label", lead.get("location_id", "Location"))))
-	var theme_label: String = str(lead.get("display_theme_label", lead.get("theme_label", lead.get("theme", "Development")))).capitalize()
-	var stage: String = str(lead.get("stage", "rumor"))
-	var status_text: String = stage.capitalize()
-	if bool(lead.get("resolved", false)):
-		status_text = str(lead.get("outcome", stage)).capitalize()
-	var detail: String = str(lead.get("source_note", "")).strip_edges()
-	if detail.is_empty():
-		detail = "%s development intel is being tracked for %s." % [theme_label, location_label]
-	var clarity_label: String = str(lead.get("clarity_label", "")).strip_edges()
-	if not clarity_label.is_empty():
-		detail = "%s %s" % [clarity_label + ".", detail]
-	return {
-		"id": "%s:property_development" % str(lead.get("id", "")),
-		"type": "property_development_lead",
-		"day_index": day_index,
-		"sort_index": day_index * 10 + 8,
-		"contact_id": str(lead.get("contact_id", "")),
-		"contact_name": str(lead.get("contact_name", "")),
-		"target_company_id": "",
-		"target_ticker": "",
-		"status": status_text.to_lower(),
-		"title": "Property Intel | %s | %s" % [location_label, status_text],
-		"detail": detail
-	}
-
-
-func _network_request_journal_row(run_state, data_repository, request: Dictionary) -> Dictionary:
-	var contact_id: String = str(request.get("contact_id", ""))
-	var company_id: String = str(request.get("target_company_id", ""))
-	var status: String = str(request.get("status", "pending"))
-	var day_index: int = int(request.get("completed_day_index", request.get("created_day_index", 0))) if status != "pending" else int(request.get("created_day_index", 0))
-	var contact_name: String = _contact_display_name(run_state, data_repository, contact_id)
-	var ticker: String = _company_ticker(run_state, company_id)
-	var due_date_text: String = _request_due_date_text(request)
-	var detail: String = "Due date unknown."
-	if due_date_text != "the due date":
-		detail = "Due %s." % due_date_text
-	if status == "completed":
-		detail = "Completed after you held at least 1 lot."
-	elif status == "missed":
-		detail = "Missed because you did not hold the requested target."
-	return {
-		"id": "%s:request" % str(request.get("id", "")),
-		"type": "request",
-		"day_index": day_index,
-		"sort_index": day_index * 10 + 3,
-		"contact_id": contact_id,
-		"contact_name": contact_name,
-		"target_company_id": company_id,
-		"target_ticker": ticker,
-		"status": status,
-		"title": "Request | %s | %s" % [ticker, status.capitalize()],
-		"detail": "%s | %s" % [contact_name, detail]
-	}
-
-
-func _network_dirty_tip_journal_row(request: Dictionary) -> Dictionary:
-	var day_index: int = int(request.get("created_day_index", 0))
-	var ticker: String = str(request.get("target_ticker", ""))
-	return {
-		"id": "%s:offered" % str(request.get("id", "")),
-		"type": "dirty_tip",
-		"day_index": day_index,
-		"sort_index": day_index * 10 + 2,
-		"contact_id": str(request.get("contact_id", "")),
-		"contact_name": str(request.get("contact_name", "Operator Room")),
-		"target_company_id": str(request.get("target_company_id", "")),
-		"target_ticker": ticker,
-		"status": str(request.get("status", "offered")),
-		"title": "Dirty Tip | %s | Offered" % ticker,
-		"detail": str(request.get("journal_detail", request.get("offer_body", "")))
-	}
-
-
-func _network_dirty_tip_decision_journal_row(request: Dictionary) -> Dictionary:
-	var day_index: int = int(request.get("decision_day_index", request.get("created_day_index", 0)))
-	var ticker: String = str(request.get("target_ticker", ""))
-	var status: String = str(request.get("decision", request.get("status", "")))
-	var detail: String = str(request.get("journal_detail", request.get("outcome_note", "")))
-	if detail.is_empty():
-		match status:
-			"accepted":
-				detail = "You accepted the room approach."
-			"reported":
-				detail = "You reported the approach."
-			_:
-				detail = "You declined the approach."
-	return {
-		"id": "%s:decision" % str(request.get("id", "")),
-		"type": "dirty_tip",
-		"day_index": day_index,
-		"sort_index": day_index * 10 + 5,
-		"contact_id": str(request.get("contact_id", "")),
-		"contact_name": str(request.get("contact_name", "Operator Room")),
-		"target_company_id": str(request.get("target_company_id", "")),
-		"target_ticker": ticker,
-		"status": status,
-		"title": "Dirty Tip | %s | %s" % [ticker, status.capitalize()],
-		"detail": detail
-	}
-
-
-func _network_dirty_tip_result_journal_row(request: Dictionary) -> Dictionary:
-	var day_index: int = int(request.get("resolved_day_index", request.get("completed_day_index", request.get("created_day_index", 0))))
-	var ticker: String = str(request.get("target_ticker", ""))
-	var status: String = str(request.get("status", "resolved_clean"))
-	var detail: String = str(request.get("outcome_note", ""))
-	if status == "caught":
-		detail = "%s Fine: Rp%.0f. Legal hold: %d trading day(s)." % [
-			detail,
-			float(request.get("fine_amount", 0.0)),
-			int(request.get("legal_days", 0))
-		]
-	return {
-		"id": "%s:result" % str(request.get("id", "")),
-		"type": "dirty_tip",
-		"day_index": day_index,
-		"sort_index": day_index * 10 + 8,
-		"contact_id": str(request.get("contact_id", "")),
-		"contact_name": str(request.get("contact_name", "Operator Room")),
-		"target_company_id": str(request.get("target_company_id", "")),
-		"target_ticker": ticker,
-		"status": status,
-		"title": "Dirty Tip | %s | %s" % [ticker, str(request.get("outcome_label", status.capitalize()))],
-		"detail": detail
-	}
 
 
 func _request_due_date_text(request: Dictionary) -> String:
-	var due_day_index: int = int(request.get("due_day_index", 0))
-	if due_day_index <= 0:
-		return "the due date"
-	var date_info: Dictionary = trading_calendar.trade_date_for_index(max(due_day_index, 1))
-	var month_names := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-	var month_index: int = clamp(int(date_info.get("month", 1)) - 1, 0, month_names.size() - 1)
-	return "%s %d, %d" % [
-		month_names[month_index],
-		int(date_info.get("day", 1)),
-		int(date_info.get("year", 2020))
-	]
-
-
-func _network_referral_journal_row(run_state, data_repository, discovery: Dictionary) -> Dictionary:
-	var referred_contact_id: String = str(discovery.get("contact_id", ""))
-	var source_contact_id: String = str(discovery.get("referred_by_contact_id", discovery.get("source_id", "")))
-	var day_index: int = int(discovery.get("day_index", 0))
-	var referred_name: String = _contact_display_name(run_state, data_repository, referred_contact_id)
-	var source_name: String = _contact_display_name(run_state, data_repository, source_contact_id)
-	var company_id: String = str(discovery.get("target_company_id", ""))
-	return {
-		"id": "%s:referral" % referred_contact_id,
-		"type": "referral",
-		"day_index": day_index,
-		"sort_index": day_index * 10 + 5,
-		"contact_id": referred_contact_id,
-		"contact_name": referred_name,
-		"target_company_id": company_id,
-		"target_ticker": _company_ticker(run_state, company_id),
-		"status": "discovered",
-		"title": "Referral | %s" % referred_name,
-		"detail": "%s introduced this lead." % source_name
-	}
-
-
-func _network_meeting_lead_journal_row(run_state, data_repository, discovery: Dictionary) -> Dictionary:
-	var contact_id: String = str(discovery.get("contact_id", ""))
-	var company_id: String = str(discovery.get("target_company_id", ""))
-	var day_index: int = int(discovery.get("day_index", 0))
-	var contact_name: String = _contact_display_name(run_state, data_repository, contact_id)
-	var ticker: String = _company_ticker(run_state, company_id)
-	return {
-		"id": "%s:meeting_lead:%s" % [contact_id, str(discovery.get("meeting_id", ""))],
-		"type": "meeting_lead",
-		"day_index": day_index,
-		"sort_index": day_index * 10 + 5,
-		"contact_id": contact_id,
-		"contact_name": contact_name,
-		"target_company_id": company_id,
-		"target_ticker": ticker,
-		"status": "met",
-		"title": "RUPSLB Lead | %s" % contact_name,
-		"detail": "Met during the %s meeting room." % ticker
-	}
-
-
-func _network_twooter_discovery_journal_row(run_state, data_repository, discovery: Dictionary) -> Dictionary:
-	var contact_id: String = str(discovery.get("contact_id", ""))
-	var day_index: int = int(discovery.get("day_index", 0))
-	var ticker: String = str(discovery.get("target_ticker", ""))
-	var source_label: String = str(discovery.get("source_label", "Twooter Contact")).strip_edges()
-	var source_note: String = str(discovery.get("source_note", "")).strip_edges()
-	if source_note.is_empty():
-		source_note = "A Twooter exchange became a tracked Network contact."
-	return {
-		"id": "%s:twooter_discovery" % contact_id,
-		"type": "twooter_discovery",
-		"day_index": day_index,
-		"sort_index": day_index * 10 + 2,
-		"contact_id": contact_id,
-		"contact_name": _contact_display_name(run_state, data_repository, contact_id),
-		"target_company_id": str(discovery.get("target_company_id", "")),
-		"target_ticker": ticker,
-		"status": "discovered",
-		"title": "%s%s" % [source_label, " | %s" % ticker if not ticker.is_empty() else ""],
-		"detail": source_note
-	}
+	return NETWORK_JOURNAL_BUILDER_SCRIPT.request_due_date_text(request)
 
 
 func _contact_display_name(run_state, data_repository, contact_id: String) -> String:
@@ -3493,28 +2744,37 @@ func _has_at_least_one_lot(run_state, company_id: String) -> bool:
 
 func _adjust_relationship(run_state, contact_id: String, delta: int) -> void:
 	var contacts: Dictionary = run_state.get_network_contacts()
+	if _adjust_relationship_in_contacts(contacts, contact_id, delta):
+		run_state.set_network_contacts(contacts)
+
+
+func _adjust_relationship_in_contacts(contacts: Dictionary, contact_id: String, delta: int) -> bool:
+	if contact_id.is_empty():
+		return false
 	var runtime: Dictionary = contacts.get(contact_id, {})
 	runtime["relationship"] = clampi(int(runtime.get("relationship", 25)) + delta, 0, 100)
 	contacts[contact_id] = runtime
-	run_state.set_network_contacts(contacts)
+	return true
 
 
 func _mark_contact_day_flag(run_state, contact_id: String, flag_key: String) -> void:
 	var contacts: Dictionary = run_state.get_network_contacts()
+	if _mark_contact_day_flag_in_contacts(contacts, contact_id, flag_key, run_state.day_index):
+		run_state.set_network_contacts(contacts)
+
+
+func _mark_contact_day_flag_in_contacts(contacts: Dictionary, contact_id: String, flag_key: String, day_index: int) -> bool:
+	if contact_id.is_empty() or flag_key.is_empty():
+		return false
 	var runtime: Dictionary = contacts.get(contact_id, {})
-	runtime[flag_key] = run_state.day_index
+	runtime[flag_key] = day_index
 	contacts[contact_id] = runtime
-	run_state.set_network_contacts(contacts)
+	return true
 
 
 func _sentiment_for_contact(contact: Dictionary, action: String) -> float:
-	var reliability: float = clamp(float(contact.get("reliability", 0.6)), 0.25, 0.95)
-	var direction: float = -1.0 if str(contact.get("tone", "mixed")) == "negative" else 1.0
-	if str(contact.get("tone", "mixed")) == "mixed":
-		direction = 1.0 if action == "request" else 0.72
-	return direction * lerp(0.009, 0.022, reliability)
+	return NETWORK_DISCOVERY_SCRIPT.sentiment_for_contact(contact, action)
 
 
 func _contact_arc_description(contact: Dictionary, ticker: String, action: String) -> String:
-	var verb: String = "tip" if action == "tip" else "request"
-	return "%s gave you a %s tied to %s." % [str(contact.get("display_name", "A contact")), verb, ticker]
+	return NETWORK_DISCOVERY_SCRIPT.contact_arc_description(contact, ticker, action)

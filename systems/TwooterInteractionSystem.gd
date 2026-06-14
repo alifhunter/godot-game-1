@@ -2,6 +2,7 @@ extends RefCounted
 
 const TWOOTER_DIALOG_ROUTER_SCRIPT := preload("res://systems/TwooterDialogRouter.gd")
 const TWOOTER_OUTCOME_RESOLVER_SCRIPT := preload("res://systems/TwooterOutcomeResolver.gd")
+const NETWORK_TIP_RESOLVER_SCRIPT := preload("res://systems/NetworkTipResolver.gd")
 
 const MAX_MESSAGE_ROWS_PER_THREAD := 24
 const MAX_TIMELINE_ROWS_PER_ACCOUNT := 12
@@ -582,6 +583,15 @@ func _apply_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, 
 	account_states[account_id] = account_state
 	state["account_states"] = account_states
 
+	var direct_tip_payload: Dictionary = {}
+	if dialog_outcome == "direct_tip" and not soft_cooldown and gain_multiplier > 0.0:
+		direct_tip_payload = NETWORK_TIP_RESOLVER_SCRIPT.build_direct_tip_payload(run_state, account, account_state, dialog_selection)
+		if bool(direct_tip_payload.get("success", false)):
+			outcome_effect["direct_tip_recorded"] = true
+			outcome_effect["direct_tip_payload"] = direct_tip_payload.duplicate(true)
+		elif not str(direct_tip_payload.get("unavailable_reason", "")).is_empty():
+			outcome_effect["direct_tip_unavailable_reason"] = str(direct_tip_payload.get("unavailable_reason", ""))
+
 	var reply_text: String = ""
 	if soft_cooldown:
 		reply_text = _dialog_cooldown_reply_text(feed_data, account, dialog_selection, run_state.day_index)
@@ -590,7 +600,9 @@ func _apply_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, 
 	elif unfollowed_attention_nudge:
 		reply_text = _unfollowed_ask_reply_text(account, post, thesis, account_state, dialog_selection, run_state.day_index)
 	else:
-		reply_text = _dialog_reply_text(feed_data, account, post, account_state, thesis, dialog_selection, run_state.day_index)
+		reply_text = _direct_tip_reply_text(feed_data, direct_tip_payload, account, run_state.day_index)
+		if reply_text.is_empty():
+			reply_text = _dialog_reply_text(feed_data, account, post, account_state, thesis, dialog_selection, run_state.day_index)
 	if already_connected:
 		reply_text = _already_connected_reply_text(account, run_state.day_index)
 	elif is_private and not soft_cooldown:
@@ -619,6 +631,7 @@ func _apply_interaction(run_state, feed_data: Dictionary, snapshot: Dictionary, 
 		"outcome_effect": outcome_effect.duplicate(true),
 		"dialog_graduated": bool(dialog_selection.get("graduation_complete", false)),
 		"dialog_next_tree": str(dialog_selection.get("graduation_next_tree", "")),
+		"direct_tip_payload": direct_tip_payload.duplicate(true) if bool(direct_tip_payload.get("success", false)) else {},
 		"private": is_private,
 		"player_text": resolved_player_text,
 		"network_changed": bool(network_result.get("network_changed", false)),
@@ -966,6 +979,26 @@ func _dialog_reply_text(feed_data: Dictionary, account: Dictionary, post: Dictio
 		int(account_state.get("interaction_count", 0))
 	]
 	return _render_dialog_pool(pool, context, seed_key)
+
+
+func _direct_tip_reply_text(feed_data: Dictionary, direct_tip_payload: Dictionary, account: Dictionary, day_index: int) -> String:
+	var payload_reply: String = str(direct_tip_payload.get("reply_text", "")).strip_edges()
+	if direct_tip_payload.is_empty():
+		return ""
+	if not bool(direct_tip_payload.get("success", false)):
+		return payload_reply
+	var templates: Array = []
+	var data_templates: Array = feed_data.get("direct_tip_reply_templates", []) if typeof(feed_data.get("direct_tip_reply_templates", [])) == TYPE_ARRAY else []
+	templates.append_array(_clean_string_pool(data_templates))
+	if templates.is_empty():
+		return payload_reply
+	var seed_key: String = "%s|direct_tip|%s|%d" % [
+		str(account.get("id", "")),
+		str(direct_tip_payload.get("ticker", "")),
+		day_index
+	]
+	var template: String = str(templates[int(abs(hash(seed_key))) % templates.size()])
+	return _render_template(template, direct_tip_payload)
 
 
 func _relationship_dialog_reply_pool(base_pool: Array, account: Dictionary, account_state: Dictionary, feed_data: Dictionary = {}) -> Array:
@@ -1400,12 +1433,24 @@ func _apply_network_bridge(run_state, state: Dictionary, account: Dictionary, ac
 		var discoveries: Dictionary = run_state.get_network_discoveries()
 		var discovery: Dictionary = discoveries.get(contact_id, {}).duplicate(true)
 		var provenance: Dictionary = _twooter_provenance(account, post, action_id)
+		var preserve_referral_access: bool = str(discovery.get("source_type", "")).strip_edges().to_lower() == "referral" or bool(discovery.get("referral_required", false)) or not str(discovery.get("referred_by_contact_id", "")).strip_edges().is_empty()
 		discovery["contact_id"] = contact_id
 		discovery["discovered"] = true
-		discovery["source_type"] = "twooter"
-		discovery["source_id"] = str(post.get("id", ""))
-		discovery["source_label"] = str(provenance.get("source_label", "Twooter"))
-		discovery["source_note"] = str(provenance.get("source_note", "A Twooter exchange became a tracked Network contact."))
+		if preserve_referral_access:
+			discovery["source_type"] = "referral"
+			if str(discovery.get("source_id", "")).strip_edges().is_empty():
+				discovery["source_id"] = str(discovery.get("referred_by_contact_id", ""))
+			if str(discovery.get("source_label", "")).strip_edges().is_empty():
+				discovery["source_label"] = "Private referral"
+			discovery["twooter_source_label"] = str(provenance.get("source_label", "Twooter"))
+			discovery["twooter_source_note"] = str(provenance.get("source_note", "A Twooter exchange became a tracked Network contact."))
+			discovery["last_twooter_day_index"] = run_state.day_index
+		else:
+			discovery["source_type"] = "twooter"
+			discovery["source_id"] = str(post.get("id", ""))
+			discovery["source_label"] = str(provenance.get("source_label", "Twooter"))
+			discovery["source_note"] = str(provenance.get("source_note", "A Twooter exchange became a tracked Network contact."))
+			discovery["day_index"] = run_state.day_index
 		discovery["twooter_origin"] = str(provenance.get("twooter_origin", "public_chatter"))
 		discovery["twooter_account_id"] = str(account.get("id", ""))
 		discovery["twooter_handle"] = str(account.get("handle", ""))
@@ -1421,7 +1466,8 @@ func _apply_network_bridge(run_state, state: Dictionary, account: Dictionary, ac
 			int(discovery.get("lead_score", 0)),
 			base_lead_score + int(account_state.get("credibility", 0)) / 3 + int(outcome_effect.get("network_source_quality_delta", 0))
 		)
-		discovery["day_index"] = run_state.day_index
+		if not preserve_referral_access:
+			discovery["day_index"] = run_state.day_index
 		discoveries[contact_id] = discovery
 		run_state.set_network_discoveries(discoveries)
 		network_changed = true
@@ -1467,6 +1513,13 @@ func _record_network_journal(run_state, account: Dictionary, contact_id: String,
 		"dialog_outcome_contact_discovery_delta": int(outcome_effect.get("contact_discovery_delta", 0)),
 		"dialog_outcome_event_invite_unlocked": bool(outcome_effect.get("event_invite_unlocked", false)),
 		"dialog_outcome_thesis_response_recorded": bool(outcome_effect.get("thesis_response_recorded", false)),
+		"dialog_outcome_direct_tip_recorded": bool(outcome_effect.get("direct_tip_recorded", false)),
+		"direct_tip_payload": outcome_effect.get("direct_tip_payload", {}).duplicate(true) if typeof(outcome_effect.get("direct_tip_payload", {})) == TYPE_DICTIONARY else {},
+		"direct_tip_direction": str(outcome_effect.get("direct_tip_payload", {}).get("direction", "")) if typeof(outcome_effect.get("direct_tip_payload", {})) == TYPE_DICTIONARY else "",
+		"direct_tip_entry_timing": str(outcome_effect.get("direct_tip_payload", {}).get("entry_timing", "")) if typeof(outcome_effect.get("direct_tip_payload", {})) == TYPE_DICTIONARY else "",
+		"direct_tip_hold_period": str(outcome_effect.get("direct_tip_payload", {}).get("hold_period", "")) if typeof(outcome_effect.get("direct_tip_payload", {})) == TYPE_DICTIONARY else "",
+		"direct_tip_risk_note": str(outcome_effect.get("direct_tip_payload", {}).get("risk_note", "")) if typeof(outcome_effect.get("direct_tip_payload", {})) == TYPE_DICTIONARY else "",
+		"direct_tip_unavailable_reason": str(outcome_effect.get("direct_tip_unavailable_reason", "")),
 		"twooter_action_id": action_id,
 		"twooter_account_id": str(account.get("id", "")),
 		"twooter_handle": str(account.get("handle", "")),

@@ -44,7 +44,12 @@ func _assert_default_public_routes(feed_data: Dictionary) -> void:
 
 
 func _assert_default_private_routes(feed_data: Dictionary) -> void:
-	_assert_private_route(feed_data, "private_network_profile", _network_account("private_network", ["network_source_followup", "network_relationship_probe"], {}), _account_state(4, 4, 4), [], "network_source_followup", "default_private")
+	_assert_private_route(feed_data, "private_network_stranger", _network_account("private_network_stranger", ["network_source_followup", "network_relationship_probe"], {}), _account_state(4, 4, 4), [], "network_stranger_source", "default_private")
+	_assert_private_route(feed_data, "private_network_familiar", _network_account("private_network_familiar", ["network_source_followup", "network_relationship_probe"], {}), _account_state(18, 12, 12), [], "network_familiar_source", "default_private")
+	_assert_private_route(feed_data, "private_network_trusted", _network_account("private_network_trusted", ["network_source_followup", "network_relationship_probe"], {}), _account_state(45, 20, 30), [], "network_trusted_source", "default_private")
+	_assert_private_route(feed_data, "private_network_inner_circle", _network_account("private_network_inner", ["network_source_followup", "network_relationship_probe"], {}), _account_state(72, 48, 58, 36), [], "network_inner_circle_source", "default_private")
+	_assert_private_route(feed_data, "private_network_insider_profile", _network_account("private_network_insider", ["network_insider_boundary", "network_source_followup", "source_check"], {"affiliation_role": "insider"}), _account_state(18, 12, 12), [], "network_insider_boundary", "default_private")
+	_assert_private_route(feed_data, "private_network_guarded_profile", _network_account("private_network_guarded", ["network_guarded_source", "suspicious_boundary", "source_check"], {"risk_profile": "suspicious"}), _account_state(18, 12, 12), [], "network_guarded_source", "default_private")
 	_assert_private_route(feed_data, "private_suspicious", _account("private_suspicious", {"risk_profile": "suspicious"}, 0), _account_state(1, 0, 0), [], "suspicious_boundary", "default_private")
 	_assert_private_route(feed_data, "private_trusted_stage", _account("private_trusted", {}, 0), _account_state(45, 18, 18), [], "event_invite", "default_private")
 	_assert_private_route(feed_data, "private_intro", _account("private_intro", {}, 0), _account_state(1, 0, 0), [], "clean_intro", "default_private")
@@ -226,10 +231,10 @@ func _network_account(id_suffix: String, dialog_trees: Array, profile_overrides:
 	return _account(id_suffix, overrides, 0)
 
 
-func _account_state(relationship: int, credibility: int, importance: int) -> Dictionary:
+func _account_state(relationship: int, credibility: int, importance: int, exposure: int = 0) -> Dictionary:
 	return {
 		"relationship": relationship,
-		"exposure": 0,
+		"exposure": exposure,
 		"credibility": credibility,
 		"importance": importance,
 		"relationship_stage": _expected_stage(relationship, credibility, importance),

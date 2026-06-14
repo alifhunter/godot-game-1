@@ -10,6 +10,7 @@ var _audit := {
 	"thesis_response": {},
 	"contact_discovery": {},
 	"event_invite": {},
+	"direct_tip": {},
 	"same_day_repeat": {}
 }
 
@@ -26,6 +27,9 @@ func _ready() -> void:
 	if _failed:
 		return
 	_assert_event_invite_effect(feed_data)
+	if _failed:
+		return
+	_assert_direct_tip_effect(feed_data)
 	if _failed:
 		return
 
@@ -86,10 +90,10 @@ func _assert_contact_discovery_effect(feed_data: Dictionary) -> void:
 	_setup_run(DAY_INDEX + 1)
 	var account: Dictionary = _network_account("contact", ["network_source_followup", "network_relationship_probe"], {})
 	var account_id: String = str(account.get("id", ""))
-	_reset_social_state(account, _account_state(4, 6, 4), DAY_INDEX + 1)
-	var option: Dictionary = _enabled_option_by_id(_thread_options(feed_data, account, [], DAY_INDEX + 1), "ask_to_connect")
+	_reset_social_state(account, _account_state(18, 12, 12), DAY_INDEX + 1)
+	var option: Dictionary = _enabled_option_by_id(_thread_options(feed_data, account, [], DAY_INDEX + 1), "connect_properly")
 	if option.is_empty():
-		_fail("Expected contact_discovery test to expose ask_to_connect.")
+		_fail("Expected contact_discovery test to expose connect_properly.")
 		return
 
 	var result: Dictionary = _apply_option(feed_data, _snapshot(account), account, option, "")
@@ -147,6 +151,68 @@ func _assert_event_invite_effect(feed_data: Dictionary) -> void:
 	_audit["event_invite"] = {
 		"outcome_relationship_delta": int(effect.get("relationship_delta", 0)),
 		"total_relationship_delta": int(result.get("relationship_delta", 0)),
+		"journal_note": str(journal.get("dialog_outcome_note", ""))
+	}
+
+
+func _assert_direct_tip_effect(feed_data: Dictionary) -> void:
+	_setup_run(DAY_INDEX + 3)
+	var account: Dictionary = _network_account("direct", ["network_inner_circle_source", "network_source_followup"], {
+		"target_company_id": "test_company",
+		"target_ticker": "TEST",
+		"target_company_name": "Test Company",
+		"contact_reliability": 0.86,
+		"recognition_required": 95,
+		"categories": ["mna", "management", "company"],
+		"role": "Personal Legal Counsel"
+	})
+	var account_id: String = str(account.get("id", ""))
+	var contact_id: String = _contact_id(account)
+	_seed_direct_tip_network_access(contact_id)
+	_reset_social_state(account, _account_state(72, 48, 58, 36), DAY_INDEX + 3)
+	var options: Array = _thread_options(feed_data, account, [], DAY_INDEX + 3)
+	var direct_option: Dictionary = _enabled_option_by_id(options, "direct_tip")
+	if direct_option.is_empty():
+		_fail("Expected inner-circle Network account to expose direct_tip.")
+		return
+	var result: Dictionary = _apply_option(feed_data, _snapshot(account), account, direct_option, "")
+	if not bool(result.get("success", false)):
+		_fail("Expected direct_tip option to apply: %s" % str(result.get("message", "")))
+		return
+	var effect: Dictionary = result.get("outcome_effect", {}) if typeof(result.get("outcome_effect", {})) == TYPE_DICTIONARY else {}
+	var payload: Dictionary = effect.get("direct_tip_payload", {}) if typeof(effect.get("direct_tip_payload", {})) == TYPE_DICTIONARY else {}
+	if str(result.get("dialog_outcome", "")) != "direct_tip" or payload.is_empty() or not bool(payload.get("success", false)):
+		_fail("Expected direct_tip outcome to carry a successful payload, got result=%s effect=%s." % [str(result), str(effect)])
+		return
+	if str(payload.get("ticker", "")) != "TEST" or str(payload.get("direction", "")) != "buy" or str(result.get("reply_text", "")).find("TEST") == -1:
+		_fail("Expected direct_tip payload/reply to include actionable TEST buy read, got payload=%s reply=%s." % [str(payload), str(result.get("reply_text", ""))])
+		return
+	if not _timeline_has_note(account_id, "Direct tip: inner-circle read recorded."):
+		_fail("Expected direct_tip timeline note to expose inner-circle read.")
+		return
+	var journal: Dictionary = _latest_journal_for_outcome(account_id, "direct_tip")
+	if journal.is_empty() or not bool(journal.get("dialog_outcome_direct_tip_recorded", false)) or str(journal.get("direct_tip_direction", "")) != "buy":
+		_fail("Expected direct_tip Network journal metadata, got %s." % str(journal))
+		return
+
+	_setup_run(DAY_INDEX + 4)
+	var trusted_account: Dictionary = _network_account("trusted_direct_guard", ["network_trusted_source", "network_source_followup"], {
+		"target_company_id": "test_company",
+		"target_ticker": "TEST",
+		"contact_reliability": 0.86,
+		"recognition_required": 95
+	})
+	_seed_direct_tip_network_access(_contact_id(trusted_account))
+	_reset_social_state(trusted_account, _account_state(45, 20, 30), DAY_INDEX + 4)
+	if not _enabled_option_by_id(_thread_options(feed_data, trusted_account, [], DAY_INDEX + 4), "direct_tip").is_empty():
+		_fail("Trusted-stage Network account should not expose direct_tip.")
+		return
+
+	_audit["direct_tip"] = {
+		"direction": str(payload.get("direction", "")),
+		"entry_timing": str(payload.get("entry_timing", "")),
+		"hold_period": str(payload.get("hold_period", "")),
+		"confidence_label": str(payload.get("confidence_label", "")),
 		"journal_note": str(journal.get("dialog_outcome_note", ""))
 	}
 
@@ -326,10 +392,10 @@ func _contact_id(account: Dictionary) -> String:
 	return contact_id
 
 
-func _account_state(relationship: int, credibility: int, importance: int) -> Dictionary:
+func _account_state(relationship: int, credibility: int, importance: int, exposure: int = 0) -> Dictionary:
 	return {
 		"relationship": relationship,
-		"exposure": 0,
+		"exposure": exposure,
 		"credibility": credibility,
 		"importance": importance,
 		"relationship_stage": _expected_stage(relationship, credibility, importance),
@@ -339,6 +405,32 @@ func _account_state(relationship: int, credibility: int, importance: int) -> Dic
 		"interaction_count": 0,
 		"like_relationship_progress": 0.0
 	}
+
+
+func _seed_direct_tip_network_access(contact_id: String) -> void:
+	var contacts: Dictionary = RunState.get_network_contacts()
+	contacts[contact_id] = {
+		"contact_id": contact_id,
+		"met": true,
+		"relationship": 76,
+		"met_day_index": RunState.day_index,
+		"last_source_type": "referral"
+	}
+	RunState.set_network_contacts(contacts)
+	var discoveries: Dictionary = RunState.get_network_discoveries()
+	discoveries[contact_id] = {
+		"contact_id": contact_id,
+		"discovered": true,
+		"source_type": "referral",
+		"source_id": "direct_tip_test_bridge",
+		"referred_by_contact_id": "direct_tip_test_bridge",
+		"referral_required": true,
+		"privacy_gate": "inner_circle",
+		"target_company_id": "test_company",
+		"target_ticker": "TEST",
+		"day_index": RunState.day_index
+	}
+	RunState.set_network_discoveries(discoveries)
 
 
 func _expected_stage(relationship: int, credibility: int, importance: int) -> String:

@@ -48,6 +48,8 @@ Use these docs instead of expanding this handoff with long progress logs.
   - Social dialog plan and completed Tasks 1-6.
 - [`docs/development/TWOOTER_INTERACTION_SYSTEM_ENHANCEMENT.md`](docs/development/TWOOTER_INTERACTION_SYSTEM_ENHANCEMENT.md)
   - Twooter interaction system plan and completed Tasks 1-6.
+- [`docs/development/CONTACT_NETWORK_INNER_CIRCLE_DIALOG_ENHANCEMENT.md`](docs/development/CONTACT_NETWORK_INNER_CIRCLE_DIALOG_ENHANCEMENT.md)
+  - Planned staged Network dialog, referral-gated inner-circle access, and direct inner-circle tip payload work.
 - [`docs/development/FEATURE_ENHANCEMENT_TEMPLATE.md`](docs/development/FEATURE_ENHANCEMENT_TEMPLATE.md)
   - Template for future feature/enhancement/development plans.
 - [`docs/development/DESIGN_SYSTEM.md`](docs/development/DESIGN_SYSTEM.md)

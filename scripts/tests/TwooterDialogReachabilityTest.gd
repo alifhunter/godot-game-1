@@ -35,6 +35,10 @@ func _ready() -> void:
 		"trust_building",
 		"event_invite",
 		"suspicious_boundary",
+		"network_stranger_source",
+		"network_familiar_source",
+		"network_trusted_source",
+		"network_inner_circle_source",
 		"network_source_followup",
 		"network_relationship_probe",
 		"network_insider_boundary",
@@ -46,8 +50,10 @@ func _ready() -> void:
 	_audit_private_route(feed_data, "trust_building", _account("regular_trust", {}, 1), _account_state(18, 12, 12), _message_rows(4))
 	_audit_private_route(feed_data, "event_invite", _account("regular_event", {}, 1), _account_state(45, 18, 18), _message_rows(5))
 	_audit_private_route(feed_data, "suspicious_boundary", _account("regular_suspicious", {"risk_profile": "suspicious"}, 1), _account_state(1, 0, 0), [])
-	_audit_private_route(feed_data, "network_source_followup", _network_account("network_source", ["network_source_followup", "network_relationship_probe", "source_check"], {}), _account_state(4, 4, 4), [])
-	_audit_private_route(feed_data, "network_relationship_probe", _network_account("network_probe", ["network_relationship_probe", "network_source_followup"], {}), _account_state(10, 6, 6), [])
+	_audit_private_route(feed_data, "network_stranger_source", _network_account("network_stranger", ["network_source_followup", "network_relationship_probe", "source_check"], {}), _account_state(4, 4, 4), [])
+	_audit_private_route(feed_data, "network_familiar_source", _network_account("network_familiar", ["network_source_followup", "network_relationship_probe", "source_check"], {}), _account_state(18, 12, 12), [])
+	_audit_private_route(feed_data, "network_trusted_source", _network_account("network_trusted", ["network_source_followup", "network_relationship_probe", "source_check"], {}), _account_state(45, 20, 30), [])
+	_audit_private_route(feed_data, "network_inner_circle_source", _network_account("network_inner", ["network_source_followup", "network_relationship_probe", "source_check"], {}), _account_state(72, 48, 58, 36), [])
 	_audit_private_route(feed_data, "network_insider_boundary", _network_account("network_insider", ["network_insider_boundary", "network_source_followup", "source_check"], {"affiliation_role": "insider"}), _account_state(10, 6, 6), [])
 	_audit_private_route(feed_data, "network_guarded_source", _network_account("network_guarded", ["network_guarded_source", "suspicious_boundary", "source_check"], {"risk_profile": "suspicious"}), _account_state(10, 6, 6), [])
 
@@ -55,6 +61,7 @@ func _ready() -> void:
 	_audit_public_route(feed_data, "source_check", _account("public_source", {}, 1), _account_state(1, 0, 0), _post("public_source", "corporate rumor source"))
 	_audit_public_route(feed_data, "trust_building", _account("public_trust", {}, 1), _account_state(20, 10, 12), _post("public_trust", "market"))
 
+	_audit_forced_branch(feed_data, "network_source_followup", _network_account("forced_source", ["network_source_followup", "network_relationship_probe"], {}), _account_state(8, 5, 5))
 	_audit_forced_branch(feed_data, "network_relationship_probe", _network_account("forced_probe", ["network_source_followup", "network_relationship_probe"], {}), _account_state(8, 5, 5))
 	_audit_blocked_option(feed_data)
 	_audit_cooldown(feed_data)
@@ -378,10 +385,10 @@ func _network_account(id_suffix: String, dialog_trees: Array, profile_overrides:
 	return _account(id_suffix, overrides, 0)
 
 
-func _account_state(relationship: int, credibility: int, importance: int) -> Dictionary:
+func _account_state(relationship: int, credibility: int, importance: int, exposure: int = 0) -> Dictionary:
 	return {
 		"relationship": relationship,
-		"exposure": 0,
+		"exposure": exposure,
 		"credibility": credibility,
 		"importance": importance,
 		"relationship_stage": _expected_stage(relationship, credibility, importance),

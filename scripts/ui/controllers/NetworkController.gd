@@ -34,6 +34,7 @@ var network_meet_button: Button = null
 var network_tip_button: Button = null
 var network_request_button: Button = null
 var network_referral_button: Button = null
+var network_twooter_button: Button = null
 var network_corporate_action_label: Label = null
 var network_open_meeting_button: Button = null
 var network_followup_button: MenuButton = null
@@ -146,6 +147,17 @@ func ensure_context_ui() -> void:
 		network_source_check_button.pressed.connect(on_source_check_pressed)
 		var network_action_row: HBoxContainer = network_meet_button.get_parent()
 		network_action_row.add_child(network_source_check_button)
+
+	if network_twooter_button == null:
+		network_twooter_button = Button.new()
+		network_twooter_button.name = "NetworkTwooterButton"
+		network_twooter_button.text = "Open Twooter DM"
+		network_twooter_button.visible = false
+		network_twooter_button.disabled = true
+		network_twooter_button.tooltip_text = "Open this contact's Twooter message thread."
+		network_twooter_button.pressed.connect(on_open_twooter_pressed)
+		var network_action_row: HBoxContainer = network_meet_button.get_parent()
+		network_action_row.add_child(network_twooter_button)
 
 	if network_journal_detail_label == null:
 		network_journal_detail_label = Label.new()
@@ -273,6 +285,10 @@ func on_source_check_pressed() -> void:
 	_on_network_source_check_pressed()
 
 
+func on_open_twooter_pressed() -> void:
+	_on_network_open_twooter_pressed()
+
+
 func on_open_meeting_pressed() -> void:
 	_on_network_open_meeting_pressed()
 
@@ -294,6 +310,8 @@ func _connect_network_signals() -> void:
 		_connect_signal_once(network_referral_button.pressed, Callable(self, "on_referral_pressed"))
 	if network_open_meeting_button != null:
 		_connect_signal_once(network_open_meeting_button.pressed, Callable(self, "on_open_meeting_pressed"))
+	if network_twooter_button != null:
+		_connect_signal_once(network_twooter_button.pressed, Callable(self, "on_open_twooter_pressed"))
 	if network_followup_button != null:
 		_connect_signal_once(network_followup_button.get_popup().id_pressed, Callable(self, "on_followup_selected"))
 	if network_source_check_button != null:
@@ -321,6 +339,7 @@ func _sync_dynamic_refs_from_root() -> void:
 		return
 	network_corporate_action_label = _root.get("network_corporate_action_label") as Label
 	network_open_meeting_button = _root.get("network_open_meeting_button") as Button
+	network_twooter_button = _root.get("network_twooter_button") as Button
 	network_followup_button = _root.get("network_followup_button") as MenuButton
 	network_tip_history_label = _root.get("network_tip_history_label") as Label
 	network_crosscheck_label = _root.get("network_crosscheck_label") as Label
@@ -341,6 +360,7 @@ func _sync_root_refs() -> void:
 		return
 	_root.set("network_corporate_action_label", network_corporate_action_label)
 	_root.set("network_open_meeting_button", network_open_meeting_button)
+	_root.set("network_twooter_button", network_twooter_button)
 	_root.set("network_followup_button", network_followup_button)
 	_root.set("network_tip_history_label", network_tip_history_label)
 	_root.set("network_crosscheck_label", network_crosscheck_label)
@@ -404,8 +424,9 @@ func _rebuild_network_contact_list() -> void:
 		var row: Dictionary = rows[row_index]
 		var affiliation_label: String = "Insider" if str(row.get("affiliation_type", "floater")) == "insider" else "Floater"
 		var prefix: String = "Met %s" % affiliation_label if bool(row.get("met", false)) else "Lead %s" % affiliation_label
-		if str(row.get("source_type", "")) == "referral" and not bool(row.get("met", false)):
-			prefix = "Referred Insider"
+		var access_label: String = str(row.get("access_label", "")).strip_edges()
+		if str(row.get("source_type", "")) == "referral" and not access_label.is_empty():
+			prefix = "Met %s" % access_label if bool(row.get("met", false)) else access_label
 		var display_role: String = str(row.get("role", ""))
 		var twooter_handle: String = str(row.get("twooter_handle", "")).strip_edges()
 		if not twooter_handle.is_empty():
@@ -634,6 +655,29 @@ func _show_network_journal_detail(row: Dictionary) -> void:
 	var ticker: String = str(row.get("target_ticker", ""))
 	if not ticker.is_empty():
 		lines.append("Ticker: %s" % ticker)
+	var access_label: String = str(row.get("access_label", "")).strip_edges()
+	if not access_label.is_empty():
+		lines.append("Access: %s" % access_label)
+	var referred_by_name: String = str(row.get("referred_by_contact_name", "")).strip_edges()
+	if not referred_by_name.is_empty():
+		var referral_line: String = "Referred by: %s" % referred_by_name
+		var referral_day_index: int = int(row.get("referral_day_index", -9999))
+		if referral_day_index >= 0:
+			referral_line += " on day %d" % referral_day_index
+		lines.append(referral_line)
+	var direct_tip_direction: String = str(row.get("direct_tip_direction", "")).strip_edges()
+	if not direct_tip_direction.is_empty():
+		var direct_tip_parts: Array = [direct_tip_direction.capitalize()]
+		var entry_timing: String = str(row.get("direct_tip_entry_timing", "")).strip_edges()
+		if not entry_timing.is_empty():
+			direct_tip_parts.append(entry_timing)
+		var hold_period: String = str(row.get("direct_tip_hold_period", "")).strip_edges()
+		if not hold_period.is_empty():
+			direct_tip_parts.append(hold_period)
+		lines.append("Direct read: %s" % " | ".join(direct_tip_parts))
+		var direct_tip_risk: String = str(row.get("direct_tip_risk_note", "")).strip_edges()
+		if not direct_tip_risk.is_empty():
+			lines.append("Risk: %s" % direct_tip_risk)
 	var detail: String = str(row.get("detail", ""))
 	if not detail.is_empty():
 		lines.append("")
@@ -717,6 +761,9 @@ func _show_network_contact(contact: Dictionary) -> void:
 		if network_source_check_button != null:
 			network_source_check_button.visible = false
 			network_source_check_button.disabled = true
+		if network_twooter_button != null:
+			network_twooter_button.visible = false
+			network_twooter_button.disabled = true
 		if network_tip_history_label != null:
 			network_tip_history_label.visible = false
 			network_tip_history_label.text = ""
@@ -741,6 +788,9 @@ func _show_network_contact(contact: Dictionary) -> void:
 		affiliation_label = "Insider at %s" % _ticker_for_company(affiliated_company_id)
 	elif str(contact.get("source_type", "")) == "referral":
 		affiliation_label = "Referred lead"
+	var access_label: String = str(contact.get("access_label", "")).strip_edges()
+	if not access_label.is_empty():
+		affiliation_label = access_label
 	var source_type_label: String = _network_source_type_label(str(contact.get("source_type", "network")))
 	var network_meta_parts: Array = [
 		affiliation_label,
@@ -748,6 +798,12 @@ func _show_network_contact(contact: Dictionary) -> void:
 		"Required recognition %d" % int(contact.get("recognition_required", 0)),
 		"Discovered via %s" % source_type_label
 	]
+	var referred_by_name: String = str(contact.get("referred_by_contact_name", "")).strip_edges()
+	if not referred_by_name.is_empty():
+		network_meta_parts.append("Referred by %s" % referred_by_name)
+	var referral_day_label: String = str(contact.get("referral_day_label", "")).strip_edges()
+	if not referral_day_label.is_empty():
+		network_meta_parts.append(referral_day_label)
 	var contact_twooter_handle: String = str(contact.get("twooter_handle", "")).strip_edges()
 	if not contact_twooter_handle.is_empty():
 		network_meta_parts.append("Twooter %s" % contact_twooter_handle)
@@ -756,6 +812,9 @@ func _show_network_contact(contact: Dictionary) -> void:
 	var last_tip_note: String = str(contact.get("last_tip_note", ""))
 	if not last_tip_note.is_empty():
 		contact_body_text += "\n\n%s" % last_tip_note
+	var referral_note: String = str(contact.get("referral_note", "")).strip_edges()
+	if not referral_note.is_empty():
+		contact_body_text += "\n\n%s" % referral_note
 	var reaction_note: String = str(contact.get("last_reaction_note", ""))
 	if not reaction_note.is_empty():
 		contact_body_text += "\n\nLatest DM: %s" % reaction_note
@@ -781,6 +840,7 @@ func _show_network_contact(contact: Dictionary) -> void:
 	network_request_button.disabled = not is_met or remaining_ap < GameManager.get_network_action_cost("request")
 	network_referral_button.disabled = not (is_met and affiliation_type == "floater" and not referral_company_id.is_empty() and not referral_cooldown_active and remaining_ap >= GameManager.get_network_action_cost("referral"))
 	network_referral_button.tooltip_text = "Already asked this contact for an introduction today." if referral_cooldown_active else "Ask this contact to introduce a connected insider."
+	_update_network_twooter_button(contact)
 	_update_network_followup_button(contact, is_met, remaining_ap)
 	_update_network_source_check_button(contact, is_met, remaining_ap)
 	if remaining_ap < GameManager.get_network_action_cost("meet") and not is_met:
@@ -832,7 +892,7 @@ func _network_source_type_label(source_type: String) -> String:
 		"twooter":
 			return "Twooter lead"
 		"referral":
-			return "Referral"
+			return "Private referral"
 		"meeting":
 			return "Meeting room"
 		"manual":
@@ -862,6 +922,20 @@ func _update_network_followup_button(contact: Dictionary, is_met: bool, remainin
 			continue
 		popup.add_item(str(option.get("label", followup_id.capitalize())), menu_id)
 	network_followup_button.tooltip_text = "Follow up on the selected contact's latest resolved read."
+
+func _update_network_twooter_button(contact: Dictionary) -> void:
+	if network_twooter_button == null:
+		return
+	var account_id: String = str(contact.get("twooter_account_id", "")).strip_edges()
+	var handle: String = str(contact.get("twooter_handle", "")).strip_edges()
+	var has_account: bool = not account_id.is_empty()
+	network_twooter_button.visible = has_account
+	network_twooter_button.disabled = not has_account
+	network_twooter_button.text = "Open Twooter DM"
+	network_twooter_button.tooltip_text = "Open %s in Twooter messages." % (handle if not handle.is_empty() else "this contact")
+	network_twooter_button.set_meta("account_id", account_id)
+	network_twooter_button.set_meta("handle", handle)
+	network_twooter_button.set_meta("contact_id", str(contact.get("id", "")))
 
 func _update_network_source_check_button(contact: Dictionary, is_met: bool, remaining_ap: int) -> void:
 	if network_source_check_button == null:
@@ -1058,6 +1132,24 @@ func _on_network_source_check_pressed() -> void:
 	var result: Dictionary = GameManager.ask_contact_source_check(str(contact.get("id", "")))
 	_show_toast(str(result.get("message", "Source check updated.")), bool(result.get("success", false)))
 	_log_perf_elapsed("_on_network_source_check_pressed", started_at_usec)
+
+func _on_network_open_twooter_pressed() -> void:
+	var contact: Dictionary = _current_network_contact()
+	var account_id: String = str(contact.get("twooter_account_id", "")).strip_edges()
+	var handle: String = str(contact.get("twooter_handle", "")).strip_edges()
+	if account_id.is_empty():
+		_show_toast("No Twooter DM is available for this contact yet.", false)
+		return
+	if _root == null or not _root.has_method("_set_active_app"):
+		_show_toast("Twooter is not available from this screen.", false)
+		return
+	_root.set("selected_social_account_id", account_id)
+	_root.set("selected_social_feed_filter_id", "all")
+	_root.set("selected_social_view_id", "message")
+	_root.set("selected_social_message_account_id", account_id)
+	_root.set("preserve_social_selection_on_next_open", true)
+	_root.call("_set_active_app", "social")
+	_show_toast("Opened %s in Twooter messages." % (handle if not handle.is_empty() else "contact"), true)
 
 func _on_network_open_meeting_pressed() -> void:
 	if network_open_meeting_button == null:

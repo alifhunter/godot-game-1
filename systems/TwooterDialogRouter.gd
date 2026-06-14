@@ -103,6 +103,8 @@ static func routing_conditions_match(conditions: Dictionary, account: Dictionary
 	var profile: Dictionary = account.get("social_profile", {}) if typeof(account.get("social_profile", {})) == TYPE_DICTIONARY else {}
 	if conditions.has("risk_profile") and str(profile.get("risk_profile", "")) != str(conditions.get("risk_profile", "")):
 		return false
+	if conditions.has("affiliation_role") and str(profile.get("affiliation_role", "")) != str(conditions.get("affiliation_role", "")):
+		return false
 	if conditions.has("network_source"):
 		var is_network_source: bool = TWOOTER_OUTCOME_RESOLVER_SCRIPT.is_network_source_account(account)
 		if is_network_source != bool(conditions.get("network_source", false)):

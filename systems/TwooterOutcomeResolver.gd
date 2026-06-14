@@ -9,6 +9,7 @@ const DIALOG_OUTCOME_EVENT_RELATIONSHIP_DELTA := 1
 const DIALOG_OUTCOME_LABELS := {
 	"source_check": "Source checked",
 	"clean_read": "Clean read",
+	"direct_tip": "Direct tip",
 	"contact_discovery": "Contact discovered",
 	"thesis_response": "Thesis response",
 	"event_invite": "Event invite",
@@ -29,6 +30,10 @@ static func outcome_effect(outcome: String, account: Dictionary, gain_multiplier
 				"network_source_quality_delta": source_quality_delta
 			}
 		"clean_read":
+			return {
+				"relationship_progress_delta": float(DIALOG_OUTCOME_CLEAN_READ_RELATIONSHIP_PROGRESS) * gain_multiplier
+			}
+		"direct_tip":
 			return {
 				"relationship_progress_delta": float(DIALOG_OUTCOME_CLEAN_READ_RELATIONSHIP_PROGRESS) * gain_multiplier
 			}
@@ -75,6 +80,10 @@ static func outcome_timeline_note(outcome: String, outcome_effect: Dictionary) -
 			if float(outcome_effect.get("relationship_progress_delta", 0.0)) > 0.0:
 				return "Clean read: relationship progress banked."
 			return "Clean read logged."
+		"direct_tip":
+			if bool(outcome_effect.get("direct_tip_recorded", false)):
+				return "Direct tip: inner-circle read recorded."
+			return "Direct tip requested."
 		"contact_discovery":
 			if int(outcome_effect.get("network_source_quality_delta", 0)) > 0:
 				return "Contact discovery: Network lead quality improved."
@@ -111,6 +120,8 @@ static func network_dialog_confidence_label(action_id: String, outcome: String, 
 		return "clean boundary"
 	if outcome == "clean_read":
 		return "clean read"
+	if outcome == "direct_tip":
+		return "inner-circle direct read"
 	if outcome == "contact_discovery":
 		return "contact discovered"
 	if outcome == "thesis_response":
