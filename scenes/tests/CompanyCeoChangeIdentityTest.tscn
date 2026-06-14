@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/CompanyCeoChangeIdentityTest.gd" id="1_ceo_identity"]
+
+[node name="CompanyCeoChangeIdentityTest" type="Node"]
+script = ExtResource("1_ceo_identity")

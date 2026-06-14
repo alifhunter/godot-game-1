@@ -22,18 +22,19 @@ This is the lean re-entry guide. The full historical handoff was archived at
 
 ## Repo State
 
-- Branch: `main`
-- Current checked commit at this handoff rewrite: `a5c9722`
+- Branch: `codex/contact-network-inner-circle-dialogs`
+- Current checked commit at this handoff update: `d7c88c7`
 - Remote: `origin https://github.com/alifhunter/godot-game-1.git`
 - Run `git status --short` before editing.
 - The worktree is intentionally dirty from recent development work and the docs-folder move.
 - Do not revert user work or broad dirty files unless explicitly asked.
 - Current notable dirty areas:
-  - docs moved into `docs/development/` and `docs/steam/`
-  - old root `docs/*.md` paths appear as deleted until the move is committed
-  - Twooter/social enhancement work is still present in modified and untracked files
-  - Godot MCP addon/config files are local/uncommitted
-  - new Twooter focused test scenes/scripts are untracked until committed
+  - company generation enhancement Tasks 1-8 are complete but not yet committed
+  - thesis system enhancement Tasks 1-7 are complete but not yet committed
+  - new company-generation tests/builders/utilities are untracked until committed
+  - new thesis content JSON and thesis test scenes/scripts are untracked until committed
+  - contact network / inner-circle dialog work is present on this feature branch
+  - Godot MCP addon/config files may be local/uncommitted
 - Python validator `__pycache__/` folders and local `logs/` output are disposable.
 
 ## Recent Development Docs
@@ -50,6 +51,10 @@ Use these docs instead of expanding this handoff with long progress logs.
   - Twooter interaction system plan and completed Tasks 1-6.
 - [`docs/development/CONTACT_NETWORK_INNER_CIRCLE_DIALOG_ENHANCEMENT.md`](docs/development/CONTACT_NETWORK_INNER_CIRCLE_DIALOG_ENHANCEMENT.md)
   - Planned staged Network dialog, referral-gated inner-circle access, and direct inner-circle tip payload work.
+- [`docs/development/COMPANY_GENERATION_ENHANCEMENT.md`](docs/development/COMPANY_GENERATION_ENHANCEMENT.md)
+  - Completed company-generation maintainability plan: deterministic fingerprint, validation warnings, named tuning constants, generator split, CEO identity continuity, seeded-pool helper, and collision-policy probe.
+- [`docs/development/THESIS_SYSTEM_ENHANCEMENT.md`](docs/development/THESIS_SYSTEM_ENHANCEMENT.md)
+  - Completed thesis-system plan: fingerprint probe, typed vocabulary, scoring constants/rebalance, option-builder cleanup, sector/stance guidance, and externalized thesis content catalog.
 - [`docs/development/FEATURE_ENHANCEMENT_TEMPLATE.md`](docs/development/FEATURE_ENHANCEMENT_TEMPLATE.md)
   - Template for future feature/enhancement/development plans.
 - [`docs/development/DESIGN_SYSTEM.md`](docs/development/DESIGN_SYSTEM.md)
@@ -107,13 +112,17 @@ Use this as the first file map when the user asks for a specific feature. Start 
 - Dirty tips / enforcement: `systems/DirtyTipSystem.gd`, `systems/LifeManager.gd`
 - Audits: `scripts/tests/MarketYearAudit.gd`, `scripts/tests/EventGenerationAuditTest.gd`
 
-### Company Profiles / Roadmaps
+### Company Profiles / Generation / Roadmaps
 
-- Company generation/profile: `systems/CompanyGenerator.gd`, `systems/CompanyProfile.gd`, `systems/CompanyNarrativeGenerator.gd`, `systems/CompanyRosterGenerator.gd`
+- Public generation facade/profile schema: `systems/CompanyGenerator.gd`, `systems/CompanyProfile.gd`
+- Chart/financial generation builders: `systems/CompanyChartProfileBuilder.gd`, `systems/CompanyFinancialsBuilder.gd`
+- Roster/narrative/pool helpers: `systems/CompanyRosterGenerator.gd`, `systems/CompanyNarrativeGenerator.gd`, `systems/SeededPool.gd`
 - Runtime wrapper: `systems/CompanyRuntime.gd`
+- CEO-change insider identity: `systems/CorporateActionApplications.gd`, `autoloads/GameManager.gd`, `systems/ContactNetworkSystem.gd`
 - Roadmaps: `systems/CompanyRoadmapSystem.gd`
 - UI app: `scripts/ui/controllers/CompanyController.gd`
-- Tests: `scripts/tests/CompanyRoadmapSystemTest.gd`
+- Tests: `scripts/tests/CompanyGenerationFingerprintTest.gd`, `scripts/tests/CompanyGenerationValidationTest.gd`, `scripts/tests/CompanyCeoChangeIdentityTest.gd`, `scripts/tests/CompanyRosterCollisionPolicyTest.gd`, `scripts/tests/CompanyRoadmapSystemTest.gd`
+- Plan doc: `docs/development/COMPANY_GENERATION_ENHANCEMENT.md`
 
 ### News / Attention / Daily Summary
 
@@ -142,10 +151,15 @@ Use this as the first file map when the user asks for a specific feature. Start 
 
 ### Thesis / Research Tray
 
-- UI and state: `systems/ThesisManager.gd`, `scripts/ui/GameRoot.gd`
+- UI: `scripts/ui/widgets/ThesisBoardWidget.gd`, `scripts/ui/GameRoot.gd`
+- Domain/state facade: `systems/ThesisManager.gd`
+- Typed vocabulary/content accessors: `systems/ThesisVocabulary.gd`
 - Evidence capture: `systems/ThesisEvidenceCaptureSystem.gd`
-- Report generation: `systems/ThesisReportSystem.gd`
-- Tests: `scripts/tests/ThesisResearchTrayTest.gd`, `scripts/tests/SmokeTest.gd`
+- Report generation/scoring: `systems/ThesisReportSystem.gd`
+- Externalized content catalog: `data/thesis/thesis_content.json`
+- Data loading: `autoloads/DataRepository.gd`
+- Tests: `scripts/tests/ThesisFingerprintTest.gd`, `scripts/tests/ThesisContentCatalogValidationTest.gd`, `scripts/tests/ThesisContentDepthTest.gd`, `scripts/tests/ThesisScoringRebalanceTest.gd`, `scripts/tests/ThesisResearchTrayTest.gd`, `scripts/tests/ThesisVocabularyValidationTest.gd`, `scripts/tests/SmokeTest.gd`
+- Plan doc: `docs/development/THESIS_SYSTEM_ENHANCEMENT.md`
 
 ### Life / Wealth Progression
 
@@ -217,6 +231,51 @@ Use this as the first file map when the user asks for a specific feature. Start 
 - The detailed plan and progress log live in
   [`docs/development/TWOOTER_INTERACTION_SYSTEM_ENHANCEMENT.md`](docs/development/TWOOTER_INTERACTION_SYSTEM_ENHANCEMENT.md).
 
+### Company Generation
+
+- Company generation enhancement Tasks 1-8 are complete.
+- The default 30-company full-roster fingerprint is the primary determinism gate:
+  - seed `20260614`
+  - expected hash `1225696160`
+  - duplicate names `0`
+  - duplicate tickers `0`
+- New focused probes cover:
+  - deterministic full-roster generation and hydration
+  - invalid-input warning behavior
+  - CEO-change insider identity continuity
+  - inflated-roster name/ticker collision policy at `30`, `80`, `120`, and `200` companies
+- `CompanyGenerator.gd` remains the public facade, with chart/financial orchestration split into:
+  - `systems/CompanyChartProfileBuilder.gd`
+  - `systems/CompanyFinancialsBuilder.gd`
+- `systems/SeededPool.gd` now centralizes matching roster/narrative pool selection without changing RNG ownership or call order.
+- CEO changes now key insider identity on the person: the old CEO remains as a stale/departed `free_agent`, while the new CEO is a fresh `insider` discovery.
+- Name/ticker collision policy is currently "document and accept": measured rosters up to 200 companies showed zero duplicates and no fallback hits. If larger rosters prove insufficient later, use deterministic seeded suffix fallback after the existing retry budget.
+- The detailed plan and progress log live in
+  [`docs/development/COMPANY_GENERATION_ENHANCEMENT.md`](docs/development/COMPANY_GENERATION_ENHANCEMENT.md).
+
+### Thesis System
+
+- Thesis system enhancement Tasks 1-7 are complete.
+- The fixed-seed thesis fingerprint is now the primary thesis determinism gate:
+  - seed `20260614`
+  - company `anre` / ticker `ANRE`
+  - expected full hash `672110177`
+  - expected option hash `747086609`
+  - expected report hash `1836382259`
+  - expected score `72`, memo state `Developing Memo`, grade `B`
+- `systems/ThesisVocabulary.gd` centralizes typed vocabulary and JSON-backed content accessors with inline fallbacks.
+- `data/thesis/thesis_content.json` now owns editable thesis copy:
+  - category/interpretation/source labels
+  - report and UI evidence pillars
+  - stance/horizon options and evidence tabs
+  - memo states, grade copy, report sections, empty states, learning notes
+  - quality/growth/risk band labels/details
+  - sector macro lenses and stance/horizon next-research guidance
+- `ThesisReportSystem.gd` scoring is aligned to five pillars: Anchor / Price / Tape / Catalyst / Risk.
+- `ThesisBoardWidget.gd` uses sector-aware and stance/horizon-aware guidance while preserving score/report math.
+- The detailed plan and progress log live in
+  [`docs/development/THESIS_SYSTEM_ENHANCEMENT.md`](docs/development/THESIS_SYSTEM_ENHANCEMENT.md).
+
 ### Market / Gorengan / Long-Run Balance
 
 - Market/gorengan balance work remains a major gameplay area.
@@ -280,6 +339,7 @@ git diff --check
 ```bash
 python3 -m json.tool data/social/twooter_feed_data.json > /dev/null
 python3 -m json.tool tools/twooter_editor/twooter_source.json > /dev/null
+python3 -m json.tool data/thesis/thesis_content.json > /dev/null
 ```
 
 ### Twooter Editor Validation
@@ -327,6 +387,46 @@ TWOOTER_DIALOG_REACHABILITY_OK
 TWOOTER_OUTCOME_CONSEQUENCES_OK
 ```
 
+### Focused Company Generation Tests
+
+```bash
+/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/CompanyGenerationFingerprintTest.tscn
+/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/CompanyGenerationValidationTest.tscn
+/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/CompanyCeoChangeIdentityTest.tscn
+/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/CompanyRosterCollisionPolicyTest.tscn
+```
+
+Expected sentinels:
+
+```text
+COMPANY_GENERATION_FINGERPRINT_OK ... "hash":"1225696160" ...
+COMPANY_GENERATION_VALIDATION_WARNING_OK
+COMPANY_CEO_CHANGE_IDENTITY_OK
+COMPANY_ROSTER_COLLISION_POLICY_OK
+```
+
+### Focused Thesis Tests
+
+```bash
+/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/ThesisContentCatalogValidationTest.tscn
+/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/ThesisFingerprintTest.tscn
+/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/ThesisContentDepthTest.tscn
+/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/ThesisScoringRebalanceTest.tscn
+/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/ThesisResearchTrayTest.tscn
+/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/ThesisVocabularyValidationTest.tscn
+```
+
+Expected sentinels:
+
+```text
+THESIS_CONTENT_CATALOG_VALIDATION_OK
+THESIS_FINGERPRINT_OK ... "hash":"672110177" ... "option_hash":"747086609" ... "report_hash":"1836382259" ...
+THESIS_CONTENT_DEPTH_OK
+THESIS_SCORING_REBALANCE_OK
+THESIS_RESEARCH_TRAY_OK
+THESIS_VOCABULARY_VALIDATION_OK
+```
+
 ### Long-Run Audit
 
 Run only when simulation, market balance, event generation, or performance risk justifies it.
@@ -347,8 +447,8 @@ Run only when simulation, market balance, event generation, or performance risk 
 ### 1. Checkpoint Hygiene
 
 - Review `git status --short` before every task.
-- Commit the docs-folder move, handoff archive, and lean handoff together if the diff is clean.
-- Consider committing recent Twooter/social enhancement files as a separate checkpoint if they are not already committed.
+- Review and commit the completed company-generation and thesis-system enhancement files as the next checkpoint if the diff is clean.
+- Keep the company-generation probes and thesis probes in the checkpoint; they are now the determinism/content safety nets.
 - Preserve unrelated dirty implementation work.
 
 ### 2. Release / Steam Prep

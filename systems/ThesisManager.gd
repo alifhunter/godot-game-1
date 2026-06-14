@@ -3,6 +3,25 @@ class_name ThesisManager
 ## Thesis / research-evidence domain logic moved out of GameManager.
 ## `gm` is the GameManager autoload instance (untyped to avoid a cyclic reference).
 
+const THESIS_VOCABULARY_SCRIPT = preload("res://systems/ThesisVocabulary.gd")
+
+const QUALITY_GROWTH_BAND_TOP_MIN := 80
+const QUALITY_GROWTH_BAND_STRONG_MIN := 65
+const QUALITY_GROWTH_BAND_AVERAGE_MIN := 50
+const QUALITY_GROWTH_BAND_WEAK_MIN := 35
+
+const RISK_BAND_HIGH_MIN := 80
+const RISK_BAND_ELEVATED_MIN := 65
+const RISK_BAND_MODERATE_MIN := 45
+const RISK_BAND_MANAGEABLE_MIN := 25
+const RISK_PROFILE_NEGATIVE_IMPACT_MIN := 58
+
+const THESIS_OPTION_CAP_OWNERSHIP := 4
+const THESIS_OPTION_CAP_NEWS := 5
+const THESIS_OPTION_CAP_TWOOTER := 5
+const THESIS_OPTION_CAP_NETWORK := 4
+const THESIS_OPTION_CAP_CORPORATE_EVENTS := 5
+
 
 static func get_thesis_board_snapshot(gm) -> Dictionary:
 	if not RunState.has_active_run():
@@ -239,17 +258,17 @@ static func get_thesis_evidence_options(gm, company_id: String) -> Dictionary:
 		return {"company": {}, "categories": []}
 
 	var categories: Array = [
-		{"id": "fundamentals", "label": "Fundamentals / Key Stats", "options": thesis_fundamental_options(company)},
-		{"id": "financials", "label": "Financials", "options": thesis_financial_options(company)},
-		{"id": "price_action", "label": "Price Action", "options": thesis_price_action_options(company)},
-		{"id": "broker_flow", "label": "Broker Flow", "options": thesis_broker_options(company)},
-		{"id": "ownership", "label": "Ownership", "options": thesis_ownership_options(company)},
-		{"id": "sector_macro", "label": "Sector / Macro", "options": thesis_sector_macro_options(gm, company)},
-		{"id": "news", "label": "News", "options": thesis_news_options(gm, company)},
-		{"id": "twooter", "label": "Twooter", "options": thesis_twooter_options(gm, company)},
-		{"id": "network_intel", "label": "Network Intel", "options": thesis_network_options(gm, company)},
-		{"id": "corporate_events", "label": "Corporate Events", "options": thesis_corporate_event_options(gm, company)},
-		{"id": "risk_invalidation", "label": "Risk / Invalidation", "options": thesis_risk_options(company)}
+		{"id": "fundamentals", "label": thesis_category_label("fundamentals"), "options": thesis_fundamental_options(company)},
+		{"id": "financials", "label": thesis_category_label("financials"), "options": thesis_financial_options(company)},
+		{"id": "price_action", "label": thesis_category_label("price_action"), "options": thesis_price_action_options(company)},
+		{"id": "broker_flow", "label": thesis_category_label("broker_flow"), "options": thesis_broker_options(company)},
+		{"id": "ownership", "label": thesis_category_label("ownership"), "options": thesis_ownership_options(company)},
+		{"id": "sector_macro", "label": thesis_category_label("sector_macro"), "options": thesis_sector_macro_options(gm, company)},
+		{"id": "news", "label": thesis_category_label("news"), "options": thesis_news_options(gm, company)},
+		{"id": "twooter", "label": thesis_category_label("twooter"), "options": thesis_twooter_options(gm, company)},
+		{"id": "network_intel", "label": thesis_category_label("network_intel"), "options": thesis_network_options(gm, company)},
+		{"id": "corporate_events", "label": thesis_category_label("corporate_events"), "options": thesis_corporate_event_options(gm, company)},
+		{"id": "risk_invalidation", "label": thesis_category_label("risk_invalidation"), "options": thesis_risk_options(company)}
 	]
 	return {
 		"company": thesis_company_compact(company),
@@ -301,7 +320,7 @@ static func add_chart_pattern_evidence_to_thesis(gm, thesis_id: String, claim: D
 		return {"success": false, "message": "This pattern claim belongs to a different stock."}
 	var evidence: Dictionary = claim.duplicate(true)
 	evidence["category"] = "price_action"
-	evidence["category_label"] = "Price Action"
+	evidence["category_label"] = thesis_category_label("price_action")
 	evidence["source_type"] = "chart_pattern"
 	evidence["source_label"] = "STOCKBOT Chart"
 	var capture_result: Dictionary = capture_research_evidence(gm, evidence)
@@ -385,24 +404,33 @@ static func add_thesis_evidence(gm, thesis_id: String, evidence: Dictionary) -> 
 		return {"success": false, "message": "Unknown thesis."}
 	var evidence_rows: Array = thesis.get("evidence", [])
 	var evidence_id: String = next_thesis_evidence_id(evidence_rows)
+	var context: String = "add_thesis_evidence:%s" % str(evidence.get("label", evidence_id))
+	var category: String = gm.thesis_evidence_capture_system.normalize_category(str(evidence.get("category", "")), true, context)
+	var impact: String = gm.thesis_evidence_capture_system.normalize_impact(str(evidence.get("impact", THESIS_VOCABULARY_SCRIPT.DEFAULT_IMPACT)), true, context)
 	var compact_evidence: Dictionary = {
 		"id": evidence_id,
-		"category": str(evidence.get("category", "")),
+		"category": category,
 		"category_label": str(evidence.get("category_label", "")),
 		"label": str(evidence.get("label", "")),
 		"value": str(evidence.get("value", "")),
 		"detail": str(evidence.get("detail", "")),
 		"source_label": str(evidence.get("source_label", "")),
-		"impact": str(evidence.get("impact", "mixed")),
+		"impact": impact,
 		"day_index": RunState.day_index
 	}
 	for key_value in ["source_type", "source_id", "source_evidence_id", "interpretation", "interpretation_label", "player_note"]:
 		var key: String = str(key_value)
 		if evidence.has(key):
 			compact_evidence[key] = str(evidence.get(key, ""))
-	if str(compact_evidence.get("interpretation", "")).is_empty():
-		compact_evidence["interpretation"] = gm.thesis_evidence_capture_system.normalize_interpretation(str(evidence.get("interpretation", "watch")))
-		compact_evidence["interpretation_label"] = gm.thesis_evidence_capture_system.interpretation_label(str(compact_evidence.get("interpretation", "watch")))
+	var explicit_interpretation: String = str(evidence.get("interpretation", "")).strip_edges()
+	if explicit_interpretation.is_empty():
+		compact_evidence["interpretation"] = THESIS_VOCABULARY_SCRIPT.DEFAULT_INTERPRETATION
+	else:
+		compact_evidence["interpretation"] = gm.thesis_evidence_capture_system.normalize_interpretation(explicit_interpretation, true, context)
+		compact_evidence["impact"] = THESIS_VOCABULARY_SCRIPT.validate_impact_for_interpretation(str(compact_evidence.get("impact", "")), str(compact_evidence.get("interpretation", "")), context)
+	compact_evidence["interpretation_label"] = gm.thesis_evidence_capture_system.interpretation_label(str(compact_evidence.get("interpretation", THESIS_VOCABULARY_SCRIPT.DEFAULT_INTERPRETATION)))
+	if str(compact_evidence.get("category_label", "")).strip_edges().is_empty() and not category.is_empty():
+		compact_evidence["category_label"] = thesis_category_label(category)
 	copy_optional_thesis_evidence_fields(compact_evidence, evidence)
 	if str(compact_evidence.get("category", "")).is_empty() or str(compact_evidence.get("label", "")).is_empty():
 		return {"success": false, "message": "Pick a valid evidence row first."}
@@ -548,13 +576,13 @@ static func thesis_fundamental_options(company: Dictionary) -> Array:
 	var quality_score: int = int(company.get("quality_score", 0))
 	var growth_score: int = int(company.get("growth_score", 0))
 	var risk_score: int = int(company.get("risk_score", 0))
-	return [
-		thesis_option("fundamentals", "Business quality", thesis_quality_band_label(quality_score), thesis_quality_band_detail(quality_score), impact_from_score(float(quality_score), 62.0, 48.0)),
-		thesis_option("fundamentals", "Growth profile", thesis_growth_band_label(growth_score), thesis_growth_band_detail(growth_score), impact_from_score(float(growth_score), 62.0, 48.0)),
-		thesis_option("fundamentals", "Risk profile", thesis_risk_band_label(risk_score), thesis_risk_band_detail(risk_score), "negative" if risk_score >= 58 else "positive"),
-		thesis_option("fundamentals", "ROE", thesis_format_percent(float(financials.get("roe", 0.0)) / 100.0), "Return on equity gives a quick quality check.", impact_from_score(float(financials.get("roe", 0.0)), 14.0, 8.0)),
-		thesis_option("fundamentals", "Debt to equity", "%sx" % String.num(float(financials.get("debt_to_equity", 0.0)), 2), "Leverage affects how much room the thesis has for mistakes.", "negative" if float(financials.get("debt_to_equity", 0.0)) >= 1.0 else "positive")
-	]
+	return thesis_options_from_specs([
+		thesis_option_spec("fundamentals", "Business quality", thesis_quality_band_label(quality_score), thesis_quality_band_detail(quality_score), impact_from_score(float(quality_score), 62.0, 48.0)),
+		thesis_option_spec("fundamentals", "Growth profile", thesis_growth_band_label(growth_score), thesis_growth_band_detail(growth_score), impact_from_score(float(growth_score), 62.0, 48.0)),
+		thesis_option_spec("fundamentals", "Risk profile", thesis_risk_band_label(risk_score), thesis_risk_band_detail(risk_score), "negative" if risk_score >= RISK_PROFILE_NEGATIVE_IMPACT_MIN else "positive"),
+		thesis_option_spec("fundamentals", "ROE", thesis_format_percent(float(financials.get("roe", 0.0)) / 100.0), "Return on equity gives a quick quality check.", impact_from_score(float(financials.get("roe", 0.0)), 14.0, 8.0)),
+		thesis_option_spec("fundamentals", "Debt to equity", "%sx" % String.num(float(financials.get("debt_to_equity", 0.0)), 2), "Leverage affects how much room the thesis has for mistakes.", "negative" if float(financials.get("debt_to_equity", 0.0)) >= 1.0 else "positive")
+	])
 
 
 static func thesis_financial_options(company: Dictionary) -> Array:
@@ -562,24 +590,24 @@ static func thesis_financial_options(company: Dictionary) -> Array:
 	var market_cap: float = float(financials.get("market_cap", 0.0))
 	var net_income: float = float(financials.get("net_income", 0.0))
 	var pe: float = safe_divide(market_cap, net_income)
-	return [
-		thesis_option("financials", "Revenue growth YoY", thesis_format_percent(float(financials.get("revenue_growth_yoy", 0.0)) / 100.0), "Revenue growth helps tell whether the story is expanding or fading.", impact_from_score(float(financials.get("revenue_growth_yoy", 0.0)), 10.0, 0.0)),
-		thesis_option("financials", "Earnings growth YoY", thesis_format_percent(float(financials.get("earnings_growth_yoy", 0.0)) / 100.0), "Earnings growth checks whether growth reaches the bottom line.", impact_from_score(float(financials.get("earnings_growth_yoy", 0.0)), 8.0, 0.0)),
-		thesis_option("financials", "Net profit margin", thesis_format_percent(float(financials.get("net_profit_margin", 0.0)) / 100.0), "Margin quality helps separate real business strength from noisy sales.", impact_from_score(float(financials.get("net_profit_margin", 0.0)), 8.0, 3.0)),
-		thesis_option("valuation", "Current PE", "%sx" % String.num(pe, 2), "PE is an approximate valuation anchor from generated earnings.", "negative" if pe > 20.0 else ("positive" if pe > 0.0 and pe < 12.0 else "mixed")),
-		thesis_option("valuation", "Market cap", thesis_format_currency(market_cap), "Market cap helps keep expectations realistic for the company size.", "mixed")
-	]
+	return thesis_options_from_specs([
+		thesis_option_spec("financials", "Revenue growth YoY", thesis_format_percent(float(financials.get("revenue_growth_yoy", 0.0)) / 100.0), "Revenue growth helps tell whether the story is expanding or fading.", impact_from_score(float(financials.get("revenue_growth_yoy", 0.0)), 10.0, 0.0)),
+		thesis_option_spec("financials", "Earnings growth YoY", thesis_format_percent(float(financials.get("earnings_growth_yoy", 0.0)) / 100.0), "Earnings growth checks whether growth reaches the bottom line.", impact_from_score(float(financials.get("earnings_growth_yoy", 0.0)), 8.0, 0.0)),
+		thesis_option_spec("financials", "Net profit margin", thesis_format_percent(float(financials.get("net_profit_margin", 0.0)) / 100.0), "Margin quality helps separate real business strength from noisy sales.", impact_from_score(float(financials.get("net_profit_margin", 0.0)), 8.0, 3.0)),
+		thesis_option_spec("valuation", "Current PE", "%sx" % String.num(pe, 2), "PE is an approximate valuation anchor from generated earnings.", "negative" if pe > 20.0 else ("positive" if pe > 0.0 and pe < 12.0 else "mixed")),
+		thesis_option_spec("valuation", "Market cap", thesis_format_currency(market_cap), "Market cap helps keep expectations realistic for the company size.", "mixed")
+	])
 
 
 static func thesis_price_action_options(company: Dictionary) -> Array:
 	var price_bars: Array = company.get("price_bars", [])
 	var recent_return: float = recent_price_bar_return(price_bars, 5)
-	return [
-		thesis_option("price_action", "Current price", thesis_format_currency(float(company.get("current_price", 0.0))), "This freezes the entry context for the thesis.", "mixed"),
-		thesis_option("price_action", "Daily move", thesis_format_percent(float(company.get("daily_change_pct", 0.0))), "The daily move shows whether the thesis is early or chasing strength.", impact_from_change(float(company.get("daily_change_pct", 0.0)))),
-		thesis_option("price_action", "Five-bar trend", thesis_format_percent(recent_return), "Recent bars show whether price action confirms the setup.", impact_from_change(recent_return)),
-		thesis_option("price_action", "YTD move", thesis_format_percent(float(company.get("ytd_change_pct", 0.0))), "YTD context helps avoid confusing a late move with an early setup.", impact_from_change(float(company.get("ytd_change_pct", 0.0))))
-	]
+	return thesis_options_from_specs([
+		thesis_option_spec("price_action", "Current price", thesis_format_currency(float(company.get("current_price", 0.0))), "This freezes the entry context for the thesis.", "mixed"),
+		thesis_option_spec("price_action", "Daily move", thesis_format_percent(float(company.get("daily_change_pct", 0.0))), "The daily move shows whether the thesis is early or chasing strength.", impact_from_change(float(company.get("daily_change_pct", 0.0)))),
+		thesis_option_spec("price_action", "Five-bar trend", thesis_format_percent(recent_return), "Recent bars show whether price action confirms the setup.", impact_from_change(recent_return)),
+		thesis_option_spec("price_action", "YTD move", thesis_format_percent(float(company.get("ytd_change_pct", 0.0))), "YTD context helps avoid confusing a late move with an early setup.", impact_from_change(float(company.get("ytd_change_pct", 0.0))))
+	])
 
 
 static func thesis_broker_options(company: Dictionary) -> Array:
@@ -587,12 +615,12 @@ static func thesis_broker_options(company: Dictionary) -> Array:
 	var flow_tag: String = str(broker_flow.get("flow_tag", "neutral"))
 	var buyer: String = broker_actor_label_for_thesis(broker_flow, "buy")
 	var seller: String = broker_actor_label_for_thesis(broker_flow, "sell")
-	return [
-		thesis_option("broker_flow", "Broker flow", flow_tag.capitalize(), "Broker flow checks whether stronger desks are supporting or leaning on the tape.", "positive" if flow_tag == "accumulation" else ("negative" if flow_tag == "distribution" else "mixed")),
-		thesis_option("broker_flow", "Dominant buyer", buyer, "Strong buyer identity helps judge the quality of demand.", "positive" if buyer != "Balanced" else "mixed"),
-		thesis_option("broker_flow", "Dominant seller", seller, "Strong seller identity is useful risk evidence.", "negative" if seller != "Balanced" else "mixed"),
-		thesis_option("broker_flow", "Net pressure", String.num(float(broker_flow.get("net_pressure", 0.0)), 2), "Net pressure gives the tape read a compact direction.", impact_from_change(float(broker_flow.get("net_pressure", 0.0))))
-	]
+	return thesis_options_from_specs([
+		thesis_option_spec("broker_flow", "Broker flow", flow_tag.capitalize(), "Broker flow checks whether stronger desks are supporting or leaning on the tape.", "positive" if flow_tag == "accumulation" else ("negative" if flow_tag == "distribution" else "mixed")),
+		thesis_option_spec("broker_flow", "Dominant buyer", buyer, "Strong buyer identity helps judge the quality of demand.", "positive" if buyer != "Balanced" else "mixed"),
+		thesis_option_spec("broker_flow", "Dominant seller", seller, "Strong seller identity is useful risk evidence.", "negative" if seller != "Balanced" else "mixed"),
+		thesis_option_spec("broker_flow", "Net pressure", String.num(float(broker_flow.get("net_pressure", 0.0)), 2), "Net pressure gives the tape read a compact direction.", impact_from_change(float(broker_flow.get("net_pressure", 0.0))))
+	])
 
 
 static func thesis_ownership_options(company: Dictionary) -> Array:
@@ -603,8 +631,7 @@ static func thesis_ownership_options(company: Dictionary) -> Array:
 		if typeof(shareholder_value) != TYPE_DICTIONARY:
 			continue
 		var shareholder: Dictionary = shareholder_value
-		rows.append(thesis_option("ownership", "Major holder", "%s %s" % [str(shareholder.get("name", "Holder")), thesis_format_percent(float(shareholder.get("ownership_pct", 0.0)))], "Ownership concentration can support or constrain a thesis.", "mixed"))
-		if rows.size() >= 4:
+		if append_capped_thesis_option(rows, thesis_option("ownership", "Major holder", "%s %s" % [str(shareholder.get("name", "Holder")), thesis_format_percent(float(shareholder.get("ownership_pct", 0.0)))], "Ownership concentration can support or constrain a thesis.", "mixed"), THESIS_OPTION_CAP_OWNERSHIP):
 			break
 	return rows
 
@@ -618,17 +645,17 @@ static func thesis_sector_macro_options(gm, company: Dictionary) -> Array:
 		if str(sector.get("id", "")) != company_sector_id:
 			continue
 		company_sector_name = str(sector.get("name", company_sector_name))
-		rows.append(thesis_option("sector_macro", "Sector performance", thesis_format_percent(float(sector.get("average_change_pct", 0.0))), "Sector tape shows whether the stock is moving with or against its group.", impact_from_change(float(sector.get("average_change_pct", 0.0)))))
-		rows.append(thesis_option("sector_macro", "Sector breadth", "%d green / %d red" % [int(sector.get("advancers", 0)), int(sector.get("decliners", 0))], "Breadth helps separate broad sector demand from one-stock noise.", "positive" if int(sector.get("advancers", 0)) >= int(sector.get("decliners", 0)) else "negative"))
+		rows.append(thesis_option("sector_macro", "Sector performance", thesis_format_percent(float(sector.get("average_change_pct", 0.0))), thesis_sector_macro_detail("Sector tape shows whether the stock is moving with or against its group.", company_sector_id), impact_from_change(float(sector.get("average_change_pct", 0.0)))))
+		rows.append(thesis_option("sector_macro", "Sector breadth", "%d green / %d red" % [int(sector.get("advancers", 0)), int(sector.get("decliners", 0))], thesis_sector_macro_detail("Breadth helps separate broad sector demand from one-stock noise.", company_sector_id), "positive" if int(sector.get("advancers", 0)) >= int(sector.get("decliners", 0)) else "negative"))
 		break
 	var macro: Dictionary = gm.get_current_macro_state()
-	rows.append(thesis_option("sector_macro", "Inflation backdrop", "%s%% YoY" % String.num(float(macro.get("inflation_yoy", 0.0)), 1), "Inflation pressure affects margins, consumer demand, rate expectations, and valuation tolerance.", thesis_inflation_impact(float(macro.get("inflation_yoy", 0.0)))))
-	rows.append(thesis_option("sector_macro", "GDP growth", "%s%%" % String.num(float(macro.get("gdp_growth", 0.0)), 1), "GDP growth is the broad demand backdrop for cyclical revenue and market risk appetite.", thesis_gdp_impact(float(macro.get("gdp_growth", 0.0)))))
-	rows.append(thesis_option("sector_macro", "Employment backdrop", "%s / unemployment %s%%" % [str(macro.get("employment_label", "Mixed")), String.num(float(macro.get("unemployment_rate", 0.0)), 1)], "Employment strength helps explain household demand and how much risk the market can carry.", thesis_employment_impact(float(macro.get("employment_index", 0.0)))))
-	rows.append(thesis_option("sector_macro", "Policy rate", thesis_policy_rate_label(macro), "The policy-rate path changes funding cost, valuation appetite, and sector leadership.", thesis_policy_impact(str(macro.get("central_bank_stance", "hold")))))
-	rows.append(thesis_option("sector_macro", "Risk appetite", thesis_risk_appetite_label(float(macro.get("risk_appetite", 0.5))), "Risk appetite is the market-wide willingness to pay for uncertainty.", thesis_risk_appetite_impact(float(macro.get("risk_appetite", 0.5)))))
+	rows.append(thesis_option("sector_macro", "Inflation backdrop", "%s%% YoY" % String.num(float(macro.get("inflation_yoy", 0.0)), 1), thesis_sector_macro_detail("Inflation pressure affects margins, consumer demand, rate expectations, and valuation tolerance.", company_sector_id), thesis_inflation_impact(float(macro.get("inflation_yoy", 0.0)))))
+	rows.append(thesis_option("sector_macro", "GDP growth", "%s%%" % String.num(float(macro.get("gdp_growth", 0.0)), 1), thesis_sector_macro_detail("GDP growth is the broad demand backdrop for revenue cycles and market risk appetite.", company_sector_id), thesis_gdp_impact(float(macro.get("gdp_growth", 0.0)))))
+	rows.append(thesis_option("sector_macro", "Employment backdrop", "%s / unemployment %s%%" % [str(macro.get("employment_label", "Mixed")), String.num(float(macro.get("unemployment_rate", 0.0)), 1)], thesis_sector_macro_detail("Employment strength helps explain household demand and how much risk the market can carry.", company_sector_id), thesis_employment_impact(float(macro.get("employment_index", 0.0)))))
+	rows.append(thesis_option("sector_macro", "Policy rate", thesis_policy_rate_label(macro), thesis_sector_macro_detail("The policy-rate path changes funding cost, valuation appetite, and sector leadership.", company_sector_id), thesis_policy_impact(str(macro.get("central_bank_stance", "hold")))))
+	rows.append(thesis_option("sector_macro", "Risk appetite", thesis_risk_appetite_label(float(macro.get("risk_appetite", 0.5))), thesis_sector_macro_detail("Risk appetite is the market-wide willingness to pay for uncertainty.", company_sector_id), thesis_risk_appetite_impact(float(macro.get("risk_appetite", 0.5)))))
 	var sector_macro_bias: float = float(macro.get("sector_biases", {}).get(company_sector_id, 0.0))
-	rows.append(thesis_option("sector_macro", "Sector macro bias", "%s %s" % [company_sector_name, thesis_format_percent(sector_macro_bias)], "This is the simulator's direct macro tilt for the company's sector from inflation, GDP, employment, rates, and risk appetite.", impact_from_change(sector_macro_bias)))
+	rows.append(thesis_option("sector_macro", "Sector macro bias", "%s %s" % [company_sector_name, thesis_format_percent(sector_macro_bias)], thesis_sector_macro_detail("This is the simulator's direct macro tilt for the company's sector from inflation, GDP, employment, rates, and risk appetite.", company_sector_id), impact_from_change(sector_macro_bias)))
 	rows.append(thesis_active_macro_shock_option(gm))
 	return rows
 
@@ -646,8 +673,7 @@ static func thesis_news_options(gm, company: Dictionary) -> Array:
 			var article: Dictionary = article_value
 			if str(article.get("target_company_id", "")) != str(company.get("id", "")) and str(article.get("target_ticker", "")) != str(company.get("ticker", "")):
 				continue
-			rows.append(thesis_option("news", str(article.get("headline", "News article")), str(article.get("public_status_label", article.get("tone", "mixed"))), str(article.get("deck", article.get("body", ""))).left(220), impact_from_tone(str(article.get("tone", "mixed"))), str(feed.get("label", "News"))))
-			if rows.size() >= 5:
+			if append_capped_thesis_option(rows, thesis_option("news", str(article.get("headline", "News article")), str(article.get("public_status_label", article.get("tone", "mixed"))), str(article.get("deck", article.get("body", ""))).left(220), impact_from_tone(str(article.get("tone", "mixed"))), str(feed.get("label", "News"))), THESIS_OPTION_CAP_NEWS):
 				return rows
 	if rows.is_empty():
 		rows.append(thesis_option("news", "No company-specific article", "No current article", "No fresh company-specific News article is available for this stock today.", "mixed", "News"))
@@ -663,8 +689,7 @@ static func thesis_twooter_options(gm, company: Dictionary) -> Array:
 		var post: Dictionary = post_value
 		if str(post.get("target_ticker", "")) != str(company.get("ticker", "")):
 			continue
-		rows.append(thesis_option("twooter", "@%s" % str(post.get("account_handle", "")), str(post.get("post_text", "")).left(120), str(post.get("context_hint", "")), impact_from_tone(str(post.get("tone", "mixed"))), "Twooter"))
-		if rows.size() >= 5:
+		if append_capped_thesis_option(rows, thesis_option("twooter", "@%s" % str(post.get("account_handle", "")), str(post.get("post_text", "")).left(120), str(post.get("context_hint", "")), impact_from_tone(str(post.get("tone", "mixed"))), "Twooter"), THESIS_OPTION_CAP_TWOOTER):
 			return rows
 	if rows.is_empty():
 		rows.append(thesis_option("twooter", "No company-specific chatter", "No current post", "No fresh company-specific Twooter post is available for this stock today.", "mixed", "Twooter"))
@@ -684,8 +709,7 @@ static func thesis_network_options(gm, company: Dictionary) -> Array:
 		var focus_company_id: String = str(contact.get("company_id", ""))
 		if focus_company_id != str(company.get("id", "")) and not company_ids.has(str(company.get("id", ""))):
 			continue
-		rows.append(thesis_option("network_intel", str(contact.get("display_name", contact.get("name", "Network contact"))), str(contact.get("role", contact.get("affiliation_role", "Contact"))), str(contact.get("last_tip_note", contact.get("description", "Known contact can add private context."))).left(220), "mixed", "Network"))
-		if rows.size() >= 4:
+		if append_capped_thesis_option(rows, thesis_option("network_intel", str(contact.get("display_name", contact.get("name", "Network contact"))), str(contact.get("role", contact.get("affiliation_role", "Contact"))), str(contact.get("last_tip_note", contact.get("description", "Known contact can add private context."))).left(220), "mixed", "Network"), THESIS_OPTION_CAP_NETWORK):
 			return rows
 	if rows.is_empty():
 		rows.append(thesis_option("network_intel", "No met contact", "No private read", "Meet relevant contacts before treating Network as thesis evidence.", "mixed", "Network"))
@@ -700,8 +724,7 @@ static func thesis_corporate_event_options(gm, company: Dictionary) -> Array:
 		var event: Dictionary = event_value
 		if str(event.get("target_company_id", "")) != str(company.get("id", "")):
 			continue
-		rows.append(thesis_option("corporate_events", str(event.get("headline", event.get("event_id", "Corporate event"))), str(event.get("summary", event.get("category", ""))).left(140), "Corporate event history can be a catalyst or a risk depending on confirmation.", impact_from_tone(str(event.get("tone", "mixed"))), "Corporate events"))
-		if rows.size() >= 5:
+		if append_capped_thesis_option(rows, thesis_option("corporate_events", str(event.get("headline", event.get("event_id", "Corporate event"))), str(event.get("summary", event.get("category", ""))).left(140), "Corporate event history can be a catalyst or a risk depending on confirmation.", impact_from_tone(str(event.get("tone", "mixed"))), "Corporate events"), THESIS_OPTION_CAP_CORPORATE_EVENTS):
 			return rows
 	var meeting_snapshot: Dictionary = gm.get_corporate_meeting_snapshot()
 	for meeting_value in meeting_snapshot.get("upcoming_rows", []):
@@ -721,22 +744,57 @@ static func thesis_risk_options(company: Dictionary) -> Array:
 	var risk_score: int = int(company.get("risk_score", 0))
 	var debt_to_equity: float = float(financials.get("debt_to_equity", 0.0))
 	var daily_change: float = float(company.get("daily_change_pct", 0.0))
-	return [
-		thesis_option("risk_invalidation", "Risk profile invalidation", thesis_risk_band_label(risk_score), thesis_risk_band_detail(risk_score), "negative" if risk_score >= 58 else "mixed"),
-		thesis_option("risk_invalidation", "Leverage invalidation", "%sx debt/equity" % String.num(debt_to_equity, 2), "If leverage is high, weak earnings can break the thesis faster.", "negative" if debt_to_equity >= 1.0 else "mixed"),
-		thesis_option("risk_invalidation", "Price invalidation", "Breaks below today's price by 5%", "If price loses the thesis level, re-check before averaging down.", "negative"),
-		thesis_option("risk_invalidation", "Chasing risk", thesis_format_percent(daily_change), "If the move already ran, a good story can still be a bad entry.", "negative" if daily_change > 0.05 else "mixed")
-	]
+	return thesis_options_from_specs([
+		thesis_option_spec("risk_invalidation", "Risk profile invalidation", thesis_risk_band_label(risk_score), thesis_risk_band_detail(risk_score), "negative" if risk_score >= RISK_PROFILE_NEGATIVE_IMPACT_MIN else "mixed"),
+		thesis_option_spec("risk_invalidation", "Leverage invalidation", "%sx debt/equity" % String.num(debt_to_equity, 2), "If leverage is high, weak earnings can break the thesis faster.", "negative" if debt_to_equity >= 1.0 else "mixed"),
+		thesis_option_spec("risk_invalidation", "Price invalidation", "Breaks below today's price by 5%", "If price loses the thesis level, re-check before averaging down.", "negative"),
+		thesis_option_spec("risk_invalidation", "Chasing risk", thesis_format_percent(daily_change), "If the move already ran, a good story can still be a bad entry.", "negative" if daily_change > 0.05 else "mixed")
+	])
 
 
-static func thesis_option(category: String, label: String, value: String, detail: String, impact: String = "mixed", source_label: String = "") -> Dictionary:
+static func thesis_option_spec(category: String, label: String, value: String, detail: String, impact: String = "mixed", source_label: String = "") -> Dictionary:
 	return {
 		"category": category,
-		"category_label": thesis_category_label(category),
 		"label": label,
 		"value": value,
 		"detail": detail,
 		"impact": impact,
+		"source_label": source_label
+	}
+
+
+static func thesis_options_from_specs(specs: Array) -> Array:
+	var rows: Array = []
+	for spec_value in specs:
+		if typeof(spec_value) != TYPE_DICTIONARY:
+			continue
+		var spec: Dictionary = spec_value
+		rows.append(thesis_option(
+			str(spec.get("category", "")),
+			str(spec.get("label", "")),
+			str(spec.get("value", "")),
+			str(spec.get("detail", "")),
+			str(spec.get("impact", THESIS_VOCABULARY_SCRIPT.DEFAULT_IMPACT)),
+			str(spec.get("source_label", ""))
+		))
+	return rows
+
+
+static func append_capped_thesis_option(rows: Array, option: Dictionary, cap: int) -> bool:
+	rows.append(option)
+	return rows.size() >= cap
+
+
+static func thesis_option(category: String, label: String, value: String, detail: String, impact: String = "mixed", source_label: String = "") -> Dictionary:
+	var normalized_category: String = THESIS_VOCABULARY_SCRIPT.normalize_category(category, true, "thesis_option:%s" % label)
+	var normalized_impact: String = THESIS_VOCABULARY_SCRIPT.normalize_impact(impact, true, "thesis_option:%s" % label)
+	return {
+		"category": normalized_category,
+		"category_label": thesis_category_label(normalized_category),
+		"label": label,
+		"value": value,
+		"detail": detail,
+		"impact": normalized_impact,
 		"source_label": source_label
 	}
 
@@ -769,22 +827,7 @@ static func copy_optional_thesis_evidence_fields(target: Dictionary, source: Dic
 
 
 static func thesis_category_label(category: String) -> String:
-	var labels := {
-		"fundamentals": "Fundamentals / Key Stats",
-		"financials": "Financials",
-		"valuation": "Valuation",
-		"price_action": "Price Action",
-		"broker_flow": "Broker Flow",
-		"ownership": "Ownership",
-		"management": "Management",
-		"sector_macro": "Sector / Macro",
-		"news": "News",
-		"twooter": "Twooter",
-		"network_intel": "Network Intel",
-		"corporate_events": "Corporate Events",
-		"risk_invalidation": "Risk / Invalidation"
-	}
-	return str(labels.get(category, category.capitalize()))
+	return THESIS_VOCABULARY_SCRIPT.category_label(category)
 
 
 static func next_thesis_id(company_id: String) -> String:
@@ -823,17 +866,11 @@ static func next_research_evidence_id(tray: Dictionary) -> String:
 
 
 static func normalize_thesis_stance(stance: String) -> String:
-	var normalized: String = stance.to_lower()
-	if normalized in ["bullish", "bearish", "income", "watch"]:
-		return normalized
-	return "bullish"
+	return THESIS_VOCABULARY_SCRIPT.normalize_stance(stance)
 
 
 static func normalize_thesis_horizon(horizon: String) -> String:
-	var normalized: String = horizon.to_lower()
-	if normalized in ["swing", "position", "income", "event"]:
-		return normalized
-	return "swing"
+	return THESIS_VOCABULARY_SCRIPT.normalize_horizon(horizon)
 
 
 static func recent_price_bar_return(price_bars: Array, lookback: int) -> float:
@@ -850,75 +887,75 @@ static func recent_price_bar_return(price_bars: Array, lookback: int) -> float:
 
 
 static func thesis_quality_band_label(score: int) -> String:
-	if score >= 80:
-		return "Excellent"
-	if score >= 65:
-		return "Strong"
-	if score >= 50:
-		return "Average"
-	if score >= 35:
-		return "Weak"
-	return "Fragile"
+	if score >= QUALITY_GROWTH_BAND_TOP_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_label("quality", score, "Excellent")
+	if score >= QUALITY_GROWTH_BAND_STRONG_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_label("quality", score, "Strong")
+	if score >= QUALITY_GROWTH_BAND_AVERAGE_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_label("quality", score, "Average")
+	if score >= QUALITY_GROWTH_BAND_WEAK_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_label("quality", score, "Weak")
+	return THESIS_VOCABULARY_SCRIPT.band_label("quality", score, "Fragile")
 
 
 static func thesis_growth_band_label(score: int) -> String:
-	if score >= 80:
-		return "Accelerating"
-	if score >= 65:
-		return "Healthy"
-	if score >= 50:
-		return "Steady"
-	if score >= 35:
-		return "Uneven"
-	return "Stalling"
+	if score >= QUALITY_GROWTH_BAND_TOP_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_label("growth", score, "Accelerating")
+	if score >= QUALITY_GROWTH_BAND_STRONG_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_label("growth", score, "Healthy")
+	if score >= QUALITY_GROWTH_BAND_AVERAGE_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_label("growth", score, "Steady")
+	if score >= QUALITY_GROWTH_BAND_WEAK_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_label("growth", score, "Uneven")
+	return THESIS_VOCABULARY_SCRIPT.band_label("growth", score, "Stalling")
 
 
 static func thesis_risk_band_label(score: int) -> String:
-	if score >= 80:
-		return "High"
-	if score >= 65:
-		return "Elevated"
-	if score >= 45:
-		return "Moderate"
-	if score >= 25:
-		return "Manageable"
-	return "Low"
+	if score >= RISK_BAND_HIGH_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_label("risk", score, "High")
+	if score >= RISK_BAND_ELEVATED_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_label("risk", score, "Elevated")
+	if score >= RISK_BAND_MODERATE_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_label("risk", score, "Moderate")
+	if score >= RISK_BAND_MANAGEABLE_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_label("risk", score, "Manageable")
+	return THESIS_VOCABULARY_SCRIPT.band_label("risk", score, "Low")
 
 
 static func thesis_quality_band_detail(score: int) -> String:
-	if score >= 80:
-		return "Excellent quality can support conviction, but the entry and valuation still need confirmation."
-	if score >= 65:
-		return "Strong quality gives the thesis fundamental support if valuation is still reasonable."
-	if score >= 50:
-		return "Average quality is workable, but the stock needs help from price action, valuation, or catalysts."
-	if score >= 35:
-		return "Weak quality means the thesis needs clear confirmation before adding size."
-	return "Fragile quality means the thesis needs more than one bullish signal before it deserves conviction."
+	if score >= QUALITY_GROWTH_BAND_TOP_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_detail("quality", score, "Excellent quality can support conviction, but the entry and valuation still need confirmation.")
+	if score >= QUALITY_GROWTH_BAND_STRONG_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_detail("quality", score, "Strong quality gives the thesis fundamental support if valuation is still reasonable.")
+	if score >= QUALITY_GROWTH_BAND_AVERAGE_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_detail("quality", score, "Average quality is workable, but the stock needs help from price action, valuation, or catalysts.")
+	if score >= QUALITY_GROWTH_BAND_WEAK_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_detail("quality", score, "Weak quality means the thesis needs clear confirmation before adding size.")
+	return THESIS_VOCABULARY_SCRIPT.band_detail("quality", score, "Fragile quality means the thesis needs more than one bullish signal before it deserves conviction.")
 
 
 static func thesis_growth_band_detail(score: int) -> String:
-	if score >= 80:
-		return "Accelerating growth can justify a stronger upside case if margins and tape confirm."
-	if score >= 65:
-		return "Healthy growth supports a constructive thesis when valuation is not stretched."
-	if score >= 50:
-		return "Steady growth is useful, but it rarely carries the thesis alone."
-	if score >= 35:
-		return "Uneven growth is not broken, but it needs confirmation from fresh financials or catalysts."
-	return "Stalling growth needs either a valuation gap, turnaround catalyst, or clear tape support."
+	if score >= QUALITY_GROWTH_BAND_TOP_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_detail("growth", score, "Accelerating growth can justify a stronger upside case if margins and tape confirm.")
+	if score >= QUALITY_GROWTH_BAND_STRONG_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_detail("growth", score, "Healthy growth supports a constructive thesis when valuation is not stretched.")
+	if score >= QUALITY_GROWTH_BAND_AVERAGE_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_detail("growth", score, "Steady growth is useful, but it rarely carries the thesis alone.")
+	if score >= QUALITY_GROWTH_BAND_WEAK_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_detail("growth", score, "Uneven growth is not broken, but it needs confirmation from fresh financials or catalysts.")
+	return THESIS_VOCABULARY_SCRIPT.band_detail("growth", score, "Stalling growth needs either a valuation gap, turnaround catalyst, or clear tape support.")
 
 
 static func thesis_risk_band_detail(score: int) -> String:
-	if score >= 80:
-		return "High risk needs tight invalidation and strong evidence before the position can be sized."
-	if score >= 65:
-		return "Elevated risk means the idea can work, but only with clear confirmation and controlled size."
-	if score >= 45:
-		return "Moderate risk demands confirmation, but it does not reject the idea by itself."
-	if score >= 25:
-		return "Manageable risk gives the thesis room to develop if evidence stays consistent."
-	return "Low risk gives the thesis more room, though price and valuation still matter."
+	if score >= RISK_BAND_HIGH_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_detail("risk", score, "High risk needs tight invalidation and strong evidence before the position can be sized.")
+	if score >= RISK_BAND_ELEVATED_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_detail("risk", score, "Elevated risk means the idea can work, but only with clear confirmation and controlled size.")
+	if score >= RISK_BAND_MODERATE_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_detail("risk", score, "Moderate risk demands confirmation, but it does not reject the idea by itself.")
+	if score >= RISK_BAND_MANAGEABLE_MIN:
+		return THESIS_VOCABULARY_SCRIPT.band_detail("risk", score, "Manageable risk gives the thesis room to develop if evidence stays consistent.")
+	return THESIS_VOCABULARY_SCRIPT.band_detail("risk", score, "Low risk gives the thesis more room, though price and valuation still matter.")
 
 
 static func thesis_policy_rate_label(macro: Dictionary) -> String:
@@ -938,6 +975,17 @@ static func thesis_risk_appetite_label(risk_appetite: float) -> String:
 	if risk_appetite <= 0.46:
 		return "Defensive"
 	return "Neutral"
+
+
+static func thesis_sector_macro_detail(base_detail: String, sector_id: String) -> String:
+	var focus: String = thesis_sector_macro_focus(sector_id)
+	if focus.is_empty():
+		return base_detail
+	return "%s Sector lens: %s." % [base_detail, focus]
+
+
+static func thesis_sector_macro_focus(sector_id: String) -> String:
+	return THESIS_VOCABULARY_SCRIPT.sector_macro_focus(sector_id)
 
 
 static func thesis_active_macro_shock_option(gm) -> Dictionary:

@@ -1,12 +1,9 @@
 extends RefCounted
 
-const VALID_INTERPRETATIONS := {
-	"support": true,
-	"risk": true,
-	"contradiction": true,
-	"watch": true,
-	"invalidation": true
-}
+const THESIS_VOCABULARY_SCRIPT = preload("res://systems/ThesisVocabulary.gd")
+const VALID_INTERPRETATIONS := THESIS_VOCABULARY_SCRIPT.VALID_INTERPRETATIONS
+const VALID_IMPACTS := THESIS_VOCABULARY_SCRIPT.VALID_IMPACTS
+const VALID_CATEGORIES := THESIS_VOCABULARY_SCRIPT.VALID_CATEGORIES
 
 const SOURCE_LABELS := {
 	"key_stats": "Key Stats",
@@ -42,45 +39,42 @@ func normalize_capture(payload: Dictionary, context: Dictionary = {}) -> Diction
 			return _normalize_generic_capture(payload, context, source_type)
 
 
-func normalize_interpretation(value: String) -> String:
-	var normalized: String = value.to_lower().strip_edges()
-	if VALID_INTERPRETATIONS.has(normalized):
-		return normalized
-	return "watch"
+func normalize_interpretation(value: String, warn_on_unknown: bool = false, context: String = "") -> String:
+	return THESIS_VOCABULARY_SCRIPT.normalize_interpretation(value, warn_on_unknown, context)
+
+
+func normalize_impact(value: String, warn_on_unknown: bool = false, context: String = "") -> String:
+	return THESIS_VOCABULARY_SCRIPT.normalize_impact(value, warn_on_unknown, context)
+
+
+func normalize_category(value: String, warn_on_unknown: bool = false, context: String = "") -> String:
+	return THESIS_VOCABULARY_SCRIPT.normalize_category(value, warn_on_unknown, context)
 
 
 func interpretation_label(value: String) -> String:
-	match normalize_interpretation(value):
-		"support":
-			return "Supporting Evidence"
-		"risk":
-			return "Risk"
-		"contradiction":
-			return "Contradiction"
-		"invalidation":
-			return "Invalidation"
-		_:
-			return "Watch Item"
+	return THESIS_VOCABULARY_SCRIPT.interpretation_label(value)
 
 
 func impact_for_interpretation(value: String) -> String:
-	match normalize_interpretation(value):
-		"support":
-			return "positive"
-		"risk", "contradiction", "invalidation":
-			return "negative"
-		_:
-			return "mixed"
+	return THESIS_VOCABULARY_SCRIPT.impact_for_interpretation(value)
 
 
 func normalize_attached_evidence(row: Dictionary, interpretation: String = "watch", note: String = "") -> Dictionary:
 	var normalized: Dictionary = row.duplicate(true)
-	var resolved_interpretation: String = normalize_interpretation(str(normalized.get("interpretation", interpretation)))
+	var context: String = str(normalized.get("label", normalized.get("id", "attached_evidence")))
+	var resolved_category: String = normalize_category(str(normalized.get("category", "")), true, context)
+	if not resolved_category.is_empty():
+		normalized["category"] = resolved_category
+	if str(normalized.get("category_label", "")).strip_edges().is_empty() and not resolved_category.is_empty():
+		normalized["category_label"] = _category_label(resolved_category)
+	var resolved_interpretation: String = normalize_interpretation(str(normalized.get("interpretation", interpretation)), true, context)
 	normalized["interpretation"] = resolved_interpretation
 	normalized["interpretation_label"] = interpretation_label(resolved_interpretation)
 	normalized["player_note"] = str(normalized.get("player_note", note)).strip_edges()
 	if str(normalized.get("impact", "")).is_empty():
 		normalized["impact"] = impact_for_interpretation(resolved_interpretation)
+	else:
+		normalized["impact"] = THESIS_VOCABULARY_SCRIPT.validate_impact_for_interpretation(str(normalized.get("impact", "")), resolved_interpretation, context)
 	return normalized
 
 
@@ -89,7 +83,7 @@ func _normalize_key_stats_capture(payload: Dictionary, context: Dictionary) -> D
 	var category: String = str(payload.get("category", _key_stats_category_for_label(label)))
 	return _normalize_generic_capture(payload.merged({
 		"source_type": "key_stats",
-		"source_label": SOURCE_LABELS.get("key_stats"),
+		"source_label": _source_label("key_stats"),
 		"category": category,
 		"category_label": _category_label(category),
 		"detail": str(payload.get("detail", _key_stats_detail_for_label(label)))
@@ -104,7 +98,7 @@ func _normalize_chart_pattern_capture(payload: Dictionary, context: Dictionary) 
 	var detail: String = str(payload.get("feedback_reason", payload.get("detail", ""))).strip_edges()
 	var row: Dictionary = _normalize_generic_capture(payload.merged({
 		"source_type": "chart_pattern",
-		"source_label": SOURCE_LABELS.get("chart_pattern"),
+		"source_label": _source_label("chart_pattern"),
 		"category": "price_action",
 		"category_label": "Price Action",
 		"label": pattern_label,
@@ -143,9 +137,10 @@ func _normalize_generic_capture(payload: Dictionary, context: Dictionary, source
 	var category: String = str(payload.get("category", "")).strip_edges()
 	if category.is_empty():
 		category = _category_for_source_type(source_type)
+	category = normalize_category(category, true, source_type)
 	var label: String = str(payload.get("label", "")).strip_edges()
 	var value: String = str(payload.get("value", "")).strip_edges()
-	var source_label: String = str(payload.get("source_label", SOURCE_LABELS.get(source_type, source_type.capitalize()))).strip_edges()
+	var source_label: String = str(payload.get("source_label", _source_label(source_type))).strip_edges()
 	var row: Dictionary = {
 		"company_id": company_id,
 		"ticker": ticker,
@@ -160,12 +155,12 @@ func _normalize_generic_capture(payload: Dictionary, context: Dictionary, source
 		"source_type": source_type,
 		"source_label": source_label,
 		"source_id": str(payload.get("source_id", "")).strip_edges(),
-		"impact": str(payload.get("impact", "mixed")).strip_edges()
+		"impact": normalize_impact(str(payload.get("impact", THESIS_VOCABULARY_SCRIPT.DEFAULT_IMPACT)), true, source_type)
 	}
 	if str(row.get("category_label", "")).is_empty():
 		row["category_label"] = _category_label(category)
 	if str(row.get("impact", "")).is_empty():
-		row["impact"] = "mixed"
+		row["impact"] = THESIS_VOCABULARY_SCRIPT.DEFAULT_IMPACT
 	return row
 
 
@@ -210,52 +205,29 @@ func _key_stats_detail_for_label(label: String) -> String:
 func _category_for_source_type(source_type: String) -> String:
 	match source_type:
 		"broker_summary", "broker_flow":
-			return "broker_flow"
+			return THESIS_VOCABULARY_SCRIPT.CATEGORY_BROKER_FLOW
 		"news", "news_article":
-			return "news"
+			return THESIS_VOCABULARY_SCRIPT.CATEGORY_NEWS
 		"twooter_post", "twooter_dm":
-			return "twooter"
+			return THESIS_VOCABULARY_SCRIPT.CATEGORY_TWOOTER
 		"network_journal":
-			return "network_intel"
+			return THESIS_VOCABULARY_SCRIPT.CATEGORY_NETWORK_INTEL
 		"corporate_event", "corporate_events":
-			return "corporate_events"
+			return THESIS_VOCABULARY_SCRIPT.CATEGORY_CORPORATE_EVENTS
 		"macro", "macro_indicator", "sector_macro":
-			return "sector_macro"
+			return THESIS_VOCABULARY_SCRIPT.CATEGORY_SECTOR_MACRO
 		"financial_statement":
-			return "financials"
+			return THESIS_VOCABULARY_SCRIPT.CATEGORY_FINANCIALS
 		"company_profile":
-			return "fundamentals"
+			return THESIS_VOCABULARY_SCRIPT.CATEGORY_FUNDAMENTALS
 		"trade_quote":
-			return "price_action"
+			return THESIS_VOCABULARY_SCRIPT.CATEGORY_PRICE_ACTION
 	return ""
 
 
 func _category_label(category: String) -> String:
-	match category:
-		"fundamentals":
-			return "Fundamentals / Key Stats"
-		"financials":
-			return "Financials"
-		"valuation":
-			return "Valuation"
-		"price_action":
-			return "Price Action"
-		"broker_flow":
-			return "Broker Flow"
-		"ownership":
-			return "Ownership"
-		"management":
-			return "Management"
-		"sector_macro":
-			return "Sector / Macro"
-		"news":
-			return "News"
-		"twooter":
-			return "Twooter"
-		"network_intel":
-			return "Network Intel"
-		"corporate_events":
-			return "Corporate Events"
-		"risk_invalidation":
-			return "Risk / Invalidation"
-	return category.capitalize()
+	return THESIS_VOCABULARY_SCRIPT.category_label(category)
+
+
+func _source_label(source_type: String) -> String:
+	return THESIS_VOCABULARY_SCRIPT.source_label(source_type, str(SOURCE_LABELS.get(source_type, source_type.capitalize())))

@@ -14,6 +14,7 @@ const TWOOTER_FEED_DATA_PATH := "res://data/social/twooter_feed_data.json"
 const CONTACT_NETWORK_DATA_PATH := "res://data/network/contact_network_data.json"
 const UPGRADE_CATALOG_PATH := "res://data/upgrades/upgrade_catalog.json"
 const ACADEMY_CATALOG_PATH := "res://data/academy/academy_catalog.json"
+const THESIS_CONTENT_PATH := "res://data/thesis/thesis_content.json"
 
 var company_archetypes = []
 var company_words = {}
@@ -29,6 +30,7 @@ var twooter_feed_data = {}
 var contact_network_data = {}
 var upgrade_catalog = {}
 var academy_catalog = {}
+var thesis_content = {}
 var company_archetype_by_id = {}
 var broker_by_code = {}
 var sector_by_id = {}
@@ -54,6 +56,7 @@ func reload_all() -> void:
 	contact_network_data = _load_dictionary_json(CONTACT_NETWORK_DATA_PATH)
 	upgrade_catalog = _load_dictionary_json(UPGRADE_CATALOG_PATH)
 	academy_catalog = _load_dictionary_json(ACADEMY_CATALOG_PATH)
+	thesis_content = _load_dictionary_json(THESIS_CONTENT_PATH)
 
 	company_archetype_by_id.clear()
 	for company_archetype in company_archetypes:
@@ -147,6 +150,10 @@ func get_upgrade_catalog() -> Dictionary:
 
 func get_academy_catalog() -> Dictionary:
 	return academy_catalog.duplicate(true)
+
+
+func get_thesis_content_catalog() -> Dictionary:
+	return thesis_content.duplicate(true)
 
 
 func get_company_archetype(company_id: String) -> Dictionary:

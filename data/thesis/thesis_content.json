@@ -1,0 +1,296 @@
+{
+  "category_labels": {
+    "fundamentals": "Fundamentals / Key Stats",
+    "key_stats": "Key Stats",
+    "financials": "Financials",
+    "valuation": "Valuation",
+    "price_action": "Price Action",
+    "broker_flow": "Broker Flow",
+    "ownership": "Ownership",
+    "management": "Management",
+    "sector_macro": "Sector / Macro",
+    "news": "News",
+    "twooter": "Twooter",
+    "network_intel": "Network Intel",
+    "corporate_events": "Corporate Events",
+    "risk_invalidation": "Risk / Invalidation"
+  },
+  "interpretation_labels": {
+    "support": "Supporting Evidence",
+    "risk": "Risk",
+    "contradiction": "Contradiction",
+    "watch": "Watch Item",
+    "invalidation": "Invalidation"
+  },
+  "source_labels": {
+    "key_stats": "Key Stats",
+    "chart_pattern": "STOCKBOT Chart",
+    "news_article": "News",
+    "news": "News",
+    "twooter_post": "Twooter",
+    "twooter_dm": "Twooter DM",
+    "network_journal": "Network",
+    "corporate_event": "Corporate Event",
+    "corporate_events": "Corporate Event",
+    "broker_summary": "Broker Summary",
+    "broker_flow": "Broker Summary",
+    "macro": "Macro",
+    "macro_indicator": "Macro",
+    "sector_macro": "Sector / Macro",
+    "company_profile": "Company Profile",
+    "financial_statement": "Financials",
+    "trade_quote": "STOCKBOT Quote"
+  },
+  "report_memo_pillars": [
+    {
+      "id": "anchor",
+      "label": "Anchor",
+      "categories": ["fundamentals", "key_stats", "financials", "valuation", "ownership", "management"],
+      "missing_note": "Capture a business, financial, ownership, or valuation anchor."
+    },
+    {
+      "id": "price",
+      "label": "Price",
+      "categories": ["price_action"],
+      "missing_note": "Capture price action or a chart pattern."
+    },
+    {
+      "id": "tape",
+      "label": "Tape",
+      "categories": ["broker_flow"],
+      "missing_note": "Capture broker flow or tape evidence."
+    },
+    {
+      "id": "catalyst",
+      "label": "Catalyst",
+      "categories": ["sector_macro", "news", "twooter", "network_intel", "corporate_events"],
+      "missing_note": "Capture a catalyst, source read, or market-context item."
+    },
+    {
+      "id": "risk",
+      "label": "Risk",
+      "categories": ["risk_invalidation"],
+      "missing_note": "Attach at least one risk or invalidation item."
+    }
+  ],
+  "ui_evidence_discipline_pillars": [
+    {
+      "id": "anchor",
+      "label": "Anchor",
+      "categories": ["fundamentals", "financials", "valuation", "ownership", "management"],
+      "focus_category": "fundamentals"
+    },
+    {
+      "id": "price",
+      "label": "Price",
+      "categories": ["price_action"],
+      "focus_category": "price_action"
+    },
+    {
+      "id": "tape",
+      "label": "Tape",
+      "categories": ["broker_flow"],
+      "focus_category": "broker_flow"
+    },
+    {
+      "id": "catalyst",
+      "label": "Catalyst",
+      "categories": ["sector_macro", "news", "twooter", "network_intel", "corporate_events"],
+      "focus_category": "sector_macro"
+    },
+    {
+      "id": "risk",
+      "label": "Invalidation",
+      "categories": ["risk_invalidation"],
+      "focus_category": "risk_invalidation"
+    }
+  ],
+  "stance_options": [
+    {"id": "bullish", "label": "Bullish"},
+    {"id": "bearish", "label": "Bearish"},
+    {"id": "income", "label": "Income"},
+    {"id": "watch", "label": "Watch"}
+  ],
+  "horizon_options": [
+    {"id": "swing", "label": "Swing"},
+    {"id": "position", "label": "Position"},
+    {"id": "income", "label": "Income"},
+    {"id": "event", "label": "Event"}
+  ],
+  "evidence_tabs": [
+    {"id": "support", "label": "Support"},
+    {"id": "risk", "label": "Risk"},
+    {"id": "contradiction", "label": "Contradict"},
+    {"id": "watch", "label": "Watch"},
+    {"id": "invalidation", "label": "Invalidation"}
+  ],
+  "memo_states": {
+    "well_supported": "Well Supported Memo",
+    "developing": "Developing Memo",
+    "thin": "Thin Memo",
+    "evidence_needed": "Evidence Needed"
+  },
+  "grade_copy": {
+    "A": {
+      "title": "Strong",
+      "subcopy": "Well-supported thesis"
+    },
+    "B": {
+      "title": "Good",
+      "subcopy": "Good support, some gaps"
+    },
+    "C": {
+      "title": "Developing",
+      "subcopy": "Needs cleaner evidence"
+    },
+    "D": {
+      "title": "Thin",
+      "subcopy": "Thin evidence base"
+    },
+    "default": {
+      "title": "Weak",
+      "subcopy": "Weak or conflicted thesis"
+    }
+  },
+  "report_tone_by_memo_state": {
+    "Well Supported Memo": "positive",
+    "Evidence Needed": "negative"
+  },
+  "report_sections": {
+    "evidence_summary": "Evidence Summary",
+    "supporting_evidence": "Supporting Evidence",
+    "risks_and_contradictions": "Risks And Contradictions",
+    "invalidation": "Invalidation",
+    "next_research_questions": "Next Research Questions",
+    "learning_note": "Learning Note"
+  },
+  "report_empty_bullets": {
+    "supporting_evidence": "No supporting evidence has been classified yet.",
+    "risks_and_contradictions": "No risk or contradiction has been attached yet.",
+    "invalidation": "No explicit invalidation item has been attached yet.",
+    "next_research": "Wait for new information, then capture fresh evidence before changing the memo."
+  },
+  "report_learning_notes": {
+    "complete": "The memo has a balanced base. Keep updating it only when you capture new evidence from the actual app surfaces.",
+    "incomplete_prefix": "This memo is useful, but incomplete. The next step is:"
+  },
+  "band_copy": {
+    "quality": [
+      {
+        "min": 80,
+        "label": "Excellent",
+        "detail": "Excellent quality can support conviction, but the entry and valuation still need confirmation."
+      },
+      {
+        "min": 65,
+        "label": "Strong",
+        "detail": "Strong quality gives the thesis fundamental support if valuation is still reasonable."
+      },
+      {
+        "min": 50,
+        "label": "Average",
+        "detail": "Average quality is workable, but the stock needs help from price action, valuation, or catalysts."
+      },
+      {
+        "min": 35,
+        "label": "Weak",
+        "detail": "Weak quality means the thesis needs clear confirmation before adding size."
+      },
+      {
+        "min": -999999,
+        "label": "Fragile",
+        "detail": "Fragile quality means the thesis needs more than one bullish signal before it deserves conviction."
+      }
+    ],
+    "growth": [
+      {
+        "min": 80,
+        "label": "Accelerating",
+        "detail": "Accelerating growth can justify a stronger upside case if margins and tape confirm."
+      },
+      {
+        "min": 65,
+        "label": "Healthy",
+        "detail": "Healthy growth supports a constructive thesis when valuation is not stretched."
+      },
+      {
+        "min": 50,
+        "label": "Steady",
+        "detail": "Steady growth is useful, but it rarely carries the thesis alone."
+      },
+      {
+        "min": 35,
+        "label": "Uneven",
+        "detail": "Uneven growth is not broken, but it needs confirmation from fresh financials or catalysts."
+      },
+      {
+        "min": -999999,
+        "label": "Stalling",
+        "detail": "Stalling growth needs either a valuation gap, turnaround catalyst, or clear tape support."
+      }
+    ],
+    "risk": [
+      {
+        "min": 80,
+        "label": "High",
+        "detail": "High risk needs tight invalidation and strong evidence before the position can be sized."
+      },
+      {
+        "min": 65,
+        "label": "Elevated",
+        "detail": "Elevated risk means the idea can work, but only with clear confirmation and controlled size."
+      },
+      {
+        "min": 45,
+        "label": "Moderate",
+        "detail": "Moderate risk demands confirmation, but it does not reject the idea by itself."
+      },
+      {
+        "min": 25,
+        "label": "Manageable",
+        "detail": "Manageable risk gives the thesis room to develop if evidence stays consistent."
+      },
+      {
+        "min": -999999,
+        "label": "Low",
+        "detail": "Low risk gives the thesis more room, though price and valuation still matter."
+      }
+    ]
+  },
+  "sector_macro_focus": {
+    "consumer": "watch domestic purchasing power, distribution strength, and margin pass-through",
+    "noncyclical": "watch staple demand, payout durability, and cost pass-through",
+    "industrial": "watch the capex cycle, order books, and operating leverage",
+    "energy": "watch commodity prices, lifting costs, and capex discipline",
+    "tech": "watch user retention, monetization, and margin durability",
+    "infra": "watch utilization, contract tenor, funding cost, and regulated returns",
+    "infrastructure": "watch utilization, contract tenor, funding cost, and regulated returns",
+    "transport": "watch route utilization, fuel sensitivity, and freight or passenger demand",
+    "logistics": "watch route utilization, fuel sensitivity, and freight or passenger demand",
+    "health": "watch regulated demand, product mix, and compliance risk",
+    "healthcare": "watch regulated demand, product mix, and compliance risk",
+    "finance": "watch credit quality, funding cost, and deposit resilience",
+    "financial": "watch credit quality, funding cost, and deposit resilience",
+    "basicindustry": "watch plant utilization, input spreads, and downstream demand",
+    "materials": "watch plant utilization, input spreads, and downstream demand",
+    "basic_materials": "watch plant utilization, input spreads, and downstream demand",
+    "property": "watch presales, occupancy, project delivery, and rate sensitivity",
+    "realestate": "watch presales, occupancy, project delivery, and rate sensitivity",
+    "real_estate": "watch presales, occupancy, project delivery, and rate sensitivity",
+    "default": "watch sector demand, margin sensitivity, and funding conditions"
+  },
+  "next_research_focus": {
+    "stance": {
+      "bullish": "For a bullish stance, confirm that upside is supported by fresh buyers, not only a good story.",
+      "bearish": "For a bearish stance, look for evidence that weakness is company-specific and not just broad market fear.",
+      "income": "For an income stance, prioritize dividend coverage, payout durability, and cash-flow resilience.",
+      "watch": "For a watch stance, define the trigger that would move the idea from observation to action."
+    },
+    "horizon": {
+      "swing": "For a swing horizon, focus on the next few sessions: price level, tape confirmation, and a near-term catalyst.",
+      "position": "For a position horizon, check sizing against macro volatility, balance-sheet risk, and whether the thesis can survive several bad weeks.",
+      "income": "For an income horizon, recheck payout coverage, cash generation, and whether rate moves change the yield tradeoff.",
+      "event": "For an event horizon, pin the catalyst date, expected disclosure, and the stop if the market prices it early."
+    }
+  }
+}

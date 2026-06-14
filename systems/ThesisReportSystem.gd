@@ -1,11 +1,39 @@
 extends RefCounted
 
-const CORE_MEMO_PILLARS := [
-	{"id": "anchor", "label": "Anchor", "categories": ["fundamentals", "key_stats", "financials", "valuation"], "missing_note": "Capture a business, financial, or valuation anchor."},
-	{"id": "price", "label": "Price", "categories": ["price_action"], "missing_note": "Capture price action or a chart pattern."},
-	{"id": "catalyst", "label": "Catalyst", "categories": ["news", "twooter", "network_intel", "corporate_events", "sector_macro"], "missing_note": "Capture a catalyst, source read, or market-context item."},
-	{"id": "risk", "label": "Risk", "categories": ["risk_invalidation"], "missing_note": "Attach at least one risk or invalidation item."}
-]
+const THESIS_VOCABULARY_SCRIPT = preload("res://systems/ThesisVocabulary.gd")
+
+const SCORE_MIN := 0
+const SCORE_MAX := 100
+const SCORE_BASE := 18
+const SCORE_EVIDENCE_CAP := 6
+const SCORE_EVIDENCE_WEIGHT := 3
+const SCORE_CATEGORY_CAP := 5
+const SCORE_CATEGORY_WEIGHT := 4
+const SCORE_SUPPORT_CAP := 4
+const SCORE_SUPPORT_WEIGHT := 5
+const SCORE_RISK_CAP := 2
+const SCORE_RISK_WEIGHT := 6
+const SCORE_CONTRADICTION_CAP := 4
+const SCORE_CONTRADICTION_PENALTY := 10
+const SCORE_MISSING_PILLAR_PENALTY := 7
+
+const MEMO_STATE_WELL_SUPPORTED_MIN := 76
+const MEMO_STATE_DEVELOPING_MIN := 58
+const MEMO_STATE_THIN_MIN := 38
+
+const GRADE_A_MIN := 82
+const GRADE_B_MIN := 68
+const GRADE_C_MIN := 52
+
+const MEMO_STATE_WELL_SUPPORTED := "Well Supported Memo"
+const MEMO_STATE_DEVELOPING := "Developing Memo"
+const MEMO_STATE_THIN := "Thin Memo"
+const MEMO_STATE_EVIDENCE_NEEDED := "Evidence Needed"
+
+const GRADE_A := "A"
+const GRADE_B := "B"
+const GRADE_C := "C"
+const GRADE_D := "D"
 
 
 func build_report(thesis: Dictionary, context: Dictionary) -> Dictionary:
@@ -30,7 +58,7 @@ func build_report(thesis: Dictionary, context: Dictionary) -> Dictionary:
 		"rating": _memo_state(score_data),
 		"memo_state": _memo_state(score_data),
 		"reasoning_score": int(score_data.get("score", 0)),
-		"reasoning_grade": _grade_for_score(int(score_data.get("score", 0))),
+		"reasoning_grade": _grade_for_score(score_data),
 		"missing_notes": score_data.get("missing_notes", []).duplicate(),
 		"discipline_rows": score_data.get("discipline_rows", []).duplicate(true),
 		"target": {"defensible": false, "label": "", "low": 0.0, "high": 0.0, "midpoint": 0.0, "implied_upside_pct": 0.0},
@@ -113,11 +141,17 @@ func _score_memo(evidence: Array) -> Dictionary:
 		missing_notes.append("Explain the contradiction instead of hiding it.")
 	if risk_count <= 0:
 		missing_notes.append("Add a risk or invalidation note before treating this as high conviction.")
-	var score: int = 20 + min(evidence.size(), 10) * 5 + min(categories.size(), 6) * 5 + min(support_count, 4) * 4 + min(risk_count, 3) * 5
-	score -= min(contradiction_count, 4) * 4
-	score -= _missing_pillar_count(discipline_rows) * 5
+	var score: int = (
+		SCORE_BASE +
+		min(evidence.size(), SCORE_EVIDENCE_CAP) * SCORE_EVIDENCE_WEIGHT +
+		min(categories.size(), SCORE_CATEGORY_CAP) * SCORE_CATEGORY_WEIGHT +
+		min(support_count, SCORE_SUPPORT_CAP) * SCORE_SUPPORT_WEIGHT +
+		min(risk_count, SCORE_RISK_CAP) * SCORE_RISK_WEIGHT
+	)
+	score -= min(contradiction_count, SCORE_CONTRADICTION_CAP) * SCORE_CONTRADICTION_PENALTY
+	score -= _missing_pillar_count(discipline_rows) * SCORE_MISSING_PILLAR_PENALTY
 	return {
-		"score": clamp(score, 0, 100),
+		"score": clamp(score, SCORE_MIN, SCORE_MAX),
 		"categories": categories,
 		"discipline_rows": discipline_rows,
 		"missing_notes": missing_notes,
@@ -130,12 +164,12 @@ func _score_memo(evidence: Array) -> Dictionary:
 
 func _build_sections(thesis: Dictionary, company: Dictionary, evidence: Array, score_data: Dictionary) -> Array:
 	return [
-		{"title": "Evidence Summary", "bullets": _summary_bullets(thesis, company, evidence, score_data), "body": ""},
-		{"title": "Supporting Evidence", "bullets": _evidence_bullets(evidence, ["support"], "No supporting evidence has been classified yet."), "body": ""},
-		{"title": "Risks And Contradictions", "bullets": _evidence_bullets(evidence, ["risk", "contradiction"], "No risk or contradiction has been attached yet."), "body": ""},
-		{"title": "Invalidation", "bullets": _evidence_bullets(evidence, ["invalidation"], "No explicit invalidation item has been attached yet."), "body": ""},
-		{"title": "Next Research Questions", "bullets": _next_question_bullets(score_data), "body": ""},
-		{"title": "Learning Note", "body": _learning_note(score_data)}
+		{"title": THESIS_VOCABULARY_SCRIPT.report_section_title("evidence_summary", "Evidence Summary"), "bullets": _summary_bullets(thesis, company, evidence, score_data), "body": ""},
+		{"title": THESIS_VOCABULARY_SCRIPT.report_section_title("supporting_evidence", "Supporting Evidence"), "bullets": _evidence_bullets(evidence, ["support"], THESIS_VOCABULARY_SCRIPT.report_empty_bullet("supporting_evidence", "No supporting evidence has been classified yet.")), "body": ""},
+		{"title": THESIS_VOCABULARY_SCRIPT.report_section_title("risks_and_contradictions", "Risks And Contradictions"), "bullets": _evidence_bullets(evidence, ["risk", "contradiction"], THESIS_VOCABULARY_SCRIPT.report_empty_bullet("risks_and_contradictions", "No risk or contradiction has been attached yet.")), "body": ""},
+		{"title": THESIS_VOCABULARY_SCRIPT.report_section_title("invalidation", "Invalidation"), "bullets": _evidence_bullets(evidence, ["invalidation"], THESIS_VOCABULARY_SCRIPT.report_empty_bullet("invalidation", "No explicit invalidation item has been attached yet.")), "body": ""},
+		{"title": THESIS_VOCABULARY_SCRIPT.report_section_title("next_research_questions", "Next Research Questions"), "bullets": _next_question_bullets(score_data), "body": ""},
+		{"title": THESIS_VOCABULARY_SCRIPT.report_section_title("learning_note", "Learning Note"), "body": _learning_note(score_data)}
 	]
 
 
@@ -178,15 +212,18 @@ func _next_question_bullets(score_data: Dictionary) -> Array:
 	for note_value in score_data.get("missing_notes", []).slice(0, 5):
 		bullets.append(_make_claim_bullet("NEXT CHECK", str(note_value)))
 	if bullets.is_empty():
-		bullets.append(_make_claim_bullet("NEXT CHECK", "Wait for new information, then capture fresh evidence before changing the memo."))
+		bullets.append(_make_claim_bullet("NEXT CHECK", THESIS_VOCABULARY_SCRIPT.report_empty_bullet("next_research", "Wait for new information, then capture fresh evidence before changing the memo.")))
 	return bullets
 
 
 func _learning_note(score_data: Dictionary) -> String:
 	var missing_notes: Array = score_data.get("missing_notes", [])
 	if missing_notes.is_empty():
-		return "The memo has a balanced base. Keep updating it only when you capture new evidence from the actual app surfaces."
-	return "This memo is useful, but incomplete. The next step is:\n- %s" % "\n- ".join(missing_notes.slice(0, 5))
+		return THESIS_VOCABULARY_SCRIPT.report_learning_note("complete", "The memo has a balanced base. Keep updating it only when you capture new evidence from the actual app surfaces.")
+	return "%s\n- %s" % [
+		THESIS_VOCABULARY_SCRIPT.report_learning_note("incomplete_prefix", "This memo is useful, but incomplete. The next step is:"),
+		"\n- ".join(missing_notes.slice(0, 5))
+	]
 
 
 func _evidence_sentence(row: Dictionary) -> String:
@@ -237,7 +274,7 @@ func _claim_from_label(label: String) -> String:
 
 func _discipline_rows(categories: Dictionary) -> Array:
 	var rows: Array = []
-	for pillar_value in CORE_MEMO_PILLARS:
+	for pillar_value in THESIS_VOCABULARY_SCRIPT.report_memo_pillars():
 		var pillar: Dictionary = pillar_value
 		var complete: bool = _has_any_category(categories, pillar.get("categories", []))
 		rows.append({
@@ -266,23 +303,67 @@ func _missing_pillar_count(discipline_rows: Array) -> int:
 
 func _memo_state(score_data: Dictionary) -> String:
 	var score: int = int(score_data.get("score", 0))
-	if score >= 76:
-		return "Well Supported Memo"
-	if score >= 58:
-		return "Developing Memo"
-	if score >= 38:
-		return "Thin Memo"
-	return "Evidence Needed"
+	var contradiction_count: int = int(score_data.get("contradiction_count", 0))
+	if contradiction_count >= 2:
+		if score >= MEMO_STATE_THIN_MIN:
+			return THESIS_VOCABULARY_SCRIPT.memo_state_label("thin", MEMO_STATE_THIN)
+		return THESIS_VOCABULARY_SCRIPT.memo_state_label("evidence_needed", MEMO_STATE_EVIDENCE_NEEDED)
+	if score >= MEMO_STATE_WELL_SUPPORTED_MIN and _all_pillars_complete(score_data) and contradiction_count == 0:
+		return THESIS_VOCABULARY_SCRIPT.memo_state_label("well_supported", MEMO_STATE_WELL_SUPPORTED)
+	if score >= MEMO_STATE_DEVELOPING_MIN:
+		return THESIS_VOCABULARY_SCRIPT.memo_state_label("developing", MEMO_STATE_DEVELOPING)
+	if score >= MEMO_STATE_THIN_MIN:
+		return THESIS_VOCABULARY_SCRIPT.memo_state_label("thin", MEMO_STATE_THIN)
+	return THESIS_VOCABULARY_SCRIPT.memo_state_label("evidence_needed", MEMO_STATE_EVIDENCE_NEEDED)
 
 
-func _grade_for_score(score: int) -> String:
-	if score >= 82:
-		return "A"
-	if score >= 68:
-		return "B"
-	if score >= 52:
-		return "C"
-	return "D"
+func _all_pillars_complete(score_data: Dictionary) -> bool:
+	var discipline_rows: Array = score_data.get("discipline_rows", [])
+	if discipline_rows.is_empty():
+		return false
+	for row_value in discipline_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			return false
+		var row: Dictionary = row_value
+		if not bool(row.get("complete", false)):
+			return false
+	return true
+
+
+func _grade_for_score(score_data: Dictionary) -> String:
+	var score: int = int(score_data.get("score", 0))
+	var grade: String = GRADE_D
+	if score >= GRADE_A_MIN:
+		grade = GRADE_A
+	elif score >= GRADE_B_MIN:
+		grade = GRADE_B
+	elif score >= GRADE_C_MIN:
+		grade = GRADE_C
+	var contradiction_count: int = int(score_data.get("contradiction_count", 0))
+	if contradiction_count >= 2:
+		return _cap_grade(grade, GRADE_C)
+	if contradiction_count > 0 or not _all_pillars_complete(score_data):
+		return _cap_grade(grade, GRADE_B)
+	return grade
+
+
+func _cap_grade(grade: String, max_grade: String) -> String:
+	var grade_rank: int = _grade_rank(grade)
+	var max_rank: int = _grade_rank(max_grade)
+	if grade_rank < max_rank:
+		return max_grade
+	return grade
+
+
+func _grade_rank(grade: String) -> int:
+	match grade:
+		GRADE_A:
+			return 0
+		GRADE_B:
+			return 1
+		GRADE_C:
+			return 2
+	return 3
 
 
 func _format_trade_date(date_info: Dictionary) -> String:

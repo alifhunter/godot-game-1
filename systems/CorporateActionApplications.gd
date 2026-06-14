@@ -816,58 +816,11 @@ static func apply_ceo_change_application(state, application: Dictionary) -> void
 	var runtime: Dictionary = state.companies.get(company_id, {}).duplicate(true)
 	var profile: Dictionary = runtime.get("company_profile", {}).duplicate(true)
 	var management_roster: Array = profile.get("management_roster", definition.get("management_roster", [])).duplicate(true)
-	var previous_ceo_name: String = str(application.get("current_ceo_name", ""))
-	var replaced_ceo: bool = false
-	for management_index in range(management_roster.size()):
-		if typeof(management_roster[management_index]) != TYPE_DICTIONARY:
-			continue
-		var management: Dictionary = management_roster[management_index].duplicate(true)
-		if str(management.get("affiliation_role", "")) != "ceo":
-			continue
-		if previous_ceo_name.is_empty():
-			previous_ceo_name = str(management.get("display_name", ""))
-		management["previous_display_name"] = str(management.get("display_name", ""))
-		management["display_name"] = new_ceo_name
-		management["contact_id"] = "insider_%s_ceo_%d" % [company_id, int(application.get("day_index", state.day_index))]
-		management["id"] = str(management.get("contact_id", ""))
-		management["role"] = "CEO"
-		management["role_label"] = "CEO"
-		management["tone"] = "constructive"
-		management["intro"] = "%s serves as CEO at %s after a shareholder-approved leadership reset focused on %s." % [
-			new_ceo_name,
-			str(definition.get("name", company_id.to_upper())),
-			str(application.get("mandate", "execution reset"))
-		]
-		management_roster[management_index] = management
-		replaced_ceo = true
-		break
-	if not replaced_ceo:
-		management_roster.insert(0, {
-			"contact_id": "insider_%s_ceo_%d" % [company_id, int(application.get("day_index", state.day_index))],
-			"id": "insider_%s_ceo_%d" % [company_id, int(application.get("day_index", state.day_index))],
-			"display_name": new_ceo_name,
-			"affiliation_type": "insider",
-			"affiliation_role": "ceo",
-			"company_id": company_id,
-			"affiliated_company_id": company_id,
-			"sector_id": str(definition.get("sector_id", "")),
-			"role": "CEO",
-			"role_label": "CEO",
-			"recognition_required": 50,
-			"base_relationship": 18,
-			"reliability": 0.68,
-			"tone": "constructive",
-			"intro": "%s serves as CEO at %s after a shareholder-approved leadership reset." % [
-				new_ceo_name,
-				str(definition.get("name", company_id.to_upper()))
-			]
-		})
-	profile["management_roster"] = management_roster
+	var previous_ceo_name: String = _active_ceo_name(management_roster, str(application.get("current_ceo_name", "")))
 	var price_reaction_pct: float = clamp(float(application.get("price_reaction_pct", 0.0)), -0.5, 0.5)
 	var new_price: float = state._apply_company_price_factor(company_id, 1.0 + price_reaction_pct, false)
 	runtime = state.companies.get(company_id, {}).duplicate(true)
 	profile = runtime.get("company_profile", {}).duplicate(true)
-	profile["management_roster"] = management_roster
 	var traits: Dictionary = profile.get("generation_traits", {}).duplicate(true)
 	traits["execution_consistency"] = clamp(float(traits.get("execution_consistency", 0.5)) + float(application.get("execution_consistency_delta", 0.0)), 0.0, 1.0)
 	traits["story_heat"] = clamp(float(traits.get("story_heat", 0.5)) + absf(price_reaction_pct) * 0.8 + 0.04, 0.0, 1.0)
@@ -941,49 +894,109 @@ static func _management_roster_with_ceo_result(
 	var day_index: int = int(ceo_result.get("day_index", 0))
 	var next_contact_id: String = "insider_%s_ceo_%d" % [company_id, day_index]
 	var next_roster: Array = []
-	var replaced_ceo: bool = false
+	var has_new_ceo: bool = false
+	var new_ceo_base_row: Dictionary = {}
 	for management_value in management_roster:
 		if typeof(management_value) != TYPE_DICTIONARY:
 			continue
 		var management: Dictionary = management_value.duplicate(true)
-		if str(management.get("affiliation_role", "")) == "ceo":
-			if not management.has("previous_display_name"):
-				management["previous_display_name"] = str(management.get("display_name", ""))
-			management["display_name"] = new_ceo_name
-			management["contact_id"] = next_contact_id
-			management["id"] = next_contact_id
-			management["role"] = "CEO"
-			management["role_label"] = "CEO"
-			management["tone"] = "constructive"
-			management["intro"] = "%s serves as CEO at %s after a shareholder-approved leadership reset focused on %s." % [
-				new_ceo_name,
-				str(definition.get("name", company_id.to_upper())),
-				str(ceo_result.get("mandate", "execution reset"))
-			]
-			replaced_ceo = true
+		var management_id: String = str(management.get("id", management.get("contact_id", "")))
+		if management_id == next_contact_id:
+			next_roster.append(_incoming_ceo_roster_row(management, ceo_result, definition, company_id, next_contact_id))
+			has_new_ceo = true
+			continue
+		if str(management.get("affiliation_role", "")) == "ceo" and str(management.get("affiliation_type", "insider")) != "free_agent":
+			if new_ceo_base_row.is_empty():
+				new_ceo_base_row = management.duplicate(true)
+			next_roster.append(_departed_ceo_roster_row(management, ceo_result, definition, company_id))
+			continue
 		next_roster.append(management)
-	if not replaced_ceo:
-		next_roster.insert(0, {
-			"contact_id": next_contact_id,
-			"id": next_contact_id,
-			"display_name": new_ceo_name,
-			"affiliation_type": "insider",
-			"affiliation_role": "ceo",
-			"company_id": company_id,
-			"affiliated_company_id": company_id,
-			"sector_id": str(definition.get("sector_id", "")),
-			"role": "CEO",
-			"role_label": "CEO",
-			"recognition_required": 50,
-			"base_relationship": 18,
-			"reliability": 0.68,
-			"tone": "constructive",
-			"intro": "%s serves as CEO at %s after a shareholder-approved leadership reset." % [
-				new_ceo_name,
-				str(definition.get("name", company_id.to_upper()))
-			]
-		})
+	if not has_new_ceo:
+		next_roster.insert(0, _incoming_ceo_roster_row(new_ceo_base_row, ceo_result, definition, company_id, next_contact_id))
 	return next_roster
+
+
+static func _incoming_ceo_roster_row(
+	base_row: Dictionary,
+	ceo_result: Dictionary,
+	definition: Dictionary,
+	company_id: String,
+	contact_id: String
+) -> Dictionary:
+	var management: Dictionary = base_row.duplicate(true)
+	var new_ceo_name: String = str(ceo_result.get("new_ceo_name", ""))
+	management.erase("previous_display_name")
+	management.erase("former_affiliation_role")
+	management.erase("former_company_id")
+	management.erase("departed")
+	management.erase("departed_day_index")
+	management["contact_id"] = contact_id
+	management["id"] = contact_id
+	management["display_name"] = new_ceo_name
+	management["affiliation_type"] = "insider"
+	management["affiliation_role"] = "ceo"
+	management["company_id"] = company_id
+	management["affiliated_company_id"] = company_id
+	management["sector_id"] = str(definition.get("sector_id", management.get("sector_id", "")))
+	management["role"] = "CEO"
+	management["role_label"] = "CEO"
+	management["recognition_required"] = int(management.get("recognition_required", 50))
+	management["base_relationship"] = int(management.get("base_relationship", 18))
+	management["reliability"] = float(management.get("reliability", 0.68))
+	management["tone"] = "constructive"
+	management["intro"] = "%s serves as CEO at %s after a shareholder-approved leadership reset focused on %s." % [
+		new_ceo_name,
+		str(definition.get("name", company_id.to_upper())),
+		str(ceo_result.get("mandate", "execution reset"))
+	]
+	return management
+
+
+static func _departed_ceo_roster_row(
+	management: Dictionary,
+	ceo_result: Dictionary,
+	definition: Dictionary,
+	company_id: String
+) -> Dictionary:
+	var departed: Dictionary = management.duplicate(true)
+	var contact_id: String = str(departed.get("id", departed.get("contact_id", "")))
+	if contact_id.is_empty():
+		contact_id = "insider_%s_ceo" % company_id
+	var previous_name: String = str(ceo_result.get("previous_ceo_name", ""))
+	if previous_name.is_empty():
+		previous_name = str(departed.get("display_name", ""))
+	departed["contact_id"] = contact_id
+	departed["id"] = contact_id
+	departed["display_name"] = previous_name
+	departed["previous_display_name"] = previous_name
+	departed["affiliation_type"] = "free_agent"
+	departed["affiliation_role"] = "former_ceo"
+	departed["former_affiliation_role"] = "ceo"
+	departed["company_id"] = company_id
+	departed["affiliated_company_id"] = company_id
+	departed["former_company_id"] = company_id
+	departed["sector_id"] = str(definition.get("sector_id", departed.get("sector_id", "")))
+	departed["role"] = "Former CEO"
+	departed["role_label"] = "Former CEO"
+	departed["departed"] = true
+	departed["departed_day_index"] = int(ceo_result.get("day_index", 0))
+	departed["intro"] = "%s previously served as CEO at %s before the shareholder-approved leadership reset. They are now a free-agent market contact with residual visibility into the issuer." % [
+		previous_name,
+		str(definition.get("name", company_id.to_upper()))
+	]
+	return departed
+
+
+static func _active_ceo_name(management_roster: Array, fallback_name: String = "") -> String:
+	if not fallback_name.is_empty():
+		return fallback_name
+	for management_value in management_roster:
+		if typeof(management_value) != TYPE_DICTIONARY:
+			continue
+		var management: Dictionary = management_value
+		if str(management.get("affiliation_role", "")) == "ceo" and str(management.get("affiliation_type", "insider")) != "free_agent":
+			return str(management.get("display_name", ""))
+	return ""
 
 
 static func apply_stock_split_application(state, application: Dictionary) -> void:

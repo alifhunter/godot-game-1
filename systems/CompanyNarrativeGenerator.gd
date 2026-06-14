@@ -1,6 +1,7 @@
 extends RefCounted
 
 const STABLE_RNG = preload("res://systems/StableRng.gd")
+const SEEDED_POOL = preload("res://systems/SeededPool.gd")
 const UINT32_RANGE := 4294967296.0
 const MULBERRY32_INCREMENT := 0x6D2B79F5
 const PROFILE_SCALE_VERSION := 1
@@ -368,7 +369,7 @@ func _join_sentences(sentences: Array) -> String:
 func _pick_string(pool: Array, rng: Dictionary) -> String:
 	if pool.is_empty():
 		return ""
-	return str(pool[_next_int(rng, 0, pool.size() - 1)])
+	return str(SEEDED_POOL.pick_value_at_index(pool, _next_int(rng, 0, pool.size() - 1), ""))
 
 
 func _pick_weighted(options: Array, weights: Array, rng: Dictionary) -> Variant:

@@ -1055,6 +1055,8 @@ func _discover_company_insiders(
 	var roster: Array = _management_roster_for_company(run_state, company_id)
 	for insider_value in roster:
 		var insider: Dictionary = insider_value
+		if str(insider.get("affiliation_type", "insider")) != "insider":
+			continue
 		var insider_id: String = str(insider.get("id", insider.get("contact_id", "")))
 		if insider_id.is_empty() or bool(contacts.get(insider_id, {}).get("met", false)):
 			continue
@@ -2366,7 +2368,8 @@ func _management_roster_for_company(run_state, company_id: String) -> Array:
 			contact_id = "insider_%s_%s" % [company_id, str(row.get("affiliation_role", "management"))]
 		row["id"] = contact_id
 		row["contact_id"] = contact_id
-		row["affiliation_type"] = "insider"
+		var affiliation_type: String = str(row.get("affiliation_type", "insider"))
+		row["affiliation_type"] = "insider" if affiliation_type.is_empty() else affiliation_type
 		row["affiliated_company_id"] = str(row.get("affiliated_company_id", row.get("company_id", company_id)))
 		row["company_id"] = str(row.get("company_id", company_id))
 		rows.append(row)
@@ -2379,6 +2382,8 @@ func _best_referral_insider(run_state, floater_id: String, company_id: String, a
 	var candidates: Array = []
 	for insider_value in _management_roster_for_company(run_state, company_id):
 		var insider: Dictionary = insider_value
+		if str(insider.get("affiliation_type", "insider")) != "insider":
+			continue
 		var insider_id: String = str(insider.get("id", insider.get("contact_id", "")))
 		if insider_id.is_empty():
 			continue

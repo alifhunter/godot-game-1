@@ -1,5 +1,6 @@
 extends MarginContainer
 
+const THESIS_VOCABULARY_SCRIPT = preload("res://systems/ThesisVocabulary.gd")
 const THESIS_FONT_SIZE := 14
 const COLOR_BG := Color(0.988235, 0.960784, 0.854902, 1)
 const COLOR_PANEL := Color(1.0, 0.976471, 0.929412, 1)
@@ -25,32 +26,6 @@ const REPORT_PREPARE_LINES := [
 	"Reviewing selected evidence...",
 	"Writing the thesis...",
 	"Formatting the thesis view..."
-]
-const EVIDENCE_DISCIPLINE_PILLARS := [
-	{"id": "anchor", "label": "Anchor", "categories": ["fundamentals", "financials", "valuation", "ownership", "management"], "focus_category": "fundamentals"},
-	{"id": "price", "label": "Price", "categories": ["price_action"], "focus_category": "price_action"},
-	{"id": "tape", "label": "Tape", "categories": ["broker_flow"], "focus_category": "broker_flow"},
-	{"id": "catalyst", "label": "Catalyst", "categories": ["sector_macro", "news", "twooter", "network_intel", "corporate_events"], "focus_category": "sector_macro"},
-	{"id": "risk", "label": "Invalidation", "categories": ["risk_invalidation"], "focus_category": "risk_invalidation"}
-]
-const STANCE_OPTIONS := [
-	{"id": "bullish", "label": "Bullish"},
-	{"id": "bearish", "label": "Bearish"},
-	{"id": "income", "label": "Income"},
-	{"id": "watch", "label": "Watch"}
-]
-const HORIZON_OPTIONS := [
-	{"id": "swing", "label": "Swing"},
-	{"id": "position", "label": "Position"},
-	{"id": "income", "label": "Income"},
-	{"id": "event", "label": "Event"}
-]
-const EVIDENCE_TABS := [
-	{"id": "support", "label": "Support"},
-	{"id": "risk", "label": "Risk"},
-	{"id": "contradiction", "label": "Contradict"},
-	{"id": "watch", "label": "Watch"},
-	{"id": "invalidation", "label": "Invalidation"}
 ]
 
 class EvidenceDragButton:
@@ -333,21 +308,21 @@ func _build_ui() -> void:
 	stance_option = OptionButton.new()
 	stance_option.name = "ThesisStanceOption"
 	stance_option.visible = false
-	_add_option_items(stance_option, STANCE_OPTIONS)
+	_add_option_items(stance_option, _stance_options())
 	meta_row.add_child(stance_option)
 	var stance_row := HBoxContainer.new()
 	stance_row.name = "ThesisStanceButtonRow"
 	stance_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stance_row.add_theme_constant_override("separation", 6)
 	meta_row.add_child(stance_row)
-	for stance_value in STANCE_OPTIONS:
+	for stance_value in _stance_options():
 		var stance: Dictionary = stance_value
 		var stance_button: Button = _make_stance_button(str(stance.get("id", "")), str(stance.get("label", "")))
 		stance_row.add_child(stance_button)
 		stance_buttons[str(stance.get("id", ""))] = stance_button
 	horizon_option = OptionButton.new()
 	horizon_option.name = "ThesisHorizonOption"
-	_add_option_items(horizon_option, HORIZON_OPTIONS)
+	_add_option_items(horizon_option, _horizon_options())
 	meta_row.add_child(horizon_option)
 
 	var create_row := HBoxContainer.new()
@@ -1180,7 +1155,7 @@ func _refresh_sidebar_pips(thesis: Dictionary) -> void:
 	if sidebar_pip_row == null:
 		return
 	_clear_children(sidebar_pip_row)
-	var rows: Array = _evidence_discipline_rows(thesis) if not thesis.is_empty() else EVIDENCE_DISCIPLINE_PILLARS
+	var rows: Array = _evidence_discipline_rows(thesis) if not thesis.is_empty() else _evidence_discipline_pillars()
 	for row_value in rows:
 		if typeof(row_value) != TYPE_DICTIONARY:
 			continue
@@ -1696,29 +1671,29 @@ func _investment_summary_for_report(report: Dictionary) -> String:
 func _report_grade_title(grade: String) -> String:
 	match grade:
 		"A":
-			return "Strong"
+			return THESIS_VOCABULARY_SCRIPT.grade_title(grade, "Strong")
 		"B":
-			return "Good"
+			return THESIS_VOCABULARY_SCRIPT.grade_title(grade, "Good")
 		"C":
-			return "Developing"
+			return THESIS_VOCABULARY_SCRIPT.grade_title(grade, "Developing")
 		"D":
-			return "Thin"
+			return THESIS_VOCABULARY_SCRIPT.grade_title(grade, "Thin")
 		_:
-			return "Weak"
+			return THESIS_VOCABULARY_SCRIPT.grade_title(grade, "Weak")
 
 
 func _report_grade_subcopy(grade: String) -> String:
 	match grade:
 		"A":
-			return "Well-supported thesis"
+			return THESIS_VOCABULARY_SCRIPT.grade_subcopy(grade, "Well-supported thesis")
 		"B":
-			return "Good support, some gaps"
+			return THESIS_VOCABULARY_SCRIPT.grade_subcopy(grade, "Good support, some gaps")
 		"C":
-			return "Needs cleaner evidence"
+			return THESIS_VOCABULARY_SCRIPT.grade_subcopy(grade, "Needs cleaner evidence")
 		"D":
-			return "Thin evidence base"
+			return THESIS_VOCABULARY_SCRIPT.grade_subcopy(grade, "Thin evidence base")
 		_:
-			return "Weak or conflicted thesis"
+			return THESIS_VOCABULARY_SCRIPT.grade_subcopy(grade, "Weak or conflicted thesis")
 
 
 func _report_rating_color(rating: String, implied: float) -> Color:
@@ -1743,13 +1718,10 @@ func _report_tone_for_move(value: float) -> String:
 
 
 func _report_tone_for_rating(rating: String, implied: float) -> String:
-	match rating:
-		"Well Supported Memo":
-			return "positive"
-		"Evidence Needed":
-			return "negative"
-		_:
-			return _report_tone_for_move(implied)
+	var catalog_tone: String = THESIS_VOCABULARY_SCRIPT.report_tone_for_memo_state(rating)
+	if not catalog_tone.is_empty():
+		return catalog_tone
+	return _report_tone_for_move(implied)
 
 
 func _report_tone_color(tone: String) -> Color:
@@ -1826,7 +1798,7 @@ func _format_report_text(thesis: Dictionary) -> String:
 	var flow_paragraph: String = _thesis_flow_summary(evidence_rows, stance)
 	if not flow_paragraph.is_empty():
 		paragraphs.append(flow_paragraph)
-	var next_paragraph: String = _thesis_next_research_summary(evidence_rows, report, stance)
+	var next_paragraph: String = _thesis_next_research_summary(evidence_rows, report, stance, horizon)
 	if not next_paragraph.is_empty():
 		paragraphs.append(next_paragraph)
 	var escaped: Array = []
@@ -2061,22 +2033,33 @@ func _thesis_tape_summary(evidence_rows: Array, stance: String) -> String:
 	return "%s." % _sentence_case(_join_sentence_parts(sentences))
 
 
-func _thesis_next_research_summary(evidence_rows: Array, report: Dictionary, stance: String) -> String:
+func _thesis_next_research_summary(evidence_rows: Array, report: Dictionary, stance: String, horizon: String) -> String:
 	var catalyst_rows: Array = _thesis_rows_matching(evidence_rows, [], ["news", "twooter", "network_intel", "corporate_events", "sector_macro"], [])
 	var flow_rows: Array = _thesis_rows_matching(evidence_rows, ["broker_summary", "broker_flow"], ["broker_flow"], [])
 	var has_chart_risk: bool = not _thesis_rows_matching(evidence_rows, ["chart_pattern"], [], ["risk", "contradiction", "invalidation"]).is_empty()
 	if catalyst_rows.is_empty() and stance == "bullish" and has_chart_risk:
-		return "Next, find a catalyst or source read that explains why buyers would return despite the weak chart. A good follow-up would be a News item, a Twooter source, or a Network contact that gives a concrete reason for demand to improve."
+		return _with_thesis_next_research_focus("Next, find a catalyst or source read that explains why buyers would return despite the weak chart. A good follow-up would be a News item, a Twooter source, or a Network contact that gives a concrete reason for demand to improve.", stance, horizon)
 	if catalyst_rows.is_empty() and flow_rows.is_empty():
-		return "Next, capture a catalyst, money-flow item, or market-context item. The thesis has facts, but it still needs a reason why the market should care now and whether money is confirming it."
+		return _with_thesis_next_research_focus("Next, capture a catalyst, money-flow item, or market-context item. The thesis has facts, but it still needs a reason why the market should care now and whether money is confirming it.", stance, horizon)
 	if catalyst_rows.is_empty():
-		return "Next, capture a catalyst, source read, or macro context item. Money flow can confirm attention, but it does not explain the story by itself."
+		return _with_thesis_next_research_focus("Next, capture a catalyst, source read, or macro context item. Money flow can confirm attention, but it does not explain the story by itself.", stance, horizon)
 	if flow_rows.is_empty():
-		return "Next, capture a money-flow item. The thesis has context, but it still needs a money-pressure check before conviction rises."
+		return _with_thesis_next_research_focus("Next, capture a money-flow item. The thesis has context, but it still needs a money-pressure check before conviction rises.", stance, horizon)
 	var missing_notes: Array = report.get("missing_notes", [])
 	if not missing_notes.is_empty():
-		return "Next, tighten the thesis by asking one specific question: %s" % str(missing_notes[0]).strip_edges()
-	return "Next, wait for new evidence rather than rewriting the thesis from price alone. If the story changes, capture the new fact and regenerate the thesis."
+		return _with_thesis_next_research_focus("Next, tighten the thesis by asking one specific question: %s" % str(missing_notes[0]).strip_edges(), stance, horizon)
+	return _with_thesis_next_research_focus("Next, wait for new evidence rather than rewriting the thesis from price alone. If the story changes, capture the new fact and regenerate the thesis.", stance, horizon)
+
+
+func _with_thesis_next_research_focus(base_text: String, stance: String, horizon: String) -> String:
+	var focus: String = _thesis_next_research_focus(stance, horizon)
+	if focus.is_empty():
+		return base_text
+	return "%s %s" % [base_text, focus]
+
+
+func _thesis_next_research_focus(stance: String, horizon: String) -> String:
+	return " ".join(THESIS_VOCABULARY_SCRIPT.next_research_focus_sentences(stance, horizon))
 
 
 func _thesis_rows_matching(evidence_rows: Array, source_types: Array, categories: Array, interpretations: Array) -> Array:
@@ -2816,10 +2799,26 @@ func _select_option_by_id(option: OptionButton, option_id: String) -> void:
 			return
 
 
+func _stance_options() -> Array:
+	return THESIS_VOCABULARY_SCRIPT.stance_options()
+
+
+func _horizon_options() -> Array:
+	return THESIS_VOCABULARY_SCRIPT.horizon_options()
+
+
+func _evidence_tabs() -> Array:
+	return THESIS_VOCABULARY_SCRIPT.evidence_tabs()
+
+
+func _evidence_discipline_pillars() -> Array:
+	return THESIS_VOCABULARY_SCRIPT.ui_evidence_discipline_pillars()
+
+
 func _evidence_discipline_rows(thesis: Dictionary) -> Array:
 	var categories: Dictionary = _thesis_category_lookup(thesis)
 	var rows: Array = []
-	for pillar_value in EVIDENCE_DISCIPLINE_PILLARS:
+	for pillar_value in _evidence_discipline_pillars():
 		var pillar: Dictionary = pillar_value
 		rows.append({
 			"id": str(pillar.get("id", "")),
@@ -3090,7 +3089,7 @@ func _build_attached_evidence_card(row: Dictionary) -> PanelContainer:
 	vbox.add_child(detail_label)
 	var interpretation_option := OptionButton.new()
 	interpretation_option.name = "ThesisEvidenceInterpretation%sOption" % _node_token(evidence_id)
-	_add_option_items(interpretation_option, EVIDENCE_TABS)
+	_add_option_items(interpretation_option, _evidence_tabs())
 	_select_option_by_id(interpretation_option, str(row.get("interpretation", "watch")))
 	interpretation_option.item_selected.connect(_on_attached_evidence_interpretation_selected.bind(evidence_id, interpretation_option))
 	_style_option_button(interpretation_option)
@@ -3241,37 +3240,21 @@ func _stance_color(stance_id: String) -> Color:
 
 
 func _impact_color(impact: String) -> Color:
-	match impact.to_lower():
-		"positive":
+	match THESIS_VOCABULARY_SCRIPT.normalize_impact(impact):
+		THESIS_VOCABULARY_SCRIPT.IMPACT_POSITIVE:
 			return COLOR_POSITIVE
-		"negative":
+		THESIS_VOCABULARY_SCRIPT.IMPACT_NEGATIVE:
 			return COLOR_NEGATIVE
 		_:
 			return COLOR_WARNING
 
 
 func _interpretation_label(interpretation: String) -> String:
-	match interpretation:
-		"support":
-			return "Supporting Evidence"
-		"risk":
-			return "Risk"
-		"contradiction":
-			return "Contradiction"
-		"invalidation":
-			return "Invalidation"
-		_:
-			return "Watch Item"
+	return THESIS_VOCABULARY_SCRIPT.interpretation_label(interpretation)
 
 
 func _impact_for_interpretation(interpretation: String) -> String:
-	match interpretation:
-		"support":
-			return "positive"
-		"risk", "contradiction", "invalidation":
-			return "negative"
-		_:
-			return "mixed"
+	return THESIS_VOCABULARY_SCRIPT.impact_for_interpretation(interpretation)
 
 
 func _style_segment_button(button: Button, accent: Color, selected: bool) -> void:

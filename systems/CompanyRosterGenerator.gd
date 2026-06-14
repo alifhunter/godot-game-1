@@ -1,6 +1,7 @@
 extends RefCounted
 
 const STABLE_RNG = preload("res://systems/StableRng.gd")
+const SEEDED_POOL = preload("res://systems/SeededPool.gd")
 const ALPHABET := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const FALLBACK_WORDS := [
 	"Global",
@@ -646,8 +647,10 @@ func _pick_template(archetype_templates: Array, sector_id: String, run_seed: int
 
 	var pool: Array = matching_templates if not matching_templates.is_empty() else archetype_templates
 	var rng: RandomNumberGenerator = _rng_for(run_seed, "template_%s_%d" % [sector_id, company_index])
-	var template_index: int = rng.randi_range(0, pool.size() - 1)
-	return pool[template_index].duplicate(true)
+	var template_value: Variant = SEEDED_POOL.pick_value_with_random_number_generator(pool, rng, {})
+	if typeof(template_value) != TYPE_DICTIONARY:
+		return {}
+	return template_value.duplicate(true)
 
 
 func _build_unique_name_words(
@@ -686,25 +689,7 @@ func _build_unique_name_words(
 
 
 func _pick_word(words: Array, preferred_words: Array, rng: RandomNumberGenerator, excluded_words: Array) -> String:
-	var preferred_pool: Array = []
-	for preferred_word_value in preferred_words:
-		var preferred_word: String = str(preferred_word_value)
-		if words.has(preferred_word) and not excluded_words.has(preferred_word):
-			preferred_pool.append(preferred_word)
-
-	if not preferred_pool.is_empty():
-		return str(preferred_pool[rng.randi_range(0, preferred_pool.size() - 1)])
-
-	var general_pool: Array = []
-	for word_value in words:
-		var word: String = str(word_value)
-		if not excluded_words.has(word):
-			general_pool.append(word)
-
-	if general_pool.is_empty():
-		return ""
-
-	return str(general_pool[rng.randi_range(0, general_pool.size() - 1)])
+	return SEEDED_POOL.pick_string_with_random_number_generator(words, preferred_words, excluded_words, rng)
 
 
 func _compact_words(name_words: Array) -> Array:

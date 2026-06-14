@@ -3,6 +3,8 @@ extends RefCounted
 const HISTORY_START_YEAR := 2010
 const HISTORY_END_YEAR := 2019
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
+const COMPANY_CHART_PROFILE_BUILDER = preload("res://systems/CompanyChartProfileBuilder.gd")
+const COMPANY_FINANCIALS_BUILDER = preload("res://systems/CompanyFinancialsBuilder.gd")
 const COMPANY_NARRATIVE_GENERATOR = preload("res://systems/CompanyNarrativeGenerator.gd")
 const COMPANY_ROADMAP_SYSTEM = preload("res://systems/CompanyRoadmapSystem.gd")
 const STABLE_RNG = preload("res://systems/StableRng.gd")
@@ -17,6 +19,7 @@ const DEFAULT_SECTOR_PROFILE := {
 }
 const CHART_SMA_PERIODS := [3, 5, 10, 20, 60, 100, 200]
 const CHART_INTENTS := ["investing", "swing_trading", "short_term_trading", "speculative"]
+const CHART_ARCHETYPES := ["range_bound", "gorengan", "funda", "organic", "distressed", "cyclical", "accumulation", "distribution"]
 const CHART_PATTERN_TIMEFRAMES := ["5y", "1y", "6m", "3m", "1m"]
 const CHART_GAP_STYLES := ["none", "news_gap", "breakout_gap", "exhaustion_gap", "rug_gap", "mixed"]
 const CHART_GAP_BIASES := ["up", "down", "mixed"]
@@ -60,6 +63,145 @@ const GORENGAN_CHART_PATTERNS := [
 	"rug_pull_volume",
 	"messy_range"
 ]
+const GENERATION_REQUIRED_ANCHOR_KEYS := [
+	"base_price",
+	"quality",
+	"growth",
+	"risk",
+	"market_cap",
+	"free_float_pct",
+	"avg_daily_value",
+	"net_profit_margin",
+	"debt_to_equity"
+]
+const GENERATION_POSITIVE_ANCHOR_KEYS := [
+	"base_price",
+	"market_cap",
+	"avg_daily_value"
+]
+const GENERATION_SCORE_ANCHOR_KEYS := [
+	"quality",
+	"growth",
+	"risk"
+]
+const GENERATION_CAPITAL_STRUCTURE_STYLES := [
+	"balanced",
+	"wide_float",
+	"institutional_premium",
+	"owner_controlled"
+]
+const CHART_GORENGAN_STORY_HEAT_MIN := 0.66
+const CHART_GORENGAN_FLOAT_TIGHTNESS_MIN := 0.54
+const CHART_GORENGAN_LIQUIDITY_MAX := 0.58
+const CHART_QUALITY_ARCHETYPE_MIN := 0.62
+const CHART_GROWTH_ARCHETYPE_MIN := 0.58
+const CHART_EXECUTION_ARCHETYPE_MIN := 0.54
+const CHART_DISTRESSED_QUALITY_MAX := 0.34
+const CHART_DISTRESSED_CYCLICALITY_MIN := 0.68
+const CHART_DISTRESSED_EXECUTION_MAX := 0.42
+const CHART_CYCLICAL_ARCHETYPE_MIN := 0.66
+const CHART_ACCUMULATION_FLOAT_TIGHTNESS_MIN := 0.58
+const CHART_ACCUMULATION_STORY_HEAT_MIN := 0.44
+const CHART_DISTRIBUTION_RANDOM_CHANCE := 0.28
+const CHART_ORGANIC_RANDOM_CHANCE := 0.54
+const CHART_TAG_GORENGAN_CHANCE := 0.58
+const CHART_TAG_FUNDA_CHANCE := 0.62
+const CHART_TAG_CYCLICAL_CHANCE := 0.54
+const CHART_BULLISH_BIAS_CHANCE := 0.72
+const CHART_BEARISH_BIAS_CHANCE := 0.76
+const CHART_GORENGAN_SMA_IGNORED_CHANCE := 0.64
+const CHART_SUPPORTING_PATTERN_CHANCE := 0.58
+const FINANCIAL_MARKET_CAP_FALLBACK_MIN := 800000000000.0
+const FINANCIAL_MARKET_CAP_FALLBACK_MAX := 4200000000000.0
+const FINANCIAL_PERCENT_SCALE := 100.0
+const FINANCIAL_TARGET_MARGIN_DEFAULT := 7.5
+const FINANCIAL_TARGET_MARGIN_MIN := 0.01
+const FINANCIAL_TARGET_MARGIN_MAX := 0.22
+const FINANCIAL_PRICE_TO_SALES_BASE := 0.55
+const FINANCIAL_PRICE_TO_SALES_GROWTH_WEIGHT := 0.95
+const FINANCIAL_PRICE_TO_SALES_MARGIN_WEIGHT := 0.52
+const FINANCIAL_PRICE_TO_SALES_STORY_WEIGHT := 0.68
+const FINANCIAL_PRICE_TO_SALES_CYCLICALITY_WEIGHT := 0.18
+const FINANCIAL_PRICE_TO_SALES_MIN := 0.40
+const FINANCIAL_PRICE_TO_SALES_MAX := 3.20
+const FINANCIAL_MIN_REVENUE_MARKET_CAP_RATIO := 0.12
+const FINANCIAL_MIN_REVENUE_FLOOR := 30000000000.0
+const FINANCIAL_MIN_REVENUE_CEILING := 120000000000.0
+const FINANCIAL_EXPECTED_GROWTH_BASE := 0.035
+const FINANCIAL_EXPECTED_GROWTH_ENGINE_WEIGHT := 0.11
+const FINANCIAL_EXPECTED_GROWTH_EXECUTION_WEIGHT := 0.020
+const FINANCIAL_EXPECTED_GROWTH_SCALE_WEIGHT := 0.018
+const FINANCIAL_EXPECTED_GROWTH_CYCLICALITY_WEIGHT := 0.015
+const FINANCIAL_EXPECTED_GROWTH_MIN := 0.02
+const FINANCIAL_EXPECTED_GROWTH_MAX := 0.18
+const FINANCIAL_MARGIN_START_GROWTH_WEIGHT := 0.010
+const FINANCIAL_MARGIN_START_CAPITAL_INTENSITY_WEIGHT := 0.012
+const FINANCIAL_MARGIN_START_MIN := 0.01
+const FINANCIAL_MARGIN_START_MAX := 0.18
+const FINANCIAL_EQUITY_REVENUE_MULTIPLIER_MIN := 0.14
+const FINANCIAL_EQUITY_REVENUE_MULTIPLIER_MAX := 0.34
+const FINANCIAL_EQUITY_FLOOR := 50000000000.0
+const FINANCIAL_REVENUE_GROWTH_BASE := 0.020
+const FINANCIAL_REVENUE_GROWTH_ENGINE_WEIGHT := 0.12
+const FINANCIAL_REVENUE_GROWTH_EXECUTION_WEIGHT := 0.020
+const FINANCIAL_REVENUE_GROWTH_SCALE_WEIGHT := 0.020
+const FINANCIAL_REVENUE_GROWTH_DEBT_THRESHOLD := 1.1
+const FINANCIAL_REVENUE_GROWTH_DEBT_WEIGHT := 0.030
+const FINANCIAL_REVENUE_GROWTH_CYCLE_MIN := 0.03
+const FINANCIAL_REVENUE_GROWTH_CYCLE_MAX := 0.08
+const FINANCIAL_REVENUE_GROWTH_EXECUTION_SHOCK_WEIGHT := 0.018
+const FINANCIAL_REVENUE_GROWTH_MIN := -0.18
+const FINANCIAL_REVENUE_GROWTH_MAX := 0.34
+const FINANCIAL_MARGIN_DRIFT_TARGET_WEIGHT := 0.26
+const FINANCIAL_MARGIN_DRIFT_SECTOR_CYCLE_WEIGHT := 0.024
+const FINANCIAL_MARGIN_DRIFT_EXECUTION_SHOCK_WEIGHT := 0.008
+const FINANCIAL_MARGIN_DRIFT_STRENGTH_WEIGHT := 0.014
+const FINANCIAL_MARGIN_DRIFT_CAPITAL_INTENSITY_WEIGHT := 0.006
+const FINANCIAL_MARGIN_MIN := 0.005
+const FINANCIAL_MARGIN_MAX := 0.24
+const FINANCIAL_PAYOUT_BASE := 0.12
+const FINANCIAL_PAYOUT_SCALE_WEIGHT := 0.10
+const FINANCIAL_PAYOUT_GROWTH_BASE := 0.18
+const FINANCIAL_PAYOUT_GROWTH_WEIGHT := 0.18
+const FINANCIAL_PAYOUT_MARGIN_THRESHOLD := 0.12
+const FINANCIAL_PAYOUT_MARGIN_WEIGHT := 0.25
+const FINANCIAL_PAYOUT_MIN := 0.08
+const FINANCIAL_PAYOUT_MAX := 0.45
+const FINANCIAL_RETAINED_EQUITY_FLOOR_RATIO := 0.05
+const FINANCIAL_DELEVER_CAPITAL_INTENSITY_WEIGHT := 0.22
+const FINANCIAL_DELEVER_CYCLICALITY_WEIGHT := 0.12
+const FINANCIAL_DELEVER_BALANCE_SHEET_WEIGHT := 0.34
+const FINANCIAL_DELEVER_EXECUTION_WEIGHT := 0.08
+const FINANCIAL_DELEVER_MIN := 0.05
+const FINANCIAL_DELEVER_MAX := 1.8
+const FINANCIAL_DELEVER_BLEND_WEIGHT := 0.28
+const FINANCIAL_PE_BASE := 7.0
+const FINANCIAL_PE_GROWTH_WEIGHT := 8.0
+const FINANCIAL_PE_MARGIN_WEIGHT := 4.0
+const FINANCIAL_PE_STORY_WEIGHT := 6.0
+const FINANCIAL_PE_EXECUTION_WEIGHT := 3.0
+const FINANCIAL_PE_CYCLICALITY_WEIGHT := 2.0
+const FINANCIAL_PE_DEBT_THRESHOLD := 1.0
+const FINANCIAL_PE_DEBT_WEIGHT := 4.0
+const FINANCIAL_PE_VALUATION_SHOCK_WEIGHT := 2.4
+const FINANCIAL_PE_MIN := 5.5
+const FINANCIAL_PE_MAX := 28.0
+const FINANCIAL_SALES_FLOOR_BASE := 0.42
+const FINANCIAL_SALES_FLOOR_GROWTH_WEIGHT := 0.90
+const FINANCIAL_SALES_FLOOR_MARGIN_WEIGHT := 0.46
+const FINANCIAL_SALES_FLOOR_STORY_WEIGHT := 0.60
+const FINANCIAL_SALES_FLOOR_CYCLICALITY_WEIGHT := 0.18
+const FINANCIAL_SALES_FLOOR_VALUATION_SHOCK_WEIGHT := 0.18
+const FINANCIAL_SALES_FLOOR_MIN := 0.35
+const FINANCIAL_SALES_FLOOR_MAX := 3.20
+const FINANCIAL_FREE_FLOAT_BLEND_WEIGHT := 0.18
+const FINANCIAL_TURNOVER_BASE := 0.0008
+const FINANCIAL_TURNOVER_LIQUIDITY_WEIGHT := 0.0032
+const FINANCIAL_TURNOVER_STORY_WEIGHT := 0.0018
+const FINANCIAL_TURNOVER_FREE_FLOAT_WEIGHT := 0.0016
+const FINANCIAL_TURNOVER_REVENUE_CHANGE_WEIGHT := 0.0024
+const FINANCIAL_TURNOVER_MIN := 0.0006
+const FINANCIAL_TURNOVER_MAX := 0.0100
 
 var company_narrative_generator = COMPANY_NARRATIVE_GENERATOR.new()
 var company_roadmap_system = COMPANY_ROADMAP_SYSTEM.new()
@@ -193,9 +335,129 @@ func generate_company_profile(template: Dictionary, sector_definition: Dictionar
 	return hydrate_company_profile_detail(core_profile, template, sector_definition, run_seed)
 
 
+func _validate_generation_inputs(template: Dictionary, sector_definition: Dictionary, hard_fail: bool) -> Dictionary:
+	var company_id: String = str(template.get("id", "company"))
+	var issues: Array[String] = []
+	var sector_id: String = str(sector_definition.get("id", template.get("sector_id", ""))).strip_edges()
+	var normalized_sector_id: String = str(SECTOR_ALIASES.get(sector_id, sector_id))
+	if sector_id.is_empty():
+		issues.append("sector_id is empty")
+	elif not SECTOR_PROFILES.has(normalized_sector_id):
+		issues.append("sector_id '%s' is unknown" % sector_id)
+
+	var anchors_value = template.get("anchors", {})
+	if typeof(anchors_value) != TYPE_DICTIONARY:
+		issues.append("anchors must be a dictionary")
+	else:
+		var anchors: Dictionary = anchors_value
+		if anchors.is_empty():
+			issues.append("anchors are empty")
+		else:
+			_validate_generation_anchor_set(issues, anchors)
+
+	_validate_generation_chart_profile(issues, template.get("chart_profile", {}), "chart_profile")
+	var traits_value = template.get("generation_traits", {})
+	if typeof(traits_value) == TYPE_DICTIONARY:
+		_validate_generation_chart_profile(
+			issues,
+			(traits_value as Dictionary).get("chart_profile", {}),
+			"generation_traits.chart_profile"
+		)
+
+	for issue in issues:
+		push_warning("Company generation input warning [%s]: %s" % [company_id, issue])
+	if hard_fail and not issues.is_empty():
+		assert(false, "Company generation input validation failed for %s: %s" % [company_id, "; ".join(issues)])
+	return {
+		"valid": issues.is_empty(),
+		"issues": issues
+	}
+
+
+func _validate_generation_anchor_set(issues: Array[String], anchors: Dictionary) -> void:
+	for anchor_key_value in GENERATION_REQUIRED_ANCHOR_KEYS:
+		var anchor_key: String = str(anchor_key_value)
+		if not anchors.has(anchor_key):
+			issues.append("anchors.%s is missing" % anchor_key)
+
+	for anchor_key_value in GENERATION_POSITIVE_ANCHOR_KEYS:
+		var anchor_key: String = str(anchor_key_value)
+		if anchors.has(anchor_key) and float(anchors.get(anchor_key, 0.0)) <= 0.0:
+			issues.append("anchors.%s must be > 0" % anchor_key)
+
+	for anchor_key_value in GENERATION_SCORE_ANCHOR_KEYS:
+		var anchor_key: String = str(anchor_key_value)
+		if anchors.has(anchor_key):
+			var score: float = float(anchors.get(anchor_key, 0.0))
+			if score < 0.0 or score > 100.0:
+				issues.append("anchors.%s must be between 0 and 100" % anchor_key)
+
+	if anchors.has("free_float_pct"):
+		var free_float_pct: float = float(anchors.get("free_float_pct", 0.0))
+		if free_float_pct <= 0.0 or free_float_pct >= 100.0:
+			issues.append("anchors.free_float_pct must be between 0 and 100")
+	if anchors.has("net_profit_margin") and float(anchors.get("net_profit_margin", 0.0)) <= -50.0:
+		issues.append("anchors.net_profit_margin is implausibly low")
+	if anchors.has("debt_to_equity") and float(anchors.get("debt_to_equity", 0.0)) < 0.0:
+		issues.append("anchors.debt_to_equity must be >= 0")
+	if anchors.has("scale_tier_rank"):
+		var scale_tier_rank: int = int(anchors.get("scale_tier_rank", -1))
+		if scale_tier_rank < 0 or scale_tier_rank > 4:
+			issues.append("anchors.scale_tier_rank must be between 0 and 4")
+	if anchors.has("scale_market_cap_floor") and float(anchors.get("scale_market_cap_floor", 0.0)) <= 0.0:
+		issues.append("anchors.scale_market_cap_floor must be > 0 when present")
+	if anchors.has("scale_market_cap_ceiling") and float(anchors.get("scale_market_cap_ceiling", 0.0)) <= 0.0:
+		issues.append("anchors.scale_market_cap_ceiling must be > 0 when present")
+	if anchors.has("scale_market_cap_floor") and anchors.has("scale_market_cap_ceiling"):
+		var scale_floor: float = float(anchors.get("scale_market_cap_floor", 0.0))
+		var scale_ceiling: float = float(anchors.get("scale_market_cap_ceiling", 0.0))
+		if scale_ceiling < scale_floor:
+			issues.append("anchors.scale_market_cap_ceiling must be >= scale_market_cap_floor")
+	if anchors.has("target_price_floor") and float(anchors.get("target_price_floor", 0.0)) <= 0.0:
+		issues.append("anchors.target_price_floor must be > 0 when present")
+	if anchors.has("target_price_ceiling") and float(anchors.get("target_price_ceiling", 0.0)) <= 0.0:
+		issues.append("anchors.target_price_ceiling must be > 0 when present")
+	if anchors.has("target_price_floor") and anchors.has("target_price_ceiling"):
+		var target_floor: float = float(anchors.get("target_price_floor", 0.0))
+		var target_ceiling: float = float(anchors.get("target_price_ceiling", 0.0))
+		if target_ceiling < target_floor:
+			issues.append("anchors.target_price_ceiling must be >= target_price_floor")
+	if anchors.has("capital_structure_style"):
+		var capital_structure_style: String = str(anchors.get("capital_structure_style", ""))
+		if not GENERATION_CAPITAL_STRUCTURE_STYLES.has(capital_structure_style):
+			issues.append("anchors.capital_structure_style '%s' is unknown" % capital_structure_style)
+
+
+func _validate_generation_chart_profile(issues: Array[String], profile_value, source_label: String) -> void:
+	if typeof(profile_value) != TYPE_DICTIONARY:
+		if profile_value != null:
+			issues.append("%s must be a dictionary when present" % source_label)
+		return
+	var profile: Dictionary = profile_value
+	if profile.is_empty():
+		return
+	if profile.has("archetype"):
+		var archetype: String = str(profile.get("archetype", ""))
+		if not CHART_ARCHETYPES.has(archetype):
+			issues.append("%s.archetype '%s' is unknown" % [source_label, archetype])
+	if profile.has("chart_intent"):
+		var chart_intent: String = str(profile.get("chart_intent", ""))
+		if not CHART_INTENTS.has(chart_intent):
+			issues.append("%s.chart_intent '%s' is unknown" % [source_label, chart_intent])
+	if profile.has("cycle_template"):
+		var cycle_template: String = str(profile.get("cycle_template", ""))
+		if not CHART_CYCLE_TEMPLATES.has(cycle_template):
+			issues.append("%s.cycle_template '%s' is unknown" % [source_label, cycle_template])
+	if profile.has("fib_profile_id"):
+		var fib_profile_id: String = str(profile.get("fib_profile_id", ""))
+		if not fib_profile_id.is_empty() and not CHART_FIB_PROFILES.has(fib_profile_id):
+			issues.append("%s.fib_profile_id '%s' is unknown" % [source_label, fib_profile_id])
+
+
 func generate_company_profile_core(template: Dictionary, sector_definition: Dictionary, run_seed: int) -> Dictionary:
 	var company_id: String = str(template.get("id", "company"))
 	var sector_id: String = str(sector_definition.get("id", template.get("sector_id", "")))
+	_validate_generation_inputs(template, sector_definition, OS.is_debug_build())
 	var sector_profile: Dictionary = _sector_profile(sector_id)
 	var traits: Dictionary = _build_traits(template, sector_profile, run_seed, company_id)
 	var financial_history: Array = _build_financial_history(
@@ -646,65 +908,75 @@ func _build_chart_profile(
 	run_seed: int,
 	company_id: String
 ) -> Dictionary:
-	var rng: RandomNumberGenerator = STABLE_RNG.rng([run_seed, "chart_profile", company_id])
-	var narrative_tags: Array = template.get("narrative_tags", [])
-	var story_heat: float = clamp(float(traits.get("story_heat", 0.5)), 0.0, 1.0)
-	var float_tightness: float = clamp(float(traits.get("float_tightness", 0.5)), 0.0, 1.0)
-	var liquidity_profile: float = clamp(float(traits.get("liquidity_profile", 0.5)), 0.0, 1.0)
-	var quality_core: float = clamp(float(traits.get("balance_sheet_strength", 0.5)), 0.0, 1.0)
-	var growth_engine: float = clamp(float(traits.get("growth_engine", 0.5)), 0.0, 1.0)
-	var cyclicality: float = clamp(float(traits.get("cyclicality", sector_profile.get("cyclicality", 0.5))), 0.0, 1.0)
-	var execution_consistency: float = clamp(float(traits.get("execution_consistency", 0.5)), 0.0, 1.0)
+	return COMPANY_CHART_PROFILE_BUILDER.build_profile(self, template, sector_profile, traits, run_seed, company_id)
 
+
+func _chart_archetype_for(
+	narrative_tags: Array,
+	story_heat: float,
+	float_tightness: float,
+	liquidity_profile: float,
+	quality_core: float,
+	growth_engine: float,
+	cyclicality: float,
+	execution_consistency: float,
+	rng: RandomNumberGenerator
+) -> String:
 	var archetype: String = "range_bound"
-	if story_heat >= 0.66 and float_tightness >= 0.54 and liquidity_profile <= 0.58:
+	if story_heat >= CHART_GORENGAN_STORY_HEAT_MIN and float_tightness >= CHART_GORENGAN_FLOAT_TIGHTNESS_MIN and liquidity_profile <= CHART_GORENGAN_LIQUIDITY_MAX:
 		archetype = "gorengan"
-	elif quality_core >= 0.62 and growth_engine >= 0.58 and execution_consistency >= 0.54:
+	elif quality_core >= CHART_QUALITY_ARCHETYPE_MIN and growth_engine >= CHART_GROWTH_ARCHETYPE_MIN and execution_consistency >= CHART_EXECUTION_ARCHETYPE_MIN:
 		archetype = "funda" if quality_core >= growth_engine else "organic"
-	elif quality_core <= 0.34 or (cyclicality >= 0.68 and execution_consistency <= 0.42):
+	elif quality_core <= CHART_DISTRESSED_QUALITY_MAX or (cyclicality >= CHART_DISTRESSED_CYCLICALITY_MIN and execution_consistency <= CHART_DISTRESSED_EXECUTION_MAX):
 		archetype = "distressed"
-	elif cyclicality >= 0.66:
+	elif cyclicality >= CHART_CYCLICAL_ARCHETYPE_MIN:
 		archetype = "cyclical"
-	elif float_tightness >= 0.58 and story_heat >= 0.44:
+	elif float_tightness >= CHART_ACCUMULATION_FLOAT_TIGHTNESS_MIN and story_heat >= CHART_ACCUMULATION_STORY_HEAT_MIN:
 		archetype = "accumulation"
-	elif rng.randf() < 0.28:
+	elif rng.randf() < CHART_DISTRIBUTION_RANDOM_CHANCE:
 		archetype = "distribution"
-	elif rng.randf() < 0.54:
+	elif rng.randf() < CHART_ORGANIC_RANDOM_CHANCE:
 		archetype = "organic"
 
 	if "retail_favorite" in narrative_tags or "narrative_hot" in narrative_tags:
-		if rng.randf() < 0.58:
+		if rng.randf() < CHART_TAG_GORENGAN_CHANCE:
 			archetype = "gorengan"
 	if "institution_quality" in narrative_tags or "supportive_balance_sheet" in narrative_tags:
-		if rng.randf() < 0.62:
+		if rng.randf() < CHART_TAG_FUNDA_CHANCE:
 			archetype = "funda"
 	if "commodity_beta" in narrative_tags or "policy_beta" in narrative_tags:
-		if rng.randf() < 0.54:
+		if rng.randf() < CHART_TAG_CYCLICAL_CHANCE:
 			archetype = "cyclical"
+	return archetype
 
-	var bias: String = "sideways"
+
+func _chart_bias_for(archetype: String, rng: RandomNumberGenerator) -> String:
 	match archetype:
 		"organic", "funda", "accumulation":
-			bias = "bullish" if rng.randf() < 0.72 else "transition"
+			return "bullish" if rng.randf() < CHART_BULLISH_BIAS_CHANCE else "transition"
 		"distressed", "distribution":
-			bias = "bearish" if rng.randf() < 0.76 else "transition"
+			return "bearish" if rng.randf() < CHART_BEARISH_BIAS_CHANCE else "transition"
 		"gorengan":
-			bias = ["bullish", "bearish", "sideways", "transition"][rng.randi_range(0, 3)]
+			return ["bullish", "bearish", "sideways", "transition"][rng.randi_range(0, 3)]
 		"cyclical":
-			bias = ["bullish", "bearish", "transition"][rng.randi_range(0, 2)]
+			return ["bullish", "bearish", "transition"][rng.randi_range(0, 2)]
 		_:
-			bias = ["sideways", "bullish", "bearish"][rng.randi_range(0, 2)]
+			return ["sideways", "bullish", "bearish"][rng.randi_range(0, 2)]
 
-	var sma_behavior: String = "ignored"
+
+func _chart_sma_behavior_for(archetype: String, bias: String, rng: RandomNumberGenerator) -> String:
 	if archetype in ["organic", "funda", "accumulation"] and bias != "bearish":
-		sma_behavior = "support"
-	elif archetype in ["distressed", "distribution"] or bias == "bearish":
-		sma_behavior = "resistance"
-	elif archetype == "range_bound" or bias == "sideways":
-		sma_behavior = "magnet"
-	elif archetype == "gorengan":
-		sma_behavior = "ignored" if rng.randf() < 0.64 else "magnet"
+		return "support"
+	if archetype in ["distressed", "distribution"] or bias == "bearish":
+		return "resistance"
+	if archetype == "range_bound" or bias == "sideways":
+		return "magnet"
+	if archetype == "gorengan":
+		return "ignored" if rng.randf() < CHART_GORENGAN_SMA_IGNORED_CHANCE else "magnet"
+	return "ignored"
 
+
+func _chart_preferred_sma_period_for(archetype: String, rng: RandomNumberGenerator) -> int:
 	var preferred_periods: Array = [20, 60]
 	match archetype:
 		"gorengan":
@@ -719,8 +991,10 @@ func _build_chart_profile(
 			preferred_periods = [20, 60, 100]
 		"range_bound":
 			preferred_periods = [10, 20, 60]
-	var preferred_sma_period: int = int(preferred_periods[rng.randi_range(0, preferred_periods.size() - 1)])
+	return int(preferred_periods[rng.randi_range(0, preferred_periods.size() - 1)])
 
+
+func _chart_pattern_selection_for(archetype: String, bias: String, rng: RandomNumberGenerator) -> Dictionary:
 	var pattern_pool: Array = _chart_pattern_pool_for(archetype, bias)
 	var primary_pattern: String = str(pattern_pool[rng.randi_range(0, pattern_pool.size() - 1)])
 	var pattern_variant: String = _chart_pattern_variant_for(primary_pattern, archetype, bias, rng)
@@ -731,123 +1005,14 @@ func _build_chart_profile(
 			continue
 		if supporting_patterns.size() >= 2:
 			break
-		if rng.randf() < 0.58:
+		if rng.randf() < CHART_SUPPORTING_PATTERN_CHANCE:
 			supporting_patterns.append(pattern_id)
 	if supporting_patterns.is_empty() and pattern_pool.size() > 1:
 		supporting_patterns.append(str(pattern_pool[(pattern_pool.find(primary_pattern) + 1) % pattern_pool.size()]))
-
-	var volatility_style: String = _chart_volatility_style(archetype, cyclicality, story_heat, rng)
-	var chart_intent: String = _chart_intent_for(
-		archetype,
-		bias,
-		quality_core,
-		growth_engine,
-		story_heat,
-		float_tightness,
-		cyclicality,
-		rng
-	)
-	var pattern_timeframe: String = _chart_pattern_timeframe_for(chart_intent, archetype, bias, rng)
-	var gap_profile: Dictionary = _chart_gap_profile_for(
-		chart_intent,
-		archetype,
-		bias,
-		volatility_style,
-		story_heat,
-		float_tightness,
-		quality_core,
-		rng
-	)
-	var operator_pressure: float = _chart_operator_pressure_for_profile(
-		archetype,
-		bias,
-		narrative_tags,
-		story_heat,
-		float_tightness,
-		liquidity_profile
-	)
-	var cycle_template: String = _chart_cycle_template_for(
-		archetype,
-		bias,
-		operator_pressure,
-		story_heat,
-		float_tightness,
-		rng
-	)
-	var fib_profile_id: String = _chart_fib_profile_for(cycle_template, operator_pressure, rng)
-	var cycle_strength: float = _chart_cycle_strength_for(cycle_template, operator_pressure, story_heat, float_tightness, rng)
-	var cycle_tempo_profile: String = _chart_tempo_profile_for(archetype, bias, narrative_tags, cycle_template, operator_pressure, story_heat, liquidity_profile, quality_core, rng)
-	var shakeout_profile: String = _chart_shakeout_profile_for(cycle_template, cycle_tempo_profile, operator_pressure, story_heat, float_tightness, rng)
-	var microstructure_intensity: float = _chart_microstructure_intensity_for(cycle_template, cycle_tempo_profile, shakeout_profile, cycle_strength, operator_pressure, story_heat, float_tightness, liquidity_profile, rng)
-	var setup_duration_bias: float = _chart_setup_duration_bias_for(cycle_tempo_profile, cycle_template, liquidity_profile, operator_pressure, rng)
-	var bar_friction_profile: String = _chart_bar_friction_profile_for(archetype, bias, narrative_tags, cycle_template, cycle_tempo_profile, operator_pressure, story_heat, liquidity_profile, float_tightness, rng)
-	var microleg_frequency_bias: float = _chart_microleg_frequency_bias_for(bar_friction_profile, cycle_tempo_profile, operator_pressure, story_heat, liquidity_profile, float_tightness, rng)
-	var wick_noise_intensity: float = _chart_wick_noise_intensity_for(bar_friction_profile, operator_pressure, story_heat, float_tightness, liquidity_profile, rng)
-	var volume_disagreement_rate: float = _chart_volume_disagreement_rate_for(bar_friction_profile, operator_pressure, story_heat, liquidity_profile, rng)
-	var tape_regime_profile: String = _chart_tape_regime_profile_for(
-		archetype,
-		bias,
-		cycle_template,
-		cycle_tempo_profile,
-		bar_friction_profile,
-		operator_pressure,
-		story_heat,
-		liquidity_profile,
-		float_tightness,
-		rng
-	)
-	var regime_block_intensity: float = _chart_regime_block_intensity_for(
-		tape_regime_profile,
-		cycle_strength,
-		microstructure_intensity,
-		operator_pressure,
-		story_heat,
-		liquidity_profile,
-		rng
-	)
-	var regime_tempo_bias: float = _chart_regime_tempo_bias_for(
-		tape_regime_profile,
-		cycle_tempo_profile,
-		setup_duration_bias,
-		operator_pressure,
-		liquidity_profile,
-		rng
-	)
-
 	return {
-		"archetype": archetype,
-		"bias": bias,
-		"chart_intent": chart_intent,
-		"pattern_timeframe": pattern_timeframe,
-		"sma_behavior": sma_behavior,
-		"preferred_sma_period": preferred_sma_period,
 		"primary_pattern": primary_pattern,
 		"pattern_variant": pattern_variant,
-		"supporting_patterns": supporting_patterns,
-		"clarity": rng.randf_range(0.58, 0.84),
-		"volatility_style": volatility_style,
-		"volume_behavior": _chart_volume_behavior(archetype, bias),
-		"gap_style": str(gap_profile.get("gap_style", "none")),
-		"gap_bias": str(gap_profile.get("gap_bias", "mixed")),
-		"gap_frequency": str(gap_profile.get("gap_frequency", "rare")),
-		"gap_followthrough": str(gap_profile.get("gap_followthrough", "fill")),
-		"cycle_template": cycle_template,
-		"cycle_strength": cycle_strength,
-		"cycle_phase_bias": _chart_cycle_phase_bias(cycle_template),
-		"operator_pressure": operator_pressure,
-		"fib_profile_id": fib_profile_id,
-		"cycle_fib_ratios": _chart_fib_ratios_for_profile(fib_profile_id),
-		"cycle_tempo_profile": cycle_tempo_profile,
-		"microstructure_intensity": microstructure_intensity,
-		"setup_duration_bias": setup_duration_bias,
-		"shakeout_profile": shakeout_profile,
-		"bar_friction_profile": bar_friction_profile,
-		"microleg_frequency_bias": microleg_frequency_bias,
-		"wick_noise_intensity": wick_noise_intensity,
-		"volume_disagreement_rate": volume_disagreement_rate,
-		"tape_regime_profile": tape_regime_profile,
-		"regime_block_intensity": regime_block_intensity,
-		"regime_tempo_bias": regime_tempo_bias
+		"supporting_patterns": supporting_patterns
 	}
 
 
@@ -1837,209 +2002,199 @@ func _build_financial_history(
 	run_seed: int,
 	company_id: String
 ) -> Array:
+	return COMPANY_FINANCIALS_BUILDER.build_history(self, template, sector_profile, traits, run_seed, company_id)
+
+
+func _financial_target_market_cap(template: Dictionary, traits: Dictionary) -> float:
 	var target_market_cap: float = _anchor_value(template, "market_cap", 0.0)
 	if target_market_cap <= 0.0:
-		target_market_cap = lerp(800000000000.0, 4200000000000.0, float(traits.get("scale", 0.5)))
-	var scale_market_cap_floor: float = _anchor_value(template, "scale_market_cap_floor", 0.0)
-	var scale_market_cap_ceiling: float = _anchor_value(template, "scale_market_cap_ceiling", 0.0)
-	var target_margin: float = clamp(
-		_anchor_value(template, "net_profit_margin", 7.5) / 100.0,
-		0.01,
-		0.22
+		return lerp(FINANCIAL_MARKET_CAP_FALLBACK_MIN, FINANCIAL_MARKET_CAP_FALLBACK_MAX, float(traits.get("scale", 0.5)))
+	return target_market_cap
+
+
+func _financial_target_margin(template: Dictionary) -> float:
+	return clamp(
+		_anchor_value(template, "net_profit_margin", FINANCIAL_TARGET_MARGIN_DEFAULT) / FINANCIAL_PERCENT_SCALE,
+		FINANCIAL_TARGET_MARGIN_MIN,
+		FINANCIAL_TARGET_MARGIN_MAX
 	)
-	var target_free_float: float = clamp(
+
+
+func _financial_target_free_float(template: Dictionary, traits: Dictionary) -> float:
+	return clamp(
 		_anchor_value(template, "free_float_pct", lerp(18.0, 42.0, 1.0 - float(traits.get("float_tightness", 0.5)))),
 		7.0,
 		60.0
 	)
-	var target_debt_to_equity: float = clamp(
+
+
+func _financial_target_debt_to_equity(template: Dictionary, traits: Dictionary) -> float:
+	return clamp(
 		_anchor_value(template, "debt_to_equity", lerp(1.45, 0.22, float(traits.get("balance_sheet_strength", 0.5)))),
 		0.05,
 		1.8
 	)
-	var price_to_sales_multiple: float = clamp(
-		0.55 +
-		(float(traits.get("growth_engine", 0.5)) * 0.95) +
-		(float(traits.get("margin_strength", 0.5)) * 0.52) +
-		(float(traits.get("story_heat", 0.5)) * 0.68) -
-		(float(traits.get("cyclicality", 0.5)) * 0.18),
-		0.40,
-		3.20
+
+
+func _financial_price_to_sales_multiple(traits: Dictionary) -> float:
+	return clamp(
+		FINANCIAL_PRICE_TO_SALES_BASE +
+		(float(traits.get("growth_engine", 0.5)) * FINANCIAL_PRICE_TO_SALES_GROWTH_WEIGHT) +
+		(float(traits.get("margin_strength", 0.5)) * FINANCIAL_PRICE_TO_SALES_MARGIN_WEIGHT) +
+		(float(traits.get("story_heat", 0.5)) * FINANCIAL_PRICE_TO_SALES_STORY_WEIGHT) -
+		(float(traits.get("cyclicality", 0.5)) * FINANCIAL_PRICE_TO_SALES_CYCLICALITY_WEIGHT),
+		FINANCIAL_PRICE_TO_SALES_MIN,
+		FINANCIAL_PRICE_TO_SALES_MAX
 	)
-	var minimum_revenue_floor: float = clamp(target_market_cap * 0.12, 30000000000.0, 120000000000.0)
-	var target_revenue_2019: float = max(target_market_cap / price_to_sales_multiple, minimum_revenue_floor)
-	var expected_growth_rate: float = clamp(
-		0.035 +
-		(float(traits.get("growth_engine", 0.5)) * 0.11) +
-		(float(traits.get("execution_consistency", 0.5)) * 0.020) -
-		(float(traits.get("scale", 0.5)) * 0.018) -
-		(float(traits.get("cyclicality", 0.5)) * 0.015) +
+
+
+func _financial_minimum_revenue_floor(target_market_cap: float) -> float:
+	return clamp(
+		target_market_cap * FINANCIAL_MIN_REVENUE_MARKET_CAP_RATIO,
+		FINANCIAL_MIN_REVENUE_FLOOR,
+		FINANCIAL_MIN_REVENUE_CEILING
+	)
+
+
+func _financial_expected_growth_rate(traits: Dictionary, sector_profile: Dictionary) -> float:
+	return clamp(
+		FINANCIAL_EXPECTED_GROWTH_BASE +
+		(float(traits.get("growth_engine", 0.5)) * FINANCIAL_EXPECTED_GROWTH_ENGINE_WEIGHT) +
+		(float(traits.get("execution_consistency", 0.5)) * FINANCIAL_EXPECTED_GROWTH_EXECUTION_WEIGHT) -
+		(float(traits.get("scale", 0.5)) * FINANCIAL_EXPECTED_GROWTH_SCALE_WEIGHT) -
+		(float(traits.get("cyclicality", 0.5)) * FINANCIAL_EXPECTED_GROWTH_CYCLICALITY_WEIGHT) +
 		(float(sector_profile.get("growth_drift", 0.0))),
-		0.02,
-		0.18
+		FINANCIAL_EXPECTED_GROWTH_MIN,
+		FINANCIAL_EXPECTED_GROWTH_MAX
 	)
-	var revenue: float = target_revenue_2019 / pow(1.0 + expected_growth_rate, float(HISTORY_END_YEAR - HISTORY_START_YEAR))
-	revenue *= _sample_noise(run_seed, company_id, "revenue_start", 0.90, 1.10, HISTORY_START_YEAR)
-	var margin: float = clamp(
+
+
+func _financial_initial_margin(
+	target_margin: float,
+	traits: Dictionary,
+	run_seed: int,
+	company_id: String
+) -> float:
+	return clamp(
 		target_margin -
 		_sample_noise(run_seed, company_id, "margin_start", -0.006, 0.030, HISTORY_START_YEAR) +
-		((float(traits.get("growth_engine", 0.5)) - 0.5) * 0.010) -
-		((float(traits.get("capital_intensity", 0.5)) - 0.5) * 0.012),
-		0.01,
-		0.18
+		((float(traits.get("growth_engine", 0.5)) - 0.5) * FINANCIAL_MARGIN_START_GROWTH_WEIGHT) -
+		((float(traits.get("capital_intensity", 0.5)) - 0.5) * FINANCIAL_MARGIN_START_CAPITAL_INTENSITY_WEIGHT),
+		FINANCIAL_MARGIN_START_MIN,
+		FINANCIAL_MARGIN_START_MAX
 	)
-	var equity: float = max(
-		revenue * lerp(0.14, 0.34, float(traits.get("balance_sheet_strength", 0.5))),
-		50000000000.0
+
+
+func _financial_initial_equity(revenue: float, traits: Dictionary) -> float:
+	return max(
+		revenue * lerp(FINANCIAL_EQUITY_REVENUE_MULTIPLIER_MIN, FINANCIAL_EQUITY_REVENUE_MULTIPLIER_MAX, float(traits.get("balance_sheet_strength", 0.5))),
+		FINANCIAL_EQUITY_FLOOR
 	)
-	var debt_to_equity: float = clamp(
-		target_debt_to_equity + _sample_noise(run_seed, company_id, "de_start", -0.20, 0.20, HISTORY_START_YEAR),
-		0.05,
-		1.8
+
+
+func _financial_revenue_growth_rate(
+	traits: Dictionary,
+	sector_profile: Dictionary,
+	debt_to_equity: float,
+	sector_cycle: float,
+	execution_shock: float
+) -> float:
+	return clamp(
+		FINANCIAL_REVENUE_GROWTH_BASE +
+		(float(traits.get("growth_engine", 0.5)) * FINANCIAL_REVENUE_GROWTH_ENGINE_WEIGHT) +
+		(float(traits.get("execution_consistency", 0.5)) * FINANCIAL_REVENUE_GROWTH_EXECUTION_WEIGHT) -
+		(float(traits.get("scale", 0.5)) * FINANCIAL_REVENUE_GROWTH_SCALE_WEIGHT) -
+		max(debt_to_equity - FINANCIAL_REVENUE_GROWTH_DEBT_THRESHOLD, 0.0) * FINANCIAL_REVENUE_GROWTH_DEBT_WEIGHT +
+		sector_cycle * lerp(FINANCIAL_REVENUE_GROWTH_CYCLE_MIN, FINANCIAL_REVENUE_GROWTH_CYCLE_MAX, float(traits.get("cyclicality", 0.5))) +
+		execution_shock * FINANCIAL_REVENUE_GROWTH_EXECUTION_SHOCK_WEIGHT +
+		float(sector_profile.get("growth_drift", 0.0)),
+		FINANCIAL_REVENUE_GROWTH_MIN,
+		FINANCIAL_REVENUE_GROWTH_MAX
 	)
-	var free_float_pct: float = clamp(
-		target_free_float + _sample_noise(run_seed, company_id, "float_start", -3.0, 3.0, HISTORY_START_YEAR),
-		7.0,
-		60.0
+
+
+func _financial_margin_drift(
+	target_margin: float,
+	margin: float,
+	traits: Dictionary,
+	sector_cycle: float,
+	execution_shock: float
+) -> float:
+	return (
+		(target_margin - margin) * FINANCIAL_MARGIN_DRIFT_TARGET_WEIGHT +
+		sector_cycle * FINANCIAL_MARGIN_DRIFT_SECTOR_CYCLE_WEIGHT +
+		execution_shock * FINANCIAL_MARGIN_DRIFT_EXECUTION_SHOCK_WEIGHT +
+		((float(traits.get("margin_strength", 0.5)) - 0.5) * FINANCIAL_MARGIN_DRIFT_STRENGTH_WEIGHT) -
+		(float(traits.get("capital_intensity", 0.5)) * FINANCIAL_MARGIN_DRIFT_CAPITAL_INTENSITY_WEIGHT)
 	)
-	var history: Array = []
-	var previous_revenue: float = revenue
-	var previous_net_income: float = revenue * margin
 
-	for year in range(HISTORY_START_YEAR, HISTORY_END_YEAR + 1):
-		if year > HISTORY_START_YEAR:
-			var sector_cycle: float = _sample_noise(run_seed, company_id, "sector_cycle", -1.0, 1.0, year)
-			var execution_shock: float = _sample_noise(run_seed, company_id, "execution", -1.0, 1.0, year)
-			var revenue_growth_rate: float = clamp(
-				0.020 +
-				(float(traits.get("growth_engine", 0.5)) * 0.12) +
-				(float(traits.get("execution_consistency", 0.5)) * 0.020) -
-				(float(traits.get("scale", 0.5)) * 0.020) -
-				max(debt_to_equity - 1.1, 0.0) * 0.030 +
-				sector_cycle * lerp(0.03, 0.08, float(traits.get("cyclicality", 0.5))) +
-				execution_shock * 0.018 +
-				float(sector_profile.get("growth_drift", 0.0)),
-				-0.18,
-				0.34
-			)
-			revenue *= 1.0 + revenue_growth_rate
 
-			var margin_drift: float = (
-				(target_margin - margin) * 0.26 +
-				sector_cycle * 0.024 +
-				execution_shock * 0.008 +
-				((float(traits.get("margin_strength", 0.5)) - 0.5) * 0.014) -
-				(float(traits.get("capital_intensity", 0.5)) * 0.006)
-			)
-			margin = clamp(margin + margin_drift, 0.005, 0.24)
+func _financial_payout_ratio(traits: Dictionary, margin: float) -> float:
+	return clamp(
+		FINANCIAL_PAYOUT_BASE +
+		(float(traits.get("scale", 0.5)) * FINANCIAL_PAYOUT_SCALE_WEIGHT) +
+		max(FINANCIAL_PAYOUT_GROWTH_BASE - float(traits.get("growth_engine", 0.5)) * FINANCIAL_PAYOUT_GROWTH_WEIGHT, 0.0) +
+		max(margin - FINANCIAL_PAYOUT_MARGIN_THRESHOLD, 0.0) * FINANCIAL_PAYOUT_MARGIN_WEIGHT,
+		FINANCIAL_PAYOUT_MIN,
+		FINANCIAL_PAYOUT_MAX
+	)
 
-		var net_income: float = revenue * margin
-		var payout_ratio: float = clamp(
-			0.12 +
-			(float(traits.get("scale", 0.5)) * 0.10) +
-			max(0.18 - float(traits.get("growth_engine", 0.5)) * 0.18, 0.0) +
-			max(margin - 0.12, 0.0) * 0.25,
-			0.08,
-			0.45
-		)
-		equity = max(
-			equity + (net_income * (1.0 - payout_ratio)),
-			revenue * 0.05
-		)
 
-		var delever_target: float = clamp(
-			target_debt_to_equity +
-			(float(traits.get("capital_intensity", 0.5)) * 0.22) +
-			(float(traits.get("cyclicality", 0.5)) * 0.12) -
-			(float(traits.get("balance_sheet_strength", 0.5)) * 0.34) -
-			(float(traits.get("execution_consistency", 0.5)) * 0.08),
-			0.05,
-			1.8
-		)
-		debt_to_equity = clamp(
-			lerp(debt_to_equity, delever_target, 0.28) +
-			_sample_noise(run_seed, company_id, "de_year", -0.05, 0.05, year),
-			0.05,
-			1.8
-		)
-		var debt: float = equity * debt_to_equity
-		var roe_ratio: float = 0.0
-		if equity > 0.0:
-			roe_ratio = net_income / equity
+func _financial_delever_target(target_debt_to_equity: float, traits: Dictionary) -> float:
+	return clamp(
+		target_debt_to_equity +
+		(float(traits.get("capital_intensity", 0.5)) * FINANCIAL_DELEVER_CAPITAL_INTENSITY_WEIGHT) +
+		(float(traits.get("cyclicality", 0.5)) * FINANCIAL_DELEVER_CYCLICALITY_WEIGHT) -
+		(float(traits.get("balance_sheet_strength", 0.5)) * FINANCIAL_DELEVER_BALANCE_SHEET_WEIGHT) -
+		(float(traits.get("execution_consistency", 0.5)) * FINANCIAL_DELEVER_EXECUTION_WEIGHT),
+		FINANCIAL_DELEVER_MIN,
+		FINANCIAL_DELEVER_MAX
+	)
 
-		var valuation_shock: float = _sample_noise(run_seed, company_id, "valuation", -1.0, 1.0, year)
-		var pe_multiple: float = clamp(
-			7.0 +
-			(float(traits.get("growth_engine", 0.5)) * 8.0) +
-			(float(traits.get("margin_strength", 0.5)) * 4.0) +
-			(float(traits.get("story_heat", 0.5)) * 6.0) +
-			(float(traits.get("execution_consistency", 0.5)) * 3.0) -
-			(float(traits.get("cyclicality", 0.5)) * 2.0) -
-			max(debt_to_equity - 1.0, 0.0) * 4.0 +
-			valuation_shock * 2.4,
-			5.5,
-			28.0
-		)
-		var sales_floor_multiple: float = clamp(
-			0.42 +
-			(float(traits.get("growth_engine", 0.5)) * 0.90) +
-			(float(traits.get("margin_strength", 0.5)) * 0.46) +
-			(float(traits.get("story_heat", 0.5)) * 0.60) -
-			(float(traits.get("cyclicality", 0.5)) * 0.18) +
-			valuation_shock * 0.18,
-			0.35,
-			3.20
-		)
-		var market_cap: float = max(net_income * pe_multiple, revenue * sales_floor_multiple)
-		if (
-			year == HISTORY_END_YEAR and
-			scale_market_cap_floor > 0.0 and
-			scale_market_cap_ceiling >= scale_market_cap_floor
-		):
-			market_cap = clamp(market_cap, scale_market_cap_floor, scale_market_cap_ceiling)
-		free_float_pct = clamp(
-			lerp(free_float_pct, target_free_float, 0.18) +
-			_sample_noise(run_seed, company_id, "free_float_year", -0.8, 0.8, year),
-			7.0,
-			60.0
-		)
-		var turnover_ratio: float = clamp(
-			0.0008 +
-			(float(traits.get("liquidity_profile", 0.5)) * 0.0032) +
-			(float(traits.get("story_heat", 0.5)) * 0.0018) +
-			((free_float_pct / 100.0) * 0.0016) +
-			(absf((revenue - previous_revenue) / max(previous_revenue, 1.0)) * 0.0024),
-			0.0006,
-			0.0100
-		)
-		var avg_daily_value: float = market_cap * turnover_ratio
-		var revenue_growth_yoy: float = 0.0
-		if year > HISTORY_START_YEAR and previous_revenue > 0.0:
-			revenue_growth_yoy = ((revenue / previous_revenue) - 1.0) * 100.0
-		var earnings_growth_yoy: float = 0.0
-		if year > HISTORY_START_YEAR:
-			earnings_growth_yoy = _growth_percent(previous_net_income, net_income)
 
-		history.append({
-			"year": year,
-			"revenue": revenue,
-			"net_income": net_income,
-			"equity": equity,
-			"debt": debt,
-			"market_cap": market_cap,
-			"free_float_pct": free_float_pct,
-			"avg_daily_value": avg_daily_value,
-			"revenue_growth_yoy": revenue_growth_yoy,
-			"earnings_growth_yoy": earnings_growth_yoy,
-			"net_profit_margin": margin * 100.0,
-			"roe": roe_ratio * 100.0,
-			"debt_to_equity": debt_to_equity
-		})
+func _financial_pe_multiple(traits: Dictionary, debt_to_equity: float, valuation_shock: float) -> float:
+	return clamp(
+		FINANCIAL_PE_BASE +
+		(float(traits.get("growth_engine", 0.5)) * FINANCIAL_PE_GROWTH_WEIGHT) +
+		(float(traits.get("margin_strength", 0.5)) * FINANCIAL_PE_MARGIN_WEIGHT) +
+		(float(traits.get("story_heat", 0.5)) * FINANCIAL_PE_STORY_WEIGHT) +
+		(float(traits.get("execution_consistency", 0.5)) * FINANCIAL_PE_EXECUTION_WEIGHT) -
+		(float(traits.get("cyclicality", 0.5)) * FINANCIAL_PE_CYCLICALITY_WEIGHT) -
+		max(debt_to_equity - FINANCIAL_PE_DEBT_THRESHOLD, 0.0) * FINANCIAL_PE_DEBT_WEIGHT +
+		valuation_shock * FINANCIAL_PE_VALUATION_SHOCK_WEIGHT,
+		FINANCIAL_PE_MIN,
+		FINANCIAL_PE_MAX
+	)
 
-		previous_revenue = revenue
-		previous_net_income = net_income
 
-	return history
+func _financial_sales_floor_multiple(traits: Dictionary, valuation_shock: float) -> float:
+	return clamp(
+		FINANCIAL_SALES_FLOOR_BASE +
+		(float(traits.get("growth_engine", 0.5)) * FINANCIAL_SALES_FLOOR_GROWTH_WEIGHT) +
+		(float(traits.get("margin_strength", 0.5)) * FINANCIAL_SALES_FLOOR_MARGIN_WEIGHT) +
+		(float(traits.get("story_heat", 0.5)) * FINANCIAL_SALES_FLOOR_STORY_WEIGHT) -
+		(float(traits.get("cyclicality", 0.5)) * FINANCIAL_SALES_FLOOR_CYCLICALITY_WEIGHT) +
+		valuation_shock * FINANCIAL_SALES_FLOOR_VALUATION_SHOCK_WEIGHT,
+		FINANCIAL_SALES_FLOOR_MIN,
+		FINANCIAL_SALES_FLOOR_MAX
+	)
+
+
+func _financial_turnover_ratio(
+	traits: Dictionary,
+	free_float_pct: float,
+	revenue: float,
+	previous_revenue: float
+) -> float:
+	return clamp(
+		FINANCIAL_TURNOVER_BASE +
+		(float(traits.get("liquidity_profile", 0.5)) * FINANCIAL_TURNOVER_LIQUIDITY_WEIGHT) +
+		(float(traits.get("story_heat", 0.5)) * FINANCIAL_TURNOVER_STORY_WEIGHT) +
+		((free_float_pct / FINANCIAL_PERCENT_SCALE) * FINANCIAL_TURNOVER_FREE_FLOAT_WEIGHT) +
+		(absf((revenue - previous_revenue) / max(previous_revenue, 1.0)) * FINANCIAL_TURNOVER_REVENUE_CHANGE_WEIGHT),
+		FINANCIAL_TURNOVER_MIN,
+		FINANCIAL_TURNOVER_MAX
+	)
 
 
 func _apply_share_price_history(financial_history: Array, shares_outstanding: float) -> Array:
@@ -2095,35 +2250,7 @@ func _build_financial_statement_snapshot(
 	company_id: String,
 	sector_id: String
 ) -> Dictionary:
-	if financial_history.is_empty():
-		return {}
-
-	var quarterly_statements: Array = _build_quarterly_statement_history(
-		financial_history,
-		traits,
-		run_seed,
-		company_id,
-		sector_id,
-		float(financials.get("shares_outstanding", 0.0))
-	)
-	if quarterly_statements.is_empty():
-		return {}
-
-	var latest_statement: Dictionary = quarterly_statements[quarterly_statements.size() - 1].duplicate(true)
-	var first_statement: Dictionary = quarterly_statements[0]
-	return {
-		"statement_year": int(latest_statement.get("statement_year", HISTORY_END_YEAR)),
-		"statement_quarter": int(latest_statement.get("statement_quarter", 4)),
-		"statement_period_label": str(latest_statement.get("statement_period_label", "Q4 %d" % HISTORY_END_YEAR)),
-		"statement_scope": "quarterly",
-		"quarterly_statement_count": quarterly_statements.size(),
-		"history_start_period_label": str(first_statement.get("statement_period_label", "Q1 %d" % HISTORY_START_YEAR)),
-		"history_end_period_label": str(latest_statement.get("statement_period_label", "Q4 %d" % HISTORY_END_YEAR)),
-		"income_statement": latest_statement.get("income_statement", []).duplicate(true),
-		"balance_sheet": latest_statement.get("balance_sheet", []).duplicate(true),
-		"cash_flow": latest_statement.get("cash_flow", []).duplicate(true),
-		"quarterly_statements": quarterly_statements
-	}
+	return COMPANY_FINANCIALS_BUILDER.build_statement_snapshot(self, financial_history, financials, traits, run_seed, company_id, sector_id)
 
 
 func _build_quarterly_statement_history(
@@ -2176,59 +2303,16 @@ func _build_quarterly_statement_history(
 			"quarter_revenue",
 			year
 		)
-		var earnings_seed_weights: Array = []
-		var debt_seed_weights: Array = []
-		var equity_seed_weights: Array = []
-		for quarter_index in range(4):
-			var margin_jitter: float = _sample_noise(
-				run_seed,
-				company_id,
-				"quarter_margin",
-				-0.06,
-				0.06,
-				(year * 10) + quarter_index + 1
-			)
-			var earnings_bias: float = 1.0
-			if quarter_index == 3:
-				earnings_bias += 0.04 + (float(traits.get("story_heat", 0.5)) * 0.03)
-			if quarter_index == 0:
-				earnings_bias -= float(traits.get("cyclicality", 0.5)) * 0.03
-			earnings_bias += (float(traits.get("execution_consistency", 0.5)) - 0.5) * 0.08
-			earnings_bias += margin_jitter
-			earnings_seed_weights.append(max(float(revenue_weights[quarter_index]) * earnings_bias, 0.05))
-
-			var debt_bias: float = float(revenue_weights[quarter_index]) * (
-				1.0 +
-				(float(traits.get("capital_intensity", 0.5)) * 0.28) +
-				(0.05 if quarter_index in [1, 2] else 0.0) +
-				_sample_noise(
-					run_seed,
-					company_id,
-					"quarter_debt_bias",
-					-0.04,
-					0.04,
-					(year * 10) + quarter_index + 1
-				)
-			)
-			debt_seed_weights.append(max(debt_bias, 0.05))
-
-			var equity_bias: float = float(revenue_weights[quarter_index]) * (
-				1.0 +
-				(float(traits.get("balance_sheet_strength", 0.5)) - 0.5) * 0.10 +
-				_sample_noise(
-					run_seed,
-					company_id,
-					"quarter_equity_bias",
-					-0.03,
-					0.03,
-					(year * 10) + quarter_index + 1
-				)
-			)
-			equity_seed_weights.append(max(equity_bias, 0.05))
-
-		var earnings_weights: Array = _normalize_quarter_weights(earnings_seed_weights)
-		var debt_progress_weights: Array = _normalize_quarter_weights(debt_seed_weights)
-		var equity_progress_weights: Array = _normalize_quarter_weights(equity_seed_weights)
+		var seed_weights: Dictionary = _build_quarter_statement_seed_weights(
+			revenue_weights,
+			traits,
+			run_seed,
+			company_id,
+			year
+		)
+		var earnings_weights: Array = _normalize_quarter_weights(seed_weights.get("earnings", []))
+		var debt_progress_weights: Array = _normalize_quarter_weights(seed_weights.get("debt", []))
+		var equity_progress_weights: Array = _normalize_quarter_weights(seed_weights.get("equity", []))
 		var cumulative_equity_progress: float = 0.0
 		var cumulative_debt_progress: float = 0.0
 		var quarter_start_debt: float = year_start_debt
@@ -2280,6 +2364,69 @@ func _build_quarterly_statement_history(
 	return statements
 
 
+func _build_quarter_statement_seed_weights(
+	revenue_weights: Array,
+	traits: Dictionary,
+	run_seed: int,
+	company_id: String,
+	year: int
+) -> Dictionary:
+	var earnings_seed_weights: Array = []
+	var debt_seed_weights: Array = []
+	var equity_seed_weights: Array = []
+	for quarter_index in range(4):
+		var margin_jitter: float = _sample_noise(
+			run_seed,
+			company_id,
+			"quarter_margin",
+			-0.06,
+			0.06,
+			(year * 10) + quarter_index + 1
+		)
+		var earnings_bias: float = 1.0
+		if quarter_index == 3:
+			earnings_bias += 0.04 + (float(traits.get("story_heat", 0.5)) * 0.03)
+		if quarter_index == 0:
+			earnings_bias -= float(traits.get("cyclicality", 0.5)) * 0.03
+		earnings_bias += (float(traits.get("execution_consistency", 0.5)) - 0.5) * 0.08
+		earnings_bias += margin_jitter
+		earnings_seed_weights.append(max(float(revenue_weights[quarter_index]) * earnings_bias, 0.05))
+
+		var debt_bias: float = float(revenue_weights[quarter_index]) * (
+			1.0 +
+			(float(traits.get("capital_intensity", 0.5)) * 0.28) +
+			(0.05 if quarter_index in [1, 2] else 0.0) +
+			_sample_noise(
+				run_seed,
+				company_id,
+				"quarter_debt_bias",
+				-0.04,
+				0.04,
+				(year * 10) + quarter_index + 1
+			)
+		)
+		debt_seed_weights.append(max(debt_bias, 0.05))
+
+		var equity_bias: float = float(revenue_weights[quarter_index]) * (
+			1.0 +
+			(float(traits.get("balance_sheet_strength", 0.5)) - 0.5) * 0.10 +
+			_sample_noise(
+				run_seed,
+				company_id,
+				"quarter_equity_bias",
+				-0.03,
+				0.03,
+				(year * 10) + quarter_index + 1
+			)
+		)
+		equity_seed_weights.append(max(equity_bias, 0.05))
+	return {
+		"earnings": earnings_seed_weights,
+		"debt": debt_seed_weights,
+		"equity": equity_seed_weights
+	}
+
+
 func _build_statement_period(
 	statement_year: int,
 	statement_quarter: int,
@@ -2306,6 +2453,106 @@ func _build_statement_period(
 	var cyclicality: float = float(traits.get("cyclicality", 0.5))
 	var story_heat: float = float(traits.get("story_heat", 0.5))
 
+	var income_metrics: Dictionary = _build_statement_income_metrics(
+		safe_revenue,
+		safe_debt,
+		previous_debt,
+		net_income,
+		net_margin_ratio,
+		margin_strength,
+		capital_intensity,
+		balance_sheet_strength,
+		cyclicality,
+		scale,
+		rng
+	)
+	var income_before_tax: float = float(income_metrics.get("income_before_tax", 0.0))
+	var income_from_operations: float = float(income_metrics.get("income_from_operations", 0.0))
+	var gross_profit: float = float(income_metrics.get("gross_profit", 0.0))
+	var total_comprehensive_income: float = float(income_metrics.get("total_comprehensive_income", 0.0))
+	var owners_income: float = float(income_metrics.get("owners_income", 0.0))
+	var others_income: float = float(income_metrics.get("others_income", 0.0))
+
+	var balance_metrics: Dictionary = _build_statement_balance_metrics(
+		safe_revenue,
+		safe_equity,
+		safe_debt,
+		capital_intensity,
+		balance_sheet_strength,
+		liquidity_profile,
+		cyclicality,
+		rng
+	)
+	var current_assets: float = float(balance_metrics.get("current_assets", 0.0))
+	var non_current_assets: float = float(balance_metrics.get("non_current_assets", 0.0))
+	var total_assets: float = float(balance_metrics.get("total_assets", 0.0))
+	var current_liabilities: float = float(balance_metrics.get("current_liabilities", 0.0))
+	var non_current_liabilities: float = float(balance_metrics.get("non_current_liabilities", 0.0))
+	var total_liabilities: float = float(balance_metrics.get("total_liabilities", 0.0))
+
+	var cash_flow_metrics: Dictionary = _build_statement_cash_flow_metrics(
+		safe_revenue,
+		safe_debt,
+		previous_debt,
+		previous_revenue,
+		net_income,
+		capital_intensity,
+		balance_sheet_strength,
+		liquidity_profile,
+		growth_engine,
+		scale,
+		story_heat,
+		rng
+	)
+	var cash_from_operating: float = float(cash_flow_metrics.get("cash_from_operating", 0.0))
+	var cash_from_investing: float = float(cash_flow_metrics.get("cash_from_investing", 0.0))
+	var cash_from_financing: float = float(cash_flow_metrics.get("cash_from_financing", 0.0))
+
+	return {
+		"statement_year": statement_year,
+		"statement_quarter": statement_quarter,
+		"statement_period_label": "Q%d %d" % [statement_quarter, statement_year],
+		"income_statement": [
+			_statement_line("revenue", "Total revenue", safe_revenue),
+			_statement_line("gross_profit", "Gross profit", gross_profit),
+			_statement_line("operating_income", "Income from operations", income_from_operations),
+			_statement_line("income_before_tax", "Income before tax", income_before_tax),
+			_statement_line("net_income", "Net income for the period", net_income),
+			_statement_line("comprehensive_income", "Total comprehensive income", total_comprehensive_income),
+			_statement_line("owners_income", "Net income attributable to owners", owners_income),
+			_statement_line("others_income", "Net income attributable to others", others_income)
+		],
+		"balance_sheet": [
+			_statement_line("current_assets", "Current assets", current_assets),
+			_statement_line("non_current_assets", "Non-current assets", non_current_assets),
+			_statement_line("total_assets", "Total assets", total_assets),
+			_statement_line("current_liabilities", "Current liabilities", current_liabilities),
+			_statement_line("non_current_liabilities", "Non-current liabilities", non_current_liabilities),
+			_statement_line("total_liabilities", "Total liabilities", total_liabilities),
+			_statement_line("equity", "Equity", safe_equity),
+			_statement_line("shares_outstanding", "Shares outstanding", max(shares_outstanding, 0.0), "shares")
+		],
+		"cash_flow": [
+			_statement_line("cash_from_operating", "Cash from operating", cash_from_operating),
+			_statement_line("cash_from_investing", "Cash from investing", cash_from_investing),
+			_statement_line("cash_from_financing", "Cash from financing", cash_from_financing)
+		]
+	}
+
+
+func _build_statement_income_metrics(
+	safe_revenue: float,
+	safe_debt: float,
+	previous_debt: float,
+	net_income: float,
+	net_margin_ratio: float,
+	margin_strength: float,
+	capital_intensity: float,
+	balance_sheet_strength: float,
+	cyclicality: float,
+	scale: float,
+	rng: RandomNumberGenerator
+) -> Dictionary:
 	var tax_rate: float = clamp(
 		0.19 +
 		(capital_intensity * 0.03) +
@@ -2352,7 +2599,26 @@ func _build_statement_period(
 	)
 	var owners_income: float = net_income * (1.0 - others_ratio)
 	var others_income: float = net_income - owners_income
+	return {
+		"income_before_tax": income_before_tax,
+		"income_from_operations": income_from_operations,
+		"gross_profit": gross_profit,
+		"total_comprehensive_income": total_comprehensive_income,
+		"owners_income": owners_income,
+		"others_income": others_income
+	}
 
+
+func _build_statement_balance_metrics(
+	safe_revenue: float,
+	safe_equity: float,
+	safe_debt: float,
+	capital_intensity: float,
+	balance_sheet_strength: float,
+	liquidity_profile: float,
+	cyclicality: float,
+	rng: RandomNumberGenerator
+) -> Dictionary:
 	var other_liabilities: float = max(
 		safe_revenue * (0.012 + (capital_intensity * 0.02) + ((1.0 - liquidity_profile) * 0.01)),
 		safe_equity * (0.08 + (capital_intensity * 0.16) + (cyclicality * 0.04) - (balance_sheet_strength * 0.05))
@@ -2380,7 +2646,30 @@ func _build_statement_period(
 	)
 	var current_liabilities: float = total_liabilities * current_liability_ratio
 	var non_current_liabilities: float = total_liabilities - current_liabilities
+	return {
+		"current_assets": current_assets,
+		"non_current_assets": non_current_assets,
+		"total_assets": total_assets,
+		"current_liabilities": current_liabilities,
+		"non_current_liabilities": non_current_liabilities,
+		"total_liabilities": total_liabilities
+	}
 
+
+func _build_statement_cash_flow_metrics(
+	safe_revenue: float,
+	safe_debt: float,
+	previous_debt: float,
+	previous_revenue: float,
+	net_income: float,
+	capital_intensity: float,
+	balance_sheet_strength: float,
+	liquidity_profile: float,
+	growth_engine: float,
+	scale: float,
+	story_heat: float,
+	rng: RandomNumberGenerator
+) -> Dictionary:
 	var depreciation: float = safe_revenue * clamp(0.02 + (capital_intensity * 0.07), 0.02, 0.09)
 	var working_capital_outflow: float = (safe_revenue - previous_revenue) * clamp(
 		0.03 + (capital_intensity * 0.04) + ((1.0 - liquidity_profile) * 0.03),
@@ -2417,36 +2706,10 @@ func _build_statement_period(
 			1.0
 		)
 	var cash_from_financing: float = debt_change + equity_raise - dividends
-
 	return {
-		"statement_year": statement_year,
-		"statement_quarter": statement_quarter,
-		"statement_period_label": "Q%d %d" % [statement_quarter, statement_year],
-		"income_statement": [
-			_statement_line("revenue", "Total revenue", safe_revenue),
-			_statement_line("gross_profit", "Gross profit", gross_profit),
-			_statement_line("operating_income", "Income from operations", income_from_operations),
-			_statement_line("income_before_tax", "Income before tax", income_before_tax),
-			_statement_line("net_income", "Net income for the period", net_income),
-			_statement_line("comprehensive_income", "Total comprehensive income", total_comprehensive_income),
-			_statement_line("owners_income", "Net income attributable to owners", owners_income),
-			_statement_line("others_income", "Net income attributable to others", others_income)
-		],
-		"balance_sheet": [
-			_statement_line("current_assets", "Current assets", current_assets),
-			_statement_line("non_current_assets", "Non-current assets", non_current_assets),
-			_statement_line("total_assets", "Total assets", total_assets),
-			_statement_line("current_liabilities", "Current liabilities", current_liabilities),
-			_statement_line("non_current_liabilities", "Non-current liabilities", non_current_liabilities),
-			_statement_line("total_liabilities", "Total liabilities", total_liabilities),
-			_statement_line("equity", "Equity", safe_equity),
-			_statement_line("shares_outstanding", "Shares outstanding", max(shares_outstanding, 0.0), "shares")
-		],
-		"cash_flow": [
-			_statement_line("cash_from_operating", "Cash from operating", cash_from_operating),
-			_statement_line("cash_from_investing", "Cash from investing", cash_from_investing),
-			_statement_line("cash_from_financing", "Cash from financing", cash_from_financing)
-		]
+		"cash_from_operating": cash_from_operating,
+		"cash_from_investing": cash_from_investing,
+		"cash_from_financing": cash_from_financing
 	}
 
 
@@ -2821,225 +3084,229 @@ func _apply_chart_profile_to_historical_bars(
 	company_id: String,
 	end_price: float
 ) -> Array:
-	if source_bars.size() < 12:
-		return source_bars
+	return COMPANY_CHART_PROFILE_BUILDER.apply_to_historical_bars(self, source_bars, chart_profile, run_seed, company_id, end_price)
 
-	var normalized_end_price: float = IDX_PRICE_RULES.normalize_last_price(max(end_price, 1.0))
-	var start_price: float = _chart_history_start_price(chart_profile, normalized_end_price, run_seed, company_id)
-	var anchors: Array = _chart_shape_anchors(chart_profile)
-	var pattern_window: Dictionary = _chart_pattern_timeframe_window(chart_profile, source_bars.size())
-	var closes: Array = []
-	var reshaped_bars: Array = []
-	var previous_close: float = start_price
-	var body_mismatch_direction: int = 0
-	var body_mismatch_count: int = 0
-	var volatility_style: String = str(chart_profile.get("volatility_style", "normal"))
-	var clarity: float = clamp(float(chart_profile.get("clarity", 0.68)), 0.35, 0.92)
-	var noise_scale: float = _chart_noise_scale(volatility_style) * lerp(1.20, 0.58, clarity)
-	var trend_log_start: float = log(max(start_price, 1.0))
-	var trend_log_end: float = log(max(normalized_end_price, 1.0))
 
-	for bar_index in range(source_bars.size()):
-		var source_bar: Dictionary = source_bars[bar_index]
-		var progress: float = float(bar_index) / float(max(source_bars.size() - 1, 1))
-		var trend_price: float = exp(lerp(trend_log_start, trend_log_end, progress))
-		var shape_multiplier: float = _chart_profile_shape_multiplier(
-			chart_profile,
-			anchors,
-			progress,
-			bar_index,
-			source_bars.size(),
-			pattern_window
-		)
-		var wave_component: float = _chart_wave_component(chart_profile, progress, run_seed, company_id)
-		var noise_component: float = _sample_noise(
-			run_seed,
-			company_id,
-			"chart_profile_noise",
-			-noise_scale,
-			noise_scale,
-			bar_index + 1
-		)
-		var micro_context: Dictionary = _chart_historical_microstructure_context(
-			chart_profile,
-			progress,
-			bar_index,
-			source_bars.size(),
-			pattern_window,
-			run_seed,
-			company_id
-		)
-		var close_price: float = trend_price * shape_multiplier * float(micro_context.get("price_multiplier", 1.0)) * (1.0 + wave_component + noise_component)
-		var regime_context: Dictionary = _chart_tape_regime_context(
-			chart_profile,
-			progress,
-			bar_index,
-			source_bars.size(),
-			pattern_window,
-			run_seed,
-			company_id,
-			previous_close,
-			close_price,
-			closes
-		)
-		close_price *= float(regime_context.get("price_multiplier", 1.0))
-		var close_blend_to_previous: float = float(regime_context.get("close_blend_to_previous", 0.0))
-		if close_blend_to_previous > 0.0:
-			var previous_close_anchor: float = previous_close * (1.0 + float(regime_context.get("previous_close_bias", 0.0)))
-			close_price = lerp(close_price, previous_close_anchor, close_blend_to_previous)
-		var friction_context: Dictionary = _chart_daily_tape_friction_context(
-			chart_profile,
-			progress,
-			bar_index,
-			source_bars.size(),
-			pattern_window,
-			run_seed,
-			company_id,
-			previous_close,
-			close_price,
-			closes
-		)
-		close_price *= float(friction_context.get("price_multiplier", 1.0))
-		close_price = _apply_chart_sma_behavior(close_price, closes, chart_profile, progress)
-		if bar_index == 0:
-			close_price = start_price
-		if bar_index == source_bars.size() - 1:
+func _chart_historical_close_context(
+	chart_profile: Dictionary,
+	anchors: Array,
+	pattern_window: Dictionary,
+	trend_log_start: float,
+	trend_log_end: float,
+	noise_scale: float,
+	bar_index: int,
+	total_bars: int,
+	previous_close: float,
+	closes: Array,
+	run_seed: int,
+	company_id: String,
+	start_price: float,
+	normalized_end_price: float
+) -> Dictionary:
+	var progress: float = float(bar_index) / float(max(total_bars - 1, 1))
+	var trend_price: float = exp(lerp(trend_log_start, trend_log_end, progress))
+	var shape_multiplier: float = _chart_profile_shape_multiplier(
+		chart_profile,
+		anchors,
+		progress,
+		bar_index,
+		total_bars,
+		pattern_window
+	)
+	var wave_component: float = _chart_wave_component(chart_profile, progress, run_seed, company_id)
+	var noise_component: float = _sample_noise(
+		run_seed,
+		company_id,
+		"chart_profile_noise",
+		-noise_scale,
+		noise_scale,
+		bar_index + 1
+	)
+	var micro_context: Dictionary = _chart_historical_microstructure_context(
+		chart_profile,
+		progress,
+		bar_index,
+		total_bars,
+		pattern_window,
+		run_seed,
+		company_id
+	)
+	var close_price: float = trend_price * shape_multiplier * float(micro_context.get("price_multiplier", 1.0)) * (1.0 + wave_component + noise_component)
+	var regime_context: Dictionary = _chart_tape_regime_context(
+		chart_profile,
+		progress,
+		bar_index,
+		total_bars,
+		pattern_window,
+		run_seed,
+		company_id,
+		previous_close,
+		close_price,
+		closes
+	)
+	close_price *= float(regime_context.get("price_multiplier", 1.0))
+	var close_blend_to_previous: float = float(regime_context.get("close_blend_to_previous", 0.0))
+	if close_blend_to_previous > 0.0:
+		var previous_close_anchor: float = previous_close * (1.0 + float(regime_context.get("previous_close_bias", 0.0)))
+		close_price = lerp(close_price, previous_close_anchor, close_blend_to_previous)
+	var friction_context: Dictionary = _chart_daily_tape_friction_context(
+		chart_profile,
+		progress,
+		bar_index,
+		total_bars,
+		pattern_window,
+		run_seed,
+		company_id,
+		previous_close,
+		close_price,
+		closes
+	)
+	close_price *= float(friction_context.get("price_multiplier", 1.0))
+	close_price = _apply_chart_sma_behavior(close_price, closes, chart_profile, progress)
+	if bar_index == 0:
+		close_price = start_price
+	if bar_index == total_bars - 1:
+		close_price = normalized_end_price
+	close_price = IDX_PRICE_RULES.normalize_last_price(max(close_price, 1.0))
+
+	var gap_ratio: float = _chart_historical_gap_ratio(
+		chart_profile,
+		bar_index,
+		total_bars,
+		pattern_window,
+		run_seed,
+		company_id
+	)
+	if not is_zero_approx(gap_ratio):
+		close_price = _chart_apply_gap_followthrough(close_price, previous_close, gap_ratio, chart_profile)
+		if bar_index == total_bars - 1:
 			close_price = normalized_end_price
 		close_price = IDX_PRICE_RULES.normalize_last_price(max(close_price, 1.0))
 
-		var gap_ratio: float = _chart_historical_gap_ratio(
-			chart_profile,
-			bar_index,
-			source_bars.size(),
-			pattern_window,
-			run_seed,
-			company_id
-		)
-		if not is_zero_approx(gap_ratio):
-			close_price = _chart_apply_gap_followthrough(close_price, previous_close, gap_ratio, chart_profile)
-			if bar_index == source_bars.size() - 1:
-				close_price = normalized_end_price
-			close_price = IDX_PRICE_RULES.normalize_last_price(max(close_price, 1.0))
+	var ar_limits: Dictionary = IDX_PRICE_RULES.auto_rejection_limits(previous_close, "main")
+	var remaining_bars: int = max(total_bars - bar_index - 1, 0)
+	close_price = _chart_clamp_historical_close(
+		close_price,
+		previous_close,
+		normalized_end_price,
+		remaining_bars,
+		ar_limits
+	)
+	var open_price: float = previous_close
+	if not is_zero_approx(gap_ratio):
+		open_price = IDX_PRICE_RULES.normalize_last_price(max(previous_close * (1.0 + gap_ratio), 1.0))
+	open_price = _chart_clamp_historical_price(open_price, ar_limits)
+	return {
+		"progress": progress,
+		"micro_context": micro_context,
+		"regime_context": regime_context,
+		"friction_context": friction_context,
+		"close": close_price,
+		"open": open_price,
+		"gap_ratio": gap_ratio,
+		"ar_limits": ar_limits,
+		"remaining_bars": remaining_bars
+	}
 
-		var ar_limits: Dictionary = IDX_PRICE_RULES.auto_rejection_limits(previous_close, "main")
-		var remaining_bars: int = max(source_bars.size() - bar_index - 1, 0)
-		close_price = _chart_clamp_historical_close(
-			close_price,
-			previous_close,
-			normalized_end_price,
-			remaining_bars,
-			ar_limits
-		)
-		var open_price: float = previous_close
-		if not is_zero_approx(gap_ratio):
-			open_price = IDX_PRICE_RULES.normalize_last_price(max(previous_close * (1.0 + gap_ratio), 1.0))
-		open_price = _chart_clamp_historical_price(open_price, ar_limits)
-		var body_context: Dictionary = _chart_reconcile_historical_body_intent(
-			chart_profile,
-			micro_context,
-			regime_context,
-			friction_context,
-			previous_close,
-			open_price,
-			close_price,
-			normalized_end_price,
-			remaining_bars,
-			ar_limits,
-			gap_ratio,
-			bar_index,
-			run_seed,
-			company_id,
-			body_mismatch_direction,
-			body_mismatch_count
-		)
-		open_price = float(body_context.get("open", open_price))
-		close_price = float(body_context.get("close", close_price))
-		var intended_body_direction: int = int(body_context.get("intended_direction", 0))
-		var actual_body_direction: int = _chart_direction_for_delta(close_price - open_price)
-		if intended_body_direction != 0 and actual_body_direction != 0 and actual_body_direction != intended_body_direction:
-			if body_mismatch_direction == intended_body_direction:
-				body_mismatch_count += 1
-			else:
-				body_mismatch_direction = intended_body_direction
-				body_mismatch_count = 1
-		else:
-			body_mismatch_direction = 0
-			body_mismatch_count = 0
-		var day_move_ratio: float = absf(close_price - open_price) / max(open_price, 1.0)
-		var range_ratio: float = _chart_intraday_range_ratio(chart_profile, day_move_ratio, run_seed, company_id, bar_index)
-		range_ratio *= float(micro_context.get("range_multiplier", 1.0))
-		range_ratio *= float(regime_context.get("range_multiplier", 1.0))
-		range_ratio *= float(friction_context.get("range_multiplier", 1.0))
-		range_ratio = min(range_ratio, _chart_daily_range_cap(chart_profile))
-		var high_price: float = IDX_PRICE_RULES.normalize_last_price(max(
-			max(open_price, close_price) * (1.0 + range_ratio * 0.62),
-			max(open_price, close_price)
+
+func _chart_historical_range_prices(
+	chart_profile: Dictionary,
+	micro_context: Dictionary,
+	regime_context: Dictionary,
+	friction_context: Dictionary,
+	open_price: float,
+	close_price: float,
+	intended_body_direction: int,
+	actual_body_direction: int,
+	run_seed: int,
+	company_id: String,
+	bar_index: int,
+	ar_limits: Dictionary
+) -> Dictionary:
+	var day_move_ratio: float = absf(close_price - open_price) / max(open_price, 1.0)
+	var range_ratio: float = _chart_intraday_range_ratio(chart_profile, day_move_ratio, run_seed, company_id, bar_index)
+	range_ratio *= float(micro_context.get("range_multiplier", 1.0))
+	range_ratio *= float(regime_context.get("range_multiplier", 1.0))
+	range_ratio *= float(friction_context.get("range_multiplier", 1.0))
+	range_ratio = min(range_ratio, _chart_daily_range_cap(chart_profile))
+	var high_price: float = IDX_PRICE_RULES.normalize_last_price(max(
+		max(open_price, close_price) * (1.0 + range_ratio * 0.62),
+		max(open_price, close_price)
+	))
+	var low_price: float = IDX_PRICE_RULES.normalize_last_price(min(
+		min(open_price, close_price) * max(1.0 - range_ratio * 0.74, 0.35),
+		min(open_price, close_price)
+	))
+	var lower_wick_bias: float = (
+		float(micro_context.get("lower_wick_bias", 0.0)) +
+		float(regime_context.get("lower_wick_bias", 0.0)) +
+		float(friction_context.get("lower_wick_bias", 0.0))
+	)
+	if intended_body_direction > 0 and actual_body_direction > 0:
+		lower_wick_bias *= 0.86
+	lower_wick_bias = _chart_clamp_wick_bias_for_daily_profile(chart_profile, lower_wick_bias)
+	if lower_wick_bias > 0.0:
+		low_price = IDX_PRICE_RULES.normalize_last_price(min(
+			low_price,
+			min(open_price, close_price) * max(1.0 - lower_wick_bias, 0.35)
 		))
-		var low_price: float = IDX_PRICE_RULES.normalize_last_price(min(
-			min(open_price, close_price) * max(1.0 - range_ratio * 0.74, 0.35),
-			min(open_price, close_price)
+	var upper_wick_bias: float = (
+		float(micro_context.get("upper_wick_bias", 0.0)) +
+		float(regime_context.get("upper_wick_bias", 0.0)) +
+		float(friction_context.get("upper_wick_bias", 0.0))
+	)
+	if intended_body_direction < 0 and actual_body_direction < 0:
+		upper_wick_bias *= 0.86
+	upper_wick_bias = _chart_clamp_wick_bias_for_daily_profile(chart_profile, upper_wick_bias)
+	if upper_wick_bias > 0.0:
+		high_price = IDX_PRICE_RULES.normalize_last_price(max(
+			high_price,
+			max(open_price, close_price) * (1.0 + upper_wick_bias)
 		))
-		var lower_wick_bias: float = (
-			float(micro_context.get("lower_wick_bias", 0.0)) +
-			float(regime_context.get("lower_wick_bias", 0.0)) +
-			float(friction_context.get("lower_wick_bias", 0.0))
-		)
-		if intended_body_direction > 0 and actual_body_direction > 0:
-			lower_wick_bias *= 0.86
-		lower_wick_bias = _chart_clamp_wick_bias_for_daily_profile(chart_profile, lower_wick_bias)
-		if lower_wick_bias > 0.0:
-			low_price = IDX_PRICE_RULES.normalize_last_price(min(
-				low_price,
-				min(open_price, close_price) * max(1.0 - lower_wick_bias, 0.35)
-			))
-		var upper_wick_bias: float = (
-			float(micro_context.get("upper_wick_bias", 0.0)) +
-			float(regime_context.get("upper_wick_bias", 0.0)) +
-			float(friction_context.get("upper_wick_bias", 0.0))
-		)
-		if intended_body_direction < 0 and actual_body_direction < 0:
-			upper_wick_bias *= 0.86
-		upper_wick_bias = _chart_clamp_wick_bias_for_daily_profile(chart_profile, upper_wick_bias)
-		if upper_wick_bias > 0.0:
-			high_price = IDX_PRICE_RULES.normalize_last_price(max(
-				high_price,
-				max(open_price, close_price) * (1.0 + upper_wick_bias)
-			))
-		high_price = _chart_clamp_historical_price(max(high_price, open_price, close_price), ar_limits)
-		low_price = _chart_clamp_historical_price(min(low_price, open_price, close_price), ar_limits)
-		high_price = max(high_price, open_price, close_price)
-		low_price = min(low_price, open_price, close_price)
+	high_price = _chart_clamp_historical_price(max(high_price, open_price, close_price), ar_limits)
+	low_price = _chart_clamp_historical_price(min(low_price, open_price, close_price), ar_limits)
+	high_price = max(high_price, open_price, close_price)
+	low_price = min(low_price, open_price, close_price)
+	return {
+		"high": high_price,
+		"low": low_price
+	}
 
-		var baseline_value: float = max(float(source_bar.get("value", 0.0)), close_price * 1000.0)
-		var volume_multiplier: float = _chart_volume_multiplier(
-			chart_profile,
-			progress,
-			(close_price - open_price) / max(open_price, 1.0),
-			run_seed,
-			company_id,
-			bar_index
-		)
-		volume_multiplier *= float(micro_context.get("volume_multiplier", 1.0))
-		volume_multiplier *= float(regime_context.get("volume_multiplier", 1.0))
-		volume_multiplier *= float(friction_context.get("volume_multiplier", 1.0))
-		if absf(gap_ratio) >= 0.018:
-			volume_multiplier *= _chart_gap_volume_multiplier(chart_profile, gap_ratio)
-		var traded_value: float = max(baseline_value * volume_multiplier, close_price * 1000.0)
-		var volume_shares: int = int(max(round(traded_value / max(close_price, 1.0) / 100.0), 1.0) * 100.0)
-		var bar_value: float = close_price * float(volume_shares)
-		reshaped_bars.append({
-			"trade_date": source_bar.get("trade_date", {}).duplicate(true),
-			"open": open_price,
-			"high": high_price,
-			"low": low_price,
-			"close": close_price,
-			"volume_shares": volume_shares,
-			"value": bar_value
-		})
-		closes.append(close_price)
-		previous_close = close_price
 
-	return reshaped_bars
+func _chart_historical_volume_fields(
+	chart_profile: Dictionary,
+	micro_context: Dictionary,
+	regime_context: Dictionary,
+	friction_context: Dictionary,
+	progress: float,
+	gap_ratio: float,
+	baseline_value: float,
+	open_price: float,
+	close_price: float,
+	run_seed: int,
+	company_id: String,
+	bar_index: int
+) -> Dictionary:
+	var volume_multiplier: float = _chart_volume_multiplier(
+		chart_profile,
+		progress,
+		(close_price - open_price) / max(open_price, 1.0),
+		run_seed,
+		company_id,
+		bar_index
+	)
+	volume_multiplier *= float(micro_context.get("volume_multiplier", 1.0))
+	volume_multiplier *= float(regime_context.get("volume_multiplier", 1.0))
+	volume_multiplier *= float(friction_context.get("volume_multiplier", 1.0))
+	if absf(gap_ratio) >= 0.018:
+		volume_multiplier *= _chart_gap_volume_multiplier(chart_profile, gap_ratio)
+	var traded_value: float = max(baseline_value * volume_multiplier, close_price * 1000.0)
+	var volume_shares: int = int(max(round(traded_value / max(close_price, 1.0) / 100.0), 1.0) * 100.0)
+	var bar_value: float = close_price * float(volume_shares)
+	return {
+		"volume_shares": volume_shares,
+		"value": bar_value
+	}
 
 
 func _chart_clamp_historical_close(
@@ -4326,11 +4593,10 @@ func _chart_distribution_cycle_anchors(ratios: Dictionary, strength: float) -> A
 
 
 func _chart_shape_anchors(chart_profile: Dictionary) -> Array:
-	var cycle_anchors: Array = _chart_cycle_shape_anchors(chart_profile)
-	if not cycle_anchors.is_empty():
-		return cycle_anchors
-	var pattern_id: String = str(chart_profile.get("primary_pattern", "messy_range"))
-	var variant: String = str(chart_profile.get("pattern_variant", "standard"))
+	return COMPANY_CHART_PROFILE_BUILDER.shape_anchors(self, chart_profile)
+
+
+func _chart_pattern_shape_anchors(pattern_id: String, variant: String) -> Array:
 	match pattern_id:
 		"double_bottom":
 			match variant:
