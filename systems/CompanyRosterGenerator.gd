@@ -434,6 +434,84 @@ func generate_roster(
 	return generated_definitions
 
 
+func generate_catalog_roster(
+	company_universe_entries: Array,
+	archetype_templates: Array,
+	sector_definitions: Array,
+	run_seed: int,
+	company_count: int,
+	macro_state: Dictionary = {}
+) -> Array:
+	if company_count <= 0 or company_universe_entries.is_empty() or archetype_templates.is_empty():
+		return []
+
+	var selected_entries: Array = _select_catalog_entries(company_universe_entries, company_count, run_seed)
+	if selected_entries.size() != company_count:
+		return []
+
+	var slot_specs: Array = []
+	var generated_definitions: Array = []
+	for company_index in range(selected_entries.size()):
+		var catalog_entry: Dictionary = selected_entries[company_index]
+		var sector_id: String = str(catalog_entry.get("sector", catalog_entry.get("sector_id", "consumer")))
+		var sector_definition: Dictionary = _sector_definition_for_id(sector_definitions, sector_id)
+		var base_template: Dictionary = _pick_template(archetype_templates, sector_id, run_seed, company_index)
+		var template: Dictionary = base_template.duplicate(true)
+		template["id"] = str(catalog_entry.get("id", ""))
+		template["ticker"] = str(catalog_entry.get("ticker", ""))
+		template["name"] = str(catalog_entry.get("name", ""))
+		template["sector_id"] = sector_id
+		template["narrative_tags"] = _catalog_narrative_tags(catalog_entry, sector_id, run_seed, company_index)
+		slot_specs.append({
+			"index": company_index,
+			"sector_id": sector_id,
+			"sector_definition": sector_definition,
+			"template": template,
+			"catalog_entry": catalog_entry
+		})
+
+	var scale_tier_assignments: Array = _build_scale_tier_assignments(slot_specs, run_seed, macro_state)
+	for slot_value in slot_specs:
+		var slot: Dictionary = slot_value
+		var company_index: int = int(slot.get("index", 0))
+		var sector_id: String = str(slot.get("sector_id", "consumer"))
+		var template: Dictionary = slot.get("template", {})
+		var catalog_entry: Dictionary = slot.get("catalog_entry", {})
+		var anchors: Dictionary = _build_anchors(
+			template,
+			sector_id,
+			run_seed,
+			company_index,
+			scale_tier_assignments[company_index],
+			macro_state
+		)
+		anchors = _apply_catalog_price_traits_to_anchors(anchors, catalog_entry.get("price_traits", {}))
+		var listing_board: String = _derive_listing_board(template, sector_id, run_seed, company_index, anchors)
+		var definition: Dictionary = {
+			"id": str(catalog_entry.get("id", "")).strip_edges(),
+			"ticker": str(catalog_entry.get("ticker", "")).strip_edges(),
+			"name": str(catalog_entry.get("name", "")).strip_edges(),
+			"sector_id": sector_id,
+			"subsector": str(catalog_entry.get("subsector", "")).strip_edges(),
+			"listing_board": listing_board,
+			"narrative_tags": template.get("narrative_tags", []).duplicate(true),
+			"anchors": anchors,
+			"company_source": "universe_catalog",
+			"universe_catalog_id": str(catalog_entry.get("id", "")).strip_edges(),
+			"business_summary": str(catalog_entry.get("business_summary", "")).strip_edges(),
+			"moat_tags": catalog_entry.get("moat_tags", []).duplicate(true),
+			"commodity_exposures": catalog_entry.get("commodity_exposures", {}).duplicate(true),
+			"macro_exposures": catalog_entry.get("macro_exposures", {}).duplicate(true),
+			"price_traits": catalog_entry.get("price_traits", {}).duplicate(true),
+			"relationship_hooks": catalog_entry.get("relationship_hooks", []).duplicate(true),
+			"story_hooks": catalog_entry.get("story_hooks", []).duplicate(true)
+		}
+		generated_definitions.append(definition)
+
+	_apply_nominal_price_profiles(generated_definitions, run_seed)
+	return generated_definitions
+
+
 func _build_scale_tier_assignments(slot_specs: Array, run_seed: int, macro_state: Dictionary) -> Array:
 	var assignments: Array = []
 	for _slot_value in slot_specs:
@@ -466,6 +544,137 @@ func _build_scale_tier_assignments(slot_specs: Array, run_seed: int, macro_state
 		if assignment_index >= 0 and assignment_index < assignments.size():
 			assignments[assignment_index] = _scale_tier_payload(tier_id)
 	return assignments
+
+
+func _select_catalog_entries(company_universe_entries: Array, company_count: int, run_seed: int) -> Array:
+	var candidates: Array = []
+	for entry_value in company_universe_entries:
+		if typeof(entry_value) != TYPE_DICTIONARY:
+			continue
+		var entry: Dictionary = entry_value
+		var entry_id: String = str(entry.get("id", "")).strip_edges()
+		var ticker: String = str(entry.get("ticker", "")).strip_edges()
+		var name: String = str(entry.get("name", "")).strip_edges()
+		var sector_id: String = str(entry.get("sector", entry.get("sector_id", ""))).strip_edges()
+		if entry_id.is_empty() or ticker.is_empty() or name.is_empty() or sector_id.is_empty():
+			continue
+		candidates.append(entry.duplicate(true))
+
+	if candidates.size() < company_count:
+		return []
+
+	candidates.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return str(left.get("id", "")) < str(right.get("id", ""))
+	)
+	var rng: RandomNumberGenerator = _rng_for(run_seed, "catalog_roster_selection")
+	for index in range(candidates.size() - 1, 0, -1):
+		var swap_index: int = rng.randi_range(0, index)
+		var original: Dictionary = candidates[index]
+		candidates[index] = candidates[swap_index]
+		candidates[swap_index] = original
+	return candidates.slice(0, company_count)
+
+
+func _sector_definition_for_id(sector_definitions: Array, sector_id: String) -> Dictionary:
+	for sector_definition_value in sector_definitions:
+		if typeof(sector_definition_value) != TYPE_DICTIONARY:
+			continue
+		var sector_definition: Dictionary = sector_definition_value
+		if str(sector_definition.get("id", "")) == sector_id:
+			return sector_definition.duplicate(true)
+	for sector_definition_value in sector_definitions:
+		if typeof(sector_definition_value) == TYPE_DICTIONARY:
+			return sector_definition_value.duplicate(true)
+	return {"id": sector_id}
+
+
+func _catalog_narrative_tags(catalog_entry: Dictionary, sector_id: String, run_seed: int, company_index: int) -> Array:
+	var tags: Array = []
+	var price_traits: Dictionary = catalog_entry.get("price_traits", {})
+	var commodity_exposures: Dictionary = catalog_entry.get("commodity_exposures", {})
+	var macro_exposures: Dictionary = catalog_entry.get("macro_exposures", {})
+	var story_hooks: Array = catalog_entry.get("story_hooks", [])
+	if float(price_traits.get("retail_attention_bias", 0.0)) >= 0.24:
+		_add_unique_tag(tags, "retail_favorite")
+	if float(price_traits.get("growth_bias", 0.0)) >= 0.26:
+		_add_unique_tag(tags, "narrative_hot")
+	if float(price_traits.get("quality_bias", 0.0)) >= 0.14:
+		_add_unique_tag(tags, "institution_quality")
+	if _catalog_max_abs_exposure(commodity_exposures) >= 0.30:
+		_add_unique_tag(tags, "commodity_beta")
+	if _catalog_has_policy_exposure(macro_exposures):
+		_add_unique_tag(tags, "policy_beta")
+	if _catalog_has_supportive_balance_story(story_hooks):
+		_add_unique_tag(tags, "supportive_balance_sheet")
+
+	var sector_tags: Array = SECTOR_NARRATIVE_HINTS.get(sector_id, NARRATIVE_TAG_POOL)
+	var rng: RandomNumberGenerator = _rng_for(run_seed, "catalog_tags_%s_%d" % [sector_id, company_index])
+	while tags.size() < 2 and not sector_tags.is_empty():
+		_add_unique_tag(tags, str(sector_tags[rng.randi_range(0, sector_tags.size() - 1)]))
+		if tags.size() >= sector_tags.size():
+			break
+	if tags.is_empty():
+		tags.append("quiet_execution")
+	if tags.size() > 3:
+		return tags.slice(0, 3)
+	return tags
+
+
+func _catalog_max_abs_exposure(exposures: Dictionary) -> float:
+	var max_exposure: float = 0.0
+	for exposure_value in exposures.values():
+		max_exposure = max(max_exposure, abs(float(exposure_value)))
+	return max_exposure
+
+
+func _catalog_has_policy_exposure(exposures: Dictionary) -> bool:
+	for key_value in exposures.keys():
+		var key: String = str(key_value)
+		if key.contains("policy") or key.contains("government") or key.contains("regulatory"):
+			return true
+	return false
+
+
+func _catalog_has_supportive_balance_story(story_hooks: Array) -> bool:
+	for hook_value in story_hooks:
+		var hook: String = str(hook_value)
+		if hook.contains("refinancing") or hook.contains("green_financing") or hook.contains("balance") or hook.contains("asset_quality"):
+			return true
+	return false
+
+
+func _apply_catalog_price_traits_to_anchors(anchors: Dictionary, price_traits: Dictionary) -> Dictionary:
+	var adjusted: Dictionary = anchors.duplicate(true)
+	adjusted["quality"] = int(round(clamp(
+		float(adjusted.get("quality", 58.0)) + (float(price_traits.get("quality_bias", 0.0)) * 18.0),
+		35.0,
+		88.0
+	)))
+	adjusted["growth"] = int(round(clamp(
+		float(adjusted.get("growth", 58.0)) + (float(price_traits.get("growth_bias", 0.0)) * 20.0),
+		35.0,
+		92.0
+	)))
+	adjusted["risk"] = int(round(clamp(
+		float(adjusted.get("risk", 42.0)) + (float(price_traits.get("risk_bias", 0.0)) * 18.0),
+		20.0,
+		86.0
+	)))
+	adjusted["avg_daily_value"] = _round_to_step(
+		float(adjusted.get("avg_daily_value", 1000000000.0)) * _catalog_liquidity_multiplier(str(price_traits.get("liquidity_profile", "mid"))),
+		10000000.0
+	)
+	return adjusted
+
+
+func _catalog_liquidity_multiplier(liquidity_profile: String) -> float:
+	match liquidity_profile:
+		"thin":
+			return 0.68
+		"liquid":
+			return 1.35
+		_:
+			return 1.0
 
 
 func _scale_tier_counts(company_count: int, macro_state: Dictionary) -> Dictionary:

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/AnnualFilingStoryFactPacketTest.gd" id="1_annual_filing_story_fact_packet"]
+
+[node name="AnnualFilingStoryFactPacketTest" type="Node"]
+script = ExtResource("1_annual_filing_story_fact_packet")

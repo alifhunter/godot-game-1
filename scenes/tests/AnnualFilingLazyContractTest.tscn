@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/AnnualFilingLazyContractTest.gd" id="1_annual_filing_lazy_contract"]
+
+[node name="AnnualFilingLazyContractTest" type="Node"]
+script = ExtResource("1_annual_filing_lazy_contract")

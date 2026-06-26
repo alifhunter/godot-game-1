@@ -1,6 +1,7 @@
 extends Node
 
 const STABLE_RNG = preload("res://systems/StableRng.gd")
+const ANNUAL_STATEMENT_BUILDER = preload("res://systems/AnnualStatementBuilder.gd")
 const SAVE_MIGRATIONS := preload("res://systems/SaveMigrations.gd")
 const SAVE_SCHEMA_VERSION := SAVE_MIGRATIONS.CURRENT_SCHEMA_VERSION
 const SAVE_FORMAT_ID := "daytrader_single_run"
@@ -14,7 +15,6 @@ const SELL_FEE_RATE := 0.0025
 const DEFAULT_UPGRADE_TIER := 4
 const UPGRADE_TRACK_IDS := [
 	"trading_fee",
-	"news_content",
 	"chart_indicators",
 	"daily_action_points"
 ]
@@ -34,9 +34,74 @@ const MAX_TRADE_HISTORY := 64
 const MAX_EVENT_HISTORY := 160
 const MAX_MARKET_HISTORY := 512
 const MAX_PRICE_BARS_HISTORY := 1600
+const LIVING_ARC_SCHEMA_VERSION := 1
+const LIVING_ARC_MAX_COMPLETED_PER_COMPANY := 8
+const LIVING_ARC_MAX_RECENT_COMPLETED := 80
+const LIVING_ARC_MAX_RECENT_MEMORY_IDS := 12
+const LIVING_ARC_TONES := ["positive", "negative", "mixed", "neutral"]
+const STORY_DOSSIER_SCHEMA_VERSION := 1
+const STORY_DOSSIER_MAX_RECENT_RESOLVED := 80
+const STORY_DOSSIER_MAX_COMPANY_STORY_IDS := 16
+const STORY_DOSSIER_MAX_FACT_ROWS := 8
+const STORY_DOSSIER_MAX_TIMELINE_ROWS := 8
+const STORY_DOSSIER_MAX_EFFECT_ROWS := 8
+const STORY_DOSSIER_MAX_CLUE_ROWS := 8
+const STORY_DOSSIER_MAX_DISCLOSURE_PLACEMENT_ROWS := 12
+const STORY_DOSSIER_MAX_DISCLOSURE_PACKET_ROWS := 12
+const STORY_DOSSIER_TRUTH_STATES := ["real", "delayed", "failed", "overhyped", "fraud_risk", "uncertain"]
+const STORY_DOSSIER_PUBLIC_STATUSES := ["silent", "rumor", "reported", "confirmed", "questioned", "disputed", "resolved"]
+const STORY_DOSSIER_STAGE_IDS := ["seeded", "public_chatter", "private_whisper", "filing_hint", "execution_window", "resolution", "aftermath"]
+const ANNUAL_STATEMENT_POST_START_ENRICHMENT_SCHEMA_VERSION := 1
+const ANNUAL_STATEMENT_POST_START_ENRICHMENT_SOURCE_ID := "annual_statement_post_start_enrichment"
+const ANNUAL_STATEMENT_POST_START_ENRICHMENT_PASS_ID := "r2_1_post_start_traceability_contract"
+const ANNUAL_STATEMENT_POST_START_SOURCE_SYSTEM_IDS := [
+	"company_story_dossier",
+	"living_company_arc",
+	"corporate_action",
+	"event_history",
+	"company_roadmap"
+]
+const LIVING_ARC_DEFAULT_COOLDOWN_KEYS := [
+	"any",
+	"company_arc",
+	"company_roadmap",
+	"corporate_action",
+	"index_review",
+	"macro_sector",
+	"relationship_graph"
+]
+const LIVING_ARC_SOURCE_COOLDOWN_DAYS := {
+	"any": 12,
+	"company_arc": 28,
+	"company_roadmap": 24,
+	"corporate_action": 40,
+	"index_review": 20,
+	"macro_sector": 14,
+	"relationship_graph": 18
+}
 const BROKER_HISTORY_BACKFILL_DAYS := 20
-const MAX_BROKER_COMPACT_HISTORY_DAYS := 1260
+const BROKER_HISTORY_COMPACT_SCHEMA_VERSION := 2
+const MAX_BROKER_COMPACT_HISTORY_DAYS := 90
 const BROKER_HISTORY_TOP_ROW_COUNT := 3
+const BROKER_HISTORY_V2_TYPE_KEYS := ["retail", "foreign", "institution", "bandar", "zombie"]
+const BROKER_HISTORY_V2_REQUIRED_KEYS := [
+	"schema_version",
+	"day_index",
+	"trade_date",
+	"flow_tag",
+	"action_meter_score",
+	"action_meter_label",
+	"net_pressure",
+	"smart_money_pressure",
+	"type_nets",
+	"dominant_buy_broker_code",
+	"dominant_sell_broker_code",
+	"dominant_buy_broker_type",
+	"dominant_sell_broker_type",
+	"total_buy_value",
+	"total_sell_value",
+	"total_value"
+]
 const CHART_HISTORY_VISIBLE_BARS := 1260
 const REPORT_CALENDAR_END_YEAR := 2030
 const APPLY_DAY_PERF_LOG_PREFIX := "[perf][apply]"
@@ -77,12 +142,18 @@ const PROFILE_SIZE_TAG_RULES := {
 # Canonical profile schema lives in CompanyProfile.KEYS (systems/CompanyProfile.gd).
 const COMPANY_PROFILE := preload("res://systems/CompanyProfile.gd")
 const COMPANY_RUNTIME := preload("res://systems/CompanyRuntime.gd")
+const COMPANY_STORY_DOSSIER_SYSTEM := preload("res://systems/CompanyStoryDossierSystem.gd")
+const COMPANY_RELATIONSHIP_GRAPH_SYSTEM := preload("res://systems/CompanyRelationshipGraphSystem.gd")
+const FINANCIAL_STATEMENT_LAYER := preload("res://systems/FinancialStatementLayer.gd")
 const COMPANY_PROFILE_KEYS := COMPANY_PROFILE.KEYS
+const MACRO_COMMODITY_DIRECTIONS := ["falling", "softening", "flat", "firming", "rising"]
+const MACRO_COMMODITY_REGIMES := ["bear", "soft", "neutral", "firm", "bull"]
 const DEFAULT_DIFFICULTY_CONFIG := {
 	"id": "normal",
 	"label": "Normal",
 	"starting_cash": 100000000.0,
 	"company_count": 30,
+	"use_company_universe_catalog": true,
 	"market_swing_range": 0.035,
 	"volatility_multiplier": 1.0,
 	"event_interval_days": 10.0,
@@ -158,6 +229,7 @@ var watchlist_company_ids = []
 var player_portfolio = {}
 var daily_summary = {}
 var last_day_results = {}
+var last_apply_day_perf_metrics = {}
 var last_equity_value = 0.0
 var trade_history = []
 var player_market_flows = {}
@@ -166,6 +238,9 @@ var market_history = []
 var active_company_arcs = []
 var active_special_events = []
 var company_roadmap_state = {}
+var living_company_arc_state = {}
+var company_story_dossier_state = {}
+var company_relationship_graph_state = {}
 var active_corporate_action_chains = {}
 var corporate_meeting_calendar = {}
 var corporate_action_intel = {}
@@ -250,6 +325,9 @@ func reset() -> void:
 	active_company_arcs = []
 	active_special_events = []
 	company_roadmap_state = _default_company_roadmap_state()
+	living_company_arc_state = _default_living_company_arc_state()
+	company_story_dossier_state = _default_company_story_dossier_state()
+	company_relationship_graph_state = _default_company_relationship_graph_state()
 	active_corporate_action_chains = {}
 	corporate_meeting_calendar = {}
 	corporate_action_intel = {}
@@ -433,14 +511,20 @@ func _add_company_to_new_run(definition_value: Dictionary) -> void:
 		"daily_change_pct": 0.0,
 		"market_depth_context": {},
 		"player_market_impact": {},
-		"company_profile": company_profile
+		"company_profile": company_profile,
+		"living_arc_state": _default_company_living_arc_state(company_id),
+		"company_story_dossier_state": _default_company_story_dossier_company_state(company_id)
 	}
 	companies[company_id] = _seed_initial_broker_flow_history(company_id, effective_definition, runtime)
+	_refresh_company_living_eligibility_tags(company_id)
 
 
 func _finalize_new_run_setup() -> void:
 	last_equity_value = get_total_equity()
 	quarterly_report_calendar = _build_quarterly_report_calendar()
+	_seed_company_relationship_graph_state_for_new_run()
+	_seed_company_story_dossier_state_for_new_run()
+	refresh_annual_statement_post_start_enrichment()
 
 
 func _effective_new_run_batch_size(total_company_count: int, requested_batch_size: int) -> int:
@@ -473,9 +557,10 @@ func _log_startup_perf_elapsed(label: String, started_at_usec: int, extra: Strin
 
 
 func _log_apply_day_perf_elapsed(enabled: bool, label: String, started_at_usec: int, extra: String = "") -> void:
+	var elapsed_msec: float = max(float(Time.get_ticks_usec() - started_at_usec) / 1000.0, 0.0)
+	last_apply_day_perf_metrics[label] = elapsed_msec
 	if not enabled:
 		return
-	var elapsed_msec: float = max(float(Time.get_ticks_usec() - started_at_usec) / 1000.0, 0.0)
 	if extra.is_empty():
 		print("%s %s %.2fms" % [APPLY_DAY_PERF_LOG_PREFIX, label, elapsed_msec])
 		return
@@ -500,6 +585,9 @@ func load_from_dict(data: Dictionary) -> void:
 	active_company_arcs = data.get("active_company_arcs", []).duplicate(true)
 	active_special_events = data.get("active_special_events", []).duplicate(true)
 	company_roadmap_state = _normalize_company_roadmap_state(data.get("company_roadmap_state", {}))
+	living_company_arc_state = _normalize_living_company_arc_state(data.get("living_company_arc_state", {}))
+	company_story_dossier_state = _normalize_company_story_dossier_state(data.get("company_story_dossier_state", {}))
+	company_relationship_graph_state = _normalize_company_relationship_graph_state(data.get("company_relationship_graph_state", {}))
 	active_corporate_action_chains = data.get("active_corporate_action_chains", {}).duplicate(true)
 	corporate_meeting_calendar = data.get("corporate_meeting_calendar", {}).duplicate(true)
 	corporate_action_intel = data.get("corporate_action_intel", {}).duplicate(true)
@@ -527,7 +615,7 @@ func load_from_dict(data: Dictionary) -> void:
 	academy_progress = _normalize_academy_progress(data.get("academy_progress", {}))
 	steam_progress = _normalize_steam_progress(data.get("steam_progress", {}))
 	quarterly_report_calendar = data.get("quarterly_report_calendar", {}).duplicate(true)
-	yearly_macro_states = data.get("yearly_macro_states", {}).duplicate(true)
+	yearly_macro_states = _normalize_yearly_macro_states(data.get("yearly_macro_states", {}))
 	difficulty_id = str(data.get("difficulty_id", "normal"))
 	difficulty_config = data.get("difficulty_config", {}).duplicate(true)
 	if difficulty_config.is_empty():
@@ -565,7 +653,11 @@ func load_from_dict(data: Dictionary) -> void:
 
 	for company_id in data.get("companies", {}).keys():
 		companies[str(company_id)] = _normalize_company_runtime(data["companies"][company_id].duplicate(true))
+	company_relationship_graph_state = _normalize_company_relationship_graph_state(company_relationship_graph_state)
+	_sync_living_company_arc_state(day_index, active_company_arcs, false)
+	_sync_company_story_dossier_company_states()
 	_ensure_company_roadmap_profiles()
+	refresh_annual_statement_post_start_enrichment()
 	_log_startup_perf_elapsed("load_from_dict:companies", phase_started_at_usec, " companies=%d" % companies.size())
 	phase_started_at_usec = Time.get_ticks_usec()
 
@@ -609,6 +701,9 @@ func to_save_dict() -> Dictionary:
 		"active_company_arcs": active_company_arcs.duplicate(true),
 		"active_special_events": active_special_events.duplicate(true),
 		"company_roadmap_state": _normalize_company_roadmap_state(company_roadmap_state),
+		"living_company_arc_state": _normalize_living_company_arc_state(living_company_arc_state),
+		"company_story_dossier_state": _normalize_company_story_dossier_state(company_story_dossier_state),
+		"company_relationship_graph_state": _normalize_company_relationship_graph_state(company_relationship_graph_state),
 		"active_corporate_action_chains": active_corporate_action_chains.duplicate(true),
 		"corporate_meeting_calendar": corporate_meeting_calendar.duplicate(true),
 		"corporate_action_intel": corporate_action_intel.duplicate(true),
@@ -635,7 +730,7 @@ func to_save_dict() -> Dictionary:
 		"academy_progress": get_academy_progress(),
 		"steam_progress": get_steam_progress(),
 		"quarterly_report_calendar": quarterly_report_calendar.duplicate(true),
-		"yearly_macro_states": yearly_macro_states.duplicate(true),
+		"yearly_macro_states": _normalize_yearly_macro_states(yearly_macro_states),
 		"difficulty_id": difficulty_id,
 		"difficulty_config": difficulty_config.duplicate(true),
 		"tutorial_enabled": tutorial_enabled,
@@ -664,6 +759,10 @@ func get_company(company_id: String) -> Dictionary:
 	if not companies.has(company_id):
 		return {}
 	return companies[company_id]
+
+
+func get_last_apply_day_perf_metrics() -> Dictionary:
+	return last_apply_day_perf_metrics.duplicate(true)
 
 
 func get_company_runtime(company_id: String):
@@ -730,6 +829,7 @@ func ensure_company_full_detail(company_id: String, persist_detail: bool = true)
 			company_profile["detail_persistence"] = COMPANY_DETAIL_PERSISTENCE_PERSISTENT
 			runtime.set_profile(company_profile)
 			_store_company_runtime(runtime)
+		_refresh_company_annual_statement_post_start_enrichment(company_id)
 		return true
 	var template: Dictionary = _get_base_company_definition(company_id)
 	if template.is_empty():
@@ -753,7 +853,1511 @@ func ensure_company_full_detail(company_id: String, persist_detail: bool = true)
 	var queued_index: int = company_detail_hydration_queue.find(company_id)
 	if queued_index >= 0:
 		company_detail_hydration_queue.remove_at(queued_index)
+	_refresh_company_annual_statement_post_start_enrichment(company_id)
 	return true
+
+
+func refresh_annual_statement_post_start_enrichment(company_id: String = "") -> int:
+	var enriched_count: int = 0
+	if not company_id.strip_edges().is_empty():
+		return 1 if _refresh_company_annual_statement_post_start_enrichment(company_id.strip_edges()) else 0
+	for company_id_value in company_order:
+		if _refresh_company_annual_statement_post_start_enrichment(str(company_id_value)):
+			enriched_count += 1
+	return enriched_count
+
+
+func _refresh_company_annual_statement_post_start_enrichment(company_id: String) -> bool:
+	if company_id.is_empty() or not companies.has(company_id):
+		return false
+	var runtime = get_company_runtime(company_id)
+	if runtime.is_empty() or not runtime.has_profile():
+		return false
+	var company_profile: Dictionary = runtime.profile_dict()
+	var snapshot_value = company_profile.get("financial_statement_snapshot", {})
+	if typeof(snapshot_value) != TYPE_DICTIONARY:
+		return false
+	var snapshot: Dictionary = snapshot_value.duplicate(true)
+	var found_annual_statement: bool = false
+	var changed: bool = false
+	var context: Dictionary = _annual_statement_post_start_enrichment_context(company_id)
+
+	var annual_statement_value = snapshot.get("annual_statement", {})
+	if typeof(annual_statement_value) == TYPE_DICTIONARY and not annual_statement_value.is_empty():
+		found_annual_statement = true
+		var enriched_statement: Dictionary = _annual_statement_with_post_start_enrichment(annual_statement_value, context)
+		if _annual_statement_enrichment_signature(annual_statement_value) != _annual_statement_enrichment_signature(enriched_statement):
+			snapshot["annual_statement"] = enriched_statement
+			changed = true
+
+	var annual_statements_value = snapshot.get("annual_statements", [])
+	if typeof(annual_statements_value) == TYPE_ARRAY:
+		var annual_statements: Array = []
+		for statement_value in annual_statements_value:
+			if typeof(statement_value) != TYPE_DICTIONARY:
+				annual_statements.append(statement_value)
+				continue
+			found_annual_statement = true
+			var statement: Dictionary = statement_value
+			var enriched_statement: Dictionary = _annual_statement_with_post_start_enrichment(statement, context)
+			if _annual_statement_enrichment_signature(statement) != _annual_statement_enrichment_signature(enriched_statement):
+				annual_statements.append(enriched_statement)
+				changed = true
+			else:
+				annual_statements.append(statement)
+		if changed:
+			snapshot["annual_statements"] = annual_statements
+
+	if not found_annual_statement:
+		return false
+	if not changed:
+		return true
+	company_profile["financial_statement_snapshot"] = snapshot
+	runtime.set_profile(company_profile)
+	_store_company_runtime(runtime)
+	return true
+
+
+func _annual_statement_post_start_enrichment_context(company_id: String) -> Dictionary:
+	return {
+		"schema_version": ANNUAL_STATEMENT_POST_START_ENRICHMENT_SCHEMA_VERSION,
+		"source_system_id": ANNUAL_STATEMENT_POST_START_ENRICHMENT_SOURCE_ID,
+		"pass_id": ANNUAL_STATEMENT_POST_START_ENRICHMENT_PASS_ID,
+		"company_id": company_id,
+		"source_mapping_status": "ready_for_live_source_mapping",
+		"available_source_system_ids": ANNUAL_STATEMENT_POST_START_SOURCE_SYSTEM_IDS.duplicate(),
+		"source_state_ready": {
+			"company_story_dossier": typeof(company_story_dossier_state) == TYPE_DICTIONARY,
+			"living_company_arc": typeof(living_company_arc_state) == TYPE_DICTIONARY,
+			"corporate_action": typeof(active_corporate_action_chains) == TYPE_DICTIONARY and typeof(corporate_action_intel) == TYPE_DICTIONARY,
+			"event_history": typeof(event_history) == TYPE_ARRAY,
+			"company_roadmap": typeof(company_roadmap_state) == TYPE_DICTIONARY
+		},
+		"story_sources_by_note_type": _annual_statement_story_sources_by_note_type(company_id),
+		"living_arc_sources_by_note_type": _annual_statement_living_arc_sources_by_note_type(company_id),
+		"corporate_action_sources_by_note_type": _annual_statement_corporate_action_sources_by_note_type(company_id),
+		"event_sources_by_note_type": _annual_statement_event_sources_by_note_type(company_id),
+		"roadmap_sources_by_note_type": _annual_statement_roadmap_sources_by_note_type(company_id)
+	}
+
+
+func _annual_statement_with_post_start_enrichment(statement_value: Dictionary, context: Dictionary) -> Dictionary:
+	var statement: Dictionary = statement_value.duplicate(true)
+	var enrichment: Dictionary = {}
+	if typeof(statement.get("post_start_traceability", {})) == TYPE_DICTIONARY:
+		enrichment = statement.get("post_start_traceability", {}).duplicate(true)
+	enrichment["schema_version"] = int(context.get("schema_version", ANNUAL_STATEMENT_POST_START_ENRICHMENT_SCHEMA_VERSION))
+	enrichment["source_system_id"] = str(context.get("source_system_id", ANNUAL_STATEMENT_POST_START_ENRICHMENT_SOURCE_ID))
+	enrichment["pass_id"] = str(context.get("pass_id", ANNUAL_STATEMENT_POST_START_ENRICHMENT_PASS_ID))
+	enrichment["company_id"] = str(context.get("company_id", ""))
+	enrichment["source_mapping_status"] = str(context.get("source_mapping_status", "ready_for_live_source_mapping"))
+	enrichment["available_source_system_ids"] = _annual_statement_enrichment_string_array(
+		context.get("available_source_system_ids", []),
+		ANNUAL_STATEMENT_POST_START_SOURCE_SYSTEM_IDS
+	)
+	enrichment["source_state_ready"] = context.get("source_state_ready", {}).duplicate(true)
+	statement["post_start_traceability"] = enrichment
+
+	var traceability: Dictionary = {}
+	if typeof(statement.get("traceability", {})) == TYPE_DICTIONARY:
+		traceability = statement.get("traceability", {}).duplicate(true)
+	traceability["post_start_enrichment_passes"] = _annual_statement_enrichment_string_array(
+		_annual_statement_enrichment_array_with_value(
+			traceability.get("post_start_enrichment_passes", []),
+			ANNUAL_STATEMENT_POST_START_ENRICHMENT_PASS_ID
+		),
+		[ANNUAL_STATEMENT_POST_START_ENRICHMENT_PASS_ID]
+	)
+	traceability["post_start_available_source_system_ids"] = _annual_statement_enrichment_string_array(
+		context.get("available_source_system_ids", []),
+		ANNUAL_STATEMENT_POST_START_SOURCE_SYSTEM_IDS
+	)
+	statement["traceability"] = traceability
+
+	var notes_value = statement.get("notes", [])
+	if typeof(notes_value) == TYPE_ARRAY:
+		var notes: Array = []
+		for note_value in notes_value:
+			if typeof(note_value) != TYPE_DICTIONARY:
+				notes.append(note_value)
+				continue
+			notes.append(_annual_statement_note_with_post_start_enrichment(note_value, context))
+		statement["notes"] = notes
+		statement["traceability"] = _annual_statement_traceability_with_note_rollup(traceability, notes)
+	statement = ANNUAL_STATEMENT_BUILDER.with_filing_note_bodies(statement)
+	return statement
+
+
+func _annual_statement_note_with_post_start_enrichment(note_value: Dictionary, context: Dictionary) -> Dictionary:
+	var note: Dictionary = note_value.duplicate(true)
+	var enrichment: Dictionary = {}
+	if typeof(note.get("post_start_traceability", {})) == TYPE_DICTIONARY:
+		enrichment = note.get("post_start_traceability", {}).duplicate(true)
+	enrichment["schema_version"] = int(context.get("schema_version", ANNUAL_STATEMENT_POST_START_ENRICHMENT_SCHEMA_VERSION))
+	enrichment["source_system_id"] = str(context.get("source_system_id", ANNUAL_STATEMENT_POST_START_ENRICHMENT_SOURCE_ID))
+	enrichment["pass_id"] = str(context.get("pass_id", ANNUAL_STATEMENT_POST_START_ENRICHMENT_PASS_ID))
+	enrichment["source_mapping_status"] = str(context.get("source_mapping_status", "ready_for_live_source_mapping"))
+	enrichment["available_source_system_ids"] = _annual_statement_enrichment_string_array(
+		context.get("available_source_system_ids", []),
+		ANNUAL_STATEMENT_POST_START_SOURCE_SYSTEM_IDS
+	)
+	note["post_start_traceability"] = enrichment
+	note = _annual_statement_note_with_story_sources(note, context)
+	note = _annual_statement_note_with_living_arc_sources(note, context)
+	note = _annual_statement_note_with_corporate_action_sources(note, context)
+	note = _annual_statement_note_with_event_sources(note, context)
+	note = _annual_statement_note_with_roadmap_sources(note, context)
+	return note
+
+
+func _annual_statement_note_with_story_sources(note: Dictionary, context: Dictionary) -> Dictionary:
+	var note_type: String = str(note.get("note_type", "")).strip_edges()
+	var sources_by_note_type: Dictionary = context.get("story_sources_by_note_type", {}) if typeof(context.get("story_sources_by_note_type", {})) == TYPE_DICTIONARY else {}
+	var source_rows: Array = _annual_statement_enrichment_variant_array(sources_by_note_type.get(note_type, []))
+	if source_rows.is_empty():
+		return note
+	var story_ids: Array = _annual_statement_enrichment_variant_array(note.get("source_story_ids", []))
+	var effect_ids: Array = _annual_statement_enrichment_variant_array(note.get("source_effect_ids", []))
+	var fact_ids: Array = _annual_statement_enrichment_variant_array(note.get("fact_ids", []))
+	var clue_ids: Array = _annual_statement_enrichment_variant_array(note.get("clue_ids", []))
+	var disclosure_packet_ids: Array = _annual_statement_enrichment_variant_array(note.get("source_disclosure_packet_ids", []))
+	var disclosure_placement_ids: Array = _annual_statement_enrichment_variant_array(note.get("source_disclosure_placement_ids", []))
+	var disclosure_section_ids: Array = _annual_statement_enrichment_variant_array(note.get("source_disclosure_section_ids", []))
+	var story_refs: Array = _annual_statement_story_source_refs(note.get("story_source_refs", []))
+	var packet_refs: Array = _annual_statement_disclosure_packet_refs(note.get("disclosure_packet_refs", []))
+	for source_value in source_rows:
+		if typeof(source_value) != TYPE_DICTIONARY:
+			continue
+		var source: Dictionary = source_value
+		var packet_source: Dictionary = _annual_statement_disclosure_packet_source_for_note(source, note_type)
+		story_ids = _annual_statement_enrichment_array_with_values(story_ids, source.get("story_ids", []))
+		story_ids = _annual_statement_enrichment_array_with_value(story_ids, str(source.get("story_id", "")))
+		effect_ids = _annual_statement_enrichment_array_with_values(effect_ids, source.get("effect_ids", []))
+		fact_ids = _annual_statement_enrichment_array_with_values(fact_ids, source.get("fact_ids", []))
+		clue_ids = _annual_statement_enrichment_array_with_values(clue_ids, source.get("clue_ids", []))
+		disclosure_packet_ids = _annual_statement_enrichment_array_with_values(disclosure_packet_ids, packet_source.get("source_disclosure_packet_ids", []))
+		disclosure_placement_ids = _annual_statement_enrichment_array_with_values(disclosure_placement_ids, packet_source.get("source_disclosure_placement_ids", []))
+		disclosure_section_ids = _annual_statement_enrichment_array_with_values(disclosure_section_ids, packet_source.get("source_disclosure_section_ids", []))
+		for packet_ref_value in _annual_statement_disclosure_packet_refs(packet_source.get("disclosure_packet_refs", [])):
+			packet_refs = _annual_statement_append_unique_source_ref(packet_refs, packet_ref_value, "packet_id")
+		story_refs = _annual_statement_append_unique_source_ref(
+			story_refs,
+			_annual_statement_story_ref_for_note_source(_annual_statement_source_with_packet_source(source, packet_source), note_type),
+			"story_id"
+		)
+	story_ids = _annual_statement_enrichment_string_array(story_ids)
+	effect_ids = _annual_statement_enrichment_string_array(effect_ids)
+	fact_ids = _annual_statement_enrichment_string_array(fact_ids)
+	clue_ids = _annual_statement_enrichment_string_array(clue_ids)
+	disclosure_packet_ids = _annual_statement_enrichment_string_array(disclosure_packet_ids)
+	disclosure_placement_ids = _annual_statement_enrichment_string_array(disclosure_placement_ids)
+	disclosure_section_ids = _annual_statement_enrichment_string_array(disclosure_section_ids)
+	note["source_story_ids"] = story_ids
+	note["source_effect_ids"] = effect_ids
+	note["effect_ids"] = effect_ids
+	note["fact_ids"] = fact_ids
+	note["clue_ids"] = clue_ids
+	note["source_disclosure_packet_ids"] = disclosure_packet_ids
+	note["source_disclosure_placement_ids"] = disclosure_placement_ids
+	note["source_disclosure_section_ids"] = disclosure_section_ids
+	note["story_source_refs"] = story_refs
+	note["disclosure_packet_refs"] = packet_refs
+	if str(note.get("story_id", "")).strip_edges().is_empty() and not story_ids.is_empty():
+		note["story_id"] = str(story_ids[0])
+	if str(note.get("effect_id", "")).strip_edges().is_empty() and not effect_ids.is_empty():
+		note["effect_id"] = str(effect_ids[0])
+	if str(note.get("fact_id", "")).strip_edges().is_empty() and not fact_ids.is_empty():
+		note["fact_id"] = str(fact_ids[0])
+	if str(note.get("clue_id", "")).strip_edges().is_empty() and not clue_ids.is_empty():
+		note["clue_id"] = str(clue_ids[0])
+	return note
+
+
+func _annual_statement_note_with_living_arc_sources(note: Dictionary, context: Dictionary) -> Dictionary:
+	var note_type: String = str(note.get("note_type", "")).strip_edges()
+	var sources_by_note_type: Dictionary = context.get("living_arc_sources_by_note_type", {}) if typeof(context.get("living_arc_sources_by_note_type", {})) == TYPE_DICTIONARY else {}
+	var source_rows: Array = _annual_statement_enrichment_variant_array(sources_by_note_type.get(note_type, []))
+	if source_rows.is_empty():
+		return note
+	var arc_ids: Array = _annual_statement_enrichment_variant_array(note.get("source_living_arc_ids", []))
+	var arc_refs: Array = _annual_statement_living_arc_refs(note.get("living_arc_refs", []))
+	for source_value in source_rows:
+		if typeof(source_value) != TYPE_DICTIONARY:
+			continue
+		var source: Dictionary = source_value
+		arc_ids = _annual_statement_enrichment_array_with_value(arc_ids, str(source.get("arc_id", "")))
+		arc_refs = _annual_statement_append_unique_source_ref(arc_refs, source, "arc_id")
+	note["source_living_arc_ids"] = _annual_statement_enrichment_string_array(arc_ids)
+	note["living_arc_refs"] = arc_refs
+	return note
+
+
+func _annual_statement_note_with_corporate_action_sources(note: Dictionary, context: Dictionary) -> Dictionary:
+	var note_type: String = str(note.get("note_type", "")).strip_edges()
+	var sources_by_note_type: Dictionary = context.get("corporate_action_sources_by_note_type", {}) if typeof(context.get("corporate_action_sources_by_note_type", {})) == TYPE_DICTIONARY else {}
+	var source_rows: Array = _annual_statement_enrichment_variant_array(sources_by_note_type.get(note_type, []))
+	if source_rows.is_empty():
+		return note
+	var action_ids: Array = _annual_statement_enrichment_variant_array(note.get("source_corporate_action_ids", []))
+	var action_refs: Array = _annual_statement_corporate_action_refs(note.get("corporate_action_refs", []))
+	for source_value in source_rows:
+		if typeof(source_value) != TYPE_DICTIONARY:
+			continue
+		var source: Dictionary = source_value
+		action_ids = _annual_statement_enrichment_array_with_value(action_ids, str(source.get("action_id", "")))
+		action_refs = _annual_statement_append_unique_source_ref(action_refs, source, "action_id")
+	note["source_corporate_action_ids"] = _annual_statement_enrichment_string_array(action_ids)
+	note["corporate_action_refs"] = action_refs
+	return note
+
+
+func _annual_statement_note_with_event_sources(note: Dictionary, context: Dictionary) -> Dictionary:
+	var note_type: String = str(note.get("note_type", "")).strip_edges()
+	var sources_by_note_type: Dictionary = context.get("event_sources_by_note_type", {}) if typeof(context.get("event_sources_by_note_type", {})) == TYPE_DICTIONARY else {}
+	var source_rows: Array = _annual_statement_enrichment_variant_array(sources_by_note_type.get(note_type, []))
+	if source_rows.is_empty():
+		return note
+	var event_ids: Array = _annual_statement_enrichment_variant_array(note.get("source_event_ids", []))
+	var event_ref_ids: Array = _annual_statement_enrichment_variant_array(note.get("source_event_ref_ids", []))
+	var event_refs: Array = _annual_statement_event_refs(note.get("event_refs", []))
+	for source_value in source_rows:
+		if typeof(source_value) != TYPE_DICTIONARY:
+			continue
+		var source: Dictionary = source_value
+		event_ids = _annual_statement_enrichment_array_with_value(event_ids, str(source.get("event_id", "")))
+		event_ref_ids = _annual_statement_enrichment_array_with_value(event_ref_ids, str(source.get("event_ref_id", "")))
+		event_refs = _annual_statement_append_unique_source_ref(event_refs, source, "event_ref_id")
+	note["source_event_ids"] = _annual_statement_enrichment_string_array(event_ids)
+	note["source_event_ref_ids"] = _annual_statement_enrichment_string_array(event_ref_ids)
+	note["event_refs"] = event_refs
+	return note
+
+
+func _annual_statement_note_with_roadmap_sources(note: Dictionary, context: Dictionary) -> Dictionary:
+	var note_type: String = str(note.get("note_type", "")).strip_edges()
+	var sources_by_note_type: Dictionary = context.get("roadmap_sources_by_note_type", {}) if typeof(context.get("roadmap_sources_by_note_type", {})) == TYPE_DICTIONARY else {}
+	var source_rows: Array = _annual_statement_enrichment_variant_array(sources_by_note_type.get(note_type, []))
+	if source_rows.is_empty():
+		return note
+	var roadmap_ids: Array = _annual_statement_enrichment_variant_array(note.get("source_roadmap_ids", []))
+	var roadmap_refs: Array = _annual_statement_roadmap_refs(note.get("roadmap_refs", []))
+	for source_value in source_rows:
+		if typeof(source_value) != TYPE_DICTIONARY:
+			continue
+		var source: Dictionary = source_value
+		roadmap_ids = _annual_statement_enrichment_array_with_value(roadmap_ids, str(source.get("roadmap_id", "")))
+		roadmap_refs = _annual_statement_append_unique_source_ref(roadmap_refs, source, "roadmap_id")
+	note["source_roadmap_ids"] = _annual_statement_enrichment_string_array(roadmap_ids)
+	note["roadmap_refs"] = roadmap_refs
+	return note
+
+
+func _annual_statement_traceability_with_note_rollup(traceability_value: Dictionary, notes: Array) -> Dictionary:
+	var traceability: Dictionary = traceability_value.duplicate(true)
+	var story_ids: Array = _annual_statement_enrichment_variant_array(traceability.get("post_start_source_story_ids", []))
+	var effect_ids: Array = _annual_statement_enrichment_variant_array(traceability.get("post_start_source_effect_ids", []))
+	var fact_ids: Array = _annual_statement_enrichment_variant_array(traceability.get("post_start_source_fact_ids", []))
+	var clue_ids: Array = _annual_statement_enrichment_variant_array(traceability.get("post_start_source_clue_ids", []))
+	var disclosure_packet_ids: Array = _annual_statement_enrichment_variant_array(traceability.get("post_start_source_disclosure_packet_ids", []))
+	var disclosure_placement_ids: Array = _annual_statement_enrichment_variant_array(traceability.get("post_start_source_disclosure_placement_ids", []))
+	var disclosure_section_ids: Array = _annual_statement_enrichment_variant_array(traceability.get("post_start_source_disclosure_section_ids", []))
+	var arc_ids: Array = _annual_statement_enrichment_variant_array(traceability.get("post_start_source_living_arc_ids", []))
+	var corporate_action_ids: Array = _annual_statement_enrichment_variant_array(traceability.get("post_start_source_corporate_action_ids", []))
+	var event_ids: Array = _annual_statement_enrichment_variant_array(traceability.get("post_start_source_event_ids", []))
+	var event_ref_ids: Array = _annual_statement_enrichment_variant_array(traceability.get("post_start_source_event_ref_ids", []))
+	var roadmap_ids: Array = _annual_statement_enrichment_variant_array(traceability.get("post_start_source_roadmap_ids", []))
+	for note_value in notes:
+		if typeof(note_value) != TYPE_DICTIONARY:
+			continue
+		var note: Dictionary = note_value
+		story_ids = _annual_statement_enrichment_array_with_values(story_ids, note.get("source_story_ids", []))
+		effect_ids = _annual_statement_enrichment_array_with_values(effect_ids, note.get("source_effect_ids", []))
+		fact_ids = _annual_statement_enrichment_array_with_values(fact_ids, note.get("fact_ids", []))
+		clue_ids = _annual_statement_enrichment_array_with_values(clue_ids, note.get("clue_ids", []))
+		disclosure_packet_ids = _annual_statement_enrichment_array_with_values(disclosure_packet_ids, note.get("source_disclosure_packet_ids", []))
+		disclosure_placement_ids = _annual_statement_enrichment_array_with_values(disclosure_placement_ids, note.get("source_disclosure_placement_ids", []))
+		disclosure_section_ids = _annual_statement_enrichment_array_with_values(disclosure_section_ids, note.get("source_disclosure_section_ids", []))
+		arc_ids = _annual_statement_enrichment_array_with_values(arc_ids, note.get("source_living_arc_ids", []))
+		corporate_action_ids = _annual_statement_enrichment_array_with_values(corporate_action_ids, note.get("source_corporate_action_ids", []))
+		event_ids = _annual_statement_enrichment_array_with_values(event_ids, note.get("source_event_ids", []))
+		event_ref_ids = _annual_statement_enrichment_array_with_values(event_ref_ids, note.get("source_event_ref_ids", []))
+		roadmap_ids = _annual_statement_enrichment_array_with_values(roadmap_ids, note.get("source_roadmap_ids", []))
+	traceability["post_start_source_story_ids"] = _annual_statement_enrichment_string_array(story_ids)
+	traceability["post_start_source_effect_ids"] = _annual_statement_enrichment_string_array(effect_ids)
+	traceability["post_start_source_fact_ids"] = _annual_statement_enrichment_string_array(fact_ids)
+	traceability["post_start_source_clue_ids"] = _annual_statement_enrichment_string_array(clue_ids)
+	traceability["post_start_source_disclosure_packet_ids"] = _annual_statement_enrichment_string_array(disclosure_packet_ids)
+	traceability["post_start_source_disclosure_placement_ids"] = _annual_statement_enrichment_string_array(disclosure_placement_ids)
+	traceability["post_start_source_disclosure_section_ids"] = _annual_statement_enrichment_string_array(disclosure_section_ids)
+	traceability["post_start_source_living_arc_ids"] = _annual_statement_enrichment_string_array(arc_ids)
+	traceability["post_start_source_corporate_action_ids"] = _annual_statement_enrichment_string_array(corporate_action_ids)
+	traceability["post_start_source_event_ids"] = _annual_statement_enrichment_string_array(event_ids)
+	traceability["post_start_source_event_ref_ids"] = _annual_statement_enrichment_string_array(event_ref_ids)
+	traceability["post_start_source_roadmap_ids"] = _annual_statement_enrichment_string_array(roadmap_ids)
+	return traceability
+
+
+func _annual_statement_story_sources_by_note_type(company_id: String) -> Dictionary:
+	var result: Dictionary = {}
+	for dossier in get_company_story_dossiers_for_company(company_id):
+		if typeof(dossier) != TYPE_DICTIONARY:
+			continue
+		var source: Dictionary = _annual_statement_story_source_from_dossier(dossier)
+		if source.is_empty():
+			continue
+		for note_type_value in _annual_statement_note_types_for_story_source(source):
+			var note_type: String = str(note_type_value)
+			var rows: Array = _annual_statement_story_source_refs(result.get(note_type, []))
+			rows = _annual_statement_append_unique_source_ref(rows, source, "story_id")
+			result[note_type] = rows
+	return result
+
+
+func _annual_statement_story_source_from_dossier(dossier: Dictionary) -> Dictionary:
+	var story_id: String = str(dossier.get("story_id", "")).strip_edges()
+	if story_id.is_empty():
+		return {}
+	var fact_ids: Array = []
+	for fact_value in _annual_statement_enrichment_variant_array(dossier.get("cause_facts", [])):
+		if typeof(fact_value) == TYPE_DICTIONARY:
+			fact_ids = _annual_statement_enrichment_array_with_value(fact_ids, str(fact_value.get("fact_id", "")))
+	var effect_ids: Array = []
+	var metric_ids: Array = []
+	var source_note_types: Array = []
+	for effect_value in _annual_statement_enrichment_variant_array(dossier.get("financial_effects", [])):
+		if typeof(effect_value) != TYPE_DICTIONARY:
+			continue
+		var effect: Dictionary = effect_value
+		effect_ids = _annual_statement_enrichment_array_with_value(effect_ids, str(effect.get("effect_id", "")))
+		metric_ids = _annual_statement_enrichment_array_with_value(metric_ids, str(effect.get("metric_id", "")))
+		source_note_types = _annual_statement_enrichment_array_with_value(source_note_types, str(effect.get("note_type", "")))
+	var clue_ids: Array = []
+	for clue_value in _annual_statement_enrichment_variant_array(dossier.get("statement_clues", [])):
+		if typeof(clue_value) != TYPE_DICTIONARY:
+			continue
+		var clue: Dictionary = clue_value
+		clue_ids = _annual_statement_enrichment_array_with_value(clue_ids, str(clue.get("clue_id", "")))
+		source_note_types = _annual_statement_enrichment_array_with_value(source_note_types, str(clue.get("note_type", "")))
+		metric_ids = _annual_statement_enrichment_array_with_values(metric_ids, clue.get("metric_ids", []))
+	var traceability: Dictionary = dossier.get("traceability", {}) if typeof(dossier.get("traceability", {})) == TYPE_DICTIONARY else {}
+	fact_ids = _annual_statement_enrichment_array_with_values(fact_ids, traceability.get("source_fact_ids", []))
+	effect_ids = _annual_statement_enrichment_array_with_values(effect_ids, traceability.get("statement_effect_ids", []))
+	clue_ids = _annual_statement_enrichment_array_with_values(clue_ids, traceability.get("evidence_ids", []))
+	var disclosure_packet_refs: Array = _annual_statement_disclosure_packet_refs_from_dossier(dossier)
+	var disclosure_packet_ids: Array = _annual_statement_ids_from_refs(disclosure_packet_refs, "packet_id")
+	var disclosure_placement_ids: Array = _annual_statement_ids_from_refs(disclosure_packet_refs, "placement_id")
+	var disclosure_section_ids: Array = _annual_statement_ids_from_refs(disclosure_packet_refs, "section_id")
+	var disclosure_note_types: Array = []
+	for packet_ref in disclosure_packet_refs:
+		disclosure_note_types = _annual_statement_enrichment_array_with_values(
+			disclosure_note_types,
+			_annual_statement_note_types_for_disclosure_ref(packet_ref)
+		)
+	return {
+		"story_id": story_id,
+		"story_ids": [story_id],
+		"company_id": str(dossier.get("company_id", "")),
+		"archetype_id": str(dossier.get("archetype_id", "")),
+		"story_family": str(dossier.get("story_family", "")),
+		"stage_id": str(dossier.get("stage_id", "")),
+		"public_status": str(dossier.get("public_status", "")),
+		"fact_ids": _annual_statement_enrichment_string_array(fact_ids),
+		"effect_ids": _annual_statement_enrichment_string_array(effect_ids),
+		"clue_ids": _annual_statement_enrichment_string_array(clue_ids),
+		"metric_ids": _annual_statement_enrichment_string_array(metric_ids),
+		"source_note_types": _annual_statement_enrichment_string_array(source_note_types),
+		"source_disclosure_packet_ids": _annual_statement_enrichment_string_array(disclosure_packet_ids),
+		"source_disclosure_placement_ids": _annual_statement_enrichment_string_array(disclosure_placement_ids),
+		"source_disclosure_section_ids": _annual_statement_enrichment_string_array(disclosure_section_ids),
+		"disclosure_note_types": _annual_statement_enrichment_string_array(disclosure_note_types),
+		"disclosure_packet_refs": disclosure_packet_refs
+	}
+
+
+func _annual_statement_disclosure_packet_refs_from_dossier(dossier: Dictionary) -> Array:
+	var rows: Array = []
+	for packet_value in _annual_statement_enrichment_variant_array(dossier.get("disclosure_packets", [])):
+		if typeof(packet_value) != TYPE_DICTIONARY:
+			continue
+		var packet_ref: Dictionary = _annual_statement_disclosure_packet_ref(packet_value)
+		if packet_ref.is_empty():
+			continue
+		rows = _annual_statement_append_unique_source_ref(rows, packet_ref, "packet_id")
+	return _annual_statement_disclosure_packet_refs(rows)
+
+
+func _annual_statement_disclosure_packet_ref(source_value: Variant) -> Dictionary:
+	if typeof(source_value) != TYPE_DICTIONARY:
+		return {}
+	var source: Dictionary = source_value
+	var packet_id: String = str(source.get("packet_id", "")).strip_edges()
+	if packet_id.is_empty():
+		return {}
+	return {
+		"packet_id": packet_id,
+		"placement_id": str(source.get("placement_id", "")).strip_edges(),
+		"story_id": str(source.get("story_id", "")).strip_edges(),
+		"source_system_id": str(source.get("source_system_id", "company_story_dossier")).strip_edges(),
+		"surface_id": str(source.get("surface_id", "annual_report")).strip_edges(),
+		"section_id": str(source.get("section_id", "")).strip_edges(),
+		"section_label": str(source.get("section_label", "")).strip_edges(),
+		"section_group": str(source.get("section_group", "")).strip_edges(),
+		"annual_statement_note_type": str(source.get("annual_statement_note_type", "")).strip_edges(),
+		"note_type": str(source.get("note_type", "")).strip_edges(),
+		"subtlety": str(source.get("subtlety", "implied")).strip_edges(),
+		"reader_effort": str(source.get("reader_effort", "")).strip_edges(),
+		"evidence_density": str(source.get("evidence_density", "")).strip_edges(),
+		"fragment_role": str(source.get("fragment_role", "")).strip_edges(),
+		"scattering_strategy": str(source.get("scattering_strategy", "")).strip_edges(),
+		"packet_role": str(source.get("packet_role", "")).strip_edges(),
+		"render_priority": int(source.get("render_priority", 0)),
+		"fact_ids": _annual_statement_enrichment_string_array(source.get("fact_ids", [])),
+		"effect_ids": _annual_statement_enrichment_string_array(source.get("effect_ids", [])),
+		"clue_ids": _annual_statement_enrichment_string_array(source.get("clue_ids", [])),
+		"metric_ids": _annual_statement_enrichment_string_array(source.get("metric_ids", [])),
+		"statement_sections": _annual_statement_enrichment_string_array(source.get("statement_sections", [])),
+		"source_note_types": _annual_statement_enrichment_string_array(source.get("source_note_types", [])),
+		"source_metric_ids": _annual_statement_enrichment_string_array(source.get("source_metric_ids", [])),
+		"phrase_ids": _annual_statement_enrichment_string_array(source.get("phrase_ids", [])),
+		"render_tokens": _annual_statement_enrichment_string_array(source.get("render_tokens", [])),
+		"cross_reference_section_ids": _annual_statement_enrichment_string_array(source.get("cross_reference_section_ids", [])),
+		"text_key": str(source.get("text_key", "")).strip_edges()
+	}
+
+
+func _annual_statement_disclosure_packet_refs(source_value: Variant) -> Array:
+	var rows: Array = []
+	for row_value in _annual_statement_enrichment_variant_array(source_value):
+		var row: Dictionary = _annual_statement_disclosure_packet_ref(row_value)
+		if row.is_empty():
+			continue
+		rows = _annual_statement_append_unique_source_ref(rows, row, "packet_id")
+	rows.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return str(left.get("packet_id", "")) < str(right.get("packet_id", ""))
+	)
+	return rows
+
+
+func _annual_statement_disclosure_packet_source_for_note(source: Dictionary, note_type: String) -> Dictionary:
+	var packet_refs: Array = []
+	for packet_ref_value in _annual_statement_disclosure_packet_refs(source.get("disclosure_packet_refs", [])):
+		if typeof(packet_ref_value) != TYPE_DICTIONARY:
+			continue
+		var packet_ref: Dictionary = packet_ref_value
+		if not _annual_statement_note_types_for_disclosure_ref(packet_ref).has(note_type):
+			continue
+		packet_refs = _annual_statement_append_unique_source_ref(packet_refs, packet_ref, "packet_id")
+	return {
+		"source_disclosure_packet_ids": _annual_statement_ids_from_refs(packet_refs, "packet_id"),
+		"source_disclosure_placement_ids": _annual_statement_ids_from_refs(packet_refs, "placement_id"),
+		"source_disclosure_section_ids": _annual_statement_ids_from_refs(packet_refs, "section_id"),
+		"disclosure_packet_refs": _annual_statement_disclosure_packet_refs(packet_refs)
+	}
+
+
+func _annual_statement_source_with_packet_source(source: Dictionary, packet_source: Dictionary) -> Dictionary:
+	var result: Dictionary = source.duplicate(true)
+	result["source_disclosure_packet_ids"] = _annual_statement_enrichment_string_array(packet_source.get("source_disclosure_packet_ids", []))
+	result["source_disclosure_placement_ids"] = _annual_statement_enrichment_string_array(packet_source.get("source_disclosure_placement_ids", []))
+	result["source_disclosure_section_ids"] = _annual_statement_enrichment_string_array(packet_source.get("source_disclosure_section_ids", []))
+	result["disclosure_packet_refs"] = _annual_statement_disclosure_packet_refs(packet_source.get("disclosure_packet_refs", []))
+	return result
+
+
+func _annual_statement_note_types_for_disclosure_ref(packet_ref: Dictionary) -> Array:
+	var note_types: Array = []
+	note_types = _annual_statement_enrichment_array_with_values(
+		note_types,
+		_annual_statement_note_types_for_disclosure_section(
+			str(packet_ref.get("section_id", "")),
+			str(packet_ref.get("annual_statement_note_type", ""))
+		)
+	)
+	for source_note_type_value in packet_ref.get("source_note_types", []):
+		note_types = _annual_statement_enrichment_array_with_values(
+			note_types,
+			_annual_statement_note_types_for_story_note_type(str(source_note_type_value))
+		)
+	for metric_id_value in packet_ref.get("metric_ids", []):
+		note_types = _annual_statement_enrichment_array_with_values(
+			note_types,
+			_annual_statement_note_types_for_metric(str(metric_id_value))
+		)
+	return _annual_statement_enrichment_string_array(note_types)
+
+
+func _annual_statement_note_types_for_disclosure_section(section_id: String, annual_note_type: String) -> Array:
+	var section: String = section_id.strip_edges()
+	var note_type: String = annual_note_type.strip_edges()
+	match note_type:
+		"revenue":
+			return ["revenue"]
+		"segment_information":
+			return ["segment_information"]
+		"trade_receivables":
+			return ["trade_receivables"]
+		"inventories":
+			return ["inventories"]
+		"property_plant_and_equipment":
+			return ["property_plant_and_equipment"]
+		"debt_and_borrowings":
+			return ["debt_and_borrowings"]
+		"cash_flow_information":
+			return ["cash_flow_information"]
+		"commitments_contingencies", "subsequent_events", "commitments_contingencies_and_subsequent_events", "related_party_transactions":
+			return ["commitments_contingencies_and_subsequent_events"]
+	match section:
+		"revenue":
+			return ["revenue"]
+		"segment_information":
+			return ["segment_information"]
+		"trade_receivables":
+			return ["trade_receivables"]
+		"inventories":
+			return ["inventories"]
+		"property_plant_and_equipment":
+			return ["property_plant_and_equipment"]
+		"debt_and_borrowings":
+			return ["debt_and_borrowings"]
+		"cash_flow_information":
+			return ["cash_flow_information"]
+		"commitments_contingencies", "subsequent_events", "related_party_transactions":
+			return ["commitments_contingencies_and_subsequent_events"]
+	return []
+
+
+func _annual_statement_ids_from_refs(source_value: Variant, id_key: String) -> Array:
+	var ids: Array = []
+	for row_value in _annual_statement_enrichment_variant_array(source_value):
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		ids = _annual_statement_enrichment_array_with_value(ids, str(row.get(id_key, "")))
+	return _annual_statement_enrichment_string_array(ids)
+
+
+func _annual_statement_note_types_for_story_source(source: Dictionary) -> Array:
+	var note_types: Array = []
+	note_types = _annual_statement_enrichment_array_with_values(note_types, source.get("disclosure_note_types", []))
+	for source_note_type_value in source.get("source_note_types", []):
+		note_types = _annual_statement_enrichment_array_with_values(
+			note_types,
+			_annual_statement_note_types_for_story_note_type(str(source_note_type_value))
+		)
+	for metric_id_value in source.get("metric_ids", []):
+		note_types = _annual_statement_enrichment_array_with_values(
+			note_types,
+			_annual_statement_note_types_for_metric(str(metric_id_value))
+		)
+	return _annual_statement_enrichment_string_array(note_types)
+
+
+func _annual_statement_note_types_for_story_note_type(story_note_type: String) -> Array:
+	match story_note_type:
+		"capex_progress":
+			return ["property_plant_and_equipment", "cash_flow_information", "commitments_contingencies_and_subsequent_events"]
+		"margin_bridge":
+			return ["cost_of_revenue_and_gross_profit", "operating_expenses", "segment_information"]
+		"commodity_price_realization":
+			return ["revenue", "cost_of_revenue_and_gross_profit", "segment_information"]
+		"input_cost_pressure":
+			return ["cost_of_revenue_and_gross_profit", "inventories", "segment_information"]
+		"customer_contract":
+			return ["revenue", "trade_receivables", "segment_information", "commitments_contingencies_and_subsequent_events"]
+		"turnaround_progress":
+			return ["operating_expenses", "cash_flow_information", "debt_and_borrowings"]
+		"governance_note":
+			return ["cash_and_cash_equivalents", "trade_receivables", "commitments_contingencies_and_subsequent_events"]
+		"debt_maturity":
+			return ["debt_and_borrowings", "cash_flow_information", "commitments_contingencies_and_subsequent_events"]
+		"statement_contradiction":
+			return ["trade_receivables", "inventories", "commitments_contingencies_and_subsequent_events"]
+		"use_of_proceeds":
+			return ["property_plant_and_equipment", "debt_and_borrowings", "equity_and_dividends", "cash_flow_information", "commitments_contingencies_and_subsequent_events"]
+		_:
+			return []
+
+
+func _annual_statement_note_types_for_metric(metric_id: String) -> Array:
+	match metric_id:
+		"revenue", "sales_volume":
+			return ["revenue", "segment_information"]
+		"gross_margin", "cost_of_revenue":
+			return ["cost_of_revenue_and_gross_profit", "segment_information"]
+		"operating_margin", "net_income":
+			return ["operating_expenses", "cash_flow_information"]
+		"production_volume", "backlog", "customer_concentration", "customer_count":
+			return ["revenue", "segment_information", "commitments_contingencies_and_subsequent_events"]
+		"capex", "property_plant_equipment", "purchase_of_ppe":
+			return ["property_plant_and_equipment", "cash_flow_information", "commitments_contingencies_and_subsequent_events"]
+		"cash", "ending_cash":
+			return ["cash_and_cash_equivalents", "cash_flow_information"]
+		"debt", "short_term_borrowings", "long_term_borrowings", "finance_cost":
+			return ["debt_and_borrowings", "cash_flow_information", "commitments_contingencies_and_subsequent_events"]
+		"receivables", "trade_receivables":
+			return ["trade_receivables"]
+		"inventory", "inventories", "working_capital":
+			return ["inventories"]
+		_:
+			return []
+
+
+func _annual_statement_living_arc_sources_by_note_type(company_id: String) -> Dictionary:
+	var result: Dictionary = {}
+	for source in _annual_statement_living_arc_source_rows(company_id):
+		if typeof(source) != TYPE_DICTIONARY:
+			continue
+		for note_type_value in _annual_statement_note_types_for_living_arc_source(source):
+			var note_type: String = str(note_type_value)
+			var rows: Array = _annual_statement_living_arc_refs(result.get(note_type, []))
+			rows = _annual_statement_append_unique_source_ref(rows, source, "arc_id")
+			result[note_type] = rows
+	return result
+
+
+func _annual_statement_living_arc_source_rows(company_id: String) -> Array:
+	var rows: Array = []
+	var company_state: Dictionary = get_company_living_arc_state(company_id)
+	var active_arc_id: String = str(company_state.get("active_arc_id", "")).strip_edges()
+	if not active_arc_id.is_empty():
+		rows.append({
+			"arc_id": active_arc_id,
+			"company_id": company_id,
+			"source_status": "active",
+			"source_system": str(company_state.get("active_source_system", "")),
+			"arc_type": str(company_state.get("active_arc_type", "")),
+			"event_id": str(company_state.get("active_event_id", "")),
+			"tone": str(company_state.get("active_tone", "neutral")),
+			"started_day_index": int(company_state.get("active_arc_started_day", -1)),
+			"expected_end_day_index": int(company_state.get("active_arc_expected_end_day", -1)),
+			"phase_id": str(company_state.get("active_phase_id", "")),
+			"phase_label": str(company_state.get("active_phase_label", "")),
+			"story_tags": _annual_statement_enrichment_string_array(company_state.get("eligibility_tags", []))
+		})
+	for completed_value in _annual_statement_enrichment_variant_array(company_state.get("completed_arcs", [])):
+		if typeof(completed_value) != TYPE_DICTIONARY:
+			continue
+		var completed: Dictionary = completed_value
+		var arc_id: String = str(completed.get("arc_id", "")).strip_edges()
+		if arc_id.is_empty():
+			continue
+		rows.append({
+			"arc_id": arc_id,
+			"company_id": company_id,
+			"source_status": "completed",
+			"source_system": str(completed.get("source_system", "")),
+			"arc_type": str(completed.get("arc_type", "")),
+			"event_id": str(completed.get("event_id", "")),
+			"tone": str(completed.get("tone", "neutral")),
+			"outcome": str(completed.get("outcome", "")),
+			"started_day_index": int(completed.get("started_day_index", -1)),
+			"resolved_day_index": int(completed.get("resolved_day_index", -1)),
+			"duration_days": int(completed.get("duration_days", 0)),
+			"story_tags": _annual_statement_enrichment_string_array(completed.get("story_tags", []))
+		})
+	return _annual_statement_living_arc_refs(rows)
+
+
+func _annual_statement_note_types_for_living_arc_source(source: Dictionary) -> Array:
+	var note_types: Array = ["commitments_contingencies_and_subsequent_events"]
+	var source_system: String = str(source.get("source_system", "")).to_lower()
+	var arc_type: String = str(source.get("arc_type", "")).to_lower()
+	var event_id: String = str(source.get("event_id", "")).to_lower()
+	var story_tags: String = "|".join(_annual_statement_enrichment_string_array(source.get("story_tags", []))).to_lower()
+	var token: String = "%s|%s|%s|%s" % [source_system, arc_type, event_id, story_tags]
+	if token.find("roadmap") >= 0 or token.find("project") >= 0 or token.find("capex") >= 0 or token.find("expansion") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["property_plant_and_equipment", "cash_flow_information"])
+	if token.find("corporate_action") >= 0 or token.find("rights") >= 0 or token.find("placement") >= 0 or token.find("proceeds") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["equity_and_dividends", "debt_and_borrowings", "cash_flow_information"])
+	if token.find("debt") >= 0 or token.find("funding") >= 0 or token.find("refinancing") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["debt_and_borrowings", "cash_flow_information"])
+	if token.find("contract") >= 0 or token.find("customer") >= 0 or token.find("demand") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["revenue", "segment_information"])
+	if note_types.size() == 1:
+		note_types.append("segment_information")
+	return _annual_statement_enrichment_string_array(note_types)
+
+
+func _annual_statement_corporate_action_sources_by_note_type(company_id: String) -> Dictionary:
+	var result: Dictionary = {}
+	for source in _annual_statement_corporate_action_source_rows(company_id):
+		if typeof(source) != TYPE_DICTIONARY:
+			continue
+		for note_type_value in _annual_statement_note_types_for_corporate_action_source(source):
+			var note_type: String = str(note_type_value)
+			var rows: Array = _annual_statement_corporate_action_refs(result.get(note_type, []))
+			rows = _annual_statement_append_unique_source_ref(rows, source, "action_id")
+			result[note_type] = rows
+	return result
+
+
+func _annual_statement_corporate_action_source_rows(company_id: String) -> Array:
+	var rows: Array = []
+	var chains: Dictionary = get_active_corporate_action_chains()
+	for chain_id_value in chains.keys():
+		var chain_value = chains.get(chain_id_value, {})
+		if typeof(chain_value) != TYPE_DICTIONARY:
+			continue
+		var chain: Dictionary = chain_value
+		if not _annual_statement_source_matches_company(chain, company_id):
+			continue
+		var action_id: String = str(chain.get("chain_id", chain_id_value)).strip_edges()
+		if action_id.is_empty():
+			continue
+		rows.append({
+			"action_id": action_id,
+			"chain_id": action_id,
+			"company_id": str(chain.get("company_id", chain.get("target_company_id", company_id))),
+			"target_company_id": str(chain.get("target_company_id", chain.get("company_id", company_id))),
+			"source_status": "active_chain",
+			"family": str(chain.get("family", chain.get("family_id", chain.get("chain_family", "")))),
+			"category": str(chain.get("category", "")),
+			"action_type": str(chain.get("action_type", "")),
+			"stage": str(chain.get("stage", "")),
+			"status": str(chain.get("status", "")),
+			"request_source": str(chain.get("request_source", "")),
+			"meeting_id": str(chain.get("meeting_id", "")),
+			"roadmap_id": str(chain.get("roadmap_id", chain.get("source_roadmap_id", ""))),
+			"funding_purpose": _annual_statement_corporate_action_funding_purpose(chain),
+			"day_index": int(chain.get("day_index", chain.get("created_day_index", -1)))
+		})
+
+	for event_value in _annual_statement_enrichment_variant_array(event_history):
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event: Dictionary = event_value
+		if not _annual_statement_source_matches_company(event, company_id):
+			continue
+		if not _annual_statement_event_is_corporate_action(event):
+			continue
+		var event_action_id: String = _annual_statement_corporate_action_id_from_event(event)
+		if event_action_id.is_empty():
+			continue
+		rows.append({
+			"action_id": event_action_id,
+			"chain_id": str(event.get("source_chain_id", event.get("chain_id", ""))),
+			"dividend_id": str(event.get("dividend_id", "")),
+			"company_id": str(event.get("company_id", event.get("target_company_id", company_id))),
+			"target_company_id": str(event.get("target_company_id", event.get("company_id", company_id))),
+			"source_status": "event_history",
+			"family": str(event.get("chain_family", event.get("family", ""))),
+			"category": str(event.get("category", "")),
+			"action_type": str(event.get("action_type", "")),
+			"stage": str(event.get("current_phase_id", event.get("stage", ""))),
+			"status": str(event.get("status", "")),
+			"request_source": str(event.get("source_system", event.get("event_family", ""))),
+			"meeting_id": str(event.get("meeting_id", "")),
+			"roadmap_id": str(event.get("arc_id", event.get("roadmap_id", ""))),
+			"funding_purpose": str(event.get("funding_purpose", "")),
+			"event_id": str(event.get("event_id", "")),
+			"day_index": int(event.get("day_index", -1))
+		})
+
+	var runtime: Dictionary = get_company(company_id)
+	var profile: Dictionary = runtime.get("company_profile", {}) if typeof(runtime.get("company_profile", {})) == TYPE_DICTIONARY else {}
+	for adjustment_value in _annual_statement_enrichment_variant_array(profile.get("corporate_action_adjustments", [])):
+		if typeof(adjustment_value) != TYPE_DICTIONARY:
+			continue
+		var adjustment: Dictionary = adjustment_value
+		var adjustment_id: String = str(adjustment.get("chain_id", adjustment.get("action_id", ""))).strip_edges()
+		if adjustment_id.is_empty():
+			adjustment_id = "adjustment|%s|%s|%d" % [
+				company_id,
+				str(adjustment.get("type", adjustment.get("action_type", "corporate_action"))),
+				int(adjustment.get("day_index", -1))
+			]
+		rows.append({
+			"action_id": adjustment_id,
+			"chain_id": str(adjustment.get("chain_id", "")),
+			"company_id": company_id,
+			"target_company_id": company_id,
+			"source_status": "profile_adjustment",
+			"family": str(adjustment.get("family", adjustment.get("type", ""))),
+			"category": str(adjustment.get("category", "")),
+			"action_type": str(adjustment.get("action_type", adjustment.get("type", ""))),
+			"stage": str(adjustment.get("stage", "")),
+			"status": str(adjustment.get("status", "applied")),
+			"request_source": str(adjustment.get("source", "")),
+			"meeting_id": str(adjustment.get("meeting_id", "")),
+			"roadmap_id": str(adjustment.get("roadmap_id", "")),
+			"funding_purpose": str(adjustment.get("funding_purpose", "")),
+			"day_index": int(adjustment.get("day_index", -1))
+		})
+
+	var dividend_calendar: Dictionary = get_corporate_dividend_calendar()
+	for dividend_id_value in dividend_calendar.keys():
+		var dividend_value = dividend_calendar.get(dividend_id_value, {})
+		if typeof(dividend_value) != TYPE_DICTIONARY:
+			continue
+		var dividend: Dictionary = dividend_value
+		if not _annual_statement_source_matches_company(dividend, company_id):
+			continue
+		var dividend_id: String = str(dividend.get("id", dividend_id_value)).strip_edges()
+		if dividend_id.is_empty():
+			continue
+		rows.append({
+			"action_id": dividend_id,
+			"dividend_id": dividend_id,
+			"company_id": str(dividend.get("company_id", company_id)),
+			"target_company_id": str(dividend.get("target_company_id", dividend.get("company_id", company_id))),
+			"source_status": "dividend_calendar",
+			"family": "dividend",
+			"category": str(dividend.get("category", "")),
+			"action_type": str(dividend.get("action_type", dividend.get("type", "dividend"))),
+			"stage": str(dividend.get("stage", "")),
+			"status": str(dividend.get("status", "")),
+			"request_source": str(dividend.get("request_source", "")),
+			"meeting_id": str(dividend.get("meeting_id", "")),
+			"day_index": int(dividend.get("day_index", dividend.get("declaration_day_index", -1)))
+		})
+	return _annual_statement_corporate_action_refs(rows)
+
+
+func _annual_statement_event_sources_by_note_type(company_id: String) -> Dictionary:
+	var result: Dictionary = {}
+	for source in _annual_statement_event_source_rows(company_id):
+		if typeof(source) != TYPE_DICTIONARY:
+			continue
+		for note_type_value in _annual_statement_note_types_for_event_source(source):
+			var note_type: String = str(note_type_value)
+			var rows: Array = _annual_statement_event_refs(result.get(note_type, []))
+			rows = _annual_statement_append_unique_source_ref(rows, source, "event_ref_id")
+			result[note_type] = rows
+	return result
+
+
+func _annual_statement_event_source_rows(company_id: String) -> Array:
+	var rows: Array = []
+	for event_value in _annual_statement_enrichment_variant_array(event_history):
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event: Dictionary = event_value
+		if not _annual_statement_source_matches_company(event, company_id):
+			continue
+		var event_id: String = str(event.get("event_id", event.get("id", ""))).strip_edges()
+		var category: String = str(event.get("category", "")).strip_edges()
+		if event_id.is_empty() and category.is_empty():
+			continue
+		var event_ref_id: String = str(event.get("event_ref_id", "")).strip_edges()
+		if event_ref_id.is_empty():
+			var source_id: String = _annual_statement_event_context_id(event)
+			event_ref_id = "event|%s|%s|%d|%s" % [
+				event_id if not event_id.is_empty() else category,
+				category,
+				int(event.get("day_index", -1)),
+				source_id
+			]
+		rows.append({
+			"event_ref_id": event_ref_id,
+			"event_id": event_id if not event_id.is_empty() else category,
+			"event_family": str(event.get("event_family", event.get("source_system", ""))),
+			"category": category,
+			"company_id": str(event.get("company_id", event.get("target_company_id", company_id))),
+			"target_company_id": str(event.get("target_company_id", event.get("company_id", company_id))),
+			"source_chain_id": str(event.get("source_chain_id", event.get("chain_id", ""))),
+			"chain_family": str(event.get("chain_family", event.get("family", ""))),
+			"roadmap_id": str(event.get("arc_id", event.get("roadmap_id", ""))),
+			"dividend_id": str(event.get("dividend_id", "")),
+			"meeting_id": str(event.get("meeting_id", "")),
+			"tone": str(event.get("tone", "neutral")),
+			"day_index": int(event.get("day_index", -1))
+		})
+	return _annual_statement_event_refs(rows)
+
+
+func _annual_statement_roadmap_sources_by_note_type(company_id: String) -> Dictionary:
+	var result: Dictionary = {}
+	for source in _annual_statement_roadmap_source_rows(company_id):
+		if typeof(source) != TYPE_DICTIONARY:
+			continue
+		for note_type_value in _annual_statement_note_types_for_roadmap_source(source):
+			var note_type: String = str(note_type_value)
+			var rows: Array = _annual_statement_roadmap_refs(result.get(note_type, []))
+			rows = _annual_statement_append_unique_source_ref(rows, source, "roadmap_id")
+			result[note_type] = rows
+	return result
+
+
+func _annual_statement_roadmap_source_rows(company_id: String) -> Array:
+	var rows: Array = []
+	var state: Dictionary = get_company_roadmap_state()
+	for bucket_key in ["active_milestones", "resolved_milestones"]:
+		var bucket: Dictionary = state.get(bucket_key, {}) if typeof(state.get(bucket_key, {})) == TYPE_DICTIONARY else {}
+		for milestone_value in bucket.values():
+			if typeof(milestone_value) != TYPE_DICTIONARY:
+				continue
+			var milestone: Dictionary = milestone_value
+			var participant_role: String = ""
+			if str(milestone.get("company_id", "")) == company_id:
+				participant_role = "target"
+			elif str(milestone.get("finance_company_id", "")) == company_id:
+				participant_role = "finance_partner"
+			else:
+				continue
+			var roadmap_id: String = str(milestone.get("id", "")).strip_edges()
+			if roadmap_id.is_empty():
+				continue
+			rows.append({
+				"roadmap_id": roadmap_id,
+				"company_id": str(milestone.get("company_id", "")),
+				"target_company_id": str(milestone.get("company_id", "")),
+				"finance_company_id": str(milestone.get("finance_company_id", "")),
+				"source_status": "active" if bucket_key == "active_milestones" else "resolved",
+				"participant_role": participant_role,
+				"family_id": str(milestone.get("family_id", "")),
+				"family_label": str(milestone.get("family_label", "")),
+				"project_label": str(milestone.get("project_label", "")),
+				"funding_scale": str(milestone.get("funding_scale", "")),
+				"funding_outcome": str(milestone.get("funding_outcome", "")),
+				"corporate_chain_id": str(milestone.get("corporate_chain_id", "")),
+				"physical_project": bool(milestone.get("physical_project", false)),
+				"start_day_index": int(milestone.get("start_day_index", -1)),
+				"end_day_index": int(milestone.get("end_day_index", -1)),
+				"duration_days": int(milestone.get("duration_days", 0))
+			})
+	return _annual_statement_roadmap_refs(rows)
+
+
+func _annual_statement_note_types_for_corporate_action_source(source: Dictionary) -> Array:
+	var token: String = _annual_statement_corporate_action_source_token(source)
+	var note_types: Array = _annual_statement_note_types_for_corporate_action_token(token)
+	if note_types.is_empty():
+		note_types = ["commitments_contingencies_and_subsequent_events"]
+	return _annual_statement_enrichment_string_array(note_types)
+
+
+func _annual_statement_note_types_for_event_source(source: Dictionary) -> Array:
+	var note_types: Array = []
+	var token: String = "|".join([
+		str(source.get("event_family", "")),
+		str(source.get("category", "")),
+		str(source.get("event_id", "")),
+		str(source.get("chain_family", "")),
+		str(source.get("source_chain_id", "")),
+		str(source.get("roadmap_id", ""))
+	]).to_lower()
+	if token.find("corporate_action") >= 0 or token.find("rights") >= 0 or token.find("placement") >= 0 or token.find("dividend") >= 0 or token.find("buyback") >= 0 or token.find("split") >= 0 or token.find("tender") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, _annual_statement_note_types_for_corporate_action_token(token))
+	if token.find("roadmap") >= 0 or token.find("project") >= 0 or token.find("capex") >= 0 or token.find("expansion") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["property_plant_and_equipment", "cash_flow_information", "segment_information", "commitments_contingencies_and_subsequent_events"])
+	if token.find("funding") >= 0 or token.find("debt") >= 0 or token.find("loan") >= 0 or token.find("refinanc") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["debt_and_borrowings", "cash_flow_information", "commitments_contingencies_and_subsequent_events"])
+	if token.find("revenue") >= 0 or token.find("contract") >= 0 or token.find("customer") >= 0 or token.find("sales") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["revenue", "trade_receivables", "segment_information", "commitments_contingencies_and_subsequent_events"])
+	if token.find("margin") >= 0 or token.find("cost") >= 0 or token.find("expense") >= 0 or token.find("earnings") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["cost_of_revenue_and_gross_profit", "operating_expenses", "segment_information"])
+	if token.find("inventory") >= 0 or token.find("inventor") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["inventories", "cost_of_revenue_and_gross_profit"])
+	return _annual_statement_enrichment_string_array(note_types)
+
+
+func _annual_statement_note_types_for_roadmap_source(source: Dictionary) -> Array:
+	var note_types: Array = ["segment_information", "commitments_contingencies_and_subsequent_events"]
+	var token: String = "|".join([
+		str(source.get("participant_role", "")),
+		str(source.get("family_id", "")),
+		str(source.get("family_label", "")),
+		str(source.get("project_label", "")),
+		str(source.get("funding_scale", "")),
+		str(source.get("funding_outcome", "")),
+		str(source.get("corporate_chain_id", ""))
+	]).to_lower()
+	if bool(source.get("physical_project", false)) or token.find("project") >= 0 or token.find("capex") >= 0 or token.find("expansion") >= 0 or token.find("property") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["property_plant_and_equipment", "cash_flow_information"])
+	if token.find("funding") >= 0 or token.find("debt") >= 0 or token.find("loan") >= 0 or token.find("rights") >= 0 or token.find("placement") >= 0 or not str(source.get("corporate_chain_id", "")).strip_edges().is_empty():
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["debt_and_borrowings", "cash_flow_information", "equity_and_dividends"])
+	if str(source.get("participant_role", "")) == "finance_partner":
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["revenue", "cash_flow_information"])
+	return _annual_statement_enrichment_string_array(note_types)
+
+
+func _annual_statement_note_types_for_corporate_action_token(token_value: String) -> Array:
+	var note_types: Array = ["commitments_contingencies_and_subsequent_events"]
+	var token: String = token_value.to_lower()
+	if token.find("rights") >= 0 or token.find("placement") >= 0 or token.find("equity") >= 0 or token.find("dividend") >= 0 or token.find("buyback") >= 0 or token.find("split") >= 0 or token.find("tender") >= 0 or token.find("share") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["equity_and_dividends", "cash_flow_information"])
+	if token.find("rights") >= 0 or token.find("placement") >= 0 or token.find("proceeds") >= 0 or token.find("funding") >= 0 or token.find("debt") >= 0 or token.find("loan") >= 0 or token.find("refinanc") >= 0 or token.find("restructur") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["debt_and_borrowings", "cash_flow_information"])
+	if token.find("capex") >= 0 or token.find("project") >= 0 or token.find("roadmap") >= 0 or token.find("expansion") >= 0 or token.find("acquisition") >= 0 or token.find("merger") >= 0 or token.find("backdoor") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["property_plant_and_equipment", "segment_information", "cash_flow_information"])
+	if token.find("ceo") >= 0 or token.find("governance") >= 0 or token.find("restructur") >= 0:
+		note_types = _annual_statement_enrichment_array_with_values(note_types, ["operating_expenses"])
+	return _annual_statement_enrichment_string_array(note_types)
+
+
+func _annual_statement_corporate_action_source_token(source: Dictionary) -> String:
+	return "|".join([
+		str(source.get("family", "")),
+		str(source.get("category", "")),
+		str(source.get("action_type", "")),
+		str(source.get("stage", "")),
+		str(source.get("status", "")),
+		str(source.get("request_source", "")),
+		str(source.get("roadmap_id", "")),
+		str(source.get("funding_purpose", ""))
+	]).to_lower()
+
+
+func _annual_statement_corporate_action_funding_purpose(source: Dictionary) -> String:
+	for terms_key in ["rights_terms", "placement_terms", "debt_terms", "tender_terms", "backdoor_terms"]:
+		var terms_value = source.get(terms_key, {})
+		if typeof(terms_value) != TYPE_DICTIONARY:
+			continue
+		var terms: Dictionary = terms_value
+		var purpose: String = str(terms.get("funding_purpose", terms.get("use_of_proceeds", terms.get("purpose", "")))).strip_edges()
+		if not purpose.is_empty():
+			return purpose
+	return str(source.get("funding_purpose", source.get("use_of_proceeds", "")))
+
+
+func _annual_statement_event_is_corporate_action(event: Dictionary) -> bool:
+	var token: String = "|".join([
+		str(event.get("event_family", "")),
+		str(event.get("source_system", "")),
+		str(event.get("category", "")),
+		str(event.get("event_id", "")),
+		str(event.get("chain_family", "")),
+		str(event.get("action_type", ""))
+	]).to_lower()
+	return token.find("corporate_action") >= 0 or token.find("rights") >= 0 or token.find("placement") >= 0 or token.find("dividend") >= 0 or token.find("buyback") >= 0 or token.find("split") >= 0 or token.find("tender") >= 0 or token.find("backdoor") >= 0
+
+
+func _annual_statement_corporate_action_id_from_event(event: Dictionary) -> String:
+	for key in ["source_chain_id", "chain_id", "dividend_id", "action_id", "meeting_id"]:
+		var value: String = str(event.get(key, "")).strip_edges()
+		if not value.is_empty():
+			return value
+	var event_id: String = str(event.get("event_id", event.get("category", ""))).strip_edges()
+	if event_id.is_empty():
+		return ""
+	return "event_action|%s|%d" % [event_id, int(event.get("day_index", -1))]
+
+
+func _annual_statement_event_context_id(event: Dictionary) -> String:
+	for key in ["source_chain_id", "chain_id", "arc_id", "roadmap_id", "dividend_id", "meeting_id"]:
+		var value: String = str(event.get(key, "")).strip_edges()
+		if not value.is_empty():
+			return value
+	return str(event.get("target_company_id", event.get("company_id", ""))).strip_edges()
+
+
+func _annual_statement_source_matches_company(source: Dictionary, company_id: String) -> bool:
+	if company_id.strip_edges().is_empty():
+		return false
+	for key in ["company_id", "target_company_id", "issuer_company_id", "source_company_id", "finance_company_id"]:
+		if str(source.get(key, "")).strip_edges() == company_id:
+			return true
+	for array_key in ["related_company_ids", "company_ids", "target_company_ids"]:
+		for value in _annual_statement_enrichment_variant_array(source.get(array_key, [])):
+			if str(value).strip_edges() == company_id:
+				return true
+	return false
+
+
+func _annual_statement_story_ref_for_note_source(source: Dictionary, note_type: String) -> Dictionary:
+	return {
+		"story_id": str(source.get("story_id", "")),
+		"company_id": str(source.get("company_id", "")),
+		"archetype_id": str(source.get("archetype_id", "")),
+		"story_family": str(source.get("story_family", "")),
+		"stage_id": str(source.get("stage_id", "")),
+		"public_status": str(source.get("public_status", "")),
+		"note_type": note_type,
+		"source_note_types": _annual_statement_enrichment_string_array(source.get("source_note_types", [])),
+		"metric_ids": _annual_statement_enrichment_string_array(source.get("metric_ids", [])),
+		"fact_ids": _annual_statement_enrichment_string_array(source.get("fact_ids", [])),
+		"effect_ids": _annual_statement_enrichment_string_array(source.get("effect_ids", [])),
+		"clue_ids": _annual_statement_enrichment_string_array(source.get("clue_ids", [])),
+		"source_disclosure_packet_ids": _annual_statement_enrichment_string_array(source.get("source_disclosure_packet_ids", [])),
+		"source_disclosure_placement_ids": _annual_statement_enrichment_string_array(source.get("source_disclosure_placement_ids", [])),
+		"source_disclosure_section_ids": _annual_statement_enrichment_string_array(source.get("source_disclosure_section_ids", [])),
+		"disclosure_packet_refs": _annual_statement_disclosure_packet_refs(source.get("disclosure_packet_refs", []))
+	}
+
+
+func _annual_statement_story_source_refs(source_value: Variant) -> Array:
+	var rows: Array = []
+	for row_value in _annual_statement_enrichment_variant_array(source_value):
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var story_id: String = str(row.get("story_id", "")).strip_edges()
+		if story_id.is_empty():
+			continue
+		rows.append({
+			"story_id": story_id,
+			"company_id": str(row.get("company_id", "")),
+			"archetype_id": str(row.get("archetype_id", "")),
+			"story_family": str(row.get("story_family", "")),
+			"stage_id": str(row.get("stage_id", "")),
+			"public_status": str(row.get("public_status", "")),
+			"note_type": str(row.get("note_type", "")),
+			"source_note_types": _annual_statement_enrichment_string_array(row.get("source_note_types", [])),
+			"metric_ids": _annual_statement_enrichment_string_array(row.get("metric_ids", [])),
+			"fact_ids": _annual_statement_enrichment_string_array(row.get("fact_ids", [])),
+			"effect_ids": _annual_statement_enrichment_string_array(row.get("effect_ids", [])),
+			"clue_ids": _annual_statement_enrichment_string_array(row.get("clue_ids", [])),
+			"source_disclosure_packet_ids": _annual_statement_enrichment_string_array(row.get("source_disclosure_packet_ids", [])),
+			"source_disclosure_placement_ids": _annual_statement_enrichment_string_array(row.get("source_disclosure_placement_ids", [])),
+			"source_disclosure_section_ids": _annual_statement_enrichment_string_array(row.get("source_disclosure_section_ids", [])),
+			"disclosure_packet_refs": _annual_statement_disclosure_packet_refs(row.get("disclosure_packet_refs", []))
+		})
+	rows.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return str(left.get("story_id", "")) < str(right.get("story_id", ""))
+	)
+	return rows
+
+
+func _annual_statement_living_arc_refs(source_value: Variant) -> Array:
+	var rows: Array = []
+	for row_value in _annual_statement_enrichment_variant_array(source_value):
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var arc_id: String = str(row.get("arc_id", "")).strip_edges()
+		if arc_id.is_empty():
+			continue
+		rows.append({
+			"arc_id": arc_id,
+			"company_id": str(row.get("company_id", "")),
+			"source_status": str(row.get("source_status", "")),
+			"source_system": str(row.get("source_system", "")),
+			"arc_type": str(row.get("arc_type", "")),
+			"event_id": str(row.get("event_id", "")),
+			"tone": str(row.get("tone", "neutral")),
+			"phase_id": str(row.get("phase_id", "")),
+			"phase_label": str(row.get("phase_label", "")),
+			"outcome": str(row.get("outcome", "")),
+			"started_day_index": int(row.get("started_day_index", -1)),
+			"expected_end_day_index": int(row.get("expected_end_day_index", -1)),
+			"resolved_day_index": int(row.get("resolved_day_index", -1)),
+			"duration_days": int(row.get("duration_days", 0)),
+			"story_tags": _annual_statement_enrichment_string_array(row.get("story_tags", []))
+		})
+	rows.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return str(left.get("arc_id", "")) < str(right.get("arc_id", ""))
+	)
+	return rows
+
+
+func _annual_statement_corporate_action_refs(source_value: Variant) -> Array:
+	var rows: Array = []
+	for row_value in _annual_statement_enrichment_variant_array(source_value):
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var action_id: String = str(row.get("action_id", "")).strip_edges()
+		if action_id.is_empty():
+			continue
+		rows.append({
+			"action_id": action_id,
+			"chain_id": str(row.get("chain_id", "")),
+			"dividend_id": str(row.get("dividend_id", "")),
+			"company_id": str(row.get("company_id", "")),
+			"target_company_id": str(row.get("target_company_id", "")),
+			"source_status": str(row.get("source_status", "")),
+			"family": str(row.get("family", "")),
+			"category": str(row.get("category", "")),
+			"action_type": str(row.get("action_type", "")),
+			"stage": str(row.get("stage", "")),
+			"status": str(row.get("status", "")),
+			"request_source": str(row.get("request_source", "")),
+			"meeting_id": str(row.get("meeting_id", "")),
+			"roadmap_id": str(row.get("roadmap_id", "")),
+			"funding_purpose": str(row.get("funding_purpose", "")),
+			"event_id": str(row.get("event_id", "")),
+			"day_index": int(row.get("day_index", -1))
+		})
+	rows.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return str(left.get("action_id", "")) < str(right.get("action_id", ""))
+	)
+	return rows
+
+
+func _annual_statement_event_refs(source_value: Variant) -> Array:
+	var rows: Array = []
+	for row_value in _annual_statement_enrichment_variant_array(source_value):
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var event_ref_id: String = str(row.get("event_ref_id", "")).strip_edges()
+		if event_ref_id.is_empty():
+			continue
+		rows.append({
+			"event_ref_id": event_ref_id,
+			"event_id": str(row.get("event_id", "")),
+			"event_family": str(row.get("event_family", "")),
+			"category": str(row.get("category", "")),
+			"company_id": str(row.get("company_id", "")),
+			"target_company_id": str(row.get("target_company_id", "")),
+			"source_chain_id": str(row.get("source_chain_id", "")),
+			"chain_family": str(row.get("chain_family", "")),
+			"roadmap_id": str(row.get("roadmap_id", "")),
+			"dividend_id": str(row.get("dividend_id", "")),
+			"meeting_id": str(row.get("meeting_id", "")),
+			"tone": str(row.get("tone", "neutral")),
+			"day_index": int(row.get("day_index", -1))
+		})
+	rows.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return str(left.get("event_ref_id", "")) < str(right.get("event_ref_id", ""))
+	)
+	return rows
+
+
+func _annual_statement_roadmap_refs(source_value: Variant) -> Array:
+	var rows: Array = []
+	for row_value in _annual_statement_enrichment_variant_array(source_value):
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var roadmap_id: String = str(row.get("roadmap_id", "")).strip_edges()
+		if roadmap_id.is_empty():
+			continue
+		rows.append({
+			"roadmap_id": roadmap_id,
+			"company_id": str(row.get("company_id", "")),
+			"target_company_id": str(row.get("target_company_id", "")),
+			"finance_company_id": str(row.get("finance_company_id", "")),
+			"source_status": str(row.get("source_status", "")),
+			"participant_role": str(row.get("participant_role", "")),
+			"family_id": str(row.get("family_id", "")),
+			"family_label": str(row.get("family_label", "")),
+			"project_label": str(row.get("project_label", "")),
+			"funding_scale": str(row.get("funding_scale", "")),
+			"funding_outcome": str(row.get("funding_outcome", "")),
+			"corporate_chain_id": str(row.get("corporate_chain_id", "")),
+			"physical_project": bool(row.get("physical_project", false)),
+			"start_day_index": int(row.get("start_day_index", -1)),
+			"end_day_index": int(row.get("end_day_index", -1)),
+			"duration_days": int(row.get("duration_days", 0))
+		})
+	rows.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return str(left.get("roadmap_id", "")) < str(right.get("roadmap_id", ""))
+	)
+	return rows
+
+
+func _annual_statement_append_unique_source_ref(rows: Array, next_ref: Dictionary, id_key: String) -> Array:
+	var normalized_ref: Dictionary = next_ref.duplicate(true)
+	var ref_id: String = str(normalized_ref.get(id_key, "")).strip_edges()
+	if ref_id.is_empty():
+		return rows
+	var result: Array = []
+	var replaced: bool = false
+	for row_value in rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		if str(row.get(id_key, "")) == ref_id:
+			if not replaced:
+				result.append(normalized_ref)
+				replaced = true
+			continue
+		result.append(row.duplicate(true))
+	if not replaced:
+		result.append(normalized_ref)
+	result.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return str(left.get(id_key, "")) < str(right.get(id_key, ""))
+	)
+	return result
+
+
+func _annual_statement_enrichment_array_with_values(source_value: Variant, next_values: Variant) -> Array:
+	var values: Array = _annual_statement_enrichment_variant_array(source_value)
+	for next_value in _annual_statement_enrichment_variant_array(next_values):
+		values = _annual_statement_enrichment_array_with_value(values, str(next_value))
+	return values
+
+
+func _annual_statement_enrichment_signature(statement: Dictionary) -> String:
+	var lines: Array[String] = []
+	var enrichment: Dictionary = statement.get("post_start_traceability", {}) if typeof(statement.get("post_start_traceability", {})) == TYPE_DICTIONARY else {}
+	lines.append("statement:%s:%s:%s" % [
+		str(enrichment.get("source_system_id", "")),
+		str(enrichment.get("pass_id", "")),
+		"|".join(_annual_statement_enrichment_string_array(enrichment.get("available_source_system_ids", [])))
+	])
+	var traceability: Dictionary = statement.get("traceability", {}) if typeof(statement.get("traceability", {})) == TYPE_DICTIONARY else {}
+	for key in [
+		"post_start_enrichment_passes",
+		"post_start_available_source_system_ids",
+		"post_start_source_story_ids",
+		"post_start_source_effect_ids",
+		"post_start_source_fact_ids",
+		"post_start_source_clue_ids",
+		"post_start_source_disclosure_packet_ids",
+		"post_start_source_disclosure_placement_ids",
+		"post_start_source_disclosure_section_ids",
+		"post_start_source_living_arc_ids",
+		"post_start_source_corporate_action_ids",
+		"post_start_source_event_ids",
+		"post_start_source_event_ref_ids",
+		"post_start_source_roadmap_ids"
+	]:
+		lines.append("trace:%s:%s" % [key, "|".join(_annual_statement_enrichment_string_array(traceability.get(key, [])))])
+	var notes: Array = _annual_statement_enrichment_variant_array(statement.get("notes", []))
+	notes.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return int(left.get("note_number", 0)) < int(right.get("note_number", 0))
+	)
+	for note_value in notes:
+		if typeof(note_value) != TYPE_DICTIONARY:
+			continue
+		var note: Dictionary = note_value
+		var note_id: String = str(note.get("note_id", ""))
+		lines.append("note:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s" % [
+			note_id,
+			str(note.get("note_type", "")),
+			"|".join(_annual_statement_enrichment_string_array(note.get("source_story_ids", []))),
+			"|".join(_annual_statement_enrichment_string_array(note.get("source_effect_ids", []))),
+			"|".join(_annual_statement_enrichment_string_array(note.get("fact_ids", []))),
+			"|".join(_annual_statement_enrichment_string_array(note.get("clue_ids", []))),
+			"|".join(_annual_statement_enrichment_string_array(note.get("source_disclosure_packet_ids", []))),
+			"|".join(_annual_statement_enrichment_string_array(note.get("source_disclosure_placement_ids", []))),
+			"|".join(_annual_statement_enrichment_string_array(note.get("source_disclosure_section_ids", []))),
+			"|".join(_annual_statement_enrichment_string_array(note.get("source_living_arc_ids", []))),
+			"|".join(_annual_statement_enrichment_string_array(note.get("source_corporate_action_ids", []))),
+			"|".join(_annual_statement_enrichment_string_array(note.get("source_event_ids", []))),
+			"|".join(_annual_statement_enrichment_string_array(note.get("source_event_ref_ids", []))),
+			"|".join(_annual_statement_enrichment_string_array(note.get("source_roadmap_ids", [])))
+		])
+		for ref in _annual_statement_story_source_refs(note.get("story_source_refs", [])):
+			lines.append("story_ref:%s:%s:%s:%s:%s:%s:%s" % [
+				note_id,
+				str(ref.get("story_id", "")),
+				str(ref.get("note_type", "")),
+				"|".join(_annual_statement_enrichment_string_array(ref.get("metric_ids", []))),
+				"|".join(_annual_statement_enrichment_string_array(ref.get("effect_ids", []))),
+				"|".join(_annual_statement_enrichment_string_array(ref.get("clue_ids", []))),
+				"|".join(_annual_statement_enrichment_string_array(ref.get("source_disclosure_packet_ids", [])))
+			])
+		for ref in _annual_statement_disclosure_packet_refs(note.get("disclosure_packet_refs", [])):
+			lines.append("disclosure_packet_ref:%s:%s:%s:%s:%s:%s" % [
+				note_id,
+				str(ref.get("packet_id", "")),
+				str(ref.get("placement_id", "")),
+				str(ref.get("section_id", "")),
+				str(ref.get("annual_statement_note_type", "")),
+				str(ref.get("subtlety", ""))
+			])
+		for ref in _annual_statement_living_arc_refs(note.get("living_arc_refs", [])):
+			lines.append("living_ref:%s:%s:%s:%s:%s:%s" % [
+				note_id,
+				str(ref.get("arc_id", "")),
+				str(ref.get("source_status", "")),
+				str(ref.get("source_system", "")),
+				str(ref.get("arc_type", "")),
+				str(ref.get("phase_id", ""))
+			])
+		for ref in _annual_statement_corporate_action_refs(note.get("corporate_action_refs", [])):
+			lines.append("corporate_action_ref:%s:%s:%s:%s:%s:%s" % [
+				note_id,
+				str(ref.get("action_id", "")),
+				str(ref.get("source_status", "")),
+				str(ref.get("family", "")),
+				str(ref.get("action_type", "")),
+				str(ref.get("day_index", ""))
+			])
+		for ref in _annual_statement_event_refs(note.get("event_refs", [])):
+			lines.append("event_ref:%s:%s:%s:%s:%s:%s" % [
+				note_id,
+				str(ref.get("event_ref_id", "")),
+				str(ref.get("event_id", "")),
+				str(ref.get("event_family", "")),
+				str(ref.get("category", "")),
+				str(ref.get("day_index", ""))
+			])
+		for ref in _annual_statement_roadmap_refs(note.get("roadmap_refs", [])):
+			lines.append("roadmap_ref:%s:%s:%s:%s:%s:%s" % [
+				note_id,
+				str(ref.get("roadmap_id", "")),
+				str(ref.get("source_status", "")),
+				str(ref.get("participant_role", "")),
+				str(ref.get("family_id", "")),
+				str(ref.get("funding_outcome", ""))
+			])
+	return "\n".join(lines)
+
+
+func _annual_statement_needs_post_start_enrichment(statement: Dictionary) -> bool:
+	var enrichment: Dictionary = {}
+	if typeof(statement.get("post_start_traceability", {})) == TYPE_DICTIONARY:
+		enrichment = statement.get("post_start_traceability", {})
+	if str(enrichment.get("pass_id", "")) != ANNUAL_STATEMENT_POST_START_ENRICHMENT_PASS_ID:
+		return true
+	if str(enrichment.get("source_system_id", "")) != ANNUAL_STATEMENT_POST_START_ENRICHMENT_SOURCE_ID:
+		return true
+	if _annual_statement_enrichment_string_array(
+		enrichment.get("available_source_system_ids", []),
+		ANNUAL_STATEMENT_POST_START_SOURCE_SYSTEM_IDS
+	) != ANNUAL_STATEMENT_POST_START_SOURCE_SYSTEM_IDS:
+		return true
+	var traceability: Dictionary = {}
+	if typeof(statement.get("traceability", {})) == TYPE_DICTIONARY:
+		traceability = statement.get("traceability", {})
+	if not _annual_statement_enrichment_string_array(
+		traceability.get("post_start_enrichment_passes", []),
+		[ANNUAL_STATEMENT_POST_START_ENRICHMENT_PASS_ID]
+	).has(ANNUAL_STATEMENT_POST_START_ENRICHMENT_PASS_ID):
+		return true
+	if _annual_statement_enrichment_string_array(
+		traceability.get("post_start_available_source_system_ids", []),
+		ANNUAL_STATEMENT_POST_START_SOURCE_SYSTEM_IDS
+	) != ANNUAL_STATEMENT_POST_START_SOURCE_SYSTEM_IDS:
+		return true
+	for note_value in _annual_statement_enrichment_variant_array(statement.get("notes", [])):
+		if typeof(note_value) != TYPE_DICTIONARY:
+			continue
+		var note: Dictionary = note_value
+		var note_enrichment: Dictionary = {}
+		if typeof(note.get("post_start_traceability", {})) == TYPE_DICTIONARY:
+			note_enrichment = note.get("post_start_traceability", {})
+		if str(note_enrichment.get("pass_id", "")) != ANNUAL_STATEMENT_POST_START_ENRICHMENT_PASS_ID:
+			return true
+		if str(note_enrichment.get("source_system_id", "")) != ANNUAL_STATEMENT_POST_START_ENRICHMENT_SOURCE_ID:
+			return true
+		if _annual_statement_enrichment_string_array(
+			note_enrichment.get("available_source_system_ids", []),
+			ANNUAL_STATEMENT_POST_START_SOURCE_SYSTEM_IDS
+		) != ANNUAL_STATEMENT_POST_START_SOURCE_SYSTEM_IDS:
+			return true
+	return false
+
+
+func _annual_statement_enrichment_array_with_value(source_value: Variant, value: String) -> Array:
+	var values: Array = []
+	if typeof(source_value) == TYPE_ARRAY:
+		values = source_value.duplicate()
+	if not value.strip_edges().is_empty():
+		values.append(value.strip_edges())
+	return values
+
+
+func _annual_statement_enrichment_string_array(source_value: Variant, canonical_order: Array = []) -> Array:
+	var lookup: Dictionary = {}
+	if typeof(source_value) == TYPE_ARRAY:
+		for item_value in source_value:
+			var item: String = str(item_value).strip_edges()
+			if item.is_empty():
+				continue
+			lookup[item] = true
+	var result: Array = []
+	for item_value in canonical_order:
+		var canonical_item: String = str(item_value).strip_edges()
+		if canonical_item.is_empty() or not lookup.has(canonical_item):
+			continue
+		result.append(canonical_item)
+		lookup.erase(canonical_item)
+	var remaining: Array = lookup.keys()
+	remaining.sort()
+	for item_value in remaining:
+		result.append(str(item_value))
+	return result
+
+
+func _annual_statement_enrichment_variant_array(source_value: Variant) -> Array:
+	if typeof(source_value) == TYPE_ARRAY:
+		return source_value.duplicate(true)
+	return []
 
 
 func _company_profile_needs_scale_refresh(company_id: String, company_profile: Dictionary) -> bool:
@@ -811,6 +2415,13 @@ func _build_companies_save_payload() -> Dictionary:
 			continue
 		var runtime_model = _company_runtime_from_dict(runtime_value)
 		var runtime: Dictionary = runtime_model.to_dict()
+		runtime["broker_flow_history"] = _normalize_broker_flow_history(runtime.get("broker_flow_history", []))
+		runtime.erase("broker_flow_full_history")
+		runtime["living_arc_state"] = _normalize_company_living_arc_state(runtime.get("living_arc_state", {}), company_id)
+		runtime["company_story_dossier_state"] = _normalize_company_story_dossier_company_state(
+			runtime.get("company_story_dossier_state", {}),
+			company_id
+		)
 		var company_profile: Dictionary = runtime.get("company_profile", {})
 		if typeof(company_profile) == TYPE_DICTIONARY:
 			runtime["company_profile"] = _build_company_profile_save_payload(company_profile)
@@ -849,6 +2460,7 @@ func _build_last_day_results_save_payload(source_results: Variant) -> Dictionary
 		"started_company_arcs": source.get("started_company_arcs", []).duplicate(true),
 		"company_arc_phase_events": source.get("company_arc_phase_events", []).duplicate(true),
 		"company_roadmap_events": source.get("company_roadmap_events", []).duplicate(true),
+		"relationship_graph_events": source.get("relationship_graph_events", []).duplicate(true),
 		"corporate_action_events": source.get("corporate_action_events", []).duplicate(true),
 		"index_review_events": source.get("index_review_events", []).duplicate(true),
 		"dividend_payments": source.get("dividend_payments", []).duplicate(true),
@@ -857,6 +2469,7 @@ func _build_last_day_results_save_payload(source_results: Variant) -> Dictionary
 		"started_special_events": source.get("started_special_events", []).duplicate(true),
 		"life_obligation": source.get("life_obligation", {}).duplicate(true),
 		"life_loan_payment": source.get("life_loan_payment", {}).duplicate(true),
+		"life_bank_loan_payment": source.get("life_bank_loan_payment", {}).duplicate(true),
 		"life_legal": source.get("life_legal", {}).duplicate(true),
 		"bankruptcy": source.get("bankruptcy", {}).duplicate(true),
 		"network_request_results": source.get("network_request_results", []).duplicate(true),
@@ -1128,11 +2741,11 @@ func buy_company(company_id: String, shares: int) -> Dictionary:
 			"message": "Cash is negative. Sell holdings, lower Life costs, or use Life > Finance before buying."
 		}
 	var finance: Dictionary = get_life_finance()
-	var active_loan: Dictionary = finance.get("active_loan", {})
-	if not active_loan.is_empty() and cash_available < float(active_loan.get("monthly_payment", 0.0)) - 0.0001:
+	var required_loan_reserve: float = required_loan_payment_reserve(finance)
+	if required_loan_reserve > 0.0 and cash_available < required_loan_reserve - 0.0001:
 		return {
 			"success": false,
-			"message": "Emergency loan payment reserve is not covered. Keep cash above %s before new buys." % _format_currency(float(active_loan.get("monthly_payment", 0.0)))
+			"message": "Combined loan payment reserve is not covered. Keep cash above %s before new buys." % _format_currency(required_loan_reserve)
 		}
 
 	if total_cost > cash_available + 0.0001:
@@ -1277,6 +2890,7 @@ func get_total_equity() -> float:
 
 func apply_day_result(day_result: Dictionary) -> void:
 	var log_apply_perf: bool = _should_log_apply_day_perf()
+	last_apply_day_perf_metrics = {}
 	var total_started_at_usec: int = Time.get_ticks_usec()
 	var phase_started_at_usec: int = total_started_at_usec
 	day_index += 1
@@ -1297,6 +2911,8 @@ func apply_day_result(day_result: Dictionary) -> void:
 		_record_event(company_arc_phase_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	for company_roadmap_event_value in day_result.get("company_roadmap_events", []):
 		_record_event(company_roadmap_event_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
+	for relationship_event_value in day_result.get("relationship_graph_events", []):
+		_record_event(relationship_event_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	for special_event_value in day_result.get("started_special_events", []):
 		_record_event(special_event_value, day_result.get("trade_date", {}), int(day_result.get("day_number", day_index)))
 	for corporate_event_value in day_result.get("corporate_action_events", []):
@@ -1308,6 +2924,7 @@ func apply_day_result(day_result: Dictionary) -> void:
 	active_company_arcs = day_result.get("active_company_arcs", []).duplicate(true)
 	active_special_events = _clear_debug_pending_special_alerts(day_result.get("active_special_events", []))
 	company_roadmap_state = _normalize_company_roadmap_state(day_result.get("company_roadmap_state", company_roadmap_state))
+	company_relationship_graph_state = _normalize_company_relationship_graph_state(day_result.get("company_relationship_graph_state", company_relationship_graph_state))
 	active_corporate_action_chains = day_result.get("active_corporate_action_chains", {}).duplicate(true)
 	corporate_meeting_calendar = day_result.get("corporate_meeting_calendar", {}).duplicate(true)
 	corporate_action_intel = day_result.get("corporate_action_intel", {}).duplicate(true)
@@ -1329,6 +2946,7 @@ func apply_day_result(day_result: Dictionary) -> void:
 			int(day_result.get("day_number", day_index))
 		)
 		applied_company_count += 1
+	_sync_living_company_arc_state(int(day_result.get("day_number", day_index)), active_company_arcs, true)
 	var corporate_action_applications: Array = day_result.get("corporate_action_applications", [])
 	var stock_dividend_distributions: Array = day_result.get("stock_dividend_distributions", [])
 	_apply_corporate_action_applications(corporate_action_applications)
@@ -1429,14 +3047,17 @@ func get_current_macro_state() -> Dictionary:
 
 
 func get_macro_state_for_year(year: int) -> Dictionary:
-	_ensure_macro_state_for_year(year)
-	var year_key: String = str(year)
+	var safe_year: int = max(year, 2020)
+	_ensure_macro_state_for_year(safe_year)
+	var year_key: String = str(safe_year)
 	if not yearly_macro_states.has(year_key):
 		return {}
+	yearly_macro_states[year_key] = _normalize_macro_state(yearly_macro_states.get(year_key, {}), safe_year)
 	return yearly_macro_states[year_key].duplicate(true)
 
 
 func get_macro_state_history() -> Array:
+	yearly_macro_states = _normalize_yearly_macro_states(yearly_macro_states)
 	var year_keys: Array = yearly_macro_states.keys()
 	year_keys.sort()
 	var history: Array = []
@@ -1693,6 +3314,246 @@ func set_company_roadmap_state(next_state: Dictionary) -> void:
 	company_roadmap_state = _normalize_company_roadmap_state(next_state)
 
 
+func get_living_company_arc_state() -> Dictionary:
+	living_company_arc_state = _normalize_living_company_arc_state(living_company_arc_state)
+	return living_company_arc_state.duplicate(true)
+
+
+func set_living_company_arc_state(next_state: Dictionary) -> void:
+	living_company_arc_state = _normalize_living_company_arc_state(next_state)
+
+
+func get_company_story_dossier_state() -> Dictionary:
+	company_story_dossier_state = _normalize_company_story_dossier_state(company_story_dossier_state)
+	return company_story_dossier_state.duplicate(true)
+
+
+func set_company_story_dossier_state(next_state: Dictionary) -> void:
+	company_story_dossier_state = _normalize_company_story_dossier_state(next_state)
+	_sync_company_story_dossier_company_states()
+
+
+func get_company_relationship_graph_state() -> Dictionary:
+	company_relationship_graph_state = _normalize_company_relationship_graph_state(company_relationship_graph_state)
+	return company_relationship_graph_state.duplicate(true)
+
+
+func set_company_relationship_graph_state(next_state: Dictionary) -> void:
+	company_relationship_graph_state = _normalize_company_relationship_graph_state(next_state)
+
+
+func get_company_relationship_edge(edge_id: String) -> Dictionary:
+	var normalized_edge_id: String = edge_id.strip_edges()
+	if normalized_edge_id.is_empty():
+		return {}
+	company_relationship_graph_state = _normalize_company_relationship_graph_state(company_relationship_graph_state)
+	var edge_index: Dictionary = company_relationship_graph_state.get("edge_index", {})
+	if not edge_index.has(normalized_edge_id):
+		return {}
+	return edge_index.get(normalized_edge_id, {}).duplicate(true)
+
+
+func get_company_relationship_edges_for_company(company_id: String, include_incoming: bool = true, include_outgoing: bool = true) -> Array:
+	var normalized_company_id: String = company_id.strip_edges()
+	if normalized_company_id.is_empty():
+		return []
+	company_relationship_graph_state = _normalize_company_relationship_graph_state(company_relationship_graph_state)
+	var company_edge_ids: Dictionary = company_relationship_graph_state.get("company_edge_ids", {})
+	var company_bucket: Dictionary = company_edge_ids.get(normalized_company_id, {}) if typeof(company_edge_ids.get(normalized_company_id, {})) == TYPE_DICTIONARY else {}
+	var ids: Array = []
+	if include_outgoing:
+		ids.append_array(COMPANY_RELATIONSHIP_GRAPH_SYSTEM._string_array(company_bucket.get("outgoing", [])))
+	if include_incoming:
+		ids.append_array(COMPANY_RELATIONSHIP_GRAPH_SYSTEM._string_array(company_bucket.get("incoming", [])))
+	ids = COMPANY_RELATIONSHIP_GRAPH_SYSTEM._string_array(ids)
+	var edge_index: Dictionary = company_relationship_graph_state.get("edge_index", {})
+	var rows: Array = []
+	for edge_id_value in ids:
+		var edge: Dictionary = edge_index.get(str(edge_id_value), {})
+		if not edge.is_empty():
+			rows.append(edge.duplicate(true))
+	return rows
+
+
+func get_company_story_dossier(story_id: String) -> Dictionary:
+	var normalized_story_id: String = story_id.strip_edges()
+	if normalized_story_id.is_empty():
+		return {}
+	company_story_dossier_state = _normalize_company_story_dossier_state(company_story_dossier_state)
+	var dossier_index: Dictionary = company_story_dossier_state.get("dossier_index", {})
+	if not dossier_index.has(normalized_story_id):
+		return {}
+	return dossier_index.get(normalized_story_id, {}).duplicate(true)
+
+
+func get_company_story_dossier_ids_for_company(company_id: String) -> Array:
+	var normalized_company_id: String = company_id.strip_edges()
+	if normalized_company_id.is_empty():
+		return []
+	company_story_dossier_state = _normalize_company_story_dossier_state(company_story_dossier_state)
+	var company_story_ids: Dictionary = company_story_dossier_state.get("company_story_ids", {})
+	return _normalize_story_dossier_string_array(company_story_ids.get(normalized_company_id, []), STORY_DOSSIER_MAX_COMPANY_STORY_IDS)
+
+
+func get_company_story_dossiers_for_company(company_id: String) -> Array:
+	var dossiers: Array = []
+	for story_id_value in get_company_story_dossier_ids_for_company(company_id):
+		var dossier: Dictionary = get_company_story_dossier(str(story_id_value))
+		if not dossier.is_empty():
+			dossiers.append(dossier)
+	return dossiers
+
+
+func get_company_story_disclosure_placements(story_id: String, section_id: String = "") -> Array:
+	var dossier: Dictionary = get_company_story_dossier(story_id)
+	if dossier.is_empty():
+		return []
+	var dossier_system = COMPANY_STORY_DOSSIER_SYSTEM.new()
+	return dossier_system.disclosure_placements_for_dossiers([dossier], section_id)
+
+
+func get_company_story_disclosure_packets(story_id: String, section_id: String = "") -> Array:
+	var dossier: Dictionary = get_company_story_dossier(story_id)
+	if dossier.is_empty():
+		return []
+	var dossier_system = COMPANY_STORY_DOSSIER_SYSTEM.new()
+	return dossier_system.disclosure_packets_for_dossiers([dossier], section_id)
+
+
+func get_company_story_disclosure_placements_for_company(company_id: String, section_id: String = "") -> Array:
+	var dossiers: Array = get_company_story_dossiers_for_company(company_id)
+	if dossiers.is_empty():
+		return []
+	var dossier_system = COMPANY_STORY_DOSSIER_SYSTEM.new()
+	return dossier_system.disclosure_placements_for_dossiers(dossiers, section_id)
+
+
+func get_company_story_disclosure_packets_for_company(company_id: String, section_id: String = "") -> Array:
+	var dossiers: Array = get_company_story_dossiers_for_company(company_id)
+	if dossiers.is_empty():
+		return []
+	var dossier_system = COMPANY_STORY_DOSSIER_SYSTEM.new()
+	return dossier_system.disclosure_packets_for_dossiers(dossiers, section_id)
+
+
+func get_company_story_dossier_company_state(company_id: String) -> Dictionary:
+	if company_id.is_empty() or not companies.has(company_id):
+		return _default_company_story_dossier_company_state(company_id)
+	var runtime: Dictionary = _normalize_company_runtime(companies.get(company_id, {}))
+	companies[company_id] = runtime
+	return runtime.get("company_story_dossier_state", {}).duplicate(true)
+
+
+func update_company_story_dossier_progress(
+	story_id: String,
+	next_stage_id: String = "",
+	next_public_status: String = "",
+	outcome_state: String = "",
+	resolved_day_index: int = -1
+) -> bool:
+	var normalized_story_id: String = story_id.strip_edges()
+	if normalized_story_id.is_empty():
+		return false
+	company_story_dossier_state = _normalize_company_story_dossier_state(company_story_dossier_state)
+	var dossier_index: Dictionary = company_story_dossier_state.get("dossier_index", {})
+	if not dossier_index.has(normalized_story_id):
+		return false
+	var dossier: Dictionary = _normalize_story_dossier_instance(dossier_index.get(normalized_story_id, {}))
+	if dossier.is_empty():
+		return false
+	var stage_id: String = _normalize_story_dossier_stage_id(next_stage_id, str(dossier.get("stage_id", "seeded")))
+	var public_status: String = _normalize_story_dossier_public_status(next_public_status, str(dossier.get("public_status", "silent")))
+	dossier["stage_id"] = stage_id
+	dossier["public_status"] = public_status
+	if not outcome_state.strip_edges().is_empty():
+		dossier["outcome_state"] = outcome_state.strip_edges()
+	if resolved_day_index >= 0:
+		dossier["resolved_day_index"] = resolved_day_index
+		if str(dossier.get("outcome_state", "")).is_empty():
+			dossier["outcome_state"] = "resolved"
+		var recent_resolved_stories: Array = _normalize_story_dossier_resolved_rows(
+			company_story_dossier_state.get("recent_resolved_stories", []),
+			STORY_DOSSIER_MAX_RECENT_RESOLVED
+		)
+		recent_resolved_stories.append({
+			"story_id": normalized_story_id,
+			"company_id": str(dossier.get("company_id", "")),
+			"archetype_id": str(dossier.get("archetype_id", "")),
+			"outcome_state": str(dossier.get("outcome_state", "")),
+			"resolved_day_index": resolved_day_index
+		})
+		company_story_dossier_state["recent_resolved_stories"] = _cap_living_rows(recent_resolved_stories, STORY_DOSSIER_MAX_RECENT_RESOLVED)
+	dossier_index[normalized_story_id] = dossier
+	company_story_dossier_state["dossier_index"] = dossier_index
+	company_story_dossier_state = _normalize_company_story_dossier_state(company_story_dossier_state)
+	_sync_company_story_dossier_company_states()
+	return true
+
+
+func sync_living_company_arcs_for_day(day_number: int, active_arcs: Array, record_source_counts: bool = true) -> Dictionary:
+	return _sync_living_company_arc_state(day_number, active_arcs, record_source_counts)
+
+
+func get_company_living_arc_state(company_id: String) -> Dictionary:
+	if company_id.is_empty() or not companies.has(company_id):
+		return _default_company_living_arc_state(company_id)
+	var runtime: Dictionary = _normalize_company_runtime(companies.get(company_id, {}))
+	companies[company_id] = runtime
+	return runtime.get("living_arc_state", {}).duplicate(true)
+
+
+func get_company_living_arc_status(company_id: String, target_day_index: int = -1) -> String:
+	var resolved_day_index: int = day_index if target_day_index < 0 else target_day_index
+	var arc_state: Dictionary = get_company_living_arc_state(company_id)
+	return _living_status_from_state(arc_state, resolved_day_index)
+
+
+func is_company_living_arc_available(
+	company_id: String,
+	source_system: String = "company_arc",
+	event_id: String = "",
+	target_day_index: int = -1,
+	allow_active_conflict: bool = false,
+	allow_cooldown: bool = false
+) -> bool:
+	return get_company_living_arc_block_reason(
+		company_id,
+		source_system,
+		event_id,
+		target_day_index,
+		allow_active_conflict,
+		allow_cooldown
+	).is_empty()
+
+
+func get_company_living_arc_block_reason(
+	company_id: String,
+	source_system: String = "company_arc",
+	event_id: String = "",
+	target_day_index: int = -1,
+	allow_active_conflict: bool = false,
+	allow_cooldown: bool = false
+) -> String:
+	var resolved_day_index: int = day_index if target_day_index < 0 else target_day_index
+	return _living_company_arc_block_reason(
+		company_id,
+		source_system,
+		event_id,
+		resolved_day_index,
+		allow_active_conflict,
+		allow_cooldown
+	)
+
+
+func set_company_living_arc_state(company_id: String, next_state: Dictionary) -> void:
+	if company_id.is_empty() or not companies.has(company_id):
+		return
+	var runtime: Dictionary = companies.get(company_id, {}).duplicate(true)
+	runtime["living_arc_state"] = _normalize_company_living_arc_state(next_state, company_id)
+	companies[company_id] = _normalize_company_runtime(runtime)
+	_refresh_company_living_eligibility_tags(company_id)
+
+
 func get_active_corporate_action_chains() -> Dictionary:
 	return active_corporate_action_chains.duplicate(true)
 
@@ -1907,6 +3768,20 @@ func refresh_cash_stress_state() -> Dictionary:
 	return get_life_finance()
 
 
+func required_loan_payment_reserve(finance: Dictionary = {}) -> float:
+	var source_finance: Dictionary = finance
+	if source_finance.is_empty():
+		source_finance = get_life_finance()
+	var required_reserve: float = 0.0
+	var active_loan: Dictionary = source_finance.get("active_loan", {})
+	if not active_loan.is_empty():
+		required_reserve += max(float(active_loan.get("monthly_payment", 0.0)), 0.0)
+	var active_bank_loan: Dictionary = source_finance.get("active_bank_loan", {})
+	if not active_bank_loan.is_empty():
+		required_reserve += max(float(active_bank_loan.get("monthly_payment", 0.0)), 0.0)
+	return required_reserve
+
+
 func apply_emergency_loan_proceeds(principal: float, detail: Dictionary = {}) -> Dictionary:
 	if is_bankrupt():
 		return {"success": false, "message": "The run is bankrupt. New loans are disabled."}
@@ -1946,6 +3821,145 @@ func apply_emergency_loan_proceeds(principal: float, detail: Dictionary = {}) ->
 		"cash_before": cash_before,
 		"cash_after": cash_after,
 		"finance": refreshed_finance
+	}
+
+
+func get_active_bank_loan() -> Dictionary:
+	var finance: Dictionary = get_life_finance()
+	return finance.get("active_bank_loan", {}).duplicate(true)
+
+
+func apply_bank_loan_proceeds(offer_id: String, principal: float, detail: Dictionary = {}) -> Dictionary:
+	if is_bankrupt():
+		return {"success": false, "message": "The run is bankrupt. New bank loans are disabled."}
+	var normalized_offer_id: String = offer_id.strip_edges()
+	if normalized_offer_id.is_empty():
+		return {"success": false, "message": "Bank loan offer id is required."}
+	var normalized_principal: float = max(principal, 0.0)
+	if normalized_principal <= 0.0:
+		return {"success": false, "message": "Bank loan amount must be positive."}
+	var lender_id: String = str(detail.get("lender_id", "")).strip_edges()
+	if lender_id.is_empty():
+		return {"success": false, "message": "Bank loan lender is required."}
+	if detail.has("eligible") and not bool(detail.get("eligible", false)):
+		var disabled_reason: String = str(detail.get("disabled_reason", "")).strip_edges()
+		if disabled_reason.is_empty():
+			disabled_reason = "Selected bank loan offer is not available."
+		return {"success": false, "message": disabled_reason}
+	var detail_disabled_reason: String = str(detail.get("disabled_reason", "")).strip_edges()
+	if not detail_disabled_reason.is_empty():
+		return {"success": false, "message": detail_disabled_reason}
+	var min_principal: float = max(float(detail.get("min_principal", 0.0)), 0.0)
+	if min_principal > 0.0 and normalized_principal + 0.0001 < min_principal:
+		return {"success": false, "message": "Bank loan amount is below the selected offer minimum."}
+	var max_principal: float = max(float(detail.get("max_principal", 0.0)), 0.0)
+	if max_principal > 0.0 and normalized_principal > max_principal + 0.0001:
+		return {"success": false, "message": "Bank loan amount exceeds the selected offer maximum."}
+	var finance: Dictionary = get_life_finance()
+	var current_bank_loan: Dictionary = finance.get("active_bank_loan", {})
+	if not current_bank_loan.is_empty():
+		return {"success": false, "message": "A regular bank loan is already active."}
+
+	var cash_before: float = float(player_portfolio.get("cash", 0.0))
+	var cash_after: float = cash_before + normalized_principal
+	player_portfolio["cash"] = cash_after
+	LifeStateSystem.start_bank_loan(finance, normalized_offer_id, normalized_principal, detail, day_index, current_trade_date)
+	set_life_finance(finance)
+	_record_trade(
+		"life",
+		"life_bank_loan",
+		{
+			"lots": 0,
+			"shares": 0,
+			"price_per_share": 0.0,
+			"gross_value": normalized_principal,
+			"fee_rate": 0.0,
+			"fee": 0.0
+		},
+		0.0,
+		normalized_principal,
+		cash_after
+	)
+	var refreshed_finance: Dictionary = refresh_cash_stress_state()
+	return {
+		"success": true,
+		"message": "Regular bank loan approved.",
+		"loan": refreshed_finance.get("active_bank_loan", {}).duplicate(true),
+		"cash_before": cash_before,
+		"cash_after": cash_after,
+		"finance": refreshed_finance
+	}
+
+
+func apply_bank_loan_payment(amount: float, detail: Dictionary = {}) -> Dictionary:
+	var finance: Dictionary = get_life_finance()
+	var loan: Dictionary = finance.get("active_bank_loan", {}).duplicate(true)
+	if loan.is_empty():
+		return {"success": false, "message": "No active regular bank loan."}
+	var normalized_amount: float = max(amount, 0.0)
+	if normalized_amount <= 0.0:
+		return {"success": false, "message": "No bank loan payment to apply."}
+	var cash_before: float = float(player_portfolio.get("cash", 0.0))
+	var cash_after: float = cash_before - normalized_amount
+	player_portfolio["cash"] = cash_after
+	var amount_paid: float = float(loan.get("amount_paid", 0.0)) + normalized_amount
+	var payments_remaining: int = max(int(loan.get("payments_remaining", 1)) - 1, 0)
+	loan["amount_paid"] = amount_paid
+	loan["payments_remaining"] = payments_remaining
+	loan["last_payment_period"] = str(detail.get("period_id", ""))
+	loan["last_payment_day_index"] = day_index
+	loan["last_payment_trade_date"] = current_trade_date.duplicate(true)
+	_record_trade(
+		"life",
+		"life_bank_loan_payment",
+		{
+			"lots": 0,
+			"shares": 0,
+			"price_per_share": 0.0,
+			"gross_value": normalized_amount,
+			"fee_rate": 0.0,
+			"fee": 0.0
+		},
+		0.0,
+		-normalized_amount,
+		cash_after
+	)
+	var loan_completed: bool = payments_remaining <= 0 or amount_paid + 0.0001 >= float(loan.get("total_repayment", 0.0))
+	if loan_completed:
+		loan["state"] = "paid"
+		loan["completed_day_index"] = day_index
+		loan["completed_trade_date"] = current_trade_date.duplicate(true)
+		finance["active_bank_loan"] = {}
+		_append_life_finance_history(finance, {
+			"type": "bank_loan_paid",
+			"loan_id": str(loan.get("id", "")),
+			"lender_id": str(loan.get("lender_id", "")),
+			"amount": normalized_amount,
+			"day_index": day_index,
+			"trade_date": current_trade_date.duplicate(true)
+		})
+	else:
+		finance["active_bank_loan"] = loan
+		_append_life_finance_history(finance, {
+			"type": "bank_loan_payment",
+			"loan_id": str(loan.get("id", "")),
+			"lender_id": str(loan.get("lender_id", "")),
+			"amount": normalized_amount,
+			"day_index": day_index,
+			"trade_date": current_trade_date.duplicate(true)
+		})
+	set_life_finance(finance)
+	var refreshed_finance: Dictionary = refresh_cash_stress_state()
+	return {
+		"success": true,
+		"message": "Regular bank loan payment applied.",
+		"amount": normalized_amount,
+		"cash_before": cash_before,
+		"cash_after": cash_after,
+		"loan": loan.duplicate(true),
+		"loan_completed": loan_completed,
+		"finance": refreshed_finance,
+		"detail": detail.duplicate(true)
 	}
 
 
@@ -2177,6 +4191,7 @@ func add_network_company_arc(arc_data: Dictionary) -> void:
 		return
 	active_company_arcs.append(arc_data.duplicate(true))
 	_append_company_arc_to_companies(arc_data)
+	_sync_living_company_arc_state(max(day_index, 1), active_company_arcs, true)
 
 
 func record_news_snapshot(snapshot: Dictionary) -> void:
@@ -2272,6 +4287,7 @@ func debug_add_company_arc(arc_data: Dictionary, start_event: Dictionary) -> voi
 		var resolved_day_index: int = max(day_index, 1)
 		_record_event(start_event, resolved_trade_date, resolved_day_index)
 	_append_company_arc_to_companies(arc_data)
+	_sync_living_company_arc_state(max(day_index, 1), active_company_arcs, true)
 
 
 func estimate_buy_order(company_id: String, shares: int) -> Dictionary:
@@ -3095,6 +5111,158 @@ func _normalize_index_review_state(source_state: Variant) -> Dictionary:
 	return normalized
 
 
+func _normalize_yearly_macro_states(source_states: Variant) -> Dictionary:
+	var normalized: Dictionary = {}
+	if typeof(source_states) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_states
+	for year_key_value in source.keys():
+		var year_key: String = str(year_key_value)
+		if year_key.strip_edges().is_empty():
+			continue
+		var fallback_year: int = max(int(year_key), 2020)
+		normalized[year_key] = _normalize_macro_state(source.get(year_key_value, {}), fallback_year)
+	return normalized
+
+
+func _normalize_macro_state(source_state: Variant, fallback_year: int) -> Dictionary:
+	var normalized: Dictionary = {}
+	if typeof(source_state) == TYPE_DICTIONARY:
+		normalized = source_state.duplicate(true)
+	var safe_year: int = max(int(normalized.get("year", fallback_year)), 2020)
+	normalized["year"] = safe_year
+	var commodity_indicators: Dictionary = _normalize_macro_commodity_indicators(normalized.get("commodity_indicators", {}))
+	normalized["commodity_indicators"] = commodity_indicators
+	normalized["commodity_regime_counts"] = _macro_commodity_regime_counts(commodity_indicators)
+	normalized["commodity_leaders"] = _macro_commodity_extremes(commodity_indicators, true)
+	normalized["commodity_laggards"] = _macro_commodity_extremes(commodity_indicators, false)
+	return normalized
+
+
+func _normalize_macro_commodity_indicators(source_indicators: Variant) -> Dictionary:
+	var normalized: Dictionary = {}
+	var source: Dictionary = {}
+	if typeof(source_indicators) == TYPE_DICTIONARY:
+		source = source_indicators
+	var commodity_definitions: Array = DataRepository.get_commodity_indicator_definitions()
+	if commodity_definitions.is_empty():
+		return source.duplicate(true)
+	for commodity_value in commodity_definitions:
+		if typeof(commodity_value) != TYPE_DICTIONARY:
+			continue
+		var commodity_definition: Dictionary = commodity_value
+		var commodity_id: String = str(commodity_definition.get("id", "")).strip_edges()
+		if commodity_id.is_empty():
+			continue
+		normalized[commodity_id] = _normalize_macro_commodity_indicator(
+			commodity_id,
+			commodity_definition,
+			source.get(commodity_id, {})
+		)
+	return normalized
+
+
+func _normalize_macro_commodity_indicator(commodity_id: String, commodity_definition: Dictionary, source_indicator: Variant) -> Dictionary:
+	var source: Dictionary = {}
+	if typeof(source_indicator) == TYPE_DICTIONARY:
+		source = source_indicator
+	var model: Dictionary = {}
+	if typeof(commodity_definition.get("model", {})) == TYPE_DICTIONARY:
+		model = commodity_definition.get("model", {})
+	var neutral_level: float = float(model.get("neutral_level", 100.0))
+	var level_floor: float = float(model.get("level_floor", 60.0))
+	var level_ceiling: float = float(model.get("level_ceiling", 160.0))
+	var ytd_floor: float = float(model.get("ytd_move_floor", -32.0))
+	var ytd_ceiling: float = float(model.get("ytd_move_ceiling", 42.0))
+	var level: float = clamp(float(source.get("level", neutral_level)), level_floor, level_ceiling)
+	var ytd_move: float = clamp(float(source.get("ytd_move", 0.0)), ytd_floor, ytd_ceiling)
+	var volatility: float = clamp(float(source.get("volatility", model.get("volatility_base", 0.24))), 0.05, 0.8)
+	var direction: String = str(source.get("direction", "flat"))
+	if not direction in MACRO_COMMODITY_DIRECTIONS:
+		direction = "flat"
+	var regime: String = str(source.get("regime", "neutral"))
+	if not regime in MACRO_COMMODITY_REGIMES:
+		regime = "neutral"
+	var related_sectors: Array = _macro_commodity_array_or_default(
+		source.get("related_sectors", []),
+		commodity_definition.get("related_sectors", [])
+	)
+	var story_tags: Array = _macro_commodity_array_or_default(
+		source.get("story_tags", []),
+		commodity_definition.get("story_tags", [])
+	)
+	return {
+		"id": commodity_id,
+		"display_name": str(source.get("display_name", commodity_definition.get("display_name", commodity_id))),
+		"category": str(source.get("category", commodity_definition.get("category", "other"))),
+		"level": snappedf(level, 0.1),
+		"direction": direction,
+		"volatility": snappedf(volatility, 0.01),
+		"regime": regime,
+		"ytd_move": snappedf(ytd_move, 0.1),
+		"driver_score": snappedf(clamp(float(source.get("driver_score", 0.0)), -1.0, 1.0), 0.01),
+		"related_sectors": related_sectors,
+		"story_tags": story_tags
+	}
+
+
+func _macro_commodity_array_or_default(source_value: Variant, default_value: Variant) -> Array:
+	if typeof(source_value) == TYPE_ARRAY:
+		return source_value.duplicate(true)
+	if typeof(default_value) == TYPE_ARRAY:
+		return default_value.duplicate(true)
+	return []
+
+
+func _macro_commodity_regime_counts(commodity_indicators: Dictionary) -> Dictionary:
+	var counts: Dictionary = {
+		"bear": 0,
+		"soft": 0,
+		"neutral": 0,
+		"firm": 0,
+		"bull": 0
+	}
+	for commodity_id_value in commodity_indicators.keys():
+		var indicator: Dictionary = commodity_indicators.get(commodity_id_value, {})
+		var regime: String = str(indicator.get("regime", "neutral"))
+		if not regime in MACRO_COMMODITY_REGIMES:
+			regime = "neutral"
+		counts[regime] = int(counts.get(regime, 0)) + 1
+	return counts
+
+
+func _macro_commodity_extremes(commodity_indicators: Dictionary, pick_positive: bool) -> Array:
+	var rows: Array = []
+	for commodity_id_value in commodity_indicators.keys():
+		var commodity_id: String = str(commodity_id_value)
+		var indicator: Dictionary = commodity_indicators.get(commodity_id, {})
+		rows.append({
+			"id": commodity_id,
+			"ytd_move": float(indicator.get("ytd_move", 0.0))
+		})
+	rows.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		var left_move: float = float(left.get("ytd_move", 0.0))
+		var right_move: float = float(right.get("ytd_move", 0.0))
+		if is_equal_approx(left_move, right_move):
+			return str(left.get("id", "")) < str(right.get("id", ""))
+		return left_move > right_move
+	)
+	if not pick_positive:
+		rows.reverse()
+	var selected: Array = []
+	for row_value in rows:
+		var row: Dictionary = row_value
+		var move: float = float(row.get("ytd_move", 0.0))
+		if pick_positive and move <= 0.0:
+			continue
+		if not pick_positive and move >= 0.0:
+			continue
+		selected.append(str(row.get("id", "")))
+		if selected.size() >= 3:
+			break
+	return selected
+
+
 func _default_company_roadmap_state() -> Dictionary:
 	return {
 		"active_milestones": {},
@@ -3143,6 +5311,1553 @@ func _normalize_company_roadmap_state(source_state: Variant) -> Dictionary:
 				normalized["company_cooldowns"][company_id] = int(source_cooldowns.get(company_id_value, 0))
 	normalized["last_spawn_day_index"] = int(source.get("last_spawn_day_index", -999))
 	return normalized
+
+
+func _seed_company_relationship_graph_state_for_new_run() -> void:
+	var definitions: Array = []
+	for company_id_value in company_order:
+		var company_id: String = str(company_id_value)
+		if not company_definitions.has(company_id):
+			continue
+		var definition_value = company_definitions.get(company_id, {})
+		if typeof(definition_value) != TYPE_DICTIONARY:
+			continue
+		definitions.append(definition_value.duplicate(true))
+	var graph_system = COMPANY_RELATIONSHIP_GRAPH_SYSTEM.new()
+	company_relationship_graph_state = graph_system.generate_graph_state(
+		run_seed,
+		definitions,
+		{"generated_day_index": day_index}
+	)
+
+
+func _default_company_relationship_graph_state() -> Dictionary:
+	return COMPANY_RELATIONSHIP_GRAPH_SYSTEM.default_graph_state(run_seed, -1)
+
+
+func _normalize_company_relationship_graph_state(source_state: Variant) -> Dictionary:
+	return COMPANY_RELATIONSHIP_GRAPH_SYSTEM.normalize_graph_state(
+		source_state,
+		company_order,
+		run_seed,
+		day_index
+	)
+
+
+func _seed_company_story_dossier_state_for_new_run() -> void:
+	var definitions: Array = []
+	for company_id_value in company_order:
+		var company_id: String = str(company_id_value)
+		if not company_definitions.has(company_id):
+			continue
+		var definition_value = company_definitions.get(company_id, {})
+		if typeof(definition_value) != TYPE_DICTIONARY:
+			continue
+		definitions.append(definition_value.duplicate(true))
+	if definitions.is_empty():
+		company_story_dossier_state = _default_company_story_dossier_state()
+		_sync_company_story_dossier_company_states()
+		return
+	var dossier_system = COMPANY_STORY_DOSSIER_SYSTEM.new()
+	var dossiers: Array = dossier_system.generate_dossiers(
+		run_seed,
+		definitions,
+		get_current_macro_state(),
+		{
+			"max_dossiers": definitions.size(),
+			"dossiers_per_company": 1
+		}
+	)
+	company_story_dossier_state = _build_company_story_dossier_state_from_dossiers(dossiers, true)
+	_sync_company_story_dossier_company_states()
+
+
+func _build_company_story_dossier_state_from_dossiers(dossiers: Array, generated: bool) -> Dictionary:
+	var state: Dictionary = _default_company_story_dossier_state()
+	state["generated"] = generated
+	state["run_seed"] = run_seed
+	state["generated_day_index"] = day_index
+	var dossier_index: Dictionary = {}
+	var company_story_ids: Dictionary = {}
+	var active_story_ids: Array = []
+	var resolved_story_ids: Array = []
+	for dossier_value in dossiers:
+		var dossier: Dictionary = _normalize_story_dossier_instance(dossier_value)
+		if dossier.is_empty():
+			continue
+		var story_id: String = str(dossier.get("story_id", ""))
+		var company_id: String = str(dossier.get("company_id", ""))
+		dossier_index[story_id] = dossier
+		if not company_id.is_empty():
+			var ids: Array = _normalize_story_dossier_string_array(company_story_ids.get(company_id, []), STORY_DOSSIER_MAX_COMPANY_STORY_IDS)
+			ids = _story_dossier_append_unique(ids, story_id, STORY_DOSSIER_MAX_COMPANY_STORY_IDS)
+			company_story_ids[company_id] = ids
+		if _story_dossier_is_resolved(dossier):
+			resolved_story_ids = _story_dossier_append_unique(resolved_story_ids, story_id, 0)
+		else:
+			active_story_ids = _story_dossier_append_unique(active_story_ids, story_id, 0)
+	state["dossier_index"] = dossier_index
+	state["company_story_ids"] = company_story_ids
+	state["active_story_ids"] = active_story_ids
+	state["resolved_story_ids"] = resolved_story_ids
+	return _normalize_company_story_dossier_state(state)
+
+
+func _sync_company_story_dossier_company_states() -> void:
+	company_story_dossier_state = _normalize_company_story_dossier_state(company_story_dossier_state)
+	for company_id_value in companies.keys():
+		var company_id: String = str(company_id_value)
+		var runtime_value = companies.get(company_id_value, {})
+		if typeof(runtime_value) != TYPE_DICTIONARY:
+			continue
+		var runtime: Dictionary = runtime_value.duplicate(true)
+		runtime["company_story_dossier_state"] = _company_story_dossier_company_state_from_global(
+			company_id,
+			company_story_dossier_state,
+			runtime.get("company_story_dossier_state", {})
+		)
+		companies[company_id] = _normalize_company_runtime(runtime)
+
+
+func _default_company_story_dossier_state() -> Dictionary:
+	return {
+		"schema_version": STORY_DOSSIER_SCHEMA_VERSION,
+		"generated": false,
+		"run_seed": run_seed,
+		"generated_day_index": -1,
+		"active_story_ids": [],
+		"resolved_story_ids": [],
+		"dossier_index": {},
+		"company_story_ids": {},
+		"recent_resolved_stories": [],
+		"story_counts_by_archetype": {},
+		"story_counts_by_truth": {}
+	}
+
+
+func _default_company_story_dossier_company_state(company_id: String = "") -> Dictionary:
+	return {
+		"schema_version": STORY_DOSSIER_SCHEMA_VERSION,
+		"company_id": company_id,
+		"active_story_ids": [],
+		"resolved_story_ids": [],
+		"current_story_id": "",
+		"current_stage_by_story_id": {},
+		"public_status_by_story_id": {},
+		"last_story_day_index": -1,
+		"recent_story_ids": []
+	}
+
+
+func _normalize_company_story_dossier_state(source_state: Variant) -> Dictionary:
+	var normalized: Dictionary = _default_company_story_dossier_state()
+	if typeof(source_state) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_state
+	normalized["schema_version"] = STORY_DOSSIER_SCHEMA_VERSION
+	normalized["generated"] = bool(source.get("generated", false))
+	normalized["run_seed"] = int(source.get("run_seed", run_seed))
+	normalized["generated_day_index"] = int(source.get("generated_day_index", -1))
+
+	var source_dossier_index: Dictionary = {}
+	if typeof(source.get("dossier_index", {})) == TYPE_DICTIONARY:
+		source_dossier_index = source.get("dossier_index", {})
+	var dossier_index: Dictionary = {}
+	var active_from_dossiers: Array = []
+	var resolved_from_dossiers: Array = []
+	var company_story_ids: Dictionary = _normalize_story_dossier_company_story_ids(source.get("company_story_ids", {}))
+	var archetype_counts: Dictionary = {}
+	var truth_counts: Dictionary = {}
+
+	for story_id_value in source_dossier_index.keys():
+		var dossier: Dictionary = _normalize_story_dossier_instance(source_dossier_index.get(story_id_value, {}))
+		if dossier.is_empty():
+			continue
+		var story_id: String = str(dossier.get("story_id", story_id_value)).strip_edges()
+		var company_id: String = str(dossier.get("company_id", "")).strip_edges()
+		dossier_index[story_id] = dossier
+		if _story_dossier_is_resolved(dossier):
+			resolved_from_dossiers = _story_dossier_append_unique(resolved_from_dossiers, story_id, 0)
+		else:
+			active_from_dossiers = _story_dossier_append_unique(active_from_dossiers, story_id, 0)
+		if not company_id.is_empty():
+			var ids: Array = _normalize_story_dossier_string_array(company_story_ids.get(company_id, []), STORY_DOSSIER_MAX_COMPANY_STORY_IDS)
+			ids = _story_dossier_append_unique(ids, story_id, STORY_DOSSIER_MAX_COMPANY_STORY_IDS)
+			company_story_ids[company_id] = ids
+		var archetype_id: String = str(dossier.get("archetype_id", "")).strip_edges()
+		if not archetype_id.is_empty():
+			archetype_counts[archetype_id] = int(archetype_counts.get(archetype_id, 0)) + 1
+		var truth_state: String = str(dossier.get("truth_state", "uncertain")).strip_edges()
+		truth_counts[truth_state] = int(truth_counts.get(truth_state, 0)) + 1
+
+	var source_active_ids: Array = _normalize_story_dossier_string_array(source.get("active_story_ids", []), 0)
+	var source_resolved_ids: Array = _normalize_story_dossier_string_array(source.get("resolved_story_ids", []), 0)
+	normalized["active_story_ids"] = _story_dossier_merge_known_ids(source_active_ids, active_from_dossiers, dossier_index, false)
+	normalized["resolved_story_ids"] = _story_dossier_merge_known_ids(source_resolved_ids, resolved_from_dossiers, dossier_index, true)
+	normalized["dossier_index"] = dossier_index
+	normalized["company_story_ids"] = company_story_ids
+	normalized["recent_resolved_stories"] = _normalize_story_dossier_resolved_rows(
+		source.get("recent_resolved_stories", []),
+		STORY_DOSSIER_MAX_RECENT_RESOLVED
+	)
+	normalized["story_counts_by_archetype"] = archetype_counts
+	normalized["story_counts_by_truth"] = truth_counts
+	return normalized
+
+
+func _company_story_dossier_company_state_from_global(company_id: String, global_state: Dictionary, source_state: Variant = {}) -> Dictionary:
+	var normalized: Dictionary = _normalize_company_story_dossier_company_state(source_state, company_id)
+	var normalized_company_id: String = company_id.strip_edges()
+	if normalized_company_id.is_empty():
+		return normalized
+	var company_story_ids: Dictionary = global_state.get("company_story_ids", {})
+	var story_ids: Array = _normalize_story_dossier_string_array(
+		company_story_ids.get(normalized_company_id, []),
+		STORY_DOSSIER_MAX_COMPANY_STORY_IDS
+	)
+	var active_lookup: Dictionary = _story_dossier_lookup(global_state.get("active_story_ids", []))
+	var resolved_lookup: Dictionary = _story_dossier_lookup(global_state.get("resolved_story_ids", []))
+	var dossier_index: Dictionary = global_state.get("dossier_index", {})
+	var active_ids: Array = []
+	var resolved_ids: Array = []
+	var current_stage_by_story_id: Dictionary = {}
+	var public_status_by_story_id: Dictionary = {}
+	var last_story_day: int = int(normalized.get("last_story_day_index", -1))
+	for story_id_value in story_ids:
+		var story_id: String = str(story_id_value)
+		var dossier: Dictionary = dossier_index.get(story_id, {})
+		if active_lookup.has(story_id):
+			active_ids = _story_dossier_append_unique(active_ids, story_id, STORY_DOSSIER_MAX_COMPANY_STORY_IDS)
+		elif resolved_lookup.has(story_id):
+			resolved_ids = _story_dossier_append_unique(resolved_ids, story_id, STORY_DOSSIER_MAX_COMPANY_STORY_IDS)
+		if typeof(dossier) == TYPE_DICTIONARY and not dossier.is_empty():
+			current_stage_by_story_id[story_id] = _normalize_story_dossier_stage_id(str(dossier.get("stage_id", "seeded")), "seeded")
+			public_status_by_story_id[story_id] = _normalize_story_dossier_public_status(str(dossier.get("public_status", "silent")), "silent")
+			last_story_day = max(last_story_day, int(dossier.get("started_day_index", -1)))
+	var current_story_id: String = str(normalized.get("current_story_id", "")).strip_edges()
+	if current_story_id.is_empty() or not story_ids.has(current_story_id):
+		if not active_ids.is_empty():
+			current_story_id = str(active_ids[0])
+		elif not story_ids.is_empty():
+			current_story_id = str(story_ids[0])
+	normalized["active_story_ids"] = active_ids
+	normalized["resolved_story_ids"] = resolved_ids
+	normalized["current_story_id"] = current_story_id
+	normalized["current_stage_by_story_id"] = current_stage_by_story_id
+	normalized["public_status_by_story_id"] = public_status_by_story_id
+	normalized["last_story_day_index"] = last_story_day
+	normalized["recent_story_ids"] = _story_dossier_merge_string_arrays(
+		normalized.get("recent_story_ids", []),
+		story_ids,
+		STORY_DOSSIER_MAX_COMPANY_STORY_IDS
+	)
+	return _normalize_company_story_dossier_company_state(normalized, normalized_company_id)
+
+
+func _normalize_company_story_dossier_company_state(source_state: Variant, company_id: String = "") -> Dictionary:
+	var normalized: Dictionary = _default_company_story_dossier_company_state(company_id)
+	if typeof(source_state) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_state
+	var effective_company_id: String = company_id.strip_edges()
+	if effective_company_id.is_empty():
+		effective_company_id = str(source.get("company_id", "")).strip_edges()
+	normalized["schema_version"] = STORY_DOSSIER_SCHEMA_VERSION
+	normalized["company_id"] = effective_company_id
+	normalized["active_story_ids"] = _normalize_story_dossier_string_array(source.get("active_story_ids", []), STORY_DOSSIER_MAX_COMPANY_STORY_IDS)
+	normalized["resolved_story_ids"] = _normalize_story_dossier_string_array(source.get("resolved_story_ids", []), STORY_DOSSIER_MAX_COMPANY_STORY_IDS)
+	normalized["current_story_id"] = str(source.get("current_story_id", "")).strip_edges()
+	normalized["current_stage_by_story_id"] = _normalize_story_dossier_string_dictionary(source.get("current_stage_by_story_id", {}), "stage")
+	normalized["public_status_by_story_id"] = _normalize_story_dossier_string_dictionary(source.get("public_status_by_story_id", {}), "public_status")
+	normalized["last_story_day_index"] = int(source.get("last_story_day_index", -1))
+	normalized["recent_story_ids"] = _normalize_story_dossier_string_array(source.get("recent_story_ids", []), STORY_DOSSIER_MAX_COMPANY_STORY_IDS)
+	return normalized
+
+
+func _normalize_story_dossier_instance(source_value: Variant) -> Dictionary:
+	if typeof(source_value) != TYPE_DICTIONARY:
+		return {}
+	var source: Dictionary = source_value
+	var story_id: String = str(source.get("story_id", "")).strip_edges()
+	var company_id: String = str(source.get("company_id", "")).strip_edges()
+	if story_id.is_empty() or company_id.is_empty():
+		return {}
+	var normalized: Dictionary = source.duplicate(true)
+	normalized["schema_version"] = STORY_DOSSIER_SCHEMA_VERSION
+	normalized["story_id"] = story_id
+	normalized["company_id"] = company_id
+	normalized["ticker"] = str(source.get("ticker", "")).strip_edges()
+	normalized["archetype_id"] = str(source.get("archetype_id", "")).strip_edges()
+	normalized["story_family"] = str(source.get("story_family", "company_story")).strip_edges()
+	normalized["hook_id"] = str(source.get("hook_id", "")).strip_edges()
+	normalized["truth_state"] = _normalize_story_dossier_truth_state(str(source.get("truth_state", "uncertain")))
+	normalized["public_status"] = _normalize_story_dossier_public_status(str(source.get("public_status", "silent")), "silent")
+	normalized["stage_id"] = _normalize_story_dossier_stage_id(str(source.get("stage_id", "seeded")), "seeded")
+	normalized["priority"] = clamp(float(source.get("priority", 0.0)), 0.0, 1.0)
+	normalized["confidence"] = clamp(float(source.get("confidence", 0.0)), 0.0, 1.0)
+	normalized["started_day_index"] = int(source.get("started_day_index", -1))
+	normalized["expected_resolution_day_index"] = int(source.get("expected_resolution_day_index", -1))
+	normalized["resolved_day_index"] = int(source.get("resolved_day_index", -1))
+	normalized["outcome_state"] = str(source.get("outcome_state", "")).strip_edges()
+	normalized["cause_facts"] = _normalize_story_dossier_fact_rows(source.get("cause_facts", []), STORY_DOSSIER_MAX_FACT_ROWS)
+	normalized["timeline"] = _normalize_story_dossier_timeline_rows(source.get("timeline", []), STORY_DOSSIER_MAX_TIMELINE_ROWS)
+	normalized["financial_effects"] = _normalize_story_dossier_effect_rows(source.get("financial_effects", []), STORY_DOSSIER_MAX_EFFECT_ROWS)
+	normalized["price_effects"] = _normalize_story_dossier_price_effects(source.get("price_effects", {}), story_id)
+	normalized["public_clues"] = _normalize_story_dossier_clue_rows(source.get("public_clues", []), STORY_DOSSIER_MAX_CLUE_ROWS)
+	normalized["private_clues"] = _normalize_story_dossier_clue_rows(source.get("private_clues", []), STORY_DOSSIER_MAX_CLUE_ROWS)
+	normalized["statement_clues"] = _normalize_story_dossier_clue_rows(source.get("statement_clues", []), STORY_DOSSIER_MAX_CLUE_ROWS)
+	var disclosure_placements: Array = _normalize_story_dossier_disclosure_placements(source.get("disclosure_placements", []), STORY_DOSSIER_MAX_DISCLOSURE_PLACEMENT_ROWS)
+	var disclosure_packets: Array = _normalize_story_dossier_disclosure_packets(source.get("disclosure_packets", []), STORY_DOSSIER_MAX_DISCLOSURE_PACKET_ROWS)
+	if disclosure_placements.is_empty() or disclosure_packets.is_empty():
+		var repaired_artifacts: Dictionary = _story_dossier_repaired_disclosure_artifacts(normalized, disclosure_placements, disclosure_packets)
+		disclosure_placements = _normalize_story_dossier_disclosure_placements(
+			repaired_artifacts.get("disclosure_placements", disclosure_placements),
+			STORY_DOSSIER_MAX_DISCLOSURE_PLACEMENT_ROWS
+		)
+		disclosure_packets = _normalize_story_dossier_disclosure_packets(
+			repaired_artifacts.get("disclosure_packets", disclosure_packets),
+			STORY_DOSSIER_MAX_DISCLOSURE_PACKET_ROWS
+		)
+	normalized["disclosure_placements"] = disclosure_placements
+	normalized["disclosure_packets"] = disclosure_packets
+	normalized["thesis_hooks"] = _normalize_story_dossier_thesis_hooks(source.get("thesis_hooks", []), STORY_DOSSIER_MAX_EFFECT_ROWS)
+	normalized["resolution_conditions"] = _normalize_story_dossier_resolution_conditions(source.get("resolution_conditions", []), STORY_DOSSIER_MAX_EFFECT_ROWS)
+	normalized["traceability"] = _normalize_story_dossier_traceability(
+		_story_dossier_traceability_with_disclosure_artifacts(
+			source.get("traceability", {}),
+			disclosure_placements,
+			disclosure_packets
+		)
+	)
+	return normalized
+
+
+func _story_dossier_repaired_disclosure_artifacts(dossier: Dictionary, disclosure_placements: Array, disclosure_packets: Array) -> Dictionary:
+	var repair_source: Dictionary = dossier.duplicate(true)
+	repair_source["disclosure_placements"] = disclosure_placements
+	repair_source["disclosure_packets"] = disclosure_packets
+	var dossier_system = COMPANY_STORY_DOSSIER_SYSTEM.new()
+	return dossier_system.disclosure_artifacts_for_dossier(repair_source)
+
+
+func _story_dossier_traceability_with_disclosure_artifacts(source_value: Variant, disclosure_placements: Array, disclosure_packets: Array) -> Dictionary:
+	var traceability: Dictionary = {}
+	if typeof(source_value) == TYPE_DICTIONARY:
+		traceability = source_value.duplicate(true)
+	traceability["disclosure_placement_ids"] = _story_dossier_ids_from_rows(disclosure_placements, "placement_id")
+	traceability["disclosure_section_ids"] = _story_dossier_ids_from_rows(disclosure_placements, "section_id")
+	traceability["disclosure_packet_ids"] = _story_dossier_ids_from_rows(disclosure_packets, "packet_id")
+	return traceability
+
+
+func _story_dossier_ids_from_rows(source_rows: Array, id_key: String) -> Array:
+	var ids: Array = []
+	for row_value in source_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var row_id: String = str(row.get(id_key, "")).strip_edges()
+		if row_id.is_empty() or ids.has(row_id):
+			continue
+		ids.append(row_id)
+	return ids
+
+
+func _normalize_story_dossier_fact_rows(source_rows: Variant, limit: int) -> Array:
+	var rows: Array = []
+	if typeof(source_rows) != TYPE_ARRAY:
+		return rows
+	for row_value in source_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var fact_id: String = str(row.get("fact_id", "")).strip_edges()
+		if fact_id.is_empty():
+			continue
+		rows.append({
+			"fact_id": fact_id,
+			"fact_type": str(row.get("fact_type", "")).strip_edges(),
+			"source_id": str(row.get("source_id", "")).strip_edges(),
+			"direction": str(row.get("direction", "mixed")).strip_edges(),
+			"strength": clamp(float(row.get("strength", 0.0)), 0.0, 1.0),
+			"confidence": clamp(float(row.get("confidence", 0.0)), 0.0, 1.0),
+			"related_sector_ids": _normalize_story_dossier_string_array(row.get("related_sector_ids", []), 0),
+			"related_company_ids": _normalize_story_dossier_string_array(row.get("related_company_ids", []), 0),
+			"tags": _normalize_story_dossier_string_array(row.get("tags", []), 0)
+		})
+	return _cap_living_rows(rows, limit)
+
+
+func _normalize_story_dossier_timeline_rows(source_rows: Variant, limit: int) -> Array:
+	var rows: Array = []
+	if typeof(source_rows) != TYPE_ARRAY:
+		return rows
+	for row_value in source_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		rows.append({
+			"timeline_id": str(row.get("timeline_id", "")).strip_edges(),
+			"stage_id": _normalize_story_dossier_stage_id(str(row.get("stage_id", "seeded")), "seeded"),
+			"start_day_index": int(row.get("start_day_index", -1)),
+			"end_day_index": int(row.get("end_day_index", -1)),
+			"visibility": str(row.get("visibility", "")).strip_edges(),
+			"unlock_surface_ids": _normalize_story_dossier_string_array(row.get("unlock_surface_ids", []), 0),
+			"fact_ids": _normalize_story_dossier_string_array(row.get("fact_ids", []), 0),
+			"expected_tone": str(row.get("expected_tone", "mixed")).strip_edges(),
+			"reliability": clamp(float(row.get("reliability", 0.0)), 0.0, 1.0)
+		})
+	return _cap_living_rows(rows, limit)
+
+
+func _normalize_story_dossier_effect_rows(source_rows: Variant, limit: int) -> Array:
+	var rows: Array = []
+	if typeof(source_rows) != TYPE_ARRAY:
+		return rows
+	for row_value in source_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var effect_id: String = str(row.get("effect_id", "")).strip_edges()
+		if effect_id.is_empty():
+			continue
+		rows.append({
+			"effect_id": effect_id,
+			"metric_id": str(row.get("metric_id", "")).strip_edges(),
+			"statement_section": str(row.get("statement_section", "")).strip_edges(),
+			"direction": str(row.get("direction", "mixed")).strip_edges(),
+			"magnitude_band": str(row.get("magnitude_band", "small")).strip_edges(),
+			"timing": str(row.get("timing", "")).strip_edges(),
+			"persistence": str(row.get("persistence", "")).strip_edges(),
+			"confidence": clamp(float(row.get("confidence", 0.0)), 0.0, 1.0),
+			"truth_states": _normalize_story_dossier_string_array(row.get("truth_states", []), 0),
+			"note_type": str(row.get("note_type", "")).strip_edges(),
+			"explain_tags": _normalize_story_dossier_string_array(row.get("explain_tags", []), 0)
+		})
+	return _cap_living_rows(rows, limit)
+
+
+func _normalize_story_dossier_price_effects(source_value: Variant, story_id: String) -> Dictionary:
+	var source: Dictionary = {}
+	if typeof(source_value) == TYPE_DICTIONARY:
+		source = source_value
+	var modifiers: Dictionary = {}
+	if typeof(source.get("truth_state_modifiers", {})) == TYPE_DICTIONARY:
+		modifiers = source.get("truth_state_modifiers", {}).duplicate(true)
+	return {
+		"price_effect_id": str(source.get("price_effect_id", "price|%s|primary" % story_id)).strip_edges(),
+		"sentiment_bias": clamp(float(source.get("sentiment_bias", 0.0)), -1.0, 1.0),
+		"drift_bps": clamp(float(source.get("drift_bps", 0.0)), -18.0, 18.0),
+		"volatility_multiplier": clamp(float(source.get("volatility_multiplier", 1.0)), 0.80, 1.40),
+		"volume_multiplier": clamp(float(source.get("volume_multiplier", 1.0)), 0.80, 1.60),
+		"confidence": clamp(float(source.get("confidence", 0.0)), 0.0, 1.0),
+		"duration_days": max(int(source.get("duration_days", 0)), 0),
+		"explain_tags": _normalize_story_dossier_string_array(source.get("explain_tags", []), 0),
+		"truth_state_modifiers": modifiers
+	}
+
+
+func _normalize_story_dossier_clue_rows(source_rows: Variant, limit: int) -> Array:
+	var rows: Array = []
+	if typeof(source_rows) != TYPE_ARRAY:
+		return rows
+	for row_value in source_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value.duplicate(true)
+		var clue_id: String = str(row.get("clue_id", "")).strip_edges()
+		if clue_id.is_empty():
+			continue
+		row["clue_id"] = clue_id
+		row["fact_ids"] = _normalize_story_dossier_string_array(row.get("fact_ids", []), 0)
+		row["surface_id"] = str(row.get("surface_id", "")).strip_edges()
+		row["visibility"] = str(row.get("visibility", "")).strip_edges()
+		row["earliest_day_index"] = int(row.get("earliest_day_index", -1))
+		row["latest_day_index"] = int(row.get("latest_day_index", -1))
+		row["reliability"] = clamp(float(row.get("reliability", 0.0)), 0.0, 1.0)
+		row["text_key"] = str(row.get("text_key", "")).strip_edges()
+		rows.append(row)
+	return _cap_living_rows(rows, limit)
+
+
+func _normalize_story_dossier_disclosure_placements(source_rows: Variant, limit: int) -> Array:
+	var rows: Array = []
+	if typeof(source_rows) != TYPE_ARRAY:
+		return rows
+	for row_value in source_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var source_row: Dictionary = row_value
+		var placement_id: String = str(source_row.get("placement_id", "")).strip_edges()
+		if placement_id.is_empty():
+			continue
+		var row: Dictionary = source_row.duplicate(true)
+		row.erase("truth_state")
+		row.erase("disclosure_quality")
+		row.erase("reliability")
+		row.erase("confidence")
+		row.erase("source_quality")
+		row["placement_id"] = placement_id
+		row["schema_version"] = int(source_row.get("schema_version", 1))
+		row["source_system_id"] = str(source_row.get("source_system_id", "company_story_dossier")).strip_edges()
+		row["story_id"] = str(source_row.get("story_id", "")).strip_edges()
+		row["surface_id"] = str(source_row.get("surface_id", "annual_report")).strip_edges()
+		row["section_id"] = str(source_row.get("section_id", "")).strip_edges()
+		row["section_label"] = str(source_row.get("section_label", "")).strip_edges()
+		row["section_group"] = str(source_row.get("section_group", "notes")).strip_edges()
+		row["annual_statement_note_type"] = str(source_row.get("annual_statement_note_type", "")).strip_edges()
+		row["placement_role"] = str(source_row.get("placement_role", "supporting")).strip_edges()
+		row["note_type"] = str(source_row.get("note_type", "")).strip_edges()
+		row["visibility"] = str(source_row.get("visibility", "filing")).strip_edges()
+		row["subtlety"] = _normalize_story_dossier_disclosure_subtlety(str(source_row.get("subtlety", "implied")))
+		row["reader_effort"] = str(source_row.get("reader_effort", "medium")).strip_edges()
+		row["evidence_density"] = str(source_row.get("evidence_density", "partial")).strip_edges()
+		row["fragment_role"] = str(source_row.get("fragment_role", "context")).strip_edges()
+		row["scattering_strategy"] = str(source_row.get("scattering_strategy", "evidence_trail")).strip_edges()
+		row["scattering_index"] = max(int(source_row.get("scattering_index", 0)), 0)
+		row["scattering_total"] = max(int(source_row.get("scattering_total", 1)), 1)
+		row["fact_ids"] = _normalize_story_dossier_string_array(source_row.get("fact_ids", []), 0)
+		row["effect_ids"] = _normalize_story_dossier_string_array(source_row.get("effect_ids", []), 0)
+		row["clue_ids"] = _normalize_story_dossier_string_array(source_row.get("clue_ids", []), 0)
+		row["metric_ids"] = _normalize_story_dossier_string_array(source_row.get("metric_ids", []), 0)
+		row["statement_sections"] = _normalize_story_dossier_string_array(source_row.get("statement_sections", []), 0)
+		row["source_note_types"] = _normalize_story_dossier_string_array(source_row.get("source_note_types", []), 0)
+		row["source_metric_ids"] = _normalize_story_dossier_string_array(source_row.get("source_metric_ids", []), 0)
+		row["text_key"] = str(source_row.get("text_key", "")).strip_edges()
+		rows.append(row)
+	return _cap_living_rows(rows, limit)
+
+
+func _normalize_story_dossier_disclosure_subtlety(subtlety_value: String) -> String:
+	var subtlety: String = subtlety_value.strip_edges().to_lower()
+	if subtlety in ["direct", "implied", "buried", "conflicting", "missing"]:
+		return subtlety
+	return "implied"
+
+
+func _normalize_story_dossier_disclosure_packets(source_rows: Variant, limit: int) -> Array:
+	var rows: Array = []
+	if typeof(source_rows) != TYPE_ARRAY:
+		return rows
+	for row_value in source_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var source_row: Dictionary = row_value
+		var packet_id: String = str(source_row.get("packet_id", "")).strip_edges()
+		if packet_id.is_empty():
+			continue
+		var row: Dictionary = source_row.duplicate(true)
+		row.erase("truth_state")
+		row.erase("disclosure_quality")
+		row.erase("reliability")
+		row.erase("confidence")
+		row.erase("source_quality")
+		row["packet_id"] = packet_id
+		row["schema_version"] = int(source_row.get("schema_version", 1))
+		row["source_system_id"] = str(source_row.get("source_system_id", "company_story_dossier")).strip_edges()
+		row["story_id"] = str(source_row.get("story_id", "")).strip_edges()
+		row["placement_id"] = str(source_row.get("placement_id", "")).strip_edges()
+		row["surface_id"] = str(source_row.get("surface_id", "annual_report")).strip_edges()
+		row["section_id"] = str(source_row.get("section_id", "")).strip_edges()
+		row["section_label"] = str(source_row.get("section_label", "")).strip_edges()
+		row["section_group"] = str(source_row.get("section_group", "notes")).strip_edges()
+		row["annual_statement_note_type"] = str(source_row.get("annual_statement_note_type", "")).strip_edges()
+		row["note_type"] = str(source_row.get("note_type", "")).strip_edges()
+		row["subtlety"] = _normalize_story_dossier_disclosure_subtlety(str(source_row.get("subtlety", "implied")))
+		row["reader_effort"] = str(source_row.get("reader_effort", "medium")).strip_edges()
+		row["evidence_density"] = str(source_row.get("evidence_density", "partial")).strip_edges()
+		row["fragment_role"] = str(source_row.get("fragment_role", "context")).strip_edges()
+		row["scattering_strategy"] = str(source_row.get("scattering_strategy", "evidence_trail")).strip_edges()
+		row["packet_role"] = str(source_row.get("packet_role", "supporting_evidence")).strip_edges()
+		row["render_priority"] = clamp(int(source_row.get("render_priority", 1)), 1, 120)
+		row["fact_ids"] = _normalize_story_dossier_string_array(source_row.get("fact_ids", []), 0)
+		row["effect_ids"] = _normalize_story_dossier_string_array(source_row.get("effect_ids", []), 0)
+		row["clue_ids"] = _normalize_story_dossier_string_array(source_row.get("clue_ids", []), 0)
+		row["metric_ids"] = _normalize_story_dossier_string_array(source_row.get("metric_ids", []), 0)
+		row["statement_sections"] = _normalize_story_dossier_string_array(source_row.get("statement_sections", []), 0)
+		row["source_note_types"] = _normalize_story_dossier_string_array(source_row.get("source_note_types", []), 0)
+		row["source_metric_ids"] = _normalize_story_dossier_string_array(source_row.get("source_metric_ids", []), 0)
+		row["phrase_ids"] = _normalize_story_dossier_string_array(source_row.get("phrase_ids", []), 0)
+		row["render_tokens"] = _normalize_story_dossier_string_array(source_row.get("render_tokens", []), 0)
+		row["cross_reference_section_ids"] = _normalize_story_dossier_string_array(source_row.get("cross_reference_section_ids", []), 0)
+		row["text_key"] = str(source_row.get("text_key", "")).strip_edges()
+		rows.append(row)
+	return _cap_living_rows(rows, limit)
+
+
+func _normalize_story_dossier_thesis_hooks(source_rows: Variant, limit: int) -> Array:
+	var rows: Array = []
+	if typeof(source_rows) != TYPE_ARRAY:
+		return rows
+	for row_value in source_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value.duplicate(true)
+		var hook_id: String = str(row.get("thesis_hook_id", "")).strip_edges()
+		if hook_id.is_empty():
+			continue
+		row["thesis_hook_id"] = hook_id
+		row["fact_ids"] = _normalize_story_dossier_string_array(row.get("fact_ids", []), 0)
+		row["metric_ids"] = _normalize_story_dossier_string_array(row.get("metric_ids", []), 0)
+		row["vocabulary_tags"] = _normalize_story_dossier_string_array(row.get("vocabulary_tags", []), 0)
+		rows.append(row)
+	return _cap_living_rows(rows, limit)
+
+
+func _normalize_story_dossier_resolution_conditions(source_rows: Variant, limit: int) -> Array:
+	var rows: Array = []
+	if typeof(source_rows) != TYPE_ARRAY:
+		return rows
+	for row_value in source_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value.duplicate(true)
+		var condition_id: String = str(row.get("condition_id", "")).strip_edges()
+		if condition_id.is_empty():
+			continue
+		row["condition_id"] = condition_id
+		row["evaluation_day_index"] = int(row.get("evaluation_day_index", -1))
+		row["threshold"] = float(row.get("threshold", 0.0))
+		rows.append(row)
+	return _cap_living_rows(rows, limit)
+
+
+func _normalize_story_dossier_traceability(source_value: Variant) -> Dictionary:
+	var source: Dictionary = {}
+	if typeof(source_value) == TYPE_DICTIONARY:
+		source = source_value
+	var seed_parts: Array = []
+	if typeof(source.get("seed_parts", [])) == TYPE_ARRAY:
+		seed_parts = source.get("seed_parts", []).duplicate(true)
+	return {
+		"seed_parts": seed_parts,
+		"source_company_hook_ids": _normalize_story_dossier_string_array(source.get("source_company_hook_ids", []), 0),
+		"source_fact_ids": _normalize_story_dossier_string_array(source.get("source_fact_ids", []), 0),
+		"generated_surface_ids": _normalize_story_dossier_string_array(source.get("generated_surface_ids", []), 0),
+		"evidence_ids": _normalize_story_dossier_string_array(source.get("evidence_ids", []), 0),
+		"price_effect_ids": _normalize_story_dossier_string_array(source.get("price_effect_ids", []), 0),
+		"statement_effect_ids": _normalize_story_dossier_string_array(source.get("statement_effect_ids", []), 0),
+		"disclosure_placement_ids": _normalize_story_dossier_string_array(source.get("disclosure_placement_ids", []), 0),
+		"disclosure_section_ids": _normalize_story_dossier_string_array(source.get("disclosure_section_ids", []), 0),
+		"disclosure_packet_ids": _normalize_story_dossier_string_array(source.get("disclosure_packet_ids", []), 0)
+	}
+
+
+func _normalize_story_dossier_resolved_rows(source_rows: Variant, limit: int) -> Array:
+	var rows: Array = []
+	if typeof(source_rows) != TYPE_ARRAY:
+		return rows
+	for row_value in source_rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var story_id: String = str(row.get("story_id", "")).strip_edges()
+		if story_id.is_empty():
+			continue
+		rows.append({
+			"story_id": story_id,
+			"company_id": str(row.get("company_id", "")).strip_edges(),
+			"archetype_id": str(row.get("archetype_id", "")).strip_edges(),
+			"outcome_state": str(row.get("outcome_state", "")).strip_edges(),
+			"resolved_day_index": int(row.get("resolved_day_index", -1))
+		})
+	return _cap_living_rows(rows, limit)
+
+
+func _normalize_story_dossier_company_story_ids(source_value: Variant) -> Dictionary:
+	var normalized: Dictionary = {}
+	if typeof(source_value) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_value
+	for company_id_value in source.keys():
+		var company_id: String = str(company_id_value).strip_edges()
+		if company_id.is_empty():
+			continue
+		normalized[company_id] = _normalize_story_dossier_string_array(
+			source.get(company_id_value, []),
+			STORY_DOSSIER_MAX_COMPANY_STORY_IDS
+		)
+	return normalized
+
+
+func _normalize_story_dossier_string_array(source_values: Variant, limit: int) -> Array:
+	var rows: Array = _normalize_string_array(source_values)
+	if limit <= 0 or rows.size() <= limit:
+		return rows
+	return _cap_living_rows(rows, limit)
+
+
+func _normalize_story_dossier_string_dictionary(source_value: Variant, value_kind: String) -> Dictionary:
+	var normalized: Dictionary = {}
+	if typeof(source_value) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_value
+	for key_value in source.keys():
+		var key: String = str(key_value).strip_edges()
+		if key.is_empty():
+			continue
+		var value: String = str(source.get(key_value, "")).strip_edges()
+		match value_kind:
+			"stage":
+				value = _normalize_story_dossier_stage_id(value, "seeded")
+			"public_status":
+				value = _normalize_story_dossier_public_status(value, "silent")
+		normalized[key] = value
+	return normalized
+
+
+func _story_dossier_append_unique(rows: Array, next_value: String, limit: int) -> Array:
+	var value: String = next_value.strip_edges()
+	if value.is_empty():
+		return rows
+	if rows.has(value):
+		rows.erase(value)
+	rows.append(value)
+	if limit > 0:
+		return _cap_living_rows(rows, limit)
+	return rows
+
+
+func _story_dossier_merge_string_arrays(first_values: Variant, second_values: Variant, limit: int) -> Array:
+	var rows: Array = _normalize_story_dossier_string_array(first_values, limit)
+	for value in _normalize_story_dossier_string_array(second_values, limit):
+		rows = _story_dossier_append_unique(rows, str(value), limit)
+	return rows
+
+
+func _story_dossier_merge_known_ids(source_ids: Array, generated_ids: Array, dossier_index: Dictionary, resolved: bool) -> Array:
+	var rows: Array = []
+	for story_id_value in source_ids:
+		var story_id: String = str(story_id_value).strip_edges()
+		if story_id.is_empty():
+			continue
+		if dossier_index.has(story_id):
+			var dossier: Dictionary = dossier_index.get(story_id, {})
+			if _story_dossier_is_resolved(dossier) != resolved:
+				continue
+		rows = _story_dossier_append_unique(rows, story_id, 0)
+	for story_id_value in generated_ids:
+		rows = _story_dossier_append_unique(rows, str(story_id_value), 0)
+	return rows
+
+
+func _story_dossier_lookup(source_values: Variant) -> Dictionary:
+	var lookup: Dictionary = {}
+	for value in _normalize_story_dossier_string_array(source_values, 0):
+		lookup[str(value)] = true
+	return lookup
+
+
+func _story_dossier_is_resolved(dossier: Dictionary) -> bool:
+	return int(dossier.get("resolved_day_index", -1)) >= 0 or not str(dossier.get("outcome_state", "")).strip_edges().is_empty()
+
+
+func _normalize_story_dossier_truth_state(truth_state_value: String) -> String:
+	var truth_state: String = truth_state_value.strip_edges().to_lower()
+	if not (truth_state in STORY_DOSSIER_TRUTH_STATES):
+		return "uncertain"
+	return truth_state
+
+
+func _normalize_story_dossier_public_status(public_status_value: String, fallback: String) -> String:
+	var public_status: String = public_status_value.strip_edges().to_lower()
+	if not (public_status in STORY_DOSSIER_PUBLIC_STATUSES):
+		return fallback
+	return public_status
+
+
+func _normalize_story_dossier_stage_id(stage_id_value: String, fallback: String) -> String:
+	var stage_id: String = stage_id_value.strip_edges().to_lower()
+	if not (stage_id in STORY_DOSSIER_STAGE_IDS):
+		return fallback
+	return stage_id
+
+
+func _default_living_company_arc_state() -> Dictionary:
+	return {
+		"schema_version": LIVING_ARC_SCHEMA_VERSION,
+		"active_arc_ids": [],
+		"active_company_ids": [],
+		"active_arc_index": {},
+		"recent_completed_arcs": [],
+		"completed_arc_count": 0,
+		"source_last_spawn_day": {},
+		"source_daily_start_counts": {}
+	}
+
+
+func _default_company_living_arc_state(company_id: String = "") -> Dictionary:
+	return {
+		"schema_version": LIVING_ARC_SCHEMA_VERSION,
+		"company_id": company_id,
+		"active_arc_id": "",
+		"active_source_system": "",
+		"active_arc_type": "",
+		"active_event_id": "",
+		"active_tone": "neutral",
+		"active_arc_started_day": -1,
+		"active_arc_expected_end_day": -1,
+		"active_phase_id": "",
+		"active_phase_label": "",
+		"last_resolved_day": -999,
+		"cooldowns": _default_company_living_cooldowns(),
+		"eligibility_tags": [],
+		"suppression_tags": [],
+		"completed_arcs": [],
+		"story_memory": _default_company_living_story_memory()
+	}
+
+
+func _default_company_living_cooldowns() -> Dictionary:
+	var cooldowns: Dictionary = {}
+	for cooldown_key in LIVING_ARC_DEFAULT_COOLDOWN_KEYS:
+		cooldowns[str(cooldown_key)] = -999
+	return cooldowns
+
+
+func _default_company_living_story_memory() -> Dictionary:
+	return {
+		"completed_count": 0,
+		"positive_count": 0,
+		"negative_count": 0,
+		"mixed_count": 0,
+		"last_arc_id": "",
+		"last_source_system": "",
+		"last_arc_type": "",
+		"last_event_id": "",
+		"last_tone": "neutral",
+		"last_outcome": "",
+		"recent_arc_ids": [],
+		"recent_story_tags": []
+	}
+
+
+func _normalize_living_company_arc_state(source_state: Variant) -> Dictionary:
+	var normalized: Dictionary = _default_living_company_arc_state()
+	if typeof(source_state) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_state
+	normalized["schema_version"] = LIVING_ARC_SCHEMA_VERSION
+	normalized["active_arc_ids"] = _normalize_living_string_array(source.get("active_arc_ids", []), 0)
+	normalized["active_company_ids"] = _normalize_living_string_array(source.get("active_company_ids", []), 0)
+	normalized["active_arc_index"] = _normalize_living_active_arc_index(source.get("active_arc_index", {}))
+	normalized["recent_completed_arcs"] = _normalize_living_completed_arc_rows(
+		source.get("recent_completed_arcs", []),
+		LIVING_ARC_MAX_RECENT_COMPLETED
+	)
+	normalized["completed_arc_count"] = max(
+		int(source.get("completed_arc_count", 0)),
+		normalized["recent_completed_arcs"].size()
+	)
+	normalized["source_last_spawn_day"] = _normalize_living_int_dictionary(source.get("source_last_spawn_day", {}), -999)
+	normalized["source_daily_start_counts"] = _normalize_living_int_dictionary(source.get("source_daily_start_counts", {}), 0)
+	return normalized
+
+
+func _sync_living_company_arc_state(day_number: int, active_arcs: Array, record_source_counts: bool = true) -> Dictionary:
+	var normalized_day: int = max(day_number, 0)
+	var global_state: Dictionary = _normalize_living_company_arc_state(living_company_arc_state)
+	var active_arc_ids: Array = []
+	var active_company_ids: Array = []
+	var active_arc_index: Dictionary = {}
+	var source_daily_start_counts: Dictionary = {}
+
+	for arc_value in active_arcs:
+		if typeof(arc_value) != TYPE_DICTIONARY:
+			continue
+		var metadata: Dictionary = _living_active_metadata_from_arc(arc_value, normalized_day)
+		if metadata.is_empty():
+			continue
+		var arc_id: String = str(metadata.get("arc_id", ""))
+		var company_id: String = str(metadata.get("company_id", ""))
+		if active_arc_index.has(arc_id):
+			continue
+		active_arc_index[arc_id] = metadata
+		active_arc_ids.append(arc_id)
+		if not active_company_ids.has(company_id):
+			active_company_ids.append(company_id)
+		if record_source_counts and int(metadata.get("started_day_index", -1)) == normalized_day:
+			var source_system: String = str(metadata.get("source_system", "company_arc"))
+			source_daily_start_counts[source_system] = int(source_daily_start_counts.get(source_system, 0)) + 1
+
+	var completed_rows: Array = []
+	for company_id_value in companies.keys():
+		var company_id: String = str(company_id_value)
+		var runtime_value = companies.get(company_id_value, {})
+		if typeof(runtime_value) != TYPE_DICTIONARY:
+			continue
+		var runtime: Dictionary = runtime_value.duplicate(true)
+		var company_state: Dictionary = _normalize_company_living_arc_state(runtime.get("living_arc_state", {}), company_id)
+		company_state["eligibility_tags"] = _living_eligibility_tags_for_company(company_id, company_state)
+		var active_arc_id: String = str(company_state.get("active_arc_id", ""))
+		if active_arc_id.is_empty():
+			runtime["living_arc_state"] = _normalize_company_living_arc_state(company_state, company_id)
+			companies[company_id] = runtime
+			continue
+		if active_arc_index.has(active_arc_id) and int(company_state.get("active_arc_expected_end_day", -1)) >= normalized_day:
+			runtime["living_arc_state"] = _normalize_company_living_arc_state(company_state, company_id)
+			companies[company_id] = runtime
+			continue
+		var completed_row: Dictionary = _living_completed_row_from_state(company_id, company_state, global_state, normalized_day)
+		if completed_row.is_empty():
+			continue
+		company_state = _resolve_company_living_arc_state(company_state, completed_row, normalized_day)
+		runtime["living_arc_state"] = company_state
+		companies[company_id] = runtime
+		completed_rows.append(completed_row)
+
+	for arc_id_value in active_arc_ids:
+		var arc_id: String = str(arc_id_value)
+		var metadata: Dictionary = active_arc_index.get(arc_id, {})
+		var company_id: String = str(metadata.get("company_id", ""))
+		if company_id.is_empty() or not companies.has(company_id):
+			continue
+		var runtime_value = companies.get(company_id, {})
+		if typeof(runtime_value) != TYPE_DICTIONARY:
+			continue
+		var runtime: Dictionary = runtime_value.duplicate(true)
+		var company_state: Dictionary = _normalize_company_living_arc_state(runtime.get("living_arc_state", {}), company_id)
+		if not str(company_state.get("active_arc_id", "")).is_empty() and str(company_state.get("active_arc_id", "")) != arc_id:
+			var replaced_row: Dictionary = _living_completed_row_from_state(company_id, company_state, global_state, normalized_day, "replaced")
+			if not replaced_row.is_empty():
+				company_state = _resolve_company_living_arc_state(company_state, replaced_row, normalized_day)
+				completed_rows.append(replaced_row)
+		company_state = _activate_company_living_arc_state(company_state, metadata)
+		company_state["eligibility_tags"] = _living_eligibility_tags_for_company(company_id, company_state)
+		runtime["living_arc_state"] = company_state
+		companies[company_id] = runtime
+
+	global_state["active_arc_ids"] = active_arc_ids
+	global_state["active_company_ids"] = active_company_ids
+	global_state["active_arc_index"] = active_arc_index
+	if record_source_counts:
+		global_state["source_daily_start_counts"] = source_daily_start_counts
+		var source_last_spawn_day: Dictionary = global_state.get("source_last_spawn_day", {}).duplicate(true)
+		for source_system_value in source_daily_start_counts.keys():
+			var source_system: String = str(source_system_value)
+			source_last_spawn_day[source_system] = normalized_day
+		global_state["source_last_spawn_day"] = source_last_spawn_day
+	for completed_row_value in completed_rows:
+		var completed_row: Dictionary = completed_row_value
+		global_state = _append_global_living_completed_arc(global_state, completed_row)
+	living_company_arc_state = _normalize_living_company_arc_state(global_state)
+	return {
+		"active_arc_count": active_arc_ids.size(),
+		"active_company_count": active_company_ids.size(),
+		"completed_count": completed_rows.size(),
+		"source_daily_start_counts": source_daily_start_counts.duplicate(true)
+	}
+
+
+func _refresh_company_living_eligibility_tags(company_id: String) -> void:
+	if company_id.is_empty() or not companies.has(company_id):
+		return
+	var runtime_value = companies.get(company_id, {})
+	if typeof(runtime_value) != TYPE_DICTIONARY:
+		return
+	var runtime: Dictionary = runtime_value.duplicate(true)
+	var company_state: Dictionary = _normalize_company_living_arc_state(runtime.get("living_arc_state", {}), company_id)
+	company_state["eligibility_tags"] = _living_eligibility_tags_for_company(company_id, company_state)
+	runtime["living_arc_state"] = _normalize_company_living_arc_state(company_state, company_id)
+	companies[company_id] = runtime
+
+
+func _living_company_arc_block_reason(
+	company_id: String,
+	source_system: String,
+	event_id: String,
+	target_day_index: int,
+	allow_active_conflict: bool,
+	allow_cooldown: bool
+) -> String:
+	var normalized_company_id: String = company_id.strip_edges()
+	if normalized_company_id.is_empty() or not companies.has(normalized_company_id):
+		return "missing_company"
+	var company_state: Dictionary = get_company_living_arc_state(normalized_company_id)
+	var active_arc_id: String = str(company_state.get("active_arc_id", ""))
+	var expected_end_day: int = int(company_state.get("active_arc_expected_end_day", -1))
+	if not allow_active_conflict and not active_arc_id.is_empty() and (expected_end_day < 0 or expected_end_day >= target_day_index):
+		return "active_arc"
+	if company_state.get("suppression_tags", []).size() > 0:
+		return "suppressed"
+	if allow_cooldown:
+		return ""
+	var normalized_source: String = source_system.strip_edges()
+	if normalized_source.is_empty():
+		normalized_source = "company_arc"
+	var cooldowns: Dictionary = _normalize_company_living_cooldowns(company_state.get("cooldowns", {}))
+	if int(cooldowns.get("any", -999)) > target_day_index:
+		return "cooldown:any"
+	if int(cooldowns.get(normalized_source, -999)) > target_day_index:
+		return "cooldown:%s" % normalized_source
+	var normalized_event_id: String = event_id.strip_edges()
+	if not normalized_event_id.is_empty():
+		var event_cooldown_key: String = "event:%s" % normalized_event_id
+		if int(cooldowns.get(event_cooldown_key, -999)) > target_day_index:
+			return "cooldown:%s" % event_cooldown_key
+	return ""
+
+
+func _living_eligibility_tags_for_company(company_id: String, company_state: Dictionary) -> Array:
+	var tags: Array = []
+	var definition: Dictionary = company_definitions.get(company_id, {})
+	var runtime: Dictionary = companies.get(company_id, {})
+	var company_profile: Dictionary = {}
+	if typeof(runtime.get("company_profile", {})) == TYPE_DICTIONARY:
+		company_profile = runtime.get("company_profile", {})
+	var traits: Dictionary = {}
+	if typeof(company_profile.get("generation_traits", {})) == TYPE_DICTIONARY:
+		traits = company_profile.get("generation_traits", {})
+	var roadmap_profile: Dictionary = {}
+	if typeof(company_profile.get("roadmap_profile", {})) == TYPE_DICTIONARY:
+		roadmap_profile = company_profile.get("roadmap_profile", {})
+	if roadmap_profile.is_empty() and typeof(definition.get("roadmap_profile", {})) == TYPE_DICTIONARY:
+		roadmap_profile = definition.get("roadmap_profile", {})
+
+	var sector_id: String = str(definition.get("sector_id", "")).strip_edges()
+	if not sector_id.is_empty():
+		tags = _living_append_tag(tags, "sector:%s" % sector_id)
+	var subsector_id: String = str(definition.get("subsector_id", definition.get("industry_id", ""))).strip_edges()
+	if not subsector_id.is_empty():
+		tags = _living_append_tag(tags, "subsector:%s" % subsector_id)
+	for array_key in ["story_hooks", "narrative_tags", "moat_tags"]:
+		for tag_value in definition.get(array_key, []):
+			tags = _living_append_tag(tags, str(tag_value))
+
+	var commodity_exposures: Dictionary = definition.get("commodity_exposures", {})
+	if typeof(commodity_exposures) == TYPE_DICTIONARY:
+		for commodity_id_value in commodity_exposures.keys():
+			var commodity_id: String = str(commodity_id_value).strip_edges()
+			var exposure: float = float(commodity_exposures.get(commodity_id_value, 0.0))
+			if commodity_id.is_empty() or absf(exposure) < 0.12:
+				continue
+			tags = _living_append_tag(tags, "commodity_sensitive")
+			tags = _living_append_tag(tags, "commodity:%s" % commodity_id)
+			var exposure_tag: String = "commodity_positive:%s" % commodity_id if exposure > 0.0 else "commodity_negative:%s" % commodity_id
+			tags = _living_append_tag(tags, exposure_tag)
+
+	var macro_exposures: Dictionary = definition.get("macro_exposures", {})
+	if typeof(macro_exposures) == TYPE_DICTIONARY:
+		for macro_id_value in macro_exposures.keys():
+			var macro_id: String = str(macro_id_value).strip_edges()
+			var exposure: float = float(macro_exposures.get(macro_id_value, 0.0))
+			if macro_id.is_empty() or absf(exposure) < 0.12:
+				continue
+			tags = _living_append_tag(tags, "macro_sensitive")
+			tags = _living_append_tag(tags, "macro:%s" % macro_id)
+
+	if float(traits.get("story_heat", 0.5)) >= 0.64:
+		tags = _living_append_tag(tags, "high_story_heat")
+	if float(traits.get("growth", 0.5)) >= 0.62 or float(definition.get("growth_score", 50.0)) >= 62.0:
+		tags = _living_append_tag(tags, "growth_story_candidate")
+	if float(traits.get("balance_sheet_strength", 0.5)) <= 0.38:
+		tags = _living_append_tag(tags, "weak_balance_sheet")
+	if float(traits.get("balance_sheet_strength", 0.5)) >= 0.66:
+		tags = _living_append_tag(tags, "strong_balance_sheet")
+	if float(traits.get("execution_consistency", 0.5)) <= 0.38:
+		tags = _living_append_tag(tags, "execution_risk")
+	if bool(roadmap_profile.get("physical_project", false)):
+		tags = _living_append_tag(tags, "roadmap_physical_project")
+	var roadmap_family_id: String = str(roadmap_profile.get("primary_family_id", "")).strip_edges()
+	if not roadmap_family_id.is_empty():
+		tags = _living_append_tag(tags, "roadmap_family:%s" % roadmap_family_id)
+	var funding_scale: String = str(roadmap_profile.get("funding_scale", "")).strip_edges()
+	if not funding_scale.is_empty():
+		tags = _living_append_tag(tags, "funding_scale:%s" % funding_scale)
+	if funding_scale in ["high", "transformational"]:
+		tags = _living_append_tag(tags, "funding_need")
+
+	var story_memory: Dictionary = company_state.get("story_memory", {})
+	for memory_key in ["last_source_system", "last_arc_type", "last_event_id"]:
+		var memory_value: String = str(story_memory.get(memory_key, "")).strip_edges()
+		if not memory_value.is_empty():
+			tags = _living_append_tag(tags, "recent:%s" % memory_value)
+			if memory_key == "last_event_id":
+				tags = _living_append_tag(tags, "recent_event:%s" % memory_value)
+	for recent_tag_value in story_memory.get("recent_story_tags", []):
+		var recent_tag: String = str(recent_tag_value).strip_edges()
+		if not recent_tag.is_empty():
+			tags = _living_append_tag(tags, "recent:%s" % recent_tag)
+	return tags
+
+
+func _living_append_tag(tags: Array, tag_value: String) -> Array:
+	var tag: String = tag_value.strip_edges().to_lower()
+	if tag.is_empty() or tags.has(tag):
+		return tags
+	tags.append(tag)
+	return tags
+
+
+func _living_active_metadata_from_arc(arc_value: Variant, day_number: int) -> Dictionary:
+	if typeof(arc_value) != TYPE_DICTIONARY:
+		return {}
+	var arc: Dictionary = arc_value
+	var company_id: String = str(arc.get("target_company_id", arc.get("company_id", ""))).strip_edges()
+	if company_id.is_empty():
+		return {}
+	var source_system: String = _living_source_system_from_arc(arc)
+	var event_id: String = str(arc.get("event_id", "")).strip_edges()
+	var started_day_index: int = int(arc.get("start_day_index", arc.get("started_day_index", day_number)))
+	var expected_end_day_index: int = int(arc.get("end_day_index", arc.get("expected_end_day_index", started_day_index)))
+	var arc_id: String = str(arc.get("arc_id", "")).strip_edges()
+	if arc_id.is_empty():
+		arc_id = "%s_%s_%d" % [event_id if not event_id.is_empty() else source_system, company_id, started_day_index]
+	return {
+		"arc_id": arc_id,
+		"company_id": company_id,
+		"target_company_id": company_id,
+		"source_system": source_system,
+		"arc_type": _living_arc_type_from_arc(arc),
+		"event_id": event_id,
+		"tone": _normalize_living_tone(str(arc.get("tone", "neutral"))),
+		"started_day_index": started_day_index,
+		"expected_end_day_index": expected_end_day_index,
+		"phase_id": str(arc.get("current_phase_id", arc.get("phase_id", ""))).strip_edges(),
+		"phase_label": str(arc.get("current_phase_label", arc.get("phase_label", ""))).strip_edges(),
+		"story_tags": _living_story_tags_from_arc(arc, source_system),
+		"target_ticker": str(arc.get("target_ticker", "")),
+		"target_company_name": str(arc.get("target_company_name", ""))
+	}
+
+
+func _activate_company_living_arc_state(company_state: Dictionary, metadata: Dictionary) -> Dictionary:
+	var normalized: Dictionary = _normalize_company_living_arc_state(company_state, str(metadata.get("company_id", "")))
+	normalized["active_arc_id"] = str(metadata.get("arc_id", ""))
+	normalized["active_source_system"] = str(metadata.get("source_system", ""))
+	normalized["active_arc_type"] = str(metadata.get("arc_type", ""))
+	normalized["active_event_id"] = str(metadata.get("event_id", ""))
+	normalized["active_tone"] = _normalize_living_tone(str(metadata.get("tone", "neutral")))
+	normalized["active_arc_started_day"] = int(metadata.get("started_day_index", -1))
+	normalized["active_arc_expected_end_day"] = int(metadata.get("expected_end_day_index", -1))
+	normalized["active_phase_id"] = str(metadata.get("phase_id", ""))
+	normalized["active_phase_label"] = str(metadata.get("phase_label", ""))
+	return _normalize_company_living_arc_state(normalized, str(metadata.get("company_id", "")))
+
+
+func _resolve_company_living_arc_state(company_state: Dictionary, completed_row: Dictionary, resolved_day_index: int) -> Dictionary:
+	var normalized: Dictionary = _normalize_company_living_arc_state(company_state, str(company_state.get("company_id", "")))
+	normalized["active_arc_id"] = ""
+	normalized["active_source_system"] = ""
+	normalized["active_arc_type"] = ""
+	normalized["active_event_id"] = ""
+	normalized["active_tone"] = "neutral"
+	normalized["active_arc_started_day"] = -1
+	normalized["active_arc_expected_end_day"] = -1
+	normalized["active_phase_id"] = ""
+	normalized["active_phase_label"] = ""
+	normalized["last_resolved_day"] = resolved_day_index
+	normalized["completed_arcs"] = _cap_living_rows(
+		normalized.get("completed_arcs", []).duplicate(true) + [completed_row.duplicate(true)],
+		LIVING_ARC_MAX_COMPLETED_PER_COMPANY
+	)
+	normalized["cooldowns"] = _living_cooldowns_after_completion(
+		normalized.get("cooldowns", {}),
+		completed_row,
+		resolved_day_index
+	)
+	normalized["story_memory"] = _living_story_memory_after_completion(
+		normalized.get("story_memory", {}),
+		completed_row,
+		normalized["completed_arcs"]
+	)
+	return _normalize_company_living_arc_state(normalized, str(normalized.get("company_id", "")))
+
+
+func _living_completed_row_from_state(
+	company_id: String,
+	company_state: Dictionary,
+	global_state: Dictionary,
+	resolved_day_index: int,
+	outcome: String = "resolved"
+) -> Dictionary:
+	var active_arc_id: String = str(company_state.get("active_arc_id", ""))
+	if active_arc_id.is_empty():
+		return {}
+	var active_index: Dictionary = global_state.get("active_arc_index", {})
+	var metadata: Dictionary = active_index.get(active_arc_id, {})
+	var source_system: String = str(company_state.get("active_source_system", metadata.get("source_system", "company_arc")))
+	var arc_type: String = str(company_state.get("active_arc_type", metadata.get("arc_type", "")))
+	var event_id: String = str(company_state.get("active_event_id", metadata.get("event_id", "")))
+	var tone: String = _normalize_living_tone(str(company_state.get("active_tone", metadata.get("tone", "neutral"))))
+	var started_day_index: int = int(company_state.get("active_arc_started_day", metadata.get("started_day_index", resolved_day_index)))
+	var expected_end_day_index: int = int(company_state.get("active_arc_expected_end_day", metadata.get("expected_end_day_index", resolved_day_index)))
+	var return_metrics: Dictionary = _living_arc_return_metrics(company_id, started_day_index, resolved_day_index)
+	return {
+		"arc_id": active_arc_id,
+		"company_id": company_id,
+		"target_company_id": company_id,
+		"source_system": source_system,
+		"arc_type": arc_type,
+		"event_id": event_id,
+		"tone": tone,
+		"outcome": outcome,
+		"started_day_index": started_day_index,
+		"resolved_day_index": resolved_day_index,
+		"duration_days": _living_completed_duration(started_day_index, expected_end_day_index, resolved_day_index),
+		"peak_return_pct": float(return_metrics.get("peak_return_pct", 0.0)),
+		"final_return_pct": float(return_metrics.get("final_return_pct", 0.0)),
+		"evidence_refs": _living_evidence_refs(active_arc_id, event_id),
+		"story_tags": _living_completion_story_tags(source_system, arc_type, event_id, metadata.get("story_tags", []))
+	}
+
+
+func _living_cooldowns_after_completion(source_cooldowns: Variant, completed_row: Dictionary, resolved_day_index: int) -> Dictionary:
+	var cooldowns: Dictionary = _normalize_company_living_cooldowns(source_cooldowns)
+	var source_system: String = str(completed_row.get("source_system", "company_arc"))
+	var event_id: String = str(completed_row.get("event_id", ""))
+	cooldowns["any"] = max(int(cooldowns.get("any", -999)), resolved_day_index + int(LIVING_ARC_SOURCE_COOLDOWN_DAYS.get("any", 12)))
+	cooldowns[source_system] = max(
+		int(cooldowns.get(source_system, -999)),
+		resolved_day_index + int(LIVING_ARC_SOURCE_COOLDOWN_DAYS.get(source_system, LIVING_ARC_SOURCE_COOLDOWN_DAYS.get("any", 12)))
+	)
+	if not event_id.is_empty():
+		var event_cooldown_key: String = "event:%s" % event_id
+		cooldowns[event_cooldown_key] = max(int(cooldowns.get(event_cooldown_key, -999)), cooldowns[source_system])
+	return cooldowns
+
+
+func _living_story_memory_after_completion(source_memory: Variant, completed_row: Dictionary, completed_arcs: Array) -> Dictionary:
+	var memory: Dictionary = _normalize_company_living_story_memory(source_memory, [])
+	memory["completed_count"] = max(int(memory.get("completed_count", 0)) + 1, completed_arcs.size())
+	var tone: String = _normalize_living_tone(str(completed_row.get("tone", "neutral")))
+	if tone == "positive":
+		memory["positive_count"] = int(memory.get("positive_count", 0)) + 1
+	elif tone == "negative":
+		memory["negative_count"] = int(memory.get("negative_count", 0)) + 1
+	elif tone == "mixed":
+		memory["mixed_count"] = int(memory.get("mixed_count", 0)) + 1
+	memory["last_arc_id"] = str(completed_row.get("arc_id", ""))
+	memory["last_source_system"] = str(completed_row.get("source_system", ""))
+	memory["last_arc_type"] = str(completed_row.get("arc_type", ""))
+	memory["last_event_id"] = str(completed_row.get("event_id", ""))
+	memory["last_tone"] = tone
+	memory["last_outcome"] = str(completed_row.get("outcome", "resolved"))
+	memory["recent_arc_ids"] = _living_append_unique_capped(
+		memory.get("recent_arc_ids", []),
+		str(completed_row.get("arc_id", "")),
+		LIVING_ARC_MAX_RECENT_MEMORY_IDS
+	)
+	var recent_story_tags: Array = memory.get("recent_story_tags", []).duplicate()
+	for tag_value in completed_row.get("story_tags", []):
+		recent_story_tags = _living_append_unique_capped(recent_story_tags, str(tag_value), LIVING_ARC_MAX_RECENT_MEMORY_IDS)
+	memory["recent_story_tags"] = recent_story_tags
+	return memory
+
+
+func _append_global_living_completed_arc(global_state: Dictionary, completed_row: Dictionary) -> Dictionary:
+	var normalized: Dictionary = _normalize_living_company_arc_state(global_state)
+	var recent_rows: Array = normalized.get("recent_completed_arcs", []).duplicate(true)
+	recent_rows.append(completed_row.duplicate(true))
+	normalized["recent_completed_arcs"] = _cap_living_rows(recent_rows, LIVING_ARC_MAX_RECENT_COMPLETED)
+	normalized["completed_arc_count"] = int(normalized.get("completed_arc_count", 0)) + 1
+	return normalized
+
+
+func _living_arc_return_metrics(company_id: String, started_day_index: int, resolved_day_index: int) -> Dictionary:
+	var runtime_value = companies.get(company_id, {})
+	if typeof(runtime_value) != TYPE_DICTIONARY:
+		return {"peak_return_pct": 0.0, "final_return_pct": 0.0}
+	var runtime: Dictionary = runtime_value
+	var price_history: Array = runtime.get("price_history", [])
+	if price_history.is_empty():
+		return {"peak_return_pct": 0.0, "final_return_pct": 0.0}
+	var baseline_index: int = clamp(started_day_index - 1, 0, price_history.size() - 1)
+	var final_index: int = clamp(resolved_day_index, 0, price_history.size() - 1)
+	if final_index < baseline_index:
+		final_index = baseline_index
+	var baseline_price: float = float(price_history[baseline_index])
+	if baseline_price <= 0.0:
+		return {"peak_return_pct": 0.0, "final_return_pct": 0.0}
+	var peak_price: float = baseline_price
+	for price_index in range(baseline_index, final_index + 1):
+		peak_price = max(peak_price, float(price_history[price_index]))
+	var final_price: float = float(price_history[final_index])
+	return {
+		"peak_return_pct": snappedf(((peak_price - baseline_price) / baseline_price) * 100.0, 0.01),
+		"final_return_pct": snappedf(((final_price - baseline_price) / baseline_price) * 100.0, 0.01)
+	}
+
+
+func _living_completed_duration(started_day_index: int, expected_end_day_index: int, resolved_day_index: int) -> int:
+	if expected_end_day_index >= started_day_index and expected_end_day_index < resolved_day_index:
+		return max(expected_end_day_index - started_day_index + 1, 1)
+	return max(resolved_day_index - started_day_index + 1, 1)
+
+
+func _living_status_from_state(company_state: Dictionary, target_day_index: int) -> String:
+	var active_arc_id: String = str(company_state.get("active_arc_id", ""))
+	var expected_end_day: int = int(company_state.get("active_arc_expected_end_day", -1))
+	if not active_arc_id.is_empty() and (expected_end_day < 0 or expected_end_day >= target_day_index):
+		return "active"
+	if company_state.get("suppression_tags", []).size() > 0:
+		return "suppressed"
+	if _living_max_cooldown_day(company_state.get("cooldowns", {})) > target_day_index:
+		return "cooling_down"
+	return "eligible"
+
+
+func _living_max_cooldown_day(source_cooldowns: Variant) -> int:
+	var cooldowns: Dictionary = _normalize_company_living_cooldowns(source_cooldowns)
+	var max_day: int = -999
+	for cooldown_day_value in cooldowns.values():
+		max_day = max(max_day, int(cooldown_day_value))
+	return max_day
+
+
+func _living_source_system_from_arc(arc: Dictionary) -> String:
+	var source_system: String = str(arc.get("source_system", "")).strip_edges()
+	if not source_system.is_empty():
+		return source_system
+	var event_family: String = str(arc.get("event_family", "")).strip_edges()
+	if not event_family.is_empty():
+		return event_family
+	return "company_arc"
+
+
+func _living_arc_type_from_arc(arc: Dictionary) -> String:
+	var category: String = str(arc.get("category", "")).strip_edges()
+	if not category.is_empty():
+		return category
+	var event_family: String = str(arc.get("event_family", "")).strip_edges()
+	if not event_family.is_empty():
+		return event_family
+	return str(arc.get("event_id", "")).strip_edges()
+
+
+func _living_story_tags_from_arc(arc: Dictionary, source_system: String) -> Array:
+	var tags: Array = []
+	for tag_value in arc.get("story_tags", []):
+		var tag: String = str(tag_value).strip_edges()
+		if not tag.is_empty() and not tags.has(tag):
+			tags.append(tag)
+	var arc_type: String = _living_arc_type_from_arc(arc)
+	var event_id: String = str(arc.get("event_id", "")).strip_edges()
+	for tag in [source_system, arc_type, event_id]:
+		var normalized_tag: String = str(tag).strip_edges()
+		if not normalized_tag.is_empty() and not tags.has(normalized_tag):
+			tags.append(normalized_tag)
+	return tags
+
+
+func _living_completion_story_tags(source_system: String, arc_type: String, event_id: String, source_tags: Variant) -> Array:
+	var tags: Array = []
+	if typeof(source_tags) == TYPE_ARRAY:
+		for tag_value in source_tags:
+			var tag: String = str(tag_value).strip_edges()
+			if not tag.is_empty() and not tags.has(tag):
+				tags.append(tag)
+	for tag in [source_system, arc_type, event_id]:
+		var normalized_tag: String = str(tag).strip_edges()
+		if not normalized_tag.is_empty() and not tags.has(normalized_tag):
+			tags.append(normalized_tag)
+	return tags
+
+
+func _living_evidence_refs(arc_id: String, event_id: String) -> Array:
+	var refs: Array = []
+	if not arc_id.is_empty():
+		refs.append("arc:%s" % arc_id)
+	if not event_id.is_empty():
+		refs.append("event:%s" % event_id)
+	return refs
+
+
+func _living_append_unique_capped(source_values: Variant, next_value: String, limit: int) -> Array:
+	var rows: Array = _normalize_living_string_array(source_values, limit)
+	var value: String = next_value.strip_edges()
+	if value.is_empty():
+		return rows
+	if rows.has(value):
+		rows.erase(value)
+	rows.append(value)
+	return _cap_living_rows(rows, limit)
+
+
+func _normalize_company_living_arc_state(source_state: Variant, company_id: String = "") -> Dictionary:
+	var normalized: Dictionary = _default_company_living_arc_state(company_id)
+	if typeof(source_state) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_state
+	var effective_company_id: String = company_id.strip_edges()
+	if effective_company_id.is_empty():
+		effective_company_id = str(source.get("company_id", "")).strip_edges()
+	normalized["schema_version"] = LIVING_ARC_SCHEMA_VERSION
+	normalized["company_id"] = effective_company_id
+	normalized["active_arc_id"] = str(source.get("active_arc_id", "")).strip_edges()
+	normalized["active_source_system"] = str(source.get("active_source_system", "")).strip_edges()
+	normalized["active_arc_type"] = str(source.get("active_arc_type", "")).strip_edges()
+	normalized["active_event_id"] = str(source.get("active_event_id", "")).strip_edges()
+	normalized["active_tone"] = _normalize_living_tone(str(source.get("active_tone", "neutral")))
+	normalized["active_arc_started_day"] = int(source.get("active_arc_started_day", -1))
+	normalized["active_arc_expected_end_day"] = int(source.get("active_arc_expected_end_day", -1))
+	normalized["active_phase_id"] = str(source.get("active_phase_id", "")).strip_edges()
+	normalized["active_phase_label"] = str(source.get("active_phase_label", "")).strip_edges()
+	normalized["last_resolved_day"] = int(source.get("last_resolved_day", -999))
+	normalized["cooldowns"] = _normalize_company_living_cooldowns(source.get("cooldowns", {}))
+	normalized["eligibility_tags"] = _normalize_living_string_array(source.get("eligibility_tags", []), 0)
+	normalized["suppression_tags"] = _normalize_living_string_array(source.get("suppression_tags", []), 0)
+	normalized["completed_arcs"] = _normalize_living_completed_arc_rows(
+		source.get("completed_arcs", []),
+		LIVING_ARC_MAX_COMPLETED_PER_COMPANY
+	)
+	normalized["story_memory"] = _normalize_company_living_story_memory(
+		source.get("story_memory", {}),
+		normalized["completed_arcs"]
+	)
+	return normalized
+
+
+func _normalize_company_living_cooldowns(source_cooldowns: Variant) -> Dictionary:
+	var normalized: Dictionary = _default_company_living_cooldowns()
+	if typeof(source_cooldowns) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_cooldowns
+	for key_value in source.keys():
+		var cooldown_key: String = str(key_value).strip_edges()
+		if cooldown_key.is_empty():
+			continue
+		normalized[cooldown_key] = int(source.get(key_value, -999))
+	return normalized
+
+
+func _normalize_company_living_story_memory(source_memory: Variant, completed_arcs: Array = []) -> Dictionary:
+	var normalized: Dictionary = _default_company_living_story_memory()
+	if typeof(source_memory) == TYPE_DICTIONARY:
+		var source: Dictionary = source_memory
+		normalized["completed_count"] = max(int(source.get("completed_count", 0)), completed_arcs.size())
+		normalized["positive_count"] = max(int(source.get("positive_count", 0)), 0)
+		normalized["negative_count"] = max(int(source.get("negative_count", 0)), 0)
+		normalized["mixed_count"] = max(int(source.get("mixed_count", 0)), 0)
+		normalized["last_arc_id"] = str(source.get("last_arc_id", "")).strip_edges()
+		normalized["last_source_system"] = str(source.get("last_source_system", "")).strip_edges()
+		normalized["last_arc_type"] = str(source.get("last_arc_type", "")).strip_edges()
+		normalized["last_event_id"] = str(source.get("last_event_id", "")).strip_edges()
+		normalized["last_tone"] = _normalize_living_tone(str(source.get("last_tone", "neutral")))
+		normalized["last_outcome"] = str(source.get("last_outcome", "")).strip_edges()
+		normalized["recent_arc_ids"] = _normalize_living_string_array(
+			source.get("recent_arc_ids", []),
+			LIVING_ARC_MAX_RECENT_MEMORY_IDS
+		)
+		normalized["recent_story_tags"] = _normalize_living_string_array(
+			source.get("recent_story_tags", []),
+			LIVING_ARC_MAX_RECENT_MEMORY_IDS
+		)
+	if normalized["last_arc_id"].is_empty() and not completed_arcs.is_empty():
+		var last_completed: Dictionary = completed_arcs[completed_arcs.size() - 1]
+		normalized["last_arc_id"] = str(last_completed.get("arc_id", ""))
+		normalized["last_source_system"] = str(last_completed.get("source_system", ""))
+		normalized["last_arc_type"] = str(last_completed.get("arc_type", ""))
+		normalized["last_event_id"] = str(last_completed.get("event_id", ""))
+		normalized["last_tone"] = _normalize_living_tone(str(last_completed.get("tone", "neutral")))
+		normalized["last_outcome"] = str(last_completed.get("outcome", ""))
+	return normalized
+
+
+func _normalize_living_active_arc_index(source_index: Variant) -> Dictionary:
+	var normalized: Dictionary = {}
+	if typeof(source_index) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_index
+	for arc_id_value in source.keys():
+		var row_value = source.get(arc_id_value, {})
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value.duplicate(true)
+		var arc_id: String = str(row.get("arc_id", arc_id_value)).strip_edges()
+		if arc_id.is_empty():
+			continue
+		row["arc_id"] = arc_id
+		var row_company_id: String = str(row.get("company_id", row.get("target_company_id", ""))).strip_edges()
+		if not row_company_id.is_empty():
+			row["company_id"] = row_company_id
+			row["target_company_id"] = str(row.get("target_company_id", row_company_id)).strip_edges()
+		row["source_system"] = str(row.get("source_system", "")).strip_edges()
+		row["arc_type"] = str(row.get("arc_type", "")).strip_edges()
+		row["event_id"] = str(row.get("event_id", "")).strip_edges()
+		row["tone"] = _normalize_living_tone(str(row.get("tone", "neutral")))
+		row["started_day_index"] = int(row.get("started_day_index", row.get("start_day_index", -1)))
+		row["expected_end_day_index"] = int(row.get("expected_end_day_index", row.get("end_day_index", -1)))
+		normalized[arc_id] = row
+	return normalized
+
+
+func _normalize_living_completed_arc_rows(source_rows: Variant, limit: int) -> Array:
+	var rows: Array = []
+	if typeof(source_rows) != TYPE_ARRAY:
+		return rows
+	for row_value in source_rows:
+		var row: Dictionary = _normalize_living_completed_arc_row(row_value)
+		if row.is_empty():
+			continue
+		rows.append(row)
+	return _cap_living_rows(rows, limit)
+
+
+func _normalize_living_completed_arc_row(source_row: Variant) -> Dictionary:
+	if typeof(source_row) != TYPE_DICTIONARY:
+		return {}
+	var source: Dictionary = source_row
+	var arc_id: String = str(source.get("arc_id", "")).strip_edges()
+	var source_system: String = str(source.get("source_system", "")).strip_edges()
+	var event_id: String = str(source.get("event_id", "")).strip_edges()
+	if arc_id.is_empty() and source_system.is_empty() and event_id.is_empty():
+		return {}
+	var started_day_index: int = int(source.get("started_day_index", -1))
+	var resolved_day_index: int = int(source.get("resolved_day_index", -1))
+	var duration_days: int = max(int(source.get("duration_days", resolved_day_index - started_day_index)), 0)
+	return {
+		"arc_id": arc_id,
+		"company_id": str(source.get("company_id", source.get("target_company_id", ""))).strip_edges(),
+		"target_company_id": str(source.get("target_company_id", source.get("company_id", ""))).strip_edges(),
+		"source_system": source_system,
+		"arc_type": str(source.get("arc_type", "")).strip_edges(),
+		"event_id": event_id,
+		"tone": _normalize_living_tone(str(source.get("tone", "neutral"))),
+		"outcome": str(source.get("outcome", "resolved")).strip_edges(),
+		"started_day_index": started_day_index,
+		"resolved_day_index": resolved_day_index,
+		"duration_days": duration_days,
+		"peak_return_pct": float(source.get("peak_return_pct", 0.0)),
+		"final_return_pct": float(source.get("final_return_pct", 0.0)),
+		"evidence_refs": _normalize_living_string_array(source.get("evidence_refs", []), 0),
+		"story_tags": _normalize_living_string_array(source.get("story_tags", []), 0)
+	}
+
+
+func _normalize_living_int_dictionary(source_value: Variant, default_value: int) -> Dictionary:
+	var normalized: Dictionary = {}
+	if typeof(source_value) != TYPE_DICTIONARY:
+		return normalized
+	var source: Dictionary = source_value
+	for key_value in source.keys():
+		var key: String = str(key_value).strip_edges()
+		if key.is_empty():
+			continue
+		normalized[key] = int(source.get(key_value, default_value))
+	return normalized
+
+
+func _normalize_living_string_array(source_values: Variant, limit: int) -> Array:
+	var rows: Array = _normalize_string_array(source_values)
+	return _cap_living_rows(rows, limit)
+
+
+func _cap_living_rows(rows: Array, limit: int) -> Array:
+	if limit <= 0 or rows.size() <= limit:
+		return rows
+	var capped: Array = []
+	var start_index: int = max(rows.size() - limit, 0)
+	for row_index in range(start_index, rows.size()):
+		capped.append(rows[row_index])
+	return capped
+
+
+func _normalize_living_tone(tone_value: String) -> String:
+	var tone: String = tone_value.strip_edges().to_lower()
+	if not tone in LIVING_ARC_TONES:
+		return "neutral"
+	return tone
 
 
 func _default_life_state() -> Dictionary:
@@ -3338,8 +7053,6 @@ func _normalize_research_evidence_row(source_row: Variant) -> Dictionary:
 		"day_index": int(source.get("day_index", source.get("captured_day_index", day_index))),
 		"status": str(source.get("status", "active"))
 	}
-	if str(normalized.get("dedupe_key", "")).is_empty():
-		normalized["dedupe_key"] = _research_evidence_dedupe_key(normalized)
 	if not interpretation.is_empty():
 		normalized["interpretation"] = interpretation
 		normalized["interpretation_label"] = str(source.get("interpretation_label", interpretation.capitalize()))
@@ -3351,7 +7064,7 @@ func _normalize_research_evidence_row(source_row: Variant) -> Dictionary:
 		normalized["captured_trade_date"] = source.get("captured_trade_date", {}).duplicate(true)
 	if typeof(source.get("created_trade_date", {})) == TYPE_DICTIONARY:
 		normalized["created_trade_date"] = source.get("created_trade_date", {}).duplicate(true)
-	for key_value in [
+	for text_field_value in [
 		"pattern_id",
 		"pattern_label",
 		"feedback_state",
@@ -3360,20 +7073,192 @@ func _normalize_research_evidence_row(source_row: Variant) -> Dictionary:
 		"next_check",
 		"chart_range",
 		"chart_range_label",
-		"region_label"
+		"region_label",
+		"commodity_id",
+		"commodity_name",
+		"commodity_category",
+		"commodity_regime",
+		"commodity_direction",
+		"generated_surface_id",
+		"generated_scope_id",
+		"source_system_id",
+		"story_id",
+		"story_note_fact_id",
+		"story_family",
+		"archetype_id",
+		"fact_id",
+		"clue_id",
+		"effect_id",
+		"surface_id",
+		"public_status",
+		"stage_id",
+		"visibility",
+		"dossier_evidence_type",
+		"dossier_archetype_id",
+		"dossier_story_family",
+		"dossier_hook_id",
+		"dossier_public_status",
+		"dossier_stage_id",
+		"metric_id",
+		"statement_section",
+		"magnitude_band",
+		"direction",
+		"directness",
+		"original_directness",
+		"required_relationship_stage",
+		"source_quality",
+		"source_excerpt",
+		"filing_capture_type",
+		"filing_excerpt_type",
+		"filing_section_id",
+		"filing_section_label",
+		"filing_excerpt_id",
+		"filing_visible_label",
+		"filing_visible_text",
+		"filing_table_id",
+		"filing_table_title",
+		"filing_table_row_id",
+		"filing_table_row_caption",
+		"filing_table_row_value",
+		"filing_table_reference",
+		"statement_id",
+		"statement_period_label",
+		"statement_scope",
+		"statement_year",
+		"statement_quarter",
+		"filing_day_index",
+		"line_id",
+		"statement_line_id",
+		"line_item_id",
+		"statement_section_label",
+		"statement_value_format",
+		"capture_level",
+		"note_id",
+		"note_type",
+		"note_title_key",
+		"note_text_key",
+		"note_paragraph_id",
+		"note_paragraph_index",
+		"note_paragraph_role",
+		"note_paragraph_text",
+		"disclosure_packet_id",
+		"disclosure_placement_id",
+		"disclosure_section_id",
+		"disclosure_section_label",
+		"disclosure_subtlety",
+		"disclosure_reader_effort",
+		"disclosure_evidence_density",
+		"disclosure_fragment_role",
+		"disclosure_packet_role",
+		"cross_reference_target_note_type",
+		"cross_reference_target_note_number",
+		"cross_reference_target_title",
+		"cross_reference_reason",
+		"cross_reference_display_text",
+		"disclosure_quality",
+		"detail_level",
+		"access_level",
+		"tone",
+		"provenance_group",
+		"provenance_label",
+		"provenance_path",
+		"provenance_surface",
+		"provenance_origin",
+		"relationship_edge_id",
+		"relationship_type",
+		"relationship_label",
+		"counterparty_company_id",
+		"counterparty_ticker",
+		"counterparty_name"
 	]:
-		var key: String = str(key_value)
-		if source.has(key):
-			normalized[key] = str(source.get(key, ""))
-	for key_value in ["start_price", "end_price", "current_price", "raw_value"]:
-		var key: String = str(key_value)
-		if source.has(key):
-			normalized[key] = float(source.get(key, 0.0))
-	for key_value in ["start_anchor", "end_anchor", "start_date", "end_date", "report_date"]:
-		var key: String = str(key_value)
-		if typeof(source.get(key, {})) == TYPE_DICTIONARY:
-			normalized[key] = source.get(key, {}).duplicate(true)
+		var text_key: String = str(text_field_value)
+		if source.has(text_key):
+			normalized[text_key] = str(source.get(text_key, ""))
+	for number_field_value in [
+		"start_price",
+		"end_price",
+		"current_price",
+		"raw_value",
+		"commodity_level",
+		"commodity_ytd_move",
+		"commodity_driver_score",
+		"commodity_exposure",
+		"reliability",
+		"leak_risk",
+		"fact_strength",
+		"fact_confidence",
+		"clue_reliability",
+		"effect_confidence",
+		"required_recognition_min",
+		"network_relationship",
+		"recognition_score",
+		"importance"
+	]:
+		var number_key: String = str(number_field_value)
+		if source.has(number_key):
+			normalized[number_key] = float(source.get(number_key, 0.0))
+	for flag_field_value in ["generated_content_surface", "commodity_has_direct_exposure", "commodity_sector_related", "statement_consolidated"]:
+		var flag_key: String = str(flag_field_value)
+		if source.has(flag_key):
+			normalized[flag_key] = bool(source.get(flag_key, false))
+	for array_field_value in [
+		"related_sectors",
+		"story_tags",
+		"fact_ids",
+		"metric_ids",
+		"effect_ids",
+		"clue_ids",
+		"source_fact_ids",
+		"source_clue_ids",
+		"source_company_ids",
+		"source_sector_ids",
+		"source_commodity_ids",
+		"source_story_ids",
+		"source_story_note_fact_ids",
+		"source_effect_ids",
+		"source_disclosure_packet_ids",
+		"source_disclosure_placement_ids",
+		"source_disclosure_section_ids",
+		"source_living_arc_ids",
+		"source_corporate_action_ids",
+		"source_event_ids",
+		"source_event_ref_ids",
+		"source_roadmap_ids",
+		"source_statement_sections",
+		"story_source_refs",
+		"disclosure_packet_refs",
+		"living_arc_refs",
+		"corporate_action_refs",
+		"event_refs",
+		"roadmap_refs",
+		"explain_tags",
+		"vocabulary_tags",
+		"provenance_tags"
+	]:
+		var array_key: String = str(array_field_value)
+		if typeof(source.get(array_key, [])) == TYPE_ARRAY:
+			normalized[array_key] = source.get(array_key, []).duplicate(true)
+	_normalize_generated_source_aliases(normalized)
+	for date_field_value in ["start_anchor", "end_anchor", "start_date", "end_date", "report_date"]:
+		var date_key: String = str(date_field_value)
+		if typeof(source.get(date_key, {})) == TYPE_DICTIONARY:
+			normalized[date_key] = source.get(date_key, {}).duplicate(true)
+	if str(normalized.get("dedupe_key", "")).is_empty():
+		normalized["dedupe_key"] = _research_evidence_dedupe_key(normalized)
 	return normalized
+
+
+func _normalize_generated_source_aliases(row: Dictionary) -> void:
+	var source_fact_ids: Array = row.get("source_fact_ids", []) if typeof(row.get("source_fact_ids", [])) == TYPE_ARRAY else []
+	var source_clue_ids: Array = row.get("source_clue_ids", []) if typeof(row.get("source_clue_ids", [])) == TYPE_ARRAY else []
+	if source_fact_ids.is_empty() and typeof(row.get("fact_ids", [])) == TYPE_ARRAY:
+		row["source_fact_ids"] = row.get("fact_ids", []).duplicate(true)
+	if source_clue_ids.is_empty() and typeof(row.get("clue_ids", [])) == TYPE_ARRAY:
+		row["source_clue_ids"] = row.get("clue_ids", []).duplicate(true)
+	if str(row.get("generated_surface_id", "")).strip_edges().is_empty() and not str(row.get("surface_id", "")).strip_edges().is_empty():
+		row["generated_surface_id"] = str(row.get("surface_id", "")).strip_edges()
+	if bool(row.get("generated_content_surface", false)) and str(row.get("source_system_id", "")).strip_edges().is_empty():
+		row["source_system_id"] = "company_story_dossier"
 
 
 func _research_evidence_dedupe_key(row: Dictionary) -> String:
@@ -3382,6 +7267,20 @@ func _research_evidence_dedupe_key(row: Dictionary) -> String:
 		_research_dedupe_segment(str(row.get("company_id", ""))),
 		_research_dedupe_segment(str(row.get("sector_id", ""))),
 		_research_dedupe_segment(str(row.get("source_id", ""))),
+		_research_dedupe_segment(str(row.get("filing_section_id", ""))),
+		_research_dedupe_segment(str(row.get("filing_excerpt_id", ""))),
+		_research_dedupe_segment(str(row.get("story_id", ""))),
+		_research_dedupe_segment(str(row.get("story_note_fact_id", ""))),
+		_research_dedupe_segment(str(row.get("fact_id", ""))),
+		_research_dedupe_segment(str(row.get("clue_id", ""))),
+		_research_dedupe_segment(str(row.get("effect_id", ""))),
+		_research_dedupe_segment(str(row.get("statement_id", ""))),
+		_research_dedupe_segment(str(row.get("statement_period_label", ""))),
+		_research_dedupe_segment(str(row.get("statement_section", ""))),
+		_research_dedupe_segment(str(row.get("line_id", row.get("statement_line_id", "")))),
+		_research_dedupe_segment(str(row.get("note_id", ""))),
+		_research_dedupe_segment(str(row.get("surface_id", ""))),
+		_research_dedupe_segment(str(row.get("dossier_evidence_type", ""))),
 		_research_dedupe_segment(str(row.get("label", ""))),
 		_research_dedupe_segment(str(row.get("value", ""))),
 		_research_dedupe_segment(str(row.get("pattern_id", ""))),
@@ -3421,7 +7320,7 @@ func _normalize_player_thesis(source_thesis: Variant) -> Dictionary:
 			var key: String = str(key_value)
 			if row.has(key):
 				normalized_row[key] = str(row.get(key, ""))
-		for key_value in [
+		for text_field_value in [
 			"company_id",
 			"ticker",
 			"pattern_id",
@@ -3432,19 +7331,176 @@ func _normalize_player_thesis(source_thesis: Variant) -> Dictionary:
 			"next_check",
 			"chart_range",
 			"chart_range_label",
-			"region_label"
+			"region_label",
+				"commodity_id",
+				"commodity_name",
+				"commodity_category",
+				"commodity_regime",
+				"commodity_direction",
+				"generated_surface_id",
+				"generated_scope_id",
+				"source_system_id",
+				"story_id",
+				"story_note_fact_id",
+				"story_family",
+				"archetype_id",
+				"fact_id",
+				"clue_id",
+				"effect_id",
+				"surface_id",
+				"public_status",
+				"stage_id",
+				"visibility",
+				"dossier_evidence_type",
+				"dossier_archetype_id",
+				"dossier_story_family",
+				"dossier_hook_id",
+				"dossier_public_status",
+				"dossier_stage_id",
+				"metric_id",
+				"statement_section",
+				"magnitude_band",
+				"direction",
+				"directness",
+				"original_directness",
+				"required_relationship_stage",
+				"source_quality",
+				"source_excerpt",
+				"filing_capture_type",
+				"filing_excerpt_type",
+				"filing_section_id",
+				"filing_section_label",
+				"filing_excerpt_id",
+				"filing_visible_label",
+				"filing_visible_text",
+				"filing_table_id",
+				"filing_table_title",
+				"filing_table_row_id",
+				"filing_table_row_caption",
+				"filing_table_row_value",
+				"filing_table_reference",
+				"statement_id",
+				"statement_period_label",
+				"statement_scope",
+				"statement_year",
+				"statement_quarter",
+				"filing_day_index",
+				"line_id",
+				"statement_line_id",
+				"line_item_id",
+				"statement_section_label",
+				"statement_value_format",
+				"capture_level",
+				"note_id",
+				"note_type",
+				"note_title_key",
+				"note_text_key",
+				"note_paragraph_id",
+				"note_paragraph_index",
+				"note_paragraph_role",
+				"note_paragraph_text",
+				"disclosure_packet_id",
+				"disclosure_placement_id",
+				"disclosure_section_id",
+				"disclosure_section_label",
+				"disclosure_subtlety",
+				"disclosure_reader_effort",
+				"disclosure_evidence_density",
+				"disclosure_fragment_role",
+				"disclosure_packet_role",
+				"cross_reference_target_note_type",
+				"cross_reference_target_note_number",
+				"cross_reference_target_title",
+				"cross_reference_reason",
+				"cross_reference_display_text",
+				"disclosure_quality",
+				"detail_level",
+				"access_level",
+				"tone",
+				"provenance_group",
+				"provenance_label",
+				"provenance_path",
+				"provenance_surface",
+				"provenance_origin",
+				"relationship_edge_id",
+				"relationship_type",
+				"relationship_label",
+				"counterparty_company_id",
+				"counterparty_ticker",
+				"counterparty_name"
+			]:
+				var text_key: String = str(text_field_value)
+				if row.has(text_key):
+					normalized_row[text_key] = str(row.get(text_key, ""))
+		for number_field_value in [
+			"start_price",
+			"end_price",
+			"current_price",
+			"commodity_level",
+			"commodity_ytd_move",
+			"commodity_driver_score",
+			"commodity_exposure",
+			"reliability",
+			"leak_risk",
+			"fact_strength",
+				"fact_confidence",
+				"clue_reliability",
+				"effect_confidence",
+				"required_recognition_min",
+				"network_relationship",
+				"recognition_score",
+				"raw_value",
+				"importance"
+			]:
+				var number_key: String = str(number_field_value)
+				if row.has(number_key):
+					normalized_row[number_key] = float(row.get(number_key, 0.0))
+		for flag_field_value in ["generated_content_surface", "commodity_has_direct_exposure", "commodity_sector_related", "statement_consolidated"]:
+			var flag_key: String = str(flag_field_value)
+			if row.has(flag_key):
+				normalized_row[flag_key] = bool(row.get(flag_key, false))
+		for array_field_value in [
+			"related_sectors",
+			"story_tags",
+			"fact_ids",
+			"metric_ids",
+			"effect_ids",
+			"clue_ids",
+			"source_fact_ids",
+			"source_clue_ids",
+			"source_company_ids",
+			"source_sector_ids",
+				"source_commodity_ids",
+				"source_story_ids",
+				"source_story_note_fact_ids",
+				"source_effect_ids",
+				"source_disclosure_packet_ids",
+				"source_disclosure_placement_ids",
+				"source_disclosure_section_ids",
+				"source_living_arc_ids",
+				"source_corporate_action_ids",
+			"source_event_ids",
+			"source_event_ref_ids",
+			"source_roadmap_ids",
+				"source_statement_sections",
+				"story_source_refs",
+				"disclosure_packet_refs",
+				"living_arc_refs",
+				"corporate_action_refs",
+			"event_refs",
+			"roadmap_refs",
+			"explain_tags",
+			"vocabulary_tags",
+			"provenance_tags"
 		]:
-			var key: String = str(key_value)
-			if row.has(key):
-				normalized_row[key] = str(row.get(key, ""))
-		for key_value in ["start_price", "end_price", "current_price"]:
-			var key: String = str(key_value)
-			if row.has(key):
-				normalized_row[key] = float(row.get(key, 0.0))
-		for key_value in ["start_anchor", "end_anchor", "start_date", "end_date", "report_date", "captured_trade_date"]:
-			var key: String = str(key_value)
-			if typeof(row.get(key, {})) == TYPE_DICTIONARY:
-				normalized_row[key] = row.get(key, {}).duplicate(true)
+			var array_key: String = str(array_field_value)
+			if typeof(row.get(array_key, [])) == TYPE_ARRAY:
+				normalized_row[array_key] = row.get(array_key, []).duplicate(true)
+		_normalize_generated_source_aliases(normalized_row)
+		for date_field_value in ["start_anchor", "end_anchor", "start_date", "end_date", "report_date", "captured_trade_date"]:
+			var date_key: String = str(date_field_value)
+			if typeof(row.get(date_key, {})) == TYPE_DICTIONARY:
+				normalized_row[date_key] = row.get(date_key, {}).duplicate(true)
 		evidence.append(normalized_row)
 	return {
 		"id": thesis_id,
@@ -3607,20 +7663,29 @@ func _append_broker_flow_history(runtime: Dictionary, trade_date_value: Variant,
 
 
 func _build_broker_flow_history_entry(broker_flow: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
-	var broker_type_totals: Dictionary = broker_flow.get("broker_type_totals", {}).duplicate(true) if typeof(broker_flow.get("broker_type_totals", {})) == TYPE_DICTIONARY else {}
-	var total_buy_value: float = 0.0
-	var total_sell_value: float = 0.0
-	if not broker_type_totals.is_empty():
-		for type_total_value in broker_type_totals.values():
-			if typeof(type_total_value) != TYPE_DICTIONARY:
-				continue
-			var type_total: Dictionary = type_total_value
-			total_buy_value += max(float(type_total.get("buy_value", 0.0)), 0.0)
-			total_sell_value += max(float(type_total.get("sell_value", 0.0)), 0.0)
-	if total_buy_value <= 0.0 and total_sell_value <= 0.0:
-		total_buy_value = _broker_side_rows_value(broker_flow.get("buy_brokers", []))
-		total_sell_value = _broker_side_rows_value(broker_flow.get("sell_brokers", []))
+	return build_broker_flow_history_v2_entry(broker_flow, trade_date, day_number)
+
+
+func broker_history_v2_required_keys() -> Array:
+	return BROKER_HISTORY_V2_REQUIRED_KEYS.duplicate()
+
+
+func broker_history_v2_contract_summary() -> Dictionary:
 	return {
+		"schema_version": BROKER_HISTORY_COMPACT_SCHEMA_VERSION,
+		"required_keys": BROKER_HISTORY_V2_REQUIRED_KEYS.duplicate(),
+		"type_keys": BROKER_HISTORY_V2_TYPE_KEYS.duplicate(),
+		"keeps_historical_top_broker_rows": false,
+		"keeps_historical_broker_type_totals": false,
+		"range_adapter": "broker_history_v2_entry_to_range_entry"
+	}
+
+
+func build_broker_flow_history_v2_entry(broker_flow: Dictionary, trade_date: Dictionary, day_number: int) -> Dictionary:
+	var total_buy_value: float = _broker_history_total_value_for_side(broker_flow, "buy")
+	var total_sell_value: float = _broker_history_total_value_for_side(broker_flow, "sell")
+	return {
+		"schema_version": BROKER_HISTORY_COMPACT_SCHEMA_VERSION,
 		"day_index": day_number,
 		"trade_date": trade_date.duplicate(true),
 		"flow_tag": str(broker_flow.get("flow_tag", "neutral")),
@@ -3628,31 +7693,258 @@ func _build_broker_flow_history_entry(broker_flow: Dictionary, trade_date: Dicti
 		"action_meter_label": str(broker_flow.get("action_meter_label", "")),
 		"net_pressure": clamp(float(broker_flow.get("net_pressure", 0.0)), -1.0, 1.0),
 		"smart_money_pressure": clamp(float(broker_flow.get("smart_money_pressure", 0.0)), -1.0, 1.0),
-		"retail_net": float(broker_flow.get("retail_net", 0.0)),
-		"foreign_net": float(broker_flow.get("foreign_net", 0.0)),
-		"institution_net": float(broker_flow.get("institution_net", 0.0)),
-		"bandar_net": float(broker_flow.get("bandar_net", 0.0)),
-		"zombie_net": float(broker_flow.get("zombie_net", 0.0)),
-		"dominant_buyer": str(broker_flow.get("dominant_buyer", "balanced")),
-		"dominant_seller": str(broker_flow.get("dominant_seller", "balanced")),
-		"dominant_buy_broker_code": str(broker_flow.get("dominant_buy_broker_code", "")),
-		"dominant_sell_broker_code": str(broker_flow.get("dominant_sell_broker_code", "")),
-		"dominant_buy_broker_type": str(broker_flow.get("dominant_buy_broker_type", "")),
-		"dominant_sell_broker_type": str(broker_flow.get("dominant_sell_broker_type", "")),
+		"type_nets": _broker_history_v2_type_nets_from_flow(broker_flow),
+		"dominant_buy_broker_code": _broker_history_dominant_broker_code(broker_flow, "buy"),
+		"dominant_sell_broker_code": _broker_history_dominant_broker_code(broker_flow, "sell"),
+		"dominant_buy_broker_type": _broker_history_dominant_broker_type(broker_flow, "buy"),
+		"dominant_sell_broker_type": _broker_history_dominant_broker_type(broker_flow, "sell"),
 		"total_buy_value": total_buy_value,
 		"total_sell_value": total_sell_value,
-		"total_value": max(float(broker_flow.get("broker_trade_value", total_buy_value + total_sell_value)), total_buy_value + total_sell_value),
-		"top_buy_brokers": _compact_broker_side_rows(broker_flow.get("buy_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
-		"top_sell_brokers": _compact_broker_side_rows(broker_flow.get("sell_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
-		"top_net_buy_brokers": _compact_broker_side_rows(broker_flow.get("net_buy_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
-		"top_net_sell_brokers": _compact_broker_side_rows(broker_flow.get("net_sell_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
-		"broker_type_totals": broker_type_totals
+		"total_value": max(float(broker_flow.get("broker_trade_value", total_buy_value + total_sell_value)), total_buy_value + total_sell_value)
 	}
+
+
+func normalize_broker_history_v2_entry(entry_value: Variant) -> Dictionary:
+	if typeof(entry_value) != TYPE_DICTIONARY:
+		return {}
+	var entry: Dictionary = entry_value
+	var trade_date_value = entry.get("trade_date", {})
+	var trade_date: Dictionary = trade_date_value.duplicate(true) if typeof(trade_date_value) == TYPE_DICTIONARY else {}
+	var type_nets: Dictionary = _broker_history_v2_type_nets_from_entry(entry)
+	var total_buy_value: float = max(float(entry.get("total_buy_value", 0.0)), 0.0)
+	var total_sell_value: float = max(float(entry.get("total_sell_value", 0.0)), 0.0)
+	if total_buy_value <= 0.0 and total_sell_value <= 0.0:
+		total_buy_value = _broker_side_rows_value(entry.get("top_buy_brokers", entry.get("buy_brokers", [])))
+		total_sell_value = _broker_side_rows_value(entry.get("top_sell_brokers", entry.get("sell_brokers", [])))
+	return {
+		"schema_version": BROKER_HISTORY_COMPACT_SCHEMA_VERSION,
+		"day_index": int(entry.get("day_index", 0)),
+		"trade_date": trade_date,
+		"flow_tag": str(entry.get("flow_tag", "neutral")),
+		"action_meter_score": clamp(float(entry.get("action_meter_score", 0.0)), -1.0, 1.0),
+		"action_meter_label": str(entry.get("action_meter_label", "")),
+		"net_pressure": clamp(float(entry.get("net_pressure", 0.0)), -1.0, 1.0),
+		"smart_money_pressure": clamp(float(entry.get("smart_money_pressure", 0.0)), -1.0, 1.0),
+		"type_nets": type_nets,
+		"dominant_buy_broker_code": _broker_history_entry_dominant_broker_code(entry, "buy"),
+		"dominant_sell_broker_code": _broker_history_entry_dominant_broker_code(entry, "sell"),
+		"dominant_buy_broker_type": _broker_history_entry_dominant_broker_type(entry, "buy"),
+		"dominant_sell_broker_type": _broker_history_entry_dominant_broker_type(entry, "sell"),
+		"total_buy_value": total_buy_value,
+		"total_sell_value": total_sell_value,
+		"total_value": max(float(entry.get("total_value", total_buy_value + total_sell_value)), total_buy_value + total_sell_value)
+	}
+
+
+func broker_history_v2_entry_to_range_entry(entry_value: Variant) -> Dictionary:
+	var entry: Dictionary = normalize_broker_history_v2_entry(entry_value)
+	if entry.is_empty():
+		return {}
+	var type_nets: Dictionary = entry.get("type_nets", {})
+	return {
+		"day_index": int(entry.get("day_index", 0)),
+		"trade_date": entry.get("trade_date", {}).duplicate(true) if typeof(entry.get("trade_date", {})) == TYPE_DICTIONARY else {},
+		"flow_tag": str(entry.get("flow_tag", "neutral")),
+		"action_meter_score": clamp(float(entry.get("action_meter_score", 0.0)), -1.0, 1.0),
+		"action_meter_label": str(entry.get("action_meter_label", "")),
+		"net_pressure": clamp(float(entry.get("net_pressure", 0.0)), -1.0, 1.0),
+		"smart_money_pressure": clamp(float(entry.get("smart_money_pressure", 0.0)), -1.0, 1.0),
+		"retail_net": float(type_nets.get("retail", 0.0)),
+		"foreign_net": float(type_nets.get("foreign", 0.0)),
+		"institution_net": float(type_nets.get("institution", 0.0)),
+		"bandar_net": float(type_nets.get("bandar", 0.0)),
+		"zombie_net": float(type_nets.get("zombie", 0.0)),
+		"dominant_buyer": str(entry.get("dominant_buy_broker_type", "balanced")),
+		"dominant_seller": str(entry.get("dominant_sell_broker_type", "balanced")),
+		"dominant_buy_broker_code": str(entry.get("dominant_buy_broker_code", "")),
+		"dominant_sell_broker_code": str(entry.get("dominant_sell_broker_code", "")),
+		"dominant_buy_broker_type": str(entry.get("dominant_buy_broker_type", "")),
+		"dominant_sell_broker_type": str(entry.get("dominant_sell_broker_type", "")),
+		"total_buy_value": max(float(entry.get("total_buy_value", 0.0)), 0.0),
+		"total_sell_value": max(float(entry.get("total_sell_value", 0.0)), 0.0),
+		"total_value": max(float(entry.get("total_value", 0.0)), 0.0),
+		"top_buy_brokers": [_broker_history_v2_synthetic_broker_row(entry, "buy")],
+		"top_sell_brokers": [_broker_history_v2_synthetic_broker_row(entry, "sell")],
+		"top_net_buy_brokers": [_broker_history_v2_synthetic_broker_row(entry, "buy")],
+		"top_net_sell_brokers": [_broker_history_v2_synthetic_broker_row(entry, "sell")],
+		"broker_type_totals": _broker_history_v2_type_totals_for_range(entry)
+	}
+
+
+func broker_history_v2_entries_to_range_rows(entries: Array) -> Array:
+	var rows: Array = []
+	for entry_value in entries:
+		var row: Dictionary = broker_history_v2_entry_to_range_entry(entry_value)
+		if not row.is_empty():
+			rows.append(row)
+	return rows
+
+
+func _broker_history_total_value_for_side(broker_flow: Dictionary, side: String) -> float:
+	var total: float = 0.0
+	var totals_value = broker_flow.get("broker_type_totals", {})
+	if typeof(totals_value) == TYPE_DICTIONARY:
+		var totals: Dictionary = totals_value
+		var key: String = "%s_value" % side
+		for total_value in totals.values():
+			if typeof(total_value) != TYPE_DICTIONARY:
+				continue
+			var type_total: Dictionary = total_value
+			total += max(float(type_total.get(key, 0.0)), 0.0)
+	if total > 0.0:
+		return total
+	var rows_key: String = "%s_brokers" % side
+	return _broker_side_rows_value(broker_flow.get(rows_key, []))
+
+
+func _broker_history_v2_type_nets_from_flow(broker_flow: Dictionary) -> Dictionary:
+	var type_nets: Dictionary = {}
+	for type_key_value in BROKER_HISTORY_V2_TYPE_KEYS:
+		var type_key: String = str(type_key_value)
+		type_nets[type_key] = float(broker_flow.get("%s_net" % type_key, 0.0))
+	var totals_value = broker_flow.get("broker_type_totals", {})
+	if typeof(totals_value) == TYPE_DICTIONARY:
+		var totals: Dictionary = totals_value
+		for type_key_value in BROKER_HISTORY_V2_TYPE_KEYS:
+			var type_key: String = str(type_key_value)
+			var total_value = totals.get(type_key, {})
+			if typeof(total_value) != TYPE_DICTIONARY:
+				continue
+			var type_total: Dictionary = total_value
+			type_nets[type_key] = float(type_total.get(
+				"net_value",
+				float(type_total.get("buy_value", 0.0)) - float(type_total.get("sell_value", 0.0))
+			))
+	return type_nets
+
+
+func _broker_history_v2_type_nets_from_entry(entry: Dictionary) -> Dictionary:
+	var source_value = entry.get("type_nets", {})
+	var type_nets: Dictionary = {}
+	for type_key_value in BROKER_HISTORY_V2_TYPE_KEYS:
+		var type_key: String = str(type_key_value)
+		type_nets[type_key] = 0.0
+	if typeof(source_value) == TYPE_DICTIONARY:
+		var source: Dictionary = source_value
+		for type_key_value in BROKER_HISTORY_V2_TYPE_KEYS:
+			var type_key: String = str(type_key_value)
+			type_nets[type_key] = float(source.get(type_key, 0.0))
+		return type_nets
+	for type_key_value in BROKER_HISTORY_V2_TYPE_KEYS:
+		var type_key: String = str(type_key_value)
+		type_nets[type_key] = float(entry.get("%s_net" % type_key, 0.0))
+	var totals_value = entry.get("broker_type_totals", {})
+	if typeof(totals_value) == TYPE_DICTIONARY:
+		var totals: Dictionary = totals_value
+		for type_key_value in BROKER_HISTORY_V2_TYPE_KEYS:
+			var type_key: String = str(type_key_value)
+			var total_value = totals.get(type_key, {})
+			if typeof(total_value) != TYPE_DICTIONARY:
+				continue
+			var type_total: Dictionary = total_value
+			type_nets[type_key] = float(type_total.get(
+				"net_value",
+				float(type_total.get("buy_value", 0.0)) - float(type_total.get("sell_value", 0.0))
+			))
+	return type_nets
+
+
+func _broker_history_dominant_broker_code(broker_flow: Dictionary, side: String) -> String:
+	var direct_key: String = "dominant_%s_broker_code" % side
+	var direct_code: String = str(broker_flow.get(direct_key, "")).strip_edges()
+	if not direct_code.is_empty():
+		return direct_code
+	return _broker_history_first_row_value(broker_flow.get("%s_brokers" % side, []), "code")
+
+
+func _broker_history_dominant_broker_type(broker_flow: Dictionary, side: String) -> String:
+	var direct_key: String = "dominant_%s_broker_type" % side
+	var direct_type: String = str(broker_flow.get(direct_key, "")).strip_edges()
+	if not direct_type.is_empty():
+		return direct_type
+	return _broker_history_first_row_value(broker_flow.get("%s_brokers" % side, []), "broker_type")
+
+
+func _broker_history_entry_dominant_broker_code(entry: Dictionary, side: String) -> String:
+	var direct_code: String = str(entry.get("dominant_%s_broker_code" % side, "")).strip_edges()
+	if not direct_code.is_empty():
+		return direct_code
+	return _broker_history_first_row_value(entry.get("top_%s_brokers" % side, entry.get("%s_brokers" % side, [])), "code")
+
+
+func _broker_history_entry_dominant_broker_type(entry: Dictionary, side: String) -> String:
+	var direct_type: String = str(entry.get("dominant_%s_broker_type" % side, "")).strip_edges()
+	if not direct_type.is_empty():
+		return direct_type
+	return _broker_history_first_row_value(entry.get("top_%s_brokers" % side, entry.get("%s_brokers" % side, [])), "broker_type")
+
+
+func _broker_history_first_row_value(rows_value: Variant, key: String) -> String:
+	if typeof(rows_value) != TYPE_ARRAY:
+		return ""
+	var rows: Array = rows_value
+	if rows.is_empty() or typeof(rows[0]) != TYPE_DICTIONARY:
+		return ""
+	var row: Dictionary = rows[0]
+	return str(row.get(key, "")).strip_edges()
+
+
+func _broker_history_v2_synthetic_broker_row(entry: Dictionary, side: String) -> Dictionary:
+	var broker_type: String = str(entry.get("dominant_%s_broker_type" % side, "retail")).strip_edges()
+	if broker_type.is_empty():
+		broker_type = "retail"
+	var broker_code: String = str(entry.get("dominant_%s_broker_code" % side, "")).strip_edges()
+	if broker_code.is_empty():
+		broker_code = "%s%s" % [broker_type.substr(0, 1).to_upper(), side.substr(0, 1).to_upper()]
+	var value_key: String = "total_%s_value" % side
+	return {
+		"code": broker_code,
+		"company_name": broker_type.capitalize(),
+		"broker_type": broker_type,
+		"value": max(float(entry.get(value_key, 0.0)), 0.0),
+		"lots": 0.0,
+		"avg_price": 0.0
+	}
+
+
+func _broker_history_v2_type_totals_for_range(entry: Dictionary) -> Dictionary:
+	var totals: Dictionary = {}
+	var type_nets: Dictionary = entry.get("type_nets", {})
+	for type_key_value in BROKER_HISTORY_V2_TYPE_KEYS:
+		var type_key: String = str(type_key_value)
+		var net_value: float = float(type_nets.get(type_key, 0.0))
+		totals[type_key] = {
+			"buy_value": max(net_value, 0.0),
+			"sell_value": max(-net_value, 0.0),
+			"buy_lots": 0.0,
+			"sell_lots": 0.0,
+			"buy_shares": 0.0,
+			"sell_shares": 0.0,
+			"net_value": net_value,
+			"net_lots": 0.0
+		}
+	return totals
 
 
 func _upsert_broker_history_entry(history: Array, entry: Dictionary, max_entries: int) -> Array:
 	var normalized_history: Array = history.duplicate()
 	var entry_day: int = int(entry.get("day_index", 0))
+	if normalized_history.is_empty():
+		return [entry.duplicate(true)]
+	var last_index: int = normalized_history.size() - 1
+	var last_entry: Dictionary = normalized_history[last_index] if typeof(normalized_history[last_index]) == TYPE_DICTIONARY else {}
+	var last_day: int = int(last_entry.get("day_index", -999999))
+	if entry_day > last_day:
+		normalized_history.append(entry.duplicate(true))
+		if normalized_history.size() > max_entries:
+			normalized_history = normalized_history.slice(normalized_history.size() - max_entries, normalized_history.size())
+		return normalized_history
+	if entry_day == last_day:
+		normalized_history[last_index] = entry.duplicate(true)
+		if normalized_history.size() > max_entries:
+			normalized_history = normalized_history.slice(normalized_history.size() - max_entries, normalized_history.size())
+		return normalized_history
+
 	var replaced: bool = false
 	for index in range(normalized_history.size()):
 		if typeof(normalized_history[index]) != TYPE_DICTIONARY:
@@ -3672,15 +7964,37 @@ func _upsert_broker_history_entry(history: Array, entry: Dictionary, max_entries
 
 
 func _broker_history_array_for_append(history_value: Variant, max_entries: int) -> Array:
-	var rows: Array = []
-	if typeof(history_value) != TYPE_ARRAY:
-		return rows
-	for entry_value in history_value:
-		if typeof(entry_value) == TYPE_DICTIONARY:
-			rows.append(entry_value)
+	if typeof(history_value) == TYPE_ARRAY:
+		var history: Array = history_value
+		if _broker_history_rows_are_append_ready(history):
+			if history.size() > max_entries:
+				return history.slice(history.size() - max_entries, history.size())
+			return history.duplicate()
+	var rows: Array = _normalize_broker_flow_history(history_value)
 	if rows.size() > max_entries:
 		rows = rows.slice(rows.size() - max_entries, rows.size())
 	return rows
+
+
+func _broker_history_rows_are_append_ready(history: Array) -> bool:
+	var previous_day: int = -999999
+	for entry_value in history:
+		if typeof(entry_value) != TYPE_DICTIONARY:
+			return false
+		var entry: Dictionary = entry_value
+		if int(entry.get("schema_version", 0)) != BROKER_HISTORY_COMPACT_SCHEMA_VERSION:
+			return false
+		if entry.has("top_buy_brokers") or entry.has("top_sell_brokers") or entry.has("top_net_buy_brokers") or entry.has("top_net_sell_brokers"):
+			return false
+		if entry.has("broker_type_totals"):
+			return false
+		if typeof(entry.get("type_nets", {})) != TYPE_DICTIONARY:
+			return false
+		var day_number: int = int(entry.get("day_index", 0))
+		if day_number <= previous_day:
+			return false
+		previous_day = day_number
+	return true
 
 
 func _normalize_broker_flow_history(history_value: Variant) -> Array:
@@ -3688,38 +8002,9 @@ func _normalize_broker_flow_history(history_value: Variant) -> Array:
 	if typeof(history_value) != TYPE_ARRAY:
 		return normalized
 	for entry_value in history_value:
-		if typeof(entry_value) != TYPE_DICTIONARY:
-			continue
-		var entry: Dictionary = entry_value
-		var normalized_entry: Dictionary = {
-			"day_index": int(entry.get("day_index", 0)),
-			"trade_date": entry.get("trade_date", {}).duplicate(true) if typeof(entry.get("trade_date", {})) == TYPE_DICTIONARY else {},
-			"flow_tag": str(entry.get("flow_tag", "neutral")),
-			"action_meter_score": clamp(float(entry.get("action_meter_score", 0.0)), -1.0, 1.0),
-			"action_meter_label": str(entry.get("action_meter_label", "")),
-			"net_pressure": clamp(float(entry.get("net_pressure", 0.0)), -1.0, 1.0),
-			"smart_money_pressure": clamp(float(entry.get("smart_money_pressure", 0.0)), -1.0, 1.0),
-			"retail_net": float(entry.get("retail_net", 0.0)),
-			"foreign_net": float(entry.get("foreign_net", 0.0)),
-			"institution_net": float(entry.get("institution_net", 0.0)),
-			"bandar_net": float(entry.get("bandar_net", 0.0)),
-			"zombie_net": float(entry.get("zombie_net", 0.0)),
-			"dominant_buyer": str(entry.get("dominant_buyer", "balanced")),
-			"dominant_seller": str(entry.get("dominant_seller", "balanced")),
-			"dominant_buy_broker_code": str(entry.get("dominant_buy_broker_code", "")),
-			"dominant_sell_broker_code": str(entry.get("dominant_sell_broker_code", "")),
-			"dominant_buy_broker_type": str(entry.get("dominant_buy_broker_type", "")),
-			"dominant_sell_broker_type": str(entry.get("dominant_sell_broker_type", "")),
-			"total_buy_value": max(float(entry.get("total_buy_value", 0.0)), 0.0),
-			"total_sell_value": max(float(entry.get("total_sell_value", 0.0)), 0.0),
-			"total_value": max(float(entry.get("total_value", 0.0)), 0.0),
-			"top_buy_brokers": _compact_broker_side_rows(entry.get("top_buy_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
-			"top_sell_brokers": _compact_broker_side_rows(entry.get("top_sell_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
-			"top_net_buy_brokers": _compact_broker_side_rows(entry.get("top_net_buy_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
-			"top_net_sell_brokers": _compact_broker_side_rows(entry.get("top_net_sell_brokers", []), BROKER_HISTORY_TOP_ROW_COUNT),
-			"broker_type_totals": entry.get("broker_type_totals", {}).duplicate(true) if typeof(entry.get("broker_type_totals", {})) == TYPE_DICTIONARY else {}
-		}
-		normalized.append(normalized_entry)
+		var normalized_entry: Dictionary = normalize_broker_history_v2_entry(entry_value)
+		if not normalized_entry.is_empty():
+			normalized.append(normalized_entry)
 	normalized.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a.get("day_index", 0)) < int(b.get("day_index", 0))
 	)
@@ -4990,6 +9275,28 @@ func _build_quarterly_filing_payload(report: Dictionary, trading_day_number: int
 		traits,
 		rng
 	)
+	statement = FINANCIAL_STATEMENT_LAYER.apply_story_effects_to_statement(
+		statement,
+		get_company_story_dossiers_for_company(company_id),
+		financials_before,
+		{
+			"company_id": company_id,
+			"ticker": str(definition.get("ticker", company_id.to_upper())),
+			"sector_id": sector_id,
+			"filing_day_index": trading_day_number,
+			"report_date": trade_date,
+			"currency": "IDR",
+			"unit": "million_idr",
+			"max_story_adjustments": 6
+		}
+	)
+	quarter_revenue = max(_statement_entry_value(statement, "income_statement", "revenue"), 1.0)
+	quarter_net_income = _statement_entry_value(statement, "income_statement", "net_income")
+	net_margin = clamp(quarter_net_income / quarter_revenue, -0.35, 0.38)
+	quarter_debt = max(
+		_statement_entry_value(statement, "balance_sheet", "debt"),
+		_statement_entry_value(statement, "balance_sheet", "total_liabilities") * 0.72
+	)
 	var updated_statements: Array = _upsert_quarterly_statement(statements, statement)
 	var financials_after: Dictionary = _financials_from_quarterly_statements(updated_statements, financials_before, runtime_snapshot, sector_id)
 	var revenue_growth_yoy: float = _filing_growth_percent(same_quarter_revenue, quarter_revenue)
@@ -5085,7 +9392,7 @@ func _apply_quarterly_filing(filing: Dictionary, trade_date: Dictionary, day_num
 	var snapshot_value = profile.get("financial_statement_snapshot", {})
 	var snapshot: Dictionary = snapshot_value.duplicate(true) if typeof(snapshot_value) == TYPE_DICTIONARY else {}
 	var statements: Array = _upsert_quarterly_statement(_quarterly_statement_history_from_snapshot(snapshot), statement)
-	var updated_snapshot: Dictionary = _statement_snapshot_from_quarters(statements)
+	var updated_snapshot: Dictionary = _statement_snapshot_from_quarters(statements, snapshot)
 	var financials_value = filing.get("financials_after", {})
 	var financials_after: Dictionary = financials_value.duplicate(true) if typeof(financials_value) == TYPE_DICTIONARY else {}
 	if financials_after.is_empty():
@@ -5203,13 +9510,13 @@ func _upsert_quarterly_statement(statements: Array, statement: Dictionary) -> Ar
 	return _sort_quarterly_statements(rows)
 
 
-func _statement_snapshot_from_quarters(statements: Array) -> Dictionary:
+func _statement_snapshot_from_quarters(statements: Array, existing_snapshot: Dictionary = {}) -> Dictionary:
 	var rows: Array = _sort_quarterly_statements(statements)
 	if rows.is_empty():
 		return {}
 	var latest_statement: Dictionary = rows[rows.size() - 1].duplicate(true)
 	var first_statement: Dictionary = rows[0]
-	return {
+	var snapshot: Dictionary = {
 		"statement_year": int(latest_statement.get("statement_year", 0)),
 		"statement_quarter": int(latest_statement.get("statement_quarter", 0)),
 		"statement_period_label": str(latest_statement.get("statement_period_label", "")),
@@ -5220,8 +9527,28 @@ func _statement_snapshot_from_quarters(statements: Array) -> Dictionary:
 		"income_statement": latest_statement.get("income_statement", []).duplicate(true),
 		"balance_sheet": latest_statement.get("balance_sheet", []).duplicate(true),
 		"cash_flow": latest_statement.get("cash_flow", []).duplicate(true),
+		"operating_metrics": latest_statement.get("operating_metrics", []).duplicate(true),
+		"notes": latest_statement.get("notes", []).duplicate(true),
+		"story_adjustments": latest_statement.get("story_adjustments", []).duplicate(true),
+		"traceability": latest_statement.get("traceability", {}).duplicate(true) if typeof(latest_statement.get("traceability", {})) == TYPE_DICTIONARY else {},
 		"quarterly_statements": rows
 	}
+	for annual_key in [
+		"annual_statement_year",
+		"annual_statement_period_label",
+		"annual_statement_count",
+		"annual_statement",
+		"annual_statements"
+	]:
+		if not existing_snapshot.has(annual_key):
+			continue
+		var annual_value = existing_snapshot.get(annual_key)
+		match typeof(annual_value):
+			TYPE_DICTIONARY, TYPE_ARRAY:
+				snapshot[annual_key] = annual_value.duplicate(true)
+			_:
+				snapshot[annual_key] = annual_value
+	return snapshot
 
 
 func _financials_from_quarterly_statements(statements: Array, previous_financials: Dictionary, runtime: Dictionary, sector_id: String) -> Dictionary:
@@ -5689,8 +10016,19 @@ func _upsert_news_archive_article(outlet_id: String, outlet_label: String, artic
 		"outlet_id": outlet_id,
 		"outlet_label": outlet_label,
 		"intel_level": int(article.get("intel_level", 1)),
+		"access_model": str(article.get("access_model", "")),
+		"public_depth_level": int(article.get("public_depth_level", 1)),
+		"coverage_type": str(article.get("coverage_type", "")),
+		"topic_ids": _normalize_string_array(article.get("topic_ids", [])),
+		"reliability": _news_archive_float(article.get("reliability", 0.0)),
+		"specificity": str(article.get("specificity", "")),
+		"noise_level": _news_archive_float(article.get("noise_level", 0.0)),
 		"headline": str(article.get("headline", "")),
 		"deck": str(article.get("deck", "")),
+		"lead": str(article.get("lead", "")),
+		"context": str(article.get("context", "")),
+		"market_reaction": str(article.get("market_reaction", "")),
+		"what_to_watch": str(article.get("what_to_watch", "")),
 		"body": str(article.get("body", "")),
 		"trade_date": trade_date,
 		"day_index": int(article.get("day_index", -1)),
@@ -5718,6 +10056,22 @@ func _upsert_news_archive_article(outlet_id: String, outlet_label: String, artic
 		"author_contact_id": str(article.get("author_contact_id", "")),
 		"public_section_label": str(article.get("public_section_label", "")),
 		"public_status_label": str(article.get("public_status_label", "")),
+		"generated_content_surface": bool(article.get("generated_content_surface", false)),
+		"generated_surface_id": str(article.get("generated_surface_id", "")),
+		"generated_scope_id": str(article.get("generated_scope_id", "")),
+		"source_system_id": str(article.get("source_system_id", "")),
+		"story_id": str(article.get("story_id", "")),
+		"story_family": str(article.get("story_family", "")),
+		"archetype_id": str(article.get("archetype_id", "")),
+		"visibility": str(article.get("visibility", "")),
+		"detail_level": int(article.get("detail_level", 1)),
+		"leak_risk": _news_archive_float(article.get("leak_risk", 0.0)),
+		"source_fact_ids": _normalize_string_array(article.get("source_fact_ids", [])),
+		"source_clue_ids": _normalize_string_array(article.get("source_clue_ids", [])),
+		"source_company_ids": _normalize_string_array(article.get("source_company_ids", [])),
+		"source_sector_ids": _normalize_string_array(article.get("source_sector_ids", [])),
+		"source_commodity_ids": _normalize_string_array(article.get("source_commodity_ids", [])),
+		"source_event_ids": _normalize_string_array(article.get("source_event_ids", [])),
 		"outlet_logo_asset": str(article.get("outlet_logo_asset", "")),
 		"author_portrait_asset": str(article.get("author_portrait_asset", "")),
 		"article_image_asset": str(article.get("article_image_asset", "")),
@@ -5742,6 +10096,26 @@ func _upsert_news_archive_article(outlet_id: String, outlet_label: String, artic
 		"is_property_development_story": bool(article_record.get("is_property_development_story", false)),
 		"property_development_source_article_id": str(article_record.get("property_development_source_article_id", "")),
 		"intel_level": int(article_record.get("intel_level", 1)),
+		"access_model": str(article_record.get("access_model", "")),
+		"public_depth_level": int(article_record.get("public_depth_level", 1)),
+		"coverage_type": str(article_record.get("coverage_type", "")),
+		"topic_ids": _normalize_string_array(article_record.get("topic_ids", [])),
+		"reliability": _news_archive_float(article_record.get("reliability", 0.0)),
+		"specificity": str(article_record.get("specificity", "")),
+		"noise_level": _news_archive_float(article_record.get("noise_level", 0.0)),
+		"generated_content_surface": bool(article_record.get("generated_content_surface", false)),
+		"generated_surface_id": str(article_record.get("generated_surface_id", "")),
+		"source_system_id": str(article_record.get("source_system_id", "")),
+		"story_id": str(article_record.get("story_id", "")),
+		"visibility": str(article_record.get("visibility", "")),
+		"detail_level": int(article_record.get("detail_level", 1)),
+		"leak_risk": _news_archive_float(article_record.get("leak_risk", 0.0)),
+		"source_fact_ids": _normalize_string_array(article_record.get("source_fact_ids", [])),
+		"source_clue_ids": _normalize_string_array(article_record.get("source_clue_ids", [])),
+		"source_company_ids": _normalize_string_array(article_record.get("source_company_ids", [])),
+		"source_sector_ids": _normalize_string_array(article_record.get("source_sector_ids", [])),
+		"source_commodity_ids": _normalize_string_array(article_record.get("source_commodity_ids", [])),
+		"source_event_ids": _normalize_string_array(article_record.get("source_event_ids", [])),
 		"property_development_clarity": int(article_record.get("property_development_clarity", 0)),
 		"property_development_location_id": str(article_record.get("property_development_location_id", "")),
 		"property_development_theme": str(article_record.get("property_development_theme", "")),
@@ -5808,6 +10182,18 @@ func _upsert_news_archive_article(outlet_id: String, outlet_label: String, artic
 	outlet_bucket["years"] = years_bucket
 	news_archive_index[outlet_id] = outlet_bucket
 	return _news_archive_month_sort_key(outlet_id, year_key, month_key)
+
+
+func _news_archive_float(value: Variant, fallback: float = 0.0) -> float:
+	match typeof(value):
+		TYPE_FLOAT:
+			return value
+		TYPE_INT:
+			return value
+		TYPE_STRING:
+			return str(value).to_float()
+		_:
+			return fallback
 
 
 func _news_archive_month_sort_key(outlet_id: String, year_key: String, month_key: String) -> String:
@@ -5956,6 +10342,14 @@ func _normalize_company_runtime(runtime: Dictionary) -> Dictionary:
 	normalized_runtime["active_events"] = normalized_runtime.get("active_events", []).duplicate(true)
 	normalized_runtime["market_depth_context"] = normalized_runtime.get("market_depth_context", {}).duplicate(true)
 	normalized_runtime["player_market_impact"] = normalized_runtime.get("player_market_impact", {}).duplicate(true)
+	normalized_runtime["living_arc_state"] = _normalize_company_living_arc_state(
+		normalized_runtime.get("living_arc_state", {}),
+		str(normalized_runtime.get("company_id", ""))
+	)
+	normalized_runtime["company_story_dossier_state"] = _normalize_company_story_dossier_company_state(
+		normalized_runtime.get("company_story_dossier_state", {}),
+		str(normalized_runtime.get("company_id", ""))
+	)
 	# No CompanyRuntime round-trip here: this runs per company in hot paths and
 	# the fields are already normalized above. Typed-schema enforcement happens
 	# once at the save boundary (_build_companies_save_payload).
@@ -5976,7 +10370,8 @@ func _normalize_day_result_company_runtime(runtime: Dictionary) -> Dictionary:
 	)
 	if normalized_runtime["price_history"].is_empty() and not normalized_runtime["price_bars"].is_empty():
 		normalized_runtime["price_history"] = _rebuild_price_history_from_bars(normalized_runtime["price_bars"])
-	normalized_runtime["broker_flow_history"] = _broker_history_array_for_append(normalized_runtime.get("broker_flow_history", []), MAX_BROKER_COMPACT_HISTORY_DAYS)
+	var broker_history_value = normalized_runtime.get("broker_flow_history", [])
+	normalized_runtime["broker_flow_history"] = broker_history_value if typeof(broker_history_value) == TYPE_ARRAY else []
 	normalized_runtime.erase("broker_flow_full_history")
 	var company_profile_value = normalized_runtime.get("company_profile", {})
 	normalized_runtime["company_profile"] = company_profile_value if typeof(company_profile_value) == TYPE_DICTIONARY else {}
@@ -5987,6 +10382,14 @@ func _normalize_day_result_company_runtime(runtime: Dictionary) -> Dictionary:
 	normalized_runtime["volume_context"] = normalized_runtime.get("volume_context", {}).duplicate(true)
 	normalized_runtime["market_depth_context"] = normalized_runtime.get("market_depth_context", {}).duplicate(true)
 	normalized_runtime["player_market_impact"] = normalized_runtime.get("player_market_impact", {}).duplicate(true)
+	normalized_runtime["living_arc_state"] = _normalize_company_living_arc_state(
+		normalized_runtime.get("living_arc_state", {}),
+		str(normalized_runtime.get("company_id", ""))
+	)
+	normalized_runtime["company_story_dossier_state"] = _normalize_company_story_dossier_company_state(
+		normalized_runtime.get("company_story_dossier_state", {}),
+		str(normalized_runtime.get("company_id", ""))
+	)
 	# Per-day per-company hot path: skip the CompanyRuntime round-trip (see
 	# _normalize_company_runtime note).
 	return normalized_runtime
@@ -6324,7 +10727,10 @@ func _build_statement_snapshot_view(
 		"statement_scope",
 		"quarterly_statement_count",
 		"history_start_period_label",
-		"history_end_period_label"
+		"history_end_period_label",
+		"annual_statement_year",
+		"annual_statement_period_label",
+		"annual_statement_count"
 	]
 	for snapshot_key_value in passthrough_keys:
 		var snapshot_key: String = str(snapshot_key_value)
@@ -6334,8 +10740,11 @@ func _build_statement_snapshot_view(
 	snapshot_view["income_statement"] = statement_snapshot.get("income_statement", []).duplicate(true)
 	snapshot_view["balance_sheet"] = statement_snapshot.get("balance_sheet", []).duplicate(true)
 	snapshot_view["cash_flow"] = statement_snapshot.get("cash_flow", []).duplicate(true)
+	if typeof(statement_snapshot.get("annual_statement", {})) == TYPE_DICTIONARY:
+		snapshot_view["annual_statement"] = statement_snapshot.get("annual_statement", {}).duplicate(true)
 	if include_statement_history:
 		snapshot_view["quarterly_statements"] = statement_snapshot.get("quarterly_statements", []).duplicate(true)
+		snapshot_view["annual_statements"] = statement_snapshot.get("annual_statements", []).duplicate(true)
 	return snapshot_view
 
 
@@ -6353,6 +10762,7 @@ func _ensure_macro_state_for_year(year: int) -> void:
 	var safe_year: int = max(year, 2020)
 	var year_key: String = str(safe_year)
 	if yearly_macro_states.has(year_key):
+		yearly_macro_states[year_key] = _normalize_macro_state(yearly_macro_states.get(year_key, {}), safe_year)
 		return
 
 	var previous_state: Dictionary = {}
@@ -6364,7 +10774,8 @@ func _ensure_macro_state_for_year(year: int) -> void:
 		run_seed,
 		safe_year,
 		DataRepository.get_sector_definitions(),
-		previous_state
+		previous_state,
+		DataRepository.get_commodity_indicator_catalog()
 	)
 
 

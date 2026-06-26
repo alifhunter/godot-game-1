@@ -1,0 +1,1716 @@
+{
+  "schema_version": 1,
+  "status": "planning_seed",
+  "description": "Catalog-backed company universe for top-down market research. Catalog roster selection is the default runtime path; procedural company generation remains available as an explicit fallback.",
+  "field_notes": {
+    "sector": "Uses existing CompanyGenerator sector ids.",
+    "subsector": "More granular business grouping for top-down filters and story targeting.",
+    "commodity_exposures": "Signed sensitivity where positive benefits from higher commodity prices and negative is input-cost pressure.",
+    "macro_exposures": "Signed sensitivity to macro drivers where positive benefits from stronger driver values.",
+    "price_traits": "Normalized hints for future price-engine integration; values are advisory until wired by later tasks.",
+    "relationship_hooks": "Potential graph edges for future supplier/customer/partner/competitor/acquirer logic.",
+    "story_hooks": "Machine-readable story seeds for future dossier, news, Twooter, Network, filing, and thesis systems."
+  },
+  "companies": [
+    {
+      "id": "sari_boga_makmur",
+      "ticker": "SARI",
+      "name": "Sari Boga Makmur",
+      "sector": "consumer",
+      "subsector": "packaged_food",
+      "business_summary": "Packaged sauces, snacks, and ready-to-cook staples distributed through modern trade and wholesale channels.",
+      "moat_tags": ["brand_recognition", "distribution_depth", "shelf_space"],
+      "commodity_exposures": {"cpo": -0.24, "wheat": -0.18, "sugar": -0.14},
+      "macro_exposures": {"domestic_demand": 0.66, "consumer_confidence": 0.58, "fx": -0.16, "interest_rate": -0.08},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.18, "growth_bias": 0.10, "risk_bias": -0.10, "retail_attention_bias": 0.14, "event_sensitivity": 0.18},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "noncyclical", "target_subsector": "plantation", "strength": 0.42, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "transport", "target_subsector": "cold_chain_logistics", "strength": 0.34, "visibility": "public"}
+      ],
+      "story_hooks": ["margin_recovery", "distribution_center", "brand_refresh", "input_cost_squeeze"]
+    },
+    {
+      "id": "nusa_retail_prima",
+      "ticker": "NUSA",
+      "name": "Nusa Retail Prima",
+      "sector": "consumer",
+      "subsector": "modern_retail",
+      "business_summary": "Neighborhood retail chain with private-label staples, pharmacy counters, and urban mini-market formats.",
+      "moat_tags": ["store_density", "private_label", "supplier_terms"],
+      "commodity_exposures": {"cpo": -0.08, "rice": -0.10, "fuel": -0.12},
+      "macro_exposures": {"domestic_demand": 0.72, "consumer_confidence": 0.70, "interest_rate": -0.14, "employment": 0.46},
+      "price_traits": {"liquidity_profile": "liquid", "volatility_profile": "moderate", "quality_bias": 0.12, "growth_bias": 0.18, "risk_bias": 0.02, "retail_attention_bias": 0.24, "event_sensitivity": 0.22},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "consumer", "target_subsector": "packaged_food", "strength": 0.46, "visibility": "public"},
+        {"type": "partner", "target_sector": "tech", "target_subsector": "payments", "strength": 0.30, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["store_rollout", "same_store_sales_turnaround", "private_label_push", "inventory_overhang"]
+    },
+    {
+      "id": "kelola_mart_sentosa",
+      "ticker": "KELA",
+      "name": "Kelola Mart Sentosa",
+      "sector": "consumer",
+      "subsector": "grocery_distribution",
+      "business_summary": "Grocery distributor and neighborhood store operator focused on second-tier cities and suburban corridors.",
+      "moat_tags": ["regional_density", "warehouse_network", "local_supplier_access"],
+      "commodity_exposures": {"rice": -0.16, "sugar": -0.12, "fuel": -0.18},
+      "macro_exposures": {"domestic_demand": 0.68, "consumer_confidence": 0.54, "logistics_cost": -0.28, "interest_rate": -0.12},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "moderate", "quality_bias": 0.08, "growth_bias": 0.12, "risk_bias": 0.06, "retail_attention_bias": 0.12, "event_sensitivity": 0.20},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "noncyclical", "target_subsector": "staple_food", "strength": 0.48, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "transport", "target_subsector": "last_mile_delivery", "strength": 0.36, "visibility": "private"}
+      ],
+      "story_hooks": ["warehouse_expansion", "regional_rollout", "working_capital_tightening", "logistics_margin_pressure"]
+    },
+    {
+      "id": "rasa_kopi_nusantara",
+      "ticker": "RASA",
+      "name": "Rasa Kopi Nusantara",
+      "sector": "consumer",
+      "subsector": "food_service",
+      "business_summary": "Coffee shop and ready-to-drink beverage operator with a franchised outlet model and packaged product line.",
+      "moat_tags": ["brand_heat", "franchise_network", "youth_demographic"],
+      "commodity_exposures": {"coffee": -0.26, "sugar": -0.12, "fuel": -0.06},
+      "macro_exposures": {"consumer_confidence": 0.74, "domestic_demand": 0.56, "interest_rate": -0.18, "urban_mobility": 0.38},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": -0.02, "growth_bias": 0.30, "risk_bias": 0.16, "retail_attention_bias": 0.34, "event_sensitivity": 0.36},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "tech", "target_subsector": "consumer_platform", "strength": 0.34, "visibility": "public"},
+        {"type": "customer", "target_sector": "property", "target_subsector": "mall_reit", "strength": 0.22, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["franchise_acceleration", "store_closure_risk", "brand_partnership", "margin_reset"]
+    },
+    {
+      "id": "surya_personal_care",
+      "ticker": "SPCA",
+      "name": "Surya Personal Care",
+      "sector": "consumer",
+      "subsector": "household_personal_care",
+      "business_summary": "Household cleaning, body care, and affordable cosmetics producer with national modern-trade distribution.",
+      "moat_tags": ["repeat_purchase", "brand_portfolio", "pricing_power"],
+      "commodity_exposures": {"cpo": -0.18, "crude_oil": -0.16},
+      "macro_exposures": {"domestic_demand": 0.58, "consumer_confidence": 0.48, "fx": -0.20, "inflation": -0.12},
+      "price_traits": {"liquidity_profile": "liquid", "volatility_profile": "low", "quality_bias": 0.24, "growth_bias": 0.08, "risk_bias": -0.18, "retail_attention_bias": 0.10, "event_sensitivity": 0.14},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "consumer", "target_subsector": "modern_retail", "strength": 0.52, "visibility": "public"},
+        {"type": "supplier", "target_sector": "basicindustry", "target_subsector": "specialty_chemicals", "strength": 0.30, "visibility": "private"}
+      ],
+      "story_hooks": ["premiumization", "raw_material_pressure", "export_trial", "brand_extension"]
+    },
+    {
+      "id": "pangan_lestari",
+      "ticker": "PANG",
+      "name": "Pangan Lestari",
+      "sector": "noncyclical",
+      "subsector": "staple_food",
+      "business_summary": "Staple food processor and distributor focused on rice products, flour blends, and bulk household staples.",
+      "moat_tags": ["staple_demand", "procurement_network", "warehouse_scale"],
+      "commodity_exposures": {"rice": 0.18, "wheat": -0.22, "fuel": -0.12},
+      "macro_exposures": {"domestic_demand": 0.44, "inflation": -0.10, "food_security_policy": 0.26, "consumer_confidence": 0.22},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "low", "quality_bias": 0.16, "growth_bias": 0.02, "risk_bias": -0.16, "retail_attention_bias": 0.06, "event_sensitivity": 0.12},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "consumer", "target_subsector": "grocery_distribution", "strength": 0.50, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "transport", "target_subsector": "last_mile_delivery", "strength": 0.24, "visibility": "private"}
+      ],
+      "story_hooks": ["staple_volume_growth", "procurement_shortage", "government_distribution_contract", "margin_normalization"]
+    },
+    {
+      "id": "sawit_bumi_raya",
+      "ticker": "SWIT",
+      "name": "Sawit Bumi Raya",
+      "sector": "noncyclical",
+      "subsector": "plantation",
+      "business_summary": "Palm plantation and crude palm oil processor with nucleus estates and third-party fresh fruit bunch sourcing.",
+      "moat_tags": ["landbank", "mill_access", "estate_age_profile"],
+      "commodity_exposures": {"cpo": 0.86, "fuel": -0.08, "fertilizer": -0.16},
+      "macro_exposures": {"fx": 0.18, "export_policy": 0.42, "weather": -0.30, "domestic_demand": 0.16},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": 0.02, "growth_bias": 0.10, "risk_bias": 0.18, "retail_attention_bias": 0.18, "event_sensitivity": 0.34},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "consumer", "target_subsector": "packaged_food", "strength": 0.42, "visibility": "semi_public"},
+        {"type": "supplier", "target_sector": "energy", "target_subsector": "biofuel_blending", "strength": 0.34, "visibility": "public"}
+      ],
+      "story_hooks": ["cpo_price_rally", "replanting_cycle", "export_levy_change", "yield_recovery"]
+    },
+    {
+      "id": "laut_garam_prima",
+      "ticker": "LGRM",
+      "name": "Laut Garam Prima",
+      "sector": "noncyclical",
+      "subsector": "salt_seasoning",
+      "business_summary": "Salt, seasoning, and basic condiment producer serving retail shelves and food manufacturing customers.",
+      "moat_tags": ["low_cost_processing", "food_service_relationships", "distribution_reach"],
+      "commodity_exposures": {"salt": 0.28, "fuel": -0.14, "sugar": -0.08},
+      "macro_exposures": {"domestic_demand": 0.38, "inflation": -0.10, "weather": -0.18, "fx": -0.08},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "moderate", "quality_bias": 0.06, "growth_bias": -0.02, "risk_bias": -0.04, "retail_attention_bias": 0.08, "event_sensitivity": 0.16},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "consumer", "target_subsector": "packaged_food", "strength": 0.28, "visibility": "private"},
+        {"type": "partner", "target_sector": "transport", "target_subsector": "port_logistics", "strength": 0.24, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["seasonal_output_shock", "food_service_contract", "import_quota_change", "capacity_upgrade"]
+    },
+    {
+      "id": "beras_nusantara",
+      "ticker": "BRAS",
+      "name": "Beras Nusantara",
+      "sector": "noncyclical",
+      "subsector": "rice_milling",
+      "business_summary": "Rice milling and branded rice distributor with procurement links across Java and Sulawesi.",
+      "moat_tags": ["procurement_relationships", "brand_trust", "regional_distribution"],
+      "commodity_exposures": {"rice": 0.54, "fuel": -0.12},
+      "macro_exposures": {"food_security_policy": 0.42, "weather": -0.36, "inflation": 0.08, "domestic_demand": 0.30},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "moderate", "quality_bias": 0.10, "growth_bias": 0.04, "risk_bias": 0.04, "retail_attention_bias": 0.08, "event_sensitivity": 0.22},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "consumer", "target_subsector": "grocery_distribution", "strength": 0.40, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "infra", "target_subsector": "port_services", "strength": 0.18, "visibility": "private"}
+      ],
+      "story_hooks": ["procurement_windfall", "weather_shortfall", "government_reserve_contract", "premium_brand_launch"]
+    },
+    {
+      "id": "segar_dairy_indonesia",
+      "ticker": "SGDI",
+      "name": "Segar Dairy Indonesia",
+      "sector": "noncyclical",
+      "subsector": "dairy_nutrition",
+      "business_summary": "Dairy and nutrition producer with cold-chain distribution into schools, supermarkets, and food-service channels.",
+      "moat_tags": ["cold_chain", "trusted_nutrition_brand", "school_channel"],
+      "commodity_exposures": {"milk": -0.30, "sugar": -0.10, "fuel": -0.12},
+      "macro_exposures": {"domestic_demand": 0.42, "consumer_confidence": 0.28, "fx": -0.20, "health_awareness": 0.32},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "low", "quality_bias": 0.20, "growth_bias": 0.08, "risk_bias": -0.12, "retail_attention_bias": 0.08, "event_sensitivity": 0.16},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "transport", "target_subsector": "cold_chain_logistics", "strength": 0.44, "visibility": "semi_public"},
+        {"type": "partner", "target_sector": "health", "target_subsector": "preventive_care", "strength": 0.20, "visibility": "private"}
+      ],
+      "story_hooks": ["cold_chain_expansion", "school_nutrition_program", "imported_milk_pressure", "premium_product_mix"]
+    },
+    {
+      "id": "bara_jaya_energi",
+      "ticker": "BARA",
+      "name": "Bara Jaya Energi",
+      "sector": "energy",
+      "subsector": "coal_mining",
+      "business_summary": "Thermal coal producer with domestic market obligation exposure and export-linked sales contracts.",
+      "moat_tags": ["reserve_life", "low_strip_ratio", "barge_access"],
+      "commodity_exposures": {"coal": 0.92, "fuel": -0.10},
+      "macro_exposures": {"global_trade": 0.36, "export_policy": 0.42, "fx": 0.24, "energy_demand": 0.44},
+      "price_traits": {"liquidity_profile": "liquid", "volatility_profile": "high", "quality_bias": -0.04, "growth_bias": 0.18, "risk_bias": 0.24, "retail_attention_bias": 0.30, "event_sensitivity": 0.46},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "infra", "target_subsector": "power_utility", "strength": 0.38, "visibility": "public"},
+        {"type": "customer", "target_sector": "transport", "target_subsector": "bulk_shipping", "strength": 0.42, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["coal_price_rally", "dmob_policy_shift", "reserve_upgrade", "mine_permit_delay"]
+    },
+    {
+      "id": "kencana_migas",
+      "ticker": "KMIG",
+      "name": "Kencana Migas",
+      "sector": "energy",
+      "subsector": "oil_gas_upstream",
+      "business_summary": "Mature oil and gas field operator with production enhancement projects and selective exploration blocks.",
+      "moat_tags": ["field_operatorship", "technical_recovery", "regulatory_access"],
+      "commodity_exposures": {"crude_oil": 0.78, "natural_gas": 0.42},
+      "macro_exposures": {"energy_demand": 0.44, "global_trade": 0.24, "fx": 0.22, "policy_support": 0.28},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": 0.02, "growth_bias": 0.16, "risk_bias": 0.22, "retail_attention_bias": 0.18, "event_sensitivity": 0.44},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "basicindustry", "target_subsector": "petrochemicals", "strength": 0.28, "visibility": "semi_public"},
+        {"type": "partner", "target_sector": "industrial", "target_subsector": "field_services", "strength": 0.34, "visibility": "private"}
+      ],
+      "story_hooks": ["production_lift", "exploration_result", "psc_extension", "lifting_cost_overrun"]
+    },
+    {
+      "id": "surya_power_nusantara",
+      "ticker": "SPWR",
+      "name": "Surya Power Nusantara",
+      "sector": "energy",
+      "subsector": "renewable_power",
+      "business_summary": "Solar, mini-hydro, and battery-linked power developer with long-term offtake projects.",
+      "moat_tags": ["project_pipeline", "ppa_access", "engineering_partner_network"],
+      "commodity_exposures": {"coal": -0.12, "copper": -0.20, "natural_gas": -0.08},
+      "macro_exposures": {"policy_support": 0.52, "interest_rate": -0.30, "infrastructure_budget": 0.26, "energy_demand": 0.34},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": 0.04, "growth_bias": 0.30, "risk_bias": 0.18, "retail_attention_bias": 0.26, "event_sensitivity": 0.40},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "infra", "target_subsector": "power_utility", "strength": 0.48, "visibility": "public"},
+        {"type": "partner", "target_sector": "finance", "target_subsector": "project_finance", "strength": 0.32, "visibility": "private"}
+      ],
+      "story_hooks": ["ppa_award", "project_delay", "green_financing", "battery_storage_pilot"]
+    },
+    {
+      "id": "kalimantan_mineral",
+      "ticker": "KMIN",
+      "name": "Kalimantan Mineral",
+      "sector": "energy",
+      "subsector": "mining_services",
+      "business_summary": "Mining contractor and hauling operator serving coal and nickel customers across Kalimantan and Sulawesi.",
+      "moat_tags": ["fleet_scale", "site_relationships", "equipment_utilization"],
+      "commodity_exposures": {"coal": 0.46, "nickel": 0.28, "fuel": -0.22},
+      "macro_exposures": {"global_trade": 0.34, "infrastructure_budget": 0.20, "interest_rate": -0.18, "commodity_cycle": 0.58},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": -0.02, "growth_bias": 0.18, "risk_bias": 0.20, "retail_attention_bias": 0.20, "event_sensitivity": 0.38},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "energy", "target_subsector": "coal_mining", "strength": 0.54, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "basicindustry", "target_subsector": "nickel_smelter", "strength": 0.32, "visibility": "private"}
+      ],
+      "story_hooks": ["fleet_renewal", "contract_win", "utilization_slump", "fuel_cost_pressure"]
+    },
+    {
+      "id": "samudra_gas_logistik",
+      "ticker": "SGLG",
+      "name": "Samudra Gas Logistik",
+      "sector": "energy",
+      "subsector": "gas_distribution",
+      "business_summary": "Gas distribution and small-scale LNG logistics operator supplying industrial estates and power customers.",
+      "moat_tags": ["route_density", "industrial_customer_base", "storage_access"],
+      "commodity_exposures": {"natural_gas": 0.48, "crude_oil": 0.12, "fuel": -0.14},
+      "macro_exposures": {"industrial_activity": 0.44, "energy_demand": 0.48, "fx": -0.10, "policy_support": 0.24},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "moderate", "quality_bias": 0.10, "growth_bias": 0.16, "risk_bias": 0.08, "retail_attention_bias": 0.10, "event_sensitivity": 0.30},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "industrial", "target_subsector": "manufacturing_services", "strength": 0.38, "visibility": "semi_public"},
+        {"type": "supplier", "target_sector": "infra", "target_subsector": "power_utility", "strength": 0.32, "visibility": "public"}
+      ],
+      "story_hooks": ["industrial_gas_contract", "storage_expansion", "regulatory_tariff_change", "customer_concentration"]
+    },
+    {
+      "id": "nikel_makmur",
+      "ticker": "NKLM",
+      "name": "Nikel Makmur",
+      "sector": "basicindustry",
+      "subsector": "nickel_smelter",
+      "business_summary": "Nickel ore processor and smelter operator selling intermediate products into battery and stainless supply chains.",
+      "moat_tags": ["smelter_capacity", "ore_access", "export_route"],
+      "commodity_exposures": {"nickel": 0.84, "coal": -0.18, "electricity": -0.20},
+      "macro_exposures": {"global_trade": 0.42, "fx": 0.18, "ev_supply_chain": 0.50, "policy_support": 0.34},
+      "price_traits": {"liquidity_profile": "liquid", "volatility_profile": "high", "quality_bias": -0.04, "growth_bias": 0.28, "risk_bias": 0.26, "retail_attention_bias": 0.32, "event_sensitivity": 0.48},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "industrial", "target_subsector": "equipment_fabrication", "strength": 0.24, "visibility": "private"},
+        {"type": "partner", "target_sector": "energy", "target_subsector": "renewable_power", "strength": 0.22, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["nickel_price_rally", "smelter_ramp", "power_cost_shock", "export_policy_change"]
+    },
+    {
+      "id": "semen_raya_industri",
+      "ticker": "SMRI",
+      "name": "Semen Raya Industri",
+      "sector": "basicindustry",
+      "subsector": "cement",
+      "business_summary": "Cement producer with regional grinding capacity and distribution into infrastructure and residential projects.",
+      "moat_tags": ["regional_distribution", "plant_scale", "dealer_network"],
+      "commodity_exposures": {"coal": -0.28, "electricity": -0.16, "fuel": -0.12},
+      "macro_exposures": {"infrastructure_budget": 0.46, "property_cycle": 0.38, "interest_rate": -0.18, "industrial_activity": 0.22},
+      "price_traits": {"liquidity_profile": "liquid", "volatility_profile": "moderate", "quality_bias": 0.04, "growth_bias": 0.02, "risk_bias": 0.08, "retail_attention_bias": 0.10, "event_sensitivity": 0.26},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "property", "target_subsector": "township_development", "strength": 0.42, "visibility": "public"},
+        {"type": "supplier", "target_sector": "infra", "target_subsector": "toll_roads", "strength": 0.36, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["utilization_recovery", "price_war", "infrastructure_order", "energy_cost_pressure"]
+    },
+    {
+      "id": "kimia_sentosa",
+      "ticker": "KIMS",
+      "name": "Kimia Sentosa",
+      "sector": "basicindustry",
+      "subsector": "specialty_chemicals",
+      "business_summary": "Specialty chemical blender serving personal care, packaging, textiles, and industrial customers.",
+      "moat_tags": ["formulation_knowhow", "customer_qualification", "small_batch_flexibility"],
+      "commodity_exposures": {"crude_oil": -0.34, "natural_gas": -0.16},
+      "macro_exposures": {"industrial_activity": 0.36, "fx": -0.24, "domestic_demand": 0.22, "global_trade": 0.16},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "moderate", "quality_bias": 0.10, "growth_bias": 0.08, "risk_bias": 0.06, "retail_attention_bias": 0.08, "event_sensitivity": 0.24},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "consumer", "target_subsector": "household_personal_care", "strength": 0.36, "visibility": "private"},
+        {"type": "supplier", "target_sector": "industrial", "target_subsector": "textile_inputs", "strength": 0.28, "visibility": "private"}
+      ],
+      "story_hooks": ["customer_qualification", "raw_material_spread", "new_formula_launch", "working_capital_strain"]
+    },
+    {
+      "id": "pulp_nusantara",
+      "ticker": "PULP",
+      "name": "Pulp Nusantara",
+      "sector": "basicindustry",
+      "subsector": "paper_packaging",
+      "business_summary": "Pulp, paper, and packaging board producer exposed to export pricing and domestic packaging demand.",
+      "moat_tags": ["fiber_access", "export_customer_base", "integrated_mill"],
+      "commodity_exposures": {"pulp": 0.62, "coal": -0.18},
+      "macro_exposures": {"global_trade": 0.36, "fx": 0.22, "domestic_demand": 0.24, "industrial_activity": 0.28},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": -0.02, "growth_bias": 0.04, "risk_bias": 0.18, "retail_attention_bias": 0.12, "event_sensitivity": 0.32},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "consumer", "target_subsector": "packaged_food", "strength": 0.28, "visibility": "semi_public"},
+        {"type": "competitor", "target_sector": "basicindustry", "target_subsector": "paper_packaging", "strength": 0.46, "visibility": "public"}
+      ],
+      "story_hooks": ["export_price_cycle", "mill_outage", "packaging_demand_recovery", "forestry_certification"]
+    },
+    {
+      "id": "baja_logam_prima",
+      "ticker": "BLPR",
+      "name": "Baja Logam Prima",
+      "sector": "basicindustry",
+      "subsector": "steel_processing",
+      "business_summary": "Steel processor and fabrication supplier for construction, industrial equipment, and logistics warehouses.",
+      "moat_tags": ["fabrication_capacity", "industrial_customer_book", "regional_service"],
+      "commodity_exposures": {"iron_ore": -0.28, "coal": -0.16, "nickel": 0.08},
+      "macro_exposures": {"infrastructure_budget": 0.42, "property_cycle": 0.30, "industrial_activity": 0.36, "interest_rate": -0.14},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": -0.04, "growth_bias": 0.08, "risk_bias": 0.20, "retail_attention_bias": 0.14, "event_sensitivity": 0.34},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "industrial", "target_subsector": "equipment_fabrication", "strength": 0.38, "visibility": "semi_public"},
+        {"type": "supplier", "target_sector": "property", "target_subsector": "logistics_estate", "strength": 0.30, "visibility": "private"}
+      ],
+      "story_hooks": ["steel_spread_recovery", "project_order", "inventory_loss", "fabrication_capacity_upgrade"]
+    },
+    {
+      "id": "mesin_presisi_indonesia",
+      "ticker": "MSPI",
+      "name": "Mesin Presisi Indonesia",
+      "sector": "industrial",
+      "subsector": "equipment_fabrication",
+      "business_summary": "Precision machinery and fabrication supplier serving food, mining, and industrial automation customers.",
+      "moat_tags": ["technical_service", "aftermarket_support", "custom_engineering"],
+      "commodity_exposures": {"steel": -0.20, "copper": -0.10},
+      "macro_exposures": {"industrial_activity": 0.48, "capex_cycle": 0.52, "interest_rate": -0.16, "global_trade": 0.18},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.18, "growth_bias": 0.10, "risk_bias": -0.02, "retail_attention_bias": 0.08, "event_sensitivity": 0.26},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "basicindustry", "target_subsector": "nickel_smelter", "strength": 0.28, "visibility": "private"},
+        {"type": "supplier", "target_sector": "consumer", "target_subsector": "packaged_food", "strength": 0.22, "visibility": "private"}
+      ],
+      "story_hooks": ["orderbook_acceleration", "margin_mix_upgrade", "customer_delay", "automation_push"]
+    },
+    {
+      "id": "otomasi_karya",
+      "ticker": "OTKA",
+      "name": "Otomasi Karya",
+      "sector": "industrial",
+      "subsector": "factory_automation",
+      "business_summary": "Factory automation integrator with sensors, controllers, and maintenance contracts for domestic manufacturers.",
+      "moat_tags": ["installed_base", "engineering_team", "maintenance_contracts"],
+      "commodity_exposures": {"copper": -0.16},
+      "macro_exposures": {"industrial_activity": 0.54, "capex_cycle": 0.56, "fx": -0.22, "interest_rate": -0.12},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": 0.08, "growth_bias": 0.24, "risk_bias": 0.12, "retail_attention_bias": 0.18, "event_sensitivity": 0.34},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "consumer", "target_subsector": "household_personal_care", "strength": 0.24, "visibility": "private"},
+        {"type": "partner", "target_sector": "tech", "target_subsector": "enterprise_software", "strength": 0.32, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["automation_contract", "component_shortage", "recurring_service_growth", "import_cost_pressure"]
+    },
+    {
+      "id": "citra_kabel_nusantara",
+      "ticker": "CKBN",
+      "name": "Citra Kabel Nusantara",
+      "sector": "industrial",
+      "subsector": "cable_manufacturing",
+      "business_summary": "Power, telecom, and industrial cable manufacturer tied to infrastructure rollout and commodity input spreads.",
+      "moat_tags": ["certified_products", "project_relationships", "factory_scale"],
+      "commodity_exposures": {"copper": -0.44, "crude_oil": -0.12},
+      "macro_exposures": {"infrastructure_budget": 0.50, "industrial_activity": 0.38, "fx": -0.20, "interest_rate": -0.10},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": 0.00, "growth_bias": 0.12, "risk_bias": 0.16, "retail_attention_bias": 0.14, "event_sensitivity": 0.34},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "infra", "target_subsector": "telecom_towers", "strength": 0.42, "visibility": "semi_public"},
+        {"type": "supplier", "target_sector": "infra", "target_subsector": "power_utility", "strength": 0.38, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["tender_win", "copper_spread_pressure", "factory_upgrade", "receivables_delay"]
+    },
+    {
+      "id": "galangan_teknik",
+      "ticker": "GTEK",
+      "name": "Galangan Teknik",
+      "sector": "industrial",
+      "subsector": "marine_engineering",
+      "business_summary": "Shipyard and marine repair operator serving tugboat, tanker, and offshore service customers.",
+      "moat_tags": ["dock_capacity", "technical_certification", "customer_retention"],
+      "commodity_exposures": {"steel": -0.22, "crude_oil": 0.10, "fuel": -0.08},
+      "macro_exposures": {"global_trade": 0.34, "energy_demand": 0.28, "industrial_activity": 0.30, "interest_rate": -0.18},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": -0.04, "growth_bias": 0.10, "risk_bias": 0.22, "retail_attention_bias": 0.12, "event_sensitivity": 0.34},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "transport", "target_subsector": "tanker_shipping", "strength": 0.42, "visibility": "private"},
+        {"type": "customer", "target_sector": "energy", "target_subsector": "oil_gas_upstream", "strength": 0.24, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["dry_dock_contract", "offshore_cycle_recovery", "project_cost_overrun", "capacity_bottleneck"]
+    },
+    {
+      "id": "alat_berat_mandiri",
+      "ticker": "ABMD",
+      "name": "Alat Berat Mandiri",
+      "sector": "industrial",
+      "subsector": "heavy_equipment_distribution",
+      "business_summary": "Heavy equipment distributor and rental operator exposed to mining, plantation, and infrastructure capex cycles.",
+      "moat_tags": ["dealer_exclusivity", "service_network", "rental_fleet"],
+      "commodity_exposures": {"coal": 0.34, "cpo": 0.18},
+      "macro_exposures": {"capex_cycle": 0.58, "commodity_cycle": 0.48, "interest_rate": -0.24, "infrastructure_budget": 0.30},
+      "price_traits": {"liquidity_profile": "liquid", "volatility_profile": "high", "quality_bias": 0.08, "growth_bias": 0.18, "risk_bias": 0.12, "retail_attention_bias": 0.20, "event_sensitivity": 0.38},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "energy", "target_subsector": "coal_mining", "strength": 0.46, "visibility": "semi_public"},
+        {"type": "supplier", "target_sector": "noncyclical", "target_subsector": "plantation", "strength": 0.28, "visibility": "private"}
+      ],
+      "story_hooks": ["rental_utilization_recovery", "dealer_contract_extension", "inventory_financing_pressure", "mining_capex_wave"]
+    },
+    {
+      "id": "awan_data_nusantara",
+      "ticker": "AWDN",
+      "name": "Awan Data Nusantara",
+      "sector": "tech",
+      "subsector": "cloud_infrastructure",
+      "business_summary": "Cloud hosting and managed data services provider serving enterprises, startups, and public-sector workloads.",
+      "moat_tags": ["data_center_footprint", "enterprise_switching_cost", "security_certification"],
+      "commodity_exposures": {"electricity": -0.34, "copper": -0.10},
+      "macro_exposures": {"digital_adoption": 0.62, "interest_rate": -0.20, "government_spending": 0.22, "fx": -0.16},
+      "price_traits": {"liquidity_profile": "liquid", "volatility_profile": "high", "quality_bias": 0.06, "growth_bias": 0.34, "risk_bias": 0.18, "retail_attention_bias": 0.30, "event_sensitivity": 0.42},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "infra", "target_subsector": "fiber_network", "strength": 0.44, "visibility": "semi_public"},
+        {"type": "supplier", "target_sector": "finance", "target_subsector": "digital_banking", "strength": 0.32, "visibility": "private"}
+      ],
+      "story_hooks": ["data_center_expansion", "enterprise_contract", "power_cost_pressure", "cybersecurity_certification"]
+    },
+    {
+      "id": "pasar_digital_prima",
+      "ticker": "PDGP",
+      "name": "Pasar Digital Prima",
+      "sector": "tech",
+      "subsector": "consumer_platform",
+      "business_summary": "Marketplace and merchant tools platform focused on local sellers, neighborhood commerce, and transaction services.",
+      "moat_tags": ["merchant_network", "transaction_data", "consumer_habit"],
+      "commodity_exposures": {"fuel": -0.12},
+      "macro_exposures": {"digital_adoption": 0.70, "consumer_confidence": 0.46, "interest_rate": -0.22, "employment": 0.28},
+      "price_traits": {"liquidity_profile": "liquid", "volatility_profile": "very_high", "quality_bias": -0.08, "growth_bias": 0.42, "risk_bias": 0.30, "retail_attention_bias": 0.44, "event_sensitivity": 0.52},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "finance", "target_subsector": "digital_payments", "strength": 0.40, "visibility": "public"},
+        {"type": "partner", "target_sector": "consumer", "target_subsector": "modern_retail", "strength": 0.28, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["take_rate_improvement", "user_growth_slowdown", "merchant_financing_launch", "marketing_spend_reset"]
+    },
+    {
+      "id": "bayar_cepat_indonesia",
+      "ticker": "BYCI",
+      "name": "Bayar Cepat Indonesia",
+      "sector": "tech",
+      "subsector": "payments",
+      "business_summary": "Payment gateway and wallet infrastructure provider connected to merchants, banks, and consumer apps.",
+      "moat_tags": ["merchant_acceptance", "bank_integrations", "fraud_models"],
+      "commodity_exposures": {},
+      "macro_exposures": {"digital_adoption": 0.68, "consumer_confidence": 0.32, "interest_rate": -0.12, "regulatory_support": 0.20},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": 0.02, "growth_bias": 0.34, "risk_bias": 0.20, "retail_attention_bias": 0.28, "event_sensitivity": 0.40},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "consumer", "target_subsector": "modern_retail", "strength": 0.38, "visibility": "public"},
+        {"type": "partner", "target_sector": "finance", "target_subsector": "banking", "strength": 0.36, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["merchant_volume_growth", "fraud_loss_spike", "bank_partnership", "regulatory_license"]
+    },
+    {
+      "id": "sistem_karya_siber",
+      "ticker": "SKSI",
+      "name": "Sistem Karya Siber",
+      "sector": "tech",
+      "subsector": "enterprise_software",
+      "business_summary": "Enterprise workflow and cybersecurity software provider with subscription and implementation revenue.",
+      "moat_tags": ["switching_cost", "domain_expertise", "recurring_revenue"],
+      "commodity_exposures": {},
+      "macro_exposures": {"digital_adoption": 0.60, "government_spending": 0.24, "fx": -0.10, "interest_rate": -0.12},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": 0.12, "growth_bias": 0.28, "risk_bias": 0.10, "retail_attention_bias": 0.18, "event_sensitivity": 0.34},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "industrial", "target_subsector": "factory_automation", "strength": 0.30, "visibility": "semi_public"},
+        {"type": "supplier", "target_sector": "finance", "target_subsector": "banking", "strength": 0.24, "visibility": "private"}
+      ],
+      "story_hooks": ["subscription_mix_shift", "large_enterprise_win", "implementation_delay", "cyber_incident_response"]
+    },
+    {
+      "id": "ritel_ai_solusi",
+      "ticker": "RAIS",
+      "name": "Ritel AI Solusi",
+      "sector": "tech",
+      "subsector": "retail_analytics",
+      "business_summary": "Retail analytics and inventory optimization vendor selling AI-assisted demand forecasting tools.",
+      "moat_tags": ["data_models", "retail_domain_knowledge", "integration_stickiness"],
+      "commodity_exposures": {},
+      "macro_exposures": {"digital_adoption": 0.58, "consumer_confidence": 0.22, "interest_rate": -0.18, "capex_cycle": 0.20},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "very_high", "quality_bias": -0.02, "growth_bias": 0.38, "risk_bias": 0.24, "retail_attention_bias": 0.34, "event_sensitivity": 0.46},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "consumer", "target_subsector": "modern_retail", "strength": 0.34, "visibility": "private"},
+        {"type": "competitor", "target_sector": "tech", "target_subsector": "enterprise_software", "strength": 0.24, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["ai_contract_hype", "pilot_conversion", "cash_burn_warning", "retail_data_partnership"]
+    },
+    {
+      "id": "menara_signal_nusantara",
+      "ticker": "MSIN",
+      "name": "Menara Signal Nusantara",
+      "sector": "infra",
+      "subsector": "telecom_towers",
+      "business_summary": "Telecom tower owner with long-term tenant leases and selective fiber backhaul expansion.",
+      "moat_tags": ["tower_locations", "long_term_contracts", "tenant_stickiness"],
+      "commodity_exposures": {"steel": -0.12, "electricity": -0.08},
+      "macro_exposures": {"digital_adoption": 0.42, "interest_rate": -0.34, "infrastructure_budget": 0.20, "consumer_confidence": 0.08},
+      "price_traits": {"liquidity_profile": "liquid", "volatility_profile": "low", "quality_bias": 0.24, "growth_bias": 0.08, "risk_bias": -0.06, "retail_attention_bias": 0.08, "event_sensitivity": 0.18},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "tech", "target_subsector": "cloud_infrastructure", "strength": 0.20, "visibility": "semi_public"},
+        {"type": "partner", "target_sector": "infra", "target_subsector": "fiber_network", "strength": 0.38, "visibility": "public"}
+      ],
+      "story_hooks": ["tenant_addition", "tower_sale_leaseback", "rate_refinancing", "fiber_backhaul_expansion"]
+    },
+    {
+      "id": "jalan_tol_mandiri",
+      "ticker": "JALN",
+      "name": "Jalan Tol Mandiri",
+      "sector": "infra",
+      "subsector": "toll_roads",
+      "business_summary": "Toll road concession operator with mature routes, new extensions, and regulated tariff adjustments.",
+      "moat_tags": ["concession_rights", "traffic_density", "tariff_framework"],
+      "commodity_exposures": {"asphalt": -0.18, "fuel": -0.06},
+      "macro_exposures": {"domestic_demand": 0.28, "interest_rate": -0.40, "infrastructure_budget": 0.28, "urban_mobility": 0.46},
+      "price_traits": {"liquidity_profile": "liquid", "volatility_profile": "moderate", "quality_bias": 0.18, "growth_bias": 0.04, "risk_bias": 0.02, "retail_attention_bias": 0.08, "event_sensitivity": 0.22},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "basicindustry", "target_subsector": "cement", "strength": 0.28, "visibility": "semi_public"},
+        {"type": "partner", "target_sector": "finance", "target_subsector": "project_finance", "strength": 0.34, "visibility": "private"}
+      ],
+      "story_hooks": ["tariff_adjustment", "traffic_recovery", "new_concession", "debt_refinancing"]
+    },
+    {
+      "id": "fiber_kota_prima",
+      "ticker": "FBKP",
+      "name": "Fiber Kota Prima",
+      "sector": "infra",
+      "subsector": "fiber_network",
+      "business_summary": "Urban fiber network and broadband infrastructure owner serving data centers, towers, and enterprises.",
+      "moat_tags": ["right_of_way", "metro_network_density", "enterprise_contracts"],
+      "commodity_exposures": {"copper": -0.10, "electricity": -0.06},
+      "macro_exposures": {"digital_adoption": 0.54, "interest_rate": -0.30, "infrastructure_budget": 0.20, "fx": -0.08},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.14, "growth_bias": 0.18, "risk_bias": 0.04, "retail_attention_bias": 0.12, "event_sensitivity": 0.28},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "tech", "target_subsector": "cloud_infrastructure", "strength": 0.46, "visibility": "semi_public"},
+        {"type": "partner", "target_sector": "infra", "target_subsector": "telecom_towers", "strength": 0.36, "visibility": "public"}
+      ],
+      "story_hooks": ["enterprise_fiber_contract", "metro_rollout", "capex_overrun", "data_center_backhaul"]
+    },
+    {
+      "id": "tirta_power_utility",
+      "ticker": "TIRP",
+      "name": "Tirta Power Utility",
+      "sector": "infra",
+      "subsector": "power_utility",
+      "business_summary": "Captive power, water treatment, and utility service operator for industrial estates and municipalities.",
+      "moat_tags": ["utility_contracts", "regulated_service", "industrial_estate_access"],
+      "commodity_exposures": {"coal": -0.22, "natural_gas": -0.18, "electricity": 0.20},
+      "macro_exposures": {"industrial_activity": 0.34, "policy_support": 0.30, "interest_rate": -0.28, "infrastructure_budget": 0.30},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.18, "growth_bias": 0.08, "risk_bias": -0.02, "retail_attention_bias": 0.08, "event_sensitivity": 0.24},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "energy", "target_subsector": "gas_distribution", "strength": 0.36, "visibility": "public"},
+        {"type": "supplier", "target_sector": "basicindustry", "target_subsector": "nickel_smelter", "strength": 0.28, "visibility": "private"}
+      ],
+      "story_hooks": ["utility_tariff_reset", "industrial_customer_win", "fuel_mix_shift", "regulated_margin_review"]
+    },
+    {
+      "id": "pelabuhan_nusa",
+      "ticker": "PLBN",
+      "name": "Pelabuhan Nusa",
+      "sector": "infra",
+      "subsector": "port_services",
+      "business_summary": "Port terminal and cargo handling operator with bulk, container, and warehousing revenue streams.",
+      "moat_tags": ["berth_access", "regional_port_position", "cargo_relationships"],
+      "commodity_exposures": {"coal": 0.18, "cpo": 0.16, "fuel": -0.10},
+      "macro_exposures": {"global_trade": 0.54, "commodity_cycle": 0.38, "infrastructure_budget": 0.18, "fx": 0.10},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.10, "growth_bias": 0.10, "risk_bias": 0.06, "retail_attention_bias": 0.10, "event_sensitivity": 0.30},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "transport", "target_subsector": "bulk_shipping", "strength": 0.40, "visibility": "public"},
+        {"type": "customer", "target_sector": "energy", "target_subsector": "coal_mining", "strength": 0.34, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["cargo_volume_recovery", "terminal_expansion", "tariff_negotiation", "export_bottleneck"]
+    },
+    {
+      "id": "logistik_rantai_dingin",
+      "ticker": "LRDI",
+      "name": "Logistik Rantai Dingin",
+      "sector": "transport",
+      "subsector": "cold_chain_logistics",
+      "business_summary": "Cold-chain logistics provider for dairy, seafood, pharmaceuticals, and fresh grocery customers.",
+      "moat_tags": ["temperature_control", "specialized_fleet", "customer_stickiness"],
+      "commodity_exposures": {"fuel": -0.34, "electricity": -0.14},
+      "macro_exposures": {"domestic_demand": 0.42, "healthcare_spending": 0.22, "consumer_confidence": 0.26, "interest_rate": -0.20},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "moderate", "quality_bias": 0.08, "growth_bias": 0.16, "risk_bias": 0.10, "retail_attention_bias": 0.12, "event_sensitivity": 0.28},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "noncyclical", "target_subsector": "dairy_nutrition", "strength": 0.44, "visibility": "private"},
+        {"type": "supplier", "target_sector": "health", "target_subsector": "pharmaceutical_distribution", "strength": 0.34, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["cold_storage_expansion", "fuel_margin_pressure", "pharma_contract", "fleet_utilization_recovery"]
+    },
+    {
+      "id": "kapal_bulk_sentosa",
+      "ticker": "KBLK",
+      "name": "Kapal Bulk Sentosa",
+      "sector": "transport",
+      "subsector": "bulk_shipping",
+      "business_summary": "Bulk carrier operator hauling coal, nickel ore, and industrial commodities across domestic and export routes.",
+      "moat_tags": ["fleet_availability", "cargo_relationships", "route_experience"],
+      "commodity_exposures": {"coal": 0.34, "nickel": 0.18, "fuel": -0.38},
+      "macro_exposures": {"global_trade": 0.52, "commodity_cycle": 0.46, "fx": 0.08, "interest_rate": -0.18},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": -0.08, "growth_bias": 0.08, "risk_bias": 0.28, "retail_attention_bias": 0.20, "event_sensitivity": 0.42},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "energy", "target_subsector": "coal_mining", "strength": 0.46, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "industrial", "target_subsector": "marine_engineering", "strength": 0.24, "visibility": "private"}
+      ],
+      "story_hooks": ["freight_rate_spike", "dry_dock_delay", "long_term_charter", "fuel_hedge_loss"]
+    },
+    {
+      "id": "armada_kurir_nusantara",
+      "ticker": "AKRN",
+      "name": "Armada Kurir Nusantara",
+      "sector": "transport",
+      "subsector": "last_mile_delivery",
+      "business_summary": "Courier and last-mile delivery network serving e-commerce, grocery, and SME merchant customers.",
+      "moat_tags": ["route_density", "merchant_integrations", "sorting_network"],
+      "commodity_exposures": {"fuel": -0.36},
+      "macro_exposures": {"digital_adoption": 0.42, "consumer_confidence": 0.32, "employment": 0.18, "interest_rate": -0.14},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": -0.06, "growth_bias": 0.22, "risk_bias": 0.20, "retail_attention_bias": 0.26, "event_sensitivity": 0.38},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "tech", "target_subsector": "consumer_platform", "strength": 0.38, "visibility": "semi_public"},
+        {"type": "supplier", "target_sector": "consumer", "target_subsector": "grocery_distribution", "strength": 0.30, "visibility": "private"}
+      ],
+      "story_hooks": ["parcel_volume_growth", "route_cost_reset", "merchant_contract", "failed_hub_expansion"]
+    },
+    {
+      "id": "tanker_samudra",
+      "ticker": "TSAM",
+      "name": "Tanker Samudra",
+      "sector": "transport",
+      "subsector": "tanker_shipping",
+      "business_summary": "Oil and chemical tanker operator with domestic cabotage routes and spot-charter exposure.",
+      "moat_tags": ["specialized_fleet", "safety_record", "cabotage_access"],
+      "commodity_exposures": {"crude_oil": 0.24, "fuel": -0.30, "natural_gas": 0.08},
+      "macro_exposures": {"energy_demand": 0.46, "global_trade": 0.34, "fx": 0.10, "interest_rate": -0.20},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": -0.04, "growth_bias": 0.10, "risk_bias": 0.24, "retail_attention_bias": 0.16, "event_sensitivity": 0.38},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "industrial", "target_subsector": "marine_engineering", "strength": 0.28, "visibility": "private"},
+        {"type": "supplier", "target_sector": "energy", "target_subsector": "oil_gas_upstream", "strength": 0.32, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["spot_rate_rally", "safety_incident", "fleet_renewal", "charter_contract_win"]
+    },
+    {
+      "id": "medika_klinik_prima",
+      "ticker": "MDKP",
+      "name": "Medika Klinik Prima",
+      "sector": "health",
+      "subsector": "clinic_network",
+      "business_summary": "Outpatient clinic operator with occupational health, diagnostics, and chronic care services.",
+      "moat_tags": ["doctor_network", "clinic_density", "trusted_care_brand"],
+      "commodity_exposures": {},
+      "macro_exposures": {"healthcare_spending": 0.58, "employment": 0.22, "consumer_confidence": 0.16, "interest_rate": -0.12},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.22, "growth_bias": 0.18, "risk_bias": -0.10, "retail_attention_bias": 0.14, "event_sensitivity": 0.24},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "property", "target_subsector": "township_development", "strength": 0.20, "visibility": "semi_public"},
+        {"type": "partner", "target_sector": "noncyclical", "target_subsector": "dairy_nutrition", "strength": 0.18, "visibility": "private"}
+      ],
+      "story_hooks": ["clinic_rollout", "patient_volume_growth", "doctor_retention_issue", "insurance_partnership"]
+    },
+    {
+      "id": "farma_generik_nusa",
+      "ticker": "FGNX",
+      "name": "Farma Generik Nusa",
+      "sector": "health",
+      "subsector": "pharmaceutical_distribution",
+      "business_summary": "Generic medicine manufacturer and distributor serving hospitals, pharmacies, and public procurement channels.",
+      "moat_tags": ["regulatory_license", "distribution_reach", "procurement_access"],
+      "commodity_exposures": {"crude_oil": -0.10},
+      "macro_exposures": {"healthcare_spending": 0.60, "government_spending": 0.34, "fx": -0.30, "domestic_demand": 0.18},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.14, "growth_bias": 0.12, "risk_bias": 0.02, "retail_attention_bias": 0.12, "event_sensitivity": 0.28},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "transport", "target_subsector": "cold_chain_logistics", "strength": 0.30, "visibility": "semi_public"},
+        {"type": "partner", "target_sector": "finance", "target_subsector": "working_capital_finance", "strength": 0.20, "visibility": "private"}
+      ],
+      "story_hooks": ["tender_win", "api_import_pressure", "factory_compliance_review", "new_generic_launch"]
+    },
+    {
+      "id": "diagnostik_sehat",
+      "ticker": "DIGN",
+      "name": "Diagnostik Sehat",
+      "sector": "health",
+      "subsector": "diagnostics_laboratory",
+      "business_summary": "Diagnostics laboratory chain offering routine tests, specialist panels, and corporate health screening.",
+      "moat_tags": ["lab_network", "doctor_referrals", "test_menu_depth"],
+      "commodity_exposures": {},
+      "macro_exposures": {"healthcare_spending": 0.54, "employment": 0.18, "consumer_confidence": 0.18, "digital_adoption": 0.18},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "moderate", "quality_bias": 0.18, "growth_bias": 0.16, "risk_bias": -0.04, "retail_attention_bias": 0.10, "event_sensitivity": 0.24},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "tech", "target_subsector": "payments", "strength": 0.18, "visibility": "public"},
+        {"type": "customer", "target_sector": "health", "target_subsector": "clinic_network", "strength": 0.28, "visibility": "private"}
+      ],
+      "story_hooks": ["corporate_screening_contract", "lab_accreditation", "test_volume_normalization", "equipment_import_delay"]
+    },
+    {
+      "id": "alat_medis_presisi",
+      "ticker": "AMPR",
+      "name": "Alat Medis Presisi",
+      "sector": "health",
+      "subsector": "medical_devices",
+      "business_summary": "Medical equipment distributor and local assembly partner for hospitals, clinics, and diagnostic centers.",
+      "moat_tags": ["vendor_relationships", "service_engineers", "hospital_access"],
+      "commodity_exposures": {"copper": -0.06},
+      "macro_exposures": {"healthcare_spending": 0.50, "government_spending": 0.30, "fx": -0.36, "interest_rate": -0.12},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": 0.04, "growth_bias": 0.18, "risk_bias": 0.14, "retail_attention_bias": 0.12, "event_sensitivity": 0.32},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "health", "target_subsector": "clinic_network", "strength": 0.30, "visibility": "private"},
+        {"type": "supplier", "target_sector": "health", "target_subsector": "diagnostics_laboratory", "strength": 0.34, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["hospital_equipment_order", "fx_margin_pressure", "assembly_localization", "service_contract_backlog"]
+    },
+    {
+      "id": "bank_orang_indonesia",
+      "ticker": "BORI",
+      "name": "Bank Orang Indonesia",
+      "sector": "finance",
+      "subsector": "banking",
+      "business_summary": "Mid-sized commercial bank with SME lending, deposit franchise, and growing transaction banking services.",
+      "moat_tags": ["deposit_franchise", "sme_relationships", "credit_underwriting"],
+      "commodity_exposures": {},
+      "macro_exposures": {"interest_rate": 0.24, "credit_cycle": 0.58, "employment": 0.24, "property_cycle": 0.18},
+      "price_traits": {"liquidity_profile": "liquid", "volatility_profile": "moderate", "quality_bias": 0.20, "growth_bias": 0.10, "risk_bias": 0.04, "retail_attention_bias": 0.12, "event_sensitivity": 0.26},
+      "relationship_hooks": [
+        {"type": "lender", "target_sector": "property", "target_subsector": "township_development", "strength": 0.32, "visibility": "private"},
+        {"type": "lender", "target_sector": "industrial", "target_subsector": "equipment_fabrication", "strength": 0.24, "visibility": "private"}
+      ],
+      "story_hooks": ["asset_quality_improvement", "loan_growth_acceleration", "deposit_cost_pressure", "digital_banking_push"]
+    },
+    {
+      "id": "multi_finance_sejahtera",
+      "ticker": "MFSJ",
+      "name": "Multi Finance Sejahtera",
+      "sector": "finance",
+      "subsector": "consumer_finance",
+      "business_summary": "Vehicle, equipment, and multipurpose financing company with dealer relationships and securitization funding.",
+      "moat_tags": ["dealer_network", "collection_system", "funding_access"],
+      "commodity_exposures": {},
+      "macro_exposures": {"interest_rate": -0.42, "consumer_confidence": 0.42, "employment": 0.34, "credit_cycle": 0.54},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": 0.02, "growth_bias": 0.14, "risk_bias": 0.22, "retail_attention_bias": 0.14, "event_sensitivity": 0.34},
+      "relationship_hooks": [
+        {"type": "lender", "target_sector": "industrial", "target_subsector": "heavy_equipment_distribution", "strength": 0.34, "visibility": "private"},
+        {"type": "partner", "target_sector": "consumer", "target_subsector": "modern_retail", "strength": 0.20, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["booking_recovery", "npl_spike", "funding_cost_reset", "dealer_partnership"]
+    },
+    {
+      "id": "asuransi_nusa",
+      "ticker": "ASNS",
+      "name": "Asuransi Nusa",
+      "sector": "finance",
+      "subsector": "insurance",
+      "business_summary": "General insurance provider covering motor, property, marine cargo, health riders, and corporate policies.",
+      "moat_tags": ["risk_pricing", "agent_network", "corporate_accounts"],
+      "commodity_exposures": {},
+      "macro_exposures": {"interest_rate": 0.18, "consumer_confidence": 0.20, "property_cycle": 0.18, "global_trade": 0.14},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "moderate", "quality_bias": 0.12, "growth_bias": 0.06, "risk_bias": 0.04, "retail_attention_bias": 0.06, "event_sensitivity": 0.20},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "transport", "target_subsector": "tanker_shipping", "strength": 0.22, "visibility": "private"},
+        {"type": "partner", "target_sector": "property", "target_subsector": "mall_reit", "strength": 0.18, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["combined_ratio_improvement", "claim_spike", "new_distribution_channel", "investment_yield_tailwind"]
+    },
+    {
+      "id": "dompet_digital_capital",
+      "ticker": "DDCA",
+      "name": "Dompet Digital Capital",
+      "sector": "finance",
+      "subsector": "digital_payments",
+      "business_summary": "Digital wallet, merchant acquiring, and embedded finance operator with a regulated payment license.",
+      "moat_tags": ["license", "merchant_network", "transaction_data"],
+      "commodity_exposures": {},
+      "macro_exposures": {"digital_adoption": 0.64, "consumer_confidence": 0.30, "interest_rate": -0.14, "regulatory_support": 0.20},
+      "price_traits": {"liquidity_profile": "liquid", "volatility_profile": "high", "quality_bias": -0.02, "growth_bias": 0.32, "risk_bias": 0.20, "retail_attention_bias": 0.34, "event_sensitivity": 0.40},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "tech", "target_subsector": "payments", "strength": 0.44, "visibility": "public"},
+        {"type": "partner", "target_sector": "consumer", "target_subsector": "food_service", "strength": 0.28, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["transaction_volume_growth", "license_review", "embedded_lending_launch", "cashback_burn_reduction"]
+    },
+    {
+      "id": "kota_mandiri_property",
+      "ticker": "KOMP",
+      "name": "Kota Mandiri Property",
+      "sector": "property",
+      "subsector": "township_development",
+      "business_summary": "Township developer with residential clusters, shophouses, and landbank along outer-city growth corridors.",
+      "moat_tags": ["landbank", "masterplan_control", "presales_network"],
+      "commodity_exposures": {"cement": -0.18, "steel": -0.16},
+      "macro_exposures": {"interest_rate": -0.58, "property_cycle": 0.70, "consumer_confidence": 0.32, "infrastructure_budget": 0.24},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": 0.02, "growth_bias": 0.12, "risk_bias": 0.24, "retail_attention_bias": 0.18, "event_sensitivity": 0.36},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "basicindustry", "target_subsector": "cement", "strength": 0.40, "visibility": "semi_public"},
+        {"type": "borrower", "target_sector": "finance", "target_subsector": "banking", "strength": 0.32, "visibility": "private"}
+      ],
+      "story_hooks": ["presales_recovery", "land_sale", "project_delay", "interest_rate_headwind"]
+    },
+    {
+      "id": "griya_logistik_estate",
+      "ticker": "GRLE",
+      "name": "Griya Logistik Estate",
+      "sector": "property",
+      "subsector": "logistics_estate",
+      "business_summary": "Industrial and logistics estate developer with warehouse parks near ports, toll corridors, and airport links.",
+      "moat_tags": ["strategic_landbank", "tenant_pipeline", "infrastructure_access"],
+      "commodity_exposures": {"cement": -0.12, "steel": -0.16},
+      "macro_exposures": {"global_trade": 0.34, "infrastructure_budget": 0.36, "interest_rate": -0.46, "property_cycle": 0.42},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": 0.06, "growth_bias": 0.18, "risk_bias": 0.22, "retail_attention_bias": 0.14, "event_sensitivity": 0.34},
+      "relationship_hooks": [
+        {"type": "landlord", "target_sector": "transport", "target_subsector": "last_mile_delivery", "strength": 0.34, "visibility": "semi_public"},
+        {"type": "landlord", "target_sector": "consumer", "target_subsector": "grocery_distribution", "strength": 0.26, "visibility": "private"}
+      ],
+      "story_hooks": ["anchor_tenant_win", "warehouse_phase_launch", "land_revaluation", "construction_cost_pressure"]
+    },
+    {
+      "id": "mall_regency_prima",
+      "ticker": "MREG",
+      "name": "Mall Regency Prima",
+      "sector": "property",
+      "subsector": "mall_reit",
+      "business_summary": "Mall and mixed-use retail asset owner focused on tenant curation, occupancy recovery, and recurring rental income.",
+      "moat_tags": ["location_quality", "tenant_mix", "recurring_rent"],
+      "commodity_exposures": {"electricity": -0.12},
+      "macro_exposures": {"consumer_confidence": 0.58, "urban_mobility": 0.52, "interest_rate": -0.36, "property_cycle": 0.30},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.12, "growth_bias": 0.02, "risk_bias": 0.06, "retail_attention_bias": 0.12, "event_sensitivity": 0.24},
+      "relationship_hooks": [
+        {"type": "landlord", "target_sector": "consumer", "target_subsector": "food_service", "strength": 0.34, "visibility": "semi_public"},
+        {"type": "partner", "target_sector": "finance", "target_subsector": "insurance", "strength": 0.16, "visibility": "private"}
+      ],
+      "story_hooks": ["occupancy_recovery", "tenant_mix_upgrade", "rent_relief_pressure", "asset_injection"]
+    },
+    {
+      "id": "wisata_kuliner_nusantara",
+      "ticker": "WIKN",
+      "name": "Wisata Kuliner Nusantara",
+      "sector": "consumer",
+      "subsector": "tourism_food_service",
+      "business_summary": "Destination restaurant and travel-area food court operator with airport, toll-road, and resort-city locations.",
+      "moat_tags": ["site_access", "tourism_brand", "tenant_curation"],
+      "commodity_exposures": {"coffee": -0.12, "sugar": -0.10, "electricity": -0.14},
+      "macro_exposures": {"tourism_flow": 0.68, "consumer_confidence": 0.44, "urban_mobility": 0.38, "fx": 0.12},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": 0.04, "growth_bias": 0.20, "risk_bias": 0.18, "retail_attention_bias": 0.22, "event_sensitivity": 0.34},
+      "relationship_hooks": [
+        {"type": "tenant", "target_sector": "property", "target_subsector": "mall_reit", "strength": 0.30, "visibility": "semi_public"},
+        {"type": "partner", "target_sector": "transport", "target_subsector": "airport_services", "strength": 0.28, "visibility": "private"}
+      ],
+      "story_hooks": ["tourism_rebound", "new_location_pipeline", "rental_cost_pressure", "franchise_format_launch"]
+    },
+    {
+      "id": "protein_nusantara",
+      "ticker": "PTIN",
+      "name": "Protein Nusantara",
+      "sector": "noncyclical",
+      "subsector": "poultry_integrator",
+      "business_summary": "Integrated poultry producer with feed mills, breeding farms, processing plants, and branded frozen protein products.",
+      "moat_tags": ["feed_scale", "cold_chain_access", "breeding_program"],
+      "commodity_exposures": {"corn": -0.34, "soybean": -0.28, "fuel": -0.10},
+      "macro_exposures": {"domestic_demand": 0.50, "consumer_confidence": 0.30, "fx": -0.22, "employment": 0.18},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.10, "growth_bias": 0.12, "risk_bias": 0.08, "retail_attention_bias": 0.12, "event_sensitivity": 0.26},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "consumer", "target_subsector": "food_service", "strength": 0.34, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "transport", "target_subsector": "cold_chain_logistics", "strength": 0.36, "visibility": "private"}
+      ],
+      "story_hooks": ["feed_margin_recovery", "protein_demand_shift", "disease_outbreak_risk", "branded_product_push"]
+    },
+    {
+      "id": "panas_bumi_lestari",
+      "ticker": "PABL",
+      "name": "Panas Bumi Lestari",
+      "sector": "energy",
+      "subsector": "geothermal_power",
+      "business_summary": "Geothermal power developer and operator with long-term power purchase agreements and exploration permits.",
+      "moat_tags": ["resource_concession", "ppa_visibility", "technical_expertise"],
+      "commodity_exposures": {"electricity": 0.42, "coal": -0.06, "steel": -0.10},
+      "macro_exposures": {"energy_policy": 0.60, "infrastructure_budget": 0.28, "interest_rate": -0.32, "carbon_policy": 0.34},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.20, "growth_bias": 0.14, "risk_bias": 0.02, "retail_attention_bias": 0.10, "event_sensitivity": 0.30},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "infra", "target_subsector": "utility_water_power", "strength": 0.30, "visibility": "public"},
+        {"type": "borrower", "target_sector": "finance", "target_subsector": "banking", "strength": 0.22, "visibility": "private"}
+      ],
+      "story_hooks": ["ppa_tariff_reset", "new_well_success", "exploration_delay", "carbon_credit_tailwind"]
+    },
+    {
+      "id": "tembaga_kabel_prima",
+      "ticker": "TKBP",
+      "name": "Tembaga Kabel Prima",
+      "sector": "basicindustry",
+      "subsector": "copper_processing",
+      "business_summary": "Copper rod, wire, and specialty cable processor serving grid upgrades, data centers, and industrial electrification projects.",
+      "moat_tags": ["technical_specification", "customer_certification", "working_capital_discipline"],
+      "commodity_exposures": {"copper": 0.36, "electricity": -0.20, "fuel": -0.08},
+      "macro_exposures": {"infrastructure_budget": 0.42, "industrial_activity": 0.36, "digital_adoption": 0.22, "fx": -0.16},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": 0.06, "growth_bias": 0.16, "risk_bias": 0.18, "retail_attention_bias": 0.14, "event_sensitivity": 0.34},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "infra", "target_subsector": "fiber_network", "strength": 0.32, "visibility": "semi_public"},
+        {"type": "supplier", "target_sector": "tech", "target_subsector": "data_center", "strength": 0.30, "visibility": "private"}
+      ],
+      "story_hooks": ["grid_upgrade_order", "copper_inventory_gain", "working_capital_squeeze", "data_center_cable_contract"]
+    },
+    {
+      "id": "satelit_data_nusantara",
+      "ticker": "SDNX",
+      "name": "Satelit Data Nusantara",
+      "sector": "tech",
+      "subsector": "satellite_broadband",
+      "business_summary": "Satellite broadband and managed connectivity provider for remote enterprises, maritime routes, and government service areas.",
+      "moat_tags": ["spectrum_access", "coverage_footprint", "enterprise_contracts"],
+      "commodity_exposures": {"fuel": -0.06},
+      "macro_exposures": {"digital_adoption": 0.58, "government_spending": 0.34, "global_trade": 0.16, "fx": -0.28},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": 0.02, "growth_bias": 0.30, "risk_bias": 0.26, "retail_attention_bias": 0.24, "event_sensitivity": 0.42},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "transport", "target_subsector": "maritime_logistics", "strength": 0.32, "visibility": "semi_public"},
+        {"type": "partner", "target_sector": "infra", "target_subsector": "fiber_network", "strength": 0.26, "visibility": "private"}
+      ],
+      "story_hooks": ["capacity_launch", "government_connectivity_contract", "satellite_delay", "enterprise_churn_risk"]
+    },
+    {
+      "id": "rel_kargo_nusantara",
+      "ticker": "RKGN",
+      "name": "Rel Kargo Nusantara",
+      "sector": "transport",
+      "subsector": "rail_freight",
+      "business_summary": "Rail freight operator moving coal, minerals, containers, and staple goods across industrial corridors.",
+      "moat_tags": ["right_of_way", "route_density", "bulk_customer_contracts"],
+      "commodity_exposures": {"coal": 0.22, "nickel": 0.12, "fuel": -0.10, "steel": -0.08},
+      "macro_exposures": {"industrial_activity": 0.44, "global_trade": 0.32, "infrastructure_budget": 0.28, "logistics_cost": 0.18},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.12, "growth_bias": 0.10, "risk_bias": 0.08, "retail_attention_bias": 0.10, "event_sensitivity": 0.28},
+      "relationship_hooks": [
+        {"type": "carrier", "target_sector": "energy", "target_subsector": "coal_mining", "strength": 0.40, "visibility": "public"},
+        {"type": "carrier", "target_sector": "basicindustry", "target_subsector": "nickel_processing", "strength": 0.28, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["volume_contract_win", "track_capacity_upgrade", "derailment_disruption", "commodity_volume_swing"]
+    },
+    {
+      "id": "biotek_vaksin_nusa",
+      "ticker": "BVKN",
+      "name": "Biotek Vaksin Nusa",
+      "sector": "health",
+      "subsector": "biotechnology",
+      "business_summary": "Vaccine fill-finish, biologics research, and specialty distribution company serving public and private health programs.",
+      "moat_tags": ["regulatory_license", "cold_chain_quality", "research_pipeline"],
+      "commodity_exposures": {"electricity": -0.08},
+      "macro_exposures": {"healthcare_spending": 0.64, "government_spending": 0.42, "fx": -0.34, "regulatory_support": 0.24},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": 0.04, "growth_bias": 0.28, "risk_bias": 0.30, "retail_attention_bias": 0.26, "event_sensitivity": 0.46},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "health", "target_subsector": "pharmaceutical_distribution", "strength": 0.34, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "transport", "target_subsector": "cold_chain_logistics", "strength": 0.30, "visibility": "private"}
+      ],
+      "story_hooks": ["clinical_trial_readout", "public_tender_win", "batch_quality_issue", "technology_transfer_deal"]
+    },
+    {
+      "id": "sekuritas_rakyat_digital",
+      "ticker": "SRDG",
+      "name": "Sekuritas Rakyat Digital",
+      "sector": "finance",
+      "subsector": "digital_brokerage",
+      "business_summary": "Retail brokerage and wealth platform with mobile trading, mutual fund distribution, and investor education products.",
+      "moat_tags": ["retail_user_base", "license", "education_funnel"],
+      "commodity_exposures": {},
+      "macro_exposures": {"market_liquidity": 0.70, "retail_participation": 0.66, "interest_rate": -0.18, "digital_adoption": 0.36},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": -0.04, "growth_bias": 0.26, "risk_bias": 0.28, "retail_attention_bias": 0.42, "event_sensitivity": 0.44},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "tech", "target_subsector": "payments", "strength": 0.34, "visibility": "public"},
+        {"type": "partner", "target_sector": "finance", "target_subsector": "digital_payments", "strength": 0.28, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["retail_trading_boom", "fee_compression", "new_product_license", "platform_outage"]
+    },
+    {
+      "id": "hotel_resort_sentosa",
+      "ticker": "HRSN",
+      "name": "Hotel Resort Sentosa",
+      "sector": "property",
+      "subsector": "hospitality_property",
+      "business_summary": "Hotel and resort asset owner with managed properties in business districts, beaches, and pilgrimage travel corridors.",
+      "moat_tags": ["location_quality", "operator_relationships", "room_inventory"],
+      "commodity_exposures": {"electricity": -0.16, "fuel": -0.08},
+      "macro_exposures": {"tourism_flow": 0.72, "consumer_confidence": 0.36, "fx": 0.18, "interest_rate": -0.34},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": 0.02, "growth_bias": 0.12, "risk_bias": 0.24, "retail_attention_bias": 0.18, "event_sensitivity": 0.38},
+      "relationship_hooks": [
+        {"type": "landlord", "target_sector": "consumer", "target_subsector": "tourism_food_service", "strength": 0.34, "visibility": "semi_public"},
+        {"type": "borrower", "target_sector": "finance", "target_subsector": "banking", "strength": 0.22, "visibility": "private"}
+      ],
+      "story_hooks": ["occupancy_rebound", "room_rate_recovery", "renovation_capex", "travel_restriction_risk"]
+    },
+    {
+      "id": "data_center_estate",
+      "ticker": "DCES",
+      "name": "Data Center Estate",
+      "sector": "property",
+      "subsector": "data_center_estate",
+      "business_summary": "Specialized property platform developing powered shells, cooling capacity, and long-lease data center campuses.",
+      "moat_tags": ["power_access", "landbank", "tenant_precommitment"],
+      "commodity_exposures": {"electricity": -0.34, "copper": -0.12, "steel": -0.10},
+      "macro_exposures": {"digital_adoption": 0.58, "interest_rate": -0.44, "infrastructure_budget": 0.24, "fx": -0.16},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": 0.08, "growth_bias": 0.30, "risk_bias": 0.22, "retail_attention_bias": 0.24, "event_sensitivity": 0.42},
+      "relationship_hooks": [
+        {"type": "landlord", "target_sector": "tech", "target_subsector": "data_center", "strength": 0.44, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "infra", "target_subsector": "utility_water_power", "strength": 0.30, "visibility": "private"}
+      ],
+      "story_hooks": ["hyperscale_prelease", "power_capacity_constraint", "campus_phase_launch", "cooling_cost_pressure"]
+    },
+    {
+      "id": "rare_bumi_mineral",
+      "ticker": "RBUM",
+      "name": "Rare Bumi Mineral",
+      "sector": "basicindustry",
+      "subsector": "rare_earth_processing",
+      "business_summary": "Rare earth concentrate processor developing separation capacity for magnets, batteries, and strategic industrial supply chains.",
+      "moat_tags": ["resource_access", "processing_license", "strategic_customer_pipeline"],
+      "commodity_exposures": {"rare_earth": 0.88, "electricity": -0.22, "fuel": -0.10},
+      "macro_exposures": {"ev_demand": 0.56, "export_policy": 0.42, "industrial_activity": 0.28, "fx": -0.20},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": -0.04, "growth_bias": 0.34, "risk_bias": 0.34, "retail_attention_bias": 0.34, "event_sensitivity": 0.52},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "tech", "target_subsector": "electronics_components", "strength": 0.34, "visibility": "private"},
+        {"type": "partner", "target_sector": "energy", "target_subsector": "battery_materials", "strength": 0.30, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["rare_earth_export_policy", "separation_plant_ramp", "strategic_customer_mou", "processing_license_delay"]
+    },
+    {
+      "id": "silika_surya_material",
+      "ticker": "SSMA",
+      "name": "Silika Surya Material",
+      "sector": "basicindustry",
+      "subsector": "silica_mining",
+      "business_summary": "High-purity silica sand miner and processor supplying glass, solar panel, foundry, and semiconductor material customers.",
+      "moat_tags": ["reserve_quality", "washing_facility", "export_customer_access"],
+      "commodity_exposures": {"silica": 0.82, "fuel": -0.12, "electricity": -0.10},
+      "macro_exposures": {"solar_demand": 0.46, "semiconductor_cycle": 0.34, "property_cycle": 0.20, "global_trade": 0.24},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": 0.02, "growth_bias": 0.26, "risk_bias": 0.24, "retail_attention_bias": 0.24, "event_sensitivity": 0.42},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "tech", "target_subsector": "semiconductor_packaging", "strength": 0.28, "visibility": "private"},
+        {"type": "supplier", "target_sector": "property", "target_subsector": "data_center_estate", "strength": 0.22, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["high_purity_silica_contract", "solar_supply_chain", "export_permit_review", "washing_plant_upgrade"]
+    },
+    {
+      "id": "bank_nusantara_raya",
+      "ticker": "BNRY",
+      "name": "Bank Nusantara Raya",
+      "sector": "finance",
+      "subsector": "large_bank",
+      "business_summary": "Large commercial bank with nationwide deposits, corporate lending, transaction banking, and a deep government payroll franchise.",
+      "moat_tags": ["deposit_scale", "corporate_relationships", "low_cost_funding"],
+      "commodity_exposures": {},
+      "macro_exposures": {"interest_rate": 0.30, "credit_cycle": 0.62, "employment": 0.30, "market_liquidity": 0.24},
+      "price_traits": {"liquidity_profile": "liquid", "volatility_profile": "low", "quality_bias": 0.26, "growth_bias": 0.08, "risk_bias": -0.10, "retail_attention_bias": 0.12, "event_sensitivity": 0.20},
+      "relationship_hooks": [
+        {"type": "lender", "target_sector": "property", "target_subsector": "township_development", "strength": 0.42, "visibility": "private"},
+        {"type": "lender", "target_sector": "energy", "target_subsector": "geothermal_power", "strength": 0.28, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["loan_growth_acceleration", "net_interest_margin_expansion", "asset_quality_improvement", "deposit_cost_pressure"]
+    },
+    {
+      "id": "bank_mega_samudra",
+      "ticker": "BMSA",
+      "name": "Bank Mega Samudra",
+      "sector": "finance",
+      "subsector": "mid_market_bank",
+      "business_summary": "Mid-sized bank focused on SME lending, supply-chain finance, payroll accounts, and selective corporate working capital lines.",
+      "moat_tags": ["sme_relationships", "supply_chain_data", "credit_underwriting"],
+      "commodity_exposures": {},
+      "macro_exposures": {"interest_rate": 0.18, "credit_cycle": 0.58, "industrial_activity": 0.24, "employment": 0.22},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.12, "growth_bias": 0.14, "risk_bias": 0.08, "retail_attention_bias": 0.12, "event_sensitivity": 0.28},
+      "relationship_hooks": [
+        {"type": "lender", "target_sector": "industrial", "target_subsector": "automation_equipment", "strength": 0.30, "visibility": "private"},
+        {"type": "lender", "target_sector": "consumer", "target_subsector": "grocery_distribution", "strength": 0.24, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["sme_loan_growth", "credit_cost_normalization", "funding_cost_reset", "supply_chain_finance_launch"]
+    },
+    {
+      "id": "bank_desa_sejahtera",
+      "ticker": "BDSJ",
+      "name": "Bank Desa Sejahtera",
+      "sector": "finance",
+      "subsector": "small_bank",
+      "business_summary": "Small community bank serving micro merchants, rural deposits, payroll clients, and local working capital borrowers.",
+      "moat_tags": ["local_relationships", "branch_density", "micro_merchant_access"],
+      "commodity_exposures": {},
+      "macro_exposures": {"interest_rate": -0.26, "employment": 0.34, "domestic_demand": 0.28, "credit_cycle": 0.46},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": -0.02, "growth_bias": 0.12, "risk_bias": 0.26, "retail_attention_bias": 0.18, "event_sensitivity": 0.34},
+      "relationship_hooks": [
+        {"type": "lender", "target_sector": "noncyclical", "target_subsector": "rice_milling", "strength": 0.24, "visibility": "private"},
+        {"type": "partner", "target_sector": "finance", "target_subsector": "digital_payments", "strength": 0.20, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["microloan_growth", "npl_spike", "branch_efficiency_program", "capital_injection_need"]
+    },
+    {
+      "id": "bank_syariah_harmoni",
+      "ticker": "BSHR",
+      "name": "Bank Syariah Harmoni",
+      "sector": "finance",
+      "subsector": "sharia_bank",
+      "business_summary": "Sharia bank with retail deposits, pilgrimage savings, SME financing, gold-backed products, and halal ecosystem partnerships.",
+      "moat_tags": ["faith_based_deposits", "pilgrimage_savings", "halal_ecosystem"],
+      "commodity_exposures": {"gold": 0.08},
+      "macro_exposures": {"interest_rate": 0.10, "consumer_confidence": 0.28, "employment": 0.24, "regulatory_support": 0.22},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.14, "growth_bias": 0.12, "risk_bias": 0.02, "retail_attention_bias": 0.14, "event_sensitivity": 0.24},
+      "relationship_hooks": [
+        {"type": "lender", "target_sector": "consumer", "target_subsector": "tourism_food_service", "strength": 0.22, "visibility": "private"},
+        {"type": "partner", "target_sector": "noncyclical", "target_subsector": "halal_food", "strength": 0.24, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["deposit_growth", "gold_product_launch", "halal_ecosystem_financing", "margin_sharing_pressure"]
+    },
+    {
+      "id": "bank_daerah_mandiri",
+      "ticker": "BDMR",
+      "name": "Bank Daerah Mandiri",
+      "sector": "finance",
+      "subsector": "regional_bank",
+      "business_summary": "Regional development bank with provincial payroll deposits, infrastructure lending, and local government treasury services.",
+      "moat_tags": ["regional_government_ties", "payroll_deposits", "local_project_access"],
+      "commodity_exposures": {},
+      "macro_exposures": {"government_spending": 0.44, "interest_rate": 0.14, "infrastructure_budget": 0.28, "employment": 0.18},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "moderate", "quality_bias": 0.10, "growth_bias": 0.08, "risk_bias": 0.06, "retail_attention_bias": 0.08, "event_sensitivity": 0.22},
+      "relationship_hooks": [
+        {"type": "lender", "target_sector": "infra", "target_subsector": "toll_road", "strength": 0.28, "visibility": "semi_public"},
+        {"type": "lender", "target_sector": "property", "target_subsector": "logistics_estate", "strength": 0.20, "visibility": "private"}
+      ],
+      "story_hooks": ["regional_project_lending", "payroll_deposit_win", "government_budget_delay", "asset_quality_review"]
+    },
+    {
+      "id": "bank_digital_karya",
+      "ticker": "BDGK",
+      "name": "Bank Digital Karya",
+      "sector": "finance",
+      "subsector": "digital_bank",
+      "business_summary": "App-first bank built around merchant wallets, salary advances, savings automation, and partner-led customer acquisition.",
+      "moat_tags": ["app_engagement", "merchant_partnerships", "data_scoring"],
+      "commodity_exposures": {},
+      "macro_exposures": {"digital_adoption": 0.68, "interest_rate": -0.22, "consumer_confidence": 0.28, "regulatory_support": 0.18},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": -0.06, "growth_bias": 0.36, "risk_bias": 0.30, "retail_attention_bias": 0.38, "event_sensitivity": 0.46},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "tech", "target_subsector": "payments", "strength": 0.38, "visibility": "public"},
+        {"type": "partner", "target_sector": "consumer", "target_subsector": "modern_retail", "strength": 0.26, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["monthly_active_user_growth", "cashback_burn_reduction", "credit_scoring_model", "regulatory_capital_review"]
+    },
+    {
+      "id": "bank_ekspor_nusa",
+      "ticker": "BENX",
+      "name": "Bank Ekspor Nusa",
+      "sector": "finance",
+      "subsector": "trade_finance_bank",
+      "business_summary": "Trade finance bank focused on letters of credit, exporter working capital, commodity receivables, and FX settlement services.",
+      "moat_tags": ["trade_documentation", "exporter_relationships", "fx_services"],
+      "commodity_exposures": {"coal": 0.04, "cpo": 0.04, "nickel": 0.04},
+      "macro_exposures": {"global_trade": 0.50, "fx": 0.24, "credit_cycle": 0.34, "market_liquidity": 0.18},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.08, "growth_bias": 0.12, "risk_bias": 0.10, "retail_attention_bias": 0.10, "event_sensitivity": 0.30},
+      "relationship_hooks": [
+        {"type": "lender", "target_sector": "energy", "target_subsector": "coal_mining", "strength": 0.26, "visibility": "private"},
+        {"type": "lender", "target_sector": "noncyclical", "target_subsector": "plantation", "strength": 0.24, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["export_receivable_growth", "fx_income_tailwind", "commodity_credit_watch", "trade_volume_slowdown"]
+    },
+    {
+      "id": "bank_kredit_rakyat",
+      "ticker": "BKRA",
+      "name": "Bank Kredit Rakyat",
+      "sector": "finance",
+      "subsector": "micro_lending_bank",
+      "business_summary": "Micro-lending bank serving kiosk owners, market vendors, motorcycle service shops, and informal payroll borrowers.",
+      "moat_tags": ["field_collection", "micro_customer_data", "local_agent_network"],
+      "commodity_exposures": {},
+      "macro_exposures": {"employment": 0.40, "domestic_demand": 0.30, "interest_rate": -0.30, "consumer_confidence": 0.22},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": -0.08, "growth_bias": 0.16, "risk_bias": 0.34, "retail_attention_bias": 0.20, "event_sensitivity": 0.38},
+      "relationship_hooks": [
+        {"type": "lender", "target_sector": "consumer", "target_subsector": "food_service", "strength": 0.22, "visibility": "private"},
+        {"type": "partner", "target_sector": "tech", "target_subsector": "enterprise_software", "strength": 0.18, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["micro_disbursement_growth", "collection_stress", "agent_network_expansion", "writeoff_cycle"]
+    },
+    {
+      "id": "jajan_nusantara_prima",
+      "ticker": "JJNP",
+      "name": "Jajan Nusantara Prima",
+      "sector": "consumer",
+      "subsector": "packaged_snacks",
+      "business_summary": "Packaged snack maker with regional flavors, mini-market distribution, and school-canteen channel exposure.",
+      "moat_tags": ["flavor_portfolio", "distribution_depth", "youth_branding"],
+      "commodity_exposures": {"wheat": -0.16, "cpo": -0.14, "sugar": -0.12},
+      "macro_exposures": {"consumer_confidence": 0.54, "domestic_demand": 0.50, "inflation": -0.16, "fx": -0.10},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.06, "growth_bias": 0.16, "risk_bias": 0.06, "retail_attention_bias": 0.18, "event_sensitivity": 0.24},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "consumer", "target_subsector": "modern_retail", "strength": 0.34, "visibility": "public"},
+        {"type": "supplier", "target_sector": "noncyclical", "target_subsector": "staple_food", "strength": 0.22, "visibility": "private"}
+      ],
+      "story_hooks": ["new_flavor_launch", "school_channel_rebound", "input_cost_pressure", "mini_market_listing_win"]
+    },
+    {
+      "id": "busana_ritel_karya",
+      "ticker": "BSRK",
+      "name": "Busana Ritel Karya",
+      "sector": "consumer",
+      "subsector": "apparel_retail",
+      "business_summary": "Affordable apparel retailer with mall outlets, online drops, and seasonal school-uniform demand.",
+      "moat_tags": ["store_network", "private_label", "fast_restock_cycle"],
+      "commodity_exposures": {"cotton": -0.22, "fuel": -0.08},
+      "macro_exposures": {"consumer_confidence": 0.66, "domestic_demand": 0.48, "fx": -0.24, "interest_rate": -0.12},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": -0.02, "growth_bias": 0.18, "risk_bias": 0.18, "retail_attention_bias": 0.22, "event_sensitivity": 0.34},
+      "relationship_hooks": [
+        {"type": "tenant", "target_sector": "property", "target_subsector": "mall_reit", "strength": 0.36, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "transport", "target_subsector": "last_mile_delivery", "strength": 0.24, "visibility": "private"}
+      ],
+      "story_hooks": ["same_store_sales_rebound", "online_drop_success", "inventory_markdown", "mall_traffic_recovery"]
+    },
+    {
+      "id": "rumah_makan_lestari",
+      "ticker": "RMLS",
+      "name": "Rumah Makan Lestari",
+      "sector": "consumer",
+      "subsector": "restaurant_chain",
+      "business_summary": "Casual dining and delivery-focused restaurant operator with family formats and central kitchen sourcing.",
+      "moat_tags": ["central_kitchen", "menu_localization", "delivery_partnerships"],
+      "commodity_exposures": {"chicken": -0.24, "rice": -0.10, "fuel": -0.08},
+      "macro_exposures": {"consumer_confidence": 0.68, "urban_mobility": 0.42, "domestic_demand": 0.38, "inflation": -0.18},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": -0.04, "growth_bias": 0.22, "risk_bias": 0.20, "retail_attention_bias": 0.26, "event_sensitivity": 0.36},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "tech", "target_subsector": "consumer_platform", "strength": 0.28, "visibility": "public"},
+        {"type": "supplier", "target_sector": "noncyclical", "target_subsector": "poultry_integrator", "strength": 0.30, "visibility": "private"}
+      ],
+      "story_hooks": ["delivery_margin_reset", "store_rollout", "menu_price_hike", "central_kitchen_delay"]
+    },
+    {
+      "id": "ayam_protein_sentosa",
+      "ticker": "AYPS",
+      "name": "Ayam Protein Sentosa",
+      "sector": "noncyclical",
+      "subsector": "poultry_integrator",
+      "business_summary": "Integrated poultry producer with feed mills, breeding farms, slaughterhouses, and chilled distribution.",
+      "moat_tags": ["integrated_supply", "cold_chain", "feed_procurement"],
+      "commodity_exposures": {"corn": -0.34, "soybean": -0.28, "chicken": 0.62},
+      "macro_exposures": {"domestic_demand": 0.36, "inflation": -0.12, "consumer_confidence": 0.22, "food_security_policy": 0.18},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.08, "growth_bias": 0.08, "risk_bias": 0.10, "retail_attention_bias": 0.12, "event_sensitivity": 0.26},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "consumer", "target_subsector": "restaurant_chain", "strength": 0.34, "visibility": "private"},
+        {"type": "customer", "target_sector": "transport", "target_subsector": "cold_chain_logistics", "strength": 0.28, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["broiler_price_recovery", "feed_cost_pressure", "cold_chain_expansion", "disease_outbreak_risk"]
+    },
+    {
+      "id": "tani_benih_nusantara",
+      "ticker": "TBNI",
+      "name": "Tani Benih Nusantara",
+      "sector": "noncyclical",
+      "subsector": "seed_agri_inputs",
+      "business_summary": "Seed, crop protection, and smallholder agronomy distributor focused on rice, corn, and horticulture programs.",
+      "moat_tags": ["farmer_network", "trial_plot_data", "regional_agents"],
+      "commodity_exposures": {"corn": 0.16, "rice": 0.12, "fertilizer": -0.18},
+      "macro_exposures": {"food_security_policy": 0.48, "weather": -0.24, "government_spending": 0.30, "domestic_demand": 0.20},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "moderate", "quality_bias": 0.10, "growth_bias": 0.14, "risk_bias": 0.10, "retail_attention_bias": 0.10, "event_sensitivity": 0.28},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "noncyclical", "target_subsector": "rice_milling", "strength": 0.24, "visibility": "private"},
+        {"type": "partner", "target_sector": "finance", "target_subsector": "micro_lending_bank", "strength": 0.18, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["seed_program_contract", "weather_disruption", "new_hybrid_launch", "subsidy_payment_delay"]
+    },
+    {
+      "id": "energi_surya_hijau",
+      "ticker": "ESHJ",
+      "name": "Energi Surya Hijau",
+      "sector": "energy",
+      "subsector": "solar_power_developer",
+      "business_summary": "Solar power developer and rooftop operator serving industrial estates, logistics warehouses, and retail chains.",
+      "moat_tags": ["project_pipeline", "ppa_relationships", "engineering_team"],
+      "commodity_exposures": {"silica": -0.16, "copper": -0.12, "electricity": 0.38},
+      "macro_exposures": {"solar_demand": 0.68, "interest_rate": -0.30, "regulatory_support": 0.34, "industrial_activity": 0.20},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": 0.06, "growth_bias": 0.32, "risk_bias": 0.22, "retail_attention_bias": 0.28, "event_sensitivity": 0.46},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "property", "target_subsector": "data_center_estate", "strength": 0.26, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "industrial", "target_subsector": "factory_automation", "strength": 0.20, "visibility": "private"}
+      ],
+      "story_hooks": ["ppa_win", "solar_tariff_change", "project_delay", "rooftop_pipeline_acceleration"]
+    },
+    {
+      "id": "gas_kota_prima",
+      "ticker": "GKOT",
+      "name": "Gas Kota Prima",
+      "sector": "energy",
+      "subsector": "city_gas_distribution",
+      "business_summary": "City gas distributor with industrial park pipelines, household connections, and long-term supply contracts.",
+      "moat_tags": ["pipeline_rights", "industrial_customers", "regulated_tariff"],
+      "commodity_exposures": {"natural_gas": 0.48, "steel": -0.10},
+      "macro_exposures": {"industrial_activity": 0.42, "energy_demand": 0.40, "regulatory_support": 0.22, "interest_rate": -0.12},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.16, "growth_bias": 0.10, "risk_bias": 0.02, "retail_attention_bias": 0.10, "event_sensitivity": 0.26},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "basicindustry", "target_subsector": "petrochemicals", "strength": 0.28, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "infra", "target_subsector": "utility_water_power", "strength": 0.22, "visibility": "private"}
+      ],
+      "story_hooks": ["pipeline_connection_growth", "tariff_review", "gas_supply_constraint", "industrial_customer_win"]
+    },
+    {
+      "id": "bara_logistik_terminal",
+      "ticker": "BLTM",
+      "name": "Bara Logistik Terminal",
+      "sector": "energy",
+      "subsector": "coal_terminal_services",
+      "business_summary": "Coal terminal and stockpile operator providing blending, loading, and river-barge handling services.",
+      "moat_tags": ["terminal_location", "barge_access", "take_or_pay_contracts"],
+      "commodity_exposures": {"coal": 0.50, "fuel": -0.16, "steel": -0.06},
+      "macro_exposures": {"global_trade": 0.30, "energy_demand": 0.36, "export_policy": 0.26, "logistics_cost": 0.16},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": 0.02, "growth_bias": 0.12, "risk_bias": 0.20, "retail_attention_bias": 0.18, "event_sensitivity": 0.38},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "energy", "target_subsector": "coal_mining", "strength": 0.38, "visibility": "semi_public"},
+        {"type": "partner", "target_sector": "transport", "target_subsector": "bulk_shipping", "strength": 0.34, "visibility": "public"}
+      ],
+      "story_hooks": ["coal_volume_surge", "stockpile_bottleneck", "terminal_expansion", "export_disruption"]
+    },
+    {
+      "id": "pupuk_agro_kimia",
+      "ticker": "PAKM",
+      "name": "Pupuk Agro Kimia",
+      "sector": "basicindustry",
+      "subsector": "fertilizer",
+      "business_summary": "Fertilizer blender and distributor supplying plantations, rice programs, and horticulture wholesalers.",
+      "moat_tags": ["distribution_license", "agronomy_service", "bulk_storage"],
+      "commodity_exposures": {"natural_gas": -0.34, "fertilizer": 0.58, "fuel": -0.08},
+      "macro_exposures": {"food_security_policy": 0.40, "government_spending": 0.30, "weather": -0.16, "fx": -0.18},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.08, "growth_bias": 0.08, "risk_bias": 0.08, "retail_attention_bias": 0.12, "event_sensitivity": 0.30},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "noncyclical", "target_subsector": "plantation", "strength": 0.34, "visibility": "semi_public"},
+        {"type": "supplier", "target_sector": "noncyclical", "target_subsector": "seed_agri_inputs", "strength": 0.26, "visibility": "private"}
+      ],
+      "story_hooks": ["fertilizer_subsidy_win", "gas_cost_pressure", "plant_turnaround", "distribution_quota_change"]
+    },
+    {
+      "id": "kaca_surya_industri",
+      "ticker": "KCSI",
+      "name": "Kaca Surya Industri",
+      "sector": "basicindustry",
+      "subsector": "glass_manufacturing",
+      "business_summary": "Flat glass and specialty glass manufacturer serving construction, packaging, automotive, and solar module customers.",
+      "moat_tags": ["furnace_scale", "customer_certification", "solar_glass_capability"],
+      "commodity_exposures": {"silica": -0.22, "natural_gas": -0.20, "electricity": -0.18},
+      "macro_exposures": {"property_cycle": 0.30, "solar_demand": 0.34, "industrial_activity": 0.24, "fx": -0.10},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.08, "growth_bias": 0.12, "risk_bias": 0.10, "retail_attention_bias": 0.12, "event_sensitivity": 0.28},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "energy", "target_subsector": "solar_power_developer", "strength": 0.24, "visibility": "private"},
+        {"type": "supplier", "target_sector": "property", "target_subsector": "township_development", "strength": 0.20, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["solar_glass_order", "furnace_rebuild", "gas_cost_squeeze", "construction_demand_recovery"]
+    },
+    {
+      "id": "aluminium_nusa",
+      "ticker": "ALNS",
+      "name": "Aluminium Nusa",
+      "sector": "basicindustry",
+      "subsector": "aluminium_smelter",
+      "business_summary": "Aluminium smelter and extrusion producer supplying cables, consumer goods, packaging, and building materials.",
+      "moat_tags": ["power_contract", "smelter_capacity", "extrusion_network"],
+      "commodity_exposures": {"aluminium": 0.72, "electricity": -0.38, "coal": -0.10},
+      "macro_exposures": {"industrial_activity": 0.36, "global_trade": 0.30, "fx": 0.18, "infrastructure_budget": 0.18},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": 0.02, "growth_bias": 0.14, "risk_bias": 0.22, "retail_attention_bias": 0.16, "event_sensitivity": 0.38},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "industrial", "target_subsector": "electrical_components", "strength": 0.28, "visibility": "semi_public"},
+        {"type": "supplier", "target_sector": "basicindustry", "target_subsector": "metal_packaging", "strength": 0.24, "visibility": "private"}
+      ],
+      "story_hooks": ["aluminium_price_rally", "power_tariff_review", "extrusion_capacity_add", "export_quota_shift"]
+    },
+    {
+      "id": "baterai_mineral_prima",
+      "ticker": "BTMP",
+      "name": "Baterai Mineral Prima",
+      "sector": "basicindustry",
+      "subsector": "battery_materials",
+      "business_summary": "Battery precursor and cathode material developer using nickel, cobalt, and manganese feedstock for EV supply chains.",
+      "moat_tags": ["processing_knowhow", "offtake_pipeline", "strategic_mineral_access"],
+      "commodity_exposures": {"nickel": 0.48, "cobalt": 0.30, "electricity": -0.26},
+      "macro_exposures": {"ev_demand": 0.72, "export_policy": 0.34, "fx": -0.14, "industrial_activity": 0.20},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": -0.02, "growth_bias": 0.38, "risk_bias": 0.34, "retail_attention_bias": 0.34, "event_sensitivity": 0.54},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "basicindustry", "target_subsector": "nickel_processing", "strength": 0.36, "visibility": "semi_public"},
+        {"type": "supplier", "target_sector": "energy", "target_subsector": "solar_power_developer", "strength": 0.18, "visibility": "private"}
+      ],
+      "story_hooks": ["ev_offtake_mou", "pilot_plant_ramp", "nickel_feedstock_squeeze", "strategic_investor_entry"]
+    },
+    {
+      "id": "robotik_pabrik_nusantara",
+      "ticker": "RBPN",
+      "name": "Robotik Pabrik Nusantara",
+      "sector": "industrial",
+      "subsector": "factory_automation",
+      "business_summary": "Factory automation integrator selling robotics cells, sensors, maintenance contracts, and productivity software.",
+      "moat_tags": ["integration_expertise", "installed_base", "after_sales_service"],
+      "commodity_exposures": {"steel": -0.12, "copper": -0.10, "semiconductor": -0.14},
+      "macro_exposures": {"industrial_activity": 0.52, "digital_adoption": 0.32, "interest_rate": -0.16, "fx": -0.18},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": 0.04, "growth_bias": 0.28, "risk_bias": 0.22, "retail_attention_bias": 0.22, "event_sensitivity": 0.40},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "tech", "target_subsector": "semiconductor_design", "strength": 0.22, "visibility": "private"},
+        {"type": "customer", "target_sector": "consumer", "target_subsector": "packaged_food", "strength": 0.20, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["automation_contract_win", "component_shortage", "service_margin_expansion", "factory_digitization_push"]
+    },
+    {
+      "id": "komponen_mesin_raya",
+      "ticker": "KMRK",
+      "name": "Komponen Mesin Raya",
+      "sector": "industrial",
+      "subsector": "machine_components",
+      "business_summary": "Precision component maker producing bearings, shafts, castings, and replacement parts for factories and heavy equipment.",
+      "moat_tags": ["tooling_depth", "replacement_part_catalog", "customer_certification"],
+      "commodity_exposures": {"steel": -0.28, "iron_ore": -0.14, "fuel": -0.08},
+      "macro_exposures": {"industrial_activity": 0.50, "infrastructure_budget": 0.22, "global_trade": 0.18, "fx": -0.10},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "moderate", "quality_bias": 0.10, "growth_bias": 0.08, "risk_bias": 0.08, "retail_attention_bias": 0.08, "event_sensitivity": 0.24},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "industrial", "target_subsector": "heavy_equipment_distribution", "strength": 0.30, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "transport", "target_subsector": "rail_freight", "strength": 0.18, "visibility": "private"}
+      ],
+      "story_hooks": ["replacement_cycle_recovery", "steel_cost_pressure", "export_customer_approval", "capacity_debottleneck"]
+    },
+    {
+      "id": "kemasan_logam_sentosa",
+      "ticker": "KMLS",
+      "name": "Kemasan Logam Sentosa",
+      "sector": "industrial",
+      "subsector": "metal_packaging",
+      "business_summary": "Metal can and foil packaging producer serving beverages, packaged food, household products, and export customers.",
+      "moat_tags": ["customer_lock_in", "printing_quality", "plant_utilization"],
+      "commodity_exposures": {"aluminium": -0.38, "steel": -0.18, "electricity": -0.10},
+      "macro_exposures": {"domestic_demand": 0.34, "consumer_confidence": 0.22, "fx": -0.14, "industrial_activity": 0.26},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.08, "growth_bias": 0.06, "risk_bias": 0.06, "retail_attention_bias": 0.08, "event_sensitivity": 0.22},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "consumer", "target_subsector": "packaged_food", "strength": 0.36, "visibility": "semi_public"},
+        {"type": "supplier", "target_sector": "consumer", "target_subsector": "household_personal_care", "strength": 0.28, "visibility": "private"}
+      ],
+      "story_hooks": ["beverage_can_contract", "aluminium_cost_squeeze", "plant_utilization_recovery", "export_packaging_order"]
+    },
+    {
+      "id": "aplikasi_warung_digital",
+      "ticker": "AWDG",
+      "name": "Aplikasi Warung Digital",
+      "sector": "tech",
+      "subsector": "merchant_software",
+      "business_summary": "Merchant operating system for small shops covering inventory, supplier ordering, payments, loyalty, and working-capital referrals.",
+      "moat_tags": ["merchant_network", "transaction_data", "supplier_integrations"],
+      "commodity_exposures": {},
+      "macro_exposures": {"digital_adoption": 0.70, "domestic_demand": 0.28, "interest_rate": -0.18, "retail_participation": 0.20},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": -0.06, "growth_bias": 0.34, "risk_bias": 0.30, "retail_attention_bias": 0.34, "event_sensitivity": 0.46},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "finance", "target_subsector": "micro_lending_bank", "strength": 0.30, "visibility": "public"},
+        {"type": "partner", "target_sector": "consumer", "target_subsector": "grocery_distribution", "strength": 0.28, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["merchant_count_growth", "take_rate_improvement", "supplier_financing_launch", "cash_burn_pressure"]
+    },
+    {
+      "id": "chip_desain_nusantara",
+      "ticker": "CDNS",
+      "name": "Chip Desain Nusantara",
+      "sector": "tech",
+      "subsector": "semiconductor_design",
+      "business_summary": "Fabless chip design and testing company focused on power management, IoT modules, and industrial sensor controllers.",
+      "moat_tags": ["design_ip", "engineering_team", "customer_qualification"],
+      "commodity_exposures": {"rare_earth": -0.08, "silica": -0.06, "electricity": -0.06},
+      "macro_exposures": {"semiconductor_cycle": 0.72, "digital_adoption": 0.34, "global_trade": 0.24, "fx": -0.22},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": -0.02, "growth_bias": 0.40, "risk_bias": 0.34, "retail_attention_bias": 0.32, "event_sensitivity": 0.54},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "industrial", "target_subsector": "factory_automation", "strength": 0.26, "visibility": "private"},
+        {"type": "partner", "target_sector": "basicindustry", "target_subsector": "rare_earth_processing", "strength": 0.18, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["chip_design_win", "qualification_delay", "global_cycle_rebound", "engineering_cost_overrun"]
+    },
+    {
+      "id": "cloud_aman_siber",
+      "ticker": "CASB",
+      "name": "Cloud Aman Siber",
+      "sector": "tech",
+      "subsector": "cybersecurity_cloud",
+      "business_summary": "Cloud security, identity protection, and managed detection provider serving banks, hospitals, and public agencies.",
+      "moat_tags": ["security_operations_center", "compliance_certification", "recurring_contracts"],
+      "commodity_exposures": {"electricity": -0.12},
+      "macro_exposures": {"digital_adoption": 0.58, "cyber_risk": 0.62, "government_spending": 0.22, "fx": -0.16},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": 0.06, "growth_bias": 0.30, "risk_bias": 0.18, "retail_attention_bias": 0.24, "event_sensitivity": 0.42},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "finance", "target_subsector": "banking", "strength": 0.28, "visibility": "private"},
+        {"type": "supplier", "target_sector": "health", "target_subsector": "hospital_chain", "strength": 0.22, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["major_contract_win", "security_incident", "subscription_retention", "public_sector_tender"]
+    },
+    {
+      "id": "menara_fiber_desa",
+      "ticker": "MFDS",
+      "name": "Menara Fiber Desa",
+      "sector": "infra",
+      "subsector": "rural_tower_fiber",
+      "business_summary": "Rural telecommunications infrastructure owner combining tower leases, fiber backhaul, and community internet nodes.",
+      "moat_tags": ["site_permits", "rural_coverage", "fiber_backhaul"],
+      "commodity_exposures": {"steel": -0.14, "copper": -0.08, "electricity": -0.08},
+      "macro_exposures": {"digital_adoption": 0.48, "government_spending": 0.32, "interest_rate": -0.24, "infrastructure_budget": 0.28},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "moderate", "quality_bias": 0.12, "growth_bias": 0.16, "risk_bias": 0.10, "retail_attention_bias": 0.12, "event_sensitivity": 0.30},
+      "relationship_hooks": [
+        {"type": "landlord", "target_sector": "tech", "target_subsector": "consumer_platform", "strength": 0.22, "visibility": "private"},
+        {"type": "partner", "target_sector": "infra", "target_subsector": "utility_water_power", "strength": 0.18, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["rural_connectivity_contract", "tower_tenancy_growth", "permit_delay", "fiber_route_launch"]
+    },
+    {
+      "id": "air_bersih_perkotaan",
+      "ticker": "ABPR",
+      "name": "Air Bersih Perkotaan",
+      "sector": "infra",
+      "subsector": "water_utility",
+      "business_summary": "Urban water treatment and distribution concession operator serving residential districts and industrial estates.",
+      "moat_tags": ["concession_rights", "treatment_capacity", "municipal_relationships"],
+      "commodity_exposures": {"electricity": -0.22, "chemicals": -0.10},
+      "macro_exposures": {"infrastructure_budget": 0.34, "government_spending": 0.28, "industrial_activity": 0.22, "interest_rate": -0.18},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "low", "quality_bias": 0.18, "growth_bias": 0.06, "risk_bias": -0.06, "retail_attention_bias": 0.06, "event_sensitivity": 0.18},
+      "relationship_hooks": [
+        {"type": "supplier", "target_sector": "property", "target_subsector": "township_development", "strength": 0.28, "visibility": "semi_public"},
+        {"type": "supplier", "target_sector": "property", "target_subsector": "data_center_estate", "strength": 0.24, "visibility": "private"}
+      ],
+      "story_hooks": ["tariff_adjustment", "new_concession_win", "treatment_plant_upgrade", "regulatory_delay"]
+    },
+    {
+      "id": "feri_nusantara_raya",
+      "ticker": "FNRR",
+      "name": "Feri Nusantara Raya",
+      "sector": "transport",
+      "subsector": "ferry_transport",
+      "business_summary": "Passenger and vehicle ferry operator connecting island routes, logistics corridors, and tourism destinations.",
+      "moat_tags": ["route_license", "fleet_availability", "port_relationships"],
+      "commodity_exposures": {"fuel": -0.42, "steel": -0.06},
+      "macro_exposures": {"tourism_flow": 0.42, "domestic_demand": 0.26, "logistics_cost": 0.18, "weather": -0.22},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": -0.02, "growth_bias": 0.10, "risk_bias": 0.24, "retail_attention_bias": 0.14, "event_sensitivity": 0.36},
+      "relationship_hooks": [
+        {"type": "carrier", "target_sector": "property", "target_subsector": "hospitality_property", "strength": 0.24, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "infra", "target_subsector": "port_services", "strength": 0.28, "visibility": "public"}
+      ],
+      "story_hooks": ["route_license_win", "fuel_cost_squeeze", "holiday_traffic_surge", "fleet_docking_delay"]
+    },
+    {
+      "id": "kargo_udara_prima",
+      "ticker": "KUDP",
+      "name": "Kargo Udara Prima",
+      "sector": "transport",
+      "subsector": "air_cargo",
+      "business_summary": "Air cargo and express freight operator serving e-commerce, pharmaceuticals, perishables, and high-value industrial shipments.",
+      "moat_tags": ["airport_slots", "cold_chain_handling", "express_network"],
+      "commodity_exposures": {"fuel": -0.48, "electricity": -0.06},
+      "macro_exposures": {"global_trade": 0.34, "digital_adoption": 0.30, "healthcare_spending": 0.16, "fx": -0.10},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": 0.02, "growth_bias": 0.18, "risk_bias": 0.22, "retail_attention_bias": 0.16, "event_sensitivity": 0.38},
+      "relationship_hooks": [
+        {"type": "carrier", "target_sector": "health", "target_subsector": "biotechnology", "strength": 0.30, "visibility": "private"},
+        {"type": "partner", "target_sector": "tech", "target_subsector": "consumer_platform", "strength": 0.24, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["express_volume_growth", "jet_fuel_spike", "pharma_cargo_contract", "airport_slot_constraint"]
+    },
+    {
+      "id": "laboratorium_klinik_citra",
+      "ticker": "LKCT",
+      "name": "Laboratorium Klinik Citra",
+      "sector": "health",
+      "subsector": "diagnostics_lab",
+      "business_summary": "Diagnostics laboratory chain offering routine testing, employer screening, specialty pathology, and home-sampling services.",
+      "moat_tags": ["lab_network", "doctor_referrals", "test_menu_depth"],
+      "commodity_exposures": {"electricity": -0.06, "crude_oil": -0.04},
+      "macro_exposures": {"healthcare_spending": 0.58, "employment": 0.18, "consumer_confidence": 0.16, "digital_adoption": 0.12},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.20, "growth_bias": 0.12, "risk_bias": -0.04, "retail_attention_bias": 0.10, "event_sensitivity": 0.24},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "health", "target_subsector": "hospital_chain", "strength": 0.30, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "tech", "target_subsector": "cybersecurity_cloud", "strength": 0.16, "visibility": "private"}
+      ],
+      "story_hooks": ["test_volume_growth", "new_lab_opening", "reimbursement_pressure", "specialty_test_mix"]
+    },
+    {
+      "id": "rumah_sakit_harmoni",
+      "ticker": "RSHM",
+      "name": "Rumah Sakit Harmoni",
+      "sector": "health",
+      "subsector": "hospital_chain",
+      "business_summary": "Mid-market hospital chain with maternity, emergency, specialist, and insurance-linked outpatient services.",
+      "moat_tags": ["doctor_network", "bed_capacity", "insurance_relationships"],
+      "commodity_exposures": {"electricity": -0.12, "medical_supplies": -0.10},
+      "macro_exposures": {"healthcare_spending": 0.66, "employment": 0.24, "interest_rate": -0.20, "consumer_confidence": 0.14},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.18, "growth_bias": 0.14, "risk_bias": 0.04, "retail_attention_bias": 0.12, "event_sensitivity": 0.26},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "finance", "target_subsector": "life_insurance", "strength": 0.26, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "tech", "target_subsector": "cybersecurity_cloud", "strength": 0.18, "visibility": "private"}
+      ],
+      "story_hooks": ["bed_occupancy_rebound", "specialist_center_launch", "insurance_claim_delay", "new_hospital_capex"]
+    },
+    {
+      "id": "pembiayaan_motor_nusantara",
+      "ticker": "PMNR",
+      "name": "Pembiayaan Motor Nusantara",
+      "sector": "finance",
+      "subsector": "motorcycle_finance",
+      "business_summary": "Motorcycle financing company serving dealers, gig workers, rural borrowers, and used-bike refinancing channels.",
+      "moat_tags": ["dealer_network", "collection_system", "credit_scoring"],
+      "commodity_exposures": {},
+      "macro_exposures": {"interest_rate": -0.34, "employment": 0.38, "consumer_confidence": 0.32, "credit_cycle": 0.46},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": 0.02, "growth_bias": 0.14, "risk_bias": 0.24, "retail_attention_bias": 0.18, "event_sensitivity": 0.34},
+      "relationship_hooks": [
+        {"type": "lender", "target_sector": "consumer", "target_subsector": "modern_retail", "strength": 0.18, "visibility": "private"},
+        {"type": "partner", "target_sector": "tech", "target_subsector": "merchant_software", "strength": 0.22, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["new_booking_growth", "npl_pressure", "dealer_incentive_program", "funding_cost_increase"]
+    },
+    {
+      "id": "asuransi_jiwa_sentosa",
+      "ticker": "AJST",
+      "name": "Asuransi Jiwa Sentosa",
+      "sector": "finance",
+      "subsector": "life_insurance",
+      "business_summary": "Life and health insurer with bancassurance, employee benefit, unit-linked, and hospital cash products.",
+      "moat_tags": ["agent_network", "bancassurance_channel", "claims_data"],
+      "commodity_exposures": {},
+      "macro_exposures": {"interest_rate": 0.18, "market_liquidity": 0.28, "employment": 0.30, "healthcare_spending": 0.22},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.16, "growth_bias": 0.08, "risk_bias": 0.02, "retail_attention_bias": 0.10, "event_sensitivity": 0.24},
+      "relationship_hooks": [
+        {"type": "partner", "target_sector": "finance", "target_subsector": "large_bank", "strength": 0.28, "visibility": "semi_public"},
+        {"type": "customer", "target_sector": "health", "target_subsector": "hospital_chain", "strength": 0.24, "visibility": "private"}
+      ],
+      "story_hooks": ["premium_growth", "claim_ratio_pressure", "bancassurance_deal", "investment_yield_tailwind"]
+    },
+    {
+      "id": "bank_pesisir_prima",
+      "ticker": "BPPR",
+      "name": "Bank Pesisir Prima",
+      "sector": "finance",
+      "subsector": "small_bank",
+      "business_summary": "Small coastal bank focused on fisheries, port workers, seafood exporters, and local deposit relationships.",
+      "moat_tags": ["coastal_customer_base", "local_deposits", "exporter_relationships"],
+      "commodity_exposures": {"fish": 0.12, "fuel": -0.06},
+      "macro_exposures": {"interest_rate": -0.22, "global_trade": 0.24, "employment": 0.20, "credit_cycle": 0.40},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": -0.04, "growth_bias": 0.10, "risk_bias": 0.28, "retail_attention_bias": 0.16, "event_sensitivity": 0.34},
+      "relationship_hooks": [
+        {"type": "lender", "target_sector": "transport", "target_subsector": "port_logistics", "strength": 0.20, "visibility": "private"},
+        {"type": "lender", "target_sector": "noncyclical", "target_subsector": "seafood_processing", "strength": 0.22, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["coastal_loan_growth", "fishery_export_boost", "asset_quality_warning", "capital_topup_plan"]
+    },
+    {
+      "id": "gudang_kota_prima",
+      "ticker": "GDKP",
+      "name": "Gudang Kota Prima",
+      "sector": "property",
+      "subsector": "urban_warehouse",
+      "business_summary": "Urban warehouse owner with last-mile fulfillment assets, cold storage pockets, and flexible lease formats.",
+      "moat_tags": ["infill_location", "tenant_mix", "last_mile_access"],
+      "commodity_exposures": {"cement": -0.12, "steel": -0.14, "electricity": -0.08},
+      "macro_exposures": {"digital_adoption": 0.38, "interest_rate": -0.34, "logistics_cost": 0.22, "domestic_demand": 0.18},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "moderate", "quality_bias": 0.12, "growth_bias": 0.16, "risk_bias": 0.10, "retail_attention_bias": 0.12, "event_sensitivity": 0.30},
+      "relationship_hooks": [
+        {"type": "landlord", "target_sector": "consumer", "target_subsector": "modern_retail", "strength": 0.28, "visibility": "semi_public"},
+        {"type": "landlord", "target_sector": "transport", "target_subsector": "last_mile_delivery", "strength": 0.34, "visibility": "public"}
+      ],
+      "story_hooks": ["warehouse_prelease", "occupancy_growth", "interest_cost_pressure", "cold_storage_conversion"]
+    },
+    {
+      "id": "apartemen_transit_raya",
+      "ticker": "ATRY",
+      "name": "Apartemen Transit Raya",
+      "sector": "property",
+      "subsector": "transit_apartment",
+      "business_summary": "Transit-oriented apartment developer with projects near rail stations, bus hubs, and mixed-use commuter corridors.",
+      "moat_tags": ["station_landbank", "permit_pipeline", "affordable_unit_mix"],
+      "commodity_exposures": {"cement": -0.20, "steel": -0.18},
+      "macro_exposures": {"property_cycle": 0.50, "interest_rate": -0.46, "urban_mobility": 0.28, "employment": 0.18},
+      "price_traits": {"liquidity_profile": "thin", "volatility_profile": "high", "quality_bias": -0.04, "growth_bias": 0.18, "risk_bias": 0.30, "retail_attention_bias": 0.18, "event_sensitivity": 0.40},
+      "relationship_hooks": [
+        {"type": "customer", "target_sector": "transport", "target_subsector": "rail_freight", "strength": 0.16, "visibility": "private"},
+        {"type": "borrower", "target_sector": "finance", "target_subsector": "banking", "strength": 0.24, "visibility": "semi_public"}
+      ],
+      "story_hooks": ["project_launch", "presales_recovery", "permit_delay", "rate_sensitive_demand"]
+    },
+    {
+      "id": "kawasan_industri_hijau",
+      "ticker": "KIHJ",
+      "name": "Kawasan Industri Hijau",
+      "sector": "property",
+      "subsector": "industrial_estate",
+      "business_summary": "Industrial estate developer selling serviced land, renewable utility packages, and logistics-ready tenant clusters.",
+      "moat_tags": ["landbank", "utility_package", "anchor_tenants"],
+      "commodity_exposures": {"cement": -0.14, "steel": -0.16, "electricity": 0.08},
+      "macro_exposures": {"industrial_activity": 0.46, "infrastructure_budget": 0.28, "interest_rate": -0.32, "global_trade": 0.22},
+      "price_traits": {"liquidity_profile": "mid", "volatility_profile": "high", "quality_bias": 0.06, "growth_bias": 0.22, "risk_bias": 0.20, "retail_attention_bias": 0.18, "event_sensitivity": 0.40},
+      "relationship_hooks": [
+        {"type": "landlord", "target_sector": "energy", "target_subsector": "solar_power_developer", "strength": 0.26, "visibility": "semi_public"},
+        {"type": "landlord", "target_sector": "basicindustry", "target_subsector": "battery_materials", "strength": 0.28, "visibility": "private"}
+      ],
+      "story_hooks": ["anchor_tenant_win", "land_sales_jump", "green_utility_package", "infrastructure_access_delay"]
+    }
+  ]
+}

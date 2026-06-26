@@ -1,5 +1,7 @@
 extends RefCounted
 
+const ANNUAL_STATEMENT_BUILDER = preload("res://systems/AnnualStatementBuilder.gd")
+
 const HISTORY_START_YEAR := 2010
 const HISTORY_END_YEAR := 2019
 const FINANCIAL_PERCENT_SCALE := 100.0
@@ -157,7 +159,23 @@ static func build_statement_snapshot(
 
 	var latest_statement: Dictionary = quarterly_statements[quarterly_statements.size() - 1].duplicate(true)
 	var first_statement: Dictionary = quarterly_statements[0]
-	return {
+	var annual_statements: Array = ANNUAL_STATEMENT_BUILDER.build_annual_statements(
+		financial_history,
+		quarterly_statements,
+		financials,
+		traits,
+		run_seed,
+		company_id,
+		sector_id,
+		{
+			"fiscal_year": HISTORY_END_YEAR,
+			"currency": "IDR",
+			"unit": "million_idr",
+			"audit_status": "audited"
+		}
+	)
+	var annual_statement: Dictionary = annual_statements[annual_statements.size() - 1].duplicate(true) if not annual_statements.is_empty() else {}
+	var snapshot: Dictionary = {
 		"statement_year": int(latest_statement.get("statement_year", HISTORY_END_YEAR)),
 		"statement_quarter": int(latest_statement.get("statement_quarter", 4)),
 		"statement_period_label": str(latest_statement.get("statement_period_label", "Q4 %d" % HISTORY_END_YEAR)),
@@ -170,3 +188,10 @@ static func build_statement_snapshot(
 		"cash_flow": latest_statement.get("cash_flow", []).duplicate(true),
 		"quarterly_statements": quarterly_statements
 	}
+	if not annual_statement.is_empty():
+		snapshot["annual_statement_year"] = int(annual_statement.get("fiscal_year", HISTORY_END_YEAR))
+		snapshot["annual_statement_period_label"] = str(annual_statement.get("statement_period_label", "FY%d" % HISTORY_END_YEAR))
+		snapshot["annual_statement_count"] = annual_statements.size()
+		snapshot["annual_statement"] = annual_statement
+		snapshot["annual_statements"] = annual_statements
+	return snapshot

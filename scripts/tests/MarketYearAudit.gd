@@ -13,14 +13,25 @@ func _ready() -> void:
 	var seed: int = _arg_int(args, "--audit-seed", DEFAULT_AUDIT_SEED)
 	var difficulty_id: String = _arg_string(args, "--audit-difficulty", DEFAULT_AUDIT_DIFFICULTY)
 	var trading_days: int = _arg_int(args, "--audit-days", DEFAULT_AUDIT_TRADING_DAYS)
-	var report: Dictionary = _run_audit(seed, difficulty_id, trading_days)
+	var use_catalog: bool = _arg_bool(args, "--audit-use-catalog", false)
+	var company_count_override: int = _arg_int(args, "--audit-company-count", 0)
+	var compact_report: bool = _arg_bool(args, "--audit-compact-report", false)
+	var audit_started_at_usec: int = Time.get_ticks_usec()
+	var report: Dictionary = _run_audit(seed, difficulty_id, trading_days, use_catalog, company_count_override)
+	report["audit_elapsed_msec"] = float(Time.get_ticks_usec() - audit_started_at_usec) / 1000.0
+	if compact_report:
+		report = _compact_audit_report(report)
 	print("%s%s" % [REPORT_PREFIX, JSON.stringify(report)])
 	get_tree().quit(0 if bool(report.get("success", false)) else 1)
 
 
-func _run_audit(seed: int, difficulty_id: String, trading_days: int) -> Dictionary:
+func _run_audit(seed: int, difficulty_id: String, trading_days: int, use_catalog: bool = false, company_count_override: int = 0) -> Dictionary:
 	var difficulty_config: Dictionary = GameManager.get_difficulty_config(difficulty_id)
 	difficulty_id = str(difficulty_config.get("id", difficulty_id))
+	if company_count_override > 0:
+		difficulty_config["company_count"] = company_count_override
+	if use_catalog:
+		difficulty_config["use_company_universe_catalog"] = true
 	var company_definitions: Array = GameManager.build_company_roster(seed, difficulty_config)
 	RunState.setup_new_run(seed, company_definitions, difficulty_config, false)
 	var audit_cash_floor: float = max(float(difficulty_config.get("starting_cash", 0.0)), 1.0)
@@ -37,6 +48,7 @@ func _run_audit(seed: int, difficulty_id: String, trading_days: int) -> Dictiona
 	var total_gorengan_value: float = 0.0
 	var max_market_value: Dictionary = {"day_index": 0, "value": 0.0}
 	var max_gorengan_value: Dictionary = {"day_index": 0, "value": 0.0}
+	var price_exposure_tracker: Dictionary = _default_price_exposure_tracker()
 
 	for _day_offset in range(max(trading_days, 0)):
 		var advance_result: Dictionary = GameManager.simulate_opening_session(false)
@@ -67,6 +79,7 @@ func _run_audit(seed: int, difficulty_id: String, trading_days: int) -> Dictiona
 		_collect_quarterly_filing_counts(RunState.last_day_results, counters)
 		_collect_campaign_state(campaign_tracker)
 		_collect_abnormal_move_counts(counters)
+		_collect_price_exposure_state(price_exposure_tracker)
 		var value_snapshot: Dictionary = _daily_value_snapshot()
 		total_market_value += float(value_snapshot.get("market_value", 0.0))
 		total_gorengan_value += float(value_snapshot.get("gorengan_value", 0.0))
@@ -83,17 +96,20 @@ func _run_audit(seed: int, difficulty_id: String, trading_days: int) -> Dictiona
 
 	var stock_report: Dictionary = _build_stock_report(initial_prices)
 	var campaign_report: Dictionary = _build_campaign_report(campaign_tracker)
+	var price_exposure_report: Dictionary = _build_price_exposure_report(price_exposure_tracker, initial_prices)
 	var days_completed: int = max(int(counters.get("days_completed", 0)), 1)
 	return {
 		"success": true,
 		"seed": seed,
 		"difficulty_id": difficulty_id,
 		"difficulty_label": str(difficulty_config.get("label", difficulty_id.capitalize())),
+		"use_company_universe_catalog": bool(difficulty_config.get("use_company_universe_catalog", false)),
 		"requested_trading_days": trading_days,
 		"days_completed": int(counters.get("days_completed", 0)),
 		"final_day_index": RunState.day_index,
 		"final_trade_date": RunState.get_current_trade_date(),
 		"company_count": RunState.company_order.size(),
+		"portfolio": _portfolio_report(),
 		"stocks": stock_report,
 		"events": {
 			"counters": counters,
@@ -102,6 +118,7 @@ func _run_audit(seed: int, difficulty_id: String, trading_days: int) -> Dictiona
 			"corporate_category_counts": corporate_category_counts,
 			"special_event_id_counts": special_event_id_counts
 		},
+		"price_exposure": price_exposure_report,
 		"gorengan_campaigns": campaign_report,
 		"turnover": {
 			"avg_market_value_per_day": total_market_value / float(days_completed),
@@ -524,6 +541,199 @@ func _build_stock_report(initial_prices: Dictionary) -> Dictionary:
 	}
 
 
+func _default_price_exposure_tracker() -> Dictionary:
+	return {
+		"active_stock_days": 0,
+		"positive_drift_days": 0,
+		"negative_drift_days": 0,
+		"flat_drift_days": 0,
+		"total_drift": 0.0,
+		"total_abs_drift": 0.0,
+		"total_confidence": 0.0,
+		"total_volatility_multiplier": 0.0,
+		"total_volume_multiplier": 0.0,
+		"by_company": {}
+	}
+
+
+func _collect_price_exposure_state(tracker: Dictionary) -> void:
+	var by_company: Dictionary = tracker.get("by_company", {})
+	for company_id_value in RunState.company_order:
+		var company_id: String = str(company_id_value)
+		var runtime: Dictionary = RunState.get_company(company_id)
+		var context_value = runtime.get("price_exposure_context", {})
+		if typeof(context_value) != TYPE_DICTIONARY:
+			continue
+		var context: Dictionary = context_value
+		var rows: Array = context.get("exposure_rows", []) if typeof(context.get("exposure_rows", [])) == TYPE_ARRAY else []
+		if rows.is_empty():
+			continue
+		var definition: Dictionary = RunState.get_effective_company_definition(company_id, false, false)
+		var drift: float = clamp(float(context.get("exposure_drift_adjustment", 0.0)), -0.004, 0.004)
+		var abs_drift: float = absf(drift)
+		var confidence: float = clamp(float(context.get("exposure_confidence", 0.0)), 0.0, 1.0)
+		var volatility_multiplier: float = clamp(float(context.get("exposure_volatility_multiplier", 1.0)), 0.90, 1.16)
+		var volume_multiplier: float = clamp(float(context.get("exposure_volume_multiplier", 1.0)), 0.92, 1.22)
+		tracker["active_stock_days"] = int(tracker.get("active_stock_days", 0)) + 1
+		tracker["total_drift"] = float(tracker.get("total_drift", 0.0)) + drift
+		tracker["total_abs_drift"] = float(tracker.get("total_abs_drift", 0.0)) + abs_drift
+		tracker["total_confidence"] = float(tracker.get("total_confidence", 0.0)) + confidence
+		tracker["total_volatility_multiplier"] = float(tracker.get("total_volatility_multiplier", 0.0)) + volatility_multiplier
+		tracker["total_volume_multiplier"] = float(tracker.get("total_volume_multiplier", 0.0)) + volume_multiplier
+		if drift > 0.000001:
+			tracker["positive_drift_days"] = int(tracker.get("positive_drift_days", 0)) + 1
+		elif drift < -0.000001:
+			tracker["negative_drift_days"] = int(tracker.get("negative_drift_days", 0)) + 1
+		else:
+			tracker["flat_drift_days"] = int(tracker.get("flat_drift_days", 0)) + 1
+
+		var company_row: Dictionary = by_company.get(company_id, {})
+		if company_row.is_empty():
+			company_row = {
+				"company_id": company_id,
+				"ticker": str(definition.get("ticker", company_id.to_upper())),
+				"name": str(definition.get("name", "")),
+				"sector_id": str(definition.get("sector_id", "")),
+				"days": 0,
+				"positive_days": 0,
+				"negative_days": 0,
+				"total_drift": 0.0,
+				"total_abs_drift": 0.0,
+				"total_confidence": 0.0,
+				"max_abs_drift": 0.0,
+				"last_summary": "",
+				"last_rows": []
+			}
+		company_row["days"] = int(company_row.get("days", 0)) + 1
+		company_row["total_drift"] = float(company_row.get("total_drift", 0.0)) + drift
+		company_row["total_abs_drift"] = float(company_row.get("total_abs_drift", 0.0)) + abs_drift
+		company_row["total_confidence"] = float(company_row.get("total_confidence", 0.0)) + confidence
+		company_row["max_abs_drift"] = max(float(company_row.get("max_abs_drift", 0.0)), abs_drift)
+		company_row["last_summary"] = str(context.get("exposure_summary", ""))
+		company_row["last_rows"] = _compact_exposure_rows(rows, 3)
+		if drift > 0.000001:
+			company_row["positive_days"] = int(company_row.get("positive_days", 0)) + 1
+		elif drift < -0.000001:
+			company_row["negative_days"] = int(company_row.get("negative_days", 0)) + 1
+		by_company[company_id] = company_row
+	tracker["by_company"] = by_company
+
+
+func _build_price_exposure_report(tracker: Dictionary, initial_prices: Dictionary) -> Dictionary:
+	var active_stock_days: int = int(tracker.get("active_stock_days", 0))
+	var company_rows: Array = []
+	var positive_exposure_returns: Array = []
+	var negative_exposure_returns: Array = []
+	var by_company: Dictionary = tracker.get("by_company", {})
+	for company_row_value in by_company.values():
+		if typeof(company_row_value) != TYPE_DICTIONARY:
+			continue
+		var company_row: Dictionary = company_row_value.duplicate(true)
+		var days: int = max(int(company_row.get("days", 0)), 1)
+		var company_id: String = str(company_row.get("company_id", ""))
+		var runtime: Dictionary = RunState.get_company(company_id)
+		var start_price: float = max(float(initial_prices.get(company_id, runtime.get("starting_price", 0.0))), 1.0)
+		var final_price: float = float(runtime.get("current_price", start_price))
+		var return_pct: float = ((final_price - start_price) / start_price) * 100.0
+		var avg_drift: float = float(company_row.get("total_drift", 0.0)) / float(days)
+		company_row["avg_drift_bps"] = avg_drift * 10000.0
+		company_row["avg_abs_drift_bps"] = (float(company_row.get("total_abs_drift", 0.0)) / float(days)) * 10000.0
+		company_row["avg_confidence"] = float(company_row.get("total_confidence", 0.0)) / float(days)
+		company_row["final_return_pct"] = return_pct
+		company_row["final_price"] = final_price
+		company_rows.append(company_row)
+		if avg_drift > 0.0:
+			positive_exposure_returns.append(return_pct)
+		elif avg_drift < 0.0:
+			negative_exposure_returns.append(return_pct)
+
+	var top_tailwinds: Array = company_rows.duplicate(true)
+	top_tailwinds.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		var left_score: float = float(left.get("avg_drift_bps", 0.0))
+		var right_score: float = float(right.get("avg_drift_bps", 0.0))
+		if is_equal_approx(left_score, right_score):
+			return str(left.get("company_id", "")) < str(right.get("company_id", ""))
+		return left_score > right_score
+	)
+	var top_headwinds: Array = company_rows.duplicate(true)
+	top_headwinds.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		var left_score: float = float(left.get("avg_drift_bps", 0.0))
+		var right_score: float = float(right.get("avg_drift_bps", 0.0))
+		if is_equal_approx(left_score, right_score):
+			return str(left.get("company_id", "")) < str(right.get("company_id", ""))
+		return left_score < right_score
+	)
+	var highest_confidence: Array = company_rows.duplicate(true)
+	highest_confidence.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		var left_score: float = float(left.get("avg_confidence", 0.0))
+		var right_score: float = float(right.get("avg_confidence", 0.0))
+		if is_equal_approx(left_score, right_score):
+			return str(left.get("company_id", "")) < str(right.get("company_id", ""))
+		return left_score > right_score
+	)
+
+	return {
+		"active_stock_days": active_stock_days,
+		"positive_drift_days": int(tracker.get("positive_drift_days", 0)),
+		"negative_drift_days": int(tracker.get("negative_drift_days", 0)),
+		"flat_drift_days": int(tracker.get("flat_drift_days", 0)),
+		"avg_drift_bps": _safe_average_total(float(tracker.get("total_drift", 0.0)) * 10000.0, active_stock_days),
+		"avg_abs_drift_bps": _safe_average_total(float(tracker.get("total_abs_drift", 0.0)) * 10000.0, active_stock_days),
+		"avg_confidence": _safe_average_total(float(tracker.get("total_confidence", 0.0)), active_stock_days),
+		"avg_volatility_multiplier": _safe_average_total(float(tracker.get("total_volatility_multiplier", 0.0)), active_stock_days),
+		"avg_volume_multiplier": _safe_average_total(float(tracker.get("total_volume_multiplier", 0.0)), active_stock_days),
+		"positive_exposure_avg_return_pct": _average(positive_exposure_returns),
+		"negative_exposure_avg_return_pct": _average(negative_exposure_returns),
+		"top_tailwinds": _trim_company_rows(top_tailwinds, 8),
+		"top_headwinds": _trim_company_rows(top_headwinds, 8),
+		"highest_confidence": _trim_company_rows(highest_confidence, 8)
+	}
+
+
+func _compact_exposure_rows(rows: Array, limit: int) -> Array:
+	var output: Array = []
+	for row_value in rows:
+		if output.size() >= limit:
+			break
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		output.append({
+			"source_type": str(row.get("source_type", "")),
+			"id": str(row.get("id", "")),
+			"label": str(row.get("label", "")),
+			"exposure": float(row.get("exposure", 0.0)),
+			"signal": float(row.get("signal", 0.0)),
+			"contribution": float(row.get("contribution", 0.0))
+		})
+	return output
+
+
+func _trim_company_rows(rows: Array, limit: int) -> Array:
+	var output: Array = []
+	for row_value in rows:
+		if output.size() >= limit:
+			break
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		output.append({
+			"company_id": str(row.get("company_id", "")),
+			"ticker": str(row.get("ticker", "")),
+			"name": str(row.get("name", "")),
+			"sector_id": str(row.get("sector_id", "")),
+			"days": int(row.get("days", 0)),
+			"avg_drift_bps": float(row.get("avg_drift_bps", 0.0)),
+			"avg_abs_drift_bps": float(row.get("avg_abs_drift_bps", 0.0)),
+			"avg_confidence": float(row.get("avg_confidence", 0.0)),
+			"final_return_pct": float(row.get("final_return_pct", 0.0)),
+			"final_price": float(row.get("final_price", 0.0)),
+			"last_summary": str(row.get("last_summary", "")),
+			"last_rows": row.get("last_rows", []).duplicate(true)
+		})
+	return output
+
+
 func _daily_value_snapshot() -> Dictionary:
 	var market_value: float = 0.0
 	var gorengan_value: float = 0.0
@@ -539,6 +749,205 @@ func _daily_value_snapshot() -> Dictionary:
 		"market_value": market_value,
 		"gorengan_value": gorengan_value
 	}
+
+
+func _portfolio_report() -> Dictionary:
+	var holdings: Dictionary = RunState.player_portfolio.get("holdings", {})
+	return {
+		"cash": float(RunState.player_portfolio.get("cash", 0.0)),
+		"market_value": RunState.get_portfolio_market_value(),
+		"equity": RunState.get_total_equity(),
+		"holdings_count": holdings.size(),
+		"realized_pnl": float(RunState.player_portfolio.get("realized_pnl", 0.0))
+	}
+
+
+func _compact_audit_report(report: Dictionary) -> Dictionary:
+	if not bool(report.get("success", false)):
+		return report
+	var stocks: Dictionary = report.get("stocks", {})
+	var events: Dictionary = report.get("events", {})
+	var counters: Dictionary = events.get("counters", {})
+	var bottom_rows: Array = stocks.get("bottom_5", [])
+	var worst_stock: Dictionary = {}
+	if not bottom_rows.is_empty() and typeof(bottom_rows[bottom_rows.size() - 1]) == TYPE_DICTIONARY:
+		worst_stock = bottom_rows[bottom_rows.size() - 1]
+	var price_exposure: Dictionary = report.get("price_exposure", {})
+	return {
+		"success": true,
+		"seed": int(report.get("seed", 0)),
+		"difficulty_id": str(report.get("difficulty_id", "")),
+		"difficulty_label": str(report.get("difficulty_label", "")),
+		"use_company_universe_catalog": bool(report.get("use_company_universe_catalog", false)),
+		"requested_trading_days": int(report.get("requested_trading_days", 0)),
+		"days_completed": int(report.get("days_completed", 0)),
+		"final_day_index": int(report.get("final_day_index", 0)),
+		"final_trade_date": report.get("final_trade_date", {}),
+		"company_count": int(report.get("company_count", 0)),
+		"audit_elapsed_msec": float(report.get("audit_elapsed_msec", 0.0)),
+		"portfolio": report.get("portfolio", {}),
+		"stocks": {
+			"advancers": int(stocks.get("advancers", 0)),
+			"decliners": int(stocks.get("decliners", 0)),
+			"flat": int(stocks.get("flat", 0)),
+			"average_return_pct": float(stocks.get("average_return_pct", 0.0)),
+			"median_return_pct": float(stocks.get("median_return_pct", 0.0)),
+			"decliner_average_final_price": float(stocks.get("decliner_average_final_price", 0.0)),
+			"decliner_median_final_price": float(stocks.get("decliner_median_final_price", 0.0)),
+			"final_price_at_floor_count": int(stocks.get("final_price_at_floor_count", 0)),
+			"floor_turnaround_candidate_count": int(stocks.get("floor_turnaround_candidate_count", 0)),
+			"floor_zombie_count": int(stocks.get("floor_zombie_count", 0)),
+			"over_200_pct_count": int(stocks.get("over_200_pct_count", 0)),
+			"over_800_pct_count": int(stocks.get("over_800_pct_count", 0)),
+			"over_1000_pct_count": int(stocks.get("over_1000_pct_count", 0)),
+			"final_price_over_100k_count": int(stocks.get("final_price_over_100k_count", 0)),
+			"final_price_over_1m_count": int(stocks.get("final_price_over_1m_count", 0)),
+			"best_stock": _compact_stock_row(stocks.get("best_stock", {})),
+			"worst_stock": _compact_stock_row(worst_stock),
+			"top_5": _compact_stock_rows(stocks.get("top_10", []), 5),
+			"bottom_5": _compact_stock_rows(bottom_rows, 5)
+		},
+		"events": {
+			"counters": counters,
+			"event_family_counts": events.get("event_family_counts", {}),
+			"corporate_category_counts": events.get("corporate_category_counts", {}),
+			"special_event_id_counts": events.get("special_event_id_counts", {}),
+			"top_event_id_counts": _top_count_rows(events.get("event_id_counts", {}), 12)
+		},
+		"gorengan_campaigns": _compact_gorengan_report(report.get("gorengan_campaigns", {})),
+		"price_exposure": {
+			"active_stock_days": int(price_exposure.get("active_stock_days", 0)),
+			"positive_drift_days": int(price_exposure.get("positive_drift_days", 0)),
+			"negative_drift_days": int(price_exposure.get("negative_drift_days", 0)),
+			"flat_drift_days": int(price_exposure.get("flat_drift_days", 0)),
+			"avg_drift_bps": float(price_exposure.get("avg_drift_bps", 0.0)),
+			"avg_abs_drift_bps": float(price_exposure.get("avg_abs_drift_bps", 0.0)),
+			"avg_confidence": float(price_exposure.get("avg_confidence", 0.0)),
+			"avg_volatility_multiplier": float(price_exposure.get("avg_volatility_multiplier", 0.0)),
+			"avg_volume_multiplier": float(price_exposure.get("avg_volume_multiplier", 0.0)),
+			"positive_exposure_avg_return_pct": float(price_exposure.get("positive_exposure_avg_return_pct", 0.0)),
+			"negative_exposure_avg_return_pct": float(price_exposure.get("negative_exposure_avg_return_pct", 0.0)),
+			"top_tailwinds": _compact_exposure_company_rows(price_exposure.get("top_tailwinds", []), 5),
+			"top_headwinds": _compact_exposure_company_rows(price_exposure.get("top_headwinds", []), 5),
+			"highest_confidence": _compact_exposure_company_rows(price_exposure.get("highest_confidence", []), 5)
+		},
+		"turnover": report.get("turnover", {})
+	}
+
+
+func _compact_stock_rows(rows: Array, limit: int) -> Array:
+	var output: Array = []
+	for row_value in rows:
+		if output.size() >= limit:
+			break
+		if typeof(row_value) == TYPE_DICTIONARY:
+			output.append(_compact_stock_row(row_value))
+	return output
+
+
+func _compact_stock_row(row_value) -> Dictionary:
+	if typeof(row_value) != TYPE_DICTIONARY:
+		return {}
+	var row: Dictionary = row_value
+	return {
+		"company_id": str(row.get("company_id", "")),
+		"ticker": str(row.get("ticker", "")),
+		"name": str(row.get("name", "")),
+		"sector_id": str(row.get("sector_id", "")),
+		"start_price": float(row.get("start_price", 0.0)),
+		"final_price": float(row.get("final_price", 0.0)),
+		"return_pct": float(row.get("return_pct", 0.0)),
+		"high_return_pct": float(row.get("high_return_pct", 0.0)),
+		"final_from_high_pct": float(row.get("final_from_high_pct", 0.0)),
+		"last_daily_change_pct": float(row.get("last_daily_change_pct", 0.0)),
+		"last_day_value": float(row.get("last_day_value", 0.0)),
+		"gorengan_tier": str(row.get("gorengan_tier", "")),
+		"gorengan_phase": str(row.get("gorengan_phase", "")),
+		"gorengan_wave": str(row.get("gorengan_wave", "")),
+		"abnormal_phase": str(row.get("abnormal_phase", "")),
+		"floor_status": str(row.get("floor_status", "")),
+		"latest_statement_period": str(row.get("latest_statement_period", "")),
+		"quality_score": int(row.get("quality_score", 0)),
+		"growth_score": int(row.get("growth_score", 0)),
+		"risk_score": int(row.get("risk_score", 0))
+	}
+
+
+func _compact_exposure_company_rows(rows: Array, limit: int) -> Array:
+	var output: Array = []
+	for row_value in rows:
+		if output.size() >= limit:
+			break
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		output.append({
+			"company_id": str(row.get("company_id", "")),
+			"ticker": str(row.get("ticker", "")),
+			"name": str(row.get("name", "")),
+			"sector_id": str(row.get("sector_id", "")),
+			"days": int(row.get("days", 0)),
+			"avg_drift_bps": float(row.get("avg_drift_bps", 0.0)),
+			"avg_abs_drift_bps": float(row.get("avg_abs_drift_bps", 0.0)),
+			"avg_confidence": float(row.get("avg_confidence", 0.0)),
+			"final_return_pct": float(row.get("final_return_pct", 0.0)),
+			"final_price": float(row.get("final_price", 0.0)),
+			"last_summary": str(row.get("last_summary", ""))
+		})
+	return output
+
+
+func _compact_gorengan_report(report_value) -> Dictionary:
+	if typeof(report_value) != TYPE_DICTIONARY:
+		return {}
+	var report: Dictionary = report_value
+	var top_campaigns: Array = []
+	for campaign_value in report.get("top_campaigns", []):
+		if top_campaigns.size() >= 5:
+			break
+		if typeof(campaign_value) != TYPE_DICTIONARY:
+			continue
+		var campaign: Dictionary = campaign_value
+		top_campaigns.append({
+			"company_id": str(campaign.get("company_id", "")),
+			"ticker": str(campaign.get("ticker", "")),
+			"name": str(campaign.get("name", "")),
+			"tier": str(campaign.get("tier", "")),
+			"phase": str(campaign.get("phase", "")),
+			"wave": str(campaign.get("wave", "")),
+			"days_active": int(campaign.get("days_active", 0)),
+			"max_realized_return_pct": float(campaign.get("max_realized_return_pct", 0.0)),
+			"last_realized_return_pct": float(campaign.get("last_realized_return_pct", 0.0)),
+			"target_return_pct": float(campaign.get("target_return_pct", 0.0)),
+			"required_hard_catalysts": int(campaign.get("required_hard_catalysts", 0)),
+			"max_hard_catalysts": int(campaign.get("max_hard_catalysts", 0)),
+			"max_soft_catalysts": int(campaign.get("max_soft_catalysts", 0)),
+			"dump_seen": bool(campaign.get("dump_seen", false)),
+			"successful": bool(campaign.get("successful", false))
+		})
+	return {
+		"started": int(report.get("started", 0)),
+		"successful_executed": int(report.get("successful_executed", 0)),
+		"dump_seen": int(report.get("dump_seen", 0)),
+		"by_tier": report.get("by_tier", {}),
+		"top_campaigns": top_campaigns
+	}
+
+
+func _top_count_rows(counts_value, limit: int) -> Array:
+	if typeof(counts_value) != TYPE_DICTIONARY:
+		return []
+	var rows: Array = []
+	for key in Dictionary(counts_value).keys():
+		rows.append({"id": str(key), "count": int(Dictionary(counts_value).get(key, 0))})
+	rows.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		var left_count: int = int(left.get("count", 0))
+		var right_count: int = int(right.get("count", 0))
+		if left_count == right_count:
+			return str(left.get("id", "")) < str(right.get("id", ""))
+		return left_count > right_count
+	)
+	return rows.slice(0, min(rows.size(), limit))
 
 
 func _latest_bar(runtime: Dictionary) -> Dictionary:
@@ -614,6 +1023,27 @@ func _arg_int(args: Array, key: String, fallback: int) -> int:
 	return int(_arg_string(args, key, str(fallback)))
 
 
+func _arg_bool(args: Array, key: String, fallback: bool) -> bool:
+	var index: int = args.find(key)
+	if index >= 0:
+		if index + 1 < args.size():
+			var next_value: String = str(args[index + 1]).strip_edges().to_lower()
+			if next_value in ["true", "1", "yes", "on"]:
+				return true
+			if next_value in ["false", "0", "no", "off"]:
+				return false
+		return true
+	for arg_value in args:
+		var arg: String = str(arg_value)
+		if arg.begins_with("%s=" % key):
+			var value: String = arg.substr(key.length() + 1).strip_edges().to_lower()
+			if value in ["true", "1", "yes", "on"]:
+				return true
+			if value in ["false", "0", "no", "off"]:
+				return false
+	return fallback
+
+
 func _average(values: Array) -> float:
 	if values.is_empty():
 		return 0.0
@@ -621,6 +1051,12 @@ func _average(values: Array) -> float:
 	for value in values:
 		total += float(value)
 	return total / float(values.size())
+
+
+func _safe_average_total(total: float, count: int) -> float:
+	if count <= 0:
+		return 0.0
+	return total / float(count)
 
 
 func _median(values: Array) -> float:

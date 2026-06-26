@@ -80,6 +80,7 @@ func _run_progression(feed_data: Dictionary, archetype: String, dialog_trees: Ar
 	var account_id: String = str(account.get("id", ""))
 	var snapshot: Dictionary = _snapshot(account)
 	_reset_social_state(account, _account_state(6, 5, 4), START_DAY_INDEX)
+	_seed_dialog_branch(account_id, "network_source_followup", "open", START_DAY_INDEX - 1)
 	_assert_thread_tree(feed_data, account, START_DAY_INDEX, "network_source_followup", "open")
 
 	var steps: Array = [
@@ -215,6 +216,27 @@ func _account_branch(account_id: String) -> Dictionary:
 	var dialog_state: Dictionary = state.get("dialog_state", {}) if typeof(state.get("dialog_state", {})) == TYPE_DICTIONARY else {}
 	var accounts: Dictionary = dialog_state.get("accounts", {}) if typeof(dialog_state.get("accounts", {})) == TYPE_DICTIONARY else {}
 	return accounts.get(account_id, {}) if typeof(accounts.get(account_id, {})) == TYPE_DICTIONARY else {}
+
+
+func _seed_dialog_branch(account_id: String, tree_id: String, node_id: String, last_day_index: int) -> void:
+	var state: Dictionary = RunState.get_twooter_social_state()
+	var dialog_state: Dictionary = state.get("dialog_state", {}) if typeof(state.get("dialog_state", {})) == TYPE_DICTIONARY else {}
+	var accounts: Dictionary = dialog_state.get("accounts", {}) if typeof(dialog_state.get("accounts", {})) == TYPE_DICTIONARY else {}
+	accounts[account_id] = {
+		"tree_id": tree_id,
+		"node_id": node_id,
+		"last_option_id": "synthetic_progression_seed",
+		"last_outcome": "",
+		"last_action_id": "message_check_in",
+		"repeat_count": 0,
+		"last_day_index": last_day_index,
+		"cooldown_until_day": -1,
+		"cooldown_reason": "",
+		"step_count": 0
+	}
+	dialog_state["accounts"] = accounts
+	state["dialog_state"] = dialog_state
+	RunState.set_twooter_social_state(state)
 
 
 func _reset_social_state(account: Dictionary, account_state: Dictionary, day_index: int) -> void:

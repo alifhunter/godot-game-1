@@ -2,6 +2,10 @@ extends RefCounted
 
 const MAX_EVENT_LOOKBACK := 20
 const MAX_RECENT_POSTS_PER_SOURCE := 2
+const MAX_GENERATED_DOSSIER_TWOOTER_SOURCES := 6
+const MAX_GENERATED_DOSSIER_TWOOTER_POSTS := 5
+const GENERATED_DOSSIER_TWOOTER_SOURCE_SYSTEM_ID := "company_story_dossier"
+const RELATIONSHIP_GRAPH_SOURCE_SYSTEM_ID := "company_relationship_graph"
 
 
 func build_social_snapshot(
@@ -38,6 +42,12 @@ func build_social_snapshot(
 	var current_day_index: int = int(current_trade_date.get("day_index", current_trade_date.get("day", 0)))
 	var story_memory: Dictionary = _build_story_memory(event_history, active_company_arcs, current_day_index)
 	var latest_market_entry: Dictionary = _latest_market_entry(market_history)
+	var generated_twooter_sources: Array = _build_generated_dossier_twooter_sources(
+		_run_state,
+		company_row_lookup,
+		current_trade_date,
+		current_day_index
+	)
 
 	var posts: Array = []
 	var seen_ids: Dictionary = {}
@@ -46,6 +56,8 @@ func build_social_snapshot(
 	for post_value in _build_active_special_posts(feed_data, unlocked_accounts, active_special_events, current_trade_date, story_memory, latest_market_entry):
 		_append_unique_post(posts, seen_ids, post_value)
 	for post_value in _build_recent_event_posts(feed_data, unlocked_accounts, company_row_lookup, event_history, current_trade_date, story_memory, latest_market_entry):
+		_append_unique_post(posts, seen_ids, post_value)
+	for post_value in _build_generated_dossier_twooter_posts(feed_data, unlocked_accounts, company_row_lookup, generated_twooter_sources, current_trade_date, story_memory):
 		_append_unique_post(posts, seen_ids, post_value)
 	for post_value in _build_ambient_posts(feed_data, unlocked_accounts, company_rows, market_history, current_trade_date):
 		_append_unique_post(posts, seen_ids, post_value)
@@ -273,6 +285,25 @@ func _build_recent_event_posts(
 	var source_counts: Dictionary = {}
 	for event_value in recent_history:
 		var event_data: Dictionary = event_value
+		if str(event_data.get("event_family", "")) == RELATIONSHIP_GRAPH_SOURCE_SYSTEM_ID:
+			var relationship_source_key: String = "relationship|%s" % str(event_data.get("relationship_event_id", event_data.get("event_id", "")))
+			source_counts[relationship_source_key] = int(source_counts.get(relationship_source_key, 0))
+			if int(source_counts.get(relationship_source_key, 0)) > 0:
+				continue
+			var relationship_post: Dictionary = _build_relationship_event_post(
+				feed_data,
+				unlocked_accounts,
+				company_row_lookup,
+				event_data,
+				current_trade_date,
+				current_day_index,
+				story_memory,
+				latest_market_entry
+			)
+			if not relationship_post.is_empty():
+				source_counts[relationship_source_key] = int(source_counts.get(relationship_source_key, 0)) + 1
+				posts.append(relationship_post)
+			continue
 		var source_data: Dictionary = _source_with_market_context(event_data, latest_market_entry)
 		var source_key: String = str(source_data.get("event_id", "")) + "|" + str(source_data.get("target_company_id", ""))
 		source_counts[source_key] = int(source_counts.get(source_key, 0))
@@ -322,6 +353,136 @@ func _build_recent_event_posts(
 			posts.append(post)
 
 	return posts
+
+
+func _build_relationship_event_post(
+	feed_data: Dictionary,
+	unlocked_accounts: Array,
+	company_row_lookup: Dictionary,
+	event_data: Dictionary,
+	current_trade_date: Dictionary,
+	current_day_index: int,
+	story_memory: Dictionary,
+	latest_market_entry: Dictionary
+) -> Dictionary:
+	if not _relationship_event_allows_public_surface(event_data):
+		return {}
+	var age_days: int = max(current_day_index - int(event_data.get("day_index", current_day_index)), 0)
+	var minimum_tier: int = _required_tier_for_event_age(age_days)
+	if str(event_data.get("relationship_visibility", "")) == "semi_public":
+		minimum_tier = max(minimum_tier, 2)
+	var account: Dictionary = _pick_generic_account(
+		unlocked_accounts,
+		minimum_tier,
+		"relationship|%s" % str(event_data.get("relationship_event_id", event_data.get("event_id", "")))
+	)
+	if account.is_empty():
+		return {}
+	var company_id: String = str(event_data.get("target_company_id", ""))
+	var row: Dictionary = company_row_lookup.get(company_id, {})
+	var source_data: Dictionary = _source_with_market_context(_relationship_event_social_source(event_data), latest_market_entry)
+	var context: Dictionary = _build_context(feed_data, source_data, row, current_trade_date, story_memory)
+	var post_id: String = "relationship|%s|%s|%s" % [
+		str(source_data.get("relationship_event_id", source_data.get("event_id", ""))),
+		int(source_data.get("day_index", -1)),
+		str(account.get("id", ""))
+	]
+	var post: Dictionary = _build_post(
+		feed_data,
+		account,
+		post_id,
+		_relationship_event_post_text(source_data, account),
+		source_data,
+		current_trade_date,
+		context,
+		_visibility_label_for_age(age_days),
+		3.05 - min(float(age_days) * 0.08, 0.8)
+	)
+	if post.is_empty():
+		return {}
+	post = _apply_generated_twooter_metadata(post, source_data, account)
+	return _copy_relationship_event_metadata(post, source_data)
+
+
+func _relationship_event_allows_public_surface(event_data: Dictionary) -> bool:
+	var visibility: String = str(event_data.get("relationship_visibility", "")).strip_edges().to_lower()
+	return visibility == "public" or visibility == "semi_public"
+
+
+func _relationship_event_social_source(event_data: Dictionary) -> Dictionary:
+	var source_data: Dictionary = event_data.duplicate(true)
+	var visibility: String = str(source_data.get("relationship_visibility", "semi_public")).strip_edges().to_lower()
+	source_data["scope"] = "company"
+	source_data["category"] = "generated_twooter_relationship"
+	source_data["event_family"] = RELATIONSHIP_GRAPH_SOURCE_SYSTEM_ID
+	source_data["generated_content_surface"] = true
+	source_data["generated_surface_id"] = "twooter"
+	source_data["generated_scope_id"] = "relationship"
+	source_data["source_system_id"] = RELATIONSHIP_GRAPH_SOURCE_SYSTEM_ID
+	source_data["story_id"] = str(source_data.get("relationship_event_id", ""))
+	source_data["story_family"] = "company_relationship"
+	source_data["archetype_id"] = str(source_data.get("relationship_event_kind", source_data.get("category", "")))
+	source_data["public_status"] = "reported" if visibility == "public" else "market_talk"
+	source_data["stage_id"] = "relationship_event"
+	source_data["visibility"] = "public" if visibility == "public" else "semi_public"
+	source_data["detail_level"] = "relationship"
+	source_data["reliability"] = snappedf(clamp(float(source_data.get("relationship_confidence", source_data.get("confidence", 0.0))) * 0.88, 0.0, 1.0), 0.001)
+	source_data["leak_risk"] = 0.0 if visibility == "public" else 0.12
+	source_data["source_fact_ids"] = _unique_string_array(["relationship_event:%s" % str(source_data.get("relationship_event_id", ""))])
+	source_data["source_clue_ids"] = _unique_string_array(["relationship_edge:%s" % str(source_data.get("relationship_edge_id", ""))])
+	source_data["source_company_ids"] = _unique_string_array([
+		str(source_data.get("target_company_id", "")),
+		str(source_data.get("counterparty_company_id", ""))
+	])
+	source_data["source_sector_ids"] = _unique_string_array([str(source_data.get("target_sector_id", ""))])
+	source_data["source_event_ids"] = _unique_string_array([str(source_data.get("relationship_event_id", ""))])
+	source_data["description"] = _relationship_event_social_summary(source_data)
+	return source_data
+
+
+func _relationship_event_social_summary(source_data: Dictionary) -> String:
+	var target_ticker: String = str(source_data.get("target_ticker", source_data.get("target_company_id", ""))).to_upper()
+	var counterparty_ticker: String = str(source_data.get("counterparty_ticker", source_data.get("counterparty_company_id", ""))).to_upper()
+	var role: String = str(source_data.get("relationship_impact_role", ""))
+	var event_kind: String = str(source_data.get("relationship_event_kind", ""))
+	if event_kind == "competitor_pressure":
+		return "%s/%s relative momentum is what people are watching, not a clean standalone catalyst yet." % [target_ticker, counterparty_ticker]
+	if role == "supplier":
+		return "%s is getting attention for the commercial link with %s; follow-through still matters." % [target_ticker, counterparty_ticker]
+	if role == "customer":
+		return "%s has exposure to the %s link, but the economics are still being argued." % [target_ticker, counterparty_ticker]
+	return "%s and %s are being tied together by relationship chatter." % [target_ticker, counterparty_ticker]
+
+
+func _relationship_event_post_text(source_data: Dictionary, account: Dictionary) -> String:
+	var target_ticker: String = str(source_data.get("target_ticker", source_data.get("target_company_id", ""))).to_upper()
+	var counterparty_ticker: String = str(source_data.get("counterparty_ticker", source_data.get("counterparty_company_id", ""))).to_upper()
+	var summary: String = str(source_data.get("description", "")).strip_edges()
+	var voice_id: String = str(account.get("voice", ""))
+	if voice_id == "funda_thread" or voice_id == "quality_hold":
+		return "%s/%s link is worth tracking, but the real test is whether it appears in orders, margins, or filings. %s" % [target_ticker, counterparty_ticker, summary]
+	if voice_id == "rumor_feed" or voice_id == "retail_hype":
+		return "%s-%s relationship chatter is back on the tape. Not enough for blind chasing, but enough to keep it on watch." % [target_ticker, counterparty_ticker]
+	return "%s and %s are getting relationship-linked attention today. %s" % [target_ticker, counterparty_ticker, summary]
+
+
+func _copy_relationship_event_metadata(target: Dictionary, source_data: Dictionary) -> Dictionary:
+	var enriched: Dictionary = target.duplicate(true)
+	for key in [
+		"relationship_event_id",
+		"relationship_event_kind",
+		"relationship_edge_id",
+		"relationship_type",
+		"relationship_visibility",
+		"relationship_impact_role",
+		"counterparty_company_id",
+		"counterparty_ticker",
+		"counterparty_company_name",
+		"source_event_ids"
+	]:
+		if source_data.has(key):
+			enriched[key] = source_data.get(key)
+	return enriched
 
 
 func _build_persona_post(
@@ -582,6 +743,585 @@ func _build_ambient_sector_source(company_rows: Array, current_trade_date: Dicti
 		"day_index": int(current_trade_date.get("day_index", -1)),
 		"trade_date": current_trade_date.duplicate(true)
 	}
+
+
+func _build_generated_dossier_twooter_sources(
+	run_state,
+	company_row_lookup: Dictionary,
+	current_trade_date: Dictionary,
+	current_day_index: int
+) -> Array:
+	if run_state == null or not run_state.has_method("get_company_story_dossier_state"):
+		return []
+
+	var dossier_state: Dictionary = run_state.get_company_story_dossier_state()
+	var dossier_index: Dictionary = dossier_state.get("dossier_index", {})
+	var source_candidates: Array = []
+	var seen_sector_ids: Dictionary = {}
+	var seen_macro_keys: Dictionary = {}
+	for story_id_value in dossier_index.keys():
+		var dossier_value: Variant = dossier_index.get(story_id_value, {})
+		if typeof(dossier_value) != TYPE_DICTIONARY:
+			continue
+		var dossier: Dictionary = dossier_value
+		var public_clue: Dictionary = _public_twooter_clue_for_day(dossier, current_day_index)
+		if public_clue.is_empty():
+			continue
+		var company_id: String = str(dossier.get("company_id", ""))
+		var company_row: Dictionary = company_row_lookup.get(company_id, {})
+		if company_row.is_empty():
+			company_row = _company_row_from_dossier(dossier)
+
+		var company_source: Dictionary = _generated_twooter_company_source(dossier, public_clue, company_row, current_trade_date, current_day_index)
+		if not company_source.is_empty():
+			source_candidates.append(company_source)
+
+		var sector_fact: Dictionary = _best_fact_for_types(dossier, ["sector"])
+		var sector_id: String = str(sector_fact.get("source_id", company_row.get("sector_id", "")))
+		if not sector_id.is_empty() and not seen_sector_ids.has(sector_id):
+			var sector_source: Dictionary = _generated_twooter_sector_source(dossier, public_clue, sector_fact, company_row, current_trade_date, current_day_index)
+			if not sector_source.is_empty():
+				source_candidates.append(sector_source)
+				seen_sector_ids[sector_id] = true
+
+		var macro_fact: Dictionary = _best_fact_for_types(dossier, ["macro", "commodity"])
+		var macro_key: String = "%s|%s" % [
+			str(macro_fact.get("fact_type", "")),
+			str(macro_fact.get("source_id", ""))
+		]
+		if not macro_fact.is_empty() and not seen_macro_keys.has(macro_key):
+			var macro_source: Dictionary = _generated_twooter_macro_source(dossier, public_clue, macro_fact, company_row, current_trade_date, current_day_index)
+			if not macro_source.is_empty():
+				source_candidates.append(macro_source)
+				seen_macro_keys[macro_key] = true
+
+	source_candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if is_equal_approx(float(a.get("priority", 0.0)), float(b.get("priority", 0.0))):
+			return str(a.get("event_id", "")) < str(b.get("event_id", ""))
+		return float(a.get("priority", 0.0)) > float(b.get("priority", 0.0))
+	)
+	return _select_generated_dossier_twooter_sources(source_candidates)
+
+
+func _build_generated_dossier_twooter_posts(
+	feed_data: Dictionary,
+	unlocked_accounts: Array,
+	company_row_lookup: Dictionary,
+	generated_twooter_sources: Array,
+	current_trade_date: Dictionary,
+	story_memory: Dictionary
+) -> Array:
+	var posts: Array = []
+	for source_value in generated_twooter_sources:
+		if posts.size() >= MAX_GENERATED_DOSSIER_TWOOTER_POSTS:
+			break
+		if typeof(source_value) != TYPE_DICTIONARY:
+			continue
+		var source_data: Dictionary = source_value
+		var account: Dictionary = _pick_generated_twooter_account(unlocked_accounts, source_data)
+		if account.is_empty():
+			continue
+		var company_id: String = str(source_data.get("target_company_id", ""))
+		var company_row: Dictionary = company_row_lookup.get(company_id, {})
+		var post_id: String = "generated_dossier_twooter|%s|%s|%s|%d" % [
+			str(account.get("id", "")),
+			str(source_data.get("generated_scope_id", "")),
+			str(source_data.get("story_id", "")).replace("|", "_"),
+			int(source_data.get("day_index", current_trade_date.get("day_index", -1)))
+		]
+		var context: Dictionary = _build_context(feed_data, source_data, company_row, current_trade_date, story_memory)
+		var post_text: String = _generated_twooter_post_text(account, source_data, context, post_id)
+		if post_text.is_empty():
+			post_text = _pick_voice_text(
+				feed_data,
+				str(account.get("voice", "")),
+				_voice_key_for_event(source_data),
+				post_id,
+				context
+			)
+		var post: Dictionary = _build_post(
+			feed_data,
+			account,
+			post_id,
+			post_text,
+			source_data,
+			current_trade_date,
+			context,
+			_generated_twooter_visibility_label(account, source_data),
+			float(source_data.get("priority", 2.0))
+		)
+		if post.is_empty():
+			continue
+		posts.append(_apply_generated_twooter_metadata(post, source_data, account))
+	return posts
+
+
+func _select_generated_dossier_twooter_sources(source_candidates: Array) -> Array:
+	var buckets: Dictionary = {
+		"company": [],
+		"sector": [],
+		"macro": []
+	}
+	for source_value in source_candidates:
+		if typeof(source_value) != TYPE_DICTIONARY:
+			continue
+		var source_data: Dictionary = source_value
+		var scope_id: String = str(source_data.get("generated_scope_id", "company"))
+		if not buckets.has(scope_id):
+			scope_id = "company"
+		var bucket: Array = buckets.get(scope_id, [])
+		bucket.append(source_data)
+		buckets[scope_id] = bucket
+
+	var selected: Array = []
+	for scope_id in ["company", "sector", "macro"]:
+		var bucket: Array = buckets.get(scope_id, [])
+		var bucket_limit: int = 2 if scope_id != "macro" else 1
+		for index in range(min(bucket_limit, bucket.size())):
+			selected.append(bucket[index])
+
+	if selected.size() < MAX_GENERATED_DOSSIER_TWOOTER_SOURCES:
+		var seen_ids: Dictionary = {}
+		for selected_value in selected:
+			if typeof(selected_value) != TYPE_DICTIONARY:
+				continue
+			var selected_source: Dictionary = selected_value
+			seen_ids[str(selected_source.get("event_id", ""))] = true
+		for source_value in source_candidates:
+			if typeof(source_value) != TYPE_DICTIONARY:
+				continue
+			var source_data: Dictionary = source_value
+			var event_id: String = str(source_data.get("event_id", ""))
+			if seen_ids.has(event_id):
+				continue
+			selected.append(source_data)
+			seen_ids[event_id] = true
+			if selected.size() >= MAX_GENERATED_DOSSIER_TWOOTER_SOURCES:
+				break
+
+	selected.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if is_equal_approx(float(a.get("priority", 0.0)), float(b.get("priority", 0.0))):
+			return str(a.get("event_id", "")) < str(b.get("event_id", ""))
+		return float(a.get("priority", 0.0)) > float(b.get("priority", 0.0))
+	)
+	return selected
+
+
+func _public_twooter_clue_for_day(dossier: Dictionary, current_day_index: int) -> Dictionary:
+	for clue_value in dossier.get("public_clues", []):
+		if typeof(clue_value) != TYPE_DICTIONARY:
+			continue
+		var clue: Dictionary = clue_value
+		if str(clue.get("surface_id", "")) != "twooter":
+			continue
+		if str(clue.get("visibility", "public")) != "public":
+			continue
+		var earliest_day_index: int = int(clue.get("earliest_day_index", 0))
+		var latest_day_index: int = int(clue.get("latest_day_index", earliest_day_index))
+		if current_day_index < earliest_day_index or current_day_index > latest_day_index:
+			continue
+		return clue.duplicate(true)
+	return {}
+
+
+func _generated_twooter_company_source(
+	dossier: Dictionary,
+	clue: Dictionary,
+	company_row: Dictionary,
+	current_trade_date: Dictionary,
+	current_day_index: int
+) -> Dictionary:
+	var ticker: String = str(dossier.get("ticker", company_row.get("ticker", "")))
+	if ticker.is_empty():
+		return {}
+	var company_id: String = str(dossier.get("company_id", company_row.get("id", "")))
+	var company_name: String = str(company_row.get("name", ticker))
+	var sector_id: String = str(company_row.get("sector_id", ""))
+	var sector_name: String = str(company_row.get("sector_name", DataRepository.get_sector_definition(sector_id).get("name", sector_id.capitalize())))
+	var detail: String = _generated_twooter_company_detail(dossier, company_name, sector_name)
+	return _generated_twooter_source_base(dossier, clue, current_trade_date, current_day_index, {
+		"generated_scope_id": "company",
+		"category": "generated_twooter_company",
+		"scope": "company",
+		"event_id": "generated_dossier_twooter_company|%s" % str(dossier.get("story_id", "")),
+		"target_company_id": company_id,
+		"target_ticker": ticker,
+		"target_company_name": company_name,
+		"target_sector_id": sector_id,
+		"sector_name": sector_name,
+		"description": detail,
+		"summary": detail,
+		"source_company_ids": _unique_string_array([company_id]),
+		"source_sector_ids": _unique_string_array([sector_id]),
+		"priority": 2.18 + float(dossier.get("priority", 0.0)) * 0.24 + float(clue.get("reliability", 0.0)) * 0.06
+	})
+
+
+func _generated_twooter_sector_source(
+	dossier: Dictionary,
+	clue: Dictionary,
+	fact: Dictionary,
+	company_row: Dictionary,
+	current_trade_date: Dictionary,
+	current_day_index: int
+) -> Dictionary:
+	var sector_id: String = str(fact.get("source_id", company_row.get("sector_id", "")))
+	if sector_id.is_empty():
+		return {}
+	var sector_definition: Dictionary = DataRepository.get_sector_definition(sector_id)
+	var sector_name: String = str(company_row.get("sector_name", sector_definition.get("name", sector_id.capitalize())))
+	var detail: String = "%s chatter is shifting from one-name noise into a broader watchlist." % sector_name
+	return _generated_twooter_source_base(dossier, clue, current_trade_date, current_day_index, {
+		"generated_scope_id": "sector",
+		"category": "generated_twooter_sector",
+		"scope": "sector",
+		"event_id": "generated_dossier_twooter_sector|%s|%s" % [sector_id, str(dossier.get("story_id", ""))],
+		"target_sector_id": sector_id,
+		"sector_name": sector_name,
+		"description": detail,
+		"summary": detail,
+		"source_company_ids": _source_company_ids_from_fact(fact, str(dossier.get("company_id", ""))),
+		"source_sector_ids": _source_sector_ids_from_fact(fact, sector_id),
+		"priority": 2.08 + float(dossier.get("priority", 0.0)) * 0.20 + float(clue.get("reliability", 0.0)) * 0.05
+	})
+
+
+func _generated_twooter_macro_source(
+	dossier: Dictionary,
+	clue: Dictionary,
+	fact: Dictionary,
+	company_row: Dictionary,
+	current_trade_date: Dictionary,
+	current_day_index: int
+) -> Dictionary:
+	var fact_type: String = str(fact.get("fact_type", "macro"))
+	var source_id: String = str(fact.get("source_id", "macro"))
+	var public_label: String = _public_fact_source_label(source_id)
+	var sector_id: String = str(company_row.get("sector_id", ""))
+	var sector_name: String = str(company_row.get("sector_name", DataRepository.get_sector_definition(sector_id).get("name", sector_id.capitalize())))
+	var detail: String = "%s is turning into a noisy exposure map, not a clean single-name answer." % public_label
+	return _generated_twooter_source_base(dossier, clue, current_trade_date, current_day_index, {
+		"generated_scope_id": "macro",
+		"category": "generated_twooter_commodity" if fact_type == "commodity" else "generated_twooter_macro",
+		"scope": "market",
+		"event_id": "generated_dossier_twooter_macro|%s|%s|%s" % [fact_type, source_id, str(dossier.get("story_id", ""))],
+		"target_sector_id": sector_id,
+		"sector_name": sector_name,
+		"description": detail,
+		"summary": detail,
+		"source_company_ids": _source_company_ids_from_fact(fact, str(dossier.get("company_id", ""))),
+		"source_sector_ids": _source_sector_ids_from_fact(fact, sector_id),
+		"public_factor_label": public_label,
+		"priority": 2.00 + float(dossier.get("priority", 0.0)) * 0.16 + float(clue.get("reliability", 0.0)) * 0.05
+	})
+
+
+func _generated_twooter_source_base(
+	dossier: Dictionary,
+	clue: Dictionary,
+	current_trade_date: Dictionary,
+	current_day_index: int,
+	overrides: Dictionary
+) -> Dictionary:
+	var source_data: Dictionary = overrides.duplicate(true)
+	source_data["event_family"] = "content_surface_generation"
+	source_data["tone"] = str(clue.get("tone", "mixed"))
+	source_data["day_index"] = current_day_index
+	source_data["trade_date"] = current_trade_date.duplicate(true)
+	source_data["generated_content_surface"] = true
+	source_data["generated_surface_id"] = "twooter"
+	source_data["source_system_id"] = GENERATED_DOSSIER_TWOOTER_SOURCE_SYSTEM_ID
+	source_data["story_id"] = str(dossier.get("story_id", ""))
+	source_data["story_family"] = str(dossier.get("story_family", "company_story"))
+	source_data["archetype_id"] = str(dossier.get("archetype_id", ""))
+	source_data["public_status"] = str(dossier.get("public_status", ""))
+	source_data["stage_id"] = str(dossier.get("stage_id", ""))
+	source_data["visibility"] = "public"
+	source_data["detail_level"] = str(clue.get("detail_level", "low"))
+	source_data["reliability"] = snappedf(clamp(float(clue.get("reliability", 0.0)), 0.0, 0.68), 0.001)
+	source_data["leak_risk"] = 0.0
+	source_data["source_fact_ids"] = _source_fact_ids_from_dossier(dossier, clue)
+	source_data["source_clue_ids"] = _unique_string_array([str(clue.get("clue_id", ""))])
+	return source_data
+
+
+func _pick_generated_twooter_account(unlocked_accounts: Array, source_data: Dictionary) -> Dictionary:
+	var preferred_voices: Array = _generated_twooter_preferred_voices(source_data)
+	for voice_value in preferred_voices:
+		var voice_id: String = str(voice_value)
+		var account: Dictionary = _account_by_voice(unlocked_accounts, voice_id)
+		if not account.is_empty():
+			return account
+	return _pick_generic_account(unlocked_accounts, 1, "generated_twooter|%s|%s" % [
+		str(source_data.get("generated_scope_id", "company")),
+		str(source_data.get("story_id", ""))
+	])
+
+
+func _generated_twooter_preferred_voices(source_data: Dictionary) -> Array:
+	var scope_id: String = str(source_data.get("generated_scope_id", "company"))
+	var tone: String = str(source_data.get("tone", "mixed"))
+	var reliability: float = float(source_data.get("reliability", 0.0))
+	var seed_value: int = int(abs(hash("%s|%s|voice" % [str(source_data.get("event_id", "")), tone])))
+	if scope_id == "macro":
+		var macro_voices: Array = ["macro_watch", "sector_classroom", "oil_psych", "market_diary"]
+		return _rotated_array(macro_voices, seed_value)
+	if scope_id == "sector":
+		var sector_voices: Array = ["sector_classroom", "flow_watch", "market_diary", "retail_hype"]
+		return _rotated_array(sector_voices, seed_value)
+	if reliability < 0.38:
+		var noisy_voices: Array = ["rumor_feed", "retail_hype", "flow_watch", "market_diary"]
+		return _rotated_array(noisy_voices, seed_value)
+	var company_voices: Array = ["rumor_feed", "flow_watch", "retail_hype", "funda_thread", "stock_mapper"]
+	return _rotated_array(company_voices, seed_value)
+
+
+func _account_by_voice(unlocked_accounts: Array, voice_id: String) -> Dictionary:
+	for account_value in unlocked_accounts:
+		if typeof(account_value) != TYPE_DICTIONARY:
+			continue
+		var account: Dictionary = account_value
+		if str(account.get("voice", "")) == voice_id:
+			return account
+	return {}
+
+
+func _generated_twooter_post_text(account: Dictionary, source_data: Dictionary, context: Dictionary, seed_key: String) -> String:
+	var voice_id: String = str(account.get("voice", ""))
+	var ticker: String = str(context.get("target_ticker", "")).strip_edges()
+	var sector_name: String = str(context.get("sector_name", "the sector")).strip_edges()
+	var factor_label: String = str(source_data.get("public_factor_label", "Macro")).strip_edges()
+	var hint: String = _short_public_hint(str(source_data.get("summary", source_data.get("description", ""))))
+	var label: String = ticker if not ticker.is_empty() else sector_name
+	var scope_id: String = str(source_data.get("generated_scope_id", "company"))
+	var tail_pool: Array = [
+		"Needs confirmation, not chest-thumping.",
+		"Good lead, bad shortcut.",
+		"Watch the follow-through before calling it clean.",
+		"Could be signal, could be timeline drama.",
+		"Still just a lead until the next public clue."
+	]
+	var tail: String = str(_pick_from_pool(tail_pool, "%s|tail" % seed_key))
+	if scope_id == "macro":
+		match voice_id:
+			"macro_watch":
+				return "%s is the macro read today. Map exposure first; do not turn every ticker into the same story." % factor_label
+			"sector_classroom":
+				return "%s matters only after you map who actually has exposure. Theme passengers are where people get lazy." % factor_label
+			"oil_psych":
+				return "%s gives the market a simple story. The hard part is separating cash-flow names from hype riders." % factor_label
+			_:
+				return "%s chatter is moving across the board. %s" % [factor_label, tail]
+	if scope_id == "sector":
+		match voice_id:
+			"sector_classroom":
+				return "%s thread: the move is more useful if second-line names confirm it. One hot ticker is not a sector story." % sector_name
+			"flow_watch":
+				return "%s flow looks less random now. I want breadth inside the sector before respecting the story." % sector_name
+			"market_diary":
+				return "Diary note: %s is on the timeline again. %s" % [sector_name, tail]
+			_:
+				return "%s becoming the room everyone watches. Exciting, but crowding cuts both ways." % sector_name
+	match voice_id:
+		"rumor_feed":
+			return "%s is on the rumor table. %s %s" % [label, hint, tail]
+		"retail_hype":
+			return "%s has a fresh story and ritel will probably overreact if the tape keeps moving. %s" % [label, tail]
+		"flow_watch":
+			return "%s flow is worth watching now. Story is useful only if volume keeps confirming." % label
+		"funda_thread":
+			return "%s story is interesting, but I still want the boring public source before upgrading the thesis." % label
+		"stock_mapper":
+			return "%s goes on the watch map. The setup needs one more public clue before it becomes more than chatter." % label
+		_:
+			return "%s has public chatter now. %s" % [label, tail]
+
+
+func _generated_twooter_visibility_label(account: Dictionary, source_data: Dictionary) -> String:
+	if bool(account.get("verified", false)):
+		return "Public thread"
+	if str(source_data.get("generated_scope_id", "")) == "macro":
+		return "Macro chatter"
+	if str(account.get("voice", "")) == "rumor_feed":
+		return "Rumor watch"
+	return "On feed"
+
+
+func _generated_twooter_confidence_label(account: Dictionary, source_data: Dictionary) -> String:
+	var voice_id: String = str(account.get("voice", ""))
+	if voice_id == "rumor_feed" or voice_id == "retail_hype":
+		return "Noisy chatter"
+	if voice_id == "flow_watch":
+		return "Flow watch"
+	if bool(account.get("verified", false)):
+		return "Public thread"
+	if float(source_data.get("reliability", 0.0)) < 0.38:
+		return "Low-confidence chatter"
+	return "Public chatter"
+
+
+func _apply_generated_twooter_metadata(post: Dictionary, source_data: Dictionary, account: Dictionary) -> Dictionary:
+	var enriched: Dictionary = post.duplicate(true)
+	for key in [
+		"generated_content_surface",
+		"generated_surface_id",
+		"generated_scope_id",
+		"source_system_id",
+		"story_id",
+		"story_family",
+		"archetype_id",
+		"public_status",
+		"stage_id",
+		"visibility",
+		"detail_level",
+		"reliability",
+		"leak_risk",
+		"source_fact_ids",
+		"source_clue_ids",
+		"source_company_ids",
+		"source_sector_ids",
+		"source_event_ids",
+		"target_company_id"
+	]:
+		enriched[key] = source_data.get(key)
+	enriched["account_voice"] = str(account.get("voice", ""))
+	enriched["public_confidence_label"] = _generated_twooter_confidence_label(account, source_data)
+	return enriched
+
+
+func _generated_twooter_company_detail(dossier: Dictionary, company_name: String, sector_name: String) -> String:
+	match str(dossier.get("archetype_id", "")):
+		"contract_win":
+			return "public chatter is circling new work around %s." % company_name
+		"capex_expansion":
+			return "capacity talk around %s is getting noisy." % company_name
+		"margin_recovery":
+			return "people are debating whether %s has a cleaner margin setup." % company_name
+		"commodity_tailwind":
+			return "%s is being tied to a friendlier commodity read in %s." % [company_name, sector_name]
+		"commodity_headwind":
+			return "%s is being checked against tougher commodity talk in %s." % [company_name, sector_name]
+		"governance_risk":
+			return "governance talk around %s is making the feed cautious." % company_name
+		"balance_sheet_stress":
+			return "%s balance-sheet chatter is getting louder." % company_name
+		"fraud_signal":
+			return "people are asking rougher questions about %s." % company_name
+		"turnaround":
+			return "%s has a turnaround story people want to believe, maybe too quickly." % company_name
+		_:
+			return "%s has a fresh public story on the feed." % company_name
+
+
+func _company_row_from_dossier(dossier: Dictionary) -> Dictionary:
+	var company_id: String = str(dossier.get("company_id", ""))
+	var ticker: String = str(dossier.get("ticker", company_id.to_upper()))
+	return {
+		"id": company_id,
+		"ticker": ticker,
+		"name": ticker,
+		"sector_id": "",
+		"sector_name": "",
+		"daily_change_pct": 0.0,
+		"current_price": 0.0
+	}
+
+
+func _best_fact_for_types(dossier: Dictionary, fact_types: Array) -> Dictionary:
+	for fact_value in dossier.get("cause_facts", []):
+		if typeof(fact_value) != TYPE_DICTIONARY:
+			continue
+		var fact: Dictionary = fact_value
+		if str(fact.get("fact_type", "")) in fact_types:
+			return fact.duplicate(true)
+	return {}
+
+
+func _source_fact_ids_from_dossier(dossier: Dictionary, clue: Dictionary) -> Array:
+	var clue_fact_ids: Array = _unique_string_array(clue.get("fact_ids", []))
+	if not clue_fact_ids.is_empty():
+		return clue_fact_ids
+	var fact_ids: Array = []
+	for fact_value in dossier.get("cause_facts", []):
+		if typeof(fact_value) != TYPE_DICTIONARY:
+			continue
+		var fact: Dictionary = fact_value
+		fact_ids.append(str(fact.get("fact_id", "")))
+	return _unique_string_array(fact_ids)
+
+
+func _source_company_ids_from_fact(fact: Dictionary, fallback_company_id: String) -> Array:
+	var company_ids: Array = []
+	if not fallback_company_id.is_empty():
+		company_ids.append(fallback_company_id)
+	for key in ["company_ids", "source_company_ids", "affected_company_ids", "related_company_ids"]:
+		for company_id_value in fact.get(key, []):
+			company_ids.append(str(company_id_value))
+	return _unique_string_array(company_ids)
+
+
+func _source_sector_ids_from_fact(fact: Dictionary, fallback_sector_id: String) -> Array:
+	var sector_ids: Array = []
+	if not fallback_sector_id.is_empty():
+		sector_ids.append(fallback_sector_id)
+	for key in ["sector_ids", "source_sector_ids", "affected_sector_ids", "related_sector_ids"]:
+		for sector_id_value in fact.get(key, []):
+			sector_ids.append(str(sector_id_value))
+	return _unique_string_array(sector_ids)
+
+
+func _public_fact_source_label(source_id: String) -> String:
+	var cleaned: String = source_id.replace("_", " ").strip_edges()
+	if cleaned.is_empty():
+		return "Macro"
+	var words: PackedStringArray = cleaned.split(" ")
+	var title_words: Array[String] = []
+	for word in words:
+		if word.is_empty():
+			continue
+		title_words.append(word.substr(0, 1).to_upper() + word.substr(1).to_lower())
+	return " ".join(title_words)
+
+
+func _short_public_hint(value: String) -> String:
+	var cleaned: String = value.strip_edges()
+	if cleaned.is_empty() or _looks_like_system_summary(cleaned):
+		return "The public trail is still thin."
+	cleaned = cleaned.replace("\n", " ")
+	while cleaned.contains("  "):
+		cleaned = cleaned.replace("  ", " ")
+	if cleaned.length() > 96:
+		cleaned = cleaned.substr(0, 96).strip_edges().trim_suffix(",").trim_suffix(".") + "."
+	if not cleaned.ends_with(".") and not cleaned.ends_with("!") and not cleaned.ends_with("?"):
+		cleaned += "."
+	return cleaned
+
+
+func _unique_string_array(source_value: Variant) -> Array:
+	var source_array: Array = []
+	if typeof(source_value) == TYPE_ARRAY:
+		source_array = source_value
+	else:
+		source_array = [source_value]
+	var seen: Dictionary = {}
+	var result: Array = []
+	for item_value in source_array:
+		var item: String = str(item_value).strip_edges()
+		if item.is_empty() or seen.has(item):
+			continue
+		seen[item] = true
+		result.append(item)
+	return result
+
+
+func _rotated_array(source_array: Array, seed_value: int) -> Array:
+	if source_array.is_empty():
+		return []
+	var offset: int = seed_value % source_array.size()
+	var rotated: Array = []
+	for index in range(source_array.size()):
+		rotated.append(source_array[(offset + index) % source_array.size()])
+	return rotated
 
 
 func _build_market_wrap_post(
@@ -908,6 +1648,8 @@ func _template_lookup_keys(source_data: Dictionary, context: Dictionary) -> Arra
 
 func _category_family_key(source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("generated_twooter"):
+		return "generated_twooter"
 	if category.begins_with("index_") or str(source_data.get("event_family", "")) == "index_review":
 		return "index_review"
 	if category.begins_with("corporate_action"):
@@ -929,6 +1671,12 @@ func _category_family_key(source_data: Dictionary) -> String:
 
 func _public_topic_label(source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category == "generated_twooter_company":
+		return "Emiten chatter"
+	if category == "generated_twooter_sector":
+		return "Sector chatter"
+	if category == "generated_twooter_macro" or category == "generated_twooter_commodity":
+		return "Macro chatter"
 	if category.begins_with("index_") or str(source_data.get("event_family", "")) == "index_review":
 		return "Index review"
 	if category.begins_with("corporate_action"):
@@ -954,6 +1702,8 @@ func _public_topic_label(source_data: Dictionary) -> String:
 
 func _public_confidence_label(source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("generated_twooter"):
+		return "Public chatter"
 	if category == "index_inclusion" or category == "index_exclusion":
 		return "Index review"
 	if category == "index_watch":
@@ -1021,6 +1771,8 @@ func _looks_like_system_summary(value: String) -> bool:
 
 func _memory_label(source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("generated_twooter"):
+		return "Twooter chatter"
 	if category == "index_inclusion":
 		return "index inclusion"
 	if category == "index_exclusion":

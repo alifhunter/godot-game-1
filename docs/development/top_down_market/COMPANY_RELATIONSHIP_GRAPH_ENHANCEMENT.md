@@ -1,0 +1,544 @@
+# Company Relationship Graph Enhancement - Plan & Progress Log
+
+This plan adds company-to-company relationships such as supplier, customer, competitor, partner, parent, acquirer, and target so companies can interact and create multi-company stories.
+**Status: complete - Tasks 1-6 complete.** Designed to run in a fresh session; everything needed to execute cold is in this file.
+
+**Review verdict recap:** Companies should not exist as isolated stock tickers. An upstream oil company can partner with a downstream oil company, suppliers can benefit from customer growth, competitors can react to margin pressure, and acquisitions can create new market stories. This plan starts with graph edges and partnerships before attempting full merger and replacement-slot logic.
+
+## Where everything lives
+
+| What | Where |
+|---|---|
+| Company roster | `systems/CompanyRosterGenerator.gd`, planned company universe catalog |
+| Company events | `systems/CompanyEventSystem.gd`, `systems/CompanyRoadmapSystem.gd` |
+| Corporate actions | `systems/CorporateActionSystem.gd`, `systems/CorporateActionApplications.gd` |
+| Price simulation | `systems/MarketSimulator.gd` |
+| Content surfaces | News, Twooter, Network, and thesis systems |
+| Relationship graph system | `systems/CompanyRelationshipGraphSystem.gd` |
+| Runtime state | `autoloads/RunState.gd` company relationship state |
+| Tests/probes | `scenes/tests/CompanyRelationshipGraphFingerprintTest.tscn`, `scenes/tests/CompanyRelationshipEventImpactTest.tscn`, `scenes/tests/CompanyRelationshipContentHooksTest.tscn`, `scenes/tests/CompanyRelationshipGraphRegressionTest.tscn` |
+| Key functions | Locate by roster creation, event generation, corporate action application, and price event bias |
+
+## Goals
+
+- Add deterministic relationship graph edges among selected companies.
+- Support partnership, supplier/customer, competitor, and later acquisition/merger stories.
+- Let relationship events affect both involved companies and content surfaces.
+
+## Non-goals
+
+- Do not implement full M&A accounting in the first task.
+- Do not allow relationship graph generation to create impossible sector combinations.
+- Do not remove existing corporate action behavior.
+
+## Working rules
+
+- Graph edges must be deterministic and validate both endpoints.
+- Relationship effects should be bounded and auditable.
+- Mergers should be designed carefully because they affect tickers, positions, charts, histories, and saves.
+- If a company is merged out, replacement-slot logic needs explicit tests.
+
+## Relationship Graph Contract
+
+Task 1 locks the graph vocabulary and direction semantics. Existing catalog `relationship_hooks` are not graph edges yet. They are relationship intent hints on a company definition. Task 2 resolves those hooks into concrete run-specific edges only when both endpoints exist in the selected roster.
+
+### Edge Direction Rule
+
+Every edge is stored from the **source company** to the **target company**. The `relationship_type` describes the source company's role relative to the target.
+
+Examples:
+
+- `supplier`: source supplies target.
+- `customer`: source buys from target.
+- `partner`: source has a reciprocal commercial partnership with target.
+- `competitor`: source competes with target.
+- `parent`: source controls target.
+- `subsidiary`: source is controlled by target.
+- `acquirer_candidate`: source is a plausible buyer of target.
+- `target_candidate`: source is a plausible target for target-company or external acquisition.
+
+Systems that need the target company's view should derive the counterpart role from the edge instead of storing duplicate truth unless a later task explicitly adds materialized reverse edges for performance.
+
+### Edge Types
+
+| Edge type | Direction meaning | Counterpart view | First implementation use | Initial event eligibility |
+|---|---|---|---|---|
+| `supplier` | Source sells inputs, services, capacity, logistics, power, financing, or platform access to target. | Target has source as vendor/supplier. | Supply-chain and customer-win stories. | Supply deal, orderbook acceleration, input shortage, customer concentration. |
+| `customer` | Source buys goods/services from target. | Target has source as customer/client. | Customer concentration, distribution, and demand-pull stories. | Customer win/loss, receivable pressure, volume ramp. |
+| `competitor` | Source competes with target in a comparable sector/subsector or substitutable demand pool. | Target competes with source. | Peer pressure and relative winner/loser stories. | Pricing pressure, margin squeeze, share gain/loss. |
+| `partner` | Source and target cooperate commercially without control transfer. | Reciprocal partner. | Partnership announcements before full M&A. | Partnership announcement, channel tie-up, technology integration, offtake agreement. |
+| `parent` | Source controls target or owns a controlling stake. | Target is subsidiary of source. | Reserved for corporate-action and later M&A state. | Not generated by Task 2 unless explicitly authored/action-derived. |
+| `subsidiary` | Source is controlled by target. | Target is parent of source. | Reserved for corporate-action and later M&A state. | Not generated by Task 2 unless explicitly authored/action-derived. |
+| `acquirer_candidate` | Source has balance sheet, strategic fit, and sector logic to acquire target. | Target is a possible target of source. | Latent M&A watchlist only. | Design-only; runtime execution is deferred by the Task 5 contract. |
+| `target_candidate` | Source could plausibly be acquired by target or by an external strategic buyer. | Target is possible acquirer or sector reference. | Latent M&A watchlist only. | Design-only; runtime execution is deferred by the Task 5 contract. |
+
+### Edge Fields
+
+Concrete graph edges should use this normalized shape:
+
+| Field | Purpose |
+|---|---|
+| `edge_id` | Stable deterministic id, e.g. `edge|{run_seed}|{source_company_id}|{target_company_id}|{relationship_type}|{ordinal}`. |
+| `source_company_id` / `target_company_id` | Required selected-roster company ids. Both endpoints must exist in the run. |
+| `source_ticker` / `target_ticker` | Denormalized labels for content/tests only. Company id remains canonical. |
+| `relationship_type` | One of the approved edge types above. |
+| `counterpart_type` | Derived opposite role for UI/content summaries. |
+| `origin` | `catalog_hook`, `generated_runtime`, `corporate_action`, `story_dossier`, or `manual_test_fixture`. |
+| `source_hook_index` | Catalog hook index when resolved from `relationship_hooks`; `-1` when generated. |
+| `strength` | `0.0..1.0` materiality of the business relationship. Stronger edges can produce stronger events. |
+| `confidence` | `0.0..1.0` confidence that the relationship is real/current. Public content should not expose this as a raw label. |
+| `visibility` | `public`, `semi_public`, `private`, or `internal`. Controls generated content surface eligibility. |
+| `relationship_scope` | `supply_chain`, `demand_channel`, `competition`, `commercial_partner`, `control`, or `mna_candidate`. |
+| `sector_fit_score` | `0.0..1.0` deterministic score for endpoint sector/subsector compatibility. |
+| `lifecycle_status` | `active`, `dormant`, `rumored`, `proposed`, `resolved`, or `expired`. |
+| `start_day_index` / `end_day_index` | Optional lifecycle bounds; static catalog-derived edges can use `0` and `-1`. |
+| `event_cooldown_until_day` | Prevents one relationship from generating repeated event spam. |
+| `source_fact_ids` / `source_clue_ids` | Optional traceability once edges are linked to dossiers, filings, or content surfaces. |
+
+### Relationship Hooks vs Generated Edges
+
+| Source | Meaning | Allowed in Task 2 | Notes |
+|---|---|---|---|
+| Catalog `relationship_hooks` | Company-authored hints like “this company can be a customer of packaged food companies.” | Yes | Highest priority. Resolved only when a selected target matches sector/subsector constraints. |
+| Generated same-sector peers | Deterministic competitor links among selected companies. | Yes | Needed because not every competitor relationship should be hand-authored. Keep density capped. |
+| Generated cross-sector fit | Deterministic supplier/customer/partner links when catalog hooks are sparse. | Limited | Use only when sector/subsector compatibility is strong and graph density is below target. |
+| Corporate-action edges | Edges created by acquisition, control, parent/subsidiary, or strategic investment actions. | No for Task 2 | Task 5 approves the design only; runtime bridge needs lifecycle and save tests first. |
+| Story dossier edges | Temporary relationship facts created by a live story arc. | Later | Can use the same edge shape but should not be the first graph source. |
+
+### Sector And Subsector Constraints
+
+- `supplier` and `customer` edges should prefer exact `target_subsector` matches from catalog hooks. If no exact target exists, Task 2 may match by `target_sector` with lower `sector_fit_score`.
+- `competitor` edges should usually stay inside the same sector and prefer same or adjacent subsectors. Cross-sector competitors require an explicit compatibility table in a later task.
+- `partner` edges can cross sectors, but the combination must be plausible through hook metadata or known compatibility pairs such as retail/payments, energy/project finance, logistics/consumer distribution, infra/power equipment, or health/tech.
+- `parent`, `subsidiary`, `acquirer_candidate`, and `target_candidate` edges should not be emitted as active relationship events until the M&A/replacement-slot design is approved.
+- Self-edges are invalid.
+- Duplicate canonical edges are invalid: same `source_company_id`, `target_company_id`, and `relationship_type`.
+- Reciprocal commercial edges are allowed only when they express different roles or an explicitly reciprocal type. For example, `partner` is reciprocal by meaning; `supplier` and `customer` should not both be stored for the same direction unless a later task proves a real two-way trade relationship.
+
+### Visibility And Content Rules
+
+| Visibility | Meaning | Content eligibility |
+|---|---|---|
+| `public` | Relationship is visible through ordinary public reporting. | News, Twooter, filings, thesis evidence. |
+| `semi_public` | Relationship can be inferred from channel checks, segment language, filings, or industry chatter. | Filings and higher-detail public content; Network can add color. |
+| `private` | Relationship is mainly contact/network intelligence. | Network and later filing footnote hints; not direct public Twooter/news unless separately leaked. |
+| `internal` | Simulation-only candidate edge. | Tests, scoring, and future event selection only; no player-facing surface. |
+
+Visible copy must not expose `edge_id`, raw confidence scores, internal sector-fit scores, or relationship gate labels. Metadata may preserve them for tests and thesis/report traceability.
+
+### Density And Event Safety Defaults
+
+- Target graph density for Task 2 should be small: roughly `1-3` active edges per company in a 30-company run.
+- Competitor edges should be capped separately so large sectors do not dominate the graph.
+- Relationship events should use cooldowns and materiality thresholds so one strong edge does not spam the news feed.
+- Price/event impact should be bounded and two-sided:
+  - supplier benefit can be customer cost pressure
+  - customer win can increase supplier concentration risk
+  - competitor pressure can hurt one company while helping another
+  - partner announcements should initially have modest effects until execution is visible
+  - M&A candidate edges stay non-impacting until lifecycle registry and Task 6 probes exist
+
+## M&A And Replacement-Slot Contract
+
+Task 5 is a design gate. It documents the approved acquisition, merger, and replacement-slot rules before any new runtime M&A behavior is added. The current code already has a safe cash acquisition path, so the first relationship-graph M&A bridge should reuse that path instead of creating a parallel portfolio migration model.
+
+### Current Behavior Inventory
+
+- `strategic_merger_acquisition` currently resolves as a cash-out:
+  - `CorporateActionApplications.apply_strategic_mna_application(...)` calculates `cashout_price`.
+  - `RunState._apply_player_acquisition_cashout(...)` removes target holdings, adds cash, records realized PnL, and writes an `mna_cashout` trade.
+  - `RunState._apply_company_acquisition_state(...)` marks the target `listing_status = acquired_cashout`, sets `trade_disabled = true`, and stores `acquisition_result`.
+- Tender-offer go-private already has a separate cash-out path for low free float.
+- Backdoor listing changes the current listed vehicle's story/profile but does not solve general acquired-target replacement.
+- No current system safely removes a company id from all active lists, replaces a roster slot, converts shares into another ticker, or migrates thesis/history across company ids.
+
+### Approved First M&A Modes
+
+| Mode | First implementation status | Portfolio treatment | Roster treatment |
+|---|---|---|---|
+| `cash_acquisition` / `cashout_only` | Approved baseline | Cash out target shares through existing `mna_cashout` path. | Target becomes archived/trade-disabled; replacement is optional and separate. |
+| `control_without_merge` | Approved after graph bridge | No share conversion. Both listed companies remain tradable. | Add/update `parent` or `subsidiary` graph edge with `origin = corporate_action`. |
+| `reverse_takeover` / `backdoor_listing` | Existing corporate-action path only | No relationship-graph replacement behavior in first pass. | Keep the existing listed vehicle path. |
+| `statutory_merger` | Deferred | Not approved until identity, saves, charts, and evidence migration are implemented. | Needs explicit archival and replacement-slot tests. |
+| `stock_swap` | Deferred | Not approved until share conversion, fractional lots, average cost, and save migration are designed. | Needs acquirer-holding and tax/realized-PnL decisions. |
+
+### Target Share Treatment
+
+- First implementation must preserve the existing cash-out model:
+  - cash received = held shares times `cashout_price`, rounded to currency precision
+  - target holding is removed
+  - realized PnL is recorded
+  - trade history receives `mna_cashout`
+  - player result is `not_held` when the player owns no target shares
+- No automatic conversion into acquirer shares in the first relationship-graph M&A implementation.
+- Duplicate cash-outs must be blocked. If a target already has `listing_status = acquired_cashout` or `trade_disabled = true`, the system should not run another acquisition cash-out for the same transaction.
+- Partial tender offers remain owned by the existing tender-offer system. Relationship graph M&A should not bypass tender aftermath rules.
+
+### Company Identity And Lifecycle Rules
+
+- Company ids are immutable. Do not reuse an acquired target's `company_id` or ticker for a replacement company.
+- Do not delete company definitions, company runtime rows, price history, event history, thesis evidence, annual filings, or research tray references mid-run.
+- An acquired target should become an archived listed company:
+  - `listing_status = acquired_cashout`
+  - `trade_disabled = true`
+  - visible in old history/evidence views
+  - hidden or clearly disabled in buy flows
+- If the acquirer is part of the selected roster, create or update a relationship edge with:
+  - `origin = corporate_action`
+  - `relationship_type = parent` or `subsidiary` as appropriate
+  - `lifecycle_status = active`
+  - `source_fact_ids` / `source_clue_ids` pointing to the corporate-action result
+- If the acquirer is external, store it as an external entity label/reference. Do not create a tradable company unless a later replacement task explicitly selects it from the catalog.
+
+### Replacement-Slot Rules
+
+- Replacement companies are optional. They should be added only when a cash-out or full absorption reduces the active tradable roster below the run's intended active count.
+- Replacement selection should be deterministic:
+  - seed from `run_seed`, `day_index`, vacated slot index, and acquired company id
+  - select from the company universe catalog
+  - exclude companies already active or archived in the current run
+  - prefer sector diversity unless a scenario explicitly asks for same-sector replacement
+- A replacement company must get a new identity:
+  - new `company_id`
+  - new ticker
+  - `replacement_origin = mna_replacement`
+  - `replacement_for_company_id = acquired target id`
+  - `listed_day_index`
+  - optional onboarding cooldown before major arcs or relationship events
+- Replacement companies must not inherit:
+  - target holdings
+  - target average cost
+  - target thesis evidence
+  - target price chart
+  - target relationship edges
+  - target annual filings
+- Future implementation should add an explicit lifecycle registry rather than mutating `company_order` blindly:
+  - `active_company_order`
+  - `archived_company_ids`
+  - `replacement_slot_map`
+  - `company_archive_index`
+  - `mna_transaction_log`
+- Until that lifecycle registry exists, relationship graph M&A should not insert replacements.
+
+### History, Thesis, And Evidence Preservation
+
+- Old target history remains attached to the old target `company_id`.
+- Thesis evidence, Research Tray rows, filing excerpts, News, Twooter, Network journal entries, and report references must continue resolving after target archival.
+- If an acquirer is listed, new evidence can cite both companies through `source_company_ids`, but old evidence should not be moved from target to acquirer.
+- If a replacement company enters the roster, it starts with its own clean thesis/evidence surface. The UI may show a "replacement for" reference, but the data model should not merge histories.
+
+### Save Compatibility Requirements
+
+- Old saves should treat companies as active unless existing profile state already says `acquired_cashout`, `go_private_cashout`, or `trade_disabled`.
+- New lifecycle fields must normalize with safe defaults when missing.
+- Cash-out idempotency requires a transaction log before replacement runtime code is added. Without a transaction log, loading an old save could accidentally apply a cash-out twice.
+- Save migration must repair:
+  - active/archived classification
+  - replacement slot maps
+  - trade-disabled buy/sell guards
+  - holdings that still point to an acquired target
+  - thesis/report references to archived companies
+
+### Content And Price Rules
+
+- Relationship graph `acquirer_candidate` and `target_candidate` edges are allowed as latent private/semi-public watchlist context, but they must not directly execute M&A.
+- Public M&A rumors can be relationship events with modest price impact.
+- Final acquisition execution must go through corporate-action application logic so portfolio and listing state stay centralized.
+- Target price impact can include a premium. Acquirer impact should be smaller and can be mixed because acquisitions can create synergy or integration risk.
+- Replacement listing should not create immediate price drama on insertion day unless a later task defines a listing event.
+
+### Future Implementation Order
+
+1. Add lifecycle registry and normalizers without replacement insertion.
+2. Bridge existing `strategic_merger_acquisition` results into relationship graph `parent`/`subsidiary` edges.
+3. Add idempotent M&A transaction logging.
+4. Add replacement-slot selection behind a fixed-seed test fixture only.
+5. Add player-facing archived-company and replacement-company content references.
+6. Add long-run tests that include holdings, watchlist, thesis evidence, save/load, and relationship graph repair.
+
+### Required Tests Before Runtime M&A Expansion
+
+- Cash-out idempotency across save/load.
+- Trade-disabled buy/sell guard for acquired targets.
+- Archived target history and thesis evidence remain readable.
+- Replacement selection is deterministic and excludes active/archived ids.
+- Replacement does not inherit target holdings, chart, thesis, or relationships.
+- Acquirer relationship edge repair is deterministic.
+- Long-run smoke has no orphan holdings, watchlist entries, or broken evidence references.
+
+## Status
+
+| # | Task | Est. cost | Status |
+|---|---|---|---|
+| 1 | Define relationship schema and edge types | ~15-25% | Complete |
+| 2 | Generate deterministic graph among selected companies | ~20-35% | Complete |
+| 3 | Add partnership and supply-chain events | ~20-35% | Complete |
+| 4 | Add relationship-driven content hooks | ~15-25% | Complete |
+| 5 | Design acquisition/merger and replacement-slot rules | ~15-30% | Complete |
+| 6 | Add graph and event tests | ~15-25% | Complete |
+
+Recommended batching: **Session 1 = Task 1** is complete. **Session 2 = Task 2** is complete. **Session 3 = Task 3** is complete. **Session 4 = Task 4** is complete. **Task 5** is complete as a design-only gate. **Task 6** is complete with graph/event regression coverage and fixture-only M&A probes. The relationship graph enhancement is complete; future M&A runtime expansion should start as a separate lifecycle/archival follow-up.
+
+## Progress log
+
+### 2026-06-14 - Plan created
+
+- Created this enhancement plan from the top-down market brainstorming session.
+- Current inventory:
+  - Corporate actions and company events already exist.
+  - No general relationship graph exists yet.
+  - Partnerships should come before full merger/replacement logic.
+- No code or data changes were made by this planning step.
+
+### 2026-06-22 - Task 1 complete
+
+- Added the relationship graph contract and edge-direction rule.
+- Locked the distinction between catalog `relationship_hooks` and concrete run-specific graph edges.
+- Defined approved edge types:
+  - `supplier`
+  - `customer`
+  - `competitor`
+  - `partner`
+  - `parent`
+  - `subsidiary`
+  - `acquirer_candidate`
+  - `target_candidate`
+- Defined normalized edge fields including endpoint ids, origin, strength, confidence, visibility, scope, sector-fit score, lifecycle status, cooldown, and traceability arrays.
+- Defined sector/subsector constraints, public/private visibility rules, density defaults, event-safety defaults, and M&A deferral rules.
+- No runtime code, data, save, price, or UI behavior changed by this task.
+- Verification:
+  - design review completed in this file
+  - `git diff --check` -> passed
+
+### 2026-06-22 - Task 2 complete
+
+- Added `CompanyRelationshipGraphSystem` as the deterministic relationship graph generator.
+- New runs now seed `company_relationship_graph_state` after selected companies are loaded and before story dossiers are seeded.
+- The first graph generation pass is behavior-neutral:
+  - no price impact
+  - no events
+  - no News/Twooter/Network content
+  - no UI changes
+- Task 2 graph generation resolves:
+  - catalog `relationship_hooks` into concrete run-specific `supplier`, `customer`, and `partner` edges when both endpoints exist in the selected roster
+  - generated same-sector `competitor` edges with separate density caps
+- Graph state now stores:
+  - `edge_ids`
+  - `edge_index`
+  - `company_edge_ids`
+  - `counts_by_type`
+  - `counts_by_visibility`
+  - `counts_by_origin`
+  - `unresolved_hook_count`
+  - `validation_issues`
+- Added RunState read-only accessors:
+  - `get_company_relationship_graph_state()`
+  - `set_company_relationship_graph_state(...)`
+  - `get_company_relationship_edge(edge_id)`
+  - `get_company_relationship_edges_for_company(company_id, include_incoming, include_outgoing)`
+- Added save/load normalization for `company_relationship_graph_state`.
+- Added `CompanyRelationshipGraphFingerprintTest` with fixed-seed hash `2129898825`.
+- Current fixed-seed graph summary:
+  - selected companies: `30`
+  - generated edges: `46`
+  - companies with at least one edge: `30`
+  - max incident edges per company: `5`
+  - origin counts: `catalog_hook=36`, `generated_runtime=10`
+  - type counts: `competitor=10`, `customer=8`, `partner=16`, `supplier=12`
+  - visibility counts: `public=8`, `semi_public=28`, `private=10`
+  - unresolved eligible catalog hooks: `8`
+- Verification:
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/CompanyRelationshipGraphFingerprintTest.tscn` -> `COMPANY_RELATIONSHIP_GRAPH_FINGERPRINT_OK {"company_with_edges_count":30,"counts_by_origin":{"catalog_hook":36,"generated_runtime":10},"counts_by_type":{"competitor":10,"customer":8,"partner":16,"supplier":12},"counts_by_visibility":{"private":10,"public":8,"semi_public":28},"edge_count":46,"first_edge_id":"edge|20260622|armada_kurir_nusantara|pasar_digital_prima|supplier|00","hash":"2129898825","issue_count":0,"issues":[],"last_edge_id":"edge|20260622|wisata_kuliner_nusantara|rel_kargo_nusantara|partner|35","max_incident_edges":5,"private_edge_count":10,"public_edge_count":8,"roster_size":30,"save_load_edge_count":46,"save_load_hash_mismatch":0,"seed":20260622,"unresolved_hook_count":8}`
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/CompanyUniverseSelectionFingerprintTest.tscn` -> unchanged hash `1682964508`
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/CompanyUniverseRosterBridgeTest.tscn` -> passed
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/CompanyUniverseCatalogValidationTest.tscn` -> passed
+  - `/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` -> `SMOKE_QUICK_OK normal_equity=94765318.11 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.`
+
+### 2026-06-22 - Task 3 complete
+
+- Added low-frequency relationship event resolution to `CompanyRelationshipGraphSystem`.
+- The resolver uses selected-roster graph edges as read-only source data and writes only bounded event/cooldown output:
+  - one selected relationship edge can trigger per day
+  - triggered edges receive `event_cooldown_until_day`
+  - private/internal edges are not eligible for public-style event rows in this task
+  - same-day company collisions with roadmap/company/corporate arcs are blocked
+- Supported first event kinds:
+  - `partnership_announcement`
+  - `supply_deal`
+  - `customer_win`
+  - `competitor_pressure`
+- Each relationship event emits two company-scoped rows:
+  - shared `relationship_event_id`
+  - per-company `target_company_id`
+  - counterparty ids and tickers
+  - bounded `sentiment_shift`
+  - visible active-event metadata for price/event context
+  - `source_system` and `event_family` set to `company_relationship_graph`
+- Wired `MarketSimulator` to resolve relationship events after other company arc sources have claimed their companies, append the relationship rows to the active company event context, and return updated graph cooldown state.
+- Wired `RunState` to record relationship graph rows into event history and persist the updated graph state.
+- Added a temporary generic News/Twooter guard for `company_relationship_graph` event-history rows so relationship events did not leak into public content before Task 4 defined the content hooks. Task 4 replaced that guard with relationship-specific generated content.
+- Added `CompanyRelationshipEventImpactTest`.
+- Verification:
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/CompanyRelationshipEventImpactTest.tscn` -> `COMPANY_RELATIONSHIP_EVENT_IMPACT_OK {"edge_id":"edge|20260622|asuransi_nusa|hotel_resort_sentosa|partner|01","relationship_type":"partner","source_company_id":"asuransi_nusa","target_company_id":"hotel_resort_sentosa"}`
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/CompanyRelationshipGraphFingerprintTest.tscn` -> unchanged hash `2129898825`
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/CompanyUniverseSelectionFingerprintTest.tscn` -> unchanged hash `1682964508`
+  - `/Users/user/.local/bin/godot --headless -e --quit` -> passed
+  - `/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/SmokeTest.tscn -- --smoke-quick --smoke-local-io` -> `SMOKE_QUICK_OK normal_equity=94765318.11 days=3 summary=Institution-led accumulation gave GLLA the cleanest tape today.`
+
+### 2026-06-22 - Task 4 complete
+
+- Replaced the temporary generic News/Twooter suppression for `company_relationship_graph` rows with relationship-specific generated content hooks.
+- News now generates relationship articles for public and semi-public relationship events with:
+  - `generated_content_surface = true`
+  - `generated_scope_id = relationship`
+  - `source_system_id = company_relationship_graph`
+  - relationship event/edge fact and clue provenance
+  - visible copy that avoids raw ids, confidence scores, and direct trade instructions
+- Twooter now generates relationship chatter posts for public and semi-public relationship events while preserving authored social content.
+- Contact Network now generates gated relationship reads for semi-public/private relationship event rows when the player asks a suitable contact for a tip.
+- Relationship Network tips are recorded in the tip journal with generated-surface metadata, source fact/clue ids, source company ids, and source event ids.
+- Added `CompanyRelationshipContentHooksTest` to force a semi-public partnership and verify:
+  - News article generation
+  - Twooter post generation
+  - Network relationship tip generation
+  - thesis capture preservation for all three surfaces
+- Verification:
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/CompanyRelationshipContentHooksTest.tscn` -> `COMPANY_RELATIONSHIP_CONTENT_HOOKS_OK {"article_id":"relationship_news|relationship|1|edge|20260622|asuransi_nusa|hotel_resort_sentosa|partner|01|partnership_announcement|1|harian_investor","company_id":"asuransi_nusa","edge_id":"edge|20260622|asuransi_nusa|hotel_resort_sentosa|partner|01","network_truth":"Network Read","post_id":"relationship|relationship|1|edge|20260622|asuransi_nusa|hotel_resort_sentosa|partner|01|partnership_announcement|1|macro_classroom","relationship_event_id":"relationship|1|edge|20260622|asuransi_nusa|hotel_resort_sentosa|partner|01|partnership_announcement","visibility":"semi_public"}`
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/CompanyRelationshipEventImpactTest.tscn` -> passed
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/ContentSurfaceThesisEvidenceCaptureTest.tscn` -> unchanged hash `650364612`
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/CompanyRelationshipGraphFingerprintTest.tscn` -> unchanged hash `2129898825`
+
+### 2026-06-22 - Task 5 complete
+
+- Completed the acquisition/merger and replacement-slot design gate.
+- Confirmed the safe baseline is the existing strategic M&A cash-out path:
+  - target holdings are removed for cash through `mna_cashout`
+  - target company is marked `acquired_cashout`
+  - target trading is disabled
+- Deferred stock-swap and statutory merger behavior until company lifecycle, save migration, fractional-share/lot handling, and identity migration are explicitly implemented.
+- Defined replacement-slot rules:
+  - replacements are optional
+  - replacements must use new company ids and tickers
+  - replacements must not inherit target holdings, charts, thesis evidence, filings, or relationship edges
+  - replacement selection must be deterministic and catalog-backed
+- Defined future lifecycle registry fields and tests needed before runtime replacement insertion.
+- No runtime code, data, save, price, or UI behavior changed by this task.
+- Verification:
+  - design review completed in this file
+  - `git diff --check` -> passed
+
+### 2026-06-22 - Task 6 complete
+
+- Added `CompanyRelationshipGraphRegressionTest` as the broad relationship graph regression guard.
+- The new regression test validates:
+  - graph generation state and schema
+  - endpoint integrity and duplicate canonical-edge protection
+  - relationship type, counterpart, scope, visibility, lifecycle, and bounded score fields
+  - recorded counts by type, visibility, and origin
+  - incoming/outgoing/all company edge buckets
+  - `RunState.get_company_relationship_edges_for_company(...)` accessors
+  - default density caps for outgoing, incoming, incident, and competitor edges
+  - forced event rows for all event-eligible relationship types
+  - private edge suppression by default and explicit private-edge override behavior
+  - fixture-only M&A candidate normalization and non-execution guard
+- The M&A probe remains behavior-neutral:
+  - it creates a manual `acquirer_candidate` edge
+  - confirms counterpart/scope normalization
+  - confirms no relationship event is emitted even when forced
+  - confirms source/target listing state is not mutated
+- Relationship graph enhancement is now complete.
+- Verification:
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/CompanyRelationshipGraphRegressionTest.tscn` -> `COMPANY_RELATIONSHIP_GRAPH_REGRESSION_OK {"edge_count":46,"event_types_checked":4,"mna_fixture_checked":true,"private_guard_checked":true,"seed":20260622}`
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/CompanyRelationshipGraphFingerprintTest.tscn` -> unchanged hash `2129898825`
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/CompanyRelationshipEventImpactTest.tscn` -> passed
+  - `/Users/user/.local/bin/godot --headless --path . scenes/tests/CompanyRelationshipContentHooksTest.tscn` -> passed
+
+---
+
+## Task 1 - Define relationship schema and edge types
+
+Problem: Company relationships need structured edge types before events can use them.
+
+1. Define edge types such as `supplier`, `customer`, `competitor`, `partner`, `parent`, `subsidiary`, `acquirer_candidate`, and `target_candidate`.
+2. Define strength, confidence, sector constraints, and visibility.
+3. Decide which edges are catalog-authored and which are generated per run.
+4. Verify:
+   - Design review in this doc.
+   - `git diff --check`
+
+Implementation status: complete. The relationship graph contract now defines edge direction, approved edge types, normalized fields, hook-to-edge resolution rules, sector/subsector constraints, visibility/content rules, density defaults, and M&A deferral boundaries. This task is documentation-only by design.
+
+## Task 2 - Generate deterministic graph among selected companies
+
+Problem: The selected roster needs valid company relationships for each run.
+
+1. Generate graph edges after company selection.
+2. Validate that all endpoints exist in the selected roster.
+3. Prevent impossible or circular edges unless explicitly allowed.
+4. Verify:
+   - Fixed-seed graph fingerprint.
+   - Roster selection tests.
+   - Quick smoke.
+
+Implementation status: complete. `CompanyRelationshipGraphSystem` now resolves catalog hooks and capped same-sector competitor edges into deterministic selected-roster graph state. RunState seeds, normalizes, saves, reloads, and exposes the graph read-only. The fixed-seed graph fingerprint is `2129898825`.
+
+## Task 3 - Add partnership and supply-chain events
+
+Problem: Relationship edges should create market-relevant events.
+
+1. Add simple events such as partnership announcement, supply deal, customer win, and competitor pressure.
+2. Apply bounded effects to both involved companies.
+3. Keep event history explainable.
+4. Verify:
+   - Targeted two-company event test.
+   - Quick smoke.
+
+Implementation status: complete. Relationship graph events now produce bounded two-company effects for partnership, supply deal, customer win, and competitor pressure stories. Event rows are recorded in history and affect daily price context; Task 4 now owns their player-facing content hooks.
+
+## Task 4 - Add relationship-driven content hooks
+
+Problem: Players need to discover company relationships through public and private surfaces.
+
+1. Generate news/Twooter items for public relationship events.
+2. Generate Network clues for less visible relationships.
+3. Add thesis evidence for relationship events.
+4. Verify:
+   - Content consistency test for one partnership.
+   - Thesis capture test if evidence hooks are added.
+
+Implementation status: complete. Relationship graph event-history rows now generate relationship-specific News and Twooter items instead of falling through generic event copy. Semi-public/private relationship rows can surface as gated Network reads, and News/Twooter/Network relationship surfaces preserve generated metadata through thesis capture.
+
+## Task 5 - Design acquisition/merger and replacement-slot rules
+
+Problem: M&A can alter company identity, portfolio holdings, charts, saves, and available roster slots.
+
+1. Decide how acquisition target shares convert or cash out.
+2. Decide when merged companies leave the roster and how replacement companies enter.
+3. Preserve old company history and thesis evidence.
+4. Verify:
+   - Design review before code.
+   - No implementation until portfolio/saves implications are clear.
+
+Implementation status: complete as a design-only gate. The approved first behavior is cash acquisition through the existing corporate-action cash-out path. Relationship graph M&A can create rumors/proposals and later bridge executed deals into graph edges, but it must not add stock swaps, statutory mergers, company deletion, or replacement-slot insertion until the lifecycle registry, transaction log, and save migration tests exist.
+
+## Task 6 - Add graph and event tests
+
+Problem: Relationship systems can create hard-to-debug cross-company side effects.
+
+1. Add graph validation tests.
+2. Add partnership impact tests.
+3. Add acquisition design probes only after Task 5 is approved.
+4. Verify:
+   - Tests pass repeatedly with fixed seed.
+   - `git diff --check`
+
+Implementation status: complete. Added `CompanyRelationshipGraphRegressionTest` to cover graph integrity, density caps, company edge buckets, accessors, all event-eligible relationship types, private edge suppression/override behavior, and a fixture-only M&A candidate non-execution guard. Existing fingerprint, event-impact, and content-hook tests still pass.
+
+## Known traps
+
+- Mergers touch many systems; do not implement them as a quick event.
+- First implementation should reuse the existing cash-out path; do not add a second portfolio conversion path.
+- Do not implement stock-swap or statutory merger behavior before lifecycle registry and save migration tests exist.
+- Do not reuse acquired target ids or tickers for replacement companies.
+- Relationship graph density can create too much event spam.
+- Company replacement slots must not break saved positions, watchlists, charts, or thesis references.

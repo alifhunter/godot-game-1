@@ -50,6 +50,13 @@ var finance_status_label: Label = null
 var finance_guidance_label: Label = null
 var emergency_loan_button: Button = null
 var emergency_loan_terms_label: Label = null
+var bank_loan_offer_option: OptionButton = null
+var bank_loan_amount_slider: HSlider = null
+var bank_loan_amount_label: Label = null
+var bank_loan_terms_label: Label = null
+var bank_loan_button: Button = null
+var active_bank_loan_panel: PanelContainer = null
+var active_bank_loan_label: Label = null
 var active_loan_panel: PanelContainer = null
 var active_loan_label: Label = null
 var bankruptcy_status_panel: PanelContainer = null
@@ -348,6 +355,22 @@ func _set_empty_state() -> void:
 		finance_status_label.text = "Start or load a run to use Finance."
 	if emergency_loan_button != null:
 		emergency_loan_button.disabled = true
+	if bank_loan_offer_option != null:
+		bank_loan_offer_option.clear()
+	if bank_loan_amount_slider != null:
+		bank_loan_amount_slider.editable = false
+		bank_loan_amount_slider.min_value = 0.0
+		bank_loan_amount_slider.max_value = 0.0
+		bank_loan_amount_slider.value = 0.0
+	if bank_loan_amount_label != null:
+		bank_loan_amount_label.text = "Amount: -"
+	if bank_loan_terms_label != null:
+		bank_loan_terms_label.text = "Start or load a run to use regular bank loans."
+	if bank_loan_button != null:
+		bank_loan_button.disabled = true
+		bank_loan_button.text = "Take Bank Loan"
+	if active_bank_loan_panel != null:
+		active_bank_loan_panel.visible = false
 	if manage_properties_button != null:
 		manage_properties_button.visible = false
 	if property_intel_summary_label != null:
@@ -482,9 +505,20 @@ func _build_cars_tab(cars_tab: VBoxContainer) -> void:
 
 
 func _build_finance_tab(finance_tab: VBoxContainer) -> void:
+	var scroll := ScrollContainer.new()
+	scroll.name = "LifeFinanceScroll"
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	finance_tab.add_child(scroll)
+	var root := VBoxContainer.new()
+	root.name = "LifeFinanceRoot"
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 10)
+	scroll.add_child(root)
+
 	var status_panel := _make_panel("LifeFinanceStatusPanel")
 	status_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	finance_tab.add_child(status_panel)
+	root.add_child(status_panel)
 	var status_vbox := _panel_vbox(status_panel, "LifeFinanceStatusVBox")
 	status_vbox.add_child(_make_title("Finance"))
 	finance_status_label = _make_body_label("LifeFinanceStatusLabel")
@@ -494,7 +528,7 @@ func _build_finance_tab(finance_tab: VBoxContainer) -> void:
 
 	var loan_offer_panel := _make_panel("LifeEmergencyLoanPanel")
 	loan_offer_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	finance_tab.add_child(loan_offer_panel)
+	root.add_child(loan_offer_panel)
 	var loan_offer_vbox := _panel_vbox(loan_offer_panel, "LifeEmergencyLoanVBox")
 	loan_offer_vbox.add_child(_make_title("Emergency Loan"))
 	emergency_loan_terms_label = _make_body_label("LifeEmergencyLoanTermsLabel")
@@ -505,9 +539,50 @@ func _build_finance_tab(finance_tab: VBoxContainer) -> void:
 	emergency_loan_button.pressed.connect(_on_emergency_loan_pressed)
 	loan_offer_vbox.add_child(emergency_loan_button)
 
+	var bank_loan_panel := _make_panel("LifeBankLoanPanel")
+	bank_loan_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	root.add_child(bank_loan_panel)
+	var bank_loan_vbox := _panel_vbox(bank_loan_panel, "LifeBankLoanVBox")
+	bank_loan_vbox.add_child(_make_title("Regular Bank Loan"))
+	var lender_label := _make_body_label("LifeBankLoanLenderLabel")
+	lender_label.text = "Lender"
+	_style_label(lender_label, COLOR_TEXT, 12)
+	bank_loan_vbox.add_child(lender_label)
+	bank_loan_offer_option = OptionButton.new()
+	bank_loan_offer_option.name = "LifeBankLoanLenderSelector"
+	bank_loan_offer_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bank_loan_offer_option.item_selected.connect(_on_bank_loan_offer_selected)
+	bank_loan_vbox.add_child(bank_loan_offer_option)
+	var amount_label := _make_body_label("LifeBankLoanAmountTitleLabel")
+	amount_label.text = "Amount"
+	_style_label(amount_label, COLOR_TEXT, 12)
+	bank_loan_vbox.add_child(amount_label)
+	bank_loan_amount_slider = HSlider.new()
+	bank_loan_amount_slider.name = "LifeBankLoanAmountSlider"
+	bank_loan_amount_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bank_loan_amount_slider.value_changed.connect(_on_bank_loan_amount_changed)
+	bank_loan_vbox.add_child(bank_loan_amount_slider)
+	bank_loan_amount_label = _make_body_label("LifeBankLoanAmountLabel")
+	bank_loan_vbox.add_child(bank_loan_amount_label)
+	bank_loan_terms_label = _make_body_label("LifeBankLoanTermsLabel")
+	bank_loan_vbox.add_child(bank_loan_terms_label)
+	bank_loan_button = Button.new()
+	bank_loan_button.name = "LifeBankLoanButton"
+	bank_loan_button.text = "Take Bank Loan"
+	bank_loan_button.pressed.connect(_on_bank_loan_pressed)
+	bank_loan_vbox.add_child(bank_loan_button)
+
+	active_bank_loan_panel = _make_panel("LifeActiveBankLoanPanel")
+	active_bank_loan_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	root.add_child(active_bank_loan_panel)
+	var active_bank_loan_vbox := _panel_vbox(active_bank_loan_panel, "LifeActiveBankLoanVBox")
+	active_bank_loan_vbox.add_child(_make_title("Active Regular Bank Loan"))
+	active_bank_loan_label = _make_body_label("LifeActiveBankLoanLabel")
+	active_bank_loan_vbox.add_child(active_bank_loan_label)
+
 	active_loan_panel = _make_panel("LifeActiveLoanPanel")
 	active_loan_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	finance_tab.add_child(active_loan_panel)
+	root.add_child(active_loan_panel)
 	var active_loan_vbox := _panel_vbox(active_loan_panel, "LifeActiveLoanVBox")
 	active_loan_vbox.add_child(_make_title("Active Loan"))
 	active_loan_label = _make_body_label("LifeActiveLoanLabel")
@@ -515,7 +590,7 @@ func _build_finance_tab(finance_tab: VBoxContainer) -> void:
 
 	bankruptcy_status_panel = _make_panel("LifeBankruptcyStatusPanel")
 	bankruptcy_status_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	finance_tab.add_child(bankruptcy_status_panel)
+	root.add_child(bankruptcy_status_panel)
 	var bankruptcy_vbox := _panel_vbox(bankruptcy_status_panel, "LifeBankruptcyStatusVBox")
 	bankruptcy_vbox.add_child(_make_title("Bankruptcy Risk"))
 	bankruptcy_status_label = _make_body_label("LifeBankruptcyStatusLabel")
@@ -531,6 +606,7 @@ func _refresh_finance_tab() -> void:
 	var monthly_outflow: float = float(finance_status.get("monthly_outflow", snapshot.get("monthly_outflow", 0.0)))
 	var runway_months: float = float(finance_status.get("runway_months", snapshot.get("runway_months", 999.0)))
 	var active_loan: Dictionary = finance_status.get("active_loan", {})
+	var active_bank_loan: Dictionary = finance_status.get("active_bank_loan", {})
 	var bankrupt: bool = bool(finance_status.get("bankrupt", false))
 	var stress_active: bool = bool(finance_status.get("cash_stress_active", false))
 	var status_text: String = "Cash is stable. Runway: %s." % _format_runway(runway_months)
@@ -576,6 +652,26 @@ func _refresh_finance_tab() -> void:
 		else:
 			emergency_loan_button.text = "Emergency Loan Locked"
 
+	_refresh_bank_loan_panel(finance_status)
+
+	if active_bank_loan_panel != null:
+		active_bank_loan_panel.visible = not active_bank_loan.is_empty()
+	if active_bank_loan_label != null:
+		if active_bank_loan.is_empty():
+			active_bank_loan_label.text = "No active regular bank loan."
+			_style_label(active_bank_loan_label, COLOR_MUTED, 12)
+		else:
+			active_bank_loan_label.text = "%s %s | Principal %s | Monthly payment %s | %d/%d payments left%s" % [
+				str(active_bank_loan.get("lender_ticker", "")),
+				str(active_bank_loan.get("lender_name", "Lender")),
+				_format_currency(float(active_bank_loan.get("principal", 0.0))),
+				_format_currency(float(active_bank_loan.get("monthly_payment", 0.0))),
+				int(active_bank_loan.get("payments_remaining", 0)),
+				int(active_bank_loan.get("payment_count", 0)),
+				" | reserve not covered" if bool(finance_status.get("bank_loan_payment_risky", false)) else ""
+			]
+			_style_label(active_bank_loan_label, COLOR_NEGATIVE if bool(finance_status.get("bank_loan_payment_risky", false)) else COLOR_MUTED, 12)
+
 	if active_loan_panel != null:
 		active_loan_panel.visible = not active_loan.is_empty()
 	if active_loan_label != null:
@@ -609,6 +705,146 @@ func _refresh_finance_tab() -> void:
 		else:
 			bankruptcy_status_label.text = "No bankruptcy risk yet. Cash below one month of costs still deserves attention."
 			_style_label(bankruptcy_status_label, COLOR_MUTED, 12)
+
+
+func _refresh_bank_loan_panel(finance_status: Dictionary) -> void:
+	var offers: Array = finance_status.get("bank_loan_offers", [])
+	_populate_bank_loan_offer_selector(offers)
+	var selected_offer: Dictionary = _selected_bank_loan_offer(offers)
+	var active_bank_loan: Dictionary = finance_status.get("active_bank_loan", {})
+	var bankrupt: bool = bool(finance_status.get("bankrupt", false))
+	var disabled_reason: String = ""
+	if bankrupt:
+		disabled_reason = "Bankrupt runs cannot take regular bank loans."
+	elif offers.is_empty():
+		disabled_reason = "No eligible bank lender in the current company roster."
+	elif not active_bank_loan.is_empty():
+		disabled_reason = "A regular bank loan is already active."
+	elif selected_offer.is_empty():
+		disabled_reason = "Select a bank lender first."
+	else:
+		disabled_reason = str(selected_offer.get("disabled_reason", "")).strip_edges()
+
+	if bank_loan_offer_option != null:
+		bank_loan_offer_option.disabled = offers.is_empty() or not active_bank_loan.is_empty() or bankrupt
+	if selected_offer.is_empty() or not disabled_reason.is_empty():
+		_configure_bank_loan_slider(0.0, 0.0, 1.0, 0.0, false)
+		if bank_loan_terms_label != null:
+			bank_loan_terms_label.text = disabled_reason
+		if bank_loan_amount_label != null:
+			bank_loan_amount_label.text = "Amount: -"
+		if bank_loan_button != null:
+			bank_loan_button.disabled = true
+			bank_loan_button.text = "Bank Loan Locked" if not disabled_reason.is_empty() else "Take Bank Loan"
+		return
+
+	var min_principal: float = float(selected_offer.get("min_principal", 0.0))
+	var max_principal: float = float(selected_offer.get("max_principal", 0.0))
+	var step_size: float = max(float(selected_offer.get("step_size", 1.0)), 1.0)
+	var current_amount: float = float(bank_loan_amount_slider.value if bank_loan_amount_slider != null else selected_offer.get("default_principal", min_principal))
+	if current_amount < min_principal - 0.0001 or current_amount > max_principal + 0.0001:
+		current_amount = float(selected_offer.get("default_principal", min_principal))
+	current_amount = _snap_bank_loan_amount(current_amount, selected_offer)
+	_configure_bank_loan_slider(min_principal, max_principal, step_size, current_amount, true)
+	_refresh_bank_loan_amount_summary(selected_offer, current_amount)
+
+
+func _populate_bank_loan_offer_selector(offers: Array) -> void:
+	if bank_loan_offer_option == null:
+		return
+	var desired_offer_id: String = _selected_bank_loan_offer_id()
+	bank_loan_offer_option.clear()
+	var first_eligible_index: int = -1
+	for offer_value in offers:
+		if typeof(offer_value) != TYPE_DICTIONARY:
+			continue
+		var offer: Dictionary = offer_value
+		var index: int = bank_loan_offer_option.item_count
+		var lender_text: String = "%s - %s" % [
+			str(offer.get("lender_ticker", "")),
+			_format_currency(float(offer.get("max_principal", 0.0)))
+		]
+		if not bool(offer.get("eligible", false)):
+			lender_text += " locked"
+		bank_loan_offer_option.add_item(lender_text)
+		bank_loan_offer_option.set_item_metadata(index, str(offer.get("offer_id", "")))
+		if first_eligible_index < 0 and bool(offer.get("eligible", false)):
+			first_eligible_index = index
+		if not desired_offer_id.is_empty() and str(offer.get("offer_id", "")) == desired_offer_id:
+			bank_loan_offer_option.select(index)
+	if bank_loan_offer_option.item_count > 0 and bank_loan_offer_option.selected < 0:
+		bank_loan_offer_option.select(first_eligible_index if first_eligible_index >= 0 else 0)
+
+
+func _configure_bank_loan_slider(min_value: float, max_value: float, step_value: float, selected_value: float, enabled: bool) -> void:
+	if bank_loan_amount_slider == null:
+		return
+	bank_loan_amount_slider.min_value = min_value
+	bank_loan_amount_slider.max_value = max_value
+	bank_loan_amount_slider.step = step_value
+	bank_loan_amount_slider.tick_count = 0
+	bank_loan_amount_slider.ticks_on_borders = false
+	bank_loan_amount_slider.editable = enabled and max_value + 0.0001 >= min_value
+	bank_loan_amount_slider.set_value_no_signal(selected_value)
+
+
+func _refresh_bank_loan_amount_summary(offer: Dictionary, amount: float) -> void:
+	var snapped_amount: float = _snap_bank_loan_amount(amount, offer)
+	var payment_count: int = max(int(offer.get("payment_count", 1)), 1)
+	var repayment_multiplier: float = max(float(offer.get("repayment_multiplier", 1.0)), 1.0)
+	var total_repayment: float = snapped_amount * repayment_multiplier
+	var monthly_payment: float = total_repayment / float(payment_count)
+	var monthly_outflow: float = float(snapshot.get("monthly_outflow", 0.0))
+	var burden_text: String = ""
+	if monthly_outflow > 0.0:
+		burden_text = " | %.0f%% of monthly outflow" % ((monthly_payment / monthly_outflow) * 100.0)
+	if bank_loan_amount_label != null:
+		bank_loan_amount_label.text = "Amount: %s" % _format_currency(snapped_amount)
+	if bank_loan_terms_label != null:
+		bank_loan_terms_label.text = "Lender: %s %s | Monthly payment %s%s | Repay %s across %d payments | %s" % [
+			str(offer.get("lender_ticker", "")),
+			str(offer.get("lender_name", "")),
+			_format_currency(monthly_payment),
+			burden_text,
+			_format_currency(total_repayment),
+			payment_count,
+			str(offer.get("monthly_rate_label", ""))
+		]
+	if bank_loan_button != null:
+		var valid_amount: bool = snapped_amount > 0.0 and snapped_amount >= float(offer.get("min_principal", 0.0)) - 0.0001 and snapped_amount <= float(offer.get("max_principal", 0.0)) + 0.0001
+		bank_loan_button.disabled = not bool(offer.get("eligible", false)) or not valid_amount
+		bank_loan_button.text = "Take Bank Loan"
+
+
+func _selected_bank_loan_offer_id() -> String:
+	return _selected_option_id(bank_loan_offer_option)
+
+
+func _selected_bank_loan_offer(offers: Array) -> Dictionary:
+	var offer_id: String = _selected_bank_loan_offer_id()
+	for offer_value in offers:
+		if typeof(offer_value) != TYPE_DICTIONARY:
+			continue
+		var offer: Dictionary = offer_value
+		if str(offer.get("offer_id", "")) == offer_id:
+			return offer
+	for offer_value in offers:
+		if typeof(offer_value) == TYPE_DICTIONARY:
+			var offer: Dictionary = offer_value
+			if bool(offer.get("eligible", false)):
+				return offer
+	if not offers.is_empty() and typeof(offers[0]) == TYPE_DICTIONARY:
+		var first_offer: Dictionary = offers[0]
+		return first_offer
+	return {}
+
+
+func _snap_bank_loan_amount(amount: float, offer: Dictionary) -> float:
+	var min_principal: float = max(float(offer.get("min_principal", 0.0)), 0.0)
+	var max_principal: float = max(float(offer.get("max_principal", 0.0)), 0.0)
+	var step_size: float = max(float(offer.get("step_size", 1.0)), 1.0)
+	var snapped_amount: float = min_principal + round((amount - min_principal) / step_size) * step_size
+	return clamp(snapped_amount, min_principal, max_principal)
 
 
 func _populate_option(option: OptionButton, rows: Array, selected_id: String) -> void:
@@ -1174,6 +1410,43 @@ func _on_update_plan_pressed() -> void:
 
 func _on_emergency_loan_pressed() -> void:
 	var result: Dictionary = GameManager.take_emergency_loan()
+	status_label.text = str(result.get("message", "Finance updated."))
+	refresh()
+
+
+func _on_bank_loan_offer_selected(_index: int) -> void:
+	var finance_status: Dictionary = snapshot.get("finance", {})
+	var selected_offer: Dictionary = _selected_bank_loan_offer(finance_status.get("bank_loan_offers", []))
+	if selected_offer.is_empty():
+		_refresh_bank_loan_panel(finance_status)
+		return
+	var default_amount: float = float(selected_offer.get("default_principal", selected_offer.get("min_principal", 0.0)))
+	_configure_bank_loan_slider(
+		float(selected_offer.get("min_principal", 0.0)),
+		float(selected_offer.get("max_principal", 0.0)),
+		max(float(selected_offer.get("step_size", 1.0)), 1.0),
+		_snap_bank_loan_amount(default_amount, selected_offer),
+		bool(selected_offer.get("eligible", false))
+	)
+	_refresh_bank_loan_amount_summary(selected_offer, float(bank_loan_amount_slider.value if bank_loan_amount_slider != null else default_amount))
+
+
+func _on_bank_loan_amount_changed(value: float) -> void:
+	var finance_status: Dictionary = snapshot.get("finance", {})
+	var selected_offer: Dictionary = _selected_bank_loan_offer(finance_status.get("bank_loan_offers", []))
+	if selected_offer.is_empty():
+		return
+	_refresh_bank_loan_amount_summary(selected_offer, value)
+
+
+func _on_bank_loan_pressed() -> void:
+	var finance_status: Dictionary = snapshot.get("finance", {})
+	var selected_offer: Dictionary = _selected_bank_loan_offer(finance_status.get("bank_loan_offers", []))
+	if selected_offer.is_empty():
+		status_label.text = "Select a bank lender first."
+		return
+	var amount: float = float(bank_loan_amount_slider.value if bank_loan_amount_slider != null else selected_offer.get("default_principal", 0.0))
+	var result: Dictionary = GameManager.take_bank_loan(str(selected_offer.get("offer_id", "")), amount)
 	status_label.text = str(result.get("message", "Finance updated."))
 	refresh()
 

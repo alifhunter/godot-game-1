@@ -30,6 +30,8 @@ func _ready() -> void:
 	if not bool(capture_result.get("success", false)):
 		_fail("Expected Key Stats evidence capture to succeed: %s" % str(capture_result.get("message", "")))
 		return
+	if not _expect_provenance(capture_result.get("evidence", {}), "company", "Key Stats"):
+		return
 	if int(GameManager.get_daily_action_snapshot().get("used", 0)) != ap_before_capture:
 		_fail("Capturing research evidence should not spend AP.")
 		return
@@ -62,6 +64,8 @@ func _ready() -> void:
 	if not bool(attach_result.get("success", false)):
 		_fail("Expected captured research to attach to the thesis.")
 		return
+	if not _expect_provenance(attach_result.get("evidence", {}), "company", "attached Key Stats"):
+		return
 	var attached_evidence_id: String = str(attach_result.get("evidence", {}).get("id", ""))
 	var update_result: Dictionary = GameManager.update_thesis_evidence_interpretation(thesis_id, attached_evidence_id, {
 		"interpretation": "risk",
@@ -85,6 +89,8 @@ func _ready() -> void:
 	if not bool(chart_capture.get("success", false)):
 		_fail("Expected chart pattern capture to use the Research Tray.")
 		return
+	if not _expect_provenance(chart_capture.get("evidence", {}), "market", "chart pattern"):
+		return
 	var chart_attach: Dictionary = GameManager.attach_research_evidence_to_thesis(thesis_id, str(chart_capture.get("evidence", {}).get("id", "")), "watch")
 	if not bool(chart_attach.get("success", false)):
 		_fail("Expected captured chart pattern to attach to the thesis.")
@@ -103,6 +109,8 @@ func _ready() -> void:
 	if not bool(wrapper_result.get("success", false)):
 		_fail("Expected old chart-pattern add API to remain compatible through the Research Tray.")
 		return
+	if not _expect_provenance(wrapper_result.get("evidence", {}), "market", "direct chart add"):
+		return
 
 	var broker_capture: Dictionary = GameManager.capture_research_evidence({
 		"source_type": "broker_summary",
@@ -115,6 +123,8 @@ func _ready() -> void:
 	})
 	if not bool(broker_capture.get("success", false)) or str(broker_capture.get("evidence", {}).get("category", "")) != "broker_flow":
 		_fail("Expected Broker Summary capture to normalize as broker_flow evidence.")
+		return
+	if not _expect_provenance(broker_capture.get("evidence", {}), "flow", "Broker Summary"):
 		return
 	var broker_attach: Dictionary = GameManager.attach_research_evidence_to_thesis(thesis_id, str(broker_capture.get("evidence", {}).get("id", "")), "support")
 	if not bool(broker_attach.get("success", false)):
@@ -145,6 +155,8 @@ func _ready() -> void:
 	if not bool(news_capture.get("success", false)) or str(news_capture.get("evidence", {}).get("category", "")) != "news":
 		_fail("Expected News capture to normalize as news evidence.")
 		return
+	if not _expect_provenance(news_capture.get("evidence", {}), "news", "News"):
+		return
 	var news_attach: Dictionary = GameManager.attach_research_evidence_to_thesis(thesis_id, str(news_capture.get("evidence", {}).get("id", "")), "support")
 	if not bool(news_attach.get("success", false)):
 		_fail("Expected News evidence to attach to the thesis.")
@@ -172,6 +184,8 @@ func _ready() -> void:
 	if not bool(source_lead_capture.get("success", false)) or str(source_lead_capture.get("evidence", {}).get("category", "")) != "network_intel":
 		_fail("Expected News source lead capture to normalize as network_intel evidence.")
 		return
+	if not _expect_provenance(source_lead_capture.get("evidence", {}), "network", "Network source lead"):
+		return
 
 	var macro_capture: Dictionary = GameManager.capture_research_evidence({
 		"source_type": "macro_indicator",
@@ -184,6 +198,8 @@ func _ready() -> void:
 	})
 	if not bool(macro_capture.get("success", false)) or str(macro_capture.get("evidence", {}).get("category", "")) != "sector_macro":
 		_fail("Expected Macro capture to normalize as sector_macro evidence.")
+		return
+	if not _expect_provenance(macro_capture.get("evidence", {}), "macro", "Macro"):
 		return
 	var macro_attach: Dictionary = GameManager.attach_research_evidence_to_thesis(thesis_id, str(macro_capture.get("evidence", {}).get("id", "")), "watch")
 	if not bool(macro_attach.get("success", false)):
@@ -205,6 +221,8 @@ func _ready() -> void:
 	if not bool(sector_capture.get("success", false)) or str(sector_capture.get("evidence", {}).get("category", "")) != "sector_macro":
 		_fail("Expected sector dashboard capture to normalize as sector_macro evidence.")
 		return
+	if not _expect_provenance(sector_capture.get("evidence", {}), "sector", "Sector"):
+		return
 	var sector_evidence_id: String = str(sector_capture.get("evidence", {}).get("id", ""))
 	var sector_rows: Array = GameManager.get_research_tray_snapshot(company_id).get("rows", [])
 	var found_sector_context: bool = false
@@ -220,6 +238,54 @@ func _ready() -> void:
 		_fail("Expected sector context evidence to attach to the thesis.")
 		return
 
+	var commodity_capture: Dictionary = GameManager.capture_research_evidence({
+		"source_type": "commodity_macro",
+		"company_id": company_id,
+		"sector_id": sector_id,
+		"sector_name": sector_name,
+		"commodity_id": "cpo",
+		"commodity_name": "CPO",
+		"label": "CPO driver",
+		"value": "+4.20%",
+		"detail": "CPO price momentum gives the sector a public top-down driver.",
+		"impact": "positive",
+		"source_id": "test_commodity_macro"
+	})
+	if not bool(commodity_capture.get("success", false)) or str(commodity_capture.get("evidence", {}).get("category", "")) != "sector_macro":
+		_fail("Expected commodity macro capture to normalize as sector_macro evidence.")
+		return
+	if not _expect_provenance(commodity_capture.get("evidence", {}), "commodity", "Commodity"):
+		return
+	var commodity_attach: Dictionary = GameManager.attach_research_evidence_to_thesis(thesis_id, str(commodity_capture.get("evidence", {}).get("id", "")), "watch")
+	if not bool(commodity_attach.get("success", false)):
+		_fail("Expected commodity macro evidence to attach to the thesis.")
+		return
+
+	var counterparty_id: String = str(RunState.company_order[1])
+	var counterparty: Dictionary = GameManager.get_company_snapshot(counterparty_id, true, true, true)
+	var relationship_capture: Dictionary = GameManager.capture_research_evidence({
+		"source_type": "company_relationship_graph",
+		"company_id": company_id,
+		"counterparty_company_id": counterparty_id,
+		"counterparty_ticker": str(counterparty.get("ticker", "")),
+		"relationship_edge_id": "test_edge_supplier_customer",
+		"relationship_type": "supplier_customer",
+		"label": "Supplier link",
+		"value": str(counterparty.get("ticker", "")),
+		"detail": "A public relationship edge connects this company to a counterparty.",
+		"impact": "mixed",
+		"source_id": "test_relationship_edge"
+	})
+	if not bool(relationship_capture.get("success", false)) or str(relationship_capture.get("evidence", {}).get("category", "")) != "corporate_events":
+		_fail("Expected relationship graph capture to normalize as corporate_events evidence.")
+		return
+	if not _expect_provenance(relationship_capture.get("evidence", {}), "relationship", "Relationship"):
+		return
+	var relationship_attach: Dictionary = GameManager.attach_research_evidence_to_thesis(thesis_id, str(relationship_capture.get("evidence", {}).get("id", "")), "watch")
+	if not bool(relationship_attach.get("success", false)):
+		_fail("Expected relationship graph evidence to attach to the thesis.")
+		return
+
 	var eps_capture: Dictionary = GameManager.capture_research_evidence({
 		"source_type": "key_stats",
 		"company_id": company_id,
@@ -230,6 +296,8 @@ func _ready() -> void:
 	})
 	if not bool(eps_capture.get("success", false)) or str(eps_capture.get("evidence", {}).get("category", "")) != "financials":
 		_fail("Expected EPS metric capture to normalize as financials evidence.")
+		return
+	if not _expect_provenance(eps_capture.get("evidence", {}), "company", "EPS Key Stats"):
 		return
 	var eps_attach: Dictionary = GameManager.attach_research_evidence_to_thesis(thesis_id, str(eps_capture.get("evidence", {}).get("id", "")), "support")
 	if not bool(eps_attach.get("success", false)):
@@ -247,6 +315,8 @@ func _ready() -> void:
 	})
 	if not bool(profile_capture.get("success", false)) or str(profile_capture.get("evidence", {}).get("category", "")) != "fundamentals":
 		_fail("Expected company profile description capture to normalize as fundamentals evidence.")
+		return
+	if not _expect_provenance(profile_capture.get("evidence", {}), "company", "Company Profile"):
 		return
 	var profile_attach: Dictionary = GameManager.attach_research_evidence_to_thesis(thesis_id, str(profile_capture.get("evidence", {}).get("id", "")), "watch")
 	if not bool(profile_attach.get("success", false)):
@@ -299,6 +369,8 @@ func _ready() -> void:
 	if not bool(financial_statement_capture.get("success", false)) or str(financial_statement_capture.get("evidence", {}).get("category", "")) != "financials":
 		_fail("Expected financial statement capture to normalize as financials evidence.")
 		return
+	if not _expect_provenance(financial_statement_capture.get("evidence", {}), "filing", "Financial Statement"):
+		return
 	var financial_statement_attach: Dictionary = GameManager.attach_research_evidence_to_thesis(thesis_id, str(financial_statement_capture.get("evidence", {}).get("id", "")), "support")
 	if not bool(financial_statement_attach.get("success", false)):
 		_fail("Expected financial statement evidence to attach to the thesis.")
@@ -332,6 +404,8 @@ func _ready() -> void:
 	if not bool(twooter_capture.get("success", false)) or str(twooter_capture.get("evidence", {}).get("category", "")) != "twooter":
 		_fail("Expected Twooter post capture to normalize as twooter evidence.")
 		return
+	if not _expect_provenance(twooter_capture.get("evidence", {}), "social", "Twooter"):
+		return
 	var twooter_attach: Dictionary = GameManager.attach_research_evidence_to_thesis(thesis_id, str(twooter_capture.get("evidence", {}).get("id", "")), "watch")
 	if not bool(twooter_attach.get("success", false)):
 		_fail("Expected Twooter post evidence to attach to the thesis.")
@@ -349,6 +423,8 @@ func _ready() -> void:
 	if not bool(twooter_dm_capture.get("success", false)) or str(twooter_dm_capture.get("evidence", {}).get("category", "")) != "twooter":
 		_fail("Expected Twooter DM capture to normalize as twooter evidence.")
 		return
+	if not _expect_provenance(twooter_dm_capture.get("evidence", {}), "social", "Twooter DM"):
+		return
 
 	var trade_quote_capture: Dictionary = GameManager.capture_research_evidence({
 		"source_type": "trade_quote",
@@ -362,10 +438,18 @@ func _ready() -> void:
 	if not bool(trade_quote_capture.get("success", false)) or str(trade_quote_capture.get("evidence", {}).get("category", "")) != "price_action":
 		_fail("Expected trade quote capture to normalize as price_action evidence.")
 		return
+	if not _expect_provenance(trade_quote_capture.get("evidence", {}), "market", "Trade Quote"):
+		return
 	var trade_quote_attach: Dictionary = GameManager.attach_research_evidence_to_thesis(thesis_id, str(trade_quote_capture.get("evidence", {}).get("id", "")), "watch")
 	if not bool(trade_quote_attach.get("success", false)):
 		_fail("Expected trade quote evidence to attach to the thesis.")
 		return
+
+	var provenance_snapshot: Dictionary = GameManager.get_research_tray_snapshot(company_id)
+	for required_group in ["company", "market", "flow", "news", "network", "macro", "sector", "commodity", "relationship", "filing", "social"]:
+		if not _snapshot_has_provenance_group(provenance_snapshot, str(required_group)):
+			_fail("Expected Research Tray snapshot to include provenance group %s." % str(required_group))
+			return
 
 	var save_payload: Dictionary = RunState.to_save_dict()
 	for row_key in save_payload.get("thesis_research_tray", {}).keys():
@@ -378,6 +462,12 @@ func _ready() -> void:
 	for normalized_row in RunState.get_thesis_research_tray().values():
 		if typeof(normalized_row) == TYPE_DICTIONARY and str(normalized_row.get("dedupe_key", "")).is_empty():
 			_fail("Expected old save-style Research Tray rows to derive a dedupe key.")
+			return
+		if typeof(normalized_row) == TYPE_DICTIONARY and str(normalized_row.get("provenance_group", "")).strip_edges().is_empty():
+			_fail("Expected Research Tray rows to preserve provenance group through save/load.")
+			return
+		if typeof(normalized_row) == TYPE_DICTIONARY and typeof(normalized_row.get("provenance_tags", [])) != TYPE_ARRAY:
+			_fail("Expected Research Tray rows to preserve provenance tags through save/load.")
 			return
 
 	var report_result: Dictionary = GameManager.generate_thesis_report(thesis_id)
@@ -430,6 +520,33 @@ func _ready() -> void:
 
 	print("THESIS_RESEARCH_TRAY_OK")
 	get_tree().quit(0)
+
+
+func _expect_provenance(row_value, expected_group: String, context: String) -> bool:
+	if typeof(row_value) != TYPE_DICTIONARY:
+		_fail("Expected %s evidence to be a dictionary." % context)
+		return false
+	var row: Dictionary = row_value
+	if str(row.get("provenance_group", "")).strip_edges() != expected_group:
+		_fail("Expected %s provenance group %s, got %s." % [context, expected_group, str(row.get("provenance_group", ""))])
+		return false
+	if str(row.get("provenance_label", "")).strip_edges().is_empty():
+		_fail("Expected %s evidence to include a provenance label." % context)
+		return false
+	if str(row.get("provenance_path", "")).strip_edges().is_empty():
+		_fail("Expected %s evidence to include a provenance path." % context)
+		return false
+	if typeof(row.get("provenance_tags", [])) != TYPE_ARRAY or row.get("provenance_tags", []).is_empty():
+		_fail("Expected %s evidence to include provenance tags." % context)
+		return false
+	return true
+
+
+func _snapshot_has_provenance_group(snapshot: Dictionary, group_id: String) -> bool:
+	for group_value in snapshot.get("provenance_groups", []):
+		if typeof(group_value) == TYPE_DICTIONARY and str(group_value.get("id", "")) == group_id:
+			return true
+	return false
 
 
 func _fail(message: String) -> void:

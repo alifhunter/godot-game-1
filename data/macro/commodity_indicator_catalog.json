@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "status": "planning_seed",
+  "description": "Catalog of macro commodity indicators. These are not tradable instruments and do not affect prices until later exposure integration tasks wire them in.",
+  "state_model": {
+    "level": "Normalized commodity index level. Neutral is 100. Generated yearly state should stay within each commodity model's level_floor and level_ceiling.",
+    "direction": "Discrete movement label derived from ytd_move: falling, softening, flat, firming, or rising.",
+    "volatility": "Normalized annual volatility hint used for future content and price integration.",
+    "regime": "Discrete regime derived from level and ytd_move: bear, soft, neutral, firm, or bull.",
+    "ytd_move": "Percent-like normalized year-to-date movement. Example: 12.5 means roughly +12.5% from start of year.",
+    "daily_indices": "Deferred. Task 2 should generate yearly state first; daily projection can be added later if content or price systems need it."
+  },
+  "global_thresholds": {
+    "direction": {
+      "falling_below": -12.0,
+      "softening_below": -4.0,
+      "firming_above": 4.0,
+      "rising_above": 12.0
+    },
+    "regime": {
+      "bear_below_level": 82.0,
+      "soft_below_level": 94.0,
+      "firm_above_level": 106.0,
+      "bull_above_level": 118.0
+    }
+  },
+  "commodities": [
+    {
+      "id": "coal",
+      "display_name": "Thermal Coal",
+      "category": "energy",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 58.0, "level_ceiling": 165.0, "volatility_base": 0.34, "ytd_move_floor": -38.0, "ytd_move_ceiling": 48.0, "trend_persistence": 0.58, "mean_reversion": 0.20},
+      "macro_drivers": ["industrial_activity", "energy_policy", "global_trade", "weather_shock"],
+      "related_sectors": ["energy", "basicindustry", "transport", "infra"],
+      "story_tags": ["export_price_cycle", "domestic_market_obligation", "power_cost_pressure"]
+    },
+    {
+      "id": "crude_oil",
+      "display_name": "Crude Oil",
+      "category": "energy",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 55.0, "level_ceiling": 170.0, "volatility_base": 0.38, "ytd_move_floor": -42.0, "ytd_move_ceiling": 52.0, "trend_persistence": 0.54, "mean_reversion": 0.22},
+      "macro_drivers": ["global_trade", "geopolitical_risk", "fx", "inflation"],
+      "related_sectors": ["energy", "transport", "basicindustry", "health"],
+      "story_tags": ["oil_price_rally", "fuel_cost_pressure", "petrochemical_margin"]
+    },
+    {
+      "id": "natural_gas",
+      "display_name": "Natural Gas",
+      "category": "energy",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 60.0, "level_ceiling": 158.0, "volatility_base": 0.32, "ytd_move_floor": -34.0, "ytd_move_ceiling": 42.0, "trend_persistence": 0.50, "mean_reversion": 0.25},
+      "macro_drivers": ["energy_policy", "industrial_activity", "weather_shock", "global_trade"],
+      "related_sectors": ["energy", "basicindustry", "infra"],
+      "story_tags": ["gas_supply_contract", "power_input_cost", "fertilizer_input_cost"]
+    },
+    {
+      "id": "fuel",
+      "display_name": "Refined Fuel",
+      "category": "energy",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 66.0, "level_ceiling": 150.0, "volatility_base": 0.26, "ytd_move_floor": -28.0, "ytd_move_ceiling": 36.0, "trend_persistence": 0.46, "mean_reversion": 0.28},
+      "macro_drivers": ["crude_oil_pass_through", "fx", "inflation", "logistics_cost"],
+      "related_sectors": ["transport", "consumer", "noncyclical", "industrial"],
+      "story_tags": ["fuel_margin_pressure", "logistics_cost_spike", "subsidy_adjustment"]
+    },
+    {
+      "id": "electricity",
+      "display_name": "Electricity Tariff",
+      "category": "utility",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 82.0, "level_ceiling": 128.0, "volatility_base": 0.12, "ytd_move_floor": -10.0, "ytd_move_ceiling": 18.0, "trend_persistence": 0.62, "mean_reversion": 0.18},
+      "macro_drivers": ["energy_policy", "coal", "natural_gas", "regulatory_support"],
+      "related_sectors": ["infra", "tech", "property", "basicindustry"],
+      "story_tags": ["utility_tariff_reset", "power_cost_shock", "regulated_margin_review"]
+    },
+    {
+      "id": "cpo",
+      "display_name": "Crude Palm Oil",
+      "category": "agriculture",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 62.0, "level_ceiling": 162.0, "volatility_base": 0.30, "ytd_move_floor": -32.0, "ytd_move_ceiling": 44.0, "trend_persistence": 0.52, "mean_reversion": 0.24},
+      "macro_drivers": ["weather_shock", "export_policy", "biofuel_policy", "global_food_prices"],
+      "related_sectors": ["noncyclical", "consumer", "energy"],
+      "story_tags": ["cpo_price_rally", "export_levy_change", "biofuel_blending"]
+    },
+    {
+      "id": "rice",
+      "display_name": "Rice",
+      "category": "agriculture",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 76.0, "level_ceiling": 138.0, "volatility_base": 0.18, "ytd_move_floor": -18.0, "ytd_move_ceiling": 28.0, "trend_persistence": 0.48, "mean_reversion": 0.32},
+      "macro_drivers": ["weather_shock", "government_spending", "inflation", "food_security_policy"],
+      "related_sectors": ["noncyclical", "consumer"],
+      "story_tags": ["harvest_cycle", "staple_price_inflation", "procurement_policy"]
+    },
+    {
+      "id": "wheat",
+      "display_name": "Wheat",
+      "category": "agriculture",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 64.0, "level_ceiling": 150.0, "volatility_base": 0.28, "ytd_move_floor": -30.0, "ytd_move_ceiling": 40.0, "trend_persistence": 0.46, "mean_reversion": 0.28},
+      "macro_drivers": ["global_food_prices", "fx", "geopolitical_risk", "weather_shock"],
+      "related_sectors": ["consumer", "noncyclical"],
+      "story_tags": ["flour_input_cost", "import_price_pressure", "staple_margin_squeeze"]
+    },
+    {
+      "id": "sugar",
+      "display_name": "Sugar",
+      "category": "agriculture",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 68.0, "level_ceiling": 145.0, "volatility_base": 0.24, "ytd_move_floor": -24.0, "ytd_move_ceiling": 34.0, "trend_persistence": 0.44, "mean_reversion": 0.30},
+      "macro_drivers": ["global_food_prices", "weather_shock", "fx", "biofuel_policy"],
+      "related_sectors": ["consumer", "noncyclical"],
+      "story_tags": ["sweetener_cost_pressure", "beverage_margin_squeeze", "food_inflation"]
+    },
+    {
+      "id": "coffee",
+      "display_name": "Coffee",
+      "category": "agriculture",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 62.0, "level_ceiling": 155.0, "volatility_base": 0.30, "ytd_move_floor": -32.0, "ytd_move_ceiling": 42.0, "trend_persistence": 0.46, "mean_reversion": 0.30},
+      "macro_drivers": ["weather_shock", "global_food_prices", "fx", "consumer_confidence"],
+      "related_sectors": ["consumer"],
+      "story_tags": ["coffee_input_cost", "menu_price_hike", "crop_shortfall"]
+    },
+    {
+      "id": "corn",
+      "display_name": "Corn",
+      "category": "agriculture",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 66.0, "level_ceiling": 148.0, "volatility_base": 0.26, "ytd_move_floor": -28.0, "ytd_move_ceiling": 38.0, "trend_persistence": 0.46, "mean_reversion": 0.30},
+      "macro_drivers": ["global_food_prices", "weather_shock", "fx", "biofuel_policy"],
+      "related_sectors": ["noncyclical", "consumer"],
+      "story_tags": ["feed_margin_pressure", "protein_cost_cycle", "crop_yield_swing"]
+    },
+    {
+      "id": "soybean",
+      "display_name": "Soybean",
+      "category": "agriculture",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 64.0, "level_ceiling": 150.0, "volatility_base": 0.27, "ytd_move_floor": -30.0, "ytd_move_ceiling": 38.0, "trend_persistence": 0.46, "mean_reversion": 0.30},
+      "macro_drivers": ["global_food_prices", "weather_shock", "fx", "global_trade"],
+      "related_sectors": ["noncyclical", "consumer"],
+      "story_tags": ["feed_cost_pressure", "protein_spread", "import_cost_swing"]
+    },
+    {
+      "id": "milk",
+      "display_name": "Milk",
+      "category": "agriculture",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 76.0, "level_ceiling": 132.0, "volatility_base": 0.16, "ytd_move_floor": -16.0, "ytd_move_ceiling": 24.0, "trend_persistence": 0.42, "mean_reversion": 0.34},
+      "macro_drivers": ["global_food_prices", "fx", "domestic_demand", "weather_shock"],
+      "related_sectors": ["noncyclical", "consumer"],
+      "story_tags": ["dairy_input_cost", "nutrition_demand", "cold_chain_margin"]
+    },
+    {
+      "id": "fertilizer",
+      "display_name": "Fertilizer",
+      "category": "agriculture",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 60.0, "level_ceiling": 158.0, "volatility_base": 0.30, "ytd_move_floor": -34.0, "ytd_move_ceiling": 42.0, "trend_persistence": 0.48, "mean_reversion": 0.26},
+      "macro_drivers": ["natural_gas", "fx", "government_spending", "global_trade"],
+      "related_sectors": ["noncyclical", "basicindustry"],
+      "story_tags": ["plantation_input_cost", "farm_yield_risk", "subsidy_policy"]
+    },
+    {
+      "id": "salt",
+      "display_name": "Salt",
+      "category": "agriculture",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 78.0, "level_ceiling": 132.0, "volatility_base": 0.15, "ytd_move_floor": -16.0, "ytd_move_ceiling": 22.0, "trend_persistence": 0.40, "mean_reversion": 0.34},
+      "macro_drivers": ["weather_shock", "domestic_demand", "import_policy", "inflation"],
+      "related_sectors": ["noncyclical", "consumer"],
+      "story_tags": ["salt_harvest", "food_input_cost", "import_quota_change"]
+    },
+    {
+      "id": "nickel",
+      "display_name": "Nickel",
+      "category": "metals",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 50.0, "level_ceiling": 185.0, "volatility_base": 0.46, "ytd_move_floor": -48.0, "ytd_move_ceiling": 62.0, "trend_persistence": 0.52, "mean_reversion": 0.22},
+      "macro_drivers": ["ev_demand", "global_trade", "export_policy", "industrial_activity"],
+      "related_sectors": ["basicindustry", "energy", "transport", "industrial"],
+      "story_tags": ["nickel_price_rally", "smelter_ramp", "export_policy_change"]
+    },
+    {
+      "id": "copper",
+      "display_name": "Copper",
+      "category": "metals",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 58.0, "level_ceiling": 168.0, "volatility_base": 0.34, "ytd_move_floor": -36.0, "ytd_move_ceiling": 46.0, "trend_persistence": 0.54, "mean_reversion": 0.24},
+      "macro_drivers": ["industrial_activity", "digital_adoption", "infrastructure_budget", "global_trade"],
+      "related_sectors": ["basicindustry", "industrial", "infra", "tech", "property"],
+      "story_tags": ["copper_inventory_gain", "grid_upgrade_order", "data_center_cable_contract"]
+    },
+    {
+      "id": "rare_earth",
+      "display_name": "Rare Earths",
+      "category": "metals",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 48.0, "level_ceiling": 190.0, "volatility_base": 0.48, "ytd_move_floor": -50.0, "ytd_move_ceiling": 66.0, "trend_persistence": 0.50, "mean_reversion": 0.22},
+      "macro_drivers": ["ev_demand", "semiconductor_cycle", "export_policy", "geopolitical_risk"],
+      "related_sectors": ["basicindustry", "tech", "industrial", "energy"],
+      "story_tags": ["rare_earth_export_policy", "magnet_supply_squeeze", "strategic_mineral_rally"]
+    },
+    {
+      "id": "gold",
+      "display_name": "Gold",
+      "category": "metals",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 70.0, "level_ceiling": 150.0, "volatility_base": 0.24, "ytd_move_floor": -24.0, "ytd_move_ceiling": 34.0, "trend_persistence": 0.48, "mean_reversion": 0.26},
+      "macro_drivers": ["risk_appetite", "interest_rate", "fx", "geopolitical_risk"],
+      "related_sectors": ["basicindustry", "finance"],
+      "story_tags": ["safe_haven_bid", "real_rate_headwind", "reserve_asset_rally"]
+    },
+    {
+      "id": "iron_ore",
+      "display_name": "Iron Ore",
+      "category": "metals",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 56.0, "level_ceiling": 160.0, "volatility_base": 0.33, "ytd_move_floor": -34.0, "ytd_move_ceiling": 44.0, "trend_persistence": 0.50, "mean_reversion": 0.26},
+      "macro_drivers": ["industrial_activity", "infrastructure_budget", "global_trade", "property_cycle"],
+      "related_sectors": ["basicindustry", "industrial", "property"],
+      "story_tags": ["steel_input_cost", "construction_cycle", "inventory_loss"]
+    },
+    {
+      "id": "steel",
+      "display_name": "Steel",
+      "category": "industrial_inputs",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 62.0, "level_ceiling": 152.0, "volatility_base": 0.28, "ytd_move_floor": -30.0, "ytd_move_ceiling": 38.0, "trend_persistence": 0.48, "mean_reversion": 0.28},
+      "macro_drivers": ["industrial_activity", "infrastructure_budget", "property_cycle", "coal"],
+      "related_sectors": ["basicindustry", "industrial", "property", "transport"],
+      "story_tags": ["steel_spread_recovery", "fabrication_cost", "project_order"]
+    },
+    {
+      "id": "cement",
+      "display_name": "Cement",
+      "category": "industrial_inputs",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 76.0, "level_ceiling": 136.0, "volatility_base": 0.16, "ytd_move_floor": -18.0, "ytd_move_ceiling": 24.0, "trend_persistence": 0.44, "mean_reversion": 0.32},
+      "macro_drivers": ["infrastructure_budget", "property_cycle", "coal", "domestic_demand"],
+      "related_sectors": ["basicindustry", "property", "infra"],
+      "story_tags": ["cement_price_war", "infrastructure_order", "construction_cost_pressure"]
+    },
+    {
+      "id": "silica",
+      "display_name": "Silica Sand",
+      "category": "industrial_inputs",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 68.0, "level_ceiling": 146.0, "volatility_base": 0.22, "ytd_move_floor": -24.0, "ytd_move_ceiling": 32.0, "trend_persistence": 0.44, "mean_reversion": 0.30},
+      "macro_drivers": ["semiconductor_cycle", "solar_demand", "construction_cycle", "export_policy"],
+      "related_sectors": ["basicindustry", "tech", "property", "industrial"],
+      "story_tags": ["glass_input_cost", "wafer_material_demand", "solar_supply_chain"]
+    },
+    {
+      "id": "pulp",
+      "display_name": "Pulp",
+      "category": "industrial_inputs",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 64.0, "level_ceiling": 150.0, "volatility_base": 0.26, "ytd_move_floor": -28.0, "ytd_move_ceiling": 36.0, "trend_persistence": 0.44, "mean_reversion": 0.30},
+      "macro_drivers": ["global_trade", "consumer_confidence", "fx", "packaging_demand"],
+      "related_sectors": ["basicindustry", "consumer"],
+      "story_tags": ["export_price_cycle", "packaging_demand_recovery", "forestry_certification"]
+    },
+    {
+      "id": "asphalt",
+      "display_name": "Asphalt",
+      "category": "industrial_inputs",
+      "unit_label": "index",
+      "model": {"neutral_level": 100.0, "level_floor": 72.0, "level_ceiling": 138.0, "volatility_base": 0.18, "ytd_move_floor": -20.0, "ytd_move_ceiling": 26.0, "trend_persistence": 0.42, "mean_reversion": 0.32},
+      "macro_drivers": ["crude_oil_pass_through", "infrastructure_budget", "government_spending", "fx"],
+      "related_sectors": ["infra", "property", "industrial"],
+      "story_tags": ["road_project_cost", "toll_capex_pressure", "infrastructure_budget"]
+    }
+  ]
+}

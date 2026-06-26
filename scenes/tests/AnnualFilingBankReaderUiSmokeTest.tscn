@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/AnnualFilingBankReaderUiSmokeTest.gd" id="1_annual_filing_bank_reader_ui_smoke"]
+
+[node name="AnnualFilingBankReaderUiSmokeTest" type="Node"]
+script = ExtResource("1_annual_filing_bank_reader_ui_smoke")

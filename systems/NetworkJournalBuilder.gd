@@ -264,7 +264,7 @@ static func journal_row(config_key: String, source: Dictionary) -> Dictionary:
 	var config: Dictionary = JOURNAL_ROW_CONFIG.get(config_key, {})
 	var row_type: String = str(config.get("type", config_key))
 	var day_index: int = journal_day_index(source, config)
-	return {
+	var row: Dictionary = {
 		"id": journal_id(source, config),
 		"type": row_type,
 		"day_index": day_index,
@@ -289,6 +289,43 @@ static func journal_row(config_key: String, source: Dictionary) -> Dictionary:
 		"direct_tip_risk_note": journal_direct_tip_field(source, "risk_note"),
 		"direct_tip_confidence_label": journal_direct_tip_field(source, "confidence_label")
 	}
+	_copy_generated_surface_metadata(row, source)
+	return row
+
+
+static func _copy_generated_surface_metadata(target: Dictionary, source: Dictionary) -> void:
+	for key_value in [
+		"generated_content_surface",
+		"generated_surface_id",
+		"generated_scope_id",
+		"source_system_id",
+		"story_id",
+		"story_family",
+		"archetype_id",
+		"public_status",
+		"stage_id",
+		"visibility",
+		"detail_level",
+		"reliability",
+		"leak_risk",
+		"source_fact_ids",
+		"source_clue_ids",
+		"source_company_ids",
+		"source_sector_ids",
+		"source_event_ids",
+		"source_quality",
+		"directness",
+		"original_directness",
+		"required_relationship_stage",
+		"required_recognition_min",
+		"network_relationship",
+		"recognition_score"
+	]:
+		var key: String = str(key_value)
+		if source.has(key):
+			target[key] = source.get(key)
+	if str(target.get("surface_id", "")).strip_edges().is_empty() and not str(target.get("generated_surface_id", "")).strip_edges().is_empty():
+		target["surface_id"] = str(target.get("generated_surface_id", "")).strip_edges()
 
 
 static func journal_day_index(source: Dictionary, config: Dictionary) -> int:

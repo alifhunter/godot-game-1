@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/AnnualFilingAnatomySchemaTest.gd" id="1_annual_filing_anatomy_schema"]
+
+[node name="AnnualFilingAnatomySchemaTest" type="Node"]
+script = ExtResource("1_annual_filing_anatomy_schema")

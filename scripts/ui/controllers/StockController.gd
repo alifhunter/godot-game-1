@@ -27,6 +27,7 @@ const TRADE_RIGHT_SECTION_RATIO := 1.0
 const ORDER_TICKET_TOGGLE_WIDTH := 28.0
 const WATCHLIST_MIN_WIDTH_NARROW := 220.0
 const WATCHLIST_MIN_WIDTH_WIDE := 260.0
+const SHOW_PROFILE_TOP_DOWN_LINKS := false
 const KEY_STATS_DASHBOARD_DESKTOP_WIDTH := 804.0
 const KEY_STATS_DASHBOARD_TWO_COLUMN_WIDTH := 540.0
 const STOCK_LIST_ADD_BUTTON_WIDTH := 72.0
@@ -241,6 +242,18 @@ const BROKER_LOT_RATIO := 1.0
 const BROKER_AVERAGE_RATIO := 1.1
 const STATEMENT_LABEL_WIDTH := 286.0
 const STATEMENT_VALUE_WIDTH := 148.0
+const FINANCIAL_STATEMENT_A4_RATIO := 1.41421356
+const FINANCIAL_STATEMENT_A4_MAX_WIDTH := 840.0
+const FINANCIAL_STATEMENT_A4_MIN_WIDTH := 420.0
+const FINANCIAL_STATEMENT_A4_MIN_SMALL_WIDTH := 300.0
+const FINANCIAL_STATEMENT_A4_VALUE_WIDTH := 148.0
+const FINANCIAL_STATEMENT_A4_SMALL_VALUE_WIDTH := 112.0
+const FINANCIAL_STATEMENT_A4_TABLE_AMOUNT_WIDTH := 128.0
+const FINANCIAL_STATEMENT_A4_TABLE_REFERENCE_WIDTH := 0.0
+const FINANCIAL_STATEMENT_A4_SCROLLBAR_GUTTER := 18.0
+const FINANCIAL_STATEMENT_A4_SECTION_CHUNK_SIZE := 3
+const FINANCIAL_STATEMENT_READER_MODE := "a4_virtualized_sections"
+const FINANCIAL_STATEMENT_REPORT_BUTTON_LABEL := "View Consolidated Financial Statement"
 const APP_WINDOW_INSET := 20
 const APP_WINDOW_CONTENT_MARGIN := 20
 const APP_WINDOW_CONTENT_TOP_MARGIN := 64
@@ -314,6 +327,7 @@ const KEY_STATS_METRIC_VALUE_WIDTH := 74.0
 const RUPSLB_MEETING_OVERLAY_SCRIPT = preload("res://scripts/ui/widgets/RupslbMeetingOverlay.gd")
 const DASHBOARD_SPARKLINE_SCRIPT = preload("res://scripts/ui/widgets/DashboardSparklineCanvas.gd")
 const THESIS_BOARD_WIDGET_SCRIPT = preload("res://scripts/ui/widgets/ThesisBoardWidget.gd")
+const ANNUAL_FILING_DOCUMENT_SCRIPT = preload("res://systems/AnnualFilingDocument.gd")
 
 var _root = null
 var selected_company_id: String = ""
@@ -357,6 +371,9 @@ var trade_workspace_key_stats_cache_key: String = ""
 var trade_workspace_broker_cache_key: String = ""
 var trade_workspace_corporate_action_cache_key: String = ""
 var trade_workspace_statement_cache_key: String = ""
+var annual_filing_document_cache: Dictionary = {}
+var financial_statement_report_context: Dictionary = {}
+var financial_statement_report_document_context: Dictionary = {}
 var status_message: String = "Ready."
 var stock_window_container: PanelContainer = null
 var app_content_margin: MarginContainer = null
@@ -397,12 +414,28 @@ var financials_year_label: Label = null
 var financials_previous_button: Button = null
 var financials_period_label: Label = null
 var financials_next_button: Button = null
+var financial_statement_report_button: Button = null
+var financial_statement_report_overlay: Control = null
+var financial_statement_report_panel: PanelContainer = null
+var financial_statement_report_toc_panel: PanelContainer = null
+var financial_statement_report_toc_vbox: VBoxContainer = null
+var financial_statement_report_title_label: Label = null
+var financial_statement_report_scroll: ScrollContainer = null
+var financial_statement_report_page_panel: PanelContainer = null
+var financial_statement_report_page_margin: MarginContainer = null
+var financial_statement_report_page_scroll: ScrollContainer = null
+var financial_statement_report_body_vbox: VBoxContainer = null
+var financial_statement_report_section_nodes: Dictionary = {}
 var income_statement_rows_vbox: VBoxContainer = null
 var income_statement_empty_label: Label = null
 var balance_sheet_rows_vbox: VBoxContainer = null
 var balance_sheet_empty_label: Label = null
 var cash_flow_rows_vbox: VBoxContainer = null
 var cash_flow_empty_label: Label = null
+var operating_metrics_rows_vbox: VBoxContainer = null
+var operating_metrics_empty_label: Label = null
+var statement_notes_rows_vbox: VBoxContainer = null
+var statement_notes_empty_label: Label = null
 var broker_panel: PanelContainer = null
 var broker_summary_label: Label = null
 var broker_meter_label: Label = null
@@ -470,6 +503,9 @@ var profile_shareholder_rows: VBoxContainer = null
 var profile_management_card: PanelContainer = null
 var profile_management_title_label: Label = null
 var profile_management_rows: VBoxContainer = null
+var profile_top_down_card: PanelContainer = null
+var profile_top_down_title_label: Label = null
+var profile_top_down_rows: VBoxContainer = null
 var contact_intel_panel: PanelContainer = null
 var contact_intel_option: OptionButton = null
 var contact_intel_button: Button = null
@@ -2728,6 +2764,19 @@ func _ensure_profile_company_layout() -> void:
 	background_vbox.add_child(profile_tags_flow)
 	profile_vbox.add_child(profile_background_card)
 
+	profile_top_down_card = _build_profile_card("ProfileTopDownLinksCard")
+	profile_top_down_card.visible = SHOW_PROFILE_TOP_DOWN_LINKS
+	var top_down_vbox: VBoxContainer = profile_top_down_card.get_meta("content_vbox") as VBoxContainer
+	profile_top_down_title_label = _build_profile_title_label("Top-Down Links")
+	profile_top_down_title_label.name = "ProfileTopDownLinksTitleLabel"
+	top_down_vbox.add_child(profile_top_down_title_label)
+	profile_top_down_rows = VBoxContainer.new()
+	profile_top_down_rows.name = "ProfileTopDownLinksRows"
+	profile_top_down_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	profile_top_down_rows.add_theme_constant_override("separation", 8)
+	top_down_vbox.add_child(profile_top_down_rows)
+	profile_vbox.add_child(profile_top_down_card)
+
 	profile_shareholder_card = _build_profile_card("ProfileShareholderCard")
 	var shareholder_vbox: VBoxContainer = profile_shareholder_card.get_meta("content_vbox") as VBoxContainer
 	var shareholder_header := HBoxContainer.new()
@@ -2803,11 +2852,11 @@ func _build_profile_body_label(text_value: String, color: Color) -> Label:
 	return label
 
 func _style_profile_company_layout() -> void:
-	for card_value in [profile_background_card, profile_shareholder_card, profile_management_card]:
+	for card_value in [profile_background_card, profile_top_down_card, profile_shareholder_card, profile_management_card]:
 		var card: PanelContainer = card_value as PanelContainer
 		if card != null:
 			_style_stockbot_panel(card, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE, 6, 1)
-	for label_value in [profile_background_title_label, profile_shareholder_title_label, profile_management_title_label]:
+	for label_value in [profile_background_title_label, profile_top_down_title_label, profile_shareholder_title_label, profile_management_title_label]:
 		var label: Label = label_value as Label
 		if label != null:
 			_set_label_tone(label, COLOR_STOCKBOT_TEXT)
@@ -2828,6 +2877,7 @@ func _refresh_profile_company_layout(snapshot: Dictionary, detail_ready: bool) -
 		profile_background_body_label.text = ""
 		profile_background_body_label.tooltip_text = ""
 		_refresh_profile_tags([])
+		_refresh_profile_top_down_links({}, false)
 		_refresh_profile_shareholder_table({})
 		_refresh_profile_management_table({})
 		return
@@ -2856,6 +2906,7 @@ func _refresh_profile_company_layout(snapshot: Dictionary, detail_ready: bool) -
 		if not candidate_label.is_empty():
 			profile_tags.append(candidate_label)
 	_refresh_profile_tags(profile_tags)
+	_refresh_profile_top_down_links(snapshot, detail_ready)
 	_refresh_profile_shareholder_table(snapshot)
 	_refresh_profile_management_table(snapshot)
 
@@ -2882,6 +2933,391 @@ func _build_profile_tag_pill(tag_text: String) -> PanelContainer:
 	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE, _get_app_font())
 	pill.add_child(label)
 	return pill
+
+func _refresh_profile_top_down_links(snapshot: Dictionary, detail_ready: bool) -> void:
+	if profile_top_down_card != null:
+		profile_top_down_card.visible = SHOW_PROFILE_TOP_DOWN_LINKS
+	if profile_top_down_rows == null:
+		return
+	if not SHOW_PROFILE_TOP_DOWN_LINKS:
+		_clear_profile_container(profile_top_down_rows)
+		return
+	_clear_profile_container(profile_top_down_rows)
+	if snapshot.is_empty():
+		profile_top_down_rows.add_child(_build_profile_empty_row("Select a company to view macro, peer, story, relationship, and filing links."))
+		return
+	if not detail_ready:
+		profile_top_down_rows.add_child(_build_profile_empty_row("Preparing top-down context for this company..."))
+		return
+	for row_value in _profile_top_down_link_rows(snapshot):
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		profile_top_down_rows.add_child(_build_profile_top_down_link_row(row_value))
+
+func _profile_top_down_link_rows(snapshot: Dictionary) -> Array:
+	return [
+		_profile_top_down_commodity_link(snapshot),
+		_profile_top_down_sector_peer_link(snapshot),
+		_profile_top_down_story_link(snapshot),
+		_profile_top_down_relationship_link(snapshot),
+		_profile_top_down_filing_link(snapshot)
+	]
+
+func _profile_top_down_commodity_link(snapshot: Dictionary) -> Dictionary:
+	var company_id: String = str(snapshot.get("id", "")).strip_edges()
+	var sector_id: String = str(snapshot.get("sector_id", "")).strip_edges()
+	var option: Dictionary = _profile_top_down_best_commodity_option(GameManager.get_commodity_macro_evidence_options(company_id, sector_id))
+	if option.is_empty():
+		return {
+			"id": "commodity",
+			"title": "Commodity",
+			"value": "No direct commodity read",
+			"detail": "Check macro and sector news for broader public drivers before treating this as a company-specific setup.",
+			"actions": []
+		}
+	return {
+		"id": "commodity",
+		"title": "Commodity",
+		"value": str(option.get("label", "Commodity context")),
+		"detail": _profile_top_down_truncate(str(option.get("detail", "")), 170),
+		"actions": [{
+			"kind": "capture",
+			"label": "Tray",
+			"button_name": "ProfileTopDownCommodityTrayButton",
+			"tooltip": "Add this commodity context to the Research Tray.",
+			"payload": option.duplicate(true)
+		}]
+	}
+
+func _profile_top_down_best_commodity_option(options: Array) -> Dictionary:
+	var rows: Array = []
+	for option_value in options:
+		if typeof(option_value) == TYPE_DICTIONARY:
+			rows.append(option_value)
+	if rows.is_empty():
+		return {}
+	rows.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		var left_score: float = absf(float(left.get("commodity_exposure", 0.0))) * 10.0 + absf(float(left.get("commodity_ytd_move", 0.0)))
+		var right_score: float = absf(float(right.get("commodity_exposure", 0.0))) * 10.0 + absf(float(right.get("commodity_ytd_move", 0.0)))
+		if bool(left.get("commodity_has_direct_exposure", false)) != bool(right.get("commodity_has_direct_exposure", false)):
+			return bool(left.get("commodity_has_direct_exposure", false))
+		return left_score > right_score
+	)
+	return rows[0].duplicate(true)
+
+func _profile_top_down_sector_peer_link(snapshot: Dictionary) -> Dictionary:
+	var peers: Array = _profile_top_down_sector_peers(snapshot, 3)
+	if peers.is_empty():
+		return {
+			"id": "sector_peers",
+			"title": "Sector peers",
+			"value": "No peer list available",
+			"detail": "The company can still be researched bottom-up from its chart, financials, broker flow, and filing.",
+			"actions": []
+		}
+	var tickers: Array = []
+	var actions: Array = []
+	for peer_value in peers:
+		var peer: Dictionary = peer_value
+		var peer_id: String = str(peer.get("id", "")).strip_edges()
+		var ticker: String = str(peer.get("ticker", peer_id.to_upper())).strip_edges()
+		if ticker.is_empty():
+			continue
+		tickers.append("%s %s" % [ticker, _format_change(float(peer.get("daily_change_pct", 0.0)))])
+		actions.append({
+			"kind": "open_company",
+			"label": ticker,
+			"button_name": "ProfileTopDownPeerButton_%s" % _node_token(peer_id),
+			"tooltip": "Open %s in STOCKBOT." % ticker,
+			"company_id": peer_id
+		})
+	return {
+		"id": "sector_peers",
+		"title": "Sector peers",
+		"value": str(snapshot.get("sector_name", "Same sector")),
+		"detail": "Comparable listed names: %s." % ", ".join(tickers),
+		"actions": actions
+	}
+
+func _profile_top_down_sector_peers(snapshot: Dictionary, limit: int) -> Array:
+	var company_id: String = str(snapshot.get("id", "")).strip_edges()
+	var sector_id: String = str(snapshot.get("sector_id", "")).strip_edges()
+	if sector_id.is_empty():
+		return []
+	var peers: Array = []
+	for row_value in _get_company_rows_cached():
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var peer_id: String = str(row.get("id", "")).strip_edges()
+		if peer_id.is_empty() or peer_id == company_id or str(row.get("sector_id", "")).strip_edges() != sector_id:
+			continue
+		peers.append(row.duplicate(true))
+	peers.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return absf(float(left.get("daily_change_pct", 0.0))) > absf(float(right.get("daily_change_pct", 0.0)))
+	)
+	if limit > 0 and peers.size() > limit:
+		peers.resize(limit)
+	return peers
+
+func _profile_top_down_story_link(snapshot: Dictionary) -> Dictionary:
+	var company_id: String = str(snapshot.get("id", "")).strip_edges()
+	var option: Dictionary = _profile_top_down_public_story_option(GameManager.get_company_story_dossier_evidence_options(company_id))
+	if option.is_empty():
+		var tags: Array = _array_from_value(snapshot.get("event_tags", []))
+		tags.append_array(_array_from_value(snapshot.get("narrative_tags", [])))
+		return {
+			"id": "active_story",
+			"title": "Active story",
+			"value": _join_or_default(tags, "No public story tag"),
+			"detail": "Use News, Twooter, Network, and filings to see whether a public story is actually building.",
+			"actions": []
+		}
+	return {
+		"id": "active_story",
+		"title": "Active story",
+		"value": str(option.get("label", "Story clue")),
+		"detail": _profile_top_down_truncate(str(option.get("detail", option.get("value", ""))), 170),
+		"actions": [{
+			"kind": "capture",
+			"label": "Tray",
+			"button_name": "ProfileTopDownStoryTrayButton",
+			"tooltip": "Add this story context to the Research Tray.",
+			"payload": option.duplicate(true)
+		}]
+	}
+
+func _profile_top_down_public_story_option(options: Array) -> Dictionary:
+	for option_value in options:
+		if typeof(option_value) != TYPE_DICTIONARY:
+			continue
+		var option: Dictionary = option_value
+		if str(option.get("category", "")).strip_edges() == "network_intel":
+			continue
+		return option.duplicate(true)
+	return {}
+
+func _profile_top_down_relationship_link(snapshot: Dictionary) -> Dictionary:
+	var company_id: String = str(snapshot.get("id", "")).strip_edges()
+	var edges: Array = _profile_top_down_relationship_edges(company_id, 3)
+	if edges.is_empty():
+		return {
+			"id": "counterparties",
+			"title": "Counterparties",
+			"value": "No public relationship edge",
+			"detail": "Relationship clues may still appear through News, Network contacts, filings, or later company events.",
+			"actions": []
+		}
+	var labels: Array = []
+	var actions: Array = []
+	var capture_payload: Dictionary = {}
+	for edge_value in edges:
+		var edge: Dictionary = edge_value
+		var counterparty_id: String = _profile_top_down_relationship_counterparty_id(edge, company_id)
+		var counterparty_label: String = _profile_top_down_counterparty_label(edge, company_id)
+		var relationship_label: String = _profile_top_down_relationship_type_label(str(edge.get("relationship_type", "relationship")))
+		labels.append("%s (%s)" % [counterparty_label, relationship_label])
+		if capture_payload.is_empty():
+			capture_payload = _profile_top_down_relationship_capture_payload(edge, snapshot, counterparty_label, relationship_label)
+		if not counterparty_id.is_empty():
+			actions.append({
+				"kind": "open_company",
+				"label": counterparty_label.get_slice(" ", 0),
+				"button_name": "ProfileTopDownCounterpartyButton_%s" % _node_token(counterparty_id),
+				"tooltip": "Open %s in STOCKBOT." % counterparty_label,
+				"company_id": counterparty_id
+			})
+	if not capture_payload.is_empty():
+		actions.push_front({
+			"kind": "capture",
+			"label": "Tray",
+			"button_name": "ProfileTopDownRelationshipTrayButton",
+			"tooltip": "Add this public relationship context to the Research Tray.",
+			"payload": capture_payload
+		})
+	return {
+		"id": "counterparties",
+		"title": "Counterparties",
+		"value": "Public relationship graph",
+		"detail": _profile_top_down_truncate(", ".join(labels), 170),
+		"actions": actions
+	}
+
+func _profile_top_down_relationship_edges(company_id: String, limit: int) -> Array:
+	var rows: Array = []
+	if company_id.is_empty() or not RunState.has_active_run():
+		return rows
+	for edge_value in RunState.get_company_relationship_edges_for_company(company_id, true, true):
+		if typeof(edge_value) != TYPE_DICTIONARY:
+			continue
+		var edge: Dictionary = edge_value
+		var visibility: String = str(edge.get("visibility", "public")).strip_edges().to_lower()
+		if visibility == "private" or visibility == "hidden":
+			continue
+		rows.append(edge.duplicate(true))
+	rows.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		var left_score: float = float(left.get("strength", 0.0)) + float(left.get("confidence", 0.0))
+		var right_score: float = float(right.get("strength", 0.0)) + float(right.get("confidence", 0.0))
+		return left_score > right_score
+	)
+	if limit > 0 and rows.size() > limit:
+		rows.resize(limit)
+	return rows
+
+func _profile_top_down_relationship_capture_payload(edge: Dictionary, snapshot: Dictionary, counterparty_label: String, relationship_label: String) -> Dictionary:
+	var company_id: String = str(snapshot.get("id", selected_company_id)).strip_edges()
+	var ticker: String = str(snapshot.get("ticker", company_id.to_upper())).strip_edges()
+	var edge_id: String = str(edge.get("edge_id", "")).strip_edges()
+	if edge_id.is_empty():
+		edge_id = "%s_%s" % [company_id, _node_token(counterparty_label)]
+	return {
+		"source_type": "company_relationship_graph",
+		"category": "corporate_events",
+		"company_id": company_id,
+		"ticker": ticker,
+		"company_name": str(snapshot.get("name", "")),
+		"label": "Counterparty: %s" % counterparty_label,
+		"value": relationship_label,
+		"detail": "%s has a public %s relationship with %s. Treat it as a research path into filings, news, and counterparties, not a trade conclusion." % [
+			ticker,
+			relationship_label,
+			counterparty_label
+		],
+		"source_id": "profile_relationship_%s" % edge_id,
+		"relationship_edge_id": edge_id,
+		"counterparty_company_id": _profile_top_down_relationship_counterparty_id(edge, company_id)
+	}
+
+func _profile_top_down_filing_link(snapshot: Dictionary) -> Dictionary:
+	return {
+		"id": "filing",
+		"title": "Related filing",
+		"value": "FY2019 annual consolidated filing",
+		"detail": "Open the full-year statement and notes when you need buried confirmation instead of public surface clues.",
+		"actions": [{
+			"kind": "open_filing",
+			"label": "Open",
+			"button_name": "ProfileTopDownFilingButton",
+			"tooltip": "Open the annual consolidated financial statement for %s." % str(snapshot.get("ticker", selected_company_id.to_upper()))
+		}]
+	}
+
+func _build_profile_top_down_link_row(row_data: Dictionary) -> Control:
+	var row := HBoxContainer.new()
+	var row_id: String = str(row_data.get("id", "link")).strip_edges()
+	row.name = "ProfileTopDownLinkRow_%s" % _node_token(row_id)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 10)
+	row.set_meta("link_id", row_id)
+
+	var text_vbox := VBoxContainer.new()
+	text_vbox.name = "ProfileTopDownLinkText_%s" % _node_token(row_id)
+	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_vbox.add_theme_constant_override("separation", 2)
+	row.add_child(text_vbox)
+
+	var title_label := _build_profile_body_label(str(row_data.get("title", "")).to_upper(), COLOR_STOCKBOT_AMBER)
+	title_label.name = "ProfileTopDownLinkTitle_%s" % _node_token(row_id)
+	title_label.add_theme_font_size_override("font_size", max(DEFAULT_APP_FONT_SIZE - 1, 10))
+	_apply_font_override_to_control(title_label, max(DEFAULT_APP_FONT_SIZE - 1, 10), _get_app_font())
+	text_vbox.add_child(title_label)
+
+	var value_label := _build_profile_body_label(str(row_data.get("value", "")), COLOR_STOCKBOT_TEXT)
+	value_label.name = "ProfileTopDownLinkValue_%s" % _node_token(row_id)
+	text_vbox.add_child(value_label)
+
+	var detail_label := _build_profile_body_label(str(row_data.get("detail", "")), COLOR_STOCKBOT_MUTED)
+	detail_label.name = "ProfileTopDownLinkDetail_%s" % _node_token(row_id)
+	detail_label.add_theme_font_size_override("font_size", max(DEFAULT_APP_FONT_SIZE - 1, 10))
+	_apply_font_override_to_control(detail_label, max(DEFAULT_APP_FONT_SIZE - 1, 10), _get_app_font())
+	text_vbox.add_child(detail_label)
+
+	var actions_flow := HFlowContainer.new()
+	actions_flow.name = "ProfileTopDownLinkActions_%s" % _node_token(row_id)
+	actions_flow.custom_minimum_size = Vector2(126, 0)
+	actions_flow.size_flags_horizontal = Control.SIZE_SHRINK_END
+	actions_flow.alignment = FlowContainer.ALIGNMENT_END
+	actions_flow.add_theme_constant_override("h_separation", 6)
+	actions_flow.add_theme_constant_override("v_separation", 6)
+	row.add_child(actions_flow)
+	for action_value in row_data.get("actions", []):
+		if typeof(action_value) != TYPE_DICTIONARY:
+			continue
+		var action: Dictionary = action_value
+		var button := Button.new()
+		button.name = str(action.get("button_name", "ProfileTopDownLinkButton_%s" % _node_token(str(action.get("label", "")))))
+		button.text = str(action.get("label", "Open"))
+		button.custom_minimum_size = Vector2(54, 28)
+		button.tooltip_text = str(action.get("tooltip", ""))
+		_style_stockbot_button(button, COLOR_STOCKBOT_BLUE_TINT, COLOR_STOCKBOT_BLUE_EDGE, COLOR_STOCKBOT_TEXT, 5)
+		var kind: String = str(action.get("kind", "")).strip_edges()
+		if kind == "capture":
+			var payload_value = action.get("payload", {})
+			var payload: Dictionary = payload_value.duplicate(true) if typeof(payload_value) == TYPE_DICTIONARY else {}
+			button.pressed.connect(_on_profile_top_down_capture_pressed.bind(payload))
+		elif kind == "open_company":
+			button.pressed.connect(_on_profile_top_down_open_company_pressed.bind(str(action.get("company_id", ""))))
+		elif kind == "open_filing":
+			button.pressed.connect(_on_profile_top_down_open_filing_pressed)
+		actions_flow.add_child(button)
+	if actions_flow.get_child_count() == 0:
+		actions_flow.visible = false
+	return row
+
+func _on_profile_top_down_capture_pressed(payload: Dictionary) -> void:
+	if payload.is_empty():
+		_show_toast("No top-down evidence is available to capture.", false)
+		return
+	var result: Dictionary = GameManager.capture_research_evidence(payload)
+	var success: bool = bool(result.get("success", false))
+	if success:
+		_mark_guide_research_interaction()
+	_show_toast(str(result.get("message", "Research Tray updated.")), success)
+
+func _on_profile_top_down_open_company_pressed(company_id: String) -> void:
+	var normalized_company_id: String = company_id.strip_edges()
+	if normalized_company_id.is_empty() or RunState.get_effective_company_definition(normalized_company_id, false, false).is_empty():
+		_show_toast("Related company is not available in this run.", false)
+		return
+	selected_company_id = normalized_company_id
+	preserve_selected_company_outside_active_stock_list_once = true
+	_refresh_after_company_selection()
+
+func _on_profile_top_down_open_filing_pressed() -> void:
+	if selected_company_id.is_empty() or current_trade_snapshot.is_empty():
+		_show_toast("Pick a stock before opening the filing.", false)
+		return
+	_open_financial_statement_report_overlay()
+
+func _profile_top_down_relationship_counterparty_id(edge: Dictionary, company_id: String) -> String:
+	var source_id: String = str(edge.get("source_company_id", "")).strip_edges()
+	var target_id: String = str(edge.get("target_company_id", "")).strip_edges()
+	if source_id == company_id:
+		return target_id
+	if target_id == company_id:
+		return source_id
+	return target_id if not target_id.is_empty() else source_id
+
+func _profile_top_down_counterparty_label(edge: Dictionary, company_id: String) -> String:
+	var counterparty_id: String = _profile_top_down_relationship_counterparty_id(edge, company_id)
+	var ticker: String = str(edge.get("target_ticker", "")).strip_edges()
+	if str(edge.get("target_company_id", "")).strip_edges() == company_id:
+		ticker = str(edge.get("source_ticker", "")).strip_edges()
+	if ticker.is_empty() and not counterparty_id.is_empty():
+		var lookup: Dictionary = _get_company_row_lookup_cached()
+		var row: Dictionary = lookup.get(counterparty_id, {}) if typeof(lookup.get(counterparty_id, {})) == TYPE_DICTIONARY else {}
+		ticker = str(row.get("ticker", counterparty_id.to_upper())).strip_edges()
+	return ticker if not ticker.is_empty() else counterparty_id
+
+func _profile_top_down_relationship_type_label(relationship_type: String) -> String:
+	var text: String = relationship_type.strip_edges().replace("_", " ").replace("-", " ")
+	return "relationship" if text.is_empty() else text
+
+func _profile_top_down_truncate(text: String, max_length: int) -> String:
+	var clean: String = text.strip_edges()
+	if max_length <= 0 or clean.length() <= max_length:
+		return clean
+	return "%s..." % clean.substr(0, max_length - 3).strip_edges()
 
 func _refresh_profile_shareholder_table(snapshot: Dictionary) -> void:
 	if profile_shareholder_rows == null:
@@ -3307,8 +3743,11 @@ func _trade_workspace_profile_snapshot_key(snapshot: Dictionary, financial_state
 	var management_rows: Array = snapshot.get("management_roster", [])
 	var location_profile: Dictionary = snapshot.get("location_profile", {})
 	var roadmap_profile: Dictionary = snapshot.get("roadmap_profile", {})
-	return "%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%s" % [
-		str(snapshot.get("id", "")),
+	var company_id: String = str(snapshot.get("id", ""))
+	var story_count: int = GameManager.get_company_story_dossier_evidence_options(company_id).size() if RunState.has_active_run() else 0
+	var relationship_count: int = RunState.get_company_relationship_edges_for_company(company_id, true, true).size() if RunState.has_active_run() else 0
+	return "%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%s|%s|%d|%d|%d" % [
+		company_id,
 		str(snapshot.get("detail_status", "ready")),
 		profile_tags.size(),
 		shareholder_rows.size(),
@@ -3318,7 +3757,11 @@ func _trade_workspace_profile_snapshot_key(snapshot: Dictionary, financial_state
 		quarterly_statements.size(),
 		str(location_profile.get("hq_location_id", "")),
 		str(roadmap_profile.get("primary_family_id", "")),
-		str(roadmap_profile.get("public_priority", "")).length()
+		str(roadmap_profile.get("public_priority", "")).length(),
+		str(snapshot.get("sector_id", "")),
+		story_count,
+		relationship_count,
+		RunState.day_index
 	]
 
 func _trade_workspace_financial_history_snapshot_key(snapshot: Dictionary) -> String:
@@ -3388,13 +3831,43 @@ func _trade_workspace_statement_snapshot_key(snapshot: Dictionary, financial_sta
 		return ""
 	var quarterly_statements: Array = financial_statement_snapshot.get("quarterly_statements", [])
 	var selected_period: Dictionary = _selected_statement_period(financial_statement_snapshot) if not financial_statement_snapshot.is_empty() else {}
-	return "%s|%s|%d|%d|%s" % [
+	return "%s|%s|%d|%d|%s|%s" % [
 		str(snapshot.get("id", "")),
 		str(snapshot.get("detail_status", "ready")),
 		quarterly_statements.size(),
 		selected_financial_statement_index,
-		str(selected_period.get("statement_period_label", selected_period.get("period_label", "")))
+		str(selected_period.get("statement_period_label", selected_period.get("period_label", ""))),
+		_statement_period_display_signature(selected_period)
 	]
+
+func _statement_period_display_signature(statement_period: Dictionary) -> String:
+	if statement_period.is_empty():
+		return ""
+	var parts: Array = []
+	for section_id in ["income_statement", "balance_sheet", "cash_flow", "operating_metrics"]:
+		var lines: Array = _array_from_value(statement_period.get(section_id, []))
+		parts.append("%s:%d" % [section_id, lines.size()])
+		for line_value in lines.slice(0, 8):
+			if typeof(line_value) != TYPE_DICTIONARY:
+				continue
+			var line: Dictionary = line_value
+			parts.append("%s=%s" % [
+				str(line.get("id", line.get("metric_id", ""))),
+				str(line.get("value", ""))
+			])
+	var notes: Array = _array_from_value(statement_period.get("notes", []))
+	parts.append("notes:%d" % notes.size())
+	for note_value in notes.slice(0, 8):
+		if typeof(note_value) != TYPE_DICTIONARY:
+			continue
+		var note: Dictionary = note_value
+		parts.append("%s:%s:%s:%s" % [
+			str(note.get("note_id", "")),
+			str(note.get("note_type", "")),
+			str(note.get("disclosure_quality", "")),
+			str(note.get("importance", ""))
+		])
+	return "|".join(parts)
 
 func _trade_workspace_corporate_action_snapshot_key(timeline_snapshot: Dictionary) -> String:
 	if timeline_snapshot.is_empty():
@@ -4079,6 +4552,7 @@ func _ensure_financials_section_cards() -> void:
 	if financials_vbox == null:
 		return
 	_set_stockbot_spacing(financials_vbox, 10)
+	_ensure_financial_statement_report_button()
 	_ensure_financials_statement_card(
 		financials_vbox,
 		"IncomeStatementCard",
@@ -4100,6 +4574,1346 @@ func _ensure_financials_section_cards() -> void:
 		cash_flow_rows_vbox,
 		""
 	)
+	_ensure_financials_optional_statement_sections(financials_vbox)
+
+func _ensure_financial_statement_report_button() -> void:
+	if financials_period_label == null:
+		return
+	var period_row: HBoxContainer = financials_period_label.get_parent() as HBoxContainer
+	if period_row == null:
+		return
+	if financial_statement_report_button == null:
+		financial_statement_report_button = period_row.get_node_or_null("FinancialStatementReportButton") as Button
+	if financial_statement_report_button == null:
+		financial_statement_report_button = Button.new()
+		financial_statement_report_button.name = "FinancialStatementReportButton"
+		financial_statement_report_button.pressed.connect(_open_financial_statement_report_overlay)
+		period_row.add_child(financial_statement_report_button)
+	financial_statement_report_button.text = FINANCIAL_STATEMENT_REPORT_BUTTON_LABEL
+	financial_statement_report_button.custom_minimum_size = Vector2(300, 32)
+	financial_statement_report_button.tooltip_text = "Open the FY2019 annual consolidated financial statement."
+	_style_stockbot_button(financial_statement_report_button, COLOR_STOCKBOT_BLUE_TINT, COLOR_STOCKBOT_BLUE_EDGE, COLOR_STOCKBOT_TEXT, 5)
+
+func _ensure_financial_statement_report_overlay() -> void:
+	if _root == null:
+		return
+	if financial_statement_report_overlay != null and is_instance_valid(financial_statement_report_overlay):
+		return
+	financial_statement_report_overlay = Control.new()
+	financial_statement_report_overlay.name = "FinancialStatementReportOverlay"
+	financial_statement_report_overlay.visible = false
+	financial_statement_report_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	financial_statement_report_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_root.add_child(financial_statement_report_overlay)
+
+	var scrim := ColorRect.new()
+	scrim.name = "FinancialStatementReportScrim"
+	scrim.color = Color(0.02, 0.025, 0.035, 0.48)
+	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	financial_statement_report_overlay.add_child(scrim)
+
+	financial_statement_report_panel = PanelContainer.new()
+	financial_statement_report_panel.name = "FinancialStatementReportPanel"
+	financial_statement_report_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	financial_statement_report_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_style_report_canvas_panel(financial_statement_report_panel)
+	financial_statement_report_overlay.add_child(financial_statement_report_panel)
+
+	var margin := MarginContainer.new()
+	margin.name = "FinancialStatementReportMargin"
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	financial_statement_report_panel.add_child(margin)
+
+	var report_vbox := VBoxContainer.new()
+	report_vbox.name = "FinancialStatementReportVBox"
+	report_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	report_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	report_vbox.add_theme_constant_override("separation", 12)
+	margin.add_child(report_vbox)
+
+	var header := HBoxContainer.new()
+	header.name = "FinancialStatementReportHeader"
+	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_theme_constant_override("separation", 12)
+	report_vbox.add_child(header)
+
+	financial_statement_report_title_label = Label.new()
+	financial_statement_report_title_label.name = "FinancialStatementReportTitle"
+	financial_statement_report_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	financial_statement_report_title_label.clip_text = true
+	_set_label_tone(financial_statement_report_title_label, COLOR_WINDOW_TEXT)
+	_apply_font_override_to_control(financial_statement_report_title_label, DEFAULT_APP_FONT_SIZE + 4, _get_dashboard_title_font())
+	header.add_child(financial_statement_report_title_label)
+
+	var close_button := Button.new()
+	close_button.name = "FinancialStatementReportCloseButton"
+	close_button.text = "Close"
+	close_button.custom_minimum_size = Vector2(84, 34)
+	close_button.pressed.connect(_close_financial_statement_report_overlay)
+	UiTheme.style_button(close_button, "desktop_secondary")
+	header.add_child(close_button)
+
+	var reader_split := HBoxContainer.new()
+	reader_split.name = "FinancialStatementReportReader"
+	reader_split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reader_split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	reader_split.add_theme_constant_override("separation", 12)
+	report_vbox.add_child(reader_split)
+
+	financial_statement_report_toc_panel = PanelContainer.new()
+	financial_statement_report_toc_panel.name = "FinancialStatementReportTocPanel"
+	financial_statement_report_toc_panel.custom_minimum_size = Vector2(280, 0)
+	financial_statement_report_toc_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_style_report_toc_panel(financial_statement_report_toc_panel)
+	reader_split.add_child(financial_statement_report_toc_panel)
+
+	var toc_margin := MarginContainer.new()
+	toc_margin.name = "FinancialStatementReportTocMargin"
+	toc_margin.add_theme_constant_override("margin_left", 10)
+	toc_margin.add_theme_constant_override("margin_top", 10)
+	toc_margin.add_theme_constant_override("margin_right", 10)
+	toc_margin.add_theme_constant_override("margin_bottom", 10)
+	financial_statement_report_toc_panel.add_child(toc_margin)
+
+	financial_statement_report_toc_vbox = VBoxContainer.new()
+	financial_statement_report_toc_vbox.name = "FinancialStatementReportTocList"
+	financial_statement_report_toc_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	financial_statement_report_toc_vbox.add_theme_constant_override("separation", 6)
+	toc_margin.add_child(financial_statement_report_toc_vbox)
+
+	financial_statement_report_scroll = ScrollContainer.new()
+	financial_statement_report_scroll.name = "FinancialStatementReportScroll"
+	financial_statement_report_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	financial_statement_report_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	financial_statement_report_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	financial_statement_report_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	reader_split.add_child(financial_statement_report_scroll)
+
+	var page_center := CenterContainer.new()
+	page_center.name = "FinancialStatementReportPageCenter"
+	page_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	page_center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	financial_statement_report_scroll.add_child(page_center)
+
+	financial_statement_report_page_panel = PanelContainer.new()
+	financial_statement_report_page_panel.name = "FinancialStatementReportPage"
+	financial_statement_report_page_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	financial_statement_report_page_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	financial_statement_report_page_panel.set_meta("page_size_hint", "A4")
+	financial_statement_report_page_panel.set_meta("reader_mode", FINANCIAL_STATEMENT_READER_MODE)
+	_style_financial_statement_page(financial_statement_report_page_panel)
+	page_center.add_child(financial_statement_report_page_panel)
+
+	financial_statement_report_page_margin = MarginContainer.new()
+	financial_statement_report_page_margin.name = "FinancialStatementReportPageMargin"
+	financial_statement_report_page_margin.add_theme_constant_override("margin_left", 34)
+	financial_statement_report_page_margin.add_theme_constant_override("margin_top", 34)
+	financial_statement_report_page_margin.add_theme_constant_override("margin_right", 34)
+	financial_statement_report_page_margin.add_theme_constant_override("margin_bottom", 34)
+	financial_statement_report_page_panel.add_child(financial_statement_report_page_margin)
+
+	financial_statement_report_page_scroll = ScrollContainer.new()
+	financial_statement_report_page_scroll.name = "FinancialStatementReportPageScroll"
+	financial_statement_report_page_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	financial_statement_report_page_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	financial_statement_report_page_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	financial_statement_report_page_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	financial_statement_report_page_scroll.set_meta("reader_mode", FINANCIAL_STATEMENT_READER_MODE)
+	financial_statement_report_page_margin.add_child(financial_statement_report_page_scroll)
+
+	financial_statement_report_body_vbox = VBoxContainer.new()
+	financial_statement_report_body_vbox.name = "FinancialStatementReportBody"
+	financial_statement_report_body_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	financial_statement_report_body_vbox.add_theme_constant_override("separation", 22)
+	financial_statement_report_body_vbox.set_meta("reader_mode", FINANCIAL_STATEMENT_READER_MODE)
+	financial_statement_report_body_vbox.set_meta("section_chunk_size", FINANCIAL_STATEMENT_A4_SECTION_CHUNK_SIZE)
+	financial_statement_report_page_scroll.add_child(financial_statement_report_body_vbox)
+	_refresh_financial_statement_report_layout()
+
+func _style_report_canvas_panel(panel: PanelContainer) -> void:
+	if panel == null:
+		return
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.90, 0.895, 0.865, 1.0)
+	style.border_color = Color(0.52, 0.50, 0.44, 1.0)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	panel.add_theme_stylebox_override("panel", style)
+
+func _style_report_toc_panel(panel: PanelContainer) -> void:
+	if panel == null:
+		return
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.965, 0.955, 0.925, 1.0)
+	style.border_color = Color(0.68, 0.64, 0.54, 1.0)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(3)
+	panel.add_theme_stylebox_override("panel", style)
+
+func _style_financial_statement_page(panel: PanelContainer) -> void:
+	if panel == null:
+		return
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(1.0, 0.998, 0.986, 1.0)
+	style.border_color = Color(0.70, 0.68, 0.60, 1.0)
+	style.shadow_color = Color(0.08, 0.07, 0.05, 0.18)
+	style.shadow_size = 8
+	style.shadow_offset = Vector2(0, 3)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(2)
+	panel.add_theme_stylebox_override("panel", style)
+
+func _refresh_financial_statement_report_layout() -> void:
+	if _root == null or financial_statement_report_panel == null:
+		return
+	var viewport_size: Vector2 = _root.get_viewport_rect().size
+	var horizontal_margin: float = clamp(viewport_size.x * 0.035, 14.0, 64.0)
+	var vertical_margin: float = clamp(viewport_size.y * 0.025, 10.0, 32.0)
+	var bottom_margin: float = clamp(viewport_size.y * 0.04, 28.0, 56.0)
+	financial_statement_report_panel.offset_left = horizontal_margin
+	financial_statement_report_panel.offset_top = vertical_margin
+	financial_statement_report_panel.offset_right = -horizontal_margin
+	financial_statement_report_panel.offset_bottom = -bottom_margin
+	if financial_statement_report_page_panel == null:
+		return
+	var show_toc: bool = viewport_size.x >= 920.0
+	if financial_statement_report_toc_panel != null:
+		financial_statement_report_toc_panel.visible = show_toc
+	var toc_width: float = 292.0 if show_toc else 0.0
+	var available_width: float = max(viewport_size.x - horizontal_margin * 2.0 - toc_width - 72.0, FINANCIAL_STATEMENT_A4_MIN_SMALL_WIDTH)
+	var reader_chrome_height: float = 16.0 + 16.0 + 34.0 + 12.0 + 24.0 + 42.0
+	var available_height: float = max(viewport_size.y - vertical_margin - bottom_margin - reader_chrome_height, 360.0)
+	var max_width_by_height: float = max(available_height / FINANCIAL_STATEMENT_A4_RATIO, FINANCIAL_STATEMENT_A4_MIN_SMALL_WIDTH)
+	var page_width: float = min(min(FINANCIAL_STATEMENT_A4_MAX_WIDTH, available_width), max_width_by_height)
+	if page_width < FINANCIAL_STATEMENT_A4_MIN_WIDTH:
+		page_width = max(FINANCIAL_STATEMENT_A4_MIN_SMALL_WIDTH, page_width)
+	financial_statement_report_page_panel.custom_minimum_size = Vector2(page_width, page_width * FINANCIAL_STATEMENT_A4_RATIO)
+	financial_statement_report_page_panel.set_meta("page_width", page_width)
+	financial_statement_report_page_panel.set_meta("page_height", page_width * FINANCIAL_STATEMENT_A4_RATIO)
+	if financial_statement_report_page_margin != null:
+		var page_margin_size: int = 34
+		if page_width < 380.0:
+			page_margin_size = 20
+		elif page_width < 520.0:
+			page_margin_size = 26
+		financial_statement_report_page_margin.add_theme_constant_override("margin_left", page_margin_size)
+		financial_statement_report_page_margin.add_theme_constant_override("margin_top", page_margin_size)
+		financial_statement_report_page_margin.add_theme_constant_override("margin_right", page_margin_size)
+		financial_statement_report_page_margin.add_theme_constant_override("margin_bottom", page_margin_size)
+
+func _open_financial_statement_report_overlay() -> void:
+	_ensure_financial_statement_report_overlay()
+	if financial_statement_report_overlay == null:
+		return
+	_refresh_financial_statement_report_layout()
+	_refresh_financial_statement_report_overlay()
+	financial_statement_report_overlay.visible = true
+
+func _close_financial_statement_report_overlay() -> void:
+	if financial_statement_report_overlay != null:
+		financial_statement_report_overlay.visible = false
+	financial_statement_report_context = {}
+	financial_statement_report_document_context = {}
+
+func _refresh_financial_statement_report_overlay() -> void:
+	if financial_statement_report_body_vbox == null or financial_statement_report_title_label == null:
+		return
+	_refresh_financial_statement_report_layout()
+	_clear_all_children(financial_statement_report_body_vbox)
+	_refresh_financial_statement_report_toc([])
+	financial_statement_report_section_nodes = {}
+	_ensure_financial_statement_report_annual_snapshot()
+	var financial_statement_snapshot: Dictionary = current_trade_snapshot.get("financial_statement_snapshot", {})
+	var report_statement: Dictionary = _financial_statement_report_statement(financial_statement_snapshot)
+	var filing_document: Dictionary = _request_annual_filing_document(report_statement)
+	financial_statement_report_document_context = filing_document.duplicate(true)
+	if not filing_document.is_empty():
+		if bool(filing_document.get("visible_document_generated", false)):
+			report_statement = filing_document.duplicate(true)
+		else:
+			var source_statement_value = filing_document.get("source_annual_statement", {})
+			if typeof(source_statement_value) == TYPE_DICTIONARY and not source_statement_value.is_empty():
+				report_statement = source_statement_value.duplicate(true)
+	financial_statement_report_context = report_statement.duplicate(true)
+	if report_statement.is_empty():
+		financial_statement_report_title_label.text = "Consolidated Financial Statement"
+		financial_statement_report_body_vbox.add_child(_build_report_empty_label("No statement data available."))
+		return
+	var period_label: String = str(report_statement.get("statement_period_label", report_statement.get("period_label", "latest"))).strip_edges()
+	var ticker: String = str(current_trade_snapshot.get("ticker", selected_company_id)).strip_edges()
+	var company_name: String = str(report_statement.get("company_name", current_trade_snapshot.get("name", ""))).strip_edges()
+	if company_name.is_empty():
+		company_name = str(current_trade_snapshot.get("name", ticker)).strip_edges()
+	financial_statement_report_title_label.text = "%s %s | %s" % [
+		ticker,
+		company_name,
+		period_label
+	]
+	financial_statement_report_body_vbox.add_child(_build_report_document_header(report_statement, ticker, company_name, period_label))
+	var section_rows: Array = _financial_statement_report_section_rows(report_statement)
+	financial_statement_report_body_vbox.set_meta("section_count", section_rows.size())
+	financial_statement_report_body_vbox.set_meta("visible_document_generated", bool(report_statement.get("visible_document_generated", false)))
+	_refresh_financial_statement_report_toc(section_rows)
+	financial_statement_report_body_vbox.add_child(_build_report_table_of_contents(report_statement, section_rows))
+	for section_value in section_rows:
+		if typeof(section_value) != TYPE_DICTIONARY:
+			continue
+		var section: Dictionary = section_value
+		var section_id: String = str(section.get("section_id", "")).strip_edges()
+		if _is_visible_filing_text_section(report_statement, section):
+			_add_report_visible_filing_section(report_statement, section, period_label)
+		elif section_id == "notes":
+			_add_report_note_index_section(report_statement.get("note_index", []), report_statement.get("notes", []), period_label, section)
+		else:
+			_add_report_statement_section(
+				section,
+				_report_lines_for_section(report_statement, section),
+				period_label
+			)
+	financial_statement_report_body_vbox.set_meta(
+		"rendered_chunk_count",
+		_count_report_section_chunks(financial_statement_report_body_vbox)
+	)
+
+func _ensure_financial_statement_report_annual_snapshot() -> void:
+	if selected_company_id.is_empty():
+		return
+	var snapshot_value = current_trade_snapshot.get("financial_statement_snapshot", {})
+	var snapshot: Dictionary = snapshot_value.duplicate(true) if typeof(snapshot_value) == TYPE_DICTIONARY else {}
+	var annual_value = snapshot.get("annual_statement", {})
+	if typeof(annual_value) == TYPE_DICTIONARY and not annual_value.is_empty():
+		return
+	if not RunState.ensure_company_full_detail(selected_company_id):
+		return
+	var fresh_snapshot: Dictionary = GameManager.get_company_snapshot(selected_company_id, true, true, true)
+	if fresh_snapshot.is_empty():
+		return
+	var fresh_statement_value = fresh_snapshot.get("financial_statement_snapshot", {})
+	if typeof(fresh_statement_value) != TYPE_DICTIONARY:
+		return
+	var fresh_statement_snapshot: Dictionary = fresh_statement_value.duplicate(true)
+	var fresh_annual_value = fresh_statement_snapshot.get("annual_statement", {})
+	if typeof(fresh_annual_value) != TYPE_DICTIONARY or fresh_annual_value.is_empty():
+		return
+	current_trade_snapshot = fresh_snapshot
+
+func _financial_statement_report_statement(financial_statement_snapshot: Dictionary) -> Dictionary:
+	if financial_statement_snapshot.is_empty():
+		return {}
+	var annual_value = financial_statement_snapshot.get("annual_statement", {})
+	if typeof(annual_value) == TYPE_DICTIONARY and not annual_value.is_empty():
+		return annual_value.duplicate(true)
+	return _selected_statement_period(financial_statement_snapshot)
+
+func _request_annual_filing_document(report_statement: Dictionary) -> Dictionary:
+	if report_statement.is_empty():
+		return {}
+	var company_id: String = selected_company_id.strip_edges()
+	if company_id.is_empty():
+		company_id = str(report_statement.get("company_id", "")).strip_edges()
+	if company_id.is_empty():
+		return {}
+	var company_definition: Dictionary = RunState.get_effective_company_definition(company_id, true, true)
+	var ticker: String = str(current_trade_snapshot.get("ticker", report_statement.get("ticker", ""))).strip_edges()
+	if ticker.is_empty():
+		ticker = str(company_definition.get("ticker", company_id.to_upper())).strip_edges()
+	var company_name: String = str(current_trade_snapshot.get("name", report_statement.get("company_name", ""))).strip_edges()
+	if company_name.is_empty():
+		company_name = str(company_definition.get("name", company_id)).strip_edges()
+	var sector_id: String = str(current_trade_snapshot.get("sector_id", current_trade_snapshot.get("sector", ""))).strip_edges()
+	if sector_id.is_empty():
+		sector_id = str(company_definition.get("sector_id", company_definition.get("sector", ""))).strip_edges()
+	var subsector_id: String = str(current_trade_snapshot.get("subsector_id", current_trade_snapshot.get("subsector", ""))).strip_edges()
+	if subsector_id.is_empty():
+		subsector_id = str(company_definition.get("subsector_id", company_definition.get("subsector", ""))).strip_edges()
+	var business_summary: String = str(current_trade_snapshot.get("business_summary", "")).strip_edges()
+	if business_summary.is_empty():
+		business_summary = str(company_definition.get("business_summary", "")).strip_edges()
+	var moat_tags: Array = _array_from_value(current_trade_snapshot.get("moat_tags", []))
+	if moat_tags.is_empty():
+		moat_tags = _array_from_value(company_definition.get("moat_tags", []))
+	var story_hooks: Array = _array_from_value(current_trade_snapshot.get("story_hooks", []))
+	if story_hooks.is_empty():
+		story_hooks = _array_from_value(company_definition.get("story_hooks", []))
+	var options: Dictionary = {
+		"ticker": ticker,
+		"company_name": company_name,
+		"company_definition": company_definition.duplicate(true),
+		"sector_style_id": str(report_statement.get("sector_style_id", sector_id if not sector_id.is_empty() else "generic_annual_filing")),
+		"sector_id": sector_id,
+		"subsector_id": subsector_id,
+		"business_summary": business_summary,
+		"moat_tags": moat_tags,
+		"story_hooks": story_hooks
+	}
+	return ANNUAL_FILING_DOCUMENT_SCRIPT.get_or_build_document(
+		annual_filing_document_cache,
+		report_statement,
+		int(RunState.run_seed),
+		company_id,
+		options
+	)
+
+func _financial_statement_report_section_rows(statement: Dictionary) -> Array:
+	var rows: Array = []
+	var section_map: Array = _array_from_value(statement.get("annual_report_section_map", []))
+	if not section_map.is_empty():
+		for section_value in section_map:
+			if typeof(section_value) != TYPE_DICTIONARY:
+				continue
+			var section: Dictionary = section_value.duplicate(true)
+			if str(section.get("section_id", "")).strip_edges().is_empty():
+				continue
+			section["title"] = _report_section_title(section)
+			section["localized_title"] = ""
+			section["page_label"] = _report_section_page_label(statement, section)
+			rows.append(section)
+		return rows
+	return [
+		{
+			"section_number": "1",
+			"section_id": "financial_position",
+			"title": "Consolidated Statement of Financial Position",
+			"localized_title": "",
+			"source_array": "financial_position",
+			"page_label": "1-3"
+		},
+		{
+			"section_number": "2",
+			"section_id": "profit_or_loss_and_oci",
+			"title": "Consolidated Statement of Profit or Loss and Other Comprehensive Income",
+			"localized_title": "",
+			"source_array": "profit_or_loss_and_oci",
+			"page_label": "4-5"
+		},
+		{
+			"section_number": "3",
+			"section_id": "changes_in_equity",
+			"title": "Consolidated Statement of Changes in Equity",
+			"localized_title": "",
+			"source_array": "changes_in_equity",
+			"page_label": "6-7"
+		},
+		{
+			"section_number": "4",
+			"section_id": "cash_flows",
+			"title": "Consolidated Statement of Cash Flows",
+			"localized_title": "",
+			"source_array": "cash_flows",
+			"page_label": "8-9"
+		},
+		{
+			"section_number": "5",
+			"section_id": "notes",
+			"title": "Notes to the Consolidated Financial Statements",
+			"localized_title": "",
+			"source_array": "notes",
+			"page_label": "10-140"
+		}
+	]
+
+func _report_section_title(section: Dictionary) -> String:
+	var title: String = str(section.get("title", "")).strip_edges()
+	if not title.is_empty():
+		return title
+	return str(section.get("section_id", "")).replace("_", " ").capitalize()
+
+func _report_section_localized_title(_section: Dictionary) -> String:
+	return ""
+
+func _report_section_page_label(statement: Dictionary, section: Dictionary) -> String:
+	var section_id: String = str(section.get("section_id", "")).strip_edges()
+	var page_label: String = str(section.get("page_label", "")).strip_edges()
+	if not page_label.is_empty():
+		return page_label
+	for toc_value in _array_from_value(statement.get("table_of_contents", [])):
+		if typeof(toc_value) != TYPE_DICTIONARY:
+			continue
+		var toc: Dictionary = toc_value
+		if str(toc.get("section_id", "")).strip_edges() == section_id:
+			return str(toc.get("page_label", "")).strip_edges()
+	return ""
+
+func _report_lines_for_section(statement: Dictionary, section: Dictionary) -> Array:
+	var section_id: String = str(section.get("section_id", "")).strip_edges()
+	var source_array: String = str(section.get("source_array", "")).strip_edges()
+	if source_array.is_empty():
+		source_array = section_id
+	var lines: Array = _array_from_value(statement.get(source_array, []))
+	if not lines.is_empty():
+		return lines
+	match section_id:
+		"financial_position":
+			return _array_from_value(statement.get("balance_sheet", []))
+		"profit_or_loss_and_oci":
+			return _array_from_value(statement.get("income_statement", []))
+		"cash_flows":
+			return _array_from_value(statement.get("cash_flow", []))
+		_:
+			return []
+
+func _is_visible_filing_text_section(statement: Dictionary, section: Dictionary) -> bool:
+	if not bool(statement.get("visible_document_generated", false)):
+		return false
+	var section_id: String = str(section.get("section_id", "")).strip_edges()
+	if section_id.is_empty() or section_id == "table_of_contents":
+		return false
+	return str(section.get("document_part", "")).strip_edges() != "primary_statement"
+
+func _visible_filing_section_payload(statement: Dictionary, section_id: String) -> Dictionary:
+	var sections_by_id: Dictionary = statement.get("visible_filing_sections_by_id", {}) if typeof(statement.get("visible_filing_sections_by_id", {})) == TYPE_DICTIONARY else {}
+	var section_value = sections_by_id.get(section_id, {})
+	if typeof(section_value) == TYPE_DICTIONARY:
+		return section_value.duplicate(true)
+	return {}
+
+func _refresh_financial_statement_report_toc(section_rows: Array) -> void:
+	if financial_statement_report_toc_vbox == null:
+		return
+	_clear_all_children(financial_statement_report_toc_vbox)
+	var title_label := Label.new()
+	title_label.name = "FinancialStatementReportTocTitle"
+	title_label.text = "Contents"
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_tone(title_label, Color(0.12, 0.105, 0.08, 1.0))
+	_apply_font_override_to_control(title_label, DEFAULT_APP_FONT_SIZE + 2, _get_dashboard_title_font())
+	financial_statement_report_toc_vbox.add_child(title_label)
+	var hint_label := Label.new()
+	hint_label.name = "FinancialStatementReportTocHint"
+	hint_label.text = "Jump to report section"
+	hint_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_set_label_tone(hint_label, Color(0.42, 0.39, 0.32, 1.0))
+	_apply_font_override_to_control(hint_label, DEFAULT_APP_FONT_SIZE - 2, _get_app_font())
+	financial_statement_report_toc_vbox.add_child(hint_label)
+	for section_value in section_rows:
+		if typeof(section_value) != TYPE_DICTIONARY:
+			continue
+		var section: Dictionary = section_value
+		var section_id: String = str(section.get("section_id", "")).strip_edges()
+		if section_id.is_empty():
+			continue
+		var button := Button.new()
+		button.name = "FinancialStatementReportTocButton_%s" % section_id
+		button.text = "%s. %s" % [
+			str(section.get("section_number", "")).strip_edges(),
+			_report_section_title(section)
+		]
+		button.tooltip_text = "Jump to %s." % _report_section_title(section)
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.clip_text = true
+		button.custom_minimum_size = Vector2(0, 38)
+		button.pressed.connect(_jump_financial_statement_report_section.bind(section_id))
+		UiTheme.style_button(button, "desktop_secondary")
+		financial_statement_report_toc_vbox.add_child(button)
+
+func _jump_financial_statement_report_section(section_id: String) -> void:
+	call_deferred("_apply_financial_statement_report_jump", section_id)
+
+func _apply_financial_statement_report_jump(section_id: String) -> void:
+	if financial_statement_report_page_scroll == null:
+		return
+	var section_node: Control = financial_statement_report_section_nodes.get(section_id, null) as Control
+	if section_node == null or not is_instance_valid(section_node):
+		return
+	financial_statement_report_page_scroll.scroll_vertical = int(max(0.0, section_node.position.y - 8.0))
+
+func _build_report_table_of_contents(statement: Dictionary, section_rows: Array) -> Control:
+	var section_vbox: VBoxContainer = _build_report_section_container({
+		"section_id": "table_of_contents",
+		"title": "Contents",
+		"localized_title": "",
+		"page_label": ""
+	})
+	for section_value in section_rows:
+		if typeof(section_value) != TYPE_DICTIONARY:
+			continue
+		var section: Dictionary = section_value
+		section_vbox.add_child(_build_report_toc_row(section))
+	return section_vbox
+
+func _build_report_toc_row(section: Dictionary) -> Control:
+	var row := HBoxContainer.new()
+	row.name = "FinancialStatementReportTocRow_%s" % str(section.get("section_id", "")).strip_edges()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 8)
+	var title_label := Label.new()
+	title_label.text = "%s. %s" % [
+		str(section.get("section_number", "")).strip_edges(),
+		_report_section_title(section)
+	]
+	title_label.custom_minimum_size = Vector2(360, 0)
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_set_label_tone(title_label, COLOR_WINDOW_TEXT)
+	_apply_font_override_to_control(title_label, DEFAULT_APP_FONT_SIZE - 2, _get_app_font())
+	row.add_child(title_label)
+	var page_label := Label.new()
+	page_label.text = str(section.get("page_label", "")).strip_edges()
+	page_label.custom_minimum_size = Vector2(72, 0)
+	page_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_set_label_tone(page_label, Color(0.36, 0.34, 0.28, 1.0))
+	_apply_font_override_to_control(page_label, DEFAULT_APP_FONT_SIZE - 2, _get_app_font())
+	row.add_child(page_label)
+	return row
+
+func _build_report_document_header(statement: Dictionary, ticker: String, company_name: String, period_label: String) -> Control:
+	var header := VBoxContainer.new()
+	header.name = "FinancialStatementReportDocumentHeader"
+	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_theme_constant_override("separation", 5)
+
+	var company_label := Label.new()
+	company_label.name = "FinancialStatementReportCompanyName"
+	company_label.text = "%s %s" % [ticker, company_name]
+	company_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	company_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	company_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_tone(company_label, Color(0.08, 0.075, 0.065, 1.0))
+	_apply_font_override_to_control(company_label, DEFAULT_APP_FONT_SIZE + 5, _get_dashboard_title_font())
+	header.add_child(company_label)
+
+	var title_label := Label.new()
+	title_label.name = "FinancialStatementReportDocumentTitle"
+	title_label.text = str(statement.get("report_title", "Consolidated Financial Statements")).strip_edges()
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_tone(title_label, Color(0.08, 0.075, 0.065, 1.0))
+	_apply_font_override_to_control(title_label, DEFAULT_APP_FONT_SIZE + 3, _get_dashboard_title_font())
+	header.add_child(title_label)
+
+	var fiscal_year: int = int(statement.get("fiscal_year", statement.get("statement_year", 0)))
+	var period_text: String = "For the year ended December 31, %d" % fiscal_year if fiscal_year > 0 else period_label
+	var meta_parts: Array = [period_text]
+	var comparative_year: int = int(statement.get("comparative_year", 0))
+	if comparative_year > 0:
+		meta_parts.append("Comparative year: %d" % comparative_year)
+	var currency: String = str(statement.get("currency", "")).strip_edges()
+	var unit: String = str(statement.get("unit", "")).strip_edges()
+	var unit_label: String = _financial_statement_report_unit_label(currency, unit)
+	if not unit_label.is_empty():
+		meta_parts.append(unit_label)
+	var audit_status: String = str(statement.get("audit_status", "")).strip_edges()
+	if not audit_status.is_empty():
+		meta_parts.append(audit_status.capitalize())
+
+	var meta_label := Label.new()
+	meta_label.name = "FinancialStatementReportDocumentMeta"
+	meta_label.text = "  |  ".join(meta_parts)
+	meta_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	meta_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_tone(meta_label, Color(0.34, 0.32, 0.28, 1.0))
+	_apply_font_override_to_control(meta_label, DEFAULT_APP_FONT_SIZE - 1, _get_app_font())
+	header.add_child(meta_label)
+
+	var separator := HSeparator.new()
+	separator.name = "FinancialStatementReportHeaderDivider"
+	header.add_child(separator)
+	return header
+
+func _add_report_statement_section(section: Dictionary, lines_value: Variant, period_label: String) -> void:
+	if financial_statement_report_body_vbox == null:
+		return
+	var lines: Array = _array_from_value(lines_value)
+	var section_id: String = str(section.get("section_id", "")).strip_edges()
+	var section_vbox: VBoxContainer = _build_report_section_container(section)
+	if lines.is_empty():
+		section_vbox.add_child(_build_report_empty_label("No %s data." % _report_section_title(section).to_lower()))
+	else:
+		for line_value in lines:
+			if typeof(line_value) != TYPE_DICTIONARY:
+				continue
+			var line_item: Dictionary = line_value
+			section_vbox.add_child(_build_report_statement_line(line_item, section_id, _report_section_title(section), period_label))
+	if not section_id.is_empty():
+		financial_statement_report_section_nodes[section_id] = section_vbox
+	financial_statement_report_body_vbox.add_child(section_vbox)
+
+func _add_report_note_section(notes_value: Variant, period_label: String) -> void:
+	if financial_statement_report_body_vbox == null:
+		return
+	var section_vbox: VBoxContainer = _build_report_section_container("Notes & MD&A")
+	var notes: Array = _statement_note_rows_for_display(_array_from_value(notes_value))
+	if notes.is_empty():
+		section_vbox.add_child(_build_report_empty_label("No statement notes."))
+	else:
+		for note_value in notes:
+			if typeof(note_value) != TYPE_DICTIONARY:
+				continue
+			var note: Dictionary = note_value
+			section_vbox.add_child(_build_report_note_row(note, period_label))
+	financial_statement_report_body_vbox.add_child(section_vbox)
+
+func _add_report_note_index_section(
+	note_index_value: Variant,
+	notes_value: Variant,
+	period_label: String,
+	section: Dictionary = {}
+) -> void:
+	if financial_statement_report_body_vbox == null:
+		return
+	if section.is_empty():
+		section = {
+			"section_id": "notes",
+			"title": "Notes to the Consolidated Financial Statements",
+			"localized_title": "",
+			"page_label": "10-140"
+		}
+	var notes: Array = _statement_note_rows_for_display(_array_from_value(notes_value))
+	if not notes.is_empty():
+		var notes_section_vbox: VBoxContainer = _build_report_section_container(section)
+		for note_value in notes:
+			if typeof(note_value) != TYPE_DICTIONARY:
+				continue
+			var note: Dictionary = note_value
+			notes_section_vbox.add_child(_build_report_note_row(note, period_label))
+		financial_statement_report_section_nodes["notes"] = notes_section_vbox
+		financial_statement_report_body_vbox.add_child(notes_section_vbox)
+		return
+	var note_index: Array = _array_from_value(note_index_value)
+	if note_index.is_empty():
+		_add_report_note_section(notes_value, period_label)
+		return
+	var section_vbox: VBoxContainer = _build_report_section_container(section)
+	for note_value in note_index:
+		if typeof(note_value) != TYPE_DICTIONARY:
+			continue
+		var note: Dictionary = note_value
+		section_vbox.add_child(_build_report_note_index_row(note))
+	financial_statement_report_section_nodes["notes"] = section_vbox
+	financial_statement_report_body_vbox.add_child(section_vbox)
+
+func _add_report_visible_filing_section(statement: Dictionary, section: Dictionary, period_label: String) -> void:
+	if financial_statement_report_body_vbox == null:
+		return
+	var section_id: String = str(section.get("section_id", "")).strip_edges()
+	var generated_section: Dictionary = _visible_filing_section_payload(statement, section_id)
+	var section_vbox: VBoxContainer = _build_report_section_container(section)
+	var note_context: Dictionary = _visible_filing_note_context(generated_section, section)
+	var has_content: bool = false
+	var chunk_state: Dictionary = {
+		"chunk": null,
+		"chunk_index": 0,
+		"item_count": 0
+	}
+	var display_blocks: Array = _array_from_value(generated_section.get("display_blocks", []))
+	if not display_blocks.is_empty():
+		for block_value in display_blocks:
+			if typeof(block_value) != TYPE_DICTIONARY:
+				continue
+			var block: Dictionary = block_value
+			var block_type: String = str(block.get("block_type", "")).strip_edges()
+			match block_type:
+				"compact_table":
+					var table: Dictionary = _visible_filing_block_payload(generated_section, block, "compact_tables", "table_id")
+					if table.is_empty():
+						continue
+					_append_report_visible_chunk_control(
+						section_vbox,
+						chunk_state,
+						section_id,
+						_build_report_note_compact_table(table, note_context, period_label)
+					)
+					has_content = true
+				"cross_reference":
+					var ref: Dictionary = _visible_filing_block_payload(generated_section, block, "cross_references", "cross_reference_id")
+					if ref.is_empty():
+						continue
+					_append_report_visible_chunk_control(
+						section_vbox,
+						chunk_state,
+						section_id,
+						_build_report_note_cross_reference(note_context, ref, period_label, int(block.get("source_index", 0)) + 1)
+					)
+					has_content = true
+				"paragraph":
+					var paragraph: Dictionary = _visible_filing_block_payload(generated_section, block, "paragraphs", "paragraph_id")
+					if paragraph.is_empty():
+						continue
+					_append_report_visible_chunk_control(
+						section_vbox,
+						chunk_state,
+						section_id,
+						_build_report_note_paragraph(note_context, paragraph, period_label, int(block.get("source_index", 0)) + 1)
+					)
+					has_content = true
+	else:
+		var paragraph_index: int = 1
+		for paragraph_value in _array_from_value(generated_section.get("paragraphs", [])):
+			if typeof(paragraph_value) != TYPE_DICTIONARY:
+				continue
+			var paragraph: Dictionary = paragraph_value
+			_append_report_visible_chunk_control(
+				section_vbox,
+				chunk_state,
+				section_id,
+				_build_report_note_paragraph(note_context, paragraph, period_label, paragraph_index)
+			)
+			paragraph_index += 1
+			has_content = true
+		for table_value in _array_from_value(generated_section.get("compact_tables", [])):
+			if typeof(table_value) != TYPE_DICTIONARY:
+				continue
+			_append_report_visible_chunk_control(
+				section_vbox,
+				chunk_state,
+				section_id,
+				_build_report_note_compact_table(table_value, note_context, period_label)
+			)
+			has_content = true
+		var reference_index: int = 1
+		for ref_value in _array_from_value(generated_section.get("cross_references", [])):
+			if typeof(ref_value) != TYPE_DICTIONARY:
+				continue
+			var ref: Dictionary = ref_value
+			_append_report_visible_chunk_control(
+				section_vbox,
+				chunk_state,
+				section_id,
+				_build_report_note_cross_reference(note_context, ref, period_label, reference_index)
+			)
+			reference_index += 1
+			has_content = true
+	if not has_content:
+		section_vbox.add_child(_build_report_empty_label("No generated filing text."))
+	if not section_id.is_empty():
+		financial_statement_report_section_nodes[section_id] = section_vbox
+	financial_statement_report_body_vbox.add_child(section_vbox)
+
+func _visible_filing_block_payload(
+	generated_section: Dictionary,
+	block: Dictionary,
+	array_key: String,
+	id_key: String
+) -> Dictionary:
+	var rows: Array = _array_from_value(generated_section.get(array_key, []))
+	var source_id: String = str(block.get("source_id", "")).strip_edges()
+	if not source_id.is_empty():
+		for row_value in rows:
+			if typeof(row_value) != TYPE_DICTIONARY:
+				continue
+			var row: Dictionary = row_value
+			if str(row.get(id_key, "")).strip_edges() == source_id:
+				return row.duplicate(true)
+	var source_index: int = int(block.get("source_index", -1))
+	if source_index >= 0 and source_index < rows.size() and typeof(rows[source_index]) == TYPE_DICTIONARY:
+		var indexed_row: Dictionary = rows[source_index]
+		return indexed_row.duplicate(true)
+	return {}
+
+func _append_report_visible_chunk_control(
+	section_vbox: VBoxContainer,
+	chunk_state: Dictionary,
+	section_id: String,
+	control: Control
+) -> void:
+	if section_vbox == null or control == null:
+		return
+	var chunk: VBoxContainer = chunk_state.get("chunk", null) as VBoxContainer
+	var item_count: int = int(chunk_state.get("item_count", 0))
+	if chunk == null or not is_instance_valid(chunk) or item_count >= FINANCIAL_STATEMENT_A4_SECTION_CHUNK_SIZE:
+		var chunk_index: int = int(chunk_state.get("chunk_index", 0)) + 1
+		chunk = _build_report_section_chunk(section_id, chunk_index)
+		section_vbox.add_child(chunk)
+		chunk_state["chunk"] = chunk
+		chunk_state["chunk_index"] = chunk_index
+		item_count = 0
+	chunk.add_child(control)
+	chunk_state["item_count"] = item_count + 1
+
+func _build_report_section_chunk(section_id: String, chunk_index: int) -> VBoxContainer:
+	var safe_section_id: String = section_id.strip_edges()
+	if safe_section_id.is_empty():
+		safe_section_id = "section"
+	var chunk := VBoxContainer.new()
+	chunk.name = "FinancialStatementReportSectionChunk_%s_%02d" % [safe_section_id, chunk_index]
+	chunk.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	chunk.add_theme_constant_override("separation", 6)
+	chunk.set_meta("reader_mode", FINANCIAL_STATEMENT_READER_MODE)
+	chunk.set_meta("page_size_hint", "A4")
+	chunk.set_meta("section_id", safe_section_id)
+	chunk.set_meta("chunk_index", chunk_index)
+	chunk.set_meta("max_chunk_items", FINANCIAL_STATEMENT_A4_SECTION_CHUNK_SIZE)
+	return chunk
+
+func _count_report_section_chunks(root: Node) -> int:
+	if root == null:
+		return 0
+	var count: int = 1 if str(root.name).begins_with("FinancialStatementReportSectionChunk_") else 0
+	for child in root.get_children():
+		count += _count_report_section_chunks(child)
+	return count
+
+func _visible_filing_note_context(generated_section: Dictionary, section: Dictionary) -> Dictionary:
+	var section_id: String = str(section.get("section_id", generated_section.get("section_id", ""))).strip_edges()
+	var title: String = _report_section_title(section)
+	var source_story_ids: Array = []
+	var source_disclosure_packet_ids: Array = []
+	var source_statement_sections: Array = []
+	for paragraph_value in _array_from_value(generated_section.get("paragraphs", [])):
+		if typeof(paragraph_value) != TYPE_DICTIONARY:
+			continue
+		var paragraph: Dictionary = paragraph_value
+		for story_id in _string_array_from_value(paragraph.get("source_story_ids", [])):
+			if not source_story_ids.has(story_id):
+				source_story_ids.append(story_id)
+		for packet_id in _string_array_from_value(paragraph.get("source_disclosure_packet_ids", [])):
+			if not source_disclosure_packet_ids.has(packet_id):
+				source_disclosure_packet_ids.append(packet_id)
+		for line_id in _string_array_from_value(paragraph.get("statement_line_ids", [])):
+			if not source_statement_sections.has(line_id):
+				source_statement_sections.append(line_id)
+	var note_number: int = int(section.get("section_order", generated_section.get("section_order", 0)))
+	return {
+		"note_id": "annual_filing_section_%s" % section_id,
+		"note_number": note_number,
+		"note_type": section_id,
+		"title": title,
+		"summary": "Generated annual filing section for %s." % title,
+		"statement_id": str(financial_statement_report_context.get("source_statement_id", financial_statement_report_context.get("statement_id", ""))),
+		"source_story_ids": source_story_ids,
+		"source_disclosure_packet_ids": source_disclosure_packet_ids,
+		"source_statement_sections": source_statement_sections,
+		"disclosure_quality": "filing_section",
+		"detail_level": str(generated_section.get("read_mode", section.get("read_mode", ""))),
+		"access_level": "public_filing",
+		"tone": "neutral",
+		"importance": float(_array_from_value(generated_section.get("paragraphs", [])).size())
+	}
+
+func _build_report_section_container(section_value: Variant) -> VBoxContainer:
+	var section: Dictionary = section_value if typeof(section_value) == TYPE_DICTIONARY else {"title": str(section_value)}
+	var section_id: String = str(section.get("section_id", "")).strip_edges()
+	var title: String = _report_section_title(section)
+	var localized_title: String = _report_section_localized_title(section)
+	var page_label: String = str(section.get("page_label", "")).strip_edges()
+	var section_vbox := VBoxContainer.new()
+	section_vbox.name = "FinancialStatementReportSection_%s" % (section_id if not section_id.is_empty() else _node_token(title))
+	section_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	section_vbox.add_theme_constant_override("separation", 7)
+	section_vbox.set_meta("reader_mode", FINANCIAL_STATEMENT_READER_MODE)
+	section_vbox.set_meta("page_size_hint", "A4")
+	if not section_id.is_empty():
+		section_vbox.set_meta("section_id", section_id)
+	if section.has("document_part"):
+		section_vbox.set_meta("document_part", str(section.get("document_part", "")))
+	if section.has("virtual_page_group"):
+		section_vbox.set_meta("virtual_page_group", str(section.get("virtual_page_group", "")))
+	var meta_parts: Array = []
+	if not localized_title.is_empty() and localized_title != title:
+		meta_parts.append(localized_title)
+	if not page_label.is_empty():
+		meta_parts.append("Pages %s" % page_label)
+	if not meta_parts.is_empty():
+		var meta_label := Label.new()
+		meta_label.name = "FinancialStatementReportSectionMeta"
+		meta_label.text = "  |  ".join(meta_parts)
+		meta_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_set_label_tone(meta_label, Color(0.40, 0.37, 0.30, 1.0))
+		_apply_font_override_to_control(meta_label, DEFAULT_APP_FONT_SIZE - 2, _get_app_font())
+		section_vbox.add_child(meta_label)
+	var title_label := Label.new()
+	title_label.name = "FinancialStatementReportSectionTitle"
+	title_label.text = title
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_set_label_tone(title_label, COLOR_WINDOW_TEXT)
+	_apply_font_override_to_control(title_label, DEFAULT_APP_FONT_SIZE + 1, _get_dashboard_title_font())
+	section_vbox.add_child(title_label)
+	var separator := HSeparator.new()
+	separator.name = "FinancialStatementReportSectionDivider"
+	section_vbox.add_child(separator)
+	return section_vbox
+
+func _build_report_statement_line(line_item: Dictionary, section_id: String, section_label: String, period_label: String) -> Control:
+	var capture_payload: Dictionary = _financial_statement_capture_payload(line_item, section_id, section_label, period_label)
+	var row := HBoxContainer.new()
+	row.name = "FinancialStatementReportLine"
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 10)
+	if not capture_payload.is_empty():
+		row.mouse_filter = Control.MOUSE_FILTER_STOP
+		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		row.tooltip_text = "Click to open research actions."
+		row.set_meta("financial_statement_capture_payload", capture_payload.duplicate(true))
+		row.gui_input.connect(_root._on_financial_statement_row_gui_input.bind(capture_payload.duplicate(true)))
+	var label := Label.new()
+	label.text = str(line_item.get("label", "")).strip_edges()
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_set_label_tone(label, COLOR_WINDOW_TEXT)
+	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE - 1, _get_app_font())
+	row.add_child(label)
+	var value := Label.new()
+	value.text = _format_statement_value(line_item)
+	value.custom_minimum_size = Vector2(_financial_statement_report_value_width(), 0)
+	value.size_flags_horizontal = Control.SIZE_SHRINK_END
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value.clip_text = false
+	_set_label_tone(value, COLOR_WINDOW_TEXT)
+	_apply_font_override_to_control(value, DEFAULT_APP_FONT_SIZE - 1, _get_app_font())
+	row.add_child(value)
+	row.add_child(_financial_statement_report_scrollbar_gutter())
+	return row
+
+func _build_report_note_index_row(note: Dictionary) -> Control:
+	var row := HBoxContainer.new()
+	row.name = "FinancialStatementReportNoteIndexRow"
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 10)
+
+	var number_label := Label.new()
+	number_label.text = str(note.get("note_number", ""))
+	number_label.custom_minimum_size = Vector2(36, 0)
+	number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_set_label_tone(number_label, COLOR_WINDOW_TEXT)
+	_apply_font_override_to_control(number_label, DEFAULT_APP_FONT_SIZE - 1, _get_app_font())
+	row.add_child(number_label)
+
+	var title_label := Label.new()
+	title_label.text = str(note.get("title", "")).strip_edges()
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_set_label_tone(title_label, COLOR_WINDOW_TEXT)
+	_apply_font_override_to_control(title_label, DEFAULT_APP_FONT_SIZE - 1, _get_app_font())
+	row.add_child(title_label)
+
+	var status_label := Label.new()
+	status_label.text = "Outline" if str(note.get("generation_status", "")).strip_edges() == "outline_pending" else str(note.get("generation_status", "")).replace("_", " ").capitalize()
+	status_label.custom_minimum_size = Vector2(96, 0)
+	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	status_label.clip_text = true
+	_set_label_tone(status_label, Color(0.46, 0.43, 0.36, 1.0))
+	_apply_font_override_to_control(status_label, DEFAULT_APP_FONT_SIZE - 2, _get_app_font())
+	row.add_child(status_label)
+	return row
+
+func _build_report_note_row(note: Dictionary, period_label: String) -> Control:
+	var capture_payload: Dictionary = _financial_statement_note_capture_payload(note, period_label)
+	var row := VBoxContainer.new()
+	var note_number: int = int(note.get("note_number", 0))
+	row.name = "FinancialStatementReportNoteRow%02d" % note_number if note_number > 0 else "FinancialStatementReportNoteRow"
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 6)
+	if not capture_payload.is_empty():
+		row.mouse_filter = Control.MOUSE_FILTER_STOP
+		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		row.tooltip_text = "Click to open note research actions."
+		row.set_meta("financial_statement_capture_payload", capture_payload.duplicate(true))
+		row.gui_input.connect(_root._on_financial_statement_row_gui_input.bind(capture_payload.duplicate(true)))
+	var title := Label.new()
+	title.text = "Note %d - %s" % [note_number, _statement_note_title(note)] if note_number > 0 else _statement_note_title(note)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_set_label_tone(title, COLOR_WINDOW_TEXT)
+	_apply_font_override_to_control(title, DEFAULT_APP_FONT_SIZE, _get_dashboard_title_font())
+	row.add_child(title)
+	var paragraphs: Array = _array_from_value(note.get("body_paragraphs", []))
+	if paragraphs.is_empty():
+		var summary_text: String = str(note.get("summary", "")).strip_edges()
+		if not summary_text.is_empty():
+			paragraphs.append({
+				"paragraph_id": "paragraph|%s|summary" % str(note.get("note_id", "")),
+				"paragraph_index": 1,
+				"paragraph_role": "summary",
+				"text": summary_text
+			})
+	var paragraph_index: int = 1
+	for paragraph_value in paragraphs:
+		if typeof(paragraph_value) != TYPE_DICTIONARY:
+			continue
+		var paragraph: Dictionary = paragraph_value
+		row.add_child(_build_report_note_paragraph(note, paragraph, period_label, paragraph_index))
+		paragraph_index += 1
+	for table_value in _array_from_value(note.get("compact_tables", [])):
+		if typeof(table_value) == TYPE_DICTIONARY:
+			row.add_child(_build_report_note_compact_table(table_value, note, period_label))
+	var cross_note_references: Array = _array_from_value(note.get("cross_note_references", []))
+	if not cross_note_references.is_empty():
+		var reference_index: int = 1
+		for ref_value in cross_note_references:
+			if typeof(ref_value) != TYPE_DICTIONARY:
+				continue
+			var ref: Dictionary = ref_value
+			row.add_child(_build_report_note_cross_reference(note, ref, period_label, reference_index))
+			reference_index += 1
+	else:
+		var visible_cross_reference_text: String = str(note.get("visible_cross_reference_text", "")).strip_edges()
+		if not visible_cross_reference_text.is_empty():
+			var cross_reference_label := Label.new()
+			cross_reference_label.name = "FinancialStatementReportNoteCrossReference"
+			cross_reference_label.text = visible_cross_reference_text
+			cross_reference_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			cross_reference_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			_set_label_tone(cross_reference_label, Color(0.34, 0.32, 0.27, 1.0))
+			_apply_font_override_to_control(cross_reference_label, DEFAULT_APP_FONT_SIZE - 2, _get_app_font())
+			row.add_child(cross_reference_label)
+	return row
+
+func _build_report_note_cross_reference(
+	note: Dictionary,
+	ref: Dictionary,
+	period_label: String,
+	fallback_index: int
+) -> Control:
+	var display_text: String = str(ref.get("display_text", "")).strip_edges()
+	if display_text.is_empty():
+		display_text = "See Note %d - %s." % [
+			int(ref.get("target_note_number", 0)),
+			str(ref.get("target_title", ref.get("target_note_type", ""))).strip_edges()
+		]
+	var cross_reference_label := Label.new()
+	cross_reference_label.name = "FinancialStatementReportNoteCrossReference"
+	cross_reference_label.text = display_text
+	cross_reference_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cross_reference_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_set_label_tone(cross_reference_label, Color(0.34, 0.32, 0.27, 1.0))
+	_apply_font_override_to_control(cross_reference_label, DEFAULT_APP_FONT_SIZE - 2, _get_app_font())
+	var capture_payload: Dictionary = _financial_statement_cross_reference_capture_payload(note, ref, period_label, fallback_index)
+	if not capture_payload.is_empty():
+		cross_reference_label.mouse_filter = Control.MOUSE_FILTER_STOP
+		cross_reference_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		cross_reference_label.tooltip_text = "Click to open cross-reference research actions."
+		cross_reference_label.set_meta("financial_statement_capture_payload", capture_payload.duplicate(true))
+		cross_reference_label.gui_input.connect(_root._on_financial_statement_row_gui_input.bind(capture_payload.duplicate(true)))
+	return cross_reference_label
+
+func _build_report_note_paragraph(
+	note: Dictionary,
+	paragraph: Dictionary,
+	period_label: String,
+	fallback_index: int
+) -> Control:
+	var paragraph_text: String = str(paragraph.get("text", "")).strip_edges()
+	var label := Label.new()
+	label.name = "FinancialStatementReportNoteParagraph"
+	label.text = paragraph_text
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_set_label_tone(label, COLOR_WINDOW_TEXT)
+	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE - 1, _get_app_font())
+	var capture_payload: Dictionary = _financial_statement_note_paragraph_capture_payload(note, paragraph, period_label, fallback_index)
+	if not capture_payload.is_empty():
+		label.mouse_filter = Control.MOUSE_FILTER_STOP
+		label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		label.tooltip_text = "Click to open paragraph research actions."
+		label.set_meta("financial_statement_capture_payload", capture_payload.duplicate(true))
+		label.gui_input.connect(_root._on_financial_statement_row_gui_input.bind(capture_payload.duplicate(true)))
+	return label
+
+func _build_report_note_compact_table(table: Dictionary, note: Dictionary = {}, period_label: String = "") -> Control:
+	var table_vbox := VBoxContainer.new()
+	table_vbox.name = "FinancialStatementReportNoteCompactTable"
+	table_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	table_vbox.add_theme_constant_override("separation", 3)
+	var title_label := Label.new()
+	title_label.text = str(table.get("title", "Selected amounts")).strip_edges()
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_set_label_tone(title_label, Color(0.18, 0.16, 0.12, 1.0))
+	_apply_font_override_to_control(title_label, DEFAULT_APP_FONT_SIZE - 2, _get_dashboard_title_font())
+	table_vbox.add_child(title_label)
+	var row_index: int = 1
+	for row_value in _array_from_value(table.get("rows", [])):
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var table_row: Dictionary = row_value
+		table_vbox.add_child(_build_report_note_compact_table_row(table_row, table, note, period_label, row_index))
+		row_index += 1
+	return table_vbox
+
+func _build_report_note_compact_table_row(
+	row_data: Dictionary,
+	table: Dictionary = {},
+	note: Dictionary = {},
+	period_label: String = "",
+	fallback_index: int = 1
+) -> Control:
+	var capture_payload: Dictionary = _financial_statement_note_table_row_capture_payload(note, table, row_data, period_label, fallback_index)
+	var row := HBoxContainer.new()
+	row.name = "FinancialStatementReportNoteCompactTableRow"
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 8)
+	if not capture_payload.is_empty():
+		row.mouse_filter = Control.MOUSE_FILTER_STOP
+		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		row.tooltip_text = "Click to open table row research actions."
+		row.set_meta("financial_statement_capture_payload", capture_payload.duplicate(true))
+		row.gui_input.connect(_root._on_financial_statement_row_gui_input.bind(capture_payload.duplicate(true)))
+	var caption := Label.new()
+	caption.name = "FinancialStatementReportNoteCompactTableCaption"
+	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	caption.text = str(row_data.get("caption", "")).strip_edges()
+	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_set_label_tone(caption, Color(0.28, 0.25, 0.20, 1.0))
+	_apply_font_override_to_control(caption, DEFAULT_APP_FONT_SIZE - 2, _get_app_font())
+	row.add_child(caption)
+	var amount := Label.new()
+	amount.name = "FinancialStatementReportNoteCompactTableAmount"
+	amount.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	amount.text = str(row_data.get("fy_value", "-")).strip_edges()
+	amount.custom_minimum_size = Vector2(_financial_statement_report_table_amount_width(), 0)
+	amount.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	amount.clip_text = false
+	_set_label_tone(amount, Color(0.12, 0.105, 0.08, 1.0))
+	_apply_font_override_to_control(amount, DEFAULT_APP_FONT_SIZE - 2, _get_app_font())
+	row.add_child(amount)
+	row.add_child(_financial_statement_report_scrollbar_gutter())
+	return row
+
+func _financial_statement_report_scrollbar_gutter() -> Control:
+	var spacer := Control.new()
+	spacer.name = "FinancialStatementReportScrollbarGutter"
+	spacer.custom_minimum_size = Vector2(FINANCIAL_STATEMENT_A4_SCROLLBAR_GUTTER, 0)
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return spacer
+
+func _financial_statement_report_value_width() -> float:
+	var page_width: float = FINANCIAL_STATEMENT_A4_MAX_WIDTH
+	if financial_statement_report_page_panel != null:
+		page_width = float(financial_statement_report_page_panel.custom_minimum_size.x)
+	if page_width < 420.0:
+		return FINANCIAL_STATEMENT_A4_SMALL_VALUE_WIDTH
+	if page_width < 560.0:
+		return 136.0
+	return FINANCIAL_STATEMENT_A4_VALUE_WIDTH
+
+func _financial_statement_report_table_amount_width() -> float:
+	var page_width: float = FINANCIAL_STATEMENT_A4_MAX_WIDTH
+	if financial_statement_report_page_panel != null:
+		page_width = float(financial_statement_report_page_panel.custom_minimum_size.x)
+	if page_width < 420.0:
+		return 82.0
+	if page_width < 560.0:
+		return 104.0
+	return FINANCIAL_STATEMENT_A4_TABLE_AMOUNT_WIDTH
+
+func _financial_statement_report_unit_label(currency: String, unit: String) -> String:
+	var clean_currency: String = currency.strip_edges()
+	var clean_unit: String = unit.strip_edges().to_lower()
+	if clean_unit == "million_idr":
+		return "Amounts in millions of IDR"
+	if clean_unit == "idr":
+		return "Amounts in IDR"
+	if clean_currency.is_empty() and clean_unit.is_empty():
+		return ""
+	if clean_unit.is_empty():
+		return "Currency: %s" % clean_currency
+	return "Currency: %s | Unit: %s" % [
+		clean_currency if not clean_currency.is_empty() else "N/A",
+		clean_unit.replace("_", " ").to_upper()
+	]
+
+func _financial_statement_report_table_reference_width() -> float:
+	var page_width: float = FINANCIAL_STATEMENT_A4_MAX_WIDTH
+	if financial_statement_report_page_panel != null:
+		page_width = float(financial_statement_report_page_panel.custom_minimum_size.x)
+	if page_width < 420.0:
+		return 72.0
+	return FINANCIAL_STATEMENT_A4_TABLE_REFERENCE_WIDTH
+
+func _build_report_empty_label(text: String) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_tone(label, Color(0.48, 0.46, 0.40, 1.0))
+	_apply_font_override_to_control(label, DEFAULT_APP_FONT_SIZE, _get_app_font())
+	return label
+
+func _clear_all_children(container: Container) -> void:
+	if container == null:
+		return
+	for child in container.get_children():
+		container.remove_child(child)
+		child.queue_free()
+
+func _ensure_financials_optional_statement_sections(financials_vbox: VBoxContainer) -> void:
+	operating_metrics_rows_vbox = _ensure_financials_dynamic_statement_card(
+		financials_vbox,
+		"OperatingMetricsCard",
+		"OperatingMetricsTitle",
+		"OPERATING METRICS",
+		"OperatingMetricsRows",
+		"OperatingMetricsEmptyLabel",
+		"No operating metrics data."
+	)
+	operating_metrics_empty_label = null
+	if operating_metrics_rows_vbox != null:
+		operating_metrics_empty_label = operating_metrics_rows_vbox.get_node_or_null("OperatingMetricsEmptyLabel") as Label
+	statement_notes_rows_vbox = _ensure_financials_dynamic_statement_card(
+		financials_vbox,
+		"StatementNotesCard",
+		"StatementNotesTitle",
+		"NOTES & MD&A",
+		"StatementNotesRows",
+		"StatementNotesEmptyLabel",
+		"No statement notes."
+	)
+	statement_notes_empty_label = null
+	if statement_notes_rows_vbox != null:
+		statement_notes_empty_label = statement_notes_rows_vbox.get_node_or_null("StatementNotesEmptyLabel") as Label
+
+func _ensure_financials_dynamic_statement_card(
+	financials_vbox: VBoxContainer,
+	card_name: String,
+	title_name: String,
+	title_text: String,
+	rows_name: String,
+	empty_label_name: String,
+	empty_text: String
+) -> VBoxContainer:
+	if financials_vbox == null:
+		return null
+	var existing_card: PanelContainer = financials_vbox.get_node_or_null(card_name) as PanelContainer
+	if existing_card == null:
+		existing_card = _build_stockbot_detail_section_card(card_name)
+		financials_vbox.add_child(existing_card)
+	else:
+		_style_stockbot_panel(existing_card, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE, 6, 1)
+
+	var content_vbox: VBoxContainer = existing_card.get_meta("content_vbox") as VBoxContainer
+	if content_vbox == null:
+		content_vbox = existing_card.find_child("%sVBox" % card_name, true, false) as VBoxContainer
+	if content_vbox == null:
+		return null
+
+	var title_label: Label = content_vbox.get_node_or_null(title_name) as Label
+	if title_label == null:
+		title_label = Label.new()
+		title_label.name = title_name
+		content_vbox.add_child(title_label)
+	title_label.text = title_text
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_tone(title_label, COLOR_STOCKBOT_TEXT)
+	_apply_font_override_to_control(title_label, DEFAULT_APP_FONT_SIZE + 2, _get_dashboard_title_font())
+
+	var rows_vbox: VBoxContainer = content_vbox.get_node_or_null(rows_name) as VBoxContainer
+	if rows_vbox == null:
+		rows_vbox = VBoxContainer.new()
+		rows_vbox.name = rows_name
+		rows_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rows_vbox.add_theme_constant_override("separation", 6)
+		content_vbox.add_child(rows_vbox)
+
+	var empty_label: Label = rows_vbox.get_node_or_null(empty_label_name) as Label
+	if empty_label == null:
+		empty_label = Label.new()
+		empty_label.name = empty_label_name
+		rows_vbox.add_child(empty_label)
+	empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	empty_label.text = empty_text
+	_set_label_tone(empty_label, COLOR_STOCKBOT_MUTED)
+	_apply_font_override_to_control(empty_label, DEFAULT_APP_FONT_SIZE, _get_app_font())
+	return rows_vbox
 
 func _ensure_financials_statement_card(
 	financials_vbox: VBoxContainer,
@@ -4280,6 +6094,8 @@ func _style_stockbot_static_panel_labels() -> void:
 		"IncomeStatementTitle",
 		"BalanceSheetTitle",
 		"CashFlowTitle",
+		"OperatingMetricsTitle",
+		"StatementNotesTitle",
 		"BrokerTitle",
 		"ProfileTitle"
 	]:
@@ -5195,6 +7011,8 @@ func _refresh_statement_sections(financial_statement_snapshot: Dictionary) -> vo
 		_refresh_statement_section(income_statement_rows_vbox, income_statement_empty_label, [], "income_statement", "Income Statement", "")
 		_refresh_statement_section(balance_sheet_rows_vbox, balance_sheet_empty_label, [], "balance_sheet", "Balance Sheet", "")
 		_refresh_statement_section(cash_flow_rows_vbox, cash_flow_empty_label, [], "cash_flow", "Cash Flow", "")
+		_refresh_statement_section(operating_metrics_rows_vbox, operating_metrics_empty_label, [], "operating_metrics", "Operating Metrics", "")
+		_refresh_statement_notes_section(statement_notes_rows_vbox, statement_notes_empty_label, [], "")
 		return
 
 	var selected_period: Dictionary = _selected_statement_period(financial_statement_snapshot)
@@ -5223,6 +7041,20 @@ func _refresh_statement_sections(financial_statement_snapshot: Dictionary) -> vo
 		"Cash Flow",
 		period_label
 	)
+	_refresh_statement_section(
+		operating_metrics_rows_vbox,
+		operating_metrics_empty_label,
+		selected_period.get("operating_metrics", []),
+		"operating_metrics",
+		"Operating Metrics",
+		period_label
+	)
+	_refresh_statement_notes_section(
+		statement_notes_rows_vbox,
+		statement_notes_empty_label,
+		selected_period.get("notes", []),
+		period_label
+	)
 
 func _refresh_statement_section(
 	rows_vbox: VBoxContainer,
@@ -5244,6 +7076,27 @@ func _refresh_statement_section(
 		var line_item: Dictionary = line_value
 		rows_vbox.add_child(_build_statement_row(line_item, section_id, section_label, period_label))
 
+func _refresh_statement_notes_section(
+	rows_vbox: VBoxContainer,
+	empty_label: Label,
+	notes: Array,
+	period_label: String = ""
+) -> void:
+	if rows_vbox == null or empty_label == null:
+		return
+
+	_clear_dynamic_rows(rows_vbox, empty_label)
+	var display_notes: Array = _statement_note_rows_for_display(notes)
+	empty_label.visible = display_notes.is_empty()
+	if display_notes.is_empty():
+		return
+
+	for note_value in display_notes:
+		if typeof(note_value) != TYPE_DICTIONARY:
+			continue
+		var note: Dictionary = note_value
+		rows_vbox.add_child(_build_statement_note_row(note, period_label))
+
 func _build_statement_row(
 	line_item: Dictionary,
 	section_id: String = "",
@@ -5258,6 +7111,7 @@ func _build_statement_row(
 		row.mouse_filter = Control.MOUSE_FILTER_STOP
 		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		row.tooltip_text = "Click to open research actions."
+		row.set_meta("financial_statement_capture_payload", capture_payload.duplicate(true))
 		row.gui_input.connect(_root._on_financial_statement_row_gui_input.bind(capture_payload.duplicate(true)))
 
 	var label_cell: Label = _build_table_cell(
@@ -5278,6 +7132,61 @@ func _build_statement_row(
 		value_cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(label_cell)
 	row.add_child(value_cell)
+	return row
+
+func _build_statement_note_row(note: Dictionary, period_label: String = "") -> Control:
+	var capture_payload: Dictionary = _financial_statement_note_capture_payload(note, period_label)
+	var row := VBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 4)
+	if not capture_payload.is_empty():
+		row.mouse_filter = Control.MOUSE_FILTER_STOP
+		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		row.tooltip_text = "Click to open research actions."
+		row.set_meta("financial_statement_capture_payload", capture_payload.duplicate(true))
+		row.gui_input.connect(_root._on_financial_statement_row_gui_input.bind(capture_payload.duplicate(true)))
+
+	var header := HBoxContainer.new()
+	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_theme_constant_override("separation", 8)
+	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(header)
+
+	var title_label := Label.new()
+	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title_label.text = _statement_note_title(note)
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_label.clip_text = true
+	_set_label_tone(title_label, COLOR_STOCKBOT_TEXT)
+	_apply_font_override_to_control(title_label, DEFAULT_APP_FONT_SIZE, _get_app_font())
+	header.add_child(title_label)
+
+	var quality_label := Label.new()
+	quality_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	quality_label.text = _statement_note_quality_label(note)
+	quality_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	quality_label.custom_minimum_size = Vector2(120, 0)
+	_set_label_tone(quality_label, _statement_note_tone_color(note))
+	_apply_font_override_to_control(quality_label, DEFAULT_APP_FONT_SIZE - 1, _get_app_font())
+	header.add_child(quality_label)
+
+	var summary_label := Label.new()
+	summary_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	summary_label.text = str(note.get("summary", "")).strip_edges()
+	summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	summary_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_tone(summary_label, COLOR_STOCKBOT_MUTED)
+	_apply_font_override_to_control(summary_label, DEFAULT_APP_FONT_SIZE, _get_app_font())
+	row.add_child(summary_label)
+
+	var meta_label := Label.new()
+	meta_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	meta_label.text = _statement_note_meta_text(note)
+	meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	meta_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_label_tone(meta_label, COLOR_STOCKBOT_FAINT)
+	_apply_font_override_to_control(meta_label, DEFAULT_APP_FONT_SIZE - 1, _get_app_font())
+	row.add_child(meta_label)
 	return row
 
 func _financial_statement_capture_payload(
@@ -5303,22 +7212,551 @@ func _financial_statement_capture_payload(
 	var resolved_period: String = period_label.strip_edges()
 	if resolved_period.is_empty():
 		resolved_period = "latest"
+	var selected_period: Dictionary = _selected_statement_period_for_capture()
+	var statement_id: String = str(line_item.get("statement_id", selected_period.get("statement_id", ""))).strip_edges()
+	var line_id: String = str(line_item.get("line_id", line_item.get("id", line_item.get("metric_id", "")))).strip_edges()
+	var metric_id: String = str(line_item.get("metric_id", line_item.get("id", ""))).strip_edges()
+	var source_story_ids: Array = _string_array_from_value(line_item.get("source_story_ids", []))
+	var source_effect_ids: Array = _string_array_from_value(line_item.get("source_effect_ids", []))
+	var metric_ids: Array = []
+	if not metric_id.is_empty():
+		metric_ids.append(metric_id)
 	var detail: String = "%s line from %s (%s)." % [label_text, resolved_section_label, resolved_period]
-	return {
+	var source_statement_token: String = statement_id if not statement_id.is_empty() else resolved_period
+	var source_line_token: String = line_id if not line_id.is_empty() else label_text
+	var payload: Dictionary = {
 		"source_type": "financial_statement",
 		"category": "financials",
 		"company_id": selected_company_id,
+		"source_label": "Annual Filing",
 		"label": label_text,
 		"value": value_text,
 		"detail": detail,
 		"source_id": "financial_statement_%s_%s_%s_%s" % [
 			selected_company_id,
 			resolved_section_id,
-			_node_token(resolved_period),
-			_node_token(label_text)
+			_node_token(source_statement_token),
+			_node_token(source_line_token)
 		],
-		"raw_value": float(line_item.get("value", 0.0))
+		"statement_id": statement_id,
+		"statement_period_label": resolved_period,
+		"statement_scope": str(selected_period.get("statement_scope", "")),
+		"statement_consolidated": bool(selected_period.get("consolidated", selected_period.get("statement_consolidated", false))),
+		"statement_year": str(selected_period.get("statement_year", "")),
+		"statement_quarter": str(selected_period.get("statement_quarter", "")),
+		"filing_day_index": str(selected_period.get("filing_day_index", "")),
+		"statement_section": resolved_section_id,
+		"statement_section_label": resolved_section_label,
+		"line_id": line_id,
+		"statement_line_id": line_id,
+		"line_item_id": str(line_item.get("id", "")),
+		"metric_id": metric_id,
+		"metric_ids": metric_ids,
+		"story_id": str(source_story_ids[0]) if not source_story_ids.is_empty() else "",
+		"effect_id": str(source_effect_ids[0]) if not source_effect_ids.is_empty() else "",
+		"source_story_ids": source_story_ids,
+		"source_effect_ids": source_effect_ids,
+		"statement_value_format": str(line_item.get("format", "")),
+		"raw_value": float(line_item.get("value", 0.0)),
+		"vocabulary_tags": _statement_capture_tags(resolved_section_id, metric_id, [])
 	}
+	var visible_text: String = "%s %s" % [label_text, value_text]
+	return _financial_statement_apply_filing_capture_metadata(
+		payload,
+		"statement_row",
+		resolved_section_id,
+		resolved_section_label,
+		line_id if not line_id.is_empty() else source_line_token,
+		label_text,
+		visible_text
+	)
+
+func _financial_statement_note_capture_payload(note: Dictionary, period_label: String) -> Dictionary:
+	if selected_company_id.is_empty():
+		return {}
+	var title_text: String = _statement_note_title(note).strip_edges()
+	if title_text.is_empty():
+		return {}
+	var summary_text: String = str(note.get("summary", "")).strip_edges()
+	if summary_text.is_empty():
+		return {}
+	var resolved_period: String = period_label.strip_edges()
+	if resolved_period.is_empty():
+		resolved_period = "latest"
+	var metric_ids: Array = _string_array_from_value(note.get("metric_ids", []))
+	var note_id: String = str(note.get("note_id", "")).strip_edges()
+	var story_id: String = str(note.get("story_id", "")).strip_edges()
+	var effect_ids: Array = _string_array_from_value(note.get("effect_ids", []))
+	var clue_ids: Array = _string_array_from_value(note.get("clue_ids", []))
+	var fact_ids: Array = _string_array_from_value(note.get("fact_ids", []))
+	var source_statement_sections: Array = _string_array_from_value(note.get("source_statement_sections", []))
+	var source_story_ids: Array = _string_array_from_value(note.get("source_story_ids", []))
+	var source_effect_ids: Array = _string_array_from_value(note.get("source_effect_ids", []))
+	var source_disclosure_packet_ids: Array = _string_array_from_value(note.get("source_disclosure_packet_ids", []))
+	var source_disclosure_placement_ids: Array = _string_array_from_value(note.get("source_disclosure_placement_ids", []))
+	var source_disclosure_section_ids: Array = _string_array_from_value(note.get("source_disclosure_section_ids", []))
+	var source_living_arc_ids: Array = _string_array_from_value(note.get("source_living_arc_ids", []))
+	var source_corporate_action_ids: Array = _string_array_from_value(note.get("source_corporate_action_ids", []))
+	var source_event_ids: Array = _string_array_from_value(note.get("source_event_ids", []))
+	var source_event_ref_ids: Array = _string_array_from_value(note.get("source_event_ref_ids", []))
+	var source_roadmap_ids: Array = _string_array_from_value(note.get("source_roadmap_ids", []))
+	var story_source_refs: Array = _array_from_value(note.get("story_source_refs", []))
+	var disclosure_packet_refs: Array = _array_from_value(note.get("disclosure_packet_refs", []))
+	var living_arc_refs: Array = _array_from_value(note.get("living_arc_refs", []))
+	var corporate_action_refs: Array = _array_from_value(note.get("corporate_action_refs", []))
+	var event_refs: Array = _array_from_value(note.get("event_refs", []))
+	var roadmap_refs: Array = _array_from_value(note.get("roadmap_refs", []))
+	var explain_tags: Array = _string_array_from_value(note.get("explain_tags", []))
+	var selected_period: Dictionary = _selected_statement_period_for_capture()
+	var statement_id: String = str(note.get("statement_id", selected_period.get("statement_id", ""))).strip_edges()
+	var note_type: String = str(note.get("note_type", "")).strip_edges()
+	var disclosure_quality: String = str(note.get("disclosure_quality", "")).strip_edges()
+	var detail_level: String = str(note.get("detail_level", "")).strip_edges()
+	var access_level: String = str(note.get("access_level", "")).strip_edges()
+	var tone: String = str(note.get("tone", "")).strip_edges()
+	if source_story_ids.is_empty() and not story_id.is_empty():
+		source_story_ids.append(story_id)
+	if source_effect_ids.is_empty():
+		source_effect_ids = effect_ids.duplicate(true)
+	var payload: Dictionary = {
+		"source_type": "financial_statement",
+		"category": "financials",
+		"company_id": selected_company_id,
+		"source_label": "Annual Filing",
+		"label": title_text,
+		"value": _statement_note_quality_label(note),
+		"detail": "%s (%s)." % [summary_text, resolved_period],
+		"source_id": "financial_statement_note_%s_%s_%s" % [
+			selected_company_id,
+			_node_token(resolved_period),
+			_node_token(note_id if not note_id.is_empty() else title_text)
+		],
+		"statement_section": "notes",
+		"statement_section_label": "Notes & MD&A",
+		"statement_id": statement_id,
+		"statement_period_label": resolved_period,
+		"statement_scope": str(selected_period.get("statement_scope", "")),
+		"statement_consolidated": bool(note.get("statement_consolidated", selected_period.get("consolidated", selected_period.get("statement_consolidated", false)))),
+		"statement_year": str(selected_period.get("statement_year", "")),
+		"statement_quarter": str(selected_period.get("statement_quarter", "")),
+		"filing_day_index": str(selected_period.get("filing_day_index", "")),
+		"note_id": note_id,
+		"note_type": note_type,
+		"note_title_key": str(note.get("title_key", "")),
+		"note_text_key": str(note.get("text_key", "")),
+		"disclosure_quality": disclosure_quality,
+		"detail_level": detail_level,
+		"access_level": access_level,
+		"story_id": story_id,
+		"metric_id": str(metric_ids[0]) if not metric_ids.is_empty() else "",
+		"effect_id": str(effect_ids[0]) if not effect_ids.is_empty() else "",
+		"clue_id": str(clue_ids[0]) if not clue_ids.is_empty() else "",
+		"fact_id": str(fact_ids[0]) if not fact_ids.is_empty() else "",
+		"metric_ids": metric_ids,
+		"effect_ids": effect_ids,
+		"clue_ids": clue_ids,
+		"fact_ids": fact_ids,
+		"source_story_ids": source_story_ids,
+		"source_effect_ids": source_effect_ids,
+		"source_disclosure_packet_ids": source_disclosure_packet_ids,
+		"source_disclosure_placement_ids": source_disclosure_placement_ids,
+		"source_disclosure_section_ids": source_disclosure_section_ids,
+		"source_living_arc_ids": source_living_arc_ids,
+		"source_corporate_action_ids": source_corporate_action_ids,
+		"source_event_ids": source_event_ids,
+		"source_event_ref_ids": source_event_ref_ids,
+		"source_roadmap_ids": source_roadmap_ids,
+		"source_statement_sections": source_statement_sections,
+		"story_source_refs": story_source_refs,
+		"disclosure_packet_refs": disclosure_packet_refs,
+		"living_arc_refs": living_arc_refs,
+		"corporate_action_refs": corporate_action_refs,
+		"event_refs": event_refs,
+		"roadmap_refs": roadmap_refs,
+		"explain_tags": explain_tags,
+		"raw_value": float(note.get("importance", 0.0)),
+		"importance": float(note.get("importance", 0.0)),
+		"direction": tone,
+		"tone": tone,
+		"source_quality": disclosure_quality,
+		"vocabulary_tags": _statement_capture_tags("notes", str(metric_ids[0]) if not metric_ids.is_empty() else "", explain_tags)
+	}
+	return _financial_statement_apply_filing_capture_metadata(
+		payload,
+		"note_section",
+		_financial_statement_note_section_id(note),
+		_financial_statement_note_section_label(note),
+		note_id if not note_id.is_empty() else title_text,
+		title_text,
+		summary_text
+	)
+
+func _financial_statement_note_paragraph_capture_payload(
+	note: Dictionary,
+	paragraph: Dictionary,
+	period_label: String,
+	fallback_index: int
+) -> Dictionary:
+	var payload: Dictionary = _financial_statement_note_capture_payload(note, period_label)
+	if payload.is_empty():
+		return {}
+	var paragraph_text: String = str(paragraph.get("text", "")).strip_edges()
+	if paragraph_text.is_empty():
+		return {}
+	var paragraph_index: int = int(paragraph.get("paragraph_index", fallback_index))
+	var note_number: int = int(note.get("note_number", 0))
+	payload["label"] = "Note %d paragraph %d" % [note_number, paragraph_index] if note_number > 0 else "%s paragraph %d" % [_statement_note_title(note), paragraph_index]
+	payload["value"] = paragraph_text
+	payload["detail"] = "Paragraph %d from %s (%s)." % [
+		paragraph_index,
+		_statement_note_title(note),
+		str(period_label).strip_edges() if not str(period_label).strip_edges().is_empty() else "latest"
+	]
+	payload["source_id"] = "%s_paragraph_%02d" % [str(payload.get("source_id", "financial_statement_note")), paragraph_index]
+	payload["capture_level"] = "note_paragraph"
+	payload["note_paragraph_id"] = str(paragraph.get("paragraph_id", "")).strip_edges()
+	payload["note_paragraph_index"] = str(paragraph_index)
+	payload["note_paragraph_role"] = str(paragraph.get("paragraph_role", "")).strip_edges()
+	payload["note_paragraph_text"] = paragraph_text
+	payload["statement_section_label"] = "Notes to the Consolidated Financial Statements"
+	for text_key_value in [
+		"surface_id",
+		"story_id",
+		"disclosure_packet_id",
+		"disclosure_placement_id",
+		"disclosure_section_id",
+		"disclosure_section_label",
+		"disclosure_subtlety",
+		"disclosure_reader_effort",
+		"disclosure_evidence_density",
+		"disclosure_fragment_role",
+		"disclosure_packet_role"
+	]:
+		var text_key: String = str(text_key_value)
+		if paragraph.has(text_key):
+			payload[text_key] = str(paragraph.get(text_key, "")).strip_edges()
+	for array_key_value in [
+		"metric_ids",
+		"effect_ids",
+		"clue_ids",
+		"fact_ids",
+		"source_story_ids",
+		"source_effect_ids",
+		"source_disclosure_packet_ids",
+		"source_disclosure_placement_ids",
+		"source_disclosure_section_ids",
+		"source_story_note_fact_ids",
+		"disclosure_packet_refs"
+	]:
+		var array_key: String = str(array_key_value)
+		var paragraph_array: Array = _array_from_value(paragraph.get(array_key, []))
+		if not paragraph_array.is_empty():
+			payload[array_key] = paragraph_array
+	if _string_array_from_value(payload.get("source_story_ids", [])).size() > 0:
+		payload["story_id"] = str(_string_array_from_value(payload.get("source_story_ids", [])).front())
+	if _string_array_from_value(payload.get("metric_ids", [])).size() > 0:
+		payload["metric_id"] = str(_string_array_from_value(payload.get("metric_ids", [])).front())
+	if _string_array_from_value(payload.get("effect_ids", [])).size() > 0:
+		payload["effect_id"] = str(_string_array_from_value(payload.get("effect_ids", [])).front())
+	if _string_array_from_value(payload.get("clue_ids", [])).size() > 0:
+		payload["clue_id"] = str(_string_array_from_value(payload.get("clue_ids", [])).front())
+	if _string_array_from_value(payload.get("fact_ids", [])).size() > 0:
+		payload["fact_id"] = str(_string_array_from_value(payload.get("fact_ids", [])).front())
+	return _financial_statement_apply_filing_capture_metadata(
+		payload,
+		_financial_statement_note_capture_type("note_paragraph", note),
+		_financial_statement_note_section_id(note),
+		_financial_statement_note_section_label(note),
+		str(paragraph.get("paragraph_id", "")).strip_edges() if not str(paragraph.get("paragraph_id", "")).strip_edges().is_empty() else "paragraph_%02d" % paragraph_index,
+		str(payload.get("label", "")),
+		paragraph_text
+	)
+
+func _financial_statement_cross_reference_capture_payload(
+	note: Dictionary,
+	ref: Dictionary,
+	period_label: String,
+	fallback_index: int
+) -> Dictionary:
+	var payload: Dictionary = _financial_statement_note_capture_payload(note, period_label)
+	if payload.is_empty():
+		return {}
+	var display_text: String = str(ref.get("display_text", "")).strip_edges()
+	if display_text.is_empty():
+		display_text = "See Note %d - %s." % [
+			int(ref.get("target_note_number", 0)),
+			str(ref.get("target_title", ref.get("target_note_type", ""))).strip_edges()
+		]
+	if display_text.strip_edges().is_empty():
+		return {}
+	var reference_index: int = max(fallback_index, 1)
+	payload["label"] = "Note %d cross-reference %d" % [int(note.get("note_number", 0)), reference_index]
+	payload["value"] = display_text
+	payload["detail"] = str(ref.get("reason", "related annual report disclosure")).strip_edges()
+	payload["source_id"] = "%s_cross_reference_%02d" % [str(payload.get("source_id", "financial_statement_note")), reference_index]
+	payload["capture_level"] = "cross_note_reference"
+	payload["cross_reference_target_note_type"] = str(ref.get("target_note_type", "")).strip_edges()
+	payload["cross_reference_target_note_number"] = str(ref.get("target_note_number", "")).strip_edges()
+	payload["cross_reference_target_title"] = str(ref.get("target_title", "")).strip_edges()
+	payload["cross_reference_reason"] = str(ref.get("reason", "")).strip_edges()
+	payload["cross_reference_display_text"] = display_text
+	payload["statement_section_label"] = "Notes to the Consolidated Financial Statements"
+	return _financial_statement_apply_filing_capture_metadata(
+		payload,
+		"cross_reference",
+		_financial_statement_note_section_id(note),
+		_financial_statement_note_section_label(note),
+		"cross_reference_%02d" % reference_index,
+		str(payload.get("label", "")),
+		display_text
+	)
+
+func _financial_statement_note_table_row_capture_payload(
+	note: Dictionary,
+	table: Dictionary,
+	row_data: Dictionary,
+	period_label: String,
+	fallback_index: int
+) -> Dictionary:
+	var payload: Dictionary = _financial_statement_note_capture_payload(note, period_label)
+	if payload.is_empty():
+		return {}
+	var table_title: String = str(table.get("title", "Selected amounts")).strip_edges()
+	if table_title.is_empty():
+		table_title = "Selected amounts"
+	var caption_text: String = str(row_data.get("caption", "")).strip_edges()
+	var value_text: String = str(row_data.get("fy_value", "")).strip_edges()
+	var related_note: String = str(row_data.get("related_note", "")).strip_edges()
+	if caption_text.is_empty() and value_text.is_empty():
+		return {}
+	var table_id: String = str(table.get("table_id", table.get("id", ""))).strip_edges()
+	if table_id.is_empty():
+		table_id = _node_token(table_title)
+	var row_id: String = str(row_data.get("row_id", row_data.get("id", ""))).strip_edges()
+	if row_id.is_empty():
+		row_id = "row_%02d" % max(fallback_index, 1)
+	var resolved_period: String = period_label.strip_edges()
+	if resolved_period.is_empty():
+		resolved_period = "latest"
+	var display_parts: Array = [caption_text]
+	if not value_text.is_empty():
+		display_parts.append(value_text)
+	if not related_note.is_empty():
+		display_parts.append(related_note)
+	var visible_text: String = " | ".join(display_parts)
+	payload["label"] = caption_text if not caption_text.is_empty() else table_title
+	payload["value"] = value_text
+	payload["detail"] = "%s row from %s (%s)." % [caption_text if not caption_text.is_empty() else "Table", table_title, resolved_period]
+	payload["source_id"] = "%s_table_%s_row_%s" % [
+		str(payload.get("source_id", "financial_statement_note")),
+		_node_token(table_id),
+		_node_token(row_id)
+	]
+	payload["capture_level"] = _financial_statement_note_capture_type("note_table_row", note)
+	payload["statement_section_label"] = "Notes to the Consolidated Financial Statements"
+	payload["filing_table_id"] = table_id
+	payload["filing_table_title"] = table_title
+	payload["filing_table_row_id"] = row_id
+	payload["filing_table_row_caption"] = caption_text
+	payload["filing_table_row_value"] = value_text
+	payload["filing_table_reference"] = related_note
+	payload["source_excerpt"] = visible_text
+	return _financial_statement_apply_filing_capture_metadata(
+		payload,
+		str(payload.get("capture_level", "note_table_row")),
+		_financial_statement_note_section_id(note),
+		_financial_statement_note_section_label(note),
+		"%s:%s" % [table_id, row_id],
+		str(payload.get("label", "")),
+		visible_text
+	)
+
+func _financial_statement_apply_filing_capture_metadata(
+	payload: Dictionary,
+	capture_type: String,
+	section_id: String,
+	section_label: String,
+	excerpt_id: String,
+	visible_label: String,
+	visible_text: String
+) -> Dictionary:
+	if payload.is_empty():
+		return payload
+	var resolved_capture_type: String = capture_type.strip_edges()
+	if resolved_capture_type.is_empty():
+		resolved_capture_type = "filing_excerpt"
+	var resolved_section_id: String = section_id.strip_edges()
+	if resolved_section_id.is_empty():
+		resolved_section_id = str(payload.get("statement_section", "annual_filing")).strip_edges()
+	var resolved_section_label: String = section_label.strip_edges()
+	if resolved_section_label.is_empty():
+		resolved_section_label = str(payload.get("statement_section_label", "Annual Filing")).strip_edges()
+	var resolved_excerpt_id: String = excerpt_id.strip_edges()
+	if resolved_excerpt_id.is_empty():
+		resolved_excerpt_id = str(payload.get("source_id", "")).strip_edges()
+	var resolved_label: String = visible_label.strip_edges()
+	if resolved_label.is_empty():
+		resolved_label = str(payload.get("label", "")).strip_edges()
+	var resolved_text: String = visible_text.strip_edges()
+	if resolved_text.is_empty():
+		resolved_text = str(payload.get("detail", "")).strip_edges()
+	payload["source_label"] = "Annual Filing"
+	payload["filing_capture_type"] = resolved_capture_type
+	payload["filing_excerpt_type"] = resolved_capture_type
+	payload["filing_section_id"] = resolved_section_id
+	payload["filing_section_label"] = resolved_section_label
+	payload["filing_excerpt_id"] = resolved_excerpt_id
+	payload["filing_visible_label"] = resolved_label
+	payload["filing_visible_text"] = resolved_text
+	payload["provenance_group"] = str(payload.get("provenance_group", "filing")).strip_edges()
+	if str(payload.get("provenance_group", "")).is_empty():
+		payload["provenance_group"] = "filing"
+	if str(payload.get("provenance_label", "")).strip_edges().is_empty():
+		payload["provenance_label"] = "Annual Filing"
+	if str(payload.get("provenance_surface", "")).strip_edges().is_empty():
+		payload["provenance_surface"] = "annual_filing_reader"
+	if str(payload.get("provenance_origin", "")).strip_edges().is_empty():
+		payload["provenance_origin"] = "visible_filing_document"
+	payload["generated_content_surface"] = bool(payload.get("generated_content_surface", true))
+	if str(payload.get("generated_surface_id", "")).strip_edges().is_empty():
+		var surface_id: String = str(payload.get("surface_id", "")).strip_edges()
+		payload["generated_surface_id"] = surface_id if not surface_id.is_empty() else "annual_filing_reader"
+	if str(payload.get("surface_id", "")).strip_edges().is_empty():
+		payload["surface_id"] = str(payload.get("generated_surface_id", "annual_filing_reader")).strip_edges()
+	if str(payload.get("source_system_id", "")).strip_edges().is_empty():
+		payload["source_system_id"] = "annual_filing_document"
+	var source_story_note_fact_ids: Array = _string_array_from_value(payload.get("source_story_note_fact_ids", []))
+	if not source_story_note_fact_ids.is_empty() and str(payload.get("story_note_fact_id", "")).strip_edges().is_empty():
+		payload["story_note_fact_id"] = str(source_story_note_fact_ids.front())
+	if _string_array_from_value(payload.get("source_fact_ids", [])).is_empty():
+		var fact_ids: Array = _string_array_from_value(payload.get("fact_ids", []))
+		if not fact_ids.is_empty():
+			payload["source_fact_ids"] = fact_ids
+	if _string_array_from_value(payload.get("source_clue_ids", [])).is_empty():
+		var clue_ids: Array = _string_array_from_value(payload.get("clue_ids", []))
+		if not clue_ids.is_empty():
+			payload["source_clue_ids"] = clue_ids
+	if resolved_text.is_empty():
+		payload.erase("source_excerpt")
+	else:
+		payload["source_excerpt"] = resolved_text
+	return payload
+
+func _financial_statement_note_capture_type(base_type: String, note: Dictionary) -> String:
+	var note_type: String = str(note.get("note_type", "")).strip_edges().to_lower()
+	var note_title: String = _statement_note_title(note).to_lower()
+	var combined: String = "%s %s" % [note_type, note_title]
+	if base_type == "note_table_row" and combined.find("segment") != -1:
+		return "segment_row"
+	if base_type == "note_paragraph" and combined.find("auditor") != -1:
+		return "auditor_key_matter_paragraph"
+	if base_type == "note_paragraph" and (combined.find("subsequent") != -1 or combined.find("after reporting") != -1):
+		return "subsequent_event_paragraph"
+	if base_type == "note_paragraph" and combined.find("segment") != -1:
+		return "segment_paragraph"
+	return base_type
+
+func _financial_statement_note_section_id(note: Dictionary) -> String:
+	var note_type: String = str(note.get("note_type", "")).strip_edges()
+	if not note_type.is_empty():
+		return note_type
+	var section: String = str(note.get("statement_section", "")).strip_edges()
+	return section if not section.is_empty() else "notes"
+
+func _financial_statement_note_section_label(note: Dictionary) -> String:
+	var title: String = _statement_note_title(note).strip_edges()
+	if not title.is_empty():
+		return title
+	return str(note.get("statement_section_label", "Notes to the Consolidated Financial Statements")).strip_edges()
+
+func _selected_statement_period_for_capture() -> Dictionary:
+	if (
+		financial_statement_report_overlay != null and
+		financial_statement_report_overlay.visible and
+		not financial_statement_report_context.is_empty()
+	):
+		return financial_statement_report_context.duplicate(true)
+	var financial_statement_snapshot: Dictionary = current_trade_snapshot.get("financial_statement_snapshot", {})
+	if financial_statement_snapshot.is_empty():
+		return {}
+	return _selected_statement_period(financial_statement_snapshot)
+
+func _statement_capture_tags(section_id: String, metric_id: String, extra_tags: Array) -> Array:
+	var tags: Array = ["financial_statement", "filing"]
+	var clean_section: String = section_id.strip_edges()
+	if not clean_section.is_empty():
+		tags.append(clean_section)
+	var clean_metric: String = metric_id.strip_edges()
+	if not clean_metric.is_empty():
+		tags.append(clean_metric)
+	for tag_value in extra_tags:
+		var tag: String = str(tag_value).strip_edges()
+		if not tag.is_empty() and not tags.has(tag):
+			tags.append(tag)
+	return tags
+
+func _statement_note_rows_for_display(notes: Array) -> Array:
+	var rows: Array = []
+	for note_value in notes:
+		if typeof(note_value) != TYPE_DICTIONARY:
+			continue
+		var note: Dictionary = note_value
+		if str(note.get("summary", "")).strip_edges().is_empty():
+			continue
+		rows.append(note.duplicate(true))
+	rows.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		var left_importance: float = float(left.get("importance", 0.0))
+		var right_importance: float = float(right.get("importance", 0.0))
+		if not is_equal_approx(left_importance, right_importance):
+			return left_importance > right_importance
+		return str(left.get("note_id", "")) < str(right.get("note_id", ""))
+	)
+	return rows
+
+func _statement_note_title(note: Dictionary) -> String:
+	var title: String = str(note.get("title", "")).strip_edges()
+	if not title.is_empty():
+		return title
+	var note_type: String = str(note.get("note_type", "statement_note")).strip_edges()
+	if note_type.is_empty():
+		note_type = "statement_note"
+	return note_type.replace("_", " ").capitalize()
+
+func _statement_note_quality_label(note: Dictionary) -> String:
+	var quality: String = str(note.get("disclosure_quality", "partial")).strip_edges()
+	var detail_level: String = str(note.get("detail_level", "")).strip_edges()
+	if detail_level.is_empty() or detail_level == "public":
+		return quality.capitalize()
+	return "%s / %s" % [quality.capitalize(), detail_level.capitalize()]
+
+func _statement_note_meta_text(note: Dictionary) -> String:
+	var parts: Array = []
+	var metric_ids: Array = _string_array_from_value(note.get("metric_ids", []))
+	if not metric_ids.is_empty():
+		var metric_labels: Array = []
+		for metric_id in metric_ids.slice(0, 4):
+			metric_labels.append(str(metric_id).replace("_", " ").capitalize())
+		parts.append("Metrics: %s" % ", ".join(metric_labels))
+	var tone: String = str(note.get("tone", "")).strip_edges()
+	if not tone.is_empty():
+		parts.append("Tone: %s" % tone.capitalize())
+	var importance: float = float(note.get("importance", 0.0))
+	if importance > 0.0:
+		parts.append("Weight: %.2f" % importance)
+	return "  |  ".join(parts)
+
+func _statement_note_tone_color(note: Dictionary) -> Color:
+	if bool(note.get("contradiction", false)):
+		return COLOR_STOCKBOT_BEAR
+	match str(note.get("disclosure_quality", "")).strip_edges():
+		"clear":
+			return COLOR_STOCKBOT_BULL
+		"weak":
+			return COLOR_STOCKBOT_AMBER
+		"contradictory":
+			return COLOR_STOCKBOT_BEAR
+		_:
+			return COLOR_STOCKBOT_BLUE
 
 func _on_financial_statement_row_gui_input(event: InputEvent, capture_payload: Dictionary) -> void:
 	if not (event is InputEventMouseButton):
@@ -5346,9 +7784,19 @@ func _on_financial_statement_capture_menu_id_pressed(id: int) -> void:
 func _format_statement_value(line_item: Dictionary) -> String:
 	var line_format: String = str(line_item.get("format", "currency"))
 	var value: float = float(line_item.get("value", 0.0))
-	if line_format == "shares":
-		return _format_grouped_integer(int(round(value)))
-	return _format_compact_currency(value)
+	match line_format:
+		"shares":
+			return _format_grouped_integer(int(round(value)))
+		"number":
+			return _format_decimal(value, 2, true)
+		"integer", "count":
+			return _format_grouped_integer(int(round(value)))
+		"percent", "percentage":
+			return _format_percent_value(value)
+		"ratio", "multiple":
+			return _format_multiple(value)
+		_:
+			return _format_compact_currency(value)
 
 func _sync_dynamic_refs_from_root() -> void:
 	if _root == null:
@@ -5776,6 +8224,22 @@ func _network_state_for_contact(network_snapshot: Dictionary, contact_id: String
 
 func _node_token(value: String) -> String:
 	return str(_call_root("_node_token", [value]))
+
+
+func _array_from_value(value: Variant) -> Array:
+	if typeof(value) == TYPE_ARRAY:
+		return value.duplicate(true)
+	return []
+
+
+func _string_array_from_value(value: Variant) -> Array:
+	var result: Array = []
+	for item_value in _array_from_value(value):
+		var text: String = str(item_value).strip_edges()
+		if not text.is_empty() and not result.has(text):
+			result.append(text)
+	result.sort()
+	return result
 
 
 func _clear_dynamic_rows(container: VBoxContainer, preserved_node: Node) -> void:

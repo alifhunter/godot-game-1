@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/CommodityMacroEvidenceContractTest.gd" id="1_commodity_macro_evidence_contract"]
+
+[node name="CommodityMacroEvidenceContractTest" type="Node"]
+script = ExtResource("1_commodity_macro_evidence_contract")

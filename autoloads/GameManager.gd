@@ -3,6 +3,7 @@ extends Node
 signal day_started(day_index)
 signal price_formed(day_index)
 signal portfolio_changed
+signal advance_day_portfolio_valued
 signal watchlist_changed
 signal network_changed
 signal social_changed
@@ -26,6 +27,7 @@ const MAIN_MENU_SCENE := "res://scenes/main_menu/MainMenu.tscn"
 const GAME_SCENE := "res://scenes/game/GameRoot.tscn"
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
 const STABLE_RNG = preload("res://systems/StableRng.gd")
+const BANK_LOAN_SYSTEM = preload("res://systems/BankLoanSystem.gd")
 const DEFAULT_DIFFICULTY_ID := "normal"
 const STARTING_CASH := 100000000.0
 const CONSOLE_CASH_GRANT_AMOUNT := 999999999999.0
@@ -690,6 +692,7 @@ const DIFFICULTY_PRESETS := {
 		"label": "Chill",
 		"starting_cash": 1000000000.0,
 		"company_count": 20,
+		"use_company_universe_catalog": true,
 		"market_swing_range": 0.02,
 		"volatility_multiplier": 0.75,
 		"event_interval_days": 14.0,
@@ -704,6 +707,7 @@ const DIFFICULTY_PRESETS := {
 		"label": "Normal",
 		"starting_cash": 100000000.0,
 		"company_count": 30,
+		"use_company_universe_catalog": true,
 		"market_swing_range": 0.035,
 		"volatility_multiplier": 1.0,
 		"event_interval_days": 10.0,
@@ -718,6 +722,7 @@ const DIFFICULTY_PRESETS := {
 		"label": "Grind",
 		"starting_cash": 10000000.0,
 		"company_count": 50,
+		"use_company_universe_catalog": true,
 		"market_swing_range": 0.055,
 		"volatility_multiplier": 1.35,
 		"event_interval_days": 7.0,
@@ -735,6 +740,7 @@ var broker_flow_system = preload("res://systems/BrokerFlowSystem.gd").new()
 var trading_calendar = preload("res://systems/TradingCalendar.gd").new()
 var company_roster_generator = preload("res://systems/CompanyRosterGenerator.gd").new()
 var macro_state_system = preload("res://systems/MacroStateSystem.gd").new()
+var commodity_macro_contract = preload("res://systems/CommodityMacroContract.gd").new()
 var chart_system = preload("res://systems/ChartSystem.gd").new()
 var chart_pattern_system = preload("res://systems/ChartPatternSystem.gd").new()
 var news_feed_system = preload("res://systems/NewsFeedSystem.gd").new()
@@ -1020,6 +1026,9 @@ func _advance_phase_apply_life(log_advance_perf: bool, previous_trade_date: Dict
 	var life_loan_payment_result: Dictionary = LifeManager.apply_life_loan_payment_if_due(previous_trade_date, RunState.current_trade_date)
 	_log_advance_perf_elapsed(log_advance_perf, "apply_life_loan_payment", phase_started_at_usec, " amount=%.2f" % float(life_loan_payment_result.get("amount", 0.0)))
 	phase_started_at_usec = Time.get_ticks_usec()
+	var life_bank_loan_payment_result: Dictionary = LifeManager.apply_bank_loan_payment_if_due(previous_trade_date, RunState.current_trade_date)
+	_log_advance_perf_elapsed(log_advance_perf, "apply_bank_loan_payment", phase_started_at_usec, " amount=%.2f" % float(life_bank_loan_payment_result.get("amount", 0.0)))
+	phase_started_at_usec = Time.get_ticks_usec()
 	var life_legal_result: Dictionary = LifeManager.apply_life_legal_state_update()
 	_log_advance_perf_elapsed(log_advance_perf, "apply_life_legal", phase_started_at_usec, " remaining=%d" % int(life_legal_result.get("days_remaining", 0)))
 	phase_started_at_usec = Time.get_ticks_usec()
@@ -1028,6 +1037,7 @@ func _advance_phase_apply_life(log_advance_perf: bool, previous_trade_date: Dict
 	return {
 		"obligation": life_obligation_result,
 		"loan_payment": life_loan_payment_result,
+		"bank_loan_payment": life_bank_loan_payment_result,
 		"legal": life_legal_result,
 		"wellbeing": life_wellbeing_result
 	}
@@ -1102,7 +1112,7 @@ func _advance_phase_emit_market_signals(log_advance_perf: bool, emit_runtime_sig
 		phase_started_at_usec = Time.get_ticks_usec()
 		daily_actions_changed.emit()
 		_log_advance_perf_elapsed(log_advance_perf, "emit_daily_actions_changed", phase_started_at_usec)
-		if not life_results.get("obligation", {}).is_empty() or not life_results.get("loan_payment", {}).is_empty() or not life_results.get("legal", {}).is_empty() or not life_results.get("wellbeing", {}).is_empty() or not life_development_results.is_empty() or _dirty_tip_results_include_legal(dirty_tip_results):
+		if not life_results.get("obligation", {}).is_empty() or not life_results.get("loan_payment", {}).is_empty() or not life_results.get("bank_loan_payment", {}).is_empty() or not life_results.get("legal", {}).is_empty() or not life_results.get("wellbeing", {}).is_empty() or not life_development_results.is_empty() or _dirty_tip_results_include_legal(dirty_tip_results):
 			phase_started_at_usec = Time.get_ticks_usec()
 			life_changed.emit()
 			_log_advance_perf_elapsed(log_advance_perf, "emit_life_changed", phase_started_at_usec)
@@ -1145,8 +1155,8 @@ func _advance_phase_save_and_announce(log_advance_perf: bool, save_after: bool, 
 		summary_ready.emit(summary)
 		_log_advance_perf_elapsed(log_advance_perf, "emit_summary_ready", phase_started_at_usec)
 		phase_started_at_usec = Time.get_ticks_usec()
-		portfolio_changed.emit()
-		_log_advance_perf_elapsed(log_advance_perf, "emit_portfolio_changed", phase_started_at_usec)
+		advance_day_portfolio_valued.emit()
+		_log_advance_perf_elapsed(log_advance_perf, "emit_advance_day_portfolio_valued", phase_started_at_usec)
 
 
 func _dirty_tip_results_include_legal(results: Array) -> bool:
@@ -2366,7 +2376,7 @@ func debug_schedule_next_day_stock_dividend(company_id: String) -> Dictionary:
 
 
 func get_unlocked_news_intel_level() -> int:
-	return _content_level_for_upgrade("news_content")
+	return 1
 
 
 func get_unlocked_twooter_access_tier() -> int:
@@ -3445,7 +3455,10 @@ func get_company_broker_flow_snapshot(company_id: String, range_id: String = "1d
 			var cached_snapshot: Dictionary = cached_snapshot_value
 			if not cached_snapshot.is_empty():
 				return cached_snapshot.duplicate(true)
-		var range_snapshot: Dictionary = _aggregate_compact_broker_flow_range(selected_compact_rows, range_definition)
+		var range_snapshot: Dictionary = _aggregate_compact_broker_flow_range(
+			RunState.broker_history_v2_entries_to_range_rows(selected_compact_rows),
+			range_definition
+		)
 		if not range_snapshot.is_empty():
 			broker_range_snapshot_cache[cache_key] = range_snapshot.duplicate(true)
 		return range_snapshot
@@ -4164,7 +4177,18 @@ func get_finance_status_snapshot() -> Dictionary:
 			"payments_remaining": int(active_loan.get("payments_remaining", 0)),
 			"covered": cash + 0.0001 >= float(active_loan.get("monthly_payment", 0.0))
 		}
-	return {
+	var active_bank_loan: Dictionary = finance.get("active_bank_loan", {})
+	var bank_next_payment: Dictionary = {}
+	if not active_bank_loan.is_empty():
+		bank_next_payment = {
+			"amount": float(active_bank_loan.get("monthly_payment", 0.0)),
+			"payments_remaining": int(active_bank_loan.get("payments_remaining", 0)),
+			"covered": cash + 0.0001 >= float(active_bank_loan.get("monthly_payment", 0.0)),
+			"lender_id": str(active_bank_loan.get("lender_id", "")),
+			"lender_ticker": str(active_bank_loan.get("lender_ticker", ""))
+		}
+	var total_required_loan_reserve: float = RunState.required_loan_payment_reserve(finance)
+	var finance_status: Dictionary = {
 		"cash": cash,
 		"equity": equity,
 		"monthly_outflow": monthly_outflow,
@@ -4176,8 +4200,13 @@ func get_finance_status_snapshot() -> Dictionary:
 		"bankrupt": bool(finance.get("bankrupt", false)),
 		"bankruptcy": finance.get("bankruptcy", {}).duplicate(true),
 		"active_loan": active_loan.duplicate(true),
+		"active_bank_loan": active_bank_loan.duplicate(true),
 		"loan_next_payment": next_payment,
+		"bank_loan_next_payment": bank_next_payment,
 		"loan_payment_risky": not active_loan.is_empty() and cash < float(active_loan.get("monthly_payment", 0.0)) - 0.0001,
+		"bank_loan_payment_risky": not active_bank_loan.is_empty() and cash < float(active_bank_loan.get("monthly_payment", 0.0)) - 0.0001,
+		"total_required_loan_reserve": total_required_loan_reserve,
+		"total_loan_payment_risky": total_required_loan_reserve > 0.0 and cash < total_required_loan_reserve - 0.0001,
 		"loan_eligible": loan_eligible,
 		"loan_eligibility_reason": loan_reason,
 		"proposed_loan_amount": proposed_loan_amount if loan_eligible else 0.0,
@@ -4186,6 +4215,26 @@ func get_finance_status_snapshot() -> Dictionary:
 		"loan_repayment_multiplier": LIFE_EMERGENCY_LOAN_REPAYMENT_MULTIPLIER,
 		"sellable_holdings_value": _estimate_sellable_holdings_value()
 	}
+	finance_status["bank_loan_offers"] = get_bank_loan_offers(finance_status)
+	return finance_status
+
+
+func get_bank_loan_offers(finance_status: Dictionary = {}) -> Array:
+	if not RunState.has_active_run():
+		return []
+	var source_finance_status: Dictionary = finance_status
+	if source_finance_status.is_empty():
+		source_finance_status = get_finance_status_snapshot()
+	var run_context: Dictionary = RunState.get_difficulty_config()
+	run_context["run_seed"] = RunState.run_seed
+	run_context["difficulty_id"] = str(run_context.get("id", RunState.difficulty_id))
+	run_context["equity"] = float(source_finance_status.get("equity", 0.0))
+	run_context["monthly_outflow"] = float(source_finance_status.get("monthly_outflow", 0.0))
+	return BANK_LOAN_SYSTEM.build_lender_offers(
+		RunState.get_effective_company_definitions(),
+		run_context,
+		source_finance_status
+	)
 
 
 func get_life_action_block_reason(action_id: String) -> String:
@@ -4200,12 +4249,12 @@ func get_cash_stress_block_reason(action_id: String) -> String:
 		return "Bankruptcy has disabled this action."
 	var normalized_action: String = action_id.to_lower()
 	var cash: float = float(finance_status.get("cash", 0.0))
-	var active_loan: Dictionary = finance_status.get("active_loan", {})
+	var required_loan_reserve: float = float(finance_status.get("total_required_loan_reserve", 0.0))
 	if normalized_action in ["buy", "upgrade"]:
 		if cash < 0.0:
 			return "Cash is negative. Sell holdings, lower Life costs, or use Life > Finance before spending."
-		if not active_loan.is_empty() and bool(finance_status.get("loan_payment_risky", false)):
-			return "Emergency loan payment reserve is not covered. Keep cash above %s before spending." % _format_currency(float(active_loan.get("monthly_payment", 0.0)))
+		if required_loan_reserve > 0.0 and bool(finance_status.get("total_loan_payment_risky", false)):
+			return "Combined loan payment reserve is not covered. Keep cash above %s before spending." % _format_currency(required_loan_reserve)
 	if normalized_action == "advance_day":
 		if cash >= 0.0:
 			return ""
@@ -4276,6 +4325,65 @@ func take_emergency_loan() -> Dictionary:
 	return result
 
 
+func take_bank_loan(offer_id: String, principal: float) -> Dictionary:
+	var block_reason: String = get_life_action_block_reason("life_finance")
+	if not block_reason.is_empty():
+		return {"success": false, "message": block_reason}
+	var normalized_offer_id: String = offer_id.strip_edges()
+	if normalized_offer_id.is_empty():
+		return {"success": false, "message": "Select a bank lender first."}
+	var finance_status: Dictionary = get_finance_status_snapshot()
+	var offer: Dictionary = _find_bank_loan_offer(finance_status.get("bank_loan_offers", []), normalized_offer_id)
+	if offer.is_empty():
+		return {"success": false, "message": "Selected bank loan offer is no longer available."}
+	var selected_amount: float = _normalize_bank_loan_principal(principal, offer)
+	if selected_amount <= 0.0:
+		return {"success": false, "message": "Bank loan amount must be positive."}
+	var min_principal: float = float(offer.get("min_principal", 0.0))
+	var max_principal: float = float(offer.get("max_principal", 0.0))
+	if selected_amount + 0.0001 < min_principal:
+		return {"success": false, "message": "Bank loan amount is below the selected offer minimum."}
+	if max_principal > 0.0 and selected_amount > max_principal + 0.0001:
+		return {"success": false, "message": "Bank loan amount exceeds the selected offer maximum."}
+
+	var payment_count: int = max(int(offer.get("payment_count", 1)), 1)
+	var repayment_multiplier: float = max(float(offer.get("repayment_multiplier", 1.0)), 1.0)
+	var detail: Dictionary = offer.duplicate(true)
+	detail["total_repayment"] = selected_amount * repayment_multiplier
+	detail["monthly_payment"] = float(detail["total_repayment"]) / float(payment_count)
+	var result: Dictionary = RunState.apply_bank_loan_proceeds(normalized_offer_id, selected_amount, detail)
+	if bool(result.get("success", false)):
+		_request_autosave("life_bank_loan")
+		life_changed.emit()
+		portfolio_changed.emit()
+	return result
+
+
+func _find_bank_loan_offer(offers: Array, offer_id: String) -> Dictionary:
+	var normalized_offer_id: String = offer_id.strip_edges()
+	for offer_value in offers:
+		if typeof(offer_value) != TYPE_DICTIONARY:
+			continue
+		var offer: Dictionary = offer_value
+		if str(offer.get("offer_id", "")) == normalized_offer_id:
+			return offer
+	return {}
+
+
+func _normalize_bank_loan_principal(principal: float, offer: Dictionary) -> float:
+	var step_size: float = max(float(offer.get("step_size", 1.0)), 1.0)
+	var min_principal: float = max(float(offer.get("min_principal", 0.0)), 0.0)
+	var max_principal: float = max(float(offer.get("max_principal", 0.0)), 0.0)
+	var selected_amount: float = max(principal, 0.0)
+	if step_size > 0.0:
+		selected_amount = min_principal + round((selected_amount - min_principal) / step_size) * step_size
+	if max_principal > 0.0:
+		selected_amount = clamp(selected_amount, min_principal, max_principal)
+	else:
+		selected_amount = max(selected_amount, min_principal)
+	return selected_amount
+
+
 func get_life_snapshot() -> Dictionary:
 	return LifeManager.get_life_snapshot(self)
 
@@ -4293,10 +4401,18 @@ func _build_daily_recap_life_snapshot(portfolio_totals: Dictionary) -> Dictionar
 		runway_months = cash / monthly_outflow
 	var finance_status: Dictionary = RunState.refresh_cash_stress_state()
 	var active_loan: Dictionary = finance_status.get("active_loan", {})
+	var active_bank_loan: Dictionary = finance_status.get("active_bank_loan", {})
+	var total_required_loan_reserve: float = RunState.required_loan_payment_reserve(finance_status)
 	finance_status["loan_payment_risky"] = (
 		not active_loan.is_empty() and
 		cash < float(active_loan.get("monthly_payment", 0.0)) - 0.0001
 	)
+	finance_status["bank_loan_payment_risky"] = (
+		not active_bank_loan.is_empty() and
+		cash < float(active_bank_loan.get("monthly_payment", 0.0)) - 0.0001
+	)
+	finance_status["total_required_loan_reserve"] = total_required_loan_reserve
+	finance_status["total_loan_payment_risky"] = total_required_loan_reserve > 0.0 and cash < total_required_loan_reserve - 0.0001
 	return {
 		"cash": cash,
 		"equity": equity,
@@ -6160,6 +6276,10 @@ func _build_life_development_news_article(outlet_id: String, outlet_label: Strin
 		"outlet_id": outlet_id,
 		"outlet_label": outlet_label,
 		"intel_level": intel_level,
+		"public_depth_level": 1,
+		"access_model": "free_topic_coverage",
+		"coverage_type": str(source_article.get("coverage_type", "market_wrap_chatter")),
+		"topic_ids": ["market_wrap", "property_development", "sector"],
 		"headline": _life_development_news_headline(intel_level, visible_location_label, visible_theme_label),
 		"deck": _life_development_news_deck(intel_level, visible_location_label, visible_theme_label),
 		"body": _life_development_news_body(source_article, location_id, theme, intel_level, reliability),
@@ -6514,6 +6634,30 @@ func get_thesis_evidence_options(company_id: String) -> Dictionary:
 	return ThesisManager.get_thesis_evidence_options(self, company_id)
 
 
+func get_company_story_dossier_evidence_options(company_id: String) -> Array:
+	return ThesisManager.get_company_story_dossier_evidence_options(self, company_id)
+
+
+func get_commodity_macro_summary(sector_id: String = "") -> Dictionary:
+	return commodity_macro_contract.build_summary(get_current_macro_state(), sector_id)
+
+
+func get_commodity_macro_evidence_options(company_id: String = "", sector_id: String = "") -> Array:
+	var context: Dictionary = {}
+	var normalized_company_id: String = company_id.strip_edges()
+	if not normalized_company_id.is_empty():
+		context = get_company_snapshot(normalized_company_id, true, true, true)
+		var definition: Dictionary = RunState.get_effective_company_definition(normalized_company_id, false, false)
+		context["company_id"] = normalized_company_id
+		if str(context.get("sector_id", "")).strip_edges().is_empty():
+			context["sector_id"] = str(definition.get("sector_id", ""))
+		if typeof(context.get("commodity_exposures", {})) != TYPE_DICTIONARY or context.get("commodity_exposures", {}).is_empty():
+			context["commodity_exposures"] = definition.get("commodity_exposures", {}).duplicate(true)
+	elif not sector_id.strip_edges().is_empty():
+		context["sector_id"] = sector_id.strip_edges()
+	return commodity_macro_contract.build_evidence_rows(get_current_macro_state(), context)
+
+
 func get_chart_pattern_catalog() -> Array:
 	return chart_pattern_system.get_pattern_catalog()
 
@@ -6611,16 +6755,39 @@ func build_company_roster(run_seed: int, selected_difficulty_config: Dictionary)
 	var base_macro_state: Dictionary = macro_state_system.build_year_state(
 		run_seed,
 		2020,
-		DataRepository.get_sector_definitions()
-	)
-	var generated_roster: Array = company_roster_generator.generate_roster(
-		DataRepository.get_company_archetypes(),
 		DataRepository.get_sector_definitions(),
-		DataRepository.get_company_word_data(),
-		run_seed,
-		company_count,
-		base_macro_state
+		{},
+		DataRepository.get_commodity_indicator_catalog()
 	)
+	var generated_roster: Array = []
+	if bool(difficulty_config.get("use_company_universe_catalog", false)):
+		var catalog_validation: Dictionary = DataRepository.get_company_universe_validation_result()
+		if bool(catalog_validation.get("valid", false)):
+			generated_roster = company_roster_generator.generate_catalog_roster(
+				DataRepository.get_company_universe_companies(),
+				DataRepository.get_company_archetypes(),
+				DataRepository.get_sector_definitions(),
+				run_seed,
+				company_count,
+				base_macro_state
+			)
+			if generated_roster.size() != company_count:
+				push_warning("Company universe catalog roster requested %d companies but produced %d; falling back to procedural roster." % [
+					company_count,
+					generated_roster.size()
+				])
+				generated_roster = []
+		else:
+			push_warning("Company universe catalog validation failed; falling back to procedural roster. issues=%s" % JSON.stringify(catalog_validation.get("issues", [])))
+	if generated_roster.is_empty():
+		generated_roster = company_roster_generator.generate_roster(
+			DataRepository.get_company_archetypes(),
+			DataRepository.get_sector_definitions(),
+			DataRepository.get_company_word_data(),
+			run_seed,
+			company_count,
+			base_macro_state
+		)
 	_log_startup_perf_elapsed("build_company_roster", started_at_usec, " companies=%d" % generated_roster.size())
 	return generated_roster
 

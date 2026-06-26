@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/FinancialStatementLayerStoryEffectTest.gd" id="1_financial_statement_layer_story_effect"]
+
+[node name="FinancialStatementLayerStoryEffectTest" type="Node"]
+script = ExtResource("1_financial_statement_layer_story_effect")

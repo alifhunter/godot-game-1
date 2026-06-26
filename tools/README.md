@@ -40,6 +40,7 @@ python3 tools/content_lint_dashboard/server.py --preview-scan --seed 42 --count 
 | Balance/upgrades editor | 8772 | `python3 tools/balance_upgrades_editor/server.py` | `data/upgrades/upgrade_catalog.json` |
 | Event content editor | 8773 | `python3 tools/event_content_editor/server.py` | `data/events/events.json` |
 | Content lint dashboard | 8774 | `python3 tools/content_lint_dashboard/server.py` | Read-only checks and previews |
+| Company universe editor | 8775 | `python3 tools/company_universe_editor/server.py` | `data/companies/company_universe_catalog.json` |
 
 Each editor keeps its editable source next to its server script, for example `tools/news_editor/news_source.json`. Use each editor's `Save Source` action while drafting and `Export Runtime JSON` when the runtime `data/` file should change.
 

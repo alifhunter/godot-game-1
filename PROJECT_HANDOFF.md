@@ -22,19 +22,12 @@ This is the lean re-entry guide. The full historical handoff was archived at
 
 ## Repo State
 
-- Branch: `codex/contact-network-inner-circle-dialogs`
-- Current checked commit at this handoff update: `d7c88c7`
+- Branch: `main`
+- Current checked commit at this handoff update: `2c72419`
 - Remote: `origin https://github.com/alifhunter/godot-game-1.git`
 - Run `git status --short` before editing.
-- The worktree is intentionally dirty from recent development work and the docs-folder move.
+- At this handoff update, recent contact-network, company-generation, and thesis-system work has been pushed to `main`; top-down market implementation work is active and may be uncommitted if this file is being read mid-session.
 - Do not revert user work or broad dirty files unless explicitly asked.
-- Current notable dirty areas:
-  - company generation enhancement Tasks 1-8 are complete but not yet committed
-  - thesis system enhancement Tasks 1-7 are complete but not yet committed
-  - new company-generation tests/builders/utilities are untracked until committed
-  - new thesis content JSON and thesis test scenes/scripts are untracked until committed
-  - contact network / inner-circle dialog work is present on this feature branch
-  - Godot MCP addon/config files may be local/uncommitted
 - Python validator `__pycache__/` folders and local `logs/` output are disposable.
 
 ## Recent Development Docs
@@ -55,6 +48,18 @@ Use these docs instead of expanding this handoff with long progress logs.
   - Completed company-generation maintainability plan: deterministic fingerprint, validation warnings, named tuning constants, generator split, CEO identity continuity, seeded-pool helper, and collision-policy probe.
 - [`docs/development/THESIS_SYSTEM_ENHANCEMENT.md`](docs/development/THESIS_SYSTEM_ENHANCEMENT.md)
   - Completed thesis-system plan: fingerprint probe, typed vocabulary, scoring constants/rebalance, option-builder cleanup, sector/stance guidance, and externalized thesis content catalog.
+- [`docs/development/BANK_LOAN_SYSTEM_ENHANCEMENT.md`](docs/development/BANK_LOAN_SYSTEM_ENHANCEMENT.md)
+  - Completed regular bank-loan plan: current-run bank lender discovery, separate `active_bank_loan` state, monthly payments, reserve gates, Life Finance selector/slider UI, grind tuning, targeted tests, and future hooks.
+- [`docs/development/PERFORMANCE_RECOVERY_ENHANCEMENT.md`](docs/development/PERFORMANCE_RECOVERY_ENHANCEMENT.md)
+  - Completed performance recovery plan: compact broker history, lighter advance-day portfolio refresh, deferred open-app refreshes, post-recap save scheduling, and final perf regression.
+- [`docs/development/top_down_market/TOP_DOWN_MARKET_SYSTEM_ROADMAP.md`](docs/development/top_down_market/TOP_DOWN_MARKET_SYSTEM_ROADMAP.md)
+  - Parent roadmap for the proposed top-down market system: company universe, commodities, price-engine exposure, living arcs, dossiers, financial statements, generated content, relationship graph, and research UI.
+- [`docs/development/top_down_market/TOP_DOWN_RESEARCH_UI_ENHANCEMENT.md`](docs/development/top_down_market/TOP_DOWN_RESEARCH_UI_ENHANCEMENT.md)
+  - Completed top-down research surface integration plan. Revision 1 intentionally hides the company Profile `Top-Down Links` card; research should flow through News, company profile reading, filings, Research Tray, and Thesis.
+- [`docs/development/test_log/2026-06-26_performance_recovery_full_regression.md`](docs/development/test_log/2026-06-26_performance_recovery_full_regression.md)
+  - Latest performance/full-year regression: targeted broker/save/perf tests passed, 70-company full-year scenario averaged `1,033.39ms/day`, quick smoke remains blocked by the known FTUE organic-chain assertion.
+- [`docs/development/test_log/2026-06-22_full_year_player_scenario_catalog_default_rerun_2.md`](docs/development/test_log/2026-06-22_full_year_player_scenario_catalog_default_rerun_2.md)
+  - Prior 225-trading-day full-year player scenario after catalog default enablement: opened game via Godot, bought `SDNX`, created a thesis, attached evidence, advanced a year, and recorded portfolio/market/event/attention/news/performance metrics.
 - [`docs/development/FEATURE_ENHANCEMENT_TEMPLATE.md`](docs/development/FEATURE_ENHANCEMENT_TEMPLATE.md)
   - Template for future feature/enhancement/development plans.
 - [`docs/development/DESIGN_SYSTEM.md`](docs/development/DESIGN_SYSTEM.md)
@@ -90,6 +95,16 @@ Use this as the first file map when the user asks for a specific feature. Start 
 - Static data access: `autoloads/DataRepository.gd`
 - Compatibility rule: preserve saved keys or add migration/default normalizers.
 
+### Performance / Save Regression
+
+- Plan doc: `docs/development/PERFORMANCE_RECOVERY_ENHANCEMENT.md`
+- Latest regression log: `docs/development/test_log/2026-06-26_performance_recovery_full_regression.md`
+- Perf probe: `scripts/tests/NormalPlayPerfTest.gd`, `scenes/tests/NormalPlayPerfTest.tscn`
+- Broker payload tests: `scripts/tests/BrokerHistoryCompactContractTest.gd`, `scripts/tests/BrokerHistoryMigrationTest.gd`, `scripts/tests/BrokerHistoryHotPathPerfTest.gd`, `scripts/tests/BrokerRangeHistoryTest.gd`
+- Main runtime anchors: `autoloads/RunState.gd`, `autoloads/SaveManager.gd`, `scripts/ui/GameRoot.gd`, `autoloads/GameManager.gd`
+- Current baseline: normal-play explicit save flush `12.91ms`; scheduled post-recap save `409.97ms`; 70-company full-year scenario `1,033.39ms/day`.
+- Remaining risk: late-year 70-company normalization still spikes; keep `[perf][apply] normalize_companies` logs visible when investigating hitches.
+
 ### Stockbot / Trading / Market UI
 
 - UI controller: `scripts/ui/controllers/StockController.gd`
@@ -123,6 +138,22 @@ Use this as the first file map when the user asks for a specific feature. Start 
 - UI app: `scripts/ui/controllers/CompanyController.gd`
 - Tests: `scripts/tests/CompanyGenerationFingerprintTest.gd`, `scripts/tests/CompanyGenerationValidationTest.gd`, `scripts/tests/CompanyCeoChangeIdentityTest.gd`, `scripts/tests/CompanyRosterCollisionPolicyTest.gd`, `scripts/tests/CompanyRoadmapSystemTest.gd`
 - Plan doc: `docs/development/COMPANY_GENERATION_ENHANCEMENT.md`
+
+### Top-Down Market Research Roadmap
+
+- Parent roadmap: `docs/development/top_down_market/TOP_DOWN_MARKET_SYSTEM_ROADMAP.md`
+- Company universe plan: `docs/development/top_down_market/COMPANY_UNIVERSE_CATALOG_ENHANCEMENT.md`
+- Commodity macro plan: `docs/development/top_down_market/COMMODITY_MACRO_INDICATORS_ENHANCEMENT.md`
+- Price exposure plan: `docs/development/top_down_market/PRICE_ENGINE_EXPOSURE_INTEGRATION_ENHANCEMENT.md`
+- Living company arcs plan: `docs/development/top_down_market/LIVING_COMPANY_ARC_SYSTEM_ENHANCEMENT.md`
+- Story dossier plan: `docs/development/top_down_market/COMPANY_STORY_DOSSIER_SYSTEM_ENHANCEMENT.md`
+- Financial statement plan: `docs/development/top_down_market/FINANCIAL_STATEMENT_LAYER_ENHANCEMENT.md`
+- Annual filing reading plan: `docs/development/top_down_market/ANNUAL_FILING_READING_EXPERIENCE_ENHANCEMENT.md`
+- Generated content plan: `docs/development/top_down_market/CONTENT_SURFACE_GENERATION_ENHANCEMENT.md`
+- Company relationship graph plan: `docs/development/top_down_market/COMPANY_RELATIONSHIP_GRAPH_ENHANCEMENT.md`
+- Research UI plan: `docs/development/top_down_market/TOP_DOWN_RESEARCH_UI_ENHANCEMENT.md`
+- Latest full-year/performance scenario log: `docs/development/test_log/2026-06-26_performance_recovery_full_regression.md`
+- Starting code anchors: `systems/CompanyRosterGenerator.gd`, `systems/CompanyGenerator.gd`, `systems/CommodityMacroContract.gd`, `systems/PriceExposureResolver.gd`, `systems/MacroStateSystem.gd`, `systems/MarketSimulator.gd`, `systems/CompanyEventSystem.gd`, `systems/CompanyRoadmapSystem.gd`, `systems/CompanyStoryDossierSystem.gd`, `systems/FinancialStatementLayer.gd`, `systems/AnnualStatementBuilder.gd`, `systems/AnnualFilingDocument.gd`, `systems/CompanyRelationshipGraphSystem.gd`, `systems/NewsFeedSystem.gd`, `systems/TwooterFeedSystem.gd`, `systems/ContactNetworkSystem.gd`, `systems/ThesisManager.gd`, `autoloads/RunState.gd`, `autoloads/DataRepository.gd`
 
 ### News / Attention / Daily Summary
 
@@ -165,7 +196,11 @@ Use this as the first file map when the user asks for a specific feature. Start 
 
 - UI controller: `scripts/ui/controllers/LifeController.gd`
 - Life systems: `systems/LifeManager.gd`, `systems/LifeStateSystem.gd`
-- Tests: `scripts/tests/LifeDevelopmentIntelTest.gd`, `scripts/tests/LifeLifestyleAssetTest.gd`, `scripts/tests/SmokeTest.gd`
+- Regular bank loans: `systems/BankLoanSystem.gd`, `autoloads/GameManager.gd`, `autoloads/RunState.gd`, `scripts/ui/widgets/LifeWidget.gd`
+- Saved regular loan key: `life_finance.active_bank_loan`; keep separate from emergency `life_finance.active_loan`
+- Bank-loan UI nodes: `LifeBankLoanPanel`, `LifeBankLoanLenderSelector`, `LifeBankLoanAmountSlider`, `LifeBankLoanButton`, `LifeActiveBankLoanPanel`
+- Tests: `scripts/tests/LifeDevelopmentIntelTest.gd`, `scripts/tests/LifeLifestyleAssetTest.gd`, `scripts/tests/BankLoanOfferContractTest.gd`, `scripts/tests/BankLoanLifecycleTest.gd`, `scripts/tests/BankLoanLifeWidgetTest.gd`, `scripts/tests/BankLoanBalanceProbeTest.gd`, `scripts/tests/SmokeTest.gd`
+- Plan doc: `docs/development/BANK_LOAN_SYSTEM_ENHANCEMENT.md`
 
 ### Upgrades / Academy / Guide Flow
 
@@ -275,6 +310,46 @@ Use this as the first file map when the user asks for a specific feature. Start 
 - `ThesisBoardWidget.gd` uses sector-aware and stance/horizon-aware guidance while preserving score/report math.
 - The detailed plan and progress log live in
   [`docs/development/THESIS_SYSTEM_ENHANCEMENT.md`](docs/development/THESIS_SYSTEM_ENHANCEMENT.md).
+
+### Top-Down Market System
+
+- Top-down market work is active and spans multiple completed/partially completed enhancement docs under `docs/development/top_down_market/`.
+- The parent tracking doc is
+  [`docs/development/top_down_market/TOP_DOWN_MARKET_SYSTEM_ROADMAP.md`](docs/development/top_down_market/TOP_DOWN_MARKET_SYSTEM_ROADMAP.md).
+- Implemented or actively wired areas include:
+  - company universe catalog and roster bridge; fresh default runs now select from the 100-company `data/companies/company_universe_catalog.json`
+  - commodity macro indicator catalog and state contract
+  - price-engine exposure resolver/integration
+  - living company arcs
+  - company story dossier/disclosure packets
+  - financial statement layer and annual filing reading experience
+  - generated content surfaces
+  - company relationship graph
+  - top-down research surface integration
+- Important UX decision: do not build a standalone top-down research app yet. The existing loop remains:
+  - discover through News, Twooter, Network, Markets/company pages, and filings
+  - capture useful items to Research Tray
+  - create a Thesis and attach evidence
+  - let the player draw the conclusion
+- News is now planned/implemented as four free topic outlets:
+  - Harian Investor
+  - The Egonomist
+  - IDK Channel
+  - MarketSnitch
+- Company Profile `Top-Down Links` card is intentionally hidden after Revision 1 in
+  [`docs/development/top_down_market/TOP_DOWN_RESEARCH_UI_ENHANCEMENT.md`](docs/development/top_down_market/TOP_DOWN_RESEARCH_UI_ENHANCEMENT.md).
+  - `scripts/ui/controllers/StockController.gd` keeps the dormant code behind `SHOW_PROFILE_TOP_DOWN_LINKS := false`.
+  - Filing access should remain through the existing `View Consolidated Financial Statement` button, not the hidden card.
+- Company universe catalog is the default roster path for `chill`, `normal`, and `grind`.
+  - Use `use_company_universe_catalog = false` only when an explicit procedural-generator fallback/regression run is needed.
+  - The annual filing reader now supplies a neutral segment selected-amounts table so catalog-backed companies keep `segment_row` filing evidence coverage even without a story-derived segment footprint.
+- Dev-only company universe editing now lives in `tools/company_universe_editor`.
+  - Run with `python3 tools/company_universe_editor/server.py`, then open `http://127.0.0.1:8775`.
+  - It imports `data/companies/company_universe_catalog.json` until `company_universe_source.json` is saved.
+- Latest 225-trading-day player/performance scenario passed and is logged at
+  [`docs/development/test_log/2026-06-26_performance_recovery_full_regression.md`](docs/development/test_log/2026-06-26_performance_recovery_full_regression.md).
+  - Bought `BORI`, created a thesis, attached `commodity`, `sector`, and `filing` evidence, opened lazy annual filing content, advanced 225 trading days, and generated the final thesis report.
+  - Key outcome: final cash `1,890,338.5`, final equity `3,098,838.5`, held `BORI` return `-74.07%`, elapsed `232,511.74ms` (`1,033.39ms/day`).
 
 ### Market / Gorengan / Long-Run Balance
 
@@ -435,20 +510,39 @@ Run only when simulation, market balance, event generation, or performance risk 
 /Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/MarketYearAudit.tscn -- --audit-days 225 --audit-seed 20260606 --audit-difficulty grind
 ```
 
+### Full-Year Player Scenario
+
+Run when you need a full-year player-flow regression that opens the game scene, buys a stock, creates a thesis, attaches evidence, advances 225 trading days, and reports portfolio/market/event/attention/news metrics.
+
+```bash
+/Users/user/.local/bin/godot --headless --path . --scene res://scenes/tests/FullYearPlayerScenarioTest.tscn
+```
+
+Expected sentinel:
+
+```text
+FULL_YEAR_PLAYER_SCENARIO_OK
+```
+
+Latest log:
+
+- [`docs/development/test_log/2026-06-26_performance_recovery_full_regression.md`](docs/development/test_log/2026-06-26_performance_recovery_full_regression.md)
+
 ## Known Verification Noise
 
 - Steam API initialization warnings are expected in local headless runs when Steam is not running.
 - RID/ObjectDB/resource cleanup warnings after a successful `_OK` sentinel are known headless teardown noise.
 - Windows root-certificate warnings after successful smoke output are non-blocking.
 - The full smoke has known pre-existing layout/coverage issues in some flows; quick smoke is the normal gate unless the task targets full UI coverage.
+- Quick smoke currently has a known unrelated FTUE/content failure: `First-month smoke found more than 2 organic chains through day 25`.
 
 ## Current Recommended Next Steps
 
 ### 1. Checkpoint Hygiene
 
 - Review `git status --short` before every task.
-- Review and commit the completed company-generation and thesis-system enhancement files as the next checkpoint if the diff is clean.
-- Keep the company-generation probes and thesis probes in the checkpoint; they are now the determinism/content safety nets.
+- Review and commit the active top-down market implementation/docs, full-year scenario test/log, and any completed enhancement probes as the next checkpoint if the diff is clean.
+- Keep the company-generation, thesis, top-down market, and full-year scenario probes in the checkpoint; they are now the determinism/content/regression safety nets.
 - Preserve unrelated dirty implementation work.
 
 ### 2. Release / Steam Prep
@@ -487,18 +581,27 @@ Run only when simulation, market balance, event generation, or performance risk 
   - no paid random reward loops
   - no side activity that out-earns stocks more easily
 - Current Life slice covers properties, cars, emergency finance, and derived pressure.
-- Next Life pass should tune costs, rent/upkeep, car/property status effects, finance warning copy, and near-bankruptcy feel.
+- Regular bank loans are implemented as a normal Life Finance product sourced from selected-run bank companies:
+  - lender selector and amount slider in `LifeWidget.gd`
+  - saved under `life_finance.active_bank_loan`
+  - monthly payments apply on the same month-boundary rhythm as emergency loans
+  - buy/upgrade reserve gates include emergency-plus-bank loan payment reserve
+- Current bank-loan balancing target from the fixed grind probe: `BNRY`, default principal `Rp6.0m`, max principal `Rp11.0m`, max monthly payment about `Rp1.19m`, about `14%` of default monthly outflow.
+- Next Life pass should tune costs, rent/upkeep, car/property status effects, finance warning copy, near-bankruptcy feel, and whether grind-mode roster selection should guarantee at least one bank lender.
 
 ### 6. Performance Follow-Up
 
 - Use `[perf][advance]`, `[perf][apply]`, `[perf][ui]`, and `[perf][save]` logs.
-- Treat performance as follow-up only when hitches are visible during playtesting.
-- Likely targets if needed:
-  - `simulate_day`
-  - News feed rendering/recording
-  - post-recap save flush
-  - heavy app redraws after Daily Recap closes
-  - deferred app refresh queue
+- Performance recovery task 8 is complete:
+  - normal-play explicit save flush is `12.91ms`
+  - scheduled post-recap save is `409.97ms`
+  - short-run save size is `3,464,461` bytes
+  - 70-company full-year scenario is `232,511.74ms`, or `1,033.39ms/day`
+- Remaining likely targets if hitches stay visible:
+  - late-year `RunState.apply_day_result` / `normalize_companies` spikes
+  - save payload construction in `RunState.to_save_dict()`
+  - company story dossier and quarterly-report save payload size
+  - `simulate_day` if daily market work becomes the visible bottleneck after normalization is reduced
 
 ### 7. Future Planning Docs
 

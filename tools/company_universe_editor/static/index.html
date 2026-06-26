@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gorengan Company Universe Editor</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Dev Tool</p>
+        <h1>Company Universe Editor</h1>
+      </div>
+      <div class="actions">
+        <button id="loadButton">Load</button>
+        <button id="saveButton">Save Source</button>
+        <button id="validateButton">Validate</button>
+        <button id="exportButton" class="primary">Export Runtime JSON</button>
+      </div>
+    </header>
+
+    <main class="shell">
+      <aside class="sidebar">
+        <button class="nav active" data-view="overview">Overview</button>
+        <button class="nav" data-view="companies">Companies</button>
+        <button class="nav" data-view="raw">Raw JSON</button>
+      </aside>
+
+      <section class="workspace">
+        <div id="status" class="status">Loading Company Universe source...</div>
+        <div id="view"></div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

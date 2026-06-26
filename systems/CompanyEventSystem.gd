@@ -474,6 +474,7 @@ func _build_company_candidates(
 		"%s sees management turnover raise fresh execution questions." % company_name
 	))
 
+	candidates = _apply_living_eligibility_weights(candidates, runtime, macro_state)
 	var minimum_weight: float = 0.20 if arc_backed_only else 0.16
 	return candidates.filter(func(candidate_value: Dictionary) -> bool:
 		var event_id: String = str(candidate_value.get("event_id", ""))
@@ -482,6 +483,54 @@ func _build_company_candidates(
 			return false
 		return is_arc_backed if arc_backed_only else not is_arc_backed
 	)
+
+
+func _apply_living_eligibility_weights(candidates: Array, runtime: Dictionary, macro_state: Dictionary) -> Array:
+	var living_state: Dictionary = runtime.get("living_arc_state", {})
+	if typeof(living_state) != TYPE_DICTIONARY:
+		return candidates
+	var tags: Array = living_state.get("eligibility_tags", [])
+	var weighted_candidates: Array = []
+	for candidate_value in candidates:
+		if typeof(candidate_value) != TYPE_DICTIONARY:
+			continue
+		var candidate: Dictionary = candidate_value.duplicate(true)
+		var event_id: String = str(candidate.get("event_id", ""))
+		var multiplier: float = 1.0
+		if tags.has("recent_event:%s" % event_id) or tags.has("recent:%s" % event_id):
+			multiplier *= 0.72
+		if tags.has("high_story_heat") and event_id in ["rumor_wave_positive", "rumor_wave_negative", "strategic_acquisition", "integration_overhang"]:
+			multiplier *= 1.08
+		if tags.has("growth_story_candidate") and event_id in ["earnings_beat", "favorable_coverage", "product_launch"]:
+			multiplier *= 1.08
+		if tags.has("weak_balance_sheet") and event_id in ["earnings_miss", "integration_overhang", "management_exit", "product_recall"]:
+			multiplier *= 1.12
+		if tags.has("weak_balance_sheet") and event_id in ["earnings_beat", "strategic_acquisition"]:
+			multiplier *= 0.92
+		if tags.has("strong_balance_sheet") and event_id in ["strategic_acquisition", "management_upgrade"]:
+			multiplier *= 1.08
+		if tags.has("execution_risk") and event_id in ["earnings_miss", "product_recall", "management_exit", "integration_overhang"]:
+			multiplier *= 1.10
+		if _has_macro_commodity_overlap(tags, macro_state.get("commodity_leaders", [])) and event_id in ["earnings_beat", "favorable_coverage", "strategic_acquisition"]:
+			multiplier *= 1.08
+		if _has_macro_commodity_overlap(tags, macro_state.get("commodity_laggards", [])) and event_id in ["earnings_miss", "rumor_wave_negative", "management_exit"]:
+			multiplier *= 1.08
+		candidate["living_eligibility_multiplier"] = snappedf(multiplier, 0.001)
+		candidate["weight"] = float(candidate.get("weight", 0.0)) * multiplier
+		weighted_candidates.append(candidate)
+	return weighted_candidates
+
+
+func _has_macro_commodity_overlap(tags: Array, commodity_ids: Variant) -> bool:
+	if typeof(commodity_ids) != TYPE_ARRAY:
+		return false
+	for commodity_id_value in commodity_ids:
+		var commodity_id: String = str(commodity_id_value).strip_edges().to_lower()
+		if commodity_id.is_empty():
+			continue
+		if tags.has("commodity:%s" % commodity_id) or tags.has("commodity_positive:%s" % commodity_id) or tags.has("commodity_negative:%s" % commodity_id):
+			return true
+	return false
 
 
 func _should_start_arc(run_state, day_number: int, active_arcs: Array, attention_directives: Dictionary = {}) -> bool:
@@ -529,7 +578,7 @@ func _build_company_arc(
 	var candidates: Array = []
 	for candidate_value in build_company_arc_candidates(run_state, trade_date, day_number, macro_state, attention_directives):
 		var candidate: Dictionary = candidate_value
-		if _candidate_is_available(candidate, history, active_arcs, day_number):
+		if _candidate_is_available(run_state, candidate, history, active_arcs, day_number, attention_directives):
 			candidates.append(candidate)
 
 	if candidates.is_empty():
@@ -669,10 +718,20 @@ func _pick_debug_company_candidate(
 	return picked_candidate
 
 
-func _candidate_is_available(candidate: Dictionary, history: Array, active_arcs: Array, day_number: int) -> bool:
+func _candidate_is_available(run_state, candidate: Dictionary, history: Array, active_arcs: Array, day_number: int, attention_directives: Dictionary = {}) -> bool:
 	var company_id: String = str(candidate.get("target_company_id", ""))
 	var event_id: String = str(candidate.get("event_id", ""))
 	var cooldown_days: int = 48 if event_id in ["strategic_acquisition", "integration_overhang"] else 28
+	if run_state != null and run_state.has_method("is_company_living_arc_available"):
+		if not run_state.is_company_living_arc_available(
+			company_id,
+			"company_arc",
+			event_id,
+			day_number,
+			bool(attention_directives.get("allow_living_arc_conflict", false)),
+			bool(attention_directives.get("allow_living_arc_cooldown", false))
+		):
+			return false
 
 	for active_arc_value in active_arcs:
 		var active_arc: Dictionary = active_arc_value

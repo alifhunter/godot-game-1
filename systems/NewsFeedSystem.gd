@@ -2,6 +2,16 @@ extends RefCounted
 
 const MAX_EVENT_LOOKBACK := 18
 const MAX_RECENT_ARTICLES_PER_SOURCE := 2
+const MAX_GENERATED_DOSSIER_NEWS_SOURCES := 6
+const MAX_GENERATED_DOSSIER_NEWS_ARTICLES_PER_OUTLET := 4
+const GENERATED_DOSSIER_NEWS_SOURCE_SYSTEM_ID := "company_story_dossier"
+const RELATIONSHIP_GRAPH_SOURCE_SYSTEM_ID := "company_relationship_graph"
+const NEWS_ACCESS_MODEL := "free_topic_coverage"
+const PUBLIC_NEWS_DEPTH_LEVEL := 1
+const COVERAGE_MARKET_WRAP_CHATTER := "market_wrap_chatter"
+const COVERAGE_MACRO_COMMODITY_SECTOR := "macro_commodity_sector"
+const COVERAGE_CORPORATE_ACTION_FILING := "corporate_action_filing"
+const COVERAGE_EARLY_SIGNAL := "early_signal"
 
 
 func build_news_snapshot(
@@ -16,10 +26,9 @@ func build_news_snapshot(
 	unlocked_intel_level: int = -1
 ) -> Dictionary:
 	var outlets: Array = feed_data.get("outlets", []).duplicate(true)
-	var resolved_intel_level: int = unlocked_intel_level
-	if resolved_intel_level < 1:
-		resolved_intel_level = int(feed_data.get("prototype_default_intel_level", max(outlets.size(), 1)))
-	resolved_intel_level = clamp(resolved_intel_level, 1, max(outlets.size(), 1))
+	var resolved_intel_level: int = PUBLIC_NEWS_DEPTH_LEVEL
+	if unlocked_intel_level > 0:
+		resolved_intel_level = PUBLIC_NEWS_DEPTH_LEVEL
 
 	var company_row_lookup: Dictionary = {}
 	for row_value in company_rows:
@@ -35,14 +44,18 @@ func build_news_snapshot(
 		latest_market_entry = market_entry.duplicate(true)
 	var current_day_index: int = int(current_trade_date.get("day_index", current_trade_date.get("day", 0)))
 	var story_memory: Dictionary = _build_story_memory(event_history, active_company_arcs, current_day_index)
+	var generated_news_sources: Array = _build_generated_dossier_news_sources(
+		_run_state,
+		company_row_lookup,
+		current_trade_date,
+		current_day_index
+	)
 
 	var outlet_rows: Array = []
 	var feeds: Dictionary = {}
 	for outlet_value in outlets:
-		var outlet: Dictionary = outlet_value.duplicate(true)
+		var outlet: Dictionary = _normalized_outlet(outlet_value)
 		var outlet_id: String = str(outlet.get("id", ""))
-		var outlet_level: int = int(outlet.get("intel_level", 1))
-		outlet["unlocked"] = outlet_level <= resolved_intel_level
 		outlet_rows.append(outlet)
 		feeds[outlet_id] = _build_outlet_feed(
 			outlet,
@@ -54,14 +67,168 @@ func build_news_snapshot(
 			active_special_events,
 			active_company_arcs,
 			current_trade_date,
-			story_memory
+			story_memory,
+			generated_news_sources
 		)
 
 	return {
 		"intel_level": resolved_intel_level,
+		"public_depth_level": PUBLIC_NEWS_DEPTH_LEVEL,
+		"access_model": NEWS_ACCESS_MODEL,
 		"outlets": outlet_rows,
 		"feeds": feeds
 	}
+
+
+func _normalized_outlet(outlet_value: Dictionary) -> Dictionary:
+	var outlet: Dictionary = outlet_value.duplicate(true)
+	outlet["legacy_intel_level"] = int(outlet.get("intel_level", PUBLIC_NEWS_DEPTH_LEVEL))
+	outlet["intel_level"] = PUBLIC_NEWS_DEPTH_LEVEL
+	outlet["public_depth_level"] = PUBLIC_NEWS_DEPTH_LEVEL
+	outlet["unlocked"] = true
+	outlet["access_model"] = NEWS_ACCESS_MODEL
+	if str(outlet.get("coverage_type", "")).strip_edges().is_empty():
+		outlet["coverage_type"] = _default_coverage_type_for_outlet_id(str(outlet.get("id", "")))
+	if _unique_string_array(outlet.get("topic_ids", [])).is_empty():
+		outlet["topic_ids"] = _default_topic_ids_for_coverage(str(outlet.get("coverage_type", "")))
+	return outlet
+
+
+func _default_coverage_type_for_outlet_id(outlet_id: String) -> String:
+	match outlet_id:
+		"waduh_finance":
+			return COVERAGE_MACRO_COMMODITY_SECTOR
+		"harian_investor":
+			return COVERAGE_CORPORATE_ACTION_FILING
+		"ordal_news":
+			return COVERAGE_EARLY_SIGNAL
+		_:
+			return COVERAGE_MARKET_WRAP_CHATTER
+
+
+func _default_topic_ids_for_coverage(coverage_type: String) -> Array:
+	match coverage_type:
+		COVERAGE_MACRO_COMMODITY_SECTOR:
+			return ["macro", "commodity", "sector", "subsector", "policy"]
+		COVERAGE_CORPORATE_ACTION_FILING:
+			return ["corporate_action", "filing", "earnings", "meeting", "index_review"]
+		COVERAGE_EARLY_SIGNAL:
+			return ["rumor", "early_signal", "market_whisper", "watchlist"]
+		_:
+			return ["market_wrap", "public_mover", "chatter", "sentiment"]
+
+
+func _outlet_has_coverage(outlet: Dictionary, coverage_type: String) -> bool:
+	var outlet_coverage_type: String = str(outlet.get("coverage_type", "")).strip_edges()
+	if outlet_coverage_type.is_empty():
+		outlet_coverage_type = _default_coverage_type_for_outlet_id(str(outlet.get("id", "")))
+	if coverage_type.is_empty():
+		return true
+	if outlet_coverage_type == coverage_type:
+		return true
+	for coverage_value in outlet.get("coverage_types", []):
+		if str(coverage_value) == coverage_type:
+			return true
+	return false
+
+
+func _outlet_covers_source(outlet: Dictionary, source_data: Dictionary) -> bool:
+	return _outlet_has_coverage(outlet, _source_coverage_type(source_data))
+
+
+func _source_coverage_type(source_data: Dictionary) -> String:
+	var explicit_coverage: String = str(source_data.get("coverage_type", "")).strip_edges()
+	if not explicit_coverage.is_empty():
+		return explicit_coverage
+	var generated_surface_id: String = str(source_data.get("generated_surface_id", ""))
+	match generated_surface_id:
+		"macro_news", "sector_news":
+			return COVERAGE_MACRO_COMMODITY_SECTOR
+		"company_news":
+			return COVERAGE_MARKET_WRAP_CHATTER
+
+	var category: String = str(source_data.get("category", "")).strip_edges()
+	var event_family: String = str(source_data.get("event_family", "")).strip_edges()
+	var visibility: String = str(source_data.get("relationship_visibility", source_data.get("visibility", ""))).strip_edges().to_lower()
+	if category == "market_wrap" or category == "public_mover" or event_family == "market":
+		return COVERAGE_MARKET_WRAP_CHATTER
+	if category == "sector_rotation" or category == "generated_sector_news" or category == "generated_macro_news":
+		return COVERAGE_MACRO_COMMODITY_SECTOR
+	if category.contains("macro") or category.contains("policy") or category.contains("commodity"):
+		return COVERAGE_MACRO_COMMODITY_SECTOR
+	if category in ["deal_post", "pandemic", "geopolitics", "special"]:
+		return COVERAGE_MACRO_COMMODITY_SECTOR
+	if category.contains("rumor") or category.contains("speculation") or category.contains("whisper"):
+		return COVERAGE_EARLY_SIGNAL
+	if category.begins_with("index_") or category == "corporate_meeting" or not str(source_data.get("meeting_id", "")).is_empty():
+		return COVERAGE_CORPORATE_ACTION_FILING
+	if category.begins_with("corporate_action") or category == "earnings" or category.contains("filing"):
+		return COVERAGE_CORPORATE_ACTION_FILING
+	if event_family == RELATIONSHIP_GRAPH_SOURCE_SYSTEM_ID:
+		return COVERAGE_CORPORATE_ACTION_FILING if visibility == "public" else COVERAGE_EARLY_SIGNAL
+	if str(source_data.get("phase_visibility", "")).strip_edges() == "hidden":
+		return COVERAGE_EARLY_SIGNAL
+	return COVERAGE_MARKET_WRAP_CHATTER
+
+
+func _source_topic_ids(source_data: Dictionary, coverage_type: String) -> Array:
+	var topic_ids: Array = _unique_string_array(source_data.get("topic_ids", []))
+	if not topic_ids.is_empty():
+		return topic_ids
+	topic_ids = _default_topic_ids_for_coverage(coverage_type)
+	var category: String = str(source_data.get("category", "")).strip_edges()
+	var generated_surface_id: String = str(source_data.get("generated_surface_id", "")).strip_edges()
+	var scope: String = str(source_data.get("scope", "")).strip_edges()
+	if not category.is_empty():
+		topic_ids.append(category)
+	if not generated_surface_id.is_empty():
+		topic_ids.append(generated_surface_id)
+	if not scope.is_empty():
+		topic_ids.append(scope)
+	if not str(source_data.get("target_sector_id", "")).is_empty():
+		topic_ids.append("sector")
+	if not str(source_data.get("target_company_id", "")).is_empty():
+		topic_ids.append("company")
+	return _unique_string_array(topic_ids)
+
+
+func _source_public_depth_level(_source_data: Dictionary) -> int:
+	return PUBLIC_NEWS_DEPTH_LEVEL
+
+
+func _source_specificity(source_data: Dictionary) -> String:
+	var specificity: String = str(source_data.get("specificity", "")).strip_edges()
+	if not specificity.is_empty():
+		return specificity
+	if not str(source_data.get("target_company_id", "")).is_empty():
+		return "company"
+	if not str(source_data.get("target_sector_id", "")).is_empty():
+		return "sector"
+	return str(source_data.get("scope", "market"))
+
+
+func _source_noise_level(source_data: Dictionary, outlet: Dictionary, coverage_type: String) -> float:
+	if source_data.has("noise_level"):
+		return clamp(float(source_data.get("noise_level", 0.0)), 0.0, 1.0)
+	if coverage_type == COVERAGE_EARLY_SIGNAL:
+		return clamp(float(outlet.get("noise_level", 0.72)), 0.0, 1.0)
+	if coverage_type == COVERAGE_CORPORATE_ACTION_FILING:
+		return clamp(float(outlet.get("noise_level", 0.18)), 0.0, 1.0)
+	if coverage_type == COVERAGE_MACRO_COMMODITY_SECTOR:
+		return clamp(float(outlet.get("noise_level", 0.30)), 0.0, 1.0)
+	return clamp(float(outlet.get("noise_level", 0.42)), 0.0, 1.0)
+
+
+func _source_reliability(source_data: Dictionary, outlet: Dictionary, coverage_type: String) -> float:
+	if source_data.has("reliability"):
+		return clamp(float(source_data.get("reliability", 0.0)), 0.0, 1.0)
+	if coverage_type == COVERAGE_CORPORATE_ACTION_FILING:
+		return clamp(float(outlet.get("reliability", 0.74)), 0.0, 1.0)
+	if coverage_type == COVERAGE_EARLY_SIGNAL:
+		return clamp(float(outlet.get("reliability", 0.42)), 0.0, 1.0)
+	if coverage_type == COVERAGE_MACRO_COMMODITY_SECTOR:
+		return clamp(float(outlet.get("reliability", 0.62)), 0.0, 1.0)
+	return clamp(float(outlet.get("reliability", 0.52)), 0.0, 1.0)
 
 
 func _build_outlet_feed(
@@ -74,11 +241,12 @@ func _build_outlet_feed(
 	active_special_events: Array,
 	active_company_arcs: Array,
 	current_trade_date: Dictionary,
-	story_memory: Dictionary
+	story_memory: Dictionary,
+	generated_news_sources: Array = []
 ) -> Dictionary:
 	var articles: Array = []
 	var seen_ids: Dictionary = {}
-	var outlet_level: int = int(outlet.get("intel_level", 1))
+	var public_depth_level: int = PUBLIC_NEWS_DEPTH_LEVEL
 	var article_limit: int = int(feed_data.get("article_limit", 12))
 
 	for article_value in _build_hidden_arc_articles(
@@ -124,6 +292,16 @@ func _build_outlet_feed(
 		story_memory
 	):
 		_append_unique_article(articles, seen_ids, article_value)
+	for article_value in _build_generated_dossier_news_articles(
+		outlet,
+		feed_data,
+		company_row_lookup,
+		latest_market_entry,
+		generated_news_sources,
+		current_trade_date,
+		story_memory
+	):
+		_append_unique_article(articles, seen_ids, article_value)
 
 	var market_wrap: Dictionary = _build_market_wrap_article(
 		outlet,
@@ -148,7 +326,14 @@ func _build_outlet_feed(
 	return {
 		"outlet_id": str(outlet.get("id", "")),
 		"outlet_label": str(outlet.get("label", "")),
-		"intel_level": outlet_level,
+		"intel_level": PUBLIC_NEWS_DEPTH_LEVEL,
+		"public_depth_level": public_depth_level,
+		"access_model": NEWS_ACCESS_MODEL,
+		"coverage_type": str(outlet.get("coverage_type", "")),
+		"topic_ids": _unique_string_array(outlet.get("topic_ids", [])),
+		"reliability": float(outlet.get("reliability", 0.55)),
+		"specificity": str(outlet.get("specificity", "market")),
+		"noise_level": float(outlet.get("noise_level", 0.35)),
 		"tagline": str(outlet.get("tagline", "")),
 		"summary": str(outlet.get("summary", "")),
 		"articles": articles
@@ -165,7 +350,7 @@ func _build_hidden_arc_articles(
 	current_trade_date: Dictionary,
 	story_memory: Dictionary
 ) -> Array:
-	if int(outlet.get("intel_level", 1)) < 4:
+	if not _outlet_has_coverage(outlet, COVERAGE_EARLY_SIGNAL):
 		return []
 
 	var articles: Array = []
@@ -173,13 +358,17 @@ func _build_hidden_arc_articles(
 		var arc: Dictionary = arc_value
 		if str(arc.get("phase_visibility", "visible")) != "hidden":
 			continue
+		var source_data: Dictionary = arc.duplicate(true)
+		source_data["coverage_type"] = COVERAGE_EARLY_SIGNAL
+		source_data["topic_ids"] = _unique_string_array(["early_signal", "rumor", "company_arc"])
+		source_data["public_depth_level"] = PUBLIC_NEWS_DEPTH_LEVEL
 
-		var company_id: String = str(arc.get("target_company_id", ""))
+		var company_id: String = str(source_data.get("target_company_id", ""))
 		var row: Dictionary = company_row_lookup.get(company_id, {})
-		var article_id: String = "hidden_arc|%s" % str(arc.get("arc_id", ""))
+		var article_id: String = "hidden_arc|%s" % str(source_data.get("arc_id", ""))
 		var context: Dictionary = _build_story_context(
 			feed_data,
-			arc,
+			source_data,
 			row,
 			_market_entry_for_day(market_history_lookup, latest_market_entry, int(current_trade_date.get("day_index", -1))),
 			current_trade_date,
@@ -190,7 +379,7 @@ func _build_hidden_arc_articles(
 		articles.append(_build_article_record(
 			outlet,
 			feed_data,
-			arc,
+			source_data,
 			context,
 			"whisper",
 			"early",
@@ -213,21 +402,17 @@ func _build_active_special_articles(
 	current_trade_date: Dictionary,
 	story_memory: Dictionary
 ) -> Array:
-	var outlet_level: int = int(outlet.get("intel_level", 1))
 	var articles: Array = []
 	var current_day_index: int = int(current_trade_date.get("day_index", current_trade_date.get("day", 0)))
 
 	for event_value in active_special_events:
 		var event_data: Dictionary = event_value
+		if not _outlet_covers_source(outlet, event_data):
+			continue
 		var start_day_index: int = int(event_data.get("start_day_index", current_day_index))
 		var duration_days: int = max(int(event_data.get("duration_days", 1)), 1)
 		var elapsed_days: int = max(current_day_index - start_day_index + 1, 1)
 		var progress_ratio: float = clamp(float(elapsed_days) / float(duration_days), 0.0, 1.0)
-		var required_level: int = _intel_requirement_for_progress(progress_ratio)
-		if _is_policy_parody_source(event_data):
-			required_level = 1
-		if outlet_level < required_level:
-			continue
 
 		var progress_key: String = _progress_key_for_ratio(progress_ratio)
 		var stage_key: String = _stage_key_for_progress(progress_key)
@@ -268,7 +453,6 @@ func _build_recent_event_articles(
 	current_trade_date: Dictionary,
 	story_memory: Dictionary
 ) -> Array:
-	var outlet_level: int = int(outlet.get("intel_level", 1))
 	var current_day_index: int = int(current_trade_date.get("day_index", current_trade_date.get("day", 0)))
 	var recent_history: Array = event_history.duplicate(true)
 	recent_history.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -281,9 +465,31 @@ func _build_recent_event_articles(
 	var articles: Array = []
 	for event_value in recent_history:
 		var event_data: Dictionary = event_value
+		if str(event_data.get("event_family", "")) == RELATIONSHIP_GRAPH_SOURCE_SYSTEM_ID:
+			var relationship_source_key: String = "relationship|%s|%s" % [
+				str(event_data.get("relationship_event_id", event_data.get("event_id", ""))),
+				str(outlet.get("id", ""))
+			]
+			source_counts[relationship_source_key] = int(source_counts.get(relationship_source_key, 0))
+			if int(source_counts.get(relationship_source_key, 0)) > 0:
+				continue
+			var relationship_article: Dictionary = _build_relationship_event_article(
+				outlet,
+				feed_data,
+				company_row_lookup,
+				market_history_lookup,
+				latest_market_entry,
+				event_data,
+				current_trade_date,
+				current_day_index,
+				story_memory
+			)
+			if not relationship_article.is_empty():
+				source_counts[relationship_source_key] = int(source_counts.get(relationship_source_key, 0)) + 1
+				articles.append(relationship_article)
+			continue
 		var age_days: int = max(current_day_index - int(event_data.get("day_index", current_day_index)), 0)
-		var required_level: int = _intel_requirement_for_history_age(age_days)
-		if outlet_level < required_level:
+		if not _outlet_covers_source(outlet, event_data):
 			continue
 
 		var source_key: String = "%s|%s|%s|%s" % [
@@ -334,6 +540,181 @@ func _build_recent_event_articles(
 	return articles
 
 
+func _build_relationship_event_article(
+	outlet: Dictionary,
+	feed_data: Dictionary,
+	company_row_lookup: Dictionary,
+	market_history_lookup: Dictionary,
+	latest_market_entry: Dictionary,
+	event_data: Dictionary,
+	current_trade_date: Dictionary,
+	current_day_index: int,
+	story_memory: Dictionary
+) -> Dictionary:
+	if not _relationship_event_allows_public_surface(event_data):
+		return {}
+	var age_days: int = max(current_day_index - int(event_data.get("day_index", current_day_index)), 0)
+	var company_id: String = str(event_data.get("target_company_id", ""))
+	var row: Dictionary = company_row_lookup.get(company_id, {})
+	var source_data: Dictionary = _relationship_event_content_source(event_data, "news")
+	if not _outlet_covers_source(outlet, source_data):
+		return {}
+	var progress_key: String = _progress_key_for_history_age(age_days)
+	var stage_key: String = _stage_key_for_progress(progress_key)
+	var article_id: String = "relationship_news|%s|%s|%s" % [
+		str(source_data.get("relationship_event_id", source_data.get("event_id", ""))),
+		int(source_data.get("day_index", -1)),
+		str(outlet.get("id", ""))
+	]
+	var event_trade_date: Dictionary = source_data.get("trade_date", current_trade_date).duplicate(true)
+	var context: Dictionary = _build_story_context(
+		feed_data,
+		source_data,
+		row,
+		_market_entry_for_day(market_history_lookup, latest_market_entry, int(source_data.get("day_index", current_day_index))),
+		event_trade_date,
+		stage_key,
+		article_id,
+		story_memory
+	)
+	var article: Dictionary = _build_article_record(
+		outlet,
+		feed_data,
+		source_data,
+		context,
+		stage_key,
+		progress_key,
+		event_trade_date,
+		int(source_data.get("day_index", -1)),
+		article_id,
+		2.85 - min(float(age_days) * 0.08, 0.8)
+	)
+	article["headline"] = str(source_data.get("headline", article.get("headline", "")))
+	article["deck"] = str(source_data.get("summary", article.get("deck", "")))
+	article["body"] = _relationship_event_news_body(source_data)
+	var relationship_sections: Dictionary = _article_sections_from_body(str(article.get("body", "")))
+	article["lead"] = str(relationship_sections.get("lead", ""))
+	article["context"] = str(relationship_sections.get("context", ""))
+	article["market_reaction"] = str(relationship_sections.get("market_reaction", ""))
+	article["what_to_watch"] = str(relationship_sections.get("what_to_watch", ""))
+	article = _apply_generated_news_metadata(article, source_data)
+	return _copy_relationship_event_metadata(article, source_data)
+
+
+func _relationship_event_allows_public_surface(event_data: Dictionary) -> bool:
+	var visibility: String = str(event_data.get("relationship_visibility", "")).strip_edges().to_lower()
+	return visibility == "public" or visibility == "semi_public"
+
+
+func _relationship_event_content_source(event_data: Dictionary, surface_context: String) -> Dictionary:
+	var source_data: Dictionary = event_data.duplicate(true)
+	var target_ticker: String = str(source_data.get("target_ticker", source_data.get("target_company_id", ""))).to_upper()
+	var counterparty_ticker: String = str(source_data.get("counterparty_ticker", source_data.get("counterparty_company_id", ""))).to_upper()
+	var target_name: String = str(source_data.get("target_company_name", target_ticker))
+	var counterparty_name: String = str(source_data.get("counterparty_company_name", counterparty_ticker))
+	var headline_pair: String = "%s-%s" % [target_ticker, counterparty_ticker] if not counterparty_ticker.is_empty() else target_ticker
+	var event_kind: String = str(source_data.get("relationship_event_kind", source_data.get("category", "")))
+	var role: String = str(source_data.get("relationship_impact_role", ""))
+	var visibility: String = str(source_data.get("relationship_visibility", "semi_public")).strip_edges().to_lower()
+	source_data["scope"] = "company"
+	source_data["category"] = "relationship_graph_news" if surface_context == "news" else "generated_twooter_relationship"
+	source_data["event_family"] = RELATIONSHIP_GRAPH_SOURCE_SYSTEM_ID
+	source_data["coverage_type"] = COVERAGE_CORPORATE_ACTION_FILING if visibility == "public" else COVERAGE_EARLY_SIGNAL
+	source_data["topic_ids"] = _unique_string_array(["company_relationship", "corporate_action"] if visibility == "public" else ["company_relationship", "early_signal", "rumor"])
+	source_data["public_depth_level"] = PUBLIC_NEWS_DEPTH_LEVEL
+	source_data["generated_content_surface"] = true
+	source_data["generated_surface_id"] = "company_news" if surface_context == "news" else "twooter"
+	source_data["generated_scope_id"] = "relationship"
+	source_data["source_system_id"] = RELATIONSHIP_GRAPH_SOURCE_SYSTEM_ID
+	source_data["story_id"] = str(source_data.get("relationship_event_id", ""))
+	source_data["story_family"] = "company_relationship"
+	source_data["archetype_id"] = event_kind
+	source_data["public_status"] = "reported" if visibility == "public" else "market_talk"
+	source_data["stage_id"] = "relationship_event"
+	source_data["visibility"] = "public" if visibility == "public" else "semi_public"
+	source_data["detail_level"] = "relationship"
+	source_data["reliability"] = snappedf(clamp(float(source_data.get("relationship_confidence", source_data.get("confidence", 0.0))), 0.0, 1.0), 0.001)
+	source_data["leak_risk"] = 0.0 if visibility == "public" else 0.08
+	source_data["source_fact_ids"] = _unique_string_array(["relationship_event:%s" % str(source_data.get("relationship_event_id", ""))])
+	source_data["source_clue_ids"] = _unique_string_array(["relationship_edge:%s" % str(source_data.get("relationship_edge_id", ""))])
+	source_data["source_company_ids"] = _unique_string_array([
+		str(source_data.get("target_company_id", "")),
+		str(source_data.get("counterparty_company_id", ""))
+	])
+	source_data["source_sector_ids"] = _unique_string_array([str(source_data.get("target_sector_id", ""))])
+	source_data["source_event_ids"] = _unique_string_array([str(source_data.get("relationship_event_id", ""))])
+	source_data["headline"] = "%s relationship move draws attention" % headline_pair
+	source_data["summary"] = _relationship_event_public_summary(event_kind, role, target_name, target_ticker, counterparty_name, counterparty_ticker, visibility)
+	source_data["description"] = str(source_data.get("summary", source_data.get("description", "")))
+	return source_data
+
+
+func _relationship_event_public_summary(
+	event_kind: String,
+	role: String,
+	target_name: String,
+	target_ticker: String,
+	counterparty_name: String,
+	counterparty_ticker: String,
+	visibility: String
+) -> String:
+	var target_label: String = "%s (%s)" % [target_name, target_ticker] if not target_ticker.is_empty() else target_name
+	var counterparty_label: String = "%s (%s)" % [counterparty_name, counterparty_ticker] if not counterparty_ticker.is_empty() else counterparty_name
+	var qualifier: String = "confirmed" if visibility == "public" else "being discussed"
+	match event_kind:
+		"partnership_announcement":
+			return "%s is %s around a commercial partnership with %s; traders are watching whether the link becomes visible in execution." % [target_label, qualifier, counterparty_label]
+		"supply_deal":
+			if role == "supplier":
+				return "%s is %s around a supply mandate tied to %s, with attention on delivery and order flow." % [target_label, qualifier, counterparty_label]
+			return "%s is %s around a vendor link with %s, with debate on whether the economics help or pressure margins." % [target_label, qualifier, counterparty_label]
+		"customer_win":
+			if role == "supplier":
+				return "%s is %s around a new demand channel tied to %s, with follow-through still the main test." % [target_label, qualifier, counterparty_label]
+			return "%s is %s around procurement exposure to %s, and the market is weighing commitment risk." % [target_label, qualifier, counterparty_label]
+		"competitor_pressure":
+			if role == "competitor_winner":
+				return "%s is %s as %s faces peer pressure; the read is relative momentum, not a full thesis yet." % [target_label, qualifier, counterparty_label]
+			return "%s is %s under peer pressure as %s shows stronger relative momentum." % [target_label, qualifier, counterparty_label]
+	return "%s is %s around a commercial link with %s." % [target_label, qualifier, counterparty_label]
+
+
+func _relationship_event_news_body(source_data: Dictionary) -> String:
+	var summary: String = str(source_data.get("summary", "")).strip_edges()
+	var description: String = str(source_data.get("description", "")).strip_edges()
+	var visibility: String = str(source_data.get("relationship_visibility", source_data.get("visibility", ""))).strip_edges()
+	var confidence_text: String = "The relationship is visible enough for public desks to track, but the useful question is still whether the operating effect shows up in filings, orders, or margins."
+	if visibility == "semi_public":
+		confidence_text = "The relationship is still closer to market talk than a full public disclosure, so the clean read is to watch confirmation rather than assume the economics."
+	var body: Array = []
+	if not summary.is_empty():
+		body.append(summary)
+	elif not description.is_empty():
+		body.append(description)
+	body.append(confidence_text)
+	body.append("The move is being treated as a company-specific relationship signal rather than a broad sector call.")
+	return "\n\n".join(body)
+
+
+func _copy_relationship_event_metadata(target: Dictionary, source_data: Dictionary) -> Dictionary:
+	var enriched: Dictionary = target.duplicate(true)
+	for key in [
+		"relationship_event_id",
+		"relationship_event_kind",
+		"relationship_edge_id",
+		"relationship_type",
+		"relationship_visibility",
+		"relationship_impact_role",
+		"counterparty_company_id",
+		"counterparty_ticker",
+		"counterparty_company_name",
+		"source_event_ids"
+	]:
+		if source_data.has(key):
+			enriched[key] = source_data.get(key)
+	return enriched
+
+
 func _build_public_daily_brief_articles(
 	outlet: Dictionary,
 	feed_data: Dictionary,
@@ -343,9 +724,6 @@ func _build_public_daily_brief_articles(
 	current_trade_date: Dictionary,
 	story_memory: Dictionary
 ) -> Array:
-	if int(outlet.get("intel_level", 1)) != 1:
-		return []
-
 	var articles: Array = []
 	var current_day_index: int = int(current_trade_date.get("day_index", current_trade_date.get("day", 0)))
 	var company_rows: Array = []
@@ -360,7 +738,7 @@ func _build_public_daily_brief_articles(
 
 	if not company_rows.is_empty():
 		var winner_row: Dictionary = company_rows[0]
-		articles.append(_build_public_company_brief_article(
+		var winner_article: Dictionary = _build_public_company_brief_article(
 			outlet,
 			feed_data,
 			winner_row,
@@ -369,10 +747,12 @@ func _build_public_daily_brief_articles(
 			story_memory,
 			"top_mover",
 			2.85
-		))
+		)
+		if not winner_article.is_empty():
+			articles.append(winner_article)
 		var loser_row: Dictionary = company_rows[company_rows.size() - 1]
 		if str(loser_row.get("id", "")) != str(winner_row.get("id", "")):
-			articles.append(_build_public_company_brief_article(
+			var loser_article: Dictionary = _build_public_company_brief_article(
 				outlet,
 				feed_data,
 				loser_row,
@@ -381,11 +761,13 @@ func _build_public_daily_brief_articles(
 				story_memory,
 				"weak_mover",
 				2.75
-			))
+			)
+			if not loser_article.is_empty():
+				articles.append(loser_article)
 
 	var sector_source: Dictionary = _build_public_sector_brief_source(company_rows, current_trade_date)
 	if not sector_source.is_empty():
-		articles.append(_build_public_source_brief_article(
+		var sector_article: Dictionary = _build_public_source_brief_article(
 			outlet,
 			feed_data,
 			sector_source,
@@ -395,7 +777,9 @@ func _build_public_daily_brief_articles(
 			story_memory,
 			"sector_watch",
 			2.65
-		))
+		)
+		if not sector_article.is_empty():
+			articles.append(sector_article)
 
 	var calendar_articles_added: int = 0
 	for event_value in event_history:
@@ -408,7 +792,7 @@ func _build_public_daily_brief_articles(
 			continue
 		var company_id: String = str(event_data.get("target_company_id", ""))
 		var company_row: Dictionary = company_row_lookup.get(company_id, {})
-		articles.append(_build_public_source_brief_article(
+		var calendar_article: Dictionary = _build_public_source_brief_article(
 			outlet,
 			feed_data,
 			_build_public_calendar_source(event_data),
@@ -418,8 +802,10 @@ func _build_public_daily_brief_articles(
 			story_memory,
 			"calendar_%d" % calendar_articles_added,
 			2.95 - (float(calendar_articles_added) * 0.05)
-		))
-		calendar_articles_added += 1
+		)
+		if not calendar_article.is_empty():
+			articles.append(calendar_article)
+			calendar_articles_added += 1
 
 	return articles
 
@@ -440,6 +826,9 @@ func _build_public_company_brief_article(
 	source_data["scope"] = "company"
 	source_data["category"] = "public_mover"
 	source_data["event_family"] = "public_brief"
+	source_data["coverage_type"] = COVERAGE_MARKET_WRAP_CHATTER
+	source_data["topic_ids"] = _unique_string_array(["market_wrap", "public_mover", "chatter"])
+	source_data["public_depth_level"] = PUBLIC_NEWS_DEPTH_LEVEL
 	source_data["tone"] = _tone_from_change(change_pct)
 	source_data["target_company_id"] = str(company_row.get("id", ""))
 	source_data["target_ticker"] = ticker
@@ -477,6 +866,8 @@ func _build_public_source_brief_article(
 	brief_key: String,
 	priority: float
 ) -> Dictionary:
+	if not _outlet_covers_source(outlet, source_data):
+		return {}
 	var day_index: int = int(source_data.get("day_index", current_trade_date.get("day_index", -1)))
 	var source_key: String = str(source_data.get("target_company_id", ""))
 	if source_key.is_empty():
@@ -548,6 +939,9 @@ func _build_public_sector_brief_source(company_rows: Array, current_trade_date: 
 		"scope": "sector",
 		"category": "sector_rotation",
 		"event_family": "public_brief",
+		"coverage_type": COVERAGE_MACRO_COMMODITY_SECTOR,
+		"topic_ids": _unique_string_array(["sector", "subsector", "market_breadth"]),
+		"public_depth_level": PUBLIC_NEWS_DEPTH_LEVEL,
 		"tone": _tone_from_change(change_pct),
 		"target_sector_id": str(best_sector.get("sector_id", "")),
 		"sector_name": sector_name,
@@ -556,6 +950,450 @@ func _build_public_sector_brief_source(company_rows: Array, current_trade_date: 
 		"day_index": int(current_trade_date.get("day_index", -1)),
 		"trade_date": current_trade_date.duplicate(true)
 	}
+
+
+func _build_generated_dossier_news_sources(
+	run_state,
+	company_row_lookup: Dictionary,
+	current_trade_date: Dictionary,
+	current_day_index: int
+) -> Array:
+	if run_state == null or not run_state.has_method("get_company_story_dossier_state"):
+		return []
+
+	var dossier_state: Dictionary = run_state.get_company_story_dossier_state()
+	var dossier_index: Dictionary = dossier_state.get("dossier_index", {})
+	var source_candidates: Array = []
+	var seen_sector_ids: Dictionary = {}
+	var seen_macro_keys: Dictionary = {}
+	for story_id_value in dossier_index.keys():
+		var story_id: String = str(story_id_value)
+		var dossier_value: Variant = dossier_index.get(story_id, {})
+		if typeof(dossier_value) != TYPE_DICTIONARY:
+			continue
+		var dossier: Dictionary = dossier_value
+		var public_clue: Dictionary = _public_news_clue_for_day(dossier, current_day_index)
+		if public_clue.is_empty():
+			continue
+		var company_id: String = str(dossier.get("company_id", ""))
+		var company_row: Dictionary = company_row_lookup.get(company_id, {})
+		if company_row.is_empty():
+			company_row = _company_row_from_dossier(dossier)
+
+		var company_source: Dictionary = _generated_news_company_source(dossier, public_clue, company_row, current_trade_date, current_day_index)
+		if not company_source.is_empty():
+			source_candidates.append(company_source)
+
+		var sector_fact: Dictionary = _best_fact_for_types(dossier, ["sector"])
+		var sector_id: String = str(sector_fact.get("source_id", company_row.get("sector_id", "")))
+		if not sector_id.is_empty() and not seen_sector_ids.has(sector_id):
+			var sector_source: Dictionary = _generated_news_sector_source(dossier, public_clue, sector_fact, company_row, current_trade_date, current_day_index)
+			if not sector_source.is_empty():
+				source_candidates.append(sector_source)
+				seen_sector_ids[sector_id] = true
+
+		var macro_fact: Dictionary = _best_fact_for_types(dossier, ["macro", "commodity"])
+		var macro_key: String = "%s|%s" % [
+			str(macro_fact.get("fact_type", "")),
+			str(macro_fact.get("source_id", ""))
+		]
+		if not macro_fact.is_empty() and not seen_macro_keys.has(macro_key):
+			var macro_source: Dictionary = _generated_news_macro_source(dossier, public_clue, macro_fact, company_row, current_trade_date, current_day_index)
+			if not macro_source.is_empty():
+				source_candidates.append(macro_source)
+				seen_macro_keys[macro_key] = true
+
+	source_candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if is_equal_approx(float(a.get("priority", 0.0)), float(b.get("priority", 0.0))):
+			return str(a.get("event_id", "")) < str(b.get("event_id", ""))
+		return float(a.get("priority", 0.0)) > float(b.get("priority", 0.0))
+	)
+	return _select_generated_dossier_news_sources(source_candidates)
+
+
+func _build_generated_dossier_news_articles(
+	outlet: Dictionary,
+	feed_data: Dictionary,
+	company_row_lookup: Dictionary,
+	latest_market_entry: Dictionary,
+	generated_news_sources: Array,
+	current_trade_date: Dictionary,
+	story_memory: Dictionary
+) -> Array:
+	var articles: Array = []
+	for source_value in generated_news_sources:
+		if articles.size() >= MAX_GENERATED_DOSSIER_NEWS_ARTICLES_PER_OUTLET:
+			break
+		if typeof(source_value) != TYPE_DICTIONARY:
+			continue
+		var source_data: Dictionary = source_value
+		if not _outlet_covers_source(outlet, source_data):
+			continue
+		var company_id: String = str(source_data.get("target_company_id", ""))
+		var company_row: Dictionary = company_row_lookup.get(company_id, {})
+		var day_index: int = int(source_data.get("day_index", current_trade_date.get("day_index", -1)))
+		var article_id: String = "generated_dossier_news|%s|%s|%s|%d" % [
+			str(outlet.get("id", "")),
+			str(source_data.get("generated_surface_id", "")),
+			str(source_data.get("story_id", "")).replace("|", "_"),
+			day_index
+		]
+		var article_trade_date: Dictionary = source_data.get("trade_date", current_trade_date).duplicate(true)
+		var context: Dictionary = _build_story_context(
+			feed_data,
+			source_data,
+			company_row,
+			latest_market_entry,
+			article_trade_date,
+			"public_brief",
+			article_id,
+			story_memory
+		)
+		var article: Dictionary = _build_article_record(
+			outlet,
+			feed_data,
+			source_data,
+			context,
+			"public_brief",
+			"developing",
+			article_trade_date,
+			day_index,
+			article_id,
+			float(source_data.get("priority", 2.35))
+		)
+		articles.append(_apply_generated_news_metadata(article, source_data))
+	return articles
+
+
+func _select_generated_dossier_news_sources(source_candidates: Array) -> Array:
+	var buckets: Dictionary = {
+		"company_news": [],
+		"sector_news": [],
+		"macro_news": []
+	}
+	for source_value in source_candidates:
+		if typeof(source_value) != TYPE_DICTIONARY:
+			continue
+		var source_data: Dictionary = source_value
+		var surface_id: String = str(source_data.get("generated_surface_id", ""))
+		if not buckets.has(surface_id):
+			continue
+		var bucket: Array = buckets.get(surface_id, [])
+		bucket.append(source_data)
+		buckets[surface_id] = bucket
+
+	var selected: Array = []
+	for surface_id in ["company_news", "sector_news", "macro_news"]:
+		var bucket: Array = buckets.get(surface_id, [])
+		var bucket_limit: int = 2 if surface_id != "macro_news" else 1
+		for index in range(min(bucket_limit, bucket.size())):
+			selected.append(bucket[index])
+
+	if selected.size() < MAX_GENERATED_DOSSIER_NEWS_SOURCES:
+		var seen_ids: Dictionary = {}
+		for selected_value in selected:
+			if typeof(selected_value) != TYPE_DICTIONARY:
+				continue
+			var selected_source: Dictionary = selected_value
+			seen_ids[str(selected_source.get("event_id", ""))] = true
+		for source_value in source_candidates:
+			if typeof(source_value) != TYPE_DICTIONARY:
+				continue
+			var source_data: Dictionary = source_value
+			var event_id: String = str(source_data.get("event_id", ""))
+			if seen_ids.has(event_id):
+				continue
+			selected.append(source_data)
+			seen_ids[event_id] = true
+			if selected.size() >= MAX_GENERATED_DOSSIER_NEWS_SOURCES:
+				break
+
+	selected.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if is_equal_approx(float(a.get("priority", 0.0)), float(b.get("priority", 0.0))):
+			return str(a.get("event_id", "")) < str(b.get("event_id", ""))
+		return float(a.get("priority", 0.0)) > float(b.get("priority", 0.0))
+	)
+	return selected
+
+
+func _public_news_clue_for_day(dossier: Dictionary, current_day_index: int) -> Dictionary:
+	for clue_value in dossier.get("public_clues", []):
+		if typeof(clue_value) != TYPE_DICTIONARY:
+			continue
+		var clue: Dictionary = clue_value
+		if str(clue.get("surface_id", "")) != "news":
+			continue
+		if str(clue.get("visibility", "public")) != "public":
+			continue
+		var earliest_day_index: int = int(clue.get("earliest_day_index", 0))
+		var latest_day_index: int = int(clue.get("latest_day_index", earliest_day_index))
+		if current_day_index < earliest_day_index or current_day_index > latest_day_index:
+			continue
+		return clue.duplicate(true)
+	return {}
+
+
+func _generated_news_company_source(
+	dossier: Dictionary,
+	clue: Dictionary,
+	company_row: Dictionary,
+	current_trade_date: Dictionary,
+	current_day_index: int
+) -> Dictionary:
+	var ticker: String = str(dossier.get("ticker", company_row.get("ticker", "")))
+	if ticker.is_empty():
+		return {}
+	var company_id: String = str(dossier.get("company_id", company_row.get("id", "")))
+	var company_name: String = str(company_row.get("name", ticker))
+	var sector_id: String = str(company_row.get("sector_id", ""))
+	var sector_name: String = str(company_row.get("sector_name", DataRepository.get_sector_definition(sector_id).get("name", sector_id.capitalize())))
+	var detail: String = _generated_company_news_detail(dossier, clue, company_name, sector_name)
+	return _generated_news_source_base(dossier, clue, current_trade_date, current_day_index, {
+		"generated_surface_id": "company_news",
+		"category": "generated_company_news",
+		"scope": "company",
+		"coverage_type": COVERAGE_MARKET_WRAP_CHATTER,
+		"topic_ids": _unique_string_array(["company", "public_chatter", "story"]),
+		"public_depth_level": PUBLIC_NEWS_DEPTH_LEVEL,
+		"event_id": "generated_dossier_company_news|%s" % str(dossier.get("story_id", "")),
+		"target_company_id": company_id,
+		"target_ticker": ticker,
+		"target_company_name": company_name,
+		"target_sector_id": sector_id,
+		"sector_name": sector_name,
+		"headline": "%s draws attention as its latest business signals get noticed" % ticker,
+		"summary": detail,
+		"headline_detail": detail,
+		"source_company_ids": _unique_string_array([company_id]),
+		"source_sector_ids": _unique_string_array([sector_id]),
+		"priority": 2.52 + float(dossier.get("priority", 0.0)) * 0.35 + float(clue.get("reliability", 0.0)) * 0.08
+	})
+
+
+func _generated_news_sector_source(
+	dossier: Dictionary,
+	clue: Dictionary,
+	fact: Dictionary,
+	company_row: Dictionary,
+	current_trade_date: Dictionary,
+	current_day_index: int
+) -> Dictionary:
+	var sector_id: String = str(fact.get("source_id", company_row.get("sector_id", "")))
+	if sector_id.is_empty():
+		return {}
+	var sector_definition: Dictionary = DataRepository.get_sector_definition(sector_id)
+	var sector_name: String = str(company_row.get("sector_name", sector_definition.get("name", sector_id.capitalize())))
+	var detail: String = "%s names are getting a cleaner public read as traders compare which companies have the stronger follow-through." % sector_name
+	return _generated_news_source_base(dossier, clue, current_trade_date, current_day_index, {
+		"generated_surface_id": "sector_news",
+		"category": "generated_sector_news",
+		"scope": "sector",
+		"coverage_type": COVERAGE_MACRO_COMMODITY_SECTOR,
+		"topic_ids": _unique_string_array(["sector", "subsector", "readthrough"]),
+		"public_depth_level": PUBLIC_NEWS_DEPTH_LEVEL,
+		"event_id": "generated_dossier_sector_news|%s|%s" % [sector_id, str(dossier.get("story_id", ""))],
+		"target_sector_id": sector_id,
+		"sector_name": sector_name,
+		"headline": "%s desks sort leaders from passengers" % sector_name,
+		"summary": detail,
+		"headline_detail": detail,
+		"source_company_ids": _source_company_ids_from_fact(fact, str(dossier.get("company_id", ""))),
+		"source_sector_ids": _source_sector_ids_from_fact(fact, sector_id),
+		"priority": 2.42 + float(dossier.get("priority", 0.0)) * 0.28 + float(clue.get("reliability", 0.0)) * 0.06
+	})
+
+
+func _generated_news_macro_source(
+	dossier: Dictionary,
+	clue: Dictionary,
+	fact: Dictionary,
+	company_row: Dictionary,
+	current_trade_date: Dictionary,
+	current_day_index: int
+) -> Dictionary:
+	var fact_type: String = str(fact.get("fact_type", "macro"))
+	var source_id: String = str(fact.get("source_id", "macro"))
+	var commodity_label: String = _public_fact_source_label(source_id)
+	var sector_id: String = str(company_row.get("sector_id", ""))
+	var sector_name: String = str(company_row.get("sector_name", DataRepository.get_sector_definition(sector_id).get("name", sector_id.capitalize())))
+	var detail: String = ""
+	if fact_type == "commodity":
+		detail = "%s remains the wider input to watch, with traders checking which exposed companies can turn the move into real numbers." % commodity_label
+	else:
+		detail = "The wider macro backdrop is giving traders a reason to re-check sector exposure before deciding which company stories deserve attention."
+	return _generated_news_source_base(dossier, clue, current_trade_date, current_day_index, {
+		"generated_surface_id": "macro_news",
+		"category": "generated_macro_news",
+		"scope": "market",
+		"coverage_type": COVERAGE_MACRO_COMMODITY_SECTOR,
+		"topic_ids": _unique_string_array([fact_type, "macro", "commodity", "sector"]),
+		"public_depth_level": PUBLIC_NEWS_DEPTH_LEVEL,
+		"event_id": "generated_dossier_macro_news|%s|%s|%s" % [fact_type, source_id, str(dossier.get("story_id", ""))],
+		"target_sector_id": sector_id,
+		"sector_name": sector_name,
+		"headline": "%s signal puts exposed names back on watch" % commodity_label,
+		"summary": detail,
+		"headline_detail": detail,
+		"source_company_ids": _source_company_ids_from_fact(fact, str(dossier.get("company_id", ""))),
+		"source_sector_ids": _source_sector_ids_from_fact(fact, sector_id),
+		"source_commodity_ids": _unique_string_array([source_id]) if fact_type == "commodity" else [],
+		"priority": 2.32 + float(dossier.get("priority", 0.0)) * 0.22 + float(clue.get("reliability", 0.0)) * 0.05
+	})
+
+
+func _generated_news_source_base(
+	dossier: Dictionary,
+	clue: Dictionary,
+	current_trade_date: Dictionary,
+	current_day_index: int,
+	overrides: Dictionary
+) -> Dictionary:
+	var source_data: Dictionary = overrides.duplicate(true)
+	source_data["event_family"] = "content_surface_generation"
+	source_data["tone"] = str(clue.get("tone", "mixed"))
+	source_data["day_index"] = current_day_index
+	source_data["trade_date"] = current_trade_date.duplicate(true)
+	source_data["generated_content_surface"] = true
+	source_data["source_system_id"] = GENERATED_DOSSIER_NEWS_SOURCE_SYSTEM_ID
+	source_data["story_id"] = str(dossier.get("story_id", ""))
+	source_data["story_family"] = str(dossier.get("story_family", "company_story"))
+	source_data["archetype_id"] = str(dossier.get("archetype_id", ""))
+	source_data["public_status"] = str(dossier.get("public_status", ""))
+	source_data["stage_id"] = str(dossier.get("stage_id", ""))
+	source_data["visibility"] = "public"
+	source_data["public_depth_level"] = PUBLIC_NEWS_DEPTH_LEVEL
+	source_data["detail_level"] = str(clue.get("detail_level", "low"))
+	source_data["reliability"] = float(clue.get("reliability", 0.0))
+	source_data["leak_risk"] = float(clue.get("leak_risk", 0.0))
+	source_data["source_fact_ids"] = _source_fact_ids_from_dossier(dossier, clue)
+	source_data["source_clue_ids"] = _unique_string_array([str(clue.get("clue_id", ""))])
+	return source_data
+
+
+func _generated_company_news_detail(dossier: Dictionary, _clue: Dictionary, company_name: String, sector_name: String) -> String:
+	match str(dossier.get("archetype_id", "")):
+		"contract_win":
+			return "%s is being watched after fresh work-pipeline signals appeared around the company." % company_name
+		"capex_expansion":
+			return "%s has a capacity story that is becoming easier for public investors to follow." % company_name
+		"margin_recovery":
+			return "%s is drawing attention as traders look for signs that cost pressure may be easing." % company_name
+		"commodity_tailwind":
+			return "%s is being linked to a better commodity backdrop inside %s." % [company_name, sector_name]
+		"commodity_headwind":
+			return "%s is being checked against a tougher commodity backdrop inside %s." % [company_name, sector_name]
+		"governance_risk":
+			return "%s is getting a more cautious public read after governance-related signals surfaced." % company_name
+		"balance_sheet_stress":
+			return "%s is under closer watch as traders focus on whether balance-sheet pressure is manageable." % company_name
+		"fraud_signal":
+			return "%s is facing a rougher public read as questions around reported activity get louder." % company_name
+		"turnaround":
+			return "%s is being watched for signs that the turnaround story has more than one good day behind it." % company_name
+		_:
+			return "%s has a fresh company-specific story that traders are beginning to place on watchlists." % company_name
+
+
+func _company_row_from_dossier(dossier: Dictionary) -> Dictionary:
+	var company_id: String = str(dossier.get("company_id", ""))
+	var ticker: String = str(dossier.get("ticker", company_id.to_upper()))
+	return {
+		"id": company_id,
+		"ticker": ticker,
+		"name": ticker,
+		"sector_id": "",
+		"sector_name": "",
+		"daily_change_pct": 0.0,
+		"current_price": 0.0
+	}
+
+
+func _best_fact_for_types(dossier: Dictionary, fact_types: Array) -> Dictionary:
+	for fact_value in dossier.get("cause_facts", []):
+		if typeof(fact_value) != TYPE_DICTIONARY:
+			continue
+		var fact: Dictionary = fact_value
+		if str(fact.get("fact_type", "")) in fact_types:
+			return fact.duplicate(true)
+	return {}
+
+
+func _source_fact_ids_from_dossier(dossier: Dictionary, clue: Dictionary) -> Array:
+	var clue_fact_ids: Array = _unique_string_array(clue.get("fact_ids", []))
+	if not clue_fact_ids.is_empty():
+		return clue_fact_ids
+	var fact_ids: Array = []
+	for fact_value in dossier.get("cause_facts", []):
+		if typeof(fact_value) != TYPE_DICTIONARY:
+			continue
+		var fact: Dictionary = fact_value
+		fact_ids.append(str(fact.get("fact_id", "")))
+	return _unique_string_array(fact_ids)
+
+
+func _source_company_ids_from_fact(fact: Dictionary, fallback_company_id: String) -> Array:
+	var company_ids: Array = []
+	if not fallback_company_id.is_empty():
+		company_ids.append(fallback_company_id)
+	for key in ["company_ids", "source_company_ids", "affected_company_ids", "related_company_ids"]:
+		for company_id_value in fact.get(key, []):
+			company_ids.append(str(company_id_value))
+	return _unique_string_array(company_ids)
+
+
+func _source_sector_ids_from_fact(fact: Dictionary, fallback_sector_id: String) -> Array:
+	var sector_ids: Array = []
+	if not fallback_sector_id.is_empty():
+		sector_ids.append(fallback_sector_id)
+	for key in ["sector_ids", "source_sector_ids", "affected_sector_ids", "related_sector_ids"]:
+		for sector_id_value in fact.get(key, []):
+			sector_ids.append(str(sector_id_value))
+	return _unique_string_array(sector_ids)
+
+
+func _public_fact_source_label(source_id: String) -> String:
+	var cleaned: String = source_id.replace("_", " ").strip_edges()
+	if cleaned.is_empty():
+		return "Macro"
+	var words: PackedStringArray = cleaned.split(" ")
+	var title_words: Array[String] = []
+	for word in words:
+		if word.is_empty():
+			continue
+		title_words.append(word.substr(0, 1).to_upper() + word.substr(1).to_lower())
+	return " ".join(title_words)
+
+
+func _apply_generated_news_metadata(article: Dictionary, source_data: Dictionary) -> Dictionary:
+	var enriched: Dictionary = article.duplicate(true)
+	for key in [
+		"generated_content_surface",
+		"generated_surface_id",
+		"generated_scope_id",
+		"source_system_id",
+		"story_id",
+		"story_family",
+		"archetype_id",
+		"public_status",
+		"stage_id",
+		"visibility",
+		"detail_level",
+		"reliability",
+		"leak_risk",
+		"source_fact_ids",
+		"source_clue_ids",
+		"source_company_ids",
+		"source_sector_ids",
+		"source_commodity_ids",
+		"source_event_ids",
+		"topic_ids",
+		"coverage_type",
+		"public_depth_level",
+		"specificity",
+		"noise_level"
+	]:
+		enriched[key] = source_data.get(key)
+	return enriched
 
 
 func _is_public_calendar_event(event_data: Dictionary) -> bool:
@@ -575,6 +1413,9 @@ func _build_public_calendar_source(event_data: Dictionary) -> Dictionary:
 		var provider_label: String = str(source_data.get("provider_label", "Index"))
 		var ticker: String = str(source_data.get("target_ticker", ""))
 		source_data["scope"] = str(source_data.get("scope", "market" if ticker.is_empty() else "company"))
+		source_data["coverage_type"] = COVERAGE_CORPORATE_ACTION_FILING
+		source_data["topic_ids"] = _unique_string_array(["index_review", "corporate_action", "filing"])
+		source_data["public_depth_level"] = PUBLIC_NEWS_DEPTH_LEVEL
 		source_data["headline"] = "%s review is on the calendar" % provider_label
 		source_data["summary"] = "%s review timing is now visible. Traders are watching announcement and effective-date passive flow." % provider_label
 		return source_data
@@ -582,6 +1423,9 @@ func _build_public_calendar_source(event_data: Dictionary) -> Dictionary:
 	var focus_label: String = ticker if not ticker.is_empty() else str(source_data.get("target_company_name", "The company"))
 	source_data["scope"] = "company"
 	source_data["event_family"] = str(source_data.get("event_family", "corporate_action"))
+	source_data["coverage_type"] = COVERAGE_CORPORATE_ACTION_FILING
+	source_data["topic_ids"] = _unique_string_array(["corporate_action", "filing", "meeting"])
+	source_data["public_depth_level"] = PUBLIC_NEWS_DEPTH_LEVEL
 	source_data["headline"] = "%s has a public corporate update on the calendar" % focus_label
 	source_data["summary"] = "%s now has a public update to follow. Traders can use the calendar and the next market reaction to judge whether the event still matters." % focus_label
 	return source_data
@@ -596,11 +1440,16 @@ func _build_market_wrap_article(
 ) -> Dictionary:
 	if latest_market_entry.is_empty():
 		return {}
+	if not _outlet_has_coverage(outlet, COVERAGE_MARKET_WRAP_CHATTER):
+		return {}
 
 	var market_wrap_source: Dictionary = latest_market_entry.duplicate(true)
 	market_wrap_source["scope"] = "market"
 	market_wrap_source["category"] = "market_wrap"
 	market_wrap_source["event_family"] = "market"
+	market_wrap_source["coverage_type"] = COVERAGE_MARKET_WRAP_CHATTER
+	market_wrap_source["topic_ids"] = _unique_string_array(["market_wrap", "breadth", "sentiment"])
+	market_wrap_source["public_depth_level"] = PUBLIC_NEWS_DEPTH_LEVEL
 	market_wrap_source["tone"] = _tone_from_change(float(latest_market_entry.get("average_change_pct", 0.0)))
 	var article_id: String = "market_wrap|%s|%s" % [
 		str(outlet.get("id", "market_wrap")),
@@ -662,15 +1511,51 @@ func _build_article_record(
 	var public_story_angle: String = str(context.get("public_story_angle", ""))
 	var public_confidence_label: String = str(context.get("public_confidence_label", ""))
 	var public_continuity_phrase: String = str(context.get("public_continuity_phrase", ""))
+	var coverage_type: String = _source_coverage_type(source_data)
+	var body_sections: Dictionary = _build_article_body_sections(feed_data, voice_profile, source_data, context, stage_key, voice_seed)
+	var article_headline: String = headline if _is_policy_parody_source(source_data) else _compose_headline(outlet, voice_profile, headline, "%s|prefix" % voice_seed)
+	var article_deck: String = deck
+	var lead_text: String = str(body_sections.get("lead", ""))
+	var context_text: String = str(body_sections.get("context", ""))
+	var market_reaction_text: String = str(body_sections.get("market_reaction", ""))
+	var watch_text: String = str(body_sections.get("what_to_watch", ""))
+	var body_text: String = str(body_sections.get("body", ""))
+	article_headline = _public_news_visible_text(article_headline, str(context.get("focus_label", "Market note")))
+	article_deck = _public_news_visible_text(article_deck, str(context.get("detail_blend", "Public details are still developing.")))
+	lead_text = _public_news_visible_text(lead_text, article_deck)
+	context_text = _public_news_visible_text(context_text, "")
+	market_reaction_text = _public_news_visible_text(market_reaction_text, "")
+	watch_text = _public_news_visible_text(watch_text, "Traders are watching the next public update and market reaction.")
+	body_text = _public_news_visible_text(body_text, _join_paragraphs([lead_text, context_text, market_reaction_text, watch_text]))
+	var topic_ids: Array = _source_topic_ids(source_data, coverage_type)
+	var source_company_ids: Array = _unique_string_array(source_data.get("source_company_ids", []))
+	if not str(context.get("target_company_id", "")).is_empty():
+		source_company_ids.append(str(context.get("target_company_id", "")))
+	source_company_ids = _unique_string_array(source_company_ids)
+	var source_sector_ids: Array = _unique_string_array(source_data.get("source_sector_ids", []))
+	if not str(context.get("target_sector_id", "")).is_empty():
+		source_sector_ids.append(str(context.get("target_sector_id", "")))
+	source_sector_ids = _unique_string_array(source_sector_ids)
 
 	return {
 		"id": article_id,
 		"outlet_id": str(outlet.get("id", "")),
 		"outlet_label": str(outlet.get("label", "News")),
-		"intel_level": int(outlet.get("intel_level", 1)),
-		"headline": headline if _is_policy_parody_source(source_data) else _compose_headline(outlet, voice_profile, headline, "%s|prefix" % voice_seed),
-		"deck": deck,
-		"body": _build_article_body(feed_data, voice_profile, source_data, context, stage_key, voice_seed),
+		"intel_level": PUBLIC_NEWS_DEPTH_LEVEL,
+		"public_depth_level": _source_public_depth_level(source_data),
+		"access_model": NEWS_ACCESS_MODEL,
+		"coverage_type": coverage_type,
+		"topic_ids": topic_ids,
+		"reliability": _source_reliability(source_data, outlet, coverage_type),
+		"specificity": _source_specificity(source_data),
+		"noise_level": _source_noise_level(source_data, outlet, coverage_type),
+		"headline": article_headline,
+		"deck": article_deck,
+		"lead": lead_text,
+		"context": context_text,
+		"market_reaction": market_reaction_text,
+		"what_to_watch": watch_text,
+		"body": body_text,
 		"day_index": day_index,
 		"trade_date": trade_date.duplicate(true),
 		"progress_label": str(feed_data.get("progress_labels", {}).get(progress_key, "Developing")),
@@ -683,6 +1568,13 @@ func _build_article_record(
 		"sector_name": str(context.get("sector_name", "")),
 		"person_name": str(context.get("person_name", "")),
 		"event_family": str(source_data.get("event_family", "")),
+		"source_system_id": str(source_data.get("source_system_id", "")),
+		"source_fact_ids": _unique_string_array(source_data.get("source_fact_ids", [])),
+		"source_clue_ids": _unique_string_array(source_data.get("source_clue_ids", [])),
+		"source_company_ids": source_company_ids,
+		"source_sector_ids": source_sector_ids,
+		"source_commodity_ids": _unique_string_array(source_data.get("source_commodity_ids", [])),
+		"source_event_ids": _unique_string_array(source_data.get("source_event_ids", [])),
 		"source_chain_id": str(source_data.get("source_chain_id", "")),
 		"chain_family": str(source_data.get("chain_family", "")),
 		"meeting_id": str(source_data.get("meeting_id", "")),
@@ -716,10 +1608,21 @@ func _build_article_body(
 	stage_key: String,
 	seed_key: String
 ) -> String:
+	return str(_build_article_body_sections(feed_data, voice_profile, source_data, context, stage_key, seed_key).get("body", ""))
+
+
+func _build_article_body_sections(
+	feed_data: Dictionary,
+	voice_profile: Dictionary,
+	source_data: Dictionary,
+	context: Dictionary,
+	stage_key: String,
+	seed_key: String
+) -> Dictionary:
 	if _is_policy_parody_source(source_data):
 		var policy_body: String = _build_policy_parody_article_body(feed_data, source_data, context, seed_key)
 		if not policy_body.is_empty():
-			return policy_body
+			return _article_sections_from_body(policy_body)
 
 	var lead_template: String = _pick_voice_template(voice_profile, "lead_templates", stage_key, "%s|lead" % seed_key)
 	var context_template: String = str(_pick_from_pool(voice_profile.get("context_templates", []), "%s|context" % seed_key))
@@ -752,7 +1655,75 @@ func _build_article_body(
 		paragraphs.append(impact_paragraph)
 	if not closing_paragraph.is_empty():
 		paragraphs.append(closing_paragraph)
-	return _join_paragraphs(paragraphs)
+	return {
+		"lead": lead_paragraph,
+		"context": context_paragraph,
+		"market_reaction": market_reaction_paragraph,
+		"source_color": source_color_paragraph,
+		"continuity": continuity_paragraph,
+		"impact": impact_paragraph,
+		"what_to_watch": closing_paragraph,
+		"body": _join_paragraphs(paragraphs)
+	}
+
+
+func _article_sections_from_body(body: String) -> Dictionary:
+	var paragraphs: PackedStringArray = body.split("\n\n")
+	var lead: String = ""
+	var context_text: String = ""
+	var market_reaction: String = ""
+	var what_to_watch: String = ""
+	if paragraphs.size() > 0:
+		lead = str(paragraphs[0])
+	if paragraphs.size() > 1:
+		context_text = str(paragraphs[1])
+	if paragraphs.size() > 2:
+		market_reaction = str(paragraphs[2])
+	if paragraphs.size() > 0:
+		what_to_watch = str(paragraphs[paragraphs.size() - 1])
+	return {
+		"lead": lead,
+		"context": context_text,
+		"market_reaction": market_reaction,
+		"what_to_watch": what_to_watch,
+		"body": body
+	}
+
+
+func _public_news_visible_text(text: String, fallback: String) -> String:
+	var resolved: String = text.strip_edges()
+	if resolved.is_empty():
+		return fallback.strip_edges()
+	if _public_news_text_has_private_terms(resolved):
+		return fallback.strip_edges()
+	return resolved
+
+
+func _public_news_text_has_private_terms(text: String) -> bool:
+	var lower_text: String = text.to_lower()
+	var forbidden_terms: Array = [
+		"truth_state",
+		"source_quality",
+		"source trail",
+		"source story",
+		"private clue",
+		"network clue",
+		"relationship edge",
+		"hidden_positioning",
+		"formal_agenda_or_filing",
+		"current_timeline_state",
+		"source reliability",
+		"price-bias read",
+		"raw statement",
+		"system metadata",
+		"clue|",
+		"fact|",
+		"story|"
+	]
+	for term_value in forbidden_terms:
+		if lower_text.contains(str(term_value)):
+			return true
+	return false
 
 
 func _build_policy_parody_article_body(feed_data: Dictionary, source_data: Dictionary, context: Dictionary, seed_key: String) -> String:
@@ -1300,6 +2271,8 @@ func _body_template_keys(source_data: Dictionary) -> Array:
 
 func _category_family_key(source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("generated_"):
+		return "generated_news"
 	if category.begins_with("index_") or str(source_data.get("event_family", "")) == "index_review":
 		return "index_review"
 	if category.begins_with("corporate_action"):
@@ -1324,6 +2297,8 @@ func _category_family_key(source_data: Dictionary) -> String:
 
 func _public_confidence_label(stage_key: String, source_data: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category.begins_with("generated_"):
+		return "Public story"
 	if category == "index_inclusion" or category == "index_exclusion":
 		return "Effective flow" if str(source_data.get("review_stage", "")) == "effective" else "Index review"
 	if category == "index_watch":
@@ -1353,6 +2328,12 @@ func _public_confidence_label(stage_key: String, source_data: Dictionary) -> Str
 
 func _public_story_angle(source_data: Dictionary, stage_key: String, tone: String, scope: String) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category == "generated_macro_news":
+		return "Macro read"
+	if category == "generated_sector_news":
+		return "Sector read"
+	if category == "generated_company_news":
+		return "Company story"
 	if category.begins_with("index_") or str(source_data.get("event_family", "")) == "index_review":
 		return "Index review"
 	if category.begins_with("corporate_action"):
@@ -1473,6 +2454,12 @@ func _public_status_label(feed_data: Dictionary, progress_key: String, stage_key
 func _public_section_label(source_data: Dictionary, context: Dictionary) -> String:
 	var category: String = str(source_data.get("category", ""))
 	var event_family: String = str(source_data.get("event_family", ""))
+	if category == "generated_macro_news":
+		return "Macro Watch"
+	if category == "generated_sector_news":
+		return "Sector Watch"
+	if category == "generated_company_news":
+		return "Companies"
 	if category.begins_with("index_") or event_family == "index_review":
 		return "Index Review"
 	if category.begins_with("corporate_action") or category == "corporate_meeting":
@@ -1494,6 +2481,12 @@ func _public_section_label(source_data: Dictionary, context: Dictionary) -> Stri
 
 func _image_slot_for_article(source_data: Dictionary, context: Dictionary, stage_key: String) -> String:
 	var category: String = str(source_data.get("category", ""))
+	if category == "generated_macro_news":
+		return "market"
+	if category == "generated_sector_news":
+		return "market"
+	if category == "generated_company_news":
+		return "company"
 	if category.begins_with("index_") or str(source_data.get("event_family", "")) == "index_review":
 		return "market"
 	if category.begins_with("corporate_action") or category == "corporate_meeting":
@@ -1516,11 +2509,27 @@ func _market_entry_for_day(market_history_lookup: Dictionary, latest_market_entr
 func _append_unique_article(articles: Array, seen_ids: Dictionary, article: Dictionary) -> void:
 	if article.is_empty():
 		return
-	var article_id: String = str(article.get("id", ""))
+	var normalized_article: Dictionary = _article_with_public_metadata_defaults(article)
+	var article_id: String = str(normalized_article.get("id", ""))
 	if article_id.is_empty() or seen_ids.has(article_id):
 		return
 	seen_ids[article_id] = true
-	articles.append(article)
+	articles.append(normalized_article)
+
+
+func _article_with_public_metadata_defaults(article: Dictionary) -> Dictionary:
+	var normalized: Dictionary = article.duplicate(true)
+	normalized["public_depth_level"] = PUBLIC_NEWS_DEPTH_LEVEL
+	normalized["intel_level"] = PUBLIC_NEWS_DEPTH_LEVEL
+	if str(normalized.get("access_model", "")).strip_edges().is_empty():
+		normalized["access_model"] = NEWS_ACCESS_MODEL
+	if str(normalized.get("coverage_type", "")).strip_edges().is_empty():
+		normalized["coverage_type"] = _default_coverage_type_for_outlet_id(str(normalized.get("outlet_id", "")))
+	if _unique_string_array(normalized.get("topic_ids", [])).is_empty():
+		normalized["topic_ids"] = _default_topic_ids_for_coverage(str(normalized.get("coverage_type", "")))
+	else:
+		normalized["topic_ids"] = _unique_string_array(normalized.get("topic_ids", []))
+	return normalized
 
 
 func _compose_headline(outlet: Dictionary, voice_profile: Dictionary, base_headline: String, seed_key: String) -> String:
@@ -1742,6 +2751,23 @@ func _phase_phrase(phase_id: String, phase_label: String, tone: String, stage_ke
 			return "the close"
 		_:
 			return "a recap stage" if tone != "positive" else "a review stage"
+
+
+func _unique_string_array(source_value: Variant) -> Array:
+	var source_array: Array = []
+	if typeof(source_value) == TYPE_ARRAY:
+		source_array = source_value
+	else:
+		source_array = [source_value]
+	var seen: Dictionary = {}
+	var result: Array = []
+	for item_value in source_array:
+		var item: String = str(item_value).strip_edges()
+		if item.is_empty() or seen.has(item):
+			continue
+		seen[item] = true
+		result.append(item)
+	return result
 
 
 func _market_state_label(market_change_pct: float, advancers: int, decliners: int) -> String:

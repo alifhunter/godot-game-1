@@ -931,7 +931,7 @@ func _social_post_capture_payload(post: Dictionary) -> Dictionary:
 			detail_parts.append(line_text)
 	var label_text: String = "Twooter post: %s" % account_name
 	var value_text: String = "$%s" % target_ticker if not target_ticker.is_empty() else "Public chatter"
-	return {
+	return _copy_generated_surface_capture_metadata({
 		"source_type": "twooter_post",
 		"source_label": "Twooter",
 		"category": "twooter",
@@ -942,7 +942,40 @@ func _social_post_capture_payload(post: Dictionary) -> Dictionary:
 		"detail": " ".join(detail_parts),
 		"source_id": "twooter_post_%s" % str(post.get("id", _node_token(body_text.left(48)))),
 		"impact": _social_tone_to_impact(str(post.get("tone", "mixed")))
-	}
+	}, post)
+
+
+func _copy_generated_surface_capture_metadata(payload: Dictionary, source: Dictionary) -> Dictionary:
+	if payload.is_empty():
+		return payload
+	for key_value in [
+		"generated_content_surface",
+		"generated_surface_id",
+		"generated_scope_id",
+		"source_system_id",
+		"story_id",
+		"story_family",
+		"archetype_id",
+		"public_status",
+		"stage_id",
+		"visibility",
+		"detail_level",
+		"reliability",
+		"leak_risk",
+		"source_fact_ids",
+		"source_clue_ids",
+		"source_company_ids",
+		"source_sector_ids",
+		"source_event_ids",
+		"account_voice",
+		"public_confidence_label"
+	]:
+		var key: String = str(key_value)
+		if source.has(key):
+			payload[key] = source.get(key)
+	if str(payload.get("surface_id", "")).strip_edges().is_empty() and not str(payload.get("generated_surface_id", "")).strip_edges().is_empty():
+		payload["surface_id"] = str(payload.get("generated_surface_id", "")).strip_edges()
+	return payload
 
 
 func _social_dm_capture_payload(row: Dictionary, account_id: String) -> Dictionary:

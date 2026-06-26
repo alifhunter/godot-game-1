@@ -1033,9 +1033,10 @@ func _refresh_evidence_detail() -> void:
 	if option.is_empty():
 		evidence_detail_label.text = "Capture evidence from Key Stats, Chart, News, Twooter, or Network first."
 		return
-	evidence_detail_label.text = "%s\nImpact: %s" % [
+	evidence_detail_label.text = "%s\nImpact: %s%s" % [
 		str(option.get("detail", "")),
-		str(option.get("impact", "mixed")).capitalize()
+		str(option.get("impact", "mixed")).capitalize(),
+		_evidence_provenance_detail_suffix(option)
 	]
 
 
@@ -2950,6 +2951,28 @@ func _make_empty_evidence_label(text: String) -> Label:
 	return label
 
 
+func _evidence_source_header(row: Dictionary) -> String:
+	var path: String = str(row.get("provenance_path", "")).strip_edges()
+	if not path.is_empty():
+		return path.to_upper()
+	var provenance_label: String = str(row.get("provenance_label", "")).strip_edges()
+	var source_label: String = str(row.get("source_label", row.get("source_type", "Research"))).strip_edges()
+	var category_label: String = str(row.get("category_label", row.get("category", "Evidence"))).strip_edges()
+	var parts: Array = []
+	for value in [provenance_label, source_label, category_label]:
+		var normalized: String = str(value).strip_edges()
+		if not normalized.is_empty() and not parts.has(normalized):
+			parts.append(normalized)
+	return " | ".join(parts).to_upper()
+
+
+func _evidence_provenance_detail_suffix(row: Dictionary) -> String:
+	var path: String = str(row.get("provenance_path", "")).strip_edges()
+	if path.is_empty():
+		return ""
+	return "\nSource path: %s" % path
+
+
 func _build_evidence_card(option: Dictionary, _thesis: Dictionary) -> Button:
 	var option_key: String = _evidence_option_key(option)
 	var impact: String = str(option.get("impact", "mixed"))
@@ -2982,11 +3005,7 @@ func _build_evidence_card(option: Dictionary, _thesis: Dictionary) -> Button:
 
 	var source_label := Label.new()
 	source_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var source_text: String = "%s | %s" % [
-		str(option.get("source_label", option.get("source_type", "Research"))),
-		str(option.get("category_label", option.get("category", "Evidence")))
-	]
-	source_label.text = source_text.to_upper()
+	source_label.text = _evidence_source_header(option)
 	source_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_style_label(source_label, COLOR_MUTED, 10)
 	vbox.add_child(source_label)
@@ -3026,7 +3045,7 @@ func _build_evidence_card(option: Dictionary, _thesis: Dictionary) -> Button:
 	detail_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var detail: String = str(option.get("detail", "No current context."))
-	detail_label.text = detail
+	detail_label.text = detail + _evidence_provenance_detail_suffix(option)
 	_style_label(detail_label, COLOR_MUTED, 11)
 	vbox.add_child(detail_label)
 	return button
@@ -3057,10 +3076,7 @@ func _build_attached_evidence_card(row: Dictionary) -> PanelContainer:
 	title_box.add_theme_constant_override("separation", 2)
 	title_row.add_child(title_box)
 	var source_label := Label.new()
-	source_label.text = "%s | %s" % [
-		str(row.get("source_label", row.get("source_type", "Research"))).to_upper(),
-		str(row.get("category_label", row.get("category", "Evidence"))).to_upper()
-	]
+	source_label.text = _evidence_source_header(row)
 	source_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_style_label(source_label, COLOR_MUTED, 10)
 	title_box.add_child(source_label)
@@ -3083,7 +3099,7 @@ func _build_attached_evidence_card(row: Dictionary) -> PanelContainer:
 	_style_label(value_label, _impact_color(impact), 13)
 	vbox.add_child(value_label)
 	var detail_label := Label.new()
-	detail_label.text = str(row.get("detail", "No current context."))
+	detail_label.text = str(row.get("detail", "No current context.")) + _evidence_provenance_detail_suffix(row)
 	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_style_label(detail_label, COLOR_MUTED, 11)
 	vbox.add_child(detail_label)

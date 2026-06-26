@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/PriceExposureResolverContractTest.gd" id="1_price_exposure_resolver_contract"]
+
+[node name="PriceExposureResolverContractTest" type="Node"]
+script = ExtResource("1_price_exposure_resolver_contract")

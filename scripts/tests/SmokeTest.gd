@@ -1171,25 +1171,32 @@ func _validate_policy_parody_feed_generation(event_id: String, trade_date: Dicti
 	)
 	var saw_policy_article: bool = false
 	var combined_policy_article_text: String = ""
-	var public_feed: Dictionary = news_snapshot.get("feeds", {}).get("gorengan_daily", {})
-	for article_value in public_feed.get("articles", []):
-		if typeof(article_value) != TYPE_DICTIONARY:
+	for feed_value in news_snapshot.get("feeds", {}).values():
+		if typeof(feed_value) != TYPE_DICTIONARY:
 			continue
-		var article: Dictionary = article_value
-		if not str(article.get("category", "")).begins_with("policy_"):
+		var public_feed: Dictionary = feed_value
+		if str(public_feed.get("coverage_type", "")) != "macro_commodity_sector":
 			continue
-		saw_policy_article = true
-		var article_text: String = "%s\n%s\n%s\n%s\n%s" % [
-			str(article.get("headline", "")),
-			str(article.get("deck", "")),
-			str(article.get("body", "")),
-			str(article.get("public_story_angle", "")),
-			str(article.get("public_confidence_label", ""))
-		]
-		combined_policy_article_text = "%s\n%s" % [combined_policy_article_text, article_text]
-		var article_guardrail_error: String = _policy_parody_visible_guardrail_violation(article_text, "policy-parody News article")
-		if not article_guardrail_error.is_empty():
-			return article_guardrail_error
+		for article_value in public_feed.get("articles", []):
+			if typeof(article_value) != TYPE_DICTIONARY:
+				continue
+			var article: Dictionary = article_value
+			if not str(article.get("category", "")).begins_with("policy_"):
+				continue
+			if str(article.get("coverage_type", "")) != "macro_commodity_sector":
+				return "Smoke test expected policy-parody News articles to use macro topic coverage."
+			saw_policy_article = true
+			var article_text: String = "%s\n%s\n%s\n%s\n%s" % [
+				str(article.get("headline", "")),
+				str(article.get("deck", "")),
+				str(article.get("body", "")),
+				str(article.get("public_story_angle", "")),
+				str(article.get("public_confidence_label", ""))
+			]
+			combined_policy_article_text = "%s\n%s" % [combined_policy_article_text, article_text]
+			var article_guardrail_error: String = _policy_parody_visible_guardrail_violation(article_text, "policy-parody News article")
+			if not article_guardrail_error.is_empty():
+				return article_guardrail_error
 	if not saw_policy_article:
 		return "Smoke test expected policy-parody active special events to create a public News article."
 	var article_specificity_error: String = _policy_parody_expected_terms_missing(combined_policy_article_text, event_id, "policy-parody News article")
@@ -8665,12 +8672,30 @@ func _run_scenario(
 		await get_tree().process_frame
 
 	var initial_news_snapshot: Dictionary = GameManager.get_news_snapshot()
-	if _count_unlocked_rows(initial_news_snapshot.get("outlets", [])) != 1:
+	var initial_news_outlets: Array = initial_news_snapshot.get("outlets", [])
+	var initial_news_coverage_types: Dictionary = {}
+	for news_outlet_value in initial_news_outlets:
+		if typeof(news_outlet_value) != TYPE_DICTIONARY:
+			continue
+		var news_outlet: Dictionary = news_outlet_value
+		if not bool(news_outlet.get("unlocked", false)):
+			continue
+		initial_news_coverage_types[str(news_outlet.get("coverage_type", ""))] = true
+	if (
+		str(initial_news_snapshot.get("access_model", "")) != "free_topic_coverage" or
+		int(initial_news_snapshot.get("public_depth_level", 0)) != 1 or
+		initial_news_outlets.is_empty() or
+		_count_unlocked_rows(initial_news_outlets) != initial_news_outlets.size() or
+		not initial_news_coverage_types.has("market_wrap_chatter") or
+		not initial_news_coverage_types.has("macro_commodity_sector") or
+		not initial_news_coverage_types.has("corporate_action_filing") or
+		not initial_news_coverage_types.has("early_signal")
+	):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected News to start with only intel level 1 unlocked."
+			"message": "Smoke test expected News to start as a fully unlocked free topic-coverage surface."
 		}
 	var initial_social_snapshot: Dictionary = GameManager.get_twooter_snapshot()
 	var initial_social_accounts: Array = initial_social_snapshot.get("accounts", [])
@@ -9443,19 +9468,20 @@ func _run_scenario(
 
 	SaveManager.flush_pending_save()
 	var cash_before_upgrade: float = float(RunState.player_portfolio.get("cash", 0.0))
-	var news_upgrade_button: Button = game_root.find_child("UpgradeBuyButton_news_content", true, false) as Button
+	var upgrade_smoke_track_id: String = "daily_action_points"
+	var smoke_upgrade_button: Button = game_root.find_child("UpgradeBuyButton_%s" % upgrade_smoke_track_id, true, false) as Button
 	var upgrade_purchase_dialog: ConfirmationDialog = game_root.find_child("UpgradePurchaseDialog", true, false) as ConfirmationDialog
-	if news_upgrade_button == null or upgrade_purchase_dialog == null:
+	if smoke_upgrade_button == null or upgrade_purchase_dialog == null:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected the Upgrades shop to expose a News Content buy button and confirmation dialog."
+			"message": "Smoke test expected the Upgrades shop to expose a buy button and confirmation dialog."
 		}
 
-	news_upgrade_button.emit_signal("pressed")
+	smoke_upgrade_button.emit_signal("pressed")
 	await get_tree().process_frame
-	if not upgrade_purchase_dialog.visible or RunState.get_upgrade_tier("news_content") != 4 or not is_equal_approx(float(RunState.player_portfolio.get("cash", 0.0)), cash_before_upgrade):
+	if not upgrade_purchase_dialog.visible or RunState.get_upgrade_tier(upgrade_smoke_track_id) != 4 or not is_equal_approx(float(RunState.player_portfolio.get("cash", 0.0)), cash_before_upgrade):
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
@@ -9505,12 +9531,12 @@ func _run_scenario(
 
 	upgrade_purchase_dialog.emit_signal("confirmed")
 	await get_tree().process_frame
-	if RunState.get_upgrade_tier("news_content") != 3:
+	if RunState.get_upgrade_tier(upgrade_smoke_track_id) != 3:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected confirming News Content once to improve it to tier 3."
+			"message": "Smoke test expected confirming an upgrade once to improve it to tier 3."
 		}
 	if float(RunState.player_portfolio.get("cash", 0.0)) >= cash_before_upgrade:
 		game_root.queue_free()
@@ -9519,12 +9545,12 @@ func _run_scenario(
 			"success": false,
 			"message": "Smoke test expected buying an upgrade to spend cash."
 		}
-	if _count_unlocked_rows(GameManager.get_news_snapshot().get("outlets", [])) != 2:
+	if int(GameManager.get_daily_action_snapshot().get("limit", 0)) != 15:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected News Content tier 3 to unlock intel level 2."
+			"message": "Smoke test expected Daily Action Points tier 3 to raise the daily limit to 15."
 		}
 	if not SaveManager.has_pending_save():
 		game_root.queue_free()
@@ -9541,25 +9567,25 @@ func _run_scenario(
 			"message": "Smoke test expected the pending autosave flush to complete immediately."
 		}
 	var flushed_upgrade_save: Dictionary = SaveManager.load_run()
-	if int(flushed_upgrade_save.get("upgrade_tiers", {}).get("news_content", 0)) != 3:
+	if int(flushed_upgrade_save.get("upgrade_tiers", {}).get(upgrade_smoke_track_id, 0)) != 3:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
-			"message": "Smoke test expected flush_pending_save to persist the upgraded News Content tier."
+			"message": "Smoke test expected flush_pending_save to persist the upgraded tier."
 		}
 	var saved_upgrade_state: Dictionary = RunState.to_save_dict()
 	RunState.load_from_dict(saved_upgrade_state)
-	if RunState.get_upgrade_tier("news_content") != 3:
+	if RunState.get_upgrade_tier(upgrade_smoke_track_id) != 3:
 		game_root.queue_free()
 		await get_tree().process_frame
 		return {
 			"success": false,
 			"message": "Smoke test expected upgrade tiers to persist through save/load."
 		}
-	if difficulty_id != GameManager.DEFAULT_DIFFICULTY_ID:
-		RunState.player_portfolio["cash"] = cash_before_upgrade
-		RunState.set_upgrade_tier("news_content", 4)
+	RunState.player_portfolio["cash"] = cash_before_upgrade
+	RunState.set_upgrade_tier(upgrade_smoke_track_id, 4)
+	SaveManager.save_run(RunState.to_save_dict())
 
 	if difficulty_id == GameManager.DEFAULT_DIFFICULTY_ID:
 		var trading_fee_result: Dictionary = GameManager.purchase_upgrade("trading_fee")
@@ -12191,6 +12217,32 @@ func _run_scenario(
 				"message": "Smoke test expected company Profile background to read naturally and avoid raw wording like %s." % forbidden_profile_term
 			}
 
+	var previous_work_tab: int = work_tabs.current_tab
+	var profile_tab_index: int = -1
+	for tab_index in range(work_tabs.get_tab_count()):
+		if work_tabs.get_tab_title(tab_index) == "Profile":
+			profile_tab_index = tab_index
+			break
+	if profile_tab_index >= 0:
+		work_tabs.current_tab = profile_tab_index
+		await get_tree().process_frame
+
+	var profile_top_down_card: PanelContainer = game_root.find_child("ProfileTopDownLinksCard", true, false) as PanelContainer
+	var profile_top_down_filing_button: Button = game_root.find_child("ProfileTopDownFilingButton", true, false) as Button
+	if (
+		(profile_top_down_card != null and profile_top_down_card.is_visible_in_tree()) or
+		(profile_top_down_filing_button != null and profile_top_down_filing_button.is_visible_in_tree())
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected company Profile to keep the compact Top-Down Links card hidden."
+		}
+	if previous_work_tab >= 0 and previous_work_tab < work_tabs.get_tab_count():
+		work_tabs.current_tab = previous_work_tab
+		await get_tree().process_frame
+
 	var referral_setup: Dictionary = _first_referral_setup(tracked_company_id)
 	if referral_setup.is_empty():
 		game_root.queue_free()
@@ -12939,6 +12991,7 @@ func _run_scenario(
 	var cash_flow_rows: VBoxContainer = game_root.find_child("CashFlowRows", true, false) as VBoxContainer
 	var financials_previous_button: Button = game_root.find_child("FinancialsPreviousButton", true, false) as Button
 	var financials_next_button: Button = game_root.find_child("FinancialsNextButton", true, false) as Button
+	var financial_statement_report_button: Button = game_root.find_child("FinancialStatementReportButton", true, false) as Button
 	if (
 		income_statement_rows == null or
 		balance_sheet_rows == null or
@@ -12948,6 +13001,7 @@ func _run_scenario(
 		cash_flow_rows.get_child_count() <= 1 or
 		financials_previous_button == null or
 		financials_next_button == null or
+		financial_statement_report_button == null or
 		financials_previous_button.disabled or
 		not financials_next_button.disabled
 	):
@@ -12956,6 +13010,309 @@ func _run_scenario(
 		return {
 			"success": false,
 			"message": "Smoke test expected the separate Financials tab rows and period navigation to remain populated."
+		}
+	if financial_statement_report_button.text != "View Consolidated Financial Statement":
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Financials annual report button label to be View Consolidated Financial Statement."
+		}
+
+	financial_statement_report_button.emit_signal("pressed")
+	await get_tree().process_frame
+	var financial_statement_report_overlay: Control = game_root.find_child("FinancialStatementReportOverlay", true, false) as Control
+	var financial_statement_report_panel: PanelContainer = game_root.find_child("FinancialStatementReportPanel", true, false) as PanelContainer
+	var financial_statement_report_toc_panel: PanelContainer = game_root.find_child("FinancialStatementReportTocPanel", true, false) as PanelContainer
+	var financial_statement_report_page: PanelContainer = game_root.find_child("FinancialStatementReportPage", true, false) as PanelContainer
+	var financial_statement_report_page_margin: MarginContainer = game_root.find_child("FinancialStatementReportPageMargin", true, false) as MarginContainer
+	var financial_statement_report_page_scroll: ScrollContainer = game_root.find_child("FinancialStatementReportPageScroll", true, false) as ScrollContainer
+	var financial_statement_report_body: VBoxContainer = game_root.find_child("FinancialStatementReportBody", true, false) as VBoxContainer
+	var financial_statement_report_header: VBoxContainer = game_root.find_child("FinancialStatementReportDocumentHeader", true, false) as VBoxContainer
+	var financial_statement_report_close: Button = game_root.find_child("FinancialStatementReportCloseButton", true, false) as Button
+	if (
+		financial_statement_report_overlay == null or
+		not financial_statement_report_overlay.visible or
+		financial_statement_report_panel == null or
+		financial_statement_report_toc_panel == null or
+		financial_statement_report_page == null or
+		financial_statement_report_page_margin == null or
+		financial_statement_report_page_scroll == null or
+		financial_statement_report_body == null or
+		financial_statement_report_header == null or
+		financial_statement_report_body.get_child_count() < 6 or
+		financial_statement_report_close == null
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Financials Report button to open a populated statement overlay."
+		}
+	var report_rect: Rect2 = financial_statement_report_panel.get_global_rect()
+	var page_rect: Rect2 = financial_statement_report_page.get_global_rect()
+	var viewport_rect: Rect2 = game_root.get_viewport_rect()
+	if (
+		report_rect.size.x < 480.0 or
+		report_rect.size.y < 360.0 or
+		report_rect.position.x < 0.0 or
+		report_rect.position.y < 0.0 or
+		report_rect.end.x > viewport_rect.size.x + 1.0 or
+		report_rect.end.y > viewport_rect.size.y + 1.0
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Financials report overlay to stay within the viewport."
+		}
+	var page_ratio: float = page_rect.size.y / max(page_rect.size.x, 1.0)
+	var page_reader_mode: String = str(financial_statement_report_page.get_meta("reader_mode", ""))
+	var body_reader_mode: String = str(financial_statement_report_body.get_meta("reader_mode", ""))
+	var page_size_hint: String = str(financial_statement_report_page.get_meta("page_size_hint", ""))
+	if (
+		page_rect.size.x < 300.0 or
+		page_ratio < 1.35 or
+		page_ratio > 1.48 or
+		page_rect.position.x < report_rect.position.x - 1.0 or
+		page_rect.end.x > report_rect.end.x + 1.0 or
+		page_size_hint != "A4" or
+		page_reader_mode != "a4_virtualized_sections" or
+		body_reader_mode != "a4_virtualized_sections" or
+		financial_statement_report_page_scroll.horizontal_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED or
+		financial_statement_report_page_scroll.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_AUTO
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Financials report page to keep an A4 portrait virtualized reader shell within the overlay. ratio=%.3f size=%s page_hint=%s page_mode=%s body_mode=%s" % [
+				page_ratio,
+				str(page_rect.size),
+				page_size_hint,
+				page_reader_mode,
+				body_reader_mode
+			]
+		}
+	var page_left_margin: int = int(financial_statement_report_page_margin.get_theme_constant("margin_left"))
+	var page_right_margin: int = int(financial_statement_report_page_margin.get_theme_constant("margin_right"))
+	if page_left_margin < 20 or page_right_margin < 20 or page_left_margin > 42 or page_right_margin > 42:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Financials report A4 margins to stay stable and responsive, got left=%d right=%d." % [page_left_margin, page_right_margin]
+		}
+	var financial_statement_report_text: String = _collect_node_text(financial_statement_report_page)
+	if (
+		not financial_statement_report_text.contains("Consolidated Financial Statements") or
+		not financial_statement_report_text.contains("For the year ended December 31, 2019") or
+		not financial_statement_report_text.contains("Consolidated Statement of Financial Position") or
+		not financial_statement_report_text.contains("Consolidated Statement of Profit or Loss and Other Comprehensive Income") or
+		not financial_statement_report_text.contains("Consolidated Statement of Changes in Equity") or
+		not financial_statement_report_text.contains("Consolidated Statement of Cash Flows") or
+		not financial_statement_report_text.contains("Company Information") or
+		not financial_statement_report_text.contains("Segment Information") or
+		not financial_statement_report_text.contains("Non-Cash Activities And Subsequent Events") or
+		financial_statement_report_text.contains("Notes - Company Information") or
+		financial_statement_report_text.contains("Notes - Segment Information") or
+		financial_statement_report_text.contains("Notes - Non-Cash Activities And Subsequent Events")
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Financials report page to render FY2019 generated annual filing sections."
+		}
+	var required_reader_sections: Array = [
+		"cover",
+		"financial_position",
+		"profit_or_loss_and_oci",
+		"changes_in_equity",
+		"cash_flows",
+		"note_company_information",
+		"note_segment_information",
+		"note_non_cash_subsequent_events"
+	]
+	for section_id_value in required_reader_sections:
+		var section_id: String = str(section_id_value)
+		var toc_button: Button = game_root.find_child("FinancialStatementReportTocButton_%s" % section_id, true, false) as Button
+		var section_anchor: Control = game_root.find_child("FinancialStatementReportSection_%s" % section_id, true, false) as Control
+		if toc_button == null or section_anchor == null:
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected Financials reader section navigation for %s." % section_id
+			}
+	var notes_toc_button: Button = game_root.find_child("FinancialStatementReportTocButton_note_segment_information", true, false) as Button
+	var notes_section_anchor: Control = game_root.find_child("FinancialStatementReportSection_note_segment_information", true, false) as Control
+	notes_toc_button.emit_signal("pressed")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if financial_statement_report_page_scroll.scroll_vertical <= 0 or notes_section_anchor == null:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Financials report TOC to jump to a generated filing note section."
+		}
+	var generated_note_section_count: int = _count_nodes_with_name_prefix(financial_statement_report_page, "FinancialStatementReportSection_note_")
+	var generated_note_chunk_count: int = _count_nodes_with_name_prefix(financial_statement_report_page, "FinancialStatementReportSectionChunk_note_")
+	var annual_note_paragraph_count: int = _count_nodes_with_name_prefix(financial_statement_report_page, "FinancialStatementReportNoteParagraph")
+	var annual_note_table_count: int = _count_nodes_with_name_prefix(financial_statement_report_page, "FinancialStatementReportNoteCompactTable")
+	var annual_note_cross_reference_count: int = _count_nodes_with_name_prefix(financial_statement_report_page, "FinancialStatementReportNoteCrossReference")
+	if (
+		generated_note_section_count < 10 or
+		generated_note_chunk_count < 10 or
+		annual_note_paragraph_count < 12 or
+		annual_note_table_count < 3 or
+		annual_note_cross_reference_count <= 0
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the generated annual filing reader to render chunked note sections with filing paragraphs, compact tables, and cross-note references, got sections=%d chunks=%d paragraphs=%d tables=%d refs=%d." % [
+				generated_note_section_count,
+				generated_note_chunk_count,
+				annual_note_paragraph_count,
+				annual_note_table_count,
+				annual_note_cross_reference_count
+			]
+		}
+	var rendered_chunk_count: int = int(financial_statement_report_body.get_meta("rendered_chunk_count", 0))
+	if rendered_chunk_count < generated_note_chunk_count or rendered_chunk_count > 80:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Financials generated filing chunks to stay bounded, got rendered=%d note_chunks=%d." % [rendered_chunk_count, generated_note_chunk_count]
+		}
+	var annual_filing_report_control_count: int = _count_controls(financial_statement_report_page)
+	if annual_filing_report_control_count <= 0 or annual_filing_report_control_count > 520:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected Financials generated filing rendered control count to stay bounded, got %d." % annual_filing_report_control_count
+		}
+	var annual_filing_required_capture_types: Array = [
+		"statement_row",
+		"note_paragraph",
+		"note_table_row",
+		"cross_reference",
+		"segment_row",
+		"auditor_key_matter_paragraph",
+		"subsequent_event_paragraph"
+	]
+	var annual_filing_payloads: Dictionary = {}
+	_collect_annual_filing_capture_payloads(financial_statement_report_page, annual_filing_payloads, annual_filing_required_capture_types)
+	for filing_capture_type_value in annual_filing_required_capture_types:
+		var filing_capture_type: String = str(filing_capture_type_value)
+		if not annual_filing_payloads.has(filing_capture_type):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected annual filing reader to expose a %s capture payload." % filing_capture_type
+			}
+		var filing_payload: Dictionary = annual_filing_payloads.get(filing_capture_type, {})
+		var filing_payload_validation: String = _validate_annual_filing_capture_payload(filing_payload, filing_capture_type)
+		if not filing_payload_validation.is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": filing_payload_validation
+			}
+	var annual_filing_capture_baseline_state: Dictionary = RunState.to_save_dict()
+	var annual_filing_research_ids: Array = []
+	for filing_capture_type_value in annual_filing_required_capture_types:
+		var filing_payload: Dictionary = annual_filing_payloads.get(str(filing_capture_type_value), {}).duplicate(true)
+		var filing_capture_result: Dictionary = GameManager.capture_research_evidence(filing_payload)
+		if not bool(filing_capture_result.get("success", false)):
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected annual filing %s evidence to capture into Research Tray: %s" % [str(filing_capture_type_value), str(filing_capture_result.get("message", ""))]
+			}
+		var filing_evidence: Dictionary = filing_capture_result.get("evidence", {})
+		annual_filing_research_ids.append(str(filing_evidence.get("id", "")))
+		if str(filing_evidence.get("filing_capture_type", "")) != str(filing_capture_type_value) or str(filing_evidence.get("source_label", "")) != "Annual Filing":
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected annual filing %s Research Tray evidence to preserve neutral filing metadata." % str(filing_capture_type_value)
+			}
+	var duplicate_capture: Dictionary = GameManager.capture_research_evidence(annual_filing_payloads.get("statement_row", {}).duplicate(true))
+	if (
+		not bool(duplicate_capture.get("success", false)) or
+		str(duplicate_capture.get("message", "")).find("Already") == -1 or
+		str(duplicate_capture.get("evidence", {}).get("id", "")) != str(annual_filing_research_ids[0])
+	):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected annual filing captured evidence to dedupe by source section and excerpt id."
+		}
+	var annual_filing_thesis_result: Dictionary = GameManager.create_thesis(tracked_company_id, "bullish", "swing", "Annual Filing Smoke Thesis")
+	if not bool(annual_filing_thesis_result.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected annual filing evidence thesis creation to succeed."
+		}
+	var annual_filing_thesis_id: String = str(annual_filing_thesis_result.get("thesis", {}).get("id", ""))
+	var annual_filing_attach_result: Dictionary = GameManager.attach_research_evidence_to_thesis(annual_filing_thesis_id, str(annual_filing_research_ids[1]), "support")
+	var annual_filing_direct_add_result: Dictionary = GameManager.add_thesis_evidence(annual_filing_thesis_id, annual_filing_payloads.get("note_table_row", {}).duplicate(true))
+	if not bool(annual_filing_attach_result.get("success", false)) or not bool(annual_filing_direct_add_result.get("success", false)):
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected annual filing evidence to survive both Research Tray attach and direct thesis add."
+		}
+	var annual_filing_saved_state: Dictionary = RunState.to_save_dict()
+	RunState.load_from_dict(annual_filing_saved_state)
+	for evidence_id_value in annual_filing_research_ids:
+		var saved_research_row: Dictionary = RunState.get_research_evidence(str(evidence_id_value))
+		if str(saved_research_row.get("source_label", "")) != "Annual Filing" or str(saved_research_row.get("filing_section_id", "")).is_empty() or str(saved_research_row.get("filing_excerpt_id", "")).is_empty() or str(saved_research_row.get("source_excerpt", "")).is_empty():
+			game_root.queue_free()
+			await get_tree().process_frame
+			return {
+				"success": false,
+				"message": "Smoke test expected annual filing Research Tray metadata to survive save/load for %s." % str(evidence_id_value)
+			}
+	var annual_filing_saved_thesis: Dictionary = RunState.get_player_thesis(annual_filing_thesis_id)
+	var annual_filing_saved_thesis_evidence: Array = annual_filing_saved_thesis.get("evidence", [])
+	var annual_filing_saved_attached_count: int = 0
+	for evidence_value in annual_filing_saved_thesis_evidence:
+		if typeof(evidence_value) != TYPE_DICTIONARY:
+			continue
+		var evidence_row: Dictionary = evidence_value
+		if str(evidence_row.get("source_label", "")) == "Annual Filing" and not str(evidence_row.get("filing_excerpt_id", "")).is_empty():
+			annual_filing_saved_attached_count += 1
+	if annual_filing_saved_attached_count < 2:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected attached and directly-added annual filing thesis evidence metadata to survive save/load."
+		}
+	RunState.load_from_dict(annual_filing_capture_baseline_state)
+	financial_statement_report_close.emit_signal("pressed")
+	await get_tree().process_frame
+	if financial_statement_report_overlay.visible:
+		game_root.queue_free()
+		await get_tree().process_frame
+		return {
+			"success": false,
+			"message": "Smoke test expected the Financials report overlay close button to hide the report."
 		}
 
 	var range_1d_button: Button = game_root.find_child("Range1DButton", true, false) as Button
@@ -13807,6 +14164,13 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 	var life_finance_status_label: Label = game_root.find_child("LifeFinanceStatusLabel", true, false) as Label
 	var life_emergency_loan_button: Button = game_root.find_child("LifeEmergencyLoanButton", true, false) as Button
 	var life_active_loan_panel: PanelContainer = game_root.find_child("LifeActiveLoanPanel", true, false) as PanelContainer
+	var life_bank_loan_panel: PanelContainer = game_root.find_child("LifeBankLoanPanel", true, false) as PanelContainer
+	var life_bank_loan_lender_selector: OptionButton = game_root.find_child("LifeBankLoanLenderSelector", true, false) as OptionButton
+	var life_bank_loan_amount_slider: HSlider = game_root.find_child("LifeBankLoanAmountSlider", true, false) as HSlider
+	var life_bank_loan_amount_label: Label = game_root.find_child("LifeBankLoanAmountLabel", true, false) as Label
+	var life_bank_loan_terms_label: Label = game_root.find_child("LifeBankLoanTermsLabel", true, false) as Label
+	var life_bank_loan_button: Button = game_root.find_child("LifeBankLoanButton", true, false) as Button
+	var life_active_bank_loan_panel: PanelContainer = game_root.find_child("LifeActiveBankLoanPanel", true, false) as PanelContainer
 	var life_bankruptcy_status_panel: PanelContainer = game_root.find_child("LifeBankruptcyStatusPanel", true, false) as PanelContainer
 	var life_property_rows: VBoxContainer = game_root.find_child("LifePropertyRows", true, false) as VBoxContainer
 	var life_property_catalog_rows: VBoxContainer = game_root.find_child("LifePropertyCatalogRows", true, false) as VBoxContainer
@@ -13863,6 +14227,13 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 		life_finance_status_label == null or
 		life_emergency_loan_button == null or
 		life_active_loan_panel == null or
+		life_bank_loan_panel == null or
+		life_bank_loan_lender_selector == null or
+		life_bank_loan_amount_slider == null or
+		life_bank_loan_amount_label == null or
+		life_bank_loan_terms_label == null or
+		life_bank_loan_button == null or
+		life_active_bank_loan_panel == null or
 		life_bankruptcy_status_panel == null or
 		life_property_rows == null or
 		life_property_catalog_rows == null or
@@ -13909,6 +14280,55 @@ func _validate_life_smoke(game_root: Node, life_app_button: Button, life_window:
 
 	if _is_quick_smoke_mode():
 		return ""
+
+	var bank_loan_smoke_state: Dictionary = RunState.to_save_dict()
+	var bank_loan_finance_status: Dictionary = GameManager.get_finance_status_snapshot()
+	var bank_loan_offers: Array = bank_loan_finance_status.get("bank_loan_offers", [])
+	var smoke_bank_loan_offer: Dictionary = {}
+	for bank_loan_offer_value in bank_loan_offers:
+		if typeof(bank_loan_offer_value) != TYPE_DICTIONARY:
+			continue
+		var bank_loan_offer: Dictionary = bank_loan_offer_value
+		if str(bank_loan_offer.get("disabled_reason", "")).strip_edges().is_empty():
+			smoke_bank_loan_offer = bank_loan_offer
+			break
+	if not smoke_bank_loan_offer.is_empty() and RunState.get_active_bank_loan().is_empty():
+		var bank_loan_finance_tab_index: int = _guide_smoke_tab_index(life_tabs, "Finance")
+		if bank_loan_finance_tab_index < 0:
+			return "Smoke test expected Life tabs to include Finance for regular bank-loan coverage."
+		life_tabs.current_tab = bank_loan_finance_tab_index
+		await get_tree().process_frame
+		var smoke_offer_id: String = str(smoke_bank_loan_offer.get("offer_id", ""))
+		var smoke_offer_selector_index: int = -1
+		for selector_index in range(life_bank_loan_lender_selector.item_count):
+			if str(life_bank_loan_lender_selector.get_item_metadata(selector_index)) == smoke_offer_id:
+				smoke_offer_selector_index = selector_index
+				break
+		if smoke_offer_selector_index < 0:
+			return "Smoke test expected regular bank-loan selector to include the eligible lender offer."
+		life_bank_loan_lender_selector.select(smoke_offer_selector_index)
+		life_bank_loan_lender_selector.emit_signal("item_selected", smoke_offer_selector_index)
+		await get_tree().process_frame
+		var smoke_bank_loan_amount: float = float(smoke_bank_loan_offer.get("min_principal", life_bank_loan_amount_slider.value))
+		life_bank_loan_amount_slider.value = smoke_bank_loan_amount
+		life_bank_loan_amount_slider.emit_signal("value_changed", smoke_bank_loan_amount)
+		await get_tree().process_frame
+		if life_bank_loan_button.disabled:
+			return "Smoke test expected eligible regular bank-loan offer to enable the Take Bank Loan button."
+		life_bank_loan_button.emit_signal("pressed")
+		await get_tree().process_frame
+		var smoke_active_bank_loan: Dictionary = RunState.get_active_bank_loan()
+		var smoke_bank_payment: Dictionary = GameManager.get_finance_status_snapshot().get("bank_loan_next_payment", {})
+		if smoke_active_bank_loan.is_empty() or smoke_bank_payment.is_empty() or float(smoke_bank_payment.get("amount", 0.0)) <= 0.0:
+			return "Smoke test expected taking a regular bank loan through Life Finance to create active state and a next payment."
+		game_root._refresh_all()
+		await get_tree().process_frame
+		life_active_bank_loan_panel = game_root.find_child("LifeActiveBankLoanPanel", true, false) as PanelContainer
+		if life_active_bank_loan_panel == null or not life_active_bank_loan_panel.visible:
+			return "Smoke test expected the active regular bank-loan panel to appear after taking a bank loan."
+		RunState.load_from_dict(bank_loan_smoke_state)
+		game_root._refresh_all()
+		await get_tree().process_frame
 
 	var starting_lifestyle_id: String = str(RunState.get_player_life().get("lifestyle_id", ""))
 	var starting_basics_tier_id: String = str(RunState.get_player_life().get("basics_tier_id", ""))
@@ -16410,6 +16830,71 @@ func _collect_node_text(root: Node) -> String:
 	var parts: Array = []
 	_collect_node_text_into(root, parts)
 	return "\n".join(parts)
+
+
+func _count_nodes_with_name_prefix(root: Node, node_name_prefix: String) -> int:
+	if root == null:
+		return 0
+	var count: int = 1 if str(root.name).begins_with(node_name_prefix) else 0
+	for child in root.get_children():
+		count += _count_nodes_with_name_prefix(child, node_name_prefix)
+	return count
+
+
+func _count_controls(root: Node) -> int:
+	if root == null:
+		return 0
+	var count: int = 1 if root is Control else 0
+	for child in root.get_children():
+		count += _count_controls(child)
+	return count
+
+
+func _collect_annual_filing_capture_payloads(root: Node, payloads: Dictionary, capture_types: Array) -> void:
+	if root == null:
+		return
+	if root.has_meta("financial_statement_capture_payload"):
+		var payload_value: Variant = root.get_meta("financial_statement_capture_payload", {})
+		if typeof(payload_value) == TYPE_DICTIONARY:
+			var payload: Dictionary = payload_value
+			var capture_type: String = str(payload.get("filing_capture_type", "")).strip_edges()
+			if capture_types.has(capture_type) and not payloads.has(capture_type):
+				payloads[capture_type] = payload.duplicate(true)
+	for child in root.get_children():
+		_collect_annual_filing_capture_payloads(child, payloads, capture_types)
+
+
+func _validate_annual_filing_capture_payload(payload: Dictionary, expected_capture_type: String) -> String:
+	if payload.is_empty():
+		return "Smoke test expected annual filing %s payload to be populated." % expected_capture_type
+	if str(payload.get("source_type", "")) != "financial_statement":
+		return "Smoke test expected annual filing %s payload source_type to be financial_statement." % expected_capture_type
+	if str(payload.get("source_label", "")) != "Annual Filing":
+		return "Smoke test expected annual filing %s payload source_label to be Annual Filing." % expected_capture_type
+	if str(payload.get("filing_capture_type", "")) != expected_capture_type:
+		return "Smoke test expected annual filing payload type %s, got %s." % [expected_capture_type, str(payload.get("filing_capture_type", ""))]
+	for required_key_value in ["filing_section_id", "filing_section_label", "filing_excerpt_id", "filing_visible_label", "filing_visible_text", "source_excerpt", "source_id", "label", "value"]:
+		var required_key: String = str(required_key_value)
+		if str(payload.get(required_key, "")).strip_edges().is_empty():
+			return "Smoke test expected annual filing %s payload to include %s." % [expected_capture_type, required_key]
+	if expected_capture_type == "note_table_row":
+		for table_key_value in ["filing_table_id", "filing_table_title", "filing_table_row_id", "filing_table_row_caption", "filing_table_row_value"]:
+			var table_key: String = str(table_key_value)
+			if str(payload.get(table_key, "")).strip_edges().is_empty():
+				return "Smoke test expected annual filing table row payload to include %s." % table_key
+	var visible_text: String = " ".join([
+		str(payload.get("label", "")),
+		str(payload.get("value", "")),
+		str(payload.get("detail", "")),
+		str(payload.get("filing_visible_label", "")),
+		str(payload.get("filing_visible_text", "")),
+		str(payload.get("source_excerpt", ""))
+	]).to_lower()
+	for forbidden_value in ["truth_state", "source_quality", "source quality", "confidence_label", "packet|", "story|", "placement|"]:
+		var forbidden: String = str(forbidden_value)
+		if visible_text.find(forbidden) != -1:
+			return "Smoke test expected annual filing %s visible payload fields to hide %s." % [expected_capture_type, forbidden]
+	return ""
 
 
 func _collect_item_list_text(item_list: ItemList) -> String:

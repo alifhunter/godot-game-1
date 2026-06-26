@@ -18,6 +18,7 @@ Use this list for Steam Early Access tester notes. Keep entries short, player-fa
 | KI-010 | Headless logs | Local Windows headless test runs can end with root-certificate, RID, or ObjectDB cleanup warnings after successful smoke output. | Non-blocking in local verification when the test prints its final `_OK` line first. |
 | KI-011 | App opening performance | Content-heavy first opens are improved, but a fully hydrated STOCKBOT company detail can still pause briefly the first time it is selected. | Known. Let the detail finish loading before rapidly switching dense tabs; report repeatable multi-second stalls. |
 | KI-012 | Steam Cloud coverage | Windows Steam Auto-Cloud restore passed on build `23274942`; cross-machine and future path-change regressions still need release-candidate checks. | Verified for current Windows branch. Re-run the Cloud restore checklist before public release builds or any save-path change. |
+| KI-013 | Long-run performance | Late-year fast-forward sessions with the larger company catalog can still hitch when many company runtimes are normalized at once. | Known after performance recovery. Save flushing is improved; close heavy apps before long fast-forward sessions and report repeatable multi-second stalls. |
 
 ## Reporting Priority
 

@@ -21,6 +21,21 @@ const THESIS_OPTION_CAP_NEWS := 5
 const THESIS_OPTION_CAP_TWOOTER := 5
 const THESIS_OPTION_CAP_NETWORK := 4
 const THESIS_OPTION_CAP_CORPORATE_EVENTS := 5
+const THESIS_OPTION_CAP_STORY_DOSSIER := 4
+const RESEARCH_PROVENANCE_GROUP_ORDER := [
+	"macro",
+	"commodity",
+	"sector",
+	"company",
+	"filing",
+	"relationship",
+	"network",
+	"social",
+	"news",
+	"flow",
+	"market",
+	"manual"
+]
 
 
 static func get_thesis_board_snapshot(gm) -> Dictionary:
@@ -65,6 +80,8 @@ static func get_research_tray_snapshot(gm, company_id: String = "") -> Dictionar
 		if typeof(row_value) != TYPE_DICTIONARY:
 			continue
 		var row: Dictionary = row_value.duplicate(true)
+		if gm.thesis_evidence_capture_system != null:
+			row = gm.thesis_evidence_capture_system.ensure_provenance_metadata(row)
 		if not normalized_company_id.is_empty():
 			var row_company_id: String = str(row.get("company_id", "")).strip_edges()
 			var row_category: String = str(row.get("category", "")).to_lower()
@@ -86,6 +103,7 @@ static func get_research_tray_snapshot(gm, company_id: String = "") -> Dictionar
 		"day_index": RunState.day_index,
 		"trade_date": gm.get_current_trade_date(),
 		"company_id": normalized_company_id,
+		"provenance_groups": research_tray_provenance_groups(rows),
 		"rows": rows
 	}
 
@@ -126,7 +144,7 @@ static func capture_research_evidence(gm, payload: Dictionary) -> Dictionary:
 			return {
 				"success": true,
 				"message": "Already in Research Tray.",
-				"evidence": existing.duplicate(true),
+				"evidence": gm.thesis_evidence_capture_system.ensure_provenance_metadata(existing.duplicate(true)) if gm.thesis_evidence_capture_system != null else existing.duplicate(true),
 				"snapshot": get_research_tray_snapshot(gm, str(existing.get("company_id", "")))
 			}
 	var evidence_id: String = next_research_evidence_id(tray)
@@ -140,7 +158,8 @@ static func capture_research_evidence(gm, payload: Dictionary) -> Dictionary:
 	gm._record_steam_progress_event("research_evidence_captured", {
 		"source_type": str(row.get("source_type", "")),
 		"company_id": str(row.get("company_id", "")),
-		"category": str(row.get("category", ""))
+		"category": str(row.get("category", "")),
+		"provenance_group": str(row.get("provenance_group", ""))
 	})
 	gm._request_autosave("thesis_capture_research")
 	gm.thesis_changed.emit()
@@ -153,6 +172,20 @@ static func research_evidence_dedupe_key(row: Dictionary) -> String:
 		research_dedupe_segment(str(row.get("company_id", ""))),
 		research_dedupe_segment(str(row.get("sector_id", ""))),
 		research_dedupe_segment(str(row.get("source_id", ""))),
+		research_dedupe_segment(str(row.get("filing_section_id", ""))),
+		research_dedupe_segment(str(row.get("filing_excerpt_id", ""))),
+		research_dedupe_segment(str(row.get("story_id", ""))),
+		research_dedupe_segment(str(row.get("story_note_fact_id", ""))),
+		research_dedupe_segment(str(row.get("fact_id", ""))),
+		research_dedupe_segment(str(row.get("clue_id", ""))),
+		research_dedupe_segment(str(row.get("effect_id", ""))),
+		research_dedupe_segment(str(row.get("statement_id", ""))),
+		research_dedupe_segment(str(row.get("statement_period_label", ""))),
+		research_dedupe_segment(str(row.get("statement_section", ""))),
+		research_dedupe_segment(str(row.get("line_id", row.get("statement_line_id", "")))),
+		research_dedupe_segment(str(row.get("note_id", ""))),
+		research_dedupe_segment(str(row.get("surface_id", ""))),
+		research_dedupe_segment(str(row.get("dossier_evidence_type", ""))),
 		research_dedupe_segment(str(row.get("label", ""))),
 		research_dedupe_segment(str(row.get("value", ""))),
 		research_dedupe_segment(str(row.get("pattern_id", ""))),
@@ -164,6 +197,37 @@ static func research_evidence_dedupe_key(row: Dictionary) -> String:
 
 static func research_dedupe_segment(value: String) -> String:
 	return value.strip_edges().to_lower().replace("\n", " ").replace("\t", " ")
+
+
+static func research_tray_provenance_groups(rows: Array) -> Array:
+	var grouped: Dictionary = {}
+	for row_value in rows:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_value
+		var group_id: String = str(row.get("provenance_group", "")).strip_edges()
+		if group_id.is_empty():
+			continue
+		if not grouped.has(group_id):
+			grouped[group_id] = {
+				"id": group_id,
+				"label": str(row.get("provenance_label", group_id.capitalize())),
+				"count": 0
+			}
+		grouped[group_id]["count"] = int(grouped[group_id].get("count", 0)) + 1
+	var result: Array = grouped.values()
+	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_index: int = RESEARCH_PROVENANCE_GROUP_ORDER.find(str(a.get("id", "")))
+		var b_index: int = RESEARCH_PROVENANCE_GROUP_ORDER.find(str(b.get("id", "")))
+		if a_index == -1:
+			a_index = 999
+		if b_index == -1:
+			b_index = 999
+		if a_index == b_index:
+			return str(a.get("label", "")) < str(b.get("label", ""))
+		return a_index < b_index
+	)
+	return result
 
 
 static func attach_research_evidence_to_thesis(gm, thesis_id: String, evidence_id: String, interpretation: String = "watch", note: String = "") -> Dictionary:
@@ -211,7 +275,8 @@ static func attach_research_evidence_to_thesis(gm, thesis_id: String, evidence_i
 	gm._record_steam_progress_event("research_evidence_attached", {
 		"thesis_id": thesis_id,
 		"evidence_id": evidence_id,
-		"source_type": str(attached.get("source_type", ""))
+		"source_type": str(attached.get("source_type", "")),
+		"provenance_group": str(attached.get("provenance_group", ""))
 	})
 	gm._request_autosave("thesis_attach_research")
 	gm.thesis_changed.emit()
@@ -256,18 +321,19 @@ static func get_thesis_evidence_options(gm, company_id: String) -> Dictionary:
 	var company: Dictionary = gm.get_company_snapshot(company_id, true, true, true)
 	if company.is_empty():
 		return {"company": {}, "categories": []}
+	var dossier_options: Dictionary = thesis_company_story_dossier_options_by_category(gm, company)
 
 	var categories: Array = [
 		{"id": "fundamentals", "label": thesis_category_label("fundamentals"), "options": thesis_fundamental_options(company)},
-		{"id": "financials", "label": thesis_category_label("financials"), "options": thesis_financial_options(company)},
+		{"id": "financials", "label": thesis_category_label("financials"), "options": thesis_financial_options(company) + dossier_options.get("financials", [])},
 		{"id": "price_action", "label": thesis_category_label("price_action"), "options": thesis_price_action_options(company)},
 		{"id": "broker_flow", "label": thesis_category_label("broker_flow"), "options": thesis_broker_options(company)},
 		{"id": "ownership", "label": thesis_category_label("ownership"), "options": thesis_ownership_options(company)},
-		{"id": "sector_macro", "label": thesis_category_label("sector_macro"), "options": thesis_sector_macro_options(gm, company)},
+		{"id": "sector_macro", "label": thesis_category_label("sector_macro"), "options": thesis_sector_macro_options(gm, company) + dossier_options.get("sector_macro", [])},
 		{"id": "news", "label": thesis_category_label("news"), "options": thesis_news_options(gm, company)},
 		{"id": "twooter", "label": thesis_category_label("twooter"), "options": thesis_twooter_options(gm, company)},
-		{"id": "network_intel", "label": thesis_category_label("network_intel"), "options": thesis_network_options(gm, company)},
-		{"id": "corporate_events", "label": thesis_category_label("corporate_events"), "options": thesis_corporate_event_options(gm, company)},
+		{"id": "network_intel", "label": thesis_category_label("network_intel"), "options": thesis_network_options(gm, company) + dossier_options.get("network_intel", [])},
+		{"id": "corporate_events", "label": thesis_category_label("corporate_events"), "options": thesis_corporate_event_options(gm, company) + dossier_options.get("corporate_events", [])},
 		{"id": "risk_invalidation", "label": thesis_category_label("risk_invalidation"), "options": thesis_risk_options(company)}
 	]
 	return {
@@ -432,6 +498,8 @@ static func add_thesis_evidence(gm, thesis_id: String, evidence: Dictionary) -> 
 	if str(compact_evidence.get("category_label", "")).strip_edges().is_empty() and not category.is_empty():
 		compact_evidence["category_label"] = thesis_category_label(category)
 	copy_optional_thesis_evidence_fields(compact_evidence, evidence)
+	if gm.thesis_evidence_capture_system != null:
+		compact_evidence = gm.thesis_evidence_capture_system.ensure_provenance_metadata(compact_evidence)
 	if str(compact_evidence.get("category", "")).is_empty() or str(compact_evidence.get("label", "")).is_empty():
 		return {"success": false, "message": "Pick a valid evidence row first."}
 	evidence_rows.append(compact_evidence)
@@ -440,7 +508,7 @@ static func add_thesis_evidence(gm, thesis_id: String, evidence: Dictionary) -> 
 	RunState.set_player_thesis(thesis)
 	gm._request_autosave("thesis_add_evidence")
 	gm.thesis_changed.emit()
-	return {"success": true, "message": "Evidence added.", "thesis": thesis}
+	return {"success": true, "message": "Evidence added.", "thesis": thesis, "evidence": compact_evidence}
 
 
 static func remove_thesis_evidence(gm, thesis_id: String, evidence_id: String) -> Dictionary:
@@ -656,6 +724,7 @@ static func thesis_sector_macro_options(gm, company: Dictionary) -> Array:
 	rows.append(thesis_option("sector_macro", "Risk appetite", thesis_risk_appetite_label(float(macro.get("risk_appetite", 0.5))), thesis_sector_macro_detail("Risk appetite is the market-wide willingness to pay for uncertainty.", company_sector_id), thesis_risk_appetite_impact(float(macro.get("risk_appetite", 0.5)))))
 	var sector_macro_bias: float = float(macro.get("sector_biases", {}).get(company_sector_id, 0.0))
 	rows.append(thesis_option("sector_macro", "Sector macro bias", "%s %s" % [company_sector_name, thesis_format_percent(sector_macro_bias)], thesis_sector_macro_detail("This is the simulator's direct macro tilt for the company's sector from inflation, GDP, employment, rates, and risk appetite.", company_sector_id), impact_from_change(sector_macro_bias)))
+	rows.append_array(gm.get_commodity_macro_evidence_options(str(company.get("id", company.get("company_id", ""))), company_sector_id))
 	rows.append(thesis_active_macro_shock_option(gm))
 	return rows
 
@@ -714,6 +783,367 @@ static func thesis_network_options(gm, company: Dictionary) -> Array:
 	if rows.is_empty():
 		rows.append(thesis_option("network_intel", "No met contact", "No private read", "Meet relevant contacts before treating Network as thesis evidence.", "mixed", "Network"))
 	return rows
+
+
+static func get_company_story_dossier_evidence_options(gm, company_id: String) -> Array:
+	if not RunState.has_active_run():
+		return []
+	var company: Dictionary = gm.get_company_snapshot(company_id, true, true, true)
+	if company.is_empty():
+		return []
+	var by_category: Dictionary = thesis_company_story_dossier_options_by_category(gm, company)
+	var rows: Array = []
+	for category_id_value in ["sector_macro", "corporate_events", "financials", "network_intel"]:
+		rows.append_array(by_category.get(str(category_id_value), []))
+	return rows
+
+
+static func thesis_company_story_dossier_options_by_category(_gm, company: Dictionary) -> Dictionary:
+	var rows_by_category: Dictionary = {
+		"sector_macro": [],
+		"corporate_events": [],
+		"financials": [],
+		"network_intel": []
+	}
+	var company_id: String = str(company.get("id", company.get("company_id", ""))).strip_edges()
+	if company_id.is_empty():
+		return rows_by_category
+	for dossier_value in RunState.get_company_story_dossiers_for_company(company_id):
+		if typeof(dossier_value) != TYPE_DICTIONARY:
+			continue
+		var dossier: Dictionary = dossier_value
+		_append_story_dossier_option(rows_by_category, "corporate_events", _dossier_company_story_option(company, dossier))
+		for fact_value in dossier.get("cause_facts", []):
+			if typeof(fact_value) != TYPE_DICTIONARY:
+				continue
+			var fact: Dictionary = fact_value
+			var fact_type: String = str(fact.get("fact_type", ""))
+			if fact_type == "macro":
+				_append_story_dossier_option(rows_by_category, "sector_macro", _dossier_cause_fact_option(company, dossier, fact, "macro_cause"))
+			elif fact_type == "sector":
+				_append_story_dossier_option(rows_by_category, "sector_macro", _dossier_cause_fact_option(company, dossier, fact, "sector_cause"))
+		for effect_value in dossier.get("financial_effects", []):
+			if typeof(effect_value) != TYPE_DICTIONARY:
+				continue
+			if _append_story_dossier_option(rows_by_category, "financials", _dossier_financial_effect_option(company, dossier, effect_value)):
+				break
+		for clue_value in dossier.get("private_clues", []):
+			if typeof(clue_value) != TYPE_DICTIONARY:
+				continue
+			if _append_story_dossier_option(rows_by_category, "network_intel", _dossier_private_clue_option(company, dossier, clue_value)):
+				break
+	return rows_by_category
+
+
+static func _append_story_dossier_option(rows_by_category: Dictionary, category: String, option: Dictionary) -> bool:
+	if option.is_empty():
+		return false
+	var rows: Array = rows_by_category.get(category, [])
+	if rows.size() >= THESIS_OPTION_CAP_STORY_DOSSIER:
+		return true
+	rows.append(option)
+	rows_by_category[category] = rows
+	return rows.size() >= THESIS_OPTION_CAP_STORY_DOSSIER
+
+
+static func _dossier_company_story_option(company: Dictionary, dossier: Dictionary) -> Dictionary:
+	var story_id: String = str(dossier.get("story_id", "")).strip_edges()
+	if story_id.is_empty():
+		return {}
+	var archetype_label: String = _dossier_archetype_label(str(dossier.get("archetype_id", "")))
+	var status_label: String = _dossier_token_label(str(dossier.get("public_status", "silent")))
+	var stage_label: String = _dossier_token_label(str(dossier.get("stage_id", "seeded")))
+	var detail: String = "%s has an active %s setup tied to %s. Treat it as a research lead, not a verdict." % [
+		str(company.get("ticker", company.get("id", ""))).to_upper(),
+		archetype_label.to_lower(),
+		_dossier_fact_summary(dossier.get("cause_facts", []))
+	]
+	return _dossier_option(
+		"corporate_events",
+		"%s story" % archetype_label,
+		"%s / %s" % [status_label, stage_label],
+		detail,
+		impact_from_change(float(dossier.get("price_effects", {}).get("sentiment_bias", 0.0))),
+		{
+			"story_id": story_id,
+			"fact_id": _dossier_primary_fact_id(dossier),
+			"fact_ids": _dossier_fact_ids(dossier.get("cause_facts", [])),
+			"surface_id": "thesis",
+			"dossier_evidence_type": "company_story",
+			"source_id": _dossier_source_id(story_id, "company_story", _dossier_primary_fact_id(dossier)),
+			"dossier_archetype_id": str(dossier.get("archetype_id", "")),
+			"dossier_story_family": str(dossier.get("story_family", "")),
+			"dossier_hook_id": str(dossier.get("hook_id", "")),
+			"dossier_public_status": str(dossier.get("public_status", "")),
+			"dossier_stage_id": str(dossier.get("stage_id", "")),
+			"story_tags": [str(dossier.get("archetype_id", "")), str(dossier.get("story_family", ""))]
+		},
+		company
+	)
+
+
+static func _dossier_cause_fact_option(company: Dictionary, dossier: Dictionary, fact: Dictionary, evidence_type: String) -> Dictionary:
+	var story_id: String = str(dossier.get("story_id", "")).strip_edges()
+	var fact_id: String = str(fact.get("fact_id", "")).strip_edges()
+	if story_id.is_empty() or fact_id.is_empty():
+		return {}
+	var source_id: String = str(fact.get("source_id", "")).strip_edges()
+	var fact_type: String = str(fact.get("fact_type", ""))
+	var label_prefix: String = "Story macro cause" if evidence_type == "macro_cause" else "Story sector cause"
+	var detail: String = "%s is linked to the %s story and gives the thesis a top-down cause to test against company evidence." % [
+		_dossier_fact_label(fact),
+		_dossier_archetype_label(str(dossier.get("archetype_id", ""))).to_lower()
+	]
+	return _dossier_option(
+		"sector_macro",
+		label_prefix,
+		"%s %s, strength %s" % [
+			source_id.to_upper() if fact_type == "macro" else source_id,
+			str(fact.get("direction", "mixed")).capitalize(),
+			String.num(float(fact.get("strength", 0.0)), 2)
+		],
+		detail,
+		_dossier_direction_impact(str(fact.get("direction", "mixed"))),
+		{
+			"story_id": story_id,
+			"fact_id": fact_id,
+			"fact_ids": [fact_id],
+			"surface_id": "thesis",
+			"dossier_evidence_type": evidence_type,
+			"source_id": _dossier_source_id(story_id, evidence_type, fact_id),
+			"dossier_archetype_id": str(dossier.get("archetype_id", "")),
+			"dossier_story_family": str(dossier.get("story_family", "")),
+			"dossier_hook_id": str(dossier.get("hook_id", "")),
+			"dossier_public_status": str(dossier.get("public_status", "")),
+			"dossier_stage_id": str(dossier.get("stage_id", "")),
+			"fact_strength": float(fact.get("strength", 0.0)),
+			"fact_confidence": float(fact.get("confidence", 0.0)),
+			"related_sectors": fact.get("related_sector_ids", []).duplicate(true) if typeof(fact.get("related_sector_ids", [])) == TYPE_ARRAY else [],
+			"story_tags": fact.get("tags", []).duplicate(true) if typeof(fact.get("tags", [])) == TYPE_ARRAY else []
+		},
+		company
+	)
+
+
+static func _dossier_financial_effect_option(company: Dictionary, dossier: Dictionary, effect_value: Variant) -> Dictionary:
+	var effect: Dictionary = effect_value if typeof(effect_value) == TYPE_DICTIONARY else {}
+	var story_id: String = str(dossier.get("story_id", "")).strip_edges()
+	var effect_id: String = str(effect.get("effect_id", "")).strip_edges()
+	if story_id.is_empty() or effect_id.is_empty():
+		return {}
+	var metric_id: String = str(effect.get("metric_id", ""))
+	var metric_label: String = _dossier_metric_label(metric_id)
+	var detail: String = "Watch %s for %s change tied to the %s story. Timing marker: %s." % [
+		_dossier_token_label(str(effect.get("statement_section", "financials"))).to_lower(),
+		metric_label.to_lower(),
+		_dossier_archetype_label(str(dossier.get("archetype_id", ""))).to_lower(),
+		_dossier_token_label(str(effect.get("timing", ""))).to_lower()
+	]
+	return _dossier_option(
+		"financials",
+		"Story financial clue: %s" % metric_label,
+		"%s / %s" % [
+			_dossier_token_label(str(effect.get("direction", "mixed"))),
+			_dossier_token_label(str(effect.get("magnitude_band", "moderate")))
+		],
+		detail,
+		_dossier_financial_impact(effect),
+		{
+			"story_id": story_id,
+			"fact_id": _dossier_primary_fact_id(dossier),
+			"fact_ids": _dossier_fact_ids(dossier.get("cause_facts", [])),
+			"effect_id": effect_id,
+			"surface_id": "statement_note",
+			"dossier_evidence_type": "financial_clue",
+			"source_id": _dossier_source_id(story_id, "financial_clue", effect_id),
+			"dossier_archetype_id": str(dossier.get("archetype_id", "")),
+			"dossier_story_family": str(dossier.get("story_family", "")),
+			"dossier_hook_id": str(dossier.get("hook_id", "")),
+			"dossier_public_status": str(dossier.get("public_status", "")),
+			"dossier_stage_id": str(dossier.get("stage_id", "")),
+			"metric_id": metric_id,
+			"metric_ids": [metric_id],
+			"statement_section": str(effect.get("statement_section", "")),
+			"magnitude_band": str(effect.get("magnitude_band", "")),
+			"direction": str(effect.get("direction", "")),
+			"effect_confidence": float(effect.get("confidence", 0.0)),
+			"story_tags": [str(dossier.get("archetype_id", "")), str(dossier.get("story_family", ""))]
+		},
+		company
+	)
+
+
+static func _dossier_private_clue_option(company: Dictionary, dossier: Dictionary, clue_value: Variant) -> Dictionary:
+	var clue: Dictionary = clue_value if typeof(clue_value) == TYPE_DICTIONARY else {}
+	var story_id: String = str(dossier.get("story_id", "")).strip_edges()
+	var clue_id: String = str(clue.get("clue_id", "")).strip_edges()
+	if story_id.is_empty() or clue_id.is_empty():
+		return {}
+	var required_stage: String = str(clue.get("required_relationship_stage", "recognized"))
+	var recognition_min: int = int(clue.get("required_recognition_min", 0))
+	var detail: String = "Private Network context exists for the %s story. It should be treated as source color until filings or price confirm it." % _dossier_archetype_label(str(dossier.get("archetype_id", ""))).to_lower()
+	var fact_id: String = _dossier_primary_fact_id(dossier)
+	if typeof(clue.get("fact_ids", [])) == TYPE_ARRAY and not clue.get("fact_ids", []).is_empty():
+		fact_id = str(clue.get("fact_ids", [])[0])
+	return _dossier_option(
+		"network_intel",
+		"Story private clue",
+		"%s, recognition %d+" % [_dossier_token_label(required_stage), recognition_min],
+		detail,
+		"mixed",
+		{
+			"story_id": story_id,
+			"fact_id": fact_id,
+			"fact_ids": clue.get("fact_ids", []).duplicate(true) if typeof(clue.get("fact_ids", [])) == TYPE_ARRAY else [],
+			"clue_id": clue_id,
+			"surface_id": str(clue.get("surface_id", "network")),
+			"dossier_evidence_type": "private_clue",
+			"source_id": _dossier_source_id(story_id, "private_clue", clue_id),
+			"dossier_archetype_id": str(dossier.get("archetype_id", "")),
+			"dossier_story_family": str(dossier.get("story_family", "")),
+			"dossier_hook_id": str(dossier.get("hook_id", "")),
+			"dossier_public_status": str(dossier.get("public_status", "")),
+			"dossier_stage_id": str(dossier.get("stage_id", "")),
+			"directness": str(clue.get("directness", "")),
+			"required_relationship_stage": required_stage,
+			"required_recognition_min": recognition_min,
+			"source_quality": str(clue.get("source_quality", "")),
+			"clue_reliability": float(clue.get("reliability", 0.0))
+		},
+		company
+	)
+
+
+static func _dossier_option(category: String, label: String, value: String, detail: String, impact: String, metadata: Dictionary, company: Dictionary) -> Dictionary:
+	var row: Dictionary = thesis_option(category, label, value, detail, impact, "Story Dossier")
+	row["source_type"] = "company_story_dossier"
+	row["company_id"] = str(company.get("id", company.get("company_id", "")))
+	row["ticker"] = str(company.get("ticker", ""))
+	row["company_name"] = str(company.get("name", ""))
+	row["sector_id"] = str(company.get("sector_id", ""))
+	row["sector_name"] = str(company.get("sector_name", ""))
+	for key_value in metadata.keys():
+		var key: String = str(key_value)
+		row[key] = metadata.get(key_value)
+	return row
+
+
+static func _dossier_primary_fact_id(dossier: Dictionary) -> String:
+	var fact_ids: Array = _dossier_fact_ids(dossier.get("cause_facts", []))
+	return str(fact_ids[0]) if not fact_ids.is_empty() else ""
+
+
+static func _dossier_fact_ids(cause_facts_value: Variant) -> Array:
+	var rows: Array = []
+	if typeof(cause_facts_value) != TYPE_ARRAY:
+		return rows
+	for fact_value in cause_facts_value:
+		if typeof(fact_value) != TYPE_DICTIONARY:
+			continue
+		var fact_id: String = str(fact_value.get("fact_id", "")).strip_edges()
+		if not fact_id.is_empty() and not rows.has(fact_id):
+			rows.append(fact_id)
+	return rows
+
+
+static func _dossier_fact_summary(cause_facts_value: Variant) -> String:
+	if typeof(cause_facts_value) != TYPE_ARRAY:
+		return "company-specific evidence"
+	var labels: Array = []
+	for fact_value in cause_facts_value:
+		if typeof(fact_value) != TYPE_DICTIONARY:
+			continue
+		labels.append(_dossier_fact_label(fact_value))
+		if labels.size() >= 2:
+			break
+	if labels.is_empty():
+		return "company-specific evidence"
+	return " and ".join(labels)
+
+
+static func _dossier_fact_label(fact: Dictionary) -> String:
+	var fact_type: String = str(fact.get("fact_type", "story")).strip_edges()
+	var source_id: String = str(fact.get("source_id", "")).strip_edges()
+	if source_id.is_empty():
+		return _dossier_token_label(fact_type)
+	return "%s %s" % [_dossier_token_label(fact_type).to_lower(), source_id]
+
+
+static func _dossier_archetype_label(archetype_id: String) -> String:
+	var normalized: String = archetype_id.strip_edges()
+	if normalized.is_empty():
+		return "Company Story"
+	match normalized:
+		"capex_expansion":
+			return "Capex Expansion"
+		"margin_recovery":
+			return "Margin Recovery"
+		"commodity_tailwind":
+			return "Commodity Tailwind"
+		"commodity_headwind":
+			return "Commodity Headwind"
+		"contract_win":
+			return "Contract Win"
+		"turnaround":
+			return "Turnaround"
+		"governance_risk":
+			return "Governance Risk"
+		"balance_sheet_stress":
+			return "Balance Sheet Stress"
+		"fraud_signal":
+			return "Statement Quality Risk"
+		"corporate_action_use_of_proceeds":
+			return "Use Of Proceeds"
+	return _dossier_token_label(normalized)
+
+
+static func _dossier_metric_label(metric_id: String) -> String:
+	match metric_id:
+		"gross_margin":
+			return "Gross Margin"
+		"operating_margin":
+			return "Operating Margin"
+		"net_income":
+			return "Net Income"
+		"production_volume":
+			return "Production Volume"
+		"working_capital":
+			return "Working Capital"
+		"customer_concentration":
+			return "Customer Concentration"
+		_:
+			return _dossier_token_label(metric_id)
+
+
+static func _dossier_token_label(value: String) -> String:
+	var text: String = value.strip_edges().replace("_", " ")
+	if text.is_empty():
+		return "Unknown"
+	return text.capitalize()
+
+
+static func _dossier_source_id(story_id: String, evidence_type: String, row_id: String) -> String:
+	return "%s|%s|%s" % [story_id, evidence_type, row_id]
+
+
+static func _dossier_direction_impact(direction: String) -> String:
+	match direction.to_lower():
+		"positive", "up":
+			return "positive"
+		"negative", "down":
+			return "negative"
+	return "mixed"
+
+
+static func _dossier_financial_impact(effect: Dictionary) -> String:
+	var metric_id: String = str(effect.get("metric_id", ""))
+	var direction: String = str(effect.get("direction", "mixed")).to_lower()
+	if direction == "mixed":
+		return "mixed"
+	var pressure_metrics: Array = ["debt", "working_capital", "inventory", "receivables"]
+	if pressure_metrics.has(metric_id):
+		return "negative" if direction == "up" else "positive"
+	return "positive" if direction == "up" else "negative"
 
 
 static func thesis_corporate_event_options(gm, company: Dictionary) -> Array:
@@ -811,19 +1241,189 @@ static func copy_optional_thesis_evidence_fields(target: Dictionary, source: Dic
 		"next_check",
 		"chart_range",
 		"chart_range_label",
-		"region_label"
+		"region_label",
+		"commodity_id",
+		"commodity_name",
+		"commodity_category",
+		"commodity_regime",
+		"commodity_direction",
+		"generated_surface_id",
+		"generated_scope_id",
+		"source_system_id",
+		"story_id",
+		"story_note_fact_id",
+		"story_family",
+		"archetype_id",
+		"fact_id",
+		"clue_id",
+		"effect_id",
+		"surface_id",
+		"public_status",
+		"stage_id",
+		"visibility",
+		"dossier_evidence_type",
+		"dossier_archetype_id",
+		"dossier_story_family",
+		"dossier_hook_id",
+		"dossier_public_status",
+		"dossier_stage_id",
+		"metric_id",
+		"statement_section",
+		"magnitude_band",
+		"direction",
+		"directness",
+		"original_directness",
+		"required_relationship_stage",
+		"source_quality",
+		"source_excerpt",
+		"filing_capture_type",
+		"filing_excerpt_type",
+		"filing_section_id",
+		"filing_section_label",
+		"filing_excerpt_id",
+		"filing_visible_label",
+		"filing_visible_text",
+		"filing_table_id",
+		"filing_table_title",
+		"filing_table_row_id",
+		"filing_table_row_caption",
+		"filing_table_row_value",
+		"filing_table_reference",
+		"statement_id",
+		"statement_period_label",
+		"statement_scope",
+		"statement_year",
+		"statement_quarter",
+		"filing_day_index",
+		"line_id",
+		"statement_line_id",
+		"line_item_id",
+		"statement_section_label",
+		"statement_value_format",
+		"capture_level",
+		"note_id",
+		"note_type",
+		"note_title_key",
+		"note_text_key",
+		"note_paragraph_id",
+		"note_paragraph_index",
+		"note_paragraph_role",
+		"note_paragraph_text",
+		"disclosure_packet_id",
+		"disclosure_placement_id",
+		"disclosure_section_id",
+		"disclosure_section_label",
+		"disclosure_subtlety",
+		"disclosure_reader_effort",
+		"disclosure_evidence_density",
+		"disclosure_fragment_role",
+		"disclosure_packet_role",
+		"cross_reference_target_note_type",
+		"cross_reference_target_note_number",
+		"cross_reference_target_title",
+		"cross_reference_reason",
+		"cross_reference_display_text",
+		"disclosure_quality",
+		"detail_level",
+		"access_level",
+		"tone",
+		"provenance_group",
+		"provenance_label",
+		"provenance_path",
+		"provenance_surface",
+		"provenance_origin",
+		"relationship_edge_id",
+		"relationship_type",
+		"relationship_label",
+		"counterparty_company_id",
+		"counterparty_ticker",
+		"counterparty_name"
 	]:
 		var key: String = str(key_value)
 		if source.has(key):
 			target[key] = str(source.get(key, ""))
-	for key_value in ["start_price", "end_price", "current_price"]:
+	for key_value in [
+		"start_price",
+		"end_price",
+		"current_price",
+		"commodity_level",
+		"commodity_ytd_move",
+		"commodity_driver_score",
+		"commodity_exposure",
+		"reliability",
+		"leak_risk",
+		"fact_strength",
+		"fact_confidence",
+		"clue_reliability",
+		"effect_confidence",
+		"required_recognition_min",
+		"network_relationship",
+		"recognition_score",
+		"raw_value",
+		"importance"
+	]:
 		var key: String = str(key_value)
 		if source.has(key):
 			target[key] = float(source.get(key, 0.0))
+	for key_value in ["generated_content_surface", "commodity_has_direct_exposure", "commodity_sector_related", "statement_consolidated"]:
+		var key: String = str(key_value)
+		if source.has(key):
+			target[key] = bool(source.get(key, false))
+	for key_value in [
+		"related_sectors",
+		"story_tags",
+		"fact_ids",
+		"metric_ids",
+		"effect_ids",
+		"clue_ids",
+		"source_fact_ids",
+		"source_clue_ids",
+		"source_company_ids",
+		"source_sector_ids",
+		"source_commodity_ids",
+		"source_story_ids",
+		"source_story_note_fact_ids",
+		"source_effect_ids",
+		"source_disclosure_packet_ids",
+		"source_disclosure_placement_ids",
+		"source_disclosure_section_ids",
+		"source_living_arc_ids",
+		"source_corporate_action_ids",
+		"source_event_ids",
+		"source_event_ref_ids",
+		"source_roadmap_ids",
+		"source_statement_sections",
+		"story_source_refs",
+		"disclosure_packet_refs",
+		"living_arc_refs",
+		"corporate_action_refs",
+		"event_refs",
+		"roadmap_refs",
+		"explain_tags",
+		"vocabulary_tags",
+		"provenance_tags"
+	]:
+		var key: String = str(key_value)
+		if typeof(source.get(key, [])) == TYPE_ARRAY:
+			target[key] = source.get(key, []).duplicate(true)
+	_normalize_generated_source_aliases(target)
 	for key_value in ["start_anchor", "end_anchor", "start_date", "end_date", "report_date", "captured_trade_date"]:
 		var key: String = str(key_value)
 		if typeof(source.get(key, {})) == TYPE_DICTIONARY:
 			target[key] = source.get(key, {}).duplicate(true)
+
+
+static func _normalize_generated_source_aliases(row: Dictionary) -> void:
+	var source_fact_ids: Array = row.get("source_fact_ids", []) if typeof(row.get("source_fact_ids", [])) == TYPE_ARRAY else []
+	var source_clue_ids: Array = row.get("source_clue_ids", []) if typeof(row.get("source_clue_ids", [])) == TYPE_ARRAY else []
+	if source_fact_ids.is_empty() and typeof(row.get("fact_ids", [])) == TYPE_ARRAY:
+		row["source_fact_ids"] = row.get("fact_ids", []).duplicate(true)
+	if source_clue_ids.is_empty() and typeof(row.get("clue_ids", [])) == TYPE_ARRAY:
+		row["source_clue_ids"] = row.get("clue_ids", []).duplicate(true)
+	if str(row.get("generated_surface_id", "")).strip_edges().is_empty() and not str(row.get("surface_id", "")).strip_edges().is_empty():
+		row["generated_surface_id"] = str(row.get("surface_id", "")).strip_edges()
+	if bool(row.get("generated_content_surface", false)) and str(row.get("source_system_id", "")).strip_edges().is_empty():
+		row["source_system_id"] = "company_story_dossier"
 
 
 static func thesis_category_label(category: String) -> String:

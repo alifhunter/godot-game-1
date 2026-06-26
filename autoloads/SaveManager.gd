@@ -31,6 +31,7 @@ var _unsaved_reason: String = ""
 var _unsaved_since_unix: int = 0
 var _save_file_info_cache: Dictionary = {}
 var _save_config_text_cache: String = ""
+var _last_save_perf_metrics: Dictionary = {}
 func _ready() -> void:
 	_ensure_save_timer()
 	_load_save_config()
@@ -248,6 +249,15 @@ func flush_pending_save() -> bool:
 	return _save_current_run("flush_pending_save:%s" % flush_reason)
 
 
+func postpone_pending_save(delay_seconds: float = DEFAULT_REQUEST_DELAY_SECONDS) -> void:
+	_ensure_save_timer()
+	if not has_pending_save():
+		return
+	_save_timer.wait_time = max(delay_seconds, 0.001)
+	_save_timer.stop()
+	_save_timer.start()
+
+
 func has_pending_save() -> bool:
 	return _save_timer != null and not _save_timer.is_stopped()
 
@@ -264,6 +274,10 @@ func get_unsaved_change_summary() -> Dictionary:
 		"pending": has_pending_save(),
 		"autosave_enabled": _autosave_enabled
 	}
+
+
+func get_last_save_perf_metrics() -> Dictionary:
+	return _last_save_perf_metrics.duplicate(true)
 
 
 func save_current_run_now(reason: String = "manual", slot_id: String = "") -> bool:
@@ -293,15 +307,18 @@ func save_run(run_state: Dictionary, slot_id: String = "") -> bool:
 
 	var serialize_started_at_usec: int = Time.get_ticks_usec()
 	var save_text: String = JSON.stringify(save_payload)
+	var serialize_ms: float = float(Time.get_ticks_usec() - serialize_started_at_usec) / 1000.0
 	_log_elapsed("save_run:serialize", serialize_started_at_usec)
 	var write_started_at_usec: int = Time.get_ticks_usec()
 	save_file.store_string(save_text)
 	save_file = null
+	var write_ms: float = float(Time.get_ticks_usec() - write_started_at_usec) / 1000.0
 	_log_elapsed("save_run:write", write_started_at_usec)
 
 	var absolute_save_path: String = ProjectSettings.globalize_path(save_path)
 	var absolute_temp_path: String = ProjectSettings.globalize_path(temp_path)
 	var absolute_backup_path: String = ProjectSettings.globalize_path(backup_path)
+	var replace_started_at_usec: int = Time.get_ticks_usec()
 	if FileAccess.file_exists(save_path):
 		if FileAccess.file_exists(backup_path):
 			DirAccess.remove_absolute(absolute_backup_path)
@@ -321,6 +338,7 @@ func save_run(run_state: Dictionary, slot_id: String = "") -> bool:
 	if rename_error != OK:
 		push_error("Unable to finalize save file. Error %d." % rename_error)
 		return false
+	var replace_ms: float = float(Time.get_ticks_usec() - replace_started_at_usec) / 1000.0
 
 	_active_slot_id = resolved_slot_id
 	_last_save_unix = int(save_payload.get("saved_at_unix", Time.get_unix_time_from_system()))
@@ -328,6 +346,15 @@ func save_run(run_state: Dictionary, slot_id: String = "") -> bool:
 	_clear_unsaved_state()
 	_invalidate_save_file_info_cache(resolved_slot_id)
 	_save_save_config()
+	_last_save_perf_metrics = {
+		"context": _active_save_context if not _active_save_context.is_empty() else "direct_save_run",
+		"slot_id": resolved_slot_id,
+		"bytes": save_text.to_utf8_buffer().size(),
+		"serialize_ms": serialize_ms,
+		"write_ms": write_ms,
+		"replace_ms": replace_ms,
+		"save_run_ms": float(Time.get_ticks_usec() - started_at_usec) / 1000.0
+	}
 	_log_elapsed("save_run", started_at_usec)
 	save_status_changed.emit()
 	return true
@@ -496,8 +523,18 @@ func _on_save_timer_timeout() -> void:
 func _save_current_run(context: String, slot_id: String = "") -> bool:
 	var started_at_usec: int = Time.get_ticks_usec()
 	_active_save_context = context
-	var saved: bool = save_run(RunState.to_save_dict(), slot_id)
+	var payload_started_at_usec: int = Time.get_ticks_usec()
+	var save_payload: Dictionary = RunState.to_save_dict()
+	var payload_ms: float = float(Time.get_ticks_usec() - payload_started_at_usec) / 1000.0
+	var saved: bool = save_run(save_payload, slot_id)
 	_active_save_context = ""
+	var context_ms: float = float(Time.get_ticks_usec() - started_at_usec) / 1000.0
+	var metrics: Dictionary = _last_save_perf_metrics.duplicate(true)
+	metrics["context"] = context
+	metrics["to_save_dict_ms"] = payload_ms
+	metrics["context_total_ms"] = context_ms
+	metrics["saved"] = saved
+	_last_save_perf_metrics = metrics
 	_log_elapsed(context, started_at_usec)
 	return saved
 

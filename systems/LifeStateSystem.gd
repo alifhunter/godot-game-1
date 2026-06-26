@@ -75,6 +75,7 @@ static func default_life_finance_state() -> Dictionary:
 		"last_cash_stress_resolved_day_index": -1,
 		"last_cash_stress_resolved_trade_date": {},
 		"active_loan": {},
+		"active_bank_loan": {},
 		"finance_history": [],
 		"bankrupt": false,
 		"bankruptcy": {}
@@ -399,6 +400,8 @@ static func normalize_life_finance_state(source_finance: Variant, day_index: int
 		normalized["last_cash_stress_resolved_trade_date"] = source.get("last_cash_stress_resolved_trade_date", {}).duplicate(true)
 	if typeof(source.get("active_loan", {})) == TYPE_DICTIONARY:
 		normalized["active_loan"] = normalize_life_loan(source.get("active_loan", {}), day_index)
+	if typeof(source.get("active_bank_loan", {})) == TYPE_DICTIONARY:
+		normalized["active_bank_loan"] = normalize_life_bank_loan(source.get("active_bank_loan", {}), day_index)
 	if typeof(source.get("bankruptcy", {})) == TYPE_DICTIONARY:
 		normalized["bankruptcy"] = source.get("bankruptcy", {}).duplicate(true)
 	var history: Array = []
@@ -442,6 +445,64 @@ static func normalize_life_loan(source_loan: Variant, day_index: int) -> Diction
 	}
 	if typeof(source.get("started_trade_date", {})) == TYPE_DICTIONARY:
 		loan["started_trade_date"] = source.get("started_trade_date", {}).duplicate(true)
+	if source.has("last_payment_day_index"):
+		loan["last_payment_day_index"] = int(source.get("last_payment_day_index", -1))
+	if typeof(source.get("last_payment_trade_date", {})) == TYPE_DICTIONARY:
+		loan["last_payment_trade_date"] = source.get("last_payment_trade_date", {}).duplicate(true)
+	if source.has("completed_day_index"):
+		loan["completed_day_index"] = int(source.get("completed_day_index", -1))
+	if typeof(source.get("completed_trade_date", {})) == TYPE_DICTIONARY:
+		loan["completed_trade_date"] = source.get("completed_trade_date", {}).duplicate(true)
+	if principal <= 0.0 or int(loan.get("payments_remaining", 0)) <= 0:
+		return {}
+	return loan
+
+
+static func normalize_life_bank_loan(source_loan: Variant, day_index: int) -> Dictionary:
+	if typeof(source_loan) != TYPE_DICTIONARY:
+		return {}
+	var source: Dictionary = source_loan
+	if source.is_empty():
+		return {}
+	var state: String = str(source.get("state", "active"))
+	if state == "paid" or state == "completed" or state == "closed":
+		return {}
+	var lender_id: String = str(source.get("lender_id", "")).strip_edges()
+	if lender_id.is_empty():
+		return {}
+	var principal: float = max(float(source.get("principal", 0.0)), 0.0)
+	var repayment_multiplier: float = max(float(source.get("repayment_multiplier", 1.0)), 1.0)
+	var payment_count: int = max(int(source.get("payment_count", 1)), 1)
+	var total_repayment: float = max(float(source.get("total_repayment", principal * repayment_multiplier)), principal)
+	var monthly_payment: float = max(float(source.get("monthly_payment", total_repayment / float(payment_count))), 0.0)
+	var loan: Dictionary = {
+		"id": str(source.get("id", "")),
+		"type": "regular_bank_loan",
+		"state": "active",
+		"offer_id": str(source.get("offer_id", "")),
+		"lender_id": lender_id,
+		"lender_ticker": str(source.get("lender_ticker", "")),
+		"lender_name": str(source.get("lender_name", "")),
+		"lender_subsector": str(source.get("lender_subsector", "")),
+		"risk_tier": str(source.get("risk_tier", "")),
+		"principal": principal,
+		"total_repayment": total_repayment,
+		"monthly_payment": monthly_payment,
+		"payment_count": payment_count,
+		"payments_remaining": clampi(int(source.get("payments_remaining", payment_count)), 0, payment_count),
+		"amount_paid": max(float(source.get("amount_paid", 0.0)), 0.0),
+		"repayment_multiplier": repayment_multiplier,
+		"started_day_index": int(source.get("started_day_index", source.get("start_day_index", day_index))),
+		"last_payment_period": str(source.get("last_payment_period", ""))
+	}
+	if loan.get("id", "") == "":
+		loan["id"] = "bank_loan_%d_%s_%d" % [
+			int(loan.get("started_day_index", day_index)),
+			lender_id,
+			int(round(principal))
+		]
+	if typeof(source.get("started_trade_date", source.get("start_trade_date", {}))) == TYPE_DICTIONARY:
+		loan["started_trade_date"] = source.get("started_trade_date", source.get("start_trade_date", {})).duplicate(true)
 	if source.has("last_payment_day_index"):
 		loan["last_payment_day_index"] = int(source.get("last_payment_day_index", -1))
 	if typeof(source.get("last_payment_trade_date", {})) == TYPE_DICTIONARY:
@@ -539,6 +600,49 @@ static func start_emergency_loan(finance: Dictionary, principal: float, detail: 
 		"type": "loan_started",
 		"loan_id": loan_id,
 		"amount": principal,
+		"day_index": day_index,
+		"trade_date": trade_date.duplicate(true)
+	})
+	return loan
+
+
+static func start_bank_loan(finance: Dictionary, offer_id: String, principal: float, detail: Dictionary, day_index: int, trade_date: Dictionary) -> Dictionary:
+	var normalized_principal: float = max(principal, 0.0)
+	var payment_count: int = max(int(detail.get("payment_count", 1)), 1)
+	var repayment_multiplier: float = max(float(detail.get("repayment_multiplier", 1.0)), 1.0)
+	var total_repayment: float = max(float(detail.get("total_repayment", normalized_principal * repayment_multiplier)), normalized_principal)
+	var monthly_payment: float = max(float(detail.get("monthly_payment", total_repayment / float(payment_count))), 0.0)
+	var lender_id: String = str(detail.get("lender_id", "")).strip_edges()
+	var loan_id: String = "bank_loan_%d_%s_%d" % [day_index, lender_id, int(round(normalized_principal))]
+	var loan: Dictionary = {
+		"id": loan_id,
+		"type": "regular_bank_loan",
+		"state": "active",
+		"offer_id": offer_id,
+		"lender_id": lender_id,
+		"lender_ticker": str(detail.get("lender_ticker", "")),
+		"lender_name": str(detail.get("lender_name", "")),
+		"lender_subsector": str(detail.get("lender_subsector", "")),
+		"risk_tier": str(detail.get("risk_tier", "")),
+		"principal": normalized_principal,
+		"total_repayment": total_repayment,
+		"monthly_payment": monthly_payment,
+		"payment_count": payment_count,
+		"payments_remaining": payment_count,
+		"amount_paid": 0.0,
+		"repayment_multiplier": repayment_multiplier,
+		"started_day_index": day_index,
+		"started_trade_date": trade_date.duplicate(true),
+		"last_payment_period": ""
+	}
+	finance["active_bank_loan"] = loan
+	append_life_finance_history(finance, {
+		"type": "bank_loan_started",
+		"loan_id": loan_id,
+		"offer_id": offer_id,
+		"lender_id": lender_id,
+		"lender_ticker": str(detail.get("lender_ticker", "")),
+		"amount": normalized_principal,
 		"day_index": day_index,
 		"trade_date": trade_date.duplicate(true)
 	})

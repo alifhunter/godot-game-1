@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/AnnualStatementAccountingContinuityTest.gd" id="1_accounting_continuity"]
+
+[node name="AnnualStatementAccountingContinuityTest" type="Node"]
+script = ExtResource("1_accounting_continuity")

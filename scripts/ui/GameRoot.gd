@@ -35,6 +35,8 @@ const TRADE_RIGHT_SECTION_RATIO := 1.0
 const ORDER_TICKET_TOGGLE_WIDTH := 28.0
 const WATCHLIST_MIN_WIDTH_NARROW := 220.0
 const WATCHLIST_MIN_WIDTH_WIDE := 260.0
+const POST_RECAP_SAVE_FLUSH_IDLE_FRAMES := 8
+const POST_RECAP_SAVE_FLUSH_AUTOSAVE_GUARD_SECONDS := 2.0
 const KEY_STATS_DASHBOARD_DESKTOP_WIDTH := 804.0
 const KEY_STATS_DASHBOARD_TWO_COLUMN_WIDTH := 540.0
 const STOCK_LIST_ADD_BUTTON_WIDTH := 72.0
@@ -502,6 +504,24 @@ var deferred_open_app_refresh_scheduled: bool = false
 var deferred_dashboard_refresh_after_recap: bool = false
 var deferred_full_refresh_after_recap: bool = false
 var advance_day_post_recap_save_flush_scheduled: bool = false
+var advance_day_post_recap_save_flush_idle_frames_remaining: int = 0
+var advance_day_post_recap_save_flush_wait_count: int = 0
+var advance_day_post_recap_save_flush_completed_count: int = 0
+var advance_day_post_recap_save_flush_skipped_count: int = 0
+var advance_day_post_recap_save_flush_last_ms: float = 0.0
+var advance_day_post_recap_save_flush_last_save_metrics: Dictionary = {}
+var advance_day_portfolio_refresh_guard_active: bool = false
+var advance_day_light_portfolio_refresh_count: int = 0
+var advance_day_full_portfolio_refresh_count: int = 0
+var advance_day_refresh_generation: int = 0
+var advance_day_deferred_refresh_queued_count: int = 0
+var advance_day_deferred_refresh_duplicate_count: int = 0
+var advance_day_deferred_refresh_refreshed_count: int = 0
+var advance_day_deferred_refresh_skipped_count: int = 0
+var advance_day_deferred_refresh_wait_count: int = 0
+var advance_day_deferred_refresh_queue_peak: int = 0
+var advance_day_deferred_refresh_app_counts: Dictionary = {}
+var deferred_open_app_refresh_generation_by_app: Dictionary = {}
 var pending_daily_recap_snapshot: Dictionary = {}
 var daily_recap_dialog: Control = null
 var daily_recap_body_label: Label = null
@@ -577,6 +597,7 @@ var jail_advance_button: Button = null
 @onready var news_archive_year_option: OptionButton = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsArchiveFiltersRow/NewsArchiveYearOption
 @onready var news_archive_month_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsArchiveFiltersRow/NewsArchiveMonthLabel
 @onready var news_archive_month_option: OptionButton = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsArchiveFiltersRow/NewsArchiveMonthOption
+var news_topic_filter_row: HFlowContainer = null
 @onready var news_article_list: ItemList = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsFeedPanel/NewsFeedMargin/NewsFeedVBox/NewsArticleList
 @onready var news_detail_panel: PanelContainer = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel
 @onready var news_detail_outlet_label: Label = $NewsWindow/NewsWindowBody/NewsWindowMargin/NewsWindowVBox/NewsContentSplit/NewsDetailPanel/NewsDetailMargin/NewsDetailVBox/NewsDetailOutletLabel
@@ -1140,6 +1161,7 @@ func _ready() -> void:
 	# Arg-carrying signals (price_formed, summary_ready, company_detail_ready)
 	# stay direct — unique payloads, not double-refresh sources.
 	GameManager.portfolio_changed.connect(_queue_signal_refresh.bind(_on_portfolio_changed))
+	GameManager.advance_day_portfolio_valued.connect(_queue_signal_refresh.bind(_on_advance_day_portfolio_valued))
 	GameManager.watchlist_changed.connect(_queue_signal_refresh.bind(_on_watchlist_changed))
 	GameManager.network_changed.connect(_queue_signal_refresh.bind(_on_network_changed))
 	GameManager.social_changed.connect(_queue_signal_refresh.bind(_refresh_social))
@@ -2091,13 +2113,39 @@ func _refresh_open_desktop_apps(log_phase_details: bool = false) -> void:
 		_log_perf_phase(log_phase_details, "_refresh_open_apps:upgrades", upgrades_started_at_usec)
 
 
-func _queue_deferred_open_app_refresh() -> void:
+func _queue_deferred_open_app_refresh(app_ids: Array = []) -> void:
 	if not RunState.has_active_run():
 		return
-	for app_id_value in _open_desktop_app_refresh_order():
+	var requested_app_ids: Array = app_ids
+	if requested_app_ids.is_empty():
+		requested_app_ids = _open_desktop_app_refresh_order()
+	var added_count: int = 0
+	var duplicate_count: int = 0
+	for app_id_value in requested_app_ids:
 		var app_id: String = str(app_id_value)
-		if not deferred_open_app_refresh_queue.has(app_id):
-			deferred_open_app_refresh_queue.append(app_id)
+		if app_id.is_empty() or not _is_desktop_app_window_open(app_id):
+			advance_day_deferred_refresh_skipped_count += 1
+			continue
+		if (
+			deferred_open_app_refresh_queue.has(app_id) or
+			int(deferred_open_app_refresh_generation_by_app.get(app_id, -1)) == advance_day_refresh_generation
+		):
+			duplicate_count += 1
+			advance_day_deferred_refresh_duplicate_count += 1
+			continue
+		deferred_open_app_refresh_queue.append(app_id)
+		added_count += 1
+		advance_day_deferred_refresh_queued_count += 1
+		advance_day_deferred_refresh_queue_peak = max(
+			advance_day_deferred_refresh_queue_peak,
+			deferred_open_app_refresh_queue.size()
+		)
+	if added_count > 0 or duplicate_count > 0:
+		print("[Perf] _queue_deferred_open_app_refresh added=%d duplicates=%d queue=%d" % [
+			added_count,
+			duplicate_count,
+			deferred_open_app_refresh_queue.size()
+		])
 
 
 func _schedule_deferred_open_app_refresh() -> void:
@@ -2112,25 +2160,32 @@ func _run_deferred_open_app_refresh_after_frame() -> void:
 	deferred_open_app_refresh_scheduled = false
 	if deferred_open_app_refresh_queue.is_empty():
 		return
-	var waiting_for_recap: bool = (
-		_is_daily_recap_visible() or
-		not pending_daily_recap_snapshot.is_empty() and
-		daily_recap_dialog != null and
-		daily_recap_body_label != null
-	)
+	var waiting_for_recap: bool = _is_waiting_for_daily_recap()
 	if advance_day_processing:
+		advance_day_deferred_refresh_wait_count += 1
 		_schedule_deferred_open_app_refresh()
 		return
 	if waiting_for_recap:
+		advance_day_deferred_refresh_wait_count += 1
 		return
 	var app_id: String = str(deferred_open_app_refresh_queue.pop_front())
 	if app_id.is_empty() or not _is_desktop_app_window_open(app_id):
+		advance_day_deferred_refresh_skipped_count += 1
+		_schedule_deferred_open_app_refresh()
+		return
+	if int(deferred_open_app_refresh_generation_by_app.get(app_id, -1)) == advance_day_refresh_generation:
+		advance_day_deferred_refresh_duplicate_count += 1
+		advance_day_deferred_refresh_skipped_count += 1
 		_schedule_deferred_open_app_refresh()
 		return
 	var started_at_usec: int = Time.get_ticks_usec()
 	_refresh_app_window_content(app_id)
+	deferred_open_app_refresh_generation_by_app[app_id] = advance_day_refresh_generation
+	advance_day_deferred_refresh_refreshed_count += 1
+	advance_day_deferred_refresh_app_counts[app_id] = int(advance_day_deferred_refresh_app_counts.get(app_id, 0)) + 1
 	_refresh_desktop()
 	_log_perf_elapsed("_refresh_deferred_open_app:%s" % app_id, started_at_usec)
+	_schedule_advance_day_post_recap_save_flush()
 	_schedule_deferred_open_app_refresh()
 
 
@@ -2153,6 +2208,7 @@ func _refresh_pending_dashboard_after_guarded_advance() -> void:
 func _run_post_daily_recap_work(show_followup_alert: bool = false) -> void:
 	await get_tree().process_frame
 	var started_at_usec: int = Time.get_ticks_usec()
+	var queued_before: int = deferred_open_app_refresh_queue.size()
 	if deferred_full_refresh_after_recap:
 		deferred_full_refresh_after_recap = false
 		deferred_dashboard_refresh_after_recap = false
@@ -2163,13 +2219,26 @@ func _run_post_daily_recap_work(show_followup_alert: bool = false) -> void:
 	_schedule_advance_day_post_recap_save_flush()
 	_refresh_ftue_progress()
 	_refresh_first_hour_guide_progress()
-	_log_perf_elapsed("_run_post_daily_recap_work", started_at_usec)
+	_log_perf_elapsed("_run_post_daily_recap_work:deferred_queue=%d refreshed=%d duplicates=%d" % [
+		queued_before,
+		advance_day_deferred_refresh_refreshed_count,
+		advance_day_deferred_refresh_duplicate_count
+	], started_at_usec)
 	if show_followup_alert:
 		call_deferred("_show_next_macro_event_alert")
 
 
 func _is_daily_recap_visible() -> bool:
 	return daily_recap_dialog != null and daily_recap_dialog.visible
+
+
+func _is_waiting_for_daily_recap() -> bool:
+	return (
+		_is_daily_recap_visible() or
+		not pending_daily_recap_snapshot.is_empty() and
+		daily_recap_dialog != null and
+		daily_recap_body_label != null
+	)
 
 
 func _open_desktop_app_refresh_order() -> Array:
@@ -2190,7 +2259,14 @@ func _remove_deferred_open_app_refresh(app_id: String) -> void:
 		deferred_open_app_refresh_queue.erase(app_id)
 
 
-func _schedule_advance_day_post_recap_save_flush() -> void:
+func _schedule_advance_day_post_recap_save_flush(idle_frames: int = POST_RECAP_SAVE_FLUSH_IDLE_FRAMES) -> void:
+	if not SaveManager.has_pending_save():
+		return
+	SaveManager.postpone_pending_save(POST_RECAP_SAVE_FLUSH_AUTOSAVE_GUARD_SECONDS)
+	advance_day_post_recap_save_flush_idle_frames_remaining = max(
+		advance_day_post_recap_save_flush_idle_frames_remaining,
+		max(idle_frames, 0)
+	)
 	if advance_day_post_recap_save_flush_scheduled:
 		return
 	advance_day_post_recap_save_flush_scheduled = true
@@ -2200,15 +2276,40 @@ func _schedule_advance_day_post_recap_save_flush() -> void:
 func _flush_advance_day_save_after_recap() -> void:
 	await get_tree().process_frame
 	advance_day_post_recap_save_flush_scheduled = false
-	if _is_daily_recap_visible() or not pending_daily_recap_snapshot.is_empty():
+	if not SaveManager.has_pending_save():
+		advance_day_post_recap_save_flush_skipped_count += 1
+		return
+	if not _can_flush_post_recap_save():
+		advance_day_post_recap_save_flush_wait_count += 1
+		_schedule_advance_day_post_recap_save_flush(advance_day_post_recap_save_flush_idle_frames_remaining)
+		return
+	if advance_day_post_recap_save_flush_idle_frames_remaining > 0:
+		advance_day_post_recap_save_flush_idle_frames_remaining -= 1
+		advance_day_post_recap_save_flush_wait_count += 1
+		_schedule_advance_day_post_recap_save_flush(advance_day_post_recap_save_flush_idle_frames_remaining)
 		return
 	var started_at_usec: int = Time.get_ticks_usec()
 	GameManager.flush_pending_save_if_needed()
-	_log_perf_elapsed("_flush_advance_day_save_after_recap", started_at_usec)
+	advance_day_post_recap_save_flush_last_ms = float(Time.get_ticks_usec() - started_at_usec) / 1000.0
+	advance_day_post_recap_save_flush_completed_count += 1
+	advance_day_post_recap_save_flush_last_save_metrics = SaveManager.get_last_save_perf_metrics()
+	_log_perf_elapsed("_flush_advance_day_save_after_recap:waits=%d" % advance_day_post_recap_save_flush_wait_count, started_at_usec)
 	_schedule_deferred_open_app_refresh()
 
 
+func _can_flush_post_recap_save() -> bool:
+	if advance_day_processing:
+		return false
+	if _is_waiting_for_daily_recap():
+		return false
+	if deferred_open_app_refresh_scheduled or not deferred_open_app_refresh_queue.is_empty():
+		return false
+	return true
+
+
 func _on_portfolio_changed() -> void:
+	if advance_day_portfolio_refresh_guard_active:
+		advance_day_full_portfolio_refresh_count += 1
 	if suppress_next_portfolio_refresh:
 		suppress_next_portfolio_refresh = false
 		return
@@ -2237,10 +2338,67 @@ func _on_portfolio_changed() -> void:
 	_refresh_first_hour_guide_progress()
 
 
+func _on_advance_day_portfolio_valued() -> void:
+	var started_at_usec: int = Time.get_ticks_usec()
+	advance_day_light_portfolio_refresh_count += 1
+	advance_day_portfolio_refresh_guard_active = false
+	var portfolio: Dictionary = GameManager.get_portfolio_snapshot()
+	_refresh_header_portfolio_valuation_labels(portfolio)
+	_refresh_sidebar()
+	_refresh_portfolio_summary_labels(portfolio)
+	if _is_desktop_app_window_open(APP_ID_STOCK):
+		_refresh_trade_workspace_holdings_state()
+		_ensure_stock_controller()
+		if _should_refresh_portfolio_stock_rows():
+			_refresh_portfolio_stock_rows(portfolio.get("holdings", []), _get_company_row_lookup_cached())
+			stock_controller.portfolio_stock_rows_dirty = false
+		else:
+			stock_controller.portfolio_stock_rows_dirty = true
+	if active_section_id == "dashboard":
+		deferred_dashboard_refresh_after_recap = true
+	_log_perf_elapsed("_on_advance_day_portfolio_valued", started_at_usec)
+
+
+func get_advance_day_portfolio_refresh_metrics() -> Dictionary:
+	return {
+		"light_refresh_count": advance_day_light_portfolio_refresh_count,
+		"full_refresh_count": advance_day_full_portfolio_refresh_count,
+		"guard_active": advance_day_portfolio_refresh_guard_active
+	}
+
+
+func get_advance_day_deferred_refresh_metrics() -> Dictionary:
+	return {
+		"generation": advance_day_refresh_generation,
+		"queued_count": advance_day_deferred_refresh_queued_count,
+		"duplicate_count": advance_day_deferred_refresh_duplicate_count,
+		"refreshed_count": advance_day_deferred_refresh_refreshed_count,
+		"skipped_count": advance_day_deferred_refresh_skipped_count,
+		"wait_count": advance_day_deferred_refresh_wait_count,
+		"queue_peak": advance_day_deferred_refresh_queue_peak,
+		"queue_size": deferred_open_app_refresh_queue.size(),
+		"scheduled": deferred_open_app_refresh_scheduled,
+		"app_refresh_counts": advance_day_deferred_refresh_app_counts.duplicate(true)
+	}
+
+
+func get_advance_day_save_flush_metrics() -> Dictionary:
+	return {
+		"scheduled": advance_day_post_recap_save_flush_scheduled,
+		"idle_frames_remaining": advance_day_post_recap_save_flush_idle_frames_remaining,
+		"wait_count": advance_day_post_recap_save_flush_wait_count,
+		"completed_count": advance_day_post_recap_save_flush_completed_count,
+		"skipped_count": advance_day_post_recap_save_flush_skipped_count,
+		"last_ms": advance_day_post_recap_save_flush_last_ms,
+		"last_save": advance_day_post_recap_save_flush_last_save_metrics.duplicate(true),
+		"pending_save": SaveManager.has_pending_save()
+	}
+
+
 func _on_life_changed() -> void:
-	if advance_day_processing:
+	if advance_day_processing or _is_waiting_for_daily_recap():
 		if _is_desktop_app_window_open(APP_ID_LIFE):
-			_queue_deferred_open_app_refresh()
+			_queue_deferred_open_app_refresh([APP_ID_LIFE])
 		return
 	_refresh_header()
 	_refresh_desktop()
@@ -2287,8 +2445,8 @@ func _on_watchlist_changed() -> void:
 
 
 func _on_network_changed() -> void:
-	if advance_day_processing:
-		_queue_deferred_open_app_refresh()
+	if advance_day_processing or _is_waiting_for_daily_recap():
+		_queue_deferred_open_app_refresh([APP_ID_NETWORK, APP_ID_THESIS])
 		return
 	_refresh_network()
 	if _is_desktop_app_window_open(APP_ID_THESIS):
@@ -2496,6 +2654,36 @@ func _refresh_header() -> void:
 	_refresh_jail_overlay()
 
 
+func _refresh_header_portfolio_valuation_labels(portfolio: Dictionary) -> void:
+	var trading_day_number: int = max(RunState.day_index + 1, 1)
+	var current_trade_date: Dictionary = GameManager.get_current_trade_date()
+	var cash_value: float = float(portfolio.get("cash", 0.0))
+	var equity_value: float = float(portfolio.get("equity", RunState.get_total_equity()))
+	var cash_chip_fill: Color = COLOR_STOCKBOT_SURFACE_ALT
+	var cash_chip_edge: Color = COLOR_STOCKBOT_EDGE_STRONG
+	var cash_chip_text: Color = COLOR_STOCKBOT_BLUE
+	top_cash_label.tooltip_text = "Cash available for new orders."
+	if cash_value < 0.0:
+		top_cash_label.tooltip_text = "Cash stress active. Sell holdings, lower Life costs, or use Life > Finance."
+		cash_chip_fill = COLOR_STOCKBOT_BEAR_TINT
+		cash_chip_edge = COLOR_STOCKBOT_BEAR_EDGE
+		cash_chip_text = COLOR_STOCKBOT_BEAR
+	top_section_label.text = "DAY %d  |  %s" % [trading_day_number, GameManager.format_trade_date(current_trade_date)]
+	top_day_label.text = "DAY %d  |  %s" % [trading_day_number, GameManager.format_trade_date(current_trade_date)]
+	top_market_label.text = "MARKET %s" % _format_change(RunState.market_sentiment)
+	top_equity_label.text = "EQUITY %s" % _format_currency(equity_value)
+	top_cash_label.text = "CASH AVAILABLE %s" % _format_currency(cash_value)
+	objective_label.text = ""
+	_set_label_tone(top_market_label, _color_for_change(RunState.market_sentiment))
+	_set_label_tone(top_cash_label, cash_chip_text)
+	_set_label_tone(top_section_label, COLOR_WARNING)
+	_set_label_tone(top_day_label, COLOR_WARNING)
+	_style_stockbot_label_chip(top_market_label, COLOR_STOCKBOT_BLUE_TINT, COLOR_STOCKBOT_BLUE_EDGE, _color_for_change(RunState.market_sentiment))
+	_style_stockbot_label_chip(top_equity_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_TEXT)
+	_style_stockbot_label_chip(top_cash_label, cash_chip_fill, cash_chip_edge, cash_chip_text)
+	_style_stockbot_label_chip(top_section_label, COLOR_STOCKBOT_SURFACE_ALT, COLOR_STOCKBOT_EDGE_STRONG, COLOR_STOCKBOT_AMBER)
+
+
 func _refresh_desktop() -> void:
 	_sync_desktop_app_state()
 	_apply_academy_release_lock_state()
@@ -2595,6 +2783,9 @@ func _refresh_news_article_list() -> void:
 	news_controller._sync_root_refs()
 
 func _refresh_social() -> void:
+	if advance_day_processing or _is_waiting_for_daily_recap():
+		_queue_deferred_open_app_refresh([APP_ID_SOCIAL])
+		return
 	_ensure_social_controller()
 	social_controller.refresh()
 func _refresh_network() -> void:
@@ -2603,8 +2794,8 @@ func _refresh_network() -> void:
 
 
 func _refresh_daily_action_displays() -> void:
-	if advance_day_processing:
-		_queue_deferred_open_app_refresh()
+	if advance_day_processing or _is_waiting_for_daily_recap():
+		_queue_deferred_open_app_refresh([APP_ID_NETWORK, APP_ID_ACADEMY, APP_ID_UPGRADES])
 		return
 	if _is_desktop_app_window_open(APP_ID_NETWORK):
 		_refresh_network()
@@ -6464,6 +6655,12 @@ func _on_company_detail_ready(company_id: String) -> void:
 	stock_controller._sync_root_refs()
 func _refresh_portfolio() -> void:
 	var portfolio: Dictionary = GameManager.get_portfolio_snapshot()
+	_refresh_portfolio_summary_labels(portfolio)
+	_refresh_holdings_rows(portfolio.get("holdings", []))
+	_refresh_trade_history()
+
+
+func _refresh_portfolio_summary_labels(portfolio: Dictionary) -> void:
 	var cash_value: float = float(portfolio.get("cash", 0.0))
 	var invested_cost: float = float(portfolio.get("invested_cost", 0.0))
 	var unrealized_pnl: float = float(portfolio.get("unrealized_pnl", 0.0))
@@ -6478,9 +6675,6 @@ func _refresh_portfolio() -> void:
 	]
 	equity_value_label.text = _format_currency(equity_value)
 	_set_label_tone(pnl_value_label, _color_for_change(unrealized_pnl_pct))
-
-	_refresh_holdings_rows(portfolio.get("holdings", []))
-	_refresh_trade_history()
 
 
 func _refresh_help() -> void:
@@ -9284,6 +9478,8 @@ func _on_next_day_pressed() -> void:
 		return
 	var started_at_usec: int = Time.get_ticks_usec()
 	advance_day_processing = true
+	advance_day_refresh_generation += 1
+	advance_day_portfolio_refresh_guard_active = true
 	pending_daily_recap_snapshot = {}
 	_refresh_hospital_overlay()
 	_refresh_jail_overlay()
@@ -9299,6 +9495,7 @@ func _on_next_day_pressed() -> void:
 	await get_tree().process_frame
 	var advance_result: Dictionary = GameManager.advance_day_deferred_save()
 	if not bool(advance_result.get("success", true)):
+		advance_day_portfolio_refresh_guard_active = false
 		var block_message: String = str(advance_result.get("message", "Advance Day is blocked."))
 		status_message = block_message
 		_show_toast(block_message, false)
@@ -9324,7 +9521,6 @@ func _on_day_progressed(_day_index: int) -> void:
 	if advance_day_processing:
 		_queue_deferred_open_app_refresh()
 		deferred_dashboard_refresh_after_recap = true
-		deferred_full_refresh_after_recap = true
 		_invalidate_company_rows_cache()
 	else:
 		_refresh_all()

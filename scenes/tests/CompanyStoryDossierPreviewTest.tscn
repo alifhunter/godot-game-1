@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/CompanyStoryDossierPreviewTest.gd" id="1_company_story_dossier_preview"]
+
+[node name="CompanyStoryDossierPreviewTest" type="Node"]
+script = ExtResource("1_company_story_dossier_preview")

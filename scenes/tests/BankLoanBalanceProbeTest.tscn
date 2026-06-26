@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/BankLoanBalanceProbeTest.gd" id="1_bank_loan_balance_probe"]
+
+[node name="BankLoanBalanceProbeTest" type="Node"]
+script = ExtResource("1_bank_loan_balance_probe")

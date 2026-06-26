@@ -2,6 +2,8 @@ extends RefCounted
 
 const IDX_PRICE_RULES = preload("res://systems/IDXPriceRules.gd")
 const STABLE_RNG = preload("res://systems/StableRng.gd")
+const PRICE_EXPOSURE_RESOLVER = preload("res://systems/PriceExposureResolver.gd")
+const COMPANY_RELATIONSHIP_GRAPH_SYSTEM = preload("res://systems/CompanyRelationshipGraphSystem.gd")
 const CHART_GAP_STYLES := ["none", "news_gap", "breakout_gap", "exhaustion_gap", "rug_gap", "mixed"]
 const CHART_GAP_BIASES := ["up", "down", "mixed"]
 const CHART_GAP_FREQUENCIES := ["rare", "moderate", "active"]
@@ -58,6 +60,8 @@ var index_review_system
 var attention_director_system
 var dirty_tip_system
 var gorengan_campaign_system
+var price_exposure_resolver
+var company_relationship_graph_system
 
 
 func _init(
@@ -68,7 +72,8 @@ func _init(
 	p_index_review_system = null,
 	p_attention_director_system = null,
 	p_dirty_tip_system = null,
-	p_gorengan_campaign_system = null
+	p_gorengan_campaign_system = null,
+	p_company_relationship_graph_system = null
 ) -> void:
 	company_event_system = p_company_event_system if p_company_event_system != null else preload("res://systems/CompanyEventSystem.gd").new()
 	company_roadmap_system = p_company_roadmap_system if p_company_roadmap_system != null else preload("res://systems/CompanyRoadmapSystem.gd").new()
@@ -78,6 +83,8 @@ func _init(
 	attention_director_system = p_attention_director_system if p_attention_director_system != null else preload("res://systems/AttentionDirectorSystem.gd").new()
 	dirty_tip_system = p_dirty_tip_system if p_dirty_tip_system != null else preload("res://systems/DirtyTipSystem.gd").new()
 	gorengan_campaign_system = p_gorengan_campaign_system if p_gorengan_campaign_system != null else preload("res://systems/GorenganCampaignSystem.gd").new()
+	price_exposure_resolver = PRICE_EXPOSURE_RESOLVER.new()
+	company_relationship_graph_system = p_company_relationship_graph_system if p_company_relationship_graph_system != null else COMPANY_RELATIONSHIP_GRAPH_SYSTEM.new()
 
 
 func simulate_day(run_state, data_repository, broker_flow_system, corporate_action_system) -> Dictionary:
@@ -140,6 +147,17 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 	active_company_arcs.append_array(company_arc_resolution.get("active_arcs", []).duplicate(true))
 	active_company_arcs.append_array(corporate_action_resolution.get("active_company_arcs", []).duplicate(true))
 	active_company_arcs.append_array(index_review_resolution.get("active_company_arcs", []).duplicate(true))
+	var relationship_graph_options: Dictionary = {
+		"blocked_company_ids": _target_company_ids_from_arcs(active_company_arcs)
+	}
+	var relationship_graph_resolution: Dictionary = company_relationship_graph_system.resolve_day(
+		run_state,
+		trade_date,
+		day_number,
+		macro_state,
+		relationship_graph_options
+	)
+	active_company_arcs.append_array(relationship_graph_resolution.get("active_company_arcs", []).duplicate(true))
 	var special_event_resolution: Dictionary = special_event_system.resolve_day(
 		run_state,
 		trade_date,
@@ -298,6 +316,8 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 			day_number,
 			company_id
 		)
+		var price_exposure_context: Dictionary = _resolve_price_exposure_context(definition, macro_state)
+		volume_context = _apply_price_exposure_context(volume_context, price_exposure_context)
 		var daily_change_pct: float = _calculate_daily_change(
 			definition,
 			sector_definition,
@@ -389,6 +409,7 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		runtime["market_depth_context"] = market_depth_context.duplicate(true)
 		runtime["abnormal_move_context"] = abnormal_move_context.duplicate(true)
 		runtime["abnormal_move_state"] = abnormal_move_context.get("state", {}).duplicate(true)
+		runtime["price_exposure_context"] = price_exposure_context.duplicate(true)
 		runtime["player_market_impact"] = _build_player_market_impact_snapshot(player_flow_context, close_context)
 		var finalized_campaign: Dictionary = gorengan_campaign_system.finalize_day_context(
 			gorengan_campaign_context,
@@ -413,6 +434,8 @@ func simulate_day(run_state, data_repository, broker_flow_system, corporate_acti
 		"started_company_arcs": company_arc_resolution.get("started_events", []).duplicate(true),
 		"company_arc_phase_events": company_arc_resolution.get("phase_events", []).duplicate(true),
 		"company_roadmap_events": company_roadmap_resolution.get("started_events", []).duplicate(true),
+		"relationship_graph_events": relationship_graph_resolution.get("relationship_graph_events", []).duplicate(true),
+		"company_relationship_graph_state": relationship_graph_resolution.get("company_relationship_graph_state", run_state.get_company_relationship_graph_state()).duplicate(true),
 		"company_roadmap_state": company_roadmap_resolution.get("company_roadmap_state", run_state.get_company_roadmap_state()).duplicate(true),
 		"corporate_action_events": _combined_arrays(
 			corporate_action_resolution.get("corporate_action_events", []),
@@ -1515,6 +1538,20 @@ func _combined_arrays(first_value: Variant, second_value: Variant) -> Array:
 	return rows
 
 
+func _target_company_ids_from_arcs(arcs_value: Variant) -> Array:
+	var arcs: Array = arcs_value if typeof(arcs_value) == TYPE_ARRAY else []
+	var ids: Array = []
+	for arc_value in arcs:
+		if typeof(arc_value) != TYPE_DICTIONARY:
+			continue
+		var arc: Dictionary = arc_value
+		var company_id: String = str(arc.get("target_company_id", arc.get("company_id", ""))).strip_edges()
+		if company_id.is_empty() or ids.has(company_id):
+			continue
+		ids.append(company_id)
+	return ids
+
+
 func _resolve_event_context(
 	definition: Dictionary,
 	runtime: Dictionary,
@@ -1947,6 +1984,38 @@ func _build_player_market_impact_snapshot(player_flow_context: Dictionary, close
 	}
 
 
+func _resolve_price_exposure_context(definition: Dictionary, macro_state: Dictionary) -> Dictionary:
+	if price_exposure_resolver == null:
+		price_exposure_resolver = PRICE_EXPOSURE_RESOLVER.new()
+	return price_exposure_resolver.resolve(definition, macro_state)
+
+
+func _apply_price_exposure_context(volume_context: Dictionary, exposure_context: Dictionary) -> Dictionary:
+	var resolved_context: Dictionary = volume_context.duplicate(true)
+	var exposure_drift: float = clamp(float(exposure_context.get("exposure_drift_adjustment", 0.0)), -0.004, 0.004)
+	var exposure_volatility_multiplier: float = clamp(float(exposure_context.get("exposure_volatility_multiplier", 1.0)), 0.90, 1.16)
+	var exposure_volume_multiplier: float = clamp(float(exposure_context.get("exposure_volume_multiplier", 1.0)), 0.92, 1.22)
+	var exposure_confidence: float = clamp(float(exposure_context.get("exposure_confidence", 0.0)), 0.0, 1.0)
+	var existing_volume_multiplier: float = max(float(resolved_context.get("volume_multiplier", 1.0)), 0.10)
+	var existing_activity_ratio: float = max(float(resolved_context.get("expected_activity_ratio", 1.0)), 0.0)
+
+	resolved_context["price_exposure_context"] = exposure_context.duplicate(true)
+	resolved_context["exposure_drift_adjustment"] = exposure_drift
+	resolved_context["exposure_volatility_multiplier"] = exposure_volatility_multiplier
+	resolved_context["exposure_volume_multiplier"] = exposure_volume_multiplier
+	resolved_context["exposure_confidence"] = exposure_confidence
+	resolved_context["exposure_rows"] = exposure_context.get("exposure_rows", []).duplicate(true)
+	resolved_context["exposure_summary"] = str(exposure_context.get("exposure_summary", ""))
+	resolved_context["exposure_commodity_score"] = float(exposure_context.get("commodity_score", 0.0))
+	resolved_context["exposure_macro_score"] = float(exposure_context.get("macro_score", 0.0))
+	resolved_context["exposure_story_score"] = float(exposure_context.get("story_score", 0.0))
+	resolved_context["pre_exposure_volume_multiplier"] = existing_volume_multiplier
+	resolved_context["pre_exposure_expected_activity_ratio"] = existing_activity_ratio
+	resolved_context["volume_multiplier"] = clamp(existing_volume_multiplier * exposure_volume_multiplier, 0.30, 14.00)
+	resolved_context["expected_activity_ratio"] = max(existing_activity_ratio * exposure_volume_multiplier, 0.0)
+	return resolved_context
+
+
 func _calculate_daily_change(
 	definition: Dictionary,
 	sector_definition: Dictionary,
@@ -1979,11 +2048,14 @@ func _calculate_daily_change(
 	var risk_edge: float = (risk - 50.0) / 50.0
 	var quality_drift: float = (quality_edge * PRICE_QUALITY_EDGE_WEIGHT) + (growth_edge * PRICE_GROWTH_EDGE_WEIGHT) - (risk_edge * PRICE_RISK_EDGE_WEIGHT) + PRICE_BASELINE_DRIFT
 	var momentum_component: float = clamp(-recent_momentum * PRICE_MOMENTUM_MEAN_REVERSION, -PRICE_MOMENTUM_CAP, PRICE_MOMENTUM_CAP)
+	var exposure_volatility_multiplier: float = clamp(float(volume_context.get("exposure_volatility_multiplier", 1.0)), 0.90, 1.16)
+	base_volatility *= exposure_volatility_multiplier
 	var noise_component: float = rng.randf_range(-base_volatility, base_volatility) * PRICE_NOISE_SCALE
 	var daily_change: float = quality_drift
 	daily_change += market_sentiment * PRICE_MARKET_SENTIMENT_WEIGHT
 	daily_change += sector_sentiment * PRICE_SECTOR_SENTIMENT_WEIGHT
 	daily_change += event_bias * PRICE_EVENT_BIAS_WEIGHT
+	daily_change += clamp(float(volume_context.get("exposure_drift_adjustment", 0.0)), -0.004, 0.004)
 	daily_change += broker_pressure * PRICE_BROKER_PRESSURE_WEIGHT * broker_impact_multiplier
 	daily_change += float(volume_context.get("lead_price_bias", 0.0)) * broker_impact_multiplier
 	daily_change += float(volume_context.get("technical_price_bias", 0.0))

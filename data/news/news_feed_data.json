@@ -1,38 +1,64 @@
 {
-  "prototype_default_intel_level": 4,
+  "prototype_default_intel_level": 1,
+  "access_model": "free_topic_coverage",
+  "public_depth_level": 1,
   "article_limit": 14,
   "outlets": [
     {
       "id": "gorengan_daily",
-      "label": "Gorengan Daily",
+      "label": "Harian Investor",
       "voice": "gorengan_daily",
       "intel_level": 1,
-      "tagline": "Loud, simple, and focused on what people are talking about.",
-      "summary": "The most dramatic outlet, but still easy to read."
+      "coverage_type": "market_wrap_chatter",
+      "topic_ids": ["market_wrap", "public_mover", "chatter", "sentiment"],
+      "public_depth_level": 1,
+      "reliability": 0.52,
+      "specificity": "market",
+      "noise_level": 0.42,
+      "tagline": "Market wrap, daily movers, and the names retail traders keep repeating.",
+      "summary": "Fast public chatter and market mood without private conclusions."
     },
     {
       "id": "waduh_finance",
-      "label": "Waduh Finance",
+      "label": "The Egonomist",
       "voice": "waduh_finance",
-      "intel_level": 2,
-      "tagline": "Fast updates once a story starts to look real.",
-      "summary": "Quick and clear coverage with less noise."
+      "intel_level": 1,
+      "coverage_type": "macro_commodity_sector",
+      "topic_ids": ["macro", "commodity", "sector", "subsector", "policy"],
+      "public_depth_level": 1,
+      "reliability": 0.62,
+      "specificity": "sector",
+      "noise_level": 0.30,
+      "tagline": "Macro, commodity, policy, and sector context for top-down reads.",
+      "summary": "Broad public drivers and sector readthroughs, not company-specific answers."
     },
     {
       "id": "harian_investor",
-      "label": "Harian Investor",
+      "label": "IDK Channel",
       "voice": "harian_investor",
-      "intel_level": 3,
-      "tagline": "Calmer coverage with a little more context.",
-      "summary": "The most balanced and straightforward outlet."
+      "intel_level": 1,
+      "coverage_type": "corporate_action_filing",
+      "topic_ids": ["corporate_action", "filing", "earnings", "meeting", "index_review"],
+      "public_depth_level": 1,
+      "reliability": 0.74,
+      "specificity": "company",
+      "noise_level": 0.18,
+      "tagline": "Formal public disclosures, meetings, earnings, and corporate-action calendars.",
+      "summary": "Public document and event coverage with a sober disclosure tone."
     },
     {
       "id": "ordal_news",
-      "label": "Ordal News",
+      "label": "MarketSnitch",
       "voice": "ordal_news",
-      "intel_level": 4,
-      "tagline": "Early stories, careful wording, and a lot of 'maybe.'",
-      "summary": "The earliest outlet, but still written in plain language."
+      "intel_level": 1,
+      "coverage_type": "early_signal",
+      "topic_ids": ["rumor", "early_signal", "market_whisper", "watchlist"],
+      "public_depth_level": 1,
+      "reliability": 0.42,
+      "specificity": "company",
+      "noise_level": 0.72,
+      "tagline": "Early signals, ambiguous whispers, and stories that still need proof.",
+      "summary": "Noisy public hints that point players toward confirmation elsewhere."
     }
   ],
   "authors": [
@@ -50,10 +76,10 @@
     {
       "id": "raka_pradipta",
       "display_name": "Raka Pradipta",
-      "role": "Corporate Desk",
+      "role": "Macro Desk",
       "outlet_ids": ["waduh_finance"],
-      "specialties": ["corporate_action", "corporate_meeting", "management", "mna", "index_review", "index_inclusion", "index_exclusion"],
-      "sector_ids": ["finance", "basicindustry", "infra", "energy"],
+      "specialties": ["macro_shock", "policy_post", "policy_commodity_gate", "commodity", "sector_rotation", "index_review"],
+      "sector_ids": ["finance", "basicindustry", "infra", "energy", "industrial"],
       "contact_id": "journalist_raka_pradipta",
       "portrait_asset": "",
       "lead_frequency": 0.45
@@ -61,9 +87,9 @@
     {
       "id": "maya_wicaksono",
       "display_name": "Maya Wicaksono",
-      "role": "Senior Markets Writer",
+      "role": "Disclosure Editor",
       "outlet_ids": ["harian_investor"],
-      "specialties": ["earnings", "sector_rotation", "policy_post", "macro_shock", "market_wrap", "index_review"],
+      "specialties": ["earnings", "corporate_action", "corporate_meeting", "corporate_action_filing", "index_review", "index_inclusion", "index_exclusion"],
       "sector_ids": ["finance", "consumer", "industrial", "health", "tech"],
       "contact_id": "journalist_maya_wicaksono",
       "portrait_asset": "",
@@ -72,9 +98,9 @@
     {
       "id": "dian_permatasari",
       "display_name": "Dian Permatasari",
-      "role": "Boardroom Columnist",
+      "role": "Market Whisper Columnist",
       "outlet_ids": ["ordal_news"],
-      "specialties": ["corporate_action", "rumor", "company_arc", "management", "index_review", "index_watch"],
+      "specialties": ["rumor", "corporate_action_rumor", "corporate_action_speculation", "company_arc", "management", "index_watch"],
       "sector_ids": ["finance", "property", "energy", "basicindustry", "infra"],
       "contact_id": "journalist_dian_permatasari",
       "portrait_asset": "",

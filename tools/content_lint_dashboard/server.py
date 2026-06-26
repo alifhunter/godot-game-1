@@ -96,6 +96,15 @@ TOOL_SPECS = [
         ],
     },
     {
+        "id": "company_universe",
+        "label": "Company Universe",
+        "port": 8775,
+        "description": "Catalog-backed company identities, sector/subsector placement, exposures, price traits, relationship hooks, and story hooks.",
+        "server": PROJECT_ROOT / "tools" / "company_universe_editor" / "server.py",
+        "source": PROJECT_ROOT / "tools" / "company_universe_editor" / "company_universe_source.json",
+        "runtime": ["data/companies/company_universe_catalog.json"],
+    },
+    {
         "id": "balance_upgrades",
         "label": "Balance / Upgrades",
         "port": 8772,

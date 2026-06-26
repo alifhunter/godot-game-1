@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/FinancialStatementLayerSnapshotMatrixTest.gd" id="1_statement_snapshot_matrix"]
+
+[node name="FinancialStatementLayerSnapshotMatrixTest" type="Node"]
+script = ExtResource("1_statement_snapshot_matrix")

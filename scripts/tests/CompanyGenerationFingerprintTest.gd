@@ -27,7 +27,7 @@ func _ready() -> void:
 		_fail("Company generation fingerprint expected %d companies, got %d." % [EXPECTED_ROSTER_SIZE, roster_size])
 		return
 	if int(first_report.get("duplicate_name_count", 0)) != 0 or int(first_report.get("duplicate_ticker_count", 0)) != 0:
-		_fail("Company generation fingerprint expected zero default-roster duplicate names/tickers, got names=%d tickers=%d." % [
+		_fail("Company generation fingerprint expected zero procedural-roster duplicate names/tickers, got names=%d tickers=%d." % [
 			int(first_report.get("duplicate_name_count", 0)),
 			int(first_report.get("duplicate_ticker_count", 0))
 		])
@@ -72,6 +72,7 @@ func _ready() -> void:
 
 func _build_fingerprint_report() -> Dictionary:
 	var difficulty_config: Dictionary = GameManager.get_difficulty_config(GameManager.DEFAULT_DIFFICULTY_ID)
+	difficulty_config["use_company_universe_catalog"] = false
 	var company_definitions: Array = GameManager.build_company_roster(RUN_SEED, difficulty_config)
 	RunState.setup_new_run(RUN_SEED, company_definitions, difficulty_config, false)
 	for company_id_value in RunState.company_order:

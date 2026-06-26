@@ -702,6 +702,38 @@ static func apply_life_loan_payment_if_due(previous_trade_date: Dictionary, curr
 	return result
 
 
+static func apply_bank_loan_payment_if_due(previous_trade_date: Dictionary, current_trade_date: Dictionary) -> Dictionary:
+	if previous_trade_date.is_empty() or current_trade_date.is_empty():
+		return {}
+	var previous_year: int = int(previous_trade_date.get("year", 0))
+	var previous_month: int = int(previous_trade_date.get("month", 0))
+	var current_year: int = int(current_trade_date.get("year", 0))
+	var current_month: int = int(current_trade_date.get("month", 0))
+	if previous_year == current_year and previous_month == current_month:
+		return {}
+	if current_year <= 0 or current_month <= 0:
+		return {}
+
+	var finance: Dictionary = RunState.get_life_finance()
+	var active_bank_loan: Dictionary = finance.get("active_bank_loan", {})
+	if active_bank_loan.is_empty():
+		return {}
+	var period_id: String = "%04d-%02d" % [current_year, current_month]
+	if str(active_bank_loan.get("last_payment_period", "")) == period_id:
+		return {}
+	var amount: float = max(float(active_bank_loan.get("monthly_payment", 0.0)), 0.0)
+	if amount <= 0.0:
+		return {}
+	var result: Dictionary = RunState.apply_bank_loan_payment(amount, {
+		"period_id": period_id,
+		"trade_date": current_trade_date.duplicate(true)
+	})
+	if not bool(result.get("success", false)):
+		return {}
+	RunState.last_day_results["life_bank_loan_payment"] = result.duplicate(true)
+	return result
+
+
 static func apply_life_legal_state_update() -> Dictionary:
 	if not RunState.has_active_run():
 		return {}

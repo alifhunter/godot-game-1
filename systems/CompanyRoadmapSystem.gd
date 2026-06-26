@@ -345,11 +345,11 @@ func debug_evaluate_funding(run_state, company_id: String, family: Dictionary, e
 	var runtime: Dictionary = run_state.get_company(company_id)
 	if definition.is_empty() or runtime.is_empty():
 		return {"outcome": "cancelled", "reason": "missing_company"}
-	return _evaluate_funding(run_state, definition, runtime, family, {}, excluded_company_ids)
+	return _evaluate_funding(run_state, definition, runtime, family, {}, excluded_company_ids, -1)
 
 
 func debug_select_finance_partner(run_state, company_id: String, excluded_company_ids: Array = []) -> Dictionary:
-	var partner_id: String = _select_finance_partner(run_state, company_id, {}, excluded_company_ids)
+	var partner_id: String = _select_finance_partner(run_state, company_id, {}, excluded_company_ids, -1)
 	if partner_id.is_empty():
 		return {}
 	return run_state.get_effective_company_definition(partner_id, false, false)
@@ -463,6 +463,8 @@ func _pick_spawn_candidate(run_state, day_number: int, macro_state: Dictionary, 
 			continue
 		if int(cooldowns.get(company_id, -999)) > day_number:
 			continue
+		if run_state.has_method("is_company_living_arc_available") and not run_state.is_company_living_arc_available(company_id, SOURCE_SYSTEM_ID, "roadmap", day_number):
+			continue
 		if _company_has_live_chain(chains, company_id):
 			continue
 		var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
@@ -479,6 +481,7 @@ func _pick_spawn_candidate(run_state, day_number: int, macro_state: Dictionary, 
 		score += float(definition.get("growth_score", 50.0)) / 100.0 * 0.18
 		score += float(family.get("positive_bias", 0.1))
 		score += float(macro_state.get("risk_appetite", 0.5)) * 0.08
+		score += _living_roadmap_score_adjustment(run_state, company_id, family, macro_state)
 		score += float(STABLE_RNG.seed_from_parts([run_state.run_seed, "roadmap_candidate", day_number, company_id]) % 1000) / 10000.0
 		candidates.append({"company_id": company_id, "family": family, "score": score})
 	if candidates.is_empty():
@@ -489,6 +492,45 @@ func _pick_spawn_candidate(run_state, day_number: int, macro_state: Dictionary, 
 	return candidates[0].duplicate(true)
 
 
+func _living_roadmap_score_adjustment(run_state, company_id: String, family: Dictionary, macro_state: Dictionary) -> float:
+	if not run_state.has_method("get_company_living_arc_state"):
+		return 0.0
+	var living_state: Dictionary = run_state.get_company_living_arc_state(company_id)
+	var tags: Array = living_state.get("eligibility_tags", [])
+	var adjustment: float = 0.0
+	if tags.has("high_story_heat"):
+		adjustment += 0.035
+	if tags.has("growth_story_candidate"):
+		adjustment += 0.035
+	if tags.has("funding_need") and str(family.get("funding_scale", "")) in ["high", "transformational"]:
+		adjustment += 0.040
+	if tags.has("roadmap_physical_project") and bool(family.get("physical", false)):
+		adjustment += 0.035
+	if tags.has("strong_balance_sheet") and str(family.get("funding_scale", "")) in ["high", "transformational"]:
+		adjustment += 0.020
+	if tags.has("weak_balance_sheet") and str(family.get("funding_scale", "")) in ["high", "transformational"]:
+		adjustment -= 0.040
+	if tags.has("recent:company_roadmap") or tags.has("recent:roadmap"):
+		adjustment -= 0.080
+	if _tags_overlap_commodity(tags, macro_state.get("commodity_leaders", [])):
+		adjustment += 0.025
+	if _tags_overlap_commodity(tags, macro_state.get("commodity_laggards", [])):
+		adjustment -= 0.015
+	return adjustment
+
+
+func _tags_overlap_commodity(tags: Array, commodity_ids: Variant) -> bool:
+	if typeof(commodity_ids) != TYPE_ARRAY:
+		return false
+	for commodity_id_value in commodity_ids:
+		var commodity_id: String = str(commodity_id_value).strip_edges().to_lower()
+		if commodity_id.is_empty():
+			continue
+		if tags.has("commodity:%s" % commodity_id) or tags.has("commodity_positive:%s" % commodity_id) or tags.has("commodity_negative:%s" % commodity_id):
+			return true
+	return false
+
+
 func _build_milestone_from_candidate(run_state, data_repository, corporate_action_system, candidate: Dictionary, trade_date: Dictionary, day_number: int, chains: Dictionary, calendar: Dictionary) -> Dictionary:
 	var company_id: String = str(candidate.get("company_id", ""))
 	var definition: Dictionary = run_state.get_effective_company_definition(company_id, true, true)
@@ -496,7 +538,7 @@ func _build_milestone_from_candidate(run_state, data_repository, corporate_actio
 	var family: Dictionary = candidate.get("family", {}).duplicate(true)
 	if definition.is_empty() or runtime.is_empty() or family.is_empty():
 		return {}
-	var funding: Dictionary = _evaluate_funding(run_state, definition, runtime, family, chains)
+	var funding: Dictionary = _evaluate_funding(run_state, definition, runtime, family, chains, [], day_number)
 	var outcome: String = str(funding.get("outcome", "self_funded"))
 	var corporate_action_events: Array = []
 	var chain_id: String = ""
@@ -573,7 +615,7 @@ func _build_milestone_from_candidate(run_state, data_repository, corporate_actio
 	}
 
 
-func _evaluate_funding(run_state, definition: Dictionary, runtime: Dictionary, family: Dictionary, chains: Dictionary = {}, excluded_company_ids: Array = []) -> Dictionary:
+func _evaluate_funding(run_state, definition: Dictionary, runtime: Dictionary, family: Dictionary, chains: Dictionary = {}, excluded_company_ids: Array = [], day_number: int = -1) -> Dictionary:
 	var financials: Dictionary = definition.get("financials", {})
 	var profile: Dictionary = runtime.get("company_profile", {})
 	var traits: Dictionary = profile.get("generation_traits", {})
@@ -588,7 +630,7 @@ func _evaluate_funding(run_state, definition: Dictionary, runtime: Dictionary, f
 			"funding_capacity": funding_capacity
 		}
 	if routes.has("loan") and debt_to_equity <= 1.55:
-		var partner_id: String = _select_finance_partner(run_state, str(definition.get("id", "")), chains, excluded_company_ids)
+		var partner_id: String = _select_finance_partner(run_state, str(definition.get("id", "")), chains, excluded_company_ids, day_number)
 		if not partner_id.is_empty():
 			var partner_definition: Dictionary = run_state.get_effective_company_definition(partner_id, false, false)
 			return {
@@ -648,13 +690,16 @@ func _cash_proxy_from_statement(statement_snapshot: Dictionary) -> float:
 	return 0.0
 
 
-func _select_finance_partner(run_state, primary_company_id: String, chains: Dictionary = {}, excluded_company_ids: Array = []) -> String:
+func _select_finance_partner(run_state, primary_company_id: String, chains: Dictionary = {}, excluded_company_ids: Array = [], day_number: int = -1) -> String:
 	var candidates: Array = []
+	var resolved_day_number: int = max(day_number, int(run_state.day_index))
 	for company_id_value in run_state.company_order:
 		var company_id: String = str(company_id_value)
 		if company_id.is_empty() or company_id == primary_company_id or excluded_company_ids.has(company_id):
 			continue
 		if _company_has_live_chain(chains, company_id):
+			continue
+		if run_state.has_method("is_company_living_arc_available") and not run_state.is_company_living_arc_available(company_id, SOURCE_SYSTEM_ID, "roadmap_financing_partner", resolved_day_number):
 			continue
 		var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
 		if str(definition.get("sector_id", "")) != "finance":

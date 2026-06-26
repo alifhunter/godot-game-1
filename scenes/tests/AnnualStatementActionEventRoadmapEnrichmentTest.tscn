@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/AnnualStatementActionEventRoadmapEnrichmentTest.gd" id="1_action_event_roadmap"]
+
+[node name="AnnualStatementActionEventRoadmapEnrichmentTest" type="Node"]
+script = ExtResource("1_action_event_roadmap")

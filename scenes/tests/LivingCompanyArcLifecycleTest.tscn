@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/LivingCompanyArcLifecycleTest.gd" id="1_living_arc_lifecycle"]
+
+[node name="LivingCompanyArcLifecycleTest" type="Node"]
+script = ExtResource("1_living_arc_lifecycle")

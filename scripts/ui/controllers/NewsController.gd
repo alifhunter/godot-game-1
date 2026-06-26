@@ -13,6 +13,16 @@ const COLOR_MARKET_PAPER_RED := UI_THEME.COLOR_MARKET_PAPER_RED
 const NEWS_ARTICLE_CARD_LIMIT := 8
 const NEWS_ARTICLE_INITIAL_CARD_LIMIT := 3
 const NEWS_ARTICLE_CARD_CLICK_DRAG_THRESHOLD := 10.0
+const NEWS_TOPIC_FILTER_ALL := "all"
+const NEWS_TOPIC_FILTER_DEFINITIONS := [
+	{"id": "all", "label": "All", "coverage_types": [], "topic_ids": []},
+	{"id": "market", "label": "Market", "coverage_types": ["market_wrap_chatter"], "topic_ids": ["market_wrap", "public_mover", "chatter", "sentiment", "breadth"]},
+	{"id": "macro", "label": "Macro", "coverage_types": ["macro_commodity_sector"], "topic_ids": ["macro", "policy", "geopolitics", "pandemic"]},
+	{"id": "commodity", "label": "Commodities", "coverage_types": ["macro_commodity_sector"], "topic_ids": ["commodity", "coal", "cpo", "oil", "nickel", "rare_earth", "silica"]},
+	{"id": "sector", "label": "Sector", "coverage_types": ["macro_commodity_sector"], "topic_ids": ["sector", "subsector", "readthrough", "sector_rotation"]},
+	{"id": "corporate", "label": "Corporate", "coverage_types": ["corporate_action_filing"], "topic_ids": ["corporate_action", "filing", "earnings", "meeting", "index_review"]},
+	{"id": "rumor", "label": "Rumor", "coverage_types": ["early_signal"], "topic_ids": ["rumor", "early_signal", "market_whisper", "watchlist"]}
+]
 const SHOW_NEWS_IMAGE_PLACEHOLDERS := false
 const MARKET_PAPER_GRUNGE_TEXTURES := {
 	"coffee": "res://assets/market_papers/grunge/coffee_stain.png",
@@ -32,6 +42,7 @@ var news_capture_menu: PopupMenu = null
 var pending_capture_payloads: Dictionary = {}
 var current_news_snapshot: Dictionary = {}
 var selected_news_outlet_id: String = ""
+var selected_news_topic_filter_id: String = NEWS_TOPIC_FILTER_ALL
 var selected_news_archive_year: int = 0
 var selected_news_archive_month: int = 0
 var selected_news_article_id: String = ""
@@ -48,6 +59,7 @@ var news_archive_year_label: Label = null
 var news_archive_year_option: OptionButton = null
 var news_archive_month_label: Label = null
 var news_archive_month_option: OptionButton = null
+var news_topic_filter_row: HFlowContainer = null
 var news_article_list: ItemList = null
 var news_detail_panel: PanelContainer = null
 var news_detail_outlet_label: Label = null
@@ -116,10 +128,12 @@ func _refresh_news() -> void:
 	news_title_label.text = "The Market Papers"
 	if not RunState.has_active_run():
 		selected_news_outlet_id = ""
+		selected_news_topic_filter_id = NEWS_TOPIC_FILTER_ALL
 		selected_news_archive_year = 0
 		selected_news_archive_month = 0
 		selected_news_article_id = ""
 		_rebuild_news_outlet_buttons([])
+		_rebuild_news_topic_filter_buttons([])
 		_refresh_news_archive_filters()
 		news_intel_status_label.text = ""
 		news_feed_summary_label.text = ""
@@ -140,6 +154,7 @@ func _refresh_news() -> void:
 	var outlets: Array = current_news_snapshot.get("outlets", [])
 	if selected_news_outlet_id.is_empty() or not _news_outlet_exists(outlets, selected_news_outlet_id):
 		selected_news_outlet_id = _default_news_outlet_id(outlets)
+		selected_news_topic_filter_id = NEWS_TOPIC_FILTER_ALL
 		selected_news_archive_year = 0
 		selected_news_archive_month = 0
 		selected_news_article_id = ""
@@ -236,12 +251,21 @@ func _refresh_news_article_list() -> void:
 	var started_at_usec: int = Time.get_ticks_usec()
 	var phase_started_at_usec: int = started_at_usec
 	news_article_list.clear()
-	var articles: Array = _current_news_archive_article_summaries()
+	var all_articles: Array = _current_news_archive_article_summaries()
+	_refresh_news_topic_filters(all_articles)
+	var articles: Array = _filtered_news_articles(all_articles)
 	_log_perf_phase(true, "_refresh_news_article_list:summaries", phase_started_at_usec)
 	phase_started_at_usec = Time.get_ticks_usec()
 	var feed: Dictionary = current_news_snapshot.get("feeds", {}).get(selected_news_outlet_id, {})
 	var feed_tagline: String = str(feed.get("tagline", "")).strip_edges()
-	news_feed_summary_label.text = "ARCHIVE" if feed_tagline.is_empty() else "ARCHIVE  ·  %s" % feed_tagline
+	var filter_label: String = _news_topic_filter_label(selected_news_topic_filter_id)
+	var count_label: String = "%d/%d" % [articles.size(), all_articles.size()]
+	var summary_parts: Array = ["ARCHIVE", count_label]
+	if not feed_tagline.is_empty():
+		summary_parts.append(feed_tagline)
+	if selected_news_topic_filter_id != NEWS_TOPIC_FILTER_ALL:
+		summary_parts.append("Filter: %s" % filter_label)
+	news_feed_summary_label.text = "  ·  ".join(summary_parts)
 
 	for article_value in articles:
 		var article: Dictionary = article_value
@@ -455,7 +479,7 @@ func _build_news_capture_payload(article: Dictionary, kind: String) -> Dictionar
 		source_label = "News"
 	match kind:
 		"headline":
-			return {
+			return _copy_generated_surface_capture_metadata({
 				"source_type": "news_article",
 				"category": "news",
 				"category_label": "News",
@@ -466,9 +490,9 @@ func _build_news_capture_payload(article: Dictionary, kind: String) -> Dictionar
 				"value": headline,
 				"detail": deck if not deck.is_empty() else _news_article_status_line(article),
 				"impact": impact
-			}
+			}, article)
 		"article":
-			return {
+			return _copy_generated_surface_capture_metadata({
 				"source_type": "news_article",
 				"category": "news",
 				"category_label": "News",
@@ -479,13 +503,13 @@ func _build_news_capture_payload(article: Dictionary, kind: String) -> Dictionar
 				"value": deck if not deck.is_empty() else headline,
 				"detail": _news_capture_excerpt(body),
 				"impact": impact
-			}
+			}, article)
 		"headline_article":
 			var combined_detail: String = deck
 			var body_excerpt: String = _news_capture_excerpt(body)
 			if not body_excerpt.is_empty():
 				combined_detail = "%s %s" % [combined_detail, body_excerpt] if not combined_detail.is_empty() else body_excerpt
-			return {
+			return _copy_generated_surface_capture_metadata({
 				"source_type": "news_article",
 				"category": "news",
 				"category_label": "News",
@@ -497,7 +521,7 @@ func _build_news_capture_payload(article: Dictionary, kind: String) -> Dictionar
 				"value": headline,
 				"detail": combined_detail,
 				"impact": impact
-			}
+			}, article)
 		"source_lead":
 			var contact: Dictionary = _contact_for_context("news", article_id, target_company_id)
 			var handle: String = str(contact.get("twooter_handle", "")).strip_edges()
@@ -507,7 +531,7 @@ func _build_news_capture_payload(article: Dictionary, kind: String) -> Dictionar
 			if display_name.is_empty():
 				display_name = "News source"
 			var value_text: String = handle if not handle.is_empty() else _news_byline_text(article)
-			return {
+			return _copy_generated_surface_capture_metadata({
 				"source_type": "network_journal",
 				"category": "network_intel",
 				"category_label": "Network Intel",
@@ -519,8 +543,37 @@ func _build_news_capture_payload(article: Dictionary, kind: String) -> Dictionar
 				"value": value_text,
 				"detail": "This source is connected to the article \"%s\"." % headline,
 				"impact": "mixed"
-			}
+			}, article)
 	return {}
+func _copy_generated_surface_capture_metadata(payload: Dictionary, source: Dictionary) -> Dictionary:
+	if payload.is_empty():
+		return payload
+	for key_value in [
+		"generated_content_surface",
+		"generated_surface_id",
+		"generated_scope_id",
+		"source_system_id",
+		"story_id",
+		"story_family",
+		"archetype_id",
+		"public_status",
+		"stage_id",
+		"visibility",
+		"detail_level",
+		"reliability",
+		"leak_risk",
+		"source_fact_ids",
+		"source_clue_ids",
+		"source_company_ids",
+		"source_sector_ids",
+		"source_event_ids"
+	]:
+		var key: String = str(key_value)
+		if source.has(key):
+			payload[key] = source.get(key)
+	if str(payload.get("surface_id", "")).strip_edges().is_empty() and not str(payload.get("generated_surface_id", "")).strip_edges().is_empty():
+		payload["surface_id"] = str(payload.get("generated_surface_id", "")).strip_edges()
+	return payload
 func _news_capture_excerpt(body: String) -> String:
 	var text: String = body.strip_edges().replace("\n", " ")
 	while text.find("  ") != -1:
@@ -543,6 +596,136 @@ func _current_news_archive_article_summaries() -> Array:
 		selected_news_archive_year,
 		selected_news_archive_month
 	)
+func _refresh_news_topic_filters(articles: Array) -> void:
+	var available_filter_ids: Dictionary = {NEWS_TOPIC_FILTER_ALL: true}
+	for definition_value in NEWS_TOPIC_FILTER_DEFINITIONS:
+		var definition: Dictionary = definition_value
+		var filter_id: String = str(definition.get("id", ""))
+		if filter_id == NEWS_TOPIC_FILTER_ALL:
+			continue
+		if _count_news_articles_for_topic_filter(articles, filter_id) > 0:
+			available_filter_ids[filter_id] = true
+	if not available_filter_ids.has(selected_news_topic_filter_id):
+		selected_news_topic_filter_id = NEWS_TOPIC_FILTER_ALL
+	_rebuild_news_topic_filter_buttons(articles)
+func _rebuild_news_topic_filter_buttons(articles: Array) -> void:
+	if news_topic_filter_row == null:
+		return
+	for child in news_topic_filter_row.get_children():
+		news_topic_filter_row.remove_child(child)
+		child.queue_free()
+	for definition_value in NEWS_TOPIC_FILTER_DEFINITIONS:
+		var definition: Dictionary = definition_value
+		var filter_id: String = str(definition.get("id", ""))
+		var count: int = articles.size() if filter_id == NEWS_TOPIC_FILTER_ALL else _count_news_articles_for_topic_filter(articles, filter_id)
+		if filter_id != NEWS_TOPIC_FILTER_ALL and count <= 0:
+			continue
+		var button := Button.new()
+		button.name = "NewsTopicFilterButton_%s" % filter_id
+		button.text = "%s %d" % [str(definition.get("label", filter_id)), count]
+		button.toggle_mode = true
+		button.button_pressed = filter_id == selected_news_topic_filter_id
+		button.custom_minimum_size = Vector2(0, 30)
+		button.tooltip_text = "Filter this issue by %s." % str(definition.get("label", filter_id)).to_lower()
+		button.pressed.connect(_on_news_topic_filter_pressed.bind(filter_id))
+		_style_news_topic_filter_button(button, button.button_pressed)
+		news_topic_filter_row.add_child(button)
+func _count_news_articles_for_topic_filter(articles: Array, filter_id: String) -> int:
+	var count: int = 0
+	for article_value in articles:
+		if typeof(article_value) != TYPE_DICTIONARY:
+			continue
+		if _news_article_matches_topic_filter(article_value, filter_id):
+			count += 1
+	return count
+func _news_article_matches_topic_filter(article: Dictionary, filter_id: String) -> bool:
+	if filter_id == NEWS_TOPIC_FILTER_ALL:
+		return true
+	var definition: Dictionary = _news_topic_filter_definition(filter_id)
+	if definition.is_empty():
+		return true
+	var coverage_type: String = str(article.get("coverage_type", ""))
+	var coverage_types: Array = _string_array(definition.get("coverage_types", []))
+	if not coverage_types.is_empty() and coverage_types.has(coverage_type):
+		if filter_id != "commodity" or not _article_commodity_ids(article).is_empty() or _article_has_any_topic(article, definition.get("topic_ids", [])):
+			return true
+	var topic_ids: Array = _article_topic_ids(article)
+	return _arrays_overlap(topic_ids, _string_array(definition.get("topic_ids", [])))
+func _article_has_any_topic(article: Dictionary, topic_values: Variant) -> bool:
+	return _arrays_overlap(_article_topic_ids(article), _string_array(topic_values))
+func _article_topic_ids(article: Dictionary) -> Array:
+	var topic_ids: Array = _string_array(article.get("topic_ids", []))
+	var category: String = str(article.get("category", "")).strip_edges()
+	if not category.is_empty():
+		topic_ids.append(category)
+	var generated_surface_id: String = str(article.get("generated_surface_id", "")).strip_edges()
+	if not generated_surface_id.is_empty():
+		topic_ids.append(generated_surface_id)
+	var result: Array = []
+	var seen: Dictionary = {}
+	for topic_value in topic_ids:
+		var topic_id: String = str(topic_value).strip_edges()
+		if topic_id.is_empty() or seen.has(topic_id):
+			continue
+		seen[topic_id] = true
+		result.append(topic_id)
+	return result
+func _article_commodity_ids(article: Dictionary) -> Array:
+	return _string_array(article.get("source_commodity_ids", []))
+func _arrays_overlap(first_values: Array, second_values: Array) -> bool:
+	var lookup: Dictionary = {}
+	for value in first_values:
+		lookup[str(value)] = true
+	for value in second_values:
+		if lookup.has(str(value)):
+			return true
+	return false
+func _news_topic_filter_definition(filter_id: String) -> Dictionary:
+	for definition_value in NEWS_TOPIC_FILTER_DEFINITIONS:
+		var definition: Dictionary = definition_value
+		if str(definition.get("id", "")) == filter_id:
+			return definition
+	return {}
+func _news_topic_filter_label(filter_id: String) -> String:
+	var definition: Dictionary = _news_topic_filter_definition(filter_id)
+	if definition.is_empty():
+		return "All"
+	return str(definition.get("label", "All"))
+func _string_array(source_value: Variant) -> Array:
+	var source_array: Array = []
+	if typeof(source_value) == TYPE_ARRAY:
+		source_array = source_value
+	else:
+		source_array = [source_value]
+	var result: Array = []
+	var seen: Dictionary = {}
+	for item_value in source_array:
+		var item: String = str(item_value).strip_edges()
+		if item.is_empty() or seen.has(item):
+			continue
+		seen[item] = true
+		result.append(item)
+	return result
+func _filtered_news_articles(articles: Array) -> Array:
+	if selected_news_topic_filter_id == NEWS_TOPIC_FILTER_ALL:
+		return articles
+	var rows: Array = []
+	for article_value in articles:
+		if typeof(article_value) != TYPE_DICTIONARY:
+			continue
+		var article: Dictionary = article_value
+		if _news_article_matches_topic_filter(article, selected_news_topic_filter_id):
+			rows.append(article)
+	return rows
+func _on_news_topic_filter_pressed(filter_id: String) -> void:
+	if filter_id.is_empty():
+		return
+	if filter_id == selected_news_topic_filter_id:
+		_rebuild_news_topic_filter_buttons(_current_news_archive_article_summaries())
+		return
+	selected_news_topic_filter_id = filter_id
+	selected_news_article_id = ""
+	_refresh_news_article_list()
 func _build_news_article_list_line(article: Dictionary) -> String:
 	return str(article.get("headline", ""))
 func _news_byline_text(article: Dictionary) -> String:
@@ -893,7 +1076,7 @@ func _on_news_article_card_pressed(article_id: String) -> void:
 		return
 	var previous_article_id: String = selected_news_article_id
 	selected_news_article_id = article_id
-	var articles: Array = _current_news_archive_article_summaries()
+	var articles: Array = _filtered_news_articles(_current_news_archive_article_summaries())
 	for article_index in range(articles.size()):
 		if str(articles[article_index].get("id", "")) == article_id:
 			news_article_list.select(article_index)
@@ -932,6 +1115,7 @@ func _news_outlet_exists(outlets: Array, outlet_id: String) -> bool:
 	return false
 func _on_news_outlet_pressed(outlet_id: String) -> void:
 	selected_news_outlet_id = outlet_id
+	selected_news_topic_filter_id = NEWS_TOPIC_FILTER_ALL
 	selected_news_archive_year = 0
 	selected_news_archive_month = 0
 	selected_news_article_id = ""
@@ -939,7 +1123,7 @@ func _on_news_outlet_pressed(outlet_id: String) -> void:
 	_refresh_news_archive_filters()
 	_refresh_news_article_list()
 func _on_news_article_selected(index: int) -> void:
-	var articles: Array = _current_news_archive_article_summaries()
+	var articles: Array = _filtered_news_articles(_current_news_archive_article_summaries())
 	if index < 0 or index >= articles.size():
 		return
 	var previous_article_id: String = selected_news_article_id
@@ -965,6 +1149,7 @@ func _on_news_archive_year_selected(index: int) -> void:
 	if index < 0 or index >= news_archive_year_option.item_count:
 		return
 	selected_news_archive_year = int(news_archive_year_option.get_item_text(index))
+	selected_news_topic_filter_id = NEWS_TOPIC_FILTER_ALL
 	selected_news_archive_month = 0
 	selected_news_article_id = ""
 	_refresh_news_archive_month_options()
@@ -976,6 +1161,7 @@ func _on_news_archive_month_selected(index: int) -> void:
 	var months: Array = GameManager.get_news_archive_months(selected_news_outlet_id, selected_news_archive_year)
 	if index < months.size():
 		selected_news_archive_month = int(months[index])
+	selected_news_topic_filter_id = NEWS_TOPIC_FILTER_ALL
 	selected_news_article_id = ""
 	_refresh_news_article_list()
 func _ensure_news_detail_scroll() -> void:
@@ -1138,6 +1324,14 @@ func _ensure_news_newspaper_ui() -> void:
 	_ensure_news_grunge_overlay()
 
 	var feed_vbox: VBoxContainer = news_article_list.get_parent()
+	if news_topic_filter_row == null:
+		news_topic_filter_row = HFlowContainer.new()
+		news_topic_filter_row.name = "NewsTopicFilterRow"
+		news_topic_filter_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		news_topic_filter_row.add_theme_constant_override("h_separation", 6)
+		news_topic_filter_row.add_theme_constant_override("v_separation", 6)
+		feed_vbox.add_child(news_topic_filter_row)
+		feed_vbox.move_child(news_topic_filter_row, feed_vbox.get_children().find(news_article_list))
 	if news_article_cards_scroll == null:
 		news_article_cards_scroll = ScrollContainer.new()
 		news_article_cards_scroll.name = "NewsArticleCardsScroll"
@@ -1321,6 +1515,11 @@ func _style_news_newspaper_ui() -> void:
 	_apply_font_override_to_control(news_archive_month_label, 13, _get_app_font())
 	_style_light_option_button(news_archive_year_option)
 	_style_light_option_button(news_archive_month_option)
+	if news_topic_filter_row != null:
+		for child in news_topic_filter_row.get_children():
+			if child is Button:
+				var filter_button: Button = child
+				_style_news_topic_filter_button(filter_button, filter_button.button_pressed)
 
 	if news_masthead_rule_container != null:
 		for child in news_masthead_rule_container.get_children():
@@ -1475,6 +1674,33 @@ func _style_news_command_button(button: Button, is_primary: bool) -> void:
 	if button == null:
 		return
 	UiTheme.style_button(button, "desktop_primary" if is_primary else "desktop_secondary")
+func _style_news_topic_filter_button(button: Button, is_selected: bool) -> void:
+	if button == null:
+		return
+	var fill_color: Color = COLOR_MARKET_PAPER_CARD if is_selected else COLOR_MARKET_PAPER_RAIL
+	var border_color: Color = COLOR_MARKET_PAPER_RED if is_selected else Color(COLOR_MARKET_PAPER_BORDER.r, COLOR_MARKET_PAPER_BORDER.g, COLOR_MARKET_PAPER_BORDER.b, 0.78)
+	var font_color: Color = Color(0.184314, 0.14902, 0.0705882, 1) if is_selected else COLOR_WINDOW_TEXT
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = border_color
+	style.set_border_width_all(1)
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 0
+	style.corner_radius_bottom_right = 0
+	style.corner_radius_bottom_left = 0
+	style.content_margin_left = 8
+	style.content_margin_right = 8
+	style.content_margin_top = 5
+	style.content_margin_bottom = 5
+	button.add_theme_stylebox_override("normal", style)
+	button.add_theme_stylebox_override("hover", style)
+	button.add_theme_stylebox_override("pressed", style)
+	button.add_theme_stylebox_override("focus", style)
+	button.add_theme_color_override("font_color", font_color)
+	button.add_theme_color_override("font_hover_color", font_color)
+	button.add_theme_color_override("font_pressed_color", font_color)
+	button.add_theme_color_override("font_focus_color", font_color)
+	_apply_font_override_to_control(button, 12, _get_dashboard_title_font())
 
 
 func _sync_dynamic_refs_from_root() -> void:
@@ -1492,6 +1718,7 @@ func _sync_dynamic_refs_from_root() -> void:
 	news_archive_year_option = _root.get("news_archive_year_option") as OptionButton
 	news_archive_month_label = _root.get("news_archive_month_label") as Label
 	news_archive_month_option = _root.get("news_archive_month_option") as OptionButton
+	news_topic_filter_row = _root.get("news_topic_filter_row") as HFlowContainer
 	news_article_list = _root.get("news_article_list") as ItemList
 	news_detail_panel = _root.get("news_detail_panel") as PanelContainer
 	news_detail_outlet_label = _root.get("news_detail_outlet_label") as Label
@@ -1540,6 +1767,7 @@ func _sync_root_refs() -> void:
 	_root.set("news_archive_year_option", news_archive_year_option)
 	_root.set("news_archive_month_label", news_archive_month_label)
 	_root.set("news_archive_month_option", news_archive_month_option)
+	_root.set("news_topic_filter_row", news_topic_filter_row)
 	_root.set("news_article_list", news_article_list)
 	_root.set("news_detail_panel", news_detail_panel)
 	_root.set("news_detail_outlet_label", news_detail_outlet_label)

@@ -22,6 +22,12 @@ const MAX_NETWORK_JOURNAL_ROWS := 18
 const MAX_SOCIAL_MESSAGE_ROWS_PER_THREAD := 24
 const NETWORK_TWOOTER_ACCOUNT_PREFIX := "network_"
 const NETWORK_REACTION_ACTION_ID := "network_followup_reaction"
+const GENERATED_DOSSIER_NETWORK_SOURCE_SYSTEM_ID := "company_story_dossier"
+const GENERATED_DOSSIER_NETWORK_SURFACE_ID := "network"
+const NETWORK_PRIVATE_STAGE_RECOGNIZED_RELATIONSHIP := 25
+const NETWORK_PRIVATE_STAGE_TRUSTED_RELATIONSHIP := 45
+const NETWORK_PRIVATE_STAGE_INNER_RELATIONSHIP := 70
+const NETWORK_PRIVATE_STAGE_INNER_RECOGNITION := 70
 const TRUTH_LABEL_NETWORK_READ := "Network Read"
 const TRUTH_LABEL_ACCUMULATION := "Accumulation"
 const TRUTH_LABEL_FILING_BACKED := "Filing-Backed"
@@ -79,6 +85,7 @@ const STANCE_CONSTRUCTIVE := "constructive"
 const STANCE_CAUTION := "caution"
 const STANCE_TIMING_RISK := "timing_risk"
 const STANCE_UNCERTAIN := "uncertain"
+const RELATIONSHIP_GRAPH_SOURCE_SYSTEM_ID := "company_relationship_graph"
 const LAST_TIP_NOTE_FIELD_MAP := [
 	{"target": "last_tip_status", "source": "status", "default": "", "type": "string"},
 	{"target": "last_tip_label", "source": "outcome_label", "default": "", "type": "string"},
@@ -585,6 +592,34 @@ func request_tip(run_state, data_repository, corporate_action_system, contact_id
 	var resolved_company_id: String = _resolve_target_company_id(run_state, data_repository, contact_id, company_id)
 	if resolved_company_id.is_empty():
 		return {"success": false, "message": "No target company is available for that tip."}
+	var generated_relationship_tip_result: Dictionary = _generated_relationship_network_tip_result(
+		run_state,
+		data_repository,
+		contact,
+		contact_id,
+		resolved_company_id
+	)
+	if bool(generated_relationship_tip_result.get("success", false)):
+		_adjust_relationship(run_state, contact_id, -TIP_RELATIONSHIP_COST)
+		_mark_contact_day_flag(run_state, contact_id, "last_tip_request_day_index")
+		generated_relationship_tip_result["contact_id"] = contact_id
+		generated_relationship_tip_result["target_company_id"] = resolved_company_id
+		_record_tip_memory(run_state, contact, resolved_company_id, generated_relationship_tip_result)
+		return generated_relationship_tip_result
+	var generated_dossier_tip_result: Dictionary = _generated_dossier_network_tip_result(
+		run_state,
+		data_repository,
+		contact,
+		contact_id,
+		resolved_company_id
+	)
+	if bool(generated_dossier_tip_result.get("success", false)):
+		_adjust_relationship(run_state, contact_id, -TIP_RELATIONSHIP_COST)
+		_mark_contact_day_flag(run_state, contact_id, "last_tip_request_day_index")
+		generated_dossier_tip_result["contact_id"] = contact_id
+		generated_dossier_tip_result["target_company_id"] = resolved_company_id
+		_record_tip_memory(run_state, contact, resolved_company_id, generated_dossier_tip_result)
+		return generated_dossier_tip_result
 	var intel_result: Dictionary = corporate_action_system.request_contact_tip_intel(
 		run_state,
 		data_repository,
@@ -1132,6 +1167,532 @@ func _build_and_store_contact_arc(run_state, data_repository, contact_id: String
 	return {"success": true, "message": "%s created a %s arc on %s." % [str(contact.get("display_name", "Contact")), action, target_ticker], "arc": arc}
 
 
+func _generated_relationship_network_tip_result(
+	run_state,
+	_data_repository,
+	contact: Dictionary,
+	contact_id: String,
+	company_id: String
+) -> Dictionary:
+	if not run_state.has_method("get_event_history"):
+		return {}
+	var recognition: Dictionary = build_recognition_snapshot(run_state)
+	var runtime: Dictionary = run_state.get_network_contacts().get(contact_id, {}) if typeof(run_state.get_network_contacts().get(contact_id, {})) == TYPE_DICTIONARY else {}
+	var candidates: Array = []
+	for event_value in run_state.get_event_history():
+		if typeof(event_value) != TYPE_DICTIONARY:
+			continue
+		var event_data: Dictionary = event_value
+		if str(event_data.get("event_family", "")) != RELATIONSHIP_GRAPH_SOURCE_SYSTEM_ID:
+			continue
+		if str(event_data.get("target_company_id", "")) != company_id:
+			continue
+		if not _relationship_network_visibility_allowed(str(event_data.get("relationship_visibility", ""))):
+			continue
+		var age_days: int = max(run_state.day_index - int(event_data.get("day_index", run_state.day_index)), 0)
+		if age_days > 6:
+			continue
+		if not _relationship_network_gate_met(event_data, runtime, recognition):
+			continue
+		candidates.append({
+			"event": event_data.duplicate(true),
+			"score": _relationship_network_score(event_data, contact, age_days)
+		})
+	if candidates.is_empty():
+		return {}
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if is_equal_approx(float(a.get("score", 0.0)), float(b.get("score", 0.0))):
+			return str(a.get("event", {}).get("relationship_event_id", "")) < str(b.get("event", {}).get("relationship_event_id", ""))
+		return float(a.get("score", 0.0)) > float(b.get("score", 0.0))
+	)
+	return _build_generated_relationship_network_tip_result(run_state, contact, company_id, candidates[0].get("event", {}), runtime, recognition)
+
+
+func _relationship_network_visibility_allowed(visibility_value: String) -> bool:
+	var visibility: String = visibility_value.strip_edges().to_lower()
+	return visibility == "semi_public" or visibility == "private"
+
+
+func _relationship_network_gate_met(event_data: Dictionary, runtime: Dictionary, recognition: Dictionary) -> bool:
+	var relationship: int = int(runtime.get("relationship", 0))
+	var recognition_score: float = float(recognition.get("score", 0.0))
+	var visibility: String = str(event_data.get("relationship_visibility", "")).strip_edges().to_lower()
+	if visibility == "private":
+		return relationship >= NETWORK_PRIVATE_STAGE_TRUSTED_RELATIONSHIP and recognition_score >= 45.0
+	return relationship >= NETWORK_PRIVATE_STAGE_RECOGNIZED_RELATIONSHIP or recognition_score >= 35.0
+
+
+func _relationship_network_score(event_data: Dictionary, contact: Dictionary, age_days: int) -> float:
+	var confidence: float = clamp(float(event_data.get("relationship_confidence", event_data.get("confidence", 0.0))), 0.0, 1.0)
+	var strength: float = clamp(float(event_data.get("relationship_strength", 0.0)), 0.0, 1.0)
+	var recency: float = clamp(1.0 - float(age_days) / 7.0, 0.0, 1.0)
+	return confidence * 0.46 + strength * 0.26 + recency * 0.18 + float(contact.get("reliability", 0.0)) * 0.10
+
+
+func _build_generated_relationship_network_tip_result(
+	run_state,
+	contact: Dictionary,
+	company_id: String,
+	event_data: Dictionary,
+	runtime: Dictionary,
+	recognition: Dictionary
+) -> Dictionary:
+	if event_data.is_empty():
+		return {}
+	var ticker: String = _company_ticker(run_state, company_id)
+	var counterparty_ticker: String = str(event_data.get("counterparty_ticker", event_data.get("counterparty_company_id", ""))).to_upper()
+	var contact_name: String = str(contact.get("display_name", "Contact"))
+	var truth_label: String = _relationship_network_truth_label(event_data)
+	var confidence_label: String = _relationship_network_confidence_label(event_data, contact)
+	var tip_read: String = _relationship_network_tip_read(contact, ticker, counterparty_ticker, event_data)
+	var reliability: float = clamp(float(event_data.get("relationship_confidence", event_data.get("confidence", 0.0))) * 0.70 + float(contact.get("reliability", 0.0)) * 0.30, 0.0, 1.0)
+	var visibility: String = str(event_data.get("relationship_visibility", "semi_public")).strip_edges().to_lower()
+	return {
+		"success": true,
+		"message": "%s | %s: %s" % [truth_label, contact_name, tip_read],
+		"public_truth_label": truth_label,
+		"public_tip_read": tip_read,
+		"public_confidence_label": confidence_label,
+		"tip_source_role": _contact_tip_voice(contact),
+		"intel_summary": "%s | %s" % [truth_label, confidence_label],
+		"intel_quality": _relationship_network_intel_quality(reliability),
+		"chain_id": "",
+		"generated_content_surface": true,
+		"generated_surface_id": GENERATED_DOSSIER_NETWORK_SURFACE_ID,
+		"generated_scope_id": "relationship",
+		"source_system_id": RELATIONSHIP_GRAPH_SOURCE_SYSTEM_ID,
+		"story_id": str(event_data.get("relationship_event_id", "")),
+		"story_family": "company_relationship",
+		"archetype_id": str(event_data.get("relationship_event_kind", event_data.get("category", ""))),
+		"public_status": "market_talk",
+		"stage_id": "relationship_event",
+		"visibility": "private",
+		"detail_level": "relationship",
+		"reliability": snappedf(reliability, 0.001),
+		"leak_risk": 0.22 if visibility == "semi_public" else 0.42,
+		"source_fact_ids": _network_unique_string_array(["relationship_event:%s" % str(event_data.get("relationship_event_id", ""))]),
+		"source_clue_ids": _network_unique_string_array(["relationship_edge:%s" % str(event_data.get("relationship_edge_id", ""))]),
+		"source_company_ids": _network_unique_string_array([
+			str(event_data.get("target_company_id", "")),
+			str(event_data.get("counterparty_company_id", ""))
+		]),
+		"source_sector_ids": _network_unique_string_array([str(event_data.get("target_sector_id", ""))]),
+		"source_event_ids": _network_unique_string_array([str(event_data.get("relationship_event_id", ""))]),
+		"target_company_id": company_id,
+		"target_ticker": ticker,
+		"source_quality": "relationship_network",
+		"directness": "relationship",
+		"original_directness": "relationship",
+		"required_relationship_stage": "recognized",
+		"required_recognition_min": 35,
+		"network_relationship": int(runtime.get("relationship", 0)),
+		"recognition_score": snappedf(float(recognition.get("score", 0.0)), 0.01)
+	}
+
+
+func _relationship_network_truth_label(event_data: Dictionary) -> String:
+	match str(event_data.get("tone", "mixed")):
+		"positive":
+			return TRUTH_LABEL_NETWORK_READ
+		"negative":
+			return TRUTH_LABEL_PRESSURE_READ
+		_:
+			return TRUTH_LABEL_EARLY_READ
+
+
+func _relationship_network_confidence_label(event_data: Dictionary, contact: Dictionary) -> String:
+	var reliability: float = clamp(float(event_data.get("relationship_confidence", event_data.get("confidence", 0.0))) * 0.68 + float(contact.get("reliability", 0.0)) * 0.32, 0.0, 1.0)
+	if reliability >= 0.76:
+		return "Grounded relationship read"
+	if reliability >= 0.64:
+		return "Useful relationship read"
+	return "Soft relationship read"
+
+
+func _relationship_network_intel_quality(reliability: float) -> String:
+	if reliability >= 0.76:
+		return "strong"
+	if reliability >= 0.62:
+		return "medium"
+	return "weak"
+
+
+func _relationship_network_tip_read(contact: Dictionary, ticker: String, counterparty_ticker: String, event_data: Dictionary) -> String:
+	var source_role: String = _contact_tip_voice(contact).capitalize()
+	var event_kind: String = str(event_data.get("relationship_event_kind", ""))
+	var role: String = str(event_data.get("relationship_impact_role", ""))
+	if event_kind == "competitor_pressure":
+		return "%s says %s versus %s is the real read. Do not treat it as a standalone trade until the relative move confirms." % [source_role, ticker, counterparty_ticker]
+	if role == "supplier":
+		return "%s says the %s link matters for %s if orders or delivery follow through; the tape alone is not enough." % [source_role, counterparty_ticker, ticker]
+	if role == "customer":
+		return "%s says %s has exposure to the %s link, but the margin effect still needs checking." % [source_role, ticker, counterparty_ticker]
+	return "%s says %s and %s are being tied together by a relationship read; watch confirmation before sizing it." % [source_role, ticker, counterparty_ticker]
+
+
+func _generated_dossier_network_tip_result(
+	run_state,
+	data_repository,
+	contact: Dictionary,
+	contact_id: String,
+	company_id: String
+) -> Dictionary:
+	if not run_state.has_method("get_company_story_dossiers_for_company"):
+		return {}
+	var recognition: Dictionary = build_recognition_snapshot(run_state)
+	var runtime: Dictionary = run_state.get_network_contacts().get(contact_id, {}) if typeof(run_state.get_network_contacts().get(contact_id, {})) == TYPE_DICTIONARY else {}
+	var candidates: Array = []
+	for dossier_value in run_state.get_company_story_dossiers_for_company(company_id):
+		if typeof(dossier_value) != TYPE_DICTIONARY:
+			continue
+		var dossier: Dictionary = dossier_value
+		var private_clue: Dictionary = _eligible_private_network_clue_for_dossier(dossier, runtime, recognition, run_state.day_index)
+		if private_clue.is_empty():
+			continue
+		var effective_directness: String = _network_clue_effective_directness(private_clue, contact, runtime, recognition)
+		var fact_ids: Array = _network_clue_fact_ids(dossier, private_clue)
+		candidates.append({
+			"dossier": dossier.duplicate(true),
+			"clue": private_clue,
+			"effective_directness": effective_directness,
+			"source_fact_ids": fact_ids,
+			"score": _generated_network_clue_score(dossier, private_clue, effective_directness)
+		})
+	if candidates.is_empty():
+		return {}
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if is_equal_approx(float(a.get("score", 0.0)), float(b.get("score", 0.0))):
+			return str(a.get("dossier", {}).get("story_id", "")) < str(b.get("dossier", {}).get("story_id", ""))
+		return float(a.get("score", 0.0)) > float(b.get("score", 0.0))
+	)
+	return _build_generated_dossier_network_tip_result(
+		run_state,
+		data_repository,
+		contact,
+		company_id,
+		candidates[0],
+		runtime,
+		recognition
+	)
+
+
+func _eligible_private_network_clue_for_dossier(
+	dossier: Dictionary,
+	runtime: Dictionary,
+	recognition: Dictionary,
+	day_index: int
+) -> Dictionary:
+	for clue_value in dossier.get("private_clues", []):
+		if typeof(clue_value) != TYPE_DICTIONARY:
+			continue
+		var clue: Dictionary = clue_value
+		if str(clue.get("surface_id", "")) != GENERATED_DOSSIER_NETWORK_SURFACE_ID:
+			continue
+		if str(clue.get("visibility", "")) != "private":
+			continue
+		var earliest_day_index: int = int(clue.get("earliest_day_index", 0))
+		var latest_day_index: int = int(clue.get("latest_day_index", earliest_day_index))
+		if day_index < earliest_day_index or day_index > latest_day_index:
+			continue
+		if not _network_private_clue_gate_met(clue, runtime, recognition):
+			continue
+		return clue.duplicate(true)
+	return {}
+
+
+func _network_private_clue_gate_met(clue: Dictionary, runtime: Dictionary, recognition: Dictionary) -> bool:
+	if float(recognition.get("score", 0.0)) < float(clue.get("required_recognition_min", 0.0)):
+		return false
+	var relationship: int = int(runtime.get("relationship", 0))
+	match str(clue.get("required_relationship_stage", "recognized")):
+		"inner_circle", "inner_circle_candidate", "specific":
+			return relationship >= NETWORK_PRIVATE_STAGE_INNER_RELATIONSHIP
+		"trusted":
+			return relationship >= NETWORK_PRIVATE_STAGE_TRUSTED_RELATIONSHIP
+		"recognized":
+			return relationship >= NETWORK_PRIVATE_STAGE_RECOGNIZED_RELATIONSHIP
+		_:
+			return relationship >= NETWORK_PRIVATE_STAGE_RECOGNIZED_RELATIONSHIP
+
+
+func _network_clue_effective_directness(clue: Dictionary, contact: Dictionary, runtime: Dictionary, recognition: Dictionary) -> String:
+	var requested_directness: String = str(clue.get("directness", "contextual")).strip_edges().to_lower()
+	if requested_directness == "specific" and _network_contact_allows_specific_clue(clue, contact, runtime, recognition):
+		return "specific"
+	if requested_directness == "specific":
+		return "high"
+	if requested_directness in ["high", "medium", "contextual"]:
+		return requested_directness
+	return "contextual"
+
+
+func _network_contact_allows_specific_clue(clue: Dictionary, contact: Dictionary, runtime: Dictionary, recognition: Dictionary) -> bool:
+	if int(runtime.get("relationship", 0)) < NETWORK_PRIVATE_STAGE_INNER_RELATIONSHIP:
+		return false
+	if float(recognition.get("score", 0.0)) < NETWORK_PRIVATE_STAGE_INNER_RECOGNITION:
+		return false
+	var source_quality: String = str(clue.get("source_quality", "")).strip_edges().to_lower()
+	if source_quality == "operator":
+		return true
+	if str(contact.get("affiliation_type", "floater")) == "insider":
+		return true
+	return float(contact.get("reliability", 0.0)) >= 0.72
+
+
+func _generated_network_clue_score(dossier: Dictionary, clue: Dictionary, effective_directness: String) -> float:
+	var directness_bonus: float = 0.0
+	match effective_directness:
+		"specific":
+			directness_bonus = 0.18
+		"high":
+			directness_bonus = 0.11
+		"medium":
+			directness_bonus = 0.06
+		_:
+			directness_bonus = 0.0
+	return float(clue.get("reliability", 0.0)) + float(dossier.get("priority", 0.0)) * 0.18 + directness_bonus
+
+
+func _build_generated_dossier_network_tip_result(
+	run_state,
+	data_repository,
+	contact: Dictionary,
+	company_id: String,
+	candidate: Dictionary,
+	runtime: Dictionary,
+	recognition: Dictionary
+) -> Dictionary:
+	var dossier: Dictionary = candidate.get("dossier", {}) if typeof(candidate.get("dossier", {})) == TYPE_DICTIONARY else {}
+	var clue: Dictionary = candidate.get("clue", {}) if typeof(candidate.get("clue", {})) == TYPE_DICTIONARY else {}
+	var effective_directness: String = str(candidate.get("effective_directness", "contextual"))
+	var fact_ids: Array = candidate.get("source_fact_ids", []) if typeof(candidate.get("source_fact_ids", [])) == TYPE_ARRAY else []
+	var ticker: String = _company_ticker(run_state, company_id)
+	var contact_name: String = str(contact.get("display_name", "Contact"))
+	var truth_label: String = _generated_network_truth_label(dossier)
+	var confidence_label: String = _generated_network_confidence_label(clue, contact, effective_directness)
+	var source_role: String = _contact_tip_voice(contact)
+	var tip_read: String = _generated_network_tip_read(
+		run_state,
+		data_repository,
+		contact,
+		dossier,
+		clue,
+		company_id,
+		effective_directness,
+		truth_label
+	)
+	return {
+		"success": true,
+		"message": "%s | %s: %s" % [truth_label, contact_name, tip_read],
+		"public_truth_label": truth_label,
+		"public_tip_read": tip_read,
+		"public_confidence_label": confidence_label,
+		"tip_source_role": source_role,
+		"intel_summary": "%s | %s" % [truth_label, confidence_label],
+		"intel_quality": _generated_network_intel_quality(clue, effective_directness),
+		"chain_id": "",
+		"generated_content_surface": true,
+		"generated_surface_id": GENERATED_DOSSIER_NETWORK_SURFACE_ID,
+		"source_system_id": GENERATED_DOSSIER_NETWORK_SOURCE_SYSTEM_ID,
+		"story_id": str(dossier.get("story_id", "")),
+		"story_family": str(dossier.get("story_family", "company_story")),
+		"archetype_id": str(dossier.get("archetype_id", "")),
+		"public_status": str(dossier.get("public_status", "")),
+		"stage_id": str(dossier.get("stage_id", "")),
+		"visibility": "private",
+		"detail_level": effective_directness,
+		"reliability": snappedf(clamp(float(clue.get("reliability", 0.0)), 0.0, 1.0), 0.001),
+		"leak_risk": snappedf(clamp(float(clue.get("leak_risk", 0.0)), 0.0, 1.0), 0.001),
+		"source_fact_ids": _network_unique_string_array(fact_ids),
+		"source_clue_ids": _network_unique_string_array([str(clue.get("clue_id", ""))]),
+		"source_company_ids": _network_source_company_ids(dossier),
+		"source_sector_ids": _network_source_sector_ids(dossier, run_state.get_effective_company_definition(company_id, false, false)),
+		"target_company_id": company_id,
+		"target_ticker": ticker,
+		"source_quality": str(clue.get("source_quality", "")),
+		"directness": effective_directness,
+		"original_directness": str(clue.get("directness", "")),
+		"required_relationship_stage": str(clue.get("required_relationship_stage", "")),
+		"required_recognition_min": int(clue.get("required_recognition_min", 0)),
+		"network_relationship": int(runtime.get("relationship", 0)),
+		"recognition_score": snappedf(float(recognition.get("score", 0.0)), 0.01)
+	}
+
+
+func _generated_network_truth_label(dossier: Dictionary) -> String:
+	match str(dossier.get("truth_state", "uncertain")):
+		"real":
+			return TRUTH_LABEL_ACCUMULATION
+		"delayed":
+			return TRUTH_LABEL_REAL_BUT_DELAYED
+		"failed":
+			return TRUTH_LABEL_DEAD_STORY
+		"fraud_risk":
+			return TRUTH_LABEL_PRESSURE_READ
+		"overhyped":
+			return TRUTH_LABEL_RETAIL_TRAP
+		_:
+			return TRUTH_LABEL_EARLY_READ
+
+
+func _generated_network_confidence_label(clue: Dictionary, contact: Dictionary, effective_directness: String) -> String:
+	var reliability: float = clamp(float(clue.get("reliability", 0.0)) * 0.72 + float(contact.get("reliability", 0.0)) * 0.28, 0.0, 1.0)
+	if effective_directness == "specific" and reliability >= 0.74:
+		return "High conviction"
+	if reliability >= 0.76:
+		return "Grounded read"
+	if reliability >= 0.66:
+		return "Early but credible"
+	return "Soft read"
+
+
+func _generated_network_intel_quality(clue: Dictionary, effective_directness: String) -> String:
+	var reliability: float = float(clue.get("reliability", 0.0))
+	if effective_directness == "specific" and reliability >= 0.78:
+		return "very_strong"
+	if reliability >= 0.74 or effective_directness == "high":
+		return "strong"
+	if reliability >= 0.64:
+		return "medium"
+	return "weak"
+
+
+func _generated_network_tip_read(
+	run_state,
+	_data_repository,
+	contact: Dictionary,
+	dossier: Dictionary,
+	_clue: Dictionary,
+	company_id: String,
+	effective_directness: String,
+	truth_label: String
+) -> String:
+	var ticker: String = _company_ticker(run_state, company_id)
+	var definition: Dictionary = run_state.get_effective_company_definition(company_id, false, false)
+	var company_name: String = str(definition.get("name", ticker))
+	var source_role: String = _contact_tip_voice(contact)
+	var mechanism: String = _generated_network_mechanism_phrase(dossier, definition)
+	var watch_note: String = _generated_network_watch_note(truth_label, ticker, mechanism)
+	if effective_directness == "specific":
+		if truth_label in CAUTIONARY_TRUTH_LABELS:
+			return "%s says do not chase %s here; the cleaner move is to wait for pressure to clear. %s" % [
+				source_role.capitalize(),
+				ticker,
+				watch_note
+			]
+		return "%s says the direct read is buy %s and hold through the next public checkpoint. %s" % [
+			source_role.capitalize(),
+			ticker,
+			watch_note
+		]
+	if effective_directness == "high":
+		return "%s has a stronger private read on %s: %s %s" % [
+			source_role.capitalize(),
+			ticker,
+			mechanism,
+			watch_note
+		]
+	if effective_directness == "medium":
+		return "%s frames %s as more than public chatter, but not clean enough for a blind trade. %s" % [
+			source_role.capitalize(),
+			ticker,
+			watch_note
+		]
+	return "%s says %s is worth tracking quietly; the useful part is still the mechanism, not the noise around %s. %s" % [
+		source_role.capitalize(),
+		ticker,
+		company_name,
+		watch_note
+	]
+
+
+func _generated_network_mechanism_phrase(dossier: Dictionary, definition: Dictionary) -> String:
+	var sector_name: String = str(definition.get("sector_name", definition.get("sector_id", "sector"))).replace("_", " ")
+	match str(dossier.get("archetype_id", "")):
+		"contract_win":
+			return "the work pipeline sounds more tangible than the public headline."
+		"capex_expansion":
+			return "capacity and execution timing matter more than the announcement itself."
+		"margin_recovery":
+			return "the margin setup is improving, but confirmation still has to show up in numbers."
+		"commodity_tailwind":
+			return "%s exposure is helping the story, but only names with real pass-through deserve credit." % sector_name
+		"commodity_headwind":
+			return "%s cost pressure is the part people are underestimating." % sector_name
+		"governance_risk":
+			return "the governance read is not clean enough to ignore."
+		"balance_sheet_stress":
+			return "cash collection and refinancing pressure are the real tells."
+		"fraud_signal":
+			return "the accounting trail needs careful checking before trusting the story."
+		"turnaround":
+			return "the turnaround path is alive, but execution is still doing the heavy lifting."
+		_:
+			return "there is a company-specific read behind the public story."
+
+
+func _generated_network_watch_note(truth_label: String, ticker: String, mechanism: String) -> String:
+	match truth_label:
+		TRUTH_LABEL_REAL_BUT_DELAYED:
+			return "Timing is the risk; keep %s on watch until the next dated clue." % ticker
+		TRUTH_LABEL_DEAD_STORY:
+			return "Do not reopen it unless a fresh public clue changes the setup."
+		TRUTH_LABEL_PRESSURE_READ, TRUTH_LABEL_RETAIL_TRAP, TRUTH_LABEL_DISTRIBUTION_RISK:
+			return "The next confirmation should be balance-sheet, filing, or tape behavior, not louder chatter."
+		TRUTH_LABEL_ACCUMULATION:
+			return "If volume builds without the room getting too loud, the read improves."
+		_:
+			return "Use filings, tape, or a second source to test whether %s is real." % mechanism.trim_suffix(".")
+
+
+func _network_clue_fact_ids(dossier: Dictionary, clue: Dictionary) -> Array:
+	var clue_fact_ids: Array = _network_unique_string_array(clue.get("fact_ids", []))
+	if not clue_fact_ids.is_empty():
+		return clue_fact_ids
+	var fact_ids: Array = []
+	for fact_value in dossier.get("cause_facts", []):
+		if typeof(fact_value) != TYPE_DICTIONARY:
+			continue
+		var fact: Dictionary = fact_value
+		fact_ids.append(str(fact.get("fact_id", "")))
+	return _network_unique_string_array(fact_ids)
+
+
+func _network_source_company_ids(dossier: Dictionary) -> Array:
+	var company_ids: Array = [str(dossier.get("company_id", ""))]
+	for fact_value in dossier.get("cause_facts", []):
+		if typeof(fact_value) != TYPE_DICTIONARY:
+			continue
+		var fact: Dictionary = fact_value
+		for company_id_value in fact.get("related_company_ids", []):
+			company_ids.append(str(company_id_value))
+	return _network_unique_string_array(company_ids)
+
+
+func _network_source_sector_ids(dossier: Dictionary, definition: Dictionary) -> Array:
+	var sector_ids: Array = [str(definition.get("sector_id", ""))]
+	for fact_value in dossier.get("cause_facts", []):
+		if typeof(fact_value) != TYPE_DICTIONARY:
+			continue
+		var fact: Dictionary = fact_value
+		for sector_id_value in fact.get("related_sector_ids", []):
+			sector_ids.append(str(sector_id_value))
+	return _network_unique_string_array(sector_ids)
+
+
+func _network_unique_string_array(source_value: Variant) -> Array:
+	var source_array: Array = source_value if typeof(source_value) == TYPE_ARRAY else [source_value]
+	var seen: Dictionary = {}
+	var result: Array = []
+	for item_value in source_array:
+		var item: String = str(item_value).strip_edges()
+		if item.is_empty() or seen.has(item):
+			continue
+		seen[item] = true
+		result.append(item)
+	return result
+
+
 func _decorate_tip_result(run_state, data_repository, contact: Dictionary, company_id: String, tip_result: Dictionary) -> Dictionary:
 	var result: Dictionary = tip_result.duplicate(true)
 	var chain: Dictionary = _active_corporate_chain_for_company(run_state, company_id)
@@ -1199,7 +1760,7 @@ func _record_tip_memory(run_state, contact: Dictionary, company_id: String, tip_
 		run_state.get_network_tip_journal().size()
 	]
 	var journal: Dictionary = run_state.get_network_tip_journal()
-	journal[tip_id] = {
+	var journal_row: Dictionary = {
 		"id": tip_id,
 		"contact_id": contact_id,
 		"contact_name": str(contact.get("display_name", "Contact")),
@@ -1224,6 +1785,36 @@ func _record_tip_memory(run_state, contact: Dictionary, company_id: String, tip_
 		"reaction_twooter_account_id": _contact_twooter_account_id(contact),
 		"reaction_twooter_handle": _contact_twooter_handle(contact)
 	}
+	for key in [
+		"generated_content_surface",
+		"generated_surface_id",
+		"generated_scope_id",
+		"source_system_id",
+		"story_id",
+		"story_family",
+		"archetype_id",
+		"public_status",
+		"stage_id",
+		"visibility",
+		"detail_level",
+		"reliability",
+		"leak_risk",
+		"source_fact_ids",
+		"source_clue_ids",
+		"source_company_ids",
+		"source_sector_ids",
+		"source_event_ids",
+		"source_quality",
+		"directness",
+		"original_directness",
+		"required_relationship_stage",
+		"required_recognition_min",
+		"network_relationship",
+		"recognition_score"
+	]:
+		if tip_result.has(key):
+			journal_row[key] = _decorator_copy_value(tip_result.get(key))
+	journal[tip_id] = journal_row
 	run_state.set_network_tip_journal(_pruned_tip_journal(journal))
 
 
